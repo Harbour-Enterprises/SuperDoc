@@ -5,6 +5,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { PaginationPluginKey } from './pagination-helpers.js';
 import { CollaborationPluginKey } from '@extensions/collaboration/collaboration.js';
 import { ImagePlaceholderPluginKey } from '@extensions/image/imageHelpers/imagePlaceholderPlugin.js';
+import { hasPageBreak } from '@extensions/paragraph/paragraph.js';
 
 const isDebugging = false;
 
@@ -257,7 +258,8 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
   let footer = null, header = null;
   const { headerIds, footerIds } = editor.converter;
 
-  const firstHeaderId = headerIds.first || headerIds.even || headerIds.default || 'default';
+  let firstHeaderId = headerIds.first || headerIds.even || headerIds.default || 'default';
+  if (headerIds.titlePg) firstHeaderId = null;
   const firstHeader = createHeader(pageMargins, pageSize, sectionData, firstHeaderId);
   const pageBreak = createPageBreak({ editor, header: firstHeader, isFirstHeader: true });
   decorations.push(Decoration.widget(0, pageBreak, { key: 'stable-key' }));
@@ -282,6 +284,12 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
 
     let shouldAddPageBreak = coords.bottom > pageHeightThreshold * scale;
     const isHardBreakNode = node.type.name === 'hardBreak';
+
+    if (node.type.name === 'paragraph') {
+      const pageBreakBefore = hasPageBreak(node.attrs.styleId, editor);
+      console.debug('paragraph STYLE', pageBreakBefore);
+      if (pageBreakBefore) shouldAddPageBreak = true;
+    };
 
     if (isHardBreakNode || shouldAddPageBreak) {
       // The node we've found extends past our threshold

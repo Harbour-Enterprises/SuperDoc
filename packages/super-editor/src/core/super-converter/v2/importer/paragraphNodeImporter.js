@@ -61,7 +61,7 @@ export const handleParagraphNode = (params) => {
       right: rightIndent,
       firstLine: firstLine,
     };
-  }
+  };
 
   const indent = pPr?.elements?.find((el) => el.name === 'w:ind');
   if (indent && indent.attributes) {
