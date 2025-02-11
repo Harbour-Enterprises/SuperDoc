@@ -690,7 +690,8 @@ const handlePdfClick = (e) => {
   pointer-events: auto;
 } */
 
-@media (max-width: 768px) {
+/* 834px is iPad screen size in portrait orientation */
+@media (max-width: 834px) {
   .superdoc .superdoc__layers {
     margin: 0;
     border: 0 !important;

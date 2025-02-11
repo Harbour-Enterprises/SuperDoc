@@ -212,6 +212,7 @@ onMounted(async () => {
 }
 
 .dev-app__view {
+  width: 100%;
   display: flex;
   padding-top: 20px;
   padding-left: 20px;

@@ -279,24 +279,23 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
   doc.descendants((node, pos) => {
     coords = view?.coordsAtPos(pos);
     if (!coords) return;
-
-    let shouldAddPageBreak = coords.bottom > pageHeightThreshold * scale;
+    
+    let shouldAddPageBreak = coords.bottom > pageHeightThreshold;
     const isHardBreakNode = node.type.name === 'hardBreak';
 
     if (isHardBreakNode || shouldAddPageBreak) {
       // The node we've found extends past our threshold
       // We need to zoom in and investigate position by position until we find the exact break point
       // And we get the actual top and bottom of the break
-      const calculatedThreshold = pageHeightThreshold * scale;
       const {
         top: actualBreakTop,
         bottom: actualBreakBottom,
         pos: breakPos,
-      } = getActualBreakCoords(view, pos, calculatedThreshold);
+      } = getActualBreakCoords(view, pos, pageHeightThreshold);
 
       if (isDebugging) {
         console.debug('----- [pagination page break] ----');
-        console.debug('[pagination page break] Expected pageHeightThreshold:', pageHeightThreshold, 'Calculated threshold:', calculatedThreshold);
+        console.debug('[pagination page break] Expected pageHeightThreshold:', pageHeightThreshold);
         console.debug('[pagination page break]  Actual top:', actualBreakTop, 'Actual bottom:', actualBreakBottom);
         console.debug('[pagination page break]  Pos:', pos, 'Break pos:', breakPos);
         console.debug('---- [pagination page break end] ---- \n\n\n');

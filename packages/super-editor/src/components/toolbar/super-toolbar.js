@@ -28,7 +28,17 @@ export class SuperToolbar extends EventEmitter {
       this.emit('superdoc-command', { item, argument });
       const layers = document.querySelector('.layers');
       if (!layers) return;
-      layers.style.zoom = argument;
+
+      const isMobileDevice = typeof screen.orientation !== 'undefined';
+      // 768px breakpoint doesn't consider iPad in portrait orientation
+      const isSmallScreen = window.matchMedia('(max-width: 834px)').matches;
+      
+      if (isMobileDevice && isSmallScreen) {
+        layers.style.transformOrigin = 'top left';
+        layers.style.transform = `scale(${parseInt(argument) / 100})`;
+      } else {
+        layers.style.zoom = argument;
+      }
     },
 
     setDocumentMode: ({ item, argument }) => {

@@ -143,7 +143,6 @@ onMounted(async () => {
 
 <style>
 .sd-toolbar {
-  min-width: 800px;
   width: 100%;
 }
 .superdoc .layers {
@@ -162,6 +161,12 @@ onMounted(async () => {
 .superdoc .layers:focus-within {
   border: 1px solid #015fcc;
   box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.3);
+}
+
+@media screen and (max-width: 1024px) {
+  .superdoc {
+    max-width: calc(100vw - 10px);
+  }
 }
 </style>
 
@@ -185,6 +190,7 @@ onMounted(async () => {
   justify-content: space-between;
   background-color: rgb(222, 237, 243);
   padding: 20px;
+  box-sizing: border-box;
 }
 
 .dev-app__header-side {
