@@ -91,6 +91,9 @@ class SuperConverter {
     this.footers = {};
     this.footerIds = { default: null, even: null, odd: null, first: null };
 
+    // Linked Styles
+    this.linkedStyles = [];
+
     // This is the JSON schema that we will be working with
     this.json = params?.json;
 
@@ -275,6 +278,7 @@ class SuperConverter {
     if (result) {
       this.savedTagsToRestore.push({ ...result.savedTagsToRestore });
       this.pageStyles = result.pageStyles;
+      this.linkedStyles = result.linkedStyles;
       return result.pmDoc;
     } else {
       return null;

@@ -74,6 +74,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       pmDoc: result,
       savedTagsToRestore: node,
       pageStyles: getDocumentStyles(node, docx, converter, editor),
+      linkedStyles: getStyleDefinitions(docx),
     };
   }
   return null;
@@ -354,10 +355,21 @@ function getDocumentStyles(node, docx, converter, editor) {
       case 'w:footerReference':
         getHeaderFooter(el, 'footer', docx, converter, editor);
         break;
+      case 'w:titlePg':
+        converter.headerIds.titlePg = true;
     }
   });
   return styles;
-}
+};
+
+function getStyleDefinitions(docx) {
+  const styles = docx['word/styles.xml'];
+  if (!styles) return [];
+
+  const { elements } = styles.elements[0];
+  const styleDefinitions = elements.filter((el) => el.name === 'w:style');
+  return styleDefinitions;
+};
 
 function getHeaderFooter(el, elementType, docx, converter, editor) {
   const rels = docx['word/_rels/document.xml.rels'];
