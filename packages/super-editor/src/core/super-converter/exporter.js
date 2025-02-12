@@ -62,7 +62,7 @@ import { marks } from 'prosemirror-schema-basic';
  */
 export function exportSchemaToJson(params) {
   // console.debug('\nExporting schema to JSON:', params.node, '\n');
-  const { type } = params.node;
+  const { type } = params.node || {};
 
   // Node handlers for each node type that we can export
   const router = {
@@ -666,7 +666,7 @@ function translateLineBreak(params) {
  * @returns {XmlReadyNode} The translated table node
  */
 function translateTable(params) {
-  params.node = preProcessVerticalMergeCells(params.node);
+  params.node = preProcessVerticalMergeCells(params.node, params);
   const elements = translateChildNodes(params);
   const tableProperties = generateTableProperties(params.node);
   const gridProperties = generateTableGrid(params.node);
@@ -684,19 +684,39 @@ function translateTable(params) {
  * @param {ExportParams.node} table The table node
  * @returns {ExportParams.node} The table node with merged cells restored
  */
-function preProcessVerticalMergeCells(table) {
+function preProcessVerticalMergeCells(table, { editorSchema }) {
   const { content } = table;
   for (let rowIndex = 0; rowIndex < content.length; rowIndex++) {
     const row = content[rowIndex];
     if (!row.content) continue;
     for (let cellIndex = 0; cellIndex < row.content?.length; cellIndex++) {
       const cell = row.content[cellIndex];
+      if (!cell) {
+        console.log('no cell');
+        continue;
+      }
       const { attrs } = cell;
       if (attrs.rowspan > 1) {
-        const { mergedCells } = attrs;
+        // const { mergedCells } = attrs;
         const rowsToChange = content.slice(rowIndex + 1, rowIndex + attrs.rowspan);
+        const mergedCell = {
+          type: cell.type,
+          content: [
+            // cells must end with a paragraph
+            editorSchema.nodes.paragraph.createAndFill().toJSON(),
+          ],
+          attrs: {
+            ...cell.attrs,
+            // reset colspan and rowspan
+            colspan: null,
+            rowspan: null,
+            // to add vMerge
+            continueMerge: true,
+          },
+        };
+
         rowsToChange.forEach((rowToChange, mergedIndex) => {
-          rowToChange.content.splice(cellIndex, 0, mergedCells[mergedIndex]);
+          rowToChange.content.splice(cellIndex, 0, mergedCell);
         });
       }
     }
@@ -916,18 +936,19 @@ function generateTableCellProperties(node) {
   const elements = [];
 
   const { attrs } = node;
-  const { width, cellWidthType = 'dxa', background = {}, colspan, widthUnit } = attrs;
+  const { colwidth = [], cellWidthType = 'dxa', background = {}, colspan, rowspan, widthUnit } = attrs;
+  const colwidthSum = colwidth.reduce((acc, curr) => acc + curr, 0);
 
   const cellWidthElement = {
     name: 'w:tcW',
-    attributes: { 'w:w': widthUnit === 'px' ? pixelsToTwips(width) : inchesToTwips(width), 'w:type': cellWidthType },
+    attributes: { 'w:w': widthUnit === 'px' ? pixelsToTwips(colwidthSum) : inchesToTwips(colwidthSum), 'w:type': cellWidthType },
   };
   elements.push(cellWidthElement);
 
   if (colspan) {
     const gridSpanElement = {
       name: 'w:gridSpan',
-      attributes: { 'w:val': colspan },
+      attributes: { 'w:val': `${colspan}` },
     };
     elements.push(gridSpanElement);
   }
@@ -958,12 +979,20 @@ function generateTableCellProperties(node) {
     };
     elements.push(vertAlignElement);
   }
-
-  const { vMerge } = attrs;
-  if (vMerge) {
+  
+  // const { vMerge } = attrs;
+  // if (vMerge) {}
+   if (rowspan && rowspan > 1) {
     const vMergeElement = {
       name: 'w:vMerge',
-      attributes: { 'w:val': null },
+      type: 'element',
+      attributes: { 'w:val': 'restart' },
+    };
+    elements.push(vMergeElement);
+  } else if (attrs.continueMerge) {
+    const vMergeElement = {
+      name: 'w:vMerge',
+      type: 'element',
     };
     elements.push(vMergeElement);
   }

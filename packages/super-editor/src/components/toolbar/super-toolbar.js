@@ -11,6 +11,7 @@ import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { getQuickFormatList } from '@extensions/linked-styles/linked-styles.js';
 import { getAvailableColorOptions, makeColorOption, renderColorOptions } from './color-dropdown-helpers.js';
+import { isInTable } from '@helpers/isInTable.js';
 
 export class SuperToolbar extends EventEmitter {
   config = {
@@ -173,6 +174,22 @@ export class SuperToolbar extends EventEmitter {
       }
       this.updateToolbarState();
     },
+
+    insertTable: ({ item, argument }) => {
+      this.#runCommandWithArgumentOnly({ item, argument });
+    },
+
+    executeTableCommand: ({ item, argument }) => {
+      if (!argument) return;
+      
+      let command = argument.command;
+
+      if (command in this.activeEditor.commands) {
+        this.activeEditor.commands[command](argument);
+      }
+
+      this.updateToolbarState();
+    },
   };
 
   constructor(config) {
@@ -295,6 +312,7 @@ export class SuperToolbar extends EventEmitter {
     }
 
     const marks = getActiveFormatting(this.activeEditor);
+    const inTable = isInTable(this.activeEditor.state);
 
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
@@ -315,6 +333,11 @@ export class SuperToolbar extends EventEmitter {
         item.activate(activeMark.attrs);
       } else {
         item.deactivate();
+      }
+
+      if (item.name.value === 'tableActions') {
+        if (inTable) item.disabled.value = false;
+        else item.disabled.value = true;
       }
     });
   }
