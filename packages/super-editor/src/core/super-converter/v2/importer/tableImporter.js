@@ -157,11 +157,12 @@ export function handleTableCellNode(
   const fontFamily = fonts['ascii'];
 
   if (width) {
-    attributes['width'] = width;
+    attributes['colwidth'] = [width];
     attributes['widthUnit'] = 'px';
   }
+
   if (widthType) attributes['widthType'] = widthType;
-  if (colspan) attributes['colspan'] = colspan;
+  if (colspan) attributes['colspan'] = Number(colspan);
   if (background) attributes['background'] = background;
   if (verticalAlign) attributes['verticalAlign'] = verticalAlign;
   if (fontSize) attributes['fontSize'] = fontSize;

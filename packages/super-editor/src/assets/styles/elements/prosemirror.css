@@ -102,13 +102,78 @@ img.ProseMirror-separator {
   margin-bottom: 1.5px;
 }
 
+/* 
+Tables 
+https://github.com/ProseMirror/prosemirror-tables/blob/master/style/tables.css
+https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
+*/
+.ProseMirror.resize-cursor {
+  cursor: ew-resize;
+  cursor: col-resize
+}
+
+.ProseMirror .tableWrapper {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.ProseMirror table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  table-layout: fixed;
+  overflow: hidden;
+  margin: 0;
+  /* width: 100%; */
+}
+
+.ProseMirror tr {
+  position: relative;
+}
+
+.ProseMirror td,
+.ProseMirror th {
+  min-width: 1em;
+  padding: 3px 5px;
+  position: relative;
+  vertical-align: top;
+  box-sizing: border-box;
+  /* border: 1px solid #000; */
+}
+
+.ProseMirror th {
+  font-weight: bold;
+  text-align: left
+}
+
 .ProseMirror td p {
   width: 100%;
   word-break: break-all;
 }
-.ProseMirror table {
-  table-layout: fixed;
+
+.ProseMirror table .column-resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: -2px; /* 0 */
+  width: 4px;
+  z-index: 20;
+  background-color: #adf;
+  pointer-events: none;
 }
+
+.ProseMirror table .selectedCell:after {
+  position: absolute;
+  content: '';
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(200, 200, 255, 0.4);
+  pointer-events: none;
+  z-index: 2;
+}
+/* Tables - end */
+
 /* Track changes */
 .ProseMirror .track-insert-dec,
 .ProseMirror .track-delete-dec,
