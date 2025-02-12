@@ -49,6 +49,14 @@ export class Schema {
         }),
       );
 
+      const additionalNodeFields = nodeExtensions.reduce((fields, e) => {
+        const extendNodeSchema = getExtensionConfigField(e, 'extendNodeSchema', context);
+        return {
+          ...fields,
+          ...(extendNodeSchema ? extendNodeSchema(extension) : {}),
+        };
+      }, {});
+      
       const schema = cleanSchemaItem({
         content: callOrGet(getExtensionConfigField(extension, 'content', context)),
         group: callOrGet(getExtensionConfigField(extension, 'group', context)),
@@ -61,6 +69,7 @@ export class Schema {
         defining: callOrGet(getExtensionConfigField(extension, 'defining', context)),
         isolating: callOrGet(getExtensionConfigField(extension, 'isolating', context)),
         attrs,
+        ...additionalNodeFields,
       });
 
       const parseDOM = callOrGet(getExtensionConfigField(extension, 'parseDOM', context));

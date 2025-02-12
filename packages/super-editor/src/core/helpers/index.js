@@ -23,3 +23,4 @@ export * from './getActiveFormatting.js';
 export * from './findChildren.js';
 export * from './posToDOMRect.js';
 export * from './findMark.js';
+export * from './isInTable.js';

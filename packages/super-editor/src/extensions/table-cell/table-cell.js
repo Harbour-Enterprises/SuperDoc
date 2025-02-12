@@ -9,45 +9,58 @@ export const TableCell = Node.create({
 
   isolating: true,
 
-  parseDOM() {
-    return [{ tag: 'td' }];
-  },
-
   addOptions() {
     return {
       htmlAttributes: {},
     };
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['td', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
-  },
-
   addAttributes() {
     return {
-      width: {
+      colspan: { 
+        default: 1, 
+      },
+
+      rowspan: {
+        default: 1,
+      },
+
+      colwidth: {
+        default: [100],
+        parseDOM: (elem) => {
+          const colwidth = elem.getAttribute('data-colwidth');
+          const value = colwidth
+            ? colwidth.split(',').map((width) => parseInt(width, 10))
+            : null;
+          return value;
+        },
+        renderDOM: (attrs) => {
+          if (!attrs.colwidth) return {};
+          return {
+            'data-colwidth': attrs.colwidth.join(','),
+          };
+        },
+      },
+
+      /* width: {
         renderDOM: ({ width, widthType, widthUnit }) => {
           if (!width) return {};
           let unit = widthUnit === 'px' ? widthUnit : 'in';
           if (widthType === 'pct') unit = '%';
-          const style = `width: ${width}${unit};`;
+          const style = `width: ${width}${unit}`;
           return { style };
         },
-      },
-      widthType: { default: 'auto', rendered: false },
-      widthUnit: { default: null, rendered: false },
-      colspan: { default: 1 },
-      rowspan: {
-        default: 1,
-      },
+      }, */
+      
       background: {
         renderDOM({ background }) {
           if (!background) return {};
           const { color } = background || {};
-          const style = `background-color: #${color || 'transparent'}`;
+          const style = `background-color: ${color ? `#${color}` : 'transparent'}`;
           return { style };
         },
       },
+
       verticalAlign: {
         renderDOM({ verticalAlign }) {
           if (!verticalAlign) return {};
@@ -55,6 +68,7 @@ export const TableCell = Node.create({
           return { style };
         },
       },
+
       cellMargins: {
         renderDOM({ cellMargins }) {
           if (!cellMargins) return {};
@@ -69,7 +83,9 @@ export const TableCell = Node.create({
           return { style };
         },
       },
+
       borders: {
+        default: () => createCellBordersDefault(),
         renderDOM({ borders }) {
           if (!borders) return {};
           const sides = ['top', 'right', 'bottom', 'left'];
@@ -84,13 +100,33 @@ export const TableCell = Node.create({
           return { style };
         },
       },
-      mergedCells: {
-        rendered: false,
-        default: [],
+
+      widthType: { 
+        default: 'auto', 
+        rendered: false, 
       },
-      vMerge: {
-        rendered: false,
+
+      widthUnit: { 
+        default: 'px', 
+        rendered: false, 
       },
     };
   },
+
+  parseDOM() {
+    return [{ tag: 'td' }];
+  },
+
+  renderDOM({ htmlAttributes }) {
+    return ['td', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  },
 });
+
+function createCellBordersDefault() {
+  return {
+    top: { size: 0.66665 },
+    left: { size: 0.66665 },
+    bottom: { size: 0.66665 },
+    right: { size: 0.66665 },
+  };
+};
