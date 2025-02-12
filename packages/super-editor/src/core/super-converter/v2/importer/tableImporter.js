@@ -127,7 +127,7 @@ export function handleTableCellNode(
   const gridColumnWidths = getGridColumnWidths(table);
 
   const tcWidth = tcPr?.elements?.find((el) => el.name === 'w:tcW');
-  let width = tcWidth ? twipsToInches(tcWidth.attributes['w:w']) : null;
+  let width = tcWidth ? twipsToPixels(tcWidth.attributes['w:w']) : null;
   const widthType = tcWidth?.attributes['w:type'];
 
   if (!width && columnWidth) width = columnWidth;
@@ -156,7 +156,10 @@ export function handleTableCellNode(
   const { fontSize, fonts = {} } = referencedStyles;
   const fontFamily = fonts['ascii'];
 
-  if (width) attributes['width'] = width;
+  if (width) {
+    attributes['width'] = width;
+    attributes['widthUnit'] = 'px';
+  }
   if (widthType) attributes['widthType'] = widthType;
   if (colspan) attributes['colspan'] = colspan;
   if (background) attributes['background'] = background;
@@ -456,7 +459,7 @@ const getGridColumnWidths = (tableNode) => {
   return (
     tblGrid?.elements?.flatMap((el) => {
       if (el.name !== 'w:gridCol') return [];
-      return twipsToInches(el.attributes['w:w']);
+      return twipsToPixels(el.attributes['w:w']);
     }) || {}
   );
 };

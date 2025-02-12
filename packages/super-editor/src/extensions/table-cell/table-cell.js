@@ -26,15 +26,16 @@ export const TableCell = Node.create({
   addAttributes() {
     return {
       width: {
-        renderDOM: ({ width, widthType }) => {
+        renderDOM: ({ width, widthType, widthUnit }) => {
           if (!width) return {};
-          let unit = 'in';
+          let unit = widthUnit === 'px' ? widthUnit : 'in';
           if (widthType === 'pct') unit = '%';
           const style = `width: ${width}${unit};`;
           return { style };
         },
       },
       widthType: { default: 'auto', rendered: false },
+      widthUnit: { default: null, rendered: false },
       colspan: { default: 1 },
       rowspan: {
         default: 1,

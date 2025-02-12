@@ -102,6 +102,13 @@ img.ProseMirror-separator {
   margin-bottom: 1.5px;
 }
 
+.ProseMirror td p {
+  width: 100%;
+  word-break: break-all;
+}
+.ProseMirror table {
+  table-layout: fixed;
+}
 /* Track changes */
 .ProseMirror .track-insert-dec,
 .ProseMirror .track-delete-dec,

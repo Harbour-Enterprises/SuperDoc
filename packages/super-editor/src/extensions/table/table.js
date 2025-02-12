@@ -25,7 +25,7 @@ export const Table = Node.create({
         renderDOM: ({ tableWidth }) => {
           if (!tableWidth) return {};
           const { width, type = 'auto' } = tableWidth;
-          return { style: `min-width: ${width}px;` };
+          return { style: `width: ${width}px;` };
         },
       },
       tableStyleId: { rendered: false },

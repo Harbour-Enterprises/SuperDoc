@@ -530,7 +530,6 @@ function translateList(params) {
         };
         return listNodes.push(spacer);
       }
-      
       if (propsElementIndex === -1) {
         outputNode.elements.unshift(listProps);
       } else {
@@ -540,7 +539,7 @@ function translateList(params) {
       listNodes.push(outputNode);
     });
   });
-
+  
   return listNodes;
 }
 
@@ -776,14 +775,24 @@ function generateTableBorders(node) {
   borderTypes.forEach((type) => {
     const border = borders[type];
     if (!border) return;
-    const borderElement = {
-      name: `w:${type}`,
-      attributes: {
+    
+    let attributes = {};
+    if (!Object.keys(border).length || !border.size) {
+      attributes = {
+        'w:val': 'nil',
+      };
+    } else {
+      attributes = {
         'w:val': 'single',
         'w:sz': pixelsToEightPoints(border.size),
         'w:space': border.space || 0,
         'w:color': border?.color?.substring(1) || '000000',
-      },
+      }
+    }
+    
+    const borderElement = {
+      name: `w:${type}`,
+      attributes
     };
     elements.push(borderElement);
   });
@@ -802,7 +811,7 @@ function generateTableBorders(node) {
  */
 function generateTableGrid(node) {
   const { gridColumnWidths } = node.attrs;
-
+  
   const elements = [];
   gridColumnWidths?.forEach((width) => {
     elements.push({
@@ -883,11 +892,11 @@ function generateTableCellProperties(node) {
   const elements = [];
 
   const { attrs } = node;
-  const { width, cellWidthType = 'dxa', background = {}, colspan } = attrs;
+  const { width, cellWidthType = 'dxa', background = {}, colspan, widthUnit } = attrs;
 
   const cellWidthElement = {
     name: 'w:tcW',
-    attributes: { 'w:w': inchesToTwips(width), 'w:type': cellWidthType },
+    attributes: { 'w:w': widthUnit === 'px' ? pixelsToTwips(width) : inchesToTwips(width), 'w:type': cellWidthType },
   };
   elements.push(cellWidthElement);
 
@@ -939,15 +948,25 @@ function generateTableCellProperties(node) {
   if (!!borders && Object.keys(borders).length) {
     const cellBordersElement = {
       name: 'w:tcBorders',
-      elements: Object.entries(borders).map(([key, value]) => ({
-        name: `w:${key}`,
-        attributes: {
-          'w:val': 'single',
-          'w:color': value.color ? value.color.substring(1) : 'auto',
-          'w:sz': pixelsToEightPoints(value.size),
-          'w:space': value.space || 0,
-        },
-      })),
+      elements: Object.entries(borders).map(([key, value]) => {
+        if (!value.size) {
+          return {
+            name: `w:${key}`,
+            attributes: {
+              'w:val': 'nil',
+            }
+          };
+        }
+        return {
+          name: `w:${key}`,
+          attributes: {
+            'w:val': 'single',
+            'w:color': value.color ? value.color.substring(1) : 'auto',
+            'w:sz': pixelsToEightPoints(value.size),
+            'w:space': value.space || 0,
+          },
+        };
+      }),
     };
 
     elements.push(cellBordersElement);
