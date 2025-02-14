@@ -92,6 +92,18 @@ export function exportSchemaToJson(params) {
  */
 function translateBodyNode(params) {
   const sectPr = params.bodyNode?.elements.find((n) => n.name === 'w:sectPr') || {};
+
+  if (params.converter) {
+    const newMargins = params.converter.pageStyles.pageMargins;
+    const sectPrMargins = sectPr.elements.find((n) => n.name === 'w:pgMar');
+    const { attributes } = sectPrMargins;
+    Object.entries(newMargins).forEach(([key, value]) => {
+      const convertedValue = inchesToTwips(value);
+      attributes[`w:${key}`] = convertedValue;
+    });
+    sectPrMargins.attributes = attributes;
+  };
+
   const elements = translateChildNodes(params);
   return {
     name: 'w:body',

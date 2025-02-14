@@ -42,6 +42,7 @@ const init = async () => {
     documentMode: 'editing',
     toolbarGroups: ['left', 'center', 'right'],
     pagination: true,
+    rulers: true,
     // isDev: true,
     user: {
       name: `SuperDoc ${Math.floor(1000 + Math.random() * 9000)}`,

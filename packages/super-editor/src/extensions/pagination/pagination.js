@@ -174,6 +174,9 @@ const performUpdate = (editor, view, previousDecorations) => {
     );
     view.dispatch(updateTransaction);
   };
+
+  // Emit that pagination has been updated
+  editor.emit('paginationUpdate');
 };
 
 /**

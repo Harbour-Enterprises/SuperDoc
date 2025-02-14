@@ -1,11 +1,12 @@
 <script setup>
 import 'tippy.js/dist/tippy.css';
 import { NSkeleton } from 'naive-ui';
-import { ref, onMounted, onBeforeUnmount, computed, shallowRef } from 'vue';
+import { ref, onMounted, onBeforeUnmount, computed, shallowRef, reactive, nextTick } from 'vue';
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
-import { observeDomChanges } from './pagination-helpers.js';
+import { observeDomChanges, adjustPaginationBreaks } from './pagination-helpers.js';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
+import Ruler from './rulers/Ruler.vue';
 
 const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 
@@ -38,6 +39,8 @@ const editor = shallowRef(null);
 
 const editorWrapper = ref(null);
 const editorElem = ref(null);
+const pageSize = reactive({ width: 8.5, height: 11 });
+const pageMargins = reactive({ top: 1, right: 1, bottom: 1, left: 1 });
 let dataPollTimeout;
 
 const stopPolling = () => {
@@ -114,6 +117,16 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     ...props.options,
   });
 
+  editor.value.on('paginationUpdate', () => {
+    adjustPaginationBreaks(editorElem, editor);
+  });
+
+  editor.value.on('create', ({ editor }) => {
+    const { pageSize: docPageSize = {}, pageMargins: docPageMargins = {} } = editor.converter.pageStyles ?? {};
+    Object.assign(pageSize, docPageSize);
+    Object.assign(pageMargins, docPageMargins);
+  });
+
   editor.value.on('collaborationReady', () => {
     setTimeout(() => {
       editorReady.value = true;
@@ -155,6 +168,23 @@ const handleMarginClick = (event) => {
   onMarginClickCursorChange(event, editor.value);
 };
 
+/**
+ * Triggered when the user changes the margin value from the ruler
+ *
+ * @param {Object} param0
+ * @param {String} param0.side - The side of the margin being changed
+ * @param {Number} param0.value - The new value of the margin in inches
+ * @returns {void}
+ */
+const handleMarginChange = ({ side, value }) => {
+  if (!editor.value) return;
+
+  const pageStyles = editor.value.getPageStyles();
+  const { pageMargins } = pageStyles;
+  const update = { ...pageMargins, [side]: value };
+  editor.value?.updatePageStyle({ pageMargins: update });
+};
+
 onBeforeUnmount(() => {
   paginationObserver?.disconnect();
   stopPolling();
@@ -165,6 +195,14 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="super-editor-container">
+
+    <Ruler
+      v-if="options.rulers"
+      :page-size="pageSize"
+      :page-margins="pageMargins"
+      @margin-change="handleMarginChange"
+    />
+
     <div 
       class="super-editor"
       ref="editorWrapper"

@@ -80,6 +80,7 @@ export class Editor extends EventEmitter {
     onDocumentLocked: () => null,
     onFirstRender: () => null,
     onCollaborationReady: () => null,
+    onPaginationUpdate: () => null,
     onException: () => null,
     // async (file) => url;
     handleImageUpload: null,
@@ -140,6 +141,7 @@ export class Editor extends EventEmitter {
     this.on('commentsUpdate', this.options.onCommentsUpdate);
     this.on('locked', this.options.onDocumentLocked);
     this.on('collaborationReady', this.#onCollaborationReady);
+    this.on('paginationUpdate', this.options.onPaginationUpdate);
 
     // this.#loadComments();
     this.initializeCollaborationData();
@@ -849,6 +851,30 @@ export class Editor extends EventEmitter {
    */
   getPageStyles() {
     return this.converter?.pageStyles;
+  }
+
+  /**
+   * Update page styles
+   * 
+   * @param {Object} param0 
+   * @param {Object} param0.pageMargins The new page margins
+   * @returns {void}
+   */
+  updatePageStyle({ pageMargins }) {
+    if (!this.converter) return;
+
+    let hasMadeUpdate = false;
+    if (pageMargins) {
+      this.converter.pageStyles.pageMargins = pageMargins;
+      this.initDefaultStyles();
+      hasMadeUpdate = true;
+    };
+
+    if (hasMadeUpdate) {
+      const newTr = this.view.state.tr;
+      newTr.setMeta('forceUpdatePagination', true);
+      this.view.dispatch(newTr);
+    };
   }
 
   /**

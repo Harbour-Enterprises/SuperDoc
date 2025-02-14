@@ -293,6 +293,7 @@ const editorOptions = (doc) => {
     colors: proxy.$superdoc.colors,
     role: proxy.$superdoc.config.role,
     documentMode: proxy.$superdoc.config.documentMode,
+    rulers: proxy.$superdoc.config.rulers,
     onBeforeCreate: onEditorBeforeCreate,
     onCreate: onEditorCreate,
     onDestroy: onEditorDestroy,

@@ -60,6 +60,7 @@ const editorOptions = computed(() => {
   return {
     documentId: 'dev-123',
     user,
+    rulers: true,
     onCreate,
     onCommentClicked,
     suppressSkeletonLoader: true,
