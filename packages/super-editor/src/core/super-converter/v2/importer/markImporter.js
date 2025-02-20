@@ -7,7 +7,7 @@ import { twipsToInches, twipsToLines } from '../../helpers.js';
  * @param property
  * @returns {PmMarkJson[]}
  */
-export function parseMarks(property, unknownMarks = []) {
+export function parseMarks(property, unknownMarks = [], docx = null) {
   const marks = [];
   const seen = new Set();
 
@@ -49,7 +49,7 @@ export function parseMarks(property, unknownMarks = []) {
 
       // Marks with attrs: we need to get their values
       if (Object.keys(attributes).length) {
-        const value = getMarkValue(m.type, attributes);
+        const value = getMarkValue(m.type, attributes, docx);
         newMark.attrs = {};
         newMark.attrs[m.property] = value;
       }
@@ -113,14 +113,14 @@ export function createImportMarks(marks) {
  * @param attributes
  * @returns {*}
  */
-function getMarkValue(markType, attributes) {
+function getMarkValue(markType, attributes, docx) {
   if (markType === 'tabs') markType = 'textIndent';
 
   const markValueMapper = {
     color: () => `#${attributes['w:val']}`,
     fontSize: () => `${attributes['w:val'] / 2}pt`,
     textIndent: () => getIndentValue(attributes),
-    fontFamily: () => attributes['w:ascii'],
+    fontFamily: () => getFontFamilyValue(attributes, docx),
     lineHeight: () => getLineHeightValue(attributes),
     textAlign: () => attributes['w:val'],
     link: () => attributes['href'],
@@ -140,6 +140,26 @@ function getMarkValue(markType, attributes) {
     return markValueMapper[markType]();
   }
 }
+
+function getFontFamilyValue(attributes, docx) {
+  const ascii = attributes['w:ascii'];
+  const themeAscii = attributes['w:asciiTheme'];
+
+  if (!docx || !themeAscii) return ascii;
+  const theme = docx['word/theme/theme1.xml'];
+  if (!theme) return ascii;
+
+  const { elements: topElements } = theme;
+  const { elements } = topElements[0];
+  const themeElements = elements.find((el) => el.name === 'a:themeElements');
+  const fontScheme = themeElements.elements.find((el) => el.name === 'a:fontScheme');
+  const majorFont = fontScheme.elements.find((el) => el.name === 'a:majorFont');
+
+  const latin = majorFont.elements.find((el) => el.name === 'a:latin');
+  const typeface = latin.attributes['typeface'];
+  return typeface;
+
+};
 
 function getIndentValue(attributes) {
   let value = attributes['w:left'];

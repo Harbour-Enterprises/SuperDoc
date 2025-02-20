@@ -66,7 +66,7 @@ const editorOptions = computed(() => {
     suppressSkeletonLoader: true,
     users: [], // For comment @-mentions, only users that have access to the document
     pagination: true,
-    telemetry: telemetry.value,
+    // telemetry: telemetry.value,
   }
 });
 

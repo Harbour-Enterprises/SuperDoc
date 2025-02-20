@@ -1,5 +1,5 @@
 import { undoDepth, redoDepth } from 'prosemirror-history';
-import { h, onDeactivated } from 'vue';
+import { h } from 'vue';
 
 import { scrollToElement } from './scroll-helpers';
 import { sanitizeNumber } from './helpers';
@@ -8,6 +8,7 @@ import IconGrid from './IconGrid.vue';
 import AlignmentButtons from './AlignmentButtons.vue';
 import LinkInput from './LinkInput.vue';
 import DocumentMode from './DocumentMode.vue';
+import LinkedStyle from './LinkedStyle.vue';
 
 const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
@@ -36,7 +37,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     labelAttr: 'fontFamily',
     hasCaret: true,
     isWide: true,
-    style: { width: '70px' },
+    style: { width: '150px' },
     suppressActiveHighlight: true,
     options: [
       {
@@ -719,6 +720,46 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     tooltip: 'Show or hide ruler',
   });
 
+  const linkedStyles = useToolbarItem({
+    type: 'dropdown',
+    name: 'linkedStyles',
+    command: 'setLinkedStyle',
+    icon: toolbarIcons.paintbrush,
+    defaultLabel: 'Quick format',
+    label: 'Quick format',
+    hasCaret: true,
+    isWide: true,
+    style: { width: '150px' },
+    suppressActiveHighlight: true,
+    disabled: false,
+    options: [
+      {
+        type: 'render',
+        key: 'linkedStyle',
+        render: () => {
+          const handleSelect = (style) => {
+            closeDropdown(linkedStyles);
+            const itemWithCommand = { ...linkedStyles, command: 'setLinkedStyle' };
+            superToolbar.emitCommand({ item: itemWithCommand, argument: style });
+          };
+
+          return h('div', {}, [
+            h(LinkedStyle, {
+              editor: superToolbar.activeEditor,
+              onSelect: handleSelect,
+            })
+          ])
+        }
+      }
+    ],
+    onActivate: () => {
+      linkedStyles.disabled.value = false;
+    },
+    onDeactivate: () => {
+      linkedStyles.disabled.value = true;
+    },
+  });
+
   // Responsive toolbar calculations
   const itemsToHide = ['zoom', 'fontFamily', 'fontSize', 'redo'];
   const hideWideItemsEndpoint = 600;
@@ -755,6 +796,8 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     numberedList,
     indentLeft,
     indentRight,
+    separator,
+    linkedStyles,
     separator,
     pageBreakTool,
     copyFormat,

@@ -32,6 +32,7 @@ import ellipsisVerticalIconSvg from '@harbour-enterprises/common/icons/ellipsis-
 import caretUpIconSvg from '@harbour-enterprises/common/icons/caret-up-solid.svg?raw';
 import caretDownIconSvg from '@harbour-enterprises/common/icons/caret-down-solid.svg?raw';
 import rulerSvg from '@harbour-enterprises/common/icons/ruler-solid.svg?raw';
+import paintbrushSvg from '@harbour-enterprises/common/icons/paintbrush-solid.svg?raw';
 
 export const toolbarIcons = {
   undo: rotateLeftIconSvg,
@@ -71,4 +72,5 @@ export const toolbarIcons = {
   dropdownCaretUp: caretUpIconSvg,
   dropdownCaretDown: caretDownIconSvg,
   ruler: rulerSvg,
+  paintbrush: paintbrushSvg,
 }
