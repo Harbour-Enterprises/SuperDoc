@@ -112,7 +112,7 @@ const generateDecorations = (doc, styles) => {
  * @param {Object} node The current node
  * @returns {String} The style string
  */
-export const generateLinkedStyleString = (linkedStyle, node) => {
+export const generateLinkedStyleString = (linkedStyle, node, includeSpacing = true) => {
   if (!linkedStyle?.definition?.styles) return '';
   const markValue = {};
 
@@ -139,12 +139,12 @@ export const generateLinkedStyleString = (linkedStyle, node) => {
 
     // If no mark already in the node, we override the style
     if (!mark) {
-      if (key === 'spacing') {
+      if (key === 'spacing' && includeSpacing) {
         const space = getSpacingStyle(value);
         Object.entries(space).forEach(([k, v]) => {
           markValue[k] = v;
         });
-      } else if (key === 'indent') {
+      } else if (key === 'indent' && includeSpacing) {
         const { leftIndent, rightIndent, firstLine } = value;
         if (leftIndent) markValue['margin-left'] = leftIndent + 'px';
         if (rightIndent) markValue['margin-right'] = rightIndent + 'px';

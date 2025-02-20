@@ -21,7 +21,7 @@ const select = (style) => {
   <div class="linked-style-buttons">
     <div
       v-for="style in getQuickFormatList(editor)" class="style-item" @click="select(style)">
-      <div class="style-name" :style="generateLinkedStyleString(style)">
+      <div class="style-name" :style="generateLinkedStyleString(style, null, false)">
         {{ style.definition.attrs.name }}
       </div>
     </div>
