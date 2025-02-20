@@ -1,7 +1,7 @@
 <script setup>
 import { computed } from 'vue';
 import { toolbarIcons } from './toolbarIcons.js';
-import { generateLinkedStyleString } from '@extensions/linked-styles/index.js';
+import { generateLinkedStyleString, getQuickFormatList } from '@extensions/linked-styles/index.js';
 
 const emit = defineEmits(['select']);
 const props = defineProps({
@@ -15,22 +15,12 @@ const select = (style) => {
   emit('select', style);
 };
 
-const getStylesList = computed(() => {
-  return props.editor.converter.linkedStyles
-      .filter((style) => {
-        return style.definition?.attrs?.qFormat;
-      })
-      .sort((a, b) => {
-        return a.definition.attrs.name.localeCompare(b.definition.attrs.name);
-      });
-});
-
 </script>
 
 <template>
   <div class="linked-style-buttons">
     <div
-      v-for="style in getStylesList" class="style-item" @click="select(style)">
+      v-for="style in getQuickFormatList(editor)" class="style-item" @click="select(style)">
       <div class="style-name" :style="generateLinkedStyleString(style)">
         {{ style.definition.attrs.name }}
       </div>

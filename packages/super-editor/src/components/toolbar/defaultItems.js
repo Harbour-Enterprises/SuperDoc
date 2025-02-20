@@ -1,5 +1,5 @@
 import { undoDepth, redoDepth } from 'prosemirror-history';
-import { h, onDeactivated } from 'vue';
+import { h } from 'vue';
 
 import { scrollToElement } from './scroll-helpers';
 import { sanitizeNumber } from './helpers';
@@ -731,6 +731,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     isWide: true,
     style: { width: '150px' },
     suppressActiveHighlight: true,
+    disabled: false,
     options: [
       {
         type: 'render',
@@ -750,7 +751,13 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
           ])
         }
       }
-    ]
+    ],
+    onActivate: () => {
+      linkedStyles.disabled.value = false;
+    },
+    onDeactivate: () => {
+      linkedStyles.disabled.value = true;
+    },
   });
 
   // Responsive toolbar calculations
