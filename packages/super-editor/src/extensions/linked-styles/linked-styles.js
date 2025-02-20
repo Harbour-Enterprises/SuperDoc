@@ -197,11 +197,11 @@ export const getSpacingStyleString = (spacing) => {
 
 export const getQuickFormatList = (editor) => {
   const styles = editor.converter.linkedStyles || [];
-  return styles
+  return styles 
     .filter((style) => {
-      return style.definition?.attrs?.qFormat;
+      return style.type === 'paragraph' && style.definition.attrs;
     })
     .sort((a, b) => {
-      return a.definition.attrs.name.localeCompare(b.definition.attrs.name);
+      return a.definition.attrs?.name.localeCompare(b.definition.attrs?.name);
     });
 };

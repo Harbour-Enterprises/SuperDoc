@@ -173,43 +173,49 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
   const firstMatch = elementsWithId[0];
   if (!firstMatch) return result;
 
-  let name;
   const qFormat = elementsWithId.find((el) => {
     const qFormat = el.elements.find((innerEl) => innerEl.name === 'w:qFormat');
-    const wName = el.elements.find((innerEl) => innerEl.name === 'w:name');
-    if (wName) name = wName.attributes['w:val'];
     return qFormat;
   });
 
+  const name = elementsWithId.find(el =>
+    el.elements.some(inner => inner.name === 'w:name')
+  )?.elements.find(inner => inner.name === 'w:name')?.attributes['w:val'];
+
   // pPr
   const pPr = firstMatch.elements.find((el) => el.name === 'w:pPr');
-  if (!pPr || !pPr.elements) return result;
+  const spacing = pPr?.elements?.find((el) => el.name === 'w:spacing');
+  const justify = pPr?.elements?.find((el) => el.name === 'w:jc');
+  const indent = pPr?.elements?.find((el) => el.name === 'w:ind');
 
-  const spacing = pPr?.elements.find((el) => el.name === 'w:spacing');
-  const justify = pPr?.elements.find((el) => el.name === 'w:jc');
-  const indent = pPr?.elements.find((el) => el.name === 'w:ind');
+  let lineSpaceBefore, lineSpaceAfter, line;
+  if (spacing) {
+    lineSpaceBefore = twipsToPixels(spacing?.attributes['w:before']);
+    lineSpaceAfter = twipsToPixels(spacing?.attributes['w:after']);
+    line = twipsToLines(spacing?.attributes['w:line']);
+  };
 
-  const lineSpaceBefore = twipsToPixels(spacing?.attributes['w:before']);
-  const lineSpaceAfter = twipsToPixels(spacing?.attributes['w:after']);
-  const line = twipsToLines(spacing?.attributes['w:line']);
-  const textAlign = justify?.attributes['w:val'];
-  const leftIndent = twipsToPixels(indent?.attributes['w:left']);
-  const rightIndent = twipsToPixels(indent?.attributes['w:right']);
-  const firstLine = twipsToPixels(indent?.attributes['w:firstLine']);
+  let textAlign, leftIndent, rightIndent, firstLine;
+  if (indent) {
+    textAlign = justify?.attributes['w:val'];
+    leftIndent = twipsToPixels(indent?.attributes['w:left']);
+    rightIndent = twipsToPixels(indent?.attributes['w:right']);
+    firstLine = twipsToPixels(indent?.attributes['w:firstLine']);
+  };
 
-  const keepNext = pPr?.elements.find((el) => el.name === 'w:keepNext');
-  const keepLines = pPr?.elements.find((el) => el.name === 'w:keepLines');
+  const keepNext = pPr?.elements?.find((el) => el.name === 'w:keepNext');
+  const keepLines = pPr?.elements?.find((el) => el.name === 'w:keepLines');
 
-  const outlineLevel = pPr?.elements.find((el) => el.name === 'w:outlineLvl');
+  const outlineLevel = pPr?.elements?.find((el) => el.name === 'w:outlineLvl');
   const outlineLvlValue = outlineLevel?.attributes['w:val'];
 
-  const pageBreakBefore = pPr?.elements.find((el) => el.name === 'w:pageBreakBefore');
+  const pageBreakBefore = pPr?.elements?.find((el) => el.name === 'w:pageBreakBefore');
   let pageBreakBeforeVal = 0;
   if (pageBreakBefore) {
      if (!pageBreakBefore.attributes?.['w:val']) pageBreakBeforeVal = 1;
      else pageBreakBeforeVal = Number(pageBreakBefore?.attributes?.['w:val'])
   };
-  const pageBreakAfter = pPr?.elements.find((el) => el.name === 'w:pageBreakAfter');
+  const pageBreakAfter = pPr?.elements?.find((el) => el.name === 'w:pageBreakAfter');
   let pageBreakAfterVal;
   if (pageBreakAfter) {
     if (!pageBreakAfter.attributes?.['w:val']) pageBreakAfterVal = 1;
@@ -217,7 +223,7 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
  };
 
   const parsedAttrs = {
-    name: name && name.length ? name[0].toUpperCase() + name.slice(1) : null,
+    name,
     qFormat: qFormat ? true : false,
     keepNext: keepNext ? true : false,
     keepLines: keepLines ? true : false,
