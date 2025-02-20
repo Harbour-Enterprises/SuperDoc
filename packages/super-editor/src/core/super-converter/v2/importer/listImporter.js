@@ -187,7 +187,7 @@ function handleListNodes(
       nodeAttributes['numId'] = numId;
       
       if (docx) {
-        const defaultStyleId = item?.attributes['w:rsidRDefault'];
+        const defaultStyleId = attributes['w:rsidRDefault'];
         nodeAttributes['spacing'] = getParagraphSpacing(defaultStyleId, item, docx);
       }
 
@@ -453,8 +453,9 @@ function _processListParagraphProperties(data) {
   if (!elements) return paragraphProperties;
 
   elements.forEach((item) => {
-    if (!expectedTypes.includes(item.name))
-      console.warn(`[numbering.xml] Unexpected list paragraph prop found: ${item.name}`);
+    if (!expectedTypes.includes(item.name)) {
+      // console.warn(`[numbering.xml] Unexpected list paragraph prop found: ${item.name}`);
+    }
     const { attributes = {} } = item;
     Object.keys(attributes).forEach((key) => {
       paragraphProperties[key] = attributes[key];
@@ -491,8 +492,9 @@ function _processListRunProperties(data) {
   if (!elements) return runProperties;
 
   elements.forEach((item) => {
-    if (!expectedTypes.includes(item.name))
-      console.warn(`[numbering.xml] Unexpected list run prop found: ${item.name}`);
+    if (!expectedTypes.includes(item.name)) {
+      // console.warn(`[numbering.xml] Unexpected list run prop found: ${item.name}`);
+    };
     const { attributes = {} } = item;
     Object.keys(attributes).forEach((key) => {
       runProperties[key] = attributes[key];

@@ -43,6 +43,7 @@ const init = async () => {
     toolbarGroups: ['left', 'center', 'right'],
     pagination: true,
     rulers: true,
+    telemetry: false,
     // isDev: true,
     user: {
       name: `SuperDoc ${Math.floor(1000 + Math.random() * 9000)}`,

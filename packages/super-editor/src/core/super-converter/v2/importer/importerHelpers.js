@@ -32,21 +32,6 @@ export function parseProperties(node, docx) {
   // Maintain any extra properties
   if (paragraphProperties && paragraphProperties.elements?.length) {
     attributes['paragraphProperties'] = paragraphProperties;
-
-    const styleTag = paragraphProperties.elements.find((el) => el.name === 'w:pStyle');
-    if (styleTag && docx) {
-      const styleId = styleTag.attributes['w:val'];
-      const styleDoc = docx['word/styles.xml'];
-      const styles = styleDoc?.elements[0].elements.find(
-        (el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId,
-      );
-
-      const stylepPr = styles?.elements.find((el) => el.name === 'w:pPr');
-      if (stylepPr) marks.push(...parseMarks(stylepPr, unknownMarks));
-
-      const stylerPr = styles?.elements.find((el) => el.name === 'w:rPr');
-      if (stylerPr) marks.push(...parseMarks(stylerPr, unknownMarks));
-    }
   }
 
   // If this is a paragraph, don't apply marks but apply attributes directly

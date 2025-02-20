@@ -1,4 +1,5 @@
 import { Node, Attribute } from '@core/index.js';
+import { getSpacingStyleString } from '@extensions/linked-styles/index.js';
 
 export const Paragraph = Node.create({
   name: 'paragraph',
@@ -24,13 +25,7 @@ export const Paragraph = Node.create({
           const { spacing } = attrs;
           if (!spacing) return {};
 
-          const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
-          const style = `
-            ${lineSpaceBefore ? `margin-top: ${lineSpaceBefore}px;` : ''}
-            ${lineSpaceAfter ? `margin-bottom: ${lineSpaceAfter}px;` : ''}
-            ${line ? `line-height: ${line};` : ''}
-          `.trim();
-
+          const style = getSpacingStyleString(spacing);
           if (style) return { style };
           return {};
         },

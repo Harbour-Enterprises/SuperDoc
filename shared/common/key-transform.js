@@ -1,5 +1,5 @@
-const snakeCase = (str) => str.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`);
-const kebabCase = (str) => str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+export const snakeCase = (str) => str.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`);
+export const kebabCase = (str) => str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
 const camelize = (str) =>
   str
     .toLowerCase()

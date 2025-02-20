@@ -49,6 +49,7 @@ import { Placeholder } from './placeholder/index.js';
 import { PopoverPlugin } from './popover-plugin/index.js';
 import { TrackChanges } from "./track-changes/index.js";
 import { Pagination } from "./pagination/index.js";
+import { LinkedStyles } from './linked-styles/linked-styles.js';
 
 // Helpers
 import { trackChangesHelpers } from './track-changes/index.js';
@@ -120,7 +121,8 @@ const getStarterExtensions = () => {
     TrackDelete,
     TrackFormat,
     Pagination,
-    Highlight
+    Highlight,
+    LinkedStyles,
   ];
 };
 
