@@ -9,6 +9,7 @@ import Toolbar from './Toolbar.vue';
 import { startImageUpload, getFileOpener } from '../../extensions/image/imageHelpers/index.js';
 import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
+import { getQuickFormatList } from '@extensions/linked-styles/linked-styles.js';
 
 export class SuperToolbar extends EventEmitter {
   config = {
@@ -261,6 +262,16 @@ export class SuperToolbar extends EventEmitter {
 
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
+
+      // Linked Styles dropdown behaves a bit different from other buttons.
+      // We need to disable it manually if there are no linked styles to show
+      if (item.name.value === 'linkedStyles') {
+        if (this.activeEditor && !getQuickFormatList(this.activeEditor).length) {
+          return item.deactivate();
+        } else {
+          return item.activate();
+        }
+      };
 
       const activeMark = marks.find((mark) => mark.name === item.name.value);
 

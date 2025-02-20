@@ -180,6 +180,12 @@ export const getSpacingStyle = (spacing) => {
   };
 };
 
+/**
+ * Convert spacing object to a style string
+ * 
+ * @param {Object} spacing The spacing object
+ * @returns {String} The style string
+ */
 export const getSpacingStyleString = (spacing) => {
   const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
   return `
@@ -187,4 +193,15 @@ export const getSpacingStyleString = (spacing) => {
     ${lineSpaceAfter ? `margin-bottom: ${lineSpaceAfter}px;` : ''}
     ${line ? `line-height: ${line};` : ''}
   `.trim();
+};
+
+export const getQuickFormatList = (editor) => {
+  const styles = editor.converter.linkedStyles || [];
+  return styles
+    .filter((style) => {
+      return style.definition?.attrs?.qFormat;
+    })
+    .sort((a, b) => {
+      return a.definition.attrs.name.localeCompare(b.definition.attrs.name);
+    });
 };
