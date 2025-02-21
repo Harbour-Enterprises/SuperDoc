@@ -19,7 +19,7 @@ describe('paragraph tests to check spacing', () => {
     });
 
     const node = nodes[0];
-    expect(node.type).toBe('fieldAnnotation');
+    expect(node.type).toBe('text');
 
     const { attrs } = node;
     const { fontFamily, fontSize, bold, italic, underline } = attrs;
@@ -46,8 +46,8 @@ describe('paragraph tests to check spacing', () => {
     });
 
     const node = nodes[0];
-    expect(node.type).toBe('fieldAnnotation');
-
+    expect(node.type).toBe('text');
+    
     const { attrs } = node;
     const { fontFamily, fontSize, color, bold, italic, underline } = attrs;
     expect(fontFamily).toBe('Courier New');

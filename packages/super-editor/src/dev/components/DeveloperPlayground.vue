@@ -110,7 +110,7 @@ onMounted(async () => {
   currentFile.value = await getFileObject(BlankDOCX, 'blank_document.docx', DOCX);
 
   telemetry.value = new Telemetry({
-    enabled: true,
+    enabled: false,
     superdocId: 'dev-playground',
   });
 });
