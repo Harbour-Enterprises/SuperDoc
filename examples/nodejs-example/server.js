@@ -1,7 +1,7 @@
-import './file-polyfill.js'; // Import the file polyfill since node.js doesn't have a File object
-import express from 'express';
-import { getEditor } from "./super-editor.js";
 import fs from 'fs/promises';
+import express from 'express';
+
+import { getEditor } from "./super-editor.js";
 
 
 const initServer = async () => {
@@ -22,19 +22,28 @@ const initServer = async () => {
 
   app.get('/', async (req, res) => {
     try {
-      // Load the default document
+      // Load our example document
       const documentData = await fs.readFile('./document.docx');
+
       // Initialize the editor
       const editor = await getEditor(documentData);
 
-      res.send({message: 'SuperEditor initialized'});
+      // Example of getting current JSON state of the editor
+      const jsonData = editor.getHTML();
+
+      // Example of getting the current HTML state of the editor
+      const htmlData = editor.getHTML();
+
+      res.send({
+        html: htmlData,
+        json: jsonData,
+      });
 
     } catch (error) {
       console.error(error);
       res.status(422).send('Failed to initialize SuperEditor');
     }
   });
-
 
 
   /**
