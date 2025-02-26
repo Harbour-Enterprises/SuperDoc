@@ -1,3 +1,4 @@
+// import './file-polyfill.js'; Import the file polyfill if using NodeJS < v22.0.0
 import fs from 'fs/promises';
 import express from 'express';
 
