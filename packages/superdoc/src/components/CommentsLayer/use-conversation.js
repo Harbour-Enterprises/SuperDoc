@@ -27,7 +27,10 @@ export default function useConversation(params) {
 
   const isFocused = ref(params.isFocused || false);
 
-  /* Mark this conversation as done with UTC date */
+  /**
+   * Mark this conversation as done with UTC date
+   * 
+   */
   const markDone = (email, name) => {
     markedDone.value = new Date().toISOString();
     markedDoneByEmail.value = email;
@@ -35,10 +38,11 @@ export default function useConversation(params) {
     group.value = null;
   };
 
-  /* Add a comment to this conversation */
-  const addComment = (comment) => data.comments.value.push(comment);
-
-  /* Get the raw values of this conversation */
+  /**
+   * Get the raw values of this comment
+   * 
+   * @returns {Object} - The raw values of this comment
+   */
   const getValues = () => {
     const values = {
       // Raw
@@ -77,12 +81,11 @@ export default function useConversation(params) {
     isTrackedChange,
     trackedChange,
   };
+
   return {
     ...exposedData,
 
-    // Data that does not need to be exported raw
     // Actions
-    addComment,
     getValues,
     markDone,
   };

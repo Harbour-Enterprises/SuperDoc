@@ -76,6 +76,10 @@ export function getElementName(element) {
   return SuperConverter.allowedElements[element.name || element.type];
 }
 
+export const isPropertiesElement = (element) => {
+  return !!SuperConverter.propertyTypes[element.name || element.type];
+}
+
 /**
  *
  * @param {XmlNode[]} elements

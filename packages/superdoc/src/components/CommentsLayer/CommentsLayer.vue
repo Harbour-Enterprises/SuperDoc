@@ -92,9 +92,11 @@ const activateComment = (conversation) => {
 };
 
 const getAllConversations = computed(() => {
-  return documentsWithConverations.value.reduce((acc, doc) => {
-    return acc.concat(doc.conversations);
-  }, []);
+  return documentsWithConverations.value
+    .reduce((acc, doc) => {
+      return acc.concat(doc.conversations);
+    }, [])
+    .filter((c) => !c.suppressHighlight);
 });
 
 watch(activeComment, (newVal) => {

@@ -49,7 +49,7 @@ export default defineConfig(({ mode, command}) => {
       targets: [
         {
           src: path.resolve(__dirname, '../super-editor/dist/*'),
-          dest: 'dist',
+          dest: 'dist/super-editor',
         }
       ],
       hook: 'writeBundle'
@@ -66,6 +66,7 @@ export default defineConfig(({ mode, command}) => {
     plugins,
     build: {
       target: 'es2022',
+      cssCodeSplit: false,
       lib: {
         entry: "src/index.js",
         formats: ['es'],

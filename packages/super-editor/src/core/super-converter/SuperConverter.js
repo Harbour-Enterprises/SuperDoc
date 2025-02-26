@@ -4,7 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { DocxExporter, exportSchemaToJson } from './exporter';
 import { createDocumentJson } from './v2/importer/docxImporter.js';
 import { getArrayBufferFromUrl } from './helpers.js';
+import { getCommentDefinition, updateCommentsXml } from './v2/exporter/commentsExporter.js';
 import { DEFAULT_CUSTOM_XML, SETTINGS_CUSTOM_XML } from './exporter-docx-defs.js';
+import { COMMENTS_XML } from './exporter-docx-defs.js';
 
 class SuperConverter {
   static allowedElements = Object.freeze({
@@ -26,10 +28,10 @@ class SuperConverter {
     'w:sectPr': 'sectionProperties',
     'w:rPr': 'runProperties',
 
-    // // Comments
-    // 'w:commentRangeStart': 'commentRangeStart',
-    // 'w:commentRangeEnd': 'commentRangeEnd',
-    // 'w:commentReference': 'commentReference',
+    // Comments
+    'w:commentRangeStart': 'commentRangeStart',
+    'w:commentRangeEnd': 'commentRangeEnd',
+    'w:commentReference': 'commentReference',
   });
 
   static markTypes = [
@@ -55,6 +57,7 @@ class SuperConverter {
     'w:rPr': 'runProperties',
     'w:sectPr': 'sectionProperties',
     'w:numPr': 'numberingProperties',
+    'w:tcPr': 'tableCellProperties',
   });
 
   static elements = new Set(['w:document', 'w:body', 'w:p', 'w:r', 'w:t', 'w:delText']);
@@ -73,6 +76,7 @@ class SuperConverter {
     this.media = params?.media || {};
 
     this.addedMedia = {};
+    this.comments = [];
 
     // XML inputs
     this.xml = params?.xml;
@@ -278,6 +282,7 @@ class SuperConverter {
     if (result) {
       this.savedTagsToRestore.push({ ...result.savedTagsToRestore });
       this.pageStyles = result.pageStyles;
+      this.comments = result.comments;
       this.linkedStyles = result.linkedStyles;
 
       return result.pmDoc;
@@ -291,8 +296,16 @@ class SuperConverter {
     return exporter.schemaToXml(data);
   }
 
-  async exportToDocx(jsonData, editorSchema, documentMedia, isFinalDoc = false) {
+  async exportToDocx(
+    jsonData,
+    editorSchema,
+    documentMedia,
+    isFinalDoc = false,
+    commentsExportType,
+    comments = [],
+  ) {
     const bodyNode = this.savedTagsToRestore.find((el) => el.name === 'w:body');
+    const commentDefinitions = comments.map((c, index) => getCommentDefinition(c, index));
 
     const [result, params] = exportSchemaToJson({
       node: jsonData,
@@ -304,7 +317,12 @@ class SuperConverter {
       editorSchema,
       converter: this,
       pageStyles: this.pageStyles,
+      comments,
+      commentsExportType,
+      exportedCommentDefs: commentDefinitions,
     });
+
+    
     const exporter = new DocxExporter(this);
     const xml = exporter.schemaToXml(result);
 
@@ -318,10 +336,38 @@ class SuperConverter {
     // Update the rels table
     this.#exportProcessNewRelationships(params.relationships);
 
+    // Update the comments.xml file
+    this.#updateCommentsFiles(params.exportedCommentDefs, commentsExportType);
+  
     // Store the SuperDoc version
     storeSuperdocVersion(this.convertedXml);
     
     return xml;
+  }
+
+  /**
+   * Update the comments.xml file with the exported comments if necessary
+   * 
+   * @param {Array[Object]} exportedCommentDefs 
+   * @param {String} commentsExportType 
+   * @returns {void}
+   */
+  #updateCommentsFiles(exportedCommentDefs, commentsExportType) {
+    const originalXml = this.convertedXml['word/comments.xml'];
+
+    // If there were no original comments, and we're exporting a clean document, we don't need to do anything
+    if (!originalXml && commentsExportType === 'clean') return;
+
+    if (!this.convertedXml['word/comments.xml']) this.convertedXml['word/comments.xml'] = { ...COMMENTS_XML };
+  
+    // If we had previous comments, but exporting clean, we need to remove them
+    const commentsXml = { ...this.convertedXml['word/comments.xml'] };
+    if (commentsXml && commentsExportType === 'clean') {
+      return this.convertedXml['word/comments.xml'] = { ...COMMENTS_XML };
+    };
+
+    const updatedCommentsXml = updateCommentsXml(exportedCommentDefs, commentsXml);
+    this.convertedXml['word/comments.xml'] = updatedCommentsXml;
   }
 
   #exportProcessNewRelationships(rels = []) {

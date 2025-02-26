@@ -63,9 +63,6 @@ export default defineConfig(({ mode }) => {
       },
       minify: false,
       sourcemap: true,
-      esbuild: {
-        drop: [],
-      },
     },
     server: {
       port: 9096,

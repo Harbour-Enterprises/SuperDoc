@@ -63,12 +63,17 @@ const editorOptions = computed(() => {
     rulers: true,
     onCreate,
     onCommentClicked,
+    onCommentsLoaded,
     suppressSkeletonLoader: true,
     users: [], // For comment @-mentions, only users that have access to the document
     pagination: true,
     // telemetry: telemetry.value,
   }
 });
+
+const onCommentsLoaded = ({ comments }) => {
+  console.debug('💬 [Dev] Comments loaded', comments);
+};
 
 const exportDocx = async () => {
   const result = await activeEditor?.exportDocx();
@@ -110,7 +115,7 @@ onMounted(async () => {
   currentFile.value = await getFileObject(BlankDOCX, 'blank_document.docx', DOCX);
 
   telemetry.value = new Telemetry({
-    enabled: true,
+    enabled: false,
     superdocId: 'dev-playground',
   });
 });

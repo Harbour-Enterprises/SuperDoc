@@ -118,7 +118,6 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     media,
     mediaFiles,
     fonts,
-    users: [], // For comment @-mentions, only users that have access to the document
     ...props.options,
   });
 

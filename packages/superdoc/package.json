@@ -1,7 +1,7 @@
 {
   "name": "@harbour-enterprises/superdoc",
   "type": "module",
-  "version": "0.5.2-RC5",
+  "version": "0.5.12",
   "license": "AGPL-3.0",
   "readme": "../../README.md",
   "files": [
@@ -13,10 +13,10 @@
       "types": "./dist/index.d.ts"
     },
     "./converter": {
-      "import": "./dist/converter.es.js"
+      "import": "./dist/super-editor/converter.es.js"
     },
     "./docx-zipper": {
-      "import": "./dist/docx-zipper.es.js"
+      "import": "./dist/super-editor/docx-zipper.es.js"
     },
     "./super-editor": {
       "import": "./dist/super-editor.es.js",
@@ -26,7 +26,7 @@
       "import": "./dist/common.es.js"
     },
     "./file-zipper": {
-      "import": "./dist/zipper.es.js"
+      "import": "./dist/super-editor/file-zipper.es.js"
     },
     "./style.css": "./dist/style.css"
   },

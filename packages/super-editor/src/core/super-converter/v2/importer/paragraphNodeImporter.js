@@ -102,8 +102,6 @@ export const getParagraphSpacing = (defaultStyleId, node, docx) => {
   }
 
   const { spacing: pDefaultSpacing = {} } = getDefaultParagraphStyle(docx);
-  // const { lineSpaceAfter, lineSpaceBefore, line, lineRule: lineRuleStyle } = getDefaultStyleDefinition(defaultStyleId, docx);
-
   let lineSpaceAfter, lineSpaceBefore, line, lineRuleStyle;
 
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');

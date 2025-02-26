@@ -8,10 +8,16 @@ import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 
 import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
 import { SuperToolbar } from '@harbour-enterprises/super-editor';
-import { createAwarenessHandler, createProvider } from './collaboration/collaboration';
+import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { createSuperdocVueApp } from './create-app';
 import { shuffleArray } from '@harbour-enterprises/common/collaboration/awareness.js';
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
+import { createDownload, cleanName } from './helpers/export.js';
+import {
+  initSuperdocYdoc,
+  initCollaborationComments,
+  makeDocumentsCollaborative,
+} from './collaboration/helpers.js';
 
 /**
  * @typedef {Object} User The current user of this superdoc
@@ -90,9 +96,12 @@ export class SuperDoc extends EventEmitter {
     user: { name: null, email: null },
     users: [],
 
-    modules: {},
-
-    pagination: false,
+    modules: {}, // Optional: Modules to load
+    title: 'SuperDoc',
+    conversations: [],
+    pagination: false, // Optional: Whether to show pagination in SuperEditors
+    isCollaborative: false,
+    isInternal: false,
 
     // toolbar config
     toolbar: null, // Optional DOM element to render the toolbar in
@@ -140,19 +149,18 @@ export class SuperDoc extends EventEmitter {
     this.config.colors = shuffleArray(this.config.colors);
     this.userColorMap = new Map();
     this.colorIndex = 0;
+
     this.version = __APP_VERSION__;
     console.debug('🦋 [superdoc] Using SuperDoc version:', this.version);
+
     this.superdocId = config.superdocId || uuidv4();
     this.colors = this.config.colors;
 
     // Initialize collaboration if configured
     await this.#initCollaboration(this.config.modules);
 
-    this.#initTelemetry();
+    // this.#initTelemetry();
     this.#initVueApp();
-    this.superdocStore.init(this.config);
-    this.app.mount(this.config.selector);
-
     this.#initListeners();
 
     this.user = this.config.user; // The current user
@@ -165,7 +173,10 @@ export class SuperDoc extends EventEmitter {
     this.isDev = this.config.isDev || false;
 
     this.activeEditor = null;
-  
+    this.comments = [];
+
+    this.app.mount(this.config.selector);
+
     // Required editors
     this.readyEditors = 0;
 
@@ -174,6 +185,7 @@ export class SuperDoc extends EventEmitter {
 
     // If a toolbar element is provided, render a toolbar
     this.addToolbar(this);
+  
   }
 
   get requiredNumberOfEditors() {
@@ -188,7 +200,7 @@ export class SuperDoc extends EventEmitter {
   }
 
   #initVueApp() {
-    const { app, pinia, superdocStore } = createSuperdocVueApp(this);
+    const { app, pinia, superdocStore, commentsStore } = createSuperdocVueApp(this);
     this.app = app;
     this.pinia = pinia;
     this.app.config.globalProperties.$config = this.config;
@@ -196,7 +208,10 @@ export class SuperDoc extends EventEmitter {
 
     this.app.config.globalProperties.$superdoc = this;
     this.superdocStore = superdocStore;
+    this.commentsStore = commentsStore;
     this.version = this.config.version;
+    this.superdocStore.init(this.config);
+    this.commentsStore.init(this.config.modules.comments);
   }
 
   #initListeners() {
@@ -214,52 +229,31 @@ export class SuperDoc extends EventEmitter {
     this.on('exception', this.config.onException);
   }
 
-  /* **
+  /**
    * Initialize collaboration if configured
    * @param {Object} config
+   * @returns {Promise<Array>} The processed documents with collaboration enabled
    */
   async #initCollaboration({ collaboration: collaborationModuleConfig } = {}) {
     if (!collaborationModuleConfig) return this.config.documents;
 
+    // Flag this superdoc as collaborative
+    this.isCollaborative = true;
+
+    // Start a socket for all documents and general metaMap for this SuperDoc
     this.socket = new HocuspocusProviderWebsocket({
       url: collaborationModuleConfig.url,
     });
 
-    // Initialize global superdoc sync - for comments, etc.
-    // TODO: Leaving it in here for reference as this will be complete soon.
-    // this.ydoc = new YDoc();
-    // const options = {
-    //   config: collaborationModuleConfig,
-    //   ydoc: this.ydoc,
-    //   user: this.config.user,
-    //   documentId: this.superdocId
-    // };
-    // this.provider = createProvider(options);
-    // this.log('[superdoc] Provider:', options);
+    // Initialize global superdoc sync - for comments, view, etc.
+    initSuperdocYdoc(this);
 
-    // Initialize individual document sync
-    const processedDocuments = [];
-    this.config.documents.forEach((doc) => {
-      this.config.user.color = this.colors[0];
-      const options = {
-        config: collaborationModuleConfig,
-        user: this.config.user,
-        documentId: doc.id,
-        socket: this.socket,
-        superdocInstance: this,
-      };
+    // Initialize comments sync, if enabled
+    initCollaborationComments(this);
 
-      const { provider, ydoc } = createProvider(options);
-      doc.provider = provider;
-      doc.socket = this.socket;
-      doc.ydoc = ydoc;
-      doc.role = this.config.role;
-      provider.on('awarenessUpdate', ({ states }) => createAwarenessHandler(this, states));
-      processedDocuments.push(doc);
-    });
-
-    return processedDocuments;
-  }
+    // Initialize collaboration for documents
+    return makeDocumentsCollaborative(this);
+  };
 
   /**
    * Initialize telemetry service.
@@ -267,9 +261,10 @@ export class SuperDoc extends EventEmitter {
   #initTelemetry() {
     this.telemetry = new Telemetry({
       enabled: this.config.telemetry?.enabled ?? true,
-      licenceKey: this.config.telemetry?.licenceKey,
+      licenseKey: this.config.telemetry?.licenseKey,
       endpoint: this.config.telemetry?.endpoint,
       superdocId: this.superdocId,
+      superdocVersion: this.version,
     });
   }
 
@@ -309,7 +304,7 @@ export class SuperDoc extends EventEmitter {
   }
 
   broadcastSidebarToggle(isOpened) {
-    this.emit('sidebar-toggle', isOpened);
+    this.emit('sidebar-toggle', isOpened); 
   }
 
   log(...args) {
@@ -346,6 +341,20 @@ export class SuperDoc extends EventEmitter {
 
     this.toolbar = new SuperToolbar(config);
     this.toolbar.on('superdoc-command', this.onToolbarCommand.bind(this));
+  }
+
+  addCommentsList(element) {
+    if (!this.config?.modules?.comments || this.config.role === 'viewer') return;
+    console.debug('🦋 [superdoc] Adding comments list to:', element);
+    if (element) this.config.modules.comments.element = element;
+    this.commentsList = new SuperComments(this.config.modules?.comments, this);
+  }
+
+  removeCommentsList() {
+    if (this.commentsList) {
+      this.commentsList.close();
+      this.commentsList = null;
+    }
   }
 
   onToolbarCommand({ item, argument }) {
@@ -444,17 +453,45 @@ export class SuperDoc extends EventEmitter {
     this.emit('locked', { isLocked, lockedBy });
   }
 
-  async exportEditorsToDOCX() {
-    console.debug('🦋 [superdoc] Exporting editors to DOCX');
+  async export({ exportType = ['docx'], commentsType, exportedName }) {
+    // Get the docx files first
+    const baseFileName = exportedName ? cleanName(exportedName) : cleanName(this.config.title);
+    const docxFiles = await this.exportEditorsToDOCX({ commentsType });
+    const blobsToZip = [];
+    const filenames = [];
+
+    // If we are exporting docx files, add them to the zip
+    if (exportType.includes('docx')) {
+      docxFiles.forEach((blob, index) => {
+        blobsToZip.push(blob);
+        filenames.push(`${baseFileName}.docx`);
+      });
+    }
+
+    // If we only have one blob, just download it. Otherwise, zip them up.
+    if (blobsToZip.length === 1) {
+      createDownload(blobsToZip[0], baseFileName, exportType[0]);
+    } else {
+      const zip = await createZip(blobsToZip, filenames);
+      createDownload(zip, baseFileName, 'zip');
+    }
+  };
+
+  async exportEditorsToDOCX({ commentsType } = {}) {    
+    const comments = [];
+    if (commentsType !== 'clean') {
+      comments.push(...this.commentsStore?.prepareCommentsForExport());
+    };
+
     const docxPromises = [];
     this.superdocStore.documents.forEach((doc) => {
       const editor = doc.getEditor();
       if (editor) {
-        docxPromises.push(editor.exportDocx());
+        docxPromises.push(editor.exportDocx({ comments, commentsType }));
       }
     });
     return await Promise.all(docxPromises);
-  }
+  };
 
   /**
    * Request an immediate save from all collaboration documents
@@ -495,12 +532,12 @@ export class SuperDoc extends EventEmitter {
   }
 
   destroy() {
-    if (!this.app) return;
+    if (!this.app) return; 
     this.log('[superdoc] Unmounting app');
 
     this.config.documents.forEach((doc) => {
-      doc.ydoc.destroy();
-      doc.provider.destroy();
+      doc.ydoc?.destroy();
+      doc.provider?.destroy();
     });
 
     this.superdocStore.reset();

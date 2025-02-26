@@ -47,16 +47,17 @@ function createProvider({ config, user, documentId, socket, superdocInstance }) 
  */
 function createHocuspocusProvider({ config, user, documentId, socket, superdocInstance }) {
   const ydoc = new YDoc({ gc: false });
-  const provider = new HocuspocusProvider({
+  const options = {
     websocketProvider: socket,
-    name: documentId,
     document: ydoc,
+    name: documentId,
     token: config.token || '',
     onAuthenticationFailed,
     onConnect: () => onConnect(superdocInstance),
     onDisconnect: () => onDisconnect(superdocInstance),
-  });
+  };
 
+  const provider = new HocuspocusProvider(options);
   provider.setAwarenessField('user', user);
   return { provider, ydoc };
 }

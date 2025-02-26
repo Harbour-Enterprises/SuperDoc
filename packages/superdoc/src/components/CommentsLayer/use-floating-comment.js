@@ -1,8 +1,9 @@
 import { ref, reactive } from 'vue';
 
-export default function useFloatingConveration(params) {
-  const id = params.conversationId;
-  const conversation = ref(params);
+export function useFloatingComment(params) {
+  const id = params.commentId;
+  const comment = ref(params);
+
   const position = reactive({
     top: 0,
     left: 0,
@@ -13,7 +14,7 @@ export default function useFloatingConveration(params) {
 
   return {
     id,
-    conversation,
+    comment,
     position,
     offset,
   };

@@ -1,43 +1,10 @@
 /**
- * @typedef {Object} BaseEvent
- * @property {string} id - Unique event identifier
- * @property {string} timestamp - ISO timestamp of the event
- * @property {string} sessionId - Current session identifier
- * @property {string} superdocId - SuperDoc ID
- * @property {Object} document - Document information
- * @property {string} [document.id] - Reference ID
- * @property {string} [document.type] - Document type
- * @property {string} [document.internalId] - Internal document ID
- * @property {string} [document.hash] - Document CRC32 hash
- * @property {string} [document.lastModified] - Last modified timestamp
- */
-
-/**
- * @typedef {Object} UsageEvent
- * @param {File} fileSource - File object
- * @param {string} documentId - document id
- * @property {string} name - Name of the usage event
- * @property {Object.<string, *>} properties - Event properties
- */
-
-/**
- * @typedef {Object} ParsingEvent
- * @param {File} fileSource - File object
- * @param {string} documentId - document id
- * @property {'mark'|'element'} category - Category of the parsed item
- * @property {string} name - Name of the parsed item
- * @property {string} path - Document path where item was found
- * @property {Object.<string, *>} [metadata] - Additional context
- */
-
-/** @typedef {(UsageEvent & BaseEvent) | (ParsingEvent & BaseEvent)} TelemetryEvent */
-
-/**
  * @typedef {Object} TelemetryConfig
- * @property {string} [licenceKey] - Licence key for telemetry service
+ * @property {string} [licenseKey] - License key for telemetry service
  * @property {boolean} [enabled=true] - Whether telemetry is enabled
  * @property {string} endpoint - service endpoint
  * @property {string} superdocId - SuperDoc id
+ * @property {string} superdocVersion - SuperDoc version
  */
 
 import crc32 from 'buffer-crc32';
@@ -51,6 +18,9 @@ class Telemetry {
   superdocId;
 
   /** @type {string} */
+  superdocVersion;
+
+  /** @type {string} */
   licenseKey;
 
   /** @type {string} */
@@ -59,17 +29,30 @@ class Telemetry {
   /** @type {string} */
   sessionId;
 
-  /** @type {TelemetryEvent[]} */
-  events = [];
+  /** @type {Object} */
+  statistics = {
+    nodeTypes: {},
+    markTypes: {},
+    attributes: {},
+    errorCount: 0,
+  };
 
-  /** @type {number|undefined} */
-  flushInterval;
+  /** @type {Array} */
+  unknownElements = [];
 
-  /** @type {number} */
-  static BATCH_SIZE = 50;
+  /** @type {Array} */
+  errors = [];
 
-  /** @type {number} */
-  static FLUSH_INTERVAL = 10000; // 30 seconds
+  /** @type {Object} */
+  fileStructure = {
+    totalFiles: 0,
+    maxDepth: 0,
+    totalNodes: 0,
+    files: [],
+  };
+
+  /** @type {Object} */
+  documentInfo = null;
 
   /** @type {string} */
   static COMMUNITY_LICENSE_KEY = 'community-and-eval-agplv3';
@@ -84,27 +67,25 @@ class Telemetry {
   constructor(config = {}) {
     this.enabled = config.enabled ?? true;
 
-    this.licenseKey = config.licenceKey ?? Telemetry.COMMUNITY_LICENSE_KEY;
+    this.licenseKey = config.licenseKey ?? Telemetry.COMMUNITY_LICENSE_KEY;
     this.endpoint = config.endpoint ?? Telemetry.DEFAULT_ENDPOINT;
     this.superdocId = config.superdocId;
 
+    this.superdocVersion = config.superdocVersion;
     this.sessionId = this.generateId();
-
-    if (this.enabled) {
-      this.startPeriodicFlush();
-    }
   }
 
   /**
-   * Create source payload for request
+   * Get browser environment information
+   * @returns {Object} Browser information
    */
-  getSourceData() {
+  getBrowserInfo() {
     return {
       userAgent: window.navigator.userAgent,
-      url: window.location.href,
-      host: window.location.host,
-      referrer: document.referrer,
-      screen: {
+      currentUrl: window.location.href,
+      hostname: window.location.hostname,
+      referrerUrl: document.referrer,
+      screenSize: {
         width: window.screen.width,
         height: window.screen.height,
       },
@@ -112,101 +93,129 @@ class Telemetry {
   }
 
   /**
-   * Track feature usage
-   * @param {File} fileSource - File object
-   * @param {string} documentId - document id
-   * @param {string} name - Name of the feature/event
-   * @param {Object.<string, *>} [properties] - Additional properties
+   * Track document usage event
+   * @param {string} name - Event name
+   * @param {Object} properties - Additional properties
    */
-  async trackUsage(fileSource, documentId, name, properties = {}) {
+  async trackUsage(name, properties = {}) {
     if (!this.enabled) return;
 
-    if (!fileSource) {
-      console.warn('Telemetry: missing file source');
-      return;
-    }
-
-    const processedDoc = await this.processDocument(fileSource, {
-      id: documentId,
-      internalId: properties.internalId,
-    });
-
-    /** @type {UsageEvent & BaseEvent} */
     const event = {
       id: this.generateId(),
       type: 'usage',
       timestamp: new Date().toISOString(),
       sessionId: this.sessionId,
       superdocId: this.superdocId,
-      source: this.getSourceData(),
-      document: processedDoc,
+      superdocVersion: this.superdocVersion,
+      file: this.documentInfo,
+      browser: this.getBrowserInfo(),
       name,
       properties,
     };
 
-    this.queueEvent(event);
+    await this.sendDataToTelemetry(event);
   }
 
   /**
-   * Track parsing events
-   * @param {File} fileSource - File object
-   * @param {string} documentId - document id
-   * @param {'mark'|'element'} category - Category of parsed item
-   * @param {string} name - Name of the item
-   * @param {string} path - Document path where item was found
-   * @param {Object.<string, *>} [metadata] - Additional context
+   * Track parsing statistics
+   * @param {string} category - Statistic category
+   * @param {string|Object} data - Statistic data
    */
-  async trackParsing(fileSource, documentId, category, name, path, metadata) {
-    if (!this.enabled) return;
-    
-    if (!fileSource) {
-      console.warn('Telemetry: missing file source');
-      return;
+  trackStatistic(category, data) {
+    if (category === 'node') {
+      this.statistics.nodeTypes[data.elementName] = (this.statistics.nodeTypes[data.elementName] || 0) + 1;
+      this.fileStructure.totalNodes++;
+    } else if (category === 'unknown') {
+      const addedElement = this.unknownElements.find(e => e.elementName === data.elementName);
+      if (addedElement) {
+        addedElement.count += 1;
+        addedElement.attributes = {
+          ...addedElement.attributes,
+          ...data.attributes
+        };
+      } else {
+        this.unknownElements.push({
+          ...data,
+          count: 1
+        });
+      }
+    } else if (category === 'error') {
+      this.errors.push(data);
+      this.statistics.errorCount++;
     }
 
-    const processedDoc = await this.processDocument(fileSource, {
+    if (data.marks?.length) {
+      data.marks.forEach((mark) => {
+        this.statistics.markTypes[mark.type] = (this.statistics.markTypes[mark.type] || 0) + 1;
+      });
+    }
+
+    // Style attributes
+    if (data.attributes && Object.keys(data.attributes).length) {
+      const styleAttributes = [
+        'textIndent',
+        'textAlign',
+        'spacing',
+        'lineHeight',
+        'indent',
+        'list-style-type',
+        'listLevel',
+        'textStyle',
+        'order',
+        'lvlText',
+        'lvlJc',
+        'listNumberingType',
+        'numId'
+      ];
+      Object.keys(data.attributes).forEach((attribute) => {
+        if (!styleAttributes.includes(attribute)) return;
+        this.statistics.attributes[attribute] = (this.statistics.attributes[attribute] || 0) + 1;
+      });
+    }
+  }
+
+  /**
+   * Track file structure
+   * @param {Object} structure - File structure information
+   * @param {File} fileSource - original file
+   * @param {String} documentId - document ID
+   * @param {string} internalId - document ID form settings.xml
+   */
+  async trackFileStructure(structure, fileSource, documentId, internalId) {
+    this.fileStructure = structure;
+    this.documentInfo = await this.processDocument(fileSource, {
       id: documentId,
-      internalId: metadata.internalId,
+      internalId: internalId,
     });
-
-    /** @type {ParsingEvent & BaseEvent} */
-    const event = {
-      id: this.generateId(),
-      type: 'parsing',
-      timestamp: new Date().toISOString(),
-      sessionId: this.sessionId,
-      superdocId: this.superdocId,
-      source: this.getSourceData(),
-      category,
-      document: processedDoc,
-      name,
-      path,
-      ...(metadata && { metadata }),
-    };
-
-    this.queueEvent(event);
   }
 
   /**
    * Process document metadata
    * @param {File} file - Document file
-   * @param {Object} options - Additional metadata options
+   * @param {Object} options - Additional options
    * @returns {Promise<Object>} Document metadata
    */
   async processDocument(file, options = {}) {
+    if (!file) {
+      console.warn('Telemetry: missing file source');
+      return {};
+    }
+
     let hash = '';
     try {
       hash = await this.generateCrc32Hash(file);
     } catch (error) {
-      console.error('Failed to retrieve file hash:', error);
+      console.error('Failed to generate file hash:', error);
     }
-    
+
     return {
       id: options.id,
-      type: options.type || file.type,
-      internalId: options.internalId,
-      hash,
+      name: file.name,
+      size: file.size,
+      crc32: hash,
       lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : null,
+      type: file.type || 'docx',
+      internalId: options.internalId,
     };
   }
 
@@ -220,33 +229,60 @@ class Telemetry {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
     const hashBuffer = crc32(buffer);
-    const hashArray = Array.from(hashBuffer);
-    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+    return hashBuffer.toString('hex');
   }
 
-  /**
-   * Queue event for sending
-   * @param {TelemetryEvent} event
-   * @private
-   */
-  queueEvent(event) {
-    this.events.push(event);
-
-    if (this.events.length >= Telemetry.BATCH_SIZE) {
-      this.flush();
+  isTelemetryDataChanged() {
+    const initialStatistics = {
+      nodeTypes: {},
+      markTypes: {},
+      styleTypes: {},
+      unknownElements: [],
+      errorCount: 0,
+    };
+    const initialFileStructure = {
+      totalFiles: 0,
+      maxDepth: 0,
+      totalNodes: 0,
+      files: [],
     }
+    // Empty document case
+    if (Object.keys(this.statistics.nodeTypes).length <= 1) return;
+
+    return this.statistics !== initialStatistics || initialFileStructure !== this.fileStructure || this.errors.length > 0 || this.unknownElements.length > 0;
   }
 
   /**
-   * Flush queued events to server
+   * Sends current report
    * @returns {Promise<void>}
    */
-  async flush() {
-    if (!this.enabled || !this.events.length) return;
+  async sendReport() {
+    if (!this.enabled || !this.isTelemetryDataChanged()) return;
 
-    const eventsToSend = [...this.events];
-    this.events = [];
+    const report = [{
+      id: this.generateId(),
+      type: 'parsing',
+      timestamp: new Date().toISOString(),
+      sessionId: this.sessionId,
+      superdocId: this.superdocId,
+      superdocVersion: this.superdocVersion,
+      file: this.documentInfo,
+      browser: this.getBrowserInfo(),
+      statistics: this.statistics,
+      fileStructure: this.fileStructure,
+      unknownElements: this.unknownElements,
+      errors: this.errors,
+    }];
     
+    await this.sendDataToTelemetry(report);
+  }
+
+  /**
+   * Sends data to the service
+   * @returns {Object} payload
+   * @returns {Promise<void>}
+   */
+  async sendDataToTelemetry(data) {
     try {
       const response = await fetch(this.endpoint, {
         method: 'POST',
@@ -254,50 +290,52 @@ class Telemetry {
           'Content-Type': 'application/json',
           'X-License-Key': this.licenseKey,
         },
-        body: JSON.stringify(eventsToSend),
+        body: JSON.stringify(data),
       });
 
       if (!response.ok) {
         throw new Error(`Upload failed: ${response.statusText}`);
+      } else {
+        this.resetStatistics();
       }
     } catch (error) {
       console.error('Failed to upload telemetry:', error);
-      // Add events back to queue
-      this.events = [...eventsToSend, ...this.events];
     }
   }
 
   /**
-   * Start periodic flush interval
-   * @private
-   */
-  startPeriodicFlush() {
-    this.flushInterval = setInterval(() => {
-      if (this.events.length > 0) {
-        this.flush();
-      }
-    }, Telemetry.FLUSH_INTERVAL);
-  }
-  
-  /**
    * Generate unique identifier
-   * @returns {string}
+   * @returns {string} Unique ID
    * @private
    */
   generateId() {
-    const randomValue = randomBytes(4).toString('hex');
-    return `${Date.now()}-${randomValue}`;
+    const timestamp = Date.now();
+    const random = randomBytes(4).toString('hex');
+    return `${timestamp}-${random}`;
   }
 
   /**
-   * Clean up telemetry service
-   * @returns {Promise<void>}
+   * Reset statistics
    */
-  destroy() {
-    if (this.flushInterval) {
-      clearInterval(this.flushInterval);
-    }
-    return this.flush();
+  resetStatistics() {
+    this.statistics = {
+      nodeTypes: {},
+      markTypes: {},
+      styleTypes: {},
+      unknownElements: [],
+      errorCount: 0,
+    };
+
+    this.fileStructure = {
+      totalFiles: 0,
+      maxDepth: 0,
+      totalNodes: 0,
+      files: [],
+    };
+
+    this.unknownElements = [];
+
+    this.errors = [];
   }
 }
 

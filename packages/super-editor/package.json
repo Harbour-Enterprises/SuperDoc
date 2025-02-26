@@ -37,6 +37,7 @@
     "build": "vite build && tsc",
     "clean": "rm -rf dist",
     "test": "vitest",
+    "build:watch": "vite build --watch --logLevel warn",
     "pack": "rm *.tgz 2>/dev/null || true && npm run build && npm pack && mv harbour-enterprises-super-editor-0.0.1-alpha.0.tgz ./super-editor.tgz"
   },
   "dependencies": {

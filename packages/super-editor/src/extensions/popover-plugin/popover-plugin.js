@@ -109,7 +109,7 @@ class Popover {
             const { $from } = this.state.selection;
             const length = atMention.length;
             const attributes = { ...user };
-            const mentionNode = this.editor.schema.nodes.mention.create({ name: user.name });
+            const mentionNode = this.editor.schema.nodes.mention.create(attributes);
             const tr = this.state.tr.replaceWith($from.pos - length, $from.pos, mentionNode);
             this.editor.view.dispatch(tr);
             this.editor.view.focus();

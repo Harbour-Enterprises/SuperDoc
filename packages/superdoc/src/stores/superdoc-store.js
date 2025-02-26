@@ -14,6 +14,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
   const documentUsers = ref([]);
   const activeZoom = ref(1);
   const isReady = ref(false);
+  const isInternal = ref(false);
 
   const users = ref([]);
 
@@ -62,9 +63,6 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     // Initialize documents
     await initializeDocuments(configDocs);
 
-    if ('comments' in modules) {
-      commentsStore.suppressInternalExternal = modules.comments.suppressInternalExternal || false;
-    }
     isReady.value = true;
   };
 
@@ -163,6 +161,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     users,
     activeZoom,
     documentScroll,
+    isInternal,
 
     selectionPosition,
     activeSelection,

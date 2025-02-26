@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, h } from 'vue';
+import { computed, ref, h, onMounted, watch } from 'vue';
 import { NDropdown, NTooltip, NSelect } from 'naive-ui';
 import { superdocIcons } from '@superdoc/icons.js';
 
@@ -8,6 +8,10 @@ const props = defineProps({
   state: {
     type: String,
     required: false,
+  },
+  isDisabled: {
+    type: Boolean,
+    default: false,
   },
 });
 
@@ -43,27 +47,39 @@ const getStyle = computed(() => {
 
   const activeOption = options.find((o) => o.key === activeState.value);
   if (!activeOption) return {};
-  if (activeOption.key === 'internal') {
-    return { backgroundColor: activeOption.backgroundColor };
-  } else {
-    return { backgroundColor: activeOption.backgroundColor };
+
+  const style = { backgroundColor: activeOption.backgroundColor };
+
+  if (props.isDisabled) {
+    style.opacity = 0.5;
+    style.cursor = 'default';
   }
+  return style;
 });
 
-const handleSelect = (key) => {
+const handleSelect = (key, suppressEmit = false) => {
   activeState.value = key;
   activeIcon.value = options.find((o) => o.key === key)?.iconString;
+
+  if (suppressEmit) return;
   emit('select', key);
 };
 
 const activeState = ref(props.state);
 const activeIcon = ref(null);
-handleSelect(props.state || 'internal');
+
+watch(() => props.state, (newVal) => {
+  handleSelect(newVal);
+});
+
+onMounted(() => {
+  handleSelect(props.state, true);
+});
 </script>
 
 <template>
   <div class="internal-dropdown" :style="getStyle">
-    <n-dropdown trigger="click" :options="options" @select="handleSelect">
+    <n-dropdown trigger="click" :options="options" @select="handleSelect($event)" :disabled="isDisabled">
       <div class="comment-option">
         <div class="active-icon" v-html="activeIcon"></div>
         <div class="option-state">{{ getState }}</div>
@@ -77,9 +93,10 @@ handleSelect(props.state || 'internal');
 .comment-option {
   display: flex;
   align-items: center;
+  font-size: 11px;
 }
 .comment-option i {
-  font-size: 12px;
+  font-size: 11px;
 }
 .option-state {
   margin: 0 7px;
