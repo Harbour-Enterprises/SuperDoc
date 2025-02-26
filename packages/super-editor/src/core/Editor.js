@@ -59,8 +59,10 @@ export class Editor extends EventEmitter {
     editorProps: {},
     parseOptions: {},
     coreExtensionOptions: {},
+    isCommentsEnabled: false,
     isNewFile: false,
     scale: 1,
+    annotations: false,
     isInternal: false,
     onBeforeCreate: () => null,
     onCreate: () => null,
@@ -716,6 +718,7 @@ export class Editor extends EventEmitter {
    * Initialize comments plugin
    */
   #initComments() {
+    if (!this.options.isCommentsEnabled) return;
     if (this.options.isHeadless || !this.options.isInternal) return;
     this.emit('commentsLoaded', { editor: this, comments: this.converter.comments || [] });
 

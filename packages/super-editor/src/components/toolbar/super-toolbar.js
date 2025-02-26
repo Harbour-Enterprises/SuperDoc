@@ -18,6 +18,7 @@ export class SuperToolbar extends EventEmitter {
     role: 'editor',
     pagination: false,
     icons: { ...toolbarIcons },
+    mode: 'docx',
   };
 
   #interceptedCommands = {

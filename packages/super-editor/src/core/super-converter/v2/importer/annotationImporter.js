@@ -36,11 +36,18 @@ export const handleAnnotationNode = (params) => {
     multipleImage: isMultipleImage === 'true',
   };
   
-  const result = {
+  let result = {
     type: 'text',
     text: `{{${attrs.displayLabel}}}`,
     attrs: { ...attrs, ...marksAsAttrs },
     marks,
+  };
+  
+  if (params.editor.options.annotations) {
+    result = {
+      type: 'fieldAnnotation',
+      attrs: { ...attrs, ...marksAsAttrs }
+    };
   };
   
   return {

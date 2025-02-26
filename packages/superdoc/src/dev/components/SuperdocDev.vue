@@ -47,6 +47,7 @@ const init = async () => {
     toolbarGroups: ['left', 'center', 'right'],
     pagination: true,
     rulers: true,
+    annotations: false,
     isInternal: true,
     telemetry: false,
     // isDev: true,

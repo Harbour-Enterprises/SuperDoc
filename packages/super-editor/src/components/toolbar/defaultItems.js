@@ -818,6 +818,13 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     toolbarItems = toolbarItems.filter((item) => item.name.value !== 'pageBreakTool');
   }
 
+  // Remove docx only items
+  if (superToolbar.config.mode !== 'docx') {
+    const getLinkedStylesIndex = toolbarItems.findIndex((item) => item.name.value === 'linkedStyles');
+    toolbarItems.splice(getLinkedStylesIndex - 1, 2);
+    toolbarItems = toolbarItems.filter((item) => item.name.value !== 'ruler');
+  }
+
   // Track changes test buttons
   const devItems = [toggleTrackChanges, toggleTrackChangesOriginal, toggleTrackChangesFinal];
 

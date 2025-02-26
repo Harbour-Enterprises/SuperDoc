@@ -141,6 +141,7 @@ const hasTextContent = computed(() => {
 });
 
 const setFocus = () => {
+  if (props.comment.resolvedTime) return;
   activeComment.value = props.comment.commentId;
   props.comment.setActive(proxy.$superdoc);
 };
@@ -177,6 +178,11 @@ const handleResolve = () => {
     email: superdocStore.user.email,
     name: superdocStore.user.name,
     superdoc: proxy.$superdoc,
+  });
+
+  nextTick(() => {
+    commentsStore.lastUpdate = new Date();
+    activeComment.value = null;
   });
 };
 

@@ -18,7 +18,7 @@ const select = (style) => {
 </script>
 
 <template>
-  <div class="linked-style-buttons">
+  <div class="linked-style-buttons" v-if="props.editor">
     <div
       v-for="style in getQuickFormatList(editor)" class="style-item" @click="select(style)">
       <div class="style-name" :style="generateLinkedStyleString(style, null, false)">

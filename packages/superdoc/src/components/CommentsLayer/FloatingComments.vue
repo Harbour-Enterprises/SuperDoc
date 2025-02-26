@@ -104,7 +104,9 @@ const initialize = () => {
 };
 
 const initializeConvos = () => {
-  sortedConversations.value = getGroupedComments.value?.parentComments.sort(sortByLocation);
+  sortedConversations.value = getGroupedComments.value?.parentComments
+    .filter((c) => !c.resolvedTime)
+    .sort(sortByLocation);
   if (!sortedConversations.value?.length) return;
 
   const firstComment = sortedConversations.value[0];
@@ -136,6 +138,7 @@ const updateOffset = () => {
 };
 
 // Update the floating comments when the conversations change
+watch(commentsList.value, () => initialize());
 watch(lastChange, (newVal) => setTimeout(() => initialize()));
 watch(activeComment, (newVal) => {
   setTimeout(() => {

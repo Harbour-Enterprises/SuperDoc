@@ -220,6 +220,8 @@ const editorOptions = (doc) => {
     documentMode: proxy.$superdoc.config.documentMode,
     rulers: doc.rulers,
     isInternal: proxy.$superdoc.config.isInternal,
+    annotations: proxy.$superdoc.config.annotations,
+    isCommentsEnabled: proxy.$superdoc.config.modules?.comments,
     onBeforeCreate: onEditorBeforeCreate,
     onCreate: onEditorCreate,
     onDestroy: onEditorDestroy,

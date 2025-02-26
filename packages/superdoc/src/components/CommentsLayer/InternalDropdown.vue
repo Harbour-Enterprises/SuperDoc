@@ -60,6 +60,8 @@ const getStyle = computed(() => {
 const handleSelect = (key, suppressEmit = false) => {
   activeState.value = key;
   activeIcon.value = options.find((o) => o.key === key)?.iconString;
+
+  if (suppressEmit) return;
   emit('select', key);
 };
 
@@ -77,7 +79,7 @@ onMounted(() => {
 
 <template>
   <div class="internal-dropdown" :style="getStyle">
-    <n-dropdown trigger="click" :options="options" @select="handleSelect" :disabled="isDisabled">
+    <n-dropdown trigger="click" :options="options" @select="handleSelect($event)" :disabled="isDisabled">
       <div class="comment-option">
         <div class="active-icon" v-html="activeIcon"></div>
         <div class="option-state">{{ getState }}</div>

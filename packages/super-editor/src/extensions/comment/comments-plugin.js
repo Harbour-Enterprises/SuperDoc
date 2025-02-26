@@ -88,6 +88,7 @@ export const CommentsPlugin = Extension.create({
           };
         },
         apply(tr, oldState, _, newEditorState) {
+          if (!editor.options.isCommentsEnabled) return { ...oldState };
           let activeThreadId;
           let isForcingUpdate = false;
           const { selection } = tr;

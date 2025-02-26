@@ -100,7 +100,7 @@ const attachAnnotationEventHandlers = () => {
 };
 
 const initToolbar = () => {
-  return new SuperToolbar({ element: 'toolbar', editor: activeEditor, isDev: true, pagination: true });
+  return new SuperToolbar({ element: 'toolbar', editor: activeEditor, isDev: true, pagination: true, });
 };
 
 /* For pagination debugging / visual cues */
