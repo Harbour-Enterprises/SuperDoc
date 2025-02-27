@@ -584,7 +584,7 @@ const handlePdfClick = (e) => {
   position: absolute;
   min-width: 100%;
   min-height: 100%;
-  z-index: 2;
+  z-index: 10;
   pointer-events: none;
 }
 
