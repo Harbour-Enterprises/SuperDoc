@@ -182,14 +182,19 @@ const handleMouseUp = (e) => {
   </div>
 </template>
 
+<style lang="postcss">
+/** Global styles */
+.superdoc-pdf-viewer {
+  @nested-import 'pdfjs-dist/web/pdf_viewer.css';
+}
+</style>
+
 <style lang="postcss" scoped>
 .superdoc-pdf-viewer-container {
   width: 100%;
 }
 
 .superdoc-pdf-viewer {
-  @nested-import 'pdfjs-dist/web/pdf_viewer.css';
-
   display: flex;
   flex-direction: column;
   width: 100%;
