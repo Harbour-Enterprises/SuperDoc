@@ -29,7 +29,7 @@ import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
  * @typedef {{handlerName: string, handler: NodeHandler}} NodeHandlerEntry
  */
 
-const DEFAULT_LINKED_STYLES = {
+export const DEFAULT_LINKED_STYLES = {
   Normal: {
     type: 'element',
     name: 'w:style',
