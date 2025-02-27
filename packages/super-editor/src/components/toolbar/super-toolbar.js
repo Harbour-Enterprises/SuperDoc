@@ -1,5 +1,5 @@
 import EventEmitter from 'eventemitter3';
-import { createApp } from 'vue';
+import { createApp, h } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { TextSelection } from 'prosemirror-state';
 import { makeDefaultItems } from './defaultItems';
@@ -10,6 +10,7 @@ import { startImageUpload, getFileOpener } from '../../extensions/image/imageHel
 import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { getQuickFormatList } from '@extensions/linked-styles/linked-styles.js';
+import { getAvailableColorOptions, makeColorOption, renderColorOptions } from './color-dropdown-helpers.js';
 
 export class SuperToolbar extends EventEmitter {
   config = {
@@ -61,6 +62,10 @@ export class SuperToolbar extends EventEmitter {
     },
 
     setColor: ({ item, argument }) => {
+      this.#runCommandWithArgumentOnly({ item, argument });
+    },
+    
+    setHighlight: ({ item, argument }) => {
       this.#runCommandWithArgumentOnly({ item, argument });
     },
 
@@ -242,6 +247,35 @@ export class SuperToolbar extends EventEmitter {
     const fontFamilyItem = this.toolbarItems.find((item) => item.name.value === 'fontFamily');
     if (fontFamilyItem) fontFamilyItem.defaultLabel.value = typeface;
   }
+  
+  #updateHighlightColors() {
+    if (!this.activeEditor || !this.activeEditor.converter) return;
+    if (!this.activeEditor.converter.docHiglightColors.size) return;
+    
+    const highlightItem = this.toolbarItems.find((item) => item.name.value === 'highlight');
+
+    const pickerColorOptions = getAvailableColorOptions();
+    const perChunk = 7; // items per chunk
+
+    const result = Array.from(this.activeEditor.converter.docHiglightColors).reduce((resultArray, item, index) => {
+      const chunkIndex = Math.floor(index / perChunk);
+      if (!resultArray[chunkIndex]) {
+        resultArray[chunkIndex] = [];
+      }
+
+      if (!pickerColorOptions.includes(item)) resultArray[chunkIndex].push(makeColorOption(item));
+      return resultArray;
+    }, []);
+    
+    const option = {
+      key: 'color',
+      type: 'render',
+      render: () => renderColorOptions(this, highlightItem, result),
+    }
+
+    highlightItem.nestedOptions.value = [option];
+  }
+
 
   /**
    * Update the toolbar state. Expects a list of marks in the form: { name, attrs }
@@ -250,6 +284,7 @@ export class SuperToolbar extends EventEmitter {
   updateToolbarState() {
     this.#updateToolbarHistory();
     this.#initDefaultFonts();
+    this.#updateHighlightColors();
 
     // Decativate toolbar items if no active editor
     // This will skip buttons that are marked as allowWithoutEditor
@@ -315,7 +350,7 @@ export class SuperToolbar extends EventEmitter {
    */
   emitCommand({ item, argument }) {
     const { command } = item;
-
+    
     if (!command) {
       return;
     }

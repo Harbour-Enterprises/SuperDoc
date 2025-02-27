@@ -8,6 +8,7 @@ import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from '@extensions/track-changes/constants.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
+import { marks } from 'prosemirror-schema-basic';
 
 /**
  * @typedef {Object} ExportParams
@@ -294,7 +295,7 @@ function getTextNodeForExport(text, marks) {
     elements: [{ text, type: 'text' }],
     attributes: nodeAttrs,
   };
-
+  
   return wrapTextInRun(textNode, outputMarks);
 }
 
@@ -1089,13 +1090,16 @@ function translateMark(mark) {
       break;
 
     case 'highlight':
-      markElement.attributes['w:val'] = attrs.color;
+      markElement.attributes['w:fill'] = attrs.color.substring(1);
+      markElement.attributes['w:color'] = 'auto';
+      markElement.attributes['w:val'] = 'clear';
+      markElement.name = 'w:shd';
       break;
 
     case 'link':
       break;
   }
-
+  
   return markElement;
 }
 
