@@ -776,13 +776,12 @@ function getStyleDefinitions(docx) {
  * 
  * Does not mutate the original docx object
  * @param {Object} styles The parsed docx styles [word/styles.xml]
- * @returns {Object} The updated styles object with default styles
+ * @returns {Object | null} The updated styles object with default styles
  */
 export function addDefaultStylesIfMissing(styles) {
   // Do not mutate the original docx object
+  if (!styles) return null;
   const updatedStyles = carbonCopy(styles);
-  if (!styles) return updatedStyles;
-  
   const { elements } = updatedStyles.elements[0];
 
   Object.keys(DEFAULT_LINKED_STYLES).forEach(styleId => {
