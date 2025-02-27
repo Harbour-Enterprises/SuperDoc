@@ -29,6 +29,416 @@ import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
  * @typedef {{handlerName: string, handler: NodeHandler}} NodeHandlerEntry
  */
 
+const DEFAULT_LINKED_STYLES = {
+  Normal: {
+    type: 'element',
+    name: 'w:style',
+    attributes: {
+      'w:type': 'paragraph',
+      'w:default': '1',
+      'w:styleId': 'Normal',
+    },
+    elements: [
+      {
+        type: 'element',
+        name: 'w:name',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:qFormat',
+      },
+    ],
+  },
+  Heading1: {
+    type: 'element',
+    name: 'w:style',
+    attributes: {
+      'w:type': 'paragraph',
+      'w:styleId': 'Heading1',
+    },
+    elements: [
+      {
+        type: 'element',
+        name: 'w:name',
+        attributes: {
+          'w:val': 'heading 1',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:basedOn',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:next',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:link',
+        attributes: {
+          'w:val': 'Heading1Char',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:uiPriority',
+        attributes: {
+          'w:val': '9',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:qFormat',
+      },
+      {
+        type: 'element',
+        name: 'w:rsid',
+        attributes: {
+          'w:val': '00233D7B',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:pPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:keepNext',
+          },
+          {
+            type: 'element',
+            name: 'w:keepLines',
+          },
+          {
+            type: 'element',
+            name: 'w:spacing',
+            attributes: {
+              'w:before': '360',
+              'w:after': '80',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:outlineLvl',
+            attributes: {
+              'w:val': '0',
+            },
+          },
+        ],
+      },
+      {
+        type: 'element',
+        name: 'w:rPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:rFonts',
+            attributes: {
+              'w:asciiTheme': 'majorHAnsi',
+              'w:eastAsiaTheme': 'majorEastAsia',
+              'w:hAnsiTheme': 'majorHAnsi',
+              'w:cstheme': 'majorBidi',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:color',
+            attributes: {
+              'w:val': '0F4761',
+              'w:themeColor': 'accent1',
+              'w:themeShade': 'BF',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:sz',
+            attributes: {
+              'w:val': '40',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:szCs',
+            attributes: {
+              'w:val': '40',
+            },
+          },
+        ],
+      },
+    ],
+  },
+  Heading2: {
+    type: 'element',
+    name: 'w:style',
+    attributes: {
+      'w:type': 'paragraph',
+      'w:styleId': 'Heading2',
+    },
+    elements: [
+      {
+        type: 'element',
+        name: 'w:name',
+        attributes: {
+          'w:val': 'heading 2',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:basedOn',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:next',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:link',
+        attributes: {
+          'w:val': 'Heading2Char',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:uiPriority',
+        attributes: {
+          'w:val': '9',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:semiHidden',
+      },
+      {
+        type: 'element',
+        name: 'w:unhideWhenUsed',
+      },
+      {
+        type: 'element',
+        name: 'w:qFormat',
+      },
+      {
+        type: 'element',
+        name: 'w:rsid',
+        attributes: {
+          'w:val': '00233D7B',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:pPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:keepNext',
+          },
+          {
+            type: 'element',
+            name: 'w:keepLines',
+          },
+          {
+            type: 'element',
+            name: 'w:spacing',
+            attributes: {
+              'w:before': '160',
+              'w:after': '80',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:outlineLvl',
+            attributes: {
+              'w:val': '1',
+            },
+          },
+        ],
+      },
+      {
+        type: 'element',
+        name: 'w:rPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:rFonts',
+            attributes: {
+              'w:asciiTheme': 'majorHAnsi',
+              'w:eastAsiaTheme': 'majorEastAsia',
+              'w:hAnsiTheme': 'majorHAnsi',
+              'w:cstheme': 'majorBidi',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:color',
+            attributes: {
+              'w:val': '0F4761',
+              'w:themeColor': 'accent1',
+              'w:themeShade': 'BF',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:sz',
+            attributes: {
+              'w:val': '32',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:szCs',
+            attributes: {
+              'w:val': '32',
+            },
+          },
+        ],
+      },
+    ],
+  },
+  Heading3: {
+    type: 'element',
+    name: 'w:style',
+    attributes: {
+      'w:type': 'paragraph',
+      'w:styleId': 'Heading3',
+    },
+    elements: [
+      {
+        type: 'element',
+        name: 'w:name',
+        attributes: {
+          'w:val': 'heading 3',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:basedOn',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:next',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:link',
+        attributes: {
+          'w:val': 'Heading3Char',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:uiPriority',
+        attributes: {
+          'w:val': '9',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:semiHidden',
+      },
+      {
+        type: 'element',
+        name: 'w:unhideWhenUsed',
+      },
+      {
+        type: 'element',
+        name: 'w:qFormat',
+      },
+      {
+        type: 'element',
+        name: 'w:rsid',
+        attributes: {
+          'w:val': '00233D7B',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:pPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:keepNext',
+          },
+          {
+            type: 'element',
+            name: 'w:keepLines',
+          },
+          {
+            type: 'element',
+            name: 'w:spacing',
+            attributes: {
+              'w:before': '160',
+              'w:after': '80',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:outlineLvl',
+            attributes: {
+              'w:val': '2',
+            },
+          },
+        ],
+      },
+      {
+        type: 'element',
+        name: 'w:rPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:rFonts',
+            attributes: {
+              'w:eastAsiaTheme': 'majorEastAsia',
+              'w:cstheme': 'majorBidi',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:color',
+            attributes: {
+              'w:val': '0F4761',
+              'w:themeColor': 'accent1',
+              'w:themeShade': 'BF',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:sz',
+            attributes: {
+              'w:val': '28',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:szCs',
+            attributes: {
+              'w:val': '28',
+            },
+          },
+        ],
+      },
+    ],
+  },
+};
 /**
  *
  * @param {ParsedDocx} docx
@@ -358,6 +768,33 @@ function getStyleDefinitions(docx) {
 
   return allParsedStyles;
 };
+
+/**
+ * Add default styles if missing. Default styles are:
+ * 
+ * Normal, Title, Subtitle, Heading1, Heading2, Heading3
+ * 
+ * Does not mutate the original docx object
+ * @param {Object} styles The parsed docx styles [word/styles.xml]
+ * @returns {Object} The updated styles object with default styles
+ */
+export function addDefaultStylesIfMissing(styles) {
+  // Do not mutate the original docx object
+  const updatedStyles = carbonCopy(styles);
+  if (!styles) return updatedStyles;
+  
+  const { elements } = updatedStyles.elements[0];
+
+  Object.keys(DEFAULT_LINKED_STYLES).forEach(styleId => {
+    const existsOnDoc = elements.some((el) => el.attributes?.['w:styleId'] === styleId);
+    if (!existsOnDoc) {
+      const missingStyle = DEFAULT_LINKED_STYLES[styleId];
+      updatedStyles.elements[0].elements.push(missingStyle);
+    }
+  })
+
+  return updatedStyles;
+}
 
 function getHeaderFooter(el, elementType, docx, converter, editor) {
   const rels = docx['word/_rels/document.xml.rels'];
