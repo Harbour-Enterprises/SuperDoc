@@ -220,7 +220,6 @@ export class SuperToolbar extends EventEmitter {
   setActiveEditor(editor) {
     this.activeEditor = editor;
     this.activeEditor.on('transaction', this.onEditorTransaction.bind(this));
-    this.updateToolbarState();
   }
 
   getToolbarItemByGroup(groupName) {
@@ -231,7 +230,6 @@ export class SuperToolbar extends EventEmitter {
     const { defaultItems, overflowItems } = makeDefaultItems(superToolbar, isDev, window.innerWidth, this.role, icons);
     this.toolbarItems = defaultItems;
     this.overflowItems = overflowItems;
-    this.updateToolbarState();
   }
 
   #initDefaultFonts() {
@@ -306,7 +304,10 @@ export class SuperToolbar extends EventEmitter {
   /**
    * React to editor transactions. Might want to debounce this.
    */
-  onEditorTransaction({ editor, transaction }) {}
+  onEditorTransaction({ editor, transaction }) {
+    if (!transaction.docChanged && !transaction.selectionSet) return;
+    this.updateToolbarState();
+  }
 
   /**
    * Main handler for toolbar commands.
