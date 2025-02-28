@@ -12,7 +12,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
   const documentBounds = ref([]);
   const pages = reactive({});
   const documentUsers = ref([]);
-  const activeZoom = ref(1);
+  const activeZoom = ref(100);
   const isReady = ref(false);
   const isInternal = ref(false);
 

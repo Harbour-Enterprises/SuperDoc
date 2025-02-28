@@ -117,6 +117,7 @@ const overflowOptions = [
 
 const showOverflow = computed(() => (comment) => {
   if (!!props.comment.resolvedTime) return [];
+  if (getConfig.value.readOnly) return [];
 
   // If this comment belongs to the current user, allow edit, delete
   if (comment.creatorEmail === superdocStore.user.email) {

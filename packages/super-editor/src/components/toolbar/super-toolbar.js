@@ -42,6 +42,8 @@ export class SuperToolbar extends EventEmitter {
       } else {
         layers.style.zoom = parseInt(argument) / 100;
       }
+
+      this.superdoc.superdocStore.activeZoom = parseInt(argument);
     },
 
     setDocumentMode: ({ item, argument }) => {
