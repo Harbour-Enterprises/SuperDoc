@@ -1,5 +1,5 @@
 import EventEmitter from 'eventemitter3';
-import { createApp } from 'vue';
+import { createApp, h } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { TextSelection } from 'prosemirror-state';
 import { makeDefaultItems } from './defaultItems';
@@ -10,6 +10,7 @@ import { startImageUpload, getFileOpener } from '../../extensions/image/imageHel
 import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { getQuickFormatList } from '@extensions/linked-styles/linked-styles.js';
+import { getAvailableColorOptions, makeColorOption, renderColorOptions } from './color-dropdown-helpers.js';
 
 export class SuperToolbar extends EventEmitter {
   config = {
@@ -18,6 +19,7 @@ export class SuperToolbar extends EventEmitter {
     role: 'editor',
     pagination: false,
     icons: { ...toolbarIcons },
+    mode: 'docx',
   };
 
   #interceptedCommands = {
@@ -34,11 +36,12 @@ export class SuperToolbar extends EventEmitter {
       // 768px breakpoint doesn't consider iPad in portrait orientation
       const isSmallScreen = window.matchMedia('(max-width: 834px)').matches;
       
+      // Zoom property doesn't work correctly when testing on mobile devices
       if (isMobileDevice && isSmallScreen) {
-        layers.style.transformOrigin = 'top left';
+        layers.style.transformOrigin = '0 0';
         layers.style.transform = `scale(${parseInt(argument) / 100})`;
       } else {
-        layers.style.zoom = argument;
+        layers.style.zoom = parseInt(argument) / 100;
       }
     },
 
@@ -61,6 +64,10 @@ export class SuperToolbar extends EventEmitter {
     },
 
     setColor: ({ item, argument }) => {
+      this.#runCommandWithArgumentOnly({ item, argument });
+    },
+    
+    setHighlight: ({ item, argument }) => {
       this.#runCommandWithArgumentOnly({ item, argument });
     },
 
@@ -206,10 +213,9 @@ export class SuperToolbar extends EventEmitter {
   }
 
   setZoom(percent_int) {
-    const percent = percent_int / 100;
     const allItems = [...this.toolbarItems, ...this.overflowItems];
     const item = allItems.find((item) => item.name.value === 'zoom');
-    this.#interceptedCommands.setZoom({ item, argument: percent });
+    this.#interceptedCommands.setZoom({ item, argument: percent_int });
   }
 
   /**
@@ -219,7 +225,6 @@ export class SuperToolbar extends EventEmitter {
   setActiveEditor(editor) {
     this.activeEditor = editor;
     this.activeEditor.on('transaction', this.onEditorTransaction.bind(this));
-    this.updateToolbarState();
   }
 
   getToolbarItemByGroup(groupName) {
@@ -230,7 +235,6 @@ export class SuperToolbar extends EventEmitter {
     const { defaultItems, overflowItems } = makeDefaultItems(superToolbar, isDev, window.innerWidth, this.role, icons);
     this.toolbarItems = defaultItems;
     this.overflowItems = overflowItems;
-    this.updateToolbarState();
   }
 
   #initDefaultFonts() {
@@ -242,6 +246,35 @@ export class SuperToolbar extends EventEmitter {
     const fontFamilyItem = this.toolbarItems.find((item) => item.name.value === 'fontFamily');
     if (fontFamilyItem) fontFamilyItem.defaultLabel.value = typeface;
   }
+  
+  #updateHighlightColors() {
+    if (!this.activeEditor || !this.activeEditor.converter) return;
+    if (!this.activeEditor.converter.docHiglightColors.size) return;
+    
+    const highlightItem = this.toolbarItems.find((item) => item.name.value === 'highlight');
+
+    const pickerColorOptions = getAvailableColorOptions();
+    const perChunk = 7; // items per chunk
+
+    const result = Array.from(this.activeEditor.converter.docHiglightColors).reduce((resultArray, item, index) => {
+      const chunkIndex = Math.floor(index / perChunk);
+      if (!resultArray[chunkIndex]) {
+        resultArray[chunkIndex] = [];
+      }
+
+      if (!pickerColorOptions.includes(item)) resultArray[chunkIndex].push(makeColorOption(item));
+      return resultArray;
+    }, []);
+    
+    const option = {
+      key: 'color',
+      type: 'render',
+      render: () => renderColorOptions(this, highlightItem, result),
+    }
+
+    highlightItem.nestedOptions.value = [option];
+  }
+
 
   /**
    * Update the toolbar state. Expects a list of marks in the form: { name, attrs }
@@ -250,6 +283,7 @@ export class SuperToolbar extends EventEmitter {
   updateToolbarState() {
     this.#updateToolbarHistory();
     this.#initDefaultFonts();
+    this.#updateHighlightColors();
 
     // Decativate toolbar items if no active editor
     // This will skip buttons that are marked as allowWithoutEditor
@@ -305,7 +339,10 @@ export class SuperToolbar extends EventEmitter {
   /**
    * React to editor transactions. Might want to debounce this.
    */
-  onEditorTransaction({ editor, transaction }) {}
+  onEditorTransaction({ editor, transaction }) {
+    if (!transaction.docChanged && !transaction.selectionSet) return;
+    this.updateToolbarState();
+  }
 
   /**
    * Main handler for toolbar commands.
@@ -315,7 +352,7 @@ export class SuperToolbar extends EventEmitter {
    */
   emitCommand({ item, argument }) {
     const { command } = item;
-
+    
     if (!command) {
       return;
     }

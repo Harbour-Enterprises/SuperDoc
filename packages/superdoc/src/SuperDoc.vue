@@ -79,6 +79,8 @@ const handleDocumentReady = (documentId, container) => {
     if (!proxy.$superdoc.config.collaboration) isReady.value = true;
     nextTick(() => initialCheck());
   }
+
+  isFloatingCommentsReady.value = true;
   proxy.$superdoc.broadcastPdfDocumentReady();
 };
 
@@ -200,14 +202,6 @@ const onEditorContentError = ({ error, editor }) => {
 const onEditorException = ({ error, editor }) => {
   proxy.$superdoc.emit('exception', { error, editor });
 };
-
-const updateToolbarState = () => {
-  proxy.$superdoc.toolbar.updateToolbarState();
-};
-
-const handleEditorClick = ({ editor }) => updateToolbarState();
-
-const handleEditorKeydown = ({ editor }) => updateToolbarState();
 
 const editorOptions = (doc) => {
   const options = {
@@ -500,7 +494,7 @@ const handlePdfClick = (e) => {
         />
 
         <!-- On-document comments layer -->
-        <!-- <CommentsLayer
+        <CommentsLayer
           class="superdoc__comments-layer comments-layer"
           v-if="showCommentsSidebar"
           style="z-index: 3"
@@ -508,7 +502,7 @@ const handlePdfClick = (e) => {
           :parent="layers"
           :user="user"
           @highlight-click="handleHighlightClick"
-        /> -->
+        />
 
         <div class="superdoc__sub-document sub-document" v-for="doc in documents" :key="doc.id">
           <!-- PDF renderer -->
@@ -524,8 +518,6 @@ const handlePdfClick = (e) => {
 
           <SuperEditor
             v-if="doc.type === DOCX"
-            @editor-click="handleEditorClick"
-            @editor-keydown="handleEditorKeydown"
             :file-source="doc.data"
             :state="doc.state"
             :document-id="doc.id"
@@ -592,7 +584,7 @@ const handlePdfClick = (e) => {
   position: absolute;
   min-width: 100%;
   min-height: 100%;
-  z-index: 2;
+  z-index: 10;
   pointer-events: none;
 }
 

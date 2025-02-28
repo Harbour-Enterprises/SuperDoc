@@ -83,7 +83,7 @@ export const useCommentsStore = defineStore('comments', () => {
   };
 
   const showAddComment = (superdoc) => {    
-    superdoc.broadcastComments({ type: COMMENT_EVENTS.PENDING });
+    superdoc.emit('comments-update', { type: COMMENT_EVENTS.PENDING });
 
     const selection = { ...superdocStore.activeSelection };
     selection.selectionBounds = { ...selection.selectionBounds };
@@ -159,58 +159,10 @@ export const useCommentsStore = defineStore('comments', () => {
     };
   };
 
-  function isOverlap(obj1, obj2) {
-    if (!obj1.comments.length || !obj2.comments.length) return false;
-    const sel1 = obj1.selection.selectionBounds;
-    const sel2 = obj2.selection.selectionBounds;
-
-    if (sel1.bottom - sel2.top < 200 || sel2.top - sel1.bottom < 200) return true;
-    return false;
-  }
-
-  const getAllConversations = computed(() => {
-    const allConvos = [];
-    let overlaps = 0;
-    documentsWithConverations.value.map((doc) => {
-      doc.conversations.forEach((c) => {
-        for (let index in allConvos) {
-          const conv = allConvos[index];
-          let currentOverlap = conv.overlap || overlaps;
-
-          if (isOverlap(conv, c)) {
-            conv.overlap = currentOverlap;
-            c.overlap = currentOverlap;
-            overlaps++;
-          }
-        }
-
-        allConvos.push({
-          ...c,
-          documentId: doc.documentId,
-          doc: doc,
-        });
-      });
-    });
-    return allConvos;
-  });
-
-  const getAllConversationsFiltered = computed(() => {
-    return getAllConversations.value.filter((c) => !c.group).filter((c) => !c.markedDone);
-  });
-
-  const getAllGroups = computed(() => {
-    return getAllConversations.value.filter((c) => c.group);
-  });
-
   const initialCheck = () => {
-    const currentDialogs = document.querySelectorAll('.comment-box');
-    currentDialogs.forEach((d) => {
-      const conversationObject = getAllConversations.value.find((conversation) => {
-        return conversation.conversationId === d.dataset.id;
-      });
-      if (!conversationObject) return;
-      checkOverlaps(d, conversationObject);
-    });
+    setTimeout(() => {
+      lastChange.value = Date.now();
+    }, 250)
   };
 
   const checkOverlaps = (currentElement, dialog, doc) => {
@@ -278,6 +230,8 @@ export const useCommentsStore = defineStore('comments', () => {
     let activeDocument;
     if (documentId) activeDocument = superdocStore.getDocument(documentId);
     else if (selection) activeDocument = superdocStore.getDocument(selection.documentId);
+  
+    if (!activeDocument) activeDocument = superdocStore.documents[0];
 
     return useComment({
       ...options,
@@ -328,9 +282,11 @@ export const useCommentsStore = defineStore('comments', () => {
     // Add the new comments to our global list
     commentsList.value.push(newComment);
 
-    // Add the comment to the active editor
-    superdoc.activeEditor.commands.insertComment(newComment.getValues());
-  
+    if (superdoc.activeEditor?.commands) {
+      // Add the comment to the active editor
+      superdoc.activeEditor.commands.insertComment(newComment.getValues());
+    };
+
     // If collaboration is enabled, sync the comments to all clients
     syncCommentsToClients(superdoc);
 
@@ -490,9 +446,6 @@ export const useCommentsStore = defineStore('comments', () => {
     // Getters
     getConfig,
     documentsWithConverations,
-    getAllConversations,
-    getAllConversationsFiltered,
-    getAllGroups,
     getGroupedComments,
 
     // Actions

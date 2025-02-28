@@ -85,6 +85,39 @@ const getContentTypesFromXml = (contentTypesXml) => {
   return Array.from(defaults).map((item) => item.getAttribute('Extension'));
 };
 
+const getHexColorFromDocxSystem = (docxColor) => {
+  const colorMap = new Map([
+    ['yellow', '#ffff00'],
+    ['green', '#00ff00'],
+    ['blue', '#0000FFFF'],
+    ['cyan', '#00ffff'],
+    ['magenta', '#ff00ff'],
+    ['red', '#ff0000'],
+    ['darkYellow', '#808000FF'],
+    ['darkGreen', '#008000FF'],
+    ['darkBlue', '#000080'],
+    ['darkCyan', '#008080FF'],
+    ['darkMagenta', '#800080FF'],
+    ['darkGray', '#808080FF'],
+    ['darkRed', '#800000FF'],
+    ['lightGray', '#C0C0C0FF'],
+    ['black', '#000'],
+  ]);
+
+  return colorMap.get(docxColor) || null;
+}
+
+function isValidHexColor(color) {
+  if (!color || typeof color !== 'string') return false;
+
+  switch(color.length) {
+    case 3: return /^[0-9A-F]{3}$/i.test(color);
+    case 6: return /^[0-9A-F]{6}$/i.test(color);
+    case 8: return /^[0-9A-F]{8}$/i.test(color);
+    default: return false;
+  }
+}
+
 export {
   inchesToTwips,
   twipsToInches,
@@ -101,4 +134,6 @@ export {
   pixelsToEightPoints,
   getArrayBufferFromUrl,
   getContentTypesFromXml,
+  getHexColorFromDocxSystem,
+  isValidHexColor
 };

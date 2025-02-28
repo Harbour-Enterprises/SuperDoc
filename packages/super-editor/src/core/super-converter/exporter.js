@@ -3,11 +3,19 @@ import { DOMParser as PMDOMParser } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { SuperConverter } from './SuperConverter.js';
 import { toKebabCase } from '@harbour-enterprises/common';
-import { inchesToTwips, linesToTwips, pixelsToEightPoints, pixelsToEmu, pixelsToTwips } from './helpers.js';
+import {
+  emuToPixels,
+  inchesToTwips,
+  linesToTwips,
+  pixelsToEightPoints,
+  pixelsToEmu,
+  pixelsToTwips,
+} from './helpers.js';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from '@extensions/track-changes/constants.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
+import { marks } from 'prosemirror-schema-basic';
 
 /**
  * @typedef {Object} ExportParams
@@ -294,7 +302,7 @@ function getTextNodeForExport(text, marks) {
     elements: [{ text, type: 'text' }],
     attributes: nodeAttrs,
   };
-
+  
   return wrapTextInRun(textNode, outputMarks);
 }
 
@@ -1089,14 +1097,50 @@ function translateMark(mark) {
       break;
 
     case 'highlight':
-      markElement.attributes['w:val'] = attrs.color;
+      markElement.attributes['w:fill'] = attrs.color.substring(1);
+      markElement.attributes['w:color'] = 'auto';
+      markElement.attributes['w:val'] = 'clear';
+      markElement.name = 'w:shd';
       break;
 
     case 'link':
       break;
   }
-
+  
   return markElement;
+}
+
+function getPngDimensions(base64) {
+  const type = base64.split(';')[0].split('/')[1];
+  if (!base64 || type !== 'png') {
+    return {
+      originalWidth: undefined,
+      originalHeight: undefined,
+    }
+  }
+  
+  let header = base64.split(',')[1].slice(0, 50)
+  let uint8 = Uint8Array.from(atob(header), c => c.charCodeAt(0))
+  let dataView = new DataView(uint8.buffer, 0, 28)
+
+  return {
+    originalWidth: dataView.getInt32(16),
+    originalHeight: dataView.getInt32(20)
+  }
+}
+
+function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
+  let scaledWidth = originalWidth;
+  let scaledHeight = originalHeight;
+
+  // Calculate aspect ratio
+  let ratio = Math.min(maxWidth / originalWidth, maxHeight / originalHeight);
+
+  // Scale dimensions
+  scaledWidth = Math.round(scaledWidth * ratio);
+  scaledHeight = Math.round(scaledHeight * ratio);
+
+  return { scaledWidth, scaledHeight };
 }
 
 function translateImageNode(params, imageSize) {
@@ -1105,12 +1149,25 @@ function translateImageNode(params, imageSize) {
   } = params;
 
   let imageId = attrs.rId;
-  const size = attrs.size
+  
+  const { originalWidth, originalHeight } = getPngDimensions(attrs.imageSrc);
+  
+  let size = attrs.size
     ? {
       w: pixelsToEmu(attrs.size.width),
       h: pixelsToEmu(attrs.size.height),
     } : imageSize;
 
+  if (originalWidth && originalHeight) {
+    const boxWidthPx = emuToPixels(size.w);
+    const boxHeightPx = emuToPixels(size.h);
+    const { scaledWidth, scaledHeight } = getScaledSize(originalWidth, originalHeight, boxWidthPx, boxHeightPx);
+    size = {
+      w: pixelsToEmu(scaledWidth),
+      h: pixelsToEmu(scaledHeight),
+    };
+  }
+  
   if (params.node.type === 'image' && !imageId) {
     const path = attrs.src?.split('word/')[1];
     imageId = addNewImageRelationship(params, path);
@@ -1119,7 +1176,7 @@ function translateImageNode(params, imageSize) {
     if (!type) {
       return prepareTextAnnotation(params);
     }
-
+    
     const hash = generateDocxRandomId(4);
     const cleanUrl = attrs.fieldId.replace('-', '_');
     const imageUrl = `media/${cleanUrl}_${hash}.${type}`;

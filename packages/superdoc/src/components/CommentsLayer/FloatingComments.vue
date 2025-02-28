@@ -71,16 +71,16 @@ const handleDialogReady = ({ commentId: dialogId, elementRef }) => {
 const renderDialog = (data, previousNode, previousBounds) => {
   if (!data) return;
   const nextConvo = data;
-  const commentTop = nextConvo.selection?.selectionBounds.top;
+  const commentTop = Number(nextConvo.floatingPosition?.top);
 
-  const previousTop = previousNode.selection?.selectionBounds.top;
+  const previousTop = Number(previousNode.floatingPosition?.top);
+  const previousBottom = previousTop + Number(previousBounds.height);
 
-  const previousBottom = previousTop + previousBounds.height;
-  nextConvo.selection.selectionBounds.top = data.selection?.selectionBounds.top; 
-
-  if (commentTop <= previousBottom || !nextConvo.selection.selectionBounds.top) {
-    nextConvo.selection.selectionBounds.top = previousBottom + 5;
+  nextConvo.floatingPosition.top = Number(data.floatingPosition?.top);
+  if (commentTop <= previousBottom || !nextConvo.floatingPosition.top) {
+    nextConvo.floatingPosition.top = previousBottom + 5;
   }
+
   visibleConversations.value.push(nextConvo);
 };
 
@@ -91,8 +91,8 @@ const sortByLocation = (a, b) => {
   const pageB = b.selection?.page || 0;
   if (pageA !== pageB) return pageA - pageB;
 
-  const topB = b.selection.selectionBounds.top;
-  const topA = a.selection.selectionBounds.top;
+  const topB = b.floatingPosition.top;
+  const topA = a.floatingPosition.top;
   return topA - topB;
 };
 
@@ -115,7 +115,7 @@ const initializeConvos = () => {
 
 const getCommentPosition = (floatingComment) => {
   return {
-    top: floatingComment.selection.selectionBounds.top + 'px',
+    top: floatingComment.floatingPosition.top + 'px',
   };
 };
 
@@ -134,7 +134,7 @@ const getFloatingSidebarStyle = computed(() => {
 const updateOffset = () => {
   const comment = commentsStore.getComment(activeComment.value);
   if (!comment) floatingCommentsOffset.value = 0;
-  else floatingCommentsOffset.value = comment.selection.selectionBounds.top;
+  else floatingCommentsOffset.value = comment.floatingPosition.top;
 };
 
 // Update the floating comments when the conversations change

@@ -49,7 +49,7 @@ const createLinkedStylesPlugin = (editor) => {
     key: LinkedStylesPluginKey,
     state: {
       init(_, { doc, selection }) {
-        if (!editor.converter) return;
+        if (!editor.converter || editor.options.mode !== 'docx') return {};
         const styles = editor.converter?.linkedStyles || [];
         return {
           styles,
@@ -57,6 +57,7 @@ const createLinkedStylesPlugin = (editor) => {
         };
       },
       apply(tr, prev, oldEditorState, newEditorState) {
+        if (!editor.converter || editor.options.mode !== 'docx') return { ...prev };
         let decorations = prev.decorations || DecorationSet.empty;
         if (tr.docChanged) {
           const styles = LinkedStylesPluginKey.getState(editor.state).styles;
@@ -196,6 +197,7 @@ export const getSpacingStyleString = (spacing) => {
 };
 
 export const getQuickFormatList = (editor) => {
+  if (!editor?.converter) return [];
   const styles = editor.converter.linkedStyles || [];
   return styles 
     .filter((style) => {

@@ -18,13 +18,18 @@ const props = defineProps({
 
 const getBarColor = computed(() => {
   if (props.name === 'color') return { backgroundColor: props.color || '#111111' };
+  if (props.name === 'highlight') return { backgroundColor: props.color || 'transparent' };
+});
+
+const hasColorBar = computed(() => {
+  return ['color', 'highlight'].includes(props.name);
 });
 </script>
 
 <template>
   <div class="toolbar-icon">
     <div class="toolbar-icon__icon" :class="[`toolbar-icon__icon--${props.name}`]" v-html="icon"></div>
-    <div class="color-bar" v-if="props.name === 'color'" :style="getBarColor"></div>
+    <div class="color-bar" v-if="hasColorBar" :style="getBarColor"></div>
   </div>
 </template>
 
@@ -42,6 +47,11 @@ const getBarColor = computed(() => {
   justify-content: center;
   flex-shrink: 0;
   height: 16px;
+  &--highlight {
+    width: 16px;
+    margin-left: 3px;
+    margin-bottom: 1px;
+  }
 }
 
 .toolbar-icon__icon :deep(svg) {

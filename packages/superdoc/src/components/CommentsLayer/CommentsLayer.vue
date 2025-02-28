@@ -3,12 +3,12 @@ import { getCurrentInstance, computed, ref, nextTick, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
-import useConversation from './use-conversation';
+import useComment from './use-comment';
 
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 const { COMMENT_EVENTS } = commentsStore;
-const { documentsWithConverations, activeComment, floatingCommentsOffset } = storeToRefs(commentsStore);
+const { documentsWithConverations, activeComment, floatingCommentsOffset, commentsList} = storeToRefs(commentsStore);
 const { documents, activeZoom } = storeToRefs(superdocStore);
 const { proxy } = getCurrentInstance();
 
@@ -48,15 +48,15 @@ const addCommentEntry = (selection) => {
 
   selection.selectionBounds = bounds;
   const matchedDocument = documents.value.find((c) => c.id === selection.documentId);
-  const newConvo = useConversation(params);
-  activeComment.value = newConvo.conversationId;
+  const newConvo = useComment(params);
+  activeComment.value = newConvo.commentId;
 
   matchedDocument.conversations.push(newConvo);
-  proxy.$superdoc.broadcastComments(COMMENT_EVENTS.NEW, newConvo.getValues());
+  proxy.$superdoc.emit('comments-update', { type: COMMENT_EVENTS.NEW, comment: newConvo.getValues() });
 };
 
 const getStyle = (conversation) => {
-  const { selection, conversationId } = conversation;
+  const { selection, commentId } = conversation;
   const containerBounds = selection.getContainerLocation(props.parent);
   const placement = conversation.selection.selectionBounds;
   const top = (parseFloat(placement.top) + containerBounds.top) * activeZoom.value;
@@ -65,7 +65,7 @@ const getStyle = (conversation) => {
   const externalHighlightColor = '#B1124B';
 
   let opacity = '33';
-  activeComment.value === conversationId ? (opacity = '66') : '33';
+  activeComment.value === commentId ? (opacity = '66') : '33';
   let fillColor = conversation.isInternal ? internalHighlightColor : externalHighlightColor;
   fillColor += opacity;
 
@@ -84,19 +84,15 @@ const setFloatingCommentOffset = (conversation) => {
   floatingCommentsOffset.value = conversation.selection.selectionBounds.top;
 };
 
-const activateComment = (conversation) => {
-  conversation.isFocused = true;
-  activeComment.value = conversation.conversationId;
-  setFloatingCommentOffset(conversation);
-  emit('highlight-click', conversation);
+const activateComment = (comment, e) => {
+  comment.isFocused = true;
+  activeComment.value = comment.commentId;
+  comment.setActive(proxy.$superdoc);
+  emit('highlight-click', comment);
 };
 
-const getAllConversations = computed(() => {
-  return documentsWithConverations.value
-    .reduce((acc, doc) => {
-      return acc.concat(doc.conversations);
-    }, [])
-    .filter((c) => !c.suppressHighlight);
+const getCurrentComments = computed(() => {
+  return commentsList.value.filter((c) => !c.parentCommentId);
 });
 
 watch(activeComment, (newVal) => {
@@ -116,10 +112,10 @@ defineExpose({
   <div class="comments-container" id="commentsContainer">
     <div class="comments-layer">
       <div
-        v-for="conversation in getAllConversations"
+        v-for="conversation in getCurrentComments"
         class="comment-anchor sd-highlight"
-        @click="(e) => activateComment(conversation, e)"
-        :data-id="conversation.conversationId"
+        @click.stop.prevent="activateComment(conversation, $event)"
+        :data-id="conversation.commentId"
         :style="getStyle(conversation)"
       ></div>
     </div>
