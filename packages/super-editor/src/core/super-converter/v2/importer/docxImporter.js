@@ -870,6 +870,11 @@ const createNodeListHandler = (nodeHandlers) => {
                 converter?.telemetry?.trackStatistic('attributes', innerItemContext);
               })
             }
+            
+            const hasHighlightMark = nodes[0]?.marks?.find(mark => mark.type === 'highlight');
+            if (hasHighlightMark) {
+              converter?.docHiglightColors.add(hasHighlightMark.attrs.color.toUpperCase());
+            }
           }
 
           // Process and store nodes (no tracking needed for success)

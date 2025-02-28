@@ -52,7 +52,7 @@ const addCommentEntry = (selection) => {
   activeComment.value = newConvo.conversationId;
 
   matchedDocument.conversations.push(newConvo);
-  proxy.$superdoc.broadcastComments(COMMENT_EVENTS.NEW, newConvo.getValues());
+  proxy.$superdoc.emit('comments-update', { type: COMMENT_EVENTS.NEW, comment: newConvo.getValues() });
 };
 
 const getStyle = (conversation) => {

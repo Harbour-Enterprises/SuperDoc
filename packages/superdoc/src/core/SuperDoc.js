@@ -298,11 +298,6 @@ export class SuperDoc extends EventEmitter {
     this.emit('editorDestroy');
   }
 
-  broadcastComments(type, data) {
-    this.log('[comments] Broadcasting:', type, data);
-    this.emit('comments-update', type, data);
-  }
-
   broadcastSidebarToggle(isOpened) {
     this.emit('sidebar-toggle', isOpened); 
   }

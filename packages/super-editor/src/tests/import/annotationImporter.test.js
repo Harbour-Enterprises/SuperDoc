@@ -5,17 +5,21 @@ import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 
 
 describe('paragraph tests to check spacing', () => {
+
+  const mockEditor = {
+    options: {}
+  };
+
   it('can parse annotation marks as attributes for non text style marks [fields_attrs1]', async () => {
     const dataName = 'fields_attrs1.docx';
     const docx = await getTestDataByFileName(dataName);
     const documentXml = docx['word/document.xml'];
-
     const doc = documentXml.elements[0];
     const body = doc.elements[0];
     const content = body.elements;
     const paragraphWithField = content[0].elements[2];
     const { nodes } = handleAnnotationNode({
-      nodes: [paragraphWithField], docx, nodeListHandler: defaultNodeListHandler()
+      nodes: [paragraphWithField], docx, nodeListHandler: defaultNodeListHandler(), editor: mockEditor,
     });
 
     const node = nodes[0];
@@ -42,7 +46,8 @@ describe('paragraph tests to check spacing', () => {
     const { nodes } = handleAnnotationNode({
       nodes: [paragraphWithField],
       docx,
-      nodeListHandler: defaultNodeListHandler()
+      nodeListHandler: defaultNodeListHandler(),
+      editor: mockEditor,
     });
 
     const node = nodes[0];

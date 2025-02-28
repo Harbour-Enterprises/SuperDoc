@@ -261,7 +261,6 @@ onMounted(async () => {
 .dev-app__view {
   display: flex;
   padding-top: 20px;
-  overflow-y: auto;
 }
 
 .dev-app__content {

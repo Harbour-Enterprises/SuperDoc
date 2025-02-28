@@ -23,8 +23,8 @@ const getFilteredUsers = computed(() => {
   // Remove the '@' symbol from the mention
   const mention = props.mention.slice(1)?.toLowerCase();
   const filtered = props.users.filter((user) => {
-    const userMatch = user.name.toLowerCase().startsWith(mention);
-    const emailMatch = user.email.toLowerCase().startsWith(mention);
+    const userMatch = user.name?.toLowerCase().startsWith(mention);
+    const emailMatch = user.email?.toLowerCase().startsWith(mention);
     return userMatch || emailMatch;
   });
   return filtered;
@@ -84,8 +84,15 @@ const handleFocus = () => {
 .selected {
   background-color: #dbdbdb;
 }
+.mentions-container {
+  outline: none !important;
+  border: none;
+  max-height: 300px;
+  overflow: auto;
+}
 .mentions-container:focus {
-  outline: none;
+  border: none;
+  outline: none !important;
 }
 .user-row {
   padding: 10px 15px;

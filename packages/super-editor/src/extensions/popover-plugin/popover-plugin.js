@@ -58,6 +58,7 @@ class Popover {
       placement: 'bottom-start',
       interactive: true,
       appendTo: document.body,
+      arrow: false,
       onShow: (instance) => {
         instance.setProps({ getReferenceClientRect: () => this.popoverRect });
         this.bindKeyDownEvents();

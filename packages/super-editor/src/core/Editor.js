@@ -808,8 +808,6 @@ export class Editor extends EventEmitter {
         transaction,
       });
     }
-
-    this.toolbar?.updateToolbarState();
     
     if (!transaction.docChanged) {
       return;

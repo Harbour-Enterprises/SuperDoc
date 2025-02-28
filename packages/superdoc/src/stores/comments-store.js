@@ -83,7 +83,7 @@ export const useCommentsStore = defineStore('comments', () => {
   };
 
   const showAddComment = (superdoc) => {    
-    superdoc.broadcastComments({ type: COMMENT_EVENTS.PENDING });
+    superdoc.emit('comments-update', { type: COMMENT_EVENTS.PENDING });
 
     const selection = { ...superdocStore.activeSelection };
     selection.selectionBounds = { ...selection.selectionBounds };
@@ -328,9 +328,11 @@ export const useCommentsStore = defineStore('comments', () => {
     // Add the new comments to our global list
     commentsList.value.push(newComment);
 
-    // Add the comment to the active editor
-    superdoc.activeEditor.commands.insertComment(newComment.getValues());
-  
+    if (superdoc.activeEditor?.commands) {
+      // Add the comment to the active editor
+      superdoc.activeEditor.commands.insertComment(newComment.getValues());
+    };
+
     // If collaboration is enabled, sync the comments to all clients
     syncCommentsToClients(superdoc);
 

@@ -1,6 +1,6 @@
 import { SuperConverter } from '../../SuperConverter.js';
 import { TrackFormatMarkName } from '@extensions/track-changes/constants.js';
-import { twipsToInches, twipsToLines } from '../../helpers.js';
+import { getHexColorFromDocxSystem, isValidHexColor, twipsToInches, twipsToLines } from '../../helpers.js';
 
 /**
  *
@@ -127,7 +127,7 @@ function getMarkValue(markType, attributes, docx) {
     underline: () => attributes['w:val'],
     bold: () => attributes?.['w:val'] || null,
     italic: () => attributes?.['w:val'] || null,
-    highlight: () => attributes?.['w:val'] || null,
+    highlight: () => getHighLightValue(attributes),
   };
 
   if (!(markType in markValueMapper)) {
@@ -176,4 +176,10 @@ function getLineHeightValue(attributes) {
   // if (!value) value = attributes['w:before'];
   if (!value || value === '0') return null;
   return `${twipsToLines(value)}`;
+}
+
+function getHighLightValue(attributes) {
+  if (attributes['w:fill']) return `#${attributes['w:fill']}`;
+  if (isValidHexColor(attributes?.['w:val'])) return `#${attributes['w:val']}`;
+  return getHexColorFromDocxSystem(attributes?.['w:val']) || null;
 }

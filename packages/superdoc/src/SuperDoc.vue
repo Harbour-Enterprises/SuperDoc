@@ -201,14 +201,6 @@ const onEditorException = ({ error, editor }) => {
   proxy.$superdoc.emit('exception', { error, editor });
 };
 
-const updateToolbarState = () => {
-  proxy.$superdoc.toolbar.updateToolbarState();
-};
-
-const handleEditorClick = ({ editor }) => updateToolbarState();
-
-const handleEditorKeydown = ({ editor }) => updateToolbarState();
-
 const editorOptions = (doc) => {
   const options = {
     pagination: proxy.$superdoc.config.pagination,
@@ -524,8 +516,6 @@ const handlePdfClick = (e) => {
 
           <SuperEditor
             v-if="doc.type === DOCX"
-            @editor-click="handleEditorClick"
-            @editor-keydown="handleEditorKeydown"
             :file-source="doc.data"
             :state="doc.state"
             :document-id="doc.id"
@@ -592,7 +582,7 @@ const handlePdfClick = (e) => {
   position: absolute;
   min-width: 100%;
   min-height: 100%;
-  z-index: 2;
+  z-index: 10;
   pointer-events: none;
 }
 
