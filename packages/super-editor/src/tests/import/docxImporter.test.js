@@ -1,4 +1,5 @@
-import { addDefaultStylesIfMissing, DEFAULT_LINKED_STYLES } from '@core/super-converter/v2/importer/docxImporter';
+import { addDefaultStylesIfMissing } from '@core/super-converter/v2/importer/docxImporter';
+import { DEFAULT_LINKED_STYLES } from '../../core/super-converter/exporter-docx-defs';
 
 describe('addDefaultStylesIfMissing', () => {
   const styles = {
