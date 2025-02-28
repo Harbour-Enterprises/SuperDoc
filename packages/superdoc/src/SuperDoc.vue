@@ -79,6 +79,8 @@ const handleDocumentReady = (documentId, container) => {
     if (!proxy.$superdoc.config.collaboration) isReady.value = true;
     nextTick(() => initialCheck());
   }
+
+  isFloatingCommentsReady.value = true;
   proxy.$superdoc.broadcastPdfDocumentReady();
 };
 
@@ -492,7 +494,7 @@ const handlePdfClick = (e) => {
         />
 
         <!-- On-document comments layer -->
-        <!-- <CommentsLayer
+        <CommentsLayer
           class="superdoc__comments-layer comments-layer"
           v-if="showCommentsSidebar"
           style="z-index: 3"
@@ -500,7 +502,7 @@ const handlePdfClick = (e) => {
           :parent="layers"
           :user="user"
           @highlight-click="handleHighlightClick"
-        /> -->
+        />
 
         <div class="superdoc__sub-document sub-document" v-for="doc in documents" :key="doc.id">
           <!-- PDF renderer -->
