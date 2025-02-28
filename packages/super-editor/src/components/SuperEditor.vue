@@ -4,6 +4,7 @@ import { NSkeleton } from 'naive-ui';
 import { ref, onMounted, onBeforeUnmount, computed, shallowRef, reactive, nextTick } from 'vue';
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
+import SlashMenu from './slash-menu/SlashMenu.vue';
 import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
 import Ruler from './rulers/Ruler.vue';
@@ -204,6 +205,7 @@ onBeforeUnmount(() => {
       @mousedown="handleMarginClick"
     >
       <div ref="editorElem" class="editor-element super-editor__element"></div>
+      <SlashMenu v-if="editorReady" :editor="editor" />
     </div>
 
     <div class="placeholder-editor" v-if="!editorReady">

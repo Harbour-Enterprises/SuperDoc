@@ -103,6 +103,7 @@ const handleClickOutside = (e) => {
         class="toolbar-button toolbar-dropdown"
         @select="(key, option) => handleSelect(item, option)"
         @clickoutside="handleClickOutside"
+        :style="item.dropdownStyles.value"
       >
         <ToolbarButton
           :toolbar-item="item"

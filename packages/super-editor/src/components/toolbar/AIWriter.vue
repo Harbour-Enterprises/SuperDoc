@@ -1,0 +1,373 @@
+<script setup>
+import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
+const props = defineProps({
+  selectedText: {
+    type: String,
+    required: true,
+  },
+  handleClose: {
+    type: Function,
+    required: true,
+  },
+  superToolbar: {
+    type: Object,
+    required: true,
+  },
+  aiModule: {
+    type: Object,
+    required: false,
+  },
+});
+
+// Store the selection state
+const selectionState = ref(null);
+
+// If we have an open ai key store in a variable
+const openAiKey = computed(() => {
+  return props.aiModule?.isOpenAiEnabled?.() ? props.aiModule.keyStorage.getKey() : undefined;
+});
+
+// Add click outside handler
+const aiWriterRef = ref(null);
+
+const handleClickOutside = (event) => {
+  if (aiWriterRef.value && !aiWriterRef.value.contains(event.target)) {
+    props.handleClose();
+  }
+};
+
+// Add ref for the editable div
+const editableRef = ref(null);
+
+// Save selection when component is mounted
+onMounted(() => {
+  if (props.selectedText) {
+    selectionState.value = props.superToolbar.activeEditor.state.selection;
+    // Store the selection in the editor's state
+    props.superToolbar.activeEditor.commands.setMeta('storedSelection', selectionState.value);
+
+    // Emit ai highlight when the writer mounts
+    props.superToolbar.emit('ai-highlight-add');
+  }
+
+  // Focus the input element on mount using nextTick to ensure DOM is ready
+  nextTick(() => {
+    if (editableRef.value) {
+      editableRef.value.focus();
+      // Optional: Place cursor at end of any existing text
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(editableRef.value);
+      range.collapse(false);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  });
+
+  // Add click outside listener
+  document.addEventListener('mousedown', handleClickOutside);
+});
+
+onUnmounted(() => {
+  // emit the ai highlight remove event
+  props.superToolbar.emit('ai-highlight-remove');
+
+  // Remove click outside listener
+  document.removeEventListener('mousedown', handleClickOutside);
+});
+
+// System prompt
+const systemPrompt =
+  'You are an expert copywriter and you are immersed in a document editor. Only write what is asked for. Do not provide explanations. Try to keep placeholders as short as possible. Do not output your prompt.';
+
+// Computed property to determine text based on selection
+const placeholderText = computed(() =>
+  props.selectedText ? 'Insert prompt to update text' : 'Insert prompt to generate text',
+);
+
+const isLoading = ref(false);
+const isError = ref('');
+const promptText = ref('');
+
+// Computed property to check if editor is in suggesting mode
+const isInSuggestingMode = computed(() => {
+  return props.superToolbar.activeEditor.isInSuggestingMode?.() || false;
+});
+
+// Refactored handleSubmit function (replaces handleKeyDown)
+const handleSubmit = async () => {
+  // Start loading
+  isLoading.value = true;
+  // Reset error
+  isError.value = '';
+
+  try {
+    let previousText = '';
+
+    // Enable track changes if in suggesting mode before using any AI model
+    if (isInSuggestingMode.value) {
+      props.superToolbar.activeEditor.commands.enableTrackChanges();
+    }
+
+    // If OpenAI is enabled, use it
+    if (openAiKey.value) {
+      if (props.selectedText) {
+        const prompt = `Rewrite the following text according to this instruction: ${promptText.value}\nText to rewrite: ${props.selectedText}`;
+
+        await props.aiModule.generateTextStream(
+          prompt,
+          (chunk) => {
+            try {
+              // Remove the selected text if we are using re-writer
+              if (previousText === '') {
+                props.superToolbar.activeEditor.commands.deleteSelection();
+                // Remove the ai highlight
+                props.superToolbar.emit('ai-highlight-remove');
+              }
+              // Update the document text with only the new content
+              props.superToolbar.activeEditor.commands.insertContent(chunk);
+              // Store the current chunk as previous for next iteration
+              previousText += chunk;
+            } catch (error) {
+              console.error('Error processing chunk:', error);
+            }
+          },
+          { temperature: 0.7 },
+        );
+      } else {
+        // Generate new text using OpenAI
+        await props.aiModule.generateTextStream(
+          promptText.value,
+          (chunk) => {
+            try {
+              props.superToolbar.activeEditor.commands.insertContent(chunk);
+              previousText += chunk;
+            } catch (error) {
+              console.error('Error processing chunk:', error);
+            }
+          },
+          { temperature: 0.7 },
+        );
+      }
+    } else {
+      // Fall back to Chrome model if no OpenAI key
+      let stream;
+      if (props.selectedText) {
+        const rewriter = await window.ai.rewriter.create({
+          sharedContext: props.superToolbar.activeEditor.state.doc.textContent,
+        });
+
+        stream = rewriter.rewriteStreaming(props.selectedText, {
+          context: promptText.value,
+        });
+      } else {
+        const writer = await window.ai.writer.create({ tone: 'formal' });
+        stream = writer.writeStreaming(promptText.value, {
+          context: systemPrompt,
+        });
+      }
+
+      for await (const chunk of stream) {
+        try {
+          // Remove the selected text if we are using re-writer
+          if (props.selectedText && previousText === '') {
+            props.superToolbar.activeEditor.commands.deleteSelection();
+            // Remove the ai highlight
+            props.superToolbar.emit('ai-highlight-remove');
+          }
+          // Extract only the new content by comparing with previous chunk
+          const newContent = chunk.slice(previousText.length);
+          // Update the document text with only the new content
+          props.superToolbar.activeEditor.commands.insertContent(newContent);
+          // Store the current chunk as previous for next iteration
+          previousText = chunk;
+        } catch (error) {
+          console.error('Error processing chunk:', error);
+        }
+      }
+    }
+
+    // If all is good, close the AI Writer
+    props.handleClose();
+  } catch (error) {
+    console.error('AI generation error:', error);
+    isError.value = error.message || 'An error occurred';
+  } finally {
+    promptText.value = ''; // Clear the input after submission
+    // Only disable track changes if we enabled it (in suggesting mode)
+    if (isInSuggestingMode.value) {
+      props.superToolbar.activeEditor.commands.disableTrackChanges();
+    }
+    isLoading.value = false;
+  }
+};
+
+// New handler for keydown
+const handleKeyDown = (event) => {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    handleSubmit();
+  }
+};
+
+// New handler for input
+const handleInput = (event) => {
+  if (isError.value) {
+    isError.value = '';
+  }
+  promptText.value = event.target.textContent;
+};
+</script>
+
+<template>
+  <div class="ai-writer" ref="aiWriterRef">
+    <div class="ai-user-input-field">
+      <span class="ai-textarea-icon">
+        <i class="fal fa-pencil"></i>
+      </span>
+      <div
+        ref="editableRef"
+        contenteditable="true"
+        class="ai-editable"
+        :data-placeholder="placeholderText"
+        @keydown="handleKeyDown"
+        @input="handleInput"
+      ></div>
+    </div>
+    <div class="ai-loader">
+      <span v-if="isLoading" class="ai-textarea-icon loading">
+        <span class="spinner-wrapper">
+          <i class="fal fa-spinner"></i>
+        </span>
+      </span>
+      <span v-else-if="isError" class="ai-textarea-icon error"><i class="fal fa-times" :title="isError"></i></span>
+      <span v-else-if="promptText" class="ai-textarea-icon ai-submit-button"
+        ><i class="fal fa-paper-plane" @click="handleSubmit"></i
+      ></span>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.ai-writer {
+  display: flex;
+  flex-direction: column;
+  width: 300px;
+  overflow-y: scroll;
+  /* Firefox */
+  scrollbar-width: none;
+  /* Internet Explorer and Edge */
+  -ms-overflow-style: none;
+}
+
+/* Chrome, Safari, and Opera */
+.ai-writer::-webkit-scrollbar {
+  display: none;
+}
+
+.ai-editable {
+  padding-left: 8px;
+  width: 100%;
+
+  color: #47484a;
+  font-size: initial;
+  line-height: initial;
+  border: initial;
+  background-color: initial;
+  outline: none;
+  border: none;
+  font-size: 13px;
+  display: inline;
+}
+
+.ai-user-input-field {
+  line-height: 13px;
+  display: flex;
+  flex-direction: row;
+
+  min-height: 50px;
+  height: 50px;
+  padding: 10px;
+  resize: none;
+  border: none;
+
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.ai-textarea-icon {
+  display: flex;
+  font-family: 'Font Awesome 5 Pro';
+  content: '';
+  font-weight: 800;
+  font-size: 14px;
+  background: linear-gradient(
+    270deg,
+    rgba(218, 215, 118, 0.5) -20%,
+    rgba(191, 100, 100, 1) 30%,
+    rgba(77, 82, 217, 1) 60%,
+    rgb(255, 219, 102) 150%
+  );
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.ai-textarea-icon.loading {
+  animation: spin 2s linear infinite;
+}
+
+.loading i {
+  display: flex;
+}
+
+.ai-editable[data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  pointer-events: none;
+  font-size: 13px;
+  color: #666;
+  font-weight: 400;
+  line-height: 1.5;
+  font-family: Inter, sans-serif;
+}
+
+.ai-loader {
+  display: flex;
+  height: 14px;
+  justify-content: flex-end;
+  align-items: center;
+  padding-right: 5px;
+  padding-left: 5px;
+}
+
+.ai-textarea-icon.error {
+  background: #dc3545;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.ai-submit-button {
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+.ai-submit-button:hover {
+  opacity: 0.8;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+</style>

@@ -14,6 +14,7 @@ import Toolbar from './components/toolbar/Toolbar.vue';
 import SuperInput from './components/SuperInput.vue';
 import * as fieldAnnotationHelpers from './extensions/field-annotation/fieldAnnotationHelpers/index.js';
 import * as trackChangesHelpers from './extensions/track-changes/trackChangesHelpers/index.js';
+import { SlashMenu } from './extensions/slash-menu';
 
 /**
  * Exported classes and components.
@@ -45,5 +46,6 @@ export {
   getStarterExtensions,
   getRichTextExtensions,
   createZip,
+  SlashMenu,
   getAllowedImageDimensions,
 };

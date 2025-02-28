@@ -4,6 +4,7 @@ import { h } from 'vue';
 import { scrollToElement } from './scroll-helpers';
 import { sanitizeNumber } from './helpers';
 import { useToolbarItem } from './use-toolbar-item';
+import AIWriter from './AIWriter.vue';
 import AlignmentButtons from './AlignmentButtons.vue';
 import LinkInput from './LinkInput.vue';
 import DocumentMode from './DocumentMode.vue';
@@ -14,7 +15,7 @@ const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
 };
 
-export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role, toolbarIcons) => {
+export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role, toolbarIcons, aiModule) => {
 
   // bold
   const bold = useToolbarItem({
@@ -78,6 +79,61 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
       fontButton.label.value = fontFamily;
     },
     onDeactivate: () => (fontButton.label.value = fontButton.defaultLabel.value),
+  });
+
+  // ai button
+  const hasAi = aiModule?.isOpenAiEnabled?.() || window.ai;
+  const aiButton = useToolbarItem({
+    type: 'dropdown',
+    disabled: !hasAi,
+    dropdownStyles: {
+      boxShadow: '0 0 2px 2px #7715b366',
+      border: '1px solid #7715b3',
+      outline: 'none',
+    },
+    name: 'ai',
+    tooltip: hasAi ? 'AI' : 'Please ensure you have provided a valid OpenAI key.',
+    icon: toolbarIcons.ai,
+    hideLabel: true,
+    hasCaret: false,
+    isWide: true,
+    suppressActiveHighlight: true,
+    options: [
+      {
+        type: 'render',
+        key: 'ai',
+        render: () => {
+          let selectedText = '';
+
+          if (superToolbar.activeEditor) {
+            const { state } = superToolbar.activeEditor;
+            const { from, to, empty } = state.selection;
+            selectedText = !empty ? state.doc.textBetween(from, to) : '';
+          }
+
+          const handleClose = () => {
+            closeDropdown(aiButton);
+          };
+
+          return h(
+            'div',
+            {
+              style: {
+                padding: '5px',
+              },
+            },
+            [
+              h(AIWriter, {
+                handleClose,
+                selectedText,
+                superToolbar,
+                aiModule,
+              }),
+            ],
+          );
+        },
+      },
+    ],
   });
 
   // font size
@@ -623,6 +679,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     ['zoom', 70],
     ['fontSize', 56],
     ['fontFamily', 72],
+    ['ai', 32],
     ['default', 32],
   ]);
   
@@ -706,6 +763,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     separator,
     link,
     image,
+    aiButton,
     separator,
     alignment,
     bulletedList,

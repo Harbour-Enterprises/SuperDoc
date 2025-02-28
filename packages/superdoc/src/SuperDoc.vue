@@ -28,6 +28,8 @@ import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
 import { SuperEditor } from '@harbour-enterprises/super-editor';
 import HtmlViewer from './components/HtmlViewer/HtmlViewer.vue';
 import useComment from './components/CommentsLayer/use-comment';
+import AiLayer from './components/AiLayer/AiLayer.vue';
+import { createAiModule } from './core/modules/ai';
 
 // Stores
 const superdocStore = useSuperdocStore();
@@ -63,6 +65,7 @@ commentsStore.proxy = proxy;
 
 // Refs
 const layers = ref(null);
+const isCollaborationReady = ref(false);
 
 // Comments layer
 const commentsLayer = ref(null);
@@ -79,8 +82,6 @@ const handleDocumentReady = (documentId, container) => {
     if (!proxy.$superdoc.config.collaboration) isReady.value = true;
     nextTick(() => initialCheck());
   }
-
-  isFloatingCommentsReady.value = true;
   proxy.$superdoc.broadcastPdfDocumentReady();
 };
 
@@ -205,6 +206,7 @@ const onEditorException = ({ error, editor }) => {
 
 const editorOptions = (doc) => {
   const options = {
+    aiModule: createAiModule(proxy.$superdoc.config.modules.ai),
     pagination: proxy.$superdoc.config.pagination,
     documentId: doc.id,
     user: proxy.$superdoc.user,
@@ -298,10 +300,14 @@ onMounted(() => {
   if (isCommentsEnabled.value && !modules.comments.readOnly) {
     document.addEventListener('mousedown', handleDocumentMouseDown);
   }
+  proxy.$superdoc.on('ai-highlight-add', handleAiHighlightAdd);
+  proxy.$superdoc.on('ai-highlight-remove', handleAiHighlightRemove);
 });
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', handleDocumentMouseDown);
+  proxy.$superdoc.off('ai-highlight-add', handleAiHighlightAdd);
+  proxy.$superdoc.off('ai-highlight-remove', handleAiHighlightRemove);
 });
 
 const selectionLayer = ref(null);
@@ -456,6 +462,24 @@ const handlePdfClick = (e) => {
   isDragging.value = true;
   handleSelectionStart(e);
 };
+
+const aiLayer = ref(null);
+
+const handleAiHighlightAdd = () => {
+  if (!aiLayer.value) {
+    console.error('[Superdoc] aiLayer.value is not available');
+    return;
+  }
+  aiLayer.value.addAiHighlight();
+};
+
+const handleAiHighlightRemove = () => {
+  if (!aiLayer.value) {
+    console.error('[Superdoc] aiLayer.value is not available');
+    return;
+  }
+  aiLayer.value.removeAiHighlight();
+};
 </script>
 
 <template>
@@ -494,7 +518,7 @@ const handlePdfClick = (e) => {
         />
 
         <!-- On-document comments layer -->
-        <CommentsLayer
+        <!-- <CommentsLayer
           class="superdoc__comments-layer comments-layer"
           v-if="showCommentsSidebar"
           style="z-index: 3"
@@ -502,7 +526,10 @@ const handlePdfClick = (e) => {
           :parent="layers"
           :user="user"
           @highlight-click="handleHighlightClick"
-        />
+        /> -->
+
+        <!-- AI Layer for temporary highlights -->
+        <AiLayer class="ai-layer" style="z-index: 4" ref="aiLayer" />
 
         <div class="superdoc__sub-document sub-document" v-for="doc in documents" :key="doc.id">
           <!-- PDF renderer -->

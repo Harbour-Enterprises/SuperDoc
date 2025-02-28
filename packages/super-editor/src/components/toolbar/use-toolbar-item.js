@@ -44,6 +44,9 @@ export const useToolbarItem = (options) => {
   const iconColor = ref(options.iconColor);
   const hasCaret = ref(options.hasCaret);
 
+  // dropdown properties
+  const dropdownStyles = ref(options.dropdownStyles);
+
   // tooltip properties
   const tooltip = ref(options.tooltip);
   const tooltipVisible = ref(options.tooltipVisible);
@@ -122,6 +125,7 @@ export const useToolbarItem = (options) => {
     parentItem,
     iconColor,
     hasCaret,
+    dropdownStyles,
     tooltipVisible,
     tooltipTimeout,
     defaultLabel,

@@ -76,6 +76,9 @@ const init = async () => {
       //   url: 'ws://localhost:3050/docs/superdoc-id',
       //   token: 'token',
       // }
+      ai: {
+        openAiKey: '',
+      },
     },
     onEditorCreate,
     onContentError,

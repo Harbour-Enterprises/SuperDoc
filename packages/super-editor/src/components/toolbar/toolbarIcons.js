@@ -34,7 +34,7 @@ import caretDownIconSvg from '@harbour-enterprises/common/icons/caret-down-solid
 import rulerSvg from '@harbour-enterprises/common/icons/ruler-solid.svg?raw';
 import paintbrushSvg from '@harbour-enterprises/common/icons/paintbrush-solid.svg?raw';
 import highlighterIcon from '@harbour-enterprises/common/icons/highlighter-icon.svg?raw';
-
+import magicWandIcon from '@harbour-enterprises/common/icons/magic-wand-solid.svg?raw';
 export const toolbarIcons = {
   undo: rotateLeftIconSvg,
   redo: rotateRightIconSvg,
@@ -75,4 +75,5 @@ export const toolbarIcons = {
   ruler: rulerSvg,
   paintbrush: paintbrushSvg,
   highlight: highlighterIcon,
+  ai: magicWandIcon,
 }

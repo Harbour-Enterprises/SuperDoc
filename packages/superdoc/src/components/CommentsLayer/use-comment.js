@@ -40,10 +40,6 @@ export default function useComment(params) {
       selectionBounds: {},
     });
   
-  const floatingPosition = params.selection?.selectionBounds
-    ? { ...params.selection.selectionBounds }
-    : { top: 0, left: 0, right: 0, bottom: 0 };
-  
   const trackedChange = ref(params.trackedChange);
 
   const resolvedTime = ref(params.resolvedTime || null);
@@ -90,8 +86,6 @@ export default function useComment(params) {
     propagateUpdate(superdoc, emitData);
 
     const activeEditor = superdoc.activeEditor;
-    if (!activeEditor) return;
-  
     activeEditor.commands.setCommentInternal({ commentId, importedId, isInternal: newIsInternal });
   };
  
@@ -236,7 +230,6 @@ export default function useComment(params) {
     isInternal,
     commentText,
     selection,
-    floatingPosition,
     trackedChange,
     resolvedTime,
     resolvedByEmail,
