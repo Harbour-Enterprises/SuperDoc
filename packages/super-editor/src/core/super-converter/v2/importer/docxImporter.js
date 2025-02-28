@@ -52,6 +52,251 @@ export const DEFAULT_LINKED_STYLES = {
       },
     ],
   },
+  Title: {
+    type: 'element',
+    name: 'w:style',
+    attributes: {
+      'w:type': 'paragraph',
+      'w:styleId': 'Title',
+    },
+    elements: [
+      {
+        type: 'element',
+        name: 'w:name',
+        attributes: {
+          'w:val': 'Title',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:basedOn',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:next',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:link',
+        attributes: {
+          'w:val': 'TitleChar',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:uiPriority',
+        attributes: {
+          'w:val': '10',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:qFormat',
+      },
+      {
+        type: 'element',
+        name: 'w:rsid',
+        attributes: {
+          'w:val': '00B72667',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:pPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:spacing',
+            attributes: {
+              'w:after': '80',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:contextualSpacing',
+          },
+        ],
+      },
+      {
+        type: 'element',
+        name: 'w:rPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:rFonts',
+            attributes: {
+              'w:asciiTheme': 'majorHAnsi',
+              'w:eastAsiaTheme': 'majorEastAsia',
+              'w:hAnsiTheme': 'majorHAnsi',
+              'w:cstheme': 'majorBidi',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:spacing',
+            attributes: {
+              'w:val': '-10',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:kern',
+            attributes: {
+              'w:val': '28',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:sz',
+            attributes: {
+              'w:val': '56',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:szCs',
+            attributes: {
+              'w:val': '56',
+            },
+          },
+        ],
+      },
+    ],
+  },
+  Subtitle: {
+    type: 'element',
+    name: 'w:style',
+    attributes: {
+      'w:type': 'paragraph',
+      'w:styleId': 'Subtitle',
+    },
+    elements: [
+      {
+        type: 'element',
+        name: 'w:name',
+        attributes: {
+          'w:val': 'Subtitle',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:basedOn',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:next',
+        attributes: {
+          'w:val': 'Normal',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:link',
+        attributes: {
+          'w:val': 'SubtitleChar',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:uiPriority',
+        attributes: {
+          'w:val': '11',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:qFormat',
+      },
+      {
+        type: 'element',
+        name: 'w:rsid',
+        attributes: {
+          'w:val': '00B72667',
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:pPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:numPr',
+            elements: [
+              {
+                type: 'element',
+                name: 'w:ilvl',
+                attributes: {
+                  'w:val': '1',
+                },
+              },
+            ],
+          },
+          {
+            type: 'element',
+            name: 'w:spacing',
+            attributes: {
+              'w:after': '160',
+            },
+          },
+        ],
+      },
+      {
+        type: 'element',
+        name: 'w:rPr',
+        elements: [
+          {
+            type: 'element',
+            name: 'w:rFonts',
+            attributes: {
+              'w:asciiTheme': 'minorHAnsi',
+              'w:eastAsiaTheme': 'majorEastAsia',
+              'w:hAnsiTheme': 'minorHAnsi',
+              'w:cstheme': 'majorBidi',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:color',
+            attributes: {
+              'w:val': '595959',
+              'w:themeColor': 'text1',
+              'w:themeTint': 'A6',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:spacing',
+            attributes: {
+              'w:val': '15',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:sz',
+            attributes: {
+              'w:val': '28',
+            },
+          },
+          {
+            type: 'element',
+            name: 'w:szCs',
+            attributes: {
+              'w:val': '28',
+            },
+          },
+        ],
+      },
+    ],
+  },
   Heading1: {
     type: 'element',
     name: 'w:style',
