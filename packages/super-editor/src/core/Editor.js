@@ -920,7 +920,8 @@ export class Editor extends EventEmitter {
       'word/_rels/document.xml.rels': String(rels),
       'docProps/custom.xml': String(customXml),
       'word/settings.xml': String(customSettings),
-      'word/styles.xml': String(styles),
+      // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
+      'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
     };
 
     // Add comments.xml to the list of files to update if we have any comments
