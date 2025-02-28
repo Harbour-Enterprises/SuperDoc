@@ -500,7 +500,6 @@ const handlePdfClick = (e) => {
         <!-- On-document comments layer -->
         <CommentsLayer
           class="superdoc__comments-layer comments-layer"
-          v-if="showCommentsSidebar"
           style="z-index: 3"
           ref="commentsLayer"
           :parent="layers"
