@@ -269,6 +269,7 @@ export const useCommentsStore = defineStore('comments', () => {
   
     const newComment = useComment(comment.getValues());
     newComment.setText({ text: currentCommentText.value, suppressUpdate: true });
+    newComment.selection.source = pendingComment.value?.selection?.source;
 
     // Set isInternal flag
     if (parentComment) {

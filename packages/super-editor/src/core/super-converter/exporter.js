@@ -1150,7 +1150,8 @@ function translateImageNode(params, imageSize) {
 
   let imageId = attrs.rId;
   
-  const { originalWidth, originalHeight } = getPngDimensions(attrs.imageSrc);
+  const src = attrs.src || attrs.imageSrc;
+  const { originalWidth, originalHeight } = getPngDimensions(src);
   
   let size = attrs.size
     ? {
@@ -1169,10 +1170,10 @@ function translateImageNode(params, imageSize) {
   }
   
   if (params.node.type === 'image' && !imageId) {
-    const path = attrs.src?.split('word/')[1];
+    const path = src?.split('word/')[1];
     imageId = addNewImageRelationship(params, path);
   } else if (params.node.type === 'fieldAnnotation' && !imageId) {
-    const type = attrs.imageSrc?.split(';')[0].split('/')[1];
+    const type = src?.split(';')[0].split('/')[1];
     if (!type) {
       return prepareTextAnnotation(params);
     }
@@ -1182,7 +1183,7 @@ function translateImageNode(params, imageSize) {
     const imageUrl = `media/${cleanUrl}_${hash}.${type}`;
 
     imageId = addNewImageRelationship(params, imageUrl);
-    params.media[`${cleanUrl}_${hash}.${type}`] = attrs.imageSrc;
+    params.media[`${cleanUrl}_${hash}.${type}`] = src;
   }
 
   const inlineAttrs = attrs.originalPadding || {

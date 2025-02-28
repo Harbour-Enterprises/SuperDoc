@@ -341,10 +341,8 @@ const handleSelectionChange = (selection) => {
   });
 
   if (!selectionPosition.value) return;
-  const selectionIsWideEnough =
-    Math.abs(selectionPosition.value.left - selectionPosition.value.right) > 5;
-  const selectionIsTallEnough =
-    Math.abs(selectionPosition.value.top - selectionPosition.value.bottom) > 5;
+  const selectionIsWideEnough = Math.abs(selectionPosition.value.left - selectionPosition.value.right) > 5;
+  const selectionIsTallEnough = Math.abs(selectionPosition.value.top - selectionPosition.value.bottom) > 5;
   if (!selectionIsWideEnough || !selectionIsTallEnough) {
     selectionLayer.value.style.pointerEvents = 'none';
     resetSelection();
@@ -414,8 +412,8 @@ const handleSelectionStart = (e) => {
 
   nextTick(() => {
     isDragging.value = true;
-    const y = e.offsetY / activeZoom.value;
-    const x = e.offsetX / activeZoom.value;
+    const y = e.offsetY / (activeZoom.value / 100)
+    const x = e.offsetX / (activeZoom.value / 100)
     updateSelection({ startX: x, startY: y });
     selectionLayer.value.addEventListener('mousemove', handleDragMove);
   });
@@ -423,8 +421,8 @@ const handleSelectionStart = (e) => {
 
 const handleDragMove = (e) => {
   if (!isDragging.value) return;
-  const y = e.offsetY / activeZoom.value;
-  const x = e.offsetX / activeZoom.value;
+  const y = e.offsetY / (activeZoom.value / 100)
+  const x = e.offsetX / (activeZoom.value / 100)
   updateSelection({ x, y });
 };
 
@@ -442,9 +440,15 @@ const handleDragEnd = (e) => {
     },
     documentId: documents.value[0].id,
   });
+
   handleSelectionChange(selection);
   selectionLayer.value.style.pointerEvents = 'none';
 };
+
+const shouldShowSelection = computed(() => {
+  const config = proxy.$superdoc.config.modules?.comments;
+  return !config.readOnly;
+});
 
 const handleSuperEditorPageMarginsChange = (doc, params) => {
   doc.documentMarginsLastChange = params.pageMargins;
@@ -480,7 +484,7 @@ const handlePdfClick = (e) => {
           <div
             :style="getSelectionPosition"
             class="superdoc__temp-selection temp-selection sd-highlight sd-initial-highlight"
-            v-if="selectionPosition"
+            v-if="selectionPosition && shouldShowSelection"
           ></div>
         </div>
 
@@ -496,7 +500,6 @@ const handlePdfClick = (e) => {
         <!-- On-document comments layer -->
         <CommentsLayer
           class="superdoc__comments-layer comments-layer"
-          v-if="showCommentsSidebar"
           style="z-index: 3"
           ref="commentsLayer"
           :parent="layers"

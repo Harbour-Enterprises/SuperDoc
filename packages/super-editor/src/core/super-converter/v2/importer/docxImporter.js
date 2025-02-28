@@ -1,6 +1,7 @@
 import { getInitialJSON } from '../docxHelper.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { twipsToInches } from '../../helpers.js';
+import { DEFAULT_LINKED_STYLES } from '../../exporter-docx-defs.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
 import { drawingNodeHandlerEntity } from './imageImporter.js';
 import { trackChangeNodeHandlerEntity } from './trackChangesImporter.js';
@@ -363,6 +364,32 @@ function getStyleDefinitions(docx) {
 
   return allParsedStyles;
 };
+
+/**
+ * Add default styles if missing. Default styles are:
+ * 
+ * Normal, Title, Subtitle, Heading1, Heading2, Heading3
+ * 
+ * Does not mutate the original docx object
+ * @param {Object} styles The parsed docx styles [word/styles.xml]
+ * @returns {Object | null} The updated styles object with default styles
+ */
+export function addDefaultStylesIfMissing(styles) {
+  // Do not mutate the original docx object
+  if (!styles) return null;
+  const updatedStyles = carbonCopy(styles);
+  const { elements } = updatedStyles.elements[0];
+
+  Object.keys(DEFAULT_LINKED_STYLES).forEach(styleId => {
+    const existsOnDoc = elements.some((el) => el.attributes?.['w:styleId'] === styleId);
+    if (!existsOnDoc) {
+      const missingStyle = DEFAULT_LINKED_STYLES[styleId];
+      updatedStyles.elements[0].elements.push(missingStyle);
+    }
+  })
+
+  return updatedStyles;
+}
 
 function getHeaderFooter(el, elementType, docx, converter, editor) {
   const rels = docx['word/_rels/document.xml.rels'];
