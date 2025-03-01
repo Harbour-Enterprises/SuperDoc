@@ -205,7 +205,7 @@ onBeforeUnmount(() => {
       @mousedown="handleMarginClick"
     >
       <div ref="editorElem" class="editor-element super-editor__element"></div>
-      <SlashMenu v-if="editorReady" :editor="editor" />
+      <SlashMenu v-if="editorReady && editor" :editor="editor" /> 
     </div>
 
     <div class="placeholder-editor" v-if="!editorReady">

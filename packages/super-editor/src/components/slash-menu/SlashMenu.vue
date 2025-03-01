@@ -1,8 +1,7 @@
 <script>
-import { computed, ref, watch, h, createApp } from 'vue';
-import { SlashMenuPluginKey } from '../../extensions/slash-menu';
+import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
 import AIWriter from '../toolbar/AIWriter.vue';
-
+import { SlashMenuPluginKey } from '@/extensions/slash-menu';
 export default {
   name: 'SlashMenu',
 
@@ -17,63 +16,73 @@ export default {
     const menuRef = ref(null);
     const searchInput = ref(null);
     const searchQuery = ref('');
+    
+    // Replace computed properties with refs
+    const isOpen = ref(false);
+    const selectedId = ref(null);
+    const items = ref([]);
+    const menuPosition = ref({ left: '0px', top: '0px' });
 
-    // Watch for editor changes instead of logging on setup
-    watch(
-      () => props.editor,
-      (newEditor) => {
-        if (newEditor) {
-          console.log('SlashMenu Component - Editor initialized:', newEditor);
-        }
-      },
-    );
-
-    const pluginState = computed(() => {
-      if (!props.editor?.state) {
-        return null;
+    // Watch for isOpen changes to focus input
+    watch(isOpen, (open) => {
+      if (open) {
+        // Use nextTick to ensure DOM is updated
+        nextTick(() => {
+          if (searchInput.value) {
+            searchInput.value.focus();
+          }
+        });
       }
-      const state = SlashMenuPluginKey.getState(props.editor.state);
-      if (state) {
-        console.log('SlashMenu Component - Plugin state:', state);
-      }
-      return state;
     });
 
-    const isOpen = computed(() => {
-      const open = Boolean(pluginState.value?.open);
-      console.log('SlashMenu Component - Menu open state:', open);
-      return open;
+    // Event listeners
+    onMounted(() => {
+      if (!props.editor) return;
+
+      props.editor.on('slashMenu:open', ({ items: menuItems, menuPosition: position }) => {
+        // State is handled by plugin, update refs
+        isOpen.value = true;
+        items.value = menuItems;
+        menuPosition.value = position;
+      });
+
+      props.editor.on('slashMenu:position', ({ menuPosition: position }) => {
+        console.log('Slash menu position updated', position);
+      });
+
+      props.editor.on('slashMenu:select', ({ id }) => {
+        console.log('Slash menu item selected', id);
+      });
+
+      props.editor.on('slashMenu:filter', ({ items: filteredItems }) => {
+        console.log('Slash menu items filtered', filteredItems);
+      });
+
+      props.editor.on('slashMenu:close', () => {
+        // Handle the close of the menu
+        searchQuery.value = '';
+        isOpen.value = false;
+      });
+
+      props.editor.on('slashMenu:keydown', ({ type, pos }) => {
+        console.log('Slash menu keydown', { type, pos });
+      });
     });
 
-    const selectedId = computed(() => pluginState.value?.selected || null);
-
-    const items = computed(() => pluginState.value?.filteredElements || pluginState.value?.items || []);
-
-    const menuPosition = computed(() => pluginState.value?.menuPosition || { left: '0px', top: '0px' });
-
-    // Update filtering logic
-    watch(searchQuery, (query) => {
-      if (props.editor?.view) {
-        // Get current items from plugin state
-        const currentState = SlashMenuPluginKey.getState(props.editor.state);
-        const allItems = currentState?.items || [];
-
-        // Check for matches before updating
-        const matches = allItems.filter((item) => item.label.toLowerCase().includes(query.toLowerCase()));
-
-        // Only update if we have matches or if query is empty
-        if (matches.length > 0 || query === '') {
-          props.editor.view.dispatch(
-            props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-              type: 'filter',
-              filter: query,
-            }),
-          );
-        }
+    onBeforeUnmount(() => {
+      // Clean up event listeners
+      if (props.editor) {
+        props.editor.off('slashMenu:open');
+        props.editor.off('slashMenu:position');
+        props.editor.off('slashMenu:select');
+        props.editor.off('slashMenu:filter');
+        props.editor.off('slashMenu:close');
+        props.editor.off('slashMenu:keydown');
       }
     });
 
     const executeCommand = (item) => {
+      console.log('executeCommand', item);  
       if (props.editor?.view) {
         if (item.id === 'insert-text') {
           // Get selected text
@@ -199,17 +208,6 @@ export default {
       );
     };
 
-    watch([() => props.editor, isOpen], ([editor, open]) => {
-      console.log('SlashMenu Component - Watch triggered:', { hasEditor: !!editor, isOpen: open });
-      if (editor && open) {
-        setTimeout(() => {
-          if (searchInput.value) {
-            searchInput.value.focus();
-          }
-        }, 0);
-      }
-    });
-
     // Add new method to handle input blur
     const handleInputBlur = (event) => {
       // Prevent closing if clicking inside the menu
@@ -273,7 +271,6 @@ export default {
     </div>
   </div>
 </template>
-
 
 <style>
 .slash-menu {

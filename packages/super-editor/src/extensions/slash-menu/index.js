@@ -67,8 +67,7 @@ export const SlashMenu = Extension.create({
         init() {
           return {
             open: false,
-            selected: null,
-            filter: '',
+            selected: defaultItems[0]?.id || null,
             items: defaultItems,
             anchorPos: null,
             menuPosition: null,
@@ -77,76 +76,112 @@ export const SlashMenu = Extension.create({
 
         apply(tr, value) {
           const meta = tr.getMeta(SlashMenuPluginKey);
+          if (!meta) return value;
 
-          if (meta?.type === 'open') {
-            const pos = getCursorPositionRelativeToContainer(editor.view);
-            const menuPosition = {
-              left: `${pos.left + 100}px`,
-              top: `${pos.top + 28}px`,
-            };
+          // Handle state updates
+          switch (meta.type) {
+            case 'open': {
+              const pos = getCursorPositionRelativeToContainer(editor.view);
+              const menuPosition = {
+                left: `${pos.left + 100}px`,
+                top: `${pos.top + 28}px`,
+              };
 
-            return {
-              ...value,
-              open: true,
-              anchorPos: meta.pos,
-              items: defaultItems,
-              filter: '',
-              selected: defaultItems[0]?.id || null,
-              menuPosition,
-            };
-          }
+              // Update state
+              const newState = {
+                ...value,
+                open: true,
+                anchorPos: meta.pos,
+                menuPosition,
+                items: defaultItems,
+                selected: defaultItems[0]?.id,
+              };
 
-          if (meta?.type === 'updatePosition' && value.anchorPos !== null) {
-            const start = getCursorPositionRelativeToContainer(editor.view);
-            return {
-              ...value,
-              menuPosition: {
+              // Emit event after state update
+              editor.emit('slashMenu:open', {
+                items: defaultItems,
+                menuPosition,
+                anchorPos: meta.pos,
+              });
+
+              return newState;
+            }
+
+            case 'updatePosition': {
+              const start = getCursorPositionRelativeToContainer(editor.view);
+              const menuPosition = {
                 left: `${start.left}px`,
                 top: `${start.bottom + 8}px`,
-              },
-            };
-          }
+              };
 
-          if (meta?.type === 'select') {
-            return {
-              ...value,
-              selected: meta.id,
-            };
-          }
+              // Update state
+              const newState = { ...value, menuPosition };
+              
+              // Emit event after state update
+              editor.emit('slashMenu:position', { menuPosition });
+              
+              return newState;
+            }
 
-          // Handle filter updates
-          if (meta?.type === 'filter') {
-            const filtered = defaultItems.filter((item) =>
-              item.label.toLowerCase().includes(meta.filter.toLowerCase()),
-            );
-            return {
-              ...value,
-              filter: meta.filter,
-              items: filtered,
-              selected: filtered[0]?.id || null, // Select first filtered item
-            };
-          }
+            case 'select': {
+              // Update state
+              const newState = { ...value, selected: meta.id };
+              
+              // Emit event after state update
+              editor.emit('slashMenu:select', { id: meta.id });
+              
+              return newState;
+            }
 
-          if (meta?.type === 'close') {
-            return {
-              ...value,
-              open: false,
-              anchorPos: null,
-            };
-          }
+            case 'filter': {
+              const filtered = defaultItems.filter((item) =>
+                item.label.toLowerCase().includes(meta.filter.toLowerCase())
+              );
 
-          return value;
+              // Update state
+              const newState = {
+                ...value,
+                items: filtered,
+                selected: filtered[0]?.id,
+              };
+
+              // Emit event after state update
+              editor.emit('slashMenu:filter', {
+                filter: meta.filter,
+                items: filtered,
+              });
+
+              return newState;
+            }
+
+            case 'close': {
+              // Update state
+              const newState = {
+                ...value,
+                open: false,
+                anchorPos: null,
+              };
+
+              // Emit event after state update
+              editor.emit('slashMenu:close');
+
+              return newState;
+            }
+
+            default:
+              return value;
+          }
         },
       },
 
       view(editorView) {
         const updatePosition = () => {
-          // Use SlashMenuPluginKey.getState instead of plugin.getState
-          if (SlashMenuPluginKey.getState(editorView.state).open) {
+          const state = SlashMenuPluginKey.getState(editorView.state);
+          if (state.open) {
             editorView.dispatch(
               editorView.state.tr.setMeta(SlashMenuPluginKey, {
                 type: 'updatePosition',
-              }),
+              })
             );
           }
         };
@@ -167,41 +202,34 @@ export const SlashMenu = Extension.create({
           const pluginState = this.getState(view.state);
 
           if (event.key === '/' && !pluginState.open) {
-            // Only trigger in empty paragraphs or after space
             const { $cursor } = view.state.selection;
             if (!$cursor) return false;
 
-            // Check if we're in a paragraph
             const isParagraph = $cursor.parent.type.name === 'paragraph';
             if (!isParagraph) return false;
 
-            // Check if we're at the start of a paragraph or after a space
             const textBefore = $cursor.parent.textContent.slice(0, $cursor.parentOffset);
             const isEmptyOrAfterSpace = !textBefore || textBefore.endsWith(' ');
             if (!isEmptyOrAfterSpace) return false;
 
-            // Prevent '/' insertion and open menu
             event.preventDefault();
 
-            // Open the menu
-            console.log('State before opening menu', view.state);
+            // Only dispatch state update - event will be emitted in apply()
             view.dispatch(
               view.state.tr.setMeta(SlashMenuPluginKey, {
                 type: 'open',
                 pos: $cursor.pos,
-              }),
+              })
             );
-
-            console.log('State after opening menu', view.state);
-
             return true;
           }
 
           if (pluginState.open && (event.key === 'Escape' || event.key === 'ArrowLeft')) {
+            // Only dispatch state update - event will be emitted in apply()
             view.dispatch(
               view.state.tr.setMeta(SlashMenuPluginKey, {
                 type: 'close',
-              }),
+              })
             );
             return true;
           }
