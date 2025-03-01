@@ -1,7 +1,17 @@
 <script>
-import { ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue';
+import { createApp, ref, onMounted, onBeforeUnmount, watch, nextTick, computed, h } from 'vue';
 import AIWriter from '../toolbar/AIWriter.vue';
 import { SlashMenuPluginKey } from '@/extensions/slash-menu';
+import { toolbarIcons } from '../toolbar/toolbarIcons.js';
+const defaultItems = [
+  {
+    id: 'insert-text',
+    label: 'Insert Text',
+    icon: toolbarIcons.ai,
+  },
+  // Add more items as needed
+];
+
 export default {
   name: 'SlashMenu',
 
@@ -13,15 +23,23 @@ export default {
   },
 
   setup(props) {
-    const menuRef = ref(null);
+
     const searchInput = ref(null);
     const searchQuery = ref('');
     
     // Replace computed properties with refs
     const isOpen = ref(false);
-    const selectedId = ref(null);
-    const items = ref([]);
+    const selectedId = ref(defaultItems[0]?.id || null);
     const menuPosition = ref({ left: '0px', top: '0px' });
+    const menuRef = ref(menuPosition.value);
+    // Filtered items based on search query
+    const items = computed(() => {
+      if (!searchQuery.value) return defaultItems;
+      
+      return defaultItems.filter((item) =>
+        item.label.toLowerCase().includes(searchQuery.value.toLowerCase())
+      );
+    });
 
     // Watch for isOpen changes to focus input
     watch(isOpen, (open) => {
@@ -35,51 +53,64 @@ export default {
       }
     });
 
-    // Event listeners
+    // Watch for search query changes to update selection
+    watch(items, (newItems) => {
+      if (newItems.length > 0) {
+        selectedId.value = newItems[0].id;
+      }
+    });
+
     onMounted(() => {
       if (!props.editor) return;
 
-      props.editor.on('slashMenu:open', ({ items: menuItems, menuPosition: position }) => {
-        // State is handled by plugin, update refs
+      // Listen for the slash menu to open
+      props.editor.on('slashMenu:open', ({ menuPosition: position }) => {
         isOpen.value = true;
-        items.value = menuItems;
         menuPosition.value = position;
-      });
-
-      props.editor.on('slashMenu:position', ({ menuPosition: position }) => {
-        console.log('Slash menu position updated', position);
-      });
-
-      props.editor.on('slashMenu:select', ({ id }) => {
-        console.log('Slash menu item selected', id);
-      });
-
-      props.editor.on('slashMenu:filter', ({ items: filteredItems }) => {
-        console.log('Slash menu items filtered', filteredItems);
+        searchQuery.value = '';  // Reset search on open
       });
 
       props.editor.on('slashMenu:close', () => {
-        // Handle the close of the menu
-        searchQuery.value = '';
         isOpen.value = false;
-      });
-
-      props.editor.on('slashMenu:keydown', ({ type, pos }) => {
-        console.log('Slash menu keydown', { type, pos });
+        searchQuery.value = '';
       });
     });
 
     onBeforeUnmount(() => {
-      // Clean up event listeners
       if (props.editor) {
         props.editor.off('slashMenu:open');
-        props.editor.off('slashMenu:position');
-        props.editor.off('slashMenu:select');
-        props.editor.off('slashMenu:filter');
         props.editor.off('slashMenu:close');
-        props.editor.off('slashMenu:keydown');
       }
     });
+
+    const handleKeyDown = (event) => {
+      const currentItems = items.value;
+      const currentIndex = currentItems.findIndex(item => item.id === selectedId.value);
+
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          if (currentIndex < currentItems.length - 1) {
+            selectedId.value = currentItems[currentIndex + 1].id;
+          }
+          break;
+
+        case 'ArrowUp':
+          event.preventDefault();
+          if (currentIndex > 0) {
+            selectedId.value = currentItems[currentIndex - 1].id;
+          }
+          break;
+
+        case 'Enter':
+          event.preventDefault();
+          const selectedItem = currentItems.find(item => item.id === selectedId.value);
+          if (selectedItem) {
+            executeCommand(selectedItem);
+          }
+          break;
+      }
+    };
 
     const executeCommand = (item) => {
       console.log('executeCommand', item);  
@@ -144,70 +175,6 @@ export default {
       }
     };
 
-    // Handle keyboard navigation
-    const handleKeyDown = (event) => {
-      // Handle escape and space keys first
-      if (event.key === 'Escape' || (event.key === ' ' && !searchQuery.value)) {
-        event.preventDefault();
-        props.editor.view.dispatch(
-          props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-            type: 'close',
-          }),
-        );
-        props.editor.view.focus();
-        return;
-      }
-
-      const currentItems = items.value;
-      const currentIndex = currentItems.findIndex((item) => item.id === selectedId.value);
-
-      switch (event.key) {
-        case 'ArrowDown':
-          event.preventDefault();
-          if (currentIndex < currentItems.length - 1) {
-            const nextItem = currentItems[currentIndex + 1];
-            props.editor.view.dispatch(
-              props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-                type: 'select',
-                id: nextItem.id,
-              }),
-            );
-          }
-          break;
-
-        case 'ArrowUp':
-          event.preventDefault();
-          if (currentIndex > 0) {
-            const prevItem = currentItems[currentIndex - 1];
-            props.editor.view.dispatch(
-              props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-                type: 'select',
-                id: prevItem.id,
-              }),
-            );
-          }
-          break;
-
-        case 'Enter':
-          event.preventDefault();
-          const selectedItem = currentItems.find((item) => item.id === selectedId.value);
-          if (selectedItem) {
-            executeCommand(selectedItem);
-          }
-          break;
-      }
-    };
-
-    // Add method to handle mouse hover selection
-    const handleItemHover = (itemId) => {
-      props.editor.view.dispatch(
-        props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-          type: 'select',
-          id: itemId,
-        }),
-      );
-    };
-
     // Add new method to handle input blur
     const handleInputBlur = (event) => {
       // Prevent closing if clicking inside the menu
@@ -235,7 +202,6 @@ export default {
       items,
       handleKeyDown,
       handleInputBlur,
-      handleItemHover,
       executeCommand,
     };
   },
@@ -243,7 +209,7 @@ export default {
 </script>
 
 <template>
-  <div v-if="isOpen" ref="menuRef" class="slash-menu" :style="menuPosition">
+  <div v-if="true" ref="menuRef" class="slash-menu" :style="menuPosition">
     <!-- Hide the input visually but keep it focused for typing -->
     <input
       ref="searchInput"
@@ -262,11 +228,10 @@ export default {
         class="slash-menu-item"
         :class="{ 'is-selected': item.id === selectedId }"
         @click="executeCommand(item)"
-        @mousemove="handleItemHover(item.id)"
       >
         <!-- Render the icon if it exists -->
-        <i v-if="item.icon" :class="item.icon" class="slash-menu-item-icon"></i>
-        {{ item.label }}
+        <span v-if="item.icon" class="slash-menu-item-icon" v-html="item.icon"></span>
+        <span>{{ item.label }}</span>
       </div>
     </div>
   </div>
@@ -330,6 +295,8 @@ export default {
   cursor: pointer;
   user-select: none;
   transition: background-color 0.15s ease;
+  display: flex;
+  align-items: center;
 }
 
 .slash-menu-item:hover {
@@ -339,10 +306,19 @@ export default {
 .slash-menu-item.is-selected {
   background: #edf6ff;
   color: #0096fd;
+  fill: #0096fd;
 }
 
 .slash-menu-item-icon {
-  margin-right: 8px;
+  display: flex;
+  align-items: center;
+  margin-right: 10px;
+
+}
+
+.slash-menu-item-icon svg {
+  height: 16px;
+  width: 16px;
 }
 
 /* Add new styles for AI popover */

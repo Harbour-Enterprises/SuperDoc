@@ -26,34 +26,6 @@ function getCursorPositionRelativeToContainer(view) {
 
 export const SlashMenuPluginKey = new PluginKey('slashMenu');
 
-// Define default menu items
-const defaultItems = [
-  {
-    id: 'insert-text',
-    label: 'Insert Text',
-    icon: 'fas fa-wand-magic-sparkles',
-  },
-  // {
-  //   id: 'table',
-  //   label: 'Insert Table',
-  //   // group: 'Table',
-  //   command: (view) => {
-  //     console.log('Table command executed');
-  //     window.alert('Table command executed');
-  //   },
-  // },
-  // {
-  //   id: 'image',
-  //   label: 'Insert Image',
-  //   // group: 'Test',
-  //   command: (view) => {
-  //     console.log('Image command executed');
-  //     window.alert('Image command executed');
-  //   },
-  // },
-  // Add more items as needed
-];
-
 export const SlashMenu = Extension.create({
   name: 'slashMenu',
 
@@ -67,8 +39,7 @@ export const SlashMenu = Extension.create({
         init() {
           return {
             open: false,
-            selected: defaultItems[0]?.id || null,
-            items: defaultItems,
+            selected: null,
             anchorPos: null,
             menuPosition: null,
           };
@@ -78,7 +49,6 @@ export const SlashMenu = Extension.create({
           const meta = tr.getMeta(SlashMenuPluginKey);
           if (!meta) return value;
 
-          // Handle state updates
           switch (meta.type) {
             case 'open': {
               const pos = getCursorPositionRelativeToContainer(editor.view);
@@ -93,79 +63,21 @@ export const SlashMenu = Extension.create({
                 open: true,
                 anchorPos: meta.pos,
                 menuPosition,
-                items: defaultItems,
-                selected: defaultItems[0]?.id,
               };
 
               // Emit event after state update
-              editor.emit('slashMenu:open', {
-                items: defaultItems,
-                menuPosition,
-                anchorPos: meta.pos,
-              });
+              editor.emit('slashMenu:open', { menuPosition });
 
-              return newState;
-            }
-
-            case 'updatePosition': {
-              const start = getCursorPositionRelativeToContainer(editor.view);
-              const menuPosition = {
-                left: `${start.left}px`,
-                top: `${start.bottom + 8}px`,
-              };
-
-              // Update state
-              const newState = { ...value, menuPosition };
-              
-              // Emit event after state update
-              editor.emit('slashMenu:position', { menuPosition });
-              
               return newState;
             }
 
             case 'select': {
-              // Update state
-              const newState = { ...value, selected: meta.id };
-              
-              // Emit event after state update
-              editor.emit('slashMenu:select', { id: meta.id });
-              
-              return newState;
-            }
-
-            case 'filter': {
-              const filtered = defaultItems.filter((item) =>
-                item.label.toLowerCase().includes(meta.filter.toLowerCase())
-              );
-
-              // Update state
-              const newState = {
-                ...value,
-                items: filtered,
-                selected: filtered[0]?.id,
-              };
-
-              // Emit event after state update
-              editor.emit('slashMenu:filter', {
-                filter: meta.filter,
-                items: filtered,
-              });
-
-              return newState;
+              return { ...value, selected: meta.id };
             }
 
             case 'close': {
-              // Update state
-              const newState = {
-                ...value,
-                open: false,
-                anchorPos: null,
-              };
-
-              // Emit event after state update
               editor.emit('slashMenu:close');
-
-              return newState;
+              return { ...value, open: false, anchorPos: null };
             }
 
             default:
