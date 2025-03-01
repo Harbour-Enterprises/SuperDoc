@@ -83,37 +83,22 @@ export default {
       }
     });
 
-    const handleKeyDown = (event) => {
-      const currentItems = items.value;
-      const currentIndex = currentItems.findIndex(item => item.id === selectedId.value);
-
-      switch (event.key) {
-        case 'ArrowDown':
-          event.preventDefault();
-          if (currentIndex < currentItems.length - 1) {
-            selectedId.value = currentItems[currentIndex + 1].id;
-          }
-          break;
-
-        case 'ArrowUp':
-          event.preventDefault();
-          if (currentIndex > 0) {
-            selectedId.value = currentItems[currentIndex - 1].id;
-          }
-          break;
-
-        case 'Enter':
-          event.preventDefault();
-          const selectedItem = currentItems.find(item => item.id === selectedId.value);
-          if (selectedItem) {
-            executeCommand(selectedItem);
-          }
-          break;
+    // Shared close function
+    const closeMenu = () => {
+      if (props.editor?.view) {
+        // Update prosemirror state
+        props.editor.view.dispatch(
+          props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
+            type: 'close',
+          })
+        );
+        // Update local state
+        isOpen.value = false;
+        searchQuery.value = '';
       }
     };
 
     const executeCommand = (item) => {
-      console.log('executeCommand', item);  
       if (props.editor?.view) {
         if (item.id === 'insert-text') {
           // Get selected text
@@ -156,22 +141,13 @@ export default {
           });
           app.mount(aiPopover);
           document.body.appendChild(aiPopover);
-
-          // Close slash menu
-          props.editor.view.dispatch(
-            props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-              type: 'close',
-            }),
-          );
         } else {
-          // Handle other commands as before
-          item.command(props.editor.view);
-          props.editor.view.dispatch(
-            props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-              type: 'close',
-            }),
-          );
+          // Handle other commands
+          item.command?.(props.editor.view);
         }
+
+        // Use shared close function
+        closeMenu();
       }
     };
 
@@ -182,13 +158,41 @@ export default {
         return;
       }
 
-      // Close menu when focus is lost
-      if (props.editor?.view) {
-        props.editor.view.dispatch(
-          props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-            type: 'close',
-          }),
-        );
+      // Use shared close function
+      closeMenu();
+    };
+
+    const handleKeyDown = (event) => {
+      const currentItems = items.value;
+      const currentIndex = currentItems.findIndex(item => item.id === selectedId.value);
+
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          if (currentIndex < currentItems.length - 1) {
+            selectedId.value = currentItems[currentIndex + 1].id;
+          }
+          break;
+
+        case 'ArrowUp':
+          event.preventDefault();
+          if (currentIndex > 0) {
+            selectedId.value = currentItems[currentIndex - 1].id;
+          }
+          break;
+
+        case 'Enter':
+          event.preventDefault();
+          const selectedItem = currentItems.find(item => item.id === selectedId.value);
+          if (selectedItem) {
+            executeCommand(selectedItem);
+          }
+          break;
+
+        case 'Escape':
+          event.preventDefault();
+          closeMenu();
+          break;
       }
     };
 
@@ -209,7 +213,7 @@ export default {
 </script>
 
 <template>
-  <div v-if="true" ref="menuRef" class="slash-menu" :style="menuPosition">
+  <div v-if="isOpen" ref="menuRef" class="slash-menu" :style="menuPosition">
     <!-- Hide the input visually but keep it focused for typing -->
     <input
       ref="searchInput"
