@@ -330,6 +330,8 @@ const getSelectionPosition = computed(() => {
 const handleSelectionChange = (selection) => {
   if (!selection.selectionBounds || !isCommentsEnabled.value) return;
 
+  resetSelection();
+  
   const isMobileView = window.matchMedia('(max-width: 768px)').matches;
 
   updateSelection({

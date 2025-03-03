@@ -130,7 +130,7 @@ function getSelectedTextBoundingBox(container) {
 
   for (let i = 1; i < boundingRects.length; i++) {
     const rect = boundingRects[i];
-    if (rect.width === 0 || rect.height === 0) {
+    if (rect.width === 0 || rect.height === 0) {ebug('Selection bounds:', sel)
       continue;
     }
     boundingBox.top = Math.min(boundingBox.top, rect.top);
@@ -144,10 +144,10 @@ function getSelectedTextBoundingBox(container) {
   const viewerRect = viewer.value.getBoundingClientRect();
 
   // Adjust the bounding box relative to the page
-  boundingBox.top = (boundingBox.top - containerRect.top) / activeZoom.value + container.scrollTop;
-  boundingBox.left = (boundingBox.left - containerRect.left) / activeZoom.value + container.scrollLeft;
-  boundingBox.bottom = (boundingBox.bottom - containerRect.top) / activeZoom.value + container.scrollTop;
-  boundingBox.right = (boundingBox.right - containerRect.left) / activeZoom.value + container.scrollLeft;
+  boundingBox.top = (boundingBox.top - containerRect.top) / (activeZoom.value / 100) + container.scrollTop;
+  boundingBox.left = (boundingBox.left - containerRect.left) / (activeZoom.value / 100) + container.scrollLeft;
+  boundingBox.bottom = (boundingBox.bottom - containerRect.top) / (activeZoom.value / 100) + container.scrollTop;
+  boundingBox.right = (boundingBox.right - containerRect.left) / (activeZoom.value / 100) + container.scrollLeft;
 
   return boundingBox;
 }
