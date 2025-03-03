@@ -223,6 +223,8 @@ const createNodeListHandler = (nodeHandlers) => {
             }
           }
 
+          if (consumed > 0) { index += consumed - 1; }
+
           // Process and store nodes (no tracking needed for success)
           if (nodes) {
             nodes.forEach((node) => {
