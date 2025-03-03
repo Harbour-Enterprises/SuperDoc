@@ -216,10 +216,17 @@ const handleInternalExternalSelect = (value) => {
 const getSidebarCommentStyle = computed(() => {
   const style = {};
 
+
   const comment = props.comment;
   if (isActiveComment.value) {
     style.backgroundColor = 'white';
     style.zIndex = 10;
+  }
+
+  if (pendingComment.value && pendingComment.value.commentId === props.comment.commentId) {
+    const top = Math.max(96, pendingComment.value.selection?.selectionBounds.top - 50);
+    style.position = 'absolute';
+    style.top = top + 'px';
   }
 
   return style;
