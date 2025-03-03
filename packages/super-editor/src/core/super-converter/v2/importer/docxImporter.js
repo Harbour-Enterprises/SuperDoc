@@ -231,6 +231,7 @@ const createNodeListHandler = (nodeHandlers) => {
             });
           }
         } catch (error) {
+          console.debug('Import error', error)
           editor?.emit('exception', { error });
 
           converter?.telemetry?.trackStatistic('error', {
@@ -245,6 +246,7 @@ const createNodeListHandler = (nodeHandlers) => {
 
       return processedElements;
     } catch (error) {
+      console.debug('Error during import', error)
       editor?.emit('exception', { error });
 
       // Track only catastrophic handler failures
