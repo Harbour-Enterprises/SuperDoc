@@ -222,9 +222,10 @@ const handleInput = (event) => {
 <template>
   <div class="ai-writer" ref="aiWriterRef">
     <div class="ai-user-input-field">
-      <span class="ai-textarea-icon">
-        <i class="fal fa-pencil"></i>
+      <span class="">
+        <i class="far fa-edit fa-gradient"></i>
       </span>
+
       <div
         ref="editableRef"
         contenteditable="true"
@@ -242,13 +243,25 @@ const handleInput = (event) => {
       </span>
       <span v-else-if="isError" class="ai-textarea-icon error"><i class="fal fa-times" :title="isError"></i></span>
       <span v-else-if="promptText" class="ai-textarea-icon ai-submit-button"
-        ><i class="fal fa-paper-plane" @click="handleSubmit"></i
+        ><i class="far fa-paper-plane fa-gradient" @click="handleSubmit"></i
       ></span>
     </div>
   </div>
 </template>
 
 <style scoped>
+.fa-gradient {
+	background: linear-gradient(
+    270deg,
+    rgba(218, 215, 118, 0.5) -20%,
+    rgba(191, 100, 100, 1) 30%,
+    rgba(77, 82, 217, 1) 60%,
+    rgb(255, 219, 102) 150%
+  );
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
 .ai-writer {
   display: flex;
   flex-direction: column;
