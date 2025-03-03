@@ -31,14 +31,13 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
     const item3 = body.elements[titleIndex + 4];
     testListNodes({ node: item3, expectedLevel: 0, expectedNumPr: 0 });
 
-
-    const nonListNode = body.elements[titleIndex + 9];
+    const nonListNode = body.elements[titleIndex + 6];
     testListNodes({ node: nonListNode, expectedLevel: undefined, expectedNumPr: undefined, text: undefined });
   });
 
 
   it('can export the second list (with sublists)', () => {
-    const titleIndex = 9;
+    const titleIndex = 6;
     const titleNode = body.elements[titleIndex];
     const titleText = getTextFromNode(titleNode);
     expect(titleText).toBe('Simple ordered list with sub lists:');
