@@ -95,6 +95,9 @@ const allowResolve = computed(() => (comment) => {
   const isAllowOverride = getConfig.value.allowResolveOverride;
   if (isAllowOverride) return true;
 
+  const allowResolveAll = getConfig.value.allowResolveAll;
+  if (allowResolveAll) return true;
+
   const allowedInConfig = getConfig.value.allowResolve;
   const isParentCommentUser = comment.creatorEmail === superdocStore.user.email;
   const isResolved = comment.resolvedTime;
