@@ -354,12 +354,8 @@ const handleSelectionChange = (selection) => {
   activeSelection.value = selection;
 
   // Place the tools menu at the level of the selection
-  let top = selection.selectionBounds.top;
-  if (selection.bottom - selection.selectionBounds.top < 0) {
-    top = selection.selectionBounds.botton;
-  }
-
-  toolsMenuPosition.top = top - 20 + 'px';
+  let top = selection.selectionBounds.bottom - 50;
+  toolsMenuPosition.top = top + 'px';
   toolsMenuPosition.right = isMobileView ? '0' : '-25px';
 };
 

@@ -84,6 +84,8 @@ export class SuperDoc extends EventEmitter {
   /** @type {number} */
   version;
 
+  users;
+
   /** @type {Config} */
   config = {
     superdocId: null,
@@ -254,6 +256,27 @@ export class SuperDoc extends EventEmitter {
     // Initialize collaboration for documents
     return makeDocumentsCollaborative(this);
   };
+
+  /**
+   * Add a user to the shared users list
+   * 
+   * @param {Object} user The user to add
+   * @returns {void}
+   */
+  addSharedUser(user) {
+    if (this.users.some((u) => u.email === user.email)) return;
+    this.users.push(user);
+  }
+
+  /**
+   * Remove a user from the shared users list
+   * 
+   * @param {String} email The email of the user to remove
+   * @returns {void}
+   */
+  removeSharedUser(email) {
+    this.users = this.users.filter((u) => u.email !== email);
+  }
 
   /**
    * Initialize telemetry service.

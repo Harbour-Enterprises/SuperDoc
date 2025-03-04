@@ -302,8 +302,10 @@ export const useCommentsStore = defineStore('comments', () => {
   const deleteComment = ({ commentId: commentIdToDelete, superdoc }) => {
     const commentIndex = commentsList.value.findIndex((c) => c.commentId === commentIdToDelete);
     const comment = commentsList.value[commentIndex];
-    const { commentId } = comment;
+    const { commentId, importedId } = comment;
     const { fileId } = comment;
+
+    superdoc.activeEditor?.commands?.resolveComment({ commentId, importedId });
 
     commentsList.value.splice(commentIndex, 1);
 

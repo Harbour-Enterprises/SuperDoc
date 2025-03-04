@@ -69,7 +69,30 @@ export const CommentsPlugin = Extension.create({
 
         dispatch(tr);
         return true;
-      }
+      },
+
+      resolveComment: ({ commentId, importedId }) => ({ tr, dispatch, state }) => {
+        const { doc } = state;
+        const toDelete = [];
+        doc.descendants((node, pos) => {
+          const commentNodes = ['commentRangeStart', 'commentRangeEnd'];
+          if (!commentNodes.includes(node.type.name)) return;
+
+          const wid = node.attrs['w:id'];
+          if (wid == commentId || wid == importedId) {
+            toDelete.push({ from: pos, to: pos + node.nodeSize });
+          }
+        });
+
+        if (toDelete.length && dispatch) {
+          toDelete.reverse().forEach(({ from, to }) => {
+            tr.delete(from, to);
+          });
+    
+          dispatch(tr);
+        }
+      },
+
     };
   },
 

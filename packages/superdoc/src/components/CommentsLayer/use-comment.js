@@ -65,6 +65,8 @@ export default function useComment(params) {
 
     const emitData = { type: comments_module_events.RESOLVED, comment: getValues() };
     propagateUpdate(superdoc, emitData);
+
+    superdoc.activeEditor?.commands?.resolveComment({ commentId, importedId });
   };
 
   /**
