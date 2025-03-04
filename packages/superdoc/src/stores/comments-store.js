@@ -254,6 +254,7 @@ export const useCommentsStore = defineStore('comments', () => {
     currentCommentText.value = '';
     pendingComment.value = null;
     activeComment.value = null;
+    superdocStore.selectionPosition = null;
   };
 
   /**
