@@ -29,7 +29,6 @@ import { SuperEditor } from '@harbour-enterprises/super-editor';
 import HtmlViewer from './components/HtmlViewer/HtmlViewer.vue';
 import useComment from './components/CommentsLayer/use-comment';
 import AiLayer from './components/AiLayer/AiLayer.vue';
-import { createAiModule } from './core/modules/ai';
 
 // Stores
 const superdocStore = useSuperdocStore();
@@ -206,7 +205,6 @@ const onEditorException = ({ error, editor }) => {
 
 const editorOptions = (doc) => {
   const options = {
-    aiModule: createAiModule(proxy.$superdoc.config.modules.ai),
     pagination: proxy.$superdoc.config.pagination,
     documentId: doc.id,
     user: proxy.$superdoc.user,

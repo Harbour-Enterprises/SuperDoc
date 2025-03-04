@@ -13,19 +13,10 @@ const props = defineProps({
     type: Object,
     required: true,
   },
-  aiModule: {
-    type: Object,
-    required: false,
-  },
 });
 
 // Store the selection state
 const selectionState = ref(null);
-
-// If we have an open ai key store in a variable
-const openAiKey = computed(() => {
-  return props.aiModule?.isOpenAiEnabled?.() ? props.aiModule.keyStorage.getKey() : undefined;
-});
 
 // Add click outside handler
 const aiWriterRef = ref(null);
@@ -109,48 +100,8 @@ const handleSubmit = async () => {
       props.superToolbar.activeEditor.commands.enableTrackChanges();
     }
 
-    // If OpenAI is enabled, use it
-    if (openAiKey.value) {
-      if (props.selectedText) {
-        const prompt = `Rewrite the following text according to this instruction: ${promptText.value}\nText to rewrite: ${props.selectedText}`;
 
-        await props.aiModule.generateTextStream(
-          prompt,
-          (chunk) => {
-            try {
-              // Remove the selected text if we are using re-writer
-              if (previousText === '') {
-                props.superToolbar.activeEditor.commands.deleteSelection();
-                // Remove the ai highlight
-                props.superToolbar.emit('ai-highlight-remove');
-              }
-              // Update the document text with only the new content
-              props.superToolbar.activeEditor.commands.insertContent(chunk);
-              // Store the current chunk as previous for next iteration
-              previousText += chunk;
-            } catch (error) {
-              console.error('Error processing chunk:', error);
-            }
-          },
-          { temperature: 0.7 },
-        );
-      } else {
-        // Generate new text using OpenAI
-        await props.aiModule.generateTextStream(
-          promptText.value,
-          (chunk) => {
-            try {
-              props.superToolbar.activeEditor.commands.insertContent(chunk);
-              previousText += chunk;
-            } catch (error) {
-              console.error('Error processing chunk:', error);
-            }
-          },
-          { temperature: 0.7 },
-        );
-      }
-    } else {
-      // Fall back to Chrome model if no OpenAI key
+      // Chrome AI Writer
       let stream;
       if (props.selectedText) {
         const rewriter = await window.ai.rewriter.create({
@@ -182,8 +133,7 @@ const handleSubmit = async () => {
           // Store the current chunk as previous for next iteration
           previousText = chunk;
         } catch (error) {
-          console.error('Error processing chunk:', error);
-        }
+        console.error('Error processing chunk:', error);
       }
     }
 

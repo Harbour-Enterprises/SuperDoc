@@ -15,7 +15,7 @@ const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
 };
 
-export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role, toolbarIcons, aiModule) => {
+export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role, toolbarIcons) => {
 
   // bold
   const bold = useToolbarItem({
@@ -82,17 +82,15 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
   });
 
   // ai button
-  const hasAi = aiModule?.isOpenAiEnabled?.() || window.ai;
   const aiButton = useToolbarItem({
     type: 'dropdown',
-    disabled: !hasAi,
     dropdownStyles: {
       boxShadow: '0 0 2px 2px #7715b366',
       border: '1px solid #7715b3',
       outline: 'none',
     },
     name: 'ai',
-    tooltip: hasAi ? 'AI' : 'Please ensure you have provided a valid OpenAI key.',
+    tooltip: 'AI Insights',
     icon: toolbarIcons.ai,
     hideLabel: true,
     hasCaret: false,
@@ -127,7 +125,6 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
                 handleClose,
                 selectedText,
                 superToolbar,
-                aiModule,
               }),
             ],
           );

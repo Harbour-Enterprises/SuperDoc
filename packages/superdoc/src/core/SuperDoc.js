@@ -11,7 +11,6 @@ import { SuperToolbar } from '@harbour-enterprises/super-editor';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { createSuperdocVueApp } from './create-app';
 import { shuffleArray } from '@harbour-enterprises/common/collaboration/awareness.js';
-import { createAiModule } from './modules/ai';
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
 import { createDownload, cleanName } from './helpers/export.js';
 import {
@@ -146,12 +145,6 @@ export class SuperDoc extends EventEmitter {
       ...this.config,
       ...config,
     };
-
-    // Initialize AI module if openAiKey is provided
-    // This can be expanded to include other AI models in the future
-    if (this.config.modules.ai) {
-      this.aiModule = createAiModule(this.config.modules.ai);
-    }
 
     this.config.colors = shuffleArray(this.config.colors);
     this.userColorMap = new Map();
@@ -336,7 +329,6 @@ export class SuperDoc extends EventEmitter {
       isDev: this.isDev || false,
       toolbarGroups: this.config.toolbarGroups,
       role: this.config.role,
-      aiModule: this.aiModule,
       pagination: this.config.pagination,
       icons: this.config.toolbarIcons,
       superdoc: this,
@@ -541,11 +533,6 @@ export class SuperDoc extends EventEmitter {
   destroy() {
     if (!this.app) return; 
     this.log('[superdoc] Unmounting app');
-
-    // Cleanup AI module
-    if (this.aiModule) {
-      this.aiModule.destroy();
-    }
 
     this.config.documents.forEach((doc) => {
       doc.ydoc?.destroy();

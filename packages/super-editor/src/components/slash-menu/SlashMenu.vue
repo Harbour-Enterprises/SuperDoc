@@ -132,7 +132,6 @@ export default {
             superToolbar: {
               activeEditor: props.editor,
             },
-            aiModule: props.editor.options.aiModule,
           });
 
           // Render and append
