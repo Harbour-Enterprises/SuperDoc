@@ -360,6 +360,11 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
       label: 'Delete table',
       command: 'deleteTable',
       icon: toolbarIcons.deleteTable,
+    },
+    { 
+      label: 'Delete borders',
+      command: 'deleteCellAndTableBorders',
+      icon: toolbarIcons.deleteBorders,
       bottomBorder: true,
     },
     { 
