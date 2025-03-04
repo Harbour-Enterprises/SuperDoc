@@ -8,6 +8,7 @@ import { TextIndent } from './text-indent/index.js';
 import { LineHeight } from './line-height/index.js';
 import { FormatCommands } from './format-commands/index.js';
 import { DropCursor } from './dropcursor/index.js';
+import { Gapcursor } from './gapcursor/index.js';
 import { Collaboration } from './collaboration/index.js';
 import { CollaborationCursor } from './collaboration-cursor/index.js';
 
@@ -102,6 +103,7 @@ const getStarterExtensions = () => {
     Underline,
     FormatCommands,
     CommentsPlugin,
+    Gapcursor,
     Table,
     TableRow,
     TableCell,
@@ -153,6 +155,7 @@ export {
   LineHeight,
   FormatCommands,
   CommentsPlugin,
+  Gapcursor,
   Table,
   TableRow,
   TableCell,
