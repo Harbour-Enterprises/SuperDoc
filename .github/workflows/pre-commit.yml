@@ -1,10 +1,7 @@
-name: Pre-commit Check
+name: Pre-commit
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  workflow_call: # No inputs needed, but this needs to be here to be called by other workflows
 
 jobs:
   pre-commit:

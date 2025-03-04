@@ -1,0 +1,10 @@
+name: Push to main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  pre-commit:
+    uses: ./.github/workflows/pre-commit.yml

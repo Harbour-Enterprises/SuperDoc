@@ -35,6 +35,14 @@ import rulerSvg from '@harbour-enterprises/common/icons/ruler-solid.svg?raw';
 import paintbrushSvg from '@harbour-enterprises/common/icons/paintbrush-solid.svg?raw';
 import highlighterIcon from '@harbour-enterprises/common/icons/highlighter-icon.svg?raw';
 import magicWandIcon from '@harbour-enterprises/common/icons/magic-wand-solid.svg?raw';
+import tableIconSvg from '@harbour-enterprises/common/icons/table-solid.svg?raw';
+import tableColumnsIconSvg from '@harbour-enterprises/common/icons/table-columns-solid.svg?raw';
+import arrowsLeftRightIconSvg from '@harbour-enterprises/common/icons/arrows-left-right-solid.svg?raw';
+import arrowsToDotIconSvg from '@harbour-enterprises/common/icons/arrows-to-dot-solid.svg?raw';
+import plusIconSvg from '@harbour-enterprises/common/icons/plus-solid.svg?raw';
+import trashIconSvg from '@harbour-enterprises/common/icons/trash-can-solid.svg?raw';
+import wrenchIconSvg from '@harbour-enterprises/common/icons/wrench-solid.svg?raw';
+
 export const toolbarIcons = {
   undo: rotateLeftIconSvg,
   redo: rotateRightIconSvg,
@@ -76,4 +84,16 @@ export const toolbarIcons = {
   paintbrush: paintbrushSvg,
   highlight: highlighterIcon,
   ai: magicWandIcon,
+  table: tableIconSvg,
+  tableActions: tableColumnsIconSvg,
+  splitCell: arrowsLeftRightIconSvg,
+  mergeCells: arrowsToDotIconSvg,
+  addRowBefore: plusIconSvg,
+  addRowAfter: plusIconSvg,
+  addColumnBefore: plusIconSvg,
+  addColumnAfter: plusIconSvg,
+  deleteRow: trashIconSvg,
+  deleteColumn: trashIconSvg,
+  deleteTable: trashIconSvg,
+  fixTables: wrenchIconSvg,
 }

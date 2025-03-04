@@ -328,13 +328,35 @@ const getListNumIdFromStyleRef = (styleId, docx) => {
   const pPr = style?.elements?.find((style) => style.name === 'w:pPr');
   if (!pPr) return null;
 
-  const numPr = pPr?.elements?.find((style) => style.name === 'w:numPr');
+  let numPr = pPr?.elements?.find((style) => style.name === 'w:numPr');
   if (!numPr) return null;
 
-  const numIdTag = numPr?.elements?.find((style) => style.name === 'w:numId') || {};
-  const numId = numIdTag?.attributes['w:val'];
-  const ilvlTag = numPr?.elements?.find((style) => style.name === 'w:ilvl');
-  const ilvl = ilvlTag?.attributes['w:val'];
+  let numIdTag = numPr?.elements?.find((style) => style.name === 'w:numId') || {};
+  let numId = numIdTag?.attributes?.['w:val'];
+  let ilvlTag = numPr?.elements?.find((style) => style.name === 'w:ilvl');
+  let ilvl = ilvlTag?.attributes?.['w:val'];
+
+  const basedOnTag = style?.elements?.find((style) => style.name === 'w:basedOn');
+  const basedOnId = basedOnTag?.attributes?.['w:val'];
+
+  // If we don't have a numId, then we need to check the basedOn style
+  // Which can in turn be based on some other style and so on.
+  let loopCount = 0;
+  while (numPr && !numId && loopCount < 10) {
+    const basedOnStyle = styleTags.find((tag) => tag.attributes['w:styleId'] === basedOnId) || {};
+    const basedOnPPr = basedOnStyle?.elements?.find((style) => style.name === 'w:pPr');
+    numPr = basedOnPPr?.elements?.find((style) => style.name === 'w:numPr')
+    numIdTag = numPr?.elements?.find((style) => style.name === 'w:numId') || {};
+    numId = numIdTag?.attributes?.['w:val'];
+
+    if (!ilvlTag) {
+      ilvlTag = numPr?.elements?.find((style) => style.name === 'w:ilvl');
+      ilvl = ilvlTag?.attributes?.['w:val'];
+    }
+
+    loopCount++;
+  }
+
   return { numId, ilvl };
 };
 

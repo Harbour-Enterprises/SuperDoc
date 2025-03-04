@@ -18,7 +18,7 @@ const props = defineProps({
 
 const getBarColor = computed(() => {
   if (props.name === 'color') return { backgroundColor: props.color || '#111111' };
-  if (props.name === 'highlight') return { backgroundColor: props.color || 'transparent' };
+  if (props.name === 'highlight') return { backgroundColor: props.color || '#D6D6D6' };
 });
 
 const hasColorBar = computed(() => {

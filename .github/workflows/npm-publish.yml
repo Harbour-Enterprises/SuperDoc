@@ -22,7 +22,12 @@ permissions:
   actions: write
 
 jobs:
+  run-unit-tests:
+    uses: ./.github/workflows/run-unit-tests.yml
+
   release:
+    # Block the workflow until the run-unit-tests job is complete
+    needs: run-unit-tests
     # Only run if:
     # 1. It's a workflow_dispatch event OR
     # 2. It's a push event AND commit message doesn't contain [skip ci] or release

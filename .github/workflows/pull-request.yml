@@ -1,0 +1,12 @@
+name: Pull-request to main
+
+on:
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  pre-commit:
+    uses: ./.github/workflows/pre-commit.yml
+
+  run-unit-tests:
+    uses: ./.github/workflows/run-unit-tests.yml

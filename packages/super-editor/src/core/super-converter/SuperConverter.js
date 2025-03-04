@@ -2,7 +2,7 @@ import xmljs from 'xml-js';
 import { v4 as uuidv4 } from 'uuid';
 
 import { DocxExporter, exportSchemaToJson } from './exporter';
-import { createDocumentJson } from './v2/importer/docxImporter.js';
+import { createDocumentJson, addDefaultStylesIfMissing } from './v2/importer/docxImporter.js';
 import { getArrayBufferFromUrl } from './helpers.js';
 import { getCommentDefinition, updateCommentsXml } from './v2/exporter/commentsExporter.js';
 import { DEFAULT_CUSTOM_XML, SETTINGS_CUSTOM_XML } from './exporter-docx-defs.js';
@@ -126,6 +126,10 @@ class SuperConverter {
 
       if (file.name === 'word/document.xml') {
         this.documentAttributes = this.convertedXml[file.name].elements[0]?.attributes;
+      }
+
+      if (file.name === 'word/styles.xml') {
+        this.convertedXml[file.name] = addDefaultStylesIfMissing(this.convertedXml[file.name]);
       }
     });
     this.initialJSON = this.convertedXml['word/document.xml'];

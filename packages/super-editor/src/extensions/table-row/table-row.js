@@ -7,13 +7,10 @@ export const TableRow = Node.create({
 
   tableRole: 'row',
 
-  parseDOM() {
-    return [{ tag: 'tr' }];
-  },
-
-  renderDOM({ htmlAttributes }) {
-    const attributes = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
-    return ['tr', attributes, 0];
+  addOptions() {
+    return {
+      htmlAttributes: {},
+    };
   },
 
   addAttributes() {
@@ -21,20 +18,18 @@ export const TableRow = Node.create({
       rowHeight: {
         renderDOM({ rowHeight }) {
           if (!rowHeight) return {};
-          const style = `height: ${rowHeight}px;`;
+          const style = `height: ${rowHeight}px`;
           return { style };
         },
       },
     };
   },
 
-  addOptions() {
-    return {
-      htmlAttributes: {},
-    };
+  parseDOM() {
+    return [{ tag: 'tr' }];
   },
 
-  addShortcuts() {
-    return {};
+  renderDOM({ htmlAttributes }) {
+    return ['tr', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 });
