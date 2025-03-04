@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 
 import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
-import { SuperToolbar } from '@harbour-enterprises/super-editor';
+import { SuperToolbar, createZip } from '@harbour-enterprises/super-editor';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { createSuperdocVueApp } from './create-app';
 import { shuffleArray } from '@harbour-enterprises/common/collaboration/awareness.js';
@@ -471,12 +471,18 @@ export class SuperDoc extends EventEmitter {
     this.emit('locked', { isLocked, lockedBy });
   }
 
-  async export({ exportType = ['docx'], commentsType, exportedName }) {
+  async export({
+    exportType = ['docx'],
+    commentsType,
+    exportedName,
+    additionalFiles = [],
+    additionalFileNames = []
+  }) {
     // Get the docx files first
     const baseFileName = exportedName ? cleanName(exportedName) : cleanName(this.config.title);
     const docxFiles = await this.exportEditorsToDOCX({ commentsType });
-    const blobsToZip = [];
-    const filenames = [];
+    const blobsToZip = [...additionalFiles];
+    const filenames = [...additionalFileNames];
 
     // If we are exporting docx files, add them to the zip
     if (exportType.includes('docx')) {
