@@ -130,7 +130,7 @@ function getSelectedTextBoundingBox(container) {
 
   for (let i = 1; i < boundingRects.length; i++) {
     const rect = boundingRects[i];
-    if (rect.width === 0 || rect.height === 0) {ebug('Selection bounds:', sel)
+    if (rect.width === 0 || rect.height === 0) {
       continue;
     }
     boundingBox.top = Math.min(boundingBox.top, rect.top);
