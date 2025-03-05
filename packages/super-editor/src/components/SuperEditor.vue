@@ -60,6 +60,10 @@ const pollForMetaMapData = (ydoc, retries = 10, interval = 500) => {
     if (docx) {
       stopPolling();
       initEditor({ content: docx });
+      // Remove the synced event listener.
+      // Avoids re-initializing the editor in case the connection is lost and reconnected
+      const provider = props.options.collaborationProvider;
+      provider.off('synced');
     } else if (retries > 0) {
       console.debug(`Waiting for 'docx' data... retries left: ${retries}`);
       dataPollTimeout = setTimeout(checkData, interval); // Retry after the interval
