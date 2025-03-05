@@ -147,7 +147,6 @@ const findContentTypeByPartName = (name, convertedXml) => {
 export const updateContentTypes = (convertedXml) => {
   const def = convertedXml['[Content_Types].xml'];
   const types = def.elements[0].elements;
-  const hasCommentsOverride = findContentTypeByPartName('/word/comments.xml', convertedXml);
 
   // Rels file
   const relsData = convertedXml['word/_rels/document.xml.rels'];
@@ -155,20 +154,8 @@ export const updateContentTypes = (convertedXml) => {
   const maxId = Math.max(...relationships.elements.map((el) => Number(el.attributes.Id.replace('rId', ''))));
   let currentId = maxId + 1;
   
-  if (!hasCommentsOverride) {      
-    const commentsRel = relationships.elements.find((el) => el.attributes.Target === 'comments.xml');
-    if (!commentsRel) {
-      relationships.elements.push({
-        type: 'element',
-        name: 'Relationship',
-        attributes: {
-          Id: `rId${currentId}`,
-          Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
-          Target: 'comments.xml',
-        },
-      });
-    }
-
+  const hasCommentsOverride = findContentTypeByPartName('/word/comments.xml', convertedXml);
+  if (!hasCommentsOverride) {
     types.push({
       type: 'element',
       name: 'Override',
@@ -179,22 +166,21 @@ export const updateContentTypes = (convertedXml) => {
     });
   };
 
+  const commentsRel = relationships.elements.find((el) => el.attributes.Target === 'comments.xml');
+  if (!commentsRel) {
+    relationships.elements.push({
+      type: 'element',
+      name: 'Relationship',
+      attributes: {
+        Id: `rId${currentId}`,
+        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
+        Target: 'comments.xml',
+      },
+    });
+  }
+
   const hasCommentsExtendedOverride = findContentTypeByPartName('/word/commentsExtended.xml', convertedXml);
   if (!hasCommentsExtendedOverride) {
-    const commentsExtendedRel = relationships.elements.find((el) => el.attributes.Target === 'commentsExtended.xml');
-    if (!commentsExtendedRel) {
-      currentId += 1;
-      relationships.elements.push({
-        type: 'element',
-        name: 'Relationship',
-        attributes: {
-          Id: `rId1${currentId}`,
-          Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentsExtended',
-          Target: 'commentsExtended.xml',
-        },
-      });
-    }
-
     types.push({
       type: 'element',
       name: 'Override',
@@ -205,21 +191,22 @@ export const updateContentTypes = (convertedXml) => {
     });
   };
 
+  const commentsExtendedRel = relationships.elements.find((el) => el.attributes.Target === 'commentsExtended.xml');
+  if (!commentsExtendedRel) {
+    currentId += 1;
+    relationships.elements.push({
+      type: 'element',
+      name: 'Relationship',
+      attributes: {
+        Id: `rId1${currentId}`,
+        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentsExtended',
+        Target: 'commentsExtended.xml',
+      },
+    });
+  }
+
   const hasCommentsIdsOverride = findContentTypeByPartName('/word/commentsIds.xml', convertedXml);
   if (!hasCommentsIdsOverride) {
-    const commentsIdsRel = relationships.elements.find((el) => el.attributes.Target === 'commentsIds.xml');
-    if (!commentsIdsRel) {
-      currentId += 1;
-      relationships.elements.push({
-        type: 'element',
-        name: 'Relationship',
-        attributes: {
-          Id: `rId1${currentId}`,
-          Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentsIds',
-          Target: 'commentsIds.xml',
-        },
-      });
-    }
     types.push({
       type: 'element',
       name: 'Override',
@@ -229,22 +216,23 @@ export const updateContentTypes = (convertedXml) => {
       },
     });
   };
-  
+
+  const commentsIdsRel = relationships.elements.find((el) => el.attributes.Target === 'commentsIds.xml');
+  if (!commentsIdsRel) {
+    currentId += 1;
+    relationships.elements.push({
+      type: 'element',
+      name: 'Relationship',
+      attributes: {
+        Id: `rId1${currentId}`,
+        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentsIds',
+        Target: 'commentsIds.xml',
+      },
+    });
+  }
+
   const hasCommentsExtensibleOverride = findContentTypeByPartName('/word/commentsExtensible.xml', convertedXml);
   if (!hasCommentsExtensibleOverride) {
-    const commentsExtensibleRel = relationships.elements.find((el) => el.attributes.Target === 'commentsExtensible.xml');
-    if (!commentsExtensibleRel) {
-      currentId += 1;
-      relationships.elements.push({
-        type: 'element',
-        name: 'Relationship',
-        attributes: {
-          Id: `rId1${currentId}`,
-          Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentsExtensible',
-          Target: 'commentsExtensible.xml',
-        },
-      });
-    }
     types.push({
       type: 'element',
       name: 'Override',
@@ -254,6 +242,20 @@ export const updateContentTypes = (convertedXml) => {
       },
     });
   };
+
+  const commentsExtensibleRel = relationships.elements.find((el) => el.attributes.Target === 'commentsExtensible.xml');
+  if (!commentsExtensibleRel) {
+    currentId += 1;
+    relationships.elements.push({
+      type: 'element',
+      name: 'Relationship',
+      attributes: {
+        Id: `rId1${currentId}`,
+        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentsExtensible',
+        Target: 'commentsExtensible.xml',
+      },
+    });
+  }
 
   return convertedXml;
 };
