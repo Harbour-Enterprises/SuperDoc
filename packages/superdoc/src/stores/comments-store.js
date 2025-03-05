@@ -93,7 +93,12 @@ export const useCommentsStore = defineStore('comments', () => {
     };
 
     pendingComment.value = getPendingComment({ selection, documentId: selection.documentId, parentCommentId: null });
+    if (!superdoc.config.isInternal) pendingComment.value.isInternal = false;
 
+    if (superdoc.activeEditor?.commands) {
+      superdoc.activeEditor.commands.insertComment({ ...pendingComment.value.getValues(), commentId: 'pending' });
+    };
+  
     if (pendingComment.value.selection.source === 'super-editor' && superdocStore.selectionPosition) {
       superdocStore.selectionPosition.source = 'super-editor';
     }
@@ -250,11 +255,13 @@ export const useCommentsStore = defineStore('comments', () => {
    * 
    * @returns {void}
    */
-  const removePendingComment = () => {
+  const removePendingComment = (superdoc) => {
     currentCommentText.value = '';
     pendingComment.value = null;
     activeComment.value = null;
     superdocStore.selectionPosition = null;
+
+    superdoc.activeEditor?.commands.removeComment({ commentId: 'pending' });
   };
 
   /**
@@ -267,7 +274,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const addComment = ({ superdoc, comment }) => {    
     let parentComment = commentsList.value.find((c) => c.commentId === activeComment.value);
     if (!parentComment) parentComment = comment;
-  
+
     const newComment = useComment(comment.getValues());
     newComment.setText({ text: currentCommentText.value, suppressUpdate: true });
     newComment.selection.source = pendingComment.value?.selection?.source;
@@ -293,7 +300,7 @@ export const useCommentsStore = defineStore('comments', () => {
     syncCommentsToClients(superdoc);
 
     // Clean up the pending comment
-    removePendingComment();
+    removePendingComment(superdoc);
 
     // Emit event for end users
     superdoc.emit('comments-update', { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() });
@@ -306,7 +313,7 @@ export const useCommentsStore = defineStore('comments', () => {
     const { commentId, importedId } = comment;
     const { fileId } = comment;
 
-    superdoc.activeEditor?.commands?.resolveComment({ commentId, importedId });
+    superdoc.activeEditor?.commands?.removeComment({ commentId, importedId });
 
     commentsList.value.splice(commentIndex, 1);
 
@@ -324,8 +331,8 @@ export const useCommentsStore = defineStore('comments', () => {
    * 
    * @returns {void}
    */
-  const cancelComment = () => {
-    removePendingComment();
+  const cancelComment = (superdoc) => {
+    removePendingComment(superdoc);
   }
 
   /**

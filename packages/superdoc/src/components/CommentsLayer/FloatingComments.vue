@@ -54,7 +54,7 @@ const handleDialogReady = ({ commentId: dialogId, elementRef }) => {
   if (!dialog) return;
 
   nextTick(() => {
-    const selectionBounds = elementRef.value.getBoundingClientRect();
+    const selectionBounds = elementRef.value?.getBoundingClientRect();
     renderDialog(sortedConversations.value[dialogIndex + 1], sortedConversations.value[dialogIndex], selectionBounds)
   });
 };

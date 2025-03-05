@@ -104,7 +104,7 @@ const handleDocumentMouseDown = (e) => {
 const handleHighlightClick = () => (toolsMenuPosition.top = null);
 const cancelPendingComment = (e) => {
   if (e.target.classList.contains('n-dropdown-option-body__label')) return;
-  commentsStore.removePendingComment();
+  commentsStore.removePendingComment(proxy.$superdoc);
 };
 
 const onCommentsLoaded = ({ editor, comments }) => {

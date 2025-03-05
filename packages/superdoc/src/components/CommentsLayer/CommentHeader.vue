@@ -78,7 +78,7 @@ const handleSelect = (value) => emit('overflow-select', value);
         :options="overflowOptions"
         @select="handleSelect"
       >
-        <div class="overflow-menu__icon" @click.stop.prevent>
+        <div class="overflow-menu__icon">
           <div class="overflow-icon" v-html="superdocIcons.overflow"></div>
         </div>
       </n-dropdown>
@@ -121,7 +121,7 @@ const handleSelect = (value) => emit('overflow-select', value);
   gap: 6px;
 }
 .overflow-menu__icon {
-  display: inline-flex;
+  box-sizing: content-box;
   justify-content: center;
   align-items: center;
   flex-shrink: 0;

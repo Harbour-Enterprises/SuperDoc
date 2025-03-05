@@ -206,7 +206,7 @@ const handleOverflowSelect = (value, comment) => {
 const handleCommentUpdate = (comment) => {
   isEditing.value = null;
   comment.setText({ text: currentCommentText.value, superdoc: proxy.$superdoc });
-  removePendingComment();
+  removePendingComment(proxy.$superdoc);
 }
 
 const handleInternalExternalSelect = (value) => {
@@ -224,7 +224,7 @@ const getSidebarCommentStyle = computed(() => {
   const comment = props.comment;
   if (isActiveComment.value) {
     style.backgroundColor = 'white';
-    style.zIndex = 10;
+    style.zIndex = 50;
   }
 
   if (pendingComment.value && pendingComment.value.commentId === props.comment.commentId) {
@@ -286,7 +286,7 @@ onMounted(() => {
             :include-header="false"
           />
           <div class="comment-footer">
-            <button class="sd-button" @click.stop.prevent="cancelComment">Cancel</button>
+            <button class="sd-button" @click.stop.prevent="cancelComment(proxy.$superdoc)">Cancel</button>
             <button
               class="sd-button primary"
               @click.stop.prevent="handleCommentUpdate(comment)"

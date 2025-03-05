@@ -3,6 +3,7 @@ import { Extension } from '@core/Extension.js';
 import { TrackInsertMarkName, TrackDeleteMarkName } from '../track-changes/constants.js';
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { comments_module_events } from '@harbour-enterprises/common';
+import { removeCommentsById, getCommentPositionsById } from './comment-helpers.js';
 
 export const CommentsPluginKey = new PluginKey('comments');
 
@@ -13,23 +14,28 @@ export const CommentsPlugin = Extension.create({
     return {
       insertComment:
         (conversation) =>
-        ({ tr, dispatch }) => {
+        ({ tr, dispatch, state }) => {
           const { selection } = tr;
           const { $from, $to } = selection;
 
-          const { commentId: threadId } = conversation;
+          const { commentId: threadId, isInternal } = conversation;
           const commentStartNodeAttrs = {
             'w:id': threadId,
-            internal: true,
+            internal: isInternal,
           };
           const startNode = this.editor.schema.nodes.commentRangeStart.create(commentStartNodeAttrs);
           const endNode = this.editor.schema.nodes.commentRangeEnd.create({ 'w:id': threadId });
           tr.insert($from.pos, startNode);
           tr.insert($to.pos + 2, endNode);
+
           dispatch(tr);
           return true;
         },
-      
+
+      removeComment: ({ commentId, importedId }) => ({ tr, dispatch, state }) => {
+        removeCommentsById({ commentId, importedId, state, tr, dispatch });
+      },
+
       setActiveComment: ({ commentId, importedId }) => ({ tr, dispatch, state }) => {
         let activeThreadId = importedId;
         if (importedId === undefined || importedId === null) activeThreadId = commentId;
@@ -73,17 +79,8 @@ export const CommentsPlugin = Extension.create({
 
       resolveComment: ({ commentId, importedId }) => ({ tr, dispatch, state }) => {
         const { doc } = state;
-        const toDelete = [];
-        doc.descendants((node, pos) => {
-          const commentNodes = ['commentRangeStart', 'commentRangeEnd'];
-          if (!commentNodes.includes(node.type.name)) return;
 
-          const wid = node.attrs['w:id'];
-          if (wid == commentId || wid == importedId) {
-            toDelete.push({ from: pos, to: pos + node.nodeSize });
-          }
-        });
-
+        const toDelete = getCommentPositionsById(commentId, importedId, doc);
         if (toDelete.length && dispatch) {
           toDelete.reverse().forEach(({ from, to }) => {
             tr.delete(from, to);
@@ -398,3 +395,4 @@ const getActiveCommentId = (doc, selection) => {
 
   return closestCommentRangeStart?.attrs['w:id'];
 };
+
