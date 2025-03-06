@@ -39,7 +39,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     labelAttr: 'fontFamily',
     hasCaret: true,
     isWide: true,
-    style: { width: '150px' },
+    style: { width: '116px' },
     suppressActiveHighlight: true,
     options: [
       {
@@ -683,7 +683,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     group: 'right',
     attributes: {
       dropdownPosition: 'right',
-      className: 'doc-mode',
+      className: 'toolbar-item--doc-mode',
     },
     options: [
       {
@@ -740,11 +740,12 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
   // define sizes to calculate toolbar overflow items
   const controlSizes = new Map([
     ['separator', 20],
-    ['textAlign', 37],
-    ['documentMode', 45],
-    ['zoom', 70],
-    ['fontSize', 56],
-    ['fontFamily', 72],
+    ['zoom', 71],
+    ['fontFamily', 118],
+    ['fontSize', 57],
+    ['textAlign', 40],
+    ['linkedStyles', 142],
+    ['documentMode', 47],
     ['default', 32],
   ]);
   
@@ -766,9 +767,12 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     label: 'Format text',
     hasCaret: true,
     isWide: true,
-    style: { width: '150px' },
+    style: { width: '140px' },
     suppressActiveHighlight: true,
     disabled: false,
+    attributes: {
+      className: 'toolbar-item--linked-styles',
+    },
     options: [
       {
         type: 'render',
@@ -798,10 +802,17 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
   });
 
   // Responsive toolbar calculations
-  const itemsToHide = ['zoom', 'fontFamily', 'fontSize', 'redo'];
-  const hideWideItemsEndpoint = 600;
-  const toolbarPadding = 32;
+  const breakpoints = {
+    sm: 768,
+    md: 1024,
+    lg: 1280,
+    xl: 1410,
+  };
   const stickyItemsWidth = 120;
+  const toolbarPadding = 32;
+
+  const itemsToHideXL = ['linkedStyles', 'clearFormatting', 'copyFormat', 'ruler'];
+  const itemsToHideSM = ['zoom', 'fontFamily', 'fontSize', 'redo'];
 
   let toolbarItems = [
     undo,
@@ -849,7 +860,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
   ];
 
   // Hide separators on small screens
-  if (windowWidth <= hideWideItemsEndpoint) {
+  if (windowWidth <= breakpoints.md) {
     toolbarItems = toolbarItems.filter((item) => item.type !== 'separator');
   }
 
@@ -867,7 +878,6 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
 
   // Track changes test buttons
   const devItems = [toggleTrackChanges, toggleTrackChangesOriginal, toggleTrackChangesFinal];
-
   if (!isDev) {
     if (role === 'viewer') {
       devItems.push(...[acceptTrackedChangeBySelection, rejectTrackedChangeOnSelection]);
@@ -877,21 +887,31 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
 
   // always visible items
   const toolbarItemsSticky = [undo, overflow, documentMode].map((item) => item.name);
-
   const isStickyItem = (item) => toolbarItemsSticky.includes(item.name);
 
   const overflowItems = [];
   const visibleItems = [];
-  // initial width with padding
 
+  // initial width with padding
   let totalWidth = toolbarPadding + stickyItemsWidth;
+
   toolbarItems.forEach((item) => {
     const itemWidth = controlSizes.get(item.name.value) || controlSizes.get('default');
 
-    if (windowWidth < hideWideItemsEndpoint && itemsToHide.includes(item.name.value)) {
+    if (windowWidth < breakpoints.xl && itemsToHideXL.includes(item.name.value)) {
+      overflowItems.push(item);
+      if (item.name.value === 'linkedStyles') {
+        const linkedStylesIdx = toolbarItems.findIndex((item) => item.name.value === 'linkedStyles');
+        toolbarItems.splice(linkedStylesIdx + 1, 1);
+      }
+      return;
+    }
+
+    if (windowWidth < breakpoints.sm && itemsToHideSM.includes(item.name.value)) {
       overflowItems.push(item);
       return;
     }
+
     if (isStickyItem(item)) {
       visibleItems.push(item);
       totalWidth += itemWidth;

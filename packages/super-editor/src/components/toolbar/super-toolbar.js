@@ -251,7 +251,8 @@ export class SuperToolbar extends EventEmitter {
   }
 
   #makeToolbarItems(superToolbar, icons, isDev = false) {
-    const { defaultItems, overflowItems } = makeDefaultItems(superToolbar, isDev, window.innerWidth, this.role, icons);
+    const documentWidth = document.documentElement.clientWidth; // take into account the scrollbar
+    const { defaultItems, overflowItems } = makeDefaultItems(superToolbar, isDev, documentWidth, this.role, icons);
     this.toolbarItems = defaultItems;
     this.overflowItems = overflowItems;
   }

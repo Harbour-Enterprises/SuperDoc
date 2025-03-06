@@ -68,11 +68,13 @@ const handleCommand = ({ item, argument }) => {
   padding: 4px 16px;
   box-sizing: border-box;
 }
-@media (max-width: 1120px) {
+
+@media (max-width: 1280px) {
   .superdoc-toolbar-group-side {
     min-width: auto !important;
   }
 }
+
 @media (max-width: 768px) {
   .superdoc-toolbar {
     padding: 4px 10px;
