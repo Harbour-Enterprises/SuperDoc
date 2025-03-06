@@ -71,7 +71,7 @@ export class SuperToolbar extends EventEmitter {
     },
     
     setHighlight: ({ item, argument }) => {
-      this.#runCommandWithArgumentOnly({ item, argument: argument || '#D6D6D6' });
+      this.#runCommandWithArgumentOnly({ item, argument });
     },
 
     toggleRuler: ({ item, argument }) => {
