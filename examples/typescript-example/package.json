@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@harbour-enterprises/superdoc": "^0.4.36",
+    "@harbour-enterprises/superdoc": "^0.6.35",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

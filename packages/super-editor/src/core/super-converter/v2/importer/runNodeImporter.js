@@ -13,7 +13,7 @@ const handleRunNode = (params) => {
   const node = nodes[0];
   const childParams = { ...params, nodes: node.elements };
   let processedRun = nodeListHandler.handler(childParams)?.filter((n) => n) || [];
-  const hasRunProperties = node.elements.some((el) => el.name === 'w:rPr');
+  const hasRunProperties = node.elements?.some((el) => el.name === 'w:rPr');
   if (hasRunProperties) {
     const { marks = [], attributes = {} } = parseProperties(node);
     if (node.marks) marks.push(...node.marks);

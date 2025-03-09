@@ -40,7 +40,15 @@ export default function useComment(params) {
       selectionBounds: {},
     });
   
+  const floatingPosition = params.selection?.selectionBounds
+    ? { ...params.selection.selectionBounds }
+    : { top: 0, left: 0, right: 0, bottom: 0 };
+
+  // Tracked changes aka suggestions
   const trackedChange = ref(params.trackedChange);
+  const trackedChangeType = ref(params.trackedChangeType || null);
+  const trackedChangeText = ref(params.trackedChangeText || null);
+  const deletedText = ref(params.deletedText || null);
 
   const resolvedTime = ref(params.resolvedTime || null);
   const resolvedByEmail = ref(params.resolvedByEmail || null);
@@ -61,6 +69,8 @@ export default function useComment(params) {
 
     const emitData = { type: comments_module_events.RESOLVED, comment: getValues() };
     propagateUpdate(superdoc, emitData);
+
+    superdoc.activeEditor?.commands?.resolveComment({ commentId, importedId });
   };
 
   /**
@@ -208,6 +218,9 @@ export default function useComment(params) {
       commentText: commentText.value,
       selection: selection ? selection.getValues() : null,
       trackedChange: trackedChange.value,
+      trackedChangeText: trackedChangeText.value,
+      trackedChangeType: trackedChangeType.value,
+      deletedText: deletedText.value,
       resolvedTime: resolvedTime.value,
       resolvedByEmail: resolvedByEmail.value,
       resolvedByName: resolvedByName.value,
@@ -231,6 +244,9 @@ export default function useComment(params) {
     commentText,
     selection,
     trackedChange,
+    deletedText,
+    trackedChangeType,
+    trackedChangeText,
     resolvedTime,
     resolvedByEmail,
     resolvedByName,
@@ -243,39 +259,4 @@ export default function useComment(params) {
     setActive,
     updatePosition,
   });
-};
-
-
-export function useCommentDeprecated(params) {
-  const id = ref(params.id || crypto.randomUUID());
-  const documentId = ref(params.documentId);
-  const comment = ref(params.comment);
-  const trackedChange = ref(params.trackedChange);
-  const user = reactive({
-    name: params.user.name,
-    email: params.user.email,
-  });
-
-  const timestamp = new Date(params.timestamp || Date.now());
-
-  const getValues = () => {
-    return {
-      id: id.value,
-      documentId: documentId.value,
-      comment: comment.value,
-      trackedChange: toRaw(trackedChange),
-      user: toRaw(user),
-      timestamp: new Date(timestamp).getTime(),
-    };
-  };
-
-  return {
-    id,
-    documentId,
-    comment,
-    trackedChange,
-    user,
-    timestamp,
-    getValues,
-  };
 };

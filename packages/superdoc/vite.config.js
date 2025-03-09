@@ -16,7 +16,7 @@ const visualizerConfig = {
   open: true
 }
 
-const getAliases = (isDev) => {
+export const getAliases = (isDev) => {
   const aliases = {
     '@superdoc': fileURLToPath(new URL('./src', import.meta.url)),
     '@stores': fileURLToPath(new URL('./src/stores', import.meta.url)),

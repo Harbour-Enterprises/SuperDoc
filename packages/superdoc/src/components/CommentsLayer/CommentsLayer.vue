@@ -94,6 +94,8 @@ const activateComment = (comment, e) => {
 const getCurrentComments = computed(() => {
   return commentsList.value
     .filter((c) => !c.parentCommentId)
+    .filter((c) => c.selection && c.selection.selectionBounds?.top)
+    .filter((c) => !c.resolvedTime)
     .filter((c) => c.selection?.source !== 'super-editor');
 });
 

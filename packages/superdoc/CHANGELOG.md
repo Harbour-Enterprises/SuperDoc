@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.6.38](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.37...v0.6.38) (2025-03-06)
+
+## [0.6.37](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.36...v0.6.37) (2025-03-06)
+
+## [0.6.36](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.35...v0.6.36) (2025-03-06)
+
+## [0.6.35](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.34...v0.6.35) (2025-03-06)
+
+## [0.6.34](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.32...v0.6.34) (2025-03-06)
+
+
+### Bug Fixes
+
+* remove only handleSynced listener after it's triggered ([#354](https://github.com/Harbour-Enterprises/SuperDoc/issues/354)) ([2805de6](https://github.com/Harbour-Enterprises/SuperDoc/commit/2805de67470d05af4658ce244cfb5225de45e7ad))
+
+## [0.6.32](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.31...v0.6.32) (2025-03-06)
+
+## [0.6.31](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.30...v0.6.31) (2025-03-05)
+
+## [0.6.30](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.28...v0.6.30) (2025-03-05)
+
+## [0.6.28](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.27...v0.6.28) (2025-03-04)
+
+## [0.6.27](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.26...v0.6.27) (2025-03-04)
+
+## [0.6.26](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.25...v0.6.26) (2025-03-04)
+
+## [0.6.25](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.24...v0.6.25) (2025-03-04)
+
+## [0.6.24](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.23...v0.6.24) (2025-03-04)
+
+## [0.6.23](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.22...v0.6.23) (2025-03-04)
+
+## [0.6.22](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.21...v0.6.22) (2025-03-04)
+
 ## [0.6.21](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.20...v0.6.21) (2025-03-04)
 
 ## [0.6.20](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.19...v0.6.20) (2025-03-03)

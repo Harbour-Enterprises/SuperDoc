@@ -413,7 +413,7 @@ function wrapTextInRun(node, marks) {
 function generateRunProps(marks = []) {
   return {
     name: 'w:rPr',
-    elements: marks,
+    elements: marks.filter((mark) => !!Object.keys(mark).length),
   };
 }
 
@@ -477,6 +477,8 @@ function translateLinkNode(params) {
  */
 function addNewLinkRelationship(params, link) {
   const newId = 'rId' + generateDocxRandomId();
+
+  if (!params.relationships || !Array.isArray(params.relationships)) params.relationships = [];
   params.relationships.push({
     type: 'element',
     name: 'Relationship',
@@ -1595,24 +1597,6 @@ export function translateHardBreak() {
 export class DocxExporter {
   constructor(converter) {
     this.converter = converter;
-  }
-
-  // Currently for hyperlinks but there will be other uses
-  #generateFldCharNode(type) {
-    return {
-      name: 'w:r',
-      type: 'element',
-      elements: [{ name: 'w:fldChar', attributes: { 'w:fldCharType': type } }],
-    };
-  }
-
-  // Used for generating hyperlinks
-  #generateInstrText(data) {
-    return {
-      name: 'w:r',
-      type: 'element',
-      elements: [{ name: 'w:instrText', elements: [{ type: 'text', text: data }] }],
-    };
   }
 
   schemaToXml(data) {

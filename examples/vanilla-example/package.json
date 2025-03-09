@@ -7,7 +7,7 @@
         "dev": "vite"
     },
     "dependencies": {
-        "@harbour-enterprises/superdoc": "^0.2.26"
+        "@harbour-enterprises/superdoc": "^0.6.35"
     },
     "devDependencies": {
         "vite": "^4.4.6"

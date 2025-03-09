@@ -82,6 +82,36 @@ export const useCommentsStore = defineStore('comments', () => {
     if (comment) activeComment.value = comment.commentId;
   };
 
+  /**
+   * Called when a tracked change is updated. Creates a new comment if necessary, 
+   * or updates an existing tracked-change comment.
+   * 
+   * @param {Object} param0 
+   * @param {Object} param0.superdoc The SuperDoc instance
+   * @param {Object} param0.params The tracked change params
+   * @returns {void}
+   */
+  const handleTrackedChangeUpdate = ({ superdoc, params }) => {
+    const { changeId, trackedChangeText, trackedChangeType, deletedText } = params;
+
+    const existingTrackedChange = commentsList.value.find((comment) => comment.commentId === changeId)
+    if (!existingTrackedChange) {
+      const comment = getPendingComment({
+        documentId: 'test',
+        commentId: changeId,
+        trackedChange: true,
+        trackedChangeText,
+        trackedChangeType,
+        deletedText,
+      });
+
+      addComment({ superdoc, comment });
+    } else {
+      existingTrackedChange.trackedChangeText = trackedChangeText;
+      existingTrackedChange.trackedChangeType = trackedChangeType;
+    }
+  };
+
   const showAddComment = (superdoc) => {    
     superdoc.emit('comments-update', { type: COMMENT_EVENTS.PENDING });
 
@@ -93,7 +123,12 @@ export const useCommentsStore = defineStore('comments', () => {
     };
 
     pendingComment.value = getPendingComment({ selection, documentId: selection.documentId, parentCommentId: null });
+    if (!superdoc.config.isInternal) pendingComment.value.isInternal = false;
 
+    if (superdoc.activeEditor?.commands) {
+      superdoc.activeEditor.commands.insertComment({ ...pendingComment.value.getValues(), commentId: 'pending' });
+    };
+  
     if (pendingComment.value.selection.source === 'super-editor' && superdocStore.selectionPosition) {
       superdocStore.selectionPosition.source = 'super-editor';
     }
@@ -296,10 +331,13 @@ export const useCommentsStore = defineStore('comments', () => {
    * 
    * @returns {void}
    */
-  const removePendingComment = () => {
+  const removePendingComment = (superdoc) => {
     currentCommentText.value = '';
     pendingComment.value = null;
     activeComment.value = null;
+    superdocStore.selectionPosition = null;
+
+    superdoc.activeEditor?.commands.removeComment({ commentId: 'pending' });
   };
 
   /**
@@ -312,7 +350,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const addComment = ({ superdoc, comment }) => {    
     let parentComment = commentsList.value.find((c) => c.commentId === activeComment.value);
     if (!parentComment) parentComment = comment;
-  
+
     const newComment = useComment(comment.getValues());
     newComment.setText({ text: currentCommentText.value, suppressUpdate: true });
     newComment.selection.source = pendingComment.value?.selection?.source;
@@ -329,7 +367,7 @@ export const useCommentsStore = defineStore('comments', () => {
     // Add the new comments to our global list
     commentsList.value.push(newComment);
 
-    if (superdoc.activeEditor?.commands) {
+    if (!comment.trackedChange && superdoc.activeEditor?.commands) {
       // Add the comment to the active editor
       superdoc.activeEditor.commands.insertComment(newComment.getValues());
     };
@@ -338,7 +376,7 @@ export const useCommentsStore = defineStore('comments', () => {
     syncCommentsToClients(superdoc);
 
     // Clean up the pending comment
-    removePendingComment();
+    removePendingComment(superdoc);
 
     // Emit event for end users
     superdoc.emit('comments-update', { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() });
@@ -348,8 +386,10 @@ export const useCommentsStore = defineStore('comments', () => {
   const deleteComment = ({ commentId: commentIdToDelete, superdoc }) => {
     const commentIndex = commentsList.value.findIndex((c) => c.commentId === commentIdToDelete);
     const comment = commentsList.value[commentIndex];
-    const { commentId } = comment;
+    const { commentId, importedId } = comment;
     const { fileId } = comment;
+
+    superdoc.activeEditor?.commands?.removeComment({ commentId, importedId });
 
     commentsList.value.splice(commentIndex, 1);
 
@@ -367,8 +407,8 @@ export const useCommentsStore = defineStore('comments', () => {
    * 
    * @returns {void}
    */
-  const cancelComment = () => {
-    removePendingComment();
+  const cancelComment = (superdoc) => {
+    removePendingComment(superdoc);
   }
 
   /**
@@ -386,7 +426,7 @@ export const useCommentsStore = defineStore('comments', () => {
     const document = superdocStore.getDocument(documentId);
 
     comments.forEach((comment) => {
-      const importedName = `${comment.creatorName} (imported)`;
+      const importedName = `${comment.creatorName.replace('(imported)', '')} (imported)`
       const newComment = useComment({
         fileId: documentId,
         fileType: document.type,
@@ -394,7 +434,7 @@ export const useCommentsStore = defineStore('comments', () => {
         commentId: comment.id,
         parentCommentId: comment.parentCommentId,
         creatorEmail: comment.creatorEmail,
-        creatorName: `${comment.creatorName} (imported)`,
+        creatorName: importedName,
         commentText: getHTmlFromComment(comment.textJson),
         resolvedTime: comment.isDone ? Date.now() : null,
         resolvedByEmail: comment.isDone ? comment.creatorEmail : null,
@@ -438,13 +478,26 @@ export const useCommentsStore = defineStore('comments', () => {
    * @returns {void}
    */
   const handleEditorLocationsUpdate = (parentElement) => {
+
     setTimeout(() => {
       const allCommentElements = document.querySelectorAll('[data-thread-id]');
+      const trackedChanges = document.querySelectorAll('.track-delete, .track-insert');
+      trackedChanges.forEach((change) => {
+        const threadId = change.dataset.id;
+        const comment = getComment(threadId);
+        const coords = change.getBoundingClientRect();
+        if (comment) {
+          comment.updatePosition(coords, parentElement);
+        };
+      })
+
       allCommentElements.forEach((commentElement) => {
         const threadId = commentElement.dataset.threadId;
         const comment = getComment(threadId);
         const coords = commentElement.getBoundingClientRect();
-        if (comment) comment.updatePosition(coords, parentElement);
+        if (comment) {
+          comment.updatePosition(coords, parentElement);
+        }
       });
 
       lastChange.value = Date.now();
@@ -515,5 +568,6 @@ export const useCommentsStore = defineStore('comments', () => {
     processLoadedDocxComments,
     prepareCommentsForExport,
     handleEditorLocationsUpdate,
+    handleTrackedChangeUpdate,
   };
 });

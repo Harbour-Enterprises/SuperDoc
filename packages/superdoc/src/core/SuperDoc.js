@@ -7,7 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 
 import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
-import { SuperToolbar } from '@harbour-enterprises/super-editor';
+import { SuperToolbar, createZip } from '@harbour-enterprises/super-editor';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { createSuperdocVueApp } from './create-app';
 import { shuffleArray } from '@harbour-enterprises/common/collaboration/awareness.js';
@@ -82,6 +82,8 @@ export class SuperDoc extends EventEmitter {
 
   /** @type {number} */
   version;
+
+  users;
 
   /** @type {Config} */
   config = {
@@ -254,6 +256,27 @@ export class SuperDoc extends EventEmitter {
     // Initialize collaboration for documents
     return makeDocumentsCollaborative(this);
   };
+
+  /**
+   * Add a user to the shared users list
+   * 
+   * @param {Object} user The user to add
+   * @returns {void}
+   */
+  addSharedUser(user) {
+    if (this.users.some((u) => u.email === user.email)) return;
+    this.users.push(user);
+  }
+
+  /**
+   * Remove a user from the shared users list
+   * 
+   * @param {String} email The email of the user to remove
+   * @returns {void}
+   */
+  removeSharedUser(email) {
+    this.users = this.users.filter((u) => u.email !== email);
+  }
 
   /**
    * Initialize telemetry service.
@@ -452,12 +475,18 @@ export class SuperDoc extends EventEmitter {
     this.emit('locked', { isLocked, lockedBy });
   }
 
-  async export({ exportType = ['docx'], commentsType, exportedName }) {
+  async export({
+    exportType = ['docx'],
+    commentsType,
+    exportedName,
+    additionalFiles = [],
+    additionalFileNames = []
+  }) {
     // Get the docx files first
     const baseFileName = exportedName ? cleanName(exportedName) : cleanName(this.config.title);
     const docxFiles = await this.exportEditorsToDOCX({ commentsType });
-    const blobsToZip = [];
-    const filenames = [];
+    const blobsToZip = [...additionalFiles];
+    const filenames = [...additionalFileNames];
 
     // If we are exporting docx files, add them to the zip
     if (exportType.includes('docx')) {

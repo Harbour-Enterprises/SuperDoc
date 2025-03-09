@@ -27,11 +27,11 @@ const currentItem = ref(null);
 const isMobile = window.matchMedia('(max-width: 768px)').matches;
 const styleMap = {
   left: {
-    minWidth: '150px',
+    minWidth: '140px',
     justifyContent: 'flex-start',
   },
   right: {
-    minWidth: '150px',
+    minWidth: '140px',
     justifyContent: 'flex-end',
   },
   default: {

@@ -61,7 +61,7 @@ export const handleAnnotationNode = (params) => {
  * @param {Object} content The sdtContent node
  * @returns {Object} The attributes object
  */
-const parseAnnotationMarks = (content = {}) => {
+export const parseAnnotationMarks = (content = {}) => {
   const run = content.elements?.find((el) => el.name === 'w:r');
   const rPr = run?.elements?.find((el) => el.name === 'w:rPr');
   if (!rPr) return {};

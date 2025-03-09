@@ -93,4 +93,87 @@ describe('paragraph tests to check spacing', () => {
     const firstListItem = content[0];
     const { nodes } = handleListNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
   });
+
+  it('should return empty result for empty nodes', () => {
+    const result = handleParagraphNode({
+      nodes: [],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler()
+    });
+    expect(result).toEqual({ nodes: [], consumed: 0 });
+  });
+
+  it('should return empty result for non w:p node', () => {
+    const result = handleParagraphNode({
+      nodes: [{ name: 'w:r' }], 
+      docx: {},
+      nodeListHandler: defaultNodeListHandler()
+    });
+    expect(result).toEqual({ nodes: [], consumed: 0 });
+  });
+
+  it('correctly handles paragraph with text alignment', () => {
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:jc',
+              attributes: {
+                'w:val': 'center'
+              }
+            }
+          ]
+        }
+      ]
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler()
+    });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+    expect(node.attrs.textAlign).toBe('center');
+  });
+
+  it('correctly handles paragraph indentation in twips', () => {
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:ind',
+              attributes: {
+                'w:left': '2880',
+                'w:right': '1440',
+                'w:firstLine': '720'
+              }
+            }
+          ]
+        }
+      ]
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler()
+    });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+    // Keep raw twips values in indent object
+    expect(node.attrs.indent.left).toBe(192);
+    expect(node.attrs.indent.right).toBe(96);
+    expect(node.attrs.indent.firstLine).toBe(48);
+    // textIndent should be in inches (2880 twips = 2 inches)
+    expect(node.attrs.textIndent).toBe('2in');
+  });
 });

@@ -54,7 +54,7 @@ const handleDialogReady = ({ commentId: dialogId, elementRef }) => {
   if (!dialog) return;
 
   nextTick(() => {
-    const selectionBounds = elementRef.value.getBoundingClientRect();
+    const selectionBounds = elementRef.value?.getBoundingClientRect();
     renderDialog(sortedConversations.value[dialogIndex + 1], sortedConversations.value[dialogIndex], selectionBounds)
   });
 };
@@ -110,6 +110,8 @@ const initializeConvos = () => {
   if (!sortedConversations.value?.length) return;
 
   const firstComment = sortedConversations.value[0];
+  const offset = firstComment.selection?.selectionBounds?.top || floatingCommentsOffset.value;
+  firstComment.floatingPosition = { top: offset };
   visibleConversations.value.push(firstComment);
 };
 

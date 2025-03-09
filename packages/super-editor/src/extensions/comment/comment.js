@@ -1,5 +1,4 @@
 import { Node, Attribute } from '@core/index.js';
-import { v4 as uuidv4 } from 'uuid';
 
 export const CommentRangeStart = Node.create({
   name: 'commentRangeStart',

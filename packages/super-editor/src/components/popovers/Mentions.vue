@@ -75,7 +75,8 @@ const handleFocus = () => {
       class="user-row"
       :class="{ selected: activeUserIndex === index }"
     >
-      <span>{{ user.name }}</span>
+      <span v-if="user.name">{{ user.name }} ({{ user.email }})</span>
+      <span v-else>{{ user.email }}</span>
     </div>
   </div>
 </template>

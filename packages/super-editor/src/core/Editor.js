@@ -13,8 +13,9 @@ import { isActive } from './helpers/isActive.js';
 import { trackedTransaction } from '@extensions/track-changes/trackChangesHelpers/trackedTransaction.js';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
 import { initPaginationData, PaginationPluginKey } from '@extensions/pagination/pagination-helpers';
-import { CommentsPluginKey } from '../extensions/comment/comments-plugin.js';
+import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
+import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
 
 /**
@@ -525,7 +526,10 @@ export class Editor extends EventEmitter {
       
       if (mode === 'docx') {
         doc = createDocument(this.converter, this.schema, this);
-  
+
+        // Perform any additional document processing prior to finalizing the doc here
+        doc = this.#prepareDocumentForImport(doc);
+
         if (fragment && isHeadless) {
           doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
         }
@@ -892,10 +896,56 @@ export class Editor extends EventEmitter {
   }
 
   /**
+   * Perform any post conversion pre prosemirror import processing.
+   * Comments are processed here.
+   * 
+   * @param {import('prosemirror-model').Node} doc The prosemirror document
+   * @returns {import('prosemirror-model').Node} The updated prosemirror document
+   */
+  #prepareDocumentForImport(doc) {
+
+    const newState = EditorState.create({
+      schema: this.schema,
+      doc,
+    });
+
+    const { tr, doc: newDoc } = newState;
+
+    // Perform comments processing (replaces comment nodes with marks)
+    prepareCommentsForImport(newDoc, tr, this.schema);
+
+    const updatedState = newState.apply(tr);
+    return updatedState.doc;
+  }
+
+  /**
+   * Prepare the document for export. Any necessary pre-export processing to the state
+   * can happen here.
+   * 
+   * @returns {Record<string, any>} The updated document JSON
+   */
+  #prepareDocumentForExport() {
+    const newState = EditorState.create({
+      schema: this.schema,
+      doc: this.state.doc,
+      plugins: this.state.plugins
+    });
+
+    const { tr, doc } = newState;
+
+    prepareCommentsForExport(doc, tr, this.schema);
+    const updatedState = newState.apply(tr);
+    return updatedState.doc.toJSON();
+  }
+
+  /**
    * Export the editor document to DOCX.
    */
   async exportDocx({ isFinalDoc = false, commentsType, comments = [] } = {}) {
-    const json = this.getJSON();
+    // Pre-process the document state to prepare for export
+    const json = this.#prepareDocumentForExport();
+
+    // Export the document to DOCX
     const documentXml = await this.converter.exportToDocx(
       json,
       this.schema,
@@ -910,7 +960,8 @@ export class Editor extends EventEmitter {
     const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
     const styles = this.converter.schemaToXml(this.converter.convertedXml['word/styles.xml'].elements[0]);
     const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
-  
+    const contentTypes = this.converter.schemaToXml(this.converter.convertedXml['[Content_Types].xml'].elements[0]);
+
     const originalCommentsXml = this.converter.convertedXml['word/comments.xml'];
     const updatedCommentsXml = originalCommentsXml ? this.converter.schemaToXml(originalCommentsXml.elements[0]) : null;
     const media = this.converter.addedMedia;
@@ -922,6 +973,7 @@ export class Editor extends EventEmitter {
       'word/settings.xml': String(customSettings),
       // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
       'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
+      '[Content_Types].xml': String(contentTypes),
     };
 
     // Add comments.xml to the list of files to update if we have any comments

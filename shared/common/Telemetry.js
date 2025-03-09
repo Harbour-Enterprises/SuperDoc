@@ -8,7 +8,14 @@
  */
 
 import crc32 from 'buffer-crc32';
-import { randomBytes } from 'crypto';
+
+function getRandomBytes(length) {
+  const array = new Uint8Array(length);
+  for (let i = 0; i < length; i++) {
+    array[i] = Math.floor(Math.random() * 256);
+  }
+  return array;
+};
 
 class Telemetry {
   /** @type {boolean} */

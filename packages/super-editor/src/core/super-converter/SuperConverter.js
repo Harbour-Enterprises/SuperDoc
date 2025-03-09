@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DocxExporter, exportSchemaToJson } from './exporter';
 import { createDocumentJson, addDefaultStylesIfMissing } from './v2/importer/docxImporter.js';
 import { getArrayBufferFromUrl } from './helpers.js';
-import { getCommentDefinition, updateCommentsXml } from './v2/exporter/commentsExporter.js';
+import { getCommentDefinition, updateCommentsXml, updateContentTypes } from './v2/exporter/commentsExporter.js';
 import { DEFAULT_CUSTOM_XML, SETTINGS_CUSTOM_XML } from './exporter-docx-defs.js';
 import { COMMENTS_XML } from './exporter-docx-defs.js';
 
@@ -346,11 +346,21 @@ class SuperConverter {
 
     // Update the comments.xml file
     this.#updateCommentsFiles(params.exportedCommentDefs, commentsExportType);
+
+    // Update content types
+    this.#prepareCommentsForExport();
   
     // Store the SuperDoc version
     storeSuperdocVersion(this.convertedXml);
     
     return xml;
+  }
+
+  /**
+   * Update [Content_Types].xml and docment.xml.rels for comments
+   */
+  #prepareCommentsForExport() {
+    this.convertedXml = updateContentTypes(this.convertedXml);
   }
 
   /**

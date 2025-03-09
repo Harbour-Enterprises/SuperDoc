@@ -95,5 +95,6 @@ export const toolbarIcons = {
   deleteRow: trashIconSvg,
   deleteColumn: trashIconSvg,
   deleteTable: trashIconSvg,
+  deleteBorders: trashIconSvg,
   fixTables: wrenchIconSvg,
 }

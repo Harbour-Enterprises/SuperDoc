@@ -58,7 +58,7 @@ const {
   isCommentsListVisible,
   isFloatingCommentsReady,
 } = storeToRefs(commentsStore);
-const { initialCheck, showAddComment, handleEditorLocationsUpdate } = commentsStore;
+const { initialCheck, showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
 const { proxy } = getCurrentInstance();
 commentsStore.proxy = proxy;
 
@@ -104,7 +104,7 @@ const handleDocumentMouseDown = (e) => {
 const handleHighlightClick = () => (toolsMenuPosition.top = null);
 const cancelPendingComment = (e) => {
   if (e.target.classList.contains('n-dropdown-option-body__label')) return;
-  commentsStore.removePendingComment();
+  commentsStore.removePendingComment(proxy.$superdoc);
 };
 
 const onCommentsLoaded = ({ editor, comments }) => {
@@ -253,10 +253,14 @@ const onEditorCommentLocationsUpdate = () => {
   }, 250);
 };
 
-const onEditorCommentsUpdate = (params) => {
+const onEditorCommentsUpdate = (params = {}) => {
   // Set the active comment in the store
-  const { activeCommentId } = params;
+  const { activeCommentId, type } = params;
 
+  if (type === 'trackedChange') {
+    handleTrackedChangeUpdate({ superdoc: proxy.$superdoc, params });
+  }
+  
   nextTick(() => {
     commentsStore.setActiveComment(activeCommentId);
   });
@@ -358,12 +362,8 @@ const handleSelectionChange = (selection) => {
   activeSelection.value = selection;
 
   // Place the tools menu at the level of the selection
-  let top = selection.selectionBounds.top;
-  if (selection.bottom - selection.selectionBounds.top < 0) {
-    top = selection.selectionBounds.botton;
-  }
-
-  toolsMenuPosition.top = top - 20 + 'px';
+  let top = selection.selectionBounds.bottom - 50;
+  toolsMenuPosition.top = top + 'px';
   toolsMenuPosition.right = isMobileView ? '0' : '-25px';
 };
 
@@ -522,14 +522,15 @@ const handleAiHighlightRemove = () => {
         />
 
         <!-- On-document comments layer -->
-        <!-- <CommentsLayer
+        <CommentsLayer
+          v-if="layers"
           class="superdoc__comments-layer comments-layer"
           style="z-index: 3"
           ref="commentsLayer"
           :parent="layers"
           :user="user"
           @highlight-click="handleHighlightClick"
-        /> -->
+        />
 
         <!-- AI Layer for temporary highlights -->
         <AiLayer class="ai-layer" style="z-index: 4" ref="aiLayer" />

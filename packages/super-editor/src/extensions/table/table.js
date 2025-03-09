@@ -5,6 +5,10 @@ import { /* TableView */ createTableView } from './TableView.js';
 import { createTable } from './tableHelpers/createTable.js';
 import { createColGroup } from './tableHelpers/createColGroup.js';
 import { deleteTableWhenSelected } from './tableHelpers/deleteTableWhenSelected.js';
+import { isInTable } from '@helpers/isInTable.js';
+import { createTableBorders } from './tableHelpers/createTableBorders.js';
+import { createCellBorders } from '../table-cell/helpers/createCellBorders.js';
+import { findParentNode } from '@helpers/findParentNode.js';
 import { TextSelection } from 'prosemirror-state';
 import {
   addColumnBefore,
@@ -257,6 +261,40 @@ export const Table = Node.create({
 
           return true;
         },
+
+        deleteCellAndTableBorders:
+          () => ({ chain, state, tr }) => {
+            if (!isInTable(state)) {
+              return false;
+            }
+
+            const table = findParentNode((node) => node.type.name === this.name)(state.selection);
+
+            if (!table) {
+              return false;
+            }
+
+            const from = table.pos;
+            const to = table.pos + table.node.nodeSize;
+
+            // remove from cells
+            state.doc.nodesBetween(from, to, (node, pos) => {
+              if (['tableCell', 'tableHeader'].includes(node.type.name)) {
+                tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  borders: createCellBorders({ size: 0 }),
+                });
+              }
+            });
+
+            // remove from table
+            tr.setNodeMarkup(table.pos, undefined, {
+              ...table.node.attrs,
+              borders: createTableBorders({ size: 0 }),
+            });
+
+            return true;
+          },
     };
   },
 

@@ -70,7 +70,7 @@ export class SuperToolbar extends EventEmitter {
     },
     
     setHighlight: ({ item, argument }) => {
-      this.#runCommandWithArgumentOnly({ item, argument: argument || '#D6D6D6' });
+      this.#runCommandWithArgumentOnly({ item, argument });
     },
 
     toggleRuler: ({ item, argument }) => {
@@ -251,7 +251,8 @@ export class SuperToolbar extends EventEmitter {
   }
 
   #makeToolbarItems(superToolbar, icons, isDev = false) {
-    const { defaultItems, overflowItems } = makeDefaultItems(superToolbar, isDev, window.innerWidth, this.role, icons);
+    const documentWidth = document.documentElement.clientWidth; // take into account the scrollbar
+    const { defaultItems, overflowItems } = makeDefaultItems(superToolbar, isDev, documentWidth, this.role, icons);
     this.toolbarItems = defaultItems;
     this.overflowItems = overflowItems;
   }

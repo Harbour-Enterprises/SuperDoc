@@ -94,9 +94,13 @@ const initializeData = async () => {
     delete props.options.content;
     const ydoc = props.options.ydoc;
     const provider = props.options.collaborationProvider;
-    provider.on('synced', () => {
+    const handleSynced = () => {
       pollForMetaMapData(ydoc);
-    });
+      // Remove the synced event listener.
+      // Avoids re-initializing the editor in case the connection is lost and reconnected
+      provider.off('synced', handleSynced);
+    }
+    provider.on('synced', handleSynced);
   }
 };
 

@@ -67,7 +67,7 @@ const init = async () => {
     modules: {
       comments: {
         // comments: sampleComments,
-        overflow: false,
+        overflow: true,
         selector: 'comments-panel',
       },
       // 'hrbr-fields': {},
