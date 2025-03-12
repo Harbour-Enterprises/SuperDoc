@@ -419,9 +419,9 @@ function storeSuperdocVersion(docx) {
   if (!properties.elements) properties.elements = [];
   const elements = properties.elements;
 
-  let pid = 1;
+  let pid = 2;
   try {
-    pid = elements.length ? Math.max(...elements.map(el => el.attributes.pid)) + 1 : 1;
+    pid = elements.length ? Math.max(...elements.map(el => el.attributes.pid)) + 1 : 2;
   } catch (error) {};
 
   elements.push(pid, generateSuperdocVersion());
@@ -432,7 +432,7 @@ function generateCustomXml() {
   return DEFAULT_CUSTOM_XML;
 }
 
-function generateSuperdocVersion(pid = 1, version = __APP_VERSION__) {
+function generateSuperdocVersion(pid = 2, version = __APP_VERSION__) {
   return {
     type: "element",
     name: "property",
