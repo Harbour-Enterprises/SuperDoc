@@ -147,8 +147,8 @@ class SuperConverter {
 
       const superdocVersion = properties.elements.find((el) => el.name === 'property' && el.attributes.name === 'SuperdocVersion');
       if (!superdocVersion) return;
-      
-      const version = superdocVersion.elements[0].elements[0].elements[0].text;
+  
+      const version = superdocVersion.elements[0].elements[0].text;
       return version;
     } catch (e) {
       console.warn('Error getting Superdoc version', e);
@@ -291,9 +291,9 @@ class SuperConverter {
     }
   }
 
-  schemaToXml(data) {
+  schemaToXml(data, debug = false) {
     const exporter = new DocxExporter(this);
-    return exporter.schemaToXml(data);
+    return exporter.schemaToXml(data, debug);
   }
 
   async exportToDocx(
@@ -418,7 +418,13 @@ function storeSuperdocVersion(docx) {
   const properties = customXml.elements.find((el) => el.name === 'Properties');
   if (!properties.elements) properties.elements = [];
   const elements = properties.elements;
-  elements.push(generateSuperdocVersion());
+
+  let pid = 1;
+  try {
+    pid = elements.length ? Math.max(...elements.map(el => el.attributes.pid)) + 1 : 1;
+  } catch (error) {};
+
+  elements.push(pid, generateSuperdocVersion());
   return docx;
 };
 
@@ -426,26 +432,23 @@ function generateCustomXml() {
   return DEFAULT_CUSTOM_XML;
 }
 
-function generateSuperdocVersion(version = __APP_VERSION__) {
+function generateSuperdocVersion(pid = 1, version = __APP_VERSION__) {
   return {
     type: "element",
     name: "property",
     attributes: {
       name: "SuperdocVersion",
-      formatId: "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}",
-      pid: "2"
+      fmtid: "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}",
+      pid,
     },
     elements: [
       {
         type: "element",
-        name: "vt:superdoc",
+        name: "vt:lpwstr",
         elements: [
           {
-            name: "w:t",
-            elements: [{
-              type: "text",
-              text: version
-            }],
+            type: "text",
+            text: version
           }
         ]
       }

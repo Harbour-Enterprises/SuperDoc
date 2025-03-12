@@ -53,7 +53,6 @@ import { translateCommentNode } from './v2/exporter/commentsExporter.js';
  * @returns {XmlReadyNode} The complete document node in XML-ready format
  */
 export function exportSchemaToJson(params) {
-  // console.debug('\nExporting schema to JSON:', params.node, '\n');
   const { type } = params.node;
 
   // Node handlers for each node type that we can export
@@ -1529,20 +1528,19 @@ export class DocxExporter {
     };
   }
 
-  schemaToXml(data) {
+  schemaToXml(data, debug = false) {
     console.debug('[SuperConverter] schemaToXml:', data);
-    const result = this.#generate_xml_as_list(data);
-    // console.debug('[SuperConverter] schemaToXml result:', result.join(''));
+    const result = this.#generate_xml_as_list(data, debug);
     return result.join('');
   }
 
-  #generate_xml_as_list(data) {
+  #generate_xml_as_list(data, debug = falase) {
     const json = JSON.parse(JSON.stringify(data));
     const declaration = this.converter.declaration.attributes;
     const xmlTag = `<?xml${Object.entries(declaration)
       .map(([key, value]) => ` ${key}="${value}"`)
       .join('')}?>`;
-    const result = this.#generateXml(json);
+    const result = this.#generateXml(json, debug);
     const final = [xmlTag, ...result];
     return final;
   }
@@ -1552,16 +1550,19 @@ export class DocxExporter {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   }
 
-  #generateXml(node) {
+  #generateXml(node, debug = false) {
     if (!node) return null;
-    const { name, elements, attributes } = node;
+    let { name } = node;
+    const { elements, attributes } = node;
+
     let tag = `<${name}`;
 
     for (let attr in attributes) {
-      tag += ` ${attr}="${attributes[attr]}"`;
+      const parsedAttrName = typeof attributes[attr] === 'string' ? this.#replaceSpecialCharacters(attributes[attr]) : attributes[attr];
+      tag += ` ${attr}="${parsedAttrName}"`;
     }
 
-    const selfClosing = !elements || !elements.length;
+    const selfClosing = name && (!elements || !elements.length);
     if (selfClosing) tag += ' />';
     else tag += '>';
     let tags = [tag];
@@ -1576,7 +1577,11 @@ export class DocxExporter {
         for (let child of elements) {
           const newElements = this.#generateXml(child);
           if (!newElements) continue;
-          tags.push(...newElements);
+          const removeUndefined = newElements.filter((el) => {
+            return el !== '<undefined>' && el !== '</undefined>'
+          });
+        
+          tags.push(...removeUndefined);
         }
       }
     }
