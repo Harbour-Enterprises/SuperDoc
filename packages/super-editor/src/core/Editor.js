@@ -15,7 +15,10 @@ import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/ind
 import { initPaginationData, PaginationPluginKey } from '@extensions/pagination/pagination-helpers';
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
-import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
+import {
+  prepareCommentsForExport,
+  prepareCommentsForImport,
+} from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
 
 /**
@@ -924,7 +927,7 @@ export class Editor extends EventEmitter {
    * 
    * @returns {Record<string, any>} The updated document JSON
    */
-  #prepareDocumentForExport() {
+  #prepareDocumentForExport(comments = []) {
     const newState = EditorState.create({
       schema: this.schema,
       doc: this.state.doc,
@@ -933,7 +936,7 @@ export class Editor extends EventEmitter {
 
     const { tr, doc } = newState;
 
-    prepareCommentsForExport(doc, tr, this.schema);
+    prepareCommentsForExport(doc, tr, this.schema, comments);
     const updatedState = newState.apply(tr);
     return updatedState.doc.toJSON();
   }
@@ -942,8 +945,9 @@ export class Editor extends EventEmitter {
    * Export the editor document to DOCX.
    */
   async exportDocx({ isFinalDoc = false, commentsType, comments = [] } = {}) {
+
     // Pre-process the document state to prepare for export
-    const json = this.#prepareDocumentForExport();
+    const json = this.#prepareDocumentForExport(comments);
 
     // Export the document to DOCX
     const documentXml = await this.converter.exportToDocx(
@@ -955,29 +959,36 @@ export class Editor extends EventEmitter {
       comments,
     );
 
-    const relsData = this.converter.convertedXml['word/_rels/document.xml.rels'];
-    const rels = this.converter.schemaToXml(relsData.elements[0]);
     const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
     const styles = this.converter.schemaToXml(this.converter.convertedXml['word/styles.xml'].elements[0]);
     const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
-    const contentTypes = this.converter.schemaToXml(this.converter.convertedXml['[Content_Types].xml'].elements[0]);
-
-    const originalCommentsXml = this.converter.convertedXml['word/comments.xml'];
-    const updatedCommentsXml = originalCommentsXml ? this.converter.schemaToXml(originalCommentsXml.elements[0]) : null;
+    const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
     const media = this.converter.addedMedia;
 
+    const contentTypes = this.converter.schemaToXml(this.converter.convertedXml['[Content_Types].xml'].elements[0]);
     const updatedDocs = {
       'word/document.xml': String(documentXml),
-      'word/_rels/document.xml.rels': String(rels),
       'docProps/custom.xml': String(customXml),
       'word/settings.xml': String(customSettings),
+      'word/_rels/document.xml.rels': String(rels),
+
       // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
       'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
       '[Content_Types].xml': String(contentTypes),
+      
     };
 
-    // Add comments.xml to the list of files to update if we have any comments
-    if (updatedCommentsXml) updatedDocs['word/comments.xml'] = String(updatedCommentsXml);
+    if (comments.length) {
+      const commentsXml = this.converter.schemaToXml(this.converter.convertedXml['word/comments.xml'].elements[0]);
+      const commentsExtendedXml = this.converter.schemaToXml(this.converter.convertedXml['word/commentsExtended.xml'].elements[0]);
+      const commentsExtensibleXml = this.converter.schemaToXml(this.converter.convertedXml['word/commentsExtensible.xml'].elements[0]);
+      const commentsIdsXml = this.converter.schemaToXml(this.converter.convertedXml['word/commentsIds.xml'].elements[0]);
+
+      updatedDocs['word/comments.xml'] = String(commentsXml);
+      updatedDocs['word/commentsExtended.xml'] = String(commentsExtendedXml);
+      updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
+      updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
+    };
 
     const zipper = new DocxZipper();
     const result = await zipper.updateZip({
@@ -988,7 +999,7 @@ export class Editor extends EventEmitter {
       fonts: this.options.fonts,
       isHeadless: this.options.isHeadless,
     });
-    
+
     this.options.telemetry?.trackUsage('document_export', {
       documentType: 'docx',
       timestamp: new Date().toISOString()

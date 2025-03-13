@@ -1,6 +1,7 @@
 import { translateParagraphNode } from '../../exporter.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
-import { COMMENT_REF } from '../../exporter-docx-defs.js';
+import { COMMENT_REF, COMMENTS_XML_DEFINITIONS } from '../../exporter-docx-defs.js';
+
 
 /**
  * Generate the end node for a comment
@@ -21,7 +22,13 @@ export function translateCommentNode(params, type) {
   });
   const commentIndex = params.comments.findIndex((comment) => comment === originalComment);
 
-  const isInternal = originalComment.isInternal;
+  const parentId = originalComment.parentCommentId;
+  let parentComment;
+  if (parentId) {
+    parentComment = params.comments.find((c) => c.commentId === parentId || c.importedId === parentId);
+  }
+
+  const isInternal = parentComment?.isInternal || originalComment.isInternal;
   if (commentsExportType === 'external' && isInternal) return;
 
   const isResolved = !!originalComment.resolvedTime;
@@ -34,6 +41,7 @@ export function translateCommentNode(params, type) {
   };
   return commentSchema;
 };
+
 
 /**
  * Generate a w:commentRangeStart or w:commentRangeEnd node
@@ -51,6 +59,22 @@ const getCommentSchema = (type, commentId) => {
   };
 };
 
+
+/**
+ * Insert w15:paraId into the comments
+ * 
+ * @param {Object} comment The comment to update
+ * @returns {Object} The updated comment
+ */
+export const prepareCommentParaIds = (comment) => {
+  const newComment = {
+    ...comment,
+    commentParaId: generateCommentId(),
+  };
+  return newComment;
+};
+
+
 /**
  * Generate the w:comment node for a comment
  * This is stored in comments.xml
@@ -59,23 +83,33 @@ const getCommentSchema = (type, commentId) => {
  * @param {string} commentId The index of the comment
  * @returns {Object} The w:comment node for the comment
  */
-export const getCommentDefinition = (comment, commentId) => {
+export const getCommentDefinition = (comment, commentId, allComments) => {
   const translatedText = translateParagraphNode({ node: comment.commentJSON });
+
+  const attributes = {
+    'w:id': String(commentId),
+    'w:author': comment.creatorName,
+    'w:email': comment.creatorEmail,
+    'w:date': toIsoNoFractional(comment.createdTime),
+    'w:initials': getInitials(comment.creatorName),
+    'w:done': comment.resolvedTime ? '1' : '0',
+    'w15:paraId': comment.commentParaId,
+  };
+
+  // Add the w15:paraIdParent attribute if the comment has a parent
+  if (comment.parentCommentId) {
+    const parentComment = allComments.find((c) => c.commentId === comment.parentCommentId);
+    attributes['w15:paraIdParent'] = parentComment.commentParaId;
+  }
 
   return {
     type: 'element',
     name: 'w:comment',
-    attributes: {
-      'w:id': String(commentId),
-      'w:author': comment.creatorName,
-      'w:email': comment.creatorEmail,
-      'w:date': toIsoNoFractional(comment.createdTime),
-      'w:initials': getInitials(comment.creatorName),
-      'w:done': comment.resolvedTime ? '1' : '0',
-    },
+    attributes,
     elements: [translatedText],
   };
 };
+
 
 /**
  * Get the initials of a name
@@ -115,147 +149,258 @@ export const updateCommentsXml = (commentDefs = [], commentsXml) => {
 
   // Re-build the comment definitions
   commentDefs.forEach((commentDef) => {
-    commentDef.elements[0].elements.unshift(COMMENT_REF);
+    const elements = commentDef.elements[0].elements;
+    elements.unshift(COMMENT_REF);
+
+    const paraId = commentDef.attributes['w15:paraId'];
+    commentDef.elements[0].attributes['w14:paraId'] = paraId;
+
+    commentDef.attributes = {
+      'w:id': commentDef.attributes['w:id'],
+      'w:author': commentDef.attributes['w:author'],
+      'w:date': commentDef.attributes['w:date'],
+      'w:initials': commentDef.attributes['w:initials'],
+    };
   });
 
   newCommentsXml.elements[0].elements = commentDefs;
   return newCommentsXml;
 };
 
+
 /**
- * Find a content type by the part name in the [Content_Types].xml file
+ * This function updates the commentsExtended.xml structure with the comments list.
  * 
- * @param {Strign} name The part name to find
- * @param {Object} convertedXml The converted XML object
- * @returns {Object | undefined} The content type object
+ * @param {Array[Object]} comments The comments list
+ * @param {Object} commentsExtendedXml The commentsExtended.xml structure as JSON
+ * @returns {Object} The updated commentsExtended structure
  */
-const findContentTypeByPartName = (name, convertedXml) => {
-  const def = convertedXml['[Content_Types].xml'];
-  const types = def.elements[0].elements;
-  return types.find((t) => {
-    const { PartName } = t.attributes;
-    if (PartName === name) return true;
+export const updateCommentsExtendedXml = (comments = [], commentsExtendedXml) => {
+  const xmlCopy = carbonCopy(commentsExtendedXml);
+
+  // Re-build the comment definitions
+  const commentsEx = comments.map((comment) => {
+    const attributes = {
+      'w15:paraId': comment.commentParaId,
+      'w15:done': comment.resolvedTime ? '1' : '0',
+    };
+
+    const parentId = comment.parentCommentId;
+    if (parentId) {
+      const parentComment = comments.find((c) => c.commentId === parentId);
+      const parentParaId = parentComment.commentParaId;
+      attributes['w15:paraIdParent'] = parentParaId;
+    };
+
+    return {
+      type: 'element',
+      name: 'w15:commentEx',
+      attributes,
+    }
   });
+
+  xmlCopy.elements[0].elements = commentsEx;
+  return xmlCopy;
+};
+
+
+/**
+ * Update commentsIds.xml and commentsExtensible.xml together since they have to
+ * share the same durableId for each comment.
+ * 
+ * @param {Array[Object]} comments The comments list
+ * @param {Object} commentsIds The commentsIds.xml structure as JSON
+ * @param {Object} extensible The commentsExtensible.xml structure as JSON
+ * @returns {Object} The updated commentsIds and commentsExtensible structures
+ */
+export const updateCommentsIdsAndExtensible = (comments = [], commentsIds, extensible) => {
+  const documentIdsUpdated = carbonCopy(commentsIds);
+  const extensibleUpdated = carbonCopy(extensible);
+  
+  documentIdsUpdated.elements[0].elements = [];
+  extensibleUpdated.elements[0].elements = [];
+  comments.forEach((comment) => {
+
+    const newDurableId = generateCommentId();
+    const newCommentIdDef = {
+      "type": "element",
+      "name": "w16cid:commentId",
+      "attributes": {
+          "w16cid:paraId": comment.commentParaId,
+          "w16cid:durableId": newDurableId,
+      }
+    };
+    documentIdsUpdated.elements[0].elements.push(newCommentIdDef);
+
+    const newExtensible = {
+      "type": "element",
+      "name": "w16cex:commentExtensible",
+      "attributes": {
+          "w16cex:durableId": newDurableId,
+          "w16cex:dateUtc": "2025-03-06T23:32:00Z"
+      }
+    };
+    extensibleUpdated.elements[0].elements.push(newExtensible);
+  });
+  
+  return {
+    documentIdsUpdated,
+    extensibleUpdated,
+  }
+};
+
+
+/**
+ * Generate the ocument.xml.rels definition
+ * 
+ * @returns {Object} The updated document rels XML structure
+ */
+export const updateDocumentRels = () => {
+  return COMMENTS_XML_DEFINITIONS.DOCUMENT_RELS_XML_DEF;
+};
+
+
+/**
+ * Generate a random comment paragraph ID
+ * 
+ * @returns {string} The generated ID
+ */
+export const generateCommentId = () => {
+  const digits = "0123456789";
+  const alphaNum = "ABCDEF0123456789";
+
+  let id = digits[Math.floor(Math.random() * digits.length)];
+  for (let i = 0; i < 7; i++) {
+    id += alphaNum[Math.floor(Math.random() * alphaNum.length)];
+  }
+  
+  return id;
+};
+
+
+/**
+ * Generate initial comments XML structure with no content
+ * 
+ * @param {Object} convertedXml The converted XML structure of the docx file
+ * @returns {Object} The updated XML structure with the comments files
+ */
+export const generateConvertedXmlWithCommentFiles = (convertedXml) => {
+  const newXml = carbonCopy(convertedXml);
+  newXml['word/comments.xml'] = COMMENTS_XML_DEFINITIONS.COMMENTS_XML_DEF;
+  newXml['word/commentsExtended.xml'] = COMMENTS_XML_DEFINITIONS.COMMENTS_EXTENDED_XML_DEF;
+  newXml['word/commentsExtensible.xml'] = COMMENTS_XML_DEFINITIONS.COMMENTS_EXTENSIBLE_XML_DEF;
+  newXml['word/commentsIds.xml'] = COMMENTS_XML_DEFINITIONS.COMMENTS_IDS_XML_DEF;
+  newXml['[Content_Types].xml'] = COMMENTS_XML_DEFINITIONS.CONTENT_TYPES;
+  return newXml;
+};
+
+
+/**
+ * Get the comments files converted to XML
+ * 
+ * @param {Object} converter The converter instance
+ * @returns {Object} The comments files converted to XML
+ */
+export const getCommentsFilesConverted = (converter, convertedXml) => {
+  const commentsXml = convertedXml['word/comments.xml'];
+  const commentsExtendedXml = convertedXml['word/commentsExtended.xml'];
+  const commentsIdsXml = convertedXml['word/commentsExtensible.xml'];
+  const commentsExtensibleXml = convertedXml['word/commentsIds.xml'];
+  const contentTypes = convertedXml['[Content_Types].xml'];
+
+  return {
+    ...convertedXml,
+    'word/comments.xml': converter.schemaToXml(commentsXml.elements[0]),
+    'word/commentsExtended.xml': converter.schemaToXml(commentsExtendedXml.elements[0]),
+    'word/commentsIds.xml': converter.schemaToXml(commentsIdsXml.elements[0]),
+    'word/commentsExtensible.xml': converter.schemaToXml(commentsExtensibleXml.elements[0]),
+    '[Content_Types].xml': converter.schemaToXml(contentTypes.elements[0]),
+  }
 };
 
 /**
- * Update document.xml.rels and [Content_Types].xml to include comments
+ * Remove comments files from the converted XML
  * 
- * @param {Object} convertedXml The converted XML object
- * @returns {Object} The updated XML object
+ * @param {Object} convertedXml The converted XML structure of the docx file
+ * @returns {Object} The updated XML structure with the comments files removed
  */
-export const updateContentTypes = (convertedXml) => {
-  const def = convertedXml['[Content_Types].xml'];
-  const types = def.elements[0].elements;
+export const removeCommentsFilesFromConvertedXml = (convertedXml) => {
+  const updatedXml = carbonCopy(convertedXml);
 
-  // Rels file
-  const relsData = convertedXml['word/_rels/document.xml.rels'];
-  const relationships = relsData?.elements?.find((x) => x.name === 'Relationships') || [];
-  const maxId = Math.max(...relationships.elements.map((el) => Number(el.attributes.Id.replace('rId', ''))));
-  let currentId = maxId + 1;
-  
-  const hasCommentsOverride = findContentTypeByPartName('/word/comments.xml', convertedXml);
-  if (!hasCommentsOverride) {
-    types.push({
-      type: 'element',
-      name: 'Override',
-      attributes: {
-        PartName: '/word/comments.xml',
-        ContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml',
-      },
-    });
+  delete updatedXml['word/comments.xml'];
+  delete updatedXml['word/commentsExtended.xml'];
+  delete updatedXml['word/commentsExtensible.xml'];
+  delete updatedXml['word/commentsIds.xml'];
+
+  return updatedXml;
+};
+
+
+/**
+ * Generate a relationship for a comments file target
+ * 
+ * @param {String} target The target of the relationship
+ * @returns {Object} The generated relationship
+ */
+export const generateRelationship = (target) => {
+  const relsDefault = COMMENTS_XML_DEFINITIONS.DOCUMENT_RELS_XML_DEF.elements[0].elements;
+  const rel = relsDefault.find((rel) => rel.attributes.Target === target);
+  return { ...rel };
+};
+
+
+/**
+ * Generate comments files into convertedXml
+ * 
+ * @param {Object} param0 
+ * @returns 
+ */
+export const prepareCommentsXmlFilesForExport = ({
+  convertedXml,
+  defs,
+  commentsWithParaIds,
+  exportType,
+  converter,
+  relationships = [],
+}) => {
+  // If we're exporting clean, simply remove the comments files
+  if (exportType === 'clean') {
+    const documentXml = removeCommentsFilesFromConvertedXml(convertedXml);
+    return { documentXml, relationships };
   };
 
-  const commentsRel = relationships.elements.find((el) => el.attributes.Target === 'comments.xml');
-  if (!commentsRel) {
-    relationships.elements.push({
-      type: 'element',
-      name: 'Relationship',
-      attributes: {
-        Id: `rId${currentId}`,
-        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments',
-        Target: 'comments.xml',
-      },
-    });
+  // Initialize comments files with empty content
+  const updatedXml = generateConvertedXmlWithCommentFiles(convertedXml);
+
+  // Update comments.xml
+  updatedXml['word/comments.xml'] = updateCommentsXml(
+    defs,
+    updatedXml['word/comments.xml']
+  );
+  relationships.push(generateRelationship('comments.xml'));
+
+  // Uodate commentsExtended.xml
+  updatedXml['word/commentsExtended.xml'] = updateCommentsExtendedXml(
+    commentsWithParaIds,
+    updatedXml['word/commentsExtended.xml']
+  );
+  relationships.push(generateRelationship('commentsExtended.xml'));
+
+  // Generate updates for documentIds.xml and commentsExtensible.xml here
+  // We do them at the same time as we need them to generate and share durable IDs between them
+  const { documentIdsUpdated, extensibleUpdated } = updateCommentsIdsAndExtensible(
+    commentsWithParaIds,
+    updatedXml['word/commentsIds.xml'],
+    updatedXml['word/commentsExtensible.xml']
+  );
+  updatedXml['word/commentsIds.xml'] = documentIdsUpdated;
+  updatedXml['word/commentsExtensible.xml'] = extensibleUpdated;
+  relationships.push(generateRelationship('commentsIds.xml'));
+  relationships.push(generateRelationship('commentsExtensible.xml'));
+
+  // Generate export-ready files
+  return {
+    relationships,
+    documentXml: updatedXml,
   }
-
-  const hasCommentsExtendedOverride = findContentTypeByPartName('/word/commentsExtended.xml', convertedXml);
-  if (!hasCommentsExtendedOverride) {
-    types.push({
-      type: 'element',
-      name: 'Override',
-      attributes: {
-        PartName: '/word/commentsExtended.xml',
-        ContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml',
-      },
-    });
-  };
-
-  const commentsExtendedRel = relationships.elements.find((el) => el.attributes.Target === 'commentsExtended.xml');
-  if (!commentsExtendedRel) {
-    currentId += 1;
-    relationships.elements.push({
-      type: 'element',
-      name: 'Relationship',
-      attributes: {
-        Id: `rId1${currentId}`,
-        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentsExtended',
-        Target: 'commentsExtended.xml',
-      },
-    });
-  }
-
-  const hasCommentsIdsOverride = findContentTypeByPartName('/word/commentsIds.xml', convertedXml);
-  if (!hasCommentsIdsOverride) {
-    types.push({
-      type: 'element',
-      name: 'Override',
-      attributes: {
-        PartName: '/word/commentsIds.xml',
-        ContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml',
-      },
-    });
-  };
-
-  const commentsIdsRel = relationships.elements.find((el) => el.attributes.Target === 'commentsIds.xml');
-  if (!commentsIdsRel) {
-    currentId += 1;
-    relationships.elements.push({
-      type: 'element',
-      name: 'Relationship',
-      attributes: {
-        Id: `rId1${currentId}`,
-        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentsIds',
-        Target: 'commentsIds.xml',
-      },
-    });
-  }
-
-  const hasCommentsExtensibleOverride = findContentTypeByPartName('/word/commentsExtensible.xml', convertedXml);
-  if (!hasCommentsExtensibleOverride) {
-    types.push({
-      type: 'element',
-      name: 'Override',
-      attributes: {
-        PartName: '/word/commentsExtensible.xml',
-        ContentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml',
-      },
-    });
-  };
-
-  const commentsExtensibleRel = relationships.elements.find((el) => el.attributes.Target === 'commentsExtensible.xml');
-  if (!commentsExtensibleRel) {
-    currentId += 1;
-    relationships.elements.push({
-      type: 'element',
-      name: 'Relationship',
-      attributes: {
-        Id: `rId1${currentId}`,
-        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/commentsExtensible',
-        Target: 'commentsExtensible.xml',
-      },
-    });
-  }
-
-  return convertedXml;
 };

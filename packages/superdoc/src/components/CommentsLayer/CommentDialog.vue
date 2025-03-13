@@ -81,7 +81,7 @@ const comments = computed(() => {
       const isThisComment = c.commentId === props.comment.commentId;
       return isThreadedComment || isThisComment;
     })
-    .sort((a, b) => a.commentId === props.comment.commetnId && a.createdTime - b.createdTime);
+    .sort((a, b) => a.commentId === props.comment.commentId && a.createdTime - b.createdTime);
 });
 
 const getCommentUser = computed(() => (comment) => {
@@ -97,7 +97,7 @@ const allowReject = computed(() => (comment) => {
   const isResolved = comment.resolvedTime;
   const isParentComment = !comment.parentCommentId;
   const isParentCommentUser = comment.creatorEmail === superdocStore.user.email;
-  return (isParentCommentUser || !comment.creatorEmail)
+  return (isParentCommentUser || comment.trackedChange)
     && isParentComment
     && !isResolved;
 });
@@ -114,7 +114,7 @@ const allowResolve = computed(() => (comment) => {
   const isResolved = comment.resolvedTime;
   const isParentComment = !comment.parentCommentId;
   return allowedInConfig
-    && (isParentCommentUser || !comment.creatorEmail)
+    && (isParentCommentUser || !comment.creatorEmail || comment.trackedChange)
     && isParentComment
     && !isResolved;
 });
@@ -196,16 +196,15 @@ const handleReject = () => {
 }
 
 const handleResolve = () => {
-  if (!props.comment.trackedChange) {
-    props.comment.resolveComment({
-      email: superdocStore.user.email,
-      name: superdocStore.user.name,
-      superdoc: proxy.$superdoc,
-    });
-  } else {
-    commentsStore.deleteComment({ superdoc: proxy.$superdoc, commentId: props.comment.commentId });
+  if (props.comment.trackedChange) {
     proxy.$superdoc.activeEditor.commands.acceptTrackedChangeById(props.comment.commentId);
   }
+
+  props.comment.resolveComment({
+    email: superdocStore.user.email,
+    name: superdocStore.user.name,
+    superdoc: proxy.$superdoc,
+  });
 
   nextTick(() => {
     commentsStore.lastUpdate = new Date();
@@ -218,6 +217,7 @@ const handleOverflowSelect = (value, comment) => {
     case 'edit':
       currentCommentText.value = comment.commentText;
       isEditing.value = comment.commentId;
+      activeComment.value = comment.commentId;
       break;
     case 'delete':
       deleteComment({ superdoc: proxy.$superdoc, commentId: comment.commentId });
@@ -278,6 +278,7 @@ onMounted(() => {
   if (props.autoFocus) {
     nextTick(() => setFocus());
   };
+
   emit('ready', { commentId: props.comment.commentId, elementRef: commentDialogElement });
 })
 </script>
@@ -294,6 +295,7 @@ onMounted(() => {
 
     <div v-if="shouldShowInternalExternal" class="existing-internal-input">
       <InternalDropdown
+        @click.stop.prevent
         class="internal-dropdown"
         :is-disabled="isInternalDropdownDisabled"
         :state="comment.isInternal ? 'internal' : 'external'"
@@ -351,7 +353,7 @@ onMounted(() => {
       </div>
       <div class="comment-separator" v-if="showSeparator(index)"></div>
     </div>
-  
+
     <!-- This area is appended to a comment if adding a new sub comment -->
     <div v-if="showInputSection && !getConfig.readOnly">
       <CommentInput

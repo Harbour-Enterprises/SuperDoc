@@ -4,9 +4,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { DocxExporter, exportSchemaToJson } from './exporter';
 import { createDocumentJson, addDefaultStylesIfMissing } from './v2/importer/docxImporter.js';
 import { getArrayBufferFromUrl } from './helpers.js';
-import { getCommentDefinition, updateCommentsXml, updateContentTypes } from './v2/exporter/commentsExporter.js';
 import { DEFAULT_CUSTOM_XML, SETTINGS_CUSTOM_XML } from './exporter-docx-defs.js';
-import { COMMENTS_XML } from './exporter-docx-defs.js';
+import {
+  getCommentDefinition,
+  prepareCommentParaIds,
+  prepareCommentsXmlFilesForExport,
+} from './v2/exporter/commentsExporter.js';
 
 class SuperConverter {
   static allowedElements = Object.freeze({
@@ -313,7 +316,10 @@ class SuperConverter {
     comments = [],
   ) {
     const bodyNode = this.savedTagsToRestore.find((el) => el.name === 'w:body');
-    const commentDefinitions = comments.map((c, index) => getCommentDefinition(c, index));
+
+    const commentsWithParaIds = comments.map((c) => prepareCommentParaIds(c));
+    const commentDefinitions = commentsWithParaIds
+      .map((c, index) => getCommentDefinition(c, index, commentsWithParaIds));
 
     const [result, params] = exportSchemaToJson({
       node: jsonData,
@@ -341,15 +347,20 @@ class SuperConverter {
       ...this.media,
     });
 
+    // Update content types and comments files as needed
+    const { documentXml, relationships } = this.#prepareCommentsXmlFilesForExport({
+      defs: params.exportedCommentDefs,
+      exportType: commentsExportType,
+      commentsWithParaIds,
+      relationships: params.relationships,
+    });
+    
+    this.convertedXml = documentXml;
+    const updatedRelationships = relationships;
+
     // Update the rels table
-    this.#exportProcessNewRelationships(params.relationships);
+    this.#exportProcessNewRelationships(updatedRelationships);
 
-    // Update the comments.xml file
-    this.#updateCommentsFiles(params.exportedCommentDefs, commentsExportType);
-
-    // Update content types
-    this.#prepareCommentsForExport();
-  
     // Store the SuperDoc version
     storeSuperdocVersion(this.convertedXml);
     
@@ -357,44 +368,39 @@ class SuperConverter {
   }
 
   /**
-   * Update [Content_Types].xml and docment.xml.rels for comments
+   * Update comments files and relationships depending on export type
    */
-  #prepareCommentsForExport() {
-    this.convertedXml = updateContentTypes(this.convertedXml);
-  }
-
-  /**
-   * Update the comments.xml file with the exported comments if necessary
-   * 
-   * @param {Array[Object]} exportedCommentDefs 
-   * @param {String} commentsExportType 
-   * @returns {void}
-   */
-  #updateCommentsFiles(exportedCommentDefs, commentsExportType) {
-    const originalXml = this.convertedXml['word/comments.xml'];
-
-    // If there were no original comments, and we're exporting a clean document, we don't need to do anything
-    if (!originalXml && commentsExportType === 'clean') return;
-
-    if (!this.convertedXml['word/comments.xml']) this.convertedXml['word/comments.xml'] = { ...COMMENTS_XML };
-  
-    // If we had previous comments, but exporting clean, we need to remove them
-    const commentsXml = { ...this.convertedXml['word/comments.xml'] };
-    if (commentsXml && commentsExportType === 'clean') {
-      return this.convertedXml['word/comments.xml'] = { ...COMMENTS_XML };
-    };
-
-    const updatedCommentsXml = updateCommentsXml(exportedCommentDefs, commentsXml);
-    this.convertedXml['word/comments.xml'] = updatedCommentsXml;
+  #prepareCommentsXmlFilesForExport({ defs, exportType, commentsWithParaIds }) {
+    const { documentXml, relationships } = prepareCommentsXmlFilesForExport({
+      exportType,
+      convertedXml: this.convertedXml,
+      defs,
+      commentsWithParaIds,
+      converter: this,
+    });
+    return { documentXml, relationships };
   }
 
   #exportProcessNewRelationships(rels = []) {
     const relsData = this.convertedXml['word/_rels/document.xml.rels'];
     const relationships = relsData.elements.find((x) => x.name === 'Relationships');
-    relationships.elements.push(...rels);
-    relationships.elements.forEach((element) => {
-      element.attributes.Target = element.attributes?.Target?.replace(/&/g, '&amp;').replace(/-/g, '&#45;');
+    const newRels = [...relationships.elements];
+
+    let largestId = Math.max(...relationships.elements.map((el) => Number(el.attributes.Id.replace('rId', ''))));
+    rels.forEach((rel) => {
+      const existingTarget = relationships.elements.find((el) => el.attributes.Target === rel.attributes.Target);
+      if (existingTarget) {
+        console.debug('Duplicate relationship found', rel.attributes.Target);
+        return;
+      };
+
+      rel.attributes.Target = rel.attributes?.Target?.replace(/&/g, '&amp;').replace(/-/g, '&#45;');
+      rel.attributes.Id = `rId${++largestId}`;
+      newRels.push(rel);
     });
+
+    relationships.elements = newRels;
+    console.debug('New relationships added', newRels, relsData);
     this.convertedXml['word/_rels/document.xml.rels'] = relsData;
   }
 

@@ -16,6 +16,8 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'jsdom',
+      // E2E tests are run separately using Playwright
+      exclude: ['src/tests/e2e/**'],
     },
     define: {
       __APP_VERSION__: JSON.stringify(superdocVersion),

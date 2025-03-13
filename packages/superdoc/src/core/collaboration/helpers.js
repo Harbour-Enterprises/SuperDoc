@@ -26,6 +26,7 @@ export const initCollaborationComments = (superdoc) => {
   });
 };
 
+
 /**
  * Initialize SuperDoc general Y.Doc for high level collaboration
  * Assigns superdoc.ydoc and superdoc.provider in place
@@ -46,9 +47,27 @@ export const initSuperdocYdoc = (superdoc) => {
     superdocInstance: superdoc,
   };
   const { provider: superdocProvider, ydoc: superdocYdoc } = createProvider(superdocCollaborationOptions);
+
+  // If we have comments and collaboration, wait for sync and then let the store know when its ready
+  if (superdoc.config.modules.comments && superdoc.provider) {
+    const onSuperDocYdocSynced = () => {
+      // Update the editor comment locations
+      const parent = superdoc.commentsStore.commentsParentElement;
+      const ids = superdoc.commentsStore.editorCommentIds;
+      superdoc.commentsStore.handleEditorLocationsUpdate(parent, ids);
+      superdoc.commentsStore.hasSyncedCollaborationComments = true;
+
+      superdocProvider.off('synced', onSuperDocYdocSynced);
+    };
+
+    // Listen for the synced event
+    superdocProvider.on('synced', onSuperDocYdocSynced);
+  };
+
   superdoc.ydoc = superdocYdoc;
   superdoc.provider = superdocProvider;
 };
+
 
 /**
  * Process SuperDoc's documents to make them collaborative by 

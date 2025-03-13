@@ -139,13 +139,18 @@ class DocxZipper {
    */
   async exportFromCollaborativeDocx(docx, updatedDocs, media, fonts) {
     const zip = new JSZip();
+
+    // Rebuild original files
     for (const file of docx) {
-      let content = file.content;
-      if (file.name in updatedDocs) {
-        content = updatedDocs[file.name];
-      }
+      const content = file.content;
       zip.file(file.name, content);
-    }
+    };
+
+    // Replace updated docs
+    Object.keys(updatedDocs).forEach((key) => {
+      const content = updatedDocs[key];
+      zip.file(key, content);
+    });
 
     Object.keys(media).forEach((name) => {
       const binaryData = Buffer.from(media[name], 'base64');

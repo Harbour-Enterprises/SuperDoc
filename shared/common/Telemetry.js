@@ -9,7 +9,7 @@
 
 import crc32 from 'buffer-crc32';
 
-function getRandomBytes(length) {
+function randomBytes(length) {
   const array = new Uint8Array(length);
   for (let i = 0; i < length; i++) {
     array[i] = Math.floor(Math.random() * 256);

@@ -15,7 +15,6 @@ import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from '@extensions/track-changes/constants.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
-import { marks } from 'prosemirror-schema-basic';
 
 /**
  * @typedef {Object} ExportParams

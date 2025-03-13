@@ -18,6 +18,8 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const COMMENT_EVENTS = comments_module_events;
   const hasInitializedComments = ref(false);
+  const hasSyncedCollaborationComments = ref(false);
+  const commentsParentElement = ref(null);
   const activeComment = ref(null);
   const commentDialogs = ref([]);
   const overlappingComments = ref([]);
@@ -27,6 +29,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const commentsList = ref([]);
   const isCommentsListVisible = ref(false);
   const lastChange = ref(Date.now());
+  const editorCommentIds = ref([]);
 
   // Floating comments
   const floatingCommentsOffset = ref(0);
@@ -34,6 +37,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const visibleConversations = ref([]);
   const skipSelectionUpdate = ref(false);
   const isFloatingCommentsReady = ref(false);
+  const generalCommentIds = ref([]);
 
   const pendingComment = ref(null);
 
@@ -110,6 +114,8 @@ export const useCommentsStore = defineStore('comments', () => {
       existingTrackedChange.trackedChangeText = trackedChangeText;
       existingTrackedChange.trackedChangeType = trackedChangeType;
     }
+
+    syncCommentsToClients(superdoc);
   };
 
   const showAddComment = (superdoc) => {    
@@ -194,48 +200,11 @@ export const useCommentsStore = defineStore('comments', () => {
     };
   };
 
-  function isOverlap(obj1, obj2) {
-    if (!obj1.comments.length || !obj2.comments.length) return false;
-    const sel1 = obj1.selection.selectionBounds;
-    const sel2 = obj2.selection.selectionBounds;
-
-    if (sel1.bottom - sel2.top < 200 || sel2.top - sel1.bottom < 200) return true;
-    return false;
-  }
-
-  const getAllConversations = computed(() => {
-    const allConvos = [];
-    let overlaps = 0;
-    documentsWithConverations.value.map((doc) => {
-      doc.conversations.forEach((c) => {
-        for (let index in allConvos) {
-          const conv = allConvos[index];
-          let currentOverlap = conv.overlap || overlaps;
-
-          if (isOverlap(conv, c)) {
-            conv.overlap = currentOverlap;
-            c.overlap = currentOverlap;
-            overlaps++;
-          }
-        }
-
-        allConvos.push({
-          ...c,
-          documentId: doc.documentId,
-          doc: doc,
-        });
-      });
-    });
-    return allConvos;
-  });
-
-  const getAllConversationsFiltered = computed(() => {
-    return getAllConversations.value.filter((c) => !c.group).filter((c) => !c.markedDone);
-  });
-
-  const getAllGroups = computed(() => {
-    return getAllConversations.value.filter((c) => c.group);
-  });
+  const updateLastChange = () => {
+    setTimeout(() => {
+      lastChange.value = Date.now();
+    }, 50);
+  };
 
   const initialCheck = () => {
     const currentDialogs = document.querySelectorAll('.comment-box');
@@ -367,7 +336,9 @@ export const useCommentsStore = defineStore('comments', () => {
     // Add the new comments to our global list
     commentsList.value.push(newComment);
 
-    if (!comment.trackedChange && superdoc.activeEditor?.commands) {
+    // If this is not a tracked change, and it belongs to a Super Editor, and its not a child comment
+    // We need to let the editor know about the new comment
+    if (!comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
       // Add the comment to the active editor
       superdoc.activeEditor.commands.insertComment(newComment.getValues());
     };
@@ -442,6 +413,8 @@ export const useCommentsStore = defineStore('comments', () => {
       });
       commentsList.value.push(newComment);
     });
+
+    updateLastChange();
   }
 
   const prepareCommentsForExport = () => {
@@ -477,7 +450,19 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {DOMElement} parentElement The parent element of the editor
    * @returns {void}
    */
-  const handleEditorLocationsUpdate = (parentElement) => {
+  const handleEditorLocationsUpdate = (parentElement, allCommentIds = []) => {
+    editorCommentIds.value = allCommentIds;
+    commentsParentElement.value = parentElement;
+
+    // Track comment IDs that we do not find in the editor
+    // These will remain as 'general' comments
+    generalCommentIds.value = commentsList.value
+      .filter((c) => {
+        const isSuperEditor = c.selection.source === 'super-editor';
+        const noCommentInEditor = !allCommentIds.includes(c.commentId || c.importedId);
+        return isSuperEditor && noCommentInEditor && !c.trackedChange;
+      })
+      .map((c) => c.commentId || c.importedId);
 
     setTimeout(() => {
       const allCommentElements = document.querySelectorAll('[data-thread-id]');
@@ -500,7 +485,7 @@ export const useCommentsStore = defineStore('comments', () => {
         }
       });
 
-      lastChange.value = Date.now();
+      updateLastChange();
       isFloatingCommentsReady.value = true;
     }, 50)
   };
@@ -525,6 +510,7 @@ export const useCommentsStore = defineStore('comments', () => {
   return {
     COMMENT_EVENTS,
     hasInitializedComments,
+    hasSyncedCollaborationComments,
     activeComment,
     commentDialogs,
     overlappingComments,
@@ -535,6 +521,9 @@ export const useCommentsStore = defineStore('comments', () => {
     commentsList,
     isCommentsListVisible,
     lastChange,
+    generalCommentIds,
+    editorCommentIds,
+    commentsParentElement,
 
     // Floating comments
     floatingCommentsOffset,
@@ -569,5 +558,6 @@ export const useCommentsStore = defineStore('comments', () => {
     prepareCommentsForExport,
     handleEditorLocationsUpdate,
     handleTrackedChangeUpdate,
+    updateLastChange,
   };
 });

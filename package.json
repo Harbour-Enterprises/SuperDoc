@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "test": "vitest --root ./packages/super-editor",
+    "test:e2e": "cd packages/super-editor && npx playwright install --with-deps && npm run test:e2e",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "npm --workspace=@harbour-enterprises/superdoc run dev",
     "dev:superdoc": "npm run dev --workspace=packages/superdoc",
@@ -26,9 +27,12 @@
     "pack": "npm run build:super-editor && npm --prefix ./packages/superdoc run pack"
   },
   "devDependencies": {
+    "@playwright/test": "^1.50.1",
+    "@types/node": "^22.13.1",
     "prettier": "3.3.3",
     "rollup": "^4.26.0",
     "rollup-plugin-visualizer": "^5.12.0",
+    "vitest": "^3.0.8",
     "xml-js": "^1.6.11"
   }
 }

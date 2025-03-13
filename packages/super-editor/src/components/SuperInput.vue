@@ -74,7 +74,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="super-editor" :class="{ 'super-input-active': isFocused }">
+  <div class="super-editor super-input" :class="{ 'super-input-active': isFocused }" @click.stop.prevent>
     <div id="currentContent" style="display: none" v-html="modelValue"></div>
     <div ref="editorElem" class="editor-element super-editor__element"></div>
   </div>
@@ -89,6 +89,11 @@ onBeforeUnmount(() => {
   outline: none;
   transition: border 0.2s ease;
   background-color: white;
+}
+
+.super-input {
+  font-size: 13px;
+  font-family: inherit;
 }
 
 .editor-element {

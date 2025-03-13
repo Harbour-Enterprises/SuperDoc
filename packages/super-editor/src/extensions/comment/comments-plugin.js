@@ -3,7 +3,7 @@ import { Extension } from '@core/Extension.js';
 import { TrackInsertMarkName, TrackDeleteMarkName } from '../track-changes/constants.js';
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { comments_module_events } from '@harbour-enterprises/common';
-import { removeCommentsById, getCommentPositionsById } from './comments-helpers.js';
+import { removeCommentsById } from './comments-helpers.js';
 import { CommentMarkName } from './comments-constants.js';
 
 export const CommentsPluginKey = new PluginKey('comments');
@@ -102,6 +102,7 @@ export const CommentsPlugin = Extension.create({
           return {
             decorations: DecorationSet.empty,
             activeThreadId: null,
+            allCommentIds: [],
             externalColor: '#B1124B',
             internalColor: '#078383',
           };
@@ -145,13 +146,13 @@ export const CommentsPlugin = Extension.create({
           }
 
           // Generate decorations for comment highlights
-          const { decorations } = processDocumentComments(editor, doc, activeThreadId) || {};
+          const { decorations, allCommentIds } = processDocumentComments(editor, doc, activeThreadId) || {};
           const decorationSet = DecorationSet.create(doc, decorations);
           const previousDecorations = oldState.decorations;
 
           // Emit the comment-positions event which signals that comments might have changed
           // SuperDoc will use this to update floating comments as necessary
-          if (hasInitialized) editor.emit('comment-positions');
+          editor.emit('comment-positions', allCommentIds);
 
           if (!isForcingUpdate && hasInitialized && previousDecorations.eq(decorationSet)) return { ...oldState };
 
@@ -159,6 +160,7 @@ export const CommentsPlugin = Extension.create({
           return {
             ...oldState,
             activeThreadId,
+            allCommentIds,
             decorations: decorationSet,
           };
         },
@@ -317,7 +319,6 @@ const getHighlightColor = ({ activeThreadId, threadId, isInternal, editor }) => 
  * @returns {Object} The positions of all tracked nodes where keys are the thread IDs
  */
 const processDocumentComments = (editor, doc, activeThreadId) => {
-  const { view } = editor;
   const allCommentPositions = {};
   const decorations = [];
   const linkedNodes = {};
@@ -328,9 +329,13 @@ const processDocumentComments = (editor, doc, activeThreadId) => {
     });
   });
 
+  // Get all current thread IDs in the document
+  const allCommentIds = Object.keys(allCommentPositions).map((threadId) => threadId);
+
   return {
     decorations,
     linkedNodes,
+    allCommentIds, 
   };
 };
 
@@ -367,17 +372,29 @@ const getActiveCommentId = (doc, selection) => {
   doc.descendants((node, pos) => {
     if (found) return;
 
+    // node goes from `pos` to `end = pos + node.nodeSize`
+    const end = pos + node.nodeSize;
+
+    // If $from.pos is outside this node’s range, skip it
+    if ($from.pos < pos || $from.pos >= end) {
+      return;
+    }
+
+    // Now we know $from.pos is within this node’s start/end
     const { marks = [] } = node;
     const commentMark = marks.find((mark) => mark.type.name === CommentMarkName);
     if (commentMark) {
       overlaps.push({
         node,
-        pos
-      })
+        pos,
+        size: node.nodeSize,
+      });
     }
 
-    // If we have passed the current position, we can stop
-    if (pos > $from.pos) found = true;
+    // If we've passed the position, we can stop
+    if (pos > $from.pos) {
+      found = true;
+    }
   });
 
   // Get the closest commentRangeStart node to the current position

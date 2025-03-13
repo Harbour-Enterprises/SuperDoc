@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.6.50](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.49...v0.6.50) (2025-03-12)
+
+
+### Bug Fixes
+
+* add test-results to gitignore ([0f859d2](https://github.com/Harbour-Enterprises/SuperDoc/commit/0f859d2ca4181f9f0ad275b74ecd71e126469be7))
+* changed hard break file ([ebc27da](https://github.com/Harbour-Enterprises/SuperDoc/commit/ebc27da52a749ac065bf1a085899c5ab12a360b7))
+* e2e test ([81782e2](https://github.com/Harbour-Enterprises/SuperDoc/commit/81782e20af76c3cace913c14c7a3f953439e8e6b))
+* e2e test ([179b794](https://github.com/Harbour-Enterprises/SuperDoc/commit/179b7946cc0a3e6e53cc66bc7f252d182dbb8552))
+* e2e tests ([64a7a87](https://github.com/Harbour-Enterprises/SuperDoc/commit/64a7a87a6c2e002b6f7191056ec13ce98b8c2c18))
+* e2e tests ([5c80d74](https://github.com/Harbour-Enterprises/SuperDoc/commit/5c80d742da1191e16d879a4aa90fa05ba571a112))
+* e2e tests to run headless no CI/CD ([f1479f7](https://github.com/Harbour-Enterprises/SuperDoc/commit/f1479f7521b864f35e0b7d8b017b1a91bd12703e))
+* tests ([1f2ebd9](https://github.com/Harbour-Enterprises/SuperDoc/commit/1f2ebd9c5b2143cfcf147dfe6de5e340a17a1bd0))
+* unit tests ([fba4cf4](https://github.com/Harbour-Enterprises/SuperDoc/commit/fba4cf48f7e9f6e48ffa0431273195e9042d7ad5))
+
+
+### Features
+
+* added e2e tests to pipeline ([6e0ead4](https://github.com/Harbour-Enterprises/SuperDoc/commit/6e0ead435b7bd8d18a3d01faa64deb9a89e18494))
+
+## [0.6.49](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.48...v0.6.49) (2025-03-12)
+
+## [0.6.48](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.47...v0.6.48) (2025-03-11)
+
+## [0.6.47](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.46...v0.6.47) (2025-03-11)
+
+## [0.6.46](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.45...v0.6.46) (2025-03-11)
+
+## [0.6.45](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.44...v0.6.45) (2025-03-10)
+
+## [0.6.44](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.43...v0.6.44) (2025-03-10)
+
+## [0.6.43](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.42...v0.6.43) (2025-03-10)
+
+## [0.6.42](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.41...v0.6.42) (2025-03-10)
+
+## [0.6.41](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.40...v0.6.41) (2025-03-10)
+
+## [0.6.40](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.39...v0.6.40) (2025-03-10)
+
+## [0.6.39](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.38...v0.6.39) (2025-03-10)
+
 ## [0.6.38](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.37...v0.6.38) (2025-03-06)
 
 ## [0.6.37](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.36...v0.6.37) (2025-03-06)

@@ -3,7 +3,12 @@ import {
   getExportedResult,
 } from '../export-helpers/index';
 import basicResolvedCommentData from '../data/comments/basic-resolved-comment';
-import { getInitials, toIsoNoFractional } from '@converter/v2/exporter/commentsExporter';
+import {
+  getInitials,
+  toIsoNoFractional,
+  generateCommentId,
+  removeCommentsFilesFromConvertedXml,
+} from '@converter/v2/exporter/commentsExporter';
 
 describe('[basic-comment.docx] interrupted ordered list tests', async () => {
   const fileName = 'basic-comment.docx';
@@ -83,5 +88,60 @@ describe('test toIsoNoFractional function', () => {
     const date = Date.now();
     const isoDate = toIsoNoFractional(date);
     expect(isoDate).toBe(new Date(date).toISOString().replace(/\.\d{3}Z$/, 'Z'));
+  });
+});
+
+describe('generateCommentId', () => {
+  it('should return an 8-character string', () => {
+    const id = generateCommentId();
+    expect(id).to.be.a('string');
+    expect(id).to.have.lengthOf(8);
+  });
+
+  it('should start with a digit', () => {
+    const id = generateCommentId();
+    const firstChar = id[0];
+    expect('0123456789').to.include(firstChar);
+  });
+
+  it('should only contain digits and uppercase letters', () => {
+    const id = generateCommentId();
+    const validChars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    for (let char of id) {
+      expect(validChars).to.include(char);
+    }
+  });
+});
+
+describe('removeCommentsFilesFromConvertedXml', () => {
+  it('removes comment-related files from the cloned object without mutating the original', () => {
+    // Arrange
+    const originalXml = {
+      'word/comments.xml': '<comments>Some comment content</comments>',
+      'word/commentsExtended.xml': '<commentsExtended>Some extended content</commentsExtended>',
+      'word/commentsExtensible.xml': '<commentsExtensible>Some extensible content</commentsExtensible>',
+      'word/commentsIds.xml': '<commentsIds>Some comment IDs content</commentsIds>',
+      'word/document.xml': '<document>Some document content</document>',
+    };
+
+    // Act
+    const result = removeCommentsFilesFromConvertedXml(originalXml);
+
+    // Assert
+    // 1. The original object should remain unchanged.
+    expect(originalXml).toHaveProperty('word/comments.xml');
+    expect(originalXml).toHaveProperty('word/commentsExtended.xml');
+    expect(originalXml).toHaveProperty('word/commentsExtensible.xml');
+    expect(originalXml).toHaveProperty('word/commentsIds.xml');
+
+    // 2. The returned object should NOT have those properties.
+    expect(result).not.toHaveProperty('word/comments.xml');
+    expect(result).not.toHaveProperty('word/commentsExtended.xml');
+    expect(result).not.toHaveProperty('word/commentsExtensible.xml');
+    expect(result).not.toHaveProperty('word/commentsIds.xml');
+
+    // 3. The returned object should still contain other properties.
+    expect(result).toHaveProperty('word/document.xml');
+    expect(result['word/document.xml']).toEqual('<document>Some document content</document>');
   });
 });

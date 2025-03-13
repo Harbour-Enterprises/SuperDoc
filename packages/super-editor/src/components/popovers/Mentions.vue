@@ -89,7 +89,7 @@ const handleFocus = () => {
   outline: none !important;
   border: none;
   max-height: 300px;
-  overflow: auto;
+  overflow-y: auto;
 }
 .mentions-container:focus {
   border: none;

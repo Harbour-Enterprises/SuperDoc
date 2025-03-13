@@ -55,22 +55,8 @@ const handleSelect = (value) => emit('overflow-select', value);
       </div>
     </div>
 
-    <!-- Tracked change options -->
-    <div class="overflow-menu" v-if="props.isTrackedChange">
-      <div 
-        class="overflow-menu__icon" 
-        v-html="superdocIcons.acceptChange"
-        title="Accept change">
-      </div>
-      <div 
-        class="overflow-menu__icon" 
-        v-html="superdocIcons.rejectChange"
-        title="Reject change">
-      </div>
-    </div>
-
     <!-- Regular comments options -->
-    <div class="overflow-menu" v-else>
+    <div class="overflow-menu">
       <div 
         v-if="allowResolve"
         class="overflow-menu__icon" 
@@ -91,7 +77,7 @@ const handleSelect = (value) => emit('overflow-select', value);
         :options="overflowOptions"
         @select="handleSelect"
       >
-        <div class="overflow-menu__icon">
+        <div class="overflow-menu__icon" @click.stop.prevent>
           <div class="overflow-icon" v-html="superdocIcons.overflow"></div>
         </div>
       </n-dropdown>

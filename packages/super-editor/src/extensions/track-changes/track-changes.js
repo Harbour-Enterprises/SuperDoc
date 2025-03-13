@@ -149,9 +149,9 @@ export const TrackChanges = Extension.create({
       acceptTrackedChangeById:
         (id) =>
         ({ state, tr, commands }) => {
-          const trackedChanges = getTrackChanges(state, id);
+          const toResolve = getChangesByIdToResolve(state, id);
 
-          return trackedChanges
+          return toResolve
             .map(({ from, to }) => {
               let mappedFrom = tr.mapping.map(from);
               let mappedTo = tr.mapping.map(to);
@@ -171,9 +171,9 @@ export const TrackChanges = Extension.create({
       rejectTrackedChangeById:
         (id) =>
         ({ state, tr, commands }) => {
-          const trackedChanges = getTrackChanges(state, id);
+          const toReject = getChangesByIdToResolve(state, id);
 
-          return trackedChanges
+          return toReject
             .map(({ from, to }) => {
               let mappedFrom = tr.mapping.map(from);
               let mappedTo = tr.mapping.map(to);
@@ -306,3 +306,22 @@ export const TrackChanges = Extension.create({
 //     editor.emit('trackedChangesUpdate', { action, id });
 //   }
 // };
+
+const getChangesByIdToResolve = (state, id) => {
+  const trackedChanges = getTrackChanges(state);
+  const changeIndex = trackedChanges.findIndex(({ mark }) => mark.attrs.id === id);
+  if (changeIndex === -1) return;
+
+  const matchingChange = trackedChanges[changeIndex];
+  const prev = trackedChanges[changeIndex - 1];
+  const next = trackedChanges[changeIndex + 1];
+
+  // Determine the linked change
+  let linkedChange;
+  if (prev && matchingChange.start === prev.end) {
+    linkedChange = prev;
+  } else if (next && matchingChange.end === next.start) {
+    linkedChange = next;
+  }
+  return [matchingChange, linkedChange].filter(Boolean);
+};

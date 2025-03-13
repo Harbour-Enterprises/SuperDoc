@@ -212,7 +212,7 @@ const calculatePageBreaks = (view, editor, sectionData) => {
   const tempContainer = editor.options.element.cloneNode();
   if (!tempContainer) return [];
 
-  tempContainer.className = 'temp-container';
+  tempContainer.className = 'temp-container super-editor';
   const HIDDEN_EDITOR_OFFSET_TOP = 0;
   const HIDDEN_EDITOR_OFFSET_LEFT = 0;
   tempContainer.style.left = HIDDEN_EDITOR_OFFSET_TOP + 'px';

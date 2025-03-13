@@ -57,6 +57,7 @@ export const initPaginationData = async (editor) => {
 const getSectionHeight = async (editor, data) => {
   return new Promise((resolve) => {
     const editorContainer = document.createElement('div');
+    editorContainer.className = 'super-editor';
     editorContainer.style.padding = 0;
     editorContainer.style.margin = 0;
 

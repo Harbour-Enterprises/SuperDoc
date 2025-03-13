@@ -57,6 +57,7 @@ const {
   commentsByDocument,
   isCommentsListVisible,
   isFloatingCommentsReady,
+  generalCommentIds,
 } = storeToRefs(commentsStore);
 const { initialCheck, showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
 const { proxy } = getCurrentInstance();
@@ -190,8 +191,11 @@ const onEditorCollaborationReady = ({ editor }) => {
   proxy.$superdoc.emit('collaboration-ready', { editor });
 
   nextTick(() => {
-    commentsStore.lastChange = Date.now();
     isReady.value = true;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const commentId = urlParams.get('commentId');
+    if (commentId) scrollToComment(commentId);
   });
 };
 
@@ -244,13 +248,25 @@ const editorOptions = (doc) => {
  * 
  * @returns {void}
  */
-const onEditorCommentLocationsUpdate = () => {
+const onEditorCommentLocationsUpdate = (commentPositions = []) => {
   if (!proxy.$superdoc.config.modules?.comments) return;
-  handleEditorLocationsUpdate(layers.value);
 
-  setTimeout(() => {
-    commentsStore.lastChange = Date.now();
-  }, 250);
+  // If we have not yet synced the collaboration comments, wait for the sync event
+  const provider = proxy.$superdoc.provider;
+  const hasSyncedCollaborationComments = proxy.$superdoc.commentsStore.hasSyncedCollaborationComments;
+  if (provider && !hasSyncedCollaborationComments) {
+    const syncPositions = () => {
+      handleEditorLocationsUpdate(layers.value, commentPositions);
+      provider.off('synced', syncPositions);
+    };
+
+    provider.on('synced', syncPositions);
+  }
+
+  // Otherwise, update the comment locations right away
+  else {
+    handleEditorLocationsUpdate(layers.value, commentPositions);
+  };
 };
 
 const onEditorCommentsUpdate = (params = {}) => {
@@ -273,10 +289,12 @@ const onEditorCommentsUpdate = (params = {}) => {
 
 const isCommentsEnabled = computed(() => 'comments' in modules);
 const showCommentsSidebar = computed(() => {
+
+  const documentComments = commentsList.value.filter((c) => !generalCommentIds.value?.includes(c.commentId || c.importedId));
   return (
     pendingComment.value ||
     (
-      commentsList.value?.length > 0
+      documentComments?.length > 0
         && layers.value
         && isReady.value
         && isCommentsEnabled.value
@@ -297,6 +315,21 @@ const showActiveSelection = computed(() => {
 watch(showCommentsSidebar, (value) => {
   proxy.$superdoc.broadcastSidebarToggle(value);
 });
+
+/**
+ * Scroll the page to a given commentId
+ * 
+ * @param {String} commentId The commentId to scroll to
+ */
+const scrollToComment = (commentId) => {
+  if (!proxy.$superdoc.config?.modules?.comments) return;
+
+  const element = document.querySelector(`[data-thread-id=${commentId}]`);
+  if (element) {
+    element.scrollIntoView({ behavior: "smooth", block: "start" });
+    commentsStore.setActiveComment(commentId);
+  }
+};
 
 onMounted(() => {
   if (isCommentsEnabled.value && !modules.comments.readOnly) {
@@ -362,7 +395,7 @@ const handleSelectionChange = (selection) => {
   activeSelection.value = selection;
 
   // Place the tools menu at the level of the selection
-  let top = selection.selectionBounds.bottom - 50;
+  let top = selection.selectionBounds.top;
   toolsMenuPosition.top = top + 'px';
   toolsMenuPosition.right = isMobileView ? '0' : '-25px';
 };
