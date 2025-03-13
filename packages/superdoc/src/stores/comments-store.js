@@ -18,8 +18,6 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const COMMENT_EVENTS = comments_module_events;
   const hasInitializedComments = ref(false);
-  const hasSyncedCollaborationComments = ref(false);
-  const commentsParentElement = ref(null);
   const activeComment = ref(null);
   const commentDialogs = ref([]);
   const overlappingComments = ref([]);
@@ -29,7 +27,6 @@ export const useCommentsStore = defineStore('comments', () => {
   const commentsList = ref([]);
   const isCommentsListVisible = ref(false);
   const lastChange = ref(Date.now());
-  const editorCommentIds = ref([]);
 
   // Floating comments
   const floatingCommentsOffset = ref(0);
@@ -37,7 +34,6 @@ export const useCommentsStore = defineStore('comments', () => {
   const visibleConversations = ref([]);
   const skipSelectionUpdate = ref(false);
   const isFloatingCommentsReady = ref(false);
-  const generalCommentIds = ref([]);
 
   const pendingComment = ref(null);
 
@@ -114,8 +110,6 @@ export const useCommentsStore = defineStore('comments', () => {
       existingTrackedChange.trackedChangeText = trackedChangeText;
       existingTrackedChange.trackedChangeType = trackedChangeType;
     }
-
-    syncCommentsToClients(superdoc);
   };
 
   const showAddComment = (superdoc) => {    
@@ -200,21 +194,10 @@ export const useCommentsStore = defineStore('comments', () => {
     };
   };
 
-  const updateLastChange = () => {
+  const initialCheck = () => {
     setTimeout(() => {
       lastChange.value = Date.now();
-    }, 50);
-  };
-
-  const initialCheck = () => {
-    const currentDialogs = document.querySelectorAll('.comment-box');
-    currentDialogs.forEach((d) => {
-      const conversationObject = getAllConversations.value.find((conversation) => {
-        return conversation.conversationId === d.dataset.id;
-      });
-      if (!conversationObject) return;
-      checkOverlaps(d, conversationObject);
-    });
+    }, 250)
   };
 
   const checkOverlaps = (currentElement, dialog, doc) => {
@@ -282,6 +265,8 @@ export const useCommentsStore = defineStore('comments', () => {
     let activeDocument;
     if (documentId) activeDocument = superdocStore.getDocument(documentId);
     else if (selection) activeDocument = superdocStore.getDocument(selection.documentId);
+  
+    if (!activeDocument) activeDocument = superdocStore.documents[0];
 
     return useComment({
       ...options,
@@ -336,9 +321,7 @@ export const useCommentsStore = defineStore('comments', () => {
     // Add the new comments to our global list
     commentsList.value.push(newComment);
 
-    // If this is not a tracked change, and it belongs to a Super Editor, and its not a child comment
-    // We need to let the editor know about the new comment
-    if (!comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
+    if (!comment.trackedChange && superdoc.activeEditor?.commands) {
       // Add the comment to the active editor
       superdoc.activeEditor.commands.insertComment(newComment.getValues());
     };
@@ -413,8 +396,6 @@ export const useCommentsStore = defineStore('comments', () => {
       });
       commentsList.value.push(newComment);
     });
-
-    updateLastChange();
   }
 
   const prepareCommentsForExport = () => {
@@ -450,19 +431,7 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {DOMElement} parentElement The parent element of the editor
    * @returns {void}
    */
-  const handleEditorLocationsUpdate = (parentElement, allCommentIds = []) => {
-    editorCommentIds.value = allCommentIds;
-    commentsParentElement.value = parentElement;
-
-    // Track comment IDs that we do not find in the editor
-    // These will remain as 'general' comments
-    generalCommentIds.value = commentsList.value
-      .filter((c) => {
-        const isSuperEditor = c.selection.source === 'super-editor';
-        const noCommentInEditor = !allCommentIds.includes(c.commentId || c.importedId);
-        return isSuperEditor && noCommentInEditor && !c.trackedChange;
-      })
-      .map((c) => c.commentId || c.importedId);
+  const handleEditorLocationsUpdate = (parentElement) => {
 
     setTimeout(() => {
       const allCommentElements = document.querySelectorAll('[data-thread-id]');
@@ -485,7 +454,7 @@ export const useCommentsStore = defineStore('comments', () => {
         }
       });
 
-      updateLastChange();
+      lastChange.value = Date.now();
       isFloatingCommentsReady.value = true;
     }, 50)
   };
@@ -510,7 +479,6 @@ export const useCommentsStore = defineStore('comments', () => {
   return {
     COMMENT_EVENTS,
     hasInitializedComments,
-    hasSyncedCollaborationComments,
     activeComment,
     commentDialogs,
     overlappingComments,
@@ -521,9 +489,6 @@ export const useCommentsStore = defineStore('comments', () => {
     commentsList,
     isCommentsListVisible,
     lastChange,
-    generalCommentIds,
-    editorCommentIds,
-    commentsParentElement,
 
     // Floating comments
     floatingCommentsOffset,
@@ -535,9 +500,6 @@ export const useCommentsStore = defineStore('comments', () => {
     // Getters
     getConfig,
     documentsWithConverations,
-    getAllConversations,
-    getAllConversationsFiltered,
-    getAllGroups,
     getGroupedComments,
 
     // Actions
@@ -558,6 +520,5 @@ export const useCommentsStore = defineStore('comments', () => {
     prepareCommentsForExport,
     handleEditorLocationsUpdate,
     handleTrackedChangeUpdate,
-    updateLastChange,
   };
 });
