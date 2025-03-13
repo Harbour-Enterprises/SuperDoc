@@ -1,5 +1,7 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { write, writeStreaming, rewrite, rewriteStreaming } from './ai-helpers';
+
 const props = defineProps({
   selectedText: {
     type: String,
@@ -85,55 +87,105 @@ const isInSuggestingMode = computed(() => {
   return props.superToolbar.activeEditor.isInSuggestingMode?.() || false;
 });
 
-// Refactored handleSubmit function (replaces handleKeyDown)
+// Helper to get document XML from the editor if needed
+const getDocumentXml = () => {
+  try {
+    // Get document content as XML if available
+    // This is a placeholder, implement according to your editor's capability
+    return props.superToolbar.activeEditor.state.doc.textContent || '';
+  } catch (error) {
+    console.error('Error getting document XML:', error);
+    return '';
+  }
+};
+
+// Handler for processing text chunks from the stream
+const handleTextChunk = (text) => {
+  try {
+    // If this is the first chunk and we're rewriting, remove the selected text
+    if (props.selectedText && !textProcessingStarted.value) {
+      props.superToolbar.activeEditor.commands.deleteSelection();
+      // Remove the ai highlight
+      props.superToolbar.emit('ai-highlight-remove');
+      textProcessingStarted.value = true;
+    }
+    
+    // Extract only the new content by comparing with previous text
+    const newContent = text.slice(previousText.value.length);
+    
+    // Update the document with only the new content
+    if (newContent) {
+      props.superToolbar.activeEditor.commands.insertContent(newContent);
+      previousText.value = text;
+    }
+  } catch (error) {
+    console.error('Error handling text chunk:', error);
+  }
+};
+
+// Track text processing state
+const textProcessingStarted = ref(false);
+const previousText = ref('');
+
+// Refactored handleSubmit function
 const handleSubmit = async () => {
-  // Start loading
+  // Reset state
   isLoading.value = true;
-  // Reset error
   isError.value = '';
+  textProcessingStarted.value = false;
+  previousText.value = '';
 
   try {
-    let previousText = '';
-
-    // Enable track changes if in suggesting mode before using any AI model
+    // Enable track changes if in suggesting mode
     if (isInSuggestingMode.value) {
       props.superToolbar.activeEditor.commands.enableTrackChanges();
     }
 
+    // Get document content for context
+    const documentXml = getDocumentXml();
 
-      // Chrome AI Writer
-      let stream;
-      if (props.selectedText) {
-        const rewriter = await window.ai.rewriter.create({
-          sharedContext: props.superToolbar.activeEditor.state.doc.textContent,
-        });
-
-        stream = rewriter.rewriteStreaming(props.selectedText, {
-          context: promptText.value,
-        });
-      } else {
-        const writer = await window.ai.writer.create({ tone: 'formal' });
-        stream = writer.writeStreaming(promptText.value, {
-          context: systemPrompt,
-        });
+    // Common options for API calls
+    const options = {
+      context: props.selectedText ? promptText.value : systemPrompt,
+      documentXml: documentXml,
+      config: {
+        // You can add API key here if not using environment variable
       }
+    };
 
-      for await (const chunk of stream) {
-        try {
-          // Remove the selected text if we are using re-writer
-          if (props.selectedText && previousText === '') {
-            props.superToolbar.activeEditor.commands.deleteSelection();
-            // Remove the ai highlight
-            props.superToolbar.emit('ai-highlight-remove');
-          }
-          // Extract only the new content by comparing with previous chunk
-          const newContent = chunk.slice(previousText.length);
-          // Update the document text with only the new content
-          props.superToolbar.activeEditor.commands.insertContent(newContent);
-          // Store the current chunk as previous for next iteration
-          previousText = chunk;
-        } catch (error) {
-        console.error('Error processing chunk:', error);
+    // @DEBUG - Use non-streaming for now
+    // Determine if we should use streaming or non-streaming
+    const useStreaming = false; // Set to true to use streaming
+
+    if (useStreaming) {
+      // STREAMING APPROACH
+      if (props.selectedText) {
+        // Use rewriteStreaming for selected text
+        await rewriteStreaming(props.selectedText, promptText.value, options, handleTextChunk);
+      } else {
+        // Use writeStreaming for generating new text
+        await writeStreaming(promptText.value, options, handleTextChunk);
+      }
+    } else {
+      // NON-STREAMING APPROACH
+      let generatedText;
+      
+      if (props.selectedText) {
+        // Get rewritten text
+        generatedText = await rewrite(props.selectedText, promptText.value, options);
+        
+        // Remove the selected text
+        props.superToolbar.activeEditor.commands.deleteSelection();
+        // Remove the ai highlight
+        props.superToolbar.emit('ai-highlight-remove');
+      } else {
+        // Get generated text
+        generatedText = await write(promptText.value, options);
+      }
+      
+      // Insert the generated text
+      if (generatedText) {
+        props.superToolbar.activeEditor.commands.insertContent(generatedText);
       }
     }
 
@@ -261,7 +313,7 @@ const handleInput = (event) => {
 .ai-textarea-icon {
   display: flex;
   font-family: 'Font Awesome 5 Pro';
-  content: '';
+  content: '';
   font-weight: 800;
   font-size: 14px;
   background: linear-gradient(
