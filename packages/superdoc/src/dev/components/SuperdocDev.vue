@@ -78,7 +78,8 @@ const init = async () => {
       //   token: 'token',
       // }
       ai: {
-        openAiKey: '',
+        // Provide your Harbour API key here for direct endpoint access
+        apiKey: '',
       },
     },
     onEditorCreate,

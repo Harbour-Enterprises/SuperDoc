@@ -1,11 +1,30 @@
 /**
  * AI Helpers - Utilities for interacting with Harbour API for document insights
  * Based on documentation at: https://harbour-enterprises.github.io/Harbour-API-Docs/#insights
+ * 
+ * Endpoint Selection Logic:
+ * - If an API key is provided, the standard Harbour API endpoint is used
+ * - If no API key is provided, requests are routed through the SuperDoc gateway
+ * 
+ * The API key can be configured when instantiating SuperDoc:
+ * ```
+ * const config = {
+ *   // ... other config options
+ *   modules: {
+ *     ai: {
+ *       apiKey: 'your-harbour-api-key'
+ *     }
+ *   }
+ * };
+ * ```
  */
 
 // API endpoint for Harbour Insights
+
+// @todo: Figure out logic for self hosted vs Harbour hosted and which endpoint
+// should be used based on that
 const API_ENDPOINT = 'https://api.myharbourshare.com/v2/insights';
-const DEFAULT_API_KEY = process.env.HARBOUR_API_KEY || '';
+const GATEWAY_ENDPOINT = 'https://superdoc-dev-gateway-88eonph9.uc.gateway.dev/insights';
 
 /**
  * UTILITY - Makes a fetch request to the Harbour API
@@ -16,20 +35,24 @@ const DEFAULT_API_KEY = process.env.HARBOUR_API_KEY || '';
  * @returns {Promise<Response>} - The API response
  */
 async function baseInsightsFetch(payload, options = {}) {
-  const apiKey = options.apiKey || DEFAULT_API_KEY;
-  const apiEndpoint = options.apiEndpoint || API_ENDPOINT;
-
-  if (!apiKey) {
-    console.warn('Harbour API key is not set. Please provide an API key.');
-  }
+  const apiKey = options.apiKey;
+  
+  // If an apiKey is provided, use the standard endpoint, otherwise use the gateway
+  const apiEndpoint =apiKey ? API_ENDPOINT : GATEWAY_ENDPOINT
 
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Only add the API key header if one is provided
+    if (apiKey) {
+      headers['x-api-key'] = apiKey;
+    }
+
     const response = await fetch(apiEndpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-      },
+      headers,
       body: JSON.stringify(payload),
     });
 
@@ -147,7 +170,7 @@ async function processStream(stream, onChunk) {
  */
 async function processResponse(response) {
   const jsonResponse = await response.json();
-  if (jsonResponse.custom_prompt) return jsonResponse.custom_prompt.value;
+  if (jsonResponse.custom_prompt) return jsonResponse.custom_prompt[0].value;
   else {
     throw new Error('No custom prompt found in response');
   }
@@ -170,7 +193,7 @@ export async function writeStreaming(prompt, options = {}, onChunk) {
   }
 
   const payload = {
-    url: options.url || '',
+    doc_text: 'this is a test',
     stream: true,
     insights: [
       {
@@ -182,13 +205,13 @@ export async function writeStreaming(prompt, options = {}, onChunk) {
     ]
   };
 
-  if (options.context) {
-    payload.context = options.context;
-  }
+  // if (options.context) {
+  //   payload.context = options.context;
+  // }
 
-  if (options.documentXml) {
-    payload.document_content = options.documentXml;
-  }
+  // if (options.documentXml) {
+  //   payload.document_content = options.documentXml;
+  // }
 
   const response = await baseInsightsFetch(payload, options.config || {});
   
@@ -217,24 +240,25 @@ export async function write(prompt, options = {}) {
   }
 
   const payload = {
-    url: options.url || '',
+    doc_text: 'this is a test',  
     stream: false,
     insights: [
       {
         type: 'custom_prompt',
         name: 'text_generation',
-        message: prompt,
+        message: ` ${options.context} Generate a text based on the following prompt: ${prompt}`,
+        format: [{ value: '' }]
       }
     ]
   };
 
-  if (options.context) {
-    payload.context = options.context;
-  }
+  // if (options.context) {
+  //   payload.context = options.context;
+  // }
 
-  if (options.documentXml) {
-    payload.document_content = options.documentXml;
-  }
+  // if (options.documentXml) {
+  //   payload.document_content = options.documentXml;
+  // }
 
   const response = await baseInsightsFetch(payload, options.config || {});
   console.log('write response', response);
@@ -262,7 +286,7 @@ export async function rewriteStreaming(text, prompt = '', options = {}, onChunk)
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
-    url: options.url || '',
+    doc_text: 'this is a test',
     stream: true,
     insights: [
       {
@@ -309,20 +333,21 @@ export async function rewrite(text, prompt = '', options = {}) {
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
-    url: options.url || '',
+    doc_text: 'this is a test',
     stream: false,
     insights: [
       {
         type: 'custom_prompt',
         name: 'text_rewrite',
         message: message,
+        format: [{ value: '' }]
       }
     ]
   };
 
-  if (options.documentXml) {
-    payload.document_content = options.documentXml;
-  }
+  // if (options.documentXml) {
+  //   payload.document_content = options.documentXml;
+  // }
 
   const response = await baseInsightsFetch(payload, options.config || {});
   return processResponse(response);

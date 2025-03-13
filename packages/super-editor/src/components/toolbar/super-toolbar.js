@@ -201,6 +201,7 @@ export class SuperToolbar extends EventEmitter {
     this.isDev = config.isDev || false;
     this.superdoc = config.superdoc;
     this.role = config.role || 'editor';
+    this.aiApiKey = config.aiApiKey;
     
     this.config.icons = {
       ...toolbarIcons,

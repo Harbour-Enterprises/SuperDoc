@@ -149,7 +149,8 @@ const handleSubmit = async () => {
       context: props.selectedText ? promptText.value : systemPrompt,
       documentXml: documentXml,
       config: {
-        // You can add API key here if not using environment variable
+        // Pass the aiApiKey from superToolbar to the AI helper functions
+        apiKey: props.superToolbar.aiApiKey,
       }
     };
 
@@ -240,10 +241,10 @@ const handleInput = (event) => {
     <div class="ai-loader">
       <span v-if="isLoading" class="ai-textarea-icon loading">
         <span class="spinner-wrapper">
-          <i class="fal fa-spinner"></i>
+          <i class="far fa-sun"></i>
         </span>
       </span>
-      <span v-else-if="isError" class="ai-textarea-icon error"><i class="fal fa-times" :title="isError"></i></span>
+      <span v-else-if="isError" class="ai-textarea-icon error"><i class="far fa-times-circle" :title="isError"></i></span>
       <span v-else-if="promptText" class="ai-textarea-icon ai-submit-button"
         ><i class="far fa-paper-plane fa-gradient" @click="handleSubmit"></i
       ></span>
@@ -260,6 +261,7 @@ const handleInput = (event) => {
     rgba(77, 82, 217, 1) 60%,
     rgb(255, 219, 102) 150%
   );
+  background-clip: text;
 	-webkit-background-clip: text;
 	-webkit-text-fill-color: transparent;
 }

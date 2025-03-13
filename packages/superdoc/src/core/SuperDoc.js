@@ -355,6 +355,7 @@ export class SuperDoc extends EventEmitter {
       pagination: this.config.pagination,
       icons: this.config.toolbarIcons,
       superdoc: this,
+      aiApiKey: this.config.modules?.ai?.apiKey,
     };
 
     this.toolbar = new SuperToolbar(config);
