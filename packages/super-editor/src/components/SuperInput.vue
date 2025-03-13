@@ -63,6 +63,11 @@ const initEditor = async () => {
   });
 };
 
+const handleFocus = () => {
+  isFocused.value = true;
+  editor.value?.view?.focus();
+};
+
 onMounted(() => {
   initEditor();
 });
@@ -74,7 +79,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="super-editor super-input" :class="{ 'super-input-active': isFocused }" @click.stop.prevent>
+  <div class="super-editor super-input" :class="{ 'super-input-active': isFocused }" @click.stop.prevent="handleFocus">
     <div id="currentContent" style="display: none" v-html="modelValue"></div>
     <div ref="editorElem" class="editor-element super-editor__element"></div>
   </div>
