@@ -42,6 +42,7 @@ const {
   floatingCommentsOffset,
   pendingComment,
   currentCommentText,
+  isDebugging,
 } = storeToRefs(commentsStore);
 
 const { activeZoom } = storeToRefs(superdocStore);
@@ -332,7 +333,10 @@ onMounted(() => {
 
       <!-- Show the comment text, unless we enter edit mode, then show an input and update buttons -->
       <div class="card-section comment-body" v-if="!comment.trackedChange">
-        <div v-if="!isEditingThisComment(comment)" class="comment" v-html="comment.commentText"></div>
+        <div v-if="!isDebugging && !isEditingThisComment(comment)" class="comment" v-html="comment.commentText"></div>
+        <div v-else-if="isDebugging && !isEditingThisComment(comment)" class="comment">
+          {{ comment.selection.selectionBounds }}
+        </div>
         <div v-else class="comment-editing">
           <CommentInput
             :user="superdocStore.user"

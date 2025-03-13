@@ -57,6 +57,7 @@ const {
   isCommentsListVisible,
   isFloatingCommentsReady,
   generalCommentIds,
+  getFloatingComments,
 } = storeToRefs(commentsStore);
 const { initialCheck, showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
 const { proxy } = getCurrentInstance();
@@ -587,7 +588,7 @@ const handlePdfClick = (e) => {
 
       <FloatingComments
         class="floating-comments"
-        v-if="isReady && isFloatingCommentsReady && !isCommentsListVisible"
+        v-if="getFloatingComments.length && !isCommentsListVisible"
         v-for="doc in documentsWithConverations"
         :parent="layers"
         :current-document="doc"

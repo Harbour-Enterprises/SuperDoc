@@ -20,6 +20,8 @@ const {
   getGroupedComments,
   lastChange,
   generalCommentIds,
+  isFloatingCommentsReady,
+  getFloatingComments,
 } = storeToRefs(commentsStore);
 const { user, activeZoom } = storeToRefs(superdocStore);
 
@@ -91,18 +93,6 @@ const renderDialog = (data, previousNode, previousBounds) => {
   visibleConversations.value.push(nextConvo);
 };
 
-const sortByLocation = (a, b) => {
-  // Sort comments by page and by position first
-
-  const pageA = a.selection?.page || 0;
-  const pageB = b.selection?.page || 0;
-  if (pageA !== pageB) return pageA - pageB;
-
-  const topB = b.floatingPosition.top;
-  const topA = a.floatingPosition.top;
-  return topA - topB;
-};
-
 const initialize = () => {
   requestAnimationFrame(() => {
     visibleConversations.value = [];
@@ -112,13 +102,10 @@ const initialize = () => {
 };
 
 const initializeConvos = () => {
-  sortedConversations.value = getGroupedComments.value?.parentComments
-    .filter((c) => !c.resolvedTime)
-    .filter((c) => !generalCommentIds.value.includes(c.commentId || c.importedId))
-    .sort(sortByLocation);
-  
+  sortedConversations.value = getFloatingComments.value;
   if (!sortedConversations.value?.length) return;
-
+  
+  isFloatingCommentsReady.value = true;
   const firstComment = sortedConversations.value[0];
   const offset = firstComment.selection?.selectionBounds?.top || floatingCommentsOffset.value;
   firstComment.floatingPosition = { top: offset };
