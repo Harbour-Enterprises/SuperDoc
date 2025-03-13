@@ -318,11 +318,6 @@ export class Editor extends EventEmitter {
   initializeCollaborationData() {
     const hasData = this.extensionService.extensions.find((e) => e.name === 'collaboration')
       ?.options.isReady;
-    if (hasData) {
-      setTimeout(() => {
-        this.emit('collaborationReady', { editor: this, ydoc: this.options.ydoc });
-      }, 150);
-    }
     
     if (!this.options.isNewFile || !this.options.collaborationProvider) return;
     const { collaborationProvider: provider } = this.options;
@@ -568,6 +563,10 @@ export class Editor extends EventEmitter {
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: EditorState.create(state),
     });
+
+    // Don't create the view here if in collaboration
+    // That is handled by the plugin
+    if (this.options.ydoc) return;
 
     const newState = this.state.reconfigure({
       plugins: this.extensionService.plugins,
