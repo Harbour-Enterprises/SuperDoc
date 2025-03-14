@@ -566,7 +566,7 @@ const handleAiHighlightRemove = () => {
         />
 
         <!-- AI Layer for temporary highlights -->
-        <AiLayer class="ai-layer" style="z-index: 4" ref="aiLayer" />
+        <AiLayer class="ai-layer" style="z-index: 4" ref="aiLayer" :editor="proxy.$superdoc.activeEditor" />
 
         <div class="superdoc__sub-document sub-document" v-for="doc in documents" :key="doc.id">
           <!-- PDF renderer -->

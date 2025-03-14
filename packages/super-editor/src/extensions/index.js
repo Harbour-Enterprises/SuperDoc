@@ -11,6 +11,7 @@ import { DropCursor } from './dropcursor/index.js';
 import { Gapcursor } from './gapcursor/index.js';
 import { Collaboration } from './collaboration/index.js';
 import { CollaborationCursor } from './collaboration-cursor/index.js';
+import { AiPlugin, AiMark } from './ai/index.js';
 
 // Nodes extensions
 import { Document } from './document/index.js';
@@ -72,6 +73,7 @@ const getRichTextExtensions = () => [
   PopoverPlugin,
   Mention,
   Highlight,
+  AiPlugin,
 ];
 
 const getStarterExtensions = () => {
@@ -126,6 +128,8 @@ const getStarterExtensions = () => {
     Highlight,
     SlashMenu,
     LinkedStyles,
+    AiPlugin,
+    AiMark,
   ];
 };
 
@@ -182,4 +186,6 @@ export {
   trackChangesHelpers,
   getStarterExtensions,
   getRichTextExtensions,
+  AiMark,
+  AiPlugin,
 };
