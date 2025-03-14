@@ -527,6 +527,9 @@ function translateList(params) {
       };
       
       const outputNode = exportSchemaToJson({ ...params, node: paragraphNode });
+      if (!outputNode.elements) {
+        outputNode.elements = [];
+      }
       const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
       
       const listProps = getListParagraphProperties(listNode, level, type, propsElementIndex > -1);
