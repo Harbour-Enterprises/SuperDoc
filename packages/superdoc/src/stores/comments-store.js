@@ -17,6 +17,7 @@ export const useCommentsStore = defineStore('comments', () => {
   });
 
   const isDebugging = false;
+  const debounceTimers = {};
 
   const COMMENT_EVENTS = comments_module_events;
   const hasInitializedComments = ref(false);
@@ -108,26 +109,68 @@ export const useCommentsStore = defineStore('comments', () => {
       author: authorName,
       documentId,
     } = params;
-
-    const existingTrackedChange = commentsList.value.find((comment) => comment.commentId === changeId);
+  
+    const existingTrackedChange = commentsList.value.find(
+      (comment) => comment.commentId === changeId
+    );
+  
+    const comment = getPendingComment({
+      documentId,
+      commentId: changeId,
+      trackedChange: true,
+      trackedChangeText,
+      trackedChangeType,
+      deletedText,
+      createdTime: date,
+      creatorNamne: authorName,
+      creatorEmail: authorEmail,
+    });
+  
     if (!existingTrackedChange) {
-      const comment = getPendingComment({
-        documentId,
-        commentId: changeId,
-        trackedChange: true,
-        trackedChangeText,
-        trackedChangeType,
-        deletedText,
-        createdTime: date,
-        creatorNamne: authorName,
-        creatorEmail: authorEmail,
-      });
-
       addComment({ superdoc, comment });
     } else {
-      existingTrackedChange.trackedChangeText = trackedChangeText;
-      existingTrackedChange.trackedChangeType = trackedChangeType;
+      // Check if anything has changed
+      const keysToCheck = [
+        "trackedChangeText",
+        "deletedText",
+      ];
+  
+      const hasChanged = keysToCheck.some((key) => {
+        return existingTrackedChange[key] !== comment[key]
+      });
+  
+      if (hasChanged) {
+        // Update only the changed properties
+        Object.assign(existingTrackedChange, {
+          trackedChangeText,
+          trackedChangeType,
+          deletedText,
+          creatorEmail: authorEmail,
+          createdTime: date,
+          creatorNamne: authorName,
+        });
+  
+        const event = {
+          type: COMMENT_EVENTS.UPDATE,
+          comment: existingTrackedChange.getValues(),
+        };
+  
+        debounceEmit(changeId, event, superdoc);
+      }
     }
+  };
+
+  const debounceEmit = (commentId, event, superdoc, delay = 1000) => {
+    if (debounceTimers[commentId]) {
+      clearTimeout(debounceTimers[commentId]);
+    }
+
+    debounceTimers[commentId] = setTimeout(() => {
+      if (superdoc) {
+        superdoc.emit("comments-update", event);
+      }
+      delete debounceTimers[commentId];
+    }, delay);
   };
 
   const showAddComment = (superdoc) => {    
@@ -363,9 +406,7 @@ export const useCommentsStore = defineStore('comments', () => {
     syncCommentsToClients(superdoc, event);
 
     // Emit event for end users
-    if (!comment.trackedChange) {
-      superdoc.emit('comments-update', event);
-    };
+    superdoc.emit('comments-update', event);
 
   };
 

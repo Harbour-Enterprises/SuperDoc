@@ -278,7 +278,7 @@ const onEditorCommentsUpdate = (params = {}) => {
   const { activeCommentId, type } = params;
 
   if (type === 'trackedChange') {
-    handleTrackedChangeUpdate({ superdoc: proxy.$superdoc, params });
+    return handleTrackedChangeUpdate({ superdoc: proxy.$superdoc, params });
   }
   
   nextTick(() => {
