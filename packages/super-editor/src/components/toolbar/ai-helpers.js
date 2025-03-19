@@ -24,8 +24,8 @@
 // @todo: Figure out logic for self hosted vs Harbour hosted and which endpoint
 // should be used based on that
 const API_ENDPOINT = 'https://api.myharbourshare.com/v2/insights';
-const GATEWAY_ENDPOINT = 'https://superdoc-dev-gateway-88eonph9.uc.gateway.dev/insights';
-
+const GATEWAY_ENDPOINT = 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights';
+const SYSTEM_PROMPT = 'You are an expert copywriter and you are immersed in a document editor. You are to provide document related text responses based on the user prompts. Only write what is asked for. Do not provide explanations. Try to keep placeholders as short as possible. Do not output your prompt.';
 /**
  * UTILITY - Makes a fetch request to the Harbour API
  * @param {Object} payload - The request payload
@@ -38,7 +38,7 @@ async function baseInsightsFetch(payload, options = {}) {
   const apiKey = options.apiKey;
   
   // If an apiKey is provided, use the standard endpoint, otherwise use the gateway
-  const apiEndpoint =apiKey ? API_ENDPOINT : GATEWAY_ENDPOINT
+  const apiEndpoint = apiKey ? API_ENDPOINT : GATEWAY_ENDPOINT
 
   try {
     const headers = {
@@ -50,6 +50,7 @@ async function baseInsightsFetch(payload, options = {}) {
       headers['x-api-key'] = apiKey;
     }
 
+    console.log('payload', payload);
     const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers,
@@ -83,83 +84,83 @@ async function processStream(stream, onChunk) {
   try {
     while (true) {
       const { done, value } = await reader.read();
-      
+      console.log('done', done, 'value', value);
       if (done) {
         break;
       }
 
       // Decode the chunk
       const chunk = decoder.decode(value, { stream: true });
+      console.log('chunk', chunk);
       jsonBuffer += chunk;
-      
+      console.log('jsonBuffer', jsonBuffer);
       // Try to parse as JSON and extract content
-      try {
-        const jsonResponse = JSON.parse(jsonBuffer);
-        
-        // Extract content based on response structure
-        let extractedContent = '';
-        
-        if (jsonResponse.custom_prompt && Array.isArray(jsonResponse.custom_prompt) && jsonResponse.custom_prompt.length > 0) {
-          const promptData = jsonResponse.custom_prompt[0];
-          
-          if (promptData.content) {
-            extractedContent = promptData.content;
-          } else if (promptData.title) {
-            extractedContent = promptData.title;
-          } else if (promptData.text) {
-            extractedContent = promptData.text;
-          }
+      tryParseAndExtractContent(jsonBuffer, (extractedContent) => {
+        result = extractedContent;
+        console.log('result', result);
+        if (typeof onChunk === 'function') {
+          console.log('calling onChunk', result);
+          onChunk(result);
         }
-        
-        if (extractedContent) {
-          result = extractedContent;
-          if (typeof onChunk === 'function') {
-            onChunk(result);
-          }
-          
-          jsonBuffer = '';
+        jsonBuffer = '';
+      });
+      
+      // Safety check for large unparseable buffers
+      if (jsonBuffer.length > 10000) {
+        result = jsonBuffer;
+        if (typeof onChunk === 'function') {
+          onChunk(result);
         }
-      } catch (e) {
-        // Not valid JSON yet, might be a partial chunk
-        if (jsonBuffer.length > 10000) {
-          result = jsonBuffer;
-          if (typeof onChunk === 'function') {
-            onChunk(result);
-          }
-          jsonBuffer = '';
-        }
+        jsonBuffer = '';
       }
     }
     
     // Final attempt to extract content from any remaining buffer
     if (jsonBuffer) {
-      try {
-        const jsonResponse = JSON.parse(jsonBuffer);
-        
-        if (jsonResponse.custom_prompt && Array.isArray(jsonResponse.custom_prompt) && jsonResponse.custom_prompt.length > 0) {
-          const promptData = jsonResponse.custom_prompt[0];
-          
-          if (promptData.content) {
-            result = promptData.content;
-          } else if (promptData.title) {
-            result = promptData.title;
-          } else if (promptData.text) {
-            result = promptData.text;
-          }
-        }
-      } catch (e) {
-        if (!result && jsonBuffer) {
-          result = jsonBuffer;
-        }
-      }
+      tryParseAndExtractContent(jsonBuffer, (extractedContent) => {
+        result = extractedContent;
+      });
     }
     
     return result;
   } catch (error) {
-    console.error('Error processing stream:', error);
+    console.error('Error reading stream:', error);
     throw error;
   } finally {
     reader.releaseLock();
+  }
+}
+
+/**
+ * Helper function to parse JSON and extract content
+ * @param {string} jsonBuffer - The JSON string to parse
+ * @param {function} onSuccess - Callback when content is successfully extracted
+ */
+function tryParseAndExtractContent(jsonBuffer, onSuccess) {
+  try {
+    console.log('jsonBuffer', jsonBuffer);
+    const jsonResponse = JSON.parse(jsonBuffer);
+    console.log('jsonResponse', jsonResponse);
+
+    // Extract content based on response structure
+    let extractedContent = '';
+    
+    if (jsonResponse.custom_prompt && Array.isArray(jsonResponse.custom_prompt) && jsonResponse.custom_prompt.length > 0) {
+      const promptData = jsonResponse.custom_prompt[0];
+      console.log('promptData', promptData);
+      if (promptData.content) {
+        extractedContent = promptData.content;
+      }
+    }
+    
+    if (extractedContent) {
+      console.log('extractedContent', extractedContent);
+      onSuccess(extractedContent);
+    }
+  } catch (e) {
+    // Not valid JSON yet, might be a partial chunk
+    // Do nothing, will try again with more data
+    console.log('not valid JSON', e);
   }
 }
 
@@ -192,18 +193,30 @@ export async function writeStreaming(prompt, options = {}, onChunk) {
     throw new Error('Prompt is required for text generation');
   }
 
-  const payload = {
-    doc_text: 'this is a test',
-    stream: true,
-    insights: [
-      {
-        type: 'custom_prompt',
-        name: 'text_generation',
-        message: prompt,
-        format: [{ content: '' }]
-      }
-    ]
-  };
+  // const payload = {
+  //   doc_text: options.docText || 'this is a test',
+  //   stream: true,
+  //   insights: [
+  //     {
+  //       type: 'custom_prompt',
+  //       name: 'text_generation',
+  //       message: `${SYSTEM_PROMPT} Generate a text based on the following prompt: ${prompt}`,
+  //     }
+  //   ]
+  // };
+  const payload = 
+    {
+      // url: S3_URL, // Using URL instead of draft_id
+      doc_text: "this is a test",
+      insights: [
+        {
+          type: "custom_prompt",
+          name: "text_generation",
+          message: "Can you generate me an NDA agreement with placeholders",
+        },
+      ],
+      stream: true,
+    }
 
   // if (options.context) {
   //   payload.context = options.context;
@@ -215,13 +228,10 @@ export async function writeStreaming(prompt, options = {}, onChunk) {
 
   const response = await baseInsightsFetch(payload, options.config || {});
   
-  if (onChunk && response.body) {
-    // Start processing the stream with the provided callback and await it
-    return await processStream(response.body, onChunk);
-  }
-  
-  // If no callback was provided, still process the stream but don't call onChunk
-  return response.body ? await processStream(response.body) : '';
+  console.log('streaming response', response);
+  if (!response.body) return '';
+  console.log('processing stream');
+  return await processStream(response.body, onChunk);
 }
 
 /**
@@ -240,13 +250,13 @@ export async function write(prompt, options = {}) {
   }
 
   const payload = {
-    doc_text: 'this is a test',  
+    doc_text: options.docText || 'this is a test',  
     stream: false,
     insights: [
       {
         type: 'custom_prompt',
         name: 'text_generation',
-        message: ` ${options.context} Generate a text based on the following prompt: ${prompt}`,
+        message: `${SYSTEM_PROMPT} Generate a text based on the following prompt: ${prompt}`,
         format: [{ value: '' }]
       }
     ]
@@ -286,13 +296,13 @@ export async function rewriteStreaming(text, prompt = '', options = {}, onChunk)
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
-    doc_text: 'this is a test',
+    doc_text: options.docText || 'this is a test',
     stream: true,
     insights: [
       {
         type: 'custom_prompt',
         name: 'text_rewrite',
-        message: message,
+        message: `${SYSTEM_PROMPT} ${message}`,
         format: [{ content: '' }]
       }
     ]
@@ -304,13 +314,9 @@ export async function rewriteStreaming(text, prompt = '', options = {}, onChunk)
 
   const response = await baseInsightsFetch(payload, options.config || {});
   
-  if (onChunk && response.body) {
-    // Start processing the stream with the provided callback and await it
-    return await processStream(response.body, onChunk);
-  }
+  if (!response.body) return '';
   
-  // If no callback was provided, still process the stream but don't call onChunk
-  return response.body ? await processStream(response.body) : '';
+  return await processStream(response.body, onChunk);
 }
 
 /**
@@ -333,13 +339,13 @@ export async function rewrite(text, prompt = '', options = {}) {
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
-    doc_text: 'this is a test',
+    doc_text: options.docText || 'this is a test',
     stream: false,
     insights: [
       {
         type: 'custom_prompt',
         name: 'text_rewrite',
-        message: message,
+        message: `${SYSTEM_PROMPT} ${message}`,
         format: [{ value: '' }]
       }
     ]

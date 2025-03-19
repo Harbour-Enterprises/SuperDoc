@@ -69,10 +69,6 @@ onUnmounted(() => {
   document.removeEventListener('mousedown', handleClickOutside);
 });
 
-// System prompt
-const systemPrompt =
-  'You are an expert copywriter and you are immersed in a document editor. Only write what is asked for. Do not provide explanations. Try to keep placeholders as short as possible. Do not output your prompt.';
-
 // Computed property to determine text based on selection
 const placeholderText = computed(() =>
   props.selectedText ? 'Insert prompt to update text' : 'Insert prompt to generate text',
@@ -110,13 +106,17 @@ const handleTextChunk = (text) => {
       textProcessingStarted.value = true;
     }
     
+    console.log('text', text);
     // Extract only the new content by comparing with previous text
     const newContent = text.slice(previousText.value.length);
     
+    console.log('newContent', newContent);
     // Update the document with only the new content
     if (newContent) {
       props.superToolbar.activeEditor.commands.insertContent(newContent);
+      console.log('inserted newContent', newContent);
       previousText.value = text;
+      console.log('previousText', previousText.value);
     }
   } catch (error) {
     console.error('Error handling text chunk:', error);
@@ -146,7 +146,8 @@ const handleSubmit = async () => {
 
     // Common options for API calls
     const options = {
-      context: props.selectedText ? promptText.value : systemPrompt,
+      // @todo: implement grabbing document text
+      docText: '',
       documentXml: documentXml,
       config: {
         // Pass the aiApiKey from superToolbar to the AI helper functions
@@ -156,7 +157,7 @@ const handleSubmit = async () => {
 
     // @DEBUG - Use non-streaming for now
     // Determine if we should use streaming or non-streaming
-    const useStreaming = false; // Set to true to use streaming
+    const useStreaming = true; // Set to true to use streaming
 
     if (useStreaming) {
       // STREAMING APPROACH
