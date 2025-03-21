@@ -29,7 +29,7 @@ const handleClickOutside = (event) => {
   }
 };
 
-// Add ref for the editable div
+// Add ref for the textarea
 const editableRef = ref(null);
 
 // Save selection when component is mounted
@@ -43,17 +43,13 @@ onMounted(() => {
     props.superToolbar.emit('ai-highlight-add');
   }
 
-  // Focus the input element on mount using nextTick to ensure DOM is ready
+  // Focus the textarea on mount using nextTick to ensure DOM is ready
   nextTick(() => {
     if (editableRef.value) {
       editableRef.value.focus();
-      // Optional: Place cursor at end of any existing text
-      const range = document.createRange();
-      const sel = window.getSelection();
-      range.selectNodeContents(editableRef.value);
-      range.collapse(false);
-      sel.removeAllRanges();
-      sel.addRange(range);
+      // For textarea, we can directly set the cursor at the end
+      const length = editableRef.value.value.length;
+      editableRef.value.setSelectionRange(length, length);
     }
   });
 
@@ -227,18 +223,20 @@ const handleSubmit = async () => {
 
 // New handler for keydown
 const handleKeyDown = (event) => {
-  if (event.key === 'Enter') {
+  // For Enter key, submit the form instead of adding a new line
+  if (event.key === 'Enter' && !event.shiftKey) {
     event.preventDefault();
     handleSubmit();
   }
 };
 
-// New handler for input
+// Updated handler for input to work with textarea
 const handleInput = (event) => {
   if (isError.value) {
     isError.value = '';
   }
-  promptText.value = event.target.textContent;
+  // Textarea provides value instead of textContent
+  promptText.value = event.target.value;
 };
 </script>
 
@@ -249,14 +247,16 @@ const handleInput = (event) => {
         <i class="far fa-edit fa-gradient"></i>
       </span>
 
-      <div
+      <!-- Replace contenteditable div with textarea -->
+      <textarea
         ref="editableRef"
-        contenteditable="true"
-        class="ai-editable"
-        :data-placeholder="placeholderText"
+        class="ai-textarea"
+        :placeholder="placeholderText"
         @keydown="handleKeyDown"
         @input="handleInput"
-      ></div>
+        v-model="promptText"
+        rows="2"
+      ></textarea>
     </div>
     <div class="ai-loader">
       <span v-if="isLoading" class="ai-textarea-icon loading">
@@ -302,32 +302,36 @@ const handleInput = (event) => {
   display: none;
 }
 
-.ai-editable {
+/* Replace .ai-editable with .ai-textarea */
+.ai-textarea {
   padding-left: 8px;
   width: 100%;
-
   color: #47484a;
-  font-size: initial;
-  line-height: initial;
-  border: initial;
-  background-color: initial;
-  outline: none;
-  border: none;
   font-size: 13px;
-  display: inline;
+  border: none;
+  background: transparent;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  height: 100%;
+  font-family: Inter, sans-serif;
+}
+
+/* Add specific styles for textarea placeholder */
+.ai-textarea::placeholder {
+  color: #666;
+  font-weight: 400;
 }
 
 .ai-user-input-field {
   line-height: 13px;
   display: flex;
   flex-direction: row;
-
   min-height: 50px;
   height: 50px;
   padding: 10px;
   resize: none;
   border: none;
-
   border-radius: 8px;
   margin-bottom: 10px;
 }
@@ -359,25 +363,6 @@ const handleInput = (event) => {
   display: flex;
 }
 
-.ai-editable[data-placeholder]:empty::before {
-  content: attr(data-placeholder);
-  pointer-events: none;
-  font-size: 13px;
-  color: #666;
-  font-weight: 400;
-  line-height: 1.5;
-  font-family: Inter, sans-serif;
-}
-
-.ai-loader {
-  display: flex;
-  height: 14px;
-  justify-content: flex-end;
-  align-items: center;
-  padding-right: 5px;
-  padding-left: 5px;
-}
-
 .ai-textarea-icon.error {
   background: #dc3545;
   background-clip: text;
@@ -406,5 +391,14 @@ const handleInput = (event) => {
   to {
     transform: rotate(360deg);
   }
+}
+
+.ai-loader {
+  display: flex;
+  height: 14px;
+  justify-content: flex-end;
+  align-items: center;
+  padding-right: 5px;
+  padding-left: 5px;
 }
 </style>
