@@ -58,6 +58,8 @@ const {
   isCommentsListVisible,
   isFloatingCommentsReady,
   generalCommentIds,
+  getFloatingComments,
+  hasSyncedCollaborationComments,
 } = storeToRefs(commentsStore);
 const { initialCheck, showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
 const { proxy } = getCurrentInstance();
@@ -108,12 +110,18 @@ const cancelPendingComment = (e) => {
   commentsStore.removePendingComment(proxy.$superdoc);
 };
 
-const onCommentsLoaded = ({ editor, comments }) => {
-  commentsStore.processLoadedDocxComments({ comments, documentId: editor.options.documentId });
+const onCommentsLoaded = ({ editor, comments, replacedFile }) => {
+  if (editor.options.isNewFile || replacedFile) {
+    commentsStore.processLoadedDocxComments({
+      superdoc: proxy.$superdoc,
+      comments,
+      documentId: editor.options.documentId
+    });
+  }
 };
 
 const onEditorBeforeCreate = ({ editor }) => {
-  proxy.$superdoc.broadcastEditorBeforeCreate(editor);
+  proxy.$superdoc?.broadcastEditorBeforeCreate(editor);
 };
 
 const onEditorCreate = ({ editor }) => {
@@ -157,13 +165,15 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
   const { pageMargins } = editor.getPageStyles();
 
   const layerBounds = layers.value.getBoundingClientRect();
-  let top = fromCoords.top - layerBounds.top;
-  top = Math.max(96, (top - 100));
+  const HEADER_HEIGHT = 96;
+  // Ensure the selection is not placed at the top of the page
+  const top = Math.max(HEADER_HEIGHT, fromCoords.top - layerBounds.top);
+  const bottom = toCoords.bottom - layerBounds.top;
   const selectionBounds = {
     top,
     left: fromCoords.left,
     right: toCoords.left,
-    bottom: toCoords.bottom - layerBounds.top,
+    bottom,
   };
 
   const selection = useSelection({
@@ -248,24 +258,26 @@ const editorOptions = (doc) => {
  * 
  * @returns {void}
  */
-const onEditorCommentLocationsUpdate = (commentPositions = []) => {
+const onEditorCommentLocationsUpdate = (commentIds = []) => {
   if (!proxy.$superdoc.config.modules?.comments) return;
 
   // If we have not yet synced the collaboration comments, wait for the sync event
   const provider = proxy.$superdoc.provider;
-  const hasSyncedCollaborationComments = proxy.$superdoc.commentsStore.hasSyncedCollaborationComments;
-  if (provider && !hasSyncedCollaborationComments) {
+  if (provider && !hasSyncedCollaborationComments.value) {
     const syncPositions = () => {
-      handleEditorLocationsUpdate(layers.value, commentPositions);
+      handleEditorLocationsUpdate(layers.value, commentIds);
       provider.off('synced', syncPositions);
     };
 
     provider.on('synced', syncPositions);
+    setTimeout(() => {
+      if (!hasSyncedCollaborationComments.value) hasSyncedCollaborationComments.value = true;
+    }, 1000);
   }
 
   // Otherwise, update the comment locations right away
   else {
-    handleEditorLocationsUpdate(layers.value, commentPositions);
+    handleEditorLocationsUpdate(layers.value, commentIds);
   };
 };
 
@@ -278,6 +290,7 @@ const onEditorCommentsUpdate = (params = {}) => {
   }
   
   nextTick(() => {
+    if (pendingComment.value) return;
     commentsStore.setActiveComment(activeCommentId);
   });
 
@@ -289,14 +302,12 @@ const onEditorCommentsUpdate = (params = {}) => {
 
 const isCommentsEnabled = computed(() => 'comments' in modules);
 const showCommentsSidebar = computed(() => {
-
-  const documentComments = commentsList.value.filter((c) => !generalCommentIds.value?.includes(c.commentId || c.importedId));
   return (
     pendingComment.value ||
     (
-      documentComments?.length > 0
-        && layers.value
+      getFloatingComments.value?.length > 0
         && isReady.value
+        && layers.value
         && isCommentsEnabled.value
         && !isCommentsListVisible.value
     )
@@ -612,7 +623,7 @@ const handleAiHighlightRemove = () => {
 
       <FloatingComments
         class="floating-comments"
-        v-if="isReady && isFloatingCommentsReady && !isCommentsListVisible"
+        v-if="getFloatingComments.length && !isCommentsListVisible"
         v-for="doc in documentsWithConverations"
         :parent="layers"
         :current-document="doc"

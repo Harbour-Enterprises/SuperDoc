@@ -149,7 +149,7 @@ export const TrackChanges = Extension.create({
       acceptTrackedChangeById:
         (id) =>
         ({ state, tr, commands }) => {
-          const toResolve = getChangesByIdToResolve(state, id);
+          const toResolve = getChangesByIdToResolve(state, id) || [];
 
           return toResolve
             .map(({ from, to }) => {
@@ -171,7 +171,7 @@ export const TrackChanges = Extension.create({
       rejectTrackedChangeById:
         (id) =>
         ({ state, tr, commands }) => {
-          const toReject = getChangesByIdToResolve(state, id);
+          const toReject = getChangesByIdToResolve(state, id) || [];
 
           return toReject
             .map(({ from, to }) => {

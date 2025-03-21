@@ -6,7 +6,7 @@ export const CommentsMark = Mark.create({
 
   group: 'comments',
 
-  inclusive: false,
+  excludes: "",
 
   addOptions() {
     return {
@@ -16,17 +16,8 @@ export const CommentsMark = Mark.create({
 
   addAttributes() {
     return {
-    };
-  },
-
-  addAttributes() {
-    return {
-      commentId: {
-        rendered: false,
-      },
-      importedId: {
-        rendered: false,
-      },
+      commentId: {},
+      importedId: {},
       internal: {
         default: true,
         rendered: false,

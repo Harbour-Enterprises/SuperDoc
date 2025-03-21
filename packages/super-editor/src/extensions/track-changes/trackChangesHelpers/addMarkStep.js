@@ -4,6 +4,7 @@ import { Node } from 'prosemirror-model';
 import { TrackDeleteMarkName, TrackFormatMarkName } from '../constants.js';
 import { v4 as uuidv4 } from 'uuid';
 import { objectIncludes } from '@core/utilities/objectIncludes.js';
+import { TrackChangesBasePluginKey } from '../plugins/index.js';
 
 /**
  * Add mark step.
@@ -17,6 +18,7 @@ import { objectIncludes } from '@core/utilities/objectIncludes.js';
  * @param {string} options.date Date.
  */
 export const addMarkStep = ({ state, tr, step, newTr, map, doc, user, date }) => {
+  const meta = {};
   doc.nodesBetween(step.from, step.to, (node, pos) => {
     if (!node.isInline) {
       return;
@@ -26,6 +28,8 @@ export const addMarkStep = ({ state, tr, step, newTr, map, doc, user, date }) =>
       return false;
     }
 
+    const existingChangeMark = node.marks.find((mark) => [TrackDeleteMarkName, TrackFormatMarkName].includes(mark.type.name));
+    const wid = existingChangeMark ? existingChangeMark.attrs.id : uuidv4();
     newTr.addMark(Math.max(step.from, pos), Math.min(step.to, pos + node.nodeSize), step.mark);
 
     const allowedMarks = ['bold', 'italic', 'strike', 'underline', 'textStyle'];
@@ -74,18 +78,22 @@ export const addMarkStep = ({ state, tr, step, newTr, map, doc, user, date }) =>
       }
 
       if (after.length || before.length) {
+        const newFormatMark = state.schema.marks[TrackFormatMarkName].create({
+          id: wid,
+          author: user.name,
+          authorEmail: user.email,
+          date,
+          before,
+          after,
+        });
         newTr.addMark(
           step.from, // Math.max(step.from, pos)
           step.to, // Math.min(step.to, pos + node.nodeSize),
-          state.schema.marks[TrackFormatMarkName].create({
-            id: uuidv4(),
-            author: user.name,
-            authorEmail: user.email,
-            date,
-            before,
-            after,
-          }),
+          newFormatMark,
         );
+        meta.formatMark = newFormatMark;
+        meta.step = step;
+        newTr.setMeta(TrackChangesBasePluginKey, meta);
       } else if (formatChangeMark) {
         newTr.removeMark(Math.max(step.from, pos), Math.min(step.to, pos + node.nodeSize), formatChangeMark);
       }

@@ -10,14 +10,17 @@ export default defineConfig(({ mode }) => {
 
   if (mode !== 'test') plugins.push(nodePolyfills());
 
-  
   return {
     plugins,
+    // Combined test configuration
     test: {
       globals: true,
       environment: 'jsdom',
-      // E2E tests are run separately using Playwright
-      exclude: ['src/tests/e2e/**'],
+      exclude: [
+        '**/src/tests/e2e/**',
+        '**/*.spec.js',
+        '**/src/tests/playwright/**',
+      ],
     },
     define: {
       __APP_VERSION__: JSON.stringify(superdocVersion),

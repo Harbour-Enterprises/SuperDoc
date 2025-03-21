@@ -21,6 +21,7 @@ export const Collaboration = Extension.create({
   addPmPlugins() {
     if (!this.editor.options.ydoc) return [];
     this.options.ydoc = this.editor.options.ydoc;
+    const undoPlugin = createUndoPlugin();
 
     // Listen for document lock changes
     initDocumentLockHandler(this.options.ydoc, this.editor);
@@ -39,7 +40,6 @@ export const Collaboration = Extension.create({
       });
     });
 
-    const undoPlugin = createUndoPlugin();
     return [syncPlugin, undoPlugin];
   },
 
@@ -135,6 +135,11 @@ const initSyncListener = (ydoc, editor, extension) => {
     editor.emit('collaborationReady', { editor, ydoc });
   };
 
-  if (provider.synced) return emit();
+  if (provider.synced) {
+    setTimeout(() => {
+      emit();
+    }, 250);
+    return;
+  }
   provider.on('synced', emit);
 };

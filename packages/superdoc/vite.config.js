@@ -62,6 +62,7 @@ export default defineConfig(({ mode, command}) => {
   return {
     define: {
       __APP_VERSION__: JSON.stringify(version),
+      __IS_DEBUG__: true,
     },
     plugins,
     build: {

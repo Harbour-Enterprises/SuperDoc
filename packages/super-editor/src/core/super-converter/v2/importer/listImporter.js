@@ -187,8 +187,7 @@ function handleListNodes(
       nodeAttributes['numId'] = numId;
       
       if (docx) {
-        const defaultStyleId = attributes['w:rsidRDefault'];
-        nodeAttributes['spacing'] = getParagraphSpacing(defaultStyleId, item, docx);
+        nodeAttributes['spacing'] = getParagraphSpacing(item, docx);
       }
 
       const newListItem = createListItem(schemaElements, nodeAttributes, []);

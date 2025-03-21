@@ -31,3 +31,4 @@ lerna-debug.log*
 
 # Playwright
 test-results
+*.tgz

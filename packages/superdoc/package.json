@@ -1,7 +1,7 @@
 {
   "name": "@harbour-enterprises/superdoc",
   "type": "module",
-  "version": "0.6.50",
+  "version": "0.6.92",
   "license": "AGPL-3.0",
   "readme": "../../README.md",
   "files": [
@@ -36,9 +36,11 @@
   "scripts": {
     "dev": "vite",
     "build": "cd ../super-editor && npm run build && cd ../superdoc && vite build && tsc && npm run build:umd",
+    "build:es": "cd ../super-editor && npm run build && cd ../superdoc && vite build",
     "build:umd": "vite build --config vite.config.umd.js",
     "release": "release-it --ci --increment=patch",
     "clean": "rm -rf dist",
+    "pack:local": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz",
     "pack": "npm run build && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz"
   },
   "dependencies": {
@@ -67,7 +69,7 @@
     "postcss-nested-import": "^1.3.0",
     "release-it": "^18.1.1",
     "typescript": "^5.7.3",
-    "vite": "^6.2.1",
+    "vite": "^5.4.12",
     "vue-draggable-next": "^2.2.1"
   }
 }

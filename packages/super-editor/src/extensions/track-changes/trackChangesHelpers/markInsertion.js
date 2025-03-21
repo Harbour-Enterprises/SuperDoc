@@ -10,6 +10,7 @@ import { findTrackedMarkBetween } from './findTrackedMarkBetween.js';
  * @param {number} options.to To position.
  * @param {object} options.user User object ({ name, email }).
  * @param {string} options.date Date.
+ * @returns {Mark} Insertion mark.
  */
 export const markInsertion = ({ tr, from, to, user, date }) => {
   tr.removeMark(from, to, tr.doc.type.schema.marks[TrackDeleteMarkName]);
@@ -56,4 +57,6 @@ export const markInsertion = ({ tr, from, to, user, date }) => {
       return false;
     }
   });
+
+  return insertionMark;
 };

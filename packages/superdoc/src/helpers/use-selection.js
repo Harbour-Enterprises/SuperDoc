@@ -32,6 +32,7 @@ export default function useSelection(params) {
       documentId: documentId.value,
       page: page.value,
       selectionBounds: toRaw(selectionBounds),
+      source: source.value,
     };
   };
 

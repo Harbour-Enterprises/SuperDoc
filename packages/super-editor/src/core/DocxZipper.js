@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { getContentTypesFromXml } from './super-converter/helpers.js';
+import { CONTENT_TYPES } from './super-converter/exporter-docx-defs.js';
 
 /**
  * Class to handle unzipping and zipping of docx files
@@ -83,17 +84,18 @@ class DocxZipper {
   /**
    * Update [Content_Types].xml with extensions of new Image annotations
    */
-  async updateContentTypes(unzippedOriginalDocx, media) {
+  async updateContentTypes(docx, media) {
     const newMediaTypes = Object.keys(media).map((name) => {
       return this.getFileExtension(name);
     });
 
     const contentTypesPath = '[Content_Types].xml';
-    const contentTypesXml = await unzippedOriginalDocx.file(contentTypesPath).async('string');
+    const contentTypesXml = await docx.file(contentTypesPath).async('string');
     let typesString = '';
 
     const defaultMediaTypes = getContentTypesFromXml(contentTypesXml);
 
+    // Update media types in content types
     const seenTypes = new Set();
     for (let type of newMediaTypes) {
       // Current extension already presented in Content_Types
@@ -104,11 +106,32 @@ class DocxZipper {
       typesString += newContentType;
       seenTypes.add(type);
     }
+  
+    // Update for comments
+    if (docx.files['word/comments.xml']) {
+      const commentsDef = `<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml" />`;
+      if (!contentTypesXml.includes(commentsDef)) typesString += commentsDef;
+    };
 
+    if (docx.files['word/commentsExtended.xml']) {
+      const commentsExtendedDef = `<Override PartName="/word/commentsExtended.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml" />`;
+      if (!contentTypesXml.includes(commentsExtendedDef)) typesString += commentsExtendedDef;
+    };
+
+    if (docx.files['word/commentsIds.xml']) {
+      const commentsIdsDef = `<Override PartName="/word/commentsIds.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml" />`;
+      if (!contentTypesXml.includes(commentsIdsDef)) typesString += commentsIdsDef;
+    };
+
+    if (docx.files['word/commentsExtensible.xml']) {
+      const commentsExtendedDef = `<Override PartName="/word/commentsExtensible.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml" />`;
+      if (!contentTypesXml.includes(commentsExtendedDef)) typesString += commentsExtendedDef;
+    };
+  
     const beginningString = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
-
     const updatedContentTypesXml = contentTypesXml.replace(beginningString, `${beginningString}${typesString}`);
-    unzippedOriginalDocx.file(contentTypesPath, updatedContentTypesXml);
+
+    docx.file(contentTypesPath, updatedContentTypesXml);
   }
 
   async unzip(file) {

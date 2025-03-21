@@ -415,7 +415,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
       icon: toolbarIcons.deleteTable,
     },
     { 
-      label: 'Delete borders',
+      label: 'Transparent borders',
       command: 'deleteCellAndTableBorders',
       icon: toolbarIcons.deleteBorders,
       bottomBorder: true,
@@ -710,14 +710,14 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
 
   const getDocumentOptionsAfterRole = (role, documentOptions) => {
     if (role === 'editor') return documentOptions;
-    // else if (role === 'suggester') return documentOptions.filter((option) => option.value !== 'editing');
-    else if (role === 'viewer') return documentOptions.filter((option) => option.value === 'viewing');
+    else if (role === 'suggester') return documentOptions.filter((option) => option.value === 'suggesting');
+    else return documentOptions.filter((option) => option.value === 'viewing');
   };
 
   const getDefaultLabel = (role) => {
     if (role === 'editor') return 'Editing';
-    // if (role === 'suggester') return 'Suggesting';
-    if (role === 'viewer') return 'Viewing';
+    else if (role === 'suggester') return 'Suggesting';
+    else return 'Viewing';
   };
 
   const documentMode = useToolbarItem({
@@ -728,12 +728,13 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     icon: toolbarIcons.documentMode,
     defaultLabel: getDefaultLabel(role),
     label: getDefaultLabel(role),
-    hasCaret: true,
+    hasCaret: role === 'editor',
     isWide: true,
     style: { display: 'flex', justifyContent: 'flex-end' },
     inlineTextInputVisible: false,
     hasInlineTextInput: false,
     group: 'right',
+    disabled: role !== 'editor',
     attributes: {
       dropdownPosition: 'right',
       className: 'toolbar-item--doc-mode',

@@ -50,20 +50,25 @@ function unwrapTextMarks(textStyleMark) {
 }
 
 function getActiveAttributes(state) {
-  const { from, to, empty } = state.selection;
-  const attributes = {};
-  const getAttrs = (node) => {
-    Object.keys(node.attrs).forEach((key) => {
-      const value = node.attrs[key];
-      if (value) {
-        attributes[key] = value;
-      }
-    });
-  };
+  try {
+    const { from, to, empty } = state.selection;
+    const attributes = {};
+    const getAttrs = (node) => {
+      Object.keys(node.attrs).forEach((key) => {
+        const value = node.attrs[key];
+        if (value) {
+          attributes[key] = value;
+        }
+      });
+    };
 
-  let start = from;
-  let end = to;
-  if (empty) state.doc.nodesBetween(start, end + 1, (node) => getAttrs(node));
-  else state.doc.nodesBetween(from, to, (node) => getAttrs(node));
-  return attributes;
+    let start = from;
+    let end = to;
+    if (empty) state.doc.nodesBetween(start, end + 1, (node) => getAttrs(node));
+    else state.doc.nodesBetween(from, to, (node) => getAttrs(node));
+    return attributes;
+  } catch (error) {
+    console.debug('Error getting active attributes:', error);
+    return {};
+  }
 }

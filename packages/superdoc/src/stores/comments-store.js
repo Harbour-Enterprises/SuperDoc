@@ -16,9 +16,13 @@ export const useCommentsStore = defineStore('comments', () => {
     showResolved: false,
   });
 
+  const isDebugging = false;
+  const debounceTimers = {};
+
   const COMMENT_EVENTS = comments_module_events;
   const hasInitializedComments = ref(false);
   const activeComment = ref(null);
+  const editingCommentId = ref(null);
   const commentDialogs = ref([]);
   const overlappingComments = ref([]);
   const overlappedIds = new Set([]);
@@ -92,28 +96,71 @@ export const useCommentsStore = defineStore('comments', () => {
    * @returns {void}
    */
   const handleTrackedChangeUpdate = ({ superdoc, params }) => {
-    const { changeId, trackedChangeText, trackedChangeType, deletedText } = params;
+    const {
+      event,
+      changeId,
+      trackedChangeText,
+      trackedChangeType,
+      deletedText,
+      authorEmail,
+      date,
+      author: authorName,
+      documentId,
+    } = params;
 
-    const existingTrackedChange = commentsList.value.find((comment) => comment.commentId === changeId)
-    if (!existingTrackedChange) {
-      const comment = getPendingComment({
-        documentId: 'test',
-        commentId: changeId,
-        trackedChange: true,
-        trackedChangeText,
-        trackedChangeType,
-        deletedText,
-      });
+    const comment = getPendingComment({
+      documentId,
+      commentId: changeId,
+      trackedChange: true,
+      trackedChangeText,
+      trackedChangeType,
+      deletedText,
+      createdTime: date,
+      creatorNamne: authorName,
+      creatorEmail: authorEmail,
+      isInternal: false,
+    });
 
+    // If this is a new tracked change, add it to our comments
+    if (event === 'add') {
       addComment({ superdoc, comment });
-    } else {
+    }
+    
+    // If we have an update event, simply update the composable comment
+    else if (event === 'update') {
+      const existingTrackedChange = commentsList.value.find(
+        (comment) => comment.commentId === changeId
+      );
+      if (!existingTrackedChange) return;
       existingTrackedChange.trackedChangeText = trackedChangeText;
-      existingTrackedChange.trackedChangeType = trackedChangeType;
+      const emitData = {
+        type: COMMENT_EVENTS.UPDATE,
+        comment: existingTrackedChange.getValues(),
+      };
+
+      syncCommentsToClients(superdoc, emitData);
+      debounceEmit(changeId, emitData, superdoc);
     }
   };
 
+  const debounceEmit = (commentId, event, superdoc, delay = 1000) => {
+    if (debounceTimers[commentId]) {
+      clearTimeout(debounceTimers[commentId]);
+    }
+
+    debounceTimers[commentId] = setTimeout(() => {
+      if (superdoc) {
+        if (__IS_DEBUG__) console.debug('[debounceEmit] tracked change update emitting...', event);
+        superdoc.emit("comments-update", event);
+      }
+      delete debounceTimers[commentId];
+    }, delay);
+  };
+
   const showAddComment = (superdoc) => {    
-    superdoc.emit('comments-update', { type: COMMENT_EVENTS.PENDING });
+    const event = { type: COMMENT_EVENTS.PENDING };
+    if (__IS_DEBUG__) console.debug('[showAddComment] emitting...', event);
+    superdoc.emit('comments-update', event);
 
     const selection = { ...superdocStore.activeSelection };
     selection.selectionBounds = { ...selection.selectionBounds };
@@ -134,6 +181,8 @@ export const useCommentsStore = defineStore('comments', () => {
     }
 
     activeComment.value = pendingComment.value.commentID;
+
+    updateLastChange();
   };
 
   /**
@@ -269,7 +318,6 @@ export const useCommentsStore = defineStore('comments', () => {
     if (!activeDocument) activeDocument = superdocStore.documents[0];
 
     return useComment({
-      ...options,
       fileId: activeDocument.id,
       fileType: activeDocument.type,
       parentCommentId,
@@ -277,6 +325,7 @@ export const useCommentsStore = defineStore('comments', () => {
       creatorName: superdocStore.user.name,
       commentText: currentCommentText.value,
       selection,
+      ...options,
    });
   };
 
@@ -306,7 +355,8 @@ export const useCommentsStore = defineStore('comments', () => {
     if (!parentComment) parentComment = comment;
 
     const newComment = useComment(comment.getValues());
-    newComment.setText({ text: currentCommentText.value, suppressUpdate: true });
+
+    if (pendingComment.value) newComment.setText({ text: currentCommentText.value, suppressUpdate: true });
     newComment.selection.source = pendingComment.value?.selection?.source;
 
     // Set isInternal flag
@@ -321,19 +371,24 @@ export const useCommentsStore = defineStore('comments', () => {
     // Add the new comments to our global list
     commentsList.value.push(newComment);
 
-    if (!comment.trackedChange && superdoc.activeEditor?.commands) {
+    // Clean up the pending comment
+    removePendingComment(superdoc);
+
+    // If this is not a tracked change, and it belongs to a Super Editor, and its not a child comment
+    // We need to let the editor know about the new comment
+    if (!comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
       // Add the comment to the active editor
       superdoc.activeEditor.commands.insertComment(newComment.getValues());
     };
 
+    const event =  { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() };
+  
     // If collaboration is enabled, sync the comments to all clients
-    syncCommentsToClients(superdoc);
-
-    // Clean up the pending comment
-    removePendingComment(superdoc);
+    syncCommentsToClients(superdoc, event);
 
     // Emit event for end users
-    superdoc.emit('comments-update', { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() });
+    if (__IS_DEBUG__) console.debug('[addComment] emitting...', event);
+    superdoc.emit('comments-update', event);
 
   };
 
@@ -345,15 +400,24 @@ export const useCommentsStore = defineStore('comments', () => {
 
     superdoc.activeEditor?.commands?.removeComment({ commentId, importedId });
 
+    // Remove the current comment
     commentsList.value.splice(commentIndex, 1);
 
-    const emitData = {
+    // Remove any child comments of the removed comment
+    const childCommentIds = commentsList.value
+      .filter((c) => c.parentCommentId === commentId)
+      .map((c) => c.commentId || c.importedId);
+    commentsList.value = commentsList.value.filter((c) => !childCommentIds.includes(c.commentId));
+
+    const event = {
       type: COMMENT_EVENTS.DELETED,
       comment: comment.getValues(),
       changes: [{ key: 'deleted', commentId, fileId }],
     };
-    superdoc.emit('comments-update', emitData);
-    syncCommentsToClients(superdoc);
+    
+    if (__IS_DEBUG__) console.debug('[deleteComment] emitting...', event);
+    superdoc.emit('comments-update', event);
+    syncCommentsToClients(superdoc, event);
   }
 
   /**
@@ -376,8 +440,10 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {String} param0.documentId The document ID
    * @returns {void}
    */
-  const processLoadedDocxComments = ({ comments, documentId }) => {
+  const processLoadedDocxComments = ({ superdoc, comments, documentId }) => {
     const document = superdocStore.getDocument(documentId);
+
+    if (__IS_DEBUG__) console.debug('[processLoadedDocxComments] processing comments...', comments);
 
     comments.forEach((comment) => {
       const importedName = `${comment.creatorName.replace('(imported)', '')} (imported)`
@@ -386,19 +452,23 @@ export const useCommentsStore = defineStore('comments', () => {
         fileType: document.type,
         importedId: comment.importedId ? Number(comment.importedId): null,
         commentId: comment.id,
+        isInternal: false,
         parentCommentId: comment.parentCommentId,
-        creatorEmail: comment.creatorEmail,
-        creatorName: importedName,
+        importedAuthor: {
+          name: importedName,
+          email: comment.creatorEmail,
+        },
         commentText: getHTmlFromComment(comment.textJson),
         resolvedTime: comment.isDone ? Date.now() : null,
         resolvedByEmail: comment.isDone ? comment.creatorEmail : null,
         resolvedByName: comment.isDone ? importedName : null,
       });
-      commentsList.value.push(newComment);
+
+      addComment({ superdoc, comment: newComment });
     });
   }
 
-  const prepareCommentsForExport = () => {
+  const translateCommentsForExport = () => {
     const processedComments = []
     commentsList.value.forEach((comment) => {
       const values = comment.getValues();
@@ -454,9 +524,27 @@ export const useCommentsStore = defineStore('comments', () => {
         }
       });
 
-      lastChange.value = Date.now();
-      isFloatingCommentsReady.value = true;
+      updateLastChange();
     }, 50)
+  };
+
+  const getFloatingComments = computed(() => {
+    return getGroupedComments.value?.parentComments
+      .filter((c) => !c.resolvedTime)
+      .filter((c) => !generalCommentIds.value.includes(c.commentId || c.importedId))
+      .sort(sortFloatingCommentsByLocation);
+  });
+
+  const sortFloatingCommentsByLocation = (a, b) => {
+    // Sort comments by page and by position first
+  
+    const pageA = a.selection?.page || 0;
+    const pageB = b.selection?.page || 0;
+    if (pageA !== pageB) return pageA - pageB;
+  
+    const topB = b.selection.selectionBounds?.top;
+    const topA = a.selection.selectionBounds?.top;
+    return topA - topB;
   };
 
   /**
@@ -478,7 +566,10 @@ export const useCommentsStore = defineStore('comments', () => {
 
   return {
     COMMENT_EVENTS,
+    isDebugging,
     hasInitializedComments,
+    hasSyncedCollaborationComments,
+    editingCommentId,
     activeComment,
     commentDialogs,
     overlappingComments,
@@ -501,6 +592,7 @@ export const useCommentsStore = defineStore('comments', () => {
     getConfig,
     documentsWithConverations,
     getGroupedComments,
+    getFloatingComments,
 
     // Actions
     init,
@@ -517,7 +609,7 @@ export const useCommentsStore = defineStore('comments', () => {
     deleteComment,
     removePendingComment,
     processLoadedDocxComments,
-    prepareCommentsForExport,
+    translateCommentsForExport,
     handleEditorLocationsUpdate,
     handleTrackedChangeUpdate,
   };

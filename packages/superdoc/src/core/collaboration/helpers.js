@@ -1,6 +1,12 @@
 import { createAwarenessHandler, createProvider } from '../collaboration/collaboration';
 import useComment from '../../components/CommentsLayer/use-comment';
 
+import {
+  addYComment,
+  updateYComment,
+  deleteYComment
+} from './collaboration-comments';
+
 /**
  * Initialize sync for comments if the module is enabled
  * 
@@ -11,18 +17,30 @@ export const initCollaborationComments = (superdoc) => {
   if (!superdoc.config.modules.comments) return;
 
   // Get the comments map from the Y.Doc
-  const commentsMap = superdoc.ydoc.getMap('comments');
+  const commentsArray = superdoc.ydoc.getArray('comments');
 
   // Observe changes to the comments map
-  commentsMap.observe((event) => {
+  commentsArray.observe((event) => {
     // Ignore events if triggered by the current user
     const currentUser = superdoc.config.user;
     const { user = {} } = event.transaction.origin;
+
     if (currentUser.name === user.name && currentUser.email === user.email) return;
 
+    if (__IS_DEBUG__) console.debug('[initCollaborationComments] commentsArray.observe', commentsArray.toJSON());
+
     // Update conversations
-    const comments = commentsMap.get('comments');
-    superdoc.commentsStore.commentsList = comments.map((c) => useComment(c));
+    const comments = commentsArray.toJSON();
+
+    const seen = new Set();
+    const filtered = [];
+    comments.forEach((c) =>{
+      if (!seen.has(c.commentId)) {
+        seen.add(c.commentId);
+        filtered.push(c);
+      };
+    });
+    superdoc.commentsStore.commentsList = filtered.map((c) => useComment(c));
   });
 };
 
@@ -43,7 +61,7 @@ export const initSuperdocYdoc = (superdoc) => {
     config: superdoc.config.modules.collaboration,
     user: superdoc.config.user,
     documentId,
-    socket: superdoc.socket,
+    socket: superdoc.config.socket,
     superdocInstance: superdoc,
   };
   const { provider: superdocProvider, ydoc: superdocYdoc } = createProvider(superdocCollaborationOptions);
@@ -84,13 +102,13 @@ export const makeDocumentsCollaborative = (superdoc) => {
       config: superdoc.config.modules.collaboration,
       user: superdoc.config.user,
       documentId: doc.id,
-      socket: superdoc.socket,
+      socket: superdoc.config.socket,
       superdocInstance: superdoc,
     };
 
     const { provider, ydoc } = createProvider(options);
     doc.provider = provider;
-    doc.socket = superdoc.socket;
+    doc.socket = superdoc.config.socket;
     doc.ydoc = ydoc;
     doc.role = superdoc.config.role;
     provider.on('awarenessUpdate', ({ states }) => createAwarenessHandler(superdoc, states));
@@ -103,15 +121,27 @@ export const makeDocumentsCollaborative = (superdoc) => {
  * Sync local comments with ydoc and other clients if in collaboration mode and comments module is enabled
  * 
  * @param {Object} superdoc 
+ * @param {Object} event
  * @returns {void}
  */
-export const syncCommentsToClients = (superdoc) => {
-  if (superdoc.isCollaborative && superdoc.config.modules.comments) {
+export const syncCommentsToClients = (superdoc, event) => {
+  if (!superdoc.isCollaborative || !superdoc.config.modules.comments) return;
+  if (__IS_DEBUG__) console.debug('[comments] syncCommentsToClients', event);
 
-    const list = superdoc.commentsStore.commentsList;
-    const yComments = superdoc.ydoc.getMap('comments');
-    superdoc.ydoc.transact(() => {
-      yComments.set('comments', list);
-    }, { user: superdoc.user });
-  };
+  const yArray = superdoc.ydoc.getArray('comments');
+
+  switch(event.type) {
+    case 'add':
+      addYComment(yArray, superdoc.ydoc, event);
+      break;
+    case 'update':
+      updateYComment(yArray, superdoc.ydoc, event);
+      break;
+    case 'resolved':
+      updateYComment(yArray, superdoc.ydoc, event);
+      break;
+    case 'deleted':
+      deleteYComment(yArray, superdoc.ydoc, event);
+      break;
+  }
 };

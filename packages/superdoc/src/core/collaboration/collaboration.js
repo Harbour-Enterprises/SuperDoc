@@ -56,6 +56,7 @@ function createHocuspocusProvider({ config, user, documentId, socket, superdocIn
     onAuthenticationFailed: () => onAuthenticationFailed(documentId),
     onConnect: () => onConnect(superdocInstance, documentId),
     onDisconnect: () => onDisconnect(superdocInstance, documentId),
+    onDestroy: () => onDestroy(superdocInstance, documentId),
   };
 
   const provider = new HocuspocusProvider(options);
@@ -73,6 +74,10 @@ const onConnect = (superdocInstance, documentId) => {
 
 const onDisconnect = (superdocInstance, documentId) => {
   console.warn('🔌 [superdoc] Disconnected', documentId);
+};
+
+const onDestroy = (superdocInstance, documentId) => {
+  console.warn('🔌 [superdoc] Destroyed', documentId);
 };
 
 export { createAwarenessHandler, createProvider };

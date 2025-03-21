@@ -22,6 +22,7 @@ export function importCommentData({ docx }) {
 
   const { elements: allComments = [] } = elements[0];
   const extractedComments = allComments.map((el) => {
+
     const { attributes } = el;
     const commentId = attributes['w:id'];
     const authorName = attributes['w:author'];
@@ -80,16 +81,18 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
     const extendedDef = commentEx.find((ce) => ce.attributes['w15:paraId'] === comment.paraId);
     if (!extendedDef) return { ...comment };
 
-    const { isDone, paraIdParent } = getExtendedDetails(extendedDef);
+    const { isDone, paraIdParent, superdocCommentId } = getExtendedDetails(extendedDef);
 
     let parentComment;
     if (paraIdParent) parentComment = comments.find((c) => c.paraId === paraIdParent);
 
-    return {
+    const newComment = {
       ...comment,
+      commentId: superdocCommentId,
       isDone,
       parentCommentId: parentComment?.id,
-    }
+    };
+    return newComment;
   });
 };
 
@@ -104,5 +107,6 @@ const getExtendedDetails = (commentEx) => {
   const paraId = attributes['w15:paraId'];
   const isDone = attributes['w15:done'] === '1' ? true : false;
   const paraIdParent = attributes['w15:paraIdParent'];
-  return { paraId, isDone, paraIdParent };
-}
+  const superdocCommentId = attributes['w:rsid'];
+  return { paraId, isDone, paraIdParent, superdocCommentId };
+};

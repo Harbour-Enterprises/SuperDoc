@@ -11,7 +11,7 @@ import { findTrackedMarkBetween } from './findTrackedMarkBetween.js';
  * @param {number} options.to To position.
  * @param {object} options.user User object ({ name, email }).
  * @param {string} options.date Date.
- * @returns {Mapping} Deletion map.
+ * @returns {Object} Deletion map and deletionMark
  */
 export const markDeletion = ({ tr, from, to, user, date }) => {
   let trackedMark = findTrackedMarkBetween({
@@ -39,6 +39,7 @@ export const markDeletion = ({ tr, from, to, user, date }) => {
   const deletionMap = new Mapping();
 
   // Add deletion mark to block nodes (figures, text blocks) and find already deleted inline nodes (and leave them alone).
+  let nodes = [];
   tr.doc.nodesBetween(from, to, (node, pos) => {
     if (node.type.name.includes('table')) {
       return;
@@ -57,6 +58,7 @@ export const markDeletion = ({ tr, from, to, user, date }) => {
         deletionMap.appendMap(removeStep.getMap());
       }
     } else if (node.isInline && !node.marks.find((mark) => mark.type.name === TrackDeleteMarkName)) {
+      nodes.push(node); 
       tr.addMark(
         deletionMap.map(Math.max(from, pos)),
         deletionMap.map(Math.min(to, pos + node.nodeSize)),
@@ -71,5 +73,5 @@ export const markDeletion = ({ tr, from, to, user, date }) => {
     }
   });
 
-  return deletionMap;
+  return { deletionMark, deletionMap, nodes };
 };

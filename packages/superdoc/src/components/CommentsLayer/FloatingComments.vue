@@ -20,6 +20,8 @@ const {
   getGroupedComments,
   lastChange,
   generalCommentIds,
+  isFloatingCommentsReady,
+  getFloatingComments,
 } = storeToRefs(commentsStore);
 const { user, activeZoom } = storeToRefs(superdocStore);
 
@@ -57,7 +59,14 @@ const handleDialogReady = ({ commentId: dialogId, elementRef }) => {
   if (!activeComment.value) {
     floatingCommentsOffset.value = 0;
   } else if (dialogId === activeComment.value) {
+    // First calculate and set the offset
     floatingCommentsOffset.value = (dialog.floatingPosition.top - dialog.selection?.selectionBounds?.top) * -1;
+    setTimeout(() => {
+      elementRef.value?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }, 100); // 100ms delay to ensure the offset is set before scrolling
   }
 
   nextTick(() => {
@@ -91,18 +100,6 @@ const renderDialog = (data, previousNode, previousBounds) => {
   visibleConversations.value.push(nextConvo);
 };
 
-const sortByLocation = (a, b) => {
-  // Sort comments by page and by position first
-
-  const pageA = a.selection?.page || 0;
-  const pageB = b.selection?.page || 0;
-  if (pageA !== pageB) return pageA - pageB;
-
-  const topB = b.selection.selectionBounds.top;
-  const topA = a.selection.selectionBounds.top;
-  return topA - topB;
-};
-
 const initialize = () => {
   requestAnimationFrame(() => {
     visibleConversations.value = [];
@@ -112,13 +109,10 @@ const initialize = () => {
 };
 
 const initializeConvos = () => {
-  sortedConversations.value = getGroupedComments.value?.parentComments
-    .filter((c) => !c.resolvedTime)
-    .filter((c) => !generalCommentIds.value.includes(c.commentId || c.importedId))
-    .sort(sortByLocation);
-  
+  sortedConversations.value = getFloatingComments.value;
   if (!sortedConversations.value?.length) return;
-
+  
+  isFloatingCommentsReady.value = true;
   const firstComment = sortedConversations.value[0];
   const offset = firstComment.selection?.selectionBounds?.top || floatingCommentsOffset.value;
   firstComment.floatingPosition = { top: offset };
@@ -134,7 +128,7 @@ const getCommentPosition = (floatingComment) => {
 const getFloatingSidebarStyle = computed(() => {
   return {
     transform: `translateY(${floatingCommentsOffset.value}px)`,
-    transition: 'all 0.3s ease',
+    transition: 'all 0.1s ease',
   };
 });
 
@@ -155,11 +149,17 @@ const updateOffset = () => {
 watch(lastChange, (newVal) => initialize());
 watch(activeComment, (newVal) => {
   if (generalCommentIds.value.includes(newVal)) return;
-  if (!activeComment.value) {
+  else {
     initialize();
   }
 });
 watch(activeZoom, () => {
+  initialize();
+});
+watch(commentsList, (newVal, oldVal) => {
+  initialize();
+});
+onMounted(() => {
   initialize();
 });
 
@@ -170,6 +170,7 @@ watch(activeZoom, () => {
     <div :style="getFloatingSidebarStyle" class="sidebar-container" :key="lastChange">
       <div v-for="floatingComment in visibleConversations">
         <CommentDialog
+          :key="floatingComment.commentId"
           class="floating-comment"
           @ready="handleDialogReady"
           :parent="parent"

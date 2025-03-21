@@ -51,7 +51,7 @@ export const handleParagraphNode = (params) => {
   const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
   if (styleTag) {
     schemaNode.attrs['styleId'] = styleTag.attributes['w:val'];
-  };
+  }
 
   const indent = pPr?.elements?.find((el) => el.name === 'w:ind');
   if (indent && indent.attributes) {
@@ -62,7 +62,7 @@ export const handleParagraphNode = (params) => {
       if (left) schemaNode.attrs['indent'].left = twipsToPixels(left);
       if (right) schemaNode.attrs['indent'].right = twipsToPixels(right);
       if (firstLine) schemaNode.attrs['indent'].firstLine = twipsToPixels(firstLine);
-    };
+    }
 
     const textIndentVal = left || firstLine || 0;
     schemaNode.attrs['textIndent'] = `${twipsToInches(textIndentVal)}in`;
@@ -75,7 +75,7 @@ export const handleParagraphNode = (params) => {
 
   if (docx) {
     const defaultStyleId = node.attributes?.['w:rsidRDefault'];
-    schemaNode.attrs['spacing'] = getParagraphSpacing(defaultStyleId, node, docx);
+    schemaNode.attrs['spacing'] = getParagraphSpacing(node, docx);
     schemaNode.attrs['rsidRDefault'] = defaultStyleId;
   }
 
@@ -92,7 +92,7 @@ export const handleParagraphNode = (params) => {
   return { nodes: schemaNode ? [schemaNode] : [], consumed: 1 };
 };
 
-export const getParagraphSpacing = (defaultStyleId, node, docx) => {
+export const getParagraphSpacing = (node, docx) => {
   // Check if we have default paragraph styles to override
   const spacing = {
     lineSpaceAfter: 0,

@@ -1,6 +1,6 @@
 import { join } from 'path';
 import { readFile } from 'fs/promises';
-import { Editor, getRichTextExtensions } from '@core/Editor.js';
+import { Editor } from '@core/Editor.js';
 import { getRichTextExtensions } from '@harbour-enterprises/super-editor';
 import { getStarterExtensions } from '@extensions/index.js';
 import { exportSchemaToJson } from '@converter/exporter';

@@ -6,6 +6,7 @@ import { useCommentsStore } from '@superdoc/stores/comments-store';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { SuperInput } from '@harbour-enterprises/super-editor';
 import { superdocIcons } from '@superdoc/icons.js';
+import { isAllowed, PERMISSIONS } from '@superdoc/core/collaboration/permissions.js';
 import useSelection from '@superdoc/helpers/use-selection';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 import Avatar from '@superdoc/components/general/Avatar.vue';
@@ -30,6 +31,9 @@ const props = defineProps({
 });
 
 const { proxy } = getCurrentInstance();
+const role = proxy.$superdoc.config.role;
+const commentCreator = props.comment.email;
+
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 
@@ -42,12 +46,13 @@ const {
   floatingCommentsOffset,
   pendingComment,
   currentCommentText,
+  isDebugging,
+  editingCommentId,
 } = storeToRefs(commentsStore);
 
 const { activeZoom } = storeToRefs(superdocStore);
 
 const isInternal = ref(true);
-const isEditing = ref(false);
 const isFocused = ref(false);
 const commentInput = ref(null);
 const commentDialogElement = ref(null);
@@ -57,7 +62,7 @@ const showButtons = computed(() => {
   return !getConfig.readOnly
     && isActiveComment.value
     && !props.comment.resolvedTime
-    && !isEditing.value;
+    && editingCommentId.value !== props.comment.commentId;
 });
 
 const showSeparator = computed(() => (index) => {
@@ -70,7 +75,7 @@ const showInputSection = computed(() => {
   return !getConfig.readOnly
     && isActiveComment.value
     && !props.comment.resolvedTime
-    && !isEditing.value;
+    && editingCommentId.value !== props.comment.commentId;
 });
 
 const comments = computed(() => {
@@ -84,68 +89,13 @@ const comments = computed(() => {
     .sort((a, b) => a.commentId === props.comment.commentId && a.createdTime - b.createdTime);
 });
 
-const getCommentUser = computed(() => (comment) => {
-  return {
-    name: comment.creatorName,
-    email: comment.creatorEmail,
-  };
-});
-
-const allowReject = computed(() => (comment) => {
-  if (!comment.trackedChange) return false;
-
-  const isResolved = comment.resolvedTime;
-  const isParentComment = !comment.parentCommentId;
-  const isParentCommentUser = comment.creatorEmail === superdocStore.user.email;
-  return (isParentCommentUser || comment.trackedChange)
-    && isParentComment
-    && !isResolved;
-});
-
-const allowResolve = computed(() => (comment) => {
-  const isAllowOverride = getConfig.value.allowResolveOverride;
-  if (isAllowOverride) return true;
-
-  const allowResolveAll = getConfig.value.allowResolveAll;
-  if (allowResolveAll) return true;
-
-  const allowedInConfig = getConfig.value.allowResolve;
-  const isParentCommentUser = comment.creatorEmail === superdocStore.user.email;
-  const isResolved = comment.resolvedTime;
-  const isParentComment = !comment.parentCommentId;
-  return allowedInConfig
-    && (isParentCommentUser || !comment.creatorEmail || comment.trackedChange)
-    && isParentComment
-    && !isResolved;
-});
-
 const isInternalDropdownDisabled = computed(() => {
   if (props.comment.resolvedTime) return true;
   return getConfig.value.readOnly;
 });
 
-const overflowOptions = [
-  { label: 'Edit', key: 'edit' },
-  { label: 'Delete', key: 'delete' },
-];
-
-const showOverflow = computed(() => (comment) => {
-  if (!!props.comment.resolvedTime) return [];
-  if (getConfig.value.readOnly) return [];
-  if (!getConfig.value.overflow) return [];
-  if (comment.trackedChange) return [];
-
-  // If this comment belongs to the current user, allow edit, delete
-  if (comment.creatorEmail === superdocStore.user.email) {
-    return overflowOptions;
-  };
-
-  // Allow no overflow if the comment does not belong to the current user
-  return [];
-});
-
 const isEditingThisComment = computed(() => (comment) => {
-  return isEditing.value === comment.commentId;
+  return editingCommentId.value === comment.commentId;
 });
 
 const shouldShowInternalExternal = computed(() => {
@@ -191,8 +141,21 @@ const handleAddComment = () => {
 };
 
 const handleReject = () => {
-  commentsStore.deleteComment({ superdoc: proxy.$superdoc, commentId: props.comment.commentId });
-  proxy.$superdoc.activeEditor.commands.rejectTrackedChangeById(props.comment.commentId);
+  if (props.comment.trackedChange) {
+    props.comment.resolveComment({
+      email: superdocStore.user.email,
+      name: superdocStore.user.name,
+      superdoc: proxy.$superdoc,
+    });
+    proxy.$superdoc.activeEditor.commands.rejectTrackedChangeById(props.comment.commentId);
+  } else {
+    commentsStore.deleteComment({ superdoc: proxy.$superdoc, commentId: props.comment.commentId });
+  };
+
+  nextTick(() => {
+    commentsStore.lastUpdate = new Date();
+    activeComment.value = null;
+  });
 }
 
 const handleResolve = () => {
@@ -216,8 +179,8 @@ const handleOverflowSelect = (value, comment) => {
   switch (value) {
     case 'edit':
       currentCommentText.value = comment.commentText;
-      isEditing.value = comment.commentId;
       activeComment.value = comment.commentId;
+      editingCommentId.value = comment.commentId;
       break;
     case 'delete':
       deleteComment({ superdoc: proxy.$superdoc, commentId: comment.commentId });
@@ -226,7 +189,7 @@ const handleOverflowSelect = (value, comment) => {
 };
 
 const handleCommentUpdate = (comment) => {
-  isEditing.value = null;
+  editingCommentId.value = null;
   comment.setText({ text: currentCommentText.value, superdoc: proxy.$superdoc });
   removePendingComment(proxy.$superdoc);
 }
@@ -274,6 +237,26 @@ const getSidebarCommentStyle = computed(() => {
   return style;
 });
 
+const getProcessedDate = (timestamp) => {
+  const isString = typeof timestamp === 'string';
+  return isString ? new Date(timestamp).getTime() : timestamp;
+};
+
+const handleCancel = (comment) => {
+  editingCommentId.value = null;
+  cancelComment(proxy.$superdoc);
+};
+
+const usersFiltered = computed(() => {
+  const users = proxy.$superdoc.users;
+
+  if (props.comment.isInternal === true) {
+    return users.filter((user) => user.access?.role === 'internal');
+  }
+
+  return users;
+});
+
 onMounted(() => {
   if (props.autoFocus) {
     nextTick(() => setFocus());
@@ -306,12 +289,9 @@ onMounted(() => {
     <!-- Comments and their threaded (sub) comments are rendered here -->
     <div v-for="(comment, index) in comments" :key="index" class="conversation-item">
       <CommentHeader
-        :user="getCommentUser(comment)"
         :config="getConfig"
-        :timestamp="comment.createdTime"
-        :allow-resolve="allowResolve(comment)"
-        :allow-reject="allowReject(comment)"
-        :overflow-options="showOverflow(comment)"
+        :timestamp="getProcessedDate(comment.createdTime)"
+        :comment="comment"
         @resolve="handleResolve"
         @reject="handleReject"
         @overflow-select="handleOverflowSelect($event, comment)"
@@ -320,10 +300,13 @@ onMounted(() => {
       <div class="card-section comment-body" v-if="comment.trackedChange">
         <div class="tracked-change">
           <div class="tracked-change">
-            <div v-if="['trackInsert', 'both'].includes(comment.trackedChangeType)">
+            <div v-if="comment.trackedChangeType === 'trackFormat'">
+              <span class="change-type">Format: </span><span class="tracked-change-text">{{ comment.trackedChangeText }}</span>
+            </div>
+            <div v-if="comment.trackedChangeText && comment.trackedChangeType !== 'trackFormat'">
               <span class="change-type">Added: </span><span class="tracked-change-text">{{ comment.trackedChangeText }}</span>
             </div>
-            <div v-if="['trackDelete', 'both'].includes(comment.trackedChangeType)">
+            <div v-if="comment.deletedText && comment.trackedChangeType !== 'trackFormat'">
               <span class="change-type">Deleted: </span><span class="tracked-change-text">{{ comment.deletedText }}</span>
             </div>
           </div>
@@ -332,16 +315,19 @@ onMounted(() => {
 
       <!-- Show the comment text, unless we enter edit mode, then show an input and update buttons -->
       <div class="card-section comment-body" v-if="!comment.trackedChange">
-        <div v-if="!isEditingThisComment(comment)" class="comment" v-html="comment.commentText"></div>
+        <div v-if="!isDebugging && !isEditingThisComment(comment)" class="comment" v-html="comment.commentText"></div>
+        <div v-else-if="isDebugging && !isEditingThisComment(comment)" class="comment">
+          {{ comment.selection.selectionBounds }}
+        </div>
         <div v-else class="comment-editing">
           <CommentInput
-            :user="superdocStore.user"
-            :users="proxy.$superdoc.users"
+            :users="usersFiltered"
             :config="getConfig"
             :include-header="false"
+            :comment="comment"
           />
           <div class="comment-footer">
-            <button class="sd-button" @click.stop.prevent="cancelComment(proxy.$superdoc)">Cancel</button>
+            <button class="sd-button" @click.stop.prevent="handleCancel(comment)">Cancel</button>
             <button
               class="sd-button primary"
               @click.stop.prevent="handleCommentUpdate(comment)"
@@ -358,9 +344,9 @@ onMounted(() => {
     <div v-if="showInputSection && !getConfig.readOnly">
       <CommentInput
         ref="commentInput"
-        :user="superdocStore.user"
-        :users="proxy.$superdoc.users"
+        :users="usersFiltered"
         :config="getConfig"
+        :comment="props.comment"
       />
 
       <div class="comment-footer" v-if="showButtons && !getConfig.readOnly">

@@ -158,8 +158,8 @@ class SuperConverter {
 
       const superdocVersion = properties.elements.find((el) => el.name === 'property' && el.attributes.name === 'SuperdocVersion');
       if (!superdocVersion) return;
-      
-      const version = superdocVersion.elements[0].elements[0].elements[0].text;
+  
+      const version = superdocVersion.elements[0].elements[0].text;
       return version;
     } catch (e) {
       console.warn('Error getting Superdoc version', e);
@@ -302,9 +302,9 @@ class SuperConverter {
     }
   }
 
-  schemaToXml(data) {
+  schemaToXml(data, debug = false) {
     const exporter = new DocxExporter(this);
-    return exporter.schemaToXml(data);
+    return exporter.schemaToXml(data, debug);
   }
 
   async exportToDocx(
@@ -348,18 +348,22 @@ class SuperConverter {
     });
 
     // Update content types and comments files as needed
-    const { documentXml, relationships } = this.#prepareCommentsXmlFilesForExport({
-      defs: params.exportedCommentDefs,
-      exportType: commentsExportType,
-      commentsWithParaIds,
-      relationships: params.relationships,
-    });
-    
-    this.convertedXml = documentXml;
-    const updatedRelationships = relationships;
+    let updatedXml = { ...this.convertedXml };
+    let commentsRels = [];
+    if (comments.length) {
+      const { documentXml, relationships } = this.#prepareCommentsXmlFilesForExport({
+        defs: params.exportedCommentDefs,
+        exportType: commentsExportType,
+        commentsWithParaIds,
+      });
+      updatedXml = { ...documentXml };
+      commentsRels = relationships;
+    };
 
+    this.convertedXml = { ...this.convertedXml, ...updatedXml };
+    
     // Update the rels table
-    this.#exportProcessNewRelationships(updatedRelationships);
+    this.#exportProcessNewRelationships([...params.relationships, ...commentsRels]);
 
     // Store the SuperDoc version
     storeSuperdocVersion(this.convertedXml);
@@ -378,29 +382,36 @@ class SuperConverter {
       commentsWithParaIds,
       converter: this,
     });
+
     return { documentXml, relationships };
   }
 
   #exportProcessNewRelationships(rels = []) {
     const relsData = this.convertedXml['word/_rels/document.xml.rels'];
     const relationships = relsData.elements.find((x) => x.name === 'Relationships');
-    const newRels = [...relationships.elements];
+    const newRels = [];
 
     let largestId = Math.max(...relationships.elements.map((el) => Number(el.attributes.Id.replace('rId', ''))));
     rels.forEach((rel) => {
+      const existingId = rel.attributes.Id;
       const existingTarget = relationships.elements.find((el) => el.attributes.Target === rel.attributes.Target);
-      if (existingTarget) {
-        console.debug('Duplicate relationship found', rel.attributes.Target);
+      const isNewMedia = rel.attributes.Target?.startsWith('media/') && existingId.length > 6;
+      
+      if (existingTarget && !isNewMedia) {
         return;
-      };
+      }
 
-      rel.attributes.Target = rel.attributes?.Target?.replace(/&/g, '&amp;').replace(/-/g, '&#45;');
-      rel.attributes.Id = `rId${++largestId}`;
+      // Update the target to escape ampersands
+      rel.attributes.Target = rel.attributes?.Target?.replace(/&/g, '&amp;');
+
+      // Update the ID. If we've assigned a long ID (ie: images) we leave it alone
+      rel.attributes.Id = existingId.length > 6 ? existingId : `rId${++largestId}`;
+
       newRels.push(rel);
     });
 
-    relationships.elements = newRels;
-    console.debug('New relationships added', newRels, relsData);
+    relationships.elements = [...relationships.elements, ...newRels];
+
     this.convertedXml['word/_rels/document.xml.rels'] = relsData;
   }
 
@@ -432,7 +443,21 @@ function storeSuperdocVersion(docx) {
   const properties = customXml.elements.find((el) => el.name === 'Properties');
   if (!properties.elements) properties.elements = [];
   const elements = properties.elements;
-  elements.push(generateSuperdocVersion());
+
+  const cleanProperties = elements
+    .filter((prop) => (typeof prop === 'object' && prop !== null))
+    .filter((prop) => {
+      const { attributes } = prop;
+      return attributes.name !== 'SuperdocVersion';
+    });
+
+  let pid = 2;
+  try {
+    pid = cleanProperties.length ? Math.max(...elements.map(el => el.attributes.pid)) + 1 : 2;
+  } catch (error) {};
+
+  cleanProperties.push(pid, generateSuperdocVersion());
+  properties.elements = cleanProperties;
   return docx;
 };
 
@@ -440,26 +465,23 @@ function generateCustomXml() {
   return DEFAULT_CUSTOM_XML;
 }
 
-function generateSuperdocVersion(version = __APP_VERSION__) {
+function generateSuperdocVersion(pid = 2, version = __APP_VERSION__) {
   return {
     type: "element",
     name: "property",
     attributes: {
       name: "SuperdocVersion",
-      formatId: "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}",
-      pid: "2"
+      fmtid: "{D5CDD505-2E9C-101B-9397-08002B2CF9AE}",
+      pid,
     },
     elements: [
       {
         type: "element",
-        name: "vt:superdoc",
+        name: "vt:lpwstr",
         elements: [
           {
-            name: "w:t",
-            elements: [{
-              type: "text",
-              text: version
-            }],
+            type: "text",
+            text: version
           }
         ]
       }

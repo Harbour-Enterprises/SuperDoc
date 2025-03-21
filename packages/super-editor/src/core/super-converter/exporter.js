@@ -60,7 +60,6 @@ import { translateCommentNode } from './v2/exporter/commentsExporter.js';
  * @returns {XmlReadyNode} The complete document node in XML-ready format
  */
 export function exportSchemaToJson(params) {
-  // console.debug('\nExporting schema to JSON:', params.node, '\n');
   const { type } = params.node || {};
 
   // Node handlers for each node type that we can export
@@ -344,7 +343,7 @@ function createTrackStyleMark(marks) {
         'w:authorEmail': trackStyleMark.attrs.authorEmail,
         'w:date': trackStyleMark.attrs.date,
       },
-      elements: trackStyleMark.attrs.before.map((mark) => processOutputMarks(mark)).filter((r) => r !== undefined),
+      elements: trackStyleMark.attrs.before.map((mark) => processOutputMarks([mark])).filter((r) => r !== undefined),
     };
     return markElement;
   }
@@ -500,7 +499,7 @@ function addNewLinkRelationship(params, link) {
  */
 function addNewImageRelationship(params, imagePath) {
   const newId = 'rId' + generateDocxRandomId();
-  params.relationships.push({
+  const newRel = {
     type: 'element',
     name: 'Relationship',
     attributes: {
@@ -508,7 +507,8 @@ function addNewImageRelationship(params, imagePath) {
       Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
       Target: imagePath,
     },
-  });
+  };
+  params.relationships.push(newRel);
   return newId;
 }
 
@@ -534,6 +534,9 @@ function translateList(params) {
       };
       
       const outputNode = exportSchemaToJson({ ...params, node: paragraphNode });
+      if (!outputNode.elements) {
+        outputNode.elements = [];
+      }
       const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
       
       const listProps = getListParagraphProperties(listNode, level, type, propsElementIndex > -1);
@@ -917,9 +920,12 @@ function generateTableRowProperties(node) {
  * @returns {XmlReadyNode} The translated table cell node
  */
 function translateTableCell(params) {
-  const elements = translateChildNodes(params);
+  const elements = translateChildNodes({
+    ...params,
+    tableCell: params.node,
+  });
   const cellProps = generateTableCellProperties(params.node);
-
+  
   elements.unshift(cellProps);
   return {
     name: 'w:tc',
@@ -1178,6 +1184,7 @@ function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
 function translateImageNode(params, imageSize) {
   const {
     node: { attrs = {}, marks = [] },
+    tableCell,
   } = params;
 
   let imageId = attrs.rId;
@@ -1199,6 +1206,16 @@ function translateImageNode(params, imageSize) {
       w: pixelsToEmu(scaledWidth),
       h: pixelsToEmu(scaledHeight),
     };
+  }
+  
+  if (tableCell) {
+    // Image inside tableCell
+    const colwidthSum = tableCell.attrs.colwidth.reduce((acc, curr) => acc + curr, 0);
+    const leftMargin = tableCell.attrs.cellMargins?.left || 8;
+    const rightMargin = tableCell.attrs.cellMargins?.right || 8;
+    const maxWidthEmu = pixelsToEmu(colwidthSum - (leftMargin + rightMargin));
+    const { width: w, height: h } = resizeKeepAspectRatio(size.w, size.h, maxWidthEmu);
+    if (w && h) size = { w, h };
   }
   
   if (params.node.type === 'image' && !imageId) {
@@ -1598,39 +1615,44 @@ export class DocxExporter {
     this.converter = converter;
   }
 
-  schemaToXml(data) {
+  schemaToXml(data, debug = false) {
     console.debug('[SuperConverter] schemaToXml:', data);
-    const result = this.#generate_xml_as_list(data);
-    // console.debug('[SuperConverter] schemaToXml result:', result.join(''));
+    const result = this.#generate_xml_as_list(data, debug);
     return result.join('');
   }
 
-  #generate_xml_as_list(data) {
+  #generate_xml_as_list(data, debug = falase) {
     const json = JSON.parse(JSON.stringify(data));
     const declaration = this.converter.declaration.attributes;
     const xmlTag = `<?xml${Object.entries(declaration)
       .map(([key, value]) => ` ${key}="${value}"`)
       .join('')}?>`;
-    const result = this.#generateXml(json);
+    const result = this.#generateXml(json, debug);
     const final = [xmlTag, ...result];
     return final;
   }
 
   #replaceSpecialCharacters(text) {
     if (!text) return;
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return text.replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
-  #generateXml(node) {
+  #generateXml(node, debug = false) {
     if (!node) return null;
-    const { name, elements, attributes } = node;
+    let { name } = node;
+    const { elements, attributes } = node;
+
     let tag = `<${name}`;
 
     for (let attr in attributes) {
-      tag += ` ${attr}="${attributes[attr]}"`;
+      const parsedAttrName = typeof attributes[attr] === 'string' ? this.#replaceSpecialCharacters(attributes[attr]) : attributes[attr];
+      tag += ` ${attr}="${parsedAttrName}"`;
     }
 
-    const selfClosing = !elements || !elements.length;
+    const selfClosing = name && (!elements || !elements.length);
     if (selfClosing) tag += ' />';
     else tag += '>';
     let tags = [tag];
@@ -1645,7 +1667,11 @@ export class DocxExporter {
         for (let child of elements) {
           const newElements = this.#generateXml(child);
           if (!newElements) continue;
-          tags.push(...newElements);
+          const removeUndefined = newElements.filter((el) => {
+            return el !== '<undefined>' && el !== '</undefined>'
+          });
+        
+          tags.push(...removeUndefined);
         }
       }
     }
@@ -1653,4 +1679,14 @@ export class DocxExporter {
     if (!selfClosing) tags.push(`</${name}>`);
     return tags;
   }
+}
+
+
+function resizeKeepAspectRatio(width, height, maxWidth) {
+  if (width > maxWidth) {
+    let scale = maxWidth / width;
+    let newHeight = Math.round(height * scale);
+    return { width: maxWidth, height: newHeight };
+  }
+  return { width, height };
 }

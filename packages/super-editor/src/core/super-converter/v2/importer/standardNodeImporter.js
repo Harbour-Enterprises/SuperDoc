@@ -43,14 +43,15 @@ export const handleStandardNode = (params) => {
   // Iterate through the children and build the schemaNode content
   // Skip run properties since they are formatting only elements
   const content = [];
+  const parentStyleId = getParentStyleId(node);
   if (elements && elements.length) {
     const updatedElements = elements.map((el) => {
       if (!el.marks) el.marks = [];
       el.marks.push(...marks);
       return el;
     });
-
-    const childParams = { ...params, nodes: updatedElements };
+    
+    const childParams = { ...params, nodes: updatedElements, parentStyleId };
     const childContent = nodeListHandler.handler(childParams);
     content.push(...childContent);
   }
@@ -64,6 +65,12 @@ export const handleStandardNode = (params) => {
   
   return { nodes: [resultNode], consumed: 1 };
 };
+
+const getParentStyleId = node => {
+  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
+  const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
+  return styleTag ? styleTag.attributes['w:val'] : null;
+}
 
 /**
  * @type {import("docxImporter").NodeHandlerEntry}

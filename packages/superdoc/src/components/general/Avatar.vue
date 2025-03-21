@@ -7,8 +7,8 @@ const props = defineProps({
 });
 
 const getInitials = (name, email) => {
-  if (!name) return;
-  const firstLetter = name.substring(0, 1) || email.substring(0, 1) || null;
+  if (!name && !email) return;
+  const firstLetter = name?.substring(0, 1) || email?.substring(0, 1) || null;
   return firstLetter;
 };
 </script>

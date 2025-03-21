@@ -18,9 +18,14 @@ const currentFile = ref(null);
 const commentsPanel = ref(null);
 const showCommentsPanel = ref(true);
 
+const urlParams = new URLSearchParams(window.location.search);
+const isInternal = urlParams.has('internal');
+const testUserEmail = urlParams.get('userEmail') || 'user@superdoc.com';
+const userRole = urlParams.get('role') || 'editor';
+
 const user = {
   name: `SuperDoc ${Math.floor(1000 + Math.random() * 9000)}`,
-  email: 'user@harbourshare.com',
+  email: testUserEmail,
 };
 
 const handleNewFile = async (file) => {
@@ -42,13 +47,13 @@ const init = async () => {
     selector: '#superdoc',
     toolbar: 'toolbar',
     // toolbarGroups: ['center'],
-    role: 'editor',
+    role: userRole,
     documentMode: 'editing',
     toolbarGroups: ['left', 'center', 'right'],
     pagination: true,
     rulers: true,
     annotations: false,
-    isInternal: true,
+    isInternal,
     telemetry: false,
     // isDev: true,
     user,

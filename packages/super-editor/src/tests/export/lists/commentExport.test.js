@@ -6,7 +6,6 @@ import basicResolvedCommentData from '../data/comments/basic-resolved-comment';
 import {
   getInitials,
   toIsoNoFractional,
-  generateCommentId,
   removeCommentsFilesFromConvertedXml,
 } from '@converter/v2/exporter/commentsExporter';
 
@@ -88,28 +87,6 @@ describe('test toIsoNoFractional function', () => {
     const date = Date.now();
     const isoDate = toIsoNoFractional(date);
     expect(isoDate).toBe(new Date(date).toISOString().replace(/\.\d{3}Z$/, 'Z'));
-  });
-});
-
-describe('generateCommentId', () => {
-  it('should return an 8-character string', () => {
-    const id = generateCommentId();
-    expect(id).to.be.a('string');
-    expect(id).to.have.lengthOf(8);
-  });
-
-  it('should start with a digit', () => {
-    const id = generateCommentId();
-    const firstChar = id[0];
-    expect('0123456789').to.include(firstChar);
-  });
-
-  it('should only contain digits and uppercase letters', () => {
-    const id = generateCommentId();
-    const validChars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    for (let char of id) {
-      expect(validChars).to.include(char);
-    }
   });
 });
 

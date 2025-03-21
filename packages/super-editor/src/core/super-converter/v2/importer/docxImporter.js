@@ -169,7 +169,7 @@ const createNodeListHandler = (nodeHandlers) => {
     };
   };
 
-  const nodeListHandlerFn = ({ nodes: elements, docx, insideTrackChange, converter, editor, filename }) => {
+  const nodeListHandlerFn = ({ nodes: elements, docx, insideTrackChange, converter, editor, filename, parentStyleId }) => {
     if (!elements || !elements.length) return [];
     
     const processedElements = [];
@@ -193,7 +193,8 @@ const createNodeListHandler = (nodeHandlers) => {
                 insideTrackChange,
                 converter,
                 editor,
-                filename
+                filename,
+                parentStyleId
               });
             },
             { nodes: [], consumed: 0 }

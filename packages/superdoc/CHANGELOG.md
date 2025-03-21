@@ -1,5 +1,98 @@
 # Changelog
 
+## [0.6.92](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.91...v0.6.92) (2025-03-20)
+
+## [0.6.91](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.90...v0.6.91) (2025-03-20)
+
+## [0.6.90](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.89...v0.6.90) (2025-03-20)
+
+## [0.6.89](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.88...v0.6.89) (2025-03-20)
+
+## [0.6.88](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.87...v0.6.88) (2025-03-20)
+
+
+### Bug Fixes
+
+* comments not repositioning after you add comment to existing dialog ([ffa51ae](https://github.com/Harbour-Enterprises/SuperDoc/commit/ffa51ae37913c6674431b94f56081b9d7adb36f2))
+
+## [0.6.87](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.86...v0.6.87) (2025-03-20)
+
+## [0.6.86](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.84...v0.6.86) (2025-03-20)
+
+## [0.6.84](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.83...v0.6.84) (2025-03-20)
+
+## [0.6.83](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.80...v0.6.83) (2025-03-19)
+
+
+### Bug Fixes
+
+* do not reposition floating comments when selected ([5edfff8](https://github.com/Harbour-Enterprises/SuperDoc/commit/5edfff8a1b02f499a9f9219e1e1d1bd7b1c49b75))
+* improve floating comments offset calculation and scrolling behavior ([2ae0b62](https://github.com/Harbour-Enterprises/SuperDoc/commit/2ae0b62def80c0acf52ad84389914a6324250bb9))
+
+## [0.6.80](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.79...v0.6.80) (2025-03-19)
+
+## [0.6.79](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.78...v0.6.79) (2025-03-18)
+
+## [0.6.78](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.76...v0.6.78) (2025-03-18)
+
+
+### Bug Fixes
+
+* improve selection bounds calculation for floating comments ([7d9306d](https://github.com/Harbour-Enterprises/SuperDoc/commit/7d9306d8b6c1505ffaf906db6298e07810ff01c1))
+
+## [0.6.76](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.75...v0.6.76) (2025-03-18)
+
+## [0.6.75](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.74...v0.6.75) (2025-03-17)
+
+## [0.6.74](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.73...v0.6.74) (2025-03-17)
+
+## [0.6.73](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.71...v0.6.73) (2025-03-17)
+
+## [0.6.71](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.70...v0.6.71) (2025-03-17)
+
+## [0.6.70](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.69...v0.6.70) (2025-03-17)
+
+## [0.6.69](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.68...v0.6.69) (2025-03-17)
+
+## [0.6.68](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.67...v0.6.68) (2025-03-17)
+
+## [0.6.67](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.66...v0.6.67) (2025-03-17)
+
+## [0.6.66](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.65...v0.6.66) (2025-03-17)
+
+## [0.6.65](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.64...v0.6.65) (2025-03-15)
+
+## [0.6.64](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.63...v0.6.64) (2025-03-15)
+
+## [0.6.63](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.62...v0.6.63) (2025-03-14)
+
+## [0.6.62](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.61...v0.6.62) (2025-03-14)
+
+## [0.6.61](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.60...v0.6.61) (2025-03-14)
+
+## [0.6.60](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.59...v0.6.60) (2025-03-14)
+
+## [0.6.59](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.58...v0.6.59) (2025-03-14)
+
+## [0.6.58](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.57...v0.6.58) (2025-03-14)
+
+## [0.6.57](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.56...v0.6.57) (2025-03-14)
+
+## [0.6.56](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.55...v0.6.56) (2025-03-14)
+
+## [0.6.55](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.54...v0.6.55) (2025-03-13)
+
+## [0.6.54](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.53...v0.6.54) (2025-03-13)
+
+## [0.6.53](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.52...v0.6.53) (2025-03-13)
+
+
+### Reverts
+
+* Revert "chore(deps): bump the npm_and_yarn group across 1 directory with 2 updates" ([931801f](https://github.com/Harbour-Enterprises/SuperDoc/commit/931801fc0f2b0ab004837d000811bf2f53960671))
+
+## [0.6.52](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.50...v0.6.52) (2025-03-13)
+
 ## [0.6.50](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.6.49...v0.6.50) (2025-03-12)
 
 

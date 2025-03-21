@@ -1,4 +1,4 @@
-import { generateDocxRandomId } from './generateDocxRandomId';
+import { generateDocxRandomId, generateRandom32BitHex } from './generateDocxRandomId';
 
 export function generateDocxListAttributes(listType) {
   // Our default blank doc definition has the following list types:

@@ -315,24 +315,16 @@ export class Editor extends EventEmitter {
    * If we are replacing data and have a valid provider, listen for synced event
    * so that we can initialize the data
    */
-  initializeCollaborationData() {
-    const hasData = this.extensionService.extensions.find((e) => e.name === 'collaboration')
-      ?.options.isReady;
-    if (hasData) {
-      setTimeout(() => {
-        this.emit('collaborationReady', { editor: this, ydoc: this.options.ydoc });
-      }, 150);
-    }
-    
+  initializeCollaborationData(replacedFile = false) {
     if (!this.options.isNewFile || !this.options.collaborationProvider) return;
     const { collaborationProvider: provider } = this.options;
 
     const postSyncInit = () => {
       provider.off('synced', postSyncInit);
-      this.#insertNewFileData();
+      this.#insertNewFileData(replacedFile);
     };
 
-    if (provider.synced) this.#insertNewFileData();
+    if (provider.synced) this.#insertNewFileData(replacedFile);
     // If we are not sync'd yet, wait for the event then insert the data
     else provider.on('synced', postSyncInit);
   }
@@ -341,12 +333,17 @@ export class Editor extends EventEmitter {
    * Replace the current document with new data. Necessary for initializing a new collaboration file,
    * since we need to insert the data only after the provider has synced.
    */
-  #insertNewFileData() {
+  #insertNewFileData(replacedFile = false) {
     if (!this.options.isNewFile) return;
     this.options.isNewFile = false;
     const doc = this.#generatePmData();
     const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc);
     this.view.dispatch(tr);
+
+    if (this.options.collaborationIsReady) {
+      this.#initPagination();
+      this.#initComments(replacedFile);
+    }
   }
 
   #registerPluginByNameIfNotExists(name) {
@@ -699,22 +696,25 @@ export class Editor extends EventEmitter {
     // Initial scale
     updateScale();
 
-    // Update scale on window orientation change
-    screen.orientation.addEventListener('change', () => {
+    const handleResize = () => {
       setTimeout(() => {
         updateScale();
       }, 150);
-    });
-    window.addEventListener('resize', () => {
-      setTimeout(() => {
-        updateScale();
-      }, 150);
-    });
+    };
+
+    if ('orientation' in screen && 'addEventListener' in screen.orientation) {
+      screen.orientation.addEventListener("change", handleResize);
+    } else {
+      window.matchMedia("(orientation: portrait)").addEventListener("change", handleResize);
+    }
+
+    window.addEventListener('resize', () => handleResize);
   };
 
   #onCollaborationReady({ editor, ydoc }) {
     if (this.options.collaborationIsReady) return;
     console.debug('🔗 [super-editor] Collaboration ready');
+
     this.options.onCollaborationReady({ editor, ydoc });
     this.options.collaborationIsReady = true;
     this.#initPagination();
@@ -724,10 +724,10 @@ export class Editor extends EventEmitter {
   /**
    * Initialize comments plugin
    */
-  #initComments() {
+  #initComments(replacedFile = false) {
     if (!this.options.isCommentsEnabled) return;
-    if (this.options.isHeadless || !this.options.isInternal) return;
-    this.emit('commentsLoaded', { editor: this, comments: this.converter.comments || [] });
+    if (this.options.isHeadless) return;
+    this.emit('commentsLoaded', { editor: this, replacedFile, comments: this.converter.comments || [] });
 
     setTimeout(() => {
       const { state, dispatch } = this.view;
@@ -915,7 +915,7 @@ export class Editor extends EventEmitter {
     const { tr, doc: newDoc } = newState;
 
     // Perform comments processing (replaces comment nodes with marks)
-    prepareCommentsForImport(newDoc, tr, this.schema);
+    prepareCommentsForImport(newDoc, tr, this.schema, this.converter);
 
     const updatedState = newState.apply(tr);
     return updatedState.doc;
@@ -965,7 +965,6 @@ export class Editor extends EventEmitter {
     const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
     const media = this.converter.addedMedia;
 
-    const contentTypes = this.converter.schemaToXml(this.converter.convertedXml['[Content_Types].xml'].elements[0]);
     const updatedDocs = {
       'word/document.xml': String(documentXml),
       'docProps/custom.xml': String(customXml),
@@ -974,8 +973,6 @@ export class Editor extends EventEmitter {
 
       // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
       'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
-      '[Content_Types].xml': String(contentTypes),
-      
     };
 
     if (comments.length) {
@@ -1012,7 +1009,9 @@ export class Editor extends EventEmitter {
    * Destroy collaboration provider and ydoc
    */
   #endCollaboration() {
+    if (!this.options.ydoc) return;
     try {
+      console.debug('🔗 [super-editor] Ending collaboration');
       if (this.options.collaborationProvider) this.options.collaborationProvider.disconnect();
       if (this.options.ydoc) this.options.ydoc.destroy();
     } catch (error) {}
@@ -1085,9 +1084,12 @@ export class Editor extends EventEmitter {
     this.#initMedia();
     this.initDefaultStyles();
     
-    this.initializeCollaborationData();
+    this.initializeCollaborationData(true);
     
-    if (!this.options.ydoc) this.#initPagination();
+    if (!this.options.ydoc) {
+      this.#initPagination();
+      this.#initComments(true);
+    };
     
   }
 }

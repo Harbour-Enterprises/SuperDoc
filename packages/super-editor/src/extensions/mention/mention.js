@@ -32,12 +32,12 @@ export const Mention = Node.create({
   },
 
   renderDOM({ node, htmlAttributes }) {
-    const { name } = node.attrs;
+    const { name, email } = node.attrs;
 
     return [
       'span',
       Attribute.mergeAttributes({ 'data-type': this.name || this.email, }, this.options.htmlAttributes, htmlAttributes),
-      `@${name}`,
+      `@${name ? name : email}`,
     ];
   },
 

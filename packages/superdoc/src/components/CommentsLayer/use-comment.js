@@ -29,6 +29,7 @@ export default function useComment(params) {
   const creatorEmail = params.creatorEmail;
   const creatorName = params.creatorName;
   const createdTime = params.createdTime || Date.now();
+  const importedAuthor = ref(params.importedAuthor || null);
 
   const commentText = ref(params.commentText || '');
 
@@ -67,9 +68,15 @@ export default function useComment(params) {
     resolvedByEmail.value = email;
     resolvedByName.value = name;
 
+    if (trackedChange.value) {
+      const emitData = { type: comments_module_events.RESOLVED, comment: getValues() };
+      propagateUpdate(superdoc, emitData);
+      superdoc.activeEditor?.commands?.resolveComment({ commentId, importedId });
+      return;
+    };
+
     const emitData = { type: comments_module_events.RESOLVED, comment: getValues() };
     propagateUpdate(superdoc, emitData);
-
     superdoc.activeEditor?.commands?.resolveComment({ commentId, importedId });
   };
 
@@ -184,16 +191,24 @@ export default function useComment(params) {
     selection.selectionBounds = newCoords;
   };
 
+  const getCommentUser = () => {
+    const user = importedAuthor.value
+      ? { name: importedAuthor.value.name || "(Imported)", email: importedAuthor.value.email }
+      : { name: creatorName, email: creatorEmail };
+  
+    return user;
+  };
+
   /**
    * Emit updates to the end client, and sync with collaboration if necessary
    * 
    * @param {Object} superdoc The SuperDoc instance
-   * @param {Object} emitData The data to emit to the client
+   * @param {Object} event The data to emit to the client
    * @returns {void}
    */
-  const propagateUpdate = (superdoc, emitData) => {
-    superdoc.emit('comments-update', emitData);
-    syncCommentsToClients(superdoc);
+  const propagateUpdate = (superdoc, event) => {
+    superdoc.emit('comments-update', event);
+    syncCommentsToClients(superdoc, event);
   };
 
   /**
@@ -209,11 +224,14 @@ export default function useComment(params) {
       parentCommentId,
       fileId,
       fileType,
-      mentions: mentions.value,
+      mentions: mentions.value.map((u) => {
+        return { ...u, name: u.name ? u.name : u.email };
+      }),
       createdAtVersionNumber,
       creatorEmail,
       creatorName,
       createdTime,
+      importedAuthor: importedAuthor.value,
       isInternal: isInternal.value,
       commentText: commentText.value,
       selection: selection ? selection.getValues() : null,
@@ -250,6 +268,7 @@ export default function useComment(params) {
     resolvedTime,
     resolvedByEmail,
     resolvedByName,
+    importedAuthor,
 
     // Actions
     setText,
@@ -258,5 +277,6 @@ export default function useComment(params) {
     setIsInternal,
     setActive,
     updatePosition,
+    getCommentUser,
   });
 };

@@ -63,46 +63,56 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
   // Collect all pending insertions in an array
   const startNodes = [];
   const endNodes = [];
+  const seen = new Set();
 
   doc.descendants((node, pos) => {
-    const commentMark = node.marks?.find(mark => mark.type.name === CommentMarkName);
-    if (commentMark) {
-      const commentStartNodeAttrs = getPreparedComment(commentMark.attrs);
-      const startNode = schema.nodes.commentRangeStart.create(commentStartNodeAttrs);
-      startNodes.push({
-        pos,
-        node: startNode,
-      });
+    const commentMarks = node.marks?.filter(mark => mark.type.name === CommentMarkName);
+    commentMarks.forEach((commentMark) => {
+      if (commentMark) {
 
-      const endNode = schema.nodes.commentRangeEnd.create(commentStartNodeAttrs);
-      endNodes.push({
-        pos: pos + node.nodeSize,
-        node: endNode,
-      });
+        const { attrs = {} } = commentMark;
+        const { commentId, importedId } = attrs;
 
-      const { commentId, importedId } = commentMark.attrs;
-      const parentId = commentId || importedId;
-      if (parentId) {
-        const childComments = comments
-          .filter((c) => c.parentCommentId == parentId || c.parentCommentId == parentId)
-          .sort((a, b) => a.createdTime - b.createdTime);
+        if (commentId === 'pending') return;
+        if (seen.has(commentId || importedId)) return;
+        seen.add(commentId || importedId);
 
-        childComments.forEach((c) => {
-          const childMark =  getPreparedComment(c);
-          const childStartNode = schema.nodes.commentRangeStart.create(childMark);
-          startNodes.push({
-            pos: pos,
-            node: childStartNode,
-          });
-
-          const childEndNode = schema.nodes.commentRangeEnd.create(childMark);
-          endNodes.push({
-            pos: pos + node.nodeSize,
-            node: childEndNode,
-          });
+        const commentStartNodeAttrs = getPreparedComment(commentMark.attrs);
+        const startNode = schema.nodes.commentRangeStart.create(commentStartNodeAttrs);
+        startNodes.push({
+          pos,
+          node: startNode,
         });
+
+        const endNode = schema.nodes.commentRangeEnd.create(commentStartNodeAttrs);
+        endNodes.push({
+          pos: pos + node.nodeSize,
+          node: endNode,
+        });
+
+        const parentId = commentId || importedId;
+        if (parentId) {
+          const childComments = comments
+            .filter((c) => c.parentCommentId == parentId || c.parentCommentId == parentId)
+            .sort((a, b) => a.createdTime - b.createdTime);
+
+          childComments.forEach((c) => {
+            const childMark =  getPreparedComment(c);
+            const childStartNode = schema.nodes.commentRangeStart.create(childMark);
+            startNodes.push({
+              pos: pos,
+              node: childStartNode,
+            });
+
+            const childEndNode = schema.nodes.commentRangeEnd.create(childMark);
+            endNodes.push({
+              pos: pos + node.nodeSize,
+              node: childEndNode,
+            });
+          });
+        }
       }
-    }
+    });
   });
 
   startNodes.forEach((n) => {
@@ -131,8 +141,9 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
  */
 export const getPreparedComment = (attrs) => {
   const { commentId, importedId, internal } = attrs;
+  const wid = commentId ? commentId : importedId;
   return {
-    'w:id': commentId || importedId,
+    'w:id': wid,
     internal: internal,
   };
 }
@@ -146,7 +157,7 @@ export const getPreparedComment = (attrs) => {
  * @param {import('prosemirror-model').Schema} schema The editor schema
  * @returns {void}
  */
-export const prepareCommentsForImport = (doc, tr, schema) => {
+export const prepareCommentsForImport = (doc, tr, schema, converter) => {
   const toMark = [];
   const toDelete = [];
 
@@ -157,10 +168,10 @@ export const prepareCommentsForImport = (doc, tr, schema) => {
     if (type.name === 'commentRangeStart') {
       toMark.push({
         'w:id': node.attrs['w:id'],
-        internal: node.attrs.internal,
+        internal: false,
         start: pos,
       });
-``
+    
       // We'll remove this node from the final doc
       toDelete.push({ start: pos, end: pos + 1 });
     }
@@ -193,4 +204,73 @@ export const prepareCommentsForImport = (doc, tr, schema) => {
     .forEach(({ start, end }) => {
       tr.delete(start, end);
     });
+};
+
+/**
+ * Translate a list of before/after marks into a human-readable format we can
+ * display in tracked change comments. This tells us what formatting changes
+ * a suggester made
+ * 
+ * @param {Object} attrs The tracked change node attributes. Contains before/after lists
+ * @returns {String} The human-readable format of the changes
+ */
+export const translateFormatChangesToEnglish = (attrs = {}) => {
+  const { before = [], after = [] } = attrs;
+
+  const beforeTypes = new Set(before.map(mark => mark.type));
+  const afterTypes = new Set(after.map(mark => mark.type));
+
+  const added = [...afterTypes].filter(type => !beforeTypes.has(type));
+  const removed = [...beforeTypes].filter(type => !afterTypes.has(type));
+
+  const messages = [];
+
+  // Detect added formatting (excluding textStyle, handled separately)
+  const nonTextStyleAdded = added.filter(type => !["textStyle", "commentMark"].includes(type));
+  if (nonTextStyleAdded.length) {
+    messages.push(`Added formatting: ${nonTextStyleAdded.join(', ')}`);
+  }
+
+  // Detect removed formatting (excluding textStyle, handled separately)
+  const nonTextStyleRemoved = removed.filter(type => !["textStyle", "commentMark"].includes(type));
+  if (nonTextStyleRemoved.length) {
+    messages.push(`Removed formatting: ${nonTextStyleRemoved.join(', ')}`);
+  }
+
+  // Handling textStyle changes separately
+  const beforeTextStyle = before.find(mark => mark.type === "textStyle")?.attrs || {};
+  const afterTextStyle = after.find(mark => mark.type === "textStyle")?.attrs || {};
+
+  const textStyleChanges = [];
+
+  // Function to convert camelCase to human-readable format
+  const formatAttrName = (attr) => attr.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
+
+  Object.keys({ ...beforeTextStyle, ...afterTextStyle }).forEach(attr => {
+    const beforeValue = beforeTextStyle[attr];
+    const afterValue = afterTextStyle[attr];
+
+    if (beforeValue !== afterValue) {
+      if (afterValue === null) {
+        // Ignore attributes that are now null
+        return;
+      } else if (attr === "color") {
+        // Special case: Simplify color change message
+        textStyleChanges.push(`Changed color`);
+      } else {
+        const label = formatAttrName(attr); // Convert camelCase to lowercase words
+        if (beforeValue === undefined || beforeValue === null) {
+          textStyleChanges.push(`Set ${label} to ${afterValue}`);
+        } else {
+          textStyleChanges.push(`Changed ${label} from ${beforeValue} to ${afterValue}`);
+        }
+      }
+    }
+  });
+
+  if (textStyleChanges.length) {
+    messages.push(`Modified text style: ${textStyleChanges.join(', ')}`);
+  }
+
+  return messages.length ? messages.join('. ') : 'No formatting changes.';
 };

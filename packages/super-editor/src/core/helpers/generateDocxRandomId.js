@@ -13,3 +13,7 @@ export function generateDocxRandomId(length = 8) {
 
   return id.join('');
 }
+
+export function generateRandom32BitHex() {
+  return Math.floor(Math.random() * 0xFFFFFFFF).toString(16).toUpperCase().padStart(8, '0');
+};

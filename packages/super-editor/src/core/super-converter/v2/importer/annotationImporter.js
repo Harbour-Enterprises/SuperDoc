@@ -17,7 +17,7 @@ export const handleAnnotationNode = (params) => {
 
   const docPartObj = sdtPr?.elements.find((el) => el.name === 'w:docPartObj');
   if (docPartObj) {
-    return handleDocPartObj(nodes, docx, nodeListHandler, insideTrackChange);
+    return handleDocPartObj({ nodes, docx, nodeListHandler, insideTrackChange });
   }
 
   const alias = sdtPr?.elements.find((el) => el.name === 'w:alias');

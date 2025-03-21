@@ -6,6 +6,7 @@ import { PaginationPluginKey } from './pagination-helpers.js';
 import { CollaborationPluginKey } from '@extensions/collaboration/collaboration.js';
 import { ImagePlaceholderPluginKey } from '@extensions/image/imageHelpers/imagePlaceholderPlugin.js';
 import { LinkedStylesPluginKey } from '@extensions/linked-styles/linked-styles.js';
+import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestToPos.js';
 
 const isDebugging = false;
 
@@ -282,15 +283,18 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
    * If we find a node that extends past where our page should end, we add a page break.
    */
   doc.descendants((node, pos) => {
-    coords = view?.coordsAtPos(pos);
+    let currentNode = node;
+    let currentPos = pos;
+  
+    coords = view?.coordsAtPos(currentPos);
     if (!coords) return;
     
     let shouldAddPageBreak = coords.bottom > pageHeightThreshold;
-    const isHardBreakNode = node.type.name === 'hardBreak';
+    const isHardBreakNode = currentNode.type.name === 'hardBreak';
 
-    if (node.type.name === 'paragraph' && node.attrs.styleId) {
+    if (currentNode.type.name === 'paragraph' && currentNode.attrs.styleId) {
       const linkedStyles = LinkedStylesPluginKey.getState(editor.state)?.styles;
-      const style = linkedStyles?.find((style) => style.id === node.attrs.styleId);
+      const style = linkedStyles?.find((style) => style.id === currentNode.attrs.styleId);
       if (style) {
         const { definition = {} } = style;
         const { pageBreakBefore, pageBreakAfter } = definition.attrs || {};
@@ -299,6 +303,15 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
     };
 
     if (isHardBreakNode || shouldAddPageBreak) {
+      const $currentPos = view.state.doc.resolve(currentPos);
+      const tableRow = findParentNodeClosestToPos($currentPos, (node) => node.type.name === 'tableRow');
+
+      if (tableRow) {
+        // If the node is in a table cell, then split the entire row.
+        currentNode = tableRow.node;
+        currentPos = tableRow.pos;
+      }
+
       // The node we've found extends past our threshold
       // We need to zoom in and investigate position by position until we find the exact break point
       // And we get the actual top and bottom of the break
@@ -306,13 +319,13 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
         top: actualBreakTop,
         bottom: actualBreakBottom,
         pos: breakPos,
-      } = getActualBreakCoords(view, pos, pageHeightThreshold);
+      } = getActualBreakCoords(view, currentPos, pageHeightThreshold);
 
       if (isDebugging) {
         console.debug('----- [pagination page break] ----');
         console.debug('[pagination page break] Expected pageHeightThreshold:', pageHeightThreshold);
         console.debug('[pagination page break]  Actual top:', actualBreakTop, 'Actual bottom:', actualBreakBottom);
-        console.debug('[pagination page break]  Pos:', pos, 'Break pos:', breakPos);
+        console.debug('[pagination page break]  Pos:', currentPos, 'Break pos:', breakPos);
         console.debug('---- [pagination page break end] ---- \n\n\n');
       };
 

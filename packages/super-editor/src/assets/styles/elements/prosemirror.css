@@ -84,6 +84,11 @@ li.ProseMirror-selectednode:after {
   pointer-events: none;
 }
 
+.ProseMirror img {
+  height: auto;
+  max-width: 100%;
+}
+
 /* Protect against generic img rules */
 img.ProseMirror-separator {
   display: inline !important;

@@ -2,41 +2,96 @@
 import { formatDate } from './helpers';
 import { superdocIcons } from '@superdoc/icons.js';
 import { NDropdown } from 'naive-ui';
+import { computed, getCurrentInstance } from 'vue';
+import { isAllowed, PERMISSIONS } from '@superdoc/core/collaboration/permissions.js';
+import { useCommentsStore } from '@superdoc/stores/comments-store';
 import Avatar from '@superdoc/components/general/Avatar.vue';
 
 const emit = defineEmits(['resolve', 'reject', 'overflow-select']);
+const commentsStore = useCommentsStore();
 const props = defineProps({
-  user: {
-    type: Object,
-    required: true,
-  },
   timestamp: {
     type: Number,
     required: false,
-  },
-  isTrackedChange: {
-    type: Boolean,
-    required: false,
-    default: false,
   },
   config: {
     type: Object,
     required: true,
   },
-  allowResolve: {
+  comment: {
+    type: Object,
+    required: false,
+  },
+  isPendingInput: {
     type: Boolean,
     required: false,
     default: false,
-  },
-  allowReject: {
-    type: Boolean,
-    required: false,
-    default: false,
-  },
-  overflowOptions: {
-    type: Array,
-    required: false,
-  },
+  }
+});
+
+const { proxy } = getCurrentInstance();
+const role = proxy.$superdoc.config.role;
+const isInternal = proxy.$superdoc.config.isInternal;
+const isOwnComment = props.comment.creatorEmail === proxy.$superdoc.config.user.email;
+
+const OVERFLOW_OPTIONS = Object.freeze({
+  edit: { label: 'Edit', key: 'edit' },
+  delete: { label: 'Delete', key: 'delete' },
+});
+
+const generallyAllowed = computed(() => {
+  if (!props.comment) return false;
+  if (props.comment.resolvedTime) return false;
+  if (commentsStore.pendingComment) return false;
+  if (props.isPendingInput) return false;
+  return true;
+});
+
+const allowResolve = computed(() => {
+  if (!generallyAllowed.value) return false;
+
+  if (isOwnComment) return isAllowed(PERMISSIONS.RESOLVE_OWN, role, isInternal);
+  else return isAllowed(PERMISSIONS.RESOLVE_OTHER, role, isInternal);
+});
+
+const allowReject = computed(() => {
+  if (!generallyAllowed.value) return false;
+  if (!props.comment.trackedChange) return false;
+
+  if (isOwnComment) return isAllowed(PERMISSIONS.REJECT_OWN, role, isInternal);
+  else return isAllowed(PERMISSIONS.REJECT_OTHER, role, isInternal);
+});
+
+const allowOverflow = computed(() => {
+  if (!generallyAllowed.value) return false;
+  if (props.comment.trackedChange) return false;
+  if (props.isPendingInput) return false;
+  if (getOverflowOptions.value.length === 0) return false;
+
+  return true;
+});
+
+const getOverflowOptions = computed(() => {
+  if (!generallyAllowed.value) return false;
+
+  const allowedOptions = [];
+  const options = new Set();
+
+  // Only the comment creator can edit
+  if (props.comment.creatorEmail === proxy.$superdoc.config.user.email) {
+    options.add('edit');
+  };
+
+  const isOwnComment = props.comment.creatorEmail === proxy.$superdoc.config.user.email;
+
+  if (isOwnComment && isAllowed(PERMISSIONS.COMMENTS_DELETE_OWN, role, isInternal)) {
+    options.add('delete');
+  } else if (!isOwnComment && isAllowed(PERMISSIONS.COMMENTS_DELETE_OTHER, role, isInternal)) {
+    options.add('delete');
+  };
+
+  options.forEach((option) => allowedOptions.push(OVERFLOW_OPTIONS[option]));
+  return allowedOptions;
 });
 
 const handleResolve = () => emit('resolve');
@@ -48,10 +103,10 @@ const handleSelect = (value) => emit('overflow-select', value);
 <template>
   <div class="card-section comment-header">
     <div class="comment-header-left">
-      <Avatar :user="props.user" class="avatar" />
+      <Avatar :user="props.comment.getCommentUser()" class="avatar" />
       <div class="user-info">
-        <div class="user-name">{{ props.user.name }}</div>
-        <div class="user-timestamp" v-if="props.timestamp">{{ formatDate(props.timestamp) }}</div>
+        <div class="user-name">{{ props.comment.getCommentUser().name }}</div>
+        <div class="user-timestamp" v-if="props.comment.createdTime">{{ formatDate(props.comment.createdTime) }}</div>
       </div>
     </div>
 
@@ -72,9 +127,9 @@ const handleSelect = (value) => emit('overflow-select', value);
       </div>
 
       <n-dropdown
-        v-if="overflowOptions?.length"
+        v-if="allowOverflow"
         trigger="click"
-        :options="overflowOptions"
+        :options="getOverflowOptions"
         @select="handleSelect"
       >
         <div class="overflow-menu__icon" @click.stop.prevent>

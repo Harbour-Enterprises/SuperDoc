@@ -5,6 +5,7 @@ import { markInsertion } from './markInsertion.js';
 import { markDeletion } from './markDeletion.js';
 import { findMark } from '@core/helpers/index.js';
 import { TrackDeleteMarkName } from '../constants.js';
+import { TrackChangesBasePluginKey } from '../plugins/index.js';
 
 /**
  * Replace step.
@@ -35,6 +36,7 @@ export const replaceStep = ({ state, tr, step, newTr, map, doc, user, date, orig
   const invertStep = originalStep.invert(tr.docs[originalStepIndex]).map(map);
   map.appendMap(invertStep.getMap());
 
+  const meta = {};
   if (newStep) {
     const trTemp = state.apply(newTr).tr;
 
@@ -44,7 +46,7 @@ export const replaceStep = ({ state, tr, step, newTr, map, doc, user, date, orig
 
     const mappedNewStepTo = newStep.getMap().map(newStep.to);
 
-    markInsertion({
+    const insertedMark = markInsertion({
       tr: trTemp,
       from: newStep.from,
       to: mappedNewStepTo,
@@ -59,20 +61,28 @@ export const replaceStep = ({ state, tr, step, newTr, map, doc, user, date, orig
     const mirrorIndex = map.maps.length - 1;
     map.appendMap(condensedStep.getMap(), mirrorIndex);
 
+    // Prepare meta for the transaction
+    meta.insertedMark = insertedMark;
+    meta.step = condensedStep;
+
     if (!newTr.selection.eq(trTemp.selection)) {
       newTr.setSelection(trTemp.selection);
     }
   }
 
   if (step.from !== step.to) {
-    map.appendMapping(
-      markDeletion({
-        tr: newTr,
-        from: step.from,
-        to: step.to,
-        user,
-        date,
-      }),
-    );
+    const { deletionMark, deletionMap, nodes: deletionNodes } = markDeletion({
+      tr: newTr,
+      from: step.from,
+      to: step.to,
+      user,
+      date,
+    });
+    meta.deletionNodes = deletionNodes;
+    meta.deletionMark = deletionMark;
+    map.appendMapping(deletionMap);
   }
+
+  // Add meta to the new transaction.
+  newTr.setMeta(TrackChangesBasePluginKey, meta);
 };
