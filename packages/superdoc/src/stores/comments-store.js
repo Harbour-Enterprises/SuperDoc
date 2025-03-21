@@ -21,6 +21,8 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const COMMENT_EVENTS = comments_module_events;
   const hasInitializedComments = ref(false);
+  const hasSyncedCollaborationComments = ref(false);
+  const commentsParentElement = ref(null);
   const activeComment = ref(null);
   const editingCommentId = ref(null);
   const commentDialogs = ref([]);
@@ -31,6 +33,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const commentsList = ref([]);
   const isCommentsListVisible = ref(false);
   const lastChange = ref(Date.now());
+  const editorCommentIds = ref([]);
 
   // Floating comments
   const floatingCommentsOffset = ref(0);
@@ -38,6 +41,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const visibleConversations = ref([]);
   const skipSelectionUpdate = ref(false);
   const isFloatingCommentsReady = ref(false);
+  const generalCommentIds = ref([]);
 
   const pendingComment = ref(null);
 
@@ -241,6 +245,12 @@ export const useCommentsStore = defineStore('comments', () => {
       top: top,
       left: left,
     };
+  };
+
+  const updateLastChange = () => {
+    setTimeout(() => {
+      lastChange.value = Date.now();
+    }, 50);
   };
 
   const initialCheck = () => {
@@ -466,6 +476,8 @@ export const useCommentsStore = defineStore('comments', () => {
 
       addComment({ superdoc, comment: newComment });
     });
+
+    updateLastChange();
   }
 
   const translateCommentsForExport = () => {
@@ -501,7 +513,19 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {DOMElement} parentElement The parent element of the editor
    * @returns {void}
    */
-  const handleEditorLocationsUpdate = (parentElement) => {
+  const handleEditorLocationsUpdate = (parentElement, allCommentIds = []) => {
+    editorCommentIds.value = allCommentIds;
+    commentsParentElement.value = parentElement;
+
+    // Track comment IDs that we do not find in the editor
+    // These will remain as 'general' comments
+    generalCommentIds.value = commentsList.value
+      .filter((c) => {
+        const isSuperEditor = c.selection.source === 'super-editor';
+        const noCommentInEditor = !allCommentIds.includes(c.commentId || c.importedId);
+        return isSuperEditor && noCommentInEditor && !c.trackedChange;
+      })
+      .map((c) => c.commentId || c.importedId);
 
     setTimeout(() => {
       const allCommentElements = document.querySelectorAll('[data-thread-id]');
@@ -580,6 +604,9 @@ export const useCommentsStore = defineStore('comments', () => {
     commentsList,
     isCommentsListVisible,
     lastChange,
+    generalCommentIds,
+    editorCommentIds,
+    commentsParentElement,
 
     // Floating comments
     floatingCommentsOffset,
@@ -612,5 +639,6 @@ export const useCommentsStore = defineStore('comments', () => {
     translateCommentsForExport,
     handleEditorLocationsUpdate,
     handleTrackedChangeUpdate,
+    updateLastChange,
   };
 });
