@@ -50,7 +50,6 @@ async function baseInsightsFetch(payload, options = {}) {
       headers['x-api-key'] = apiKey;
     }
 
-    console.log('payload', payload);
     const response = await fetch(apiEndpoint, {
       method: 'POST',
       headers,
