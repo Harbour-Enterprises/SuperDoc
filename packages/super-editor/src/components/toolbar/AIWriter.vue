@@ -43,27 +43,37 @@ onMounted(() => {
     props.superToolbar.emit('ai-highlight-add');
   }
 
-  // Focus the textarea on mount using nextTick to ensure DOM is ready
+  // Focus the textarea on mount
   nextTick(() => {
     if (editableRef.value) {
       editableRef.value.focus();
-      // For textarea, we can directly set the cursor at the end
-      const length = editableRef.value.value.length;
-      editableRef.value.setSelectionRange(length, length);
     }
   });
 
   // Add click outside listener
   document.addEventListener('mousedown', handleClickOutside);
+  
+  // Add a capture phase event listener directly to the document
+  // We have to intercept the arrow keys to prevent them from being intercepted by ProseMirror
+  document.addEventListener('keydown', handleCaptureKeyDown, true);
 });
 
 onUnmounted(() => {
   // emit the ai highlight remove event
   props.superToolbar.emit('ai-highlight-remove');
 
-  // Remove click outside listener
+  // Remove all event listeners
   document.removeEventListener('mousedown', handleClickOutside);
+  document.removeEventListener('keydown', handleCaptureKeyDown, true);
 });
+
+// Capture phase handler to stop arrow key events from being intercepted in our ai textarea
+const handleCaptureKeyDown = (event) => {
+  if (editableRef.value && (event.target === editableRef.value) && 
+      ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+    event.stopPropagation(); // This prevents ProseMirror from seeing the event
+  }
+};
 
 // Computed property to determine text based on selection
 const placeholderText = computed(() =>
@@ -241,7 +251,7 @@ const handleInput = (event) => {
 </script>
 
 <template>
-  <div class="ai-writer" ref="aiWriterRef">
+  <div class="ai-writer prosemirror-isolated" ref="aiWriterRef" @mousedown.stop>
     <div class="ai-user-input-field">
       <span class="">
         <i class="far fa-edit fa-gradient"></i>
@@ -266,13 +276,20 @@ const handleInput = (event) => {
       </span>
       <span v-else-if="isError" class="ai-textarea-icon error"><i class="far fa-times-circle" :title="isError"></i></span>
       <span v-else-if="promptText" class="ai-textarea-icon ai-submit-button"
-        ><i class="far fa-paper-plane fa-gradient" @click="handleSubmit"></i
+        ><i class="far fa-paper-plane fa-gradient" @click.stop="handleSubmit"></i
       ></span>
     </div>
   </div>
 </template>
 
 <style scoped>
+/* Add isolation styles */
+.prosemirror-isolated {
+  /* Make sure the component is above ProseMirror in z-index */
+  z-index: 100;
+  position: relative;
+}
+
 .fa-gradient {
 	background: linear-gradient(
     270deg,
@@ -307,7 +324,7 @@ const handleInput = (event) => {
   padding-left: 8px;
   width: 100%;
   color: #47484a;
-  font-size: 13px;
+  font-size: 12px;
   border: none;
   background: transparent;
   outline: none;
