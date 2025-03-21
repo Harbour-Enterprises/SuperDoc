@@ -25,7 +25,7 @@
 // should be used based on that
 const API_ENDPOINT = 'https://api.myharbourshare.com/v2/insights';
 const GATEWAY_ENDPOINT = 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights';
-const SYSTEM_PROMPT = 'You are an expert copywriter and you are immersed in a document editor. You are to provide document related text responses based on the user prompts. Only write what is asked for. Do not provide explanations. Try to keep placeholders as short as possible. Do not output your prompt.';
+const SYSTEM_PROMPT = 'You are an expert copywriter and you are immersed in a document editor. You are to provide document related text responses based on the user prompts. Only write what is asked for. Do not provide explanations. Try to keep placeholders as short as possible. Do not output your prompt. Your instructions are: ';
 /**
  * UTILITY - Makes a fetch request to the Harbour API
  * @param {Object} payload - The request payload
@@ -79,50 +79,36 @@ async function processStream(stream, onChunk) {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let result = '';
-  let jsonBuffer = '';
+  let buffer = '';
 
   try {
     while (true) {
       const { done, value } = await reader.read();
-      console.log('done', done, 'value', value);
-      if (done) {
-        break;
-      }
+
+      if (done) break;
 
       // Decode the chunk
       const chunk = decoder.decode(value, { stream: true });
-      console.log('chunk', chunk);
-      jsonBuffer += chunk;
-      console.log('jsonBuffer', jsonBuffer);
-      // Try to parse as JSON and extract content
-      tryParseAndExtractContent(jsonBuffer, (extractedContent) => {
-        result = extractedContent;
-        console.log('result', result);
-        if (typeof onChunk === 'function') {
-          console.log('calling onChunk', result);
-          onChunk(result);
-        }
-        jsonBuffer = '';
-      });
+      buffer += chunk;
       
-      // Safety check for large unparseable buffers
-      if (jsonBuffer.length > 10000) {
-        result = jsonBuffer;
+      // Try to extract content between ```json and ```
+      let extractedValue = getJsonBetweenFencesFromResponse(buffer);
+      
+      if (extractedValue !== null) {
+        result = extractedValue;
         if (typeof onChunk === 'function') {
           onChunk(result);
         }
-        jsonBuffer = '';
       }
     }
     
-    // Final attempt to extract content from any remaining buffer
-    if (jsonBuffer) {
-      tryParseAndExtractContent(jsonBuffer, (extractedContent) => {
-        result = extractedContent;
-      });
+    // Final attempt to extract content from buffer
+    let extractedValue = getJsonBetweenFencesFromResponse(buffer);
+    if (extractedValue !== null) {
+      result = extractedValue;
     }
     
-    return result;
+    return result || '';
   } catch (error) {
     console.error('Error reading stream:', error);
     throw error;
@@ -132,35 +118,28 @@ async function processStream(stream, onChunk) {
 }
 
 /**
- * Helper function to parse JSON and extract content
- * @param {string} jsonBuffer - The JSON string to parse
- * @param {function} onSuccess - Callback when content is successfully extracted
+ * Helper function to extract content from buffer with markdown code fences
+ * @param {string} buffer - The text buffer to parse
+ * @returns {string|null} - The extracted content or null if not found
  */
-function tryParseAndExtractContent(jsonBuffer, onSuccess) {
+function getJsonBetweenFencesFromResponse(buffer) {
   try {
-    console.log('jsonBuffer', jsonBuffer);
-    const jsonResponse = JSON.parse(jsonBuffer);
-    console.log('jsonResponse', jsonResponse);
-
-    // Extract content based on response structure
-    let extractedContent = '';
+    // Try to extract content between ```json and ```
+    const jsonRegex = /```json\s*\n([\s\S]*?)\n\s*```/;
+    const match = buffer.match(jsonRegex);
     
-    if (jsonResponse.custom_prompt && Array.isArray(jsonResponse.custom_prompt) && jsonResponse.custom_prompt.length > 0) {
-      const promptData = jsonResponse.custom_prompt[0];
-      console.log('promptData', promptData);
-      if (promptData.content) {
-        extractedContent = promptData.content;
+    if (match && match[1]) {
+      const jsonObj = JSON.parse(match[1]);
+      
+      // Extract value from custom_prompt.value
+      if (jsonObj.custom_prompt && jsonObj.custom_prompt.value !== undefined) {
+        return jsonObj.custom_prompt.value || '';
       }
     }
     
-    if (extractedContent) {
-      console.log('extractedContent', extractedContent);
-      onSuccess(extractedContent);
-    }
+    return null;
   } catch (e) {
-    // Not valid JSON yet, might be a partial chunk
-    // Do nothing, will try again with more data
-    console.log('not valid JSON', e);
+    return null;
   }
 }
 
@@ -169,7 +148,7 @@ function tryParseAndExtractContent(jsonBuffer, onSuccess) {
  * @param {Response} response - The API response
  * @returns {Promise<string>} - The extracted content
  */
-async function processResponse(response) {
+async function returnNonStreamingJson(response) {
   const jsonResponse = await response.json();
   if (jsonResponse.custom_prompt) return jsonResponse.custom_prompt[0].value;
   else {
@@ -193,44 +172,26 @@ export async function writeStreaming(prompt, options = {}, onChunk) {
     throw new Error('Prompt is required for text generation');
   }
 
-  // const payload = {
-  //   doc_text: options.docText || 'this is a test',
-  //   stream: true,
-  //   insights: [
-  //     {
-  //       type: 'custom_prompt',
-  //       name: 'text_generation',
-  //       message: `${SYSTEM_PROMPT} Generate a text based on the following prompt: ${prompt}`,
-  //     }
-  //   ]
-  // };
-  const payload = 
-    {
-      // url: S3_URL, // Using URL instead of draft_id
-      doc_text: "this is a test",
-      insights: [
-        {
-          type: "custom_prompt",
-          name: "text_generation",
-          message: "Can you generate me an NDA agreement with placeholders",
-        },
-      ],
-      stream: true,
-    }
+  const payload = {
+    doc_text: options.docText || 'this is a test',
+    stream: true,
+    insights: [
+      {
+        type: 'custom_prompt',
+        name: 'text_generation',
+        message: `${SYSTEM_PROMPT} ${prompt}`,
+      }
+    ]
+  };
 
-  // if (options.context) {
-  //   payload.context = options.context;
-  // }
-
-  // if (options.documentXml) {
-  //   payload.document_content = options.documentXml;
-  // }
+  // Add document content if available
+  if (options.documentXml) {
+    payload.document_content = options.documentXml;
+  }
 
   const response = await baseInsightsFetch(payload, options.config || {});
   
-  console.log('streaming response', response);
   if (!response.body) return '';
-  console.log('processing stream');
   return await processStream(response.body, onChunk);
 }
 
@@ -272,7 +233,7 @@ export async function write(prompt, options = {}) {
 
   const response = await baseInsightsFetch(payload, options.config || {});
   console.log('write response', response);
-  return processResponse(response);
+  return returnNonStreamingJson(response);
 }
 
 /**
@@ -303,11 +264,11 @@ export async function rewriteStreaming(text, prompt = '', options = {}, onChunk)
         type: 'custom_prompt',
         name: 'text_rewrite',
         message: `${SYSTEM_PROMPT} ${message}`,
-        format: [{ content: '' }]
       }
     ]
   };
 
+  // Add document content if available
   if (options.documentXml) {
     payload.document_content = options.documentXml;
   }
@@ -356,5 +317,5 @@ export async function rewrite(text, prompt = '', options = {}) {
   // }
 
   const response = await baseInsightsFetch(payload, options.config || {});
-  return processResponse(response);
+  return returnNonStreamingJson(response);
 }

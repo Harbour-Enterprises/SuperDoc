@@ -106,17 +106,36 @@ const handleTextChunk = (text) => {
       textProcessingStarted.value = true;
     }
     
-    console.log('text', text);
-    // Extract only the new content by comparing with previous text
-    const newContent = text.slice(previousText.value.length);
+    // If the text is null, undefined or empty, don't process it
+    if (text === null || text === undefined) {
+      return;
+    }
     
-    console.log('newContent', newContent);
+    // Convert to string in case it's not already a string
+    const textStr = String(text || '');
+    
+    // Handle incremental updates with plaintext
+    // Only insert content that hasn't been inserted yet
+    let newContent = '';
+    
+    if (previousText.value.length === 0) {
+      // First chunk - insert everything
+      newContent = textStr;
+    } else {
+      // Subsequent chunks - only insert what's new
+      if (textStr.startsWith(previousText.value)) {
+        // If text is an extension of previous text
+        newContent = textStr.slice(previousText.value.length);
+      } else {
+        // If it's completely different (unlikely with streaming)
+        newContent = textStr;
+      }
+    }
+    
     // Update the document with only the new content
     if (newContent) {
       props.superToolbar.activeEditor.commands.insertContent(newContent);
-      console.log('inserted newContent', newContent);
-      previousText.value = text;
-      console.log('previousText', previousText.value);
+      previousText.value = textStr;
     }
   } catch (error) {
     console.error('Error handling text chunk:', error);
