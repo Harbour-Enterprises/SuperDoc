@@ -68,7 +68,6 @@ function getActiveAttributes(state) {
     else state.doc.nodesBetween(from, to, (node) => getAttrs(node));
     return attributes;
   } catch (error) {
-    console.debug('Error getting active attributes:', error);
     return {};
   }
 }

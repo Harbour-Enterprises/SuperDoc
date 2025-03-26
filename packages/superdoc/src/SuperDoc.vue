@@ -60,6 +60,8 @@ const {
   generalCommentIds,
   getFloatingComments,
   hasSyncedCollaborationComments,
+  editorCommentPositions,
+  hasInitializedLocations,
 } = storeToRefs(commentsStore);
 const { initialCheck, showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
 const { proxy } = getCurrentInstance();
@@ -111,11 +113,13 @@ const cancelPendingComment = (e) => {
 };
 
 const onCommentsLoaded = ({ editor, comments, replacedFile }) => {
-  if (editor.options.isNewFile || replacedFile) {
-    commentsStore.processLoadedDocxComments({
-      superdoc: proxy.$superdoc,
-      comments,
-      documentId: editor.options.documentId
+  if (editor.options.shouldLoadComments || replacedFile) {
+    nextTick(() => {
+      commentsStore.processLoadedDocxComments({
+        superdoc: proxy.$superdoc,
+        comments,
+        documentId: editor.options.documentId
+      });
     });
   }
 };
@@ -128,7 +132,7 @@ const onEditorCreate = ({ editor }) => {
   const { documentId } = editor.options;
   const doc = getDocument(documentId);
   doc.setEditor(editor);
-  proxy.$superdoc.activeEditor = editor;
+  proxy.$superdoc.setActiveEditor(editor);
   proxy.$superdoc.broadcastEditorCreate(editor);
   proxy.$superdoc.log('[SuperDoc] Editor created', proxy.$superdoc.activeEditor);
   proxy.$superdoc.log('[SuperDoc] Page styles (pixels)', editor.getPageStyles());
@@ -258,27 +262,9 @@ const editorOptions = (doc) => {
  * 
  * @returns {void}
  */
-const onEditorCommentLocationsUpdate = (commentIds = []) => {
+const onEditorCommentLocationsUpdate = ({ allCommentIds: activeThreadId, allCommentPositions }) => {
   if (!proxy.$superdoc.config.modules?.comments) return;
-
-  // If we have not yet synced the collaboration comments, wait for the sync event
-  const provider = proxy.$superdoc.provider;
-  if (provider && !hasSyncedCollaborationComments.value) {
-    const syncPositions = () => {
-      handleEditorLocationsUpdate(layers.value, commentIds);
-      provider.off('synced', syncPositions);
-    };
-
-    provider.on('synced', syncPositions);
-    setTimeout(() => {
-      if (!hasSyncedCollaborationComments.value) hasSyncedCollaborationComments.value = true;
-    }, 1000);
-  }
-
-  // Otherwise, update the comment locations right away
-  else {
-    handleEditorLocationsUpdate(layers.value, commentIds);
-  };
+  handleEditorLocationsUpdate(allCommentPositions, activeThreadId);
 };
 
 const onEditorCommentsUpdate = (params = {}) => {
@@ -528,6 +514,13 @@ const handleAiHighlightRemove = () => {
   }
   aiLayer.value.removeAiHighlight();
 };
+
+watch(getFloatingComments, () => {
+  hasInitializedLocations.value = false;
+  nextTick(() => {
+    hasInitializedLocations.value = true;
+  });
+});
 </script>
 
 <template>
@@ -621,13 +614,14 @@ const handleAiHighlightRemove = () => {
         v-click-outside="cancelPendingComment"
       />
 
-      <FloatingComments
-        class="floating-comments"
-        v-if="getFloatingComments.length && !isCommentsListVisible"
-        v-for="doc in documentsWithConverations"
-        :parent="layers"
-        :current-document="doc"
-      />
+      <div class="floating-comments">
+        <FloatingComments
+          v-if="hasInitializedLocations && getFloatingComments.length > 0"
+          v-for="doc in documentsWithConverations"
+          :parent="layers"
+          :current-document="doc"
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -635,6 +629,15 @@ const handleAiHighlightRemove = () => {
 <style scoped>
 .superdoc {
   display: flex;
+}
+
+.right-sidebar {
+  min-width: 320px;
+}
+
+.floating-comments {
+  min-width: 300px;
+  width: 300px;
 }
 
 .superdoc--with-sidebar { /*  */ }
@@ -676,6 +679,7 @@ const handleAiHighlightRemove = () => {
 
 .superdoc__right-sidebar {
   width: 320px;
+  min-width: 320px;
   padding: 0 10px;
   min-height: 100%;
   position: relative;

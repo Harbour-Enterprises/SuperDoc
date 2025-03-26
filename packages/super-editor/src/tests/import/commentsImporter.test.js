@@ -22,8 +22,7 @@ describe('basic comment import [basic-comment.docx]', () => {
     expect(comments).toHaveLength(1);
 
     const comment = comments[0];
-    expect(comment.id).toHaveLength(36); // UUID is generated at import
-    expect(comment.importedId).toBe('0');
+    expect(comment.commentId).toHaveLength(36); // UUID is generated at import
     expect(comment.creatorName).toBe('Nick Bernal');
     expect(comment.creatorEmail).toBeUndefined();
     expect(comment.createdTime).toBe(1739389620000);
@@ -69,7 +68,7 @@ describe('threaded comment import [threaded-comment.docx]', () => {
     expect(parentComment.parentCommentId).toBeUndefined();
 
     const childComment = comments[1];
-    expect(childComment.parentCommentId).toBe(parentComment.id);
+    expect(childComment.parentCommentId).toBe(parentComment.commentId);
     expect(childComment.isDone).toBe(false);
   });
 });

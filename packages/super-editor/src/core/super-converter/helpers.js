@@ -118,6 +118,18 @@ function isValidHexColor(color) {
   }
 }
 
+const componentToHex = (val) => {
+  const a = Number(val).toString(16);
+  return a.length === 1 ? '0' + a : a;
+}
+
+const rgbToHex = (rgb) => {
+  return '#' + rgb
+    .match(/\d+/g)
+    .map(componentToHex)
+    .join('');
+}
+
 export {
   inchesToTwips,
   twipsToInches,
@@ -135,5 +147,6 @@ export {
   getArrayBufferFromUrl,
   getContentTypesFromXml,
   getHexColorFromDocxSystem,
-  isValidHexColor
+  isValidHexColor,
+  rgbToHex
 };

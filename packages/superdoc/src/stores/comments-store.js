@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, reactive, computed, unref } from 'vue';
+import { ref, reactive, computed } from 'vue';
 import { comments_module_events } from '@harbour-enterprises/common';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
@@ -23,6 +23,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const hasInitializedComments = ref(false);
   const hasSyncedCollaborationComments = ref(false);
   const commentsParentElement = ref(null);
+  const hasInitializedLocations = ref(false);
   const activeComment = ref(null);
   const editingCommentId = ref(null);
   const commentDialogs = ref([]);
@@ -32,8 +33,8 @@ export const useCommentsStore = defineStore('comments', () => {
   const currentCommentText = ref('');
   const commentsList = ref([]);
   const isCommentsListVisible = ref(false);
-  const lastChange = ref(Date.now());
   const editorCommentIds = ref([]);
+  const editorCommentPositions = ref({});
 
   // Floating comments
   const floatingCommentsOffset = ref(0);
@@ -110,6 +111,7 @@ export const useCommentsStore = defineStore('comments', () => {
       date,
       author: authorName,
       documentId,
+      coords,
     } = params;
 
     const comment = getPendingComment({
@@ -123,8 +125,11 @@ export const useCommentsStore = defineStore('comments', () => {
       creatorNamne: authorName,
       creatorEmail: authorEmail,
       isInternal: false,
+      selection: {
+        selectionBounds: coords,
+      }
     });
-
+    
     // If this is a new tracked change, add it to our comments
     if (event === 'add') {
       addComment({ superdoc, comment });
@@ -185,8 +190,6 @@ export const useCommentsStore = defineStore('comments', () => {
     }
 
     activeComment.value = pendingComment.value.commentID;
-
-    updateLastChange();
   };
 
   /**
@@ -245,18 +248,6 @@ export const useCommentsStore = defineStore('comments', () => {
       top: top,
       left: left,
     };
-  };
-
-  const updateLastChange = () => {
-    setTimeout(() => {
-      lastChange.value = Date.now();
-    }, 50);
-  };
-
-  const initialCheck = () => {
-    setTimeout(() => {
-      lastChange.value = Date.now();
-    }, 250)
   };
 
   const checkOverlaps = (currentElement, dialog, doc) => {
@@ -367,6 +358,7 @@ export const useCommentsStore = defineStore('comments', () => {
     const newComment = useComment(comment.getValues());
 
     if (pendingComment.value) newComment.setText({ text: currentCommentText.value, suppressUpdate: true });
+    else newComment.setText({ text: comment.commentText, suppressUpdate: true });
     newComment.selection.source = pendingComment.value?.selection?.source;
 
     // Set isInternal flag
@@ -392,14 +384,13 @@ export const useCommentsStore = defineStore('comments', () => {
     };
 
     const event =  { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() };
-  
+
     // If collaboration is enabled, sync the comments to all clients
     syncCommentsToClients(superdoc, event);
 
     // Emit event for end users
     if (__IS_DEBUG__) console.debug('[addComment] emitting...', event);
     superdoc.emit('comments-update', event);
-
   };
 
   const deleteComment = ({ commentId: commentIdToDelete, superdoc }) => {
@@ -450,18 +441,20 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {String} param0.documentId The document ID
    * @returns {void}
    */
-  const processLoadedDocxComments = ({ superdoc, comments, documentId }) => {
+  const processLoadedDocxComments = async ({ superdoc, comments, documentId }) => {
     const document = superdocStore.getDocument(documentId);
 
     if (__IS_DEBUG__) console.debug('[processLoadedDocxComments] processing comments...', comments);
 
     comments.forEach((comment) => {
+      const htmlContent = getHTmlFromComment(comment.textJson);
+      if (!htmlContent) return;
+
       const importedName = `${comment.creatorName.replace('(imported)', '')} (imported)`
       const newComment = useComment({
         fileId: documentId,
         fileType: document.type,
-        importedId: comment.importedId ? Number(comment.importedId): null,
-        commentId: comment.id,
+        commentId: comment.commentId,
         isInternal: false,
         parentCommentId: comment.parentCommentId,
         importedAuthor: {
@@ -476,8 +469,6 @@ export const useCommentsStore = defineStore('comments', () => {
 
       addComment({ superdoc, comment: newComment });
     });
-
-    updateLastChange();
   }
 
   const translateCommentsForExport = () => {
@@ -513,63 +504,21 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {DOMElement} parentElement The parent element of the editor
    * @returns {void}
    */
-  const handleEditorLocationsUpdate = (parentElement, allCommentIds = []) => {
-    editorCommentIds.value = allCommentIds;
-    commentsParentElement.value = parentElement;
-
-    // Track comment IDs that we do not find in the editor
-    // These will remain as 'general' comments
-    generalCommentIds.value = commentsList.value
-      .filter((c) => {
-        const isSuperEditor = c.selection.source === 'super-editor';
-        const noCommentInEditor = !allCommentIds.includes(c.commentId || c.importedId);
-        return isSuperEditor && noCommentInEditor && !c.trackedChange;
-      })
-      .map((c) => c.commentId || c.importedId);
-
-    setTimeout(() => {
-      const allCommentElements = document.querySelectorAll('[data-thread-id]');
-      const trackedChanges = document.querySelectorAll('.track-delete, .track-insert');
-      trackedChanges.forEach((change) => {
-        const threadId = change.dataset.id;
-        const comment = getComment(threadId);
-        const coords = change.getBoundingClientRect();
-        if (comment) {
-          comment.updatePosition(coords, parentElement);
-        };
-      })
-
-      allCommentElements.forEach((commentElement) => {
-        const threadId = commentElement.dataset.threadId;
-        const comment = getComment(threadId);
-        const coords = commentElement.getBoundingClientRect();
-        if (comment) {
-          comment.updatePosition(coords, parentElement);
-        }
-      });
-
-      updateLastChange();
-    }, 50)
+  const handleEditorLocationsUpdate = (allCommentPositions, activeThreadId) => {
+    editorCommentPositions.value = allCommentPositions;
   };
 
   const getFloatingComments = computed(() => {
-    return getGroupedComments.value?.parentComments
+    const comments = getGroupedComments.value?.parentComments
       .filter((c) => !c.resolvedTime)
-      .filter((c) => !generalCommentIds.value.includes(c.commentId || c.importedId))
-      .sort(sortFloatingCommentsByLocation);
-  });
+      .filter((c) => {
+        const keys = Object.keys(editorCommentPositions.value);
+        console.debug('[getFloatingComments] editorCommentPositions', keys)
 
-  const sortFloatingCommentsByLocation = (a, b) => {
-    // Sort comments by page and by position first
-  
-    const pageA = a.selection?.page || 0;
-    const pageB = b.selection?.page || 0;
-    if (pageA !== pageB) return pageA - pageB;
-  
-    const topB = b.selection.selectionBounds?.top;
-    const topA = a.selection.selectionBounds?.top;
-    return topA - topB;
-  };
+        return keys.includes(c.commentId);
+      });
+    return comments;
+  });
 
   /**
    * Get HTML content from the comment text JSON (which uses DOCX schema)
@@ -578,14 +527,22 @@ export const useCommentsStore = defineStore('comments', () => {
    * @returns {string} The HTML content
    */
   const getHTmlFromComment = (commentTextJson) => {
-    const editor = new Editor({
-      mode: 'text',
-      isHeadless: true,
-      content: commentTextJson,
-      loadFromSchema: true,
-      extensions: getRichTextExtensions(),
-    });
-    return editor.getHTML();
+    // If no content, we can't convert and its not a valid comment
+    if (!commentTextJson.content?.length) return;
+
+    try {
+      const editor = new Editor({
+        mode: 'text',
+        isHeadless: true,
+        content: commentTextJson,
+        loadFromSchema: true,
+        extensions: getRichTextExtensions(),
+      });
+      return editor.getHTML();
+    } catch (error) {
+      console.warn('Failed to convert comment', error);
+      return;
+    };
   };
 
   return {
@@ -603,10 +560,11 @@ export const useCommentsStore = defineStore('comments', () => {
     currentCommentText,
     commentsList,
     isCommentsListVisible,
-    lastChange,
     generalCommentIds,
     editorCommentIds,
     commentsParentElement,
+    editorCommentPositions,
+    hasInitializedLocations,
 
     // Floating comments
     floatingCommentsOffset,
@@ -628,7 +586,6 @@ export const useCommentsStore = defineStore('comments', () => {
     getCommentLocation,
     hasOverlapId,
     checkOverlaps,
-    initialCheck,
     getPendingComment,
     showAddComment,
     addComment,
@@ -639,6 +596,5 @@ export const useCommentsStore = defineStore('comments', () => {
     translateCommentsForExport,
     handleEditorLocationsUpdate,
     handleTrackedChangeUpdate,
-    updateLastChange,
   };
 });

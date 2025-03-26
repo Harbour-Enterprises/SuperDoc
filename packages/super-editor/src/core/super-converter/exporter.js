@@ -10,6 +10,7 @@ import {
   pixelsToEightPoints,
   pixelsToEmu,
   pixelsToTwips,
+  rgbToHex
 } from './helpers.js';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
@@ -1117,6 +1118,9 @@ function translateMark(mark) {
 
     case 'color':
       let processedColor = attrs.color.replace(/^#/, '').replace(/;$/, ''); // Remove `#` and `;` if present
+      if (processedColor.startsWith('rgb')) {
+        processedColor = rgbToHex(processedColor);
+      }
       markElement.attributes['w:val'] = processedColor;
       break;
 
@@ -1604,11 +1608,14 @@ function translateFieldAnnotation(params) {
 
 export function translateHardBreak() {
   return {
-    name: 'w:br',
-    type: 'element',
-    attributes: { 'w:type': 'page' }
+    name: 'w:r',
+    elements: [{
+      name: 'w:br',
+      type: 'element',
+      attributes: { 'w:type': 'page' }
+    }]
   };
-};
+}
 
 export class DocxExporter {
   constructor(converter) {

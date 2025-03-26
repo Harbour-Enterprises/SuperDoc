@@ -20,11 +20,12 @@ const showCommentsPanel = ref(true);
 
 const urlParams = new URLSearchParams(window.location.search);
 const isInternal = urlParams.has('internal');
-const testUserEmail = urlParams.get('userEmail') || 'user@superdoc.com';
+const testUserEmail = urlParams.get('email') || 'user@superdoc.com';
+const testUserName = urlParams.get('name') || `SuperDoc ${Math.floor(1000 + Math.random() * 9000)}`;
 const userRole = urlParams.get('role') || 'editor';
 
 const user = {
-  name: `SuperDoc ${Math.floor(1000 + Math.random() * 9000)}`,
+  name: testUserName,
   email: testUserEmail,
 };
 
@@ -51,7 +52,7 @@ const init = async () => {
     documentMode: 'editing',
     toolbarGroups: ['left', 'center', 'right'],
     pagination: true,
-    rulers: true,
+    rulers: false,
     annotations: false,
     isInternal,
     telemetry: false,
@@ -59,8 +60,8 @@ const init = async () => {
     user,
     title: 'Test document',
     users: [
-      { name: 'Nick Bernal', email: 'nick@harbourshare.com' },
-      { name: 'Eric Doversberger', email: 'eric@harbourshare.com' },
+      { name: 'Nick Bernal', email: 'nick@harbourshare.com', access: 'internal' },
+      { name: 'Eric Doversberger', email: 'eric@harbourshare.com', access: 'external' },
     ],
     documents: [
       {
@@ -93,6 +94,10 @@ const init = async () => {
     // Override icons.
     toolbarIcons: {},
     onCommentsUpdate,
+    onCommentsListChange: ({ isRendered }) => {
+      console.debug('Comments list change', isRendered);
+      isCommentsListOpen.value = isRendered;
+    }
   };
 
   superdoc.value = new SuperDoc(config);
@@ -146,6 +151,15 @@ const handleTitleChange = (e) => {
   console.debug('Title changed', metaMap.toJSON());
 };
 
+const isCommentsListOpen = ref(false);
+const toggleCommentsPanel = () => {
+  if (isCommentsListOpen.value) {
+    superdoc.value?.removeCommentsList();
+  } else {
+    superdoc.value?.addCommentsList(commentsPanel.value);
+  }
+};
+
 onMounted(async () => {
   handleNewFile(await getFileObject(BlankDOCX, 'test.docx', DOCX));
 });
@@ -168,6 +182,7 @@ onMounted(async () => {
           <button class="dev-app__header-export-btn" @click="exportDocx()">Export Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('clean')">Export clean Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('external')">Export external Docx</button>
+          <button class="dev-app__header-export-btn" @click="toggleCommentsPanel">Toggle comments panel</button>
         </div>
       </div>
 
@@ -175,7 +190,9 @@ onMounted(async () => {
 
       <div class="dev-app__main">
         <div class="dev-app__view">
-          <div class="comments-panel" id="comments-panel" ref="commentsPanel"></div>
+          <div class="comments-panel" v-show="isCommentsListOpen">
+            <div id="comments-panel" ref="commentsPanel"></div>
+          </div>
 
           <div class="dev-app__content" v-if="currentFile">
             <div class="dev-app__content-container">
@@ -191,6 +208,9 @@ onMounted(async () => {
 <style>
 .sd-toolbar {
   width: 100%;
+}
+.comments-panel {
+  width: 320px;
 }
 .superdoc .super-editor {
   background-color: white;
@@ -266,6 +286,7 @@ onMounted(async () => {
 .dev-app__main {
   display: flex;
   justify-content: center;
+  overflow: auto;
 }
 
 .dev-app__view {

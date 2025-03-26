@@ -18,7 +18,7 @@ export function translateCommentNode(params, type) {
 
   // Check if the comment is resolved
   const originalComment = params.comments.find((comment) => {
-    return comment.commentId == nodeId || comment.importedId == nodeId;
+    return comment.commentId == nodeId;
   });
 
   if (!originalComment) return;
@@ -38,11 +38,14 @@ export function translateCommentNode(params, type) {
 
   let commentSchema = getCommentSchema(type, commentIndex);
   if (type === 'End') {
-    const commentReference = { name: 'w:commentReference', attributes: { 'w:id': String(commentIndex) } };
+    const commentReference = {
+      name: 'w:r',
+      elements: [{ name: 'w:commentReference', attributes: { 'w:id': String(commentIndex) } }]
+    };
     commentSchema = [commentSchema, commentReference];
-  };
+  }
   return commentSchema;
-};
+}
 
 
 /**
@@ -90,12 +93,13 @@ export const getCommentDefinition = (comment, commentId, allComments) => {
 
   const attributes = {
     'w:id': String(commentId),
-    'w:author': comment.creatorName,
-    'w:email': comment.creatorEmail,
+    'w:author': comment.creatorName || comment.importedAuthor?.name,
+    'w:email': comment.creatorEmail || comment.importedAuthor?.email,
     'w:date': toIsoNoFractional(comment.createdTime),
     'w:initials': getInitials(comment.creatorName),
     'w:done': comment.resolvedTime ? '1' : '0',
     'w15:paraId': comment.commentParaId,
+    'custom:internalId': comment.commentId || comment.internalId,
   };
 
   // Add the w15:paraIdParent attribute if the comment has a parent
@@ -162,6 +166,8 @@ export const updateCommentsXml = (commentDefs = [], commentsXml) => {
       'w:author': commentDef.attributes['w:author'],
       'w:date': commentDef.attributes['w:date'],
       'w:initials': commentDef.attributes['w:initials'],
+      'custom:internalId': commentDef.attributes['custom:internalId'],
+      'xmlns:custom': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main',
     };
   });
 
@@ -185,15 +191,13 @@ export const updateCommentsExtendedXml = (comments = [], commentsExtendedXml) =>
     const attributes = {
       'w15:paraId': comment.commentParaId,
       'w15:done': comment.resolvedTime ? '1' : '0',
-      'w:rsid': comment.commentId || comment.importedId,
     };
 
     const parentId = comment.parentCommentId;
     if (parentId) {
       const parentComment = comments.find((c) => c.commentId === parentId);
-      const parentParaId = parentComment.commentParaId;
-      attributes['w15:paraIdParent'] = parentParaId;
-    };
+      attributes['w15:paraIdParent'] = parentComment.commentParaId;
+    }
 
     return {
       type: 'element',
@@ -240,7 +244,7 @@ export const updateCommentsIdsAndExtensible = (comments = [], commentsIds, exten
       "name": "w16cex:commentExtensible",
       "attributes": {
           "w16cex:durableId": newDurableId,
-          "w16cex:dateUtc": "2025-03-06T23:32:00Z"
+          "w16cex:dateUtc": toIsoNoFractional()
       }
     };
     extensibleUpdated.elements[0].elements.push(newExtensible);
@@ -353,8 +357,8 @@ export const prepareCommentsXmlFilesForExport = ({
   if (exportType === 'clean') {
     const documentXml = removeCommentsFilesFromConvertedXml(convertedXml);
     return { documentXml, relationships };
-  };
-
+  }
+  
   // Initialize comments files with empty content
   const updatedXml = generateConvertedXmlWithCommentFiles(convertedXml);
 

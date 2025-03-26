@@ -358,7 +358,7 @@ class SuperConverter {
       });
       updatedXml = { ...documentXml };
       commentsRels = relationships;
-    };
+    }
 
     this.convertedXml = { ...this.convertedXml, ...updatedXml };
     
@@ -390,8 +390,10 @@ class SuperConverter {
     const relsData = this.convertedXml['word/_rels/document.xml.rels'];
     const relationships = relsData.elements.find((x) => x.name === 'Relationships');
     const newRels = [];
-
-    let largestId = Math.max(...relationships.elements.map((el) => Number(el.attributes.Id.replace('rId', ''))));
+    
+    const regex = /rId|mi/g;
+    let largestId = Math.max(...relationships.elements.map((el) => Number(el.attributes.Id.replace(regex, ''))));
+    
     rels.forEach((rel) => {
       const existingId = rel.attributes.Id;
       const existingTarget = relationships.elements.find((el) => el.attributes.Target === rel.attributes.Target);
@@ -400,7 +402,7 @@ class SuperConverter {
       if (existingTarget && !isNewMedia) {
         return;
       }
-
+      
       // Update the target to escape ampersands
       rel.attributes.Target = rel.attributes?.Target?.replace(/&/g, '&amp;');
 

@@ -13,7 +13,7 @@ export const Highlight = Mark.create({
     return {
       color: {
         default: null,
-        parseHTML: (element) => element.getAttribute('data-color') || element.style.backgroundColor,
+        parseDOM: (element) => element.getAttribute('data-color') || element.style.backgroundColor,
         renderDOM: (attributes) => {
           if (!attributes.color) {
             return {};

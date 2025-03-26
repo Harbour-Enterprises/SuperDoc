@@ -1,20 +1,19 @@
 import { CommentMarkName } from './comments-constants.js';
 import { COMMENTS_XML_DEFINITIONS } from '@converter/exporter-docx-defs.js';
-
+import { CommentsPluginKey } from './comments-plugin.js';
 
 /**
  * Remove comment by id
  * 
  * @param {Object} param0 
  * @param {string} param0.commentId The comment ID
- * @param {string} param0.importedId The imported ID
  * @param {import('prosemirror-state').EditorState} state The current editor state
  * @param {import('prosemirror-state').Transaction} tr The current transaction
  * @param {Function} param0.dispatch The dispatch function
  * @returns {void}
  */
-export const removeCommentsById = ({ commentId, importedId, state, tr, dispatch }) => {
-  const positions = getCommentPositionsById(commentId, importedId, state.doc);
+export const removeCommentsById = ({ commentId, state, tr, dispatch }) => {
+  const positions = getCommentPositionsById(commentId, state.doc);
   
   // Remove the mark
   positions.forEach(({ from, to }) => {
@@ -28,11 +27,10 @@ export const removeCommentsById = ({ commentId, importedId, state, tr, dispatch 
  * Get the positions of a comment by ID
  * 
  * @param {String} commentId The comment ID
- * @param {String} importedId The imported ID
  * @param {import('prosemirror-model').Node} doc The prosemirror document
  * @returns {Array} The positions of the comment
  */
-export const getCommentPositionsById = (commentId, importedId, doc) => {
+export const getCommentPositionsById = (commentId, doc) => {
   const positions = [];
   doc.descendants((node, pos) => {
     const { marks } = node;
@@ -40,9 +38,8 @@ export const getCommentPositionsById = (commentId, importedId, doc) => {
   
     if (commentMark) {
       const { attrs } = commentMark;
-      const { commentId: currentCommentId, importedId: currentImportedId } = attrs;
-      const wid = currentCommentId || currentImportedId;
-      if (wid == commentId || wid == importedId) {
+      const { commentId: currentCommentId, } = attrs;
+      if (commentId === currentCommentId) {
         positions.push({ from: pos, to: pos + node.nodeSize });
       }
     }
@@ -71,11 +68,11 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
       if (commentMark) {
 
         const { attrs = {} } = commentMark;
-        const { commentId, importedId } = attrs;
+        const { commentId } = attrs;
 
         if (commentId === 'pending') return;
-        if (seen.has(commentId || importedId)) return;
-        seen.add(commentId || importedId);
+        if (seen.has(commentId)) return;
+        seen.add(commentId);
 
         const commentStartNodeAttrs = getPreparedComment(commentMark.attrs);
         const startNode = schema.nodes.commentRangeStart.create(commentStartNodeAttrs);
@@ -90,15 +87,16 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
           node: endNode,
         });
 
-        const parentId = commentId || importedId;
+        const parentId = commentId;
         if (parentId) {
           const childComments = comments
-            .filter((c) => c.parentCommentId == parentId || c.parentCommentId == parentId)
+            .filter((c) => c.parentCommentId === parentId)
             .sort((a, b) => a.createdTime - b.createdTime);
 
           childComments.forEach((c) => {
             const childMark =  getPreparedComment(c);
             const childStartNode = schema.nodes.commentRangeStart.create(childMark);
+            seen.add(c.commentId);
             startNodes.push({
               pos: pos,
               node: childStartNode,
@@ -140,10 +138,9 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
  * @returns {Object} The prepared comment attributes
  */
 export const getPreparedComment = (attrs) => {
-  const { commentId, importedId, internal } = attrs;
-  const wid = commentId ? commentId : importedId;
+  const { commentId, internal } = attrs;
   return {
-    'w:id': wid,
+    'w:id': commentId,
     internal: internal,
   };
 }
@@ -163,15 +160,23 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
 
   doc.descendants((node, pos) => {
     const { type } = node;
+    
+    const commentNodes = ['commentRangeStart', 'commentRangeEnd', 'commentReference'];
+    if (!commentNodes.includes(type.name)) return;
+
+    const matchingImportedComment = converter.comments?.find((c) => c.importedId == node.attrs['w:id']) || {};
+    const { commentId } = matchingImportedComment;
+    if (!commentId) return;
 
     // If the node is a commentRangeStart, record it so we can place a mark once we find the end.
     if (type.name === 'commentRangeStart') {
       toMark.push({
-        'w:id': node.attrs['w:id'],
+        'w:id': commentId,
+        importedId: node.attrs['w:id'],
         internal: false,
         start: pos,
       });
-    
+
       // We'll remove this node from the final doc
       toDelete.push({ start: pos, end: pos + 1 });
     }
@@ -179,11 +184,12 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
     // When we reach the commentRangeEnd, add a mark spanning from start to current pos,
     // then mark it for deletion as well.
     else if (type.name === 'commentRangeEnd') {
-      const itemToMark = toMark.find((p) => p['w:id'] === node.attrs['w:id']);
+      const itemToMark = toMark.find((p) => p.importedId === node.attrs['w:id']);
       if (!itemToMark) return; // No matching start? just skip
 
       const { start } = itemToMark;
       const markAttrs = {
+        commentId,
         importedId: node.attrs['w:id'],
         internal: itemToMark.internal,
       };
@@ -274,3 +280,21 @@ export const translateFormatChangesToEnglish = (attrs = {}) => {
 
   return messages.length ? messages.join('. ') : 'No formatting changes.';
 };
+
+/**
+ * Get the highlight color for a comment or tracked changes node
+ * 
+ * @param {Object} param0 
+ * @param {String} param0.activeThreadId The active comment ID
+ * @param {String} param0.threadId The current thread ID
+ * @param {Boolean} param0.isInternal Whether the comment is internal or external
+ * @param {EditorView} param0.editor The current editor view
+ * @returns {String} The color to use for the highlight
+ */
+export const getHighlightColor = ({ activeThreadId, threadId, isInternal, editor }) => {
+  if (!editor.options.isInternal && isInternal) return 'transparent';
+  const pluginState = CommentsPluginKey.getState(editor.state);
+  const color = isInternal ? pluginState.internalColor : pluginState.externalColor;
+  const alpha = activeThreadId == threadId ? '44' : '22';
+  return `${color}${alpha}`;
+}

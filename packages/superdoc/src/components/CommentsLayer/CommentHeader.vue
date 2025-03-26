@@ -26,7 +26,7 @@ const props = defineProps({
     type: Boolean,
     required: false,
     default: false,
-  }
+  },
 });
 
 const { proxy } = getCurrentInstance();
@@ -98,14 +98,18 @@ const handleResolve = () => emit('resolve');
 const handleReject = () => emit('reject');
 const handleSelect = (value) => emit('overflow-select', value);
 
+const getCurrentUser = computed(() => {
+  if (props.isPendingInput) return proxy.$superdoc.config.user;
+  return props.comment.getCommentUser();
+});
 </script>
 
 <template>
   <div class="card-section comment-header">
     <div class="comment-header-left">
-      <Avatar :user="props.comment.getCommentUser()" class="avatar" />
+      <Avatar :user="getCurrentUser" class="avatar" />
       <div class="user-info">
-        <div class="user-name">{{ props.comment.getCommentUser().name }}</div>
+        <div class="user-name">{{ getCurrentUser.name }}</div>
         <div class="user-timestamp" v-if="props.comment.createdTime">{{ formatDate(props.comment.createdTime) }}</div>
       </div>
     </div>

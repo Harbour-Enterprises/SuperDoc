@@ -13,8 +13,8 @@ import { defaultNodeListHandler } from "./docxImporter";
  * @returns {Array} The parsed comments
  */
 export function importCommentData({ docx }) {
-  const nodeListHandler = defaultNodeListHandler()
-  const comments =  docx['word/comments.xml'];
+  const nodeListHandler = defaultNodeListHandler();
+  const comments = docx['word/comments.xml'];
   if (!comments) return;
 
   const { elements } = comments;
@@ -24,11 +24,12 @@ export function importCommentData({ docx }) {
   const extractedComments = allComments.map((el) => {
 
     const { attributes } = el;
-    const commentId = attributes['w:id'];
+    const importedId = attributes['w:id'];
     const authorName = attributes['w:author'];
     const authorEmail = attributes['w:email'];
     const initials = attributes['w:initials'];
     const createdDate = attributes['w:date'];
+    const internalId = attributes['custom:internalId'];
     const date = new Date(createdDate);
     const unixTimestampMs = date.getTime();
 
@@ -44,8 +45,8 @@ export function importCommentData({ docx }) {
     const paraId = attrs['w14:paraId'];
 
     return {
-      id: uuidv4(),
-      importedId: commentId,
+      commentId: internalId || uuidv4(),
+      importedId,
       creatorName: authorName,
       creatorEmail: authorEmail,
       createdTime: unixTimestampMs,
@@ -57,7 +58,7 @@ export function importCommentData({ docx }) {
 
   const extendedComments = generateCommentsWithExtendedData({ docx, comments: extractedComments });
   return extendedComments;
-};
+}
 
 /**
  * Import the commentsExtended.xml file to get the extended comment details
@@ -88,9 +89,8 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
 
     const newComment = {
       ...comment,
-      commentId: superdocCommentId,
       isDone,
-      parentCommentId: parentComment?.id,
+      parentCommentId: parentComment?.commentId,
     };
     return newComment;
   });
@@ -107,6 +107,5 @@ const getExtendedDetails = (commentEx) => {
   const paraId = attributes['w15:paraId'];
   const isDone = attributes['w15:done'] === '1' ? true : false;
   const paraIdParent = attributes['w15:paraIdParent'];
-  const superdocCommentId = attributes['w:rsid'];
-  return { paraId, isDone, paraIdParent, superdocCommentId };
+  return { paraId, isDone, paraIdParent };
 };

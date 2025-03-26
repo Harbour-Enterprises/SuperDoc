@@ -15,5 +15,6 @@ export function generateDocxRandomId(length = 8) {
 }
 
 export function generateRandom32BitHex() {
-  return Math.floor(Math.random() * 0xFFFFFFFF).toString(16).toUpperCase().padStart(8, '0');
+  const val = Math.floor(Math.random() * 0x7FFFFFFF);
+  return val.toString(16).toUpperCase().padStart(8, '0');
 };

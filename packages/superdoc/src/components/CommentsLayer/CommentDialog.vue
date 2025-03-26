@@ -48,6 +48,7 @@ const {
   currentCommentText,
   isDebugging,
   editingCommentId,
+  editorCommentPositions,
 } = storeToRefs(commentsStore);
 
 const { activeZoom } = storeToRefs(superdocStore);
@@ -262,7 +263,10 @@ onMounted(() => {
     nextTick(() => setFocus());
   };
 
-  emit('ready', { commentId: props.comment.commentId, elementRef: commentDialogElement });
+  nextTick(() => {
+    const commentId = props.comment.importedId !== undefined ? props.comment.importedId : props.comment.commentId;
+    emit('ready', { commentId, elementRef: commentDialogElement });
+  });
 })
 </script>
 
@@ -317,7 +321,7 @@ onMounted(() => {
       <div class="card-section comment-body" v-if="!comment.trackedChange">
         <div v-if="!isDebugging && !isEditingThisComment(comment)" class="comment" v-html="comment.commentText"></div>
         <div v-else-if="isDebugging && !isEditingThisComment(comment)" class="comment">
-          {{ comment.selection.selectionBounds }}
+          {{ editorCommentPositions[comment.importedId !== undefined ? comment.importedId: comment.commentId]?.bounds }}
         </div>
         <div v-else class="comment-editing">
           <CommentInput

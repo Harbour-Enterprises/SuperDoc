@@ -50,7 +50,11 @@ export default defineConfig(({ mode, command}) => {
         {
           src: path.resolve(__dirname, '../super-editor/dist/*'),
           dest: 'dist/super-editor',
-        }
+        },
+        { 
+          src: path.resolve(__dirname, '../../node_modules/pdfjs-dist/web/images/*'), 
+          dest: 'dist/images',
+        },
       ],
       hook: 'writeBundle'
     }),
