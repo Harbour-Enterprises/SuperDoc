@@ -19,8 +19,6 @@
  * ```
  */
 
-// API endpoint for Harbour Insights
-
 // @todo: Figure out logic for self hosted vs Harbour hosted and which endpoint
 // should be used based on that
 const API_ENDPOINT = 'https://api.myharbourshare.com/v2/insights';
@@ -172,13 +170,14 @@ export async function writeStreaming(prompt, options = {}, onChunk) {
   }
 
   const payload = {
-    doc_text: options.docText || 'this is a test',
     stream: true,
+    context: SYSTEM_PROMPT,
+    doc_text:'',
     insights: [
       {
         type: 'custom_prompt',
         name: 'text_generation',
-        message: `${SYSTEM_PROMPT} ${prompt}`,
+        message: `Generate text based on the following prompt: ${prompt}`,
       }
     ]
   };
@@ -210,25 +209,17 @@ export async function write(prompt, options = {}) {
   }
 
   const payload = {
-    doc_text: options.docText || 'this is a test',  
     stream: false,
+    context: SYSTEM_PROMPT,
     insights: [
       {
         type: 'custom_prompt',
         name: 'text_generation',
-        message: `${SYSTEM_PROMPT} Generate a text based on the following prompt: ${prompt}`,
+        message: `Generate text based on the following prompt: ${prompt}`,
         format: [{ value: '' }]
       }
     ]
   };
-
-  // if (options.context) {
-  //   payload.context = options.context;
-  // }
-
-  // if (options.documentXml) {
-  //   payload.document_content = options.documentXml;
-  // }
 
   const response = await baseInsightsFetch(payload, options.config || {});
   console.log('write response', response);
@@ -256,21 +247,16 @@ export async function rewriteStreaming(text, prompt = '', options = {}, onChunk)
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
-    doc_text: options.docText || 'this is a test',
     stream: true,
+    context: SYSTEM_PROMPT,
     insights: [
       {
         type: 'custom_prompt',
         name: 'text_rewrite',
-        message: `${SYSTEM_PROMPT} ${message}`,
+        message: `Rewrite the following text: "${text}" using these instructions: ${prompt}`,
       }
     ]
   };
-
-  // Add document content if available
-  if (options.documentXml) {
-    payload.document_content = options.documentXml;
-  }
 
   const response = await baseInsightsFetch(payload, options.config || {});
   
@@ -299,21 +285,17 @@ export async function rewrite(text, prompt = '', options = {}) {
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
-    doc_text: options.docText || 'this is a test',
     stream: false,
+    context: SYSTEM_PROMPT,
     insights: [
       {
         type: 'custom_prompt',
         name: 'text_rewrite',
-        message: `${SYSTEM_PROMPT} ${message}`,
+        message: `Rewrite the following text: "${text}" using these instructions: ${prompt}`,
         format: [{ value: '' }]
       }
     ]
   };
-
-  // if (options.documentXml) {
-  //   payload.document_content = options.documentXml;
-  // }
 
   const response = await baseInsightsFetch(payload, options.config || {});
   return returnNonStreamingJson(response);
