@@ -130,6 +130,7 @@ export class SuperDoc extends EventEmitter {
     onSidebarToggle: () => null,
     onCollaborationReady: () => null,
     onCommentsListChange: () => null,
+    onEditorKeydown: () => null,
     onException: () => null,
 
     // Image upload handler
@@ -229,6 +230,7 @@ export class SuperDoc extends EventEmitter {
     this.on('pdf-document-ready', this.config.onPdfDocumentReady);
     this.on('sidebar-toggle', this.config.onSidebarToggle);
     this.on('collaboration-ready', this.config.onCollaborationReady);
+    this.on('editor-keydown', this.config.onEditorKeydown);
     this.on('content-error', this.onContentError);
     this.on('exception', this.config.onException);
   }

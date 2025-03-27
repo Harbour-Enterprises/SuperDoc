@@ -82,6 +82,7 @@ export class Editor extends EventEmitter {
     },
     onTrackedChangesUpdate: () => null,
     onCommentsUpdate: () => null,
+    onKeydown: () => null,
     onCommentsLoaded: () => null,
     onCommentClicked: () => null,
     onCommentLocationsUpdate: () => null,
@@ -147,6 +148,7 @@ export class Editor extends EventEmitter {
     this.on('commentsLoaded', this.options.onCommentsLoaded);
     this.on('commentClick', this.options.onCommentClicked);
     this.on('commentsUpdate', this.options.onCommentsUpdate);
+    this.on('keydown', this.options.onKeydown);
     this.on('locked', this.options.onDocumentLocked);
     this.on('collaborationReady', this.#onCollaborationReady);
     this.on('paginationUpdate', this.options.onPaginationUpdate);

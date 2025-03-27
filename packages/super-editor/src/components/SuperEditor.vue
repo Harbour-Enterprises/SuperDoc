@@ -138,7 +138,7 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
 };
 
 const handleSuperEditorKeydown = (event) => {
-  emit('editor-keydown', { editor: editor.value });
+  props.options.onKeydown({editor: editor.value })
 };
 
 const handleSuperEditorClick = (event) => {

@@ -221,6 +221,10 @@ const onEditorException = ({ error, editor }) => {
   proxy.$superdoc.emit('exception', { error, editor });
 };
 
+const onEditorKeydown = ({ editor }) => {
+  proxy.$superdoc.emit('editor-keydown', { editor });
+}
+
 const editorOptions = (doc) => {
   const options = {
     pagination: proxy.$superdoc.config.pagination,
@@ -243,6 +247,7 @@ const editorOptions = (doc) => {
     onCollaborationReady: onEditorCollaborationReady,
     onContentError: onEditorContentError,
     onException: onEditorException,
+    onKeydown: onEditorKeydown,
     onCommentsLoaded,
     onCommentsUpdate: onEditorCommentsUpdate,
     onCommentLocationsUpdate: onEditorCommentLocationsUpdate,
