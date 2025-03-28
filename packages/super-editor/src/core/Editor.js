@@ -64,6 +64,7 @@ export class Editor extends EventEmitter {
     editorProps: {},
     parseOptions: {},
     coreExtensionOptions: {},
+    enableInputRules: true,
     isCommentsEnabled: false,
     isNewFile: false,
     scale: 1,

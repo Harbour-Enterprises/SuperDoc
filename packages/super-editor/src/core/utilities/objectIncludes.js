@@ -1,6 +1,4 @@
-const isRegExp = (value) => {
-  return Object.prototype.toString.call(value) === '[object RegExp]';
-};
+import { isRegExp } from './isRegExp.js';
 
 /**
  * Check if obj1 includes obj2

@@ -32,6 +32,7 @@ export * from './selectTextblockStart.js';
 export * from './selectTextblockEnd.js';
 export * from './insertContent.js';
 export * from './insertContentAt.js';
+export * from './undoInputRule.js';
 
 // Lists
 export * from './wrapInList.js';

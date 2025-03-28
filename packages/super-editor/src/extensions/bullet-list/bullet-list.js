@@ -1,5 +1,11 @@
 import { Node, Attribute } from '@core/index.js';
 import { generateDocxListAttributes } from '@helpers/index.js';
+import { wrappingInputRule } from '../../core/inputRules/wrappingInputRule.js';
+
+/**
+ * Matches a bullet list to a dash or asterisk.
+ */
+const inputRegex = /^\s*([-+*])\s$/;
 
 export const BulletList = Node.create({
   name: 'bulletList',
@@ -15,6 +21,7 @@ export const BulletList = Node.create({
       itemTypeName: 'listItem',
       htmlAttributes: {},
       keepMarks: true,
+      keepAttributes: false,
     };
   },
 
@@ -61,4 +68,24 @@ export const BulletList = Node.create({
   },
 
   // Input rules.
+  addInputRules() {
+    let inputRule = wrappingInputRule({
+      match: inputRegex,
+      type: this.type,
+    })
+
+    if (this.options.keepMarks || this.options.keepAttributes) {
+      inputRule = wrappingInputRule({
+        match: inputRegex,
+        type: this.type,
+        keepMarks: this.options.keepMarks,
+        keepAttributes: this.options.keepAttributes,
+        getAttributes: () => { return this.editor.getAttributes('textStyle') },
+        editor: this.editor,
+      })
+    }
+    return [
+      inputRule,
+    ];
+  },
 });

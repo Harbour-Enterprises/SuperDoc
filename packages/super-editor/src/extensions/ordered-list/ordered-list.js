@@ -3,6 +3,12 @@ import { toKebabCase } from '@harbour-enterprises/common';
 import { generateDocxListAttributes, findParentNode } from '@helpers/index.js';
 import { orderedListSync as orderedListSyncPlugin } from './helpers/orderedListSyncPlugin.js';
 import { orderedListMarker as orderedListMarkerPlugin } from './helpers/orderedListMarkerPlugin.js';
+import { wrappingInputRule } from '../../core/inputRules/wrappingInputRule.js';
+
+/**
+ * Matches an ordered list to a 1. on input (or any number followed by a dot).
+ */
+const inputRegex = /^(\d+)\.\s$/;
 
 export const OrderedList = Node.create({
   name: 'orderedList',
@@ -18,6 +24,7 @@ export const OrderedList = Node.create({
       itemTypeName: 'listItem',
       htmlAttributes: {},
       keepMarks: true,
+      keepAttributes: false,
       listStyleTypes: ['decimal', 'lowerAlpha', 'lowerRoman'],
     };
   },
@@ -215,6 +222,30 @@ export const OrderedList = Node.create({
 
   addPmPlugins() {
     return [orderedListMarkerPlugin(), orderedListSyncPlugin()];
+  },
+
+  addInputRules() {
+    let inputRule = wrappingInputRule({
+      match: inputRegex,
+      type: this.type,
+      getAttributes: match => ({ start: +match[1] }),
+      joinPredicate: (match, node) => node.childCount + node.attrs.start === +match[1],
+    })
+
+    if (this.options.keepMarks || this.options.keepAttributes) {
+      inputRule = wrappingInputRule({
+        match: inputRegex,
+        type: this.type,
+        keepMarks: this.options.keepMarks,
+        keepAttributes: this.options.keepAttributes,
+        getAttributes: match => ({ start: +match[1], ...this.editor.getAttributes('textStyle') }),
+        joinPredicate: (match, node) => node.childCount + node.attrs.start === +match[1],
+        editor: this.editor,
+      })
+    }
+    return [
+      inputRule,
+    ];
   },
 });
 

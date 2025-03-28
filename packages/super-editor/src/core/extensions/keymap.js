@@ -20,6 +20,7 @@ export const Keymap = Extension.create({
 
     const handleBackspace = () =>
       this.editor.commands.first(({ commands, tr }) => [
+        () => commands.undoInputRule(),
         () => {
           tr.setMeta('inputType', 'deleteContentBackward');
           return false;
