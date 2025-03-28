@@ -90,7 +90,6 @@ const getRichTextExtensions = () => {
     FieldAnnotation,
     DropCursor,
     Mention,
-    TrackChanges,
     TrackInsert,
     TrackDelete,
     TrackFormat,
