@@ -55,23 +55,49 @@ import { LinkedStyles } from './linked-styles/linked-styles.js';
 // Helpers
 import { trackChangesHelpers } from './track-changes/index.js';
 
-const getRichTextExtensions = () => [
-  Bold,
-  Color,
-  Document,
-  History,
-  Italic,
-  Link,
-  Paragraph,
-  Strike,
-  Text,
-  TextStyle,
-  Underline,
-  Placeholder,
-  PopoverPlugin,
-  Mention,
-  Highlight,
-];
+const getRichTextExtensions = () => {
+  return [
+    Bold,
+    BulletList,
+    Color,
+    Document,
+    FontFamily,
+    FontSize,
+    History,
+    Heading,
+    Italic,
+    ListItem,
+    LineHeight,
+    Link,
+    OrderedList,
+    Paragraph,
+    LineBreak,
+    HardBreak,
+    RunItem,
+    Strike,
+    TabNode,
+    Text,
+    TextAlign,
+    TextIndent,
+    TextStyle,
+    Underline,
+    FormatCommands,
+    CommentsPlugin,
+    Gapcursor,
+    Table,
+    TableRow,
+    TableCell,
+    TableHeader,
+    FieldAnnotation,
+    DropCursor,
+    Mention,
+    TrackChanges,
+    TrackInsert,
+    TrackDelete,
+    TrackFormat,
+    Highlight,
+  ];
+};
 
 const getStarterExtensions = () => {
   return [
