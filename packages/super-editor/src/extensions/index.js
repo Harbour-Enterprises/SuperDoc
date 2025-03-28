@@ -89,7 +89,7 @@ const getRichTextExtensions = () => {
     TableCell,
     TableHeader,
     FieldAnnotation,
-    // DropCursor,
+    DropCursor,
     TrackInsert,
     TrackDelete,
     TrackFormat,
