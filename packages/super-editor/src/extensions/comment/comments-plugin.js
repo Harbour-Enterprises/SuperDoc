@@ -118,6 +118,8 @@ export const CommentsPlugin = Extension.create({
     let shouldUpdate;
     let activeThreadId;
 
+    if (editor.options.isHeadless) return [];
+
     const commentsPlugin = new Plugin({
       key: CommentsPluginKey,
 
