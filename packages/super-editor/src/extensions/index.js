@@ -92,11 +92,9 @@ const getRichTextExtensions = () => {
     // TableHeader,
     // FieldAnnotation,
     // DropCursor,
-    // Mention,
-    // TrackInsert,
-    // TrackDelete,
-    // TrackFormat,
-    // Highlight,
+    TrackInsert,
+    TrackDelete,
+    TrackFormat,
   ];
 };
 
