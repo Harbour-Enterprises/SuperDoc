@@ -1137,7 +1137,7 @@ function translateMark(mark) {
       break;
 
     case 'highlight':
-      markElement.attributes['w:fill'] = attrs.color.substring(1);
+      markElement.attributes['w:fill'] = attrs.color?.substring(1);
       markElement.attributes['w:color'] = 'auto';
       markElement.attributes['w:val'] = 'clear';
       markElement.name = 'w:shd';
