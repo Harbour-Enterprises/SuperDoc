@@ -4,6 +4,7 @@ import { h } from 'vue';
 import { scrollToElement } from './scroll-helpers';
 import { sanitizeNumber } from './helpers';
 import { useToolbarItem } from './use-toolbar-item';
+import AIWriter from './AIWriter.vue';
 import AlignmentButtons from './AlignmentButtons.vue';
 import LinkInput from './LinkInput.vue';
 import DocumentMode from './DocumentMode.vue';
@@ -80,6 +81,55 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
       fontButton.label.value = fontFamily;
     },
     onDeactivate: () => (fontButton.label.value = fontButton.defaultLabel.value),
+  });
+
+  // ai button
+  const aiButton = useToolbarItem({
+    type: 'dropdown',
+    dropdownStyles: {
+      padding: 0,
+      outline: 'none',
+    },
+    name: 'ai',
+    tooltip: 'AI Insights',
+    icon: toolbarIcons.ai,
+    hideLabel: true,
+    hasCaret: false,
+    isWide: true,
+    suppressActiveHighlight: true,
+    options: [
+      {
+        type: 'render',
+        key: 'ai',
+        render: () => {
+          let selectedText = '';
+
+          if (superToolbar.activeEditor) {
+            const { state } = superToolbar.activeEditor;
+            const { from, to, empty } = state.selection;
+            selectedText = !empty ? state.doc.textBetween(from, to) : '';
+          }
+
+          const handleClose = () => {
+            closeDropdown(aiButton);
+          };
+
+          return h(
+            'div',
+            {},
+            [
+              h(AIWriter, {
+                handleClose,
+                selectedText,
+                editor: superToolbar.activeEditor,
+                key: superToolbar.config.aiApiKey,
+                superToolbar: superToolbar,
+              }),
+            ],
+          );
+        },
+      },
+    ],
   });
 
   // font size
@@ -747,6 +797,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     ['textAlign', 40],
     ['linkedStyles', 142],
     ['documentMode', 47],
+    ['ai', 32],
     ['default', 32],
   ]);
   
@@ -840,6 +891,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     separator,
     link,
     image,
+    aiButton,
     tableItem,
     tableActionsItem,
     separator,

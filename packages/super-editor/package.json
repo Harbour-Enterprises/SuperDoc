@@ -28,6 +28,9 @@
     "./file-zipper": {
       "import": "./dist/file-zipper.es.js"
     },
+    "./ai-writer": {
+      "import": "./dist/ai-writer.es.js"
+    },
     "./style.css": "./dist/style.css"
   },
   "main": "./dist/super-editor.es.js",

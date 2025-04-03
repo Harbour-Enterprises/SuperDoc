@@ -11,6 +11,7 @@ import { DropCursor } from './dropcursor/index.js';
 import { Gapcursor } from './gapcursor/index.js';
 import { Collaboration } from './collaboration/index.js';
 import { CollaborationCursor } from './collaboration-cursor/index.js';
+import { AiPlugin, AiMark, AiAnimationMark } from './ai/index.js';
 
 // Nodes extensions
 import { Document } from './document/index.js';
@@ -48,8 +49,8 @@ import { CommentsMark } from './comment/index.js';
 import { CommentsPlugin } from './comment/index.js';
 import { Placeholder } from './placeholder/index.js';
 import { PopoverPlugin } from './popover-plugin/index.js';
-import { TrackChanges } from "./track-changes/index.js";
-import { Pagination } from "./pagination/index.js";
+import { TrackChanges } from './track-changes/index.js';
+import { Pagination } from './pagination/index.js';
 import { LinkedStyles } from './linked-styles/linked-styles.js';
 
 // Helpers
@@ -93,6 +94,7 @@ const getRichTextExtensions = () => {
     TrackInsert,
     TrackDelete,
     TrackFormat,
+    AiPlugin,
   ];
 };
 
@@ -147,6 +149,9 @@ const getStarterExtensions = () => {
     Pagination,
     Highlight,
     LinkedStyles,
+    AiPlugin,
+    AiMark,
+    AiAnimationMark,
   ];
 };
 
@@ -203,4 +208,7 @@ export {
   trackChangesHelpers,
   getStarterExtensions,
   getRichTextExtensions,
+  AiMark,
+  AiAnimationMark,
+  AiPlugin,
 };
