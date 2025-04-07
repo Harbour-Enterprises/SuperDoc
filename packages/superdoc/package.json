@@ -31,7 +31,7 @@
     },
     "./style.css": "./dist/style.css"
   },
-  "main": "./dist/superdoc.umd.js",
+  "main": "./dist/superdoc.cjs",
   "module": "./dist/superdoc.es.js",
   "types": "./dist/index.d.ts",
   "scripts": {
