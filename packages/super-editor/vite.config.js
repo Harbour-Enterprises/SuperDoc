@@ -48,6 +48,7 @@ export default defineConfig(({ mode }) => {
           'docx-zipper': '@core/DocxZipper',
           'toolbar': '@components/toolbar/Toolbar.vue',
           'file-zipper': '@core/super-converter/zipper.js',
+          'ai-writer': '@components/toolbar/AIWriter.vue',
         },
         output: {
           globals: {
@@ -61,6 +62,7 @@ export default defineConfig(({ mode }) => {
             'toolbar': ['@components/toolbar/Toolbar.vue'],
             'super-input': ['@components/SuperInput.vue'],
             'file-zipper': ['@core/super-converter/zipper.js'],
+            'ai-writer': ['@components/toolbar/AIWriter.vue'],
           },
           entryFileNames: '[name].es.js',
           chunkFileNames: 'chunks/[name]-[hash].js'

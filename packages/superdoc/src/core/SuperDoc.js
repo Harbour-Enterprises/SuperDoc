@@ -33,7 +33,6 @@ import {
  * @property {string} [endpoint] The endpoint for telemetry
  */
 
-
 /**
  * @typedef {Object} Document
  * @property {string} id The ID of the document
@@ -101,7 +100,8 @@ export class SuperDoc extends EventEmitter {
     user: { name: null, email: null },
     users: [],
 
-    modules: {}, // Optional: Modules to load
+    modules: {}, // Optional: Modules to load. Use modules.ai.{your_key} to pass in your key
+
     title: 'SuperDoc',
     conversations: [],
     pagination: false, // Optional: Whether to show pagination in SuperEditors
@@ -363,10 +363,15 @@ export class SuperDoc extends EventEmitter {
       icons: this.config.toolbarIcons,
       documentMode: this.config.documentMode,
       superdoc: this,
+      aiApiKey: this.config.modules?.ai?.apiKey,
     };
 
     this.toolbar = new SuperToolbar(config);
+
     this.toolbar.on('superdoc-command', this.onToolbarCommand.bind(this));
+    // AI highlight is not related to document editing, should be separate events
+    this.toolbar.on('ai-highlight-add', (data) => this.emit('ai-highlight-add', data));
+    this.toolbar.on('ai-highlight-remove', () => this.emit('ai-highlight-remove'));
     this.once('editorCreate', () => this.toolbar.updateToolbarState()); 
   }
 

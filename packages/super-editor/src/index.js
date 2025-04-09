@@ -16,6 +16,7 @@ import SuperEditor from './components/SuperEditor.vue';
 import BasicUpload from './dev/components/BasicUpload.vue';
 import Toolbar from './components/toolbar/Toolbar.vue';
 import SuperInput from './components/SuperInput.vue';
+import AIWriter from './components/toolbar/AIWriter.vue';
 import * as fieldAnnotationHelpers from './extensions/field-annotation/fieldAnnotationHelpers/index.js';
 import * as trackChangesHelpers from './extensions/track-changes/trackChangesHelpers/index.js';
 import { TrackChangesBasePluginKey } from './extensions/track-changes/plugins/index.js';
@@ -35,6 +36,7 @@ const Extensions = {
  * @see DocxZipper
  * @see SuperEditor
  * @see Toolbar
+ * @see AIWriter
  */
 export {
   // Classes
@@ -48,6 +50,7 @@ export {
   SuperInput,
   BasicUpload,
   Toolbar,
+  AIWriter,
 
   // Helpers
   helpers,
