@@ -515,7 +515,7 @@ function _processListRunProperties(data) {
   elements.forEach((item) => {
     if (!expectedTypes.includes(item.name)) {
       // console.warn(`[numbering.xml] Unexpected list run prop found: ${item.name}`);
-    };
+    }
     const { attributes = {} } = item;
     Object.keys(attributes).forEach((key) => {
       runProperties[key] = attributes[key];

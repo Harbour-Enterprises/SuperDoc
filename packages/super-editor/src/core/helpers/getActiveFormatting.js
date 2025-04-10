@@ -4,8 +4,9 @@ import { findMark } from './findMark.js';
 export function getActiveFormatting(editor) {
   const { state } = editor;
   const { selection } = state;
-
+  
   const marks = getMarksFromSelection(state);
+  const markAttrs = selection.$head.parent.attrs.marksAttrs;
 
   const marksToProcess = marks
     .filter((mark) =>  !['textStyle', 'link'].includes(mark.type.name))
@@ -13,6 +14,18 @@ export function getActiveFormatting(editor) {
 
   const textStyleMarks = marks.filter((mark) => mark.type.name === 'textStyle');
   marksToProcess.push(...textStyleMarks.flatMap(unwrapTextMarks));
+
+  // Empty paragraphs could have marks defined as attributes
+  if (markAttrs) {
+    const marksFromAttrs = markAttrs
+      .filter((mark) =>  !['textStyle', 'link'].includes(mark.type))
+      .map((mark) => ({ name: mark.type, attrs: mark.attrs || {} }));
+
+    const textStyleMarksFromAttrs = markAttrs.filter((mark) => mark.type === 'textStyle');
+    
+    marksToProcess.push(...marksFromAttrs);
+    marksToProcess.push(...textStyleMarksFromAttrs.flatMap(unwrapTextMarks));
+  }
 
   const linkMarkType = state.schema.marks['link'];
   const linkMark = findMark(state, linkMarkType);

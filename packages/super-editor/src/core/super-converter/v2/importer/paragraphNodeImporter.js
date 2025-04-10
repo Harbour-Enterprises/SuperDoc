@@ -1,4 +1,4 @@
-import { twipsToInches, twipsToPixels, twipsToLines } from '../../helpers.js';
+import { twipsToInches, twipsToLines, twipsToPixels } from '../../helpers.js';
 import { testForList } from './listImporter.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { mergeTextNodes } from './mergeTextNodes.js';
@@ -49,22 +49,29 @@ export const handleParagraphNode = (params) => {
 
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');
   const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
+  const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
+  
+  if (nestedRPr) {
+    schemaNode.attrs.marksAttrs = parseMarks(nestedRPr, []);
+  }
+  
   if (styleTag) {
     schemaNode.attrs['styleId'] = styleTag.attributes['w:val'];
   }
 
   const indent = pPr?.elements?.find((el) => el.name === 'w:ind');
   if (indent && indent.attributes) {
-    const { 'w:left': left, 'w:right': right, 'w:firstLine': firstLine } = indent?.attributes;
+    const { 'w:left': left, 'w:right': right, 'w:firstLine': firstLine, 'w:hanging': hanging } = indent?.attributes;
 
     if (schemaNode.attrs) {
       if (!schemaNode.attrs.indent) schemaNode.attrs.indent = {};
       if (left) schemaNode.attrs['indent'].left = twipsToPixels(left);
       if (right) schemaNode.attrs['indent'].right = twipsToPixels(right);
       if (firstLine) schemaNode.attrs['indent'].firstLine = twipsToPixels(firstLine);
+      if (hanging) schemaNode.attrs['indent'].hanging = twipsToPixels(hanging);
     }
 
-    const textIndentVal = left || firstLine || 0;
+    const textIndentVal = left - parseInt(hanging || 0) || 0;
     schemaNode.attrs['textIndent'] = `${twipsToInches(textIndentVal)}in`;
   }
 
@@ -72,10 +79,20 @@ export const handleParagraphNode = (params) => {
   if (justify && justify.attributes) {
     schemaNode.attrs['textAlign'] = justify.attributes['w:val'];
   }
+  
+  const keepLines = pPr?.elements?.find((el) => el.name === 'w:keepLines');
+  if (keepLines && keepLines.attributes) {
+    schemaNode.attrs['keepLines'] = keepLines.attributes['w:val'];
+  }
+
+  const keepNext = pPr?.elements?.find((el) => el.name === 'w:keepNext');
+  if (keepNext && keepNext.attributes) {
+    schemaNode.attrs['keepNext'] = keepNext.attributes['w:val'];
+  }
 
   if (docx) {
     const defaultStyleId = node.attributes?.['w:rsidRDefault'];
-    schemaNode.attrs['spacing'] = getParagraphSpacing(node, docx);
+    schemaNode.attrs['spacing'] = getParagraphSpacing(node, docx, schemaNode.attrs['styleId'], schemaNode.attrs.marksAttrs);
     schemaNode.attrs['rsidRDefault'] = defaultStyleId;
   }
 
@@ -92,7 +109,7 @@ export const handleParagraphNode = (params) => {
   return { nodes: schemaNode ? [schemaNode] : [], consumed: 1 };
 };
 
-export const getParagraphSpacing = (node, docx) => {
+export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
   // Check if we have default paragraph styles to override
   const spacing = {
     lineSpaceAfter: 0,
@@ -100,13 +117,16 @@ export const getParagraphSpacing = (node, docx) => {
     line: 0,
     lineRule: null,
   }
-
-  const { spacing: pDefaultSpacing = {} } = getDefaultParagraphStyle(docx);
+  
+  const { spacing: pDefaultSpacing = {} } = getDefaultParagraphStyle(docx, styleId);
   let lineSpaceAfter, lineSpaceBefore, line, lineRuleStyle;
 
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');
   const inLineSpacingTag = pPr?.elements?.find((el) => el.name === 'w:spacing');
   const inLineSpacing = inLineSpacingTag?.attributes || {};
+  
+  const textStyleMark = marks.find((el) => el.type === 'textStyle');
+  const fontSize = textStyleMark?.attrs?.fontSize;
 
   // These styles are taken in order of precedence
   // 1. Inline spacing
@@ -117,9 +137,19 @@ export const getParagraphSpacing = (node, docx) => {
 
   const beforeSpacing = inLineSpacing?.['w:before'] || lineSpaceBefore || pDefaultSpacing?.['w:before'];
   if (beforeSpacing) spacing.lineSpaceBefore = twipsToPixels(beforeSpacing);
+  
+  const beforeAutospacing = inLineSpacing?.['w:beforeAutospacing'];
+  if (beforeAutospacing === '1' && fontSize) {
+    spacing.lineSpaceBefore += Math.round((parseInt(fontSize) * 0.5) * 96 / 72);
+  }
 
   const afterSpacing = inLineSpacing?.['w:after'] || lineSpaceAfter || pDefaultSpacing?.['w:after'];
   if (afterSpacing) spacing.lineSpaceAfter = twipsToPixels(afterSpacing);
+
+  const afterAutospacing = inLineSpacing?.['w:afterAutospacing'];
+  if (afterAutospacing === '1' && fontSize) {
+    spacing.lineSpaceAfter += Math.round((parseInt(fontSize) * 0.5) * 96 / 72);
+  }
 
   const lineRule = inLineSpacing?.['w:lineRule'] || lineRuleStyle || pDefaultSpacing?.['w:lineRule'];
   if (lineRule) spacing.lineRule = lineRule;
@@ -127,7 +157,7 @@ export const getParagraphSpacing = (node, docx) => {
   return spacing;
 };
 
-const getDefaultParagraphStyle = (docx) => {
+const getDefaultParagraphStyle = (docx, styleId = '') => {
   const styles = docx['word/styles.xml'];
   if (!styles) {
     return {};
@@ -136,10 +166,26 @@ const getDefaultParagraphStyle = (docx) => {
   const pDefault = defaults.elements.find((el) => el.name === 'w:pPrDefault');
   const pPrDefault = pDefault?.elements?.find((el) => el.name === 'w:pPr');
   const pPrDefaultSpacingTag = pPrDefault?.elements?.find((el) => el.name === 'w:spacing') || {};
+  
+  // Paragraph 'Normal' styles
+  const stylesNormal = styles.elements[0].elements?.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === 'Normal');
+  const pPrNormal = stylesNormal?.elements?.find((el) => el.name === 'w:pPr');
+  const pPrNormalSpacingTag = pPrNormal?.elements?.find((el) => el.name === 'w:spacing') || {};
+  
+  // Styles based on styleId
+  let pPrStyleIdSpacingTag = {};
+  if (styleId) {
+    const stylesById = styles.elements[0].elements?.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId);
+    const pPrById = stylesById?.elements?.find((el) => el.name === 'w:pPr');
+    pPrStyleIdSpacingTag = pPrById?.elements?.find((el) => el.name === 'w:spacing') || {};
+  }
+  
   const { attributes: pPrDefaultSpacingAttr } = pPrDefaultSpacingTag;
+  const { attributes: pPrNormalSpacingAttr } = pPrNormalSpacingTag;
+  const { attributes: pPrByIdSpacingAttr } = pPrStyleIdSpacingTag;
 
   return {
-    spacing: pPrDefaultSpacingAttr,
+    spacing: pPrByIdSpacingAttr || pPrDefaultSpacingAttr || pPrNormalSpacingAttr,
   }
 };
 
@@ -323,6 +369,6 @@ export function preProcessNodesForFldChar(nodes) {
       });
     }
   });
-
+  
   return processedNodes;
 }
