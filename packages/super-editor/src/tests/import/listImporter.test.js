@@ -435,6 +435,7 @@ describe('custom nested list tests', () => {
                     order: '1',
                     lvlText: '○',
                     lvlJc: 'both',
+                    indent: { right: -8 },
                     listLevel: [],
                     listNumberingType: 'bullet',
                     spacing: {
@@ -573,6 +574,7 @@ describe('custom nested list tests', () => {
             order: '1',
             lvlText: '%1.',
             lvlJc: 'both',
+            indent: { right: -8 },
             listLevel: [1],
             listNumberingType: 'decimal',
             spacing: {
@@ -698,6 +700,7 @@ describe('custom nested list tests', () => {
                     order: '1',
                     lvlText: '○',
                     lvlJc: undefined,
+                    indent: { right: -8 },
                     listLevel: [],
                     listNumberingType: 'bullet',
                     spacing: {
@@ -858,6 +861,7 @@ describe('custom nested list tests', () => {
             order: '1',
             lvlText: '%1.',
             lvlJc: 'both',
+            indent: { right: -8 },
             listLevel: [2],
             listNumberingType: 'decimal',
             spacing: {
