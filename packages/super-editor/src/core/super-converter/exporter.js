@@ -530,9 +530,9 @@ function translateList(params) {
     const attrsNumId = listNode.attrs.numId;
 
     const actualNumId = attrsNumId || listNode.listId;
-    const listId = actualNumId ?? generateNewListDefinition(params, listType);
+    const listId = actualNumId ?? generateNewListDefinition(params, listType);  
     const pPr = getListParagraphProperties(level, listId, additionalPprs);
-  
+
     content.forEach((contentNode) => {
       // Get paragraph attributes which were attached to list item node
       const paragraphNode = Object.assign({}, contentNode);
@@ -546,9 +546,7 @@ function translateList(params) {
         outputNode.elements = [];
       }
       const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
-      
       const content = outputNode.elements.filter((e) => e.name !== 'w:pPr');
-      
       if (!content.length) {
         // Some empty nodes could have spacing defined
         const spacingProp = outputNode.elements[propsElementIndex]?.elements.find((e) => e.name === 'w:spacing');
@@ -568,8 +566,7 @@ function translateList(params) {
       if (propsElementIndex === -1) {
         outputNode.elements.unshift(pPr);
       } else {
-        const pPrIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
-        outputNode.elements[pPrIndex] = pPr;
+        outputNode.elements[propsElementIndex] = pPr;
       }
       
       listNodes.push(outputNode);
@@ -694,12 +691,31 @@ function flattenContent({ node }) {
 
   const { attributes = {} } = attrs;
   const pPrs = attributes?.parentAttributes?.paragraphProperties?.elements?.filter((el) => el.name !== 'w:numPr') || [];
-
   const flatContent = [];
 
   function recursiveFlatten(items, level = 0) {
     if (!items || !items.length) return;
     items.forEach((item) => {
+      const indent = item.attrs?.indent;
+      if (indent) {
+        const { left, right, firstLine } = indent;
+        const indentAttrs = {};
+        if (left !== undefined) indentAttrs['w:left'] = pixelsToTwips(left);
+        if (right!== undefined) indentAttrs['w:right'] = pixelsToTwips(right);
+        if (firstLine !== undefined) indentAttrs['w:firstLine'] = pixelsToTwips(firstLine);
+
+        const indentElement = {
+          type: 'element',
+          name: 'w:ind',
+          indentAttrs,
+        };
+
+        const existingIndentIndex = pPrs.findIndex((el) => el.name === 'w:ind');
+        if (existingIndentIndex !== -1) {
+          pPrs[existingIndentIndex] = indentElement;
+        };
+      };
+
       const subList = item.content?.filter((c) => c.type === 'bulletList' || c.type === 'orderedList') || [];
       const notLists = item.content?.filter((c) => c.type !== 'bulletList' && c.type !== 'orderedList') || [];
       const newItem = { ...item, content: notLists, listId, level, listType, syncId, pPrs };

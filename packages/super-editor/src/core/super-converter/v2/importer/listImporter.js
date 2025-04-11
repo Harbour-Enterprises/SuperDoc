@@ -3,6 +3,7 @@ import { hasTextNode, parseProperties } from './importerHelpers.js';
 import { preProcessNodesForFldChar, getParagraphSpacing } from './paragraphNodeImporter.js';
 import { mergeTextNodes } from './mergeTextNodes.js';
 import { ErrorWithDetails } from '../../../helpers/ErrorWithDetails.js';
+import { twipsToInches, twipsToPixels, twipsToLines } from '../../helpers.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -186,7 +187,19 @@ function handleListNodes(
           thisItemPath = newPath;
         }
       };
-    
+
+      // Process additional possible inline styles
+      const pPr = item.elements.find((el) => el.name === 'w:pPr');
+      const indent = pPr?.elements.find((el) => el.name === 'w:ind');
+      if (indent) {
+        const indentAttrs = {};
+        if (indent.attributes['w:left'] !== undefined) indentAttrs.left = twipsToPixels(indent.attributes['w:left']);
+        if (indent.attributes['w:right'] !== undefined) indentAttrs.right = twipsToPixels(indent.attributes['w:right']);
+        if (indent.attributes['w:firstLine'] !== undefined) indentAttrs.firstLine = twipsToPixels(indent.attributes['w:firstLine']);
+        nodeAttributes['indent'] = indentAttrs;
+      }
+
+      // Process other core node attributes
       if (listpPrs) nodeAttributes['listParagraphProperties'] = listpPrs;
       if (listrPrs) nodeAttributes['listRunProperties'] = listrPrs;
       nodeAttributes['textStyle'] = textStyle;

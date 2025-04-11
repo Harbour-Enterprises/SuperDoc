@@ -991,7 +991,7 @@ export class Editor extends EventEmitter {
       'docProps/custom.xml': String(customXml),
       'word/settings.xml': String(customSettings),
       'word/_rels/document.xml.rels': String(rels),
-      // 'word/numbering.xml': String(numbering),
+      'word/numbering.xml': String(numbering),
 
       // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
       'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),

@@ -102,6 +102,11 @@ export const ListItem = Node.create({
       spacing: {
         default: null,
         rendered: false,
+      },
+
+      indent: {
+        default: null,
+        rendered: false,
       }
     };
   },

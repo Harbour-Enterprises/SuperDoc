@@ -365,7 +365,7 @@ class SuperConverter {
     storeSuperdocVersion(this.convertedXml);
     
     // Update the numbering.xml
-    // this.#exportNumberingFile(params);
+    this.#exportNumberingFile(params);
 
     return xml;
   };
