@@ -25,7 +25,7 @@ describe('table live xml test', () => {
       'word/numbering.xml': numbering,
     };
 
-    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler(), lists: {} });
     expect(result.nodes.length).toBe(1);
     expect(result.nodes[0].type).toBe('bulletList');
     expect(result.nodes[0].content.length).toBe(1);
@@ -59,7 +59,7 @@ describe('table live xml test', () => {
       'word/numbering.xml': numbering,
     };
 
-    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler(), lists: {} });
     expect(result.nodes.length).toBe(1);
     expect(result.nodes[0].type).toBe('orderedList');
     expect(result.nodes[0].content.length).toBe(1);
@@ -165,7 +165,7 @@ describe('table live xml test', () => {
       'word/numbering.xml': numbering,
     };
 
-    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler(), lists: {} });
     expect(result.nodes.length).toBe(1);
     expect(result.nodes[0].type).toBe('bulletList');
     expect(result.nodes[0].content.length).toBe(3);
@@ -291,7 +291,7 @@ describe('custom nested list tests', () => {
     const docx = {
       'word/numbering.xml': numbering,
     };
-    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler(), lists: {} });
 
     expect(result.nodes.length).toBe(1);
     const expectedResult = {
@@ -500,6 +500,8 @@ describe('custom nested list tests', () => {
               ],
               attrs: {
                 'list-style-type': 'lowerLetter',
+                listId: '2',
+                syncId: "2",
                 attributes: {
                   parentAttributes: {
                     'w14:paraId': '057544FE',
@@ -772,6 +774,8 @@ describe('custom nested list tests', () => {
               ],
               attrs: {
                 'list-style-type': 'bullet',
+                listId: '2',
+                syncId: '2',
                 attributes: {
                   parentAttributes: {
                     'w14:paraId': '437AE2E1',
@@ -919,6 +923,8 @@ describe('custom nested list tests', () => {
       ],
       attrs: {
         'list-style-type': 'bullet',
+        listId: '1',
+        syncId: '1',
         attributes: {
           parentAttributes: {
             'w14:paraId': '3947758C',
@@ -1156,7 +1162,7 @@ describe('custom nested list tests', () => {
     const docx = {
       'word/numbering.xml': numbering,
     };
-    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler(), lists: {} });
     const expectedResult = {
       type: 'orderedList',
       content: [
@@ -1287,6 +1293,8 @@ describe('custom nested list tests', () => {
               ],
               attrs: {
                 'list-style-type': 'bullet',
+                listId: '1',
+                syncId: '1',
                 attributes: {
                   parentAttributes: {
                     'w14:paraId': '2F6FAED3',
@@ -1520,6 +1528,8 @@ describe('custom nested list tests', () => {
               ],
               attrs: {
                 'list-style-type': 'bullet',
+                listId: '1',
+                syncId: '1',
                 attributes: {
                   parentAttributes: {
                     'w14:paraId': '2DBCC378',
@@ -1844,6 +1854,8 @@ describe('custom nested list tests', () => {
               ],
               attrs: {
                 'list-style-type': 'lowerLetter',
+                listId: '1',
+                syncId: "1",
                 attributes: {
                   parentAttributes: {
                     'w14:paraId': '4F17D13D',
@@ -1958,6 +1970,8 @@ describe('custom nested list tests', () => {
       ],
       attrs: {
         'list-style-type': 'decimal',
+        listId: '1',
+        syncId: '1',
         attributes: {
           parentAttributes: {
             'w14:paraId': '2D072E4D',
@@ -2180,7 +2194,7 @@ describe('custom nested list tests', () => {
     const docx = {
       'word/numbering.xml': numbering,
     };
-    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = handleListNode({ nodes, docx, nodeListHandler: defaultNodeListHandler(), lists: {} });
 
     const expectedResult = {
       type: 'orderedList',
@@ -2326,6 +2340,8 @@ describe('custom nested list tests', () => {
       ],
       attrs: {
         'list-style-type': 'decimal',
+        listId: '2',
+        syncId: '2',
         attributes: {
           parentAttributes: {
             'w14:paraId': '2BEDC1A3',

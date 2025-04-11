@@ -2,6 +2,36 @@ import { Extension } from '../Extension.js';
 import { isIOS } from '../utilities/isIOS.js';
 import { isMacOS } from '../utilities/isMacOS.js';
 
+export const handleEnter = (editor) => {
+  editor.commands.first(({ commands }) => [
+    () => commands.newlineInCode(),
+    () => commands.createParagraphNear(),
+    () => commands.liftEmptyBlock(),
+    () => commands.splitBlock(),
+  ]);
+};
+
+export const handleBackspace = (editor) => {
+  editor.commands.first(({ commands, tr }) => [
+    () => commands.undoInputRule(),
+    () => {
+      tr.setMeta('inputType', 'deleteContentBackward');
+      return false;
+    },
+    () => commands.deleteSelection(),
+    () => commands.joinBackward(),
+    () => commands.selectNodeBackward(),
+  ]);
+};
+
+export const handleDelete = (editor) => {
+  editor.commands.first(({ commands }) => [
+    () => commands.deleteSelection(),
+    () => commands.joinForward(),
+    () => commands.selectNodeForward(),
+  ]);
+};
+
 /**
  * For reference.
  * https://github.com/ProseMirror/prosemirror-commands/blob/master/src/commands.ts
@@ -10,41 +40,14 @@ export const Keymap = Extension.create({
   name: 'keymap',
 
   addShortcuts() {
-    const handleEnter = () =>
-      this.editor.commands.first(({ commands }) => [
-        () => commands.newlineInCode(),
-        () => commands.createParagraphNear(),
-        () => commands.liftEmptyBlock(),
-        () => commands.splitBlock(),
-      ]);
-
-    const handleBackspace = () =>
-      this.editor.commands.first(({ commands, tr }) => [
-        () => commands.undoInputRule(),
-        () => {
-          tr.setMeta('inputType', 'deleteContentBackward');
-          return false;
-        },
-        () => commands.deleteSelection(),
-        () => commands.joinBackward(),
-        () => commands.selectNodeBackward(),
-      ]);
-
-    const handleDelete = () =>
-      this.editor.commands.first(({ commands }) => [
-        () => commands.deleteSelection(),
-        () => commands.joinForward(),
-        () => commands.selectNodeForward(),
-      ]);
-
     const baseKeymap = {
-      Enter: handleEnter,
+      Enter: () => handleEnter(this.editor),
       'Mod-Enter': () => this.editor.commands.exitCode(),
-      Backspace: handleBackspace,
-      'Mod-Backspace': handleBackspace,
-      'Shift-Backspace': handleBackspace,
-      Delete: handleDelete,
-      'Mod-Delete': handleDelete,
+      Backspace: () => handleBackspace(this.editor),
+      'Mod-Backspace': () => handleBackspace(this.editor),
+      'Shift-Backspace': () => handleBackspace(this.editor),
+      Delete: () =>  handleDelete(this.editor),
+      'Mod-Delete': () => handleDelete(this.editor),
       'Mod-a': () => this.editor.commands.selectAll(),
       Tab: () => this.editor.commands.insertTabNode(),
     };
@@ -55,12 +58,12 @@ export const Keymap = Extension.create({
 
     const macBaseKeymap = {
       ...baseKeymap,
-      'Ctrl-h': handleBackspace,
-      'Alt-Backspace': handleBackspace,
-      'Ctrl-d': handleDelete,
-      'Ctrl-Alt-Backspace': handleDelete,
-      'Alt-Delete': handleDelete,
-      'Alt-d': handleDelete,
+      'Ctrl-h': () => handleBackspace(this.editor),
+      'Alt-Backspace': () => handleBackspace(this.editor),
+      'Ctrl-d': () => handleDelete(this.editor),
+      'Ctrl-Alt-Backspace': () => handleDelete(this.editor),
+      'Alt-Delete': () => handleDelete(this.editor),
+      'Alt-d': () => handleDelete(this.editor),
       'Ctrl-a': () => this.editor.commands.selectTextblockStart(),
       'Ctrl-e': () => this.editor.commands.selectTextblockEnd(),
       'Ctrl-t': () => this.editor.commands.insertTabChar(),

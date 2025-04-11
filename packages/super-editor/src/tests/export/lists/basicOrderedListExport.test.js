@@ -35,7 +35,6 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
     testListNodes({ node: nonListNode, expectedLevel: undefined, expectedNumPr: undefined, text: undefined });
   });
 
-
   it('can export the second list (with sublists)', () => {
     const titleIndex = 6;
     const titleNode = body.elements[titleIndex];
