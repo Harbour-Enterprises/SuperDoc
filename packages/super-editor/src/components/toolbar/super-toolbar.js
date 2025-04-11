@@ -67,8 +67,6 @@ export class SuperToolbar extends EventEmitter {
     // If groups is configured, override toolbarGroups
     if (this.config.groups && !Array.isArray(this.config.groups) && Object.keys(this.config.groups).length) {
       this.config.toolbarGroups = Object.keys(this.config.groups);
-    } else {
-      this.config.toolbarGroups = ['left', 'center', 'right'];
     }
   }
 
