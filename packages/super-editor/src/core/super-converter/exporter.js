@@ -15,6 +15,7 @@ import {
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from '@extensions/track-changes/constants.js';
+import { carbonCopy } from '../utilities/carbonCopy.js';
 import { baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/base-list.definitions.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 
@@ -533,7 +534,7 @@ function translateList(params) {
     const listId = actualNumId ?? generateNewListDefinition(params, listType);  
     const pPr = getListParagraphProperties(level, listId, additionalPprs);
 
-    content.forEach((contentNode) => {
+    content.forEach((contentNode, index) => {
       // Get paragraph attributes which were attached to list item node
       const paragraphNode = Object.assign({}, contentNode);
       paragraphNode.attrs = {
@@ -563,10 +564,18 @@ function translateList(params) {
         };
         return listNodes.push(spacer);
       }
+  
       if (propsElementIndex === -1) {
-        outputNode.elements.unshift(pPr);
+        outputNode.elements.unshift(carbonCopy(pPr));
       } else {
-        outputNode.elements[propsElementIndex] = pPr;
+        outputNode.elements[propsElementIndex] = carbonCopy(pPr);
+      }
+
+      // Remove the numPr properties from content nodes
+      if (index !== 0) {
+        const currentpPr = outputNode.elements.find((e) => e.name === 'w:pPr');
+        const numPrIndex = currentpPr.elements.findIndex((e) => e.name === 'w:numPr');
+        if (numPrIndex !== -1) currentpPr.elements.splice(numPrIndex, 1);
       }
       
       listNodes.push(outputNode);
