@@ -81,6 +81,72 @@ describe('paragraph tests to check spacing', () => {
     expect(spacing.lineRule).toBe('auto');
   });
 
+  it('correctly gets marks for empty paragraph', async () => {
+    const dataName = 'doc_with_spacing.docx';
+    const docx = await getTestDataByFileName(dataName);
+    const documentXml = docx['word/document.xml'];
+
+    const doc = documentXml.elements[0];
+    const body = doc.elements[0];
+    const content = body.elements;
+
+    const { nodes } = handleParagraphNode({ nodes: [content[1]], docx, nodeListHandler: defaultNodeListHandler() });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+
+    const { attrs } = node;
+    const { spacing, marksAttrs } = attrs;
+
+    expect(spacing.lineSpaceAfter).toBe(18);
+    expect(spacing.lineSpaceBefore).toBe(18);
+    expect(marksAttrs.length).toBe(2);
+    expect(marksAttrs[0].type).toBe('bold');
+    expect(marksAttrs[1].type).toBe('textStyle');
+    expect(marksAttrs[1].attrs.fontFamily).toBe('Arial');
+    expect(marksAttrs[1].attrs.fontSize).toBe('16pt');
+  });
+
+  it('correctly gets spaces from paragraph Normal styles', async () => {
+    const dataName = 'doc_with_spacing.docx';
+    const docx = await getTestDataByFileName(dataName);
+    const documentXml = docx['word/document.xml'];
+
+    const doc = documentXml.elements[0];
+    const body = doc.elements[0];
+    const content = body.elements;
+
+    const { nodes } = handleParagraphNode({ nodes: [content[4]], docx, nodeListHandler: defaultNodeListHandler() });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+
+    const { attrs } = node;
+    const { spacing } = attrs;
+    expect(spacing.lineSpaceAfter).toBe(11);
+    expect(spacing.lineSpaceBefore).toBe(0);
+  });
+
+  it('correctly gets spacing from styles.xml by related styleId', async () => {
+    const dataName = 'doc_with_spaces_from_styles.docx';
+    const docx = await getTestDataByFileName(dataName);
+    const documentXml = docx['word/document.xml'];
+
+    const doc = documentXml.elements[0];
+    const body = doc.elements[0];
+    const content = body.elements;
+
+    const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+
+    const { attrs } = node;
+    const { spacing } = attrs;
+    expect(spacing.lineSpaceAfter).toBe(6);
+    expect(spacing.lineSpaceBefore).toBe(21);
+  });
+
   it('correctly gets spacing with lists [list-def-mix]', async () => {
     const dataName = 'list-def-mix.docx';
     const docx = await getTestDataByFileName(dataName);
@@ -153,7 +219,8 @@ describe('paragraph tests to check spacing', () => {
               attributes: {
                 'w:left': '2880',
                 'w:right': '1440',
-                'w:firstLine': '720'
+                'w:firstLine': '720',
+                'w:hanging': '270'
               }
             }
           ]
@@ -173,7 +240,8 @@ describe('paragraph tests to check spacing', () => {
     expect(node.attrs.indent.left).toBe(192);
     expect(node.attrs.indent.right).toBe(96);
     expect(node.attrs.indent.firstLine).toBe(48);
-    // textIndent should be in inches (2880 twips = 2 inches)
-    expect(node.attrs.textIndent).toBe('2in');
+    expect(node.attrs.indent.hanging).toBe(18);
+    // textIndent should be in inches (2880twips - 270twips(hanging))
+    expect(node.attrs.textIndent).toBe('1.81in');
   });
 });

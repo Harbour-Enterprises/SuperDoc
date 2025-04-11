@@ -16,7 +16,9 @@ export function parseProperties(node, docx) {
   const unknownMarks = [];
   const { attributes = {}, elements = [] } = node;
   const { nodes, paragraphProperties = {}, runProperties = {} } = splitElementsAndProperties(elements);
-  paragraphProperties.elements = paragraphProperties?.elements?.filter((el) => el.name !== 'w:rPr');
+  const hasRun = elements.find(element => element.name === 'w:r');
+
+  if (hasRun) paragraphProperties.elements = paragraphProperties?.elements?.filter((el) => el.name !== 'w:rPr');
 
   // Get the marks from the run properties
   if (runProperties && runProperties?.elements?.length) {
@@ -58,7 +60,7 @@ function splitElementsAndProperties(elements) {
   const rPr = elements.find((el) => el.name === 'w:rPr');
   const sectPr = elements.find((el) => el.name === 'w:sectPr');
   const els = elements.filter((el) => el.name !== 'w:pPr' && el.name !== 'w:rPr' && el.name !== 'w:sectPr');
-
+  
   return {
     nodes: els,
     paragraphProperties: pPr,

@@ -196,6 +196,31 @@ export const getSpacingStyleString = (spacing) => {
   `.trim();
 };
 
+export const getMarksStyle = (attrs) => {
+  let styles = '';
+  for (const attr of attrs) {
+    switch (attr.type) {
+      case 'bold': 
+        styles += `font-weight: bold; `;
+        break;
+      case 'italic':
+        styles += `font-style: italic; `;
+        break;
+      case 'underline':
+        styles += `text-decoration: underline; `;
+        break;
+      case 'highlight':
+        styles += `background-color: ${attr.attrs.color}; `;
+        break;
+      case 'textStyle':
+        const { fontFamily, fontSize } = attr.attrs;
+        styles += `${fontFamily ? `font-family: ${fontFamily};` : ''} ${fontSize ? `font-size: ${fontSize};` : ''}`;
+    }
+  }
+  
+  return styles.trim();
+}
+
 export const getQuickFormatList = (editor) => {
   if (!editor?.converter) return [];
   const styles = editor.converter.linkedStyles || [];

@@ -167,7 +167,7 @@ function generateParagraphProperties(node) {
   const { styleId } = attrs;
   if (styleId) pPrElements.push({ name: 'w:pStyle', attributes: { 'w:val': styleId } });
 
-  const { spacing, indent, textAlign } = attrs;
+  const { spacing, indent, textAlign, marksAttrs, keepLines, keepNext } = attrs;
   if (spacing) {
     const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
 
@@ -187,11 +187,12 @@ function generateParagraphProperties(node) {
   }
 
   if (indent) {
-    const { left, right, firstLine } = indent;
+    const { left, right, firstLine, hanging } = indent;
     const attributes = {};
     if (left || left === 0) attributes['w:left'] = pixelsToTwips(left);
     if (right || right === 0) attributes['w:right'] = pixelsToTwips(right);
     if (firstLine || firstLine === 0) attributes['w:firstLine'] = pixelsToTwips(firstLine);
+    if (hanging || hanging === 0) attributes['w:hanging'] = pixelsToTwips(hanging);
 
     const indentElement = {
       name: 'w:ind',
@@ -208,8 +209,28 @@ function generateParagraphProperties(node) {
     pPrElements.push(textAlignElement);
   }
   
-  if (!pPrElements.length) return null;
+  if (marksAttrs) {
+    const outputMarks = processOutputMarks(marksAttrs);
+    const rPrElement = generateRunProps(outputMarks);
+    pPrElements.push(rPrElement);
+  }
   
+  if (keepLines) {
+    pPrElements.push({
+      name: 'w:keepLines',
+      attributes: { 'w:val': keepLines },
+    });
+  }
+
+  if (keepNext) {
+    pPrElements.push({
+      name: 'w:keepNext',
+      attributes: { 'w:val': keepNext },
+    });
+  }
+  
+  if (!pPrElements.length) return null;
+
   return {
     name: 'w:pPr',
     elements: pPrElements,
@@ -533,16 +554,16 @@ function translateList(params) {
         ...paragraphNode.attrs,
         ...listNode.attrs
       };
-      
+
       const outputNode = exportSchemaToJson({ ...params, node: paragraphNode });
       if (!outputNode.elements) {
         outputNode.elements = [];
       }
       const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
-      
+
       const listProps = getListParagraphProperties(listNode, level, type, propsElementIndex > -1);
       const content = outputNode.elements.filter((e) => e.name !== 'w:pPr');
-      
+
       if (!content.length) {
         // Some empty nodes could have spacing defined
         const spacingProp = outputNode.elements[propsElementIndex]?.elements.find((e) => e.name === 'w:spacing');
@@ -562,9 +583,11 @@ function translateList(params) {
       if (propsElementIndex === -1) {
         outputNode.elements.unshift(listProps);
       } else {
-        outputNode.elements[propsElementIndex].elements.push(listProps);
+        outputNode.elements[propsElementIndex].elements = [
+          ...outputNode.elements[propsElementIndex].elements,
+          ...listProps
+        ];
       }
-      
       listNodes.push(outputNode);
     });
   });
@@ -603,15 +626,24 @@ function getListParagraphProperties(node, level, type, hasParentProps) {
       },
     ],
   };
+  const resultElements = [numPr];
+  
+  let indent;
+  if (node.attrs.attributes?.parentAttributes) {
+    // Keep original list indent
+    indent = node.attrs.attributes.parentAttributes.paragraphProperties.elements.find(e => e.name === 'w:ind');
+  }
+  
+  indent && resultElements.push(indent);
   
   if (hasParentProps) {
-    return numPr;
+    return resultElements;
   }
   
   return {
     name: 'w:pPr',
     type: 'element',
-    elements: [numPr],
+    elements: resultElements
   };
 }
 
