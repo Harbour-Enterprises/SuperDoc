@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { DocxExporter, exportSchemaToJson } from './exporter';
 import { createDocumentJson, addDefaultStylesIfMissing } from './v2/importer/docxImporter.js';
 import { getArrayBufferFromUrl } from './helpers.js';
+import { baseNumbering } from './v2/exporter/helpers/base-list.definitions.js';
 import { DEFAULT_CUSTOM_XML, SETTINGS_CUSTOM_XML } from './exporter-docx-defs.js';
 import {
   getCommentDefinition,
@@ -88,6 +89,9 @@ class SuperConverter {
     // XML inputs
     this.xml = params?.xml;
     this.declaration = null;
+
+    // List defs
+    this.numbering = {};
 
     // Processed additional content
     this.numbering = null;
@@ -293,6 +297,7 @@ class SuperConverter {
     if (result) {
       this.savedTagsToRestore.push({ ...result.savedTagsToRestore });
       this.pageStyles = result.pageStyles;
+      this.numbering = result.numbering;
       this.comments = result.comments;
       this.linkedStyles = result.linkedStyles;
 
@@ -315,28 +320,19 @@ class SuperConverter {
     commentsExportType,
     comments = [],
   ) {
-    const bodyNode = this.savedTagsToRestore.find((el) => el.name === 'w:body');
-
     const commentsWithParaIds = comments.map((c) => prepareCommentParaIds(c));
     const commentDefinitions = commentsWithParaIds
       .map((c, index) => getCommentDefinition(c, index, commentsWithParaIds));
 
-    const [result, params] = exportSchemaToJson({
-      node: jsonData,
-      bodyNode,
-      relationships: [],
-      documentMedia: {},
-      media: {},
-      isFinalDoc,
+    const { result, params } = this.exportToXmlJson({
+      data: jsonData,
       editorSchema,
-      converter: this,
-      pageStyles: this.pageStyles,
       comments,
+      commentDefinitions,
       commentsExportType,
-      exportedCommentDefs: commentDefinitions,
+      isFinalDoc
     });
 
-    
     const exporter = new DocxExporter(this);
     const xml = exporter.schemaToXml(result);
 
@@ -368,8 +364,56 @@ class SuperConverter {
     // Store the SuperDoc version
     storeSuperdocVersion(this.convertedXml);
     
+    // Update the numbering.xml
+    // this.#exportNumberingFile(params);
+
     return xml;
+  };
+
+  exportToXmlJson({
+    data,
+    editorSchema,
+    comments,
+    commentDefinitions,
+    commentsExportType = 'clean',
+    isFinalDoc = false
+  }) {
+    const bodyNode = this.savedTagsToRestore.find((el) => el.name === 'w:body');
+
+    const [result, params] = exportSchemaToJson({
+      node: data,
+      bodyNode,
+      relationships: [],
+      documentMedia: {},
+      media: {},
+      isFinalDoc,
+      editorSchema,
+      converter: this,
+      pageStyles: this.pageStyles,
+      comments,
+      commentsExportType,
+      exportedCommentDefs: commentDefinitions,
+    });
+
+    return { result, params };
   }
+
+  #exportNumberingFile(params) {
+    const numberingPath = 'word/numbering.xml';
+    let numberingXml = this.convertedXml[numberingPath];
+
+    const newNumbering = this.numbering;
+
+    if (!numberingXml) numberingXml = baseNumbering;
+    const currentNumberingXml = numberingXml.elements[0];
+
+    const newAbstracts = Object.values(newNumbering.abstracts).map((entry) => entry);
+    const newNumDefs = Object.values(newNumbering.definitions).map((entry) => entry);
+    currentNumberingXml.elements = [...newAbstracts, ...newNumDefs];
+
+    // Update the numbering file
+    this.convertedXml[numberingPath] = numberingXml;
+  };
 
   /**
    * Update comments files and relationships depending on export type
@@ -415,7 +459,7 @@ class SuperConverter {
     relationships.elements = [...relationships.elements, ...newRels];
 
     this.convertedXml['word/_rels/document.xml.rels'] = relsData;
-  }
+  };
 
   async #exportProcessMediaFiles(media) {
     const processedData = {};

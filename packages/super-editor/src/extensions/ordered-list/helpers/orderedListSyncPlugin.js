@@ -34,7 +34,7 @@ export function orderedListSync(options = {}) {
       let changed = false;
       Object.entries(listsBySyncId).forEach(([_syncId, lists]) => {
         // If there are less than 2 lists, then we have nothing to sync.
-        if (lists.length < 2) {
+        if (lists.length < 1) {
           let [firstList] = lists;
           tr.setNodeMarkup(firstList.pos, undefined, {
             ...firstList.node.attrs,
@@ -71,4 +71,8 @@ export function orderedListSync(options = {}) {
       return changed ? tr : null;
     },
   });
-}
+};
+
+export function randomId() {
+  return Math.floor(Math.random() * 0xffffffff).toString();
+};

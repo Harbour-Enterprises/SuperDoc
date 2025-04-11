@@ -8,7 +8,7 @@ import { ErrorWithDetails } from '../../../helpers/ErrorWithDetails.js';
  * @type {import("docxImporter").NodeHandler}
  */
 export const handleListNode = (params) => {
-  const { nodes } = params;
+  const { nodes, lists } = params;
   if (nodes.length === 0 || nodes[0].name !== 'w:p') {
     return { nodes: [], consumed: 0 };
   }
@@ -42,9 +42,10 @@ export const handleListNode = (params) => {
     return {
       nodes: [listNodes],
       consumed: listItems.filter((i) => i.seen).length,
+      lists,
     };
   } else {
-    return { nodes: [], consumed: 0 };
+    return { nodes: [], consumed: 0, lists };
   }
 };
 
@@ -80,7 +81,7 @@ function handleListNodes(
   path = '',
   isNested = false,
 ) {
-  const { docx, nodeListHandler, insideTrackChange } = params;
+  const { docx, nodeListHandler, lists } = params;
   const parsedListItems = [];
   let overallListType;
   let listStyleType;
@@ -93,7 +94,6 @@ function handleListNodes(
     return { nodes: [], consumed: 0 };
   }
 
-  let listItemIndices = {};
   const initialpPr = listItems[0].elements.find((el) => el.name === 'w:pPr');
   const initialNumPr = initialpPr?.elements?.find((el) => el.name === 'w:numPr');
   const initialNumIdTag = initialNumPr?.elements?.find((el) => el.name === 'w:numId') || {};
@@ -124,7 +124,6 @@ function handleListNodes(
       getNodeNumberingDefinition(attributes, listLevel, docx);
     listStyleType = listOrderingType;
     const intLevel = parseInt(ilvl);
-
     const isRoot = actualListLevel === intLevel && numId === currentListNumId;
     const isSameListLevelDef = isSameListLevelDefsExceptStart({
       firstListId: numId,
@@ -137,9 +136,15 @@ function handleListNodes(
     const isNested =
       listLevel < intLevel || (listLevel === intLevel && isDifferentList && lastNestedListLevel === listLevel);
 
+    // We keep track of all indices for all lists here with an object
+    // This allows us to detect disconnected lists and handle them correctly
+    if (!lists[currentListNumId]) lists[currentListNumId] = {};
+    if (!lists[currentListNumId][listLevel]) lists[currentListNumId][listLevel] = 0;
+
     // If this node belongs on this list level, add it to the list
     const nodeAttributes = {};
     if (isRoot) {
+      lists[currentListNumId][actualListLevel]++;  
       overallListType = listType;
       item.seen = true;
 
@@ -164,15 +169,24 @@ function handleListNodes(
 
       schemaElements.push(parNode);
       lastNestedListLevel = listLevel;
-
-      if (!(intLevel in listItemIndices)) listItemIndices[intLevel] = parseInt(start);
-      else listItemIndices[intLevel] += 1;
-
+    
       let thisItemPath = [];
       if (listStyleType !== 'bullet') {
-        thisItemPath = [...path, listItemIndices[intLevel]];
+        thisItemPath = [...path, lists[currentListNumId][listLevel]];
       }
 
+      // Rebuild a path if we're continuing after a break
+      if (!path.length && actualListLevel > 0) {
+        const currentDef = lists[currentListNumId];
+        if (currentDef) {
+          const newPath = [];
+          Object.keys(currentDef).forEach((key) => {
+            newPath.push(currentDef[key]);
+          });
+          thisItemPath = newPath;
+        }
+      };
+    
       if (listpPrs) nodeAttributes['listParagraphProperties'] = listpPrs;
       if (listrPrs) nodeAttributes['listRunProperties'] = listrPrs;
       nodeAttributes['textStyle'] = textStyle;
@@ -197,7 +211,7 @@ function handleListNodes(
     // If this item belongs in a deeper list level, we need to process it by calling this function again
     // But going one level deeper.
     else if (isNested) {
-      const newPath = [...path, listItemIndices[listLevel]];
+      const newPath = [...path, lists[currentListNumId][listLevel]];
       const sublist = handleListNodes(
         listItems.slice(index),
         params,
@@ -216,12 +230,23 @@ function handleListNodes(
         lastItem.content.push(sublist);
       }
     }
+    
+    else if (!numId) {
+      item.seen = true;
+      const n = handleStandardNode({ ...params, nodes: [item] }).nodes[0];
+      parsedListItems[parsedListItems.length - 1]?.content.push(n);
+    }
 
     // If this item belongs in a higher list level, we need to break out of the loop and return to higher levels
     else {
       lastNestedListLevel = listLevel;
+
+      if (listLevel > 0 && item.elements[0].elements.find((el)=>el.name==='w:numPr')) {
+        lists[currentListNumId][listLevel] = 0;
+      }
+
       break;
-    }
+    }  
   }
 
   const resultingList = {
@@ -229,6 +254,8 @@ function handleListNodes(
     content: parsedListItems,
     attrs: {
       'list-style-type': listStyleType,
+      listId: currentListNumId,
+      syncId: currentListNumId,
       attributes: {
         parentAttributes: listItems[0]?.attributes || null,
       },
@@ -236,6 +263,7 @@ function handleListNodes(
   };
 
   if (isNested) resultingList.lastNestedListLevel = lastNestedListLevel;
+
   return resultingList;
 }
 

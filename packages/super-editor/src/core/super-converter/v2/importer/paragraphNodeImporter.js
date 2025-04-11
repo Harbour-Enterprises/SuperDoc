@@ -14,7 +14,7 @@ import { kebabCase } from '@harbour-enterprises/common';
  * @type {import("docxImporter").NodeHandler}
  */
 export const handleParagraphNode = (params) => {
-  const { nodes, docx, nodeListHandler, filename } = params;
+  const { nodes, docx, nodeListHandler, filename, lists } = params;
   if (nodes.length === 0 || nodes[0].name !== 'w:p') {
     return { nodes: [], consumed: 0 };
   }

@@ -71,6 +71,7 @@ export class Editor extends EventEmitter {
     annotations: false,
     isInternal: false,
     externalExtensions: [],
+    numbering: {},
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -500,11 +501,11 @@ export class Editor extends EventEmitter {
    * Load the data from DOCX to be used in the schema.
    * Expects a DOCX file.
    */
-  static async loadXmlData(fileSource) {
+  static async loadXmlData(fileSource, isNode = false) {
     if (!fileSource) return;
 
     const zipper = new DocxZipper();
-    const xmlFiles = await zipper.getDocxData(fileSource);
+    const xmlFiles = await zipper.getDocxData(fileSource, isNode);
     const mediaFiles = zipper.media;
 
     return [xmlFiles, mediaFiles, zipper.mediaFiles, zipper.fonts];
@@ -983,11 +984,14 @@ export class Editor extends EventEmitter {
     const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
     const media = this.converter.addedMedia;
 
+    const numberingData = this.converter.convertedXml['word/numbering.xml'];
+    const numbering = this.converter.schemaToXml(numberingData.elements[0]);
     const updatedDocs = {
       'word/document.xml': String(documentXml),
       'docProps/custom.xml': String(customXml),
       'word/settings.xml': String(customSettings),
       'word/_rels/document.xml.rels': String(rels),
+      // 'word/numbering.xml': String(numbering),
 
       // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
       'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),

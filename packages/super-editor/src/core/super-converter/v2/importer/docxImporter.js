@@ -17,6 +17,7 @@ import { tabNodeEntityHandler } from './tabImporter.js';
 import { listHandlerEntity } from './listImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
 import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
+import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -74,12 +75,15 @@ export const createDocumentJson = (docx, converter, editor) => {
     const content = node.elements?.filter((n) => !ignoreNodes.includes(n.name)) ?? [];
     const comments = importCommentData({ docx, nodeListHandler, converter, editor });
 
+    // Track imported lists
+    const lists = {};
     const parsedContent = nodeListHandler.handler({
       nodes: content,
       nodeListHandler,
       docx,
       converter,
       editor,
+      lists,
     });
 
     const result = {
@@ -107,6 +111,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       pageStyles: getDocumentStyles(node, docx, converter, editor),
       comments,
       linkedStyles: getStyleDefinitions(docx, converter, editor),
+      numbering: getNumberingDefinitions(docx),
     };
   }
   return null;
@@ -169,7 +174,7 @@ const createNodeListHandler = (nodeHandlers) => {
     };
   };
 
-  const nodeListHandlerFn = ({ nodes: elements, docx, insideTrackChange, converter, editor, filename, parentStyleId }) => {
+  const nodeListHandlerFn = ({ nodes: elements, docx, insideTrackChange, converter, editor, filename, parentStyleId, lists }) => {
     if (!elements || !elements.length) return [];
     
     const processedElements = [];
@@ -194,7 +199,8 @@ const createNodeListHandler = (nodeHandlers) => {
                 converter,
                 editor,
                 filename,
-                parentStyleId
+                parentStyleId,
+                lists,
               });
             },
             { nodes: [], consumed: 0 }
@@ -434,4 +440,38 @@ function getHeaderFooter(el, elementType, docx, converter, editor) {
 
   storage[rId] = { type: 'doc', content: [...schema] };
   storageIds[sectionType] = rId;
+};
+
+/**
+ * Import this document's numbering.xml definitions
+ * They will be stored into converter.numbering
+ * 
+ * @param {Object} docx The parsed docx
+ * @returns {Object} The numbering definitions
+ */
+function getNumberingDefinitions(docx) {
+  let numbering = docx['word/numbering.xml'];
+  if (!numbering) numbering = baseNumbering;
+
+  const elements = numbering.elements[0].elements;
+
+  const abstractDefs = elements.filter((el) => el.name === 'w:abstractNum');
+  const definitions = elements.filter((el) => el.name === 'w:num');
+
+  const abstractDefinitions = {};
+  abstractDefs.forEach((el) => {
+    const abstractId = Number(el.attributes['w:abstractNumId']);
+    abstractDefinitions[abstractId] = el;
+  });
+
+  const importListDefs = {};
+  definitions.forEach((el) => {
+    const numId = Number(el.attributes['w:numId']);
+    importListDefs[numId] = el;
+  });
+
+  return {
+    abstracts: abstractDefinitions,
+    definitions: importListDefs,
+  }
 }

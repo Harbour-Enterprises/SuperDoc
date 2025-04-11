@@ -84,6 +84,8 @@ export const getExportedResult = async (name, comments = []) => {
     comments,
     exportedComments: [],
     exportedCommentDefs: commentDefinitions,
+    editor,
+    lists: {},
   });
 
   return result;
@@ -112,6 +114,7 @@ export const getExportedResultForAnnotations = async (isFinalDoc) => {
     media: {},
     isFinalDoc,
     pageStyles: editor.converter.pageStyles,
+    editor,
   });
 
   return { result, params };
