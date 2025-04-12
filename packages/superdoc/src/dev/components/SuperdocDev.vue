@@ -85,7 +85,7 @@ const init = async () => {
         //   right: ['documentMode']
         // },
         excludeItems: [], // ['italic', 'bold'],
-      }
+      },
       // 'hrbr-fields': {},
 
       // To test this dev env with collaboration you must run a local collaboration server here.
@@ -93,6 +93,10 @@ const init = async () => {
       //   url: 'ws://localhost:3050/docs/superdoc-id',
       //   token: 'token',
       // }
+      ai: {
+        // Provide your Harbour API key here for direct endpoint access
+        apiKey: '',
+      },
     },
     onEditorCreate,
     onContentError,
