@@ -85,6 +85,7 @@ const handleDocumentReady = (documentId, container) => {
   }
 
   isFloatingCommentsReady.value = true;
+  hasInitializedLocations.value = true;
   proxy.$superdoc.broadcastPdfDocumentReady();
 };
 

@@ -555,7 +555,8 @@ export const useCommentsStore = defineStore('comments', () => {
       .filter((c) => !c.resolvedTime)
       .filter((c) => {
         const keys = Object.keys(editorCommentPositions.value);
-
+        const isPdfComment = c.selection?.source !== 'super-editor';
+        if (isPdfComment) return true;
         return keys.includes(c.commentId);
       });
     return comments;

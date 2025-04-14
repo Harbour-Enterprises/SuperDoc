@@ -59,7 +59,7 @@ export const useHrbrFieldsStore = defineStore('hrbr-fields', () => {
         if (!pageContainer) return;
         const pageBounds = pageContainer.getBoundingClientRect();
 
-        const pageInfo = doc.pageContainers.find((p) => p.page === page + 1);
+        const pageInfo = doc.pageContainers.find((p) => p.page === page);
         const scale = pageBounds.height / pageInfo.containerBounds.originalHeight;
         const pageBottom = pageBounds.bottom - bounds.top;
         const pageLeft = pageBounds.left - bounds.left;
