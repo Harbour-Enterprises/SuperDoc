@@ -527,7 +527,7 @@ function translateList(params) {
 
   const listNodes = [];
   flatContent.forEach((listNode) => {
-    const { level, listType, pPrs: additionalPprs, content } = listNode;
+    const { level, listType, pPrs: additionalPprs, content, attrs = {} } = listNode;
     const attrsNumId = listNode.attrs.numId;
 
     const actualNumId = attrsNumId || listNode.listId;
@@ -565,6 +565,11 @@ function translateList(params) {
         return listNodes.push(spacer);
       }
   
+      // pPr processing
+      const { attributes: generalAttributes } = attrs;
+      const { originalInlineRunProps } = generalAttributes || {};
+      if (originalInlineRunProps) pPr.elements.push(originalInlineRunProps);
+
       if (propsElementIndex === -1) {
         outputNode.elements.unshift(carbonCopy(pPr));
       } else {

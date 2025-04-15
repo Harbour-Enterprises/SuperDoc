@@ -19,7 +19,7 @@ export const handleListNode = (params) => {
   const processedElements = preProcessNodesForFldChar(node.elements);
   node.elements = processedElements;
   
-  const pPr = node.elements.find((el) => el.name === 'w:pPr');
+  const originalPpr = node.elements.find((el) => el.name === 'w:pPr');
 
   // Check if this paragraph node is a list
   if (testForList(node)) {
@@ -39,7 +39,7 @@ export const handleListNode = (params) => {
       }
     }
 
-    const listNodes = handleListNodes(listItems, params, 0);
+    const listNodes = handleListNodes({ listItems, params, originalPpr, level: 0 });
     return {
       nodes: [listNodes],
       consumed: listItems.filter((i) => i.seen).length,
@@ -73,15 +73,16 @@ export const listHandlerEntity = {
  * @param {number} [listLevel=0] - The current indentation level of the list.
  * @returns {Object} The processed list node with structured content.
  */
-function handleListNodes(
+function handleListNodes({
   listItems,
+  originalPpr,
   params,
   listLevel = 0,
   actualListLevel = 0,
   currentListNumId = null,
   path = '',
   isNested = false,
-) {
+}) {
   const { docx, nodeListHandler, lists } = params;
   const parsedListItems = [];
   let overallListType;
@@ -210,6 +211,7 @@ function handleListNodes(
       nodeAttributes['listNumberingType'] = listOrderingType;
       nodeAttributes['attributes'] = {
         parentAttributes: item?.attributes || null,
+        originalInlineRunProps: originalPpr?.elements?.find((el) => el.name === 'w:rPr'),
       };
       nodeAttributes['numId'] = numId;
       
@@ -225,15 +227,16 @@ function handleListNodes(
     // But going one level deeper.
     else if (isNested) {
       const newPath = [...path, lists[currentListNumId][listLevel]];
-      const sublist = handleListNodes(
-        listItems.slice(index),
+      const sublist = handleListNodes({
+        listItems: listItems.slice(index),
+        originalPpr,
         params,
-        listLevel + 1,
-        listLevel,
-        numId,
-        newPath,
-        true,
-      );
+        listLevel: listLevel + 1,
+        actualListLevel: listLevel,
+        currentListNumId: numId,
+        path: newPath,
+        isNested: true,
+      });
       lastNestedListLevel = sublist.lastNestedListLevel;
       delete sublist.lastNestedListLevel;
       const lastItem = parsedListItems[parsedListItems.length - 1];

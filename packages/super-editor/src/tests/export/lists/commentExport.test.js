@@ -24,11 +24,6 @@ describe('[basic-comment.docx] interrupted ordered list tests', async () => {
     const commentId = content[commentStart]?.attributes['w:id'];
     expect(commentStart).toBe(-1);
     expect(commentId).toBeUndefined();
-
-    // const commentEnd = content.findIndex((el) => el.name === 'w:commentRangeEnd');
-    // const commentIdEnd = content[commentStart]?.attributes['w:id'];
-    // expect(commentEnd).toBe(3);
-    // expect(commentIdEnd).toBe('0');
   });
 });
 
