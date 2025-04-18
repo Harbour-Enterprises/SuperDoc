@@ -118,6 +118,7 @@ export function handleTableCellNode(
   columnWidth = null,
   styleTag,
   params,
+  cellIndex,
 ) {
   const { docx, nodeListHandler } = params;
   const tcPr = node.elements.find((el) => el.name === 'w:tcPr');
@@ -159,10 +160,33 @@ export function handleTableCellNode(
   if (width) {
     attributes['colwidth'] = [width];
     attributes['widthUnit'] = 'px';
+
+    const defaultColWidths = gridColumnWidths;
+    const hasDefaultColWidths = gridColumnWidths && gridColumnWidths.length > 0;
+    const colspanNum = parseInt(colspan, 10);
+
+    if (colspanNum && colspanNum > 1 && hasDefaultColWidths) {
+      let colwidth = [];
+
+      for (let i = 0; i < colspanNum; i++) {
+        let colwidthValue = defaultColWidths[cellIndex + i];
+        let defaultColwidth = 100;
+
+        if (typeof colwidthValue !== 'undefined') {
+          colwidth.push(colwidthValue);
+        } else {
+          colwidth.push(defaultColwidth);
+        }
+      }
+
+      if (colwidth.length) {
+        attributes['colwidth'] = [...colwidth];
+      }
+    }
   }
 
   if (widthType) attributes['widthType'] = widthType;
-  if (colspan) attributes['colspan'] = Number(colspan);
+  if (colspan) attributes['colspan'] = parseInt(colspan, 10);
   if (background) attributes['background'] = background;
   if (verticalAlign) attributes['verticalAlign'] = verticalAlign;
   if (fontSize) attributes['fontSize'] = fontSize;
@@ -397,7 +421,7 @@ export function handleTableRowNode(node, table, rowBorders, styleTag, params) {
   const content =
     cellNodes?.map((n, index) => {
       const colWidth = cellNodes.length > 1 ? gridColumnWidths[index] : null;
-      return handleTableCellNode(n, node, table, borders, colWidth, styleTag, params);
+      return handleTableCellNode(n, node, table, borders, colWidth, styleTag, params, index);
     }) || [];
 
   const newNode = {
@@ -448,6 +472,6 @@ const getGridColumnWidths = (tableNode) => {
     tblGrid?.elements?.flatMap((el) => {
       if (el.name !== 'w:gridCol') return [];
       return twipsToPixels(el.attributes['w:w']);
-    }) || {}
+    }) || []
   );
 };

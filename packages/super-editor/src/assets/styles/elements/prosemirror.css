@@ -131,7 +131,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 
 .ProseMirror .tableWrapper {
   --table-border-width: 1px;
-  --offset: 1px;
+  --offset: 2px;
 
   overflow-x: auto;
   scrollbar-width: thin;

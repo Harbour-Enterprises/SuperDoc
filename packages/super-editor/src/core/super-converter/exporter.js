@@ -18,6 +18,8 @@ import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from '@
 import { carbonCopy } from '../utilities/carbonCopy.js';
 import { baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/base-list.definitions.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
+import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
+
 
 /**
  * @typedef {Object} ExportParams
@@ -808,7 +810,7 @@ function translateTable(params) {
   params.node = preProcessVerticalMergeCells(params.node, params);
   const elements = translateChildNodes(params);
   const tableProperties = generateTableProperties(params.node);
-  const gridProperties = generateTableGrid(params.node);
+  const gridProperties = generateTableGrid(params.node, params);
 
   elements.unshift(tableProperties);
   elements.unshift(gridProperties);
@@ -992,17 +994,32 @@ function generateTableBorders(node) {
  * @param {SchemaNode} node
  * @returns {XmlReadyNode} The table grid properties node
  */
-function generateTableGrid(node) {
-  const { gridColumnWidths } = node.attrs;
-  
+function generateTableGrid(node, params) {
+  const { editorSchema } = params;
+
+  let colgroup = [];
+
+  try {
+    const pmNode = editorSchema.nodeFromJSON(node);
+    const cellMinWidth = 25;
+    const { colgroupValues } = createColGroup(
+      pmNode,
+      cellMinWidth,
+    );
+
+    colgroup = colgroupValues;
+  } catch(err) {
+    colgroup = [];
+  }
+
   const elements = [];
-  gridColumnWidths?.forEach((width) => {
+  colgroup?.forEach((width) => {
     elements.push({
       name: 'w:gridCol',
-      attributes: { 'w:w': inchesToTwips(width) },
+      attributes: { 'w:w': pixelsToTwips(width) },
     });
   });
-
+  
   return {
     name: 'w:tblGrid',
     elements,

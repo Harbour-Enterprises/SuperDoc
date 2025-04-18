@@ -74,6 +74,7 @@ export const getExportedResult = async (name, comments = []) => {
   const commentDefinitions = processedComments.map((c, index) => getCommentDefinition(c, index));
 
   const [result, params] = exportSchemaToJson({
+    editorSchema: editor.schema,
     node: schema,
     bodyNode,
     relationships: [],

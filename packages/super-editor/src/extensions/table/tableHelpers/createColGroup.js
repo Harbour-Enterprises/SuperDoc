@@ -5,6 +5,7 @@ export const createColGroup = (node, cellMinWidth, overrideCol, overrideValue) =
   let fixedWidth = true;
   
   const cols = [];
+  const colsValues = [];
   const row = node.firstChild;
 
   if (!row) return {};
@@ -18,16 +19,19 @@ export const createColGroup = (node, cellMinWidth, overrideCol, overrideValue) =
       if (!hasWidth) fixedWidth = false;
       const [prop, value] = getColStyleDeclaration(cellMinWidth, hasWidth);
       cols.push(['col', { style: `${prop}: ${value}` }]);
+      colsValues.push(parseInt(value, 10));
     }
   }
 
   const tableWidth = fixedWidth ? `${totalWidth}px` : '';
   const tableMinWidth = fixedWidth ? '' : `${totalWidth}px`;
   const colgroup = ['colgroup', {}, ...cols];
+  const colgroupValues = [...colsValues];
 
   return { 
     colgroup, 
     tableWidth, 
-    tableMinWidth, 
+    tableMinWidth,
+    colgroupValues, 
   };
 };
