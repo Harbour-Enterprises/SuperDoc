@@ -12,6 +12,8 @@ import { renderColorOptions } from './color-dropdown-helpers.js';
 import TableGrid from './TableGrid.vue';
 import TableActions from './TableActions.vue';
 
+import checkIconSvg from '@harbour-enterprises/common/icons/check.svg?raw';
+
 const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
 };
@@ -802,6 +804,35 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     },
   });
 
+  const renderIcon = (value, selectedValue) => {
+    if (selectedValue.value.toString() !== value) return;
+    return h('div', { innerHTML: checkIconSvg, class: 'dropdown-select-icon' });
+  };
+
+  // line height
+  const lineHeight = useToolbarItem({
+    type: 'dropdown',
+    name: 'lineHeight',
+    tooltip: 'Line height',
+    icon: toolbarIcons.lineHeight,
+    hasCaret: false,
+    hasInlineTextInput: false,
+    inlineTextInputVisible: false,
+    suppressActiveHighlight: true,
+    isWide: false,
+    command: 'setLineHeight',
+    dropdownValueKey: 'key',
+    selectedValue: '1',
+    options: [
+      { label: '1,0', key: '1', icon: () => renderIcon('1', lineHeight.selectedValue) },
+      { label: '1,15', key: '1.15', icon: () => renderIcon('1.15', lineHeight.selectedValue) },
+      { label: '1,5', key: '1.5', icon: () => renderIcon('1.5', lineHeight.selectedValue) },
+      { label: '2,0', key: '2', icon: () => renderIcon('2', lineHeight.selectedValue) },
+      { label: '2,5', key: '2.5', icon: () => renderIcon('2.5', lineHeight.selectedValue) },
+      { label: '3,0', key: '3', icon: () => renderIcon('3', lineHeight.selectedValue) },
+    ],
+  });
+
   // Responsive toolbar calculations
   const breakpoints = {
     sm: 768,
@@ -847,6 +878,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     numberedList,
     indentLeft,
     indentRight,
+    lineHeight,
     separator,
     linkedStyles,
     separator,

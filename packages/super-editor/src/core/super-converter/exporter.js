@@ -9,8 +9,9 @@ import {
   linesToTwips,
   pixelsToEightPoints,
   pixelsToEmu,
-  pixelsToTwips,
-  rgbToHex
+  pixelsToTwips, 
+  ptToTwips,
+  rgbToHex,
 } from './helpers.js';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
@@ -169,7 +170,7 @@ function generateParagraphProperties(node) {
   const { styleId } = attrs;
   if (styleId) pPrElements.push({ name: 'w:pStyle', attributes: { 'w:val': styleId } });
   
-  const { spacing, indent, textAlign, textIndent, marksAttrs, keepLines, keepNext } = attrs;
+  const { spacing, indent, textAlign, textIndent, lineHeight, marksAttrs, keepLines, keepNext } = attrs;
   if (spacing) {
     const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
 
@@ -178,12 +179,28 @@ function generateParagraphProperties(node) {
     // Zero values have to be considered in export to maintain accurate line height
     if (lineSpaceBefore >= 0) attributes['w:before'] = pixelsToTwips(lineSpaceBefore);
     if (lineSpaceAfter >= 0) attributes['w:after'] = pixelsToTwips(lineSpaceAfter);
-    if (line) attributes['w:line'] = linesToTwips(line);
-    attributes['w:lineRule'] = lineRule || "auto";
+
+    if (lineRule === 'exact') {
+      if (lineHeight) attributes['w:line'] = ptToTwips(parseFloat(lineHeight));
+    } else {
+      if (lineHeight) attributes['w:line'] = linesToTwips(lineHeight);
+    }
+    
+    attributes['w:lineRule'] = lineRule || 'auto';
 
     const spacingElement = {
       name: 'w:spacing',
       attributes,
+    };
+    pPrElements.push(spacingElement);
+  }
+  
+  if (lineHeight && !spacing) {
+    const spacingElement = {
+      name: 'w:spacing',
+      attributes: {
+        'w:line': linesToTwips(lineHeight)
+      },
     };
     pPrElements.push(spacingElement);
   }
@@ -329,7 +346,7 @@ function getTextNodeForExport(text, marks) {
   const hasLeadingOrTrailingSpace = /^\s|\s$/.test(text);
   const space = hasLeadingOrTrailingSpace ? 'preserve' : null;
   const nodeAttrs = space ? { 'xml:space': space } : null;
-
+  
   const outputMarks = processOutputMarks(marks);
   const textNode = {
     name: 'w:t',
@@ -566,7 +583,7 @@ function translateList(params) {
     const actualNumId = attrsNumId || listNode.listId;
     const listId = actualNumId ?? generateNewListDefinition(params, listType);  
     const pPr = getListParagraphProperties(level, listId, additionalPprs);
-
+    
     content.forEach((contentNode, index) => {
       // Get paragraph attributes which were attached to list item node
       const paragraphNode = Object.assign({}, contentNode);
@@ -582,14 +599,8 @@ function translateList(params) {
       const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
       const content = outputNode.elements.filter((e) => e.name !== 'w:pPr');
       if (!content.length) {
-        // Some empty nodes could have spacing defined
-        const spacingProp = outputNode.elements[propsElementIndex]?.elements.find((e) => e.name === 'w:spacing');
-        const elements = spacingProp ? [{
-          name: 'w:pPr',
-          type: 'element',
-          elements: [spacingProp],
-        }] : [];
-
+        // Apply initial properties to the empty nodes
+        const elements = contentNode.attrs.paragraphProperties ? [contentNode.attrs.paragraphProperties] : [];
         const spacer = { 
           name: 'w:p',
           type: 'element',
@@ -597,7 +608,7 @@ function translateList(params) {
         };
         return listNodes.push(spacer);
       }
-  
+      
       // pPr processing
       const { attributes: generalAttributes } = attrs;
       const { originalInlineRunProps } = generalAttributes || {};
@@ -606,7 +617,12 @@ function translateList(params) {
       if (propsElementIndex === -1) {
         outputNode.elements.unshift(carbonCopy(pPr));
       } else {
-        outputNode.elements[propsElementIndex] = carbonCopy(pPr);
+        // Check if there is any properties processed by translateParagraphNode
+        const resultProps = carbonCopy(pPr).elements.map(item => {
+          const isChanged = outputNode.elements[propsElementIndex].elements.find((e) => e.name === item.name);
+          return isChanged ? isChanged : item;
+        });
+        outputNode.elements[propsElementIndex].elements = resultProps;
       }
 
       // Remove the numPr properties from content nodes
@@ -754,14 +770,14 @@ function flattenContent({ node }) {
         const indentElement = {
           type: 'element',
           name: 'w:ind',
-          indentAttrs,
+          attributes: indentAttrs,
         };
 
         const existingIndentIndex = pPrs.findIndex((el) => el.name === 'w:ind');
         if (existingIndentIndex !== -1) {
           pPrs[existingIndentIndex] = indentElement;
-        };
-      };
+        }
+      }
 
       const subList = item.content?.filter((c) => c.type === 'bulletList' || c.type === 'orderedList') || [];
       const notLists = item.content?.filter((c) => c.type !== 'bulletList' && c.type !== 'orderedList') || [];

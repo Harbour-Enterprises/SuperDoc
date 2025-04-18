@@ -1,4 +1,4 @@
-import { twipsToInches, twipsToLines, twipsToPixels } from '../../helpers.js';
+import { twipsToInches, twipsToLines, twipsToPixels, twipsToPt } from '../../helpers.js';
 import { testForList } from './listImporter.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { mergeTextNodes } from './mergeTextNodes.js';
@@ -186,6 +186,13 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
   const lineSpacing = inLineSpacing?.['w:line'] || line || pDefaultSpacing?.['w:line'];
   if (lineSpacing) spacing.line = twipsToLines(lineSpacing);
 
+  const lineRule = inLineSpacing?.['w:lineRule'] || lineRuleStyle || pDefaultSpacing?.['w:lineRule'];
+  if (lineRule) spacing.lineRule = lineRule;
+  
+  if (lineRule === 'exact' && lineSpacing) {
+    spacing.line = `${twipsToPt(lineSpacing)}pt`;
+  }
+
   const beforeSpacing = inLineSpacing?.['w:before'] || lineSpaceBefore || pDefaultSpacing?.['w:before'];
   if (beforeSpacing) spacing.lineSpaceBefore = twipsToPixels(beforeSpacing);
   
@@ -201,9 +208,6 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
   if (afterAutospacing === '1' && fontSize) {
     spacing.lineSpaceAfter += Math.round((parseInt(fontSize) * 0.5) * 96 / 72);
   }
-
-  const lineRule = inLineSpacing?.['w:lineRule'] || lineRuleStyle || pDefaultSpacing?.['w:lineRule'];
-  if (lineRule) spacing.lineRule = lineRule;
 
   return spacing;
 };

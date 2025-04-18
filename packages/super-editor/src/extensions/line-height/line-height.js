@@ -1,5 +1,5 @@
 import { Extension } from '@core/index.js';
-import { parseSizeUnit } from '@core/utilities/index.js';
+import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 
 export const LineHeight = Extension.create({
   name: 'lineHeight',
@@ -23,10 +23,7 @@ export const LineHeight = Extension.create({
             parseDOM: (el) => el.style.lineHeight,
             renderDOM: (attrs) => {
               if (!attrs.lineHeight) return {};
-              let [value, unit] = parseSizeUnit(attrs.lineHeight);
-              if (Number.isNaN(value)) return {};
-              unit = unit ? unit : this.options.defaults.unit;
-              return { style: `line-height: ${value}${unit}` };
+              return { style: getLineHeightValueString(attrs.lineHeight, this.options.defaults.unit) };
             },
           },
         },

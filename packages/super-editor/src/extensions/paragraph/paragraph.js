@@ -76,6 +76,7 @@ export const Paragraph = Node.create({
       rsidRDefault: { rendered: false },
       keepLines: { rendered: false },
       keepNext: { rendered: false },
+      paragraphProperties: { rendered: false },
     };
   },
 

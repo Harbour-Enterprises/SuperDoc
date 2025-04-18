@@ -1,3 +1,5 @@
+import { parseSizeUnit } from '../utilities/index.js';
+
 function inchesToTwips(inches) {
   if (inches == null) return;
   if (typeof inches === 'string') inches = parseFloat(inches);
@@ -72,6 +74,16 @@ function pixelsToEightPoints(pixels) {
   return Math.round(pixels * 6);
 }
 
+function twipsToPt(twips) {
+  if (twips == null) return;
+  return twips / 20;
+}
+
+function ptToTwips(pt) {
+  if (pt == null) return;
+  return pt * 20;
+}
+
 const getArrayBufferFromUrl = async (url) => {
   const res = await fetch(url);
   const buffer = await res.arrayBuffer();
@@ -130,6 +142,16 @@ const rgbToHex = (rgb) => {
     .join('');
 }
 
+const getLineHeightValueString = (lineHeight, defaultUnit) => {
+  let [value, unit] = parseSizeUnit(lineHeight);
+  if (Number.isNaN(value)) return {};
+  unit = unit ? unit : defaultUnit;
+
+  // MS Word has a slightly bigger gap with line spacing equal to Superdoc's
+  value += unit ? 4 : 0.2;
+  return `line-height: ${value}${unit}`;
+}
+
 export {
   inchesToTwips,
   twipsToInches,
@@ -148,5 +170,8 @@ export {
   getContentTypesFromXml,
   getHexColorFromDocxSystem,
   isValidHexColor,
-  rgbToHex
+  rgbToHex,
+  ptToTwips,
+  twipsToPt,
+  getLineHeightValueString
 };

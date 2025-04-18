@@ -70,7 +70,8 @@ const closeDropdowns = () => {
 
 const handleSelect = (item, option) => {
   closeDropdowns();
-  emit('command', { item, argument: option.label });
+  const value = item.dropdownValueKey.value ? option[item.dropdownValueKey.value] : option.label;
+  emit('command', { item, argument: value });
 };
 
 const handleClickOutside = (e) => {

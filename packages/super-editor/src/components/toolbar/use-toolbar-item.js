@@ -58,6 +58,10 @@ export const useToolbarItem = (options) => {
 
   const markName = ref(options.markName);
   const labelAttr = ref(options.labelAttr);
+  
+  // Dropdown item
+  const selectedValue = ref(options.selectedValue);
+  const dropdownValueKey = ref(options.dropdownValueKey);
 
   const nestedOptions = ref([]);
   if (options.options) {
@@ -134,6 +138,8 @@ export const useToolbarItem = (options) => {
     childItem,
 
     allowWithoutEditor,
+    dropdownValueKey,
+    selectedValue
   };
 
   return {

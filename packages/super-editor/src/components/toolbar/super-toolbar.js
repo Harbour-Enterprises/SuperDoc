@@ -361,6 +361,11 @@ export class SuperToolbar extends EventEmitter {
       } else {
         item.deactivate();
       }
+      
+      const spacingAttr = marks.find((mark) => mark.name === 'spacing');
+      if (item.name.value === 'lineHeight' && (activeMark?.attrs?.lineHeight || spacingAttr)) {
+        item.selectedValue.value = activeMark?.attrs?.lineHeight || spacingAttr.attrs?.spacing?.line || '';
+      }
 
       if (item.name.value === 'tableActions') {
         if (inTable) item.disabled.value = false;

@@ -1,6 +1,6 @@
 import { SuperConverter } from '../../SuperConverter.js';
 import { TrackFormatMarkName } from '@extensions/track-changes/constants.js';
-import { getHexColorFromDocxSystem, isValidHexColor, twipsToInches, twipsToLines } from '../../helpers.js';
+import { getHexColorFromDocxSystem, isValidHexColor, twipsToInches, twipsToLines, twipsToPt } from '../../helpers.js';
 
 /**
  *
@@ -172,13 +172,16 @@ function getIndentValue(attributes) {
 }
 
 function getLineHeightValue(attributes) {
-  let value = attributes['w:line'];
+  const value = attributes['w:line'];
+  const lineRule = attributes['w:lineRule'];
 
   // TODO: Figure out handling of additional line height attributes from docx
   // if (!value) value = attributes['w:lineRule'];
   // if (!value) value = attributes['w:after'];
   // if (!value) value = attributes['w:before'];
   if (!value || value === '0') return null;
+  
+  if (lineRule === 'exact') return `${twipsToPt(value)}pt`;
   return `${twipsToLines(value)}`;
 }
 

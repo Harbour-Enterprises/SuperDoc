@@ -19,7 +19,7 @@ describe('[list_with_indents.docx] simple ordered with indent', async () => {
     const pPr = firstItem.elements.find((el) => el.name === 'w:pPr');
     const indent = pPr.elements.find((el) => el.name === 'w:ind');
     expect(indent).toBeDefined();
-    expect(indent.indentAttrs['w:left']).toEqual(540);
-    expect(indent.indentAttrs['w:hanging']).toEqual(270);
+    expect(indent.attributes['w:left']).toEqual(540);
+    expect(indent.attributes['w:hanging']).toEqual(270);
   });
 });

@@ -3,4 +3,13 @@
   height: 100%;
   display: block;
   fill: currentColor;
+  path {
+    stroke: currentColor;
+  }
+}
+
+.n-dropdown-option .dropdown-select-icon {
+  display: flex;
+  width: 12px;
+  height: 12px;
 }

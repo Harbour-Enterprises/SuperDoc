@@ -12,7 +12,7 @@ const DOM_SIZE_UNITS = ['px', 'rem', 'em', 'in', 'q', 'mm', 'cm', 'pt', 'pc', 'v
  * @returns Array with parsed value and unit (or null).
  */
 export function parseSizeUnit(val = '0') {
-  const length = val || '0';
+  const length = val.toString() || '0';
   const value = Number.parseFloat(length);
   const match = length.match(CSS_DIMENSION_REGEX);
   const unit = (match?.[1] ?? '').toLowerCase();

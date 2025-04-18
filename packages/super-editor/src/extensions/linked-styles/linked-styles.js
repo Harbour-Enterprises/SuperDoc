@@ -3,6 +3,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
 import { kebabCase } from '@harbour-enterprises/common';
 import { findParentNode } from '@helpers/index.js';
+import { getLineHeightValueString } from '../../core/super-converter/helpers.js';
 
 export const LinkedStylesPluginKey = new PluginKey('linkedStyles');
 
@@ -173,11 +174,11 @@ const getLinkedStyle = (styleId, styles = []) => {
 };
 
 export const getSpacingStyle = (spacing) => {
-  const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
+  const { lineSpaceBefore, lineSpaceAfter, line } = spacing;
   return {
     'margin-top': lineSpaceBefore + 'px',
     'margin-bottom': lineSpaceAfter + 'px',
-    'line-height': line,
+    ...getLineHeightValueString(line, '')
   };
 };
 
@@ -188,11 +189,10 @@ export const getSpacingStyle = (spacing) => {
  * @returns {String} The style string
  */
 export const getSpacingStyleString = (spacing) => {
-  const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
+  const { lineSpaceBefore, lineSpaceAfter } = spacing;
   return `
     ${lineSpaceBefore ? `margin-top: ${lineSpaceBefore}px;` : ''}
     ${lineSpaceAfter ? `margin-bottom: ${lineSpaceAfter}px;` : ''}
-    ${line ? `line-height: ${line};` : ''}
   `.trim();
 };
 

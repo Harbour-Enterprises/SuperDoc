@@ -3,6 +3,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Attribute } from '@core/index.js';
 import { findChildren, getMarkType } from '@core/helpers/index.js';
 import { parseSizeUnit } from '@core/utilities/index.js';
+import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 
 export function styledListMarker(options = {}) {
   return new Plugin({
@@ -119,7 +120,7 @@ function getListItemStylingFromParagraphProps(state) {
       const style = `
             ${lineSpaceBefore ? `margin-top: ${lineSpaceBefore}px;` : ''}
             ${lineSpaceAfter ? `margin-bottom: ${lineSpaceAfter}px;` : ''}
-            ${line ? `line-height: ${line};` : ''}
+            ${line ? getLineHeightValueString(line, '') : ''}
           `.trim();
       
       spacingAttrs = {
