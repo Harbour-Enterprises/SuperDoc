@@ -631,37 +631,42 @@ function translateList(params) {
  * @param {Number} param.listId The list id
  * @returns {Object} The new abstract and num definitions
  */
-function generateNewListDefinition({ abstractId, listId }) {
+function generateNewListDefinition(params, listType) {
   // Generate a new numId to add to numbering.xml
 
-  // Generate the new abstractNum definition
-  const newAbstractDef = {
-    ...definition,
-    attributes: {
-      ...definition.attributes,
-      'w:abstractNumId': abstractId,
-    }
-  };
+  const nextNumbering = getLargestListDefinitionIndex(params.converter.numbering?.definitions);
+  const definition = listType === 'bullet' ? baseBulletList : baseOrderedListDef;
+  const listId = nextNumbering;
+  const abstractId = definition.attributes['w:abstractNumId'];
 
   // Generate the new numId definition
   const newNumDef = {
     type: 'element',
     name: 'w:num',
     attributes: {
-      'w:numId': String(abstractId),
+      'w:numId': String(listId),
       'w16cid:durableId': '485517411'
     },
     elements: [
-      { name: 'w:abstractNumId', attributes: { 'w:val': String(listId) } },
+      { name: 'w:abstractNumId', attributes: { 'w:val': String(abstractId) } },
     ]
   };
 
-  return {
-    newAbstractDef,
-    newNumDef,
-  };
+  params.converter.numbering.definitions[listId] = newNumDef;
+  return listId;
 };
 
+/**
+ * Get the largest list definition index
+ * 
+ * @param {Object} definitions The list definitions
+ * @returns {number} The largest list definition index
+ */
+const getLargestListDefinitionIndex = (definitions) => {
+  if (!definitions || !Object.keys(definitions).length) return 0;
+  const maxKey = Math.max(...Object.keys(definitions).map((key) => parseInt(key, 10)));
+  return maxKey + 1;
+};
 
 /**
  * Get the paragraph properties for a list
@@ -697,37 +702,6 @@ function getListParagraphProperties(level, numId, additionalPprs = []) {
     ],
   };
 }
-
-
-/**
- * Get list definition details from the list plugin
- * @param {Number} listId The current list id
- * @param {*} editor The current editor instance
- * @returns {Object} An object containing list details
- */
-function getUserListDetails(listId, editor) {
-  const pluginState = listPluginKey.getState(editor.state);
-  const activeLists = pluginState?.lists;
-  const definitions = pluginState?.definitions;
-
-  const currentList = activeLists.find((list) => list.listId === Number(listId));
-  if (!currentList) {
-    //TODO: Investigate why this is happening
-    return {};
-  }
-  const { abstractId, source } = activeLists.find((list) => list.listId === Number(listId));
-
-  const isGenerated = source === 'generated';
-  const listType = activeLists[listId]?.listType;
-  const definition = definitions[listType];
-
-  return {
-    isGenerated,
-    listType,
-    definition,
-    abstractId,
-  };
-};
 
 /**
  * Flatten list nodes for processing.
