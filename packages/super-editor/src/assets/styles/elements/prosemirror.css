@@ -157,20 +157,16 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 .ProseMirror td,
 .ProseMirror th {
   min-width: 1em;
-  padding: 3px 5px;
+  padding: 3px 2px;
   position: relative;
   vertical-align: top;
   box-sizing: border-box;
+  overflow-wrap: anywhere;
 }
 
 .ProseMirror th {
   font-weight: bold;
   text-align: left
-}
-
-.ProseMirror td p {
-  width: 100%;
-  word-break: break-all;
 }
 
 .ProseMirror table .column-resize-handle {
