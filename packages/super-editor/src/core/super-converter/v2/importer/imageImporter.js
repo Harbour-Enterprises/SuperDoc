@@ -5,10 +5,19 @@ import { emuToPixels } from '../../helpers.js';
  */
 export const handleDrawingNode = (params) => {
   const { nodes, filename } = params;
-  if (nodes.length === 0 || nodes[0].name !== 'w:drawing') {
+
+  const validNodes = ['w:drawing', 'w:p'];
+  if (nodes.length === 0 || !validNodes.includes(nodes[0].name)) {
     return { nodes: [], consumed: 0 };
   }
-  const node = nodes[0];
+
+  const mainNode = nodes[0];
+  let node;
+
+  if (mainNode.name === 'w:drawing') node = mainNode;
+  else node = mainNode.elements.find((el) => el.name === 'w:drawing');
+
+  if (!node) return { nodes: [], consumed: 0 };
 
   let result;
   const { elements } = node;
@@ -22,6 +31,7 @@ export const handleDrawingNode = (params) => {
   // Others, wp:inline
   const inlineImage = elements.find((el) => el.name === 'wp:inline');
   if (inlineImage) result = handleImageImport(inlineImage, currentFileName, params);
+
   return { nodes: result ? [result] : [], consumed: 1 };
 };
 
@@ -43,6 +53,11 @@ export function handleImageImport(node, currentFileName, params) {
 
   const graphic = node.elements.find((el) => el.name === 'a:graphic');
   const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
+  const { uri } = graphicData?.attributes;
+  const shapeURI = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
+  if (!!uri && uri === shapeURI) {
+    return handleShapeDrawing(params, node, graphicData);
+  };
 
   const picture = graphicData.elements.find((el) => el.name === 'pic:pic');
   if (!picture || !picture.elements) return null;
@@ -96,6 +111,52 @@ export function handleImageImport(node, currentFileName, params) {
     },
   };
 }
+
+const handleShapeDrawing = (params, node, graphicData) => {
+  const wsp = graphicData.elements.find((el) => el.name === 'wps:wsp');
+  const textBox = wsp.elements.find((el) => el.name === 'wps:txbx');
+  const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
+
+  const isGraphicContainer = node.elements.find((el) => el.name === 'wp:docPr');
+  const spPr = wsp.elements.find((el) => el.name === 'wps:spPr');
+  const prstGeom = spPr?.elements.find((el) => el.name === 'a:prstGeom');
+
+  let container;
+  if (!!prstGeom && prstGeom.attributes['prst'] === 'rect') return getRectangleShape(spPr);
+
+  if (!textBoxContent) return null;
+  const { nodeListHandler } = params;
+  const translatedElement = nodeListHandler.handler({
+    ...params,
+    node: textBoxContent.elements[0],
+    nodes: textBoxContent.elements
+  });
+
+  return translatedElement[0];
+};
+
+const getRectangleShape = (params, node) => {
+  const xfrm = params.elements.find((el) => el.name === 'a:xfrm');
+  const start = xfrm.elements.find((el) => el.name === 'a:off');
+  const size = xfrm.elements.find((el) => el.name === 'a:ext');
+  const outline = params.elements.find((el) => el.name === 'a:ln');
+  const solidFill = params.elements.find((el) => el.name === 'a:solidFill');
+
+  const rectangleSize = {
+    top: emuToPixels(start.attributes['y']),
+    left: emuToPixels(start.attributes['x']),
+    width: emuToPixels(size.attributes['cx']),
+    height: emuToPixels(size.attributes['cy']),
+    backgroundColor: '#' + solidFill?.elements[0]?.attributes['val'],
+  };
+
+  return {
+    type: 'contentBlock',
+    attrs: {
+      size: rectangleSize,
+    }
+  }
+};
 
 /**
  * @type {import("docxImporter").NodeHandlerEntry}

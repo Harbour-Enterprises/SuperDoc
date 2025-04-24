@@ -33,6 +33,7 @@ import { Image } from './image/index.js';
 import { BookmarkStart } from './bookmarks/index.js';
 import { Mention } from './mention/index.js';
 import { PageNumber, TotalPageCount } from './page-number/index.js';
+import { ContentBlock } from './content-block/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -150,6 +151,7 @@ const getStarterExtensions = () => {
     LinkedStyles,
     PageNumber,
     TotalPageCount,
+    ContentBlock,
   ];
 };
 
