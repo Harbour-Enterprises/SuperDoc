@@ -1,5 +1,5 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
-import { Fragment } from 'prosemirror-model';
+import { Fragment, DOMParser } from 'prosemirror-model';
 import { CommandService } from './CommandService.js';
 import { chainableEditorState } from './helpers/chainableEditorState.js';
 import { getHTMLFromFragment } from './helpers/getHTMLFromFragment.js';
@@ -206,9 +206,80 @@ export const inputRulesPlugin = ({ editor, rules }) => {
 
         return false;
       },
+
+      // Paste handler
+      handlePaste(view, event, slice) {
+        const clipboard = event.clipboardData;
+        const types = Array.from(clipboard.types);
+        const html = clipboard.getData("text/html");
+        const text = clipboard.getData("text/plain");
+
+        let source;
+        if (!html) {
+          source = "plain-text";
+        } else {
+          // Word often embeds Mso-styles, XML namespaces, <!--[if gte mso] conditionals, Meta Generator tags…
+          const wordFingerprint = /class="?Mso|xmlns:o="urn:schemas-microsoft-com|name="?Generator" content="?Microsoft Word|<!--\[if gte mso/i;
+          if (wordFingerprint.test(html)) {
+            source = "word-html";
+          } else {
+            source = "browser-html";
+          }
+        }
+
+        switch (source) {
+          case "plain-text":
+            break;
+          case "word-html":
+            break;
+          case "browser-html":
+            return handleHtmlPaste(html, editor, view, plugin);
+        }
+
+        return false;
+      }
     },
 
     isInputRules: true,
   });
   return plugin;
 }
+
+/**
+ * Handle HTML paste events.
+ *
+ * @param {String} html The HTML string to be pasted.
+ * @param {Editor} editor The editor instance.
+ * @returns {Boolean} Returns true if the paste was handled.
+ */
+const handleHtmlPaste = (html, editor, plugin) => {
+  const cleanedHtml = convertEmToPt(html);
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = cleanedHtml;
+
+  const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv)
+  tempDiv.remove();
+
+  const { dispatch } = editor.view;
+  if (!dispatch) return false;
+
+  dispatch(editor.view.state.tr.replaceSelectionWith(doc, true));
+  return true;
+};
+
+/**
+ * Process the HTML string to convert em units to pt units in font-size
+ * 
+ * @param {String} html The HTML string to be processed.
+ * @returns {String} The processed HTML string with em units converted to pt units.
+ */
+const convertEmToPt = (html) => {
+  return html.replace(
+    /font-size\s*:\s*([\d.]+)em/gi,
+    (_, emValue) => {
+      const em = parseFloat(emValue);
+      const pt = Math.round(em * 12 * 100) / 100;   // e.g. 1.5×12 = 18.00
+      return `font-size: ${pt}pt`;
+    }
+  )
+};
