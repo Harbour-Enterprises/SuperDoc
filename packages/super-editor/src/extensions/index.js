@@ -72,7 +72,6 @@ const getRichTextExtensions = () => {
     Link,
     OrderedList,
     Paragraph,
-    LineBreak,
     HardBreak,
     Strike,
     Text,
