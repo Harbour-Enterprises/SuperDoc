@@ -555,7 +555,7 @@ const getListLevelDefinitionTag = (numId, level, pStyleId, docx) => {
  */
 export function getNodeNumberingDefinition(item, level, docx) {
   if (!item) return;
-  const { attributes } = item;
+  const { attributes = {} } = item;
 
   const { paragraphProperties = {} } = attributes;
   const { elements: listStyles = [] } = paragraphProperties;
