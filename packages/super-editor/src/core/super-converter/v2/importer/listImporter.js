@@ -212,6 +212,7 @@ function handleListNodes({
       const indent = pPr?.elements.find((el) => el.name === 'w:ind');
       if (indent) {
         const indentAttrs = {};
+        if (!indent.attributes) indent.attributes = {};
         if (indent.attributes['w:left'] !== undefined) indentAttrs.left = twipsToPixels(indent.attributes['w:left']);
         if (indent.attributes['w:right'] !== undefined) indentAttrs.right = twipsToPixels(indent.attributes['w:right']);
         if (indent.attributes['w:firstLine'] !== undefined) indentAttrs.firstLine = twipsToPixels(indent.attributes['w:firstLine']);
