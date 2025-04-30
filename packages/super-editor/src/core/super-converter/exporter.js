@@ -218,9 +218,14 @@ function generateParagraphProperties(node) {
   }
 
   if (textAlign) {
+    let alignment = textAlign;
+
+    // MS Word does not support 'justify', need to use 'both'
+    if (alignment === 'justify') alignment = 'both';
+
     const textAlignElement = {
       name: 'w:jc',
-      attributes: { 'w:val': textAlign },
+      attributes: { 'w:val': alignment },
     };
     pPrElements.push(textAlignElement);
   }
