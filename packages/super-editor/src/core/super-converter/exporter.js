@@ -136,13 +136,15 @@ export function translateParagraphNode(params) {
   let elements = translateChildNodes(params);
 
   // Replace current paragraph with content of html annotation
-  const htmlAnnotationChild = elements.find((element) => element.name === 'htmlAnnotation');
-  if (elements.length === 1 && htmlAnnotationChild) {
+  const htmlAnnotationChildren = elements.filter((element) => element.name === 'htmlAnnotation');
+  if (htmlAnnotationChildren.length) {
     const newElements = [];
-    htmlAnnotationChild.elements.forEach((el) => {
-      const { name } = el;
-      if (name === 'w:p') newElements.push(...el.elements);
-      else newElements.push(el);
+    htmlAnnotationChildren.forEach((htmlAnnotationChild) => {
+      htmlAnnotationChild.elements.forEach((el) => {
+        const { name } = el;
+        if (name === 'w:p') newElements.push(...el.elements);
+        else newElements.push(el);
+      });
     });
     elements = newElements;
   };
