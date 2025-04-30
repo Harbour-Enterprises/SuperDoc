@@ -133,14 +133,20 @@ function translateBodyNode(params) {
  * @returns {XmlReadyNode} JSON of the XML-ready paragraph node
  */
 export function translateParagraphNode(params) {
-  const elements = translateChildNodes(params);
+  let elements = translateChildNodes(params);
 
   // Replace current paragraph with content of html annotation
   const htmlAnnotationChild = elements.find((element) => element.name === 'htmlAnnotation');
   if (elements.length === 1 && htmlAnnotationChild) {
-    return htmlAnnotationChild.elements;
-  }
-  
+    const newElements = [];
+    htmlAnnotationChild.elements.forEach((el) => {
+      const { name } = el;
+      if (name === 'w:p') newElements.push(...el.elements);
+      else newElements.push(el);
+    });
+    elements = newElements;
+  };
+
   // Insert paragraph properties at the beginning of the elements array
   const pPr = generateParagraphProperties(params.node);
   if (pPr) elements.unshift(pPr);
@@ -574,56 +580,46 @@ function translateList(params) {
     const listId = actualNumId ?? generateNewListDefinition(params, listType);  
     const pPr = getListParagraphProperties(level, listId, additionalPprs);
 
-    content.forEach((contentNode, index) => {
-      // Get paragraph attributes which were attached to list item node
-      const paragraphNode = Object.assign({}, contentNode);
-      paragraphNode.attrs = {
-        ...paragraphNode.attrs,
-        ...listNode.attrs
-      };
+    const firstChild = content[0];
+    if (!firstChild || !firstChild.attrs) return;
 
-      const outputNode = exportSchemaToJson({ ...params, node: paragraphNode });
-      if (!outputNode.elements) {
-        outputNode.elements = [];
-      }
-      const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
-      const content = outputNode.elements.filter((e) => e.name !== 'w:pPr');
-      if (!content.length) {
-        // Some empty nodes could have spacing defined
-        const spacingProp = outputNode.elements[propsElementIndex]?.elements.find((e) => e.name === 'w:spacing');
-        const elements = spacingProp ? [{
-          name: 'w:pPr',
-          type: 'element',
-          elements: [spacingProp],
-        }] : [];
+    const outputChild = exportSchemaToJson({ ...params, node: firstChild });
+    outputChild.attrs = {
+      ...firstChild.attrs,
+      ...listNode.attrs
+    };
 
-        const spacer = { 
-          name: 'w:p',
-          type: 'element',
-          elements
-        };
-        return listNodes.push(spacer);
-      }
-  
+    // pPr processing
+    const { attributes: generalAttributes } = attrs;
+    const { originalInlineRunProps } = generalAttributes || {};
+    if (originalInlineRunProps) pPr.elements.push(originalInlineRunProps);
+
+    const propsElementIndex = outputChild.elements.findIndex((e) => e.name === 'w:pPr');
+    if (propsElementIndex === -1) {
+      outputChild.elements.unshift(carbonCopy(pPr));
+    } else {
+      outputChild.elements[propsElementIndex] = carbonCopy(pPr);
+    }
+
+    content?.slice(1).forEach((contentNode, index) => {  
+      const outputNode = exportSchemaToJson({ ...params, node: contentNode });
+
       // pPr processing
       const { attributes: generalAttributes } = attrs;
       const { originalInlineRunProps } = generalAttributes || {};
       if (originalInlineRunProps) pPr.elements.push(originalInlineRunProps);
 
-      if (propsElementIndex === -1) {
-        outputNode.elements.unshift(carbonCopy(pPr));
+      if (outputNode.name === 'w:pPr') return;
+      if (outputNode.name === 'w:p') {
+        outputChild.elements.push({ name: 'w:br' });
+        outputChild.elements.push(...outputNode.elements);
       } else {
-        outputNode.elements[propsElementIndex] = carbonCopy(pPr);
-      }
-
-      // Remove the numPr properties from content nodes
-      if (index !== 0) {
-        const currentpPr = outputNode.elements.find((e) => e.name === 'w:pPr');
-        const numPrIndex = currentpPr.elements.findIndex((e) => e.name === 'w:numPr');
-        if (numPrIndex !== -1) currentpPr.elements.splice(numPrIndex, 1);
-      }
-      listNodes.push(outputNode);
+        outputChild.elements.push(outputNode);
+      };
+    
     });
+  
+    listNodes.push(outputChild)
   });
   
   return listNodes;
@@ -1571,13 +1567,14 @@ function prepareHtmlAnnotation(params) {
   });
 
   const htmlAnnotationNode = state.doc.toJSON();
-  return {
+  const result = {
     name: 'htmlAnnotation',
     elements: translateChildNodes({
       ...params,
       node: htmlAnnotationNode,
     }),
   };
+  return result;
 }
 
 /**
