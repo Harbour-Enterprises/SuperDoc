@@ -104,7 +104,6 @@ function handleListNodes({
   const numPrTag = getNumPrRecursive({ node: listItems[0], styleId, docx });
   currentListNumId = getNumIdFromTag(numPrTag);
 
-
   // List level can come from inline props or styled def
   actualListLevel = parseInt(numPrTag?.elements?.find((el) => el.name === 'w:ilvl')?.attributes['w:val']) || 0;
   if (actualListLevel === undefined) actualListLevel = getOutlineLevelFromStyleTag(styleId, docx);
@@ -114,6 +113,15 @@ function handleListNodes({
   for (let [index, item] of listItems.entries()) {
     // Skip items we've already processed
     if (item.seen) continue;
+
+    // Sometimes there are paragraph nodes that only have pPr element and no text node - these are
+    // Spacers in the XML and need to be appended to the last item.
+    if (item.elements && !hasTextNode(item.elements)) {
+      const n = handleStandardNode({ ...params, nodes: [item] }).nodes[0];
+      if (n) parsedListItems[parsedListItems.length - 1]?.content.push(n); 
+      item.seen = true;
+      continue;
+    }
 
     // Get the properties of the node - this is where we will find depth level for the node
     // As well as many other list properties
@@ -346,8 +354,6 @@ const getNumIdFromTag = (tag) => {
  */
 function getStyleTagFromStyleId(styleId, docx) {
   const styles = docx['word/styles.xml'];
-  if (!styleId || !styles) return null;
-
   const styleEls = styles.elements;
   const wStyles = styleEls.find((el) => el.name === 'w:styles');
   const styleTags = wStyles.elements.filter((style) => style.name === 'w:style');
