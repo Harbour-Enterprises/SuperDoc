@@ -543,7 +543,7 @@ export class Editor extends EventEmitter {
         // Perform any additional document processing prior to finalizing the doc here
         doc = this.#prepareDocumentForImport(doc);
 
-        if (fragment) {
+        if (fragment && isHeadless) {
           doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
         }
       } else if (mode === 'text') {

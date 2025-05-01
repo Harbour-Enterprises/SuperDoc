@@ -15,16 +15,13 @@ describe('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
 
   it('export spacer props correctly', () => {
     const spacer = body.elements[1];
-    expect(spacer.elements.length).toEqual(6);
+    expect(spacer.elements.length).toEqual(1);
     expect(spacer.elements[0].name).toEqual('w:pPr');
-
-    const spacing = spacer.elements[0].elements.find((el) => el.name === 'w:spacing');
-    console.debug(spacing);
-    expect(spacing.name).toEqual('w:spacing');
-    expect(Number(spacing.attributes['w:before'])).toEqual(0);
-    expect(Number(spacing.attributes['w:after'])).toEqual(0);
-    expect(Number(spacing.attributes['w:line'])).toEqual(240);
-    expect(spacing.attributes['w:lineRule']).toEqual('auto');
+    expect(spacer.elements[0].elements[0].name).toEqual('w:spacing');
+    expect(spacer.elements[0].elements[0].attributes['w:before']).toEqual(90);
+    expect(spacer.elements[0].elements[0].attributes['w:after']).toEqual(0);
+    expect(spacer.elements[0].elements[0].attributes['w:line']).toEqual(240);
+    expect(spacer.elements[0].elements[0].attributes['w:lineRule']).toEqual('auto');
   });
 });
 
@@ -61,17 +58,19 @@ describe('[list-with-table-break.docx] list with a table in between sub list nod
     const subListItem1NumId = subListItem1NumPr.elements.find((el) => el.name === 'w:numId');
     expect(subListItem1NumId.attributes['w:val']).toEqual("1");
 
-    // Expect the table to follow
-    const table = content[2];
-    expect(table.name).toEqual('w:tbl');
-
     // Expect to see a blank paragraph between the list (and sub list) and the table
-    const blankSpace = content[3];
+    const blankSpace = content[2];
     expect(blankSpace.elements.length).toEqual(1);
     expect(blankSpace.elements[0].name).toEqual('w:pPr');
 
-    // The next sub list item should be content[4]
-    const subListItem2 = content[4];
+    // Expect the table to follow
+    const table = content[3];
+    expect(table.name).toEqual('w:tbl');
+
+    // Skip content[4] - another blank line
+
+    // The next sub list item should be content[5]
+    const subListItem2 = content[5];
     const subListItem2Run = subListItem2.elements.find((el) => el.name === 'w:r');
     const subListItem2Text = subListItem2Run.elements.find((el) => el.name === 'w:t');
     expect(subListItem2Text.elements[0].text).toEqual('d');
@@ -84,8 +83,10 @@ describe('[list-with-table-break.docx] list with a table in between sub list nod
     const subListItem2NumId = subListItem2NumPr.elements.find((el) => el.name === 'w:numId');
     expect(subListItem2NumId.attributes['w:val']).toEqual("1");
 
-    // The next main list item (not sub list) should be content[5]
-    const mainListItem2 = content[5];
+    // Skip item 6 - another blank line
+
+    // The next main list item (not sub list) should be content[7]
+    const mainListItem2 = content[7];
     const mainListItem2Run = mainListItem2.elements.find((el) => el.name === 'w:r');
     const mainListItem2Text = mainListItem2Run.elements.find((el) => el.name === 'w:t');
     expect(mainListItem2Text.elements[0].text).toEqual('TWO');
