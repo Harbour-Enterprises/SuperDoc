@@ -34,6 +34,7 @@ export const LinkedStyles = Extension.create({
         tr.setNodeMarkup(pos, undefined, {
           ...paragraphNode.attrs,
           styleId: style.id,
+          
         });
 
       },
@@ -144,8 +145,8 @@ export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpac
     
     // Check if this node has the expected mark. If yes, we are not overriding it
     const mark = flattenedMarks.find((n) => n.key === key);
-    const hasParentIndent = Object.keys(parent?.attrs?.indent || {});
-    const hasParentSpacing = Object.keys(parent?.attrs?.spacing || {});
+    const hasParentIndent = Object.keys(parent?.attrs?.indent || {}).length > 0 || parent?.attrs.hasParentIndent;
+    const hasParentSpacing = Object.keys(parent?.attrs?.spacing || {}).length > 0 || parent?.attrs.hasParentSpacing;
 
     // If no mark already in the node, we override the style
     if (!mark) {

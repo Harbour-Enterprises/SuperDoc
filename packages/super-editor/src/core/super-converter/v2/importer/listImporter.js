@@ -1,6 +1,6 @@
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { hasTextNode, parseProperties } from './importerHelpers.js';
-import { preProcessNodesForFldChar, getParagraphSpacing } from './paragraphNodeImporter.js';
+import { preProcessNodesForFldChar, getParagraphSpacing, getParagraphIndent } from './paragraphNodeImporter.js';
 import { mergeTextNodes } from './mergeTextNodes.js';
 import { ErrorWithDetails } from '../../../helpers/ErrorWithDetails.js';
 import { twipsToInches, twipsToPixels, twipsToLines } from '../../helpers.js';
@@ -178,9 +178,16 @@ function handleListNodes({
       
       let parNode = {
         type: 'paragraph',
-        content: nodeListHandler.handler({ ...params, nodes: [ attributes.paragraphProperties, ...elements ] })?.filter((n) => n),
+        content: nodeListHandler.handler({ ...params, nodes: [ ...elements ] })?.filter((n) => n),
       };
-
+      
+      const parIndent = getParagraphIndent({
+        elements: [attributes.paragraphProperties]
+      }, docx, styleId);
+      const parSpacing = getParagraphSpacing({
+        elements: [attributes.paragraphProperties]
+      }, docx, styleId);
+      
       // Normalize text nodes.
       if (parNode.content) {
         parNode = {
@@ -188,7 +195,9 @@ function handleListNodes({
           attrs: {
             textAlign: textStyle?.attrs.textAlign || textStyleFromStyles?.attrs.textAlign || null,
             rsidRDefault: attributes?.['w:rsidRDefault'] || null,
-            styleId,
+            hasParentIndent: Object.keys(parIndent).length > 0,
+            hasParentSpacing: Object.keys(parSpacing).length > 0,
+            ...(styleId && { styleId })
           },
           content: mergeTextNodes(parNode.content),
         };
