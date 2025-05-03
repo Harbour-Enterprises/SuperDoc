@@ -137,22 +137,38 @@ function translateBodyNode(params) {
  * @returns {XmlReadyNode} JSON of the XML-ready paragraph node
  */
 export function translateParagraphNode(params) {
-  const elements = translateChildNodes(params);
-
-  // Replace current paragraph with content of html annotation
-  const htmlAnnotationChild = elements.find((element) => element.name === 'htmlAnnotation');
-  if (elements.length === 1 && htmlAnnotationChild) {
-    return htmlAnnotationChild.elements;
-  }
-  
   // Insert paragraph properties at the beginning of the elements array
   const pPr = generateParagraphProperties(params.node);
-  if (pPr) elements.unshift(pPr);
 
   let attributes = {};
   if (params.node.attrs?.rsidRDefault) {
     attributes['w:rsidRDefault'] = params.node.attrs.rsidRDefault;
   }
+
+  const { content } = params.node;
+  // Replace current paragraph with content of html annotation
+  const htmlAnnotationChildren = content?.filter((el) => el.type === 'fieldAnnotation' && el.attrs?.type === 'html') || [];;
+
+  if (htmlAnnotationChildren.length && params.isFinalDoc) {
+      if (params.isInList) {
+        return restructureContent(content, params);
+      } else {
+        const updatedContent = [];
+        content.forEach((el) => {
+          if (el.type === 'fieldAnnotation') {
+            const htmlNode = prepareHtmlAnnotation({ ...params, node: el });
+            const { content: internalContent } = htmlNode;
+            updatedContent.push(...internalContent.map((el) => exportSchemaToJson({ ...params, node: el })));
+          } else {
+            updatedContent.push(exportSchemaToJson({ ...params, node: el }));
+          }
+        });
+        return updatedContent;
+      }
+  }
+
+  const elements = translateChildNodes(params);
+  if (pPr) elements.unshift(pPr);
 
   return {
     name: 'w:p',
@@ -160,6 +176,59 @@ export function translateParagraphNode(params) {
     attributes,
   };
 }
+
+/**
+ * If we are processing an html annotation inside a list, we need to restructure the content since block nodes need to be placed at the top
+ * level of the xml body, but retain list indent etc.
+ * 
+ * @param {Array} content The content of the paragraph
+ * @param {Object} params The parameters object
+ * @returns {Array} The restructured content
+ */
+function restructureContent(content, params) {
+  const restructured = [];
+  let newParagraph = getNewParagraph(params);
+
+  for (const el of content) {
+    const schemaDef = params.editor.schema.nodes[el.type];
+    const isBlock   = schemaDef?.spec?.group === 'block';
+
+    // 1) On block nodes or fieldAnnotation, flush current paragraph + the node
+    if (el.type === 'fieldAnnotation' || isBlock) {
+      if (newParagraph.content.length) {
+        restructured.push(newParagraph);
+        newParagraph = getNewParagraph(params);
+      }
+      restructured.push(el);
+    }
+    // 2) Otherwise, accumulate into the current paragraph
+    else {
+      newParagraph.content.push(el);
+    }
+  }
+
+  // 3) After looping, flush any leftover inline paragraph
+  if (newParagraph.content.length) {
+    restructured.push(newParagraph);
+  }
+
+  return restructured;
+};
+
+/**
+ * Extracts the current node from the params and returns it as a node without content
+ * 
+ * @param {Object} params 
+ * @returns {Object} The new paragraph node
+ */
+function getNewParagraph(params) {
+  const { node } = params;
+
+  return {
+    ...node,
+    content: [],
+  }
+};
 
 /**
  * Generate the w:pPr props for a paragraph node
@@ -635,71 +704,109 @@ function addNewImageRelationship(params, imagePath) {
  * @returns {XmlReadyNode} The translated list node
  */
 function translateList(params) {
-  const { type } = params.node;
   const flatContent = flattenContent(params);
+
+  console.debug('Flat content', flatContent, '\n\n');
 
   const listNodes = [];
   flatContent.forEach((listNode) => {
-    const { level, listType, pPrs: additionalPprs, content, attrs = {} } = listNode;
-    const attrsNumId = listNode.attrs.numId;
-
-    const actualNumId = attrsNumId || listNode.listId;
-    const listId = actualNumId ?? generateNewListDefinition(params, listType);  
-    const pPr = getListParagraphProperties(level, listId, additionalPprs);
-    
-    content.forEach((contentNode, index) => {
-      // Get paragraph attributes which were attached to list item node
-      const paragraphNode = Object.assign({}, contentNode);
-      paragraphNode.attrs = {
-        ...paragraphNode.attrs,
-        ...listNode.attrs
-      };
-
-      const outputNode = exportSchemaToJson({ ...params, node: paragraphNode });
-      if (!outputNode.elements) {
-        outputNode.elements = [];
-      }
-      const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
-      const content = outputNode.elements.filter((e) => e.name !== 'w:pPr');
-      if (!content.length) {
-        // Apply initial properties to the empty nodes
-        const elements = contentNode.attrs.paragraphProperties ? [contentNode.attrs.paragraphProperties] : [];
-        const spacer = { 
-          name: 'w:p',
-          type: 'element',
-          elements
-        };
-        return listNodes.push(spacer);
-      }
-      
-      // pPr processing
-      const { attributes: generalAttributes } = attrs;
-      const { originalInlineRunProps } = generalAttributes || {};
-      if (originalInlineRunProps) pPr.elements.push(originalInlineRunProps);
-
-      if (propsElementIndex === -1) {
-        outputNode.elements.unshift(carbonCopy(pPr));
-      } else {
-        // Check if there is any properties processed by translateParagraphNode
-        const resultProps = carbonCopy(pPr).elements.map(item => {
-          const isChanged = outputNode.elements[propsElementIndex].elements.find((e) => e.name === item.name);
-          return isChanged ? isChanged : item;
-        });
-        outputNode.elements[propsElementIndex].elements = resultProps;
-      }
-
-      // Remove the numPr properties from content nodes
-      if (index !== 0) {
-        const currentpPr = outputNode.elements.find((e) => e.name === 'w:pPr');
-        const numPrIndex = currentpPr.elements.findIndex((e) => e.name === 'w:numPr');
-        if (numPrIndex !== -1) currentpPr.elements.splice(numPrIndex, 1);
-      }
-      listNodes.push(outputNode);
-    });
+    console.debug("LISTNODE", listNode)
+    const { content } = listNode;
+    const processedContent = processListContentNodes(content, listNode, params);
+    console.debug("PROCESSED CONTENT", processedContent)  
+    listNodes.push(...processedContent);
   });
   
   return listNodes;
 }
+
+function processListContentNodes(nodes, listNode, params, isExtendedContent, processedNodes = []) {
+  const { level, listType, pPrs: additionalPprs, attrs = {} } = listNode;
+
+  const attrsNumId = listNode.attrs.numId;
+  const actualNumId = attrsNumId || listNode.listId;
+  const listId = actualNumId ?? generateNewListDefinition(params, listType);  
+  const pPr = getListParagraphProperties(level, listId, additionalPprs);
+
+  for (let index = 0; index < nodes.length; index++) {
+    const contentNode = nodes[index];
+    contentNode.attrs = {
+      ...contentNode.attrs,
+      ...listNode.attrs,
+      numId: null,
+      listLevel: level,
+      listId: null,
+      styleId: null,
+    }
+    params.isInList = true;
+
+    console.debug("CONTENT NODE", contentNode, listNode.attrs);
+    const outputNode = exportSchemaToJson({ ...params, node: contentNode });
+    console.debug("OUTPUT NODE", outputNode);
+
+    // If this is an array, we need to process each element separately
+    // This happens if we're processing an html field annotation
+    if (Array.isArray(outputNode)) {
+      const nodesToProcess = [];
+      for (let el of outputNode) {
+        const htmlAnnotationField = el.type === 'fieldAnnotation' && el.attrs?.type === 'html';
+        if (htmlAnnotationField) {
+          const htmlNode = prepareHtmlAnnotation({ ...params, node: el });
+          const { content: internalContent } = htmlNode;
+          nodesToProcess.push(...internalContent);
+        } else {
+          nodesToProcess.push(el);
+        };
+      };
+
+      processListContentNodes(nodesToProcess, listNode, params, true, processedNodes);
+      continue;
+    };
+
+    if (!outputNode.elements) {
+      outputNode.elements = [];
+    }
+    const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
+    const content = outputNode.elements.filter((e) => e.name !== 'w:pPr');
+    if (!content.length && outputNode.name === 'w:p') {
+      // Apply initial properties to the empty nodes
+      const elements = contentNode.attrs.paragraphProperties ? [contentNode.attrs.paragraphProperties] : [];
+      const spacer = { 
+        name: 'w:p',
+        type: 'element',
+        elements
+      };
+      processedNodes.push(spacer);
+      continue;
+    }
+    
+    // pPr processing
+    const { attributes: generalAttributes } = attrs;
+    const { originalInlineRunProps } = generalAttributes || {};
+    if (originalInlineRunProps) pPr.elements.push(originalInlineRunProps);
+
+    if (propsElementIndex === -1) {
+      outputNode.elements.unshift(carbonCopy(pPr));
+    } else {
+      // Check if there is any properties processed by translateParagraphNode
+      const resultProps = carbonCopy(pPr).elements.map(item => {
+        const isChanged = outputNode.elements[propsElementIndex].elements.find((e) => e.name === item.name);
+        return isChanged ? isChanged : item;
+      });
+      outputNode.elements[propsElementIndex].elements = resultProps;
+    }
+
+    // Remove the numPr properties from content nodes
+    if (index !== 0 || isExtendedContent) {
+      const currentpPr = outputNode.elements.find((e) => e.name === 'w:pPr');
+      const numPrIndex = currentpPr.elements.findIndex((e) => e.name === 'w:numPr');
+      if (numPrIndex !== -1) currentpPr.elements.splice(numPrIndex, 1);
+    }
+    processedNodes.push(outputNode);
+  };
+
+  return processedNodes;
+};
 
 /**
  * Generate a new list definition to be inserted into numbering.xml
@@ -938,7 +1045,7 @@ function generateTableProperties(node) {
   const elements = [];
 
   const { attrs } = node;
-  const { tableWidth, tableWidthType, tableStyleId, borders, tableIndent, tableLayout, tableCellSpacing } = attrs;
+  const { tableWidth, tableWidthType, tableStyleId, borders, tableIndent, indent, tableLayout, tableCellSpacing } = attrs;
 
   if (tableStyleId) {
     const tableStyleElement = {
@@ -953,8 +1060,20 @@ function generateTableProperties(node) {
     elements.push(borderElement);
   }
 
+  if (indent) {
+    const { left } = indent;
+    console.debug('\n\n LEFT', left, '\n\n');
+
+    const tableIndentElement = {
+      name: 'w:tblInd',
+      attributes: { 'w:w': pixelsToTwips(left) },
+    };
+    elements.push(tableIndentElement);
+  }
+
   if (tableIndent) {
     const { width, type } = tableIndent;
+
     const tableIndentElement = {
       name: 'w:tblInd',
       attributes: { 'w:w': pixelsToTwips(width), 'w:type': type },
@@ -1624,13 +1743,24 @@ function prepareCheckboxAnnotation(params) {
   return getTextNodeForExport(content, marks, params);
 }
 
+export function prepareHtmlAnnotationForExport(params) {
+  const htmlAnnotationNode = prepareHtmlAnnotation(params);
+  return {
+    name: 'htmlAnnotation',
+    elements: translateChildNodes({
+      ...params,
+      node: htmlAnnotationNode,
+    }),
+  };
+};
+
 /**
  * Translates html annotations
  *
  * @param {ExportParams} params
  * @returns {XmlReadyNode} The translated html node
  */
-function prepareHtmlAnnotation(params) {
+export function prepareHtmlAnnotation(params) {
   const {
     node: { attrs = {} },
   } = params;
@@ -1642,14 +1772,7 @@ function prepareHtmlAnnotation(params) {
     doc: PMDOMParser.fromSchema(params.editorSchema).parse(paragraphHtml),
   });
 
-  const htmlAnnotationNode = state.doc.toJSON();
-  return {
-    name: 'htmlAnnotation',
-    elements: translateChildNodes({
-      ...params,
-      node: htmlAnnotationNode,
-    }),
-  };
+  return state.doc.toJSON();
 }
 
 /**
@@ -1709,7 +1832,7 @@ function getTranslationByAnnotationType(annotationType) {
     image: (params) => prepareImageAnnotation(params, imageEmuSize),
     signature: (params) => prepareImageAnnotation(params, signatureEmuSize),
     checkbox: prepareCheckboxAnnotation,
-    html: prepareHtmlAnnotation,
+    html: prepareHtmlAnnotationForExport,
     link: prepareUrlAnnotation,
   };
 
@@ -1756,7 +1879,11 @@ function translateFieldAnnotation(params) {
     sdtContentElements = [processedNode];
 
     if (attrs.type === 'html') {
-      sdtContentElements = [...processedNode.elements];
+      console.debug('--- HERE ---', processedNode);
+      // sdtContentElements = [...processedNode.elements];
+      // sdtContentElements = [{
+      //   type: te
+      // }];
     }
   }
 

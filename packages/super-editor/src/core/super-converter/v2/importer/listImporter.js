@@ -222,6 +222,8 @@ function handleListNodes({
       const stylesIndent = pPrFromStyles?.elements?.find((el) => el.name === 'w:ind');
       if (!indent) indent = stylesIndent;
       
+      console.debug('--INDENT', indent);
+    
       if (indent) {
         const indentAttrs = {};
         if (!indent.attributes) indent.attributes = {};

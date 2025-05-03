@@ -31,6 +31,12 @@
   list-style-type: none;
 }
 
+.ProseMirror ol,
+.ProseMirror ul {
+  margin-block-start: 0;
+  margin-block-end: 0;
+}
+
 .ProseMirror li:has(> ul:first-child, > ol:first-child):not(:has(> p))::marker {
   content: '';
 }

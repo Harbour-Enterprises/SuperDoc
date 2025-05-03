@@ -1,5 +1,6 @@
 <script setup>
 import '@harbour-enterprises/common/styles/common-styles.css';
+import axios from 'axios';
 import { nextTick, onMounted, provide, ref, shallowRef } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
@@ -106,6 +107,7 @@ const init = async () => {
         endpoint: 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights',
       },
     },
+    annotations: true,
     onEditorCreate,
     onContentError,
     // handleImageUpload: async (file) => url,
@@ -142,9 +144,42 @@ const onContentError = ({ editor, error, documentId, file }) => {
   console.debug('Content error on', documentId, error);
 };
 
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onloadend = () => {
+      const dataUrl = reader.result;
+      const base64 = dataUrl.split(',')[1];
+      resolve(base64);
+    };
+    reader.readAsDataURL(blob);
+  });
+}
+
 const exportDocx = async (commentsType) => {
   console.debug('Exporting docx', { commentsType });
   await superdoc.value.export({ commentsType });
+
+  const docxBlob = await superdoc.value.activeEditor.exportDocx();
+  const base64Payload = await blobToBase64(docxBlob);
+
+  const options = {
+    file_base64: base64Payload,
+    filename: 'test.docx',
+  }
+  const result = await axios.post('http://localhost:8070/convert', options)
+  const { pdf_base64 } = result.data;
+  const pdfBlob = new Blob([Uint8Array.from(atob(pdf_base64), c => c.charCodeAt(0))], { type: 'application/pdf' });
+  const pdfUrl = URL.createObjectURL(pdfBlob);
+  const a = document.createElement('a');
+  a.href = pdfUrl;
+  a.download = 'exported.pdf';
+  a.click();
+  URL.revokeObjectURL(pdfUrl);
+  a.remove();
+
+
 };
 
 const onEditorCreate = ({ editor }) => {
@@ -177,6 +212,10 @@ const toggleCommentsPanel = () => {
   }
 };
 
+const logJSON = () => {
+  console.debug('JSON', superdoc.value?.activeEditor?.getJSON());
+};
+
 onMounted(async () => {
   handleNewFile(await getFileObject(BlankDOCX, 'test.docx', DOCX));
 });
@@ -196,6 +235,7 @@ onMounted(async () => {
           </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">
+          <button class="dev-app__header-export-btn" @click="logJSON">Log JSON</button>
           <button class="dev-app__header-export-btn" @click="exportDocx()">Export Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('clean')">Export clean Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('external')">Export external Docx</button>

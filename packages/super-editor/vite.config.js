@@ -68,8 +68,8 @@ export default defineConfig(({ mode }) => {
           chunkFileNames: 'chunks/[name]-[hash].js'
         }
       },
-      minify: true,
-      sourcemap: false,
+      minify: false,
+      sourcemap: true,
     },
     server: {
       port: 9096,
