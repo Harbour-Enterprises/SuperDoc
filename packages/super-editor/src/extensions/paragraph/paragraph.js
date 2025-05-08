@@ -88,6 +88,8 @@ export const Paragraph = Node.create({
       keepNext: { rendered: false },
       paragraphProperties: { rendered: false },
       dropcap: { rendered: false },
+      hasParentIndent: { rendered: false },
+      hasParentSpacing: { rendered: false },
       pageBreakSource: { rendered: false },
       justify: {
         renderDOM: ({ justify }) => {
