@@ -38,6 +38,9 @@ export const handleDrawingNode = (params) => {
 export function handleImageImport(node, currentFileName, params) {
   const { docx } = params;
   const { attributes } = node;
+  const isAnchor = node.name === 'wp:anchor';
+  const behindDoc = attributes.behindDoc === '1' || attributes.behindDoc === 'true';
+
   const padding = {
     top: emuToPixels(attributes['distT']),
     bottom: emuToPixels(attributes['distB']),
@@ -108,6 +111,8 @@ export function handleImageImport(node, currentFileName, params) {
         distR: attributes['distR'],
       },
       rId: relAttributes['Id'],
+      isAnchor,
+      behindDoc,
     },
   };
 }

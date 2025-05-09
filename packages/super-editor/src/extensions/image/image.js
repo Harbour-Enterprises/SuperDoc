@@ -76,6 +76,26 @@ export const Image = Node.create({
         },
       },
 
+      isAnchor: {
+        default: false,
+        renderDOM: (attrs) => {
+          if (!attrs.isAnchor) return {};
+          return {
+            style: 'position: absolute',
+          };
+        },
+      },
+
+      behindDoc: {
+        default: false,
+        renderDOM: (attrs) => {
+          if (!attrs.behindDoc) return {};
+          return {
+            style: 'z-index: -1',
+          };
+        },
+      },
+
       style: {
         default: null,
         rendered: true,
