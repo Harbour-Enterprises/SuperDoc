@@ -2,9 +2,10 @@
 import { handleParagraphNode } from '@converter/v2/importer/paragraphNodeImporter.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
-
+import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
+import { getExportedResult } from '../export/export-helpers/index';
 import { handleListNode } from '@converter/v2/importer/listImporter.js';
-import { beforeAll } from 'vitest';
+import { beforeAll, expect } from 'vitest';
 
 describe('paragraph tests to check spacing', () => {
   let lists = {};
@@ -57,8 +58,8 @@ describe('paragraph tests to check spacing', () => {
     const { spacing } = attrs;
 
     expect(spacing.line).toBe(1.15);
-    expect(spacing.lineSpaceAfter).toBe(0);
-    expect(spacing.lineSpaceBefore).toBe(0);
+    expect(spacing.lineSpaceAfter).toBeUndefined();
+    expect(spacing.lineSpaceBefore).toBeUndefined();
   });
 
   it('correctly gets spacing around image in p [image_p_spacing]', async () => {
@@ -130,7 +131,7 @@ describe('paragraph tests to check spacing', () => {
     const { attrs } = node;
     const { spacing } = attrs;
     expect(spacing.lineSpaceAfter).toBe(11);
-    expect(spacing.lineSpaceBefore).toBe(0);
+    expect(spacing.lineSpaceBefore).toBeUndefined();
   });
 
   it('correctly gets spacing from styles.xml by related styleId', async () => {
@@ -295,4 +296,85 @@ describe('paragraph with dropcaps', () => {
     const { dropcap } = attrs;
     expect(dropcap.type).toBe('drop');
   });
+});
+
+describe('Check that we can import list item with invalid list def with fallback', () => {
+  const filename = 'invalid-list-def-fallback.docx';
+  let docx, media, mediaFiles, fonts, editor, dispatch, content, exported, body;
+  beforeAll(async () => {
+    ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename));
+    ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts }));
+    content = editor.getJSON();
+    exported = await getExportedResult(filename);
+    body = exported.elements?.find((el) => el.name === 'w:body');
+  });
+
+  it('imports expected list item with fallback', async () => {
+    const item = content.content[3];
+    expect(item.type).toBe('paragraph');
+    const textNode = item.content[0];
+    expect(textNode.type).toBe('text');
+    expect(textNode.text).toBe('NO VALID DEF');
+  });
+
+  it('exports first list item correctly', async () => {
+    const item = body.elements[0];
+    const pPr = item.elements.find((el) => el.name === 'w:pPr');
+  });
+});
+
+describe('Check that paragraph-level sectPr is retained', () => {
+  const filename = 'paragraph-sectpr-breaks.docx';
+  let docx, media, mediaFiles, fonts, editor, dispatch, content;
+  beforeAll(async () => {
+    ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename));
+    ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts }));
+    content = editor.getJSON();
+  });
+
+  it('correctly imports sectPr inside paragraphs as section breaks', async () => {
+    const p2 = content.content[2];
+    const sectPr = p2.attrs.paragraphProperties.sectPr;
+    expect(sectPr).toBeDefined();
+    expect(p2.attrs.pageBreakSource).toBe('sectPr');
+
+    const textNode = p2.content.find((el) => el.type === 'text');
+    expect(textNode.text).toBe('TITLE');
+  });
+
+  it('correctly imports the first node alignment', async () => {
+    const p1 = content.content[0];
+    const { attrs } = p1;
+    expect(attrs.styleId).toBe('Title');
+  });
+
+  it('correctly exports the pass-through sectPr', () => {
+    const { result: exported } = editor.converter.exportToXmlJson({
+      data: editor.getJSON(),
+      editor
+    });
+    expect(exported).toBeDefined();
+    expect(exported.elements.length).toBe(1);
+    expect(exported.elements[0].name).toBe('w:body');
+
+    const body = exported.elements[0];
+
+    const p1 = content.content[1];
+    expect(p1.attrs.pageBreakSource).toBe('sectPr');
+    const p1sectPrData = p1.attrs.paragraphProperties.sectPr;
+    expect(p1sectPrData).toBeDefined();
+
+    // Check the empty paragraph for its sectPr
+    const p1exported = body.elements[1];
+    const pPr1 = p1exported.elements.find((el) => el.name === 'w:pPr');
+    const sectPr1 = pPr1.elements.find((el) => el.name === 'w:sectPr');
+    expect(p1sectPrData).toEqual(sectPr1);
+
+    const p2 = content.content[2];
+    const p2sectPrData = p2.attrs.paragraphProperties.sectPr;
+    const p2Exported = body.elements[2];
+    const pPr2 = p2Exported.elements.find((el) => el.name === 'w:pPr');
+    const sectPr2 = pPr2.elements.find((el) => el.name === 'w:sectPr');
+    expect(p2sectPrData).toEqual(sectPr2);
+  })
 });
