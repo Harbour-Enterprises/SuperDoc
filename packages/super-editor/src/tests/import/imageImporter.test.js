@@ -17,7 +17,7 @@ describe('ImageNodeImporter', () => {
     const paragraphNode = nodes[0];
     const drawingNode = paragraphNode.content[0];
     const { attrs } = drawingNode;
-    const { padding, marginOffset, size } = attrs;
+    const { padding, size } = attrs;
     
     expect(paragraphNode.type).toBe('paragraph');
     expect(drawingNode.type).toBe('image');
@@ -27,13 +27,31 @@ describe('ImageNodeImporter', () => {
     
     expect(size).toHaveProperty('width', 602);
     expect(size).toHaveProperty('height', 903);
-    
-    expect(marginOffset).toHaveProperty('left', 12);
-    expect(marginOffset).toHaveProperty('top', 12);
 
-    expect(padding).toHaveProperty('left', 12);
-    expect(padding).toHaveProperty('top', 12);
-    expect(padding).toHaveProperty('bottom', 12);
-    expect(padding).toHaveProperty('right', 12);
+    expect(padding).toHaveProperty('left', 0);
+    expect(padding).toHaveProperty('top', 0);
+    expect(padding).toHaveProperty('bottom', 0);
+    expect(padding).toHaveProperty('right', 0);
+  });
+
+  it('imports anchor image node correctly', async() => {
+    const dataName = 'anchor_images.docx';
+    const docx = await getTestDataByFileName(dataName);
+    const documentXml = docx['word/document.xml'];
+
+    const doc = documentXml.elements[0];
+    const body = doc.elements[0];
+    const content = body.elements;
+    const { nodes } = handleParagraphNode({ nodes: [content[1]], docx, nodeListHandler: defaultNodeListHandler() });
+
+    const paragraphNode = nodes[0];
+    const drawingNode = paragraphNode.content[3];
+    const { attrs } = drawingNode;
+    const { anchorData } = attrs;
+
+    expect(anchorData).toHaveProperty('hRelativeFrom', 'margin');
+    expect(anchorData).toHaveProperty('vRelativeFrom', 'margin');
+    expect(anchorData).toHaveProperty('alignH', 'left');
+    expect(anchorData).toHaveProperty('alignV', 'top');
   });
 });

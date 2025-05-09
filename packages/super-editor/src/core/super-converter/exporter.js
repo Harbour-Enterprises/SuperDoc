@@ -1445,23 +1445,116 @@ function translateImageNode(params, imageSize) {
     params.media[`${cleanUrl}_${hash}.${type}`] = src;
   }
 
-  const inlineAttrs = attrs.originalPadding || {
+  let inlineAttrs = attrs.originalPadding || {
     distT: 0,
     distB: 0,
     distL: 0,
     distR: 0,
   };
 
+  const anchorElements = [];
+  let wrapProp = [];
+  
+  // Handle anchor image export
+  if (attrs.isAnchor) {
+    inlineAttrs = {
+      ...inlineAttrs,
+      simplePos: attrs.originalAttributes?.simplePos,
+      relativeHeight: 1,
+      behindDoc: attrs.originalAttributes?.behindDoc,
+      locked: attrs.originalAttributes?.locked,
+      layoutInCell: attrs.originalAttributes?.layoutInCell,
+      allowOverlap: attrs.originalAttributes?.allowOverlap,
+    };
+    if (attrs.simplePos) {
+      anchorElements.push({
+        name: 'wp:simplePos',
+        attributes: {
+          x: 0,
+          y: 0,
+        }
+      });
+    }
+
+    if (attrs.anchorData) {
+      anchorElements.push({
+        name: 'wp:positionH',
+        attributes: {
+          relativeFrom: attrs.anchorData.hRelativeFrom,
+        },
+        ...(attrs.marginOffset.left && {
+          elements: [{
+            name: 'wp:posOffset',
+            elements: [{
+              type: 'text',
+              text: pixelsToEmu(attrs.marginOffset.left).toString(),
+            }],
+          }]
+        }),
+        ...(attrs.anchorData.alignH && {
+          elements: [{
+            name: 'wp:align',
+            elements: [{
+              type: 'text',
+              text: attrs.anchorData.alignH,
+            }],
+          }]
+        })
+      });
+      anchorElements.push({
+        name: 'wp:positionV',
+        attributes: {
+          relativeFrom: attrs.anchorData.vRelativeFrom,
+        },
+        ...(attrs.marginOffset.top && {
+          elements: [{
+            name: 'wp:posOffset',
+            elements: [{
+              type: 'text',
+              text: pixelsToEmu(attrs.marginOffset.top).toString(),
+            }],
+          }]
+        }),
+        ...(attrs.anchorData.alignV && {
+          elements: [{
+            name: 'wp:align',
+            elements: [{
+              type: 'text',
+              text: attrs.anchorData.alignV,
+            }],
+          }]
+        })
+      });
+    }
+    
+    if (attrs.wrapText) {
+      wrapProp.push({
+        name: 'wp:wrapSquare',
+        attributes: {
+          wrapText: attrs.wrapText,
+        }
+      });
+    }
+
+    if (attrs.wrapTopAndBottom) {
+      wrapProp.push({
+        name: 'wp:wrapTopAndBottom',
+      });
+    }
+  }
+
   const drawingXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
   const pictureXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-  return wrapTextInRun(
+  
+  const textNode =  wrapTextInRun(
     {
       name: 'w:drawing',
       elements: [
         {
-          name: 'wp:inline',
+          name: attrs.isAnchor ? 'wp:anchor' : 'wp:inline',
           attributes: inlineAttrs,
           elements: [
+            ...anchorElements,
             {
               name: 'wp:extent',
               attributes: {
@@ -1478,12 +1571,13 @@ function translateImageNode(params, imageSize) {
                 b: 0,
               },
             },
+            ...wrapProp,
             {
               name: 'wp:docPr',
               attributes: {
-                id: 0,
-                name: '',
-                descr: '',
+                id: attrs.id || 0,
+                name: attrs.alt,
+                descr: attrs.title,
               },
             },
             {
@@ -1516,9 +1610,8 @@ function translateImageNode(params, imageSize) {
                             {
                               name: 'pic:cNvPr',
                               attributes: {
-                                id: 0,
-                                name: '',
-                                desc: '',
+                                id: attrs.id || 0,
+                                name: attrs.title,
                               },
                             },
                             {
@@ -1542,11 +1635,7 @@ function translateImageNode(params, imageSize) {
                               name: 'a:blip',
                               attributes: {
                                 'r:embed': imageId,
-                                cstate: 'none',
                               },
-                            },
-                            {
-                              name: 'a:srcRect',
                             },
                             {
                               name: 'a:stretch',
@@ -1584,6 +1673,9 @@ function translateImageNode(params, imageSize) {
                               attributes: { prst: 'rect' },
                               elements: [{ name: 'a:avLst' }],
                             },
+                            {
+                              name: 'a:noFill'
+                            }
                           ],
                         },
                       ],
@@ -1598,6 +1690,8 @@ function translateImageNode(params, imageSize) {
     },
     [],
   );
+  
+  return textNode;
 }
 
 /**
