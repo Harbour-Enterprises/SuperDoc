@@ -18,9 +18,9 @@ describe('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
     expect(spacer.elements.length).toEqual(1);
     expect(spacer.elements[0].name).toEqual('w:pPr');
     expect(spacer.elements[0].elements[0].name).toEqual('w:spacing');
-    expect(spacer.elements[0].elements[0].attributes['w:before']).toEqual('0');
-    expect(spacer.elements[0].elements[0].attributes['w:after']).toEqual('0');
-    expect(spacer.elements[0].elements[0].attributes['w:line']).toEqual('276');
+    expect(spacer.elements[0].elements[0].attributes['w:before']).toEqual(0);
+    expect(spacer.elements[0].elements[0].attributes['w:after']).toEqual(0);
+    expect(spacer.elements[0].elements[0].attributes['w:line']).toEqual(276);
     expect(spacer.elements[0].elements[0].attributes['w:lineRule']).toEqual('auto');
   });
 });

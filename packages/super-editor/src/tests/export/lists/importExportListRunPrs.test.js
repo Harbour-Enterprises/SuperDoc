@@ -14,13 +14,27 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
   });
 
   it('correctly imports list with inline run properties', () => {
-    const originalInlineRunProps = doc.content[0].content[0]?.attrs?.attributes?.originalInlineRunProps;
-    expect(originalInlineRunProps).toBeDefined();
+    const list = doc.content[0];
+    const item = list.content[0];
+    expect(list.type).toBe('orderedList');
+    expect(item.type).toBe('listItem');
+    expect(item.attrs.indent.left).toBeUndefined();
+    expect(item.attrs.indent.hanging).toBeUndefined();
 
-    const wsz = originalInlineRunProps.elements.find((el) => el.name === 'w:sz');
-    const { attributes } = wsz;
-    expect(attributes).toBeDefined();
-    expect(attributes['w:val']).toBe('16');
+    const content = item.content[0];
+    const text = content.content[0];
+    expect(content.type).toBe('paragraph');
+    expect(text.type).toBe('text');
+    expect(text.text).toBe('APPOINTMENT');
+
+    const textStyleMarks = text.marks;
+    expect(textStyleMarks.length).toBe(2);
+    const textStyleMark = textStyleMarks.find((mark) => mark.type === 'textStyle');
+
+    expect(textStyleMark).toBeDefined();
+    expect(textStyleMark.attrs).toBeDefined();
+    expect(textStyleMark.attrs.fontSize).toBe('8pt');
+    expect(textStyleMark.attrs.fontFamily).toBe('Times New Roman');
   });
 
   it('exports list with inline run properties', () => {
@@ -34,6 +48,7 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
   
     // We are looking for the w:rPr tag inside the list item w:pPr
     const pPr = listItem.find((el) => el.name === 'w:pPr');
+    expect(pPr).toBeDefined();
     const rPr = pPr.elements.find((el) => el.name === 'w:rPr');
     expect(rPr).toBeDefined();
 
@@ -42,7 +57,7 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     expect(wsz).toBeDefined();
     const { attributes } = wsz;
     expect(attributes).toBeDefined();
-    expect(attributes['w:val']).toBe('16');
+    expect(attributes['w:val']).toBe(16);
     
   });
 });
