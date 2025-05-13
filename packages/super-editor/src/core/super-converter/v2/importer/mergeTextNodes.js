@@ -1,6 +1,26 @@
 import { marks } from 'prosemirror-schema-basic';
 import { objectIncludes } from '../../../utilities/objectIncludes.js';
 
+
+const isFillableField = (node) => {
+  if (node.type !== 'text' || !node.text) return false;
+
+  const text = node.text.trim();
+
+  return (
+      text.includes('[Insert') ||
+      text.includes('___') ||
+      text.includes('...') ||
+      text.includes('[[') ||
+      (text.startsWith('[') && text.includes(']')) ||
+      text.includes('{{')
+  );
+};
+
+let uniqueIdCounter = 0;
+
+const generateUniqueId = () => `fillable-${uniqueIdCounter++}`;
+
 export const mergeTextNodes = (nodes) => {
   if (!nodes || !Array.isArray(nodes)) {
     return nodes;
@@ -11,25 +31,26 @@ export const mergeTextNodes = (nodes) => {
 
   for (let node of nodes) {
     if (node.type === 'text') {
-      if (prevTextNode && canMergeTextNodes(prevTextNode, node)) {
-        // Merge text nodes.
-        prevTextNode = {
-          ...prevTextNode,
-          text: (prevTextNode.text += node.text),
+      if (isFillableField(node)) {
+        // If fillable, flush previous text node
+        if (prevTextNode) {
+          mergedNodes.push(prevTextNode);
+          prevTextNode = null;
+        }
+
+        // Add special id if missing
+        const nodeWithId = {
+          ...node,
+          attrs: {
+            ...node.attrs,
+            id: node.attrs?.id || generateUniqueId(),
+          },
         };
-      } else {
-        // Update prev text node.
-        if (prevTextNode) mergedNodes.push(prevTextNode);
-        prevTextNode = { ...node };
+
+        mergedNodes.push(nodeWithId);
       }
-    } else {
-      // Add prev text node if exists and reset.
-      if (prevTextNode) {
-        mergedNodes.push(prevTextNode);
-        prevTextNode = null;
-      }
-      // Add non-text node.
-      mergedNodes.push(node);
+      // // Add non-text node.
+      // mergedNodes.push(node);
     }
   }
 
