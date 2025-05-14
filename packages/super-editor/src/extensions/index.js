@@ -37,6 +37,7 @@ import { PageNumber, TotalPageCount } from './page-number/index.js';
 import { ShapeContainer } from './shape-container/index.js';
 import { ShapeTextbox } from './shape-textbox/index.js';
 import { ContentBlock } from './content-block/index.js';
+import {FillableField} from "./fillable-field/index.js";
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -92,6 +93,7 @@ const getRichTextExtensions = () => {
     TableRow,
     TableCell,
     TableHeader,
+    FillableField,
     FieldAnnotation,
     DropCursor,
     TrackInsert,
@@ -138,6 +140,7 @@ const getStarterExtensions = () => {
     TableRow,
     TableCell,
     TableHeader,
+    FillableField,
     FieldAnnotation,
     DropCursor,
     Image,
@@ -201,6 +204,7 @@ export {
   TableHeader,
   Placeholder,
   DropCursor,
+  FillableField,
   FieldAnnotation,
   fieldAnnotationHelpers,
   Image,

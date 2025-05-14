@@ -1,4 +1,4 @@
-import { getElementName, parseProperties } from './importerHelpers.js';
+import { extractFillableParts, getElementName, parseProperties } from './importerHelpers.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -24,16 +24,29 @@ export const handleTextNode = (params) => {
 
   // Ignore others - can catch other special cases here if necessary
   else return { nodes: [], consumed: 0 };
+  const parts = extractFillableParts(text);
+  const resultNodes = parts.flatMap((part) => {
+    let attrs = { type, attributes: attributes || {} }
+    if(part.fillable) {
+      let label = part.text;
+      attrs.fieldId = 'fillable-0';
+      attrs.displayLabel = label;
+      return {
+        type: 'fillableField',
+        attrs: attrs,
+        marks,
+      };
+    }
+    return {
+      type: getElementName(node),
+      text: part.text,
+      attrs: attrs,
+      marks,
+    };
+  });
 
   return {
-    nodes: [
-      {
-        type: getElementName(node),
-        text: text,
-        attrs: { type, attributes: attributes || {} },
-        marks,
-      },
-    ],
+    nodes: resultNodes,
     consumed: 1,
   };
 };

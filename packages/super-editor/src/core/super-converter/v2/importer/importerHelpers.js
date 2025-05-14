@@ -92,3 +92,29 @@ export function hasTextNode(elements) {
   const runsHaveText = runs.some((run) => run.elements.some((el) => el.name === 'w:t'));
   return runsHaveText;
 }
+
+export const isFillableText = (text) => {
+  const regex = /(\[Insert[^\]]*\]|\[\[[^\]]*\]\]|\{\{[^}]+\}\}|___+|\.{3,}|\[[^\]]+\])/;
+  return regex.test(text);
+};
+
+export const extractFillableParts = (text) => {
+  const regex = /(\[Insert[^\]]*\]|\[\[[^\]]*\]\]|\{\{[^}]+\}\}|___+|\.{3,}|\[[^\]]+\])/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ text: text.slice(lastIndex, match.index), fillable: false });
+    }
+    parts.push({ text: match[0], fillable: true });
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push({ text: text.slice(lastIndex), fillable: false });
+  }
+
+  return parts;
+};
