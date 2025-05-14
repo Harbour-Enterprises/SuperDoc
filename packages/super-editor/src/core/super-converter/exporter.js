@@ -81,6 +81,7 @@ export function exportSchemaToJson(params) {
     tableRow: translateTableRow,
     tableCell: translateTableCell,
     bookmarkStart: translateBookmarkStart,
+    fillableField: translateFillableField,
     fieldAnnotation: translateFieldAnnotation,
     tab: translateTab,
     image: translateImageNode,
@@ -1809,6 +1810,19 @@ function translateFieldAnnotation(params) {
         elements: sdtContentElements,
       },
     ],
+  };
+};
+
+function translateFillableField(params) {
+  const { node, isFinalDoc } = params;
+  const { attrs = {} } = node;
+  const { displayLabel } = attrs;
+  console.log(params);
+
+  return {
+    name: 'w:t',
+
+    elements: [{ text:displayLabel, type: 'text' }],
   };
 };
 

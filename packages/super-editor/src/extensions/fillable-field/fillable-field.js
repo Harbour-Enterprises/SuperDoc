@@ -12,7 +12,6 @@ export const FillableField = Node.create({
   selectable: true,
   addAttributes() {
     return {
-
       displayLabel: {
         default: 'Text field',
         parseDOM: (elem) => elem.getAttribute('data-display-label'),
@@ -30,6 +29,16 @@ export const FillableField = Node.create({
           if (!attrs.fieldId) return {};
           return {
             'data-field-id': attrs.fieldId,
+          };
+        },
+      },
+      isFillable: {
+        default: true,
+        parseDOM: (elem) => elem.getAttribute('data-fillable-field'),
+        renderDOM: (attrs) => {
+          if (!attrs.displayLabel) return {};
+          return {
+            'data-fillable-field': true,
           };
         },
       },
