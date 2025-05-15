@@ -1,7 +1,7 @@
 {
   "name": "@harbour-enterprises/superdoc",
   "type": "module",
-  "version": "0.10.71",
+  "version": "0.10.72",
   "license": "AGPL-3.0",
   "readme": "../../README.md",
   "files": [
