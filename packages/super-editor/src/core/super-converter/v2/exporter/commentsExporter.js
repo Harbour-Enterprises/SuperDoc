@@ -88,8 +88,8 @@ export const prepareCommentParaIds = (comment) => {
  * @param {string} commentId The index of the comment
  * @returns {Object} The w:comment node for the comment
  */
-export const getCommentDefinition = (comment, commentId, allComments) => {
-  const translatedText = translateParagraphNode({ node: comment.commentJSON });
+export const getCommentDefinition = (comment, commentId, allComments, editor) => {
+  const translatedText = translateParagraphNode({ editor, node: comment.commentJSON });
   const attributes = {
     'w:id': String(commentId),
     'w:author': comment.creatorName || comment.importedAuthor?.name,
