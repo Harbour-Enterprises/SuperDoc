@@ -2,6 +2,8 @@ import { Node, Attribute } from '@core/index.js';
 import { callOrGet } from '@core/utilities/callOrGet.js';
 import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.js';
 import { /* TableView */ createTableView } from './TableView.js';
+import { findParentNodeClosestToPos } from '@helpers/index.js';
+import { Fragment } from "prosemirror-model";
 import { createTable } from './tableHelpers/createTable.js';
 import { createColGroup } from './tableHelpers/createColGroup.js';
 import { deleteTableWhenSelected } from './tableHelpers/deleteTableWhenSelected.js';
@@ -10,6 +12,7 @@ import { createTableBorders } from './tableHelpers/createTableBorders.js';
 import { createCellBorders } from '../table-cell/helpers/createCellBorders.js';
 import { findParentNode } from '@helpers/findParentNode.js';
 import { TextSelection } from 'prosemirror-state';
+import { getFieldAttrs } from '@helpers/annotator.js';
 import {
   addColumnBefore,
   addColumnAfter,
@@ -295,6 +298,76 @@ export const Table = Node.create({
 
             return true;
           },
+
+        generateTable: (annotation, matchingAnnotation, fieldData) => {
+          return ({ tr, editor }) => {
+            const seenTableRowAnnotationIds = [];
+            const { state: { doc, schema } } = editor;
+            const { tableRow: RowType, tableCell: CellType, fieldAnnotation: FieldType, paragraph: ParaType } = schema.nodes;
+
+            // Locate the parent row node containing the annotation
+            const position = doc.resolve(annotation.pos);
+            const rowInfo = findParentNodeClosestToPos(position, (node) => node.type === RowType);
+            if (!rowInfo) return;
+
+            // Get all annotations in the row
+            rowInfo.node.descendants((node, pos) => {
+              if (node.type.name === 'fieldAnnotation') {
+                seenTableRowAnnotationIds.push(node.attrs.fieldId);
+              }
+            });
+
+            if (!seenTableRowAnnotationIds.includes(annotation.node.attrs.fieldId)) return [];
+
+            // Figure out the position where we will start inserting new rows
+            const { pos: rowStartPos, node: rowNode } = rowInfo;
+            let insertPos = rowStartPos + rowNode.nodeSize;
+
+            // Helper: rebuild a single cell for a given row index
+            const rebuildCell = (cellNode, rowIndex) => {
+              const updatedBlocks = cellNode.content.content.map((blockNode) => {
+                if (blockNode.type !== ParaType) return blockNode;
+
+                // Rebuild paragraphs by mapping inline nodes
+                const updatedInlines = blockNode.content.content.map((inlineNode) => {
+                  if (inlineNode.type !== FieldType) return inlineNode;
+
+                  // Find the matching field data and compute new attributes
+                  const fieldRecord = fieldData.find((f) => f.input_id === inlineNode.attrs.fieldId);
+                  const value = fieldRecord?.input_value[rowIndex];
+
+                  // Different field types require different annotation handling
+                  // We use the helper here to get the correct attributes
+                  // Since generated tables contain annotated fields
+                  const extraAttrs = getFieldAttrs(inlineNode, value);
+                  return FieldType.create(
+                    { ...inlineNode.attrs, ...extraAttrs },
+                    inlineNode.content,
+                    inlineNode.marks
+                  );
+                });
+
+                return ParaType.create(blockNode.attrs, Fragment.from(updatedInlines), blockNode.marks);
+              });
+
+              return CellType.create(cellNode.attrs, Fragment.from(updatedBlocks), cellNode.marks);
+            };
+
+            // Iterate over each row value and build+insert a new row
+            matchingAnnotation.input_value.forEach((_, rowIndex) => {
+              // Build all cells for the new row
+              const newCells = rowNode.content.content.map((cellNode) => rebuildCell(cellNode, rowIndex));
+              const newRow = RowType.create(rowNode.attrs, Fragment.from(newCells), rowNode.marks);
+
+              tr.insert(insertPos, Fragment.from(newRow));
+              insertPos += newRow.nodeSize;
+            });
+
+            // Remove the original (placeholder) row
+            tr.delete(rowStartPos, rowStartPos + rowNode.nodeSize);
+            return seenTableRowAnnotationIds;
+          };
+        },
     };
   },
 
