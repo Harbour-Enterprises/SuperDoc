@@ -87,15 +87,21 @@ const config = {
   // Required: A DOM element ID to render superdoc into
   selector: '#superdoc',
 
-  // Optional: Initial document mode: viewing, editing. Defaults to viewing
+  // Optional: Initial document mode: viewing, suggesting,editing. Defaults to editing
   documentMode: 'editing',
+
+  // Optional: User role: editor, suggester, viewer. Defaults to editor
+  role: 'editor',
 
   // Required: Documents list with one document
   documents: [
     {
       id: 'my-doc-id', // Required: This document's ID. This is also used as the room name in collaboration.
       type: 'docx', // Required: 'pdf', 'docx' or 'html'
-      data: fileObject, // Optional: A JS File object of your doc, pdf or html file.
+      
+      // Document content - provide EITHER data OR url:
+      data: fileObject, // Option 1: A JS File/Blob object of your document
+      url: 'https://example.com/document.docx', // Option 2: URL to fetch the document from
     },
   ],
 
@@ -143,6 +149,24 @@ const config = {
     onException: () => null,
 };
 ```
+
+## Document Modes and Roles
+
+SuperDoc supports different document modes and user roles to control editing capabilities:
+
+### Document Modes
+
+- **editing** - Full document editing capabilities
+- **viewing** - Read-only mode with no editing allowed
+- **suggesting** - Track changes mode where edits are shown as suggestions
+
+### User Roles
+
+- **editor** - Users with full editing capabilities who can access all document modes
+- **suggester** - Users who can only make suggestions (track changes) but cannot directly edit
+- **viewer** - Users with read-only access who can only view the document
+
+The user's role restricts which document modes they can access. For example, a user with the "viewer" role will always be in viewing mode regardless of the requested document mode.
 
 ## Project Structure
 
@@ -196,8 +220,9 @@ superdoc.off('ready', myReadyHandler);
 // Export the document as DOCX
 await superdoc.export();
 
-// Switch between viewing and editing modes
+// Switch between viewing, suggesting, and editing modes
 superdoc.setDocumentMode('viewing');
+superdoc.setDocumentMode('suggesting');
 superdoc.setDocumentMode('editing');
 
 // Get a list of HTML strings (one per DOCX editor)

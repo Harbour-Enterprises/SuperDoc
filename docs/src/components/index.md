@@ -49,7 +49,8 @@ const superdoc = new SuperDoc({
 | `selector`     | `string\|Element` | CSS selector or DOM element where SuperDoc will be rendered |    ✓     | -                |
 | `documents`    | `array`           | Array of document objects to load                           |    ✓     | -                |
 | `superdocId`   | `string`          | Unique identifier for this SuperDoc instance                |          | Random UUID      |
-| `documentMode` | `string`          | Initial mode: 'viewing' or 'editing'                        |          | 'viewing'        |
+| `documentMode` | `string`          | Document mode: 'viewing', 'suggesting', or 'editing'         |          | 'editing'        |
+| `role`         | `string`          | User role: 'editor', 'suggester', or 'viewer'               |          | 'editor'         |
 | `user`         | `object`          | Current user information                                    |          | {}               |
 | `toolbar`      | `string\|Element` | DOM element to render toolbar                               |          | Internal toolbar |
 | `modules`      | `object`          | Additional modules configuration                            |          | {}               |
@@ -91,7 +92,7 @@ modules: {
 | Method                                | Parameters                        | Return          | Description                                                 |
 | :------------------------------------ | :-------------------------------- | :-------------- | :---------------------------------------------------------- |
 | `export()`                            | -                                 | `Promise<Void>` | Exports the SuperDocs and triggers download                 |
-| `setDocumentMode(mode)`               | mode: 'viewing' or 'editing'      | -               | Switches between view and edit modes                        |
+| `setDocumentMode(mode)`               | mode: 'viewing', 'suggesting', or 'editing'      | -               | Switches between view, suggest, and edit modes                        |
 | `on(event, callback)`                 | event: string, callback: function | -               | Registers an event listener                                 |
 | `off(event, callback)`                | event: string, callback: function | -               | Removes an event listener                                   |
 | `getHTML()`                           | -                                 | -               | Get a list of HTML strings (one per DOCX document)          |
@@ -103,7 +104,7 @@ modules: {
 | onEditorBeforeCreate | -                         | Called **before** the document editor is created.       |
 | onEditorCreate       | `{ editor }`              | Called when the document editor is created.             |
 | onEditorDestroy      | -                         | Called when the document editor is destroyed.           |
-| onContentError       | `{ error, editor }`       | Called when there’s an error with document content.     |
+| onContentError       | `{ error, editor }`       | Called when there's an error with document content.     |
 | onReady              | -                         | Called when the document is fully initialized and ready.|
 | onAwarenessUpdate    | `{ users }`               | Called when user presence information changes.          |
 | onPdfDocumentReady   | -                         | Called when the PDF version of the document is ready.   |
@@ -151,8 +152,8 @@ const editor = new SuperEditor({
 | :---------------------- | :--------- | :------------------------------------- | :------------- |
 | `user`                  | `object`   | Current user information               | {}             |
 | `colors`                | `object`   | Theme color configuration              | Default colors |
-| `role`                  | `string`   | User role: 'editor', 'viewer', 'admin' | 'editor'       |
-| `documentMode`          | `string`   | 'viewing' or 'editing'                 | 'viewing'      |
+| `role`                  | `string`   | User role: 'editor', 'suggester', 'viewer' | 'editor'       |
+| `documentMode`          | `string`   | 'editing', 'viewing', or 'suggesting'  | 'viewing'      |
 | `pagination`            | `boolean`  | Enable pagination                      | true           |
 | `rulers`                | `array`    | Document ruler configuration           | []             |
 | `ydoc`                  | `Y.Doc`    | Yjs document for collaboration         | null           |
