@@ -45,6 +45,15 @@ const onCreate = ({ editor }) => {
 
   // Set debugging pagination value from editor plugin state
   isDebuggingPagination.value = PaginationPluginKey.getState(editor.state)?.isDebugging;
+
+  // editor.commands.addFieldAnnotation(0, {
+  //   type: 'html',
+  //   displayLabel: 'Paragraph',
+  //   fieldId: `123`,
+  //   fieldType: 'TEXTINPUT',
+  //   fieldColor: '#980043',
+  //   rawHtml: '<p><span style="font-family: Courier New; font-size: 8pt;">Par 1</span></p><p>Par 2</p>',
+  // });
 };
 
 const onCommentClicked = ({ conversation }) => {
@@ -68,6 +77,7 @@ const editorOptions = computed(() => {
     users: [], // For comment @-mentions, only users that have access to the document
     pagination: true,
     telemetry: telemetry.value,
+    annotations: true,
   }
 });
 

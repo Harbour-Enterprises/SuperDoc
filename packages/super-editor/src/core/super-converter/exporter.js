@@ -1731,17 +1731,25 @@ function prepareCheckboxAnnotation(params) {
  */
 function prepareHtmlAnnotation(params) {
   const {
-    node: { attrs = {} },
+    node: { attrs = {}, marks = [] },
+    editorSchema,
   } = params;
 
   const parser = new window.DOMParser();
   const paragraphHtml = parser.parseFromString(attrs.rawHtml || attrs.displayLabel, 'text/html');
+  const marksFromAttrs = translateFieldAttrsToMarks(attrs);
+  const allMarks = [...marks, ...marksFromAttrs]
 
-  const state = EditorState.create({
-    doc: PMDOMParser.fromSchema(params.editorSchema).parse(paragraphHtml),
+  let state = EditorState.create({
+    doc: PMDOMParser.fromSchema(editorSchema).parse(paragraphHtml),
   });
 
+  if (allMarks.length) {
+    state = applyMarksToHtmlAnnotation(state, allMarks);
+  }
+
   const htmlAnnotationNode = state.doc.toJSON();
+  
   return {
     name: 'htmlAnnotation',
     elements: translateChildNodes({
@@ -1894,6 +1902,20 @@ function translateFieldAnnotation(params) {
             attributes: {
               'xmlns:w': customXmlns,
               'w:val': attrs.multipleImage,
+            },
+          },
+          {
+            name: 'w:fieldFontFamily',
+            attributes: {
+              'xmlns:w': customXmlns,
+              'w:val': attrs.fontFamily,
+            },
+          },
+          {
+            name: 'w:fieldFontSize',
+            attributes: {
+              'xmlns:w': customXmlns,
+              'w:val': attrs.fontSize,
             },
           },
         ],
@@ -2103,3 +2125,46 @@ function resizeKeepAspectRatio(width, height, maxWidth) {
   }
   return { width, height };
 }
+
+function applyMarksToHtmlAnnotation(state, marks) {
+  const { tr, doc, schema } = state;
+  const allowedMarks = ['fontFamily', 'fontSize'];
+
+  if (
+    !marks.some((m) => allowedMarks.includes(m.type))
+  ) {
+    return state;
+  }
+
+  const fontFamily = marks.find((m) => m.type === 'fontFamily');
+  const fontSize = marks.find((m) => m.type === 'fontSize');
+
+  doc.descendants((node, pos) => {
+    if (!node.isText) return;
+
+    const found = node.marks.find((m) => m.type.name === 'textStyle');
+    const textStyleType = schema.marks.textStyle;
+
+    if (!found) {
+      tr.addMark(pos, pos + node.nodeSize, textStyleType.create({
+        ...fontFamily?.attrs,
+        ...fontSize?.attrs,
+      }));
+      return;
+    }
+
+    if (!found?.attrs.fontFamily && fontFamily) {
+      tr.addMark(pos, pos + node.nodeSize, textStyleType.create({
+        ...found?.attrs,
+        ...fontFamily.attrs,
+      }));
+    } else if (!found?.attrs.fontSize && fontSize) {
+      tr.addMark(pos, pos + node.nodeSize, textStyleType.create({
+        ...found?.attrs,
+        ...fontSize.attrs,
+      }));
+    }
+  });
+
+  return state.apply(tr);
+};
