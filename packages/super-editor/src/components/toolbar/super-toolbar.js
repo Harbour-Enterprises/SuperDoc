@@ -13,7 +13,61 @@ import { getQuickFormatList } from '@extensions/linked-styles/linked-styles.js';
 import { getAvailableColorOptions, makeColorOption, renderColorOptions } from './color-dropdown-helpers.js';
 import { isInTable } from '@helpers/isInTable.js';
 
+/**
+ * @typedef {Object} ToolbarConfig
+ * @property {string} [selector] - CSS selector for the toolbar container
+ * @property {string[]} [toolbarGroups=['left', 'center', 'right']] - Groups to organize toolbar items
+ * @property {string} [role='editor'] - Role of the toolbar ('editor' or 'viewer')
+ * @property {boolean} [pagination=false] - Whether pagination is enabled
+ * @property {Object} [icons] - Custom icons for toolbar items
+ * @property {string} [mode='docx'] - Editor mode
+ * @property {string[]} [excludeItems=[]] - Items to exclude from the toolbar
+ * @property {Object} [groups=null] - Custom groups configuration
+ * @property {Object} [editor=null] - The editor instance
+ * @property {string} [aiApiKey=null] - API key for AI integration
+ * @property {string} [aiEndpoint=null] - Endpoint for AI integration
+ */
+
+/**
+ * @typedef {Object} ToolbarItem
+ * @property {Object} name - The name of the toolbar item
+ * @property {string} name.value - The value of the name
+ * @property {Object} group - The group the item belongs to
+ * @property {string} group.value - The value of the group
+ * @property {Object} selectedValue - The selected value for the item
+ * @property {*} selectedValue.value - The value of the selected value
+ * @property {Object} disabled - Whether the item is disabled
+ * @property {boolean} disabled.value - The value of disabled
+ * @property {Object} allowWithoutEditor - Whether the item can be used without an editor
+ * @property {boolean} allowWithoutEditor.value - The value of allowWithoutEditor
+ * @property {Object} defaultLabel - The default label for the item
+ * @property {*} defaultLabel.value - The value of the default label
+ * @property {Object} nestedOptions - Nested options for the item
+ * @property {Array} nestedOptions.value - The array of nested options
+ * @property {string} command - The command to execute
+ * @property {string} [noArgumentCommand] - The command to execute when no argument is provided
+ * @property {Function} activate - Function to activate the item
+ * @property {Function} deactivate - Function to deactivate the item
+ * @property {Function} setDisabled - Function to set the disabled state
+ * @property {Function} resetDisabled - Function to reset the disabled state
+ */
+
+/**
+ * @typedef {Object} CommandItem
+ * @property {ToolbarItem} item - The toolbar item
+ * @property {*} [argument] - The argument to pass to the command
+ */
+
+/**
+ * A customizable toolbar for the Super Editor
+ * @class
+ * @extends EventEmitter
+ */
 export class SuperToolbar extends EventEmitter {
+  /**
+   * Default configuration for the toolbar
+   * @type {ToolbarConfig}
+   */
   config = {
     selector: null,
     toolbarGroups: ['left', 'center', 'right'],
@@ -28,6 +82,11 @@ export class SuperToolbar extends EventEmitter {
     aiEndpoint: null,
   };
 
+  /**
+   * Creates a new SuperToolbar instance
+   * @param {ToolbarConfig} config - The configuration for the toolbar
+   * @returns {void}
+   */
   constructor(config) {
     super();
 
@@ -73,6 +132,11 @@ export class SuperToolbar extends EventEmitter {
     this.updateToolbarState();
   }
 
+  /**
+  * Initiate toolbar groups
+  * @private
+  * @returns {void}
+  */
   #initToolbarGroups() {
     // If groups is configured, override toolbarGroups
     if (this.config.groups && !Array.isArray(this.config.groups) && Object.keys(this.config.groups).length) {
@@ -80,7 +144,19 @@ export class SuperToolbar extends EventEmitter {
     }
   }
 
+  /**
+   * Custom commands that override default behavior
+   * @private
+   * @type {Object.<string, function(CommandItem): void>}
+   */
   #interceptedCommands = {
+    /**
+     * Handles zoom level changes
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {string|number} params.argument - The zoom level (percentage)
+     * @returns {void}
+     */
     setZoom: ({ item, argument }) => {
       // Currently only set up to work with full SuperDoc
       if (!argument) return;
@@ -93,7 +169,7 @@ export class SuperToolbar extends EventEmitter {
       const isMobileDevice = typeof screen.orientation !== 'undefined';
       // 768px breakpoint doesn't consider iPad in portrait orientation
       const isSmallScreen = window.matchMedia('(max-width: 834px)').matches;
-      
+
       // Zoom property doesn't work correctly when testing on mobile devices
       if (isMobileDevice && isSmallScreen) {
         layers.style.transformOrigin = '0 0';
@@ -105,36 +181,86 @@ export class SuperToolbar extends EventEmitter {
       this.superdoc.superdocStore.activeZoom = parseInt(argument);
     },
 
+    /**
+     * Sets the document mode
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {string} params.argument - The document mode to set
+     * @returns {void}
+     */
     setDocumentMode: ({ item, argument }) => {
       if (!argument) return;
 
       this.emit('superdoc-command', { item, argument });
     },
 
+    /**
+     * Sets the font size for text
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {string|number} params.argument - The font size to set
+     * @returns {void}
+     */
     setFontSize: ({ item, argument }) => {
       this.#runCommandWithArgumentOnly({ item, argument }, () => {
         this.activeEditor?.commands.setFieldAnnotationsFontSize(argument, true);
       });
     },
 
+    /**
+     * Sets the font family for text
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {string} params.argument - The font family to set
+     * @returns {void}
+     */
     setFontFamily: ({ item, argument }) => {
       this.#runCommandWithArgumentOnly({ item, argument }, () => {
         this.activeEditor?.commands.setFieldAnnotationsFontFamily(argument, true);
       });
     },
 
+    /**
+     * Sets the text color
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {string} params.argument - The color to set
+     * @returns {void}
+     */
     setColor: ({ item, argument }) => {
       this.#runCommandWithArgumentOnly({ item, argument });
     },
-    
+
+    /**
+     * Sets the highlight color for text
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {string} params.argument - The highlight color to set
+     * @returns {void}
+     */
     setHighlight: ({ item, argument }) => {
       this.#runCommandWithArgumentOnly({ item, argument });
     },
 
+    /**
+     * Toggles the ruler visibility
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {*} params.argument - Not used
+     * @returns {void}
+     */
     toggleRuler: ({ item, argument }) => {
       this.superdoc.toggleRuler();
     },
 
+    /**
+     * Initiates the image upload process
+     * @async
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {*} params.argument - Not used
+     * @returns {Promise<void>}
+     */
     startImageUpload: async ({ item, argument }) => {
       let open = getFileOpener();
       let result = await open();
@@ -150,6 +276,13 @@ export class SuperToolbar extends EventEmitter {
       });
     },
 
+    /**
+     * Increases text indentation or list level
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {*} params.argument - Command arguments
+     * @returns {void}
+     */
     increaseTextIndent: ({ item, argument }) => {
       let command = item.command;
       let { state } = this.activeEditor;
@@ -164,6 +297,13 @@ export class SuperToolbar extends EventEmitter {
       }
     },
 
+    /**
+     * Decreases text indentation or list level
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {*} params.argument - Command arguments
+     * @returns {boolean}
+     */
     decreaseTextIndent: ({ item, argument }) => {
       let command = item.command;
       let { state } = this.activeEditor;
@@ -178,6 +318,13 @@ export class SuperToolbar extends EventEmitter {
       }
     },
 
+    /**
+     * Toggles bold formatting for text
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {*} params.argument - Command arguments
+     * @returns {void}
+     */
     toggleBold: ({ item, argument }) => {
       let command = item.command;
 
@@ -189,6 +336,13 @@ export class SuperToolbar extends EventEmitter {
       this.updateToolbarState();
     },
 
+    /**
+     * Toggles italic formatting for text
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {*} params.argument - Command arguments
+     * @returns {void}
+     */
     toggleItalic: ({ item, argument }) => {
       let command = item.command;
 
@@ -200,6 +354,13 @@ export class SuperToolbar extends EventEmitter {
       this.updateToolbarState();
     },
 
+    /**
+     * Toggles underline formatting for text
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {*} params.argument - Command arguments
+     * @returns {void}
+     */
     toggleUnderline: ({ item, argument }) => {
       let command = item.command;
 
@@ -211,6 +372,13 @@ export class SuperToolbar extends EventEmitter {
       this.updateToolbarState();
     },
 
+    /**
+     * Toggles link formatting and updates cursor position
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {*} params.argument - Command arguments
+     * @returns {void}
+     */
     toggleLink: ({ item, argument }) => {
       let command = item.command;
 
@@ -232,13 +400,28 @@ export class SuperToolbar extends EventEmitter {
       this.updateToolbarState();
     },
 
+    /**
+     * Inserts a table into the document
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {Object} params.argument - Table configuration
+     * @returns {void}
+     */
     insertTable: ({ item, argument }) => {
       this.#runCommandWithArgumentOnly({ item, argument });
     },
 
+    /**
+     * Executes a table-related command
+     * @param {Object} params - Command parameters
+     * @param {CommandItem} params.item - The command item
+     * @param {Object} params.argument - The table command and its parameters
+     * @param {string} params.argument.command - The specific table command to execute
+     * @returns {void}
+     */
     executeTableCommand: ({ item, argument }) => {
       if (!argument) return;
-      
+
       let command = argument.command;
 
       if (command in this.activeEditor.commands) {
@@ -249,10 +432,20 @@ export class SuperToolbar extends EventEmitter {
     },
   };
 
+  /**
+   * Log debug information to the console
+   * @param {...*} args - Arguments to log
+   * @returns {void}
+   */
   log(...args) {
     console.debug('[🎨 super-toolbar]', ...args);
   }
 
+  /**
+   * Set the zoom level
+   * @param {number} percent_int - The zoom percentage as an integer
+   * @returns {void}
+   */
   setZoom(percent_int) {
     const allItems = [...this.toolbarItems, ...this.overflowItems];
     const item = allItems.find((item) => item.name.value === 'zoom');
@@ -261,21 +454,40 @@ export class SuperToolbar extends EventEmitter {
 
   /**
    * The toolbar expects an active Super Editor instance.
-   * @param {*} editor
+   * @param {Object} editor - The editor instance to attach to the toolbar
+   * @returns {void}
    */
   setActiveEditor(editor) {
     this.activeEditor = editor;
     this.activeEditor.on('transaction', this.onEditorTransaction.bind(this));
   }
 
+  /**
+   * Get toolbar items by group name
+   * @param {string} groupName - The name of the group
+   * @returns {ToolbarItem[]} An array of toolbar items in the specified group
+   */
   getToolbarItemByGroup(groupName) {
     return this.toolbarItems.filter((item) => item.group.value === groupName);
   }
-  
+
+  /**
+   * Get a toolbar item by name
+   * @param {string} name - The name of the toolbar item
+   * @returns {ToolbarItem|undefined} The toolbar item with the specified name or undefined if not found
+   */
   getToolbarItemByName(name) {
     return this.toolbarItems.find((item) => item.name.value === name);
   }
 
+  /**
+   * Create toolbar items based on configuration
+   * @private
+   * @param {SuperToolbar} superToolbar - The toolbar instance
+   * @param {Object} icons - Icons to use for toolbar items
+   * @param {boolean} [isDev=false] - Whether in development mode
+   * @returns {void}
+   */
   #makeToolbarItems(superToolbar, icons, isDev = false) {
     const documentWidth = document.documentElement.clientWidth; // take into account the scrollbar
     const { defaultItems, overflowItems } = makeDefaultItems(superToolbar, isDev, documentWidth, this.role, icons);
@@ -285,7 +497,7 @@ export class SuperToolbar extends EventEmitter {
       ...overflowItems.map((item) => item.name.value),
     ];
     if (this.config.groups) allConfigItems = Object.values(this.config.groups).flatMap((item) => item);
-    
+
     const filteredItems = defaultItems
       .filter((item) => allConfigItems.includes(item.name.value))
       .filter((item) => !this.config.excludeItems.includes(item.name.value))
@@ -294,6 +506,11 @@ export class SuperToolbar extends EventEmitter {
     this.overflowItems = overflowItems.filter((item) => allConfigItems.includes(item.name.value));
   }
 
+  /**
+   * Initialize default fonts from the editor
+   * @private
+   * @returns {void}
+   */
   #initDefaultFonts() {
     if (!this.activeEditor || !this.activeEditor.converter) return;
     const { typeface = 'Arial', fontSizePt = 12 } = this.activeEditor.converter.getDocumentDefaultStyles() ?? {};
@@ -303,11 +520,16 @@ export class SuperToolbar extends EventEmitter {
     const fontFamilyItem = this.toolbarItems.find((item) => item.name.value === 'fontFamily');
     if (fontFamilyItem) fontFamilyItem.defaultLabel.value = typeface;
   }
-  
+
+  /**
+   * Update highlight color options based on document colors
+   * @private
+   * @returns {void}
+   */
   #updateHighlightColors() {
     if (!this.activeEditor || !this.activeEditor.converter) return;
     if (!this.activeEditor.converter.docHiglightColors.size) return;
-    
+
     const highlightItem = this.toolbarItems.find((item) => item.name.value === 'highlight');
 
     const pickerColorOptions = getAvailableColorOptions();
@@ -322,7 +544,7 @@ export class SuperToolbar extends EventEmitter {
       if (!pickerColorOptions.includes(item)) resultArray[chunkIndex].push(makeColorOption(item));
       return resultArray;
     }, []);
-    
+
     const option = {
       key: 'color',
       type: 'render',
@@ -334,8 +556,9 @@ export class SuperToolbar extends EventEmitter {
 
 
   /**
-   * Update the toolbar state. Expects a list of marks in the form: { name, attrs }
-   * @param {Object} marks
+   * Update the toolbar state based on the current editor state
+   * Updates active/inactive state of all toolbar items
+   * @returns {void}
    */
   updateToolbarState() {
     this.#updateToolbarHistory();
@@ -372,7 +595,7 @@ export class SuperToolbar extends EventEmitter {
       } else {
         item.deactivate();
       }
-      
+
       // Activate toolbar items based on linked styles
       const styleIdMark = marks.find((mark) => mark.name === 'styleId');
       if (styleIdMark?.attrs.styleId) {
@@ -390,7 +613,7 @@ export class SuperToolbar extends EventEmitter {
           item.activate(value);
         }
       }
-      
+
       const spacingAttr = marks.find((mark) => mark.name === 'spacing');
       if (item.name.value === 'lineHeight' && (activeMark?.attrs?.lineHeight || spacingAttr)) {
         item.selectedValue.value = activeMark?.attrs?.lineHeight || spacingAttr.attrs?.spacing?.line || '';
@@ -402,6 +625,10 @@ export class SuperToolbar extends EventEmitter {
     });
   }
 
+  /**
+   * Handler for toolbar resize events
+   * @returns {void}
+   */
   onToolbarResize = () => {
     this.#makeToolbarItems(this, this.config.icons, this.isDev);
     if (this.role === 'viewer') {
@@ -409,6 +636,11 @@ export class SuperToolbar extends EventEmitter {
     };
   };
 
+  /**
+   * Deactivate all toolbar items
+   * @private
+   * @returns {void}
+   */
   #deactivateAll() {
     this.activeEditor = null;
     this.toolbarItems.forEach((item) => {
@@ -418,6 +650,11 @@ export class SuperToolbar extends EventEmitter {
     });
   }
 
+  /**
+   * Update undo/redo history state in the toolbar
+   * @private
+   * @returns {void}
+   */
   #updateToolbarHistory() {
     if (!this.activeEditor) return;
     this.undoDepth = undoDepth(this.activeEditor.state);
@@ -426,6 +663,10 @@ export class SuperToolbar extends EventEmitter {
 
   /**
    * React to editor transactions. Might want to debounce this.
+   * @param {Object} params - Transaction parameters
+   * @param {Object} params.editor - The editor instance (not used)
+   * @param {Object} params.transaction - The transaction object
+   * @returns {void}
    */
   onEditorTransaction({ editor, transaction }) {
     if (!transaction.docChanged && !transaction.selectionSet) return;
@@ -433,15 +674,16 @@ export class SuperToolbar extends EventEmitter {
   }
 
   /**
-   * Main handler for toolbar commands.
-   *
-   * @param {Object} item is an instance of the useToolbarItem composable
-   * @param {Object} argument is the argument passed to the command
-   */
+   * Main handler for toolbar commands
+   * @param {CommandItem} params - Command parameters
+   * @param {ToolbarItem} params.item - An instance of the useToolbarItem composable
+   * @param {*} [params.argument] - The argument passed to the command
+   * @returns {*} The result of the executed command, undefined if no result is returned
+  */
   emitCommand({ item, argument }) {
     this.activeEditor?.focus();
     const { command } = item;
-    
+
     if (!command) {
       return;
     }
@@ -461,18 +703,27 @@ export class SuperToolbar extends EventEmitter {
     }
   }
 
+  /**
+   * Run a command that requires an argument
+   * @private
+   * @param {CommandItem} params - Command parameters
+   * @param {ToolbarItem} params.item - The toolbar item
+   * @param {*} params.argument - The argument for the command
+   * @param {Function} [callback] - Optional callback to run after the command
+   * @returns {void}
+   */
   #runCommandWithArgumentOnly({ item, argument }, callback) {
     if (!argument || !this.activeEditor) return;
-    
+
     let command = item.command;
     const noArgumentCommand = item.noArgumentCommand;
-    
+
     if (argument === 'none' && noArgumentCommand in this.activeEditor?.commands) {
       this.activeEditor.commands[noArgumentCommand]();
       this.updateToolbarState();
       return;
     }
-    
+
     if (command in this.activeEditor?.commands) {
       this.activeEditor.commands[command](argument);
       if (typeof callback === 'function') callback(argument);

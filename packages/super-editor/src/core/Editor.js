@@ -26,19 +26,109 @@ import DocxZipper from '@core/DocxZipper.js';
 /**
  * Editor main class.
  */
+/**
+ * @typedef {Object} EditorOptions
+ * @property {HTMLElement} [element] - The container element for the editor
+ * @property {string} [selector] - CSS selector for the editor container
+ * @property {boolean} [isHeadless=false] - Whether the editor is running in headless mode
+ * @property {Document} [mockDocument] - Mock document for testing
+ * @property {Window} [mockWindow] - Mock window for testing
+ * @property {string} [content=''] - XML content
+ * @property {Object} [user] - Current user information
+ * @property {Array} [users=[]] - List of users for collaboration
+ * @property {Object} [media={}] - Media configuration
+ * @property {Object} [mediaFiles={}] - Media files
+ * @property {Object} [fonts={}] - Font configuration
+ * @property {string} [documentMode='editing'] - Document mode ('editing', 'viewing', 'suggesting')
+ * @property {string} [mode='docx'] - Editor mode ('docx', 'text', 'html')
+ * @property {string} [role='editor'] - User role ('editor', 'viewer', 'suggester')
+ * @property {Array} [colors=[]] - Available colors
+ * @property {Object} [converter] - Document converter
+ * @property {Object} [fileSource] - Source of the file
+ * @property {Object} [initialState] - Initial editor state
+ * @property {string} [documentId] - Unique document identifier
+ * @property {Array} [extensions=[]] - Editor extensions
+ * @property {boolean} [editable=true] - Whether the editor is editable
+ * @property {Object} [editorProps={}] - Editor properties
+ * @property {Object} [parseOptions={}] - Parsing options
+ * @property {Object} [coreExtensionOptions={}] - Core extension options
+ * @property {boolean} [enableInputRules=true] - Whether to enable input rules
+ * @property {boolean} [isCommentsEnabled=false] - Whether comments are enabled
+ * @property {boolean} [isNewFile=false] - Whether this is a new file
+ * @property {number} [scale=1] - Editor scale/zoom
+ * @property {boolean} [annotations=false] - Whether annotations are enabled
+ * @property {boolean} [isInternal=false] - Whether this is an internal editor
+ * @property {Array} [externalExtensions=[]] - External extensions
+ * @property {Object} [numbering={}] - Numbering configuration
+ * @property {Function} [onBeforeCreate] - Called before editor creation
+ * @property {Function} [onCreate] - Called after editor creation
+ * @property {Function} [onUpdate] - Called when editor content updates
+ * @property {Function} [onSelectionUpdate] - Called when selection updates
+ * @property {Function} [onTransaction] - Called when a transaction is processed
+ * @property {Function} [onFocus] - Called when editor gets focus
+ * @property {Function} [onBlur] - Called when editor loses focus
+ * @property {Function} [onDestroy] - Called when editor is destroyed
+ * @property {Function} [onContentError] - Called when there's a content error
+ * @property {Function} [onTrackedChangesUpdate] - Called when tracked changes update
+ * @property {Function} [onCommentsUpdate] - Called when comments update
+ * @property {Function} [onCommentsLoaded] - Called when comments are loaded
+ * @property {Function} [onCommentClicked] - Called when a comment is clicked
+ * @property {Function} [onCommentLocationsUpdate] - Called when comment locations update
+ * @property {Function} [onDocumentLocked] - Called when document is locked
+ * @property {Function} [onFirstRender] - Called on first render
+ * @property {Function} [onCollaborationReady] - Called when collaboration is ready
+ * @property {Function} [onPaginationUpdate] - Called when pagination updates
+ * @property {Function} [onException] - Called when an exception occurs
+ * @property {Function} [handleImageUpload] - Handler for image uploads
+ * @property {Object} [telemetry] - Telemetry configuration
+ */
+
+/**
+ * Main editor class that manages document state, extensions, and user interactions
+ * @class
+ * @extends EventEmitter
+ */
 export class Editor extends EventEmitter {
+  /**
+   * Command service for handling editor commands
+   * @private
+   */
   #commandService;
 
+  /**
+   * Service for managing extensions
+   * @type {Object}
+   */
   extensionService;
 
+  /**
+   * Storage for extension data
+   * @type {Object}
+   */
   extensionStorage = {};
 
+  /**
+   * ProseMirror schema for the editor
+   * @type {Object}
+   */
   schema;
 
+  /**
+   * ProseMirror view instance
+   * @type {Object}
+   */
   view;
 
+  /**
+   * Whether the editor currently has focus
+   * @type {boolean}
+   */
   isFocused = false;
 
+  /**
+   * CSS styles for the editor
+   * @private
+   */
   #css;
 
   options = {
@@ -97,18 +187,23 @@ export class Editor extends EventEmitter {
     onException: () => null,
     // async (file) => url;
     handleImageUpload: null,
-    
+
     // telemetry
     telemetry: null,
   };
 
+  /**
+   * Create a new Editor instance
+   * @param {EditorOptions} options - Editor configuration options
+   * @returns {void}
+   */
   constructor(options) {
     super();
-    
+
     this.#initContainerElement(options);
     this.#checkHeadless(options);
     this.setOptions(options);
-  
+
     let modes = {
       docx: () => this.#init(this.options),
       text: () => this.#initRichText(this.options),
@@ -119,10 +214,16 @@ export class Editor extends EventEmitter {
     };
 
     let initMode = modes[this.options.mode] ?? modes.default;
-    
+
     initMode();
   }
 
+  /**
+   * Initialize the container element for the editor
+   * @private
+   * @param {EditorOptions} options - Editor options
+   * @returns {void}
+   */
   #initContainerElement(options) {
     if (!options.element && options.selector) {
       const { selector } = options;
@@ -140,6 +241,12 @@ export class Editor extends EventEmitter {
     options.element = options.isHeadless ? null : options.element || document.createElement('div');
   }
 
+  /**
+   * Initialize the editor with the given options
+   * @private
+   * @param {EditorOptions} options - Editor options
+   * @returns {void}
+   */
   #init(options) {
     this.#createExtensionService();
     this.#createCommandService();
@@ -150,7 +257,7 @@ export class Editor extends EventEmitter {
     if (!this.options.isHeadless) {
       this.#initFonts();
     }
-    
+
     this.on('beforeCreate', this.options.onBeforeCreate);
     this.emit('beforeCreate', { editor: this });
     this.on('contentError', this.options.onContentError);
@@ -194,6 +301,12 @@ export class Editor extends EventEmitter {
     }, 0);
   }
 
+  /**
+   * Initialize the editor in rich text mode
+   * @private
+   * @param {EditorOptions} options - Editor options
+   * @returns {void}
+   */
   #initRichText(options) {
     if (!options.extensions || !options.extensions.length) {
       this.options.extensions = getRichTextExtensions();
@@ -226,15 +339,34 @@ export class Editor extends EventEmitter {
     }, 0);
   }
 
+  /**
+  *
+  * @private
+  * @param {Object} param0
+  * @param {Object} param0.editor
+  * @param {Object} param0.event
+  * @returns {void}
+  */
   #onFocus({ editor, event }) {
     this.toolbar?.setActiveEditor(editor);
     this.options.onFocus({ editor, event });
   }
 
+  /**
+   * Set the toolbar for this editor
+   * @param {Object} toolbar - The toolbar instance
+   * @returns {void}
+   */
   setToolbar(toolbar) {
     this.toolbar = toolbar;
   }
 
+  /**
+   * Check if the editor should run in headless mode
+   * @private
+   * @param {EditorOptions} options - Editor options
+   * @returns {void}
+   */
   #checkHeadless(options) {
     if (!options.isHeadless) return;
 
@@ -250,20 +382,23 @@ export class Editor extends EventEmitter {
 
   /**
    * Focus the editor.
+   * @returns {void}
    */
   focus() {
     this.view?.focus();
   }
 
   /**
-   * Get the editor state.
+   * Get the editor state
+   * @returns {Object} ProseMirror state
    */
   get state() {
-    return this.view.state;
+    return this.view?.state;
   }
 
   /**
    * Get the editor storage.
+   * @returns {Object} Editor storage object
    */
   get storage() {
     return this.extensionStorage;
@@ -271,13 +406,15 @@ export class Editor extends EventEmitter {
 
   /**
    * Get object of registered commands.
+   * @returns {Object} Commands object
    */
   get commands() {
-    return this.#commandService.commands;
+    return this.#commandService?.commands;
   }
 
   /**
    * Check if the editor is editable.
+   * @returns {boolean}
    */
   get isEditable() {
     return this.options.editable && this.view && this.view.editable;
@@ -285,6 +422,7 @@ export class Editor extends EventEmitter {
 
   /**
    * Check if editor is destroyed.
+   * @returns {boolean}
    */
   get isDestroyed() {
     return this.view.isDestroyed; // !this.view?.docView
@@ -292,6 +430,7 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the editor element
+   * @returns {HTMLElement} The editor element
    */
   get element() {
     return this.options.element;
@@ -299,6 +438,7 @@ export class Editor extends EventEmitter {
 
   /**
    * Get possible users of the editor.
+   * @returns {Array.<Object>} List of users
    */
   get users() {
     return this.options.users;
@@ -306,6 +446,7 @@ export class Editor extends EventEmitter {
 
   /**
    * Create a chain of commands to call multiple commands at once.
+   * @returns {Object} Command chain
    */
   chain() {
     return this.#commandService.chain();
@@ -313,11 +454,16 @@ export class Editor extends EventEmitter {
 
   /**
    * Check if a command or a chain of commands can be executed. Without executing it.
+   * @returns {Object} Object with methods to check command availability
    */
   can() {
     return this.#commandService.can();
   }
 
+  /**
+   * Set the document mode
+   * @param {string} documentMode - The document mode ('editing', 'viewing', 'suggesting')
+   */
   setDocumentMode(documentMode) {
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
     if (!this.extensionService) return;
@@ -351,8 +497,10 @@ export class Editor extends EventEmitter {
   }
 
   /**
+  * Initialize data for collaborative editing
    * If we are replacing data and have a valid provider, listen for synced event
    * so that we can initialize the data
+   * @returns {void}
    */
   initializeCollaborationData() {
     if (!this.options.isNewFile || !this.options.collaborationProvider) return;
@@ -372,6 +520,11 @@ export class Editor extends EventEmitter {
    * Replace the current document with new data. Necessary for initializing a new collaboration file,
    * since we need to insert the data only after the provider has synced.
    */
+  /**
+   * Insert data for a new file
+   * @private
+   * @returns {void}
+   */
   #insertNewFileData() {
     if (!this.options.isNewFile) return;
     this.options.isNewFile = false;
@@ -385,6 +538,12 @@ export class Editor extends EventEmitter {
     }, 50);
   }
 
+  /**
+   * Register a plugin by name if it doesn't already exist
+   * @private
+   * @param {string} name - Plugin name
+   * @returns {string|void}
+   */
   #registerPluginByNameIfNotExists(name) {
     const plugin = this.extensionService?.plugins.find((p) => p.key.startsWith(name));
     const hasPlugin = this.state.plugins.find((p) => p.key.startsWith(name));
@@ -394,9 +553,10 @@ export class Editor extends EventEmitter {
 
   /**
    * Set editor options and update state.
-   * @param options List of options.
+   * @param {EditorOptions} options - Editor options
+   * @returns {void}
    */
-  setOptions(options) {
+  setOptions(options = {}) {
     this.options = {
       ...this.options,
       ...options,
@@ -412,7 +572,7 @@ export class Editor extends EventEmitter {
     if (this.options.isNewFile && this.options.isCommentsEnabled) {
       this.options.shouldLoadComments = true;
     }
-  
+
     if (!this.view || !this.state || this.ifsDestroyed) {
       return;
     }
@@ -425,11 +585,12 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Updates editable state.
-   * @param editable Editable value.
-   * @param emitUpdate Emit 'update' event or not.
+   * Set whether the editor is editable
+   * @param {boolean} [editable=true] - Whether the editor is editable
+   * @param {boolean} [emitUpdate=true] - Whether to emit an update event
+   * @returns {void}
    */
-  setEditable(editable, emitUpdate = true) {
+  setEditable(editable = true, emitUpdate = true) {
     this.setOptions({ editable });
 
     if (emitUpdate) {
@@ -441,6 +602,7 @@ export class Editor extends EventEmitter {
    * Register PM plugin.
    * @param plugin PM plugin.
    * @param handlePlugins Optional function for handling plugin merge.
+   * @returns {void}
    */
   registerPlugin(plugin, handlePlugins) {
     const plugins =
@@ -453,10 +615,11 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Unregister PM plugin.
-   * @param nameOrPluginKey Plugin name.
+   * Unregister a PM plugin
+   * @param {string|Object} nameOrPlugin - Plugin name or plugin instance
+   * @returns {void}
    */
-  unregisterPlugin(nameOrPluginKey) {
+  unregisterPlugin(nameOrPlugin) {
     if (this.isDestroyed) return;
 
     const name = typeof nameOrPluginKey === 'string' ? `${nameOrPluginKey}$` : nameOrPluginKey.key;
@@ -470,6 +633,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Creates extension service.
+   * @private
+   * @returns {void}
    */
   #createExtensionService() {
     const allowedExtensions = ['extension', 'node', 'mark'];
@@ -486,6 +651,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Creates a command service.
+   * @private
+   * @returns {void}
    */
   #createCommandService() {
     this.#commandService = CommandService.create({
@@ -495,6 +662,11 @@ export class Editor extends EventEmitter {
 
   /**
    * Creates a SuperConverter.
+   */
+  /**
+   * Create the document converter as this.converter.
+   * @private
+   * @returns {void}
    */
   #createConverter() {
     if (this.options.converter) {
@@ -514,6 +686,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize media.
+   * @private
+   * @returns {void}
    */
   #initMedia() {
     if (!this.options.ydoc) return (this.storage.image.media = this.options.mediaFiles);
@@ -536,6 +710,11 @@ export class Editor extends EventEmitter {
     }
   }
 
+  /**
+   * Initialize fonts
+   * @private
+   * @returns {void}
+   */
   #initFonts() {
     const styleString = this.converter.getDocumentFonts();
 
@@ -549,6 +728,15 @@ export class Editor extends EventEmitter {
   /**
    * Load the data from DOCX to be used in the schema.
    * Expects a DOCX file.
+   * @static
+   * @async
+   * @param {File|Blob|Buffer} fileSource - The DOCX file to load (File/Blob in browser, Buffer in Node.js)
+   * @param {boolean} [isNode=false] - Whether the method is being called in a Node.js environment
+   * @returns {Promise<Array>} - A promise that resolves to an array containing:
+   *   - [0] xmlFiles - Array of XML files extracted from the DOCX
+   *   - [1] mediaFiles - Object containing media files with URLs (browser only)
+   *   - [2] mediaFiles - Object containing media files with base64 data
+   *   - [3] fonts - Object containing font files from the DOCX
    */
   static async loadXmlData(fileSource, isNode = false) {
     if (!fileSource) return;
@@ -560,25 +748,42 @@ export class Editor extends EventEmitter {
     return [xmlFiles, mediaFiles, zipper.mediaFiles, zipper.fonts];
   }
 
-  static getDocumentVersion(content) {
-    const version = SuperConverter.getStoredSuperdocVersion(content);
+  /**
+   * Get the document version
+   * @static
+   * @param {Object} doc - Document object
+   * @returns {string} Document version
+   */
+  static getDocumentVersion(doc) {
+    const version = SuperConverter.getStoredSuperdocVersion(doc);
     return version;
   };
 
-  static updateDocumentVersion(content, version) {
-    const updatedContent = SuperConverter.updateDocumentVersion(content, version);
+  /**
+   * Update the document version
+   * @static
+   * @param {Object} doc - Document object
+   * @param {string} version - New version
+   * @returns {Object}
+   */
+  static updateDocumentVersion(doc, version) {
+    const updatedContent = SuperConverter.updateDocumentVersion(doc, version);
     return updatedContent;
   };
 
   /**
-   * Creates PM schema.
+   * Creates document PM schema.
+   * @private
+   * @returns {void
    */
   #createSchema() {
     this.schema = this.extensionService.schema;
   }
 
   /**
-   * Generate data from file
+   * Generate ProseMirror data from file
+   * @private
+   * @returns {Object} ProseMirror data
    */
   #generatePmData() {
     let doc;
@@ -608,14 +813,15 @@ export class Editor extends EventEmitter {
       console.error(err);
       this.emit('contentError', { editor: this, error: err });
     }
-  
+
     return doc;
   }
 
   /**
-   * Generate a prosemirror document from html content.
-   * @param {string} content HTML content.
-   * @returns {ProseMirrorNode} ProseMirror document.
+   * Create a document from HTML content
+   * @private
+   * @param {string} content - HTML content
+   * @returns {Object} Document node
    */
   #createDocFromHTML(content) {
     let parsedContent = content;
@@ -630,11 +836,13 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Creates PM View.
+   * Create the PM editor view
+   * @private
+   * @returns {void}
    */
   #createView() {
     let doc = this.#generatePmData();
-    
+
     // Only initialize the doc if we are not using Yjs/collaboration
     const state = { schema: this.schema };
     if (!this.options.ydoc) state.doc = doc;
@@ -644,7 +852,7 @@ export class Editor extends EventEmitter {
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: EditorState.create(state),
     });
-    
+
     const newState = this.state.reconfigure({
       plugins: [...this.extensionService.plugins],
     });
@@ -655,12 +863,13 @@ export class Editor extends EventEmitter {
 
     const dom = this.view.dom;
     dom.editor = this;
-    
+
     this.options.telemetry?.sendReport();
   }
 
   /**
    * Creates all node views.
+   * @returns {void}
    */
   createNodeViews() {
     this.view.setProps({
@@ -668,6 +877,10 @@ export class Editor extends EventEmitter {
     });
   }
 
+  /**
+   * Get the maximum content size
+   * @returns {Object} Size object with width and height
+   */
   getMaxContentSize() {
     if (!this.converter) return {};
     const { pageSize = {}, pageMargins = {} } = this.converter.pageStyles ?? {};
@@ -686,10 +899,13 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Initialize default styles for the editor container and ProseMirror.
-   * Get page size and margins from the converter.
-   * Set document default font and font size.
-   */
+    * Initialize default styles for the editor container and ProseMirror.
+    * Get page size and margins from the converter.
+    * Set document default font and font size.
+    *
+    * @param {HTMLElement} [element=this.element] - The DOM element to apply styles to
+    * @returns {void}
+    */
   initDefaultStyles(element = this.element) {
     if (this.options.isHeadless) return;
 
@@ -740,18 +956,25 @@ export class Editor extends EventEmitter {
     this.initMobileStyles(element);
   };
 
+  /**
+   * Initializes responsive styles for mobile devices.
+   * Sets up scaling based on viewport width and handles orientation changes.
+   *
+   * @param {HTMLElement|void} element - The DOM element to apply mobile styles to
+   * @returns {void}
+   */
   initMobileStyles(element) {
     if (!element) {
       return;
     }
 
     const initialWidth = element.offsetWidth;
-    
+
     const updateScale = () => {
       const minPageSideMargin = 10;
       const elementWidth = initialWidth;
       const availableWidth = document.documentElement.clientWidth - minPageSideMargin;
-      
+
       this.options.scale = Math.min(1, availableWidth / elementWidth);
 
       const superEditorElement = element.closest('.super-editor');
@@ -770,7 +993,7 @@ export class Editor extends EventEmitter {
         superEditorElement.style.maxWidth = '';
         superEditorContainer.style.minWidth = '';
 
-        element.style.transform = "none"; 
+        element.style.transform = "none";
       }
     };
 
@@ -792,6 +1015,16 @@ export class Editor extends EventEmitter {
     window.addEventListener('resize', () => handleResize);
   };
 
+  /**
+   * Handler called when collaboration is ready.
+   * Initializes pagination and comments if not a new file.
+   *
+   * @private
+   * @param {Object} params - Collaboration parameters
+   * @param {Editor} params.editor - The editor instance
+   * @param {Object} params.ydoc - The Yjs document
+   * @returns {void}
+   */
   #onCollaborationReady({ editor, ydoc }) {
     if (this.options.collaborationIsReady) return;
     console.debug('🔗 [super-editor] Collaboration ready');
@@ -807,6 +1040,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize comments plugin
+   * @private
+   * @returns {void}
    */
   #initComments() {
     if (!this.options.isCommentsEnabled) return;
@@ -825,6 +1060,9 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize pagination, if the pagination extension is enabled.
+   * @private
+   * @async
+   * @returns {Promise<void>}
    */
   async #initPagination() {
     if (this.options.isHeadless || !this.extensionService) return;
@@ -843,8 +1081,9 @@ export class Editor extends EventEmitter {
   };
 
   /**
-   * The callback which is used to intercept View transactions.
-   * @param {*} transaction State transaction.
+   * Dispatch a transaction to update the editor state
+   * @private
+   * @param {Object} transaction - ProseMirror transaction
    */
   #dispatchTransaction(transaction) {
     if (this.view.isDestroyed) return;
@@ -902,7 +1141,7 @@ export class Editor extends EventEmitter {
         transaction,
       });
     }
-    
+
     if (!transaction.docChanged) {
       return;
     }
@@ -915,6 +1154,7 @@ export class Editor extends EventEmitter {
 
   /**
    * Get attrs of the currently selected node or mark.
+   * @param {String} nameOrType
    * @example
    * editor.getAttributes('textStyle').color
    */
@@ -924,6 +1164,9 @@ export class Editor extends EventEmitter {
 
   /**
    * Returns if the currently selected node or mark is active.
+   * @param {String|Object} nameOrAttributes - The name of the node/mark or an attributes object
+   * @param {Object} [attributesOrUndefined] - Optional attributes to check when first parameter is a name
+   * @returns {Boolean} Whether the node or mark is active with the specified attributes
    * @example
    * editor.isActive('bold')
    * editor.isActive('textStyle', { color: 'purple' })
@@ -939,12 +1182,20 @@ export class Editor extends EventEmitter {
   /**
    * Get the document as JSON.
    */
+  /**
+   * Get the editor content as JSON
+   * @returns {Object} Editor content as JSON
+   */
   getJSON() {
     return this.state.doc.toJSON();
   }
 
   /**
    * Get HTML string of the document
+   */
+  /**
+   * Get the editor content as HTML
+   * @returns {string} Editor content as HTML
    */
   getHTML() {
     const div = document.createElement('div');
@@ -957,14 +1208,18 @@ export class Editor extends EventEmitter {
   /**
    * Get page styles
    */
+  /**
+   * Get page styles
+   * @returns {Object} Page styles
+   */
   getPageStyles() {
     return this.converter?.pageStyles || {};
   }
 
   /**
    * Update page styles
-   * 
-   * @param {Object} param0 
+   *
+   * @param {Object} param0
    * @param {Object} param0.pageMargins The new page margins
    * @returns {void}
    */
@@ -988,9 +1243,9 @@ export class Editor extends EventEmitter {
   /**
    * Perform any post conversion pre prosemirror import processing.
    * Comments are processed here.
-   * 
-   * @param {import('prosemirror-model').Node} doc The prosemirror document
-   * @returns {import('prosemirror-model').Node} The updated prosemirror document
+   * @private
+   * @param {Object} doc The prosemirror document
+   * @returns {Object} The updated prosemirror document
    */
   #prepareDocumentForImport(doc) {
 
@@ -1011,8 +1266,8 @@ export class Editor extends EventEmitter {
   /**
    * Prepare the document for export. Any necessary pre-export processing to the state
    * can happen here.
-   * 
-   * @returns {Record<string, any>} The updated document JSON
+   * @private
+   * @returns {Object} The updated document in JSON
    */
   #prepareDocumentForExport(comments = []) {
     const newState = EditorState.create({
@@ -1030,6 +1285,12 @@ export class Editor extends EventEmitter {
 
   /**
    * Export the editor document to DOCX.
+   * @async
+   * @param {Object} options - The export options
+   * @param {boolean} [options.isFinalDoc=false] - Whether this is the final document version
+   * @param {string} [options.commentsType] - The type of comments to include
+   * @param {Array} [options.comments=[]] - Array of comments to include in the document
+   * @returns {Promise<Blob|ArrayBuffer>} The exported DOCX file
    */
   async exportDocx({ isFinalDoc = false, commentsType, comments = [] } = {}) {
 
@@ -1098,6 +1359,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Destroy collaboration provider and ydoc
+   * @private
+   * @returns {void}
    */
   #endCollaboration() {
     if (!this.options.ydoc) return;
@@ -1109,7 +1372,8 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Destroy the editor.
+   * Destroy the editor and clean up resources
+   * @returns {void}
    */
   destroy() {
     this.emit('destroy');
@@ -1118,7 +1382,13 @@ export class Editor extends EventEmitter {
     this.removeAllListeners();
   }
 
-  static checkIfMigrationsNeeded(version) {
+  /**
+   * Check if migrations are needed for the data
+   * @static
+   * @param {Object} data - Document data
+   * @returns {boolean} Whether migrations are needed
+   */
+  static checkIfMigrationsNeeded(data) {
     if (!version) version = 'initial';
     const migrations = getNecessaryMigrations(version) || [];
     console.debug('[checkVersionMigrations] Migrations needed:', version, migrations.length);
@@ -1126,9 +1396,8 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Check for any necessary document migrations in collaboration mode
-   * 
-   * @returns {Y.Doc | undefined} Updated Y.Doc if any, otherwise undefined
+   * Process collaboration migrations
+   * @returns {Object | void} Migration results
    */
   processCollaborationMigrations() {
     console.debug('[checkVersionMigrations] Current editor version', __APP_VERSION__);
@@ -1160,7 +1429,13 @@ export class Editor extends EventEmitter {
     return pluginState.doc;
   };
 
-  async replaceFile(newFile) {
+  /**
+   * Replace the current file
+   * @async
+   * @param {Object} file - New file data
+   * @returns {Promise<void>}
+   */
+  async replaceFile(file) {
     this.setOptions({ annotations: true })
     const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(newFile);
     this.setOptions({
@@ -1190,11 +1465,22 @@ export class Editor extends EventEmitter {
     }
   }
 
+  /**
+   * Get all nodes of a specific type
+   * @param {string} type - Node type
+   * @returns {Array} Array of nodes
+   */
   getNodesOfType(type) {
     const { findChildren } = helpers;
     return findChildren(this.state.doc, (node) => node.type.name === type);
   }
 
+  /**
+   * Replace a node with HTML content
+   * @param {Object} targetNode - The node to replace
+   * @param {string} html - HTML content to replace with
+   * @returns {void}
+   */
   replaceNodeWithHTML(targetNode, html) {
     const { tr } = this.state;
     const { dispatch } = this.view;
