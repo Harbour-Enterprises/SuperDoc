@@ -36,7 +36,7 @@
 } 
 
 
-
+/* AI text appear animation */
 @keyframes aiTextAppear {
   from {
     opacity: 0;
@@ -56,4 +56,30 @@
   will-change: opacity, transform;
   /* Ensure each mark is treated as a separate animation context */
   contain: content;
+}
+
+.sd-ai-loader {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.sd-ai-loader > img {
+  width: fit-content;
+  height: 40px;
+}
+
+@keyframes ai-pulse {
+  0% {
+    background-color: rgba(99, 102, 241, 0.1);
+  }
+  50% {
+    background-color: rgba(99, 102, 241, 0.375);
+  }
+  100% {
+    background-color: rgba(99, 102, 241, 0.1);
+  }
+}
+
+.sd-ai-highlight-pulse {
+  animation: ai-pulse 1.5s ease-in-out infinite;
 }
