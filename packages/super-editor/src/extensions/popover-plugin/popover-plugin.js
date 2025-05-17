@@ -50,7 +50,7 @@ class Popover {
     this.editor = editor;
     this.view = view;
     this.popover = document.createElement('div');
-    this.popover.className = 'popover';
+    this.popover.className = 'sd-editor-popover';
     document.body.appendChild(this.popover);
 
     this.tippyInstance = tippy(this.popover, {
@@ -66,7 +66,7 @@ class Popover {
       onHide: () => {
         this.unbindKeyDownEvents();
       },
-      theme: 'popover',
+      theme: 'sd-editor-popover',
     });
   }
 

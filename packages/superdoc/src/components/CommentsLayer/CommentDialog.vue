@@ -116,7 +116,7 @@ const setFocus = () => {
 
 const handleClickOutside = (e) => {
   if (e.target.classList.contains('n-dropdown-option-body__label')) return;
-  if (e.target.classList.contains('comment-highlight')) return;
+  if (e.target.classList.contains('sd-editor-comment-highlight')) return;
   if (activeComment.value === props.comment.commentId) {
     floatingCommentsOffset.value = 0;
     emit('dialog-exit');

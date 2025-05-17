@@ -19,7 +19,7 @@ export const Placeholder = Extension.create({
       const { $from } = state.selection;
       const decoration = Decoration.node($from.before(), $from.after(), {
         'data-placeholder': this.options.placeholder,
-        class: 'super-editor-placeholder',
+        class: 'sd-editor-placeholder',
       });
       return DecorationSet.create(state.doc, [decoration]);
     };

@@ -10,7 +10,7 @@ export const AiMark = Mark.create({
 
   addOptions() {
     return {
-      htmlAttributes: { class: 'super-editor-ai' },
+      htmlAttributes: { class: 'sd-editor-ai' },
     };
   },
 

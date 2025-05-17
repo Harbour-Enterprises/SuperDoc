@@ -1,10 +1,4 @@
-.disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-
-.input-active {
+.sd-input-active {
   border: 1px solid #1355ff !important;
 }
 

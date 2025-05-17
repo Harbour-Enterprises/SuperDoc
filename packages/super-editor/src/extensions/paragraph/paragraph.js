@@ -73,7 +73,7 @@ export const Paragraph = Node.create({
       class: {
         renderDOM: (attributes) => {
           if (attributes.dropcap) {
-            return { class: `super-doc-dropcap`};
+            return { class: `sd-editor-dropcap`};
           }
           return null;
         }

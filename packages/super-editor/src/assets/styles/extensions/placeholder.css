@@ -1,4 +1,4 @@
-.super-editor-placeholder::before {
+.sd-editor-placeholder::before {
   content: attr(data-placeholder);
   color: #aaa;
   pointer-events: none;

@@ -12,7 +12,7 @@ export const ShapeTextbox = Node.create({
   addOptions() {
     return {
       htmlAttributes: {
-        class: 'pm-shape-textbox',
+        class: 'sd-editor-shape-textbox',
       },
     };
   },

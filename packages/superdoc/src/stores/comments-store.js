@@ -255,7 +255,7 @@ export const useCommentsStore = defineStore('comments', () => {
   };
 
   const checkOverlaps = (currentElement, dialog, doc) => {
-    const currentDialogs = document.querySelectorAll('.comment-box');
+    const currentDialogs = document.querySelectorAll('.sd-comment-box');
     const currentBounds = currentElement.getBoundingClientRect();
 
     const overlaps = [];

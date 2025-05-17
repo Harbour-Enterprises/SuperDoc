@@ -35,8 +35,6 @@
   filter: brightness(1.3);
 } 
 
-
-
 @keyframes aiTextAppear {
   from {
     opacity: 0;

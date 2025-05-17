@@ -202,7 +202,6 @@ const destroy = () => {
 };
 
 onMounted(async () => {
-  await import('pdfjs-dist/web/pdf_viewer.css');
   await loadPDF(pdfData);
 });
 
@@ -220,6 +219,13 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style lang="postcss">
+/** Global styles */
+.superdoc-pdf-viewer {
+  @nested-import 'pdfjs-dist/web/pdf_viewer.css';
+}
+</style>
 
 <style lang="postcss" scoped>
 .superdoc-pdf-viewer-container {

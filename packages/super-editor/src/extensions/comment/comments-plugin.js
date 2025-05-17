@@ -246,7 +246,7 @@ export const CommentsPlugin = Extension.create({
                 const deco = Decoration.inline(pos, pos + node.nodeSize, {
                   style: `background-color: ${color};`,
                   'data-thread-id': threadId,
-                  class: 'comment-highlight',
+                  class: 'sd-editor-comment-highlight',
                 })
 
                 // Ignore inner marks if we need to show an outer active one

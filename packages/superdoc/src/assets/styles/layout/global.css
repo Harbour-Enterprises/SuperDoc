@@ -1,27 +1,3 @@
-/* General */
-.box-sizing {
-  box-sizing: border-box;
-}
-
-.cursor-pointer {
-  cursor: pointer;
-}
-
-.flex {
-  display: flex;
-}
-
-.flex-column {
-  flex-direction: column;
-}
-
-.flex-center {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-/* General - end */
-
 .superdoc *,
 .superdoc ::before,
 .superdoc ::after,
@@ -29,6 +5,14 @@
 .superdoc-toolbar ::before,
 .superdoc-toolbar ::after {
   box-sizing: border-box;
+}
+
+.superdoc .disabled,
+.super-editor .disabled,
+.superdoc-toolbar .disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  pointer-events: none;
 }
 
 .super-editor p {
@@ -52,28 +36,17 @@
   background-color: #dbdbdb;
 }
 
-.primary {
+.sd-button.primary {
   background-color: #1355ff;
   border: none;
   color: white;
 }
 
-.primary:hover {
+.sd-button.primary:hover {
   background-color: #0d3fcc;
 }
 
-.drawer {
-  display: flex;
-  flex-direction: column;
-  max-width: 320px;
-  min-width: 320px;
-  width: 320px;
-  box-sizing: border-box;
-  flex-grow: 1;
-  padding: 10px;
-}
-
-.comment-box {
+.sd-comment-box {
   width: 300px;
 }
 
@@ -96,7 +69,7 @@
   margin: 0;
 }
 
-.super-editor-placeholder::before {
+.sd-editor-placeholder::before {
   content: attr(data-placeholder);
   color: #aaa;
   pointer-events: none;
