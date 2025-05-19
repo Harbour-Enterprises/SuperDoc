@@ -17,6 +17,7 @@ import { initPaginationData, PaginationPluginKey } from '@extensions/pagination/
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
 import { getRichTextExtensions } from '../extensions/index.js';
+import { AnnotatorServices } from '@helpers/annotator.js';
 import {
   prepareCommentsForExport,
   prepareCommentsForImport,
@@ -1205,6 +1206,18 @@ export class Editor extends EventEmitter {
     const htmlNode = this.#createDocFromHTML(html);
     tr.replaceWith(start, end, htmlNode);
     dispatch(tr);
+  }
+
+  /**
+   * A command to prepare the editor to receive annotations. This will 
+   * pre-process the document as needed prior to running in the annotator.
+   * 
+   * Currently this is only used for table generation but additional pre-processing can be done here.
+   * @param {Array[Object]} annotationValues 
+   * @returns {void}
+   */
+  prepareForAnnotations(annotationValues = []) {
+    AnnotatorServices.processTables({ editor: this, annotationValues });
   }
 
 }

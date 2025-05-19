@@ -272,8 +272,14 @@ export const FieldAnnotation = Node.create({
             style: `font-size: ${fontSize}`,
           };
         },
+
       },
       /// Formatting attrs - end.
+
+      generatorIndex: {
+        rendered: false,
+        default: null,
+      }
     };
   },
 

@@ -193,6 +193,11 @@ export const FieldAnnotation = Node.create({
       extras: {
         default: {},
         rendered: false,
+      },
+
+      generatorIndex: {
+        default: null,
+        rendered: false,
       }
     };
   },
