@@ -105,8 +105,10 @@ class SuperConverter {
     // Headers and footers
     this.headers = {};
     this.headerIds = { default: null, even: null, odd: null, first: null };
+    this.headerEditors = [];
     this.footers = {};
     this.footerIds = { default: null, even: null, odd: null, first: null };
+    this.footerEditors = [];
 
     // Linked Styles
     this.linkedStyles = [];

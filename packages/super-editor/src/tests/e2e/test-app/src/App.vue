@@ -20,7 +20,7 @@ window.initTestApp = async (fileToLoad, options = {}) => {
   editorDiv.value.innerHTML = '';
   const fileObject = await getFileObject(fileToLoad, 'testdoc.docx', DOCX);
   const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(fileObject, true);
-
+  
   editor.value = new Editor({
     element: document.getElementById('editor'),
     content: docx,
