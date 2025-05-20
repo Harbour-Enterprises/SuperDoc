@@ -49,7 +49,6 @@ describe('[blank-doc.docx] import, add node, export', () => {
     const numPr = pPr.elements.find((el) => el.name === 'w:numPr');
     // expect(numPr).toBeDefined();
     // expect(numPr.elements.length).toBe(2);
-    console.debug('exported', pPr);
   });
 
   it('can add text to the first list item', () => {

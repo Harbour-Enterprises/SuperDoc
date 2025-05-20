@@ -104,11 +104,21 @@ function handleListNodes(params, node) {
   if (!currentListByNumId.levels[iLvl]) currentListByNumId.levels[iLvl] = Number(start) || 1;
   else currentListByNumId.levels[iLvl]++;
 
+  // Reset deeper levels when this level is updated
+  Object.keys(currentListByNumId.levels).forEach((key) => {
+    const level = Number(key);
+    if (level > iLvl) {
+      delete currentListByNumId.levels[level];
+    }
+  });
+
   const path = [];
   if (iLvl > 0) {    
     for (let i = iLvl; i >= 0; i--) {
       const { start: lvlStart } = getNodeNumberingDefinition(node, i, docx);
-      if (!currentListByNumId.levels[i]) currentListByNumId.levels[i] = Number(lvlStart);
+      if (!currentListByNumId.levels[i]) {
+        currentListByNumId.levels[i] = Number(lvlStart);
+      }
       path.unshift(currentListByNumId.levels[i]);
     };
   }
