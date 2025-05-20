@@ -3,6 +3,7 @@ import { canSplit } from 'prosemirror-transform';
 import { TextSelection } from 'prosemirror-state';
 import { Attribute } from '../Attribute.js';
 import { getNodeType } from '../helpers/getNodeType.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 /**
  * Splits one list item into two separate list items.
@@ -12,7 +13,7 @@ import { getNodeType } from '../helpers/getNodeType.js';
  * `splitListItem` command to better manage attributes and marks.
  * https://github.com/ProseMirror/prosemirror-schema-list/blob/master/src/schema-list.ts#L114
  */
-export const splitListItem = (typeOrName) => (props) => {
+export const splitListItem = (typeOrName, currentNode) => (props) => {
   const { tr, state, dispatch, editor } = props;
   const type = getNodeType(typeOrName, state.schema);
   const { $from, $to, node } = state.selection;
@@ -77,42 +78,25 @@ export const splitListItem = (typeOrName) => (props) => {
     return true;
   }
 
-  const nextType = $to.pos === $from.end() ? grandParent.contentMatchAt(0).defaultType : null;
-
-  const newTypeAttributes = Attribute.getSplittedAttributes(extensionAttrs, grandParent.type.name, grandParent.attrs);
-  const newNextTypeAttributes = Attribute.getSplittedAttributes(
-    extensionAttrs,
-    $from.node().type.name,
-    $from.node().attrs,
-  );
-
   tr.delete($from.pos, $to.pos);
 
-  const types = nextType
-    ? [
-        { type, attrs: newTypeAttributes },
-        { type: nextType, attrs: newNextTypeAttributes },
-      ]
-    : [{ type, attrs: newTypeAttributes }];
-
-  if (!canSplit(tr.doc, $from.pos, 2)) {
-    return false;
-  }
+  if (!canSplit(tr.doc, $from.pos, 3)) return false;
 
   if (dispatch) {
     const { selection, storedMarks } = state;
     const { splittableMarks } = editor.extensionService;
     const marks = storedMarks || (selection.$to.parentOffset && selection.$from.marks());
 
-    tr.split($from.pos, 2, types).scrollIntoView();
+    tr.split($from.pos, 3).scrollIntoView()
 
     if (!marks || !dispatch) return true;
 
     const filteredMarks = marks.filter((m) => splittableMarks.includes(m.type.name));
-    tr.ensureMarks(filteredMarks);
+    const updatedMarks = ListHelpers.addInlineTextMarks(currentNode.node, filteredMarks);
+    tr.ensureMarks(updatedMarks);
 
     // Add meta so we know which transactions are actually updating list items
-    tr.setMeta('splitListItem', filteredMarks)
+    tr.setMeta('splitListItem', updatedMarks)
   }
 
   return true;

@@ -190,3 +190,32 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     expect(pNode.content[0].text).toBe('c');
   });
 });
+
+describe('[brken-list.docx] Test list breaking indentation formatting', () => {
+
+  const filename = 'broken-list.docx';
+  let docx, media, mediaFiles, fonts, editor, dispatch, content;
+  let exported, body;
+  
+  beforeAll(async () => {
+    ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename));
+    ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts }));
+    content = editor.getJSON();
+    exported = await getExportedResult(filename);
+    body = exported.elements?.find((el) => el.name === 'w:body');
+  });
+
+  it('can import the first list item', () => {
+    const list = content.content[0];
+    const listItem = list.content[0];
+
+    expect(list.type).toBe('orderedList');
+    const { attrs } = listItem;
+    expect(attrs.numId).toBe("1");
+    expect(attrs.level).toBe(0);
+    expect(attrs.numPrType).toBe('inline');
+    expect(attrs.listLevel).toStrictEqual([1]);
+    expect(attrs.indent.left).toBeUndefined();
+    expect(attrs.indent.leftChars).toBe("0");
+  });
+});

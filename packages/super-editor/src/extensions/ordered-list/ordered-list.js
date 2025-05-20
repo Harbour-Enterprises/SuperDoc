@@ -5,6 +5,8 @@ import { orderedListSync as orderedListSyncPlugin, randomId } from './helpers/or
 import { orderedListMarker as orderedListMarkerPlugin } from './helpers/orderedListMarkerPlugin.js';
 import { wrappingInputRule } from '../../core/inputRules/wrappingInputRule.js';
 
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+
 /**
  * Matches an ordered list to a 1. on input (or any number followed by a dot).
  */
@@ -56,7 +58,7 @@ export const OrderedList = Node.create({
       },
 
       listId: {
-        default: null,
+        keepOnSplit: true,
         render: false,
       },
 
@@ -99,8 +101,8 @@ export const OrderedList = Node.create({
     return {
       toggleOrderedList:
         () =>
-        ({ commands }) => {
-          return commands.toggleList(this.name, this.options.itemTypeName, this.options.keepMarks);
+        ({ tr, editor, chain }) => {
+          return ListHelpers.createNewList({ listType: this, editor, chain });
         },
   
       getCurrentList: () => ({ state }) => {
@@ -278,4 +280,3 @@ export const OrderedList = Node.create({
     ];
   },
 });
-
