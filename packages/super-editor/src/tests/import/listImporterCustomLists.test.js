@@ -219,3 +219,23 @@ describe('[brken-list.docx] Test list breaking indentation formatting', () => {
     expect(attrs.indent.leftChars).toBe("0");
   });
 });
+
+describe('[restart-numbering-sub-list.docx] Test sublist restart nubering', () => {
+
+  const filename = 'restart-numbering-sub-list.docx';
+  let docx, media, mediaFiles, fonts, editor, dispatch, content;
+  let exported, body;
+  
+  beforeAll(async () => {
+    ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename));
+    ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts }));
+    content = editor.getJSON();
+    exported = await getExportedResult(filename);
+    body = exported.elements?.find((el) => el.name === 'w:body');
+  });
+
+  it('resets the numbering for the indented list item', () => {
+    const sublist1 = content.content[4];
+    expect(sublist1.content[0].attrs.listLevel).toStrictEqual([2, 1]);
+  });
+});
