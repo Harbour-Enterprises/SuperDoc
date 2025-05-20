@@ -19,8 +19,36 @@
   white-space: pre-wrap;
 }
 
-.ProseMirror li {
-  position: relative;
+.ProseMirror ol,
+.ProseMirror ul {
+  margin-block-start: 0;
+  margin-block-end: 0;
+  margin-inline-start: 0;
+  margin-inline-end: 0;
+}
+
+.ProseMirror ol,
+.ProseMirror ul {
+  padding-inline-start: 0;
+  padding-left: 0 ;
+}
+
+.ProseMirror ol,
+.ProseMirror ul {
+  /* list-style: none !important; */
+}
+.ProseMirror li::marker {
+  content: none;
+}
+.ProseMirror li::marker {
+  padding: 0;
+  margin: 0;
+}
+
+.ProseMirror li > p {
+  margin: 0;
+  padding: 0;
+  display: inline-block;
 }
 
 /**
@@ -34,33 +62,7 @@
 .ProseMirror li:has(> ul:first-child, > ol:first-child):not(:has(> p))::marker {
   content: '';
 }
-
-.ProseMirror li::marker {
-  font-size: var(--marker-font-size);
-  font-family: var(--marker-font-family);
-}
-.ProseMirror li[data-marker-type] {
-  list-style: none;
-  display: grid;
-  grid-template-columns: max-content 1fr;
-  column-gap: 0.5em;
-  align-items: start;
-}
-.ProseMirror li[data-marker-type]::marker {
-  content: "";
-}
-.ProseMirror li[data-marker-type]::before {
-  content: attr(data-marker-type);
-  white-space: pre;
-  font-size: var(--marker-font-size);
-  font-family: var(--marker-font-family);
-  grid-column: 1;
-}
-.ProseMirror li[data-marker-type] > * {
-  grid-column: 2;
-  margin: 0;
-}
-
+ 
 .ProseMirror-hideselection *::selection {
   background: transparent;
 }

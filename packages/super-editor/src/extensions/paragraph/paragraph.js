@@ -56,9 +56,13 @@ export const Paragraph = Node.create({
         },
       },
       indent: {
+        default: null,
         renderDOM: ({ indent }) => {
           if (!indent) return {};
           const { left, right, firstLine, hanging } = indent;
+          if (indent && Object.values(indent).every((v) => v === 0)) {
+            return {};
+          }
 
           let style = '';
           if (left) style += `margin-left: ${left}px;`;

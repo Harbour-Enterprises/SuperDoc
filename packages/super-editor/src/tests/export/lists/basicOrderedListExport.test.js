@@ -109,7 +109,7 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     expect(iLvl).toBe(expectedLevel);
 
     const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
-    expect(indentTag).toBeDefined();
+    expect(indentTag).toBeUndefined();
     const indentLeft = indentTag?.attributes['w:left'];
     const indentHanging = indentTag?.attributes['w:hanging'];
     expect(indentLeft).toBeUndefined();

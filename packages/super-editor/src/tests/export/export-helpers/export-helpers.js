@@ -14,7 +14,9 @@ import { getCommentDefinition } from '@converter/v2/exporter/commentsExporter.js
  */
 export const getTextFromNode = (node) => {
   const listTextNode = node.elements.find((el) => el.name === 'w:r');
-  return listTextNode?.elements[0].elements[0].text;
+  const textNode = listTextNode?.elements?.find((el) => el.name === 'w:t');
+  const text = textNode?.elements?.find((el) => el.type === 'text')?.text;
+  return text;
 };
 
 /**
