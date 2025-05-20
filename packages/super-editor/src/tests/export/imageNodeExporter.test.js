@@ -50,7 +50,6 @@ describe('ImageNodeExporter anchor image', async () => {
     
     expect(anchorNode.attributes).toHaveProperty('simplePos', '0');
     expect(anchorNode.elements[0].name).toBe('wp:simplePos');
-    console.log(anchorNode.elements[5]);
     expect(anchorNode.elements[1].attributes.relativeFrom).toBe('margin');
     expect(anchorNode.elements[1].elements[0].name).toBe('wp:align');
     expect(anchorNode.elements[1].elements[0].elements[0].text).toBe('left');

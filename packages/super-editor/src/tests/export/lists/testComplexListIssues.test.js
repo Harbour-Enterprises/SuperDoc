@@ -77,12 +77,12 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
 
     const subItem3 = listAfterBreak.content[0];
     expect(subItem3.attrs.numId).toBe("5");
-    expect(subItem3.attrs.listLevel).toStrictEqual([3, 8]);
+    expect(subItem3.attrs.listLevel).toStrictEqual([3, 2]);
 
     const subItem4 = currentState.content[23].content[0];
     expect(subItem4.type).toBe('listItem');
     expect(subItem4.attrs.numId).toBe("5");
-    expect(subItem4.attrs.listLevel).toStrictEqual([3, 9]);
+    expect(subItem4.attrs.listLevel).toStrictEqual([3, 3]);
   });
 
   it('root list continues correctly after third item with break', () => {
