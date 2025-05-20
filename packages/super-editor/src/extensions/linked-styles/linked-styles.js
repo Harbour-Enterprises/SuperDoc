@@ -10,6 +10,8 @@ export const LinkedStylesPluginKey = new PluginKey('linkedStyles');
 export const LinkedStyles = Extension.create({
   name: 'linkedStyles',
 
+  priority: 200, // We need this plugin to run before the list plugins
+
   addPmPlugins() {
     return [createLinkedStylesPlugin(this.editor)];
   },

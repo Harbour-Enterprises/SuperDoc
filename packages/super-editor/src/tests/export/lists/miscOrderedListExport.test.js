@@ -43,7 +43,7 @@ describe('[orderedlist_interrupted1.docx] interrupted ordered list tests', async
     expect(firstListPprList.length).toBe(1);
 
     const firstListPpr = firstListPprList[0];
-    expect(firstListPpr.elements.length).toBe(3);
+    expect(firstListPpr.elements.length).toBe(2);
 
     // Ensure that we only have 1 pPr tag
     const firstListNumPrList = firstListPpr.elements.filter((n) => n.name === 'w:numPr');
@@ -69,7 +69,7 @@ describe('[custom_list1.docx] interrupted ordered list tests', async () => {
     const firstList = body.elements[0];
     const firstListPprList = firstList.elements.filter((n) => n.name = 'w:pPr' && n.elements.length);
     const firstListPpr = firstListPprList[0];
-    expect(firstListPpr.elements.length).toBe(5);
+    expect(firstListPpr.elements.length).toBe(4);
 
     const numPr = firstListPpr.elements.find((n) => n.name === 'w:numPr');
     const numIdTag = numPr.elements.find((n) => n.name === 'w:numId');

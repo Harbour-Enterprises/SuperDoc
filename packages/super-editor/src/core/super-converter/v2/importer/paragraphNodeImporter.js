@@ -20,18 +20,12 @@ export const handleParagraphNode = (params) => {
   }
 
   const node = carbonCopy(nodes[0]);
-
   let schemaNode;
 
   // We need to pre-process paragraph nodes to combine various possible elements we will find ie: lists, links.
   // Also older MS word versions store auto page numbers here
   let processedElements = preProcessNodesForFldChar(node.elements);
   node.elements = processedElements;
-
-  // Check if this paragraph node is a list
-  if (testForList(node, docx)) {
-    return { nodes: [], consumed: 0 };
-  }
 
   // If it is a standard paragraph node, process normally
   const handleStandardNode = nodeListHandler.handlerEntities.find(
@@ -115,6 +109,15 @@ export const handleParagraphNode = (params) => {
     const defaultStyleId = node.attributes?.['w:rsidRDefault'];
     schemaNode.attrs['spacing'] = getParagraphSpacing(node, docx, styleId, schemaNode.attrs.marksAttrs);
     schemaNode.attrs['rsidRDefault'] = defaultStyleId;
+  }
+
+  if (docx) {
+    const { justify } = getDefaultParagraphStyle(docx, styleId);
+    if (justify) {
+      schemaNode.attrs.justify = {
+        val: justify['w:val'],
+      };
+    }
   }
 
   if (framePr && framePr.attributes['w:dropCap']) {
