@@ -65,11 +65,8 @@ const init = async () => {
       { name: 'Nick Bernal', email: 'nick@harbourshare.com', access: 'internal' },
       { name: 'Eric Doversberger', email: 'eric@harbourshare.com', access: 'external' },
     ],
-    document: {
-      data: currentFile.value,
-      id: testId,
-      isNewFile: true,
-    },
+    document: currentFile.value,
+
     // documents: [
     //   {
     //     data: currentFile.value,
@@ -191,7 +188,6 @@ onMounted(async () => {
             <h2>🦋 SuperDoc Dev</h2>
           </div>
           <div class="dev-app__header-upload">
-            Upload docx, pdf or (soon) html
             <BasicUpload @file-change="handleNewFile" />
           </div>
         </div>
@@ -199,7 +195,6 @@ onMounted(async () => {
           <button class="dev-app__header-export-btn" @click="exportDocx()">Export Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('clean')">Export clean Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('external')">Export external Docx</button>
-          <button class="dev-app__header-export-btn" @click="toggleCommentsPanel">Toggle comments panel</button>
         </div>
       </div>
 
@@ -207,7 +202,7 @@ onMounted(async () => {
 
       <div class="dev-app__main">
         <div class="dev-app__view">
-          <div class="comments-panel" v-show="isCommentsListOpen">
+          <div class="comments-panel" v-show="false">
             <div id="comments-panel" ref="commentsPanel"></div>
           </div>
 
@@ -223,6 +218,23 @@ onMounted(async () => {
 </template>
 
 <style>
+button {
+  padding: 8px 12px;
+  outline: none;
+  border: none;
+  border-radius: 8px;
+  margin: 0 3px;
+  background-color: rgb(148, 163, 222);
+  cursor: pointer;
+  transition: all 250ms ease;
+}
+button:hover {
+  background-color: #015fcc;
+}
+button:active {
+  background-color: #d0d0d0;
+}
+
 .sd-toolbar {
   width: 100%;
 }
