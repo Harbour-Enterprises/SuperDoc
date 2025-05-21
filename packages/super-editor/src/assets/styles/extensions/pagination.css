@@ -45,7 +45,7 @@
 Workaround to display pagination in footer 
 on the right if it is inside shape textbox.
 */
-.pagination-section-footer .pm-shape-container:has(
+.pagination-section-footer .sd-editor-shape-container:has(
   [data-id="auto-page-number"],
   [data-id="auto-total-pages"]
 ) {

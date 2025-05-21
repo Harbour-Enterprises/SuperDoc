@@ -1,7 +1,7 @@
-.comment-highlight {
+.sd-editor-comment-highlight {
   transition: background-color 250ms ease;
 }
 
-.comment-highlight:hover {
+.sd-editor-comment-highlight:hover {
   background-color: #1354FF55;
 }

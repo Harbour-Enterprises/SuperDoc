@@ -3,7 +3,7 @@ import { isIOS } from '../utilities/isIOS.js';
 import { isMacOS } from '../utilities/isMacOS.js';
 
 export const handleEnter = (editor) => {
-  editor.commands.first(({ commands }) => [
+  return editor.commands.first(({ commands }) => [
     () => commands.newlineInCode(),
     () => commands.createParagraphNear(),
     () => commands.liftEmptyBlock(),
@@ -12,7 +12,7 @@ export const handleEnter = (editor) => {
 };
 
 export const handleBackspace = (editor) => {
-  editor.commands.first(({ commands, tr }) => [
+  return editor.commands.first(({ commands, tr }) => [
     () => commands.undoInputRule(),
     () => {
       tr.setMeta('inputType', 'deleteContentBackward');
@@ -25,7 +25,7 @@ export const handleBackspace = (editor) => {
 };
 
 export const handleDelete = (editor) => {
-  editor.commands.first(({ commands }) => [
+  return editor.commands.first(({ commands }) => [
     () => commands.deleteSelection(),
     () => commands.joinForward(),
     () => commands.selectNodeForward(),

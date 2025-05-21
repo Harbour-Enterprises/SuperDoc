@@ -195,7 +195,9 @@ const getHeaderFooterId = (currentPageNumber, sectionType, editor, node = null) 
   if (sectionIds?.titlePg && first && currentPageNumber === 1) return first;
 
   let sectionId = sectionIds.default;
-  if (currentPageNumber === 1) sectionId = first || defaultHeader;
+  // this causes issue and displays incorrect header/footer for first page
+  // if (currentPageNumber === 1) sectionId = first || defaultHeader;
+  if (currentPageNumber === 1) sectionId = defaultHeader;
 
   if (alternateHeaders) {
     if (currentPageNumber === 1) sectionId = first;

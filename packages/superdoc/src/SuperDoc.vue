@@ -657,6 +657,7 @@ watch(getFloatingComments, () => {
         :editor="proxy.$superdoc.activeEditor"
         :api-key="proxy.$superdoc.toolbar?.config?.aiApiKey"
         :endpoint="proxy.$superdoc.config?.modules?.ai?.endpoint"
+        @ai-highlight="handleAiHighlight"
       />
     </div>
   </div>

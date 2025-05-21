@@ -1,6 +1,7 @@
 {
-    "title": "CDN",
-    "tags": ["editing", "viewing"],
-    "slug": "cdn",
-    "demo_type": "interactive"
+    "tags": [
+        "editing",
+        "viewing"
+    ],
+    "title": "CDN"
 }

@@ -381,7 +381,7 @@ class SuperConverter {
   ) {
     const commentsWithParaIds = comments.map((c) => prepareCommentParaIds(c));
     const commentDefinitions = commentsWithParaIds
-      .map((c, index) => getCommentDefinition(c, index, commentsWithParaIds));
+      .map((c, index) => getCommentDefinition(c, index, commentsWithParaIds, editor));
 
     const { result, params } = this.exportToXmlJson({
       data: jsonData,

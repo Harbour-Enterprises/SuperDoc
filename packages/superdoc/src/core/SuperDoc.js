@@ -516,6 +516,14 @@ export class SuperDoc extends EventEmitter {
     }
   }
 
+  search(text) {
+    return this.activeEditor?.commands.search(text);
+  }
+
+  goToSearchResult(match) {
+    return this.activeEditor?.commands.goToSearchResult(match);
+  }
+
   /**
    * Set the document to locked or unlocked
    * @param {boolean} lock
@@ -559,11 +567,12 @@ export class SuperDoc extends EventEmitter {
     commentsType,
     exportedName,
     additionalFiles = [],
-    additionalFileNames = []
+    additionalFileNames = [],
+    isFinalDoc = false,
   } = {}) {
     // Get the docx files first
     const baseFileName = exportedName ? cleanName(exportedName) : cleanName(this.config.title);
-    const docxFiles = await this.exportEditorsToDOCX({ commentsType });
+    const docxFiles = await this.exportEditorsToDOCX({ commentsType, isFinalDoc });
     const blobsToZip = [...additionalFiles];
     const filenames = [...additionalFileNames];
 
@@ -584,7 +593,7 @@ export class SuperDoc extends EventEmitter {
     }
   };
 
-  async exportEditorsToDOCX({ commentsType } = {}) {    
+  async exportEditorsToDOCX({ commentsType, isFinalDoc } = {}) {    
     const comments = [];
     if (commentsType !== 'clean') {
       comments.push(...this.commentsStore?.translateCommentsForExport());
@@ -594,7 +603,7 @@ export class SuperDoc extends EventEmitter {
     this.superdocStore.documents.forEach((doc) => {
       const editor = doc.getEditor();
       if (editor) {
-        docxPromises.push(editor.exportDocx({ comments, commentsType }));
+        docxPromises.push(editor.exportDocx({ isFinalDoc, comments, commentsType }));
       }
     });
     return await Promise.all(docxPromises);

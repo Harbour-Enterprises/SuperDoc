@@ -1,6 +1,9 @@
 {
-    "title": "React",
-    "tags": ["editing", "viewing", "react"],
-    "slug": "react",
-    "demo_type": "interactive"
+    "dirname": "react-example",
+    "tags": [
+        "editing",
+        "viewing",
+        "react"
+    ],
+    "title": "React"
 }

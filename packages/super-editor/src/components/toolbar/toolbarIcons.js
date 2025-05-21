@@ -44,6 +44,7 @@ import trashIconSvg from '@harbour-enterprises/common/icons/trash-can-solid.svg?
 import wrenchIconSvg from '@harbour-enterprises/common/icons/wrench-solid.svg?raw';
 import borderNoneIconSvg from '@harbour-enterprises/common/icons/border-none-solid.svg?raw';
 import upDownIconSvg from '@harbour-enterprises/common/icons/up-down.svg?raw';
+import magnifyingGlassSvg from '@harbour-enterprises/common/icons/magnifying-glass.svg?raw';
 
 export const toolbarIcons = {
   undo: rotateLeftIconSvg,
@@ -100,4 +101,5 @@ export const toolbarIcons = {
   deleteBorders: borderNoneIconSvg,
   fixTables: wrenchIconSvg,
   lineHeight: upDownIconSvg,
+  search: magnifyingGlassSvg,
 }

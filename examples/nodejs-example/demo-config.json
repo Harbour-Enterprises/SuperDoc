@@ -1,6 +1,8 @@
 {
-    "title": "Node JS",
-    "tags": ["editing","node"],
-    "slug": "node",
-    "demo_type": "interactive"
+    "dirname": "nodejs-example",
+    "tags": [
+        "editing",
+        "node"
+    ],
+    "title": "Node JS"
 }

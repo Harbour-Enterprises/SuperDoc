@@ -68,7 +68,7 @@ export const toggleList =
     if (!range) return false;
 
     const parentList = findParentNode((node) => isList(node.type.name, extensions))(selection);
-    const { numbering } = editor.converter;
+    const numbering = editor.converter?.numbering ?? null;
 
     // This is the case when we toggle an existing list.
     if (range.depth >= 1 && parentList && range.depth - parentList.depth <= 1) {
@@ -76,7 +76,7 @@ export const toggleList =
       // then execute `liftListItem` command.
       if (parentList.node.type === listType) {
         const { listId } = parentList.node.attrs;
-        editor.converter.numbering = removeListDefinitions(listId, numbering);
+        if (editor.converter) editor.converter.numbering = removeListDefinitions(listId, numbering);
         return commands.liftListItem(itemType);
       }
 
@@ -108,8 +108,8 @@ export const toggleList =
     };
 
     // Update the numbering definition for this document
-    const newListId = getNewListId(numbering.definitions);
-    editor.converter.numbering = generateNewListDefinition(newListId, numbering, listType);
+    const newListId = numbering?.definitions ? getNewListId(numbering.definitions) : null;
+    if (editor.converter) editor.converter.numbering = generateNewListDefinition(newListId, numbering, listType);
     attributes.listId = newListId;
 
     // This is the case when there is no need to ensureMarks.

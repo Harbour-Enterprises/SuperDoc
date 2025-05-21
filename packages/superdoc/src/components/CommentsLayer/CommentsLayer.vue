@@ -117,7 +117,7 @@ defineExpose({
     <div class="comments-layer">
       <div
         v-for="conversation in getCurrentComments"
-        class="comment-anchor sd-highlight"
+        class="sd-comment-anchor sd-highlight"
         @click.stop.prevent="activateComment(conversation, $event)"
         :data-id="conversation.commentId"
         :style="getStyle(conversation)"
@@ -133,7 +133,7 @@ defineExpose({
 .comments-layer {
   position: relative;
 }
-.comment-anchor {
+.sd-comment-anchor {
   position: absolute;
   cursor: pointer;
   z-index: 3;

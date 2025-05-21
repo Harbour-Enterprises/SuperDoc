@@ -1,5 +1,5 @@
 import { undoDepth, redoDepth } from 'prosemirror-history';
-import { h } from 'vue';
+import { h, ref } from 'vue';
 
 import { scrollToElement } from './scroll-helpers';
 import { sanitizeNumber } from './helpers';
@@ -14,6 +14,7 @@ import TableGrid from './TableGrid.vue';
 import TableActions from './TableActions.vue';
 
 import checkIconSvg from '@harbour-enterprises/common/icons/check.svg?raw';
+import SearchInput from './SearchInput.vue';
 
 const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
@@ -93,7 +94,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
       outline: 'none',
     },
     name: 'ai',
-    tooltip: 'AI Insights',
+    tooltip: 'AI text generation',
     icon: toolbarIcons.ai,
     hideLabel: true,
     hasCaret: false,
@@ -257,6 +258,39 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     },
     onDeactivate: () => (colorButton.iconColor.value = '#000'),
   });
+  
+  // search
+  const searchRef = ref(null);
+  const search = useToolbarItem({
+    type: 'dropdown',
+    name: 'search',
+    active: false,
+    icon: toolbarIcons.search,
+    tooltip: 'Search',
+    group: 'right',
+    inputRef: searchRef,
+    options: [
+      {
+        type: 'render',
+        key: 'searchDropdown',
+        render: () => renderSearchDropdown(),
+      },
+    ],
+  });
+  
+  const renderSearchDropdown = () => {
+    
+    const handleSubmit = ({ value }) => {
+      superToolbar.activeEditor.commands.search(value);
+    };
+    
+    return h('div', {}, [
+      h(SearchInput, {
+        onSubmit: handleSubmit,
+        searchRef,
+      }),
+    ]);
+  };
 
   // link
   const link = useToolbarItem({
@@ -669,18 +703,6 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     icon: toolbarIcons.trackChangesFinal,
     group: 'left',
   });
-  //
-
-  // search
-  // const search = useToolbarItem({
-  //   type: "button",
-  //   allowWithoutEditor: true,
-  //   name: "search",
-  //   tooltip: "Search",
-  //   disabled: true,
-  //   icon: "fas fa-magnifying-glass", // change to svg
-  //   group: "right",
-  // });
 
   const clearFormatting = useToolbarItem({
     type: 'button',
@@ -696,7 +718,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     underline,
     indentRight,
     indentLeft,
-    // search,
+    search,
     overflow,
   ].map((item) => item.name);
 
@@ -935,14 +957,13 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     separator,
     linkedStyles,
     separator,
+    ruler,
     pageBreakTool,
     copyFormat,
     clearFormatting,
-    ruler,
     aiButton,
     overflow,
     documentMode,
-    // search,
   ];
 
   if (!superToolbar.config?.superdoc?.config?.modules?.ai) {
@@ -978,7 +999,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
   }
 
   // always visible items
-  const toolbarItemsSticky = [undo, overflow, documentMode].map((item) => item.name);
+  const toolbarItemsSticky = [search, undo, overflow, documentMode].map((item) => item.name);
   const isStickyItem = (item) => toolbarItemsSticky.includes(item.name);
 
   const overflowItems = [];

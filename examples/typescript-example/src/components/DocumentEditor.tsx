@@ -1,5 +1,6 @@
 import { SuperDoc, Config } from '@harbour-enterprises/superdoc';
 import { Editor } from '@harbour-enterprises/superdoc/super-editor'
+
 import '@harbour-enterprises/superdoc/style.css';
 import { useEffect, useRef } from 'react';
 
@@ -24,15 +25,9 @@ const DocumentEditor = ({
       selector: '#superdoc',
       toolbar: 'superdoc-toolbar',
       documentMode: readOnly ? 'viewing' : 'editing',
-      documents: [{
-        id: documentId,
-        type: documentType,
-        data: initialData
-      }],
-      onReady: (editor: { superdoc: SuperDoc }) => {
-        if (onEditorReady) {
-          onEditorReady(editor);
-        }
+      onReady: (activeSuperDoc: SuperDoc) => {
+        const superEditor = activeSuperDoc.activeEditor;
+        console.debug('SuperDoc editor is ready', superEditor);
       },
       onEditorCreate: (editor: Editor) => {
         console.log('Editor created', editor);

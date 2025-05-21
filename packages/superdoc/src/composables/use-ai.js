@@ -23,15 +23,30 @@ export function useAi({ emitAiHighlight, activeEditorRef }) {
    * @param {Object} params.data - Additional data (optional)
    */
   const handleAiHighlight = ({ type, data }) => {
-    if (!aiLayer.value) {
-      console.error('[useAi] aiLayer.value is not available');
-      return;
-    }
+    if (!aiLayer.value) return;
     
-    if (type === 'add') {
-      aiLayer.value.addAiHighlight();
-    } else if (type === 'remove') {
-      aiLayer.value.removeAiHighlight();
+    // Get the editor from the ref
+    const editor = activeEditorRef.value;
+
+    switch (type) {
+      case 'add':
+        // First clear any existing pulse animation if the editor is available
+        if (editor && !editor.isDestroyed) {
+          editor.commands.clearAiHighlightStyle();
+        }
+        // Then add the highlight
+        aiLayer.value.addAiHighlight();
+        break;
+      case 'remove':
+        // Clear any pulse animation before removing highlight
+        if (editor && !editor.isDestroyed) {
+          editor.commands.clearAiHighlightStyle();
+        }
+        aiLayer.value.removeAiHighlight();
+        break;
+      case 'update':
+        aiLayer.value.updateAiHighlight();
+        break;
     }
   };
 
@@ -101,8 +116,6 @@ export function useAi({ emitAiHighlight, activeEditorRef }) {
    */
   const handleAiWriterClose = () => {
     showAiWriter.value = false;
-    // Remove the AI highlight when AIWriter is closed
-    emitAiHighlight({ type: 'remove', data: null });
   };
 
   /**
@@ -118,6 +131,9 @@ export function useAi({ emitAiHighlight, activeEditorRef }) {
    * Handle tool click for AI functionality
    */
   const handleAiToolClick = () => {
+    // Emit the highlight event before showing the AI writer
+    // @todo: is this double?
+    emitAiHighlight({ type: 'add', data: null });
     showAiWriterAtCursor();
   };
 

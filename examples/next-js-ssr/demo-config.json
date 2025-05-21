@@ -1,6 +1,9 @@
 {
-    "title": "SSR",
-    "tags": ["editing","next-js", "ssr"],
-    "slug": "ssr",
-    "demo_type": "interactive"
+    "dirname": "next-js-ssr",
+    "tags": [
+        "editing",
+        "next-js",
+        "ssr"
+    ],
+    "title": "SSR"
 }

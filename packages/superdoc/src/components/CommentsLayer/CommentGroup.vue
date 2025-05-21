@@ -88,7 +88,7 @@ const getVisibleComments = computed(() => {
   >
     <template v-for="convo in getVisibleComments">
       <CommentDialog
-        class="comment-box"
+        class="sd-comment-box"
         :data-id="convo.conversationId"
         :data="convo"
         :user="props.user"

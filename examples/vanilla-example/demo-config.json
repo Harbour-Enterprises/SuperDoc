@@ -1,10 +1,9 @@
 {
-    "title": "Vanilla JS",
+    "dirname": "vanilla-example",
     "tags": [
         "editing",
         "viewing",
         "vanilla-js"
     ],
-    "slug": "vanilla-js",
-    "demo_type": "interactive"
+    "title": "Vanilla JS"
 }

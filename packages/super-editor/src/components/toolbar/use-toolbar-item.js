@@ -66,6 +66,8 @@ export const useToolbarItem = (options) => {
   // Dropdown item
   const selectedValue = ref(options.selectedValue);
   const dropdownValueKey = ref(options.dropdownValueKey);
+  
+  const inputRef = ref(options.inputRef || null);
 
   const nestedOptions = ref([]);
   if (options.options) {
@@ -145,7 +147,8 @@ export const useToolbarItem = (options) => {
 
     allowWithoutEditor,
     dropdownValueKey,
-    selectedValue
+    selectedValue,
+    inputRef
   };
 
   return {

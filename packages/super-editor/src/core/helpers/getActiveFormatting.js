@@ -47,8 +47,26 @@ export function getActiveFormatting(editor) {
     marksToProcess.push({ name: key, attrs });
   });
 
+  // For fieldAnnotation.
+  const textColor = marksToProcess.find((i) => i.name === 'textColor');
+  const textHightlight = marksToProcess.find((i) => i.name === 'textHighlight');
+  
+  if (textColor) {
+    marksToProcess.push({ 
+      name: 'color', 
+      attrs: { color: textColor.attrs?.textColor }, 
+    });
+  }
+  if (textHightlight) {
+    marksToProcess.push({ 
+      name: 'highlight', 
+      attrs: { color: textHightlight.attrs?.textHighlight }, 
+    });
+  }
+
   const hasPendingFormatting = !!editor.storage.formatCommands?.storedStyle;
   if (hasPendingFormatting) marksToProcess.push({ name: 'copyFormat', attrs: true });
+
   return marksToProcess;
 }
 

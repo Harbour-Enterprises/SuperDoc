@@ -1,6 +1,10 @@
 {
-    "title": "Docxtemplater",
-    "tags": ["editing", "viewing", "vue", "templating"],
-    "slug": "docxtemplater",
-    "demo_type": "interactive"
+    "dirname": "docxtemplater-example",
+    "tags": [
+        "editing",
+        "viewing",
+        "vue",
+        "templating"
+    ],
+    "title": "Docxtemplater"
 }

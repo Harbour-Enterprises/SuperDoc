@@ -1,5 +1,5 @@
 <script setup>
-import { ref, getCurrentInstance, onMounted, onDeactivated } from 'vue';
+import { ref, getCurrentInstance, onMounted, onDeactivated, nextTick } from 'vue';
 import { throttle } from './helpers.js';
 import ButtonGroup from './ButtonGroup.vue';
 
@@ -18,11 +18,27 @@ const getFilteredItems = (position) => {
 
 onMounted(() => {
   window.addEventListener('resize', onResizeThrottled);
+  window.addEventListener('keydown', onKeyDown);
 });
 
 onDeactivated(() => {
   window.removeEventListener('resize', onResizeThrottled);
+  window.removeEventListener('keydown', onKeyDown);
 });
+
+const onKeyDown = async (e) => {
+  if (e.metaKey && e.key === 'f') {
+    e.preventDefault();
+    const searchItem = proxy.$toolbar.getToolbarItemByName('search');
+    if (searchItem) {
+      searchItem.expand.value = true;
+      await nextTick();
+      if (searchItem.inputRef.value) {
+        searchItem.inputRef.value.focus();
+      }
+    }
+  }
+}
 
 const onWindowResized = async () => {
   await proxy.$toolbar.onToolbarResize();

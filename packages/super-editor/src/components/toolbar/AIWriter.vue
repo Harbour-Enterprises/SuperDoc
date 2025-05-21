@@ -1,10 +1,9 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { writeStreaming, rewriteStreaming } from './ai-helpers';
+import { TextSelection } from 'prosemirror-state';
 import edit from '@harbour-enterprises/common/icons/edit-regular.svg?raw';
 import paperPlane from '@harbour-enterprises/common/icons/paper-plane-regular.svg?raw';
-import timesCircle from '@harbour-enterprises/common/icons/times-circle-regular.svg?raw';
-import sun from '@harbour-enterprises/common/icons/sun-regular.svg?raw';
 
 const props = defineProps({
   selectedText: {
@@ -37,6 +36,8 @@ const props = defineProps({
   },
 });
 
+const emits = defineEmits(['ai-highlight']);
+
 // Store the selection state
 const selectionState = ref(null);
 
@@ -45,6 +46,10 @@ const aiWriterRef = ref(null);
 
 const handleClickOutside = (event) => {
   if (aiWriterRef.value && !aiWriterRef.value.contains(event.target)) {
+    // Only emit 'remove' if we're not in a loading state
+    if (!isLoading.value) {
+      emitAiHighlight('remove');
+    }
     props.handleClose();
   }
 };
@@ -53,16 +58,25 @@ const handleClickOutside = (event) => {
 const editableRef = ref(null);
 
 // Helper function to emit AI highlight events
+// We need to emit through the superToolbar if it exists, otherwise emit through the emits
+// Hoping we can simplify this logic in the future if we combine SE and SD
 const emitAiHighlight = (type, data = null) => {
   if (props.superToolbar) {
     props.superToolbar.emit('ai-highlight', { type, data });
+  } else {
+    emits('ai-highlight', { type, data });
   }
 };
 
 // Helper functions
 const saveSelection = () => {
   if (props.selectedText) {
-    selectionState.value = props.editor.state.selection;
+    // Store the complete selection state
+    selectionState.value = {
+      ...props.editor.state.selection,
+      from: props.editor.state.selection.from,
+      to: props.editor.state.selection.to
+    };
     // Store the selection in the editor's state
     props.editor.commands.setMeta('storedSelection', selectionState.value);
 
@@ -97,9 +111,10 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  // emit the ai highlight remove event through the toolbar
-  emitAiHighlight('remove');
-
+  // Only emit 'remove' if we're not in a loading state
+  if (!isLoading.value) {
+    emitAiHighlight('remove');
+  }
   // Remove all event listeners
   removeEventListeners();
 });
@@ -123,6 +138,8 @@ const placeholderText = computed(() =>
 const isLoading = ref(false);
 const isError = ref('');
 const promptText = ref('');
+const textProcessingStarted = ref(false);
+const previousText = ref('');
 
 // Computed property to check if editor is in suggesting mode
 const isInSuggestingMode = computed(() => {
@@ -144,10 +161,39 @@ const getDocumentXml = () => {
 // Handler for processing text chunks from the stream
 const handleTextChunk = (text) => {
   try {
-    // If this is the first chunk and we're rewriting, remove the selected text
+    // Remove the loader node when we start receiving text
+    props.editor.commands.removeAiNode('aiLoaderNode');
+
+    // If this is the first chunk and we're rewriting, handle the selection
     if (props.selectedText && !textProcessingStarted.value) {
+      emitAiHighlight('remove');
+      
+      // Clear the pulsing animation when we start inserting text
+      props.editor.commands.clearAiHighlightStyle();
+      
+      // Check if we have a valid stored selection
+      if (selectionState.value) {
+        // Apply the stored selection using the TextSelection API
+        const { state } = props.editor;
+        const { from, to } = selectionState.value;
+        
+        // Create a transaction to set the selection
+        const tr = state.tr.setSelection(
+          TextSelection.create(state.doc, from, to)
+        );
+        
+        // Dispatch the transaction to update the editor state
+        props.editor.view.dispatch(tr);
+      } else {
+        console.warn('[AIWriter] No stored selection to restore');
+      }
+      
+      // Now delete the selection
       props.editor.commands.deleteSelection();
+      
+      // Mark as processed
       textProcessingStarted.value = true;
+      
     }
 
     // If the text is null, undefined or empty, don't process it
@@ -188,22 +234,33 @@ const handleDone = () => {
   // We need to wait for the animation to finish before removing the mark
   setTimeout(() => {
     props.editor.commands.removeAiMark('aiAnimationMark');
+    // Remove the highlight when we're done
+    emitAiHighlight('remove');
   }, 1000);
 };
-
-// Track text processing state
-const textProcessingStarted = ref(false);
-const previousText = ref('');
 
 // Refactored handleSubmit function
 const handleSubmit = async () => {
   // Reset state
-  isLoading.value = true;
   isError.value = '';
   textProcessingStarted.value = false;
   previousText.value = '';
+  isLoading.value = true;  // Set loading to true before starting the operation
 
   try {
+    // Close the AI Writer immediately and transition to loading states
+    props.handleClose();
+
+    // If there is selected text, emit the update event to start pulsing animation
+    if (props.selectedText) {
+      emitAiHighlight('update');
+    } else {
+      // Insert the loader node at the current cursor position
+      props.editor.commands.insertContent({
+        type: 'aiLoaderNode',
+      });
+    }
+
     // Enable track changes if in suggesting mode
     if (isInSuggestingMode.value) {
       props.editor.commands.enableTrackChanges();
@@ -233,18 +290,19 @@ const handleSubmit = async () => {
       await writeStreaming(promptText.value, options, handleTextChunk, handleDone);
     }
 
-    // If all is good, close the AI Writer
-    props.handleClose();
   } catch (error) {
     console.error('AI generation error:', error);
     isError.value = error.message || 'An error occurred';
   } finally {
-    promptText.value = ''; // Clear the input after submission
+    // Clear the input after submission
+    promptText.value = '';
     // Only disable track changes if we enabled it (in suggesting mode)
     if (isInSuggestingMode.value) {
       props.editor.commands.disableTrackChanges();
     }
     isLoading.value = false;
+    // Ensure textProcessingStarted is reset for next operation
+    textProcessingStarted.value = false;
   }
 };
 
@@ -283,11 +341,7 @@ const handleInput = (event) => {
       ></textarea>
     </div>
     <div class="ai-loader">
-      <span v-if="isLoading" class="ai-textarea-icon loading spinner-wrapper">
-        <span v-html="sun"></span>
-      </span>
-      <span v-else-if="isError" class="ai-textarea-icon error" v-html="timesCircle" />
-      <span v-else-if="promptText" class="ai-textarea-icon ai-submit-button" @click.stop="handleSubmit" v-html="paperPlane" />
+      <span v-if="promptText" class="ai-textarea-icon ai-submit-button" @click.stop="handleSubmit" v-html="paperPlane" />
     </div>
   </div>
 </template>

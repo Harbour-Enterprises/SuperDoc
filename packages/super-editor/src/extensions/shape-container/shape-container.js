@@ -12,7 +12,7 @@ export const ShapeContainer = Node.create({
   addOptions() {
     return {
       htmlAttributes: {
-        class: 'pm-shape-container',
+        class: 'sd-editor-shape-container',
       },
     };
   },

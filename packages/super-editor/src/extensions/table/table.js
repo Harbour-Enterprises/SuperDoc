@@ -10,6 +10,8 @@ import { createTableBorders } from './tableHelpers/createTableBorders.js';
 import { createCellBorders } from '../table-cell/helpers/createCellBorders.js';
 import { findParentNode } from '@helpers/findParentNode.js';
 import { TextSelection } from 'prosemirror-state';
+import { getNodeType } from '@core/helpers/getNodeType.js';
+import { isCellSelection } from './tableHelpers/isCellSelection.js';
 import {
   addColumnBefore,
   addColumnAfter,
@@ -148,7 +150,9 @@ export const Table = Node.create({
     return {
       insertTable:
         ({ rows = 3, cols = 3, withHeaderRow = false } = {}) => ({ tr, dispatch, editor }) => {
-          const node = createTable(editor.schema, rows, cols, withHeaderRow);
+          const zeroWidthText = editor.schema.text('\u200B');
+          const emptyPar = getNodeType('paragraph', editor.schema).create(null, zeroWidthText);
+          const node = createTable(editor.schema, rows, cols, withHeaderRow, emptyPar);
 
           if (dispatch) {
             const offset = tr.selection.from + 1;
@@ -261,6 +265,23 @@ export const Table = Node.create({
 
           return true;
         },
+
+        setCellBackground:
+          (value) => ({ editor, commands, dispatch }) => {
+            const { selection } = editor.state;
+
+            if (!isCellSelection(selection)) {
+              return false;
+            }
+            
+            const color = value?.startsWith('#') ? value.slice(1) : value;
+
+            if (dispatch) {
+              return commands.setCellAttr('background', { color });
+            }
+
+            return true;
+          },
 
         deleteCellAndTableBorders:
           () => ({ chain, state, tr }) => {

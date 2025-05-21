@@ -1,5 +1,79 @@
 # Changelog
 
+## [0.11.31](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.30...v0.11.31) (2025-05-21)
+
+## [0.11.30](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.29...v0.11.30) (2025-05-21)
+
+## [0.11.29](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.28...v0.11.29) (2025-05-21)
+
+## [0.11.28](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.27...v0.11.28) (2025-05-21)
+
+## [0.11.27](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.26...v0.11.27) (2025-05-20)
+
+## [0.11.26](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.25...v0.11.26) (2025-05-20)
+
+## [0.11.25](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.24...v0.11.25) (2025-05-19)
+
+## [0.11.24](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.23...v0.11.24) (2025-05-19)
+
+## [0.11.23](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.22...v0.11.23) (2025-05-19)
+
+## [0.11.22](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.21...v0.11.22) (2025-05-19)
+
+
+### Bug Fixes
+
+* revert back to main ai writer ([02e86e9](https://github.com/Harbour-Enterprises/SuperDoc/commit/02e86e90589bedbeec9b41ce8275dd778714764c))
+
+
+### Features
+
+* enhance AI highlight functionality with custom styling and animation controls ([293a577](https://github.com/Harbour-Enterprises/SuperDoc/commit/293a5776891fe3ab3e288b1dd461ebf0723c1691))
+* loading and other ai writer enhancements ([325f210](https://github.com/Harbour-Enterprises/SuperDoc/commit/325f210f80e0e278b9d23e116a54ce13c9b5c6ee))
+* new dark purple loading dots ([60bdc0b](https://github.com/Harbour-Enterprises/SuperDoc/commit/60bdc0b00de2eb3cc6586daa2b2f41ecd95d8363))
+
+## [0.11.21](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.20...v0.11.21) (2025-05-19)
+
+## [0.11.20](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.19...v0.11.20) (2025-05-19)
+
+## [0.11.19](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.18...v0.11.19) (2025-05-19)
+
+## [0.11.18](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.17...v0.11.18) (2025-05-18)
+
+## [0.11.17](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.16...v0.11.17) (2025-05-18)
+
+## [0.11.16](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.15...v0.11.16) (2025-05-16)
+
+## [0.11.15](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.14...v0.11.15) (2025-05-16)
+
+## [0.11.14](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.13...v0.11.14) (2025-05-16)
+
+## [0.11.13](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.12...v0.11.13) (2025-05-15)
+
+## [0.11.12](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.11...v0.11.12) (2025-05-14)
+
+## [0.11.11](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.10...v0.11.11) (2025-05-14)
+
+## [0.11.10](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.9...v0.11.10) (2025-05-13)
+
+## [0.11.9](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.8...v0.11.9) (2025-05-13)
+
+## [0.11.8](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.7...v0.11.8) (2025-05-13)
+
+## [0.11.7](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.6...v0.11.7) (2025-05-13)
+
+## [0.11.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.5...v0.11.6) (2025-05-13)
+
+## [0.11.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.4...v0.11.5) (2025-05-13)
+
+## [0.11.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.3...v0.11.4) (2025-05-13)
+
+## [0.11.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.2...v0.11.3) (2025-05-13)
+
+## [0.11.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.1...v0.11.2) (2025-05-13)
+
+## [0.11.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.10.69...v0.11.1) (2025-05-13)
+
 ## [0.10.69](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.10.68...v0.10.69) (2025-05-13)
 
 ## [0.10.68](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.10.67...v0.10.68) (2025-05-13)

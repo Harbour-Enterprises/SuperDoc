@@ -10,7 +10,7 @@ export const CommentsMark = Mark.create({
 
   addOptions() {
     return {
-      htmlAttributes: { class: 'super-editor-comment' },
+      htmlAttributes: { class: 'sd-editor-comment' },
     };
   },
 

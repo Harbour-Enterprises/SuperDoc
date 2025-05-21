@@ -41,7 +41,7 @@ const handleFocusChange = (focused) => emit('focus', focused);
   <div class="input-section">
     <CommentHeader v-if="includeHeader" :config="config" :comment="comment" :is-pending-input="true" />
 
-    <div class="comment-entry" :class="{ 'input-active': isFocused }">
+    <div class="comment-entry" :class="{ 'sd-input-active': isFocused }">
       <SuperInput
         class="superdoc-field"
         placeholder="Add a comment"

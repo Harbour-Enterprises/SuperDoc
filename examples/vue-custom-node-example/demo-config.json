@@ -1,6 +1,9 @@
 {
-    "title": "Custom Nodes",
-    "tags": ["editing", "viewing", "vue"],
-    "slug": "custom-nodes",
-    "demo_type": "interactive"
+    "dirname": "vue-custom-node-example",
+    "tags": [
+        "editing",
+        "viewing",
+        "vue"
+    ],
+    "title": "Custom Nodes"
 }

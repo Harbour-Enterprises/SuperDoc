@@ -101,19 +101,27 @@ const handleClickOutside = (e) => {
         :show="item.expand.value"
         size="medium"
         placement="bottom-start"
-        class="toolbar-button toolbar-dropdown"
+        class="toolbar-button toolbar-dropdown sd-editor-toolbar-dropdown"
         @select="(key, option) => handleSelect(item, option)"
         @clickoutside="handleClickOutside"
         :style="item.dropdownStyles.value"
       >
-        <ToolbarButton
-          :toolbar-item="item"
-          @textSubmit="handleToolbarButtonTextSubmit(item, $event)"
-          @buttonClick="handleToolbarButtonClick(item)"
-        />
+        <n-tooltip trigger="hover" :disabled="!item.tooltip?.value">
+          <template #trigger>
+            <ToolbarButton
+              :toolbar-item="item"
+              @textSubmit="handleToolbarButtonTextSubmit(item, $event)"
+              @buttonClick="handleToolbarButtonClick(item)"
+            />
+          </template>
+          <div>
+            {{ item.tooltip }}
+            <span v-if="item.disabled.value">(disabled)</span>
+          </div>
+        </n-tooltip>
       </n-dropdown>
 
-      <n-tooltip trigger="hover" v-else-if="isButton(item)">
+      <n-tooltip trigger="hover" v-else-if="isButton(item)" class="sd-editor-toolbar-tooltip">
         <template #trigger>
           <ToolbarButton
             :toolbar-item="item"
@@ -138,17 +146,13 @@ const handleClickOutside = (e) => {
 </template>
 
 <style lang="postcss">
-.n-dropdown {
+.sd-editor-toolbar-dropdown {
   border-radius: 8px;
   min-width: 80px;
+  cursor: pointer;
 }
-.n-tooltip,
-.n-popover {
-  background-color: #333333 !important;
-  font-size: 14px;
-  border-radius: 8px !important;
-}
-.n-dropdown-option-body {
+
+.sd-editor-toolbar-dropdown .n-dropdown-option-body {
   &:hover {
     &::before,
     &::after {
@@ -156,8 +160,12 @@ const handleClickOutside = (e) => {
     }
   }
 }
-.toolbar-dropdown {
-  cursor: pointer;
+
+.sd-editor-toolbar-tooltip,
+.sd-editor-toolbar-tooltip.n-popover {
+  background-color: #333333 !important;
+  font-size: 14px;
+  border-radius: 8px !important;
 }
 </style>
 

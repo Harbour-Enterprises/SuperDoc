@@ -410,47 +410,48 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
  * @param {XmlNode[]} nodes
  * @returns
  */
-export function preProcessNodesForFldChar(nodes) {
-  let processedNodes = [];
-  let nodesToCombine = [];
-  let isCombiningNodes = false;
+export function preProcessNodesForFldChar(nodes = []) {
+  const processedNodes = [];
+  let buffer = [];
+  let collecting = false;
 
-  nodes?.forEach((n) => {
-    if (n.seen) return;
+  for (const node of nodes) {
+    const fldCharEl = node.elements?.find((el) => el.name === 'w:fldChar');
+    const fldType = fldCharEl?.attributes?.['w:fldCharType'];
 
-    n.seen = true;
-    const fldChar = n.elements?.filter((el) => el.name === 'w:fldChar') || [];
-    if (fldChar.length) {
-
-      // If we have a fldChar of length greater than 1, we need to process them as a group
-      if (fldChar.length > 1) {
-        const result = processCombinedNodesForFldChar([n]);
-        processedNodes.push(...result);
-      }
-
-      // if we have fldChar of length 1, we need to combine nodes to complete the fld chars
-      else {
-        const fldType = fldChar[0].attributes['w:fldCharType'];
-        if (fldType === 'begin') {
-          isCombiningNodes = true;
-          nodesToCombine.push(n);
-        } else if (fldType === 'end') {
-          isCombiningNodes = false;
-          nodesToCombine.push(n);
-          const result = processCombinedNodesForFldChar(nodesToCombine);
-          processedNodes.push(...result);
-          nodesToCombine = [];
-        }
-      }
+    if (fldType === 'begin') {
+      buffer = [node];
+      collecting = true;
+      continue;
     }
-    
-    if (!isCombiningNodes) processedNodes.push(n);
-    else nodesToCombine.push(n); // Combine nodes
-  });
+
+    if (fldType === 'separate' && collecting) {
+      buffer.push(node);
+      continue;
+    }
+
+    if (fldType === 'end' && collecting) {
+      buffer.push(node);
+      processedNodes.push(...processCombinedNodesForFldChar(buffer));
+      buffer = [];
+      collecting = false;
+      continue;
+    }
+
+    if (collecting) {
+      buffer.push(node);
+    } else {
+      processedNodes.push(node);
+    }
+  }
+
+  // In case of unclosed field
+  if (buffer.length) {
+    processedNodes.push(...buffer);
+  }
 
   return processedNodes;
-}
-
+};
 
 /**
  * Process the combined nodes for fldChar

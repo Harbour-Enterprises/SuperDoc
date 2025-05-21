@@ -1,4 +1,4 @@
-.popover {
+.sd-editor-popover {
   background-color: #fff;
   border-radius: 8px;
   -webkit-box-shadow: 0px 4px 12px 0px rgba(50, 50, 50, 0.15);
@@ -12,28 +12,24 @@
   z-index: 1000;
 }
 
-.popover-header {
+.sd-editor-popover .popover-header {
   font-weight: bold;
   margin-bottom: 8px;
 }
 
-.tippy-content {
-  padding: 0;
-}
-
-.tippy-box[data-theme~='popover'] {
+.tippy-box[data-theme~='sd-editor-popover'] {
   background-color: #fff;
   border-radius: 8px;
   box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
-  border: none;
+  border: none !important;
+  padding: 0 !important;
 }
 
-.tippy-box[data-theme~='popover'] .tippy-arrow {
+.tippy-box[data-theme~='sd-editor-popover'] .tippy-arrow {
   color: #fff;
   border: 1px solid #dbdbdb;
 }
 
-.tippy-box[data-theme~='popover'] {
-  border: none !important;
-  padding: none !important;
+.tippy-box[data-theme~='sd-editor-popover'] .tippy-content {
+  padding: 0;
 }
