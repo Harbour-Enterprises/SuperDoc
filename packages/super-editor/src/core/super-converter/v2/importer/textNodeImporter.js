@@ -1,4 +1,10 @@
-import { generateUniqueId, extractFillableParts, getElementName, parseProperties } from './importerHelpers.js';
+import {
+  generateUniqueId,
+  extractFillableParts,
+  getElementName,
+  parseProperties,
+  getProcessedNodex
+} from './importerHelpers.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -24,29 +30,18 @@ export const handleTextNode = (params) => {
 
   // Ignore others - can catch other special cases here if necessary
   else return { nodes: [], consumed: 0 };
-  const parts = extractFillableParts(text);
-  const resultNodes = parts.flatMap((part) => {
-    let attrs = { type, attributes: attributes || {} }
-    if(part.fillable) {
-      let label = part.text;
-      attrs.fieldId = generateUniqueId();
-      attrs.displayLabel = label;
-      attrs.highlighted = false;
-      attrs.type = "text";
-      return {
-        type: 'fieldAnnotation',
-        attrs: attrs,
-        marks,
-      };
-    }
-    return {
+  let resultNodes;
+  if (!params.editor.options.annotations) {
+    resultNodes = [{
       type: getElementName(node),
-      text: part.text,
-      attrs: attrs,
+      text: text,
+      attrs: {type, attributes: attributes || {}},
       marks,
-    };
-  });
-
+    }];
+  } else {
+    const parts = extractFillableParts(text);
+    resultNodes = getProcessedNodex(node, marks, type, parts, attributes);
+  }
   return {
     nodes: resultNodes,
     consumed: 1,
