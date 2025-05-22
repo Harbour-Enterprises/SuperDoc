@@ -378,6 +378,7 @@ class SuperConverter {
     commentsExportType,
     comments = [],
     editor,
+    exportJsonOnly = false,
   ) {
     const commentsWithParaIds = comments.map((c) => prepareCommentParaIds(c));
     const commentDefinitions = commentsWithParaIds
@@ -392,6 +393,8 @@ class SuperConverter {
       isFinalDoc,
       editor,
     });
+
+    if (exportJsonOnly) return result;
 
     const exporter = new DocxExporter(this);
     const xml = exporter.schemaToXml(result);
