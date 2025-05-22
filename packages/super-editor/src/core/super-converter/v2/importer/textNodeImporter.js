@@ -3,7 +3,7 @@ import {
   extractFillableParts,
   getElementName,
   parseProperties,
-  getProcessedNodex
+  getProcessedNodex, getProcessedNode
 } from './importerHelpers.js';
 
 /**
@@ -40,7 +40,7 @@ export const handleTextNode = (params) => {
     }];
   } else {
     const parts = extractFillableParts(text);
-    resultNodes = getProcessedNodex(node, marks, type, parts, attributes);
+    resultNodes = getProcessedNode(node, marks, type, parts, attributes);
   }
   return {
     nodes: resultNodes,

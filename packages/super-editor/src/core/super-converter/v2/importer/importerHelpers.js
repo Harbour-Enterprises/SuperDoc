@@ -97,6 +97,12 @@ export function hasTextNode(elements) {
 
 export const generateUniqueId = () => `fillable-${index++}`;
 
+/**
+ *
+ * @param {string} text
+ * @returns [parts of text including if it's fillable field]
+ *
+ */
 export const extractFillableParts = (text) => {
   const regex = /(\[Insert[^\]]*\]|\[\[[^\]]*\]\]|\{\{[^}]+\}\}|___+|\.{3,}|\[[^\]]+\])/g;
   const parts = [];
@@ -118,7 +124,16 @@ export const extractFillableParts = (text) => {
   return parts;
 };
 
-export const getProcessedNodex = (node, marks, type, parts, attributes) => {
+/**
+ *
+ * @param {Node} node
+ * @param {Array} parts
+ * @returns {Node}  processed node
+ *
+ */
+export const getProcessedNode = (node, parts) => {
+  const { type } = node;
+  const { attributes, marks = [] } = parseProperties(node);
   return parts.flatMap((part) => {
     let attrs = {type, attributes: attributes || {}}
     if (part.fillable) {
