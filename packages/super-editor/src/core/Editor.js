@@ -23,6 +23,7 @@ import {
   prepareCommentsForImport,
 } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
+import { toggleHeaderFooterEditMode } from '../extensions/pagination/pagination-helpers.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -377,6 +378,19 @@ export class Editor extends EventEmitter {
     // If we are not sync'd yet, wait for the event then insert the data
     else provider.on('synced', postSyncInit);
   }
+  
+  replaceContent(content) {
+    this.setOptions({
+      content,
+    });
+
+    this.#createConverter();
+    this.initDefaultStyles();
+    
+    const doc = this.#generatePmData();
+    const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc);
+    this.view.dispatch(tr);
+  }
 
   /**
    * Replace the current document with new data. Necessary for initializing a new collaboration file,
@@ -597,15 +611,21 @@ export class Editor extends EventEmitter {
       const { mode, fragment, isHeadless, content, loadFromSchema } = this.options;
 
       if (mode === 'docx') {
-        doc = createDocument(this.converter, this.schema, this);
+        if (loadFromSchema) {
+          doc = this.schema.nodeFromJSON(content);
+          doc = this.#prepareDocumentForImport(doc);
+        }
+        else {
+          doc = createDocument(this.converter, this.schema, this);
 
-        // Perform any additional document processing prior to finalizing the doc here
-        doc = this.#prepareDocumentForImport(doc);
+          // Perform any additional document processing prior to finalizing the doc here
+          doc = this.#prepareDocumentForImport(doc);
 
-        // If we have a new doc, and have html data, we initialize from html
-        if (this.options.html) doc = this.#createDocFromHTML(this.options.html)
+          // If we have a new doc, and have html data, we initialize from html
+          if (this.options.html) doc = this.#createDocFromHTML(this.options.html)
 
-        if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+          if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+        }
       }
 
       // If we are in HTML mode, we initialize from either content or html (or blank)
@@ -653,7 +673,36 @@ export class Editor extends EventEmitter {
       ...this.options.editorProps,
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: EditorState.create(state),
+      handleDoubleClick: async (view, pos, event) => {
+        const isHeader = hasSomeParentWithClass(event.target, 'pagination-section-header');
+        const isFooter = hasSomeParentWithClass(event.target, 'pagination-section-footer');
+        if (isHeader || isFooter) {
+          const eventClone = new event.constructor(event.type);
+          event.target.dispatchEvent(eventClone);
+          return;
+        }
+        event.stopPropagation();
+        if (!this.options.editable) {
+          this.setEditable(true, false);
+          toggleHeaderFooterEditMode(this, null, false);
+
+          const sectionData = await initPaginationData(this);
+          this.storage.pagination.sectionData = sectionData;
+
+          const newTr = this.view.state.tr;
+          setTimeout(() => {
+            newTr.setMeta('forceUpdatePagination', true);
+            this.view.dispatch(newTr);
+          }, 300);
+          
+        }
+      }
     });
+
+    const hasSomeParentWithClass = (element, classname) => {
+      if (element.className?.split(' ')?.indexOf(classname) >= 0) return true;
+      return element.parentNode && hasSomeParentWithClass(element.parentNode, classname);
+    }
     
     const newState = this.state.reconfigure({
       plugins: [...this.extensionService.plugins],
@@ -1037,6 +1086,10 @@ export class Editor extends EventEmitter {
     const updatedState = newState.apply(tr);
     return updatedState.doc.toJSON();
   }
+  
+  getUpdatedJson() {
+    return this.#prepareDocumentForExport();
+  }
 
   /**
    * Export the editor document to DOCX.
@@ -1086,7 +1139,7 @@ export class Editor extends EventEmitter {
       updatedDocs['word/commentsExtended.xml'] = String(commentsExtendedXml);
       updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
       updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
-    };
+    }
 
     const zipper = new DocxZipper();
     const result = await zipper.updateZip({
@@ -1192,7 +1245,7 @@ export class Editor extends EventEmitter {
       this.initializeCollaborationData(true);
     } else {
       this.#insertNewFileData();
-    };
+    }
 
     if (!this.options.ydoc) {
       this.#initPagination();

@@ -56,48 +56,21 @@ export const initPaginationData = async (editor) => {
  */
 const getSectionHeight = async (editor, data) => {
   if (!data) return {};
+  
   return new Promise((resolve) => {
     const editorContainer = document.createElement('div');
     editorContainer.className = 'super-editor';
-    editorContainer.style.padding = 0;
-    editorContainer.style.margin = 0;
-
-    const parentStyles = editor.converter.getDocumentDefaultStyles();
-    const { fontSizePt, typeface } = parentStyles;
-    const fontSizeInPixles = fontSizePt * 1.3333;
-    const lineHeight = fontSizeInPixles * 1.15;
-
-    Object.assign(editorContainer.style, {
-      padding: "0",
-      margin: "0",
-      border: "none",
-      boxSizing: "border-box",
-      position: "absolute",
-      top: "0",
-      left: "0",
-      width: "auto",
-      maxWidth: "none",
-      fontFamily: typeface,
-      fontSize: `${fontSizeInPixles}px`,
-      lineHeight: `${lineHeight}px`,
-    });
-
-    document.body.appendChild(editorContainer);
-    const sectionEditor = new SuperEditor({
-      loadFromSchema: true,
-      mode: 'text',
-      editable: false,
-      element: editorContainer,
-      content: data,
-      extensions: getStarterExtensions(),
-      documentId: 'sectionId',
-    });
+    editorContainer.style.padding = '0';
+    editorContainer.style.margin = '0';
+    
+    const sectionEditor = createHeaderFooterEditor({ editor, data, editorContainer });
 
     sectionEditor.on('create', () => {
+      sectionEditor.setEditable(false, false);
       requestAnimationFrame(() => {
         const height = editorContainer.offsetHeight;
         document.body.removeChild(editorContainer);
-
+        
         Object.assign(editorContainer.style, {
           padding: "0",
           margin: "0",
@@ -116,4 +89,76 @@ const getSectionHeight = async (editor, data) => {
       })
     });
   });
+};
+
+export const createHeaderFooterEditor = ({ 
+  editor, 
+  data, 
+  editorContainer, 
+  appendToBody = true,
+  sectionId,
+  type
+}) => {
+  const parentStyles = editor.converter.getDocumentDefaultStyles();
+  const { fontSizePt, typeface } = parentStyles;
+  const fontSizeInPixles = fontSizePt * 1.3333;
+  const lineHeight = fontSizeInPixles * 1.2;
+
+  Object.assign(editorContainer.style, {
+    padding: "0",
+    margin: "0",
+    border: "none",
+    boxSizing: "border-box",
+    position: "absolute",
+    top: "0",
+    left: "0",
+    width: "auto",
+    maxWidth: "none",
+    fontFamily: typeface,
+    fontSize: `${fontSizeInPixles}px`,
+    lineHeight: `${lineHeight}px`,
+  });
+
+  if (appendToBody) document.body.appendChild(editorContainer);
+  
+  return new SuperEditor({
+    loadFromSchema: true,
+    mode: 'docx',
+    element: editorContainer,
+    content: data,
+    extensions: getStarterExtensions(),
+    documentId: sectionId || 'sectionId',
+    onBlur: (evt) => onHeaderFooterDataUpdate(evt, editor, sectionId, type),
+  });
+};
+
+export const toggleHeaderFooterEditMode = (editor, focusedSectionEditor, isEditMode) => {
+  const footers = editor.view.dom.querySelectorAll('.pagination-section-footer');
+  const headers = editor.view.dom.querySelectorAll('.pagination-section-header');
+
+  headers.forEach(header => {
+    header.style.display = isEditMode ? 'none' : 'block';
+  });
+  editor.converter.headerEditors.forEach(item => {
+    item.editor.options.element.style.display = isEditMode ? 'block' : 'none';
+  });
+  
+  footers.forEach(footer => {
+    footer.style.display = isEditMode ? 'none' : 'block';
+  });
+  editor.converter.footerEditors.forEach(item => {
+    item.editor.options.element.style.display = isEditMode ? 'block' : 'none';
+  });
+
+  if (focusedSectionEditor) focusedSectionEditor.view.focus();
+};
+
+const onHeaderFooterDataUpdate = ({ editor }, mainEditor, sectionId, type) => {
+  if (!type || !sectionId) return;
+  
+  const updatedData = editor.getUpdatedJson();
+  mainEditor.converter[`${type}Editors`].forEach(item => {
+    if (item.id === sectionId) item.editor.replaceContent(updatedData);
+  });
+  mainEditor.converter[`${type}s`][sectionId] = updatedData;
 };
