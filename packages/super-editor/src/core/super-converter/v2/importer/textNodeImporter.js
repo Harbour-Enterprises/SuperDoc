@@ -1,9 +1,8 @@
 import {
-  generateUniqueId,
   extractFillableParts,
   getElementName,
   parseProperties,
-  getProcessedNodex, getProcessedNode
+  getProcessedNode
 } from './importerHelpers.js';
 
 /**
@@ -31,7 +30,7 @@ export const handleTextNode = (params) => {
   // Ignore others - can catch other special cases here if necessary
   else return { nodes: [], consumed: 0 };
   let resultNodes;
-  if (!params.editor.options.annotations) {
+  if (!params.editor.options.aiDetection) {
     resultNodes = [{
       type: getElementName(node),
       text: text,
@@ -40,7 +39,7 @@ export const handleTextNode = (params) => {
     }];
   } else {
     const parts = extractFillableParts(text);
-    resultNodes = getProcessedNode(node, marks, type, parts, attributes);
+    resultNodes = getProcessedNode(node, parts);
   }
   return {
     nodes: resultNodes,

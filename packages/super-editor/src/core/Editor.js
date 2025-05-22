@@ -81,6 +81,7 @@ export class Editor extends EventEmitter {
     isNewFile: false,
     scale: 1,
     annotations: false,
+    aiDetection: false,
     isInternal: false,
     externalExtensions: [],
     numbering: {},

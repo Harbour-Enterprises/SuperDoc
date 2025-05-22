@@ -128,7 +128,7 @@ export const extractFillableParts = (text) => {
  *
  * @param {Node} node
  * @param {Array} parts
- * @returns {Node}  processed node
+ * @returns [{Node}]  processed node
  *
  */
 export const getProcessedNode = (node, parts) => {
