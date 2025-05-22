@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.32](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.31...v0.11.32) (2025-05-21)
+
+
+### Features
+
+*  text formatting functionality in AI Writer; add formatDocument method ([5bdd103](https://github.com/Harbour-Enterprises/SuperDoc/commit/5bdd103df8744534005c3fbedc5ad13d25f2c8af))
+
 ## [0.11.31](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.30...v0.11.31) (2025-05-21)
 
 ## [0.11.30](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.11.29...v0.11.30) (2025-05-21)

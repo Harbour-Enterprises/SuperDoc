@@ -1,6 +1,6 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
-import { writeStreaming, rewriteStreaming } from './ai-helpers';
+import { writeStreaming, rewriteStreaming, formatDocument } from './ai-helpers';
 import { TextSelection } from 'prosemirror-state';
 import edit from '@harbour-enterprises/common/icons/edit-regular.svg?raw';
 import paperPlane from '@harbour-enterprises/common/icons/paper-plane-regular.svg?raw';
@@ -140,6 +140,8 @@ const isError = ref('');
 const promptText = ref('');
 const textProcessingStarted = ref(false);
 const previousText = ref('');
+const isFormatting = ref(false);
+const pendingFormatting = ref(false);
 
 // Computed property to check if editor is in suggesting mode
 const isInSuggestingMode = computed(() => {
@@ -159,7 +161,7 @@ const getDocumentXml = () => {
 };
 
 // Handler for processing text chunks from the stream
-const handleTextChunk = (text) => {
+const handleTextChunk = async (text) => {
   try {
     // Remove the loader node when we start receiving text
     props.editor.commands.removeAiNode('aiLoaderNode');
@@ -193,7 +195,6 @@ const handleTextChunk = (text) => {
       
       // Mark as processed
       textProcessingStarted.value = true;
-      
     }
 
     // If the text is null, undefined or empty, don't process it
@@ -204,7 +205,7 @@ const handleTextChunk = (text) => {
     // Convert to string in case it's not already a string
     const textStr = String(text);
 
-    // Wrap the content in a span with our animation class and unique ID
+    // Wrap the raw content in a span with our animation class and unique ID
     const wrappedContent = {
       type: 'text',
       marks: [{
@@ -217,8 +218,14 @@ const handleTextChunk = (text) => {
       text: textStr
     };
 
-    // Insert the new content
+    // Insert the raw content with animation mark
     props.editor.commands.insertContent(wrappedContent);
+    
+    // Prevent race conditions - do not call formatDocument if we are already formatting
+    pendingFormatting.value = true;
+    if (!isFormatting.value) {
+      await runSafeFormat();
+    }
     
     // Hide the AI Writer after content is received
     props.handleClose();
@@ -228,13 +235,60 @@ const handleTextChunk = (text) => {
   }
 };
 
-// Handler for when the stream is done
-const handleDone = () => {
+/**
+ * Run formatting when it's safe (no other formatting is in progress)
+ * Recursively call itself if we are still needing to process raw requests from
+ * pendingFormatting.value
+ */
+const runSafeFormat = async () => {
+  if (isFormatting.value) return;
+  
+  try {
+    isFormatting.value = true;
+    pendingFormatting.value = false;
+
+    await nextTick();
+
+    formatDocument(props.editor);
+    
+    // Check if more formatting requests arrived while we were formatting
+    if (pendingFormatting.value) {
+      pendingFormatting.value = false;
+      await runSafeFormat();
+    }
+  } finally {
+    isFormatting.value = false;
+  }
+};
+
+/**
+ * Handler for when the stream is done
+ * 
+ * We need to make sure we're not currently running any formatting before our final call
+ * 
+ * We can do this by using a short recursive polling system to wait.
+ */
+const handleDone = async () => {
+  if (pendingFormatting.value || isFormatting.value) {
+    pendingFormatting.value = true;
+    await new Promise(resolve => {
+      const checkFormatting = () => {
+        if (!isFormatting.value && !pendingFormatting.value) {
+          resolve();
+        } else {
+          setTimeout(checkFormatting, 100);
+        }
+      };
+      checkFormatting();
+    });
+  }
+
+  await runSafeFormat();
+  
   // If we are done we can remove the animation mark
   // We need to wait for the animation to finish before removing the mark
   setTimeout(() => {
     props.editor.commands.removeAiMark('aiAnimationMark');
-    // Remove the highlight when we're done
     emitAiHighlight('remove');
   }, 1000);
 };
@@ -245,7 +299,7 @@ const handleSubmit = async () => {
   isError.value = '';
   textProcessingStarted.value = false;
   previousText.value = '';
-  isLoading.value = true;  // Set loading to true before starting the operation
+  isLoading.value = true;
 
   try {
     // Close the AI Writer immediately and transition to loading states
@@ -329,7 +383,6 @@ const handleInput = (event) => {
   <div class="ai-writer prosemirror-isolated" ref="aiWriterRef" @mousedown.stop>
     <div class="ai-user-input-field">
       <span class="ai-textarea-icon" v-html="edit"></span>
-      <!-- Replace contenteditable div with textarea -->
       <textarea
         ref="editableRef"
         class="ai-textarea"
