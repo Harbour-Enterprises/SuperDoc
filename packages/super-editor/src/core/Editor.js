@@ -1085,7 +1085,6 @@ export class Editor extends EventEmitter {
 
     const pagination = this.options.extensions.find((e) => e.name === 'pagination');
     if (pagination && this.options.pagination) {
-      console.debug('🔗 [super-editor] Initializing pagination');
       const sectionData = await initPaginationData(this);
       this.storage.pagination.sectionData = sectionData;
 
@@ -1322,7 +1321,10 @@ export class Editor extends EventEmitter {
       commentsType,
       comments,
       this,
+      exportJsonOnly,
     );
+  
+    if (exportXmlOnly || exportJsonOnly) return documentXml;
 
     const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
     const styles = this.converter.schemaToXml(this.converter.convertedXml['word/styles.xml'].elements[0]);
@@ -1354,7 +1356,7 @@ export class Editor extends EventEmitter {
       updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
       updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
     };
-
+  
     const zipper = new DocxZipper();
     const result = await zipper.updateZip({
       docx: this.options.content,

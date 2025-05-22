@@ -9,6 +9,8 @@ const DocumentEditor = ({
 }) => {
   const editorRef = useRef(null);
 
+  console.debug('data', initialData);
+
   useEffect(() => {
     const editor = new SuperDoc({
       selector: '#superdoc',
