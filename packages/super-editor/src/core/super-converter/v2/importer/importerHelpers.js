@@ -1,6 +1,8 @@
 import { handleStyleChangeMarks, parseMarks } from './markImporter.js';
 import { SuperConverter } from '../../SuperConverter.js';
 
+let index = 0;
+
 /**
  *
  * @param {XmlNode} node
@@ -92,3 +94,67 @@ export function hasTextNode(elements) {
   const runsHaveText = runs.some((run) => run.elements.some((el) => el.name === 'w:t'));
   return runsHaveText;
 }
+
+export const generateUniqueId = () => `fillable-${index++}`;
+
+/**
+ *
+ * @param {string} text
+ * @returns [parts of text including if it's fillable field]
+ *
+ */
+export const extractFillableParts = (text) => {
+  const regex = /(\[Insert[^\]]*\]|\[\[[^\]]*\]\]|\{\{[^}]+\}\}|___+|\.{3,}|\[[^\]]+\])/g;
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push({ text: text.slice(lastIndex, match.index), fillable: false });
+    }
+    parts.push({ text: match[0], fillable: true });
+    lastIndex = regex.lastIndex;
+  }
+
+  if (lastIndex < text.length) {
+    parts.push({ text: text.slice(lastIndex), fillable: false });
+  }
+
+  return parts;
+};
+
+/**
+ *
+ * @param {Node} node
+ * @param {Array} parts
+ * @returns [{Node}]  processed node
+ *
+ */
+export const getProcessedNode = (node, parts) => {
+  const { type } = node;
+  const { attributes, marks = [] } = parseProperties(node);
+  return parts.flatMap((part) => {
+    let attrs = {type, attributes: attributes || {}}
+    if (part.fillable) {
+      let label = part.text;
+      attrs.fieldId = generateUniqueId();
+      attrs.displayLabel = label;
+      attrs.highlighted = false;
+      attrs.type = "text";
+      return {
+        type: 'fieldAnnotation',
+        attrs: attrs,
+        marks,
+      };
+    }
+    return {
+      type: getElementName(node),
+      text: part.text,
+      attrs: attrs,
+      marks,
+    };
+  });
+};
+
+

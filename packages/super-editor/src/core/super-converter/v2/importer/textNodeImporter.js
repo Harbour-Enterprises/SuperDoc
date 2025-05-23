@@ -1,4 +1,9 @@
-import { getElementName, parseProperties } from './importerHelpers.js';
+import {
+  extractFillableParts,
+  getElementName,
+  parseProperties,
+  getProcessedNode
+} from './importerHelpers.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -24,16 +29,20 @@ export const handleTextNode = (params) => {
 
   // Ignore others - can catch other special cases here if necessary
   else return { nodes: [], consumed: 0 };
-
+  let resultNodes;
+  if (!params.editor.options.aiDetection) {
+    resultNodes = [{
+      type: getElementName(node),
+      text: text,
+      attrs: {type, attributes: attributes || {}},
+      marks,
+    }];
+  } else {
+    const parts = extractFillableParts(text);
+    resultNodes = getProcessedNode(node, parts);
+  }
   return {
-    nodes: [
-      {
-        type: getElementName(node),
-        text: text,
-        attrs: { type, attributes: attributes || {} },
-        marks,
-      },
-    ],
+    nodes: resultNodes,
     consumed: 1,
   };
 };

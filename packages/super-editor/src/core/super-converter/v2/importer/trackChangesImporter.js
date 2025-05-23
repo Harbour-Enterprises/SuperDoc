@@ -19,8 +19,8 @@ export const handleTrackChangeNode = (params) => {
   if (['w:ins', 'w:del'].includes(mainNode.name)) {
     node = mainNode;
   } else {
-    const sdtContent = mainNode.elements.find((el) => el.name === 'w:sdtContent');
-    const trackedChange = sdtContent?.elements.find((el) => ['w:ins', 'w:del'].includes(el.name));
+    const sdtContent = mainNode.elements?.find((el) => el.name === 'w:sdtContent');
+    const trackedChange = sdtContent?.elements?.find((el) => ['w:ins', 'w:del'].includes(el.name));
     if (trackedChange) node = trackedChange;
   }
 
