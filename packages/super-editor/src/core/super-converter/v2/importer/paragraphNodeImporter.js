@@ -136,7 +136,6 @@ export const handleParagraphNode = (params) => {
       content: mergeTextNodes(schemaNode.content),
     };
   }
-
   // Pass through this paragraph's sectPr, if any
   const sectPr = pPr?.elements?.find((el) => el.name === 'w:sectPr');
   if (sectPr) {
@@ -144,18 +143,11 @@ export const handleParagraphNode = (params) => {
     schemaNode.attrs.paragraphProperties.sectPr = sectPr;
     schemaNode.attrs.pageBreakSource = 'sectPr';
   };
-
   return { nodes: schemaNode ? [schemaNode] : [], consumed: 1 };
 };
 
 export const getParagraphIndent = (node, docx, styleId = '') => {
-  const indent = {
-    left: 0,
-    right: 0,
-    firstLine: 0,
-    hanging: 0,
-    textIndent: 0,
-  };
+  const indent = {};
 
   const { indent: pDefaultIndent = {} } = getDefaultParagraphStyle(docx, styleId);
 
@@ -192,12 +184,7 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
 
 export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
   // Check if we have default paragraph styles to override
-  const spacing = {
-    lineSpaceAfter: 0,
-    lineSpaceBefore: 0,
-    line: 0,
-    lineRule: null,
-  }
+  const spacing = {};
   
   const { spacing: pDefaultSpacing = {} } = getDefaultParagraphStyle(docx, styleId);
   let lineSpaceAfter, lineSpaceBefore, line, lineRuleStyle;
