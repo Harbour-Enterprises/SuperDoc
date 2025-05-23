@@ -92,6 +92,7 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     expect(attrs.indent.left).toBeUndefined();
     expect(attrs.indent.hanging).toBeUndefined();
     expect(attrs.level).toBe(expectedLevel);
+    // expect(attrs.styleId).toBe('ListParagraph');
 
     const exportedList1 = body.elements[0];
     const pPr = exportedList1.elements.find((s) => s.name === 'w:pPr');
@@ -114,6 +115,12 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const indentHanging = indentTag?.attributes['w:hanging'];
     expect(indentLeft).toBeUndefined();
     expect(indentHanging).toBeUndefined();
+  
+    // Ensure styleId is passed through correctly
+    const styleId = pPr?.elements.find((s) => s.name === 'w:pStyle');
+    expect(styleId).toBeDefined();
+    const styleIdVal = styleId?.attributes['w:val'];
+    expect(styleIdVal).toBe('ListParagraph');
   });
 
   it('imports/exports the second item (custom indent)', () => {

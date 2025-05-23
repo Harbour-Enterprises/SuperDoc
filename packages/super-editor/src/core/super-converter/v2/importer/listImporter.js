@@ -133,6 +133,7 @@ function handleListNodes(params, node) {
   attrs.numId = currentListNumId;
   attrs.level = iLvl;
   attrs.numPrType = numPrType;
+  attrs.styleId = styleId;
 
   // Get the contents of the node
   node.isList = true;
@@ -246,11 +247,10 @@ const getNumIdFromTag = (tag) => {
  * @param {Object} docx The docx data
  * @returns {Object} The style tag
  */
-function getStyleTagFromStyleId(styleId, docx) {
+export function getStyleTagFromStyleId(styleId, docx) {
   const styles = docx['word/styles.xml'];
-  if (!styles) {
-    return {};
-  }
+  if (!styles) return {};
+
   const styleEls = styles.elements;
   const wStyles = styleEls.find((el) => el.name === 'w:styles');
   const styleTags = wStyles.elements.filter((style) => style.name === 'w:style');
@@ -269,7 +269,7 @@ function getStyleTagFromStyleId(styleId, docx) {
  * @param {Set} seenStyleIds The set of style IDs we've already seen to avoid circular references
  * @returns {string|null} The numId or null if not found
  */
-function getNumPrRecursive({ node, styleId, docx, seenStyleIds = new Set() }) {
+export function getNumPrRecursive({ node, styleId, docx, seenStyleIds = new Set() }) {
   const initialPpr = node?.elements?.find((el) => el.name === 'w:pPr');
   const initialNumPr = initialPpr?.elements?.find((el) => el.name === 'w:numPr');
   let numPr = initialNumPr;
@@ -331,29 +331,6 @@ const unorderedListTypes = [
   'disc', // Disc bullets (●)
 ];
 
-/**
- * Helper to check if all elements in a list def level are the same except
- * the start number value. If so, we can consider these the same list
- * @param {string} firstListId The numId of the first list to compare.
- * @param {string} secondListId The numId of the second list to compare.
- * @param {int} level The ilvl of the list level to compare.
- * @param {Object} docx The docx data
- * @returns {boolean} Whether the list level definitions are the same based on this specific rule.
- */
-const isSameListLevelDefsExceptStart = ({ firstListId, secondListId, level, pStyleId, docx }) => {
-  const { numFmt, lvlText, lvlJc } = getListLevelDefinitionTag(firstListId, level, pStyleId, docx);
-  const {
-    numFmt: numFmt2,
-    lvlText: lvlText2,
-    lvlJc: lvlJc2,
-  } = getListLevelDefinitionTag(secondListId, level, pStyleId, docx);
-
-  const sameNumFmt = numFmt === numFmt2;
-  const sameLvlText = lvlText === lvlText2;
-  const sameLvlJc = lvlJc === lvlJc2;
-  return sameNumFmt && sameLvlText && sameLvlJc;
-};
-
 const getListNumIdFromStyleRef = (styleId, docx) => {
   const styles = docx['word/styles.xml'];
   if (!styles) return null;
@@ -396,6 +373,27 @@ const getListNumIdFromStyleRef = (styleId, docx) => {
   return { numId, ilvl };
 };
 
+export const getAbstractDefinition = (numId, docx) => {
+  const def = docx['word/numbering.xml'];
+  if (!def) return {};
+
+  const { elements } = def;
+  const listData = elements[0];
+
+  const numberingElements = listData.elements;
+  const abstractDefinitions = numberingElements.filter((style) => style.name === 'w:abstractNum');
+  const numDefinitions = numberingElements.filter((style) => style.name === 'w:num');
+  const numDefinition = numDefinitions.find((style) => style.attributes['w:numId'] == numId);
+
+  const abstractNumId = numDefinition?.elements[0].attributes['w:val'];
+  console.debug('listData', abstractNumId);
+
+  const listDefinitionForThisNumId = abstractDefinitions?.find(
+    (style) => style.attributes['w:abstractNumId'] === abstractNumId,
+  );
+  return listDefinitionForThisNumId;
+}
+
 /**
  * Helper to get the list level definition tag for a specific list level
  * @param {string} numId The numId of the list
@@ -404,27 +402,13 @@ const getListNumIdFromStyleRef = (styleId, docx) => {
  * @returns {Object} The list level definition tag start, numFmt, lvlText and lvlJc
  */
 const getListLevelDefinitionTag = (numId, level, pStyleId, docx) => {
-  const def = docx['word/numbering.xml'];
-  if (!def) return {};
-
-  const { elements } = def;
-  const listData = elements[0];
-
   if (pStyleId) {
     const { numId: numIdFromStyles, ilvl: iLvlFromStyles } = getListNumIdFromStyleRef(pStyleId, docx) || {};
     if (!numId && numIdFromStyles) numId = numIdFromStyles;
     if (!level && iLvlFromStyles) level = iLvlFromStyles ? parseInt(iLvlFromStyles) : null;
   }
 
-  const numberingElements = listData.elements;
-  const abstractDefinitions = numberingElements.filter((style) => style.name === 'w:abstractNum');
-  const numDefinitions = numberingElements.filter((style) => style.name === 'w:num');
-  const numDefinition = numDefinitions.find((style) => style.attributes['w:numId'] === numId);
-
-  const abstractNumId = numDefinition?.elements[0].attributes['w:val'];
-  const listDefinitionForThisNumId = abstractDefinitions?.find(
-    (style) => style.attributes['w:abstractNumId'] === abstractNumId,
-  );
+  const listDefinitionForThisNumId = getAbstractDefinition(numId, docx);
   const currentLevel = getDefinitionForLevel(listDefinitionForThisNumId, level);
 
   const numStyleLink = listDefinitionForThisNumId?.elements?.find((style) => style.name === 'w:numStyleLink');
@@ -508,7 +492,7 @@ export function getNodeNumberingDefinition(item, level, docx) {
   return { listType, listOrderingType: listTypeDef, listrPrs, listpPrs, start, lvlText, lvlJc };
 }
 
-function getDefinitionForLevel(data, level) {
+export function getDefinitionForLevel(data, level) {
   return data?.elements?.find((item) => Number(item.attributes['w:ilvl']) === level);
 }
 
