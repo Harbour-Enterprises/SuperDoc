@@ -1,4 +1,6 @@
 import { Node, Attribute } from '@core/index.js';
+import { Plugin, PluginKey } from 'prosemirror-state';
+import { Decoration, DecorationSet } from 'prosemirror-view';
 import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 import { findChildren, getMarkType } from '@core/helpers/index.js';
 import { parseSizeUnit } from '@core/utilities/index.js';
@@ -53,21 +55,7 @@ export const ListItem = Node.create({
         if (val.endsWith('px')) return parseFloat(val);
         return parseFloat(val) * 96;
       }
-      const explicitTextIndentPx = parseIndent(textIndent);
-  
-      // Clamp that override to never exceed the defined hanging:
-      // const hangPx = explicitTextIndentPx > 0
-      //   ? Math.min(explicitPx, indent.hanging)
-      //   : indent.hanging;
-  
-      // Compute exactly where the marker should sit:
-      //    • Nested lists (listLevel>0) and any explicit override → hangPx  
-      //    • Top‑level with no override → indent.left - 1.5*hangPx
-      // const isOverride = explicitPx > 0 || listLevel > 0;
-      // const markerOffset = isOverride
-      //   ? hangPx
-      //   : indent.left - 1.5 * hangPx;
-  
+
       // Build the <li> and style it:
       const dom = document.createElement('li');
       dom.style.position  = 'relative';
@@ -110,6 +98,8 @@ export const ListItem = Node.create({
         }
       });
 
+      //TODO: Set the indentation and spacing from styles 
+
       // Place the custom marker:
       const numberDom = document.createElement('span');
       numberDom.textContent = orderMarker;
@@ -132,31 +122,31 @@ export const ListItem = Node.create({
   addAttributes() {
     return {
       // Virtual attribute.
-      markerType: {
-        default: null,
-        renderDOM: (attrs) => {
-          let { listLevel, listNumberingType, lvlText } = attrs;
-          let hasListLevel = !!listLevel?.length;
+      // markerType: {
+      //   default: null,
+      //   renderDOM: (attrs) => {
+      //     let { listLevel, listNumberingType, lvlText } = attrs;
+      //     let hasListLevel = !!listLevel?.length;
 
-          if (!hasListLevel || !lvlText) {
-            return {};
-          }
+      //     if (!hasListLevel || !lvlText) {
+      //       return {};
+      //     }
 
-          // MS Word has many custom ordered list options.
-          // We need to generate the correct index here.
-          let orderMarker = generateOrderedListIndex({
-            listLevel,
-            lvlText,
-            listNumberingType,
-          });
+      //     // MS Word has many custom ordered list options.
+      //     // We need to generate the correct index here.
+      //     let orderMarker = generateOrderedListIndex({
+      //       listLevel,
+      //       lvlText,
+      //       listNumberingType,
+      //     });
 
-          if (!orderMarker) return {};
+      //     if (!orderMarker) return {};
 
-          return {
-            'data-marker-type': orderMarker,
-          };
-        },
-      },
+      //     return {
+      //       'data-marker-type': orderMarker,
+      //     };
+      //   },
+      // },
 
       lvlText: { rendered: false, keepOnSplit: true, },
       listNumberingType: { rendered: false, keepOnSplit: true, },
@@ -218,7 +208,8 @@ export const ListItem = Node.create({
   },
   
   addPmPlugins() {
-    return [styledListMarker()];
+    return [];
+    // return [styledListMarker()];
   },
 
   addShortcuts() {
