@@ -8,6 +8,7 @@ import { styledListMarker } from './helpers/styledListMarkerPlugin.js';
 import { findParentNode } from '@helpers/index.js';
 import { LinkedStylesPluginKey } from '../linked-styles/linked-styles.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { getStyleTagFromStyleId, getAbstractDefinition, getDefinitionForLevel } from '../../core/super-converter/v2/importer/listImporter.js';
 
 export const ListItem = Node.create({
   name: 'listItem',
@@ -39,7 +40,7 @@ export const ListItem = Node.create({
   addNodeView() {
     return ({ node, editor, getPos }) => {
       const { attrs } = node;
-      const { listLevel, listNumberingType, lvlText, indent, textIndent, start } = attrs;
+      const { listLevel, listNumberingType, lvlText, numId, level } = attrs;
 
       let orderMarker = '';
       if (listLevel) {
@@ -63,6 +64,8 @@ export const ListItem = Node.create({
       dom.style.position  = 'relative';
       dom.style.listStyle = 'none';
       dom.style.display = 'flex';
+
+      const defs = getListItemStyleDefinitions({ node, numId, level, editor });
 
       // Get any style based decorations from the linked styles plugin:
       const { state } = editor.view;
@@ -252,7 +255,13 @@ export const ListItem = Node.create({
         default: null,
         rendered: false,
         keepOnSplit: true,
-      }
+      },
+
+      styleId: {
+        rendered: false,
+        keepOnSplit: true,
+        keepOnSplit: true,
+      },
     };
   },
 
@@ -348,4 +357,37 @@ function getListItemTextStyleMarks(listItem, markType) {
     });
   });
   return textStyleMarks;
+}
+
+const getListItemStyleId = (listItem) => {
+  const firstContent = listItem.content?.content[0] || {};
+  const { attrs = {} } = firstContent;
+  const { styleId } = attrs;
+  return styleId;
+}
+
+const getListItemNumId = (listItem) => {
+  const firstContent = listItem.content?.content[0] || {};
+  const { attrs = {} } = firstContent;
+  const { numId } = attrs;
+  return numId;
+}
+
+export const getListItemStyleDefinitions = ({ styleId, numId, level, editor }) => {  
+  const docx = editor?.converter?.convertedXml;
+  console.debug('--docx', editor)
+
+  // We need definitions for the styleId if we have one.
+  const styleDefinition = getStyleTagFromStyleId(styleId, docx);
+  console.debug('styleDefinition:', styleDefinition);
+
+  // We also check definitions for the numId which can contain styles.
+  const abstractDefinition = getAbstractDefinition(numId, docx);
+  console.debug('abstractDefinition:', abstractDefinition);
+  const numDefinition = getDefinitionForLevel(abstractDefinition, level);
+  console.debug('numDefinition:', numDefinition);
+
+  return {
+    styleDefinition
+  }
 }
