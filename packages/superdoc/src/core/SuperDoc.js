@@ -2,14 +2,14 @@
 import '../style.css';
 import '@harbour-enterprises/super-editor/style.css';
 
-import EventEmitter from 'eventemitter3';
+import { EventEmitter } from 'eventemitter3';
 import { v4 as uuidv4 } from 'uuid';
 import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 
 import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
 import { SuperToolbar, createZip } from '@harbour-enterprises/super-editor';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
-import { createSuperdocVueApp } from './create-app';
+import { createSuperdocVueApp } from './create-app.js';
 import { shuffleArray } from '@harbour-enterprises/common/collaboration/awareness.js';
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
 import { createDownload, cleanName } from './helpers/export.js';
@@ -23,21 +23,27 @@ import {
  * @typedef {Object} User The current user of this superdoc
  * @property {string} name The user's name
  * @property {string} email The user's email
- * @property {string | null} image The user's photo
+ * @property {string | null} [image] The user's photo
  */
 
 /**
- * @typedef {Object} Telemetry Telemetry configuration
+ * @typedef {Object} TelemetryConfig Telemetry configuration
  * @property {boolean} [enabled=true] Whether telemetry is enabled
- * @property {string} [licenceKey] The licence key for telemetry
+ * @property {string} [licenseKey] The licence key for telemetry
  * @property {string} [endpoint] The endpoint for telemetry
+ * @property {string} [superdocVersion] The version of the superdoc
  */
 
 /**
  * @typedef {Object} Document
- * @property {string} id The ID of the document
+ * @property {string} [id] The ID of the document
  * @property {string} type The type of the document
  * @property {File | null} [data] The initial data of the document
+ * @property {string} [name] The name of the document
+ * @property {string} [url] The URL of the document
+ * @property {boolean} [isNewFile] Whether the document is a new file
+ * @property {import('yjs').Doc} [ydoc] The Yjs document for collaboration
+ * @property {import('@hocuspocus/provider').HocuspocusProvider} [provider] The provider for collaboration
  */
 
 /**
@@ -46,13 +52,24 @@ import {
  * @property {Object} [ai] AI module configuration
  * @property {string} [ai.apiKey] Harbour API key for AI features
  * @property {string} [ai.endpoint] Custom endpoint URL for AI services
+ * @property {Object} [collaboration] Collaboration module configuration
+ * @property {Object} [toolbar] Toolbar module configuration
+ */
+
+/** @typedef {import('@harbour-enterprises/super-editor').Editor} Editor */
+
+/**
+ * @typedef {string} DocumentMode
+ * @property {'editing'} editing The document is in editing mode
+ * @property {'viewing'} viewing The document is in viewing mode
+ * @property {'suggesting'} suggesting The document is in suggesting mode
  */
 
 /**
  * @typedef {Object} Config
  * @property {string} [superdocId] The ID of the SuperDoc
  * @property {string} selector The selector to mount the SuperDoc into
- * @property {'editing' | 'viewing' | 'suggesting'} documentMode The mode of the document
+ * @property {DocumentMode} documentMode The mode of the document
  * @property {'editor' | 'viewer' | 'suggester'} [role] The role of the user in this SuperDoc
  * @property {Object | string} [document] The document to load. If a string, it will be treated as a URL
  * @property {Array<Document>} documents The documents to load
@@ -65,11 +82,11 @@ import {
  * @property {Array<string>} [toolbarGroups] Toolbar groups to show
  * @property {Object} [toolbarIcons] Icons to show in the toolbar
  * @property {boolean} [isDev] Whether the SuperDoc is in development mode
- * @property {Telemetry} [telemetry] Telemetry configuration
+ * @property {TelemetryConfig} [telemetry] Telemetry configuration
  * @property {(editor: Editor) => void} [onEditorBeforeCreate] Callback before an editor is created
  * @property {(editor: Editor) => void} [onEditorCreate] Callback after an editor is created
  * @property {() => void} [onEditorDestroy] Callback after an editor is destroyed
- * @property {(params: { error: object, editor: Editor, documentId: string, file: File })} [onContentError] Callback when there is an error in the content
+ * @property {(params: { error: object, editor: Editor, documentId: string, file: File }) => void} [onContentError] Callback when there is an error in the content
  * @property {(editor: { superdoc: SuperDoc }) => void} [onReady] Callback when the SuperDoc is ready
  * @property {(params: { type: string, data: object}) => void} [onCommentsUpdate] Callback when comments are updated
  * @property {(params: { context: SuperDoc, states: Array }) => void} [onAwarenessUpdate] Callback when awareness is updated
@@ -78,22 +95,43 @@ import {
  * @property {(isOpened: boolean) => void} [onSidebarToggle] Callback when the sidebar is toggled
  * @property {(params: { editor: Editor }) => void} [onCollaborationReady] Callback when collaboration is ready
  * @property {(params: { editor: Editor }) => void} [onEditorUpdate] Callback when document is updated
- * @property {(params: { error: Exception }) => void} [onException] Callback when an exception is thrown
+ * @property {(params: { error: Error }) => void} [onException] Callback when an exception is thrown
+ * @property {(params: { isRendered: boolean }) => void} [onCommentsListChange] Callback when the comments list is rendered
+ * @property {string} [format] The format of the document (docx, pdf, html)
+ * @property {Object[]} [editorExtensions] The extensions to load for the editor
+ * @property {boolean} [isInternal] Whether the SuperDoc is internal
+ * @property {string} [title] The title of the SuperDoc
+ * @property {Object[]} [conversations] The conversations to load
+ * @property {boolean} [isLocked] Whether the SuperDoc is locked
+ * @property {Object} [pdfViewer] The PDF viewer configuration
+ * @property {function(File): Promise<string>} [handleImageUpload] The function to handle image uploads
+ * @property {User} [lockedBy] The user who locked the SuperDoc
+ * @property {HocuspocusProviderWebsocket} [socket] The socket connection for collaboration
+ * @property {boolean} [rulers] Whether to show the ruler in the editor
  */
 
 /**
  * SuperDoc class
  * Expects a config object
+ * 
  * @class
+ * @extends EventEmitter
  */
 export class SuperDoc extends EventEmitter {
   /** @type {Array<string>} */
   static allowedTypes = [DOCX, PDF, HTML];
 
-  /** @type {number} */
+  /** @type {string} */
   version;
 
+  /** @type {User[]} */
   users;
+
+  /** @type {import('yjs').Doc | undefined} */
+  ydoc;
+  
+  /** @type {import('@hocuspocus/provider').HocuspocusProvider | undefined} */
+  provider;
 
   /** @type {Config} */
   config = {
@@ -115,7 +153,6 @@ export class SuperDoc extends EventEmitter {
     title: 'SuperDoc',
     conversations: [],
     pagination: false, // Optional: Whether to show pagination in SuperEditors
-    isCollaborative: false,
     isInternal: false,
 
     // toolbar config
@@ -169,6 +206,7 @@ export class SuperDoc extends EventEmitter {
     this.userColorMap = new Map();
     this.colorIndex = 0;
 
+    // @ts-ignore
     this.version = __APP_VERSION__;
     console.debug('🦋 [superdoc] Using SuperDoc version:', this.version);
 
@@ -203,9 +241,13 @@ export class SuperDoc extends EventEmitter {
     this.lockedBy = this.config.lockedBy || null;
 
     // If a toolbar element is provided, render a toolbar
-    this.#addToolbar(this);
+    this.#addToolbar();
   }
 
+  /**
+   * Get the number of editors that are required for this superdoc
+   * @returns {number} The number of required editors
+   */
   get requiredNumberOfEditors() {
     return this.superdocStore.documents.filter((d) => d.type === DOCX).length;
   }
@@ -251,7 +293,7 @@ export class SuperDoc extends EventEmitter {
   }
 
   #initVueApp() {
-    const { app, pinia, superdocStore, commentsStore } = createSuperdocVueApp(this);
+    const { app, pinia, superdocStore, commentsStore } = createSuperdocVueApp();
     this.app = app;
     this.pinia = pinia;
     this.app.config.globalProperties.$config = this.config;
@@ -260,7 +302,6 @@ export class SuperDoc extends EventEmitter {
     this.app.config.globalProperties.$superdoc = this;
     this.superdocStore = superdocStore;
     this.commentsStore = commentsStore;
-    this.version = this.config.version;
     this.superdocStore.init(this.config);
     this.commentsStore.init(this.config.modules.comments);
   }
@@ -309,7 +350,6 @@ export class SuperDoc extends EventEmitter {
 
   /**
    * Add a user to the shared users list
-   * 
    * @param {Object} user The user to add
    * @returns {void}
    */
@@ -320,7 +360,6 @@ export class SuperDoc extends EventEmitter {
 
   /**
    * Remove a user from the shared users list
-   * 
    * @param {String} email The email of the user to remove
    * @returns {void}
    */
@@ -341,36 +380,68 @@ export class SuperDoc extends EventEmitter {
     });
   }
 
+  /**
+   * Triggered when there is an error in the content
+   * @param {Object} param0
+   * @param {Error} param0.error The error that occurred
+   * @param {Editor} param0.editor The editor that caused the error
+   */
   onContentError({ error, editor }) {
     const { documentId } = editor.options;
     const doc = this.superdocStore.documents.find((d) => d.id === documentId);
     this.config.onContentError({ error, editor, documentId: doc.id, file: doc.data });
   }
 
+  /**
+   * Triggered when the PDF document is ready
+   * @returns {void}
+   */
   broadcastPdfDocumentReady() {
     this.emit('pdf-document-ready');
   }
 
+  /**
+   * Triggered when the superdoc is ready
+   * @returns {void}
+   */
   broadcastReady() {
     if (this.readyEditors === this.requiredNumberOfEditors) {
       this.emit('ready', { superdoc: this });
     }
   }
 
+  /**
+   * Triggered before an editor is created
+   * @param {Editor} editor The editor that is about to be created
+   * @returns {void}
+   */
   broadcastEditorBeforeCreate(editor) {
     this.emit('editorBeforeCreate', { editor });
   }
 
+  /**
+   * Triggered when an editor is created
+   * @param {Editor} editor The editor that was created
+   * @returns {void}
+   */
   broadcastEditorCreate(editor) {
     this.readyEditors++;
     this.broadcastReady();
     this.emit('editorCreate', { editor });
   }
 
+  /**
+   * Triggered when an editor is destroyed
+   * @returns {void}
+   */
   broadcastEditorDestroy() {
     this.emit('editorDestroy');
   }
 
+  /**
+   * Triggered when the comments sidebar is toggled
+   * @param {boolean} isOpened 
+   */
   broadcastSidebarToggle(isOpened) {
     this.emit('sidebar-toggle', isOpened); 
   }
@@ -379,6 +450,11 @@ export class SuperDoc extends EventEmitter {
     console.debug('🦋 🦸‍♀️ [superdoc]', ...args);
   }
 
+  /**
+   * Set the active editor
+   * @param {Editor} editor The editor to set as active
+   * @returns {void}
+   */
   setActiveEditor(editor) {
     this.activeEditor = editor;
     if (this.toolbar) this.toolbar.setActiveEditor(editor);
@@ -425,6 +501,12 @@ export class SuperDoc extends EventEmitter {
     this.once('editorCreate', () => this.toolbar.updateToolbarState()); 
   }
 
+  /**
+   * Add a comments list to the superdoc
+   * Requires the comments module to be enabled
+   * @param {Element} element The DOM element to render the comments list in
+   * @returns {void}
+   */
   addCommentsList(element) {
     if (!this.config?.modules?.comments || this.config.role === 'viewer') return;
     console.debug('🦋 [superdoc] Adding comments list to:', element);
@@ -433,6 +515,10 @@ export class SuperDoc extends EventEmitter {
     if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: true })
   }
 
+  /**
+   * Remove the comments list from the superdoc
+   * @returns {void}
+   */
   removeCommentsList() {
     if (this.commentsList) {
       this.commentsList.close();
@@ -441,6 +527,12 @@ export class SuperDoc extends EventEmitter {
     }
   }
 
+  /**
+   * Triggered when a toolbar command is executed
+   * @param {Object} param0
+   * @param {Object} param0.item The toolbar item that was clicked
+   * @param {string} param0.argument The argument passed to the command
+   */
   onToolbarCommand({ item, argument }) {
     if (item.command === 'setDocumentMode') {
       this.setDocumentMode(argument);
@@ -449,6 +541,11 @@ export class SuperDoc extends EventEmitter {
     }
   }
 
+  /**
+   * Set the document mode.
+   * @param {DocumentMode} type
+   * @returns {void}
+   */
   setDocumentMode(type) {
     if (!type) return;
 
@@ -516,10 +613,20 @@ export class SuperDoc extends EventEmitter {
     }
   }
 
+  /**
+   * Search for text or regex in the active editor
+   * @param {string | RegExp} text The text or regex to search for
+   * @returns {Object[]} The search results
+   */
   search(text) {
     return this.activeEditor?.commands.search(text);
   }
 
+  /**
+   * Go to the next search result
+   * @param {Object} match The match object
+   * @returns {void}
+   */
   goToSearchResult(match) {
     return this.activeEditor?.commands.goToSearchResult(match);
   }
@@ -538,6 +645,10 @@ export class SuperDoc extends EventEmitter {
     });
   }
 
+  /**
+   * Get the HTML content of all editors
+   * @returns {Array<string>} The HTML content of all editors
+   */
   getHTML() {
     const editors = [];
     this.superdocStore.documents.forEach((doc) => {
@@ -562,6 +673,17 @@ export class SuperDoc extends EventEmitter {
     this.emit('locked', { isLocked, lockedBy });
   }
 
+  /**
+   * Export the superdoc to a file
+   * @param {Object} params
+   * @param {string[]} [params.exportType]
+   * @param {string} [params.commentsType]
+   * @param {string} [params.exportedName]
+   * @param {Array} [params.additionalFiles]
+   * @param {Array} [params.additionalFileNames]
+   * @param {boolean} [params.isFinalDoc]
+   * @returns {Promise<void>} The exported file
+   */
   async export({
     exportType = ['docx'],
     commentsType,
@@ -593,6 +715,11 @@ export class SuperDoc extends EventEmitter {
     }
   };
 
+  /**
+   * Export editors to DOCX format.
+   * @param {{ commentsType?: string, isFinalDoc?: boolean }} [options]
+   * @returns {Promise<Array<Blob>>}
+   */
   async exportEditorsToDOCX({ commentsType, isFinalDoc } = {}) {    
     const comments = [];
     if (commentsType !== 'clean') {
@@ -635,6 +762,10 @@ export class SuperDoc extends EventEmitter {
     });
   }
 
+  /**
+   * Save the superdoc if in collaboration mode
+   * @returns {Promise<void[]>} Resolves when all documents have saved
+   */
   async save() {
     const savePromises = [
       this.#triggerCollaborationSaves(),
@@ -647,6 +778,10 @@ export class SuperDoc extends EventEmitter {
     return result;
   }
 
+  /**
+   * Destroy the superdoc instance
+   * @returns {void}
+   */
   destroy() {
     if (!this.app) {
       return;
@@ -672,10 +807,7 @@ export class SuperDoc extends EventEmitter {
       doc.ydoc?.destroy();
     });
 
-    this.superdocStore.reset();
-
-    // Clean up telemetry when editor is destroyed
-    this.telemetry?.destroy();
+    this.superdocStore.reset();;
 
     this.app.unmount();
     this.removeAllListeners();

@@ -1,11 +1,14 @@
 {
   "include": ["./src/**/*"],
   "compilerOptions": {
+    // "checkJs": true,
     "allowJs": true,
     "declaration": true,
     "emitDeclarationOnly": true,
     "outDir": "dist",
     "declarationMap": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
   }
 }

@@ -1,5 +1,5 @@
-import EventEmitter from 'eventemitter3';
-import { createApp, h } from 'vue';
+import { EventEmitter } from 'eventemitter3';
+import { createApp } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { TextSelection } from 'prosemirror-state';
 import { makeDefaultItems } from './defaultItems';
