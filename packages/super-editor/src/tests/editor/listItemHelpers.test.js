@@ -1,30 +1,53 @@
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
-import { getListItemStyleDefinitions } from '@extensions/list-item/list-item.js';
+import { getListItemStyleDefinitions, getVisibleIndent } from '@extensions/list-item/list-item.js';
 import { expect } from 'vitest';
 
-describe(' test getListItemStyleDefinitions', () => {
+describe(' test list item rendering indents from styles', () => {
 
   const filename = 'base-custom.docx';
   let docx, media, mediaFiles, fonts, editor;
   beforeAll(async () => ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename)));
   beforeEach(() => ({ editor } = initTestEditor({ content: docx, media, mediaFiles, fonts })));
 
-  it('can import the list item style definitions', () => {
+  // Global so we can access it in the tests
+  let stylePpr, numDefPpr;
+
+  it('[getListItemStyleDefinitions] can import the list item style definitions []', () => {
     const numId = 1;
     const level = 1;
-    const { styleDefinition } = getListItemStyleDefinitions({ styleId: 'ListParagraph', numId, level, editor });
-    expect(styleDefinition).toBeDefined();
+    const { stylePpr: stylePprResult, numDefPpr: numDefPprResult } = getListItemStyleDefinitions({ styleId: 'ListParagraph', numId, level, editor });
 
-    const { elements } = styleDefinition;
-    expect(elements.length).toBe(6);
+    stylePpr = stylePprResult;
+    numDefPpr = numDefPprResult;
 
-    const pPr = elements.find((el) => el.name === 'w:pPr');
-    expect(pPr).toBeDefined();
-
-    const indentTag = pPr.elements.find((el) => el.name === 'w:ind');
+    // Check the style definitions for indent
+    expect(stylePpr).toBeDefined();
+    const indentTag = stylePpr.elements.find((el) => el.name === 'w:ind');
     expect(indentTag).toBeDefined();
     const indentLeft = indentTag.attributes['w:left'];
     expect(indentLeft).toBe("720");
+    expect(indentTag.attributes['w:hanging']).toBeUndefined();
+    expect(indentTag.attributes['w:firstLine']).toBeUndefined();
+    expect(indentTag.attributes['w:right']).toBeUndefined();
+
+    // Check the numDef for indent
+    expect(numDefPpr).toBeDefined();
+    const numDefIndentTag = numDefPpr.elements.find((el) => el.name === 'w:ind');
+    expect(numDefIndentTag).toBeDefined();
+    const numDefIndentLeft = numDefIndentTag.attributes['w:left'];
+    const numDefIndentHanging = numDefIndentTag.attributes['w:hanging'];
+    expect(numDefIndentLeft).toBe("1440");
+    expect(numDefIndentHanging).toBe("360");
+    expect(numDefIndentTag.attributes['w:firstLine']).toBeUndefined();
+    expect(numDefIndentTag.attributes['w:right']).toBeUndefined();
   });
+
+  it('[getVisibleIndent] can calculate visible indent', () => {
+    const visibleIndent = getVisibleIndent(stylePpr, numDefPpr);
+    expect(visibleIndent).toBeDefined();
+    expect(visibleIndent.left).toBe(96);
+    expect(visibleIndent.hanging).toBe(24);
+    expect(visibleIndent.right).toBeUndefined();
+  })
 
 });
