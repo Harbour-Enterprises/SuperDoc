@@ -10,10 +10,11 @@ export const LinkedStylesPluginKey = new PluginKey('linkedStyles');
 export const LinkedStyles = Extension.create({
   name: 'linkedStyles',
 
-  priority: 200, // We need this plugin to run before the list plugins
+  priority: 1, // We need this plugin to run before the list plugins
 
   addPmPlugins() {
     return [createLinkedStylesPlugin(this.editor)];
+    // return [createLinkedStylesPlugin(this.editor)];
   },
 
   addCommands() {
@@ -152,10 +153,10 @@ export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpac
     // If no mark already in the node, we override the style
     if (!mark) {
       if (key === 'spacing' && includeSpacing && !hasParentSpacing) {
-        const space = getSpacingStyle(value);
-        Object.entries(space).forEach(([k, v]) => {
-          markValue[k] = v;
-        });
+        // const space = getSpacingStyle(value);
+        // Object.entries(space).forEach(([k, v]) => {
+        //   markValue[k] = v;
+        // });
       } else if (key === 'indent' && includeSpacing && !hasParentIndent) {
         const { leftIndent, rightIndent, firstLine } = value;
         
@@ -164,13 +165,12 @@ export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpac
         if (firstLine) markValue['text-indent'] = firstLine + 'px';
       } else if (key === 'bold') {
         markValue['font-weight'] = 'bold';
-      } else {
-        markValue[key] = value;
-      }
+      } else if (typeof value === 'string') markValue[key] = value;
     }
   });
   
-  return Object.entries(markValue).map(([key, value]) => `${key}: ${value}`).join(';');
+  const final = Object.entries(markValue).map(([key, value]) => `${key}: ${value}`).join(';');
+  return final;
 };
 
 /**

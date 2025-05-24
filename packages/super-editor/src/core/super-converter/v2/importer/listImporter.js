@@ -254,7 +254,8 @@ export function getStyleTagFromStyleId(styleId, docx) {
   const styleEls = styles.elements;
   const wStyles = styleEls.find((el) => el.name === 'w:styles');
   const styleTags = wStyles.elements.filter((style) => style.name === 'w:style');
-  return styleTags.find((tag) => tag.attributes['w:styleId'] === styleId);
+  const styleDef = styleTags.find((tag) => tag.attributes['w:styleId'] === styleId);
+  return styleDef;
 }
 
 /**
@@ -386,8 +387,6 @@ export const getAbstractDefinition = (numId, docx) => {
   const numDefinition = numDefinitions.find((style) => style.attributes['w:numId'] == numId);
 
   const abstractNumId = numDefinition?.elements[0].attributes['w:val'];
-  console.debug('listData', abstractNumId);
-
   const listDefinitionForThisNumId = abstractDefinitions?.find(
     (style) => style.attributes['w:abstractNumId'] === abstractNumId,
   );
@@ -496,7 +495,7 @@ export function getDefinitionForLevel(data, level) {
   return data?.elements?.find((item) => Number(item.attributes['w:ilvl']) === level);
 }
 
-function parseIndentElement(indElem) {
+export function parseIndentElement(indElem) {
   if (!indElem || !indElem.attributes) return {}
   const out = {}
 
@@ -504,19 +503,20 @@ function parseIndentElement(indElem) {
   if (indElem.attributes['w:right'] != null) out.right = twipsToPixels(indElem.attributes['w:right'])
   if (indElem.attributes['w:firstLine'] != null) out.firstLine = twipsToPixels(indElem.attributes['w:firstLine'])
   if (indElem.attributes['w:hanging'] != null) out.hanging = twipsToPixels(indElem.attributes['w:hanging'])
-  if (indElem.attributes['w:leftChars'] != null) out.leftChars = indElem.attributes['w:leftChars']
+  if (indElem.attributes['w:leftChars'] != null) out.leftChars = twipsToPixels(indElem.attributes['w:leftChars'])
   return out
 };
 
-function combineIndents(ind1 = {}, ind2 = {}) {
+export function combineIndents(ind1 = {}, ind2 = {}) {
   const indent = {};
   ['left', 'right', 'firstLine', 'hanging'].forEach(prop => {
     const v1 = ind1[prop] !== undefined ? Number(ind1[prop]) : null;
     const v2 = ind2[prop] !== undefined ? Number(ind2[prop]) : null;
 
     if (v1 != null && v2 != null) {
-      // both defined → take the larger
-      indent[prop] = Math.max(v1, v2);
+      // for left or hanging, if both defined → take the larger
+      if (prop === 'left' || prop === 'hanging') indent[prop] = Math.max(v1, v2);
+      else indent[prop] = v1; 
     } else if (v1 != null) {
       // only inline defined
       indent[prop] = v1;
