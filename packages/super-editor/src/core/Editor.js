@@ -42,6 +42,11 @@ import DocxZipper from '@core/DocxZipper.js';
 * @property {string} email The user's email
 * @property {string | null} image The user's photo
 */
+
+/**
+ * @typedef {Object} DocxNode A JSON representation of a docx node
+ */
+
 /**
  * @typedef {Object} EditorOptions
  * @property {HTMLElement} [element] - The container element for the editor

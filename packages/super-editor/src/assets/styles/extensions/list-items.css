@@ -1,0 +1,13 @@
+.sd-editor-list-item-node-view {
+  position: relative;
+}
+.sd-editor-list-item-numbering {
+  position: absolute;
+  cursor: pointer;
+}
+.sd-editor-list-item-numbering-selected {
+  background-color: red;
+}
+.sd-editor-list-item-content-dom {
+
+}
