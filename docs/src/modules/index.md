@@ -236,6 +236,7 @@ annotations: true
 
 
 # Annotate
+__available in SuperDoc > 0.11.35__
 
 SuperDoc's editor instance (`superdoc.activeEditor`) exposes the `annotate()` function, allowing you to insert values into the Field nodes, either for preview or final document export.
 
