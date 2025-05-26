@@ -178,6 +178,13 @@ onMounted(async () => {
 </style>
 
 <style scoped>
+.sd-toolbar {
+  width: 100%;
+  background: white;
+  position: relative;
+  z-index: 1;
+}
+
 .page-spacer {
   height: 11in;
   width: 60px;
@@ -199,6 +206,8 @@ onMounted(async () => {
 }
 
 .dev-app__layout {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100vh;
 }

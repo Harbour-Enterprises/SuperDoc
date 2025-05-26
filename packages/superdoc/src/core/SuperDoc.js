@@ -152,6 +152,7 @@ export class SuperDoc extends EventEmitter {
     title: 'SuperDoc',
     conversations: [],
     pagination: false, // Optional: Whether to show pagination in SuperEditors
+    paginationFloatingClass: null,
     isInternal: false,
 
     // toolbar config

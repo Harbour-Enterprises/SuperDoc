@@ -23,6 +23,8 @@ export function adjustPaginationBreaks(editorElem, editor) {
     if (!firstLeft) firstLeft = left;
     if (left !== firstLeft) {
       const diff = left - firstLeft;
+      // Note: elements with "position: fixed" do not work correctly with transform style.
+      // node.style.left = `${diff}px`;
       node.style.transform = `translateX(${diff}px)`;
     }
   });
