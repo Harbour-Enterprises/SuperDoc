@@ -236,6 +236,9 @@ onMounted(async () => {
 <style>
 .sd-toolbar {
   width: 100%;
+  background: white;
+  position: relative;
+  z-index: 1;
 }
 .comments-panel {
   width: 320px;
