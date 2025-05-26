@@ -26,7 +26,7 @@ export default defineConfig(({ mode }) => {
       __APP_VERSION__: JSON.stringify(superdocVersion),
     },
     optimizeDeps: {
-      exclude: ['yjs', 'tippy.js']
+      exclude: ['yjs', 'tippy.js', '@floating-ui/dom']
     },
     build: {
       target: 'es2020',

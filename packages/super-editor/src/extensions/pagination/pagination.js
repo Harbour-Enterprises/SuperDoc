@@ -7,8 +7,13 @@ import { CollaborationPluginKey } from '@extensions/collaboration/collaboration.
 import { ImagePlaceholderPluginKey } from '@extensions/image/imageHelpers/imagePlaceholderPlugin.js';
 import { LinkedStylesPluginKey } from '@extensions/linked-styles/linked-styles.js';
 import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestToPos.js';
+import { computePosition, autoUpdate, hide } from '@floating-ui/dom';
+
+const SEPARATOR_CLASS = 'pagination-separator';
+const SEPARATOR_FLOATING_CLASS = 'pagination-separator-floating';
 
 const isDebugging = false;
+const cleanupFunctions = new Set();
 
 export const Pagination = Extension.create({
   name: 'pagination',
@@ -41,6 +46,7 @@ export const Pagination = Extension.create({
    */
   addPmPlugins() {
     const editor = this.editor;
+
     let isUpdating = false;
 
     // Used to prevent unnecessary transactions
@@ -128,7 +134,7 @@ export const Pagination = Extension.create({
         let previousDecorations = DecorationSet.empty;
 
         return {
-          update: (view) => {
+          update: (view, prevState) => {
             if (!shouldUpdate || isUpdating) return;
 
             isUpdating = true;
@@ -140,6 +146,7 @@ export const Pagination = Extension.create({
              */
             if (isDebugging) console.debug('--- Calling performUpdate ---')
             performUpdate(editor, view, previousDecorations);
+
             isUpdating = false;
             shouldUpdate = false;
           },
@@ -147,12 +154,16 @@ export const Pagination = Extension.create({
       },
       props: {
         decorations(state) {
-        return PaginationPluginKey.getState(state).decorations;
+          return PaginationPluginKey.getState(state).decorations;
         },
       },
     });
 
     return [paginationPlugin];
+  },
+
+  onDestroy() {
+    cleanupFloatingSeparators();
   },
 });
 
@@ -217,8 +228,9 @@ const getHeaderFooterId = (currentPageNumber, sectionType, editor, node = null) 
  * @returns {void}
  */
 const performUpdate = (editor, view, previousDecorations) => {
-  const sectionData = editor.storage.pagination.sectionData;
+  const sectionData = editor.storage.pagination.sectionData;  
   const newDecorations = calculatePageBreaks(view, editor, sectionData);
+  const editorElement = editor.options.element;
 
   // Skip updating if decorations haven't changed
   if (!previousDecorations.eq(newDecorations)) {
@@ -227,6 +239,16 @@ const performUpdate = (editor, view, previousDecorations) => {
       { decorations: newDecorations }
     );
     view.dispatch(updateTransaction);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        cleanupFloatingSeparators();
+        const separators = [...editorElement.querySelectorAll(`.${SEPARATOR_CLASS}--table`)];
+        separators.forEach((separator) => {
+          createFloatingSeparator(separator);
+        });
+      });
+    });
   };
 
   // Emit that pagination has been updated
@@ -368,7 +390,10 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
 
     if (isHardBreakNode || shouldAddPageBreak) {
       const $currentPos = view.state.doc.resolve(currentPos);
+      const table = findParentNodeClosestToPos($currentPos, (node) => node.type.name === 'table');
       const tableRow = findParentNodeClosestToPos($currentPos, (node) => node.type.name === 'tableRow');
+
+      let isInTable = (table || tableRow) ? true : false;
 
       if (tableRow) {
         // If the node is in a table cell, then split the entire row.
@@ -406,7 +431,7 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
       const pageSpacer = Decoration.widget(breakPos, spacingNode, { key: 'stable-key' });
       decorations.push(pageSpacer);
 
-      const pageBreak = createPageBreak({ editor, header, footer });
+      const pageBreak = createPageBreak({ editor, header, footer, isInTable });
       decorations.push(Decoration.widget(breakPos, pageBreak, { key: 'stable-key' }));
 
       // Check if we have a hard page break node
@@ -553,7 +578,7 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, currentPageN
  * @param {HTMLElement} param0.footer The footer element
  * @returns {HTMLElement} The page break element
  */
-function createPageBreak({ editor, header, footer, footerBottom = null, isFirstHeader, isLastFooter }) {
+function createPageBreak({ editor, header, footer, footerBottom = null, isFirstHeader, isLastFooter, isInTable = false }) {
   const { pageSize, pageMargins } = editor.converter.pageStyles;
 
   let sectionHeight = 0;
@@ -577,9 +602,11 @@ function createPageBreak({ editor, header, footer, footerBottom = null, isFirstH
     const separatorHeight = 20;
     sectionHeight += separatorHeight;
     const separator = document.createElement('div');
-    separator.className = 'pagination-separator';
+    separator.classList.add(SEPARATOR_CLASS);
+    if (isInTable) {
+      separator.classList.add(`${SEPARATOR_CLASS}--table`);
+    }
     if (isDebugging) separator.style.backgroundColor = 'green';
-
     innerDiv.appendChild(separator);
   };
 
@@ -647,3 +674,71 @@ const onImageLoad = (editor) => {
     editor.view.dispatch(newTr);
   });
 };
+
+function createFloatingSeparator(separator) {
+  const floatingSeparator = document.createElement('div');
+  floatingSeparator.classList.add(SEPARATOR_FLOATING_CLASS);
+  // separator.append(floatingSeparator);
+  document.body.append(floatingSeparator);
+  
+  const updatePosition = () => {
+    computePosition(separator, floatingSeparator, {
+      strategy: 'fixed',
+      placement: 'top-start',
+      middleware: [
+        hide({
+          padding: {
+            top: 20,
+            bottom: 20,
+          },
+        }),
+        {
+          name: 'copy',
+          fn: ({ elements }) => {
+            const rect = elements.reference.getBoundingClientRect();
+            return {
+              x: rect.left,
+              y: rect.top,
+              data: {
+                width: rect.width,
+                height: rect.height,
+              },
+            };
+          },
+        },
+      ],
+    }).then(({ x, y, middlewareData }) => { 
+      Object.assign(floatingSeparator.style, {
+        top: `${y}px`,
+        left: `${x}px`,
+        width: `${middlewareData.copy.width}px`,
+        height: `${middlewareData.copy.height}px`,
+        visibility: middlewareData.hide?.referenceHidden ? 'hidden' : 'visible',
+      });
+    });
+  };
+
+  const cleanup = autoUpdate(
+    separator,
+    floatingSeparator,
+    updatePosition,
+    // { animationFrame: true },
+  );
+
+  const extendedCleanup = () => {
+    floatingSeparator?.remove();
+    cleanup();
+  };
+
+  cleanupFunctions.add(extendedCleanup);
+
+  return { 
+    cleanup: extendedCleanup, 
+    updatePosition,
+  };
+}
+
+function cleanupFloatingSeparators() {
+  cleanupFunctions.forEach((cleanup) => cleanup());
+  cleanupFunctions.clear();
+}
