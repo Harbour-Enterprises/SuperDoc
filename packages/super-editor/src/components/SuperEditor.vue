@@ -242,7 +242,12 @@ onBeforeUnmount(() => {
   </div>
 </template>
 
+
 <style scoped>
+.editor-element {
+  position: relative;
+}
+
 .super-editor-container {
   width: auto;
   height: auto;

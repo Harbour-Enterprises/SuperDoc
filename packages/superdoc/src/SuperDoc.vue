@@ -260,6 +260,7 @@ const onEditorException = ({ error, editor }) => {
 const editorOptions = (doc) => {
   const options = {
     pagination: proxy.$superdoc.config.pagination,
+    paginationFloating: proxy.$superdoc.config.paginationFloating,
     documentId: doc.id,
     user: proxy.$superdoc.user,
     users: proxy.$superdoc.users,
