@@ -107,7 +107,7 @@ export const handleParagraphNode = (params) => {
 
   if (docx) {
     const defaultStyleId = node.attributes?.['w:rsidRDefault'];
-    // schemaNode.attrs['spacing'] = getParagraphSpacing(node, docx, styleId, schemaNode.attrs.marksAttrs);
+    schemaNode.attrs['spacing'] = getParagraphSpacing(node, docx, styleId, schemaNode.attrs.marksAttrs);
     schemaNode.attrs['rsidRDefault'] = defaultStyleId;
   }
 

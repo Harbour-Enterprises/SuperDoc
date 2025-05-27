@@ -216,7 +216,7 @@ describe('[brken-list.docx] Test list breaking indentation formatting', () => {
     expect(attrs.numPrType).toBe('inline');
     expect(attrs.listLevel).toStrictEqual([1]);
     expect(attrs.indent.left).toBeUndefined();
-    expect(attrs.indent.leftChars).toBe("0");
+    expect(attrs.indent.leftChars).toBe(0);
   });
 });
 

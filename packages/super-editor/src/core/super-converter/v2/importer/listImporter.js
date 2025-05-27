@@ -507,27 +507,27 @@ export function parseIndentElement(indElem) {
   return out
 };
 
-export function combineIndents(ind1 = {}, ind2 = {}) {
+export function combineIndents(ind1, ind2) {
+  ind1 = (ind1 && typeof ind1 === 'object') ? ind1 : {};
+  ind2 = (ind2 && typeof ind2 === 'object') ? ind2 : {};
+
   const indent = {};
-  ['left', 'right', 'firstLine', 'hanging'].forEach(prop => {
+  ['left', 'right', 'firstLine', 'hanging'].forEach((prop) => {
     const v1 = ind1[prop] !== undefined ? Number(ind1[prop]) : null;
     const v2 = ind2[prop] !== undefined ? Number(ind2[prop]) : null;
 
     if (v1 != null && v2 != null) {
-      // for left or hanging, if both defined → take the larger
-      if (prop === 'left' || prop === 'hanging') indent[prop] = Math.max(v1, v2);
-      else indent[prop] = v1; 
+      indent[prop] = (prop === 'left' || prop === 'hanging') ? Math.max(v1, v2) : v1;
     } else if (v1 != null) {
-      // only inline defined
       indent[prop] = v1;
     } else if (v2 != null) {
-      // only numbering def defined
       indent[prop] = v2;
     }
   });
 
   return indent;
-};
+}
+
 
 function _processListParagraphProperties(data, inlinePpr) {
   const { elements } = data;
