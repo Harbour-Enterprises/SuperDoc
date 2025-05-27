@@ -148,7 +148,6 @@ export const handleParagraphNode = (params) => {
     schemaNode.attrs.pageBreakSource = 'sectPr';
   };
 
-  console.debug('paragraphNodeHandler', schemaNode);
   return { nodes: schemaNode ? [schemaNode] : [], consumed: 1 };
 };
 

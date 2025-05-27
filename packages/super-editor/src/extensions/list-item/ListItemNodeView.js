@@ -11,7 +11,7 @@ import {
 import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 
 
-const IS_DEBUGGING = true;
+const IS_DEBUGGING = false;
 
 /**
  * @typedef {Object} IndentObject
@@ -64,7 +64,6 @@ export class ListItemNodeView {
     // Gather visible indents
     const defs = getListItemStyleDefinitions({ styleId, node: this.node, numId, level, editor: this.editor });
     const visibleIndent = getVisibleIndent(defs.stylePpr, defs.numDefPpr, inlineIndent);
-    console.debug('VISIBLEINDENT', visibleIndent, '\n\n\n\n');
     let absoluteLeft = visibleIndent.left - (visibleIndent.hanging || 0);
     if (!absoluteLeft && absoluteLeft !== 0) absoluteLeft = 0;
 
