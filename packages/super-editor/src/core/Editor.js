@@ -1404,7 +1404,14 @@ export class Editor extends EventEmitter {
    * @param {boolean} [options.getUpdatedDocs=false] - When set to true return only updated docx files
    * @returns {Promise<Blob|ArrayBuffer|Object>} The exported DOCX file or updated docx files
    */
-  async exportDocx({ isFinalDoc = false, commentsType = 'external', comments = [], getUpdatedDocs = false } = {}) {
+  async exportDocx({
+    isFinalDoc = false,
+    commentsType = 'external',
+    exportJsonOnly = false,
+    exportXmlOnly = false,
+    comments = [],
+    getUpdatedDocs = false
+  } = {}) {
 
     // Pre-process the document state to prepare for export
     const json = this.#prepareDocumentForExport(comments);
