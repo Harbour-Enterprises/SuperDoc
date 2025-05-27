@@ -57,8 +57,8 @@ describe('paragraph tests to check spacing', () => {
     const { spacing } = attrs;
 
     expect(spacing.line).toBe(1.15);
-    expect(spacing.lineSpaceAfter).toBe(0);
-    expect(spacing.lineSpaceBefore).toBe(0);
+    expect(spacing.lineSpaceAfter).toBeUndefined();
+    expect(spacing.lineSpaceBefore).toBeUndefined();
   });
 
   it('correctly gets spacing around image in p [image_p_spacing]', async () => {
@@ -130,7 +130,7 @@ describe('paragraph tests to check spacing', () => {
     const { attrs } = node;
     const { spacing } = attrs;
     expect(spacing.lineSpaceAfter).toBe(11);
-    expect(spacing.lineSpaceBefore).toBe(0);
+    expect(spacing.lineSpaceBefore).toBeUndefined();
   });
 
   it('correctly gets spacing from styles.xml by related styleId', async () => {
