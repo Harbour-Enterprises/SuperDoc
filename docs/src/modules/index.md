@@ -175,7 +175,99 @@ const config = {
 ### Default toolbar buttons
 See all buttons in defaultItems.js
 
+## Customizing toolbar buttons
+⚠️ **Requires SuperDoc > 0.11.40**
 
+### Adding a custom button
+You can create a custom toolbar buttons in SuperDoc to perform custom actions.
+
+[Please see an example of creating buttons with different commands, as well as a custom dropdown here](https://github.com/Harbour-Enterprises/SuperDoc/tree/main/examples/vue-custom-mark)
+
+To create a custom button, simply create a JSON config. This will be generated using the use-toolbar-button composable. [See the composable for all available options](https://github.com/Harbour-Enterprises/SuperDoc/blob/main/packages/super-editor/src/components/toolbar/use-toolbar-item.js). 
+```
+const myBasicButtonConfig = {
+  type: 'button',
+  name: 'insertCustomMark',
+
+  // Since this command is already in editor.commands (from the custom-mark extension), we can use the command name directly
+  command: 'setMyCustomMark',
+
+  tooltip: 'Insert Custom Mark',
+  group: 'center',
+  icon: headphonesSVG, // You can use a custom icon here
+};
+```
+
+Alternatively, you can also pass in a function instead of an existing command name:
+```
+const myBasicButtonConfig = {
+  type: 'button',
+  name: 'insertCustomMark',
+
+  // We can also pass in a function as the command
+  // All commands receive:
+  //     item (the currently-clicked button)
+  //     argument (some argument value, if any)
+  //     option (the entire option from the options array, for dropdowns)
+  command: ({ item, argument, option }) => {
+    const id = Math.random().toString(36).substring(2, 7);
+    return superdoc.value?.activeEditor?.commands.setMyCustomMark(id);
+  },
+
+  tooltip: 'Insert Custom Mark',
+  group: 'center',
+  icon: headphonesSVG, // You can use a custom icon here
+};
+```
+
+Example of creating a custom dropdown:
+```
+const customDropDown = {
+  type: 'dropdown',
+  name: 'customDropdown',
+  command: ({ item, argument, option }) => {
+    if (!item || !option) return; // Case where the dropdown is being expanded or collapsed but no option selected
+    const { key, label } = option; // This is from the options array defined below
+
+    // Do something with the selected option here
+    // For example, we can call a command or a custom function based on the key
+    if (key === 'custom-mark') {
+      superdoc.value?.activeEditor?.commands.setMyCustomMark();
+    } else if (key === 'export-docx') {
+      exportDocx();
+    }
+  },
+
+  tooltip: 'Custom Dropdown',
+  group: 'center',
+  icon: chevronDownSVG,
+  hasCaret: true,
+  suppressActiveHighlight: true,
+
+  // Dropdown options
+  options: [
+    { label: 'Insert Custom Mark', key: 'custom-mark', },
+    { label: 'Export to DOCX', key: 'export-docx', },
+  ],
+};
+```
+
+Finally, simply pass in a list of custom buttons to your toolbar config:
+```
+const mySuperDocConfig = {
+  ...config, // The rest of your SuperDoc config
+  modules: {
+    // Other module config
+    toolbar: {
+      // Other toolbar config
+      customButtons: [
+        customDropDown,
+        myBasicButtonConfig,
+      ]
+    }
+  }
+}
+```
 
 # Fields
 
