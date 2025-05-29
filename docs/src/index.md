@@ -60,17 +60,18 @@ import '@harbour-enterprises/superdoc/style.css';
 import { SuperDoc } from '@harbour-enterprises/superdoc';
 
 const superdoc = new SuperDoc({
-  selector: '#root',
-  documents: [
-    id: 'pets-123',
-    type: 'docx',
-    url: 'http://my-document-url.docx',
-  ],
+  selector: '#superdoc',
+  toolbar: '#superdoc-toolbar',
+  document: '/sample.docx', // URL, File or document config
+  documentMode: 'editing',
   pagination: true,
-  licenseKey: 'community-and-eval-agplv3',
-  telemetry: { 
-    enabled: true,
-  } //basic usage metrics and exceptions
+  rulers: true,
+  onReady: (event) => {
+    console.log('SuperDoc is ready', event);
+  },
+  onEditorCreate: (event) => {
+    console.log('Editor is created', event);
+  },
 })
 ```
 
@@ -93,17 +94,8 @@ const config = {
   // Optional: User role: editor, suggester, viewer. Defaults to editor
   role: 'editor',
 
-  // Required: Documents list with one document
-  documents: [
-    {
-      id: 'my-doc-id', // Required: This document's ID. This is also used as the room name in collaboration.
-      type: 'docx', // Required: 'pdf', 'docx' or 'html'
-      
-      // Document content - provide EITHER data OR url:
-      data: fileObject, // Option 1: A JS File/Blob object of your document
-      url: 'https://example.com/document.docx', // Option 2: URL to fetch the document from
-    },
-  ],
+  // Required: URL, File or document config
+  document: '/sample.docx',
 
   // Optional: For enterprise users, set the license key
   licenseKey: 'community-and-eval-agplv3',
@@ -138,6 +130,12 @@ const config = {
 
     // More coming soon
   },
+
+  // Optional: pagination
+  pagination: true,
+
+  // Optional: rulers
+  rulers: true,
 
   // Optional: events - pass in your own functions for each
     onEditorBeforeCreate: () => null,
@@ -204,9 +202,7 @@ SuperDoc provides a robust event system to handle various document interactions:
 ```javascript
 const superdoc = new SuperDoc({
   selector: '#superdoc',
-  documents: [
-    /* ... */
-  ],
+  document: '/sample.docx',
 });
 
 

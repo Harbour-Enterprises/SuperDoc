@@ -29,11 +29,7 @@ import { SuperDoc } from '@harbour-enterprises/superdoc';
 
 const superdoc = new SuperDoc({
   selector: '#root',
-  documents: [
-    id: 'pets-123',
-    type: 'docx',
-    url: 'http://my-document-url.docx',
-  ],
+  document: '/sample.docx',
   pagination: true,
   licenseKey: 'community-and-eval-agplv3',
   telemetry: { 
@@ -47,7 +43,7 @@ const superdoc = new SuperDoc({
 | Property       | Type              | Description                                                 | Required | Default          |
 | :------------- | :---------------- | :---------------------------------------------------------- | :------: | :--------------- |
 | `selector`     | `string\|Element` | CSS selector or DOM element where SuperDoc will be rendered |    ✓     | -                |
-| `documents`    | `array`           | Array of document objects to load                           |    ✓     | -                |
+| `document`     | `string\|File\|object` | URL, File or document config                           |    ✓     | -                |
 | `superdocId`   | `string`          | Unique identifier for this SuperDoc instance                |          | Random UUID      |
 | `documentMode` | `string`          | Document mode: 'viewing', 'suggesting', or 'editing'         |          | 'editing'        |
 | `role`         | `string`          | User role: 'editor', 'suggester', or 'viewer'               |          | 'editor'         |
