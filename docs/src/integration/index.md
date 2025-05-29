@@ -37,13 +37,11 @@ function SuperDocComponent({ documentId, documentData, user }) {
     if (containerRef.current && !superdocRef.current) {
       superdocRef.current = new SuperDoc({
         selector: '#superdoc-container',
-        documents: [
-          {
-            id: documentId,
-            type: 'docx',
-            data: documentData,
-          },
-        ],
+        document: {
+          id: documentId,
+          type: 'docx',
+          data: documentData,
+        },
         user: user,
       });
     }
@@ -137,13 +135,11 @@ const SuperDocComponent = forwardRef(({ documentId, documentData, user, onReady 
     if (containerRef.current && !superdocRef.current) {
       superdocRef.current = new SuperDoc({
         selector: '#superdoc-container',
-        documents: [
-          {
-            id: documentId,
-            type: 'docx',
-            data: documentData,
-          },
-        ],
+        document: {
+          id: documentId,
+          type: 'docx',
+          data: documentData,
+        },
         user: user,
       });
 
@@ -213,13 +209,11 @@ export default {
     onMounted(() => {
       superdoc = new SuperDoc({
         selector: superdocContainer.value,
-        documents: [
-          {
-            id: props.documentId,
-            type: 'docx',
-            data: props.documentData,
-          },
-        ],
+        document: {
+          id: props.documentId,
+          type: 'docx',
+          data: props.documentData,
+        },
         user: props.user,
       });
 
@@ -300,13 +294,11 @@ export default {
   mounted() {
     this.superdoc = new SuperDoc({
       selector: this.$refs.superdocContainer,
-      documents: [
-        {
-          id: this.documentId,
-          type: 'docx',
-          data: this.documentData,
-        },
-      ],
+      documents: {
+        id: this.documentId,
+        type: 'docx',
+        data: this.documentData,
+      },
       user: this.user,
     });
 
@@ -387,14 +379,12 @@ SuperDoc can be used with plain JavaScript without any framework.
       document.addEventListener('DOMContentLoaded', () => {
         const superdoc = new SuperDoc({
           selector: '#superdoc-container',
-          documents: [
-            {
-              id: 'example-doc',
-              type: 'docx',
-              // Use a file input to get the document data
-              // data: document.getElementById('file-input').files[0]
-            },
-          ],
+          document: {
+            id: 'example-doc',
+            type: 'docx',
+            // Use a file input to get the document data
+            // data: document.getElementById('file-input').files[0]
+          },
           user: {
             name: 'John Doe',
             email: 'john@example.com',
@@ -458,13 +448,11 @@ SuperDoc can be used with plain JavaScript without any framework.
           // Initialize SuperDoc with the selected file
           superdoc = new SuperDoc({
             selector: '#superdoc-container',
-            documents: [
-              {
-                id: 'uploaded-doc',
-                type: 'docx',
-                data: file,
-              },
-            ],
+            document: {
+              id: 'uploaded-doc',
+              type: 'docx',
+              data: file,
+            },
             user: {
               name: 'John Doe',
               email: 'john@example.com',
@@ -486,12 +474,10 @@ SuperDoc supports real-time collaborative editing using Yjs. Here's how to set i
 ```javascript
 const superdoc = new SuperDoc({
   selector: '#superdoc-container',
-  documents: [
-    {
-      id: 'collaborative-doc', // This ID is used as the collaboration room name
-      type: 'docx',
-    },
-  ],
+  document: {
+    id: 'collaborative-doc', // This ID is used as the collaboration room name
+    type: 'docx',
+  },
   modules: {
     collaboration: {
       url: 'wss://your-collaboration-server.com',
