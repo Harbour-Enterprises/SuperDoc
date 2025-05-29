@@ -36,13 +36,7 @@ fetch('https://example.com/path/to/document.docx')
     // Initialize SuperDoc with the file
     const superdoc = new SuperDoc({
       selector: '#superdoc-container',
-      documents: [
-        {
-          id: 'doc-from-url',
-          type: 'docx',
-          data: file,
-        },
-      ],
+      document: file,
     });
   })
   .catch((error) => console.error('Error loading document:', error));
@@ -61,9 +55,7 @@ This example shows how to implement export buttons for DOCX and PDF formats.
 // Initialize SuperDoc
 const superdoc = new SuperDoc({
   selector: '#superdoc-container',
-  documents: [
-    /* ... */
-  ],
+  document: '/sample.docx',
 });
 
 // Add export functionality
@@ -106,9 +98,7 @@ This example shows how to implement a custom comments sidebar that synchronizes 
 // Initialize SuperDoc
 const superdoc = new SuperDoc({
   selector: '#superdoc-container',
-  documents: [
-    /* ... */
-  ],
+  document: '/sample.docx',
   modules: {
     comments: {
       // Enable comments module
@@ -172,25 +162,13 @@ This example shows how to implement a simple version comparison between two docu
 // Load two versions of the document
 const originalDoc = new SuperDoc({
   selector: '#document-original',
-  documents: [
-    {
-      id: 'original-doc',
-      type: 'docx',
-      data: originalFile,
-    },
-  ],
+  document: originalFile,
   documentMode: 'viewing', // Set to viewing mode
 });
 
 const modifiedDoc = new SuperDoc({
   selector: '#document-modified',
-  documents: [
-    {
-      id: 'modified-doc',
-      type: 'docx',
-      data: modifiedFile,
-    },
-  ],
+  document: modifiedFile,
   documentMode: 'viewing', // Set to viewing mode
 });
 
@@ -295,13 +273,7 @@ If you're already using Prosemirror for your document editing needs, migrating t
 
    const superdoc = new SuperDoc({
      selector: '#editor',
-     documents: [
-       {
-         id: 'my-document',
-         type: 'docx',
-         data: docxFile,
-       },
-     ],
+     document: '/sample.docx',
    });
    ```
 
