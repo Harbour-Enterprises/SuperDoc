@@ -1,6 +1,7 @@
 import { Extension } from '@core/index.js';
 import { PluginKey } from 'prosemirror-state';
-import { ySyncPlugin, yUndoPlugin, yUndoPluginKey, undo, redo } from 'y-prosemirror';
+import { prosemirrorToYDoc } from 'yjs';
+import { ySyncPlugin, yUndoPlugin, yUndoPluginKey, undo, redo, prosemirrorToYDoc } from 'y-prosemirror';
 
 export const CollaborationPluginKey = new PluginKey('collaboration');
 
@@ -84,17 +85,20 @@ export const Collaboration = Extension.create({
   },
 });
 
-const createSyncPlugin = (ydoc, editor) => {
+export const createSyncPlugin = (ydoc, editor) => {
   const fragment = ydoc.getXmlFragment('supereditor');
-
   const onFirstRender = () => {
     if (!editor.options.isNewFile) return;
-    const metaMap = ydoc.getMap('meta');
-    metaMap.set('docx', editor.options.content);
-    metaMap.set('fonts', editor.options.fonts);
+    initializeMetaMap(ydoc, editor);
   };
 
   return [ySyncPlugin(fragment, { onFirstRender }), fragment];
+};
+
+export const initializeMetaMap = (ydoc, editor) => {
+  const metaMap = ydoc.getMap('meta');
+  metaMap.set('docx', editor.options.content);
+  metaMap.set('fonts', editor.options.fonts);
 };
 
 const createUndoPlugin = () => {
@@ -142,4 +146,10 @@ const initSyncListener = (ydoc, editor, extension) => {
     return;
   }
   provider.on('synced', emit);
+};
+
+export const generateCollaborationData = (editor) => {
+  const ydoc = prosemirrorToYDoc(editor.state.doc, 'supereditor');
+  initializeMetaMap(ydoc, editor);
+  return encodeStateAsUpdate(ydoc);
 };
