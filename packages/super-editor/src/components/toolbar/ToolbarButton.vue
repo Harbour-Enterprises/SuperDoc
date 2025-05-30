@@ -87,6 +87,7 @@ const caretIcon = computed(() => {
       @click="handleClick"
       class="toolbar-button"
       :class="{ active, disabled, narrow: isNarrow, wide: isWide, 'has-inline-text-input': hasInlineTextInput }"
+      :data-item="`btn-${name || ''}`"
     >
       <ToolbarButtonIcon v-if="icon" :color="iconColor" class="toolbar-icon" :icon="icon" :name="name">
       </ToolbarButtonIcon>

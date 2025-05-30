@@ -15,12 +15,21 @@ import TableActions from './TableActions.vue';
 
 import checkIconSvg from '@harbour-enterprises/common/icons/check.svg?raw';
 import SearchInput from './SearchInput.vue';
+import { TOOLBAR_FONTS } from './constants.js';
 
 const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
 };
 
-export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role, toolbarIcons) => {
+export const makeDefaultItems = ({
+  superToolbar,
+  toolbarIcons,
+  toolbarFonts,
+  hideButtons,
+  availableWidth,
+  role,
+  isDev = false,
+} = {}) => {
 
   // bold
   const bold = useToolbarItem({
@@ -45,40 +54,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     isWide: true,
     style: { width: '116px' },
     suppressActiveHighlight: true,
-    options: [
-      {
-        label: 'Georgia',
-        key: 'Georgia, serif',
-        fontWeight: 400,
-        props: {
-          style: { fontFamily: 'Georgia, serif' },
-        },
-      },
-      {
-        label: 'Arial',
-        key: 'Arial, sans-serif',
-        fontWeight: 400,
-        props: {
-          style: { fontFamily: 'Arial, sans-serif' },
-        },
-      },
-      {
-        label: 'Courier New',
-        key: 'Courier New, monospace',
-        fontWeight: 400,
-        props: {
-          style: { fontFamily: 'Courier New, monospace' },
-        },
-      },
-      {
-        label: 'Times New Roman',
-        key: 'Times New Roman, serif',
-        fontWeight: 400,
-        props: {
-          style: { fontFamily: 'Times New Roman, serif' },
-        },
-      },
-    ],
+    options: [...(toolbarFonts ? toolbarFonts : TOOLBAR_FONTS)],
     onActivate: ({ fontFamily }) => {
       if (!fontFamily) return;
       fontButton.label.value = fontFamily;
@@ -153,20 +129,20 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     isWide: true,
     command: 'setFontSize',
     options: [
-      { label: '8', key: '8pt' },
-      { label: '9', key: '9pt' },
-      { label: '10', key: '10pt' },
-      { label: '11', key: '11pt' },
-      { label: '12', key: '12pt' },
-      { label: '14', key: '14pt' },
-      { label: '18', key: '18pt' },
-      { label: '24', key: '24pt' },
-      { label: '30', key: '30pt' },
-      { label: '36', key: '36pt' },
-      { label: '48', key: '48pt' },
-      { label: '60', key: '60pt' },
-      { label: '72', key: '72pt' },
-      { label: '96', key: '96pt' },
+      { label: '8', key: '8pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '9', key: '9pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '10', key: '10pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '11', key: '11pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '12', key: '12pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '14', key: '14pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '18', key: '18pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '24', key: '24pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '30', key: '30pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '36', key: '36pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '48', key: '48pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '60', key: '60pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '72', key: '72pt', props: { 'data-item': 'btn-fontSize-option' } },
+      { label: '96', key: '96pt', props: { 'data-item': 'btn-fontSize-option' } },
     ],
     onActivate: ({ fontSize: size }) => {
       if (!size) return (fontSize.label.value = fontSize.defaultLabel.value);
@@ -417,58 +393,69 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
       label: 'Insert row above',
       command: 'addRowBefore',
       icon: toolbarIcons.addRowBefore,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Insert row below',
       command: 'addRowAfter',
       icon: toolbarIcons.addRowAfter,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Insert column left',
       command: 'addColumnBefore',
       icon: toolbarIcons.addColumnBefore,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Insert column right',
       command: 'addColumnAfter',
       icon: toolbarIcons.addColumnAfter,
       bottomBorder: true,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Delete row',
       command: 'deleteRow',
       icon: toolbarIcons.deleteRow,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Delete column',
       command: 'deleteColumn',
       icon: toolbarIcons.deleteColumn,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Delete table',
       command: 'deleteTable',
       icon: toolbarIcons.deleteTable,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Transparent borders',
       command: 'deleteCellAndTableBorders',
       icon: toolbarIcons.deleteBorders,
       bottomBorder: true,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Merge cells',
       command: 'mergeCells',
       icon: toolbarIcons.mergeCells,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Split cell',
       command: 'splitCell',
       icon: toolbarIcons.splitCell,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
     { 
       label: 'Fix tables',
       command: 'fixTables',
       icon: toolbarIcons.fixTables,
+      props: { 'data-item': 'btn-tableActions-option' }
     },
   ];
 
@@ -610,13 +597,13 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     inlineTextInputVisible: false,
     hasInlineTextInput: true,
     options: [
-      { label: '50%', key: 0.5 },
-      { label: '75%', key: 0.75 },
-      { label: '90%', key: 0.9 },
-      { label: '100%', key: 1 },
-      { label: '125%', key: 1.25 },
-      { label: '150%', key: 1.5 },
-      { label: '200%', key: 2 },
+      { label: '50%', key: 0.5, props: { 'data-item': 'btn-zoom-option' } },
+      { label: '75%', key: 0.75, props: { 'data-item': 'btn-zoom-option' } },
+      { label: '90%', key: 0.9, props: { 'data-item': 'btn-zoom-option' } },
+      { label: '100%', key: 1, props: { 'data-item': 'btn-zoom-option' } },
+      { label: '125%', key: 1.25, props: { 'data-item': 'btn-zoom-option' } },
+      { label: '150%', key: 1.5, props: { 'data-item': 'btn-zoom-option' } },
+      { label: '200%', key: 2, props: { 'data-item': 'btn-zoom-option' } },
     ],
     onActivate: ({ zoom: value }) => {
       if (!value) return;
@@ -899,12 +886,12 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
     dropdownValueKey: 'key',
     selectedValue: '1',
     options: [
-      { label: '1,0', key: '1', icon: () => renderIcon('1', lineHeight.selectedValue) },
-      { label: '1,15', key: '1.15', icon: () => renderIcon('1.15', lineHeight.selectedValue) },
-      { label: '1,5', key: '1.5', icon: () => renderIcon('1.5', lineHeight.selectedValue) },
-      { label: '2,0', key: '2', icon: () => renderIcon('2', lineHeight.selectedValue) },
-      { label: '2,5', key: '2.5', icon: () => renderIcon('2.5', lineHeight.selectedValue) },
-      { label: '3,0', key: '3', icon: () => renderIcon('3', lineHeight.selectedValue) },
+      { label: '1,0', key: '1', icon: () => renderIcon('1', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
+      { label: '1,15', key: '1.15', icon: () => renderIcon('1.15', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
+      { label: '1,5', key: '1.5', icon: () => renderIcon('1.5', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
+      { label: '2,0', key: '2', icon: () => renderIcon('2', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
+      { label: '2,5', key: '2.5', icon: () => renderIcon('2.5', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
+      { label: '3,0', key: '3', icon: () => renderIcon('3', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
     ],
   });
 
@@ -971,7 +958,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
   }
 
   // Hide separators on small screens
-  if (windowWidth <= breakpoints.md) {
+  if (availableWidth <= breakpoints.md && hideButtons) {
     toolbarItems = toolbarItems.filter((item) => item.type !== 'separator');
   }
 
@@ -1011,7 +998,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
   toolbarItems.forEach((item) => {
     const itemWidth = controlSizes.get(item.name.value) || controlSizes.get('default');
 
-    if (windowWidth < breakpoints.xl && itemsToHideXL.includes(item.name.value)) {
+    if (availableWidth < breakpoints.xl && itemsToHideXL.includes(item.name.value) && hideButtons) {
       overflowItems.push(item);
       if (item.name.value === 'linkedStyles') {
         const linkedStylesIdx = toolbarItems.findIndex((item) => item.name.value === 'linkedStyles');
@@ -1020,7 +1007,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
       return;
     }
 
-    if (windowWidth < breakpoints.sm && itemsToHideSM.includes(item.name.value)) {
+    if (availableWidth < breakpoints.sm && itemsToHideSM.includes(item.name.value) && hideButtons) {
       overflowItems.push(item);
       return;
     }
@@ -1031,7 +1018,7 @@ export const makeDefaultItems = (superToolbar, isDev = false, windowWidth, role,
       return;
     }
 
-    if (totalWidth < windowWidth) {
+    if (totalWidth < availableWidth || !hideButtons) {
       visibleItems.push(item);
       totalWidth += itemWidth;
     } else {

@@ -5,6 +5,8 @@ import { chainableEditorState } from './helpers/chainableEditorState.js';
 import { getHTMLFromFragment } from './helpers/getHTMLFromFragment.js';
 import { getTextContentFromNodes } from './helpers/getTextContentFromNodes.js';
 import { isRegExp } from './utilities/isRegExp.js';
+import { handleDocxPaste } from './inputRules/docx-paste/docx-paste.js';
+
 
 export class InputRule {
   match;
@@ -210,28 +212,25 @@ export const inputRulesPlugin = ({ editor, rules }) => {
       // Paste handler
       handlePaste(view, event, slice) {
         const clipboard = event.clipboardData;
-        const types = Array.from(clipboard.types);
         const html = clipboard.getData("text/html");
         const text = clipboard.getData("text/plain");
 
         let source;
         if (!html) {
           source = "plain-text";
+        } else if (isWordHtml(html)) {
+          source = "word-html";
         } else {
-          // Word often embeds Mso-styles, XML namespaces, <!--[if gte mso] conditionals, Meta Generator tags…
-          const wordFingerprint = /class="?Mso|xmlns:o="urn:schemas-microsoft-com|name="?Generator" content="?Microsoft Word|<!--\[if gte mso/i;
-          if (wordFingerprint.test(html)) {
-            source = "word-html";
-          } else {
-            source = "browser-html";
-          }
+          source = "browser-html";
         }
 
         switch (source) {
           case "plain-text":
             break;
           case "word-html":
-            break;
+            if (editor.options.mode === "docx") {
+              return handleDocxPaste(html, editor, view, plugin);
+            }
           case "browser-html":
             return handleHtmlPaste(html, editor, view, plugin);
         }
@@ -243,6 +242,10 @@ export const inputRulesPlugin = ({ editor, rules }) => {
     isInputRules: true,
   });
   return plugin;
+}
+
+function isWordHtml(html) {
+  return /class=["']?Mso|xmlns:o=["']?urn:schemas-microsoft-com|<!--\[if gte mso|<meta[^>]+name=["']?Generator["']?[^>]+Word/i.test(html);
 }
 
 /**
@@ -273,7 +276,7 @@ const handleHtmlPaste = (html, editor, plugin) => {
  * @param {String} html The HTML string to be processed.
  * @returns {String} The processed HTML string with em units converted to pt units.
  */
-const convertEmToPt = (html) => {
+export const convertEmToPt = (html) => {
   return html.replace(
     /font-size\s*:\s*([\d.]+)em/gi,
     (_, emValue) => {

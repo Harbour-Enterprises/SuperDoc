@@ -55,6 +55,9 @@
  * Hide marker for indented lists.
  * If a list-item contains a list but doesn't contain a "p" tag with text.
  */
+.ProseMirror ol {
+  margin: 0;
+}
 .ProseMirror li:has(> ul:first-child, > ol:first-child):not(:has(> p)) {
   list-style-type: none;
 }

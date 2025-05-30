@@ -16,7 +16,7 @@ const DocumentEditor = ({
       selector: '#superdoc',
       toolbar: '#superdoc-toolbar',
       documentMode: readOnly ? 'viewing' : 'editing',
-      document: initialData,
+      document: initialData ? initialData : '/sample.docx',
       pagination: true,
       rulers: true,
       onReady: () => {

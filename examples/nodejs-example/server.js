@@ -18,7 +18,7 @@ const server = express();
  */
 server.get('/', async (req, res, next) => {
   // Load our example document - a blank template with a header and footer
-  let documentData = await fs.readFile('../shared/data/sample-document.docx');
+  let documentData = await fs.readFile('./sample-document.docx');
 
   // Get the text and html from the query parameters
   const { text, html } = req.query;

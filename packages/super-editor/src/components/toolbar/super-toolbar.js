@@ -132,6 +132,9 @@ export class SuperToolbar extends EventEmitter {
     role: 'editor',
     pagination: false,
     icons: { ...toolbarIcons },
+    fonts: null,
+    hideButtons: true,
+    responsiveToContainer: false,
     mode: 'docx',
     excludeItems: [],
     groups: null,
@@ -156,39 +159,67 @@ export class SuperToolbar extends EventEmitter {
     this.isDev = config.isDev || false;
     this.superdoc = config.superdoc;
     this.role = config.role || 'editor';
+    this.toolbarContainer = null;
 
-    if (this.config.editor) this.config.mode = this.config.editor.options.mode;
+    if (this.config.editor) {
+      this.config.mode = this.config.editor.options.mode;
+    }
+
     this.config.icons = {
       ...toolbarIcons,
       ...config.icons,
     };
+    
+    this.config.hideButtons = config.hideButtons ?? true;
+    this.config.responsiveToContainer = config.responsiveToContainer ?? false;
 
     // Move legacy 'element' to 'selector'
-    if (!this.config.selector && this.config.element) this.config.selector = this.config.element;
-    this.#initToolbarGroups();
-
-    this.#makeToolbarItems(this, this.config.icons, config.isDev);
-
-    let el = null;
-    if (this.config.selector) {
-      if (this.config.selector.startsWith('#') || this.config.selector.startsWith('.')) {
-        el = document.querySelector(this.config.selector);
-      } else {
-        el = document.getElementById(this.config.selector);
-      };
-
-      if (!el) {
-        console.warn(`[super-toolbar 🎨] Element not found: ${this.config.selector}`);
-        return;
-      }
+    if (!this.config.selector && this.config.element) {
+      this.config.selector = this.config.element;
     }
+
+    this.toolbarContainer = this.getElementBySelector(this.config.selector);
+
+    if (!this.toolbarContainer) {
+      return;
+    }
+
+    this.#initToolbarGroups();
+    this.#makeToolbarItems({
+      superToolbar: this,
+      icons: this.config.icons,
+      fonts: this.config.fonts,
+      hideButtons: this.config.hideButtons,
+      isDev: config.isDev,
+    });
 
     this.app = createApp(Toolbar);
     this.app.directive('click-outside', vClickOutside);
     this.app.config.globalProperties.$toolbar = this;
-    if (el) this.toolbar = this.app.mount(el);
+    if (this.toolbarContainer) {
+      this.toolbar = this.app.mount(this.toolbarContainer);
+    }
     this.activeEditor = config.editor || null;
     this.updateToolbarState();
+  }
+
+  getElementBySelector(selector) {
+    let el = null;
+
+    if (selector) {
+      if (selector.startsWith('#') || selector.startsWith('.')) {
+        el = document.querySelector(selector);
+      } else {
+        el = document.getElementById(selector);
+      }
+
+      if (!el) {
+        console.warn(`[super-toolbar 🎨] Element not found: ${selector}`);
+        return null;
+      }
+    }
+
+    return el;
   }
 
   /**
@@ -544,14 +575,33 @@ export class SuperToolbar extends EventEmitter {
   /**
    * Create toolbar items based on configuration
    * @private
-   * @param {SuperToolbar} superToolbar - The toolbar instance
-   * @param {Object} icons - Icons to use for toolbar items
-   * @param {boolean} [isDev=false] - Whether in development mode
+   * @param {SuperToolbar} options.superToolbar - The toolbar instance
+   * @param {Object} options.icons - Icons to use for toolbar items
+   * @param {Array} options.fonts - Fonts for the toolbar item
+   * @param {boolean} options.isDev - Whether in development mode
    * @returns {void}
    */
-  #makeToolbarItems(superToolbar, icons, isDev = false) {
+  #makeToolbarItems({
+    superToolbar, 
+    icons,
+    fonts,
+    hideButtons,
+    isDev = false,
+  } = {}) {
     const documentWidth = document.documentElement.clientWidth; // take into account the scrollbar
-    const { defaultItems, overflowItems } = makeDefaultItems(superToolbar, isDev, documentWidth, this.role, icons);
+    const containerWidth = this.toolbarContainer.offsetWidth;
+    const availableWidth = this.config.responsiveToContainer ? containerWidth : documentWidth;
+
+    const { defaultItems, overflowItems } = makeDefaultItems({
+      superToolbar,
+      toolbarIcons: icons,
+      toolbarFonts: fonts,
+      hideButtons,
+      availableWidth,
+      role: this.role,
+      isDev,
+    });
+
     const customItems = this.config.customButtons || [];
     if (customItems.length) {
       defaultItems.push(...customItems.map((item) => useToolbarItem({...item})));
@@ -695,7 +745,14 @@ export class SuperToolbar extends EventEmitter {
    * @returns {void}
    */
   onToolbarResize = () => {
-    this.#makeToolbarItems(this, this.config.icons, this.isDev);
+    this.#makeToolbarItems({
+      superToolbar: this,
+      icons: this.config.icons,
+      fonts: this.config.fonts,
+      hideButtons: this.config.hideButtons,
+      isDev: this.isDev,
+    });
+
     if (this.role === 'viewer') {
       this.#deactivateAll();
     };

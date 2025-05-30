@@ -864,6 +864,33 @@ function translateListOld(params) {
         outputNode.elements[propsElementIndex].elements = resultProps;
       }
 
+      let importedFontSize;
+      if (listNode.attrs?.importedFontSize) {
+        const fontNoUnit = parseInt(listNode.attrs.importedFontSize.split('pt')[0]);
+        importedFontSize = {
+          name: 'w:sz',
+          attributes: { 'w:val': fontNoUnit * 2 },
+        };
+      };
+
+      let importedFontFamily
+      if (listNode.attrs?.importedFontFamily) {
+        importedFontFamily = {
+          name: 'w:rFonts',
+          attributes: { 'w:ascii': listNode.attrs?.importedFontFamily, 'w:hAnsi': listNode.attrs?.importedFontFamily },
+        };
+      }
+
+      const rPrElement = outputNode.elements.find((e) => e.name === 'w:rPr');
+      if (rPrElement) {
+        rPrElement.elements.push(fontSize);
+      } else if (importedFontSize || importedFontFamily) {
+        const elements = [];
+        if (importedFontSize) elements.push(importedFontSize);
+        if (importedFontFamily) elements.push(importedFontFamily);
+        outputNode.elements.unshift({ name: 'w:rPr', elements });
+      }
+
       // Remove the numPr properties from content nodes
       if (index !== 0) {
         const currentpPr = outputNode.elements.find((e) => e.name === 'w:pPr');
@@ -2123,6 +2150,7 @@ export function translateHardBreak(params) {
   const { attrs = {} } = node;
   const { pageBreakSource } = attrs;
   if (pageBreakSource === 'sectPr') return null;
+
   return {
     name: 'w:r',
     elements: [{

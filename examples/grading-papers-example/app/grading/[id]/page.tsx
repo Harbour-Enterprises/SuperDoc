@@ -14,6 +14,7 @@ import { Slider } from "@/components/ui/slider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { SuperDoc } from "@harbour-enterprises/superdoc"
 import { use } from 'react';
+import { docMap } from './_doc-links';
 
 export default function GradingPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter()
@@ -119,10 +120,11 @@ export default function GradingPage({ params }: { params: Promise<{ id: string }
 
   const initSuperDoc = async (fileToLoad = null) => {
     const { SuperDoc } = await import('@harbour-enterprises/superdoc');
+  
     superDocRef.current = new SuperDoc({
       selector: '#superdoc',
       pagination: true,
-      document: `/${asyncParams.id}.docx`,
+      document: docMap[asyncParams.id],
       user: {
         name: 'Grading user',
         email: 'grader@school.com'

@@ -2,8 +2,8 @@
 import '@harbour-enterprises/superdoc/style.css';
 import { onMounted, shallowRef } from 'vue';
 import { SuperDoc } from '@harbour-enterprises/superdoc';
-import UploadFile from '../../shared/vue/UploadFile/UploadFile.vue';
-import sampleDocument from '../../shared/data/sample-document.docx?url';
+import UploadFile from './UploadFile.vue';
+import sampleDocument from '../assets/sample-document.docx?url';
 
 // These custom SVG icons are in our public folder as an example. You should import in the correct way for your project.
 import headphonesSVG from '/headphones-solid.svg?raw'; 

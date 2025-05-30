@@ -107,15 +107,16 @@ onMounted(() => {
           class="open-link-icon" 
           :class="{ disabled: !validUrl }" 
           v-html="toolbarIcons.openLink" 
-          @click="openLink">
+          @click="openLink"
+          data-item="btn-link-open">
         </div>
       </div>
       <div class="input-row link-buttons">
-        <button class="remove-btn" @click="handleRemove" v-if="href">
+        <button class="remove-btn" @click="handleRemove" v-if="href" data-item="btn-link-remove">
           <div class="remove-btn__icon" v-html="toolbarIcons.removeLink"></div>
           Remove
         </button>
-        <button class="submit-btn" v-if="showApply" @click="handleSubmit" :class="{ 'disable-btn': isDisabled }">
+        <button class="submit-btn" v-if="showApply" @click="handleSubmit" :class="{ 'disable-btn': isDisabled }" data-item="btn-link-apply">
           {{ getApplyText }}
         </button>
       </div>

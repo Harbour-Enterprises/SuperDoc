@@ -18,6 +18,7 @@ const handleClick = (item) => {
       v-for="option in options"
       @click="handleClick(option)"
       :class="{ disabled: option.disabled }"
+      data-item="btn-documentMode-option"
     >
       <div class="document-mode-column icon-column">
         <div class="icon-column__icon" v-html="option.icon"></div>

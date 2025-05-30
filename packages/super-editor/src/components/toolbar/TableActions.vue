@@ -18,7 +18,8 @@ const handleClick = (item) => {
       class="toolbar-table-actions__item"
       :class="{ 'toolbar-table-actions__item--border':  option.bottomBorder}"
       v-for="option in options"
-      @click="handleClick(option)">
+      @click="handleClick(option)"
+      :data-item="option.props?.['data-item'] || ''">
       <div class="toolbar-table-actions__icon">
         <div class="toolbar-table-actions__icon-wrapper" v-html="option.icon"></div>
       </div>

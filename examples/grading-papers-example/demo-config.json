@@ -4,7 +4,8 @@
         "editing",
         "next-js",
         "LMS",
-        "ssr"
+        "ssr",
+        "react"
     ],
-    "title": "Grading papers with SuperDoc"
+    "title": "Grading assignments"
 }

@@ -4,7 +4,8 @@
         "editing",
         "viewing",
         "typescript",
-        "vanilla-js"
+        "vanilla-js",
+        "react"
     ],
     "title": "Typescript"
 }
