@@ -23,6 +23,8 @@ import {
   prepareCommentsForImport,
 } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
+import { toggleHeaderFooterEditMode } from '../extensions/pagination/pagination-helpers.js';
+import { hasSomeParentWithClass } from './super-converter/helpers.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -76,6 +78,7 @@ import DocxZipper from '@core/DocxZipper.js';
  * @property {boolean} [isInternal=false] - Whether this is an internal editor
  * @property {Array} [externalExtensions=[]] - External extensions
  * @property {Object} [numbering={}] - Numbering configuration
+ * @property {boolean} [isHeaderOrFooter=false] - Whether this is a header or footer editor
  * @property {Function} [onBeforeCreate] - Called before editor creation
  * @property {Function} [onCreate] - Called after editor creation
  * @property {Function} [onUpdate] - Called when editor content updates
@@ -180,6 +183,8 @@ export class Editor extends EventEmitter {
     isInternal: false,
     externalExtensions: [],
     numbering: {},
+    isHeaderOrFooter: false,
+    lastSelection: null,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -491,6 +496,7 @@ export class Editor extends EventEmitter {
       // this.unregisterPlugin('comments');
       this.commands.toggleTrackChangesShowOriginal();
       this.setEditable(false, false);
+      toggleHeaderFooterEditMode(this, null, false);
     }
 
     // Suggesting: Editable, tracked changes plugin enabled, comments
@@ -509,6 +515,7 @@ export class Editor extends EventEmitter {
       this.commands.disableTrackChangesShowOriginal();
       this.commands.disableTrackChanges();
       this.setEditable(true, false);
+      toggleHeaderFooterEditMode(this, null, false);
     }
   }
 
@@ -530,6 +537,29 @@ export class Editor extends EventEmitter {
     if (provider.synced) this.#insertNewFileData();
     // If we are not sync'd yet, wait for the event then insert the data
     else provider.on('synced', postSyncInit);
+  }
+
+  /**
+   * Replace content of editor that was created with loadFromSchema option
+   * Used to replace content of other header/footer when one of it was edited
+   * 
+   * @param {object} content - new editor content json (retrieved from editor.getUpdatedJson)
+   * @returns {void}
+   */
+  replaceContent(content) {
+    this.setOptions({
+      content,
+    });
+
+    this.#createConverter();
+    this.initDefaultStyles();
+
+    this.#createConverter();
+    this.#initMedia();
+    
+    const doc = this.#generatePmData();
+    const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc);
+    this.view.dispatch(tr);
   }
 
   /**
@@ -808,15 +838,21 @@ export class Editor extends EventEmitter {
       const { mode, fragment, isHeadless, content, loadFromSchema } = this.options;
 
       if (mode === 'docx') {
-        doc = createDocument(this.converter, this.schema, this);
+        if (loadFromSchema) {
+          doc = this.schema.nodeFromJSON(content);
+          doc = this.#prepareDocumentForImport(doc);
+        }
+        else {
+          doc = createDocument(this.converter, this.schema, this);
 
-        // Perform any additional document processing prior to finalizing the doc here
-        doc = this.#prepareDocumentForImport(doc);
+          // Perform any additional document processing prior to finalizing the doc here
+          doc = this.#prepareDocumentForImport(doc);
 
-        // If we have a new doc, and have html data, we initialize from html
-        if (this.options.html) doc = this.#createDocFromHTML(this.options.html)
+          // If we have a new doc, and have html data, we initialize from html
+          if (this.options.html) doc = this.#createDocFromHTML(this.options.html)
 
-        if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+          if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+        }
       }
 
       // If we are in HTML mode, we initialize from either content or html (or blank)
@@ -867,8 +903,33 @@ export class Editor extends EventEmitter {
       ...this.options.editorProps,
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: EditorState.create(state),
-    });
+      handleDoubleClick: async (view, pos, event) => {
+        // Deactivates header/footer editing mode when double-click on main editor
+        const isHeader = hasSomeParentWithClass(event.target, 'pagination-section-header');
+        const isFooter = hasSomeParentWithClass(event.target, 'pagination-section-footer');
+        if (isHeader || isFooter) {
+          const eventClone = new event.constructor(event.type);
+          event.target.dispatchEvent(eventClone);
+          return;
+        }
+        event.stopPropagation();
+        
+        if (!this.options.editable) {
+          // ToDo don't need now but consider to update pagination when recalculate header/footer height
+          // this.storage.pagination.sectionData = await initPaginationData(this);
+          //
+          // const newTr = this.view.state.tr;
+          // newTr.setMeta('forceUpdatePagination', true);
+          // this.view.dispatch(newTr);
 
+          this.setEditable(true, false);
+          toggleHeaderFooterEditMode(this, null, false);
+          const pm = document.querySelector('.ProseMirror');
+          pm.classList.remove('header-footer-edit');
+        }
+      }
+    });
+    
     const newState = this.state.reconfigure({
       plugins: [...this.extensionService.plugins],
     });
@@ -1298,6 +1359,10 @@ export class Editor extends EventEmitter {
     const updatedState = newState.apply(tr);
     return updatedState.doc.toJSON();
   }
+  
+  getUpdatedJson() {
+    return this.#prepareDocumentForExport();
+  }
 
   /**
    * Export the editor document to DOCX.
@@ -1329,6 +1394,14 @@ export class Editor extends EventEmitter {
     const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
     const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
     const media = this.converter.addedMedia;
+    
+    const updatedHeadersFooters = {};
+    Object.entries(this.converter.convertedXml).forEach(([name, json]) => {
+      if (name.includes('header') || name.includes('footer')) {
+        const resultXml = this.converter.schemaToXml(json.elements[0]);
+        updatedHeadersFooters[name] = String(resultXml);
+      }
+    });
 
     const numberingData = this.converter.convertedXml['word/numbering.xml'];
     const numbering = this.converter.schemaToXml(numberingData.elements[0]);
@@ -1341,6 +1414,7 @@ export class Editor extends EventEmitter {
 
       // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
       'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
+      ...updatedHeadersFooters
     };
 
     if (comments.length) {
@@ -1353,7 +1427,7 @@ export class Editor extends EventEmitter {
       updatedDocs['word/commentsExtended.xml'] = String(commentsExtendedXml);
       updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
       updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
-    };
+    }
 
     const zipper = new DocxZipper();
     const result = await zipper.updateZip({
@@ -1473,7 +1547,7 @@ export class Editor extends EventEmitter {
       this.initializeCollaborationData(true);
     } else {
       this.#insertNewFileData();
-    };
+    }
 
     if (!this.options.ydoc) {
       this.#initPagination();

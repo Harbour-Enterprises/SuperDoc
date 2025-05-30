@@ -457,7 +457,10 @@ export class SuperDoc extends EventEmitter {
    */
   setActiveEditor(editor) {
     this.activeEditor = editor;
-    if (this.toolbar) this.toolbar.setActiveEditor(editor);
+    if (this.toolbar) {
+      this.activeEditor.toolbar = this.toolbar;
+      this.toolbar.setActiveEditor(editor);
+    }
   }
 
   /**

@@ -2,8 +2,11 @@ import { Attribute } from '../Attribute.js';
 import { getMarkType } from '../helpers/getMarkType.js';
 import { isTextSelection } from '../helpers/isTextSelection.js';
 
-function canSetMark(state, tr, newMarkType) {
-  const { selection } = tr;
+function canSetMark(editor, state, tr, newMarkType) {
+  let { selection } = tr;
+  if (editor.options.isHeaderOrFooter) {
+    selection = editor.options.lastSelection;
+  }
   let cursor = null;
 
   if (isTextSelection(selection)) {
@@ -49,8 +52,11 @@ function canSetMark(state, tr, newMarkType) {
  * @param attributes Attributes to add.
  */
 //prettier-ignore
-export const setMark = (typeOrName, attributes = {}) => ({ tr, state, dispatch }) => {
-    const { selection } = tr;
+export const setMark = (typeOrName, attributes = {}) => ({ tr, state, dispatch, editor }) => {
+    let { selection } = tr;
+    if (editor.options.isHeaderOrFooter) {
+      selection = editor.options.lastSelection;
+    }
     const { empty, ranges } = selection;
     const type = getMarkType(typeOrName, state.schema);
 
@@ -98,5 +104,5 @@ export const setMark = (typeOrName, attributes = {}) => ({ tr, state, dispatch }
       }
     }
 
-    return canSetMark(state, tr, type);
+    return canSetMark(editor, state, tr, type);
   };

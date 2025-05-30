@@ -205,6 +205,11 @@ const deobfuscateFont = (arrayBuffer, guidHex) => {
   return dta.buffer;
 }
 
+const hasSomeParentWithClass = (element, classname) => {
+  if (element.className?.split(' ')?.indexOf(classname) >= 0) return true;
+  return element.parentNode && hasSomeParentWithClass(element.parentNode, classname);
+}
+
 export {
   inchesToTwips,
   twipsToInches,
@@ -227,5 +232,6 @@ export {
   ptToTwips,
   twipsToPt,
   getLineHeightValueString,
-  deobfuscateFont
+  deobfuscateFont,
+  hasSomeParentWithClass
 };

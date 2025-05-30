@@ -106,8 +106,10 @@ class SuperConverter {
     // Headers and footers
     this.headers = {};
     this.headerIds = { default: null, even: null, odd: null, first: null };
+    this.headerEditors = [];
     this.footers = {};
     this.footerIds = { default: null, even: null, odd: null, first: null };
+    this.footerEditors = [];
 
     // Linked Styles
     this.linkedStyles = [];
@@ -396,7 +398,7 @@ class SuperConverter {
 
     const exporter = new DocxExporter(this);
     const xml = exporter.schemaToXml(result);
-
+    
     // Update media
     await this.#exportProcessMediaFiles({
       ...documentMedia,
@@ -422,12 +424,14 @@ class SuperConverter {
     // Update the rels table
     this.#exportProcessNewRelationships([...params.relationships, ...commentsRels]);
 
+    this.#exportProcessHeadersFooters();
+
     // Store the SuperDoc version
     storeSuperdocVersion(this.convertedXml);
     
     // Update the numbering.xml
     this.#exportNumberingFile(params);
-
+    
     return xml;
   };
 
@@ -439,6 +443,7 @@ class SuperConverter {
     commentsExportType = 'clean',
     isFinalDoc = false,
     editor,
+    isHeaderFooter = false,
   }) {
     const bodyNode = this.savedTagsToRestore.find((el) => el.name === 'w:body');
 
@@ -456,6 +461,7 @@ class SuperConverter {
       commentsExportType,
       exportedCommentDefs: commentDefinitions,
       editor,
+      isHeaderFooter
     });
 
     return { result, params };
@@ -491,6 +497,81 @@ class SuperConverter {
     });
 
     return { documentXml, relationships };
+  }
+
+  #exportProcessHeadersFooters() {
+    const relsData = this.convertedXml['word/_rels/document.xml.rels'];
+    const relationships = relsData.elements.find((x) => x.name === 'Relationships');
+    
+    Object.entries(this.headers).forEach(([id, header]) => {
+      const fileName = relationships.elements.find((el) => el.attributes.Id === id)?.attributes.Target;
+      const headerEditor = this.headerEditors.find((item) => item.id === id);
+
+      const { result, params } = this.exportToXmlJson({ 
+        data: header,
+        editor: headerEditor.editor,
+        editorSchema: headerEditor.editor.schema,
+        comments: [],
+        commentDefinitions: [],
+        isHeaderFooter: true,
+      });
+      
+      const bodyContent = result.elements[0].elements;
+      const file = this.convertedXml[`word/${fileName}`];
+      file.elements[0].elements = bodyContent;
+
+      if (params.relationships.length) {
+        const relationships = this.convertedXml[`word/_rels/${fileName}.rels`]?.elements?.find((x) => x.name === 'Relationships')?.elements || [];
+        this.convertedXml[`word/_rels/${fileName}.rels`] = {
+          declaration: this.initialJSON?.declaration,
+          elements: [{
+            name: 'Relationships',
+            attributes: {
+              xmlns: 'http://schemas.openxmlformats.org/package/2006/relationships'
+            },
+            elements: [
+              ...relationships,
+              ...params.relationships
+            ]
+          }]
+        };
+      }
+    });
+
+    Object.entries(this.footers).forEach(([id, footer]) => {
+      const fileName = relationships.elements.find((el) => el.attributes.Id === id)?.attributes.Target;
+      const footerEditor = this.footerEditors.find((item) => item.id === id);
+
+      const { result, params } = this.exportToXmlJson({
+        data: footer,
+        editor: footerEditor.editor,
+        editorSchema: footerEditor.editor.schema,
+        comments: [],
+        commentDefinitions: [],
+        isHeaderFooter: true,
+      });
+      
+      const bodyContent = result.elements[0].elements;
+      const file = this.convertedXml[`word/${fileName}`];
+      file.elements[0].elements = bodyContent;
+
+      if (params.relationships.length) {
+        const relationships = this.convertedXml[`word/_rels/${fileName}.rels`]?.elements?.find((x) => x.name === 'Relationships')?.elements || [];
+        this.convertedXml[`word/_rels/${fileName}.rels`] = {
+          declaration: this.initialJSON?.declaration,
+          elements: [{
+            name: 'Relationships',
+            attributes: {
+              xmlns: 'http://schemas.openxmlformats.org/package/2006/relationships'
+            },
+            elements: [
+              ...relationships,
+              ...params.relationships
+            ]
+          }]
+        };
+      }
+    });
   }
 
   #exportProcessNewRelationships(rels = []) {

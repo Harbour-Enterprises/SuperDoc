@@ -7,9 +7,12 @@ import { getMarkType } from '../helpers/getMarkType.js';
  * @param options.extendEmptyMarkRange Removes the mark even across the current selection.
  */
 //prettier-ignore
-export const unsetMark = (typeOrName, options = {}) => ({ tr, state, dispatch }) => {
+export const unsetMark = (typeOrName, options = {}) => ({ tr, state, dispatch, editor }) => {
   const { extendEmptyMarkRange = false } = options;
-  const { selection } = tr;
+  let { selection } = tr;
+  if (editor.options.isHeaderOrFooter) {
+    selection = editor.options.lastSelection;
+  }
   const type = getMarkType(typeOrName, state.schema);
   const { $from, empty, ranges } = selection;
 

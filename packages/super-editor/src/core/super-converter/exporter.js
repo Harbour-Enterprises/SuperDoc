@@ -125,6 +125,14 @@ function translateBodyNode(params) {
   }
 
   const elements = translateChildNodes(params);
+  
+  if (params.isHeaderFooter) {
+    return {
+      name: 'w:body',
+      elements: [...elements],
+    };
+  }
+  
   return {
     name: 'w:body',
     elements: [...elements, sectPr],

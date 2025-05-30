@@ -56,3 +56,10 @@ on the right if it is inside shape textbox.
 .pagination-section-footer img[contenteditable="false"] {
   pointer-events: none;
 }
+
+.pagination-section-header div[contenteditable="false"],
+.pagination-section-footer div[contenteditable="false"] {
+  opacity: 0.5;
+}
+
+

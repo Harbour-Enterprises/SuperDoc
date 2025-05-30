@@ -23,6 +23,27 @@
   position: relative;
 }
 
+.ProseMirror.header-footer-edit {
+  > p, li, span {
+    color: #7e7e7e !important;
+    &:before, &:after {
+      color: #7e7e7e !important;
+    }
+    img, a {
+      opacity: .5;
+    }
+  }
+  .pagination-break-wrapper {
+    color: initial !important;
+    span {
+      color: initial !important;
+    }
+    img, a {
+      opacity: 1;
+    }
+  }
+}
+
 /**
  * Hide marker for indented lists.
  * If a list-item contains a list but doesn't contain a "p" tag with text.

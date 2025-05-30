@@ -145,7 +145,7 @@ export const Paragraph = Node.create({
         },
       },
     });
-    
+
     return [dropcapPlugin];
   }
 });
@@ -157,7 +157,7 @@ const getDropcapDecorations = (state, view) => {
       const width = getDropcapWidth(view, pos);
       
       decorations.push(
-        Decoration.node(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }),
+        Decoration.inline(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }),
       );
     }
   });
