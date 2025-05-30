@@ -23,7 +23,9 @@ export function adjustPaginationBreaks(editorElem, editor) {
     if (!firstLeft) firstLeft = left;
     if (left !== firstLeft) {
       const diff = left - firstLeft;
-      node.style.transform = `translateX(${diff}px)`;
+      node.style.left = `${diff}px`;
+      // elements with "position: fixed" do not work correctly with transform style.
+      // node.style.transform = `translateX(${diff}px)`;
     }
   });
 };
