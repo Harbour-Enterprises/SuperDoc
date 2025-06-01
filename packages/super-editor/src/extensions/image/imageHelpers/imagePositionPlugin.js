@@ -28,10 +28,7 @@ export const ImagePositionPlugin = ({ editor }) => {
           if (shouldUpdate) {
             shouldUpdate = false;
             const decorations = getImagePositionDecorations(lastState, view);
-            const updateTransaction = view.state.tr.setMeta(
-              ImagePositionPluginKey,
-              { decorations }
-            );
+            const updateTransaction = view.state.tr.setMeta(ImagePositionPluginKey, { decorations });
             view.dispatch(updateTransaction);
           }
           if (pagination?.isReadyToInit) {
@@ -57,7 +54,7 @@ const getImagePositionDecorations = (state, view) => {
       let className = '';
       const { vRelativeFrom, alignH } = node.attrs.anchorData;
       const { size, padding } = node.attrs;
-      
+
       const pageBreak = findPreviousDomNodeWithClass(view, pos, 'pagination-break-wrapper');
       if (pageBreak) {
         switch (alignH) {
@@ -71,8 +68,11 @@ const getImagePositionDecorations = (state, view) => {
             style += 'display: block; margin-left: auto; margin-right: auto; ';
             break;
         }
-        style += vRelativeFrom === 'margin' ? `position: absolute; top: ${pageBreak?.offsetTop + pageBreak?.offsetHeight}px; ` : '';
-        
+        style +=
+          vRelativeFrom === 'margin'
+            ? `position: absolute; top: ${pageBreak?.offsetTop + pageBreak?.offsetHeight}px; `
+            : '';
+
         if (vRelativeFrom === 'margin') {
           const nextPos = view.posAtDOM(pageBreak, 1);
           const imageBlock = document.createElement('div');
@@ -84,9 +84,7 @@ const getImagePositionDecorations = (state, view) => {
         }
       }
 
-      decorations.push(
-        Decoration.node(pos, pos + node.nodeSize, { style, class: className }),
-      );
+      decorations.push(Decoration.node(pos, pos + node.nodeSize, { style, class: className }));
     }
   });
   return decorations;
@@ -94,7 +92,7 @@ const getImagePositionDecorations = (state, view) => {
 
 const findPreviousDomNodeWithClass = (view, pos, className) => {
   let { node } = view.domAtPos(pos);
-  
+
   // If you get a text node, go to its parent
   if (node.nodeType === 3) {
     node = node.parentNode;
@@ -117,4 +115,4 @@ const findPreviousDomNodeWithClass = (view, pos, className) => {
   }
 
   return null; // Not found
-}
+};

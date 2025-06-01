@@ -4,8 +4,8 @@ import { ref } from 'vue';
 const props = defineProps({
   searchRef: {
     type: Object,
-  }
-})
+  },
+});
 
 const searchValue = ref('');
 const emit = defineEmits(['submit']);
@@ -29,9 +29,7 @@ const handleSubmit = () => {
       />
     </div>
     <div class="row submit">
-      <button class="submit-btn" @click="handleSubmit">
-        Apply
-      </button>
+      <button class="submit-btn" @click="handleSubmit">Apply</button>
     </div>
   </div>
 </template>
@@ -49,8 +47,9 @@ const handleSubmit = () => {
     color: #666;
     border: 1px solid #ddd;
     box-sizing: border-box;
-    box-shadow: 0 4px 12px 0 rgba(0, 0, 0, .15);
-    &:active, &:focus {
+    box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15);
+    &:active,
+    &:focus {
       outline: none;
       border: 1px solid #1355ff;
     }

@@ -9,7 +9,7 @@ test.describe('pagination', () => {
       page = await context.newPage();
       await page.goto('http://localhost:4173?file=blank');
     });
-  
+
     test('should be positioned at (0, 0) and have the correct dimensions', async () => {
       await page.waitForSelector('#editor');
       const editorDiv = await page.$('#editor');
@@ -117,7 +117,7 @@ test.describe('pagination', () => {
       await page.waitForSelector('#editor');
       await page.waitForSelector('.ProseMirror p');
       await page.waitForSelector('.pagination-page-spacer.ProseMirror-widget');
-      
+
       const spacers = await page.$$('.pagination-page-spacer.ProseMirror-widget');
 
       for (const spacer of spacers) {

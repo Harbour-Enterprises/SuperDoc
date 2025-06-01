@@ -1,4 +1,3 @@
-
 # Super Editor Test App
 
 This is a minimal test application used for end-to-end testing of the Super Editor component.
@@ -18,11 +17,13 @@ Example test scenarios that can be covered using this app include:
 ## Usage
 
 1. Start the dev server:
+
    ```bash
    npm run dev
    ```
 
 2. Build the app:
+
    ```bash
    npm run build
    ```

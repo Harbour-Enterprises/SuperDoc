@@ -30,7 +30,9 @@ export const addMarkStep = ({ state, tr, step, newTr, map, doc, user, date }) =>
       return false;
     }
 
-    const existingChangeMark = node.marks.find((mark) => [TrackDeleteMarkName, TrackFormatMarkName].includes(mark.type.name));
+    const existingChangeMark = node.marks.find((mark) =>
+      [TrackDeleteMarkName, TrackFormatMarkName].includes(mark.type.name),
+    );
     const wid = existingChangeMark ? existingChangeMark.attrs.id : uuidv4();
     newTr.addMark(Math.max(step.from, pos), Math.min(step.to, pos + node.nodeSize), step.mark);
 

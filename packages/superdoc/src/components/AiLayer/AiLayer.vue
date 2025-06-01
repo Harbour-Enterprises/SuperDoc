@@ -6,8 +6,8 @@ const props = defineProps({
   editor: {
     type: Object,
     required: false,
-    default: null
-  }
+    default: null,
+  },
 });
 
 const superdocStore = useSuperdocStore();
@@ -57,7 +57,7 @@ const updateAiHighlight = () => {
     // This will re-render document (but should not happen )
     if (highlightLayer.value) {
       const highlights = highlightLayer.value.querySelectorAll('.ai-highlight-anchor');
-      Array.from(highlights).forEach(highlight => {
+      Array.from(highlights).forEach((highlight) => {
         highlight.classList.add('sd-ai-highlight-pulse');
       });
     }
@@ -68,8 +68,8 @@ const removeAiHighlight = () => {
   // Remove the AI mark using the editor if available
   if (props.editor && !props.editor.isDestroyed) {
     props.editor.commands.removeAiMark();
-  } 
-  
+  }
+
   // Always clear the DOM layer as a safety measure
   if (highlightLayer.value) {
     highlightLayer.value.innerHTML = '';
@@ -89,7 +89,6 @@ defineExpose({
   </div>
 </template>
 
-
 <style scoped>
 .ai-highlight-layer {
   position: relative;
@@ -104,5 +103,4 @@ defineExpose({
 .bypass {
   display: none;
 }
-
 </style>

@@ -22,12 +22,13 @@ const activeUserIndex = ref(null);
 const getFilteredUsers = computed(() => {
   // Remove the '@' symbol from the mention
   const mention = props.mention.slice(1)?.toLowerCase();
-  const filtered = props.users.filter((user) => {
-    const isViewer = user.role === 'viewer';
-    const userMatch = user.name?.toLowerCase().startsWith(mention);
-    const emailMatch = user.email?.toLowerCase().startsWith(mention);
-    return !isViewer && (userMatch || emailMatch);
-  }) || [];
+  const filtered =
+    props.users.filter((user) => {
+      const isViewer = user.role === 'viewer';
+      const userMatch = user.name?.toLowerCase().startsWith(mention);
+      const emailMatch = user.email?.toLowerCase().startsWith(mention);
+      return !isViewer && (userMatch || emailMatch);
+    }) || [];
   return filtered;
 });
 

@@ -74,7 +74,7 @@ export const BulletList = Node.create({
     let inputRule = wrappingInputRule({
       match: inputRegex,
       type: this.type,
-    })
+    });
 
     if (this.options.keepMarks || this.options.keepAttributes) {
       inputRule = wrappingInputRule({
@@ -82,12 +82,12 @@ export const BulletList = Node.create({
         type: this.type,
         keepMarks: this.options.keepMarks,
         keepAttributes: this.options.keepAttributes,
-        getAttributes: () => { return this.editor.getAttributes('textStyle') },
+        getAttributes: () => {
+          return this.editor.getAttributes('textStyle');
+        },
         editor: this.editor,
-      })
+      });
     }
-    return [
-      inputRule,
-    ];
+    return [inputRule];
   },
 });

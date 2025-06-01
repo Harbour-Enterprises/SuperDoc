@@ -1,8 +1,6 @@
 // prettier-ignore
 import { expect } from 'vitest';
-import {
-  getExportedResult,
-} from '../export-helpers/index';
+import { getExportedResult } from '../export-helpers/index';
 
 describe('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
   const fileName = 'listWithSpacerNodes.docx';
@@ -10,7 +8,10 @@ describe('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
   const body = {};
 
   beforeEach(() => {
-    Object.assign(body, result.elements?.find((el) => el.name === 'w:body'));
+    Object.assign(
+      body,
+      result.elements?.find((el) => el.name === 'w:body'),
+    );
   });
 
   it('export spacer props correctly', () => {
@@ -31,7 +32,10 @@ describe('[list-with-table-break.docx] list with a table in between sub list nod
   const body = {};
 
   beforeEach(() => {
-    Object.assign(body, result.elements?.find((el) => el.name === 'w:body'));
+    Object.assign(
+      body,
+      result.elements?.find((el) => el.name === 'w:body'),
+    );
   });
 
   it('export spacer props correctly', () => {
@@ -56,7 +60,7 @@ describe('[list-with-table-break.docx] list with a table in between sub list nod
     const subListItem1ilvl = subListItem1NumPr.elements.find((el) => el.name === 'w:ilvl');
     expect(subListItem1ilvl.attributes['w:val']).toEqual(1);
     const subListItem1NumId = subListItem1NumPr.elements.find((el) => el.name === 'w:numId');
-    expect(subListItem1NumId.attributes['w:val']).toEqual("1");
+    expect(subListItem1NumId.attributes['w:val']).toEqual('1');
 
     // Expect to see a blank paragraph between the list (and sub list) and the table
     const blankSpace = content[2];
@@ -81,7 +85,7 @@ describe('[list-with-table-break.docx] list with a table in between sub list nod
     const subListItem2ilvl = subListItem2NumPr.elements.find((el) => el.name === 'w:ilvl');
     expect(subListItem2ilvl.attributes['w:val']).toEqual(1);
     const subListItem2NumId = subListItem2NumPr.elements.find((el) => el.name === 'w:numId');
-    expect(subListItem2NumId.attributes['w:val']).toEqual("1");
+    expect(subListItem2NumId.attributes['w:val']).toEqual('1');
 
     // Skip item 6 - another blank line
 
@@ -90,6 +94,5 @@ describe('[list-with-table-break.docx] list with a table in between sub list nod
     const mainListItem2Run = mainListItem2.elements.find((el) => el.name === 'w:r');
     const mainListItem2Text = mainListItem2Run.elements.find((el) => el.name === 'w:t');
     expect(mainListItem2Text.elements[0].text).toEqual('TWO');
-
   });
 });

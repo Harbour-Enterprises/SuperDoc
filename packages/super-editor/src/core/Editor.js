@@ -18,10 +18,7 @@ import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
 import { getRichTextExtensions } from '../extensions/index.js';
 import { AnnotatorServices } from '@helpers/annotator.js';
-import {
-  prepareCommentsForExport,
-  prepareCommentsForImport,
-} from '@extensions/comment/comments-helpers.js';
+import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
 import { generateCollaborationData } from '@extensions/collaboration/collaboration.js';
 
@@ -38,11 +35,11 @@ import { generateCollaborationData } from '@extensions/collaboration/collaborati
  * @class
  */
 /**
-* @typedef {Object} User The current user of this superdoc
-* @property {string} name The user's name
-* @property {string} email The user's email
-* @property {string | null} image The user's photo
-*/
+ * @typedef {Object} User The current user of this superdoc
+ * @property {string} name The user's name
+ * @property {string} email The user's email
+ * @property {string | null} image The user's photo
+ */
 /**
  * @typedef {Object} EditorOptions
  * @property {HTMLElement} [element] - The container element for the editor
@@ -251,7 +248,7 @@ export class Editor extends EventEmitter {
         options.element = document.querySelector(selector);
       } else {
         options.element = document.getElementById(selector);
-      };
+      }
 
       const textModes = ['text', 'html'];
       if (textModes.includes(options.mode) && options.element) {
@@ -360,13 +357,13 @@ export class Editor extends EventEmitter {
   }
 
   /**
-  *
-  * @private
-  * @param {Object} param0
-  * @param {Object} param0.editor
-  * @param {Object} param0.event
-  * @returns {void}
-  */
+   *
+   * @private
+   * @param {Object} param0
+   * @param {Object} param0.editor
+   * @param {Object} param0.event
+   * @returns {void}
+   */
   #onFocus({ editor, event }) {
     this.toolbar?.setActiveEditor(editor);
     this.options.onFocus({ editor, event });
@@ -525,7 +522,7 @@ export class Editor extends EventEmitter {
   }
 
   /**
-  * Initialize data for collaborative editing
+   * Initialize data for collaborative editing
    * If we are replacing data and have a valid provider, listen for synced event
    * so that we can initialize the data
    * @returns {void}
@@ -591,7 +588,7 @@ export class Editor extends EventEmitter {
     };
 
     if (this.options.collaborationProvider && this.options.ydoc) {
-      const nonCollabHistoryIndex = this.options.extensions.findIndex((e) => e.name === "history");
+      const nonCollabHistoryIndex = this.options.extensions.findIndex((e) => e.name === 'history');
       if (nonCollabHistoryIndex !== -1) {
         this.options.extensions.splice(nonCollabHistoryIndex, 1);
       }
@@ -785,7 +782,7 @@ export class Editor extends EventEmitter {
   static getDocumentVersion(doc) {
     const version = SuperConverter.getStoredSuperdocVersion(doc);
     return version;
-  };
+  }
 
   /**
    * Update the document version
@@ -797,7 +794,7 @@ export class Editor extends EventEmitter {
   static updateDocumentVersion(doc, version) {
     const updatedContent = SuperConverter.updateDocumentVersion(doc, version);
     return updatedContent;
-  };
+  }
 
   /**
    * Creates document PM schema.
@@ -826,7 +823,7 @@ export class Editor extends EventEmitter {
         doc = this.#prepareDocumentForImport(doc);
 
         // If we have a new doc, and have html data, we initialize from html
-        if (this.options.html) doc = this.#createDocFromHTML(this.options.html)
+        if (this.options.html) doc = this.#createDocFromHTML(this.options.html);
 
         if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
       }
@@ -858,7 +855,7 @@ export class Editor extends EventEmitter {
       tempDiv.innerHTML = content;
       parsedContent = tempDiv;
       tempDiv.remove();
-    };
+    }
 
     return DOMParser.fromSchema(this.schema).parse(parsedContent);
   }
@@ -923,17 +920,17 @@ export class Editor extends EventEmitter {
     return {
       width: maxWidth,
       height: maxHeight,
-    }
+    };
   }
 
   /**
-    * Initialize default styles for the editor container and ProseMirror.
-    * Get page size and margins from the converter.
-    * Set document default font and font size.
-    *
-    * @param {HTMLElement} [element=this.element] - The DOM element to apply styles to
-    * @returns {void}
-    */
+   * Initialize default styles for the editor container and ProseMirror.
+   * Get page size and margins from the converter.
+   * Set document default font and font size.
+   *
+   * @param {HTMLElement} [element=this.element] - The DOM element to apply styles to
+   * @returns {void}
+   */
   initDefaultStyles(element = this.element) {
     if (this.options.isHeadless || this.options.htmlOverride) return;
 
@@ -982,7 +979,7 @@ export class Editor extends EventEmitter {
     }
 
     this.initMobileStyles(element);
-  };
+  }
 
   /**
    * Initializes responsive styles for mobile devices.
@@ -1021,7 +1018,7 @@ export class Editor extends EventEmitter {
         superEditorElement.style.maxWidth = '';
         superEditorContainer.style.minWidth = '';
 
-        element.style.transform = "none";
+        element.style.transform = 'none';
       }
     };
 
@@ -1035,13 +1032,13 @@ export class Editor extends EventEmitter {
     };
 
     if ('orientation' in screen && 'addEventListener' in screen.orientation) {
-      screen.orientation.addEventListener("change", handleResize);
+      screen.orientation.addEventListener('change', handleResize);
     } else {
-      window.matchMedia("(orientation: portrait)").addEventListener("change", handleResize);
+      window.matchMedia('(orientation: portrait)').addEventListener('change', handleResize);
     }
 
     window.addEventListener('resize', () => handleResize);
-  };
+  }
 
   /**
    * Handler called when collaboration is ready.
@@ -1064,7 +1061,7 @@ export class Editor extends EventEmitter {
       this.#initPagination();
       this.#initComments();
     }
-  };
+  }
 
   /**
    * Initialize comments plugin
@@ -1084,7 +1081,7 @@ export class Editor extends EventEmitter {
       const tr = state.tr.setMeta(CommentsPluginKey, { type: 'force' });
       dispatch(tr);
     }, 50);
-  };
+  }
 
   /**
    * Initialize pagination, if the pagination extension is enabled.
@@ -1106,7 +1103,7 @@ export class Editor extends EventEmitter {
       const tr = state.tr.setMeta(PaginationPluginKey, { isReadyToInit: true });
       dispatch(tr);
     }
-  };
+  }
 
   /**
    * Dispatch a transaction to update the editor state
@@ -1202,8 +1199,7 @@ export class Editor extends EventEmitter {
    */
   isActive(nameOrAttributes, attributesOrUndefined) {
     const name = typeof nameOrAttributes === 'string' ? nameOrAttributes : null;
-    const attributes =
-      typeof nameOrAttributes === 'string' ? attributesOrUndefined : nameOrAttributes;
+    const attributes = typeof nameOrAttributes === 'string' ? attributesOrUndefined : nameOrAttributes;
     return isActive(this.state, name, attributes);
   }
 
@@ -1276,7 +1272,6 @@ export class Editor extends EventEmitter {
    * @returns {Object} The updated prosemirror document
    */
   #prepareDocumentForImport(doc) {
-
     const newState = EditorState.create({
       schema: this.schema,
       doc,
@@ -1301,7 +1296,7 @@ export class Editor extends EventEmitter {
     const newState = EditorState.create({
       schema: this.schema,
       doc: this.state.doc,
-      plugins: this.state.plugins
+      plugins: this.state.plugins,
     });
 
     const { tr, doc } = newState;
@@ -1321,7 +1316,6 @@ export class Editor extends EventEmitter {
    * @returns {Promise<Blob|ArrayBuffer>} The exported DOCX file
    */
   async exportDocx({ isFinalDoc = false, commentsType = 'external', comments = [] } = {}) {
-
     // Pre-process the document state to prepare for export
     const json = this.#prepareDocumentForExport(comments);
 
@@ -1357,15 +1351,21 @@ export class Editor extends EventEmitter {
 
     if (comments.length) {
       const commentsXml = this.converter.schemaToXml(this.converter.convertedXml['word/comments.xml'].elements[0]);
-      const commentsExtendedXml = this.converter.schemaToXml(this.converter.convertedXml['word/commentsExtended.xml'].elements[0]);
-      const commentsExtensibleXml = this.converter.schemaToXml(this.converter.convertedXml['word/commentsExtensible.xml'].elements[0]);
-      const commentsIdsXml = this.converter.schemaToXml(this.converter.convertedXml['word/commentsIds.xml'].elements[0]);
+      const commentsExtendedXml = this.converter.schemaToXml(
+        this.converter.convertedXml['word/commentsExtended.xml'].elements[0],
+      );
+      const commentsExtensibleXml = this.converter.schemaToXml(
+        this.converter.convertedXml['word/commentsExtensible.xml'].elements[0],
+      );
+      const commentsIdsXml = this.converter.schemaToXml(
+        this.converter.convertedXml['word/commentsIds.xml'].elements[0],
+      );
 
       updatedDocs['word/comments.xml'] = String(commentsXml);
       updatedDocs['word/commentsExtended.xml'] = String(commentsExtendedXml);
       updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
       updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
-    };
+    }
 
     const zipper = new DocxZipper();
     const result = await zipper.updateZip({
@@ -1379,7 +1379,7 @@ export class Editor extends EventEmitter {
 
     this.options.telemetry?.trackUsage('document_export', {
       documentType: 'docx',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     return result;
@@ -1447,7 +1447,7 @@ export class Editor extends EventEmitter {
       const result = migration(this);
       if (!result) throw new Error('Migration failed at ' + migration.name);
       else hasRunMigrations = true;
-    };
+    }
 
     // If no migrations were run, return undefined (no updated ydoc).
     if (!hasRunMigrations) return;
@@ -1455,7 +1455,7 @@ export class Editor extends EventEmitter {
     // Return the updated ydoc
     const pluginState = syncPlugin?.getState(this.state);
     return pluginState.doc;
-  };
+  }
 
   /**
    * Replace the current file
@@ -1464,7 +1464,7 @@ export class Editor extends EventEmitter {
    * @returns {Promise<void>}
    */
   async replaceFile(file) {
-    this.setOptions({ annotations: true })
+    this.setOptions({ annotations: true });
     const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(newFile);
     this.setOptions({
       fileSource: newFile,
@@ -1485,7 +1485,7 @@ export class Editor extends EventEmitter {
       this.initializeCollaborationData(true);
     } else {
       this.#insertNewFileData();
-    };
+    }
 
     if (!this.options.ydoc) {
       this.#initPagination();
@@ -1553,11 +1553,10 @@ export class Editor extends EventEmitter {
       tr,
       schema,
       annotationValues,
-      hiddenFieldIds: hiddenIds
+      hiddenFieldIds: hiddenIds,
     });
 
     // Dispatch everything in a single transaction, which makes this undo-able in a single undo
     if (tr.docChanged) view.dispatch(tr.scrollIntoView());
   }
-
 }

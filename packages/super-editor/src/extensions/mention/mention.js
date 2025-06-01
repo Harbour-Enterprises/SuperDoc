@@ -36,7 +36,7 @@ export const Mention = Node.create({
 
     return [
       'span',
-      Attribute.mergeAttributes({ 'data-type': this.name || this.email, }, this.options.htmlAttributes, htmlAttributes),
+      Attribute.mergeAttributes({ 'data-type': this.name || this.email }, this.options.htmlAttributes, htmlAttributes),
       `@${name ? name : email}`,
     ];
   },

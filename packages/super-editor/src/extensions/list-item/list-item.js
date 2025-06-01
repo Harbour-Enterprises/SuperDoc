@@ -85,7 +85,7 @@ export const ListItem = Node.create({
           let listLevel = elem.getAttribute('data-list-level');
           try {
             listLevel = JSON.parse(listLevel);
-          } catch (e) {};
+          } catch (e) {}
           return listLevel;
         },
         renderDOM: (attrs) => {
@@ -95,7 +95,7 @@ export const ListItem = Node.create({
           };
         },
       },
-      
+
       // JC = justification. Expect left, right, center
       lvlJc: {
         default: null,
@@ -131,7 +131,7 @@ export const ListItem = Node.create({
           return {
             'data-font-size': attrs.importedFontSize,
           };
-        }
+        },
       },
 
       importedFontFamily: {
@@ -141,9 +141,9 @@ export const ListItem = Node.create({
           return {
             'data-font-family': attrs.importedFontFamily,
           };
-        }
+        },
       },
-  
+
       spacing: {
         default: null,
         rendered: false,
@@ -152,55 +152,69 @@ export const ListItem = Node.create({
       indent: {
         default: null,
         rendered: false,
-      }
+      },
     };
   },
 
   addCommands() {
     return {
-      getCurrentListNode: () => ({ state }) => {
-        return findParentNode((node) => node.type.name === this.name)(state.selection);
-      },
+      getCurrentListNode:
+        () =>
+        ({ state }) => {
+          return findParentNode((node) => node.type.name === this.name)(state.selection);
+        },
 
-      increaseListIndent: () => ({ commands }) => {
-        if (!commands.sinkListItem(this.name)) { return false }
-        commands.updateNodeStyle();
-        commands.updateOrderedListStyleType();
-        return true;
-      },
+      increaseListIndent:
+        () =>
+        ({ commands }) => {
+          if (!commands.sinkListItem(this.name)) {
+            return false;
+          }
+          commands.updateNodeStyle();
+          commands.updateOrderedListStyleType();
+          return true;
+        },
 
-      decreaseListIndent: () => ({ commands }) => {
-        const currentList = commands.getCurrentList();
-        const depth = currentList?.depth;
+      decreaseListIndent:
+        () =>
+        ({ commands }) => {
+          const currentList = commands.getCurrentList();
+          const depth = currentList?.depth;
 
-        if (depth === 1) return false;
-        if (!commands.liftListItem(this.name)) { return true }
-        if (!commands.updateNodeStyle()) { return false }
+          if (depth === 1) return false;
+          if (!commands.liftListItem(this.name)) {
+            return true;
+          }
+          if (!commands.updateNodeStyle()) {
+            return false;
+          }
 
-        const currentNode = commands.getCurrentListNode();
-        const currentNodeIndex = currentList?.node?.children.findIndex((child) => child === currentNode.node);
-        const nextNodePos = currentNode?.pos + currentNode?.node.nodeSize;
-        const followingNodes = currentList?.node?.children.slice(currentNodeIndex + 1) || [];
+          const currentNode = commands.getCurrentListNode();
+          const currentNodeIndex = currentList?.node?.children.findIndex((child) => child === currentNode.node);
+          const nextNodePos = currentNode?.pos + currentNode?.node.nodeSize;
+          const followingNodes = currentList?.node?.children.slice(currentNodeIndex + 1) || [];
 
-        commands.updateOrderedListStyleType();
-        commands.restartListNodes(followingNodes, nextNodePos);
-        return true;
-      },
+          commands.updateOrderedListStyleType();
+          commands.restartListNodes(followingNodes, nextNodePos);
+          return true;
+        },
 
-      updateNodeStyle: () => ({ tr, state }) => {
-        let list = findParentNode((node) => node.type.name === 'orderedList')(tr.selection);
-        const current = findParentNode((node) => node.type.name === this.name)(state.selection);
+      updateNodeStyle:
+        () =>
+        ({ tr, state }) => {
+          let list = findParentNode((node) => node.type.name === 'orderedList')(tr.selection);
+          const current = findParentNode((node) => node.type.name === this.name)(state.selection);
 
-        if (!list) return false;
+          if (!list) return false;
 
-        const firstNodeAttrs = list?.node.children[0]?.attrs;
-        const newPos = tr.mapping.map(current.pos);
-        tr.setNodeMarkup(newPos, undefined, {
-          ...firstNodeAttrs,
-        });
-        return true;
-      },
-    }
+          const firstNodeAttrs = list?.node.children[0]?.attrs;
+          const newPos = tr.mapping.map(current.pos);
+          tr.setNodeMarkup(newPos, undefined, {
+            ...firstNodeAttrs,
+          });
+          return true;
+        },
+    };
   },
 
   addShortcuts() {

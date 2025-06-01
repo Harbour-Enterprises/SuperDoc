@@ -1,15 +1,11 @@
 import { createAwarenessHandler, createProvider } from '../collaboration/collaboration';
 import useComment from '../../components/CommentsLayer/use-comment';
 
-import {
-  addYComment,
-  updateYComment,
-  deleteYComment
-} from './collaboration-comments';
+import { addYComment, updateYComment, deleteYComment } from './collaboration-comments';
 
 /**
  * Initialize sync for comments if the module is enabled
- * 
+ *
  * @param {Object} superdoc The SuperDoc instance
  * @returns {void}
  */
@@ -34,21 +30,20 @@ export const initCollaborationComments = (superdoc) => {
 
     const seen = new Set();
     const filtered = [];
-    comments.forEach((c) =>{
+    comments.forEach((c) => {
       if (!seen.has(c.commentId)) {
         seen.add(c.commentId);
         filtered.push(c);
-      };
+      }
     });
     superdoc.commentsStore.commentsList = filtered.map((c) => useComment(c));
   });
 };
 
-
 /**
  * Initialize SuperDoc general Y.Doc for high level collaboration
  * Assigns superdoc.ydoc and superdoc.provider in place
- * 
+ *
  * @param {Object} superdoc The SuperDoc instance
  * @returns {void}
  */
@@ -81,17 +76,16 @@ export const initSuperdocYdoc = (superdoc) => {
 
     // Listen for the synced event
     superdocProvider.on('synced', onSuperDocYdocSynced);
-  };
+  }
 
   superdoc.ydoc = superdocYdoc;
   superdoc.provider = superdocProvider;
 };
 
-
 /**
- * Process SuperDoc's documents to make them collaborative by 
+ * Process SuperDoc's documents to make them collaborative by
  * adding provider, ydoc, awareness handler, and socket to each document.
- * 
+ *
  * @param {Object} superdoc The SuperDoc instance
  * @returns {Array[Object]} The processed documents
  */
@@ -120,8 +114,8 @@ export const makeDocumentsCollaborative = (superdoc) => {
 
 /**
  * Sync local comments with ydoc and other clients if in collaboration mode and comments module is enabled
- * 
- * @param {Object} superdoc 
+ *
+ * @param {Object} superdoc
  * @param {Object} event
  * @returns {void}
  */
@@ -131,7 +125,7 @@ export const syncCommentsToClients = (superdoc, event) => {
 
   const yArray = superdoc.ydoc.getArray('comments');
 
-  switch(event.type) {
+  switch (event.type) {
     case 'add':
       addYComment(yArray, superdoc.ydoc, event);
       break;

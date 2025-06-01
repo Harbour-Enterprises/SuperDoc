@@ -11,10 +11,7 @@ export function styledListMarker(options = {}) {
 
     state: {
       init(_, state) {
-        const decorations = [
-          ...getListMarkerDecorations(state),
-          ...getListItemStylingFromParagraphProps(state),
-        ];
+        const decorations = [...getListMarkerDecorations(state), ...getListItemStylingFromParagraphProps(state)];
         return DecorationSet.create(state.doc, decorations);
       },
 
@@ -93,7 +90,7 @@ function getListMarkerDecorations(state, marks = []) {
     let fontFamilyAttrs = {
       style: `--marker-font-family: ${fontFamily ?? 'initial'}`,
     };
-    
+
     let attrs = Attribute.mergeAttributes(fontSizeAttrs, fontFamilyAttrs);
 
     let dec = Decoration.node(pos, pos + node.nodeSize, attrs);
@@ -114,7 +111,7 @@ function getListItemStylingFromParagraphProps(state) {
 
   listItems.forEach(({ node, pos }) => {
     let spacingAttrs = {};
-    
+
     if (node.attrs.spacing) {
       const { lineSpaceBefore, lineSpaceAfter, line } = node.attrs.spacing;
       const style = `
@@ -122,9 +119,9 @@ function getListItemStylingFromParagraphProps(state) {
             ${lineSpaceAfter ? `margin-bottom: ${lineSpaceAfter}px;` : ''}
             ${line ? getLineHeightValueString(line, '') : ''}
           `.trim();
-      
+
       spacingAttrs = {
-        style
+        style,
       };
     }
 

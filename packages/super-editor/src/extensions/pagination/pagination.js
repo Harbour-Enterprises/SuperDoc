@@ -1,5 +1,5 @@
 import { Plugin, EditorState } from 'prosemirror-state';
-import { EditorView } from "prosemirror-view";
+import { EditorView } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { PaginationPluginKey } from './pagination-helpers.js';
@@ -22,12 +22,14 @@ export const Pagination = Extension.create({
 
   addCommands() {
     return {
-      insertPageBreak: () => ({ commands }) => {
-        return commands.insertContent({
-          type: 'hardBreak',
-        });
-      }
-    }
+      insertPageBreak:
+        () =>
+        ({ commands }) => {
+          return commands.insertContent({
+            type: 'hardBreak',
+          });
+        },
+    };
   },
 
   addShortcuts() {
@@ -59,61 +61,61 @@ export const Pagination = Extension.create({
             isReadyToInit: false,
             decorations: DecorationSet.empty,
             isDebugging,
-          }
+          };
         },
         apply(tr, oldState, prevEditorState, newEditorState) {
           // Check for new decorations passed via metadata
 
           const meta = tr.getMeta(PaginationPluginKey);
           if (meta && meta.isReadyToInit) {
-            if (isDebugging) console.debug('✅ INIT READY')
+            if (isDebugging) console.debug('✅ INIT READY');
             shouldUpdate = true;
             shouldInitialize = meta.isReadyToInit;
-          };
+          }
 
           // We need special handling for images / the image placeholder plugin
           const imagePluginTransaction = tr.getMeta(ImagePlaceholderPluginKey);
           if (imagePluginTransaction) {
             if (imagePluginTransaction.type === 'remove') {
               const imagePos = imagePluginTransaction.pos;
-              const domImage = editor.view.domAtPos(imagePos).node.querySelector("img");
+              const domImage = editor.view.domAtPos(imagePos).node.querySelector('img');
               if (domImage.complete) onImageLoad(editor);
               else domImage.onload = () => onImageLoad(editor);
-            };
-            return { ...oldState }
-          };
+            }
+            return { ...oldState };
+          }
 
           const isAnnotationUpdate = tr.getMeta('fieldAnnotationUpdate');
           if (isAnnotationUpdate) {
-            return { ...oldState }
+            return { ...oldState };
           }
 
           if (!shouldInitialize && !oldState.isReadyToInit) {
-            if (isDebugging) console.debug('🚫 NO INIT')
-            return { ...oldState }
+            if (isDebugging) console.debug('🚫 NO INIT');
+            return { ...oldState };
           }
 
           if (meta && meta.decorations) {
             shouldUpdate = true;
-            if (isDebugging) console.debug('🦋 RETURN META DECORATIONS')
+            if (isDebugging) console.debug('🦋 RETURN META DECORATIONS');
             return {
               ...oldState,
               decorations: meta.decorations.map(tr.mapping, newEditorState.doc),
-            }
-          };
+            };
+          }
 
           const isForceUpdate = tr.getMeta('forceUpdatePagination');
 
           // If the document hasn't changed, and we've already initialized, don't update
           if (!isForceUpdate && prevEditorState.doc.eq(newEditorState.doc) && hasInitialized) {
-            if (isDebugging) console.debug('🚫 NO UPDATE')
+            if (isDebugging) console.debug('🚫 NO UPDATE');
             shouldUpdate = false;
             return { ...oldState };
           }
 
           // content size
           shouldUpdate = true;
-          if (isDebugging) console.debug('🚀 UPDATE DECORATIONS')
+          if (isDebugging) console.debug('🚀 UPDATE DECORATIONS');
           if (isForceUpdate) shouldUpdate = true;
 
           return {
@@ -138,7 +140,7 @@ export const Pagination = Extension.create({
              * Perform the actual update here.
              * We call calculatePageBreaks which actually generates the decorations
              */
-            if (isDebugging) console.debug('--- Calling performUpdate ---')
+            if (isDebugging) console.debug('--- Calling performUpdate ---');
             performUpdate(editor, view, previousDecorations);
             isUpdating = false;
             shouldUpdate = false;
@@ -147,7 +149,7 @@ export const Pagination = Extension.create({
       },
       props: {
         decorations(state) {
-        return PaginationPluginKey.getState(state).decorations;
+          return PaginationPluginKey.getState(state).decorations;
         },
       },
     });
@@ -159,10 +161,10 @@ export const Pagination = Extension.create({
 /**
  * Get the correct header or footer ID based on the current page number and section type
  * Consider wether or not we need to alternate odd/even pages or if we have a title page
- * 
- * @param {Number} currentPageNumber 
- * @param {String} sectionType 
- * @param {Editor} editor 
+ *
+ * @param {Number} currentPageNumber
+ * @param {String} sectionType
+ * @param {Editor} editor
  * @returns {String|null} The header or footer ID
  */
 const getHeaderFooterId = (currentPageNumber, sectionType, editor, node = null) => {
@@ -174,11 +176,15 @@ const getHeaderFooterId = (currentPageNumber, sectionType, editor, node = null) 
 
     if (currentPageNumber === 1) {
       if (sectionType === 'headerIds') {
-        const sectionData = sectPr?.elements?.find((el) => el.name === 'w:headerReference' && el.attributes?.['w:type'] === 'first');
+        const sectionData = sectPr?.elements?.find(
+          (el) => el.name === 'w:headerReference' && el.attributes?.['w:type'] === 'first',
+        );
         const newId = sectionData?.attributes?.['r:id'];
         return newId;
       } else if (sectionType === 'footerIds') {
-        const sectionData = sectPr?.elements?.find((el) => el.name === 'w:footerReference' && el.attributes?.['w:type'] === 'first');
+        const sectionData = sectPr?.elements?.find(
+          (el) => el.name === 'w:footerReference' && el.attributes?.['w:type'] === 'first',
+        );
         const newId = sectionData?.attributes?.['r:id'];
         return newId;
       }
@@ -208,7 +214,6 @@ const getHeaderFooterId = (currentPageNumber, sectionType, editor, node = null) 
   return sectionId;
 };
 
-
 /**
  * Calculate page breaks and update the editor state with the new decorations
  * @param {Editor} editor The editor instance
@@ -222,12 +227,9 @@ const performUpdate = (editor, view, previousDecorations) => {
 
   // Skip updating if decorations haven't changed
   if (!previousDecorations.eq(newDecorations)) {
-    const updateTransaction = view.state.tr.setMeta(
-      PaginationPluginKey,
-      { decorations: newDecorations }
-    );
+    const updateTransaction = view.state.tr.setMeta(PaginationPluginKey, { decorations: newDecorations });
     view.dispatch(updateTransaction);
-  };
+  }
 
   // Emit that pagination has been updated
   editor.emit('paginationUpdate');
@@ -288,9 +290,8 @@ const calculatePageBreaks = (view, editor, sectionData) => {
   document.body.removeChild(tempContainer);
 
   // Return a list of page break decorations
-  return DecorationSet.create(view.state.doc, decorations)
+  return DecorationSet.create(view.state.doc, decorations);
 };
-
 
 /**
  * Generate internal page breaks by iterating through the document, keeping track of the height.
@@ -311,7 +312,8 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
   let currentPageNumber = 1;
   let pageHeightThreshold = pageHeight;
   let hardBreakOffsets = 0;
-  let footer = null, header = null;
+  let footer = null,
+    header = null;
 
   const firstHeaderId = getHeaderFooterId(currentPageNumber, 'headerIds', editor);
   const firstHeader = createHeader(pageMargins, pageSize, sectionData, firstHeaderId);
@@ -334,10 +336,10 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
   doc.descendants((node, pos) => {
     let currentNode = node;
     let currentPos = pos;
-  
+
     coords = view?.coordsAtPos(currentPos);
     if (!coords) return;
-    
+
     let shouldAddPageBreak = coords.bottom > pageHeightThreshold;
     let isHardBreakNode = currentNode.type.name === 'hardBreak';
 
@@ -353,8 +355,8 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
         const newFirstHeader = createHeader(pageMargins, pageSize, sectionData, headerId);
         const pageBreak = createPageBreak({ editor, header: newFirstHeader, isFirstHeader: true });
         decorations.push(Decoration.widget(0, pageBreak, { key: 'stable-key' }));
-      };
-    };
+      }
+    }
 
     if (currentNode.type.name === 'paragraph' && currentNode.attrs.styleId) {
       const linkedStyles = LinkedStylesPluginKey.getState(editor.state)?.styles;
@@ -364,7 +366,7 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
         const { pageBreakBefore, pageBreakAfter } = definition.attrs || {};
         if (pageBreakBefore || pageBreakAfter) shouldAddPageBreak = true;
       }
-    };
+    }
 
     if (isHardBreakNode || shouldAddPageBreak) {
       const $currentPos = view.state.doc.resolve(currentPos);
@@ -391,7 +393,7 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
         console.debug('[pagination page break]  Actual top:', actualBreakTop, 'Actual bottom:', actualBreakBottom);
         console.debug('[pagination page break]  Pos:', currentPos, 'Break pos:', breakPos);
         console.debug('---- [pagination page break end] ---- \n\n\n');
-      };
+      }
 
       // Update the header and footer based on the current page number
       const footerId = getHeaderFooterId(currentPageNumber, 'footerIds', editor, currentNode);
@@ -417,7 +419,7 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
 
       // Recalculate the page threshold based on where we actually inserted the break
       pageHeightThreshold = actualBreakBottom + (pageHeight - header.headerHeight - footer.footerHeight);
-    };
+    }
   });
 
   // Add blank padding to the last page to make a full page height
@@ -442,11 +444,11 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
     const sectionContainer = decoration.type.toDOM;
     const totalPageNumber = sectionContainer?.querySelector('span[data-id="auto-total-pages"]');
     if (totalPageNumber) {
-      const fontSize = totalPageNumber.previousElementSibling?.style?.fontSize ||
-      totalPageNumber.nextElementSibling?.style?.fontSize;
+      const fontSize =
+        totalPageNumber.previousElementSibling?.style?.fontSize || totalPageNumber.nextElementSibling?.style?.fontSize;
       if (fontSize) totalPageNumber.style.fontSize = fontSize;
       totalPageNumber.innerText = currentPageNumber;
-    };
+    }
   });
 
   // Return the widget decorations array
@@ -466,9 +468,8 @@ function createFinalPagePadding(bufferHeight) {
   div.style.height = bufferHeight + 'px';
 
   if (isDebugging) div.style.backgroundColor = '#ff000033';
-  return { nodeHeight: bufferHeight, node: div }
-};
-
+  return { nodeHeight: bufferHeight, node: div };
+}
 
 /**
  * Generate a header element
@@ -483,7 +484,7 @@ function createHeader(pageMargins, pageSize, sectionData, headerId) {
   const headerMargin = pageMargins.header * 96;
 
   // If the header content is larger than the available space, we need to add the 'header' margin
-  const hasHeaderOffset = headerDef?.height > (minHeaderHeight - headerMargin);
+  const hasHeaderOffset = headerDef?.height > minHeaderHeight - headerMargin;
   const headerOffset = hasHeaderOffset ? headerMargin : 0;
   const headerHeight = Math.max(headerDef?.height || 0, minHeaderHeight) + headerOffset;
 
@@ -491,7 +492,7 @@ function createHeader(pageMargins, pageSize, sectionData, headerId) {
   let sectionContainer = headerDef?.sectionContainer?.cloneNode(true);
   if (!sectionContainer) sectionContainer = document.createElement('div');
 
-  sectionContainer.className = 'pagination-section-header'
+  sectionContainer.className = 'pagination-section-header';
   sectionContainer.style.paddingTop = headerMargin + 'px';
   sectionContainer.style.paddingLeft = pageMargins.left * 96 + 'px';
   sectionContainer.style.paddingRight = pageMargins.right * 96 + 'px';
@@ -503,8 +504,7 @@ function createHeader(pageMargins, pageSize, sectionData, headerId) {
     section: sectionContainer,
     headerHeight: headerHeight,
   };
-};
-
+}
 
 /**
  * Generate a footer element
@@ -524,8 +524,8 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, currentPageN
 
   const autoPageNumber = sectionContainer?.querySelector('span[data-id="auto-page-number"]');
   if (autoPageNumber) {
-    const fontSize = autoPageNumber.previousElementSibling?.style?.fontSize ||
-      autoPageNumber.nextElementSibling?.style?.fontSize;
+    const fontSize =
+      autoPageNumber.previousElementSibling?.style?.fontSize || autoPageNumber.nextElementSibling?.style?.fontSize;
     if (fontSize) autoPageNumber.style.fontSize = fontSize;
     autoPageNumber.innerText = currentPageNumber;
   }
@@ -541,13 +541,12 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, currentPageN
   return {
     section: sectionContainer,
     footerHeight: footerHeight + footerPaddingFromEdge,
-  }
+  };
 }
-
 
 /**
  * Combine header and footer into a page break element
- * @param {Object} param0 
+ * @param {Object} param0
  * @param {Editor} param0.editor The editor instance
  * @param {HTMLElement} param0.header The header element
  * @param {HTMLElement} param0.footer The footer element
@@ -558,7 +557,7 @@ function createPageBreak({ editor, header, footer, footerBottom = null, isFirstH
 
   let sectionHeight = 0;
   const paginationDiv = document.createElement('div');
-  paginationDiv.className = 'pagination-break-wrapper'
+  paginationDiv.className = 'pagination-break-wrapper';
 
   const innerDiv = document.createElement('div');
   innerDiv.className = 'pagination-inner';
@@ -571,7 +570,7 @@ function createPageBreak({ editor, header, footer, footerBottom = null, isFirstH
   if (footer) {
     innerDiv.appendChild(footer.section);
     sectionHeight += footer.footerHeight;
-  };
+  }
 
   if (header && footer) {
     const separatorHeight = 20;
@@ -581,12 +580,12 @@ function createPageBreak({ editor, header, footer, footerBottom = null, isFirstH
     if (isDebugging) separator.style.backgroundColor = 'green';
 
     innerDiv.appendChild(separator);
-  };
+  }
 
   if (header) {
     innerDiv.appendChild(header.section);
     sectionHeight += header.headerHeight;
-  };
+  }
 
   paginationDiv.style.height = sectionHeight + 'px';
   paginationDiv.style.minHeight = sectionHeight + 'px';
@@ -606,12 +605,12 @@ function createPageBreak({ editor, header, footer, footerBottom = null, isFirstH
   }
 
   return paginationDiv;
-};
+}
 
 /**
  * Get the actual break coordinates for a page split based on the approximate position (pos)
  * and the calculated threshold (which accounts for 'scale')
- * 
+ *
  * Since we know the node at pos extends past the threshold, we iterate
  * backwards through all positions from there to find the exact break point
  * @param {EditorView} view The current editor view
@@ -630,10 +629,10 @@ function getActualBreakCoords(view, pos, calculatedThreshold) {
     }
 
     currentPos--;
-  };
+  }
 
   return actualBreak;
-};
+}
 
 /**
  * Special handling for images in pagination. Trigger a pagination update transaction after an image loads.

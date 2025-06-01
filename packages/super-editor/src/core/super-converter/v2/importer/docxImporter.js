@@ -100,15 +100,12 @@ export const createDocumentJson = (docx, converter, editor) => {
 
     // Not empty document
     if (result.content.length > 1) {
-      converter?.telemetry?.trackUsage(
-        'document_import',
-        {
-          documentType: 'docx',
-          timestamp: new Date().toISOString()
-        }
-      );
+      converter?.telemetry?.trackUsage('document_import', {
+        documentType: 'docx',
+        timestamp: new Date().toISOString(),
+      });
     }
-    
+
     return {
       pmDoc: result,
       savedTagsToRestore: node,
@@ -168,7 +165,7 @@ const createNodeListHandler = (nodeHandlers) => {
       return {
         elementIndex: index,
         error: 'index_out_of_bounds',
-        arrayLength: elements?.length
+        arrayLength: elements?.length,
       };
     }
 
@@ -191,12 +188,12 @@ const createNodeListHandler = (nodeHandlers) => {
     editor,
     filename,
     parentStyleId,
-    lists
+    lists,
   }) => {
     if (!elements || !elements.length) return [];
-    
+
     const processedElements = [];
-    
+
     try {
       for (let index = 0; index < elements.length; index++) {
         try {
@@ -208,7 +205,7 @@ const createNodeListHandler = (nodeHandlers) => {
           const { nodes, consumed, unhandled } = nodeHandlers.reduce(
             (res, handler) => {
               if (res.consumed > 0) return res;
-              
+
               return handler.handler({
                 nodes: nodesToHandle,
                 docx,
@@ -221,7 +218,7 @@ const createNodeListHandler = (nodeHandlers) => {
                 lists,
               });
             },
-            { nodes: [], consumed: 0 }
+            { nodes: [], consumed: 0 },
           );
 
           // Only track unhandled nodes that should have been handled
@@ -233,22 +230,24 @@ const createNodeListHandler = (nodeHandlers) => {
             continue;
           } else {
             converter?.telemetry?.trackStatistic('node', context);
-            
+
             // Use Telemetry to track list item attributes
             if (context.type === 'orderedList' || context.type === 'bulletList') {
               context.content.forEach((item) => {
                 const innerItemContext = getSafeElementContext([item], 0, item, `/word/${filename || 'document.xml'}`);
                 converter?.telemetry?.trackStatistic('attributes', innerItemContext);
-              })
+              });
             }
-            
-            const hasHighlightMark = nodes[0]?.marks?.find(mark => mark.type === 'highlight');
+
+            const hasHighlightMark = nodes[0]?.marks?.find((mark) => mark.type === 'highlight');
             if (hasHighlightMark) {
               converter?.docHiglightColors.add(hasHighlightMark.attrs.color.toUpperCase());
             }
           }
 
-          if (consumed > 0) { index += consumed - 1; }
+          if (consumed > 0) {
+            index += consumed - 1;
+          }
 
           // Process and store nodes (no tracking needed for success)
           if (nodes) {
@@ -262,7 +261,7 @@ const createNodeListHandler = (nodeHandlers) => {
             });
           }
         } catch (error) {
-          console.debug('Import error', error)
+          console.debug('Import error', error);
           editor?.emit('exception', { error });
 
           converter?.telemetry?.trackStatistic('error', {
@@ -277,7 +276,7 @@ const createNodeListHandler = (nodeHandlers) => {
 
       return processedElements;
     } catch (error) {
-      console.debug('Error during import', error)
+      console.debug('Error during import', error);
       editor?.emit('exception', { error });
 
       // Track only catastrophic handler failures
@@ -288,7 +287,7 @@ const createNodeListHandler = (nodeHandlers) => {
         stack: error.stack,
         fileName: `/word/${filename || 'document.xml'}`,
       });
-      
+
       throw error;
     }
   };
@@ -349,18 +348,18 @@ function getDocumentStyles(node, docx, converter, editor) {
   importHeadersFooters(docx, converter, editor);
   styles.alternateHeaders = isAlternatingHeadersOddEven(docx);
   return styles;
-};
+}
 
 /**
  * Import style definitions from the document
- * 
+ *
  * @param {Object} docx The parsed docx object
  * @returns {Object[]} The style definitions
  */
 function getStyleDefinitions(docx) {
   const styles = docx['word/styles.xml'];
   if (!styles) return [];
-  
+
   const { elements } = styles.elements[0];
   const styleDefinitions = elements.filter((el) => el.name === 'w:style');
 
@@ -390,13 +389,13 @@ function getStyleDefinitions(docx) {
   });
 
   return allParsedStyles;
-};
+}
 
 /**
  * Add default styles if missing. Default styles are:
- * 
+ *
  * Normal, Title, Subtitle, Heading1, Heading2, Heading3
- * 
+ *
  * Does not mutate the original docx object
  * @param {Object} styles The parsed docx styles [word/styles.xml]
  * @returns {Object | null} The updated styles object with default styles
@@ -407,20 +406,20 @@ export function addDefaultStylesIfMissing(styles) {
   const updatedStyles = carbonCopy(styles);
   const { elements } = updatedStyles.elements[0];
 
-  Object.keys(DEFAULT_LINKED_STYLES).forEach(styleId => {
+  Object.keys(DEFAULT_LINKED_STYLES).forEach((styleId) => {
     const existsOnDoc = elements.some((el) => el.attributes?.['w:styleId'] === styleId);
     if (!existsOnDoc) {
       const missingStyle = DEFAULT_LINKED_STYLES[styleId];
       updatedStyles.elements[0].elements.push(missingStyle);
     }
-  })
+  });
 
   return updatedStyles;
 }
 
 /**
  * Import all header and footer definitions
- * 
+ *
  * @param {Object} docx The parsed docx object
  * @param {Object} converter The converter instance
  * @param {Editor} editor The editor instance
@@ -441,7 +440,9 @@ const importHeadersFooters = (docx, converter, editor) => {
   headers.forEach((header) => {
     const { rId, referenceFile, currentFileName } = getHeaderFooterSectionData(header, docx);
 
-    const sectPrHeader = allSectPrElements.find((el) => el.name === 'w:headerReference' && el.attributes['r:id'] === rId);
+    const sectPrHeader = allSectPrElements.find(
+      (el) => el.name === 'w:headerReference' && el.attributes['r:id'] === rId,
+    );
     let sectionType = sectPrHeader?.attributes['w:type'];
     if (converter.headerIds[sectionType]) sectionType = null;
     const nodeListHandler = defaultNodeListHandler();
@@ -461,8 +462,10 @@ const importHeadersFooters = (docx, converter, editor) => {
   });
 
   footers.forEach((footer) => {
-    const { rId, referenceFile, currentFileName } = getHeaderFooterSectionData(footer, docx)
-    const sectPrFooter = allSectPrElements.find((el) => el.name === 'w:footerReference' && el.attributes['r:id'] === rId);
+    const { rId, referenceFile, currentFileName } = getHeaderFooterSectionData(footer, docx);
+    const sectPrFooter = allSectPrElements.find(
+      (el) => el.name === 'w:footerReference' && el.attributes['r:id'] === rId,
+    );
     const sectionType = sectPrFooter?.attributes['w:type'];
 
     const nodeListHandler = defaultNodeListHandler();
@@ -485,7 +488,7 @@ const importHeadersFooters = (docx, converter, editor) => {
 const findSectPr = (obj, result = []) => {
   for (const key in obj) {
     if (obj[key] === 'w:sectPr') {
-      result.push(obj)
+      result.push(obj);
     } else if (typeof obj[key] === 'object') {
       findSectPr(obj[key], result);
     }
@@ -495,27 +498,27 @@ const findSectPr = (obj, result = []) => {
 
 /**
  * Get section data from the header or footer
- * 
+ *
  * @param {Object} sectionData The section data (header or footer)
  * @param {Object} docx The parsed docx object
  * @returns {Object} The section data
  */
 const getHeaderFooterSectionData = (sectionData, docx) => {
-  const rId = sectionData.attributes.Id
+  const rId = sectionData.attributes.Id;
   const target = sectionData.attributes.Target;
   const referenceFile = docx[`word/${target}`];
   const currentFileName = target;
   return {
     rId,
     referenceFile,
-    currentFileName
+    currentFileName,
   };
 };
 
 /**
  * Import this document's numbering.xml definitions
  * They will be stored into converter.numbering
- * 
+ *
  * @param {Object} docx The parsed docx
  * @returns {Object} The numbering definitions
  */
@@ -542,12 +545,12 @@ function getNumberingDefinitions(docx) {
   return {
     abstracts: abstractDefinitions,
     definitions: importListDefs,
-  }
+  };
 }
 
 /**
  * Check if the document has alternating headers and footers.
- * 
+ *
  * @param {Object} docx The parsed docx object
  * @returns {Boolean} True if the document has alternating headers and footers, false otherwise
  */

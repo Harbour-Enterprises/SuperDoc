@@ -12,7 +12,7 @@
   white-space: break-spaces;
   -webkit-font-variant-ligatures: none;
   font-variant-ligatures: none;
-  font-feature-settings: "liga" 0; /* the above doesn't seem to work in Edge */
+  font-feature-settings: 'liga' 0; /* the above doesn't seem to work in Edge */
 }
 
 .ProseMirror pre {
@@ -50,7 +50,7 @@
   align-items: start;
 }
 .ProseMirror li[data-marker-type]::marker {
-  content: "";
+  content: '';
 }
 .ProseMirror li[data-marker-type]::before {
   content: attr(data-marker-type);
@@ -77,8 +77,8 @@
 }
 
 /* See https://github.com/ProseMirror/prosemirror/issues/1421#issuecomment-1759320191 */
-.ProseMirror [draggable][contenteditable=false] { 
-  user-select: text 
+.ProseMirror [draggable][contenteditable='false'] {
+  user-select: text;
 }
 
 .ProseMirror-selectednode {
@@ -91,10 +91,12 @@ li.ProseMirror-selectednode {
 }
 
 li.ProseMirror-selectednode:after {
-  content: "";
+  content: '';
   position: absolute;
   left: -32px;
-  right: -2px; top: -2px; bottom: -2px;
+  right: -2px;
+  top: -2px;
+  bottom: -2px;
   border: 2px solid #8cf;
   pointer-events: none;
 }
@@ -129,7 +131,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 */
 .ProseMirror.resize-cursor {
   cursor: ew-resize;
-  cursor: col-resize
+  cursor: col-resize;
 }
 
 .ProseMirror .tableWrapper {
@@ -169,7 +171,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 
 .ProseMirror th {
   font-weight: bold;
-  text-align: left
+  text-align: left;
 }
 
 .ProseMirror table .column-resize-handle {
@@ -209,15 +211,15 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 }
 
 .ProseMirror .track-insert-dec.highlighted {
-  border-top: 1px dashed #00853D;
-  border-bottom: 1px dashed #00853D;
-  background-color: #399C7222;
+  border-top: 1px dashed #00853d;
+  border-bottom: 1px dashed #00853d;
+  background-color: #399c7222;
 }
 
 .ProseMirror .track-delete-dec.highlighted {
-  border-top: 1px dashed #CB0E47;
-  border-bottom: 1px dashed #CB0E47;
-  background-color: #CB0E4722;
+  border-top: 1px dashed #cb0e47;
+  border-bottom: 1px dashed #cb0e47;
+  background-color: #cb0e4722;
   text-decoration: line-through;
   text-decoration-thickness: 2px;
 }
@@ -273,7 +275,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 }
 
 .ProseMirror placeholder:after {
-  content: "☁";
+  content: '☁';
   font-size: 200%;
   line-height: 0.1;
   font-weight: bold;
@@ -288,7 +290,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 }
 
 .ProseMirror-gapcursor:after {
-  content: "";
+  content: '';
   display: block;
   position: absolute;
   top: -2px;
@@ -307,10 +309,10 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   display: block;
 }
 
-.ProseMirror div[data-type="contentBlock"] {
-  position: absolute; 
-  outline: none; 
-  user-select: none; 
+.ProseMirror div[data-type='contentBlock'] {
+  position: absolute;
+  outline: none;
+  user-select: none;
   z-index: -1;
 }
 

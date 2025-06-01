@@ -83,7 +83,7 @@ const getOverflowOptions = computed(() => {
   // Only the comment creator can edit
   if (props.comment.creatorEmail === proxy.$superdoc.config.user.email) {
     options.add('edit');
-  };
+  }
 
   const isOwnComment = props.comment.creatorEmail === proxy.$superdoc.config.user.email;
 
@@ -91,7 +91,7 @@ const getOverflowOptions = computed(() => {
     options.add('delete');
   } else if (!isOwnComment && isAllowed(PERMISSIONS.COMMENTS_DELETE_OTHER, role, isInternal)) {
     options.add('delete');
-  };
+  }
 
   options.forEach((option) => allowedOptions.push(OVERFLOW_OPTIONS[option]));
   return allowedOptions;
@@ -119,26 +119,21 @@ const getCurrentUser = computed(() => {
 
     <!-- Regular comments options -->
     <div class="overflow-menu">
-      <div 
+      <div
         v-if="allowResolve"
-        class="overflow-menu__icon" 
+        class="overflow-menu__icon"
         v-html="superdocIcons.markDone"
-        @click.stop.prevent="handleResolve">
-      </div>
+        @click.stop.prevent="handleResolve"
+      ></div>
 
-      <div 
+      <div
         v-if="allowReject"
-        class="overflow-menu__icon" 
+        class="overflow-menu__icon"
         v-html="superdocIcons.rejectChange"
-        @click.stop.prevent="handleReject">
-      </div>
+        @click.stop.prevent="handleReject"
+      ></div>
 
-      <n-dropdown
-        v-if="allowOverflow"
-        trigger="click"
-        :options="getOverflowOptions"
-        @select="handleSelect"
-      >
+      <n-dropdown v-if="allowOverflow" trigger="click" :options="getOverflowOptions" @select="handleSelect">
         <div class="overflow-menu__icon" @click.stop.prevent>
           <div class="overflow-icon" v-html="superdocIcons.overflow"></div>
         </div>
@@ -194,7 +189,7 @@ const getCurrentUser = computed(() => {
   transition: all 250ms ease;
 }
 .overflow-menu__icon:hover {
-  background-color: #DBDBDB;
+  background-color: #dbdbdb;
 }
 .overflow-menu__icon :deep(svg) {
   width: 100%;
@@ -210,5 +205,4 @@ const getCurrentUser = computed(() => {
   width: 10px;
   height: 16px;
 }
-
 </style>

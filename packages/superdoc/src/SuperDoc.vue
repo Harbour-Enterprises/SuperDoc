@@ -92,10 +92,10 @@ const {
   handleAiHighlight,
   showAiWriterAtCursor,
   handleAiWriterClose,
-  handleAiToolClick
+  handleAiToolClick,
 } = useAi({
   emitAiHighlight: (params) => proxy.$superdoc.emit('ai-highlight', params),
-  activeEditorRef
+  activeEditorRef,
 });
 
 // Hrbr Fields
@@ -145,7 +145,7 @@ const onCommentsLoaded = ({ editor, comments, replacedFile }) => {
         superdoc: proxy.$superdoc,
         editor,
         comments,
-        documentId: editor.options.documentId
+        documentId: editor.options.documentId,
       });
     });
   }
@@ -179,9 +179,9 @@ const onEditorDocumentLocked = ({ editor, isLocked, lockedBy }) => {
   proxy.$superdoc.lockSuperdoc(isLocked, lockedBy);
 };
 
-const onEditorUpdate = ({editor}) => {
-  proxy.$superdoc.emit('editor-update', { editor })
-}
+const onEditorUpdate = ({ editor }) => {
+  proxy.$superdoc.emit('editor-update', { editor });
+};
 
 const onEditorSelectionChange = ({ editor, transaction }) => {
   if (skipSelectionUpdate.value) {
@@ -296,7 +296,7 @@ const editorOptions = (doc) => {
 /**
  * Trigger a comment-positions location update
  * This is called when the editor has updated the comment locations
- * 
+ *
  * @returns {void}
  */
 const onEditorCommentLocationsUpdate = ({ allCommentIds: activeThreadId, allCommentPositions }) => {
@@ -311,7 +311,7 @@ const onEditorCommentsUpdate = (params = {}) => {
   if (type === 'trackedChange') {
     handleTrackedChangeUpdate({ superdoc: proxy.$superdoc, params });
   }
-  
+
   nextTick(() => {
     if (pendingComment.value) return;
     commentsStore.setActiveComment(activeCommentId);
@@ -327,13 +327,11 @@ const isCommentsEnabled = computed(() => 'comments' in modules);
 const showCommentsSidebar = computed(() => {
   return (
     pendingComment.value ||
-    (
-      getFloatingComments.value?.length > 0
-        && isReady.value
-        && layers.value
-        && isCommentsEnabled.value
-        && !isCommentsListVisible.value
-    )
+    (getFloatingComments.value?.length > 0 &&
+      isReady.value &&
+      layers.value &&
+      isCommentsEnabled.value &&
+      !isCommentsListVisible.value)
   );
 });
 
@@ -352,7 +350,7 @@ watch(showCommentsSidebar, (value) => {
 
 /**
  * Scroll the page to a given commentId
- * 
+ *
  * @param {String} commentId The commentId to scroll to
  */
 const scrollToComment = (commentId) => {
@@ -360,7 +358,7 @@ const scrollToComment = (commentId) => {
 
   const element = document.querySelector(`[data-thread-id=${commentId}]`);
   if (element) {
-    element.scrollIntoView({ behavior: "smooth", block: "start" });
+    element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     commentsStore.setActiveComment(commentId);
   }
 };
@@ -404,7 +402,7 @@ const handleSelectionChange = (selection) => {
   if (!selection.selectionBounds || !isCommentsEnabled.value) return;
 
   resetSelection();
-  
+
   const isMobileView = window.matchMedia('(max-width: 768px)').matches;
 
   updateSelection({
@@ -483,8 +481,8 @@ const handleSelectionStart = (e) => {
 
   nextTick(() => {
     isDragging.value = true;
-    const y = e.offsetY / (activeZoom.value / 100)
-    const x = e.offsetX / (activeZoom.value / 100)
+    const y = e.offsetY / (activeZoom.value / 100);
+    const x = e.offsetX / (activeZoom.value / 100);
     updateSelection({ startX: x, startY: y });
     selectionLayer.value.addEventListener('mousemove', handleDragMove);
   });
@@ -492,8 +490,8 @@ const handleSelectionStart = (e) => {
 
 const handleDragMove = (e) => {
   if (!isDragging.value) return;
-  const y = e.offsetY / (activeZoom.value / 100)
-  const x = e.offsetX / (activeZoom.value / 100)
+  const y = e.offsetY / (activeZoom.value / 100);
+  const x = e.offsetX / (activeZoom.value / 100);
   updateSelection({ x, y });
 };
 
@@ -543,7 +541,6 @@ watch(getFloatingComments, () => {
 <template>
   <div class="superdoc" :class="{ 'superdoc--with-sidebar': showCommentsSidebar }">
     <div class="superdoc__layers layers" ref="layers">
-
       <!-- Floating tools menu (shows up when user has text selection)-->
       <div v-if="showToolsFloatingMenu" class="superdoc__tools tools" :style="toolsMenuPosition">
         <div class="tools-item" data-id="is-tool" @click.stop.prevent="handleToolClick('comments')">
@@ -596,7 +593,13 @@ watch(getFloatingComments, () => {
         />
 
         <!-- AI Layer for temporary highlights -->
-        <AiLayer v-if="showAiLayer" class="ai-layer" style="z-index: 4" ref="aiLayer" :editor="proxy.$superdoc.activeEditor" />
+        <AiLayer
+          v-if="showAiLayer"
+          class="ai-layer"
+          style="z-index: 4"
+          ref="aiLayer"
+          :editor="proxy.$superdoc.activeEditor"
+        />
 
         <div class="superdoc__sub-document sub-document" v-for="doc in documents" :key="doc.id">
           <!-- PDF renderer -->
@@ -652,7 +655,7 @@ watch(getFloatingComments, () => {
 
     <!-- AI Writer at cursor position -->
     <div class="ai-writer-container" v-if="showAiWriter" :style="aiWriterPosition">
-      <AIWriter 
+      <AIWriter
         :selected-text="selectedText"
         :handle-close="handleAiWriterClose"
         :editor="proxy.$superdoc.activeEditor"
@@ -668,7 +671,7 @@ watch(getFloatingComments, () => {
 .superdoc .super-editor {
   border-radius: 8px;
   border: 1px solid #d3d3d3;
-  box-shadow:0 0 5px hsla( 0,0%,0%,.05);
+  box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.05);
 }
 </style>
 
@@ -686,7 +689,9 @@ watch(getFloatingComments, () => {
   width: 300px;
 }
 
-.superdoc--with-sidebar { /*  */ }
+.superdoc--with-sidebar {
+  /*  */
+}
 
 .superdoc__layers {
   height: 100%;
@@ -858,7 +863,7 @@ watch(getFloatingComments, () => {
 }
 
 .ai-tool::before {
-  content: "";
+  content: '';
   position: absolute;
   width: 20px;
   height: 20px;
@@ -871,14 +876,16 @@ watch(getFloatingComments, () => {
     rgba(77, 82, 217, 1) 60%,
     rgb(255, 219, 102) 150%
   );
-  -webkit-mask: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><path d='M224 96l16-32 32-16-32-16-16-32-16 32-32 16 32 16 16 32zM80 160l26.7-53.3L160 80l-53.3-26.7L80 0 53.3 53.3 0 80l53.3 26.7L80 160zm352 128l-26.7 53.3L352 368l53.3 26.7L432 448l26.7-53.3L512 368l-53.3-26.7L432 288zm70.6-193.8L417.8 9.4C411.5 3.1 403.3 0 395.2 0c-8.2 0-16.4 3.1-22.6 9.4L9.4 372.5c-12.5 12.5-12.5 32.8 0 45.3l84.9 84.9c6.3 6.3 14.4 9.4 22.6 9.4 8.2 0 16.4-3.1 22.6-9.4l363.1-363.2c12.5-12.5 12.5-32.8 0-45.2zM359.5 203.5l-50.9-50.9 86.6-86.6 50.9 50.9-86.6 86.6z'/></svg>") center / contain no-repeat;
-  mask: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><path d='M224 96l16-32 32-16-32-16-16-32-16 32-32 16 32 16 16 32zM80 160l26.7-53.3L160 80l-53.3-26.7L80 0 53.3 53.3 0 80l53.3 26.7L80 160zm352 128l-26.7 53.3L352 368l53.3 26.7L432 448l26.7-53.3L512 368l-53.3-26.7L432 288zm70.6-193.8L417.8 9.4C411.5 3.1 403.3 0 395.2 0c-8.2 0-16.4 3.1-22.6 9.4L9.4 372.5c-12.5 12.5-12.5 32.8 0 45.3l84.9 84.9c6.3 6.3 14.4 9.4 22.6 9.4 8.2 0 16.4-3.1 22.6-9.4l363.1-363.2c12.5-12.5 12.5-32.8 0-45.2zM359.5 203.5l-50.9-50.9 86.6-86.6 50.9 50.9-86.6 86.6z'/></svg>") center / contain no-repeat;
+  -webkit-mask: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><path d='M224 96l16-32 32-16-32-16-16-32-16 32-32 16 32 16 16 32zM80 160l26.7-53.3L160 80l-53.3-26.7L80 0 53.3 53.3 0 80l53.3 26.7L80 160zm352 128l-26.7 53.3L352 368l53.3 26.7L432 448l26.7-53.3L512 368l-53.3-26.7L432 288zm70.6-193.8L417.8 9.4C411.5 3.1 403.3 0 395.2 0c-8.2 0-16.4 3.1-22.6 9.4L9.4 372.5c-12.5 12.5-12.5 32.8 0 45.3l84.9 84.9c6.3 6.3 14.4 9.4 22.6 9.4 8.2 0 16.4-3.1 22.6-9.4l363.1-363.2c12.5-12.5 12.5-32.8 0-45.2zM359.5 203.5l-50.9-50.9 86.6-86.6 50.9 50.9-86.6 86.6z'/></svg>")
+    center / contain no-repeat;
+  mask: url("data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><path d='M224 96l16-32 32-16-32-16-16-32-16 32-32 16 32 16 16 32zM80 160l26.7-53.3L160 80l-53.3-26.7L80 0 53.3 53.3 0 80l53.3 26.7L80 160zm352 128l-26.7 53.3L352 368l53.3 26.7L432 448l26.7-53.3L512 368l-53.3-26.7L432 288zm70.6-193.8L417.8 9.4C411.5 3.1 403.3 0 395.2 0c-8.2 0-16.4 3.1-22.6 9.4L9.4 372.5c-12.5 12.5-12.5 32.8 0 45.3l84.9 84.9c6.3 6.3 14.4 9.4 22.6 9.4 8.2 0 16.4-3.1 22.6-9.4l363.1-363.2c12.5-12.5 12.5-32.8 0-45.2zM359.5 203.5l-50.9-50.9 86.6-86.6 50.9 50.9-86.6 86.6z'/></svg>")
+    center / contain no-repeat;
   filter: brightness(1.2);
   transition: filter 0.2s ease;
 }
 
 .ai-tool:hover::before {
   filter: brightness(1.3);
-} 
+}
 /* Tools styles - end */
 </style>

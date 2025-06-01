@@ -12,9 +12,9 @@ import { getTextFromNode } from './index';
 
 /**
  * Test a list node for its level, numPr and text
- * 
+ *
  * @param {TestListNodesParams} params - The parameters for the test
- * @returns {void} 
+ * @returns {void}
  */
 export const testListNodes = ({ node, expectedLevel, expectedNumPr, text }) => {
   const numPr = getListAttrFromNumPr('w:ilvl', node);
@@ -26,13 +26,13 @@ export const testListNodes = ({ node, expectedLevel, expectedNumPr, text }) => {
   if (text) {
     const nodeText = getTextFromNode(node);
     expect(nodeText).toBe(text);
-  };
+  }
 };
 
 /**
  * Get the value of a specific attribute from a w:numPr node
  * ie: w:ilvl or w:numId
- * 
+ *
  * @param {string} attrName The name of the attribute to get
  * @param {Object} node The node to search for the attribute
  * @returns {string} The value of the attribute

@@ -34,17 +34,20 @@ import { SuperDoc } from '@harbour-enterprises/superdoc';
 
 const superdoc = new SuperDoc({
   selector: '#superdoc',
-  documents: [{
-    id: 'my-doc-id',
-    type: 'docx',
-    data: fileObject  // Optional: JS File object if not using collaboration
-  }]
+  documents: [
+    {
+      id: 'my-doc-id',
+      type: 'docx',
+      data: fileObject, // Optional: JS File object if not using collaboration
+    },
+  ],
 });
 ```
 
 ## 🛠️ Development Setup
 
 1. **Clone the Repository**
+
 ```bash
 git clone https://github.com/your-username/SuperDoc.git
 cd SuperDoc
@@ -55,6 +58,7 @@ cd SuperDoc
 SuperDoc consists of two main packages:
 
 - **/packages/superdoc**: Main package (recommended)
+
   ```bash
   cd packages/superdoc
   npm install && npm run dev

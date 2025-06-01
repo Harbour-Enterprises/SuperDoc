@@ -34,7 +34,6 @@ const commentsStore = useCommentsStore();
 const { currentCommentText } = storeToRefs(commentsStore);
 
 const handleFocusChange = (focused) => emit('focus', focused);
-
 </script>
 
 <template>

@@ -190,9 +190,12 @@ export class FieldAnnotationView {
     annotation.append(content);
 
     let omitHighlight = highlighted === false;
-    let annotationStyle = [`border: 2px solid ${this.borderColor}`, `border-radius: 2px`, `padding: 1px 2px`, `box-sizing: border-box`].join(
-      '; ',
-    );
+    let annotationStyle = [
+      `border: 2px solid ${this.borderColor}`,
+      `border-radius: 2px`,
+      `padding: 1px 2px`,
+      `box-sizing: border-box`,
+    ].join('; ');
 
     let mergedAttrs = Attribute.mergeAttributes(this.htmlAttributes, {
       style: omitHighlight ? '' : annotationStyle,

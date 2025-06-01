@@ -1,6 +1,6 @@
 // prettier-ignore
 import { beforeAll, beforeEach, expect } from 'vitest';
-import { TextSelection } from "prosemirror-state";
+import { TextSelection } from 'prosemirror-state';
 import { loadTestDataForEditorTests, initTestEditor, getNewTransaction } from '@tests/helpers/helpers.js';
 import { handleEnter } from '@core/extensions/keymap.js';
 
@@ -37,7 +37,7 @@ describe('[blank-doc.docx] import, add node, export', () => {
     const tr = getNewTransaction(editor);
     const listPosition = 1;
 
-    tr.insertText("hello world", listPosition);
+    tr.insertText('hello world', listPosition);
     dispatch(tr);
 
     const currentState = editor.getJSON();
@@ -51,7 +51,7 @@ describe('[blank-doc.docx] import, add node, export', () => {
   it('correctly exports after the first list item', () => {
     const { result: exported } = editor.converter.exportToXmlJson({
       data: editor.getJSON(),
-      editor
+      editor,
     });
 
     expect(exported).toBeDefined();
@@ -74,7 +74,6 @@ describe('[blank-doc.docx] import, add node, export', () => {
     const runNode = listItem.elements.find((el) => el.name === 'w:r');
     const runText = runNode.elements[0].elements[0].text;
     expect(runText).toBe('hello world');
-
   });
 
   it('can add text to the second list item', () => {
@@ -82,13 +81,12 @@ describe('[blank-doc.docx] import, add node, export', () => {
 
     // Add text to the second list item
     const secondListPosition = 16;
-    tr.insertText("item 2", secondListPosition);
+    tr.insertText('item 2', secondListPosition);
     dispatch(tr);
 
     const currentState = editor.getJSON();
     const secondListItemTextNode = currentState.content[0].content[1].content[0].content[0].text;
     expect(secondListItemTextNode).toBe('item 2');
-
   });
 
   it('should have a third list item after insertText', () => {
@@ -118,7 +116,7 @@ describe('[blank-doc.docx] import, add node, export', () => {
     // Insert text between the two list items
     let tr = getNewTransaction(editor);
     const breakPos = 18;
-    tr.insertText("--- break", breakPos);
+    tr.insertText('--- break', breakPos);
     dispatch(tr);
 
     const currentState = editor.getJSON();
@@ -134,13 +132,12 @@ describe('[blank-doc.docx] import, add node, export', () => {
     const secondListItem = content[2];
     const secondText = secondListItem.content[0].content[0].content[0].text;
     expect(secondText).toBe('item 2');
-
   });
 
   it('exports list correctly with break', async () => {
     const { result: exported } = editor.converter.exportToXmlJson({
       data: editor.getJSON(),
-      editor
+      editor,
     });
     expect(exported).toBeDefined();
 
@@ -177,12 +174,11 @@ describe('[blank-doc.docx] import, add node, export', () => {
     const numIdTag2 = numPr2.elements.find((el) => el.name === 'w:numId');
     const numId2 = numIdTag2.attributes['w:val'];
     expect(numId2).toBe(3);
- 
+
     const lvl2 = numPr2.elements.find((el) => el.name === 'w:ilvl');
     const lvlText2 = lvl2.attributes['w:val'];
     expect(lvlText2).toBe(0);
   });
-
 });
 
 const save = async (editor) => {

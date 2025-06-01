@@ -102,4 +102,4 @@ export const toolbarIcons = {
   fixTables: wrenchIconSvg,
   lineHeight: upDownIconSvg,
   search: magnifyingGlassSvg,
-}
+};

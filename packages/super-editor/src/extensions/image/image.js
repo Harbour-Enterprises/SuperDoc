@@ -1,174 +1,165 @@
-import { Attribute, Node } from "@core/index.js";
-import { ImagePlaceholderPlugin } from "./imageHelpers/imagePlaceholderPlugin.js";
-import { ImagePositionPlugin } from "./imageHelpers/imagePositionPlugin.js";
-import { ImageResizePlugin } from "./imageHelpers/imageResizePlugin.js";
-import "./imageHelpers/imageResize.css";
+import { Attribute, Node } from '@core/index.js';
+import { ImagePlaceholderPlugin } from './imageHelpers/imagePlaceholderPlugin.js';
+import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
+import { ImageResizePlugin } from './imageHelpers/imageResizePlugin.js';
+import './imageHelpers/imageResize.css';
 
 export const Image = Node.create({
-	name: "image",
+  name: 'image',
 
-	group: "inline",
+  group: 'inline',
 
-	inline: true,
+  inline: true,
 
-	draggable: true,
+  draggable: true,
 
-	addOptions() {
-		return {
-			allowBase64: true,
-			htmlAttributes: {
-				style: "display: inline-block;",
-			},
-		};
-	},
+  addOptions() {
+    return {
+      allowBase64: true,
+      htmlAttributes: {
+        style: 'display: inline-block;',
+      },
+    };
+  },
 
-	addStorage() {
-		return {
-			media: {},
-		};
-	},
+  addStorage() {
+    return {
+      media: {},
+    };
+  },
 
-	addAttributes() {
-		return {
-			src: {
-				default: null,
-				renderDOM: ({ src }) => {
-					return {
-						src: this.storage.media[src] ?? src,
-					};
-				},
-			},
+  addAttributes() {
+    return {
+      src: {
+        default: null,
+        renderDOM: ({ src }) => {
+          return {
+            src: this.storage.media[src] ?? src,
+          };
+        },
+      },
 
-			alt: {
-				default: null,
-			},
+      alt: {
+        default: null,
+      },
 
-			id: { rendered: false },
+      id: { rendered: false },
 
-			title: {
-				default: null,
-			},
+      title: {
+        default: null,
+      },
 
-			rId: {
-				default: null,
-				rendered: false,
-			},
+      rId: {
+        default: null,
+        rendered: false,
+      },
 
-			originalPadding: {
-				default: null,
-				rendered: false,
-			},
-			originalAttributes: { rendered: false },
-			wrapTopAndBottom: { rendered: false },
+      originalPadding: {
+        default: null,
+        rendered: false,
+      },
+      originalAttributes: { rendered: false },
+      wrapTopAndBottom: { rendered: false },
 
-			anchorData: {
-				default: null,
-				rendered: false,
-			},
+      anchorData: {
+        default: null,
+        rendered: false,
+      },
 
-			isAnchor: { rendered: false },
-			simplePos: { rendered: false },
-			wrapText: { rendered: false },
+      isAnchor: { rendered: false },
+      simplePos: { rendered: false },
+      wrapText: { rendered: false },
 
-			size: {
-				default: {},
-				renderDOM: ({ size }) => {
-					let style = "";
-					const { width, height } = size ?? {};
-					if (width) style += `width: ${width}px;`;
-					if (height) style += "height: auto;";
-					return { style };
-				},
-			},
+      size: {
+        default: {},
+        renderDOM: ({ size }) => {
+          let style = '';
+          const { width, height } = size ?? {};
+          if (width) style += `width: ${width}px;`;
+          if (height) style += 'height: auto;';
+          return { style };
+        },
+      },
 
-			padding: {
-				default: {},
-				renderDOM: ({ padding, marginOffset }) => {
-					const { left = 0, top = 0, bottom = 0, right = 0 } = padding ?? {};
-					let style = "";
-					if (left && !marginOffset?.left) style += `margin-left: ${left}px;`;
-					if (top && !marginOffset?.top) style += `margin-top: ${top}px;`;
-					if (bottom) style += `margin-bottom: ${bottom}px;`;
-					if (right) style += `margin-right: ${right}px;`;
-					return { style };
-				},
-			},
+      padding: {
+        default: {},
+        renderDOM: ({ padding, marginOffset }) => {
+          const { left = 0, top = 0, bottom = 0, right = 0 } = padding ?? {};
+          let style = '';
+          if (left && !marginOffset?.left) style += `margin-left: ${left}px;`;
+          if (top && !marginOffset?.top) style += `margin-top: ${top}px;`;
+          if (bottom) style += `margin-bottom: ${bottom}px;`;
+          if (right) style += `margin-right: ${right}px;`;
+          return { style };
+        },
+      },
 
-			marginOffset: {
-				default: {},
-				renderDOM: ({ marginOffset }) => {
-					const { left = 0, top = 0 } = marginOffset ?? {};
-					let style = "";
-					if (left) style += `margin-left: ${left}px;`;
-					if (top) style += `margin-top: ${top}px;`;
-					return { style };
-				},
-			},
+      marginOffset: {
+        default: {},
+        renderDOM: ({ marginOffset }) => {
+          const { left = 0, top = 0 } = marginOffset ?? {};
+          let style = '';
+          if (left) style += `margin-left: ${left}px;`;
+          if (top) style += `margin-top: ${top}px;`;
+          return { style };
+        },
+      },
 
-			style: {
-				default: null,
-				rendered: true,
-				renderDOM: ({ style }) => {
-					if (!style) return {};
-					return { style };
-				},
-			},
-		};
-	},
+      style: {
+        default: null,
+        rendered: true,
+        renderDOM: ({ style }) => {
+          if (!style) return {};
+          return { style };
+        },
+      },
+    };
+  },
 
-	parseDOM() {
-		return [
-			{
-				tag: this.options.allowBase64
-					? "img[src]"
-					: 'img[src]:not([src^="data:"])',
-			},
-		];
-	},
+  parseDOM() {
+    return [
+      {
+        tag: this.options.allowBase64 ? 'img[src]' : 'img[src]:not([src^="data:"])',
+      },
+    ];
+  },
 
-	renderDOM({ htmlAttributes }) {
-		return [
-			"img",
-			Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes),
-		];
-	},
+  renderDOM({ htmlAttributes }) {
+    return ['img', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
+  },
 
-	addCommands() {
-		return {
-			setImage:
-				(options) =>
-				({ commands }) => {
-					return commands.insertContent({
-						type: this.name,
-						attrs: options,
-					});
-				},
-			resizeImage:
-				(pos, width, height) =>
-				({ tr }) => {
-					const node = tr.doc.nodeAt(pos);
-					if (node && node.type.name === "image") {
-						const attrs = {
-							...node.attrs,
-							size: {
-								...node.attrs.size,
-								width,
-								height,
-							},
-						};
-						tr.setNodeMarkup(pos, null, attrs);
-						return true;
-					}
-					return false;
-				},
-		};
-	},
+  addCommands() {
+    return {
+      setImage:
+        (options) =>
+        ({ commands }) => {
+          return commands.insertContent({
+            type: this.name,
+            attrs: options,
+          });
+        },
+      resizeImage:
+        (pos, width, height) =>
+        ({ tr }) => {
+          const node = tr.doc.nodeAt(pos);
+          if (node && node.type.name === 'image') {
+            const attrs = {
+              ...node.attrs,
+              size: {
+                ...node.attrs.size,
+                width,
+                height,
+              },
+            };
+            tr.setNodeMarkup(pos, null, attrs);
+            return true;
+          }
+          return false;
+        },
+    };
+  },
 
-	addPmPlugins() {
-		return [
-			ImagePlaceholderPlugin(),
-			ImagePositionPlugin({ editor: this.editor }),
-			ImageResizePlugin(),
-		];
-	},
+  addPmPlugins() {
+    return [ImagePlaceholderPlugin(), ImagePositionPlugin({ editor: this.editor }), ImageResizePlugin()];
+  },
 });

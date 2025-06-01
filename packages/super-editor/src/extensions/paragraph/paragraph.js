@@ -73,12 +73,12 @@ export const Paragraph = Node.create({
       class: {
         renderDOM: (attributes) => {
           if (attributes.dropcap) {
-            return { class: `sd-editor-dropcap`};
+            return { class: `sd-editor-dropcap` };
           }
           return null;
-        }
+        },
       },
-      styleId: { },
+      styleId: {},
       attributes: {
         rendered: false,
       },
@@ -102,21 +102,23 @@ export const Paragraph = Node.create({
 
           return { style };
         },
-      }
+      },
     };
   },
 
   parseDOM() {
-    return [{
-      tag: 'p',
-      getAttrs: (node) => {
-        let extra = {};
-        Array.from(node.attributes).forEach((attr) => {
-          extra[attr.name] = attr.value;
-        });
-        return { extraAttrs: extra };
+    return [
+      {
+        tag: 'p',
+        getAttrs: (node) => {
+          let extra = {};
+          Array.from(node.attributes).forEach((attr) => {
+            extra[attr.name] = attr.value;
+          });
+          return { extraAttrs: extra };
+        },
       },
-    }];
+    ];
   },
 
   renderDOM({ htmlAttributes }) {
@@ -145,9 +147,9 @@ export const Paragraph = Node.create({
         },
       },
     });
-    
+
     return [dropcapPlugin];
-  }
+  },
 });
 
 const getDropcapDecorations = (state, view) => {
@@ -155,10 +157,8 @@ const getDropcapDecorations = (state, view) => {
   state.doc.descendants((node, pos) => {
     if (node.attrs.dropcap?.type === 'margin') {
       const width = getDropcapWidth(view, pos);
-      
-      decorations.push(
-        Decoration.node(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }),
-      );
+
+      decorations.push(Decoration.node(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }));
     }
   });
   return decorations;

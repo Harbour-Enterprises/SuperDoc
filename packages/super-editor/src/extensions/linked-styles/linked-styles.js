@@ -35,11 +35,9 @@ export const LinkedStyles = Extension.create({
           ...paragraphNode.attrs,
           styleId: style.id,
         });
-
       },
-    }
+    };
   },
-
 });
 
 /**
@@ -71,14 +69,14 @@ const createLinkedStylesPlugin = (editor) => {
     props: {
       decorations(state) {
         return LinkedStylesPluginKey.getState(state)?.decorations;
-      }
-    }
-  })
+      },
+    },
+  });
 };
 
 /**
  * Generate style decorations for linked styles
- * 
+ *
  * @param {Object} state Editor state
  * @param {Array[Object]} styles The linked styles
  * @returns {DecorationSet} The decorations
@@ -87,7 +85,7 @@ const generateDecorations = (state, styles) => {
   const decorations = [];
   let lastStyleId = null;
   const doc = state?.doc;
-  
+
   doc.descendants((node, pos) => {
     const { name } = node.type;
 
@@ -114,7 +112,7 @@ const generateDecorations = (state, styles) => {
 /**
  * Convert the linked styles and current node marks into a decoration string
  * If the node contains a given mark, we don't override it with the linked style per MS Word behavior
- * 
+ *
  * @param {Object} linkedStyle The linked style object
  * @param {Object} node The current node
  * @param {Object} parent The parent of current
@@ -125,7 +123,7 @@ export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpac
   const markValue = {};
 
   Object.entries(linkedStyle.definition.styles).forEach(([k, value]) => {
-    const key = kebabCase(k);  
+    const key = kebabCase(k);
     const flattenedMarks = [];
 
     // Flatten node marks (including text styles) for comparison
@@ -141,7 +139,7 @@ export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpac
 
       flattenedMarks.push({ key: n.type.name, value: n.attrs[key] });
     });
-    
+
     // Check if this node has the expected mark. If yes, we are not overriding it
     const mark = flattenedMarks.find((n) => n.key === key);
     const hasParentIndent = Object.keys(parent?.attrs?.indent || {});
@@ -156,7 +154,7 @@ export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpac
         });
       } else if (key === 'indent' && includeSpacing && !hasParentIndent) {
         const { leftIndent, rightIndent, firstLine } = value;
-        
+
         if (leftIndent) markValue['margin-left'] = leftIndent + 'px';
         if (rightIndent) markValue['margin-right'] = rightIndent + 'px';
         if (firstLine) markValue['text-indent'] = firstLine + 'px';
@@ -167,13 +165,15 @@ export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpac
       }
     }
   });
-  
-  return Object.entries(markValue).map(([key, value]) => `${key}: ${value}`).join(';');
+
+  return Object.entries(markValue)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join(';');
 };
 
 /**
  * Get the (parsed) linked style from the styles.xml
- * 
+ *
  * @param {String} styleId The styleId of the linked style
  * @param {Array[Object]} styles The styles array
  * @returns {Object} The linked style
@@ -187,13 +187,13 @@ export const getSpacingStyle = (spacing) => {
   return {
     'margin-top': lineSpaceBefore + 'px',
     'margin-bottom': lineSpaceAfter + 'px',
-    ...getLineHeightValueString(line, '', lineRule, true)
+    ...getLineHeightValueString(line, '', lineRule, true),
   };
 };
 
 /**
  * Convert spacing object to a style string
- * 
+ *
  * @param {Object} spacing The spacing object
  * @returns {String} The style string
  */
@@ -210,7 +210,7 @@ export const getMarksStyle = (attrs) => {
   let styles = '';
   for (const attr of attrs) {
     switch (attr.type) {
-      case 'bold': 
+      case 'bold':
         styles += `font-weight: bold; `;
         break;
       case 'italic':
@@ -227,14 +227,14 @@ export const getMarksStyle = (attrs) => {
         styles += `${fontFamily ? `font-family: ${fontFamily};` : ''} ${fontSize ? `font-size: ${fontSize};` : ''}`;
     }
   }
-  
+
   return styles.trim();
-}
+};
 
 export const getQuickFormatList = (editor) => {
   if (!editor?.converter) return [];
   const styles = editor.converter.linkedStyles || [];
-  return styles 
+  return styles
     .filter((style) => {
       return style.type === 'paragraph' && style.definition.attrs;
     })

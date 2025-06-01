@@ -30,7 +30,6 @@ export const makeDefaultItems = ({
   role,
   isDev = false,
 } = {}) => {
-
   // bold
   const bold = useToolbarItem({
     type: 'button',
@@ -93,20 +92,16 @@ export const makeDefaultItems = ({
             closeDropdown(aiButton);
           };
 
-          return h(
-            'div',
-            {},
-            [
-              h(AIWriter, {
-                handleClose,
-                selectedText,
-                editor: superToolbar.activeEditor,
-                apiKey: superToolbar.config.aiApiKey,
-                endpoint: superToolbar.config.aiEndpoint,
-                superToolbar: superToolbar,
-              }),
-            ],
-          );
+          return h('div', {}, [
+            h(AIWriter, {
+              handleClose,
+              selectedText,
+              editor: superToolbar.activeEditor,
+              apiKey: superToolbar.config.aiApiKey,
+              endpoint: superToolbar.config.aiEndpoint,
+              superToolbar: superToolbar,
+            }),
+          ]);
         },
       },
     ],
@@ -183,7 +178,7 @@ export const makeDefaultItems = ({
     active: false,
     tooltip: 'Underline',
   });
-  
+
   // highlight
   const highlight = useToolbarItem({
     type: 'dropdown',
@@ -208,7 +203,7 @@ export const makeDefaultItems = ({
       highlight.iconColor.value = color || '';
     },
     onDeactivate: () => (highlight.iconColor.value = ''),
-  })
+  });
 
   // color
   const colorButton = useToolbarItem({
@@ -234,7 +229,7 @@ export const makeDefaultItems = ({
     },
     onDeactivate: () => (colorButton.iconColor.value = '#000'),
   });
-  
+
   // search
   const searchRef = ref(null);
   const search = useToolbarItem({
@@ -253,13 +248,12 @@ export const makeDefaultItems = ({
       },
     ],
   });
-  
+
   const renderSearchDropdown = () => {
-    
     const handleSubmit = ({ value }) => {
       superToolbar.activeEditor.commands.search(value);
     };
-    
+
     return h('div', {}, [
       h(SearchInput, {
         onSubmit: handleSubmit,
@@ -389,73 +383,73 @@ export const makeDefaultItems = ({
   });
 
   const tableActionsOptions = [
-    { 
+    {
       label: 'Insert row above',
       command: 'addRowBefore',
       icon: toolbarIcons.addRowBefore,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Insert row below',
       command: 'addRowAfter',
       icon: toolbarIcons.addRowAfter,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Insert column left',
       command: 'addColumnBefore',
       icon: toolbarIcons.addColumnBefore,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Insert column right',
       command: 'addColumnAfter',
       icon: toolbarIcons.addColumnAfter,
       bottomBorder: true,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Delete row',
       command: 'deleteRow',
       icon: toolbarIcons.deleteRow,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Delete column',
       command: 'deleteColumn',
       icon: toolbarIcons.deleteColumn,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Delete table',
       command: 'deleteTable',
       icon: toolbarIcons.deleteTable,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Transparent borders',
       command: 'deleteCellAndTableBorders',
       icon: toolbarIcons.deleteBorders,
       bottomBorder: true,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Merge cells',
       command: 'mergeCells',
       icon: toolbarIcons.mergeCells,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Split cell',
       command: 'splitCell',
       icon: toolbarIcons.splitCell,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
-    { 
+    {
       label: 'Fix tables',
       command: 'fixTables',
       icon: toolbarIcons.fixTables,
-      props: { 'data-item': 'btn-tableActions-option' }
+      props: { 'data-item': 'btn-tableActions-option' },
     },
   ];
 
@@ -468,7 +462,7 @@ export const makeDefaultItems = ({
         superToolbar.emitCommand({ item: tableActionsItem, argument: { command } });
       },
     });
-  };
+  }
 
   // alignment
   const alignment = useToolbarItem({
@@ -699,15 +693,9 @@ export const makeDefaultItems = ({
     icon: toolbarIcons.clearFormatting,
   });
 
-  const toolbarItemsMobile = [
-    bold,
-    italic,
-    underline,
-    indentRight,
-    indentLeft,
-    search,
-    overflow,
-  ].map((item) => item.name);
+  const toolbarItemsMobile = [bold, italic, underline, indentRight, indentLeft, search, overflow].map(
+    (item) => item.name,
+  );
 
   const copyFormat = useToolbarItem({
     type: 'button',
@@ -758,23 +746,23 @@ export const makeDefaultItems = ({
   });
 
   const documentOptions = [
-    { 
-      label: 'Editing', 
-      value: 'editing', 
-      icon: toolbarIcons.documentEditingMode, 
-      description: 'Edit document directly' 
+    {
+      label: 'Editing',
+      value: 'editing',
+      icon: toolbarIcons.documentEditingMode,
+      description: 'Edit document directly',
     },
-    { 
-      label: 'Suggesting', 
-      value: 'suggesting', 
-      icon: toolbarIcons.documentSuggestingMode, 
-      description: 'Edits become suggestions' 
+    {
+      label: 'Suggesting',
+      value: 'suggesting',
+      icon: toolbarIcons.documentSuggestingMode,
+      description: 'Edits become suggestions',
     },
-    { 
-      label: 'Viewing', 
-      value: 'viewing', 
-      icon: toolbarIcons.documentViewingMode, 
-      description: 'View clean version of document only' 
+    {
+      label: 'Viewing',
+      value: 'viewing',
+      icon: toolbarIcons.documentViewingMode,
+      description: 'View clean version of document only',
     },
   ];
 
@@ -790,7 +778,7 @@ export const makeDefaultItems = ({
         superToolbar.emitCommand({ item: documentMode, argument: label });
       },
     });
-  };
+  }
 
   const pageBreakTool = useToolbarItem({
     type: 'button',
@@ -813,7 +801,7 @@ export const makeDefaultItems = ({
     ['ai', 32],
     ['default', 32],
   ]);
-  
+
   const ruler = useToolbarItem({
     type: 'button',
     name: 'ruler',
@@ -853,10 +841,10 @@ export const makeDefaultItems = ({
             h(LinkedStyle, {
               editor: superToolbar.activeEditor,
               onSelect: handleSelect,
-            })
-          ])
-        }
-      }
+            }),
+          ]);
+        },
+      },
     ],
     onActivate: () => {
       linkedStyles.disabled.value = false;
@@ -886,12 +874,42 @@ export const makeDefaultItems = ({
     dropdownValueKey: 'key',
     selectedValue: '1',
     options: [
-      { label: '1,0', key: '1', icon: () => renderIcon('1', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '1,15', key: '1.15', icon: () => renderIcon('1.15', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '1,5', key: '1.5', icon: () => renderIcon('1.5', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '2,0', key: '2', icon: () => renderIcon('2', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '2,5', key: '2.5', icon: () => renderIcon('2.5', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '3,0', key: '3', icon: () => renderIcon('3', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
+      {
+        label: '1,0',
+        key: '1',
+        icon: () => renderIcon('1', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '1,15',
+        key: '1.15',
+        icon: () => renderIcon('1.15', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '1,5',
+        key: '1.5',
+        icon: () => renderIcon('1.5', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '2,0',
+        key: '2',
+        icon: () => renderIcon('2', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '2,5',
+        key: '2.5',
+        icon: () => renderIcon('2.5', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '3,0',
+        key: '3',
+        icon: () => renderIcon('3', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
     ],
   });
 

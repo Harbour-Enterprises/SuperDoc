@@ -1,94 +1,94 @@
 /* Image resize styles */
 .ProseMirror .resizable-image-wrapper img {
-	display: block;
-	max-width: 100%;
-	height: auto;
+  display: block;
+  max-width: 100%;
+  height: auto;
 }
 
 /* Resize handles container */
 .image-resize-container {
-	position: absolute;
-	pointer-events: none;
-	z-index: 1000;
+  position: absolute;
+  pointer-events: none;
+  z-index: 1000;
 }
 
 /* Resize handles */
 .resize-handle {
-	position: absolute;
-	width: 12px;
-	height: 12px;
-	background-color: #4dabf7;
-	border: 2px solid #fff;
-	border-radius: 50%;
-	box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
-	pointer-events: auto;
-	transition: all 0.1s ease;
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  background-color: #4dabf7;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+  pointer-events: auto;
+  transition: all 0.1s ease;
 }
 
 .resize-handle:hover {
-	background-color: #228be6;
-	transform: scale(1.1);
-	box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
+  background-color: #228be6;
+  transform: scale(1.1);
+  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
 }
 
 /* Handle positions */
 .resize-handle-nw {
-	top: -6px;
-	left: -6px;
-	cursor: nwse-resize;
+  top: -6px;
+  left: -6px;
+  cursor: nwse-resize;
 }
 
 .resize-handle-ne {
-	top: -6px;
-	right: -6px;
-	cursor: nesw-resize;
+  top: -6px;
+  right: -6px;
+  cursor: nesw-resize;
 }
 
 .resize-handle-sw {
-	bottom: -6px;
-	left: -6px;
-	cursor: nesw-resize;
+  bottom: -6px;
+  left: -6px;
+  cursor: nesw-resize;
 }
 
 .resize-handle-se {
-	bottom: -6px;
-	right: -6px;
-	cursor: nwse-resize;
+  bottom: -6px;
+  right: -6px;
+  cursor: nwse-resize;
 }
 
 /* Hide handles when editor loses focus */
 .ProseMirror:not(.ProseMirror-focused) .image-resize-container {
-	display: none;
+  display: none;
 }
 
 /* Smooth transitions for image resizing */
 .resizable-image-wrapper img {
-	transition: none;
+  transition: none;
 }
 
-.resizable-image-wrapper img:not([style*="width"]) {
-	transition: all 0.2s ease;
+.resizable-image-wrapper img:not([style*='width']) {
+  transition: all 0.2s ease;
 }
 
 /* Resize feedback indicator */
 .resizable-image-wrapper::after {
-	content: "Drag corners to resize";
-	position: absolute;
-	bottom: -25px;
-	left: 50%;
-	transform: translateX(-50%);
-	background-color: rgba(77, 171, 247, 0.9);
-	color: white;
-	font-size: 11px;
-	padding: 4px 8px;
-	border-radius: 4px;
-	white-space: nowrap;
-	pointer-events: none;
-	opacity: 0;
-	transition: opacity 0.3s ease;
-	z-index: 1001;
+  content: 'Drag corners to resize';
+  position: absolute;
+  bottom: -25px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(77, 171, 247, 0.9);
+  color: white;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 1001;
 }
 
 .resizable-image-wrapper:hover::after {
-	opacity: 1;
+  opacity: 1;
 }

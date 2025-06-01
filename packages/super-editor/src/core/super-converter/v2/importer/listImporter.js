@@ -18,7 +18,7 @@ export const handleListNode = (params) => {
   // We need to pre-process paragraph nodes to combine various possible elements we will find ie: lists, links.
   const processedElements = preProcessNodesForFldChar(node.elements);
   node.elements = processedElements;
-  
+
   const originalPpr = node.elements.find((el) => el.name === 'w:pPr');
 
   // Check if this paragraph node is a list
@@ -118,7 +118,7 @@ function handleListNodes({
     // Spacers in the XML and need to be appended to the last item.
     if (item.elements && !hasTextNode(item.elements)) {
       const n = handleStandardNode({ ...params, nodes: [item] }).nodes[0];
-      if (n) parsedListItems[parsedListItems.length - 1]?.content.push(n); 
+      if (n) parsedListItems[parsedListItems.length - 1]?.content.push(n);
       item.seen = true;
       continue;
     }
@@ -129,21 +129,12 @@ function handleListNodes({
 
     const matchedStyle = getStyleTagFromStyleId(styleId, docx) || {};
     const { marks: styleIdMarks } = parseProperties(matchedStyle, docx);
-    
+
     const textStyle = marks.find((mark) => mark.type === 'textStyle');
     const textStyleFromStyles = styleIdMarks?.find((mark) => mark.type === 'textStyle');
 
-    const {
-      listType,
-      listOrderingType,
-      ilvl,
-      listrPrs,
-      listpPrs,
-      start,
-      lvlText,
-      lvlJc,
-      numId
-    } = getNodeNumberingDefinition(item, listLevel, docx);
+    const { listType, listOrderingType, ilvl, listrPrs, listpPrs, start, lvlText, lvlJc, numId } =
+      getNodeNumberingDefinition(item, listLevel, docx);
 
     listStyleType = listOrderingType;
     const intLevel = parseInt(ilvl);
@@ -156,10 +147,8 @@ function handleListNodes({
       docx,
     });
     const isDifferentList = numId !== currentListNumId && !isSameListLevelDef;
-    const isNested = (
-      listLevel < intLevel
-      || listLevel === intLevel && isDifferentList && lastNestedListLevel === listLevel
-    );
+    const isNested =
+      listLevel < intLevel || (listLevel === intLevel && isDifferentList && lastNestedListLevel === listLevel);
 
     // We keep track of all indices for all lists here with an object
     // This allows us to detect disconnected lists and handle them correctly
@@ -175,10 +164,12 @@ function handleListNodes({
       item.seen = true;
 
       const schemaElements = [];
-      
+
       let parNode = {
         type: 'paragraph',
-        content: nodeListHandler.handler({ ...params, nodes: [ attributes.paragraphProperties, ...elements ] })?.filter((n) => n),
+        content: nodeListHandler
+          .handler({ ...params, nodes: [attributes.paragraphProperties, ...elements] })
+          ?.filter((n) => n),
       };
 
       // Normalize text nodes.
@@ -196,11 +187,11 @@ function handleListNodes({
 
       schemaElements.push(parNode);
       lastNestedListLevel = listLevel;
-    
+
       let thisItemPath = [];
       if (listStyleType !== 'bullet') {
         thisItemPath = [...path, lists[currentListNumId][listLevel]];
-        lists[currentListNumId][actualListLevel]++;  
+        lists[currentListNumId][actualListLevel]++;
       }
 
       // Rebuild a path if we're continuing after a break
@@ -221,14 +212,16 @@ function handleListNodes({
       const pPrFromStyles = matchedStyle?.elements?.find((style) => style.name === 'w:pPr');
       const stylesIndent = pPrFromStyles?.elements?.find((el) => el.name === 'w:ind');
       if (!indent) indent = stylesIndent;
-      
+
       if (indent) {
         const indentAttrs = {};
         if (!indent.attributes) indent.attributes = {};
         if (indent.attributes['w:left'] !== undefined) indentAttrs.left = twipsToPixels(indent.attributes['w:left']);
         if (indent.attributes['w:right'] !== undefined) indentAttrs.right = twipsToPixels(indent.attributes['w:right']);
-        if (indent.attributes['w:firstLine'] !== undefined) indentAttrs.firstLine = twipsToPixels(indent.attributes['w:firstLine']);
-        if (indent.attributes['w:hanging'] !== undefined) indentAttrs.hanging = twipsToPixels(indent.attributes['w:hanging']);
+        if (indent.attributes['w:firstLine'] !== undefined)
+          indentAttrs.firstLine = twipsToPixels(indent.attributes['w:firstLine']);
+        if (indent.attributes['w:hanging'] !== undefined)
+          indentAttrs.hanging = twipsToPixels(indent.attributes['w:hanging']);
         nodeAttributes['indent'] = indentAttrs;
       }
 
@@ -247,8 +240,8 @@ function handleListNodes({
 
       const originalRunProps = originalPpr?.elements?.find((el) => el.name === 'w:rPr');
       if (originalRunProps) {
-        nodeAttributes.attributes["originalInlineRunProps"] = originalRunProps;
-      };
+        nodeAttributes.attributes['originalInlineRunProps'] = originalRunProps;
+      }
 
       nodeAttributes['numId'] = numId;
 
@@ -282,9 +275,7 @@ function handleListNodes({
       } else {
         lastItem.content.push(sublist);
       }
-    }
-
-    else if (!numId) {
+    } else if (!numId) {
       item.seen = true;
       const n = handleStandardNode({ ...params, nodes: [item] }).nodes[0];
       parsedListItems[parsedListItems.length - 1]?.content.push(n);
@@ -294,7 +285,7 @@ function handleListNodes({
     else {
       lastNestedListLevel = listLevel;
 
-      if (listLevel > 0 && item.elements[0].elements.find((el)=>el.name==='w:numPr')) {
+      if (listLevel > 0 && item.elements[0].elements.find((el) => el.name === 'w:numPr')) {
         lists[currentListNumId][listLevel] = 0;
       }
 
@@ -311,7 +302,7 @@ function handleListNodes({
       attributes: {
         parentAttributes: listItems[0]?.attributes || null,
       },
-    }
+    },
   };
 
   if (isNested) resultingList.lastNestedListLevel = lastNestedListLevel;
@@ -323,7 +314,7 @@ const getOutlineLevelFromStyleTag = (styleTag, docx) => {
   const matchedStyle = getStyleTagFromStyleId(styleTag, docx);
   const pPr = matchedStyle?.elements?.find((style) => style.name === 'w:pPr');
   const outlineLevel = pPr?.elements?.find((style) => style.name === 'w:outlineLvl');
-  
+
   try {
     return parseInt(outlineLevel?.attributes['w:val']);
   } catch (e) {}
@@ -331,7 +322,7 @@ const getOutlineLevelFromStyleTag = (styleTag, docx) => {
 
 /**
  * Checks if the given node is a list or not.
- * 
+ *
  * @param {XmlNode} node The node to check.
  * @returns {boolean} Whether the node is a list or not.
  */
@@ -351,7 +342,7 @@ export function testForList(node, docx) {
   }
 
   return !!numId;
-};
+}
 
 const getNumIdFromTag = (tag) => {
   return tag?.elements?.find((el) => el.name === 'w:numId')?.attributes['w:val'];
@@ -359,7 +350,7 @@ const getNumIdFromTag = (tag) => {
 
 /**
  * Get the style tag from the style ID
- * 
+ *
  * @param {string} styleId The style ID to search for
  * @param {Object} docx The docx data
  * @returns {Object} The style tag
@@ -380,7 +371,7 @@ function getStyleTagFromStyleId(styleId, docx) {
  * This is a recursive function that will check the style definition for the numId
  * If it doesn't exist, it will check the basedOn style definition for the numId
  * This will continue until we find a numId or we run out of basedOn styles
- * 
+ *
  * @param {Object} node The node to check
  * @param {string} styleId The style ID to check
  * @param {Object} docx The docx data
@@ -499,7 +490,7 @@ const getListNumIdFromStyleRef = (styleId, docx) => {
   while (numPr && !numId && loopCount < 10) {
     const basedOnStyle = styleTags.find((tag) => tag.attributes['w:styleId'] === basedOnId) || {};
     const basedOnPPr = basedOnStyle?.elements?.find((style) => style.name === 'w:pPr');
-    numPr = basedOnPPr?.elements?.find((style) => style.name === 'w:numPr')
+    numPr = basedOnPPr?.elements?.find((style) => style.name === 'w:numPr');
     numIdTag = numPr?.elements?.find((style) => style.name === 'w:numId') || {};
     numId = numIdTag?.attributes?.['w:val'];
 

@@ -17,28 +17,32 @@ export const handleStandardNode = (params) => {
   if (name === 'w:sdt') {
     return { nodes: [], consumed: 0 };
   }
-  
+
   // Formatting only nodes
   if (isPropertiesElement(node)) {
     return {
-      nodes: [{
-        type: getElementName(node),
-        attrs: { ...attributes },
-        marks: [],
-      }],
-      consumed: 0
+      nodes: [
+        {
+          type: getElementName(node),
+          attrs: { ...attributes },
+          marks: [],
+        },
+      ],
+      consumed: 0,
     };
   }
-  
+
   // Unhandled nodes
   if (!getElementName(node)) {
-    return { 
-      nodes: [{
-        type: name,
-        content: elements,
-        attrs: { ...attributes },
-        marks,
-      }], 
+    return {
+      nodes: [
+        {
+          type: name,
+          content: elements,
+          attrs: { ...attributes },
+          marks,
+        },
+      ],
       consumed: 0,
       unhandled: true,
     };
@@ -54,27 +58,27 @@ export const handleStandardNode = (params) => {
       el.marks.push(...marks);
       return el;
     });
-    
+
     const childParams = { ...params, nodes: updatedElements, parentStyleId };
     const childContent = nodeListHandler.handler(childParams);
     content.push(...childContent);
   }
-  
+
   const resultNode = {
     type: getElementName(node),
     content,
     attrs: { ...attributes },
     marks: [],
   };
-  
+
   return { nodes: [resultNode], consumed: 1 };
 };
 
-const getParentStyleId = node => {
+const getParentStyleId = (node) => {
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');
   const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
   return styleTag ? styleTag.attributes['w:val'] : null;
-}
+};
 
 /**
  * @type {import("docxImporter").NodeHandlerEntry}

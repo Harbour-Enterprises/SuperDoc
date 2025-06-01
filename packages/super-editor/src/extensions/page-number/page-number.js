@@ -12,7 +12,7 @@ export const PageNumber = Node.create({
       htmlAttributes: {
         'data-id': 'auto-page-number',
       },
-    }
+    };
   },
 
   parseDOM() {
@@ -36,7 +36,7 @@ export const TotalPageCount = Node.create({
       htmlAttributes: {
         'data-id': 'auto-total-pages',
       },
-    }
+    };
   },
 
   parseDOM() {

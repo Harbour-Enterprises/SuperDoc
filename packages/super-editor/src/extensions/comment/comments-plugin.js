@@ -1,24 +1,19 @@
-import { Plugin, PluginKey } from 'prosemirror-state'
-import { Extension } from '@core/Extension.js'
-import { Decoration, DecorationSet } from 'prosemirror-view'
-import { removeCommentsById, getHighlightColor } from './comments-helpers.js'
-import { CommentMarkName } from './comments-constants.js'
+import { Plugin, PluginKey } from 'prosemirror-state';
+import { Extension } from '@core/Extension.js';
+import { Decoration, DecorationSet } from 'prosemirror-view';
+import { removeCommentsById, getHighlightColor } from './comments-helpers.js';
+import { CommentMarkName } from './comments-constants.js';
 import { PaginationPluginKey } from '../pagination/pagination-helpers.js';
 
-
 // Example tracked-change keys, if needed
-import {
-  TrackInsertMarkName,
-  TrackDeleteMarkName,
-  TrackFormatMarkName,
-} from '../track-changes/constants.js'
-import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js'
-import { comments_module_events } from '@harbour-enterprises/common'
-import { translateFormatChangesToEnglish } from './comments-helpers.js'
+import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../track-changes/constants.js';
+import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
+import { comments_module_events } from '@harbour-enterprises/common';
+import { translateFormatChangesToEnglish } from './comments-helpers.js';
 
 const TRACK_CHANGE_MARKS = [TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName];
 
-export const CommentsPluginKey = new PluginKey('comments')
+export const CommentsPluginKey = new PluginKey('comments');
 
 export const CommentsPlugin = Extension.create({
   name: 'comments',
@@ -28,21 +23,21 @@ export const CommentsPlugin = Extension.create({
       insertComment:
         (conversation) =>
         ({ tr, dispatch, state }) => {
-          const { selection } = tr
-          const { $from, $to } = selection
-          const { commentId, isInternal } = conversation
+          const { selection } = tr;
+          const { $from, $to } = selection;
+          const { commentId, isInternal } = conversation;
 
-          tr.setMeta(CommentsPluginKey, { event: 'add' })
+          tr.setMeta(CommentsPluginKey, { event: 'add' });
           tr.addMark(
             $from.pos,
             $to.pos,
             this.editor.schema.marks[CommentMarkName].create({
               commentId,
               internal: isInternal,
-            })
-          )
+            }),
+          );
 
-          dispatch(tr)
+          dispatch(tr);
           return true;
         },
 
@@ -69,7 +64,7 @@ export const CommentsPlugin = Extension.create({
           let foundPos;
 
           // Find the commentRangeStart node that matches the comment ID
-          tr.setMeta(CommentsPluginKey, { event: 'update' })
+          tr.setMeta(CommentsPluginKey, { event: 'update' });
           doc.descendants((node, pos) => {
             if (foundStartNode) return;
 
@@ -84,10 +79,10 @@ export const CommentsPlugin = Extension.create({
                 foundPos = pos;
               }
             }
-          })
+          });
 
           // If no matching node, return false
-          if (!foundStartNode) return false
+          if (!foundStartNode) return false;
 
           // Update the mark itself
           tr.addMark(
@@ -96,25 +91,25 @@ export const CommentsPlugin = Extension.create({
             this.editor.schema.marks[CommentMarkName].create({
               commentId,
               internal: isInternal,
-            })
-          )
+            }),
+          );
 
-          tr.setMeta(CommentsPluginKey, { type: 'setCommentInternal' })
-          dispatch(tr)
-          return true
+          tr.setMeta(CommentsPluginKey, { type: 'setCommentInternal' });
+          dispatch(tr);
+          return true;
         },
 
       resolveComment:
         ({ commentId }) =>
         ({ tr, dispatch, state }) => {
-          tr.setMeta(CommentsPluginKey, { event: 'update' })
-          removeCommentsById({ commentId, state, tr, dispatch })
+          tr.setMeta(CommentsPluginKey, { event: 'update' });
+          removeCommentsById({ commentId, state, tr, dispatch });
         },
-    }
+    };
   },
 
   addPmPlugins() {
-    const editor = this.editor
+    const editor = this.editor;
     let shouldUpdate;
     let activeThreadId;
 
@@ -134,11 +129,10 @@ export const CommentsPlugin = Extension.create({
             allCommentIds: [],
             changedActiveThread: false,
             trackedChanges: {},
-          }
+          };
         },
 
         apply(tr, pluginState, _, newEditorState) {
-
           const paginationMeta = tr.getMeta(PaginationPluginKey);
           const isPaginationInit = paginationMeta?.isReadyToInit;
           if (isPaginationInit) shouldUpdate = true;
@@ -153,8 +147,8 @@ export const CommentsPlugin = Extension.create({
               ...pluginState,
               decorations: meta.decorations,
               allCommentPositions: meta.allCommentPositions,
-            }
-          };
+            };
+          }
 
           // If this is a tracked change transaction, handle separately
           const trackedChangeMeta = tr.getMeta(TrackChangesBasePluginKey);
@@ -166,7 +160,7 @@ export const CommentsPlugin = Extension.create({
               newEditorState,
               editor,
             );
-          };          
+          }
 
           // Check for changes in the actively selected comment
           const trChangedActiveComment = meta?.type === 'setActiveComment';
@@ -180,7 +174,7 @@ export const CommentsPlugin = Extension.create({
               activeThreadId = currentActiveThread;
               const update = {
                 type: comments_module_events.SELECTED,
-                activeCommentId: activeThreadId ? activeThreadId : null
+                activeCommentId: activeThreadId ? activeThreadId : null,
               };
 
               shouldUpdate = true;
@@ -190,16 +184,16 @@ export const CommentsPlugin = Extension.create({
               const { dispatch } = editor.view;
               newTr.setMeta(CommentsPluginKey, { type: 'force' });
               dispatch(newTr);
-            };
-          };
+            }
+          }
 
-          return pluginState
+          return pluginState;
         },
       },
 
       props: {
         decorations(state) {
-          return this.getState(state).decorations
+          return this.getState(state).decorations;
         },
       },
 
@@ -209,28 +203,26 @@ export const CommentsPlugin = Extension.create({
 
         return {
           update(view, prevState) {
-            const { state } = view
-            const { doc, tr } = state
+            const { state } = view;
+            const { doc, tr } = state;
 
             if (prevDoc && !prevDoc.eq(doc)) shouldUpdate = true;
             if (!shouldUpdate) return;
             prevDoc = doc;
             shouldUpdate = false;
 
-            const decorations = []
-            const allCommentPositions = {}
+            const decorations = [];
+            const allCommentPositions = {};
             doc.descendants((node, pos) => {
-              const { marks = [] } = node
-              const commentMarks = marks.filter(
-                (mark) => mark.type.name === CommentMarkName
-              )
+              const { marks = [] } = node;
+              const commentMarks = marks.filter((mark) => mark.type.name === CommentMarkName);
 
               let hasActive = false;
               commentMarks.forEach((commentMark) => {
-                const { attrs } = commentMark
-                const threadId = attrs.commentId || attrs.importedId
+                const { attrs } = commentMark;
+                const threadId = attrs.commentId || attrs.importedId;
 
-                const currentBounds = view.coordsAtPos(pos)
+                const currentBounds = view.coordsAtPos(pos);
 
                 updatePosition({
                   allCommentPositions,
@@ -247,14 +239,14 @@ export const CommentsPlugin = Extension.create({
                   style: `background-color: ${color};`,
                   'data-thread-id': threadId,
                   class: 'sd-editor-comment-highlight',
-                })
+                });
 
                 // Ignore inner marks if we need to show an outer active one
                 if (hasActive && activeThreadId !== threadId) return;
-                decorations.push(deco)
+                decorations.push(deco);
               });
 
-              const trackedChangeMark = findTrackedMark({ 
+              const trackedChangeMark = findTrackedMark({
                 doc,
                 from: pos,
                 to: pos + node.nodeSize,
@@ -270,49 +262,42 @@ export const CommentsPlugin = Extension.create({
                   currentBounds,
                   node,
                 });
-              };
+              }
             });
 
-            const decorationSet = DecorationSet.create(doc, decorations)
+            const decorationSet = DecorationSet.create(doc, decorations);
 
             // Compare new decorations with the old state to avoid infinite loop
-            const pluginState = CommentsPluginKey.getState(state)
-            const oldDecorations = pluginState.decorations
+            const pluginState = CommentsPluginKey.getState(state);
+            const oldDecorations = pluginState.decorations;
 
             // We only dispatch if something actually changed
-            const same = oldDecorations.eq(decorationSet)
+            const same = oldDecorations.eq(decorationSet);
             if (!same) {
               const tr = state.tr.setMeta(CommentsPluginKey, {
                 decorations: decorationSet,
                 allCommentPositions,
-              })
+              });
               // Dispatch the transaction to update pluginState
-              view.dispatch(tr)
+              view.dispatch(tr);
             }
 
             editor.emit('comment-positions', { allCommentPositions });
 
             // Remember the new decorations for next time
-            prevDecorations = decorationSet
-
+            prevDecorations = decorationSet;
           },
-        }
+        };
       },
-    })
+    });
 
-    return [commentsPlugin]
+    return [commentsPlugin];
   },
 });
 
-const updatePosition = ({
-  allCommentPositions,
-  threadId,
-  pos,
-  currentBounds,
-  node,
-}) => {
+const updatePosition = ({ allCommentPositions, threadId, pos, currentBounds, node }) => {
   let bounds = {};
-  
+
   if (currentBounds instanceof DOMRect) {
     bounds = {
       top: currentBounds.top,
@@ -321,7 +306,7 @@ const updatePosition = ({
       right: currentBounds.right,
     };
   } else {
-    bounds =  { ...currentBounds };
+    bounds = { ...currentBounds };
   }
 
   if (!allCommentPositions[threadId]) {
@@ -330,14 +315,14 @@ const updatePosition = ({
       start: pos,
       end: pos + node.nodeSize,
       bounds,
-    }
+    };
   } else {
     // Adjust the positional indices
-    const existing = allCommentPositions[threadId]
-    existing.start = Math.min(existing.start, pos)
-    existing.end = Math.max(existing.end, pos + node.nodeSize)
-    existing.bounds.top = Math.min(existing.bounds.top, currentBounds.top)
-    existing.bounds.bottom = Math.max(existing.bounds.bottom, currentBounds.bottom)
+    const existing = allCommentPositions[threadId];
+    existing.start = Math.min(existing.start, pos);
+    existing.end = Math.max(existing.end, pos + node.nodeSize);
+    existing.bounds.top = Math.min(existing.bounds.top, currentBounds.top);
+    existing.bounds.bottom = Math.max(existing.bounds.bottom, currentBounds.bottom);
   }
 };
 
@@ -373,7 +358,7 @@ const getActiveCommentId = (doc, selection) => {
   // Otherwise, we need to check for comment nodes
   const overlaps = [];
   let found = false;
-  
+
   // Look for commentRangeStart nodes before the current position
   // There could be overlapping comments so we need to track all of them
   doc.descendants((node, pos) => {
@@ -422,11 +407,11 @@ const getActiveCommentId = (doc, selection) => {
   return closestCommentMark?.attrs?.commentId || closestCommentMark?.attrs?.importedId;
 };
 
-const findTrackedMark = ({ 
+const findTrackedMark = ({
   doc,
-  from, 
+  from,
   to,
-  offset = 1, // To get non-inclusive marks. 
+  offset = 1, // To get non-inclusive marks.
 }) => {
   const startPos = Math.max(from - offset, 0);
   const endPos = Math.min(to + offset, doc.content.size);
@@ -453,12 +438,7 @@ const findTrackedMark = ({
 };
 
 const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEditorState, editor) => {
-  const { 
-    insertedMark,
-    deletionMark, 
-    formatMark, 
-    deletionNodes, 
-  } = trackedChangeMeta;
+  const { insertedMark, deletionMark, formatMark, deletionNodes } = trackedChangeMeta;
 
   if (!insertedMark && !deletionMark && !formatMark) {
     return;
@@ -476,7 +456,7 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
   if (!newTrackedChanges[id]) {
     newTrackedChanges[id] = {};
     isNewChange = true;
-  };
+  }
 
   if (insertedMark) newTrackedChanges[id].insertion = id;
   if (deletionMark) newTrackedChanges[id].deletion = deletionMark.attrs?.id;
@@ -492,7 +472,7 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
       if (hasFormatMark) {
         nodes = [node];
         return false;
-      };
+      }
     });
   }
 
@@ -516,12 +496,12 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
 
 const getTrackedChangeText = ({
   state,
-  node, 
-  mark, 
-  marks, 
-  trackedChangeType, 
-  isDeletionInsertion, 
-  deletionNodes = [], 
+  node,
+  mark,
+  marks,
+  trackedChangeType,
+  isDeletionInsertion,
+  deletionNodes = [],
 }) => {
   let trackedChangeText = '';
   let deletionText = '';
@@ -560,7 +540,7 @@ const getTrackedChangeText = ({
 const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes, newEditorState, documentId }) => {
   const trackedMark = marks.insertedMark || marks.deletionMark || marks.formatMark;
   const { type, attrs } = trackedMark;
-  
+
   const { name: trackedChangeType } = type;
   const { author, authorEmail, date } = attrs;
   const id = attrs.id;
@@ -604,7 +584,7 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
     authorEmail,
     date,
   };
-  
+
   if (event === 'add') params.event = comments_module_events.ADD;
   else if (event === 'update') params.event = comments_module_events.UPDATE;
 

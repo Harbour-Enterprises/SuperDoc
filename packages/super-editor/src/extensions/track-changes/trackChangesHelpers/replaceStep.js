@@ -73,7 +73,11 @@ export const replaceStep = ({ state, tr, step, newTr, map, doc, user, date, orig
   }
 
   if (step.from !== step.to) {
-    const { deletionMark, deletionMap, nodes: deletionNodes } = markDeletion({
+    const {
+      deletionMark,
+      deletionMap,
+      nodes: deletionNodes,
+    } = markDeletion({
       tr: newTr,
       from: step.from,
       to: step.to,

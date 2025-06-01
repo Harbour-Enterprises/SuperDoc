@@ -1,2 +1,2 @@
-export * from "./image";
-export * from "./imageHelpers";
+export * from './image';
+export * from './imageHelpers';

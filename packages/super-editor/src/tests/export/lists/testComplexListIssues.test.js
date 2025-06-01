@@ -20,10 +20,10 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
 
   it('first list item imports correctly', () => {
     const listItem = currentState.content[0].content[0];
-    
+
     expect(listItem.type).toBe('listItem');
     expect(listItem.content.length).toBe(2);
-    
+
     const sublist = listItem.content.find((el) => el.type === 'orderedList');
     expect(sublist).toBeDefined();
     expect(sublist.content.length).toBe(4); // 4 sub items
@@ -37,10 +37,10 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
 
   it('second list item imports correctly', () => {
     const listItem = currentState.content[0].content[1];
-    
+
     expect(listItem.type).toBe('listItem');
     expect(listItem.content.length).toBe(3);
-    
+
     const sublist = listItem.content.find((el) => el.type === 'orderedList');
 
     expect(sublist).toBeDefined();
@@ -48,9 +48,9 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
 
     const subItem1 = sublist.content[0];
     expect(subItem1.type).toBe('listItem');
-    expect(subItem1.attrs.numId).toBe("5");
+    expect(subItem1.attrs.numId).toBe('5');
     expect(subItem1.attrs.listLevel).toStrictEqual([3, 1]);
-    
+
     const subItem2 = sublist.content[1];
     expect(subItem2.attrs.listLevel).toStrictEqual([3, 2]);
   });
@@ -59,7 +59,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
     const listItem = currentState.content[0].content[2];
     expect(listItem.type).toBe('listItem');
     expect(listItem.content.length).toBe(3);
-    
+
     const sublist = listItem.content.find((el) => el.type === 'orderedList');
     expect(sublist).toBeDefined();
     expect(sublist.content.length).toBe(1);
@@ -77,19 +77,19 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
     const listAfterBreak = currentState.content[3];
     expect(listAfterBreak.type).toBe('bulletList');
 
-    const subItem3 = listAfterBreak.content[0].content[0].content[0]
-    expect(subItem3.attrs.numId).toBe("5");
+    const subItem3 = listAfterBreak.content[0].content[0].content[0];
+    expect(subItem3.attrs.numId).toBe('5');
     expect(subItem3.attrs.listLevel).toStrictEqual([4, 2]);
 
-    const subItem4 = listAfterBreak.content[0].content[0].content[1]
+    const subItem4 = listAfterBreak.content[0].content[0].content[1];
     expect(subItem4.type).toBe('listItem');
-    expect(subItem4.attrs.numId).toBe("5");
+    expect(subItem4.attrs.numId).toBe('5');
     expect(subItem4.attrs.listLevel).toStrictEqual([4, 3]);
   });
 
   it('root list continues correctly after third item with break', () => {
     // Make sure the 'FOUR' list item continues correctly here
-    const listItem = currentState.content[4].content[0]
+    const listItem = currentState.content[4].content[0];
     expect(listItem.type).toBe('listItem');
     expect(listItem.attrs.listLevel).toStrictEqual([4]);
 
@@ -101,7 +101,6 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
     expect(textNode.type).toBe('text');
     expect(textNode.text).toBe('FOUR');
   });
-
 });
 
 describe('[complex-list-def-issue.docx] importing complex list (repeated num id in sub lists, breaks)', () => {
@@ -130,7 +129,6 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
     expect(indent.firstLine).toBe(0);
     expect(indent.hanging).toBeUndefined();
   });
-
 });
 
 describe('[custom-list-numbering1.docx] importing complex list (repeated num id in sub lists, breaks)', () => {
@@ -151,7 +149,7 @@ describe('[custom-list-numbering1.docx] importing complex list (repeated num id 
     expect(attrs.lvlText).toBe('SECTION %1.  ');
   });
 
-  it ('correctly imports the sublist with numbering (a), (b) etc', () => {
+  it('correctly imports the sublist with numbering (a), (b) etc', () => {
     const listItem = currentState.content[0].content[0];
     const subList = listItem.content[1];
     const subItem1 = subList.content[0];

@@ -56,7 +56,7 @@ export class Schema {
           ...(extendNodeSchema ? extendNodeSchema(extension) : {}),
         };
       }, {});
-      
+
       const schema = cleanSchemaItem({
         content: callOrGet(getExtensionConfigField(extension, 'content', context)),
         group: callOrGet(getExtensionConfigField(extension, 'group', context)),

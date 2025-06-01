@@ -6,7 +6,6 @@ import { Attribute } from '@core/Attribute.js';
  * https://github.com/ProseMirror/prosemirror-tables/blob/master/src/tableview.ts
  */
 export const createTableView = ({ editor }) => {
-
   return class TableView {
     editor;
 
@@ -33,7 +32,7 @@ export const createTableView = ({ editor }) => {
       updateTable(this.editor, this.node, this.table);
       updateColumns(node, this.colgroup, this.table, cellMinWidth);
       this.contentDOM = this.table.appendChild(document.createElement('tbody'));
-      
+
       // use `setTimeout` to get cells.
       setTimeout(() => {
         updateTableWrapper(this.dom, this.table);
@@ -55,29 +54,18 @@ export const createTableView = ({ editor }) => {
 
     ignoreMutation(mutation) {
       const tableWrapper = this.dom;
-      if (
-        mutation.target === tableWrapper
-        && (mutation.type === 'attributes' && mutation.attributeName === 'style')
-      ) {
+      if (mutation.target === tableWrapper && mutation.type === 'attributes' && mutation.attributeName === 'style') {
         return true;
       }
 
       return (
-        mutation.type === 'attributes'
-        && (mutation.target === this.table || this.colgroup.contains(mutation.target))
+        mutation.type === 'attributes' && (mutation.target === this.table || this.colgroup.contains(mutation.target))
       );
     }
-  }
-}
+  };
+};
 
-export function updateColumns(
-  node,
-  colgroup,
-  table,
-  cellMinWidth,
-  overrideCol,
-  overrideValue,
-) {
+export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, overrideValue) {
   let totalWidth = 0;
   let fixedWidth = true;
   let nextDOM = colgroup.firstChild;
@@ -88,15 +76,15 @@ export function updateColumns(
   if (row !== null) {
     for (let i = 0, col = 0; i < row.childCount; i++) {
       const { colspan, colwidth } = row.child(i).attrs;
-      
+
       for (let j = 0; j < colspan; j++, col++) {
-        const hasWidth = overrideCol === col ? overrideValue : (colwidth && colwidth[j]);
+        const hasWidth = overrideCol === col ? overrideValue : colwidth && colwidth[j];
         const cssWidth = hasWidth ? `${hasWidth}px` : '';
         totalWidth += hasWidth || cellMinWidth;
         if (!hasWidth) fixedWidth = false;
 
         if (!nextDOM) {
-          const col = document.createElement('col')
+          const col = document.createElement('col');
           const [propKey, propVal] = getColStyleDeclaration(cellMinWidth, hasWidth);
           col.style.setProperty(propKey, propVal);
           colgroup.appendChild(col);

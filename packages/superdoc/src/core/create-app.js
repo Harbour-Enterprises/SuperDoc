@@ -8,7 +8,7 @@ import App from '../SuperDoc.vue';
 
 /**
  * Generate the superdoc vue app
- * 
+ *
  * @returns {Object} An object containing the vue app, the pinia reference, and the superdoc store
  */
 export const createSuperdocVueApp = () => {

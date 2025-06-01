@@ -32,7 +32,7 @@ export const HardBreak = Node.create({
         contentEditable: 'false',
         lineBreakType: 'page',
       },
-    }
+    };
   },
 
   addAttributes() {
@@ -44,8 +44,8 @@ export const HardBreak = Node.create({
       pageBreakType: {
         default: null,
         rendered: false,
-      }
-    }
+      },
+    };
   },
 
   parseDOM() {
@@ -54,5 +54,5 @@ export const HardBreak = Node.create({
 
   renderDOM({ htmlAttributes }) {
     return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
-  }
+  },
 });

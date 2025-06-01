@@ -8,13 +8,7 @@ import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
 import Ruler from './rulers/Ruler.vue';
 
-const emit = defineEmits([
-  'editor-ready',
-  'editor-click',
-  'editor-keydown',
-  'comments-loaded',
-  'selection-update',
-]);
+const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 
 const props = defineProps({
   documentId: {
@@ -98,7 +92,7 @@ const initializeData = async () => {
       // Remove the synced event listener.
       // Avoids re-initializing the editor in case the connection is lost and reconnected
       provider.off('synced', handleSynced);
-    }
+    };
     provider.on('synced', handleSynced);
   }
 };
@@ -106,7 +100,7 @@ const initializeData = async () => {
 const getExtensions = () => {
   const extensions = getStarterExtensions();
   if (!props.options.pagination) {
-    return extensions.filter(ext => ext.name !== 'pagination');
+    return extensions.filter((ext) => ext.name !== 'pagination');
   }
   return extensions;
 };
@@ -193,18 +187,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="super-editor-container">
-  
-    <Ruler
-      class="ruler"
-      v-if="options.rulers && !!editor"
-      :editor="editor"
-      @margin-change="handleMarginChange"
-    />
+    <Ruler class="ruler" v-if="options.rulers && !!editor" :editor="editor" @margin-change="handleMarginChange" />
 
-    <div 
+    <div
       class="super-editor"
       ref="editorWrapper"
-      @keydown="handleSuperEditorKeydown" 
+      @keydown="handleSuperEditorKeydown"
       @click="handleSuperEditorClick"
       @mousedown="handleMarginClick"
     >

@@ -4,15 +4,18 @@ describe('AnnotationNodeExporter', async () => {
   window.URL.createObjectURL = vi.fn().mockImplementation((file) => {
     return file.name;
   });
-  
+
   const { result, params } = await getExportedResultForAnnotations(false);
   const body = {};
 
   beforeEach(() => {
-    Object.assign(body, result.elements?.find((el) => el.name === 'w:body'));
+    Object.assign(
+      body,
+      result.elements?.find((el) => el.name === 'w:body'),
+    );
   });
-  
-  it('export text annotation correctly', async() => {
+
+  it('export text annotation correctly', async () => {
     const textField = body.elements[0].elements[1].elements[0].elements.find((f) => f.name === 'w:fieldTypeShort');
     expect(textField.attributes['w:val']).toBe('text');
 
@@ -20,7 +23,7 @@ describe('AnnotationNodeExporter', async () => {
     expect(text).toEqual('Vladyslava Andrushchenko');
   });
 
-  it('export image annotation correctly', async() => {
+  it('export image annotation correctly', async () => {
     const tag = body.elements[2].elements[1].elements[0];
 
     const fieldElements = body.elements[2].elements[1].elements[0].elements;
@@ -34,7 +37,7 @@ describe('AnnotationNodeExporter', async () => {
     expect(mediaIds[0].replace('_', '-').startsWith(tag.elements[0].attributes['w:val'])).toBe(true);
   });
 
-  it('export signature annotation correctly', async() => {
+  it('export signature annotation correctly', async () => {
     const tag = body.elements[4].elements[1].elements[0];
     const fieldElements = body.elements[4].elements[1].elements[0].elements;
     const shortFieldType = fieldElements.find((f) => f.name === 'w:fieldTypeShort');
@@ -44,7 +47,7 @@ describe('AnnotationNodeExporter', async () => {
     expect(mediaIds[1].replace('_', '-').startsWith(tag.elements[0].attributes['w:val'])).toBe(true);
   });
 
-  it('export checkbox annotation correctly', async() => {
+  it('export checkbox annotation correctly', async () => {
     const fieldElements = body.elements[6].elements[1].elements[0].elements;
     const shortFieldType = fieldElements.find((f) => f.name === 'w:fieldTypeShort');
     expect(shortFieldType.attributes['w:val']).toBe('checkbox');
@@ -53,7 +56,7 @@ describe('AnnotationNodeExporter', async () => {
     expect(text).toEqual('x');
   });
 
-  it('export paragraph annotation correctly', async() => {
+  it('export paragraph annotation correctly', async () => {
     const fieldElements = body.elements[8].elements[1].elements[0].elements;
     const shortFieldType = fieldElements.find((f) => f.name === 'w:fieldTypeShort');
     expect(shortFieldType.attributes['w:val']).toBe('html');
@@ -61,11 +64,11 @@ describe('AnnotationNodeExporter', async () => {
     expect(text).toEqual('test paragraph data');
   });
 
-  it('export url annotation correctly', async() => {
+  it('export url annotation correctly', async () => {
     const fieldElements = body.elements[10].elements[1].elements[0].elements;
     const shortFieldType = fieldElements.find((f) => f.name === 'w:fieldTypeShort');
     expect(shortFieldType.attributes['w:val']).toBe('link');
-  
+
     const node = body.elements[10].elements[1].elements[1].elements[0];
     const run = node.elements.find((el) => el.name === 'w:r');
     const text = run?.elements[1].elements[0].text;

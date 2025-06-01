@@ -16,7 +16,7 @@ export function createDocument(converter, schema, editor, { check = false } = {}
     if (check) {
       documentNode.check();
     }
-    
+
     return documentNode;
   }
 

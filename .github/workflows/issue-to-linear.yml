@@ -20,9 +20,9 @@ jobs:
             const LINEAR_TOKEN = process.env.LINEAR_TOKEN;
             const LINEAR_TEAM_ID = process.env.LINEAR_TEAM_ID;
             const LINEAR_STATE_ID = process.env.LINEAR_STATE_ID;
-            
+
             const issue = context.payload.issue;
-            
+
             // Prepare the Linear issue creation query
             const query = `
               mutation IssueCreate($input: IssueCreateInput!) {
@@ -34,7 +34,7 @@ jobs:
                 }
               }
             `;
-            
+
             const variables = {
               input: {
                 teamId: LINEAR_TEAM_ID,
@@ -43,7 +43,7 @@ jobs:
                 stateId: LINEAR_STATE_ID,
               }
             };
-            
+
             // Make the API request to Linear
             try {
               const response = await fetch('https://api.linear.app/graphql', {

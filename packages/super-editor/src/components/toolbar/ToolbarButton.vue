@@ -122,14 +122,7 @@ const caretIcon = computed(() => {
         />
       </span>
 
-      <div 
-        v-if="hasCaret"
-        class="dropdown-caret"
-        v-html="caretIcon"
-        :style="{ opacity: disabled ? 0.6 : 1 }"
-        >
-      </div>
-
+      <div v-if="hasCaret" class="dropdown-caret" v-html="caretIcon" :style="{ opacity: disabled ? 0.6 : 1 }"></div>
     </div>
   </div>
 </template>
@@ -249,7 +242,7 @@ const caretIcon = computed(() => {
   .toolbar-item--linked-styles {
     width: auto !important;
   }
-  
+
   .toolbar-item--linked-styles .button-label {
     display: none;
   }

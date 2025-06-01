@@ -120,7 +120,7 @@ export const FieldAnnotationPlugin = (options = {}) => {
           changed = true;
         }
       });
-      
+
       return changed ? tr : null;
     },
     ///

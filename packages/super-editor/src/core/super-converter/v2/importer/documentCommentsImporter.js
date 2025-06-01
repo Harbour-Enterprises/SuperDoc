@@ -1,11 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
-import { defaultNodeListHandler } from "./docxImporter";
+import { defaultNodeListHandler } from './docxImporter';
 
 /**
  * Parse comments.xml into SuperDoc-ready comments
  * These will be available in converter.comments
- * 
- * @param {Object} param0 
+ *
+ * @param {Object} param0
  * @param {ParsedDocx} param0.docx The parsed docx object
  * @param {NodeListHandler} param0.nodeListHandler The node list handler
  * @param {SuperConverter} param0.converter The super converter instance
@@ -31,12 +31,10 @@ export function importCommentData({ docx }) {
     const internalId = attributes['custom:internalId'];
     const trackedChange = attributes['custom:trackedChange'] === 'true';
     const trackedChangeType = attributes['custom:trackedChangeType'];
-    const trackedChangeText = attributes['custom:trackedChangeText'] !== 'null' 
-      ? attributes['custom:trackedChangeText'] 
-      : null;
-    const trackedDeletedText = attributes['custom:trackedDeletedText'] !== 'null' 
-      ? attributes['custom:trackedDeletedText'] 
-      : null;
+    const trackedChangeText =
+      attributes['custom:trackedChangeText'] !== 'null' ? attributes['custom:trackedChangeText'] : null;
+    const trackedDeletedText =
+      attributes['custom:trackedDeletedText'] !== 'null' ? attributes['custom:trackedDeletedText'] : null;
 
     const date = new Date(createdDate);
     const unixTimestampMs = date.getTime();
@@ -46,7 +44,9 @@ export function importCommentData({ docx }) {
 
     const { elements: commentElements } = commentData;
     const parsedComment = nodeListHandler.handler({
-      nodes: el.elements, nodeListHandler, docx
+      nodes: el.elements,
+      nodeListHandler,
+      docx,
     });
 
     const { attrs } = parsedComment[0];
@@ -75,8 +75,8 @@ export function importCommentData({ docx }) {
 /**
  * Import the commentsExtended.xml file to get the extended comment details
  * Note: This is where parent/child comment relationships are defined
- * 
- * @param {Object} param0 
+ *
+ * @param {Object} param0
  * @param {ParsedDocx} param0.docx The parsed docx object
  * @param {Array} param0.comments The comments to be extended
  * @returns {Array} The comments with extended details
@@ -110,7 +110,7 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
 
 /**
  * Extract the details from the commentExtended node
- * 
+ *
  * @param {Object} commentEx The commentExtended node
  * @returns {Object} Object contianing paraId, isDone and paraIdParent
  */

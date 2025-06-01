@@ -10,10 +10,30 @@ const select = (alignment) => {
 
 <template>
   <div class="alignment-buttons">
-    <div class="button-icon" @click="select('left')" v-html="toolbarIcons.alignLeft" data-item="btn-textAlign-option"></div>
-    <div class="button-icon" @click="select('center')" v-html="toolbarIcons.alignCenter" data-item="btn-textAlign-option"></div>
-    <div class="button-icon" @click="select('right')" v-html="toolbarIcons.alignRight" data-item="btn-textAlign-option"></div>
-    <div class="button-icon" @click="select('justify')" v-html="toolbarIcons.alignJustify" data-item="btn-textAlign-option"></div>
+    <div
+      class="button-icon"
+      @click="select('left')"
+      v-html="toolbarIcons.alignLeft"
+      data-item="btn-textAlign-option"
+    ></div>
+    <div
+      class="button-icon"
+      @click="select('center')"
+      v-html="toolbarIcons.alignCenter"
+      data-item="btn-textAlign-option"
+    ></div>
+    <div
+      class="button-icon"
+      @click="select('right')"
+      v-html="toolbarIcons.alignRight"
+      data-item="btn-textAlign-option"
+    ></div>
+    <div
+      class="button-icon"
+      @click="select('justify')"
+      v-html="toolbarIcons.alignJustify"
+      data-item="btn-textAlign-option"
+    ></div>
   </div>
 </template>
 

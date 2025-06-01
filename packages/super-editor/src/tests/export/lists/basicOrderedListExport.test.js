@@ -12,9 +12,11 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
   const body = {};
 
   beforeEach(() => {
-    Object.assign(body, result.elements?.find((el) => el.name === 'w:body'));
+    Object.assign(
+      body,
+      result.elements?.find((el) => el.name === 'w:body'),
+    );
   });
-
 
   it('can export the first list', () => {
     const titleIndex = 0;
@@ -24,10 +26,10 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
 
     const item1 = body.elements[titleIndex + 2];
     testListNodes({ node: item1, expectedLevel: 0, expectedNumPr: 0, text: 'Item 1' });
-  
+
     const item2 = body.elements[titleIndex + 3];
     testListNodes({ node: item2, expectedLevel: 0, expectedNumPr: 0, text: 'Item 2' });
-  
+
     const item3 = body.elements[titleIndex + 4];
     testListNodes({ node: item3, expectedLevel: 0, expectedNumPr: 0 });
 
