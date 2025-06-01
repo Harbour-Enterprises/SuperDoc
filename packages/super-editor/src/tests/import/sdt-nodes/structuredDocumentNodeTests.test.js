@@ -1,10 +1,8 @@
-
 import { expect } from 'vitest';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { getExportedResult } from '../../export/export-helpers/index';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
-
 
 describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () => {
   const fileName = 'sdt-node-comment.docx';
@@ -16,7 +14,7 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
     ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(fileName));
     ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts }));
     doc = editor.getJSON();
-  
+
     exported = await getExportedResult(fileName);
     body = exported.elements?.find((el) => el.name === 'w:body');
   });
@@ -28,7 +26,7 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
     const p1 = content[0];
     expect(p1.type).toBe('paragraph');
     expect(p1.content.length).toBe(2);
-  
+
     const sdtNode = p1.content[0];
     expect(sdtNode.type).toBe('structuredContent');
     expect(sdtNode.content.length).toBe(3);
@@ -40,7 +38,7 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
 
     const { marks } = sdtNode;
     expect(marks.length).toBe(2);
-    
+
     const bold = marks.find((mark) => mark.type === 'bold');
     expect(bold).toBeDefined();
 
@@ -50,7 +48,7 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
     const textBeforeComment = sdtNode.content[0];
     expect(textBeforeComment.type).toBe('text');
     expect(textBeforeComment.text).toBe('SDT field with ');
-    
+
     const commentText = sdtNode.content[1];
     expect(commentText.type).toBe('text');
     expect(commentText.text).toBe('text and comment');
@@ -83,7 +81,7 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
     const sdtContent = sdtNode.elements[1];
     expect(sdtContent.name).toBe('w:sdtContent');
     expect(sdtContent.elements.length).toBe(2);
-  
+
     const textBeforeComment = sdtContent.elements[0]?.elements.find((el) => el.name === 'w:t');
     expect(textBeforeComment.name).toBe('w:t');
     expect(textBeforeComment.elements[0].text).toBe('SDT field with ');
@@ -95,6 +93,5 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
     const extraTextAfterSdt = p1.elements[2]?.elements.find((el) => el.name === 'w:t');
     expect(extraTextAfterSdt.name).toBe('w:t');
     expect(extraTextAfterSdt.elements[0].text).toBe(' text');
-
   });
 });

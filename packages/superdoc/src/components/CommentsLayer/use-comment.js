@@ -7,7 +7,7 @@ import useSelection from '@superdoc/helpers/use-selection';
 
 /**
  * Comment composable
- * 
+ *
  * @param {Object} params The initial values of the comment
  * @returns {Object} The comment composable
  */
@@ -33,14 +33,14 @@ export default function useComment(params) {
 
   const commentText = ref(params.commentText || '');
 
-  const selection = params.selection 
+  const selection = params.selection
     ? useSelection(params.selection)
     : useSelection({
-      documentId: fileId,
-      page: 1,
-      selectionBounds: {},
-    });
-  
+        documentId: fileId,
+        page: 1,
+        selectionBounds: {},
+      });
+
   const floatingPosition = params.selection?.selectionBounds
     ? { ...params.selection.selectionBounds }
     : { top: 0, left: 0, right: 0, bottom: 0 };
@@ -57,7 +57,7 @@ export default function useComment(params) {
 
   /**
    * Mark this conversation as resolved with UTC date
-   * 
+   *
    * @param {String} email The email of the user marking this conversation as done
    * @param {String} name The name of the user marking this conversation as done
    * @returns {void}
@@ -73,7 +73,7 @@ export default function useComment(params) {
       propagateUpdate(superdoc, emitData);
       superdoc.activeEditor?.commands?.resolveComment({ commentId, importedId });
       return;
-    };
+    }
 
     const emitData = { type: comments_module_events.RESOLVED, comment: getValues() };
     propagateUpdate(superdoc, emitData);
@@ -82,8 +82,8 @@ export default function useComment(params) {
 
   /**
    * Update the isInternal value of this comment
-   * 
-   * @param {Object} param0 
+   *
+   * @param {Object} param0
    * @param {Boolean} param0.isInternal The new isInternal value
    * @param {Object} param0.superdoc The SuperDoc instance
    * @returns {void}
@@ -98,19 +98,19 @@ export default function useComment(params) {
     const emitData = {
       type: comments_module_events.UPDATE,
       changes: [{ key: 'isInternal', value: newIsInternal, previousValue }],
-      comment: getValues()
+      comment: getValues(),
     };
     propagateUpdate(superdoc, emitData);
 
     const activeEditor = superdoc.activeEditor;
     if (!activeEditor) return;
-  
+
     activeEditor.commands.setCommentInternal({ commentId, importedId, isInternal: newIsInternal });
   };
- 
+
   /**
    * Set this comment as the active comment in the editor
-   * 
+   *
    * @param {Object} superdoc The SuperDoc instance
    * @returns {void}
    */
@@ -121,7 +121,7 @@ export default function useComment(params) {
 
   /**
    *  Update the text value of this comment
-   * 
+   *
    * @param {Object} param0
    * @param {String} param0.text The new text value
    * @param {Object} param0.superdoc The SuperDoc instance
@@ -131,22 +131,22 @@ export default function useComment(params) {
     commentText.value = text;
 
     // Track mentions
-    mentions.value = extractMentions(text);;
-  
+    mentions.value = extractMentions(text);
+
     if (suppressUpdate) return;
 
     const emitData = {
       type: comments_module_events.UPDATE,
       changes: [{ key: 'text', value: text }],
-      comment: getValues()
+      comment: getValues(),
     };
     propagateUpdate(superdoc, emitData);
   };
 
   /**
    * Extract mentions from comment contents
-   * 
-   * @param {String} htmlString 
+   *
+   * @param {String} htmlString
    * @returns {Array[Object]} An array of unique mentions
    */
   const extractMentions = (htmlString) => {
@@ -168,7 +168,7 @@ export default function useComment(params) {
           name: span.getAttribute('name'),
           email: span.getAttribute('email'),
         });
-      };
+      }
     });
 
     return uniqueMentions;
@@ -176,34 +176,34 @@ export default function useComment(params) {
 
   /**
    * Update the selection bounds of this comment
-   * 
+   *
    * @param {Object} coords Object containing the selection bounds
    * @param {*} source Specifies the source of the selection bounds
    */
   const updatePosition = (coords, parentElement) => {
     selection.source = 'super-editor';
-    const parentTop = parentElement?.getBoundingClientRect()?.top
+    const parentTop = parentElement?.getBoundingClientRect()?.top;
 
     const newCoords = {
       top: coords.top - parentTop,
       left: coords.left,
       right: coords.right,
       bottom: coords.bottom - parentTop,
-    }
+    };
     selection.selectionBounds = newCoords;
   };
 
   const getCommentUser = () => {
     const user = importedAuthor.value
-      ? { name: importedAuthor.value.name || "(Imported)", email: importedAuthor.value.email }
+      ? { name: importedAuthor.value.name || '(Imported)', email: importedAuthor.value.email }
       : { name: creatorName, email: creatorEmail };
-  
+
     return user;
   };
 
   /**
    * Emit updates to the end client, and sync with collaboration if necessary
-   * 
+   *
    * @param {Object} superdoc The SuperDoc instance
    * @param {Object} event The data to emit to the client
    * @returns {void}
@@ -215,7 +215,7 @@ export default function useComment(params) {
 
   /**
    * Get the raw values of this comment
-   * 
+   *
    * @returns {Object} - The raw values of this comment
    */
   const getValues = () => {
@@ -282,4 +282,4 @@ export default function useComment(params) {
     updatePosition,
     getCommentUser,
   });
-};
+}

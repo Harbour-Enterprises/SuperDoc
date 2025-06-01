@@ -21,7 +21,6 @@ import { baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/base-l
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 
-
 /**
  * @typedef {Object} ExportParams
  * @property {Object} node JSON node to translate (from PM schema)
@@ -145,7 +144,7 @@ export function translateParagraphNode(params) {
   if (htmlAnnotationChild) {
     return htmlAnnotationChild.elements;
   }
-  
+
   // Insert paragraph properties at the beginning of the elements array
   const pPr = generateParagraphProperties(params.node);
   if (pPr) elements.unshift(pPr);
@@ -175,7 +174,7 @@ function generateParagraphProperties(node) {
 
   const { styleId } = attrs;
   if (styleId) pPrElements.push({ name: 'w:pStyle', attributes: { 'w:val': styleId } });
-  
+
   const { spacing, indent, textAlign, textIndent, lineHeight, marksAttrs, keepLines, keepNext, dropcap } = attrs;
   if (spacing) {
     const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
@@ -191,7 +190,7 @@ function generateParagraphProperties(node) {
     } else {
       if (lineHeight) attributes['w:line'] = linesToTwips(lineHeight);
     }
-    
+
     attributes['w:lineRule'] = lineRule || 'auto';
 
     const spacingElement = {
@@ -200,17 +199,17 @@ function generateParagraphProperties(node) {
     };
     pPrElements.push(spacingElement);
   }
-  
+
   if (lineHeight && !spacing) {
     const spacingElement = {
       name: 'w:spacing',
       attributes: {
-        'w:line': linesToTwips(lineHeight)
+        'w:line': linesToTwips(lineHeight),
       },
     };
     pPrElements.push(spacingElement);
   }
-  
+
   if (indent) {
     const { left, right, firstLine, hanging } = indent;
     const attributes = {};
@@ -222,7 +221,7 @@ function generateParagraphProperties(node) {
     if (textIndent && !attributes['w:left']) {
       attributes['w:left'] = inchesToTwips(textIndent);
     }
-    
+
     const indentElement = {
       name: 'w:ind',
       attributes,
@@ -231,8 +230,8 @@ function generateParagraphProperties(node) {
   } else if (textIndent) {
     const indentElement = {
       name: 'w:ind',
-      attributes: { 
-        'w:left': inchesToTwips(textIndent), 
+      attributes: {
+        'w:left': inchesToTwips(textIndent),
       },
     };
     pPrElements.push(indentElement);
@@ -245,13 +244,13 @@ function generateParagraphProperties(node) {
     };
     pPrElements.push(textAlignElement);
   }
-  
+
   if (marksAttrs) {
     const outputMarks = processOutputMarks(marksAttrs);
     const rPrElement = generateRunProps(outputMarks);
     pPrElements.push(rPrElement);
   }
-  
+
   if (keepLines) {
     pPrElements.push({
       name: 'w:keepLines',
@@ -269,7 +268,7 @@ function generateParagraphProperties(node) {
   if (dropcap) {
     pPrElements.push({
       name: 'w:framePr',
-      attributes: { 
+      attributes: {
         'w:dropCap': dropcap.type,
         'w:lines': dropcap.lines,
         'w:wrap': dropcap.wrap,
@@ -368,35 +367,41 @@ function translateChildNodes(params) {
  */
 const isolateAnnotations = (node) => {
   if (!node) return node;
-  const hasTextRun = node.elements?.some(item => item.name === 'w:r');
-  const hasSdtContent = node.elements?.some(item => item.name === 'w:sdt');
+  const hasTextRun = node.elements?.some((item) => item.name === 'w:r');
+  const hasSdtContent = node.elements?.some((item) => item.name === 'w:sdt');
 
-  const sdtNode = node.elements?.find(item => item.name === 'w:sdt');
-  const sdtPr = sdtNode?.elements?.find(item => item.name === 'w:sdtPr');
-  const hasAlias = sdtPr?.elements?.some(item => item.name === 'w:alias');
+  const sdtNode = node.elements?.find((item) => item.name === 'w:sdt');
+  const sdtPr = sdtNode?.elements?.find((item) => item.name === 'w:sdtPr');
+  const hasAlias = sdtPr?.elements?.some((item) => item.name === 'w:alias');
   if (!hasAlias) return node;
 
   let result = node;
   if (hasTextRun && hasSdtContent) {
-    const sdtNodes = node.elements.filter(item => item.name === 'w:sdt');
-    const otherNodes = node.elements.filter(item => item.name !== 'w:sdt');
-    const hasText = otherNodes.filter(item => item.name === 'w:r').every(item => {
-      const textElements = item.elements.filter(item => item.name === 'w:t');
-      return textElements?.every(item => item.elements[0].text.trim().length > 0);
-    });
+    const sdtNodes = node.elements.filter((item) => item.name === 'w:sdt');
+    const otherNodes = node.elements.filter((item) => item.name !== 'w:sdt');
+    const hasText = otherNodes
+      .filter((item) => item.name === 'w:r')
+      .every((item) => {
+        const textElements = item.elements.filter((item) => item.name === 'w:t');
+        return textElements?.every((item) => item.elements[0].text.trim().length > 0);
+      });
     result = [
-      ...(hasText ? [{
-        ...node,
-        elements: otherNodes,
-      }] : []),
+      ...(hasText
+        ? [
+            {
+              ...node,
+              elements: otherNodes,
+            },
+          ]
+        : []),
       {
         name: 'w:p',
         elements: sdtNodes,
-      }
+      },
     ];
   }
   return result;
-}
+};
 
 /**
  * Helper function to be used for text node translation
@@ -433,13 +438,13 @@ function getTextNodeForExport(text, marks, params) {
       });
 
       if (!isCustomMark) return;
-  
+
       let attrsString = '';
       Object.entries(mark.attrs).forEach(([key, value]) => {
         if (value) {
           attrsString += `${key}=${value};`;
         }
-      }); 
+      });
 
       if (isCustomMark) {
         textNodes.unshift({
@@ -448,16 +453,16 @@ function getTextNodeForExport(text, marks, params) {
           attributes: {
             'w:id': '5000',
             'w:name': mark.type + ';' + attrsString,
-          }
+          },
         });
         textNodes.push({
           type: 'element',
           name: 'w:bookmarkEnd',
           attributes: {
             'w:id': '5000',
-          }
+          },
         });
-      };
+      }
     });
   }
 
@@ -617,7 +622,7 @@ function translateLinkNode(params) {
   }
 
   node.marks = node.marks.filter((m) => m.type !== 'link');
-  
+
   const outputNode = exportSchemaToJson({ ...params, node });
   const contentNode = processLinkContentNode(outputNode);
 
@@ -660,10 +665,7 @@ function processLinkContentNode(node) {
       // we don't add underline by default
       const runProps = {
         name: 'w:rPr',
-        elements: [
-          hyperlinkStyle,
-          color,
-        ],
+        elements: [hyperlinkStyle, color],
       };
 
       contentNode.elements.unshift(runProps);
@@ -739,15 +741,15 @@ function translateList(params) {
     const attrsNumId = listNode.attrs.numId;
 
     const actualNumId = attrsNumId || listNode.listId;
-    const listId = actualNumId ?? generateNewListDefinition(params, listType);  
+    const listId = actualNumId ?? generateNewListDefinition(params, listType);
     const pPr = getListParagraphProperties(level, listId, additionalPprs);
-    
+
     content.forEach((contentNode, index) => {
       // Get paragraph attributes which were attached to list item node
       const paragraphNode = Object.assign({}, contentNode);
       paragraphNode.attrs = {
         ...paragraphNode.attrs,
-        ...listNode.attrs
+        ...listNode.attrs,
       };
 
       const outputNode = exportSchemaToJson({ ...params, node: paragraphNode });
@@ -759,14 +761,14 @@ function translateList(params) {
       if (!content.length) {
         // Apply initial properties to the empty nodes
         const elements = contentNode.attrs.paragraphProperties ? [contentNode.attrs.paragraphProperties] : [];
-        const spacer = { 
+        const spacer = {
           name: 'w:p',
           type: 'element',
-          elements
+          elements,
         };
         return listNodes.push(spacer);
       }
-      
+
       // pPr processing
       const { attributes: generalAttributes } = attrs;
       const { originalInlineRunProps } = generalAttributes || {};
@@ -776,7 +778,7 @@ function translateList(params) {
         outputNode.elements.unshift(carbonCopy(pPr));
       } else {
         // Check if there is any properties processed by translateParagraphNode
-        const resultProps = carbonCopy(pPr).elements.map(item => {
+        const resultProps = carbonCopy(pPr).elements.map((item) => {
           const isChanged = outputNode.elements[propsElementIndex].elements.find((e) => e.name === item.name);
           return isChanged ? isChanged : item;
         });
@@ -790,9 +792,9 @@ function translateList(params) {
           name: 'w:sz',
           attributes: { 'w:val': fontNoUnit * 2 },
         };
-      };
+      }
 
-      let importedFontFamily
+      let importedFontFamily;
       if (listNode.attrs?.importedFontFamily) {
         importedFontFamily = {
           name: 'w:rFonts',
@@ -819,7 +821,7 @@ function translateList(params) {
       listNodes.push(outputNode);
     });
   });
-  
+
   return listNodes;
 }
 
@@ -843,20 +845,18 @@ function generateNewListDefinition(params, listType) {
     name: 'w:num',
     attributes: {
       'w:numId': String(listId),
-      'w16cid:durableId': '485517411'
+      'w16cid:durableId': '485517411',
     },
-    elements: [
-      { name: 'w:abstractNumId', attributes: { 'w:val': String(abstractId) } },
-    ]
+    elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': String(abstractId) } }],
   };
 
   params.converter.numbering.definitions[listId] = newNumDef;
   return listId;
-};
+}
 
 /**
  * Get the largest list definition index
- * 
+ *
  * @param {Object} definitions The list definitions
  * @returns {number} The largest list definition index
  */
@@ -921,7 +921,7 @@ function flattenContent({ node }) {
         const { left, right, firstLine, hanging } = indent;
         const indentAttrs = {};
         if (left !== undefined) indentAttrs['w:left'] = pixelsToTwips(left);
-        if (right!== undefined) indentAttrs['w:right'] = pixelsToTwips(right);
+        if (right !== undefined) indentAttrs['w:right'] = pixelsToTwips(right);
         if (firstLine !== undefined) indentAttrs['w:firstLine'] = pixelsToTwips(firstLine);
         if (hanging !== undefined) indentAttrs['w:hanging'] = pixelsToTwips(hanging);
 
@@ -1132,7 +1132,7 @@ function generateTableBorders(node) {
   borderTypes.forEach((type) => {
     const border = borders[type];
     if (!border) return;
-    
+
     let attributes = {};
     if (!Object.keys(border).length || !border.size) {
       attributes = {
@@ -1144,12 +1144,12 @@ function generateTableBorders(node) {
         'w:sz': pixelsToEightPoints(border.size),
         'w:space': border.space || 0,
         'w:color': border?.color?.substring(1) || '000000',
-      }
+      };
     }
-    
+
     const borderElement = {
       name: `w:${type}`,
-      attributes
+      attributes,
     };
     elements.push(borderElement);
   });
@@ -1174,13 +1174,10 @@ function generateTableGrid(node, params) {
   try {
     const pmNode = editorSchema.nodeFromJSON(node);
     const cellMinWidth = 25;
-    const { colgroupValues } = createColGroup(
-      pmNode,
-      cellMinWidth,
-    );
+    const { colgroupValues } = createColGroup(pmNode, cellMinWidth);
 
     colgroup = colgroupValues;
-  } catch(err) {
+  } catch (err) {
     colgroup = [];
   }
 
@@ -1191,7 +1188,7 @@ function generateTableGrid(node, params) {
       attributes: { 'w:w': pixelsToTwips(width) },
     });
   });
-  
+
   return {
     name: 'w:tblGrid',
     elements,
@@ -1248,9 +1245,9 @@ function translateTableCell(params) {
     ...params,
     tableCell: params.node,
   });
-  
+
   const cellProps = generateTableCellProperties(params.node);
-  
+
   elements.unshift(cellProps);
   return {
     name: 'w:tc',
@@ -1273,7 +1270,10 @@ function generateTableCellProperties(node) {
 
   const cellWidthElement = {
     name: 'w:tcW',
-    attributes: { 'w:w': widthUnit === 'px' ? pixelsToTwips(colwidthSum) : inchesToTwips(colwidthSum), 'w:type': cellWidthType },
+    attributes: {
+      'w:w': widthUnit === 'px' ? pixelsToTwips(colwidthSum) : inchesToTwips(colwidthSum),
+      'w:type': cellWidthType,
+    },
   };
   elements.push(cellWidthElement);
 
@@ -1311,10 +1311,10 @@ function generateTableCellProperties(node) {
     };
     elements.push(vertAlignElement);
   }
-  
+
   // const { vMerge } = attrs;
   // if (vMerge) {}
-   if (rowspan && rowspan > 1) {
+  if (rowspan && rowspan > 1) {
     const vMergeElement = {
       name: 'w:vMerge',
       type: 'element',
@@ -1339,7 +1339,7 @@ function generateTableCellProperties(node) {
             name: `w:${key}`,
             attributes: {
               'w:val': 'nil',
-            }
+            },
           };
         }
         return {
@@ -1471,7 +1471,7 @@ function translateMark(mark) {
     case 'link':
       break;
   }
-  
+
   return markElement;
 }
 
@@ -1483,17 +1483,17 @@ function getPngDimensions(base64) {
     return {
       originalWidth: undefined,
       originalHeight: undefined,
-    }
+    };
   }
-  
-  let header = base64.split(',')[1].slice(0, 50)
-  let uint8 = Uint8Array.from(atob(header), c => c.charCodeAt(0))
-  let dataView = new DataView(uint8.buffer, 0, 28)
+
+  let header = base64.split(',')[1].slice(0, 50);
+  let uint8 = Uint8Array.from(atob(header), (c) => c.charCodeAt(0));
+  let dataView = new DataView(uint8.buffer, 0, 28);
 
   return {
     originalWidth: dataView.getInt32(16),
-    originalHeight: dataView.getInt32(20)
-  }
+    originalHeight: dataView.getInt32(20),
+  };
 }
 
 function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
@@ -1517,15 +1517,16 @@ function translateImageNode(params, imageSize) {
   } = params;
 
   let imageId = attrs.rId;
-  
+
   const src = attrs.src || attrs.imageSrc;
   const { originalWidth, originalHeight } = getPngDimensions(src);
-  
+
   let size = attrs.size
     ? {
-      w: pixelsToEmu(attrs.size.width),
-      h: pixelsToEmu(attrs.size.height),
-    } : imageSize;
+        w: pixelsToEmu(attrs.size.width),
+        h: pixelsToEmu(attrs.size.height),
+      }
+    : imageSize;
 
   if (originalWidth && originalHeight) {
     const boxWidthPx = emuToPixels(size.w);
@@ -1536,7 +1537,7 @@ function translateImageNode(params, imageSize) {
       h: pixelsToEmu(scaledHeight),
     };
   }
-  
+
   if (tableCell) {
     // Image inside tableCell
     const colwidthSum = tableCell.attrs.colwidth.reduce((acc, curr) => acc + curr, 0);
@@ -1546,7 +1547,7 @@ function translateImageNode(params, imageSize) {
     const { width: w, height: h } = resizeKeepAspectRatio(size.w, size.h, maxWidthEmu);
     if (w && h) size = { w, h };
   }
-  
+
   if (params.node.type === 'image' && !imageId) {
     const path = src?.split('word/')[1];
     imageId = addNewImageRelationship(params, path);
@@ -1555,7 +1556,7 @@ function translateImageNode(params, imageSize) {
     if (!type) {
       return prepareTextAnnotation(params);
     }
-    
+
     const hash = generateDocxRandomId(4);
     const cleanUrl = attrs.fieldId.replace('-', '_');
     const imageUrl = `media/${cleanUrl}_${hash}.${type}`;
@@ -1573,7 +1574,7 @@ function translateImageNode(params, imageSize) {
 
   const anchorElements = [];
   let wrapProp = [];
-  
+
   // Handle anchor image export
   if (attrs.isAnchor) {
     inlineAttrs = {
@@ -1591,7 +1592,7 @@ function translateImageNode(params, imageSize) {
         attributes: {
           x: 0,
           y: 0,
-        }
+        },
       });
     }
 
@@ -1602,23 +1603,31 @@ function translateImageNode(params, imageSize) {
           relativeFrom: attrs.anchorData.hRelativeFrom,
         },
         ...(attrs.marginOffset.left && {
-          elements: [{
-            name: 'wp:posOffset',
-            elements: [{
-              type: 'text',
-              text: pixelsToEmu(attrs.marginOffset.left).toString(),
-            }],
-          }]
+          elements: [
+            {
+              name: 'wp:posOffset',
+              elements: [
+                {
+                  type: 'text',
+                  text: pixelsToEmu(attrs.marginOffset.left).toString(),
+                },
+              ],
+            },
+          ],
         }),
         ...(attrs.anchorData.alignH && {
-          elements: [{
-            name: 'wp:align',
-            elements: [{
-              type: 'text',
-              text: attrs.anchorData.alignH,
-            }],
-          }]
-        })
+          elements: [
+            {
+              name: 'wp:align',
+              elements: [
+                {
+                  type: 'text',
+                  text: attrs.anchorData.alignH,
+                },
+              ],
+            },
+          ],
+        }),
       });
       anchorElements.push({
         name: 'wp:positionV',
@@ -1626,32 +1635,40 @@ function translateImageNode(params, imageSize) {
           relativeFrom: attrs.anchorData.vRelativeFrom,
         },
         ...(attrs.marginOffset.top && {
-          elements: [{
-            name: 'wp:posOffset',
-            elements: [{
-              type: 'text',
-              text: pixelsToEmu(attrs.marginOffset.top).toString(),
-            }],
-          }]
+          elements: [
+            {
+              name: 'wp:posOffset',
+              elements: [
+                {
+                  type: 'text',
+                  text: pixelsToEmu(attrs.marginOffset.top).toString(),
+                },
+              ],
+            },
+          ],
         }),
         ...(attrs.anchorData.alignV && {
-          elements: [{
-            name: 'wp:align',
-            elements: [{
-              type: 'text',
-              text: attrs.anchorData.alignV,
-            }],
-          }]
-        })
+          elements: [
+            {
+              name: 'wp:align',
+              elements: [
+                {
+                  type: 'text',
+                  text: attrs.anchorData.alignV,
+                },
+              ],
+            },
+          ],
+        }),
       });
     }
-    
+
     if (attrs.wrapText) {
       wrapProp.push({
         name: 'wp:wrapSquare',
         attributes: {
           wrapText: attrs.wrapText,
-        }
+        },
       });
     }
 
@@ -1664,8 +1681,8 @@ function translateImageNode(params, imageSize) {
 
   const drawingXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
   const pictureXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-  
-  const textNode =  wrapTextInRun(
+
+  const textNode = wrapTextInRun(
     {
       name: 'w:drawing',
       elements: [
@@ -1793,8 +1810,8 @@ function translateImageNode(params, imageSize) {
                               elements: [{ name: 'a:avLst' }],
                             },
                             {
-                              name: 'a:noFill'
-                            }
+                              name: 'a:noFill',
+                            },
                           ],
                         },
                       ],
@@ -1809,7 +1826,7 @@ function translateImageNode(params, imageSize) {
     },
     [],
   );
-  
+
   return textNode;
 }
 
@@ -1857,7 +1874,7 @@ function prepareHtmlAnnotation(params) {
   const parser = new window.DOMParser();
   const paragraphHtml = parser.parseFromString(attrs.rawHtml || attrs.displayLabel, 'text/html');
   const marksFromAttrs = translateFieldAttrsToMarks(attrs);
-  const allMarks = [...marks, ...marksFromAttrs]
+  const allMarks = [...marks, ...marksFromAttrs];
 
   let state = EditorState.create({
     doc: PMDOMParser.fromSchema(editorSchema).parse(paragraphHtml),
@@ -1944,15 +1961,7 @@ function getTranslationByAnnotationType(annotationType) {
 }
 
 const translateFieldAttrsToMarks = (attrs = {}) => {
-  const {
-    fontFamily,
-    fontSize,
-    bold,
-    underline,
-    italic,
-    textColor,
-    textHighlight,
-  } = attrs;
+  const { fontFamily, fontSize, bold, underline, italic, textColor, textHighlight } = attrs;
 
   const marks = [];
   if (fontFamily) marks.push({ type: 'fontFamily', attrs: { fontFamily } });
@@ -1979,7 +1988,7 @@ function translateFieldAnnotation(params) {
 
   let processedNode;
   let sdtContentElements;
-  
+
   if (isFinalDoc) {
     return annotationHandler(params);
   } else {
@@ -2064,7 +2073,7 @@ function translateFieldAnnotation(params) {
       },
     ],
   };
-};
+}
 
 export function translateHardBreak(params) {
   const { node = {} } = params;
@@ -2074,11 +2083,13 @@ export function translateHardBreak(params) {
 
   return {
     name: 'w:r',
-    elements: [{
-      name: 'w:br',
-      type: 'element',
-      attributes: { 'w:type': 'page' }
-    }]
+    elements: [
+      {
+        name: 'w:br',
+        type: 'element',
+        attributes: { 'w:type': 'page' },
+      },
+    ],
   };
 }
 
@@ -2094,21 +2105,21 @@ function translateShapeContainer(params) {
     },
     elements: [
       ...elements,
-      ...(
-        node.attrs.wrapAttributes
-        ? [{
-            name: 'w10:wrap',
-            attributes: { ...node.attrs.wrapAttributes },
-          }] 
-        : []
-      ),
+      ...(node.attrs.wrapAttributes
+        ? [
+            {
+              name: 'w10:wrap',
+              attributes: { ...node.attrs.wrapAttributes },
+            },
+          ]
+        : []),
     ],
   };
 
   const pict = {
     name: 'w:pict',
     attributes: {
-      'w14:anchorId':  Math.floor(Math.random() * 0xffffffff).toString(),
+      'w14:anchorId': Math.floor(Math.random() * 0xffffffff).toString(),
     },
     elements: [shape],
   };
@@ -2117,7 +2128,7 @@ function translateShapeContainer(params) {
     name: 'w:p',
     elements: [wrapTextInRun(pict)],
   };
-  
+
   return par;
 }
 
@@ -2147,13 +2158,7 @@ function translateContentBlock(params) {
 
   const drawing = {
     name: 'w:drawing',
-    elements: [
-      ...(
-        drawingContent
-        ? [...(drawingContent.elements || [])]
-        : []
-      )
-    ],
+    elements: [...(drawingContent ? [...(drawingContent.elements || [])] : [])],
   };
 
   const choice = {
@@ -2198,10 +2203,7 @@ export class DocxExporter {
 
   #replaceSpecialCharacters(text) {
     if (!text) return;
-    return text.replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
   #generateXml(node, debug = false) {
@@ -2212,7 +2214,8 @@ export class DocxExporter {
     let tag = `<${name}`;
 
     for (let attr in attributes) {
-      const parsedAttrName = typeof attributes[attr] === 'string' ? this.#replaceSpecialCharacters(attributes[attr]) : attributes[attr];
+      const parsedAttrName =
+        typeof attributes[attr] === 'string' ? this.#replaceSpecialCharacters(attributes[attr]) : attributes[attr];
       tag += ` ${attr}="${parsedAttrName}"`;
     }
 
@@ -2242,9 +2245,9 @@ export class DocxExporter {
           }
 
           const removeUndefined = newElements.filter((el) => {
-            return el !== '<undefined>' && el !== '</undefined>'
+            return el !== '<undefined>' && el !== '</undefined>';
           });
-        
+
           tags.push(...removeUndefined);
         }
       }
@@ -2254,7 +2257,6 @@ export class DocxExporter {
     return tags;
   }
 }
-
 
 function resizeKeepAspectRatio(width, height, maxWidth) {
   if (width > maxWidth) {
@@ -2269,9 +2271,7 @@ function applyMarksToHtmlAnnotation(state, marks) {
   const { tr, doc, schema } = state;
   const allowedMarks = ['fontFamily', 'fontSize', 'highlight'];
 
-  if (
-    !marks.some((m) => allowedMarks.includes(m.type))
-  ) {
+  if (!marks.some((m) => allowedMarks.includes(m.type))) {
     return state;
   }
 
@@ -2287,35 +2287,51 @@ function applyMarksToHtmlAnnotation(state, marks) {
 
     const foundTextStyle = node.marks.find((m) => m.type.name === 'textStyle');
     const foundHighlight = node.marks.find((m) => m.type.name === 'highlight');
-    
+
     // text style (fontFamily, fontSize)
     if (!foundTextStyle) {
-      tr.addMark(pos, pos + node.nodeSize, textStyleType.create({
-        ...fontFamily?.attrs,
-        ...fontSize?.attrs,
-      }));
+      tr.addMark(
+        pos,
+        pos + node.nodeSize,
+        textStyleType.create({
+          ...fontFamily?.attrs,
+          ...fontSize?.attrs,
+        }),
+      );
     } else if (!foundTextStyle?.attrs.fontFamily && fontFamily) {
-      tr.addMark(pos, pos + node.nodeSize, textStyleType.create({
-        ...foundTextStyle?.attrs,
-        ...fontFamily.attrs,
-      }));
+      tr.addMark(
+        pos,
+        pos + node.nodeSize,
+        textStyleType.create({
+          ...foundTextStyle?.attrs,
+          ...fontFamily.attrs,
+        }),
+      );
     } else if (!foundTextStyle?.attrs.fontSize && fontSize) {
-      tr.addMark(pos, pos + node.nodeSize, textStyleType.create({
-        ...foundTextStyle?.attrs,
-        ...fontSize.attrs,
-      }));
+      tr.addMark(
+        pos,
+        pos + node.nodeSize,
+        textStyleType.create({
+          ...foundTextStyle?.attrs,
+          ...fontSize.attrs,
+        }),
+      );
     }
 
     // highlight
     if (!foundHighlight) {
-      tr.addMark(pos, pos + node.nodeSize, highlightType.create({
-        ...highlight?.attrs,
-      }));
+      tr.addMark(
+        pos,
+        pos + node.nodeSize,
+        highlightType.create({
+          ...highlight?.attrs,
+        }),
+      );
     }
   });
 
   return state.apply(tr);
-};
+}
 
 function translateStructuredContent(params) {
   const { node } = params;
@@ -2330,10 +2346,10 @@ function translateStructuredContent(params) {
       elements: childContent,
     },
   ];
-  nodeElements.unshift(attrs.sdtPr)
+  nodeElements.unshift(attrs.sdtPr);
 
   return {
     name: 'w:sdt',
     elements: nodeElements,
   };
-};
+}

@@ -17,19 +17,17 @@ export const TableHeader = Node.create({
 
   addAttributes() {
     return {
-      colspan: { 
-        default: 1, 
+      colspan: {
+        default: 1,
       },
-      rowspan: { 
-        default: 1, 
+      rowspan: {
+        default: 1,
       },
       colwidth: {
         default: null,
         parseDOM: (element) => {
           const colwidth = element.getAttribute('data-colwidth');
-          const value = colwidth
-            ? colwidth.split(',').map((width) => parseInt(width, 10))
-            : null;
+          const value = colwidth ? colwidth.split(',').map((width) => parseInt(width, 10)) : null;
           return value;
         },
         renderDOM: (attrs) => {

@@ -14,22 +14,21 @@ export const handleSdtNode = (params) => {
   const sdtContent = node.elements.find((el) => el.name === 'w:sdtContent');
   const { marks } = parseAnnotationMarks(sdtContent);
 
-  const translatedContent = nodeListHandler.handler({ ...params, nodes: sdtContent?.elements })
-  
+  const translatedContent = nodeListHandler.handler({ ...params, nodes: sdtContent?.elements });
+
   let result = {
     type: 'structuredContent',
     content: translatedContent,
     marks,
     attrs: {
       sdtPr,
-    }
+    },
   };
-  
+
   return {
     nodes: [result],
     consumed: 1,
   };
-
 };
 
 /**

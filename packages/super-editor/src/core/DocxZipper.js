@@ -50,7 +50,6 @@ class DocxZipper {
           content,
         });
       } else if (zipEntry.name.startsWith('word/media') && zipEntry.name !== 'word/media/') {
-
         // If we are in node, we need to convert the buffer to base64
         if (isNode) {
           const buffer = await zipEntry.async('nodebuffer');
@@ -107,37 +106,45 @@ class DocxZipper {
       typesString += newContentType;
       seenTypes.add(type);
     }
-  
+
     // Update for comments
     const xmlJson = JSON.parse(xmljs.xml2json(contentTypesXml, null, 2));
     const types = xmlJson.elements?.find((el) => el.name === 'Types') || {};
 
     // Overrides
-    const hasComments = types.elements?.some((el) => el.name === 'Override' && el.attributes.PartName === '/word/comments.xml');
-    const hasCommentsExtended = types.elements?.some((el) => el.name === 'Override' && el.attributes.PartName === '/word/commentsExtended.xml');
-    const hasCommentsIds = types.elements?.some((el) => el.name === 'Override' && el.attributes.PartName === '/word/commentsIds.xml');
-    const hasCommentsExtensible = types.elements?.some((el) => el.name === 'Override' && el.attributes.PartName === '/word/commentsExtensible.xml');
-    
+    const hasComments = types.elements?.some(
+      (el) => el.name === 'Override' && el.attributes.PartName === '/word/comments.xml',
+    );
+    const hasCommentsExtended = types.elements?.some(
+      (el) => el.name === 'Override' && el.attributes.PartName === '/word/commentsExtended.xml',
+    );
+    const hasCommentsIds = types.elements?.some(
+      (el) => el.name === 'Override' && el.attributes.PartName === '/word/commentsIds.xml',
+    );
+    const hasCommentsExtensible = types.elements?.some(
+      (el) => el.name === 'Override' && el.attributes.PartName === '/word/commentsExtensible.xml',
+    );
+
     if (docx.files['word/comments.xml']) {
       const commentsDef = `<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml" />`;
       if (!hasComments) typesString += commentsDef;
-    };
-  
+    }
+
     if (docx.files['word/commentsExtended.xml']) {
       const commentsExtendedDef = `<Override PartName="/word/commentsExtended.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml" />`;
       if (!hasCommentsExtended) typesString += commentsExtendedDef;
-    };
+    }
 
     if (docx.files['word/commentsIds.xml']) {
       const commentsIdsDef = `<Override PartName="/word/commentsIds.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml" />`;
       if (!hasCommentsIds) typesString += commentsIdsDef;
-    };
+    }
 
     if (docx.files['word/commentsExtensible.xml']) {
       const commentsExtendedDef = `<Override PartName="/word/commentsExtensible.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml" />`;
       if (!hasCommentsExtensible) typesString += commentsExtendedDef;
-    };
-  
+    }
+
     const beginningString = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
     const updatedContentTypesXml = contentTypesXml.replace(beginningString, `${beginningString}${typesString}`);
 
@@ -177,7 +184,7 @@ class DocxZipper {
     for (const file of docx) {
       const content = file.content;
       zip.file(file.name, content);
-    };
+    }
 
     // Replace updated docs
     Object.keys(updatedDocs).forEach((key) => {

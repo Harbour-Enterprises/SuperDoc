@@ -43,4 +43,3 @@ export const autoTotalPageCountEntity = {
   handlerName: 'autoTotalPageCountEntity',
   handler: handleAutoTotalPageNumber,
 };
-

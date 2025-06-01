@@ -17,7 +17,7 @@ export const EditorFocus = Extension.create({
         handleDOMEvents: {
           focus: (view, event) => {
             editor.isFocused = true;
-            
+
             const tr = editor.state.tr.setMeta('focus', { event }).setMeta('addToHistory', false);
 
             view.dispatch(tr);

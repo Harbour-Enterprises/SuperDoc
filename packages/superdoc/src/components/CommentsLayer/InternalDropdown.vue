@@ -68,9 +68,12 @@ const handleSelect = (key, suppressEmit = false) => {
 const activeState = ref(props.state);
 const activeIcon = ref(null);
 
-watch(() => props.state, (newVal) => {
-  handleSelect(newVal);
-});
+watch(
+  () => props.state,
+  (newVal) => {
+    handleSelect(newVal);
+  },
+);
 
 onMounted(() => {
   handleSelect(props.state, true);

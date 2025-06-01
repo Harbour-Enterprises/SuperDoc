@@ -45,8 +45,8 @@ const readFilesRecursively = (xmlFiles) => {
 
 /**
  * Get test data for editor tests
- * 
- * @param {string} filename 
+ *
+ * @param {string} filename
  * @returns {Promise<[Object, Object, Object, Object]>}
  */
 export const loadTestDataForEditorTests = async (filename) => {
@@ -57,7 +57,7 @@ export const loadTestDataForEditorTests = async (filename) => {
 
 /**
  * Instantiate a new test editor instance
- * 
+ *
  * @param {Object} options Editor options
  * @returns {Editor} A new test editor instance
  */
@@ -70,22 +70,22 @@ export const initTestEditor = (options = {}) => {
     isHeadless: true,
     extensions: getStarterExtensions(),
     users: [],
-    ...options
+    ...options,
   });
   return {
     editor,
-    dispatch: editor.view.dispatch
-  }
+    dispatch: editor.view.dispatch,
+  };
 };
 
 /**
  * Get a new transaction from an editor instance
- * 
- * @param {Editor} editor 
+ *
+ * @param {Editor} editor
  * @returns {Transaction} A new transaction instance
  */
 export const getNewTransaction = (editor) => {
   const { view } = editor;
   const { state, dispatch } = view;
   return state.tr;
-}
+};

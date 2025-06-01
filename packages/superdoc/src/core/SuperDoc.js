@@ -13,11 +13,7 @@ import { createSuperdocVueApp } from './create-app.js';
 import { shuffleArray } from '@harbour-enterprises/common/collaboration/awareness.js';
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
 import { createDownload, cleanName } from './helpers/export.js';
-import {
-  initSuperdocYdoc,
-  initCollaborationComments,
-  makeDocumentsCollaborative,
-} from './collaboration/helpers.js';
+import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative } from './collaboration/helpers.js';
 
 /**
  * @typedef {Object} User The current user of this superdoc
@@ -113,7 +109,7 @@ import {
 /**
  * SuperDoc class
  * Expects a config object
- * 
+ *
  * @class
  * @extends EventEmitter
  */
@@ -129,7 +125,7 @@ export class SuperDoc extends EventEmitter {
 
   /** @type {import('yjs').Doc | undefined} */
   ydoc;
-  
+
   /** @type {import('@hocuspocus/provider').HocuspocusProvider | undefined} */
   provider;
 
@@ -267,7 +263,7 @@ export class SuperDoc extends EventEmitter {
     const hasListOfDocuments = this.config.documents && this.config.documents?.length;
     if (hasDocumentConfig && hasListOfDocuments) {
       console.warn('🦋 [superdoc] You can only provide one of document or documents');
-    };
+    }
 
     if (hasDocumentConfig) {
       this.config.documents = [this.config.document];
@@ -346,7 +342,7 @@ export class SuperDoc extends EventEmitter {
 
     // Initialize collaboration for documents
     return makeDocumentsCollaborative(this);
-  };
+  }
 
   /**
    * Add a user to the shared users list
@@ -440,10 +436,10 @@ export class SuperDoc extends EventEmitter {
 
   /**
    * Triggered when the comments sidebar is toggled
-   * @param {boolean} isOpened 
+   * @param {boolean} isOpened
    */
   broadcastSidebarToggle(isOpened) {
-    this.emit('sidebar-toggle', isOpened); 
+    this.emit('sidebar-toggle', isOpened);
   }
 
   log(...args) {
@@ -462,7 +458,7 @@ export class SuperDoc extends EventEmitter {
 
   /**
    * Toggle the ruler visibility for SuperEditors
-   * 
+   *
    * @returns {void}
    */
   toggleRuler() {
@@ -480,7 +476,7 @@ export class SuperDoc extends EventEmitter {
     const config = {
       selector: this.toolbarElement || null,
       isDev: this.isDev || false,
-      toolbarGroups:  this.config.modules?.toolbar?.groups || this.config.toolbarGroups,
+      toolbarGroups: this.config.modules?.toolbar?.groups || this.config.toolbarGroups,
       role: this.config.role,
       pagination: this.config.pagination,
       icons: this.config.modules?.toolbar?.icons || this.config.toolbarIcons,
@@ -501,7 +497,7 @@ export class SuperDoc extends EventEmitter {
     this.toolbar.on('ai-highlight', ({ type, data }) => {
       this.emit('ai-highlight', { type, data });
     });
-    this.once('editorCreate', () => this.toolbar.updateToolbarState()); 
+    this.once('editorCreate', () => this.toolbar.updateToolbarState());
   }
 
   /**
@@ -515,7 +511,7 @@ export class SuperDoc extends EventEmitter {
     console.debug('🦋 [superdoc] Adding comments list to:', element);
     if (element) this.config.modules.comments.element = element;
     this.commentsList = new SuperComments(this.config.modules?.comments, this);
-    if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: true })
+    if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: true });
   }
 
   /**
@@ -526,7 +522,7 @@ export class SuperDoc extends EventEmitter {
     if (this.commentsList) {
       this.commentsList.close();
       this.commentsList = null;
-      if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: false })
+      if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: false });
     }
   }
 
@@ -580,7 +576,7 @@ export class SuperDoc extends EventEmitter {
     if (this.toolbar) {
       this.toolbar.documentMode = 'editing';
       this.toolbar.updateToolbarState();
-    }   
+    }
   }
 
   #setModeSuggesting() {
@@ -609,7 +605,7 @@ export class SuperDoc extends EventEmitter {
       const editor = doc.getEditor();
       if (editor) editor.setDocumentMode('viewing');
     });
-    
+
     if (this.toolbar) {
       this.toolbar.documentMode = 'viewing';
       this.toolbar.updateToolbarState();
@@ -716,14 +712,14 @@ export class SuperDoc extends EventEmitter {
       const zip = await createZip(blobsToZip, filenames);
       createDownload(zip, baseFileName, 'zip');
     }
-  };
+  }
 
   /**
    * Export editors to DOCX format.
    * @param {{ commentsType?: string, isFinalDoc?: boolean }} [options]
    * @returns {Promise<Array<Blob>>}
    */
-  async exportEditorsToDOCX({ commentsType, isFinalDoc } = {}) {    
+  async exportEditorsToDOCX({ commentsType, isFinalDoc } = {}) {
     const comments = [];
     if (commentsType !== 'clean') {
       comments.push(...this.commentsStore?.translateCommentsForExport());
@@ -737,7 +733,7 @@ export class SuperDoc extends EventEmitter {
       }
     });
     return await Promise.all(docxPromises);
-  };
+  }
 
   /**
    * Request an immediate save from all collaboration documents
@@ -804,13 +800,13 @@ export class SuperDoc extends EventEmitter {
       if (doc.provider) {
         doc.provider.disconnect();
         doc.provider.destroy();
-      };
+      }
 
       // Destroy the ydoc
       doc.ydoc?.destroy();
     });
 
-    this.superdocStore.reset();;
+    this.superdocStore.reset();
 
     this.app.unmount();
     this.removeAllListeners();

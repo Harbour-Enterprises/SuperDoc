@@ -22,7 +22,7 @@ const onTableGridMouseOver = (event) => {
 
   selectedCols.value = cols;
   selectedRows.value = rows;
-  
+
   for (let i = 0; i < allItems.length; i++) {
     let item = allItems[i];
     let itemsCols = parseInt(item.dataset.cols, 10);
@@ -45,20 +45,19 @@ const handleClick = ({ cols, rows }) => {
   <div class="toolbar-table-grid-wrapper">
     <div class="toolbar-table-grid" @mouseover="onTableGridMouseOver" data-grid="true">
       <template v-for="i in 5" :key="i">
-        <div class="toolbar-table-grid__item" 
-          v-for="n in 5" 
-          :key="`${i}_${n}`" 
-          :data-cols="n" 
-          :data-rows="i" 
+        <div
+          class="toolbar-table-grid__item"
+          v-for="n in 5"
+          :key="`${i}_${n}`"
+          :data-cols="n"
+          :data-rows="i"
           data-item="true"
-          @click.stop.prevent="handleClick({ cols: n, rows: i })">
-        </div>
+          @click.stop.prevent="handleClick({ cols: n, rows: i })"
+        ></div>
       </template>
     </div>
 
-    <div class="toolbar-table-grid-value">
-      {{ selectedRows }} x {{ selectedCols }}
-    </div>
+    <div class="toolbar-table-grid-value">{{ selectedRows }} x {{ selectedCols }}</div>
   </div>
 </template>
 
@@ -76,7 +75,7 @@ const handleClick = ({ cols, rows }) => {
   height: 20px;
   border: 1px solid #d3d3d3;
   cursor: pointer;
-  transition: all .15s;
+  transition: all 0.15s;
 }
 
 .toolbar-table-grid__item.selected {

@@ -22,7 +22,7 @@ const handleAlternateChoice = (params) => {
   const allowedNamespaces = ['wps', 'wp14', 'w14', 'w15'];
 
   const wpsNode = altChoiceNode.elements.find(
-    (el) => el.name === 'mc:Choice' && allowedNamespaces.includes(el.attributes['Requires'])
+    (el) => el.name === 'mc:Choice' && allowedNamespaces.includes(el.attributes['Requires']),
   );
 
   if (!wpsNode) {

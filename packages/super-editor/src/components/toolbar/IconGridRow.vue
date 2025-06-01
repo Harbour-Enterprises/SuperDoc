@@ -42,18 +42,14 @@ onMounted(() => {
       :key="optionIndex"
       @click.stop.prevent="handleClick(option)"
     >
-      <div
-        class="option__icon"
-        v-html="option.icon"
-        :style="option.style">
-      </div>
+      <div class="option__icon" v-html="option.icon" :style="option.style"></div>
 
       <div
         v-if="isActive(option)"
         class="option__check"
         v-html="toolbarIcons.colorOptionCheck"
-        :style="getCheckStyle(option.value, optionIndex)">
-      </div>
+        :style="getCheckStyle(option.value, optionIndex)"
+      ></div>
     </div>
   </div>
 </template>

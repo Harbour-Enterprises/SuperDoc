@@ -6,7 +6,6 @@ const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
 };
 
-
 export const makeColorOption = (color, label = null) => {
   return {
     label,
@@ -36,7 +35,7 @@ export const renderColorOptions = (superToolbar, button, customIcons = [], hasNo
       onSelect: handleSelect,
     }),
   ]);
-}
+};
 
 const icons = [
   [
@@ -122,4 +121,4 @@ const icons = [
 
 export const getAvailableColorOptions = () => {
   return icons.flat().map((item) => item.value);
-}
+};

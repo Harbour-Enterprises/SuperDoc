@@ -3,10 +3,10 @@ import { fieldAnnotationHelpers } from '@extensions/index.js';
 
 /**
  * Get the field attributes based on the field type and value
- * 
+ *
  * @param {Object} field The field node
  * @param {Object} value The value we want to annotate the field with
- * @returns 
+ * @returns
  */
 export const getFieldAttrs = (field, value, input) => {
   const { type } = field.attrs;
@@ -18,7 +18,7 @@ export const getFieldAttrs = (field, value, input) => {
     link: annotateLink,
     yesno: annotateYesNo,
     date: annotateDate,
-  }
+  };
 
   const handler = annotatorHandlers[type];
   if (!handler) return {};
@@ -44,16 +44,16 @@ const annotateLink = (value) => {
 
 const annotateYesNo = (value) => {
   const yesNoValues = {
-    'YES': 'Yes',
-    'NO': 'No',
-  }
+    YES: 'Yes',
+    NO: 'No',
+  };
   const parsedValue = yesNoValues[value[0].toUpperCase()];
   return { displayLabel: parsedValue };
 };
 
 /**
  * Pre-process tables in the document to generate rows from annotations if necessary
- * 
+ *
  * @param {Object} param0 The editor instance and annotation values
  * @param {Object} param0.editor The editor instance
  * @param {Array} param0.annotationValues The annotation values to process
@@ -83,7 +83,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, editor }) =
     tableRow: RowType,
     tableCell: CellType,
     fieldAnnotation: FieldType,
-    paragraph: ParaType
+    paragraph: ParaType,
   } = editor.schema.nodes;
 
   // Find the row with fieldAnnotations that are arrays
@@ -131,7 +131,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, editor }) =
         return FieldType.create(
           { ...inlineNode.attrs, ...extraAttrs, generatorIndex: rowIndex },
           inlineNode.content,
-          inlineNode.marks
+          inlineNode.marks,
         );
       });
 
@@ -155,18 +155,11 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, editor }) =
   tr.delete(mappedDeleteStart - 1, mappedDeleteEnd + 1);
 };
 
-
 const getAnnotationValue = (id, annotationValues) => {
   return annotationValues.find((value) => value.input_id === id)?.input_value || null;
 };
 
-export const annotateDocument = ({
-  annotationValues = [],
-  hiddenFieldIds = [],
-  schema,
-  tr,
-}) => {
-
+export const annotateDocument = ({ annotationValues = [], hiddenFieldIds = [], schema, tr }) => {
   const annotations = [];
   const FieldType = schema.nodes.fieldAnnotation;
   tr.doc.descendants((node, pos) => {
@@ -191,14 +184,11 @@ export const annotateDocument = ({
     if (toDelete.has(pos)) continue;
 
     let newValue = null;
-    const input = annotationValues.find(i => i.input_id === fieldId);
+    const input = annotationValues.find((i) => i.input_id === fieldId);
 
     if (!input) {
-      const checkboxInputs = annotationValues.filter(
-        i => i.input_field_type === 'CHECKBOXINPUT'
-      );
-      inputsLoop:
-      for (const cb of checkboxInputs) {
+      const checkboxInputs = annotationValues.filter((i) => i.input_field_type === 'CHECKBOXINPUT');
+      inputsLoop: for (const cb of checkboxInputs) {
         for (const opt of cb.input_options) {
           if (opt.itemid === fieldId) {
             newValue = cb.input_link_value[opt.itemid] || ' ';
@@ -215,8 +205,7 @@ export const annotateDocument = ({
     }
 
     if (type === 'checkbox' || fieldType === 'CHECKBOXINPUT') {
-      const isEmptyOrSquare = !newValue
-        || (typeof newValue === 'string' && newValue.codePointAt(0) === 0x2610);
+      const isEmptyOrSquare = !newValue || (typeof newValue === 'string' && newValue.codePointAt(0) === 0x2610);
       if (isEmptyOrSquare) newValue = ' ';
     }
 
@@ -227,7 +216,7 @@ export const annotateDocument = ({
       const attrs = getFieldAttrs(node, newValue, input);
       tr = tr.setNodeMarkup(pos, undefined, {
         ...node.attrs,
-        ...attrs
+        ...attrs,
       });
     }
   }
@@ -235,18 +224,18 @@ export const annotateDocument = ({
   // perform deletes all in one go (descending positions)
   Array.from(toDelete)
     .sort((a, b) => b - a)
-    .forEach(pos => {
-      const ann = annotations.find(a => a.pos === pos);
+    .forEach((pos) => {
+      const ann = annotations.find((a) => a.pos === pos);
       if (!ann) return;
       tr = tr.delete(pos, pos + ann.node.nodeSize);
     });
 
-    return tr;
+  return tr;
 };
 
 /**
  * Format the date to the given format
- * 
+ *
  * @param {String} input The date value
  * @param {String} format The date format
  */
@@ -264,9 +253,9 @@ const getFormattedDate = (input = null, format = '') => {
 
   // 4. Otherwise, do a single toLocaleDateString call:
   return date.toLocaleDateString('en-US', {
-    month: 'short',  // e.g. “May”
-    day: '2-digit',  // e.g. “05”
-    year: 'numeric'  // e.g. “2025”
+    month: 'short', // e.g. “May”
+    day: '2-digit', // e.g. “05”
+    year: 'numeric', // e.g. “2025”
   });
 };
 

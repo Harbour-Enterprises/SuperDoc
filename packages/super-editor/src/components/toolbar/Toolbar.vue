@@ -38,7 +38,7 @@ const onKeyDown = async (e) => {
       }
     }
   }
-}
+};
 
 const onWindowResized = async () => {
   await proxy.$toolbar.onToolbarResize();

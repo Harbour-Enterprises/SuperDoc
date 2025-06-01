@@ -1,6 +1,8 @@
-import { Node, Attribute } from '@core/index.js';
+import { Attribute, Node } from '@core/index.js';
 import { ImagePlaceholderPlugin } from './imageHelpers/imagePlaceholderPlugin.js';
 import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
+import { ImageResizePlugin } from './imageHelpers/imageResizePlugin.js';
+import './imageHelpers/imageResize.css';
 
 export const Image = Node.create({
   name: 'image',
@@ -40,7 +42,7 @@ export const Image = Node.create({
       alt: {
         default: null,
       },
-      
+
       id: { rendered: false },
 
       title: {
@@ -63,7 +65,7 @@ export const Image = Node.create({
         default: null,
         rendered: false,
       },
-      
+
       isAnchor: { rendered: false },
       simplePos: { rendered: false },
       wrapText: { rendered: false },
@@ -72,17 +74,17 @@ export const Image = Node.create({
         default: {},
         renderDOM: ({ size }) => {
           let style = '';
-          let { width, height } = size ?? {};
+          const { width, height } = size ?? {};
           if (width) style += `width: ${width}px;`;
-          if (height) style += `height: auto;`;
+          if (height) style += 'height: auto;';
           return { style };
         },
       },
-      
+
       padding: {
         default: {},
         renderDOM: ({ padding, marginOffset }) => {
-          let { left = 0, top = 0, bottom = 0, right = 0 } = padding ?? {};
+          const { left = 0, top = 0, bottom = 0, right = 0 } = padding ?? {};
           let style = '';
           if (left && !marginOffset?.left) style += `margin-left: ${left}px;`;
           if (top && !marginOffset?.top) style += `margin-top: ${top}px;`;
@@ -95,7 +97,7 @@ export const Image = Node.create({
       marginOffset: {
         default: {},
         renderDOM: ({ marginOffset }) => {
-          let { left = 0, top = 0 } = marginOffset ?? {};
+          const { left = 0, top = 0 } = marginOffset ?? {};
           let style = '';
           if (left) style += `margin-left: ${left}px;`;
           if (top) style += `margin-top: ${top}px;`;
@@ -136,10 +138,28 @@ export const Image = Node.create({
             attrs: options,
           });
         },
+      resizeImage:
+        (pos, width, height) =>
+        ({ tr }) => {
+          const node = tr.doc.nodeAt(pos);
+          if (node && node.type.name === 'image') {
+            const attrs = {
+              ...node.attrs,
+              size: {
+                ...node.attrs.size,
+                width,
+                height,
+              },
+            };
+            tr.setNodeMarkup(pos, null, attrs);
+            return true;
+          }
+          return false;
+        },
     };
   },
 
   addPmPlugins() {
-    return [ImagePlaceholderPlugin(), ImagePositionPlugin({editor: this.editor })];
+    return [ImagePlaceholderPlugin(), ImagePositionPlugin({ editor: this.editor }), ImageResizePlugin()];
   },
 });

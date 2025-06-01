@@ -19,43 +19,27 @@ const props = defineProps({
   hasNoneIcon: {
     type: Boolean,
     required: false,
-  }
+  },
 });
 
 const handleSelect = (option) => {
   emit('select', option);
 };
-
 </script>
 
 <template>
   <div class="options-grid-wrap">
-    <div 
-      v-if="hasNoneIcon"
-      class="none-option"
-      @click="handleSelect('none')"
-    >
-      <span 
-        v-html="DropIcon"
-        class="none-icon"
-      ></span>
+    <div v-if="hasNoneIcon" class="none-option" @click="handleSelect('none')">
+      <span v-html="DropIcon" class="none-icon"></span>
       None
     </div>
     <div class="option-grid-ctn">
-      <IconGridRow
-        :icons="icons"
-        :active-color="activeColor"
-        @select="handleSelect"
-      />
+      <IconGridRow :icons="icons" :active-color="activeColor" @select="handleSelect" />
 
       <template v-if="customIcons.flat().length">
         <span class="option-grid-ctn__subtitle">Custom colors</span>
 
-        <IconGridRow
-          :icons="customIcons"
-          :active-color="activeColor"
-          @select="handleSelect"
-        />
+        <IconGridRow :icons="customIcons" :active-color="activeColor" @select="handleSelect" />
       </template>
     </div>
   </div>
@@ -88,7 +72,6 @@ const handleSelect = (option) => {
     padding: 3px;
     font-size: 12px;
     font-weight: 600;
-
   }
 }
 

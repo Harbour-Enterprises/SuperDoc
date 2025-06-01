@@ -108,32 +108,36 @@ export const OrderedList = Node.create({
         ({ commands }) => {
           return commands.toggleList(this.name, this.options.itemTypeName, this.options.keepMarks);
         },
-  
-      getCurrentList: () => ({ state }) => {
-        return findParentNode((node) => node.type.name === this.name)(state.selection);
-      },
-  
-      restartListNodes: (followingNodes, pos) => ({ tr, state }) => {      
-        let currentNodePos = pos
-        const nodes = followingNodes.map((node) => {
-          const resultNode = {
-            node,
-            pos: currentNodePos,
-          };
 
-          currentNodePos += node.nodeSize;
-          return resultNode;
-        });
+      getCurrentList:
+        () =>
+        ({ state }) => {
+          return findParentNode((node) => node.type.name === this.name)(state.selection);
+        },
 
-        nodes.forEach((item) => {
-          const { pos } = item
-          const newPos = tr.mapping.map(pos);
+      restartListNodes:
+        (followingNodes, pos) =>
+        ({ tr, state }) => {
+          let currentNodePos = pos;
+          const nodes = followingNodes.map((node) => {
+            const resultNode = {
+              node,
+              pos: currentNodePos,
+            };
 
-          tr.setNodeMarkup(newPos, undefined, {});
-        });
+            currentNodePos += node.nodeSize;
+            return resultNode;
+          });
 
-        return true;
-      },
+          nodes.forEach((item) => {
+            const { pos } = item;
+            const newPos = tr.mapping.map(pos);
+
+            tr.setNodeMarkup(newPos, undefined, {});
+          });
+
+          return true;
+        },
 
       /**
        * Updates ordered list style type when sink or lift `listItem`.
@@ -264,9 +268,9 @@ export const OrderedList = Node.create({
     let inputRule = wrappingInputRule({
       match: inputRegex,
       type: this.type,
-      getAttributes: match => ({ start: +match[1] }),
+      getAttributes: (match) => ({ start: +match[1] }),
       joinPredicate: (match, node) => node.childCount + node.attrs.start === +match[1],
-    })
+    });
 
     if (this.options.keepMarks || this.options.keepAttributes) {
       inputRule = wrappingInputRule({
@@ -274,14 +278,11 @@ export const OrderedList = Node.create({
         type: this.type,
         keepMarks: this.options.keepMarks,
         keepAttributes: this.options.keepAttributes,
-        getAttributes: match => ({ start: +match[1], ...this.editor.getAttributes('textStyle') }),
+        getAttributes: (match) => ({ start: +match[1], ...this.editor.getAttributes('textStyle') }),
         joinPredicate: (match, node) => node.childCount + node.attrs.start === +match[1],
         editor: this.editor,
-      })
+      });
     }
-    return [
-      inputRule,
-    ];
+    return [inputRule];
   },
 });
-

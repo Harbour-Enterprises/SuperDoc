@@ -203,7 +203,6 @@ describe('table live xml test', () => {
 });
 
 describe('table tests to check colwidth', () => {
-
   it('correctly gets colwidth for horizontally merged cells', async () => {
     const dataName = 'table-merged-cells.docx';
     const docx = await getTestDataByFileName(dataName);
@@ -224,7 +223,7 @@ describe('table tests to check colwidth', () => {
 
     expect(tr1.content[0].attrs.colspan).toBe(2);
     expect(tr1.content[0].attrs.colwidth).toEqual([94, 331]);
-    expect(tr1.content[1].attrs.colwidth).toEqual([176])
+    expect(tr1.content[1].attrs.colwidth).toEqual([176]);
 
     expect(tr2.content[0].attrs.colwidth).toEqual([94]);
     expect(tr2.content[1].attrs.colwidth).toEqual([331]);

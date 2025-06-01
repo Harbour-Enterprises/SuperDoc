@@ -25,7 +25,7 @@ const props = defineProps({
     default: false,
   },
   parent: {
-  type: Object,
+    type: Object,
     required: false,
   },
 });
@@ -38,7 +38,7 @@ const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 
 /* Comments store refs */
-const { addComment, cancelComment, deleteComment, removePendingComment, } = commentsStore;
+const { addComment, cancelComment, deleteComment, removePendingComment } = commentsStore;
 const {
   suppressInternalExternal,
   getConfig,
@@ -60,23 +60,26 @@ const commentDialogElement = ref(null);
 
 const isActiveComment = computed(() => activeComment.value === props.comment.commentId);
 const showButtons = computed(() => {
-  return !getConfig.readOnly
-    && isActiveComment.value
-    && !props.comment.resolvedTime
-    && editingCommentId.value !== props.comment.commentId;
+  return (
+    !getConfig.readOnly &&
+    isActiveComment.value &&
+    !props.comment.resolvedTime &&
+    editingCommentId.value !== props.comment.commentId
+  );
 });
 
 const showSeparator = computed(() => (index) => {
   if (showInputSection.value && index === comments.value.length - 1) return true;
-  return comments.value.length > 1
-    && index !== comments.value.length - 1
+  return comments.value.length > 1 && index !== comments.value.length - 1;
 });
 
 const showInputSection = computed(() => {
-  return !getConfig.readOnly
-    && isActiveComment.value
-    && !props.comment.resolvedTime
-    && editingCommentId.value !== props.comment.commentId;
+  return (
+    !getConfig.readOnly &&
+    isActiveComment.value &&
+    !props.comment.resolvedTime &&
+    editingCommentId.value !== props.comment.commentId
+  );
 });
 
 const comments = computed(() => {
@@ -105,7 +108,7 @@ const shouldShowInternalExternal = computed(() => {
 });
 
 const hasTextContent = computed(() => {
-  return currentCommentText.value && currentCommentText.value !== "<p></p>";
+  return currentCommentText.value && currentCommentText.value !== '<p></p>';
 });
 
 const setFocus = () => {
@@ -120,7 +123,7 @@ const handleClickOutside = (e) => {
   if (activeComment.value === props.comment.commentId) {
     floatingCommentsOffset.value = 0;
     emit('dialog-exit');
-  };
+  }
 
   activeComment.value = null;
 };
@@ -135,10 +138,10 @@ const handleAddComment = () => {
   if (pendingComment.value) {
     const selection = pendingComment.value.selection.getValues();
     options.selection = selection;
-  };
+  }
 
   const comment = commentsStore.getPendingComment(options);
-  addComment({ superdoc: proxy.$superdoc, comment })
+  addComment({ superdoc: proxy.$superdoc, comment });
 };
 
 const handleReject = () => {
@@ -151,13 +154,13 @@ const handleReject = () => {
     proxy.$superdoc.activeEditor.commands.rejectTrackedChangeById(props.comment.commentId);
   } else {
     commentsStore.deleteComment({ superdoc: proxy.$superdoc, commentId: props.comment.commentId });
-  };
+  }
 
   nextTick(() => {
     commentsStore.lastUpdate = new Date();
     activeComment.value = null;
   });
-}
+};
 
 const handleResolve = () => {
   if (props.comment.trackedChange) {
@@ -186,14 +189,14 @@ const handleOverflowSelect = (value, comment) => {
     case 'delete':
       deleteComment({ superdoc: proxy.$superdoc, commentId: comment.commentId });
       break;
-  };
+  }
 };
 
 const handleCommentUpdate = (comment) => {
   editingCommentId.value = null;
   comment.setText({ text: currentCommentText.value, superdoc: proxy.$superdoc });
   removePendingComment(proxy.$superdoc);
-}
+};
 
 const getTrackedChangeType = (comment) => {
   const { trackedChangeType } = comment;
@@ -208,8 +211,8 @@ const getTrackedChangeType = (comment) => {
       return 'Format';
     default:
       return '';
-  };
-}
+  }
+};
 
 const handleInternalExternalSelect = (value) => {
   const isPendingComment = !!pendingComment.value;
@@ -221,7 +224,6 @@ const handleInternalExternalSelect = (value) => {
 
 const getSidebarCommentStyle = computed(() => {
   const style = {};
-
 
   const comment = props.comment;
   if (isActiveComment.value) {
@@ -261,13 +263,13 @@ const usersFiltered = computed(() => {
 onMounted(() => {
   if (props.autoFocus) {
     nextTick(() => setFocus());
-  };
+  }
 
   nextTick(() => {
     const commentId = props.comment.importedId !== undefined ? props.comment.importedId : props.comment.commentId;
     emit('ready', { commentId, elementRef: commentDialogElement });
   });
-})
+});
 </script>
 
 <template>
@@ -279,7 +281,6 @@ onMounted(() => {
     :style="getSidebarCommentStyle"
     ref="commentDialogElement"
   >
-
     <div v-if="shouldShowInternalExternal" class="existing-internal-input">
       <InternalDropdown
         @click.stop.prevent
@@ -305,13 +306,16 @@ onMounted(() => {
         <div class="tracked-change">
           <div class="tracked-change">
             <div v-if="comment.trackedChangeType === 'trackFormat'">
-              <span class="change-type">Format: </span><span class="tracked-change-text">{{ comment.trackedChangeText }}</span>
+              <span class="change-type">Format: </span
+              ><span class="tracked-change-text">{{ comment.trackedChangeText }}</span>
             </div>
             <div v-if="comment.trackedChangeText && comment.trackedChangeType !== 'trackFormat'">
-              <span class="change-type">Added: </span><span class="tracked-change-text">{{ comment.trackedChangeText }}</span>
+              <span class="change-type">Added: </span
+              ><span class="tracked-change-text">{{ comment.trackedChangeText }}</span>
             </div>
             <div v-if="comment.deletedText && comment.trackedChangeType !== 'trackFormat'">
-              <span class="change-type">Deleted: </span><span class="tracked-change-text">{{ comment.deletedText }}</span>
+              <span class="change-type">Deleted: </span
+              ><span class="tracked-change-text">{{ comment.deletedText }}</span>
             </div>
           </div>
         </div>
@@ -321,23 +325,15 @@ onMounted(() => {
       <div class="card-section comment-body" v-if="!comment.trackedChange">
         <div v-if="!isDebugging && !isEditingThisComment(comment)" class="comment" v-html="comment.commentText"></div>
         <div v-else-if="isDebugging && !isEditingThisComment(comment)" class="comment">
-          {{ editorCommentPositions[comment.importedId !== undefined ? comment.importedId: comment.commentId]?.bounds }}
+          {{
+            editorCommentPositions[comment.importedId !== undefined ? comment.importedId : comment.commentId]?.bounds
+          }}
         </div>
         <div v-else class="comment-editing">
-          <CommentInput
-            :users="usersFiltered"
-            :config="getConfig"
-            :include-header="false"
-            :comment="comment"
-          />
+          <CommentInput :users="usersFiltered" :config="getConfig" :include-header="false" :comment="comment" />
           <div class="comment-footer">
             <button class="sd-button" @click.stop.prevent="handleCancel(comment)">Cancel</button>
-            <button
-              class="sd-button primary"
-              @click.stop.prevent="handleCommentUpdate(comment)"
-              >
-                Update
-              </button>
+            <button class="sd-button primary" @click.stop.prevent="handleCommentUpdate(comment)">Update</button>
           </div>
         </div>
       </div>
@@ -346,12 +342,7 @@ onMounted(() => {
 
     <!-- This area is appended to a comment if adding a new sub comment -->
     <div v-if="showInputSection && !getConfig.readOnly">
-      <CommentInput
-        ref="commentInput"
-        :users="usersFiltered"
-        :config="getConfig"
-        :comment="props.comment"
-      />
+      <CommentInput ref="commentInput" :users="usersFiltered" :config="getConfig" :comment="props.comment" />
 
       <div class="comment-footer" v-if="showButtons && !getConfig.readOnly">
         <button class="sd-button" @click.stop.prevent="cancelComment">Cancel</button>
@@ -359,12 +350,12 @@ onMounted(() => {
           class="sd-button primary"
           @click.stop.prevent="handleAddComment"
           :disabled="!hasTextContent"
-          :class="{ disabled: !hasTextContent }">
-            Comment
-          </button>
+          :class="{ disabled: !hasTextContent }"
+        >
+          Comment
+        </button>
       </div>
     </div>
-
   </div>
 </template>
 

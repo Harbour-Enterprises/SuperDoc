@@ -68,15 +68,15 @@ const getSectionHeight = async (editor, data) => {
     const lineHeight = fontSizeInPixles * 1.15;
 
     Object.assign(editorContainer.style, {
-      padding: "0",
-      margin: "0",
-      border: "none",
-      boxSizing: "border-box",
-      position: "absolute",
-      top: "0",
-      left: "0",
-      width: "auto",
-      maxWidth: "none",
+      padding: '0',
+      margin: '0',
+      border: 'none',
+      boxSizing: 'border-box',
+      position: 'absolute',
+      top: '0',
+      left: '0',
+      width: 'auto',
+      maxWidth: 'none',
       fontFamily: typeface,
       fontSize: `${fontSizeInPixles}px`,
       lineHeight: `${lineHeight}px`,
@@ -99,21 +99,21 @@ const getSectionHeight = async (editor, data) => {
         document.body.removeChild(editorContainer);
 
         Object.assign(editorContainer.style, {
-          padding: "0",
-          margin: "0",
-          border: "none",
-          boxSizing: "border-box",
-          position: "relative",
-          top: "initial",
-          left: "initial",
-          width: "initial",
-          maxWidth: "initial",
-          fontFamily: "initial",
-          fontSize: "initial",
-          lineHeight: "initial",
+          padding: '0',
+          margin: '0',
+          border: 'none',
+          boxSizing: 'border-box',
+          position: 'relative',
+          top: 'initial',
+          left: 'initial',
+          width: 'initial',
+          maxWidth: 'initial',
+          fontFamily: 'initial',
+          fontSize: 'initial',
+          lineHeight: 'initial',
         });
         resolve({ height, sectionEditor, sectionContainer: editorContainer });
-      })
+      });
     });
   });
 };

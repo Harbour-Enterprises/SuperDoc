@@ -14,14 +14,16 @@ const props = defineProps({
 const select = (style) => {
   emit('select', style);
 };
-
 </script>
 
 <template>
   <div class="linked-style-buttons" v-if="props.editor">
-    <div
-      v-for="style in getQuickFormatList(editor)" class="style-item" @click="select(style)">
-      <div class="style-name" :style="generateLinkedStyleString(style, null, false)" data-item="btn-linkedStyles-option">
+    <div v-for="style in getQuickFormatList(editor)" class="style-item" @click="select(style)">
+      <div
+        class="style-name"
+        :style="generateLinkedStyleString(style, null, false)"
+        data-item="btn-linkedStyles-option"
+      >
         {{ style.definition.attrs.name }}
       </div>
     </div>

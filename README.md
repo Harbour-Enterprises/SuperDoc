@@ -1,4 +1,3 @@
-
 <h1 align="center">
   <a href="https://www.superdoc.dev" target="_blank">
     <img alt="SuperDoc logo" src="https://storage.googleapis.com/public_statichosting/SuperDocHomepage/logo.webp" width="170px" height="auto" />
@@ -50,7 +49,7 @@ npm install @harbour-enterprises/superdoc
 Or install with CDN
 
 ```html
-<link rel="stylesheet" href="https://unpkg.com/@harbour-enterprises/superdoc/dist/style.css">
+<link rel="stylesheet" href="https://unpkg.com/@harbour-enterprises/superdoc/dist/style.css" />
 <script type="module" src="https://unpkg.com/@harbour-enterprises/superdoc/dist/superdoc.umd.js"></script>
 ```
 
@@ -121,7 +120,6 @@ See our [Contributing Guide](CONTRIBUTING.md) for more details.
 
 - [✉️ Email](mailto:q@superdoc.dev?subject=[SuperDoc]%20Project%20inquiry)
 - [⛵️ Website](https://superdoc.dev)
-
 
 ---
 

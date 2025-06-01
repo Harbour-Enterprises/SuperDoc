@@ -1,6 +1,5 @@
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 
-
 describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
   const filename = 'sublist-issue.docx';
   let docx, media, mediaFiles, fonts, editor, dispatch;
@@ -15,7 +14,7 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
     const list = currentState.content[2];
     const secondItem = list.content[1];
     const numId = secondItem.attrs.numId;
-    expect(numId).toBe("5");
+    expect(numId).toBe('5');
 
     // Ensure we're importing the empty paragraprh
     const emptyParagraph = secondItem.content[1];
@@ -24,6 +23,6 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
 
     const sublistItem = secondItem.content[2].content[0];
     const sublistNumId = sublistItem.attrs.numId;
-    expect(sublistNumId).toBe("3");
+    expect(sublistNumId).toBe('3');
   });
 });

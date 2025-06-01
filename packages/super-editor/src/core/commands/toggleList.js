@@ -138,47 +138,44 @@ export const toggleList =
     return result;
   };
 
+const getNewListId = (definitions) => Math.max(...Object.keys(definitions).map(Number)) + 1;
 
-  const getNewListId = (definitions) => Math.max(...Object.keys(definitions).map(Number)) + 1;
+const generateNewListDefinition = (newListId, numbering, listType) => {
+  // Generate a new numId to add to numbering.xml
+  const definition = listType.name === 'orderedList' ? baseOrderedListDef : baseBulletList;
+  const newNumbering = { ...numbering };
 
-  const generateNewListDefinition = (newListId, numbering, listType) => {
-    // Generate a new numId to add to numbering.xml
-    const definition = listType.name === 'orderedList' ? baseOrderedListDef : baseBulletList;
-    const newNumbering = { ...numbering };
-  
-    // Generate the new abstractNum definition
-    const newAbstractId = getNewListId(newNumbering.abstracts);
-    const newAbstractDef = {
-      ...definition,
-      attributes: {
-        ...definition.attributes,
-        'w:abstractNumId': String(newAbstractId),
-      }
-    };
-    newNumbering.abstracts[newAbstractId] = newAbstractDef;
-  
-    // Generate the new numId definition
-    const newNumDef = {
-      type: 'element',
-      name: 'w:num',
-      attributes: {
-        'w:numId': String(newListId),
-        'w16cid:durableId': '485517411'
-      },
-      elements: [
-        { name: 'w:abstractNumId', attributes: { 'w:val': String(newAbstractId) } },
-      ]
-    };
-    newNumbering.definitions[newListId] = newNumDef;  
-    return newNumbering;
+  // Generate the new abstractNum definition
+  const newAbstractId = getNewListId(newNumbering.abstracts);
+  const newAbstractDef = {
+    ...definition,
+    attributes: {
+      ...definition.attributes,
+      'w:abstractNumId': String(newAbstractId),
+    },
   };
-  
-  const removeListDefinitions = (listId, numbering) => {
-    const { definitions, abstracts } = numbering;
+  newNumbering.abstracts[newAbstractId] = newAbstractDef;
 
-    const abstractId = definitions[listId].elements[0].attributes['w:val'];
-    delete definitions[listId];
-    delete abstracts[abstractId];
-
-    return numbering;
+  // Generate the new numId definition
+  const newNumDef = {
+    type: 'element',
+    name: 'w:num',
+    attributes: {
+      'w:numId': String(newListId),
+      'w16cid:durableId': '485517411',
+    },
+    elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': String(newAbstractId) } }],
   };
+  newNumbering.definitions[newListId] = newNumDef;
+  return newNumbering;
+};
+
+const removeListDefinitions = (listId, numbering) => {
+  const { definitions, abstracts } = numbering;
+
+  const abstractId = definitions[listId].elements[0].attributes['w:val'];
+  delete definitions[listId];
+  delete abstracts[abstractId];
+
+  return numbering;
+};

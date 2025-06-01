@@ -37,7 +37,7 @@ export const ContentBlock = Node.create({
         default: null,
         renderDOM: (attrs) => {
           if (!attrs.background) return {};
-          return { 
+          return {
             style: `background-color: ${attrs.background}`,
           };
         },
@@ -57,14 +57,14 @@ export const ContentBlock = Node.create({
     return [
       {
         tag: `div[data-type="${this.name}"]`,
-      }
+      },
     ];
   },
 
   renderDOM({ htmlAttributes }) {
     return [
-      'div', 
-      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }), 
+      'div',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }),
       0,
     ];
   },

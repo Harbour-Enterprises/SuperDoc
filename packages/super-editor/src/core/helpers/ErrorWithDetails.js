@@ -16,6 +16,4 @@ function ErrorWithDetails(name, message, details) {
 }
 ErrorWithDetails.prototype = Object.create(Error.prototype);
 
-export {
-  ErrorWithDetails,
-}
+export { ErrorWithDetails };

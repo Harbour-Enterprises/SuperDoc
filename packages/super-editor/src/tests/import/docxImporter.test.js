@@ -37,7 +37,7 @@ describe('addDefaultStylesIfMissing', () => {
 
   it.each(Object.keys(DEFAULT_LINKED_STYLES))('adds %s as a default style', (styleId) => {
     const result = addDefaultStylesIfMissing(styles);
-    const foundStyle = result.elements[0].elements.find(element => element.attributes?.['w:styleId'] === styleId);
+    const foundStyle = result.elements[0].elements.find((element) => element.attributes?.['w:styleId'] === styleId);
     expect(foundStyle).toEqual(DEFAULT_LINKED_STYLES[styleId]);
   });
 });

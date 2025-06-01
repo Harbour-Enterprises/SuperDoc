@@ -73,8 +73,8 @@ export const Table = Node.create({
           const { width, type = 'dxa' } = tableIndent;
           let style = '';
           if (width) style += `margin-left: ${width}px`;
-          return { 
-            style, 
+          return {
+            style,
           };
         },
       },
@@ -83,15 +83,12 @@ export const Table = Node.create({
         default: {},
         renderDOM({ borders }) {
           if (!borders) return {};
-          const style = Object.entries(borders).reduce(
-            (acc, [key, { size, color }]) => {
-              return `${acc}border-${key}: ${size}px solid ${color || 'black'};`;
-            }, 
-            ''
-          );
+          const style = Object.entries(borders).reduce((acc, [key, { size, color }]) => {
+            return `${acc}border-${key}: ${size}px solid ${color || 'black'};`;
+          }, '');
 
-          return { 
-            style, 
+          return {
+            style,
           };
         },
       },
@@ -99,18 +96,18 @@ export const Table = Node.create({
       borderCollapse: {
         default: null,
         renderDOM({ borderCollapse }) {
-          return { 
-            style: `border-collapse: ${borderCollapse || 'collapse'}`, 
+          return {
+            style: `border-collapse: ${borderCollapse || 'collapse'}`,
           };
         },
       },
 
-      tableStyleId: { 
-        rendered: false, 
+      tableStyleId: {
+        rendered: false,
       },
 
-      tableLayout: { 
-        rendered: false 
+      tableLayout: {
+        rendered: false,
       },
 
       tableCellSpacing: {
@@ -125,23 +122,13 @@ export const Table = Node.create({
   },
 
   renderDOM({ node, htmlAttributes }) {
-    const { colgroup, tableWidth, tableMinWidth } = createColGroup(
-      node,
-      this.options.cellMinWidth,
-    );
+    const { colgroup, tableWidth, tableMinWidth } = createColGroup(node, this.options.cellMinWidth);
 
     const attrs = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, {
-      style: tableWidth 
-        ? `width: ${tableWidth}` 
-        : `min-width: ${tableMinWidth}`,
+      style: tableWidth ? `width: ${tableWidth}` : `min-width: ${tableMinWidth}`,
     });
 
-    const table =  [
-      'table', 
-      attrs, 
-      colgroup, 
-      ['tbody', 0],
-    ];
+    const table = ['table', attrs, colgroup, ['tbody', 0]];
 
     return table;
   },
@@ -149,7 +136,8 @@ export const Table = Node.create({
   addCommands() {
     return {
       insertTable:
-        ({ rows = 3, cols = 3, withHeaderRow = false } = {}) => ({ tr, dispatch, editor }) => {
+        ({ rows = 3, cols = 3, withHeaderRow = false } = {}) =>
+        ({ tr, dispatch, editor }) => {
           const zeroWidthText = editor.schema.text('\u200B');
           const emptyPar = getNodeType('paragraph', editor.schema).create(null, zeroWidthText);
           const node = createTable(editor.schema, rows, cols, withHeaderRow, emptyPar);
@@ -160,57 +148,67 @@ export const Table = Node.create({
               .scrollIntoView()
               .setSelection(TextSelection.near(tr.doc.resolve(offset)));
           }
-          
+
           return true;
         },
 
       deleteTable:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return deleteTable(state, dispatch);
         },
 
       addColumnBefore:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return addColumnBefore(state, dispatch);
         },
 
       addColumnAfter:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return addColumnAfter(state, dispatch);
         },
 
       deleteColumn:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return deleteColumn(state, dispatch);
         },
 
       addRowBefore:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return addRowBefore(state, dispatch);
         },
 
       addRowAfter:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return addRowAfter(state, dispatch);
         },
 
       deleteRow:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return deleteRow(state, dispatch);
         },
 
       mergeCells:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return mergeCells(state, dispatch);
         },
 
       splitCell:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return splitCell(state, dispatch);
         },
 
       mergeOrSplit:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           if (mergeCells(state, dispatch)) {
             return true;
           }
@@ -219,37 +217,44 @@ export const Table = Node.create({
         },
 
       toggleHeaderColumn:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return toggleHeader('column')(state, dispatch);
         },
 
       toggleHeaderRow:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return toggleHeader('row')(state, dispatch);
         },
 
       toggleHeaderCell:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return toggleHeaderCell(state, dispatch);
         },
 
       setCellAttr:
-        (name, value) => ({ state, dispatch }) => {
+        (name, value) =>
+        ({ state, dispatch }) => {
           return setCellAttr(name, value)(state, dispatch);
         },
 
       goToNextCell:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return goToNextCell(1)(state, dispatch);
         },
 
       goToPreviousCell:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           return goToNextCell(-1)(state, dispatch);
         },
 
       fixTables:
-        () => ({ state, dispatch }) => {
+        () =>
+        ({ state, dispatch }) => {
           if (dispatch) {
             fixTables(state);
           }
@@ -258,7 +263,8 @@ export const Table = Node.create({
         },
 
       setCellSelection:
-        (pos) => ({ tr, dispatch }) => {
+        (pos) =>
+        ({ tr, dispatch }) => {
           if (dispatch) {
             tr.setSelection(CellSelection.create(tr.doc, pos.anchorCell, pos.headCell));
           }
@@ -266,56 +272,58 @@ export const Table = Node.create({
           return true;
         },
 
-        setCellBackground:
-          (value) => ({ editor, commands, dispatch }) => {
-            const { selection } = editor.state;
+      setCellBackground:
+        (value) =>
+        ({ editor, commands, dispatch }) => {
+          const { selection } = editor.state;
 
-            if (!isCellSelection(selection)) {
-              return false;
+          if (!isCellSelection(selection)) {
+            return false;
+          }
+
+          const color = value?.startsWith('#') ? value.slice(1) : value;
+
+          if (dispatch) {
+            return commands.setCellAttr('background', { color });
+          }
+
+          return true;
+        },
+
+      deleteCellAndTableBorders:
+        () =>
+        ({ chain, state, tr }) => {
+          if (!isInTable(state)) {
+            return false;
+          }
+
+          const table = findParentNode((node) => node.type.name === this.name)(state.selection);
+
+          if (!table) {
+            return false;
+          }
+
+          const from = table.pos;
+          const to = table.pos + table.node.nodeSize;
+
+          // remove from cells
+          state.doc.nodesBetween(from, to, (node, pos) => {
+            if (['tableCell', 'tableHeader'].includes(node.type.name)) {
+              tr.setNodeMarkup(pos, undefined, {
+                ...node.attrs,
+                borders: createCellBorders({ size: 0 }),
+              });
             }
-            
-            const color = value?.startsWith('#') ? value.slice(1) : value;
+          });
 
-            if (dispatch) {
-              return commands.setCellAttr('background', { color });
-            }
+          // remove from table
+          tr.setNodeMarkup(table.pos, undefined, {
+            ...table.node.attrs,
+            borders: createTableBorders({ size: 0 }),
+          });
 
-            return true;
-          },
-
-        deleteCellAndTableBorders:
-          () => ({ chain, state, tr }) => {
-            if (!isInTable(state)) {
-              return false;
-            }
-
-            const table = findParentNode((node) => node.type.name === this.name)(state.selection);
-
-            if (!table) {
-              return false;
-            }
-
-            const from = table.pos;
-            const to = table.pos + table.node.nodeSize;
-
-            // remove from cells
-            state.doc.nodesBetween(from, to, (node, pos) => {
-              if (['tableCell', 'tableHeader'].includes(node.type.name)) {
-                tr.setNodeMarkup(pos, undefined, {
-                  ...node.attrs,
-                  borders: createCellBorders({ size: 0 }),
-                });
-              }
-            });
-
-            // remove from table
-            tr.setNodeMarkup(table.pos, undefined, {
-              ...table.node.attrs,
-              borders: createTableBorders({ size: 0 }),
-            });
-
-            return true;
-          },
+          return true;
+        },
     };
   },
 
@@ -344,18 +352,18 @@ export const Table = Node.create({
     return [
       ...(resizable
         ? [
-          columnResizing({
-            handleWidth: this.options.handleWidth,
-            cellMinWidth: this.options.cellMinWidth,
-            defaultCellMinWidth: this.options.cellMinWidth,
-            lastColumnResizable: this.options.lastColumnResizable,
-            View: createTableView({
-              editor: this.editor,
+            columnResizing({
+              handleWidth: this.options.handleWidth,
+              cellMinWidth: this.options.cellMinWidth,
+              defaultCellMinWidth: this.options.cellMinWidth,
+              lastColumnResizable: this.options.lastColumnResizable,
+              View: createTableView({
+                editor: this.editor,
+              }),
             }),
-          }),
-        ] 
+          ]
         : []),
-        
+
       tableEditing({
         allowTableNodeSelection: this.options.allowTableNodeSelection,
       }),
@@ -364,11 +372,13 @@ export const Table = Node.create({
 
   extendNodeSchema(extension) {
     return {
-      tableRole: callOrGet(getExtensionConfigField(extension, 'tableRole', {
-        name: extension.name,
-        options: extension.options,
-        storage: extension.storage,
-      })),
+      tableRole: callOrGet(
+        getExtensionConfigField(extension, 'tableRole', {
+          name: extension.name,
+          options: extension.options,
+          storage: extension.storage,
+        }),
+      ),
     };
   },
 });

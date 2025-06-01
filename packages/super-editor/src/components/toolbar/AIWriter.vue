@@ -25,11 +25,11 @@ const props = defineProps({
     type: String,
     required: false,
   },
-/**
+  /**
    * AIWriter component is used both in the superToolbar and SuperDoc directly
    * When we are rending in the toolbar menu, our events are emitted through toolbar to Superdoc
-   * When we are rendering directly in SuperDoc, we need to emit the events through Superdoc and do not need to 
-   * emit any events through 
+   * When we are rendering directly in SuperDoc, we need to emit the events through Superdoc and do not need to
+   * emit any events through
    */
   superToolbar: {
     type: Object,
@@ -75,7 +75,7 @@ const saveSelection = () => {
     selectionState.value = {
       ...props.editor.state.selection,
       from: props.editor.state.selection.from,
-      to: props.editor.state.selection.to
+      to: props.editor.state.selection.to,
     };
     // Store the selection in the editor's state
     props.editor.commands.setMeta('storedSelection', selectionState.value);
@@ -169,30 +169,28 @@ const handleTextChunk = async (text) => {
     // If this is the first chunk and we're rewriting, handle the selection
     if (props.selectedText && !textProcessingStarted.value) {
       emitAiHighlight('remove');
-      
+
       // Clear the pulsing animation when we start inserting text
       props.editor.commands.clearAiHighlightStyle();
-      
+
       // Check if we have a valid stored selection
       if (selectionState.value) {
         // Apply the stored selection using the TextSelection API
         const { state } = props.editor;
         const { from, to } = selectionState.value;
-        
+
         // Create a transaction to set the selection
-        const tr = state.tr.setSelection(
-          TextSelection.create(state.doc, from, to)
-        );
-        
+        const tr = state.tr.setSelection(TextSelection.create(state.doc, from, to));
+
         // Dispatch the transaction to update the editor state
         props.editor.view.dispatch(tr);
       } else {
         console.warn('[AIWriter] No stored selection to restore');
       }
-      
+
       // Now delete the selection
       props.editor.commands.deleteSelection();
-      
+
       // Mark as processed
       textProcessingStarted.value = true;
     }
@@ -208,28 +206,29 @@ const handleTextChunk = async (text) => {
     // Wrap the raw content in a span with our animation class and unique ID
     const wrappedContent = {
       type: 'text',
-      marks: [{
-        type: 'aiAnimationMark',
-        attrs: { 
-          class: 'sd-ai-text-appear',
-          'dataMarkId': `ai-animation-${Date.now()}`
-        }
-      }],
-      text: textStr
+      marks: [
+        {
+          type: 'aiAnimationMark',
+          attrs: {
+            class: 'sd-ai-text-appear',
+            dataMarkId: `ai-animation-${Date.now()}`,
+          },
+        },
+      ],
+      text: textStr,
     };
 
     // Insert the raw content with animation mark
     props.editor.commands.insertContent(wrappedContent);
-    
+
     // Prevent race conditions - do not call formatDocument if we are already formatting
     pendingFormatting.value = true;
     if (!isFormatting.value) {
       await runSafeFormat();
     }
-    
+
     // Hide the AI Writer after content is received
     props.handleClose();
-
   } catch (error) {
     console.error('Error handling text chunk:', error);
   }
@@ -242,7 +241,7 @@ const handleTextChunk = async (text) => {
  */
 const runSafeFormat = async () => {
   if (isFormatting.value) return;
-  
+
   try {
     isFormatting.value = true;
     pendingFormatting.value = false;
@@ -250,7 +249,7 @@ const runSafeFormat = async () => {
     await nextTick();
 
     formatDocument(props.editor);
-    
+
     // Check if more formatting requests arrived while we were formatting
     if (pendingFormatting.value) {
       pendingFormatting.value = false;
@@ -263,15 +262,15 @@ const runSafeFormat = async () => {
 
 /**
  * Handler for when the stream is done
- * 
+ *
  * We need to make sure we're not currently running any formatting before our final call
- * 
+ *
  * We can do this by using a short recursive polling system to wait.
  */
 const handleDone = async () => {
   if (pendingFormatting.value || isFormatting.value) {
     pendingFormatting.value = true;
-    await new Promise(resolve => {
+    await new Promise((resolve) => {
       const checkFormatting = () => {
         if (!isFormatting.value && !pendingFormatting.value) {
           resolve();
@@ -284,7 +283,7 @@ const handleDone = async () => {
   }
 
   await runSafeFormat();
-  
+
   // If we are done we can remove the animation mark
   // We need to wait for the animation to finish before removing the mark
   setTimeout(() => {
@@ -343,7 +342,6 @@ const handleSubmit = async () => {
       // Use writeStreaming for generating new text
       await writeStreaming(promptText.value, options, handleTextChunk, handleDone);
     }
-
   } catch (error) {
     console.error('AI generation error:', error);
     isError.value = error.message || 'An error occurred';
@@ -394,7 +392,12 @@ const handleInput = (event) => {
       ></textarea>
     </div>
     <div class="ai-loader">
-      <span v-if="promptText" class="ai-textarea-icon ai-submit-button" @click.stop="handleSubmit" v-html="paperPlane" />
+      <span
+        v-if="promptText"
+        class="ai-textarea-icon ai-submit-button"
+        @click.stop="handleSubmit"
+        v-html="paperPlane"
+      />
     </div>
   </div>
 </template>
@@ -513,5 +516,4 @@ const handleInput = (event) => {
   justify-content: flex-end;
   align-items: center;
 }
-
 </style>

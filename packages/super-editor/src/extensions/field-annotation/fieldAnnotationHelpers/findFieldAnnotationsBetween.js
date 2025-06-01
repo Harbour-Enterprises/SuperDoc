@@ -1,4 +1,3 @@
-
 /**
  * Find all field annotations between positions.
  * @param from From position.
@@ -21,6 +20,6 @@ export function findFieldAnnotationsBetween(from, to, doc) {
       });
     }
   });
-  
+
   return fieldAnnotations;
 }

@@ -3,7 +3,12 @@ import { ref, reactive, computed } from 'vue';
 import { comments_module_events } from '@harbour-enterprises/common';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
-import { Editor, trackChangesHelpers, TrackChangesBasePluginKey, CommentsPluginKey } from '@harbour-enterprises/super-editor';
+import {
+  Editor,
+  trackChangesHelpers,
+  TrackChangesBasePluginKey,
+  CommentsPluginKey,
+} from '@harbour-enterprises/super-editor';
 import { getRichTextExtensions } from '@harbour-enterprises/super-editor';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 
@@ -48,25 +53,25 @@ export const useCommentsStore = defineStore('comments', () => {
 
   /**
    * Initialize the store
-   * 
+   *
    * @param {Object} config The comments module config from SuperDoc
    * @returns {void}
    */
   const init = (config = {}) => {
-    const updatedConfig = {...commentsConfig, ...config};
+    const updatedConfig = { ...commentsConfig, ...config };
     Object.assign(commentsConfig, updatedConfig);
-  
+
     suppressInternalExternal.value = commentsConfig.suppressInternalExternal || false;
 
     // Map initial comments state
     if (config.comments && config.comments.length) {
       commentsList.value = config.comments?.map((c) => useComment(c)) || [];
-    };
+    }
   };
 
   /**
    * Get a comment by either ID or imported ID
-   * 
+   *
    * @param {string} id The comment ID
    * @returns {Object} The comment object
    */
@@ -77,25 +82,25 @@ export const useCommentsStore = defineStore('comments', () => {
 
   /**
    * Set the active comment or clear all active comments
-   * 
+   *
    * @param {string | undefined | null} id The comment ID
    * @returns {void}
    */
   const setActiveComment = (id) => {
     // If no ID, we clear any focused comments
     if (id === undefined || id === null) {
-      return activeComment.value = null;
-    };
+      return (activeComment.value = null);
+    }
 
     const comment = getComment(id);
     if (comment) activeComment.value = comment.commentId;
   };
 
   /**
-   * Called when a tracked change is updated. Creates a new comment if necessary, 
+   * Called when a tracked change is updated. Creates a new comment if necessary,
    * or updates an existing tracked-change comment.
-   * 
-   * @param {Object} param0 
+   *
+   * @param {Object} param0
    * @param {Object} param0.superdoc The SuperDoc instance
    * @param {Object} param0.params The tracked change params
    * @returns {void}
@@ -127,17 +132,15 @@ export const useCommentsStore = defineStore('comments', () => {
       isInternal: false,
       selection: {
         selectionBounds: coords,
-      }
+      },
     });
-    
+
     if (event === 'add') {
       // If this is a new tracked change, add it to our comments
       addComment({ superdoc, comment });
     } else if (event === 'update') {
       // If we have an update event, simply update the composable comment
-      const existingTrackedChange = commentsList.value.find(
-        (comment) => comment.commentId === changeId
-      );
+      const existingTrackedChange = commentsList.value.find((comment) => comment.commentId === changeId);
       if (!existingTrackedChange) return;
 
       existingTrackedChange.trackedChangeText = trackedChangeText;
@@ -164,13 +167,13 @@ export const useCommentsStore = defineStore('comments', () => {
     debounceTimers[commentId] = setTimeout(() => {
       if (superdoc) {
         if (__IS_DEBUG__) console.debug('[debounceEmit] tracked change update emitting...', event);
-        superdoc.emit("comments-update", event);
+        superdoc.emit('comments-update', event);
       }
       delete debounceTimers[commentId];
     }, delay);
   };
 
-  const showAddComment = (superdoc) => {    
+  const showAddComment = (superdoc) => {
     const event = { type: COMMENT_EVENTS.PENDING };
     if (__IS_DEBUG__) console.debug('[showAddComment] emitting...', event);
     superdoc.emit('comments-update', event);
@@ -180,15 +183,15 @@ export const useCommentsStore = defineStore('comments', () => {
 
     if (superdocStore.selectionPosition?.source) {
       superdocStore.selectionPosition.source = null;
-    };
+    }
 
     pendingComment.value = getPendingComment({ selection, documentId: selection.documentId, parentCommentId: null });
     if (!superdoc.config.isInternal) pendingComment.value.isInternal = false;
 
     if (superdoc.activeEditor?.commands) {
       superdoc.activeEditor.commands.insertComment({ ...pendingComment.value.getValues(), commentId: 'pending' });
-    };
-  
+    }
+
     if (pendingComment.value.selection.source === 'super-editor' && superdocStore.selectionPosition) {
       superdocStore.selectionPosition.source = 'super-editor';
     }
@@ -199,23 +202,23 @@ export const useCommentsStore = defineStore('comments', () => {
   /**
    * Generate the comments list separating resolved and active
    * We only return parent comments here, since CommentDialog.vue will handle threaded comments
-  */
+   */
   const getGroupedComments = computed(() => {
     const parentComments = [];
     const resolvedComments = [];
     const childCommentMap = new Map();
-  
+
     commentsList.value.forEach((comment) => {
       // Track resolved comments
       if (comment.resolvedTime) {
         resolvedComments.push(comment);
       }
-  
+
       // Track parent comments
       else if (!comment.parentCommentId && !comment.resolvedTime) {
         parentComments.push({ ...comment });
       }
-  
+
       // Track child comments (threaded comments)
       else if (comment.parentCommentId) {
         if (!childCommentMap.has(comment.parentCommentId)) {
@@ -224,11 +227,11 @@ export const useCommentsStore = defineStore('comments', () => {
         childCommentMap.get(comment.parentCommentId).push(comment);
       }
     });
-  
+
     // Return only parent comments
     const sortedParentComments = parentComments.sort((a, b) => a.createdTime - b.createdTime);
     const sortedResolvedComments = resolvedComments.sort((a, b) => a.createdTime - b.createdTime);
-  
+
     return {
       parentComments: sortedParentComments,
       resolvedComments: sortedResolvedComments,
@@ -295,8 +298,8 @@ export const useCommentsStore = defineStore('comments', () => {
 
   /**
    * Get a new pending comment
-   * 
-   * @param {Object} param0 
+   *
+   * @param {Object} param0
    * @param {Object} param0.selection The selection object
    * @param {String} param0.documentId The document ID
    * @param {String} param0.parentCommentId The parent comment
@@ -308,8 +311,8 @@ export const useCommentsStore = defineStore('comments', () => {
 
   /**
    * Get the new comment object
-   * 
-   * @param {Object} param0 
+   *
+   * @param {Object} param0
    * @param {Object} param0.selection The selection object
    * @param {String} param0.documentId The document ID
    * @param {String} param0.parentCommentId The parent comment ID
@@ -319,7 +322,7 @@ export const useCommentsStore = defineStore('comments', () => {
     let activeDocument;
     if (documentId) activeDocument = superdocStore.getDocument(documentId);
     else if (selection) activeDocument = superdocStore.getDocument(selection.documentId);
-  
+
     if (!activeDocument) activeDocument = superdocStore.documents[0];
 
     return useComment({
@@ -331,12 +334,12 @@ export const useCommentsStore = defineStore('comments', () => {
       commentText: currentCommentText.value,
       selection,
       ...options,
-   });
+    });
   };
 
   /**
    * Remove the pending comment
-   * 
+   *
    * @returns {void}
    */
   const removePendingComment = (superdoc) => {
@@ -350,12 +353,12 @@ export const useCommentsStore = defineStore('comments', () => {
 
   /**
    * Add a new comment to the document
-   * 
-   * @param {Object} param0 
+   *
+   * @param {Object} param0
    * @param {Object} param0.superdoc The SuperDoc instance
    * @returns {void}
    */
-  const addComment = ({ superdoc, comment }) => {    
+  const addComment = ({ superdoc, comment }) => {
     let parentComment = commentsList.value.find((c) => c.commentId === activeComment.value);
     if (!parentComment) parentComment = comment;
 
@@ -385,9 +388,9 @@ export const useCommentsStore = defineStore('comments', () => {
     if (!comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
       // Add the comment to the active editor
       superdoc.activeEditor.commands.insertComment(newComment.getValues());
-    };
+    }
 
-    const event =  { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() };
+    const event = { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() };
 
     // If collaboration is enabled, sync the comments to all clients
     syncCommentsToClients(superdoc, event);
@@ -419,28 +422,28 @@ export const useCommentsStore = defineStore('comments', () => {
       comment: comment.getValues(),
       changes: [{ key: 'deleted', commentId, fileId }],
     };
-    
+
     if (__IS_DEBUG__) console.debug('[deleteComment] emitting...', event);
     superdoc.emit('comments-update', event);
     syncCommentsToClients(superdoc, event);
-  }
+  };
 
   /**
    * Cancel the pending comment
-   * 
+   *
    * @returns {void}
    */
   const cancelComment = (superdoc) => {
     removePendingComment(superdoc);
-  }
+  };
 
   /**
-   * Initialize loaded comments into SuperDoc by mapping the imported 
+   * Initialize loaded comments into SuperDoc by mapping the imported
    * comment data to SuperDoc useComment objects.
-   * 
+   *
    * Updates the commentsList ref with the new comments.
-   * 
-   * @param {Object} param0 
+   *
+   * @param {Object} param0
    * @param {Array} param0.comments The comments to be loaded
    * @param {String} param0.documentId The document ID
    * @returns {void}
@@ -456,7 +459,7 @@ export const useCommentsStore = defineStore('comments', () => {
       if (!htmlContent && !comment.trackedChange) {
         return;
       }
-      
+
       const creatorName = comment.creatorName.replace('(imported)', '');
       const importedName = `${creatorName} (imported)`;
       const newComment = useComment({
@@ -486,7 +489,7 @@ export const useCommentsStore = defineStore('comments', () => {
 
     const trackedChanges = trackChangesHelpers.getTrackChanges(editor.state);
 
-    // Create comments for tracked changes 
+    // Create comments for tracked changes
     // that do not have a corresponding comment (created in Word).
     trackedChanges.forEach(({ mark }) => {
       const foundComment = commentsList.value.find((i) => i.commentId === mark.attrs.id);
@@ -511,10 +514,10 @@ export const useCommentsStore = defineStore('comments', () => {
         dispatch(tr);
       }
     });
-  }
+  };
 
   const translateCommentsForExport = () => {
-    const processedComments = []
+    const processedComments = [];
     commentsList.value.forEach((comment) => {
       const values = comment.getValues();
       const richText = values.commentText;
@@ -542,7 +545,7 @@ export const useCommentsStore = defineStore('comments', () => {
   /**
    * Triggered when the editor locations are updated
    * Updates floating comment locations from the editor
-   * 
+   *
    * @param {DOMElement} parentElement The parent element of the editor
    * @returns {void}
    */
@@ -564,7 +567,7 @@ export const useCommentsStore = defineStore('comments', () => {
 
   /**
    * Get HTML content from the comment text JSON (which uses DOCX schema)
-   * 
+   *
    * @param {Object} commentTextJson The comment text JSON
    * @returns {string} The HTML content
    */
@@ -584,7 +587,7 @@ export const useCommentsStore = defineStore('comments', () => {
     } catch (error) {
       console.warn('Failed to convert comment', error);
       return;
-    };
+    }
   };
 
   return {

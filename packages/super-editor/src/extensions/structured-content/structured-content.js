@@ -1,6 +1,5 @@
 import { Node, Attribute } from '@core/index.js';
 
-
 export const StructuredContent = Node.create({
   name: 'structuredContent',
   group: 'inline',
@@ -11,7 +10,7 @@ export const StructuredContent = Node.create({
     return {
       annotationClass: 'sd-structured-content-tag',
       htmlAttributes: {},
-    }
+    };
   },
 
   parseDOM() {
@@ -24,15 +23,14 @@ export const StructuredContent = Node.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0]
+    return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
   addAttributes() {
     return {
       sdtPr: {
         rendered: false,
-      }
-    }
+      },
+    };
   },
-
 });

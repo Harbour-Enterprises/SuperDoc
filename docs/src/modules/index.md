@@ -7,6 +7,7 @@
 SuperDoc can be extended via modules. There are several modules available currently.
 
 You can add a module by passing in a config for it in the main SuperDoc config:
+
 ```
 const config {
   ...mySuperDocConfig, // Your config
@@ -18,13 +19,12 @@ const config {
 }
 ```
 
-
-
 # Search
 
 SuperDoc 0.11 adds a new .docx search feature.
 
 ### Usage
+
 Search works the same if you're using SuperDoc or the Editor instance directly.
 
 ```
@@ -51,6 +51,7 @@ const regexResults = superdoc.search(/\b\w+ng\b/gi);
 ```
 
 ### Commands
+
 superdoc.search(...)
 // Or editor.commands.search(...)
 
@@ -58,6 +59,7 @@ superdoc.goToSearchResult(match); // Pass in a match from the result of search()
 // Or editor.commands.goToSearchResult(match);
 
 ### Customization
+
 You can customize the color of the highlights from these styles:
 
 ```
@@ -65,17 +67,15 @@ You can customize the color of the highlights from these styles:
 .ProseMirror-active-search-match
 ```
 
-
-
 # Comments
 
 The comments module can be added by adding the comments config to the modules.
 
 ```
 const comments = {
-  
+
   // Defaults to false. Set to true if you only want to show comments
-  readOnly: false, 
+  readOnly: false,
 
   // Defaults to true. Set to false if you do not want to allow comment resolution.
   allowResolve: true,
@@ -86,12 +86,12 @@ const comments = {
 ## Comments example
 
 You can run the SuperDoc Dev environment to see a working example of comments. From the main SuperDoc folder:
+
 ```
 npm install && npm run dev
 ```
 
 This will start a simple SuperDoc dev playground. Try adding some comments by adding text / selecting it / adding comments!
-
 
 ## Comments hooks
 
@@ -173,15 +173,15 @@ const config = {
 ```
 
 ### Default toolbar buttons
+
 See all buttons in defaultItems.js
-
-
 
 # Fields
 
-SuperDoc by default has the **fields** extension enabled.  You can learn more about the [**Field Annotation** node here](https://github.com/Harbour-Enterprises/SuperDoc/blob/main/packages/super-editor/src/extensions/field-annotation/field-annotation.js)
+SuperDoc by default has the **fields** extension enabled. You can learn more about the [**Field Annotation** node here](https://github.com/Harbour-Enterprises/SuperDoc/blob/main/packages/super-editor/src/extensions/field-annotation/field-annotation.js)
 
 Fields can be used when placeholder / variable content is needed inside the document. They can contain various types of data:
+
 - Plain text
 - HTML rich text
 - Images
@@ -189,6 +189,7 @@ Fields can be used when placeholder / variable content is needed inside the docu
 - Checkboxes
 
 ## Commands
+
 ```
 // Add a field annotation at the specified position
 // editorFocus = true will re-focus the editor after the command, in cases where it is not in focus (ie: drag and drop)
@@ -200,7 +201,9 @@ addFieldAnnotationAtSelection(attrs = {}, editorFocus = false)
 ```
 
 ## Field schema
+
 To create a field, we just pass in a JSON config to the addFieldAnnotationAtSelection command
+
 ```
 const fieldTypes = ['text', 'image', 'signature', 'checkbox', 'html', 'link']
 const myField = {
@@ -215,9 +218,11 @@ addFieldAnnotationAtSelection(myField)
 ```
 
 ## Drag-and-drop
+
 If you create a drag-and-drop system ([See this example](https://github.com/Harbour-Enterprises/SuperDoc/tree/main/examples/vue-fields-example)) for fields, you should listen for the Editor event 'fieldAnnotationDropped'.
 
 Example:
+
 ```
  superdoc.activeEditor.on('fieldAnnotationDropped', ({ sourceField }) => {
     superdoc.activeEditor.commands.addFieldAnnotationAtSelection(sourceField);
@@ -225,15 +230,14 @@ Example:
 ```
 
 ## Fields docx export
+
 SuperDoc supports full export and re-import of fields. By default, SuperDoc will not re-import document fields and will convert them to mustache style templates only.
 
 To enable fields import simply add the below to your config when instantiating `new SuperDoc`
+
 ```
 annotations: true
 ```
-
-
-
 
 # Annotate
 
@@ -256,6 +260,7 @@ editor.annotate(
 ```
 
 ## Example use
+
 ```
 editor.annotate(
   [
@@ -280,9 +285,11 @@ editor.commands.redo()
 ```
 
 ## Exporting after annotate()
+
 If using annotate() to do field value replacement, and then exporting the `.docx` document via `superdoc.export()` the `.docx` file will be exported with the fields still in the document (rather than replacing the fields with their expected values, ie: for final document export).
 
 You can pass in the `isFinalDoc` flag to export() in order to actually replace fields with their values, creating a seamless final document that contains no field objects.
+
 ```
 Example:
 superdoc.export({ isFinalDoc: true })

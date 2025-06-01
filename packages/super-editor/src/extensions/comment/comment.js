@@ -21,11 +21,11 @@ export const CommentRangeStart = Node.create({
     return {
       htmlAttributes: {
         contentEditable: 'false',
-      }
-    }
+      },
+    };
   },
 
-  renderDOM({ htmlAttributes}) {
+  renderDOM({ htmlAttributes }) {
     return ['commentRangeStart', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
   },
 
@@ -59,8 +59,8 @@ export const CommentRangeEnd = Node.create({
     return {
       htmlAttributes: {
         contentEditable: 'false',
-      }
-    }
+      },
+    };
   },
 
   parseDOM() {
@@ -97,8 +97,8 @@ export const CommentReference = Node.create({
     return {
       htmlAttributes: {
         contentEditable: 'false',
-      }
-    }
+      },
+    };
   },
 
   parseDOM() {

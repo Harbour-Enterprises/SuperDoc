@@ -27,8 +27,8 @@
   min-height: 18px;
   min-width: 100%;
   width: 100%;
-  border-top: 1px solid #DBDBDB;
-  border-bottom: 1px solid #DBDBDB;
+  border-top: 1px solid #dbdbdb;
+  border-bottom: 1px solid #dbdbdb;
   cursor: default;
 }
 
@@ -45,14 +45,11 @@
 Workaround to display pagination in footer 
 on the right if it is inside shape textbox.
 */
-.pagination-section-footer .sd-editor-shape-container:has(
-  [data-id="auto-page-number"],
-  [data-id="auto-total-pages"]
-) {
+.pagination-section-footer .sd-editor-shape-container:has([data-id='auto-page-number'], [data-id='auto-total-pages']) {
   margin-left: auto;
 }
 
-.pagination-section-header img[contenteditable="false"],
-.pagination-section-footer img[contenteditable="false"] {
+.pagination-section-header img[contenteditable='false'],
+.pagination-section-footer img[contenteditable='false'] {
   pointer-events: none;
 }

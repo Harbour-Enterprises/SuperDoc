@@ -39,10 +39,8 @@ export const onMarginClickCursorChange = (event, editor) => {
       cursorPos = node?.isText && charAtPos !== ' ' ? pos - 1 : pos;
     }
 
-    const transaction = view.state.tr.setSelection(
-      TextSelection.create(view.state.doc, cursorPos)
-    );
+    const transaction = view.state.tr.setSelection(TextSelection.create(view.state.doc, cursorPos));
     view.dispatch(transaction);
     view.focus();
   }
-}
+};

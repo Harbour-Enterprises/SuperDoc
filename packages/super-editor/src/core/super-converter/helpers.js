@@ -142,42 +142,43 @@ const getHexColorFromDocxSystem = (docxColor) => {
   ]);
 
   return colorMap.get(docxColor) || null;
-}
+};
 
 function isValidHexColor(color) {
   if (!color || typeof color !== 'string') return false;
 
-  switch(color.length) {
-    case 3: return /^[0-9A-F]{3}$/i.test(color);
-    case 6: return /^[0-9A-F]{6}$/i.test(color);
-    case 8: return /^[0-9A-F]{8}$/i.test(color);
-    default: return false;
+  switch (color.length) {
+    case 3:
+      return /^[0-9A-F]{3}$/i.test(color);
+    case 6:
+      return /^[0-9A-F]{6}$/i.test(color);
+    case 8:
+      return /^[0-9A-F]{8}$/i.test(color);
+    default:
+      return false;
   }
 }
 
 const componentToHex = (val) => {
   const a = Number(val).toString(16);
   return a.length === 1 ? '0' + a : a;
-}
+};
 
 const rgbToHex = (rgb) => {
-  return '#' + rgb
-    .match(/\d+/g)
-    .map(componentToHex)
-    .join('');
-}
+  return '#' + rgb.match(/\d+/g).map(componentToHex).join('');
+};
 
 const getLineHeightValueString = (lineHeight, defaultUnit, lineRule = '', isObject = false) => {
   let [value, unit] = parseSizeUnit(lineHeight);
   if (Number.isNaN(value) || value === 0) return {};
   if (lineRule === 'atLeast' && value < 1) return {};
-  
+
   unit = unit ? unit : defaultUnit;
 
   // MS Word has a slightly bigger gap with line spacing equal to Superdoc's
   value += unit ? 4 : 0.2;
   return isObject ? { ['line-height']: `${value}${unit}` } : `line-height: ${value}${unit}`;
-}
+};
 
 const deobfuscateFont = (arrayBuffer, guidHex) => {
   const dta = new Uint8Array(arrayBuffer);
@@ -187,7 +188,6 @@ const deobfuscateFont = (arrayBuffer, guidHex) => {
     console.error('Invalid GUID');
     return;
   }
-  
 
   // Convert GUID hex string to byte array
   const guidBytes = new Uint8Array(16);
@@ -203,7 +203,7 @@ const deobfuscateFont = (arrayBuffer, guidHex) => {
   }
 
   return dta.buffer;
-}
+};
 
 export {
   inchesToTwips,
@@ -227,5 +227,5 @@ export {
   ptToTwips,
   twipsToPt,
   getLineHeightValueString,
-  deobfuscateFont
+  deobfuscateFont,
 };
