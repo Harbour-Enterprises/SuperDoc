@@ -1448,10 +1448,10 @@ export class Editor extends EventEmitter {
   /**
    * Replace the current file
    * @async
-   * @param {Object} file - New file data
+   * @param {Object} newFile - New file data
    * @returns {Promise<void>}
    */
-  async replaceFile(file) {
+  async replaceFile(newFile) {
     this.setOptions({ annotations: true })
     const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(newFile);
     this.setOptions({
