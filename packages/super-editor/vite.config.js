@@ -68,7 +68,7 @@ export default defineConfig(({ mode }) => {
           chunkFileNames: 'chunks/[name]-[hash].js'
         }
       },
-      minify: true,
+      minify: false,
       sourcemap: false,
     },
     server: {
