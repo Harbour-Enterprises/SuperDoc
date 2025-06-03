@@ -596,6 +596,7 @@ export class SuperToolbar extends EventEmitter {
     if (!this.activeEditor.converter.docHiglightColors.size) return;
 
     const highlightItem = this.toolbarItems.find((item) => item.name.value === 'highlight');
+    if (!highlightItem) return;
 
     const pickerColorOptions = getAvailableColorOptions();
     const perChunk = 7; // items per chunk

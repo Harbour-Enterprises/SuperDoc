@@ -72,7 +72,7 @@ export const useToolbarItem = (options) => {
   const nestedOptions = ref([]);
   if (options.options) {
     if (!Array.isArray(options.options)) throw new Error('Invalid toolbar item options - ' + options.options);
-    nestedOptions.value.push(...options.options);
+    nestedOptions.value?.push(...options.options);
   }
 
   // Activation & Deactivation

@@ -68,8 +68,11 @@ export const processTables = ({ editor, tr, annotationValues }) => {
     if (node.type.name === 'table') tables.push({ node, pos });
   });
 
-  tables.reverse().forEach((table) => {
-    generateTableIfNecessary({ tableNode: table, annotationValues, tr, editor });
+  tables.reverse().forEach(({ pos }) => {
+    const currentTableNode = tr.doc.nodeAt(pos);
+    if (!currentTableNode || currentTableNode.type.name !== 'table') return;
+
+    generateTableIfNecessary({ tableNode: { node: currentTableNode, pos }, annotationValues, tr, editor });
   });
 
   return tr;
@@ -92,7 +95,9 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, editor }) =
     if (node.type === RowType) currentRow = { node, pos };
     if (node.type === FieldType) {
       const annotationValue = getAnnotationValue(node.attrs.fieldId, annotationValues);
-      if (Array.isArray(annotationValue)) rowNodeToGenerate = currentRow;
+      if (Array.isArray(annotationValue) && node.attrs.generatorIndex === null) {
+        rowNodeToGenerate = currentRow;
+      }
     }
   });
 
