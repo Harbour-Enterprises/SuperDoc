@@ -351,7 +351,7 @@ function translateChildNodes(params) {
     let translatedNode = exportSchemaToJson({ ...params, node });
 
     const nodeType = translatedNode?.name || translatedNode?.type;
-    if (nodeType !== 'w:sdt') translatedNode = isolateAnnotations(translatedNode);
+    // if (nodeType !== 'w:sdt') translatedNode = isolateAnnotations(translatedNode);
 
     if (translatedNode instanceof Array) translatedNodes.push(...translatedNode);
     else translatedNodes.push(translatedNode);
