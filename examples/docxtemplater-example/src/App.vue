@@ -10,7 +10,8 @@ import 'prismjs/themes/prism-tomorrow.css';
 import { SuperDoc, getFileObject } from '@harbour-enterprises/superdoc';
 import templateFileUrl from './assets/template.docx?url';
 import { getProcessedTemplateFromCode } from './fileProcessing';
-import { sleep } from './utils';
+import { sleep, base64ToDocx } from './utils';
+import templateB64 from './assets/template.js';
 import DocumentTab from './components/DocumentTab.vue';
 
 const highlighter = (code) => highlight(code, languages.js);
@@ -258,8 +259,11 @@ const handleCodeEditorKeydown = async () => {
 }
 
 onMounted(async () => {
+  // load template file
+  const file = base64ToDocx(templateB64);
+  // const file = await getFileObject(templateFileUrl, 'template.docx');
+
   // init template editor
-  const file = await getFileObject(templateFileUrl, 'template.docx');
   await initSuperdoc({
     file,
     name: 'template.docx',
@@ -270,7 +274,8 @@ onMounted(async () => {
   // init code editor
   await initCodeEditorWithSideEffects();
 
-  const templateFileBlob = await getFileObject(templateFileUrl, 'template.docx');
+  // const templateFileBlob = await getFileObject(templateFileUrl, 'template.docx');
+  const templateFileBlob = file;
 
   getProcessedTemplateAndUpdateOutput({
     codeString: codeInput.value,
