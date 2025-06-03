@@ -129,7 +129,6 @@ const SuperDocComponent = forwardRef(({ documentId, documentData, user, onReady 
   // Expose SuperDoc methods to parent components
   useImperativeHandle(ref, () => ({
     exportDocx: () => superdocRef.current.exportDocx(),
-    exportPdf: () => superdocRef.current.exportPdf(),
     setDocumentMode: (mode) => superdocRef.current.setDocumentMode(mode),
   }));
 
