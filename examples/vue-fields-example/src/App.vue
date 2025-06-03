@@ -6,7 +6,8 @@ import UploadFile from './UploadFile.vue';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/superdoc';
 
 // Default document
-import sampleDocument from '/sample-document.docx?url';
+// import sampleDocument from '/sample-document.docx?url';
+import sampleDocument from '../public/sample-document.js'; // stackblitz support
 
 
 const superdoc = shallowRef(null);
