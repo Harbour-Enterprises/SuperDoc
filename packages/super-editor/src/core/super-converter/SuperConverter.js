@@ -336,6 +336,7 @@ class SuperConverter {
   getThemeInfo(themeName) {
     themeName = themeName.toLowerCase();
     const theme1 = this.convertedXml['word/theme/theme1.xml'];
+    if (!theme1) return {};
     const themeData = theme1.elements.find((el) => el.name === 'a:theme');
     const themeElements = themeData.elements.find((el) => el.name === 'a:themeElements');
     const fontScheme = themeElements.elements.find((el) => el.name === 'a:fontScheme');

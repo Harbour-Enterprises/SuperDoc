@@ -2232,28 +2232,30 @@ export class DocxExporter {
     if (!name && node.type === 'text') {
       return node.text;
     }
+    
+    if (elements) {
+      if (name === 'w:instrText') {
+        tags.push(elements[0].text);
+      } else if (name === 'w:t' || name === 'w:delText' || name === 'wp:posOffset') {
+        const text = this.#replaceSpecialCharacters(elements[0].text);
+        tags.push(text);
+      } else {
+        if (elements) {
+          for (let child of elements) {
+            const newElements = this.#generateXml(child);
+            if (!newElements) continue;
 
-    if (name === 'w:instrText') {
-      tags.push(elements[0].text);
-    } else if (name === 'w:t' || name === 'w:delText' || name === 'wp:posOffset') {
-      const text = this.#replaceSpecialCharacters(elements[0].text);
-      tags.push(text);
-    } else {
-      if (elements) {
-        for (let child of elements) {
-          const newElements = this.#generateXml(child);
-          if (!newElements) continue;
+            if (typeof newElements === 'string') {
+              tags.push(newElements);
+              continue;
+            }
 
-          if (typeof newElements === 'string') {
-            tags.push(newElements);
-            continue;
+            const removeUndefined = newElements.filter((el) => {
+              return el !== '<undefined>' && el !== '</undefined>'
+            });
+
+            tags.push(...removeUndefined);
           }
-
-          const removeUndefined = newElements.filter((el) => {
-            return el !== '<undefined>' && el !== '</undefined>'
-          });
-        
-          tags.push(...removeUndefined);
         }
       }
     }
