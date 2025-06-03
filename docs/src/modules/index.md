@@ -150,7 +150,7 @@ By default, we render a toolbar with all available buttons. You can customize th
 
 You can customize the toolbar configuration via the **SuperDoc config** object.
 
-```
+```javascript
 const config = {
   // ... your SuperDoc config
   modules: {
@@ -166,7 +166,36 @@ const config = {
 
       // Optional: Instead of specifying all the buttons you want, specify which ones to exclude
       excludeItems: ['bold', italic'], // Will exclude these from the standard toolbar
+      
+      // Optional: override icons for toolbar items.
+      // `packages/super-editor/src/components/toolbar/toolbarIcons.js` - for reference.
+      icons: {
+        bold: '<svg></svg>',
+      },
 
+      // Optional: override text for toolbar items.
+      // `packages/super-editor/src/components/toolbar/toolbarTexts.js` - for reference.
+      texts: {
+        color: 'Change text color',
+      },
+
+      // Optional: Customize the fonts list.
+      fonts: [
+        {
+          label: 'Custom font',
+          key: 'Custom font, serif',
+          fontWeight: 400,
+          props: {
+            style: { fontFamily: 'Custom font, serif' },
+          },
+        },
+      ],
+
+      // Optional: disable hiding toolbar buttons on small screens (true by default).
+      hideButtons: false,
+
+      // Optional: make toolbar responsive to its container not to the entire window.
+      responsiveToContainer: true,
     }
   }
 }
