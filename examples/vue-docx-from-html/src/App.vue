@@ -2,6 +2,7 @@
 import '@harbour-enterprises/superdoc/style.css';
 import { onMounted } from 'vue';
 import { SuperDoc } from '@harbour-enterprises/superdoc';
+import sampleDocument from '../public/sample-document.js';
 
 const init = () => {
   const mySuperDoc = new SuperDoc({
@@ -19,7 +20,8 @@ const init = () => {
     toolbarGroups: ['center'],
 
     // Optional, pass in an initial docx document to use your own template rather than a blank doc
-    document: '/sample-document.docx',
+    // document: '/sample-document.docx',
+    document: sampleDocument,
   });
 };
 
