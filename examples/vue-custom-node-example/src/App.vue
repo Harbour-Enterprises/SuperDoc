@@ -5,7 +5,8 @@ import { SuperDoc } from '@harbour-enterprises/superdoc';
 import UploadFile from './UploadFile.vue';
 
 // Default document
-import sampleDocument from '/sample-document.docx?url';
+// import sampleDocument from '/sample-document.docx?url';
+import sampleDocument from '../public/sample-document.js'; // stackblitz support
 
 // This is our custom node that we are creating for this example
 import { myCustomNode } from './custom-node';
