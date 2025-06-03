@@ -24,10 +24,12 @@
   <div id="superdoc"></div>
 
   <script type="module">
+    import sampleDoc from './sample.js';
     const superdoc = new SuperDocLibrary.SuperDoc({
       selector: '#superdoc',
       toolbar: '#my-toolbar',
-      document: './sample.docx', // URL, File or document config
+      // document: './sample.docx', // URL, File or document config
+      document: sampleDoc, // stackblitz support
       documentMode: 'editing',
       pagination: true,
       rulers: true,
