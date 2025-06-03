@@ -7,7 +7,7 @@
 SuperDoc can be extended via modules. There are several modules available currently.
 
 You can add a module by passing in a config for it in the main SuperDoc config:
-```
+```javascript
 const config {
   ...mySuperDocConfig, // Your config
 
@@ -27,7 +27,7 @@ SuperDoc 0.11 adds a new .docx search feature.
 ### Usage
 Search works the same if you're using SuperDoc or the Editor instance directly.
 
-```
+```javascript
 const superdoc = new SuperDoc({ ...myConfig });
 
 // Text search
@@ -60,7 +60,7 @@ superdoc.goToSearchResult(match); // Pass in a match from the result of search()
 ### Customization
 You can customize the color of the highlights from these styles:
 
-```
+```css
 .ProseMirror-search-match
 .ProseMirror-active-search-match
 ```
@@ -71,7 +71,7 @@ You can customize the color of the highlights from these styles:
 
 The comments module can be added by adding the comments config to the modules.
 
-```
+```javascript
 const comments = {
   
   // Defaults to false. Set to true if you only want to show comments
@@ -86,7 +86,7 @@ const comments = {
 ## Comments example
 
 You can run the SuperDoc Dev environment to see a working example of comments. From the main SuperDoc folder:
-```
+```bash
 npm install && npm run dev
 ```
 
@@ -99,7 +99,7 @@ This will start a simple SuperDoc dev playground. Try adding some comments by ad
 
 The onCommentsUpdate is fired whenever there is a change to the list of comments (new, update, edit, delete and so on). You can handle these events by passing in a handler into the main SuperDoc config
 
-```
+```javascript
 const config = {
   ...mySuperDocConfig, // Your config
 
@@ -150,7 +150,7 @@ By default, we render a toolbar with all available buttons. You can customize th
 
 You can customize the toolbar configuration via the **SuperDoc config** object.
 
-```
+```javascript
 const config = {
   // ... your SuperDoc config
   modules: {
@@ -166,7 +166,36 @@ const config = {
 
       // Optional: Instead of specifying all the buttons you want, specify which ones to exclude
       excludeItems: ['bold', italic'], // Will exclude these from the standard toolbar
+      
+      // Optional: override icons for toolbar items.
+      // `packages/super-editor/src/components/toolbar/toolbarIcons.js` - for reference.
+      icons: {
+        bold: '<svg></svg>',
+      },
 
+      // Optional: override text for toolbar items.
+      // `packages/super-editor/src/components/toolbar/toolbarTexts.js` - for reference.
+      texts: {
+        color: 'Change text color',
+      },
+
+      // Optional: Customize the fonts list.
+      fonts: [
+        {
+          label: 'Custom font',
+          key: 'Custom font, serif',
+          fontWeight: 400,
+          props: {
+            style: { fontFamily: 'Custom font, serif' },
+          },
+        },
+      ],
+
+      // Optional: disable hiding toolbar buttons on small screens (true by default).
+      hideButtons: false,
+
+      // Optional: make toolbar responsive to its container not to the entire window.
+      responsiveToContainer: true,
     }
   }
 }
@@ -184,7 +213,7 @@ You can create a custom toolbar buttons in SuperDoc to perform custom actions.
 [Please see an example of creating buttons with different commands, as well as a custom dropdown here](https://github.com/Harbour-Enterprises/SuperDoc/tree/main/examples/vue-custom-mark)
 
 To create a custom button, simply create a JSON config. This will be generated using the use-toolbar-button composable. [See the composable for all available options](https://github.com/Harbour-Enterprises/SuperDoc/blob/main/packages/super-editor/src/components/toolbar/use-toolbar-item.js). 
-```
+```javascript
 const myBasicButtonConfig = {
   type: 'button',
   name: 'insertCustomMark',
@@ -199,7 +228,7 @@ const myBasicButtonConfig = {
 ```
 
 Alternatively, you can also pass in a function instead of an existing command name:
-```
+```javascript
 const myBasicButtonConfig = {
   type: 'button',
   name: 'insertCustomMark',
@@ -221,7 +250,7 @@ const myBasicButtonConfig = {
 ```
 
 Example of creating a custom dropdown:
-```
+```javascript
 const customDropDown = {
   type: 'dropdown',
   name: 'customDropdown',
@@ -253,7 +282,7 @@ const customDropDown = {
 ```
 
 Finally, simply pass in a list of custom buttons to your toolbar config:
-```
+```javascript
 const mySuperDocConfig = {
   ...config, // The rest of your SuperDoc config
   modules: {
@@ -281,7 +310,7 @@ Fields can be used when placeholder / variable content is needed inside the docu
 - Checkboxes
 
 ## Commands
-```
+```javascript
 // Add a field annotation at the specified position
 // editorFocus = true will re-focus the editor after the command, in cases where it is not in focus (ie: drag and drop)
 addFieldAnnotation(pos, attrs = {}, editorFocus = false)
@@ -293,7 +322,7 @@ addFieldAnnotationAtSelection(attrs = {}, editorFocus = false)
 
 ## Field schema
 To create a field, we just pass in a JSON config to the addFieldAnnotationAtSelection command
-```
+```javascript
 const fieldTypes = ['text', 'image', 'signature', 'checkbox', 'html', 'link']
 const myField = {
   displayLabel: 'My placeholder field',     // Placeholder text
@@ -310,7 +339,7 @@ addFieldAnnotationAtSelection(myField)
 If you create a drag-and-drop system ([See this example](https://github.com/Harbour-Enterprises/SuperDoc/tree/main/examples/vue-fields-example)) for fields, you should listen for the Editor event 'fieldAnnotationDropped'.
 
 Example:
-```
+```javascript
  superdoc.activeEditor.on('fieldAnnotationDropped', ({ sourceField }) => {
     superdoc.activeEditor.commands.addFieldAnnotationAtSelection(sourceField);
   });
@@ -349,7 +378,7 @@ editor.annotate(
 ```
 
 ## Example use
-```
+```javascript
 editor.annotate(
   [
     {
@@ -376,7 +405,7 @@ editor.commands.redo()
 If using annotate() to do field value replacement, and then exporting the `.docx` document via `superdoc.export()` the `.docx` file will be exported with the fields still in the document (rather than replacing the fields with their expected values, ie: for final document export).
 
 You can pass in the `isFinalDoc` flag to export() in order to actually replace fields with their values, creating a seamless final document that contains no field objects.
-```
-Example:
+```javascript
+// Example:
 superdoc.export({ isFinalDoc: true })
 ```
