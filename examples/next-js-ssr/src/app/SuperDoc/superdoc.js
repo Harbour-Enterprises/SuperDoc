@@ -2,7 +2,30 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import './superdoc.css';
+import sampleDocumentB64 from '../../../public/sample-document.js';
 import '@harbour-enterprises/superdoc/style.css';
+
+const base64ToDocx = (base64String, filename) => {
+  try {
+      const binaryString = atob(base64String);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      const blob = new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+
+      const file = new File([blob], filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+      return file;
+  } catch (error) {
+      console.error('Error converting base64 to DOCX:', error);
+  }
+}
+
+const sampleDocument = base64ToDocx(sampleDocumentB64);
 
 export default function SuperDocEditor() {
   const superdocContainerRef = useRef(null);
@@ -35,7 +58,7 @@ export default function SuperDocEditor() {
   };
 
   useEffect(() => {
-    initSuperDoc();
+    initSuperDoc(sampleDocument);
   }, []);
 
   const handleImport = useCallback(async () => {
