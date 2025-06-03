@@ -1,8 +1,31 @@
 import { useRef, useState } from 'react';
 import DocumentEditor from './components/DocumentEditor';
+import sampleDocB64 from '../public/sample.js';
+
+const base64ToDocx = (base64String, filename) => {
+  try {
+      const binaryString = atob(base64String);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+      }
+
+      const blob = new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      });
+
+      const file = new File([blob], filename, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+      return file;
+  } catch (error) {
+      console.error('Error converting base64 to DOCX:', error);
+  }
+}
+
+const sampleDoc = base64ToDocx(sampleDocB64);
 
 function App() {
-  const [documentFile, setDocumentFile] = useState(null);
+  const [documentFile, setDocumentFile] = useState(sampleDoc);
   const fileInputRef = useRef(null);
 
   const handleFileChange = (event) => {
