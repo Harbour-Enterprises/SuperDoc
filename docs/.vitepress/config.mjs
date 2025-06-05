@@ -61,6 +61,7 @@ function sidebar() {
           { text: 'Installation', link: '/#installation' },
           { text: 'Basic Usage', link: '/#basic-usage' },
           { text: 'Configuration', link: '/#configuration' },
+          { text: 'Accessibility', link: '/#accessibility' },
         ],
       },
       {
