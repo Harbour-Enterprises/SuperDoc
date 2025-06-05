@@ -415,6 +415,25 @@ superdoc.export({ isFinalDoc: true })
 
 You can convert .docx files to PDF with our conversion endpoint. This must be done from the backend, so if you need conversion in the frontend, make sure to set up an endpoint in your own backend that you call from the frontend (which then in turn calls our conversion endpoint)
 
+## Authentication
+
+To authenticate you need to add an `x-api-key` header with your API key:
+
+```bash
+x-api-key: YOUR_API_KEY
+```
+
+::: warning Security Note
+
+Your API keys carry many privileges, so be sure to keep them secure:
+
+- You need to contact superdoc team for an API key: q@superdoc.dev
+- Never use API keys in client-side code, JavaScript, mobile apps, or public repositories
+- Store keys securely as environment variables or in secure configuration files
+- Limit API key access to only essential team members
+- Don't embed credentials directly in your code base, even if it's private
+:::
+
 **Endpoint**
 
 ```http
