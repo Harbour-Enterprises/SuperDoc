@@ -226,6 +226,32 @@ superdoc.getHTML()
 
 ```
 
+
+## Accessibility
+
+
+SuperDoc is built with accessibility in mind, providing comprehensive support for screen readers and keyboard navigation.
+
+### High contrast mode
+
+You can enable/disable high contrast mode at any point after the editor is ready by calling the `setHighContrastMode()` function on the `superdoc` instance.
+
+```js
+const config = {
+  // ...
+  onReady: (event) => {
+    // Initialize high contrast mode
+    event.superdoc.setHighContrastMode(true);
+  },
+  // ...
+};
+
+const editor = new SuperDoc(config);
+// Or at any point later (if the editor is ready)
+editor.setHighContrastMode(true);
+```
+
+
 ## Next Steps
 
 - See [Integration](/integration/) for framework-specific integration guides
