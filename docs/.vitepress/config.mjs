@@ -89,6 +89,7 @@ function sidebar() {
           { text: 'Search', link: '/modules/#search' },
           { text: 'Fields', link: '/modules/#fields' },
           { text: 'Annotate', link: '/modules/#annotate' },
+          { text: 'Convert to PDF', link: '/modules/#pdf-conversion' },
         ]
       },
       {

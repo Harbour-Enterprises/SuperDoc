@@ -409,3 +409,98 @@ You can pass in the `isFinalDoc` flag to export() in order to actually replace f
 // Example:
 superdoc.export({ isFinalDoc: true })
 ```
+
+
+# PDF conversion
+
+You can convert .docx files to PDF with our conversion endpoint. This must be done from the backend, so if you need conversion in the frontend, make sure to set up an endpoint in your own backend that you call from the frontend (which then in turn calls our conversion endpoint)
+
+**Endpoint**
+
+```http
+POST https://api.myharbourshare.com/v2/documents/convert
+```
+
+
+**Request Body**
+| Field | Type | Description | Required |
+|:------|:-----|:------------|:--------:|
+| file_base64 | `string` | Base64 of original docx document | ✓ |
+| filename | `string` | Original name of the document | ✓ |
+| final_format | `string` | Format to convert to (default: `pdf`) | |
+
+**Response Body**
+
+| Field | Type | Description |
+|:------|:-----|:------------|
+| file_base64 | `string` | Base64 of converted document |
+| filename | `string` | Updated filename with proper format |
+
+:::warning Important
+- The document must be in a format that can be converted to the requested output format
+- The Base64 string should be valid
+:::
+
+:::details Example Request
+
+```json
+POST /documents/convert
+
+{
+  "file_base64": "UEsDBBQABgAIAAAAIQDTutUjug...",
+  "filename": "example_document.docx",
+  "final_format": "pdf"
+}
+```
+
+
+:::
+
+:::details Success Response
+
+```json
+{
+  "file_base64": "JVBERi0xLjcKJcOkw7zDtsOfCjIgMCBvYmoK...",
+  "filename": "example_document.pdf"
+}
+```
+
+:::
+
+:::details Error Response
+
+```json
+{
+    "code": 3001,
+    "message": "Invalid request",
+    "detail": "The request payload failed validation. Please check the errors array for details.",
+    "docs": "https://docs.harbourshare.com/errors/3001",
+    "errors": [
+        {
+            "path": "file_base64",
+            "code": "custom",
+            "message": "file_base64 must be a valid Base64-encoded string",
+            "internal_message": "Validation error: value_error",
+            "resolution": "Provide a valid value that meets all requirements",
+            "docs": "https://docs.harbourshare.com/errors/#custom"
+        }
+    ]
+}
+```
+
+:::
+
+**Supported Formats**
+
+The API currently supports the following conversion formats:
+
+1. **PDF**
+   > - Convert documents to PDF format
+   > - Maintains formatting and layout of the original document
+   > - Default format if none specified
+
+**Notes**
+
+- Conversion operations are asynchronous and may take a few seconds to complete
+- If the base64 is invalid, the conversion won't be possible
+- This approach is secure as data is not persisted on our servers and uploading a document is not required
