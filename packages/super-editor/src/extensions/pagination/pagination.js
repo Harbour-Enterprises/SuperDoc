@@ -357,7 +357,7 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
       if (currentPageNumber === 1) {
         const headerId = getHeaderFooterId(currentPageNumber, 'headerIds', editor, currentNode);
         decorations.pop(); // Remove the first header and replace with sectPr header
-        const newFirstHeader = createHeader(pageMargins, pageSize, sectionData, headerId);
+        const newFirstHeader = createHeader(pageMargins, pageSize, sectionData, headerId, editor);
         const pageBreak = createPageBreak({ editor, header: newFirstHeader, isFirstHeader: true });
         decorations.push(Decoration.widget(0, pageBreak, { key: 'stable-key' }));
       }
@@ -499,7 +499,7 @@ function createHeader(pageMargins, pageSize, sectionData, headerId, editor) {
   const availableHeight = headerHeight - headerMargin;
   const editorContainer = document.createElement('div');
 
-  if (!headerId && !editor.converter.headerIds['default']) {
+  if (!headerId && !editor?.converter?.headerIds?.['default']) {
     headerId = 'rId' + generateDocxRandomId();
     editor.converter.headerIds['default'] = headerId;
   }
