@@ -9,18 +9,14 @@ export const processUploadedImage = (fileData, editor) => {
 
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const { width, height } = getAllowedImageDimensions(
-        img.width,
-        img.height,
-        editor,
-      );
+      const { width, height } = getAllowedImageDimensions(img.width, img.height, editor);
       canvas.width = width;
       canvas.height = height;
 
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, width, height);
 
-      if (typeof fileData === 'string' ) {
+      if (typeof fileData === 'string') {
         const resizedBase64 = canvas.toDataURL();
         resolve(resizedBase64);
       } else {
@@ -47,13 +43,13 @@ export const getAllowedImageDimensions = (width, height, editor) => {
   const aspectRatio = width / height;
 
   if (height > maxHeight) {
-      adjustedHeight = maxHeight;
-      adjustedWidth = Math.round(maxHeight * aspectRatio);
+    adjustedHeight = maxHeight;
+    adjustedWidth = Math.round(maxHeight * aspectRatio);
   }
 
   if (adjustedWidth > maxWidth) {
-      adjustedWidth = maxWidth;
-      adjustedHeight = Math.round(maxWidth / aspectRatio);
+    adjustedWidth = maxWidth;
+    adjustedHeight = Math.round(maxWidth / aspectRatio);
   }
 
   return { width: adjustedWidth, height: adjustedHeight };
