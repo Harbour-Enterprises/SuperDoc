@@ -2,7 +2,6 @@ import { Node, Attribute } from '@core/index.js';
 import { findParentNode } from '@helpers/index.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { ListItemNodeView } from './ListItemNodeView.js';
-import { keep } from 'naive-ui/es/_utils/index.js';
 
 export const ListItem = Node.create({
   name: 'listItem',
