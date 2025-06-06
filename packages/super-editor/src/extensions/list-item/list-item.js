@@ -2,6 +2,7 @@ import { Node, Attribute } from '@core/index.js';
 import { findParentNode } from '@helpers/index.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { ListItemNodeView } from './ListItemNodeView.js';
+import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 
 export const ListItem = Node.create({
   name: 'listItem',
@@ -43,31 +44,31 @@ export const ListItem = Node.create({
   addAttributes() {
     return {
       // Virtual attribute.
-      // markerType: {
-      //   default: null,
-      //   renderDOM: (attrs) => {
-      //     let { listLevel, listNumberingType, lvlText } = attrs;
-      //     let hasListLevel = !!listLevel?.length;
+      markerType: {
+        default: null,
+        renderDOM: (attrs) => {
+          let { listLevel, listNumberingType, lvlText } = attrs;
+          let hasListLevel = !!listLevel?.length;
 
-      //     if (!hasListLevel || !lvlText) {
-      //       return {};
-      //     }
+          if (!hasListLevel || !lvlText) {
+            return {};
+          }
 
-      //     // MS Word has many custom ordered list options.
-      //     // We need to generate the correct index here.
-      //     let orderMarker = generateOrderedListIndex({
-      //       listLevel,
-      //       lvlText,
-      //       listNumberingType,
-      //     });
+          // MS Word has many custom ordered list options.
+          // We need to generate the correct index here.
+          let orderMarker = generateOrderedListIndex({
+            listLevel,
+            lvlText,
+            listNumberingType,
+          });
 
-      //     if (!orderMarker) return {};
+          if (!orderMarker) return {};
 
-      //     return {
-      //       'data-marker-type': orderMarker,
-      //     };
-      //   },
-      // },
+          return {
+            'data-marker-type': orderMarker,
+          };
+        },
+      },
 
       lvlText: {
         default: null,
