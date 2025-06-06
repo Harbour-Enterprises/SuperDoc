@@ -17,7 +17,7 @@ import { initPaginationData, PaginationPluginKey } from '@extensions/pagination/
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
 import { getRichTextExtensions } from '../extensions/index.js';
-import { AnnotatorServices } from '@helpers/annotator.js';
+import { AnnotatorHelpers } from '@helpers/annotator.js';
 import {
   prepareCommentsForExport,
   prepareCommentsForImport,
@@ -1618,11 +1618,8 @@ export class Editor extends EventEmitter {
    */
   prepareForAnnotations(annotationValues = []) {
     const { tr } = this.state;
-    const { dispatch } = this.view;
-    const newTr = AnnotatorServices.processTables({ state: this.state, tr, annotationValues });
-    this.view.dispatch(newTr);
-  
-    AnnotatorServices.annotateHeadersAndFooters({ editor: this, annotationValues });
+    const newTr = AnnotatorHelpers.processTables({ state: this.state, tr, annotationValues });
+    this.view.dispatch(newTr);  
   }
 
   /**
@@ -1632,16 +1629,17 @@ export class Editor extends EventEmitter {
    * @param {String[]} hiddenIds List of field ids to remove from the document.
    * @returns {void}
    */
-  annotate(annotationValues = [], hiddenIds = []) {
+  annotate(annotationValues = [], hiddenIds = [], removeEmptyFields = false) {
     const { state, view, schema } = this;
     let tr = state.tr;
 
-    tr = AnnotatorServices.processTables({ state: this.state, tr, annotationValues });
-    tr = AnnotatorServices.annotateDocument({
+    tr = AnnotatorHelpers.processTables({ state: this.state, tr, annotationValues });
+    tr = AnnotatorHelpers.annotateDocument({
       tr,
       schema,
       annotationValues,
       hiddenFieldIds: hiddenIds,
+      removeEmptyFields,
       editor: this,
     });
 
