@@ -1,3 +1,7 @@
+:root {
+  --sd-editor-separator-height: 18px;
+}
+
 .pagination-section-header {
   cursor: default;
 }
@@ -23,13 +27,25 @@
 .pagination-separator {
   position: relative;
   display: block;
-  height: 18px;
-  min-height: 18px;
+  height: var(--sd-editor-separator-height);
+  min-height: var(--sd-editor-separator-height);
   min-width: 100%;
   width: 100%;
   border-top: 1px solid #DBDBDB;
   border-bottom: 1px solid #DBDBDB;
   cursor: default;
+}
+
+.pagination-separator--table {
+  border: 0;
+}
+
+.pagination-separator-floating {
+  position: fixed;
+  height: var(--sd-editor-separator-height);
+  border-top: 1px solid #DBDBDB;
+  border-bottom: 1px solid #DBDBDB;
+  pointer-events: none;
 }
 
 .pagination-inner {
