@@ -19,7 +19,10 @@ const handleClick = (item) => {
       :class="{ 'toolbar-table-actions__item--border':  option.bottomBorder}"
       v-for="option in options"
       @click="handleClick(option)"
-      :data-item="option.props?.['data-item'] || ''">
+      :data-item="option.props?.['data-item'] || ''"
+      :ariaLabel="option.props?.ariaLabel"
+      role="menuitem"
+    >
       <div class="toolbar-table-actions__icon">
         <div class="toolbar-table-actions__icon-wrapper" v-html="option.icon"></div>
       </div>

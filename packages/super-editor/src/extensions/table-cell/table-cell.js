@@ -12,7 +12,9 @@ export const TableCell = Node.create({
 
   addOptions() {
     return {
-      htmlAttributes: {},
+      htmlAttributes: {
+        'aria-label': 'Table cell node'
+      },
     };
   },
 

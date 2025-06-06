@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, watch, getCurrentInstance, onMounted } from "vue";
 import { toolbarIcons } from './toolbarIcons.js';
+import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
 
 const emit = defineEmits(['submit', 'cancel']);
 const props = defineProps({
@@ -25,6 +26,7 @@ const props = defineProps({
     default: () => {},
   },
 });
+const { isHighContrastMode } = useHighContrastMode();
 
 const { proxy } = getCurrentInstance();
 const handleSubmit = () => {
@@ -86,7 +88,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="link-input-ctn">
+  <div class="link-input-ctn" :class="{'high-contrast': isHighContrastMode}">
     <div class="link-title" v-if="!href">Add link</div>
     <div class="link-title" v-else-if="isAnchor">Page anchor</div>
     <div class="link-title" v-else>Edit link</div>
@@ -96,6 +98,7 @@ onMounted(() => {
         <div class="input-icon" v-html="toolbarIcons.linkInput"></div>
         <input
           type="text"
+          name="link"
           placeholder="Type or paste a link"
           :class="{ error: urlError }"
           v-model="rawUrl"
@@ -103,11 +106,7 @@ onMounted(() => {
           @keydown="urlError = false"
         />
 
-        <div 
-          class="open-link-icon" 
-          :class="{ disabled: !validUrl }" 
-          v-html="toolbarIcons.openLink" 
-          @click="openLink"
+        <div class="open-link-icon" :class="{ disabled: !validUrl }" v-html="toolbarIcons.openLink" @click="openLink"
           data-item="btn-link-open">
         </div>
       </div>
@@ -116,7 +115,8 @@ onMounted(() => {
           <div class="remove-btn__icon" v-html="toolbarIcons.removeLink"></div>
           Remove
         </button>
-        <button class="submit-btn" v-if="showApply" @click="handleSubmit" :class="{ 'disable-btn': isDisabled }" data-item="btn-link-apply">
+        <button class="submit-btn" v-if="showApply" @click="handleSubmit"
+          :class="{ 'disable-btn': isDisabled }" data-item="btn-link-apply">
           {{ getApplyText }}
         </button>
       </div>
@@ -129,13 +129,69 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.link-input-ctn :deep(svg) {
-  width: 100%;
-  height: 100%;
-  display: block;
-  fill: currentColor;
+.link-input-ctn {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  padding: 1em;
+  border-radius: 5px;
+  background-color: #fff;
+  box-sizing: border-box;
+
+  :deep(svg) {
+    width: 100%;
+      height: 100%;
+      display: block;
+      fill: currentColor;
+    }
+    
+    .input-row {
+      align-content: baseline;
+      display: flex;
+      align-items: center;
+      font-size: 16px;
+    
+      input {
+        font-size: 13px;
+        flex-grow: 1;
+        padding: 10px;
+        border-radius: 8px;
+        padding-left: 32px;
+        box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15);
+        color: #666;
+        border: 1px solid #ddd;
+        box-sizing: border-box;
+    
+        &:active,
+        &:focus {
+          outline: none;
+          border: 1px solid #1355ff;
+        }
+        
+      }
+    }
+
+.input-icon {
+  position: absolute;
+  transform: rotate(45deg);
+  left: 25px;
+  width: auto;
+  height: 12px;
+  color: #999;
+  pointer-events: none;
 }
 
+&.high-contrast {
+  .input-icon {
+    color: #000;
+  }
+
+  .input-row input {
+    color: #000;
+    border-color: #000;
+  }
+}
+}
 .open-link-icon {
   margin-left: 10px;
   width: 30px;
@@ -166,6 +222,7 @@ onMounted(() => {
   cursor: not-allowed;
   pointer-events: none;
 }
+
 .link-buttons {
   display: flex;
   justify-content: flex-end;
@@ -183,47 +240,33 @@ onMounted(() => {
 .link-buttons button {
   margin-left: 5px;
 }
+
 .disable-btn {
   opacity: 0.6;
   cursor: not-allowed;
   pointer-events: none;
 }
+
 .go-to-anchor a {
   font-size: 14px;
   text-decoration: underline;
 }
+
 .clickable {
   cursor: pointer;
 }
+
 .link-title {
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 10px;
 }
 
-.input-icon {
-  position: absolute;
-  transform: rotate(45deg);
-  left: 25px;
-  width: auto;
-  height: 12px;
-  color: #999;
-  pointer-events: none;
-}
-
 .hasBottomMargin {
   margin-bottom: 1em;
 }
 
-.link-input-ctn {
-  width: 320px;
-  display: flex;
-  flex-direction: column;
-  padding: 1em;
-  border-radius: 5px;
-  background-color: #fff;
-  box-sizing: border-box;
-}
+
 .remove-btn {
   display: inline-flex;
   justify-content: center;
@@ -240,9 +283,11 @@ onMounted(() => {
   border: 1px solid #ebebeb;
   box-sizing: border-box;
 }
+
 .remove-btn:hover {
   background-color: #dbdbdb;
 }
+
 .submit-btn {
   display: inline-flex;
   justify-content: center;
@@ -258,37 +303,14 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.2s ease;
   box-sizing: border-box;
-}
-.submit-btn:hover {
-  background-color: #0d47c1;
-}
-
-.input-row {
-  align-content: baseline;
-  display: flex;
-  align-items: center;
+/* &.high-contrast {
+    background-color: black;
+  } */
+  &:hover {
+    background-color: #0d47c1;
+  }
 }
 
-.input-row input {
-  font-size: 13px;
-  flex-grow: 1;
-  padding: 10px;
-  border-radius: 8px;
-  padding-left: 32px;
-  box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15);
-  color: #666;
-  border: 1px solid #ddd;
-  box-sizing: border-box;
-}
-.input-row input:active,
-.input-row input:focus {
-  outline: none;
-  border: 1px solid #1355ff;
-}
-
-.input-row {
-  font-size: 16px;
-}
 
 .error {
   border-color: red !important;

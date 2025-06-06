@@ -114,15 +114,6 @@ function handleListNodes({
     // Skip items we've already processed
     if (item.seen) continue;
 
-    // Sometimes there are paragraph nodes that only have pPr element and no text node - these are
-    // Spacers in the XML and need to be appended to the last item.
-    if (item.elements && !hasTextNode(item.elements)) {
-      const n = handleStandardNode({ ...params, nodes: [item] }).nodes[0];
-      if (n) parsedListItems[parsedListItems.length - 1]?.content.push(n); 
-      item.seen = true;
-      continue;
-    }
-
     // Get the properties of the node - this is where we will find depth level for the node
     // As well as many other list properties
     const { attributes, elements, marks = [] } = parseProperties(item, docx);
@@ -175,10 +166,11 @@ function handleListNodes({
       item.seen = true;
 
       const schemaElements = [];
-      
+
+      const nodeContents = nodeListHandler.handler({ ...params, nodes: [ attributes.paragraphProperties, ...elements ] })?.filter((n) => n) || [];
       let parNode = {
         type: 'paragraph',
-        content: nodeListHandler.handler({ ...params, nodes: [ attributes.paragraphProperties, ...elements ] })?.filter((n) => n),
+        content: nodeContents,
       };
 
       // Normalize text nodes.

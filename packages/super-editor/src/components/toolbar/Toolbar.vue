@@ -46,14 +46,21 @@ const onWindowResized = async () => {
 };
 const onResizeThrottled = throttle(onWindowResized, 300);
 
-const handleCommand = ({ item, argument, option }) => {
-  proxy.$toolbar.emitCommand({ item, argument, option });
+const handleCommand = ({ item, argument, option, switchFocusToEditor = true }) => {
+  proxy.$toolbar.emitCommand({ item, argument, option, switchFocusToEditor });
 };
+
 </script>
 
 <template>
-  <div class="superdoc-toolbar" :key="toolbarKey">
+  <div 
+    class="superdoc-toolbar" 
+    :key="toolbarKey"
+    role="toolbar"
+    aria-label="Toolbar"
+  >
     <ButtonGroup
+      tabindex="0"
       v-if="showLeftSide"
       :toolbar-items="getFilteredItems('left')"
       position="left"
@@ -61,12 +68,14 @@ const handleCommand = ({ item, argument, option }) => {
       class="superdoc-toolbar-group-side"
     />
     <ButtonGroup
+      tabindex="0"
       :toolbar-items="getFilteredItems('center')"
       :overflow-items="proxy.$toolbar.overflowItems"
       position="center"
       @command="handleCommand"
     />
     <ButtonGroup
+      tabindex="0"
       v-if="showRightSide"
       :toolbar-items="getFilteredItems('right')"
       position="right"

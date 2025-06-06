@@ -15,7 +15,7 @@ const editor = shallowRef(null);
 const snapshot = shallowRef(null);
 
 const init = (fileToLoad) => {
-  superdoc.value = new SuperDoc({
+  const config = {
     // Can also be a class ie: .main-editor
     selector: '#editor',
 
@@ -23,8 +23,6 @@ const init = (fileToLoad) => {
     pagination: true,
 
     rulers: true,
-
-    document: fileToLoad ? { data: fileToLoad } : sampleDocument,
 
     // Initialize the toolbar
     toolbar: '#toolbar',
@@ -35,7 +33,12 @@ const init = (fileToLoad) => {
 
     // Listen for ready event
     onReady,
-  });
+  };
+
+  if (fileToLoad) config.document = fileToLoad;
+  // config.document = sampleDocument; // or try sample document
+
+  superdoc.value = new SuperDoc(config);
 };
 
 const handleFileUpdate = (file) => {

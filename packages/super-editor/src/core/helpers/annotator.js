@@ -166,20 +166,17 @@ const getAnnotationValue = (id, annotationValues) => {
 };
 
 /**
- * Annotate headers and footers in the document
- * 
- * @param {Object} param0 
- * @param {Object} param0.editor The editor instance
- * @param {Array} param0.annotationValues The annotation values to apply
- * @param {Array} param0.hiddenFieldIds List of field IDs to hide
- * @returns {void}
+ * Get all header and footer editors from the editor instance
+ * @param {Editor} editor The editor instance
+ * @returns {Object[]} An array of header and footer editors
  */
-const annotateHeadersAndFooters = ({ editor, annotationValues = [], hiddenFieldIds = [] }) => {
+export const getAllHeaderFooterEditors = (editor) => {
   const sections = {
     header: editor.converter.headers || {},
     footer: editor.converter.footers || {},
   };
 
+  const allEditors = [];
   Object.entries(sections).forEach(([type, items]) => {
     const editorsKey = `${type}Editors`;
     Object.entries(items).forEach(([sectionId, data]) => {
@@ -198,29 +195,52 @@ const annotateHeadersAndFooters = ({ editor, annotationValues = [], hiddenFieldI
           }),
         };
         editor.converter[editorsKey].push(sectionEditor);
+        allEditors.push({
+          ...sectionEditor,
+          key: editorsKey,
+          type,
+          sectionId,
+        })
       }
-
-      sectionEditor.editor.annotate(annotationValues, hiddenFieldIds);
-      onHeaderFooterDataUpdate(
-        { editor: sectionEditor.editor },
-        editor,
-        sectionId,
-        type
-      );
     });
+  });
+
+  return allEditors;
+};
+
+/**
+ * Annotate headers and footers in the document
+ * 
+ * @param {Object} param0 
+ * @param {Object} param0.editor The editor instance
+ * @param {Array} param0.annotationValues The annotation values to apply
+ * @param {Array} param0.hiddenFieldIds List of field IDs to hide
+ * @returns {void}
+ */
+const annotateHeadersAndFooters = ({ editor, annotationValues = [], hiddenFieldIds = [], removeEmptyFields = false }) => {
+  const allEditors = getAllHeaderFooterEditors(editor);
+  allEditors.forEach(({ sectionId, editor: sectionEditor, type }) => {
+    sectionEditor.annotate(annotationValues, hiddenFieldIds, removeEmptyFields);
+    onHeaderFooterDataUpdate(
+      { editor: sectionEditor },
+      editor,
+      sectionId,
+      type
+    );
   });
 };
 
 export const annotateDocument = ({
   annotationValues = [],
   hiddenFieldIds = [],
+  removeEmptyFields = false,
   schema,
   tr,
   editor,
 }) => {
 
   // Annotate headers and footers first
-  annotateHeadersAndFooters({ editor, annotationValues, hiddenFieldIds });
+  annotateHeadersAndFooters({ editor, annotationValues, hiddenFieldIds, removeEmptyFields });
 
   const annotations = [];
   const FieldType = schema.nodes.fieldAnnotation;
@@ -287,14 +307,16 @@ export const annotateDocument = ({
     }
   }
 
-  // perform deletes all in one go (descending positions)
-  Array.from(toDelete)
-    .sort((a, b) => b - a)
-    .forEach(pos => {
-      const ann = annotations.find(a => a.pos === pos);
-      if (!ann) return;
-      tr = tr.delete(pos, pos + ann.node.nodeSize);
-    });
+  if (removeEmptyFields) {
+    // perform deletes all in one go (descending positions)
+    Array.from(toDelete)
+      .sort((a, b) => b - a)
+      .forEach(pos => {
+        const ann = annotations.find(a => a.pos === pos);
+        if (!ann) return;
+        tr = tr.delete(pos, pos + ann.node.nodeSize);
+      });
+  };
 
     return tr;
 };
@@ -325,9 +347,46 @@ const getFormattedDate = (input = null, format = '') => {
   });
 };
 
-export const AnnotatorServices = {
+const updateHeaderFooterFieldAnnotations = ({ editor, fieldIdOrArray, attrs = {} }) => {
+  if (!editor) return;
+
+  const sectionEditors = getAllHeaderFooterEditors(editor);
+
+  sectionEditors.forEach(({ editor: sectionEditor, sectionId, type }) => {
+    sectionEditor.commands.updateFieldAnnotations(fieldIdOrArray, attrs);
+
+    onHeaderFooterDataUpdate(
+      { editor: sectionEditor },
+      editor,
+      sectionId,
+      type,
+    );
+  });
+};
+
+const deleteHeaderFooterFieldAnnotations = ({ editor, fieldIdOrArray }) => {
+  if (!editor) return;
+
+  const sectionEditors = getAllHeaderFooterEditors(editor);
+
+  sectionEditors.forEach(({ editor: sectionEditor, sectionId, type }) => {
+    sectionEditor.commands.deleteFieldAnnotations(fieldIdOrArray);
+
+    onHeaderFooterDataUpdate(
+      { editor: sectionEditor },
+      editor,
+      sectionId,
+      type,
+    );
+  });
+};
+
+export const AnnotatorHelpers = {
   getFieldAttrs,
   processTables,
   annotateDocument,
   annotateHeadersAndFooters,
+  getAllHeaderFooterEditors,
+  updateHeaderFooterFieldAnnotations,
+  deleteHeaderFooterFieldAnnotations,
 };

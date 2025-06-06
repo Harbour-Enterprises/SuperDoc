@@ -53,7 +53,7 @@ const init = async () => {
     toolbarGroups: ['left', 'center', 'right'],
     pagination: true,
     rulers: false,
-    annotations: false,
+    annotations: true,
     isInternal,
     telemetry: false,
     // format: 'docx',
@@ -77,11 +77,14 @@ const init = async () => {
     //     isNewFile: true,
     //   },
     // ],
+    // cspNonce: 'testnonce123',
     modules: {
       comments: {
         // comments: sampleComments,
         overflow: true,
         selector: 'comments-panel',
+        // useInternalExternalComments: true,
+        // suppressInternalExternal: true,
       },
       toolbar: {
         selector: 'toolbar',
@@ -94,6 +97,7 @@ const init = async () => {
         // hideButtons: false,
         // responsiveToContainer: true,
         excludeItems: [], // ['italic', 'bold'],
+        // texts: {},
       },
       // 'hrbr-fields': {},
 
@@ -150,6 +154,11 @@ const exportDocx = async (commentsType) => {
   await superdoc.value.export({ commentsType });
 };
 
+const exportDocxBlob = async () => {
+  const blob = await superdoc.value.export({ commentsType: 'external', triggerDownload: false });
+  console.debug(blob);
+};
+
 const onEditorCreate = ({ editor }) => {
   activeEditor.value = editor;
 
@@ -202,6 +211,7 @@ onMounted(async () => {
           <button class="dev-app__header-export-btn" @click="exportDocx()">Export Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('clean')">Export clean Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('external')">Export external Docx</button>
+          <button class="dev-app__header-export-btn" @click="exportDocxBlob()">Export Docx Blob</button>
           <button class="dev-app__header-export-btn" @click="toggleCommentsPanel">Toggle comments panel</button>
         </div>
       </div>
@@ -231,22 +241,6 @@ onMounted(async () => {
 }
 .comments-panel {
   width: 320px;
-}
-.superdoc .super-editor {
-  background-color: white;
-  border-radius: 16px;
-  border: 1px solid #d3d3d3 !important;
-  text-align: left;
-  box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.05);
-  transition: all 0.18s ease-out;
-}
-.superdoc .super-editor:hover {
-  border: 1px solid #0160cc86;
-  box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.1);
-}
-.superdoc .super-editor:focus-within {
-  border: 1px solid #015fcc;
-  box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.3);
 }
 
 @media screen and (max-width: 1024px) {

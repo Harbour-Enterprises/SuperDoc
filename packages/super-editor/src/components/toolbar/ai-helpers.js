@@ -312,6 +312,24 @@ const formatRegistry = {
         text: content,
       }),
     },
+    {
+      name: 'italic',
+      pattern: /\*(.*?)\*/g,
+      transform: (_match, content, _editor) => ({
+        type: 'text',
+        marks: [{ type: 'italic' }],
+        text: content,
+      }),
+    },
+    {
+      name: 'underline',
+      pattern: /<(?:u|ins)>(.*?)<\/(?:u|ins)>/g,
+      transform: (_match, content, _editor) => ({
+        type: 'text',
+        marks: [{ type: 'underline' }],
+        text: content,
+      }),
+    },
   ],
 };
 

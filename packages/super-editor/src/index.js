@@ -22,6 +22,7 @@ import * as fieldAnnotationHelpers from './extensions/field-annotation/fieldAnno
 import * as trackChangesHelpers from './extensions/track-changes/trackChangesHelpers/index.js';
 import { TrackChangesBasePluginKey } from './extensions/track-changes/plugins/index.js';
 import { CommentsPluginKey } from './extensions/comment/comments-plugin.js';
+import { AnnotatorHelpers } from '@helpers/annotator.js';
 
 const Extensions = {
   Node,
@@ -58,6 +59,7 @@ export {
   helpers,
   fieldAnnotationHelpers,
   trackChangesHelpers,
+  AnnotatorHelpers,
   getMarksFromSelection,
   getActiveFormatting,
   getStarterExtensions,

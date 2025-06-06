@@ -1,4 +1,5 @@
 <script setup>
+import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
 const emit = defineEmits(['command']);
 const props = defineProps({
   active: {
@@ -6,11 +7,24 @@ const props = defineProps({
     default: false,
   },
 });
+
+const { isHighContrastMode } = useHighContrastMode();
+
+const getSeparatorColor = () => {
+  if (isHighContrastMode.value) {
+    return '#000';
+  }
+  return '#dbdbdb';
+};
 </script>
 
 <template>
-  <div class="toolbar-separator">
-    <div class="separator-inner"></div>
+  <div 
+    class="toolbar-separator"
+    role="separator"
+    aria-label="Toolbar separator"
+  >
+    <div class="separator-inner" :style="{ backgroundColor: getSeparatorColor() }"></div>
   </div>
 </template>
 
@@ -30,8 +44,8 @@ const props = defineProps({
 .toolbar-separator .separator-inner {
   width: 1.5px;
   height: 20px;
-  background-color: #dbdbdb;
 }
+
 .toolbar-button:hover {
   color: black;
   background-color: #d8dee5;

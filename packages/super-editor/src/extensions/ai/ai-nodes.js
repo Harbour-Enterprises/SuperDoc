@@ -20,6 +20,7 @@ export const AiLoaderNode = Node.create({
       htmlAttributes: {
         class: 'sd-ai-loader',
         contentEditable: 'false',
+        'aria-label': 'AI loader node'
       }
     };
   },

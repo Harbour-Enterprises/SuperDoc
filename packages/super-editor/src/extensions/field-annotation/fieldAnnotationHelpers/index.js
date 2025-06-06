@@ -6,3 +6,4 @@ export * from './findFirstFieldAnnotationByFieldId.js';
 export * from './findFieldAnnotationsBetween.js';
 export * from './findRemovedFieldAnnotations.js';
 export * from './trackFieldAnnotationsDeletion.js';
+export * from './getHeaderFooterAnnotations.js';

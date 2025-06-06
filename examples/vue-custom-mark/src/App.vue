@@ -71,21 +71,17 @@ const customDropDown = {
 
 const superdoc = shallowRef(null);
 const init = (fileToLoad) => {
-  superdoc.value = new SuperDoc({
+  const config = {
     selector: '#editor', // Can also be a class ie: .main-editor
 
     pagination: true,
 
     rulers: true,
 
-    // Load the document if provided, otherwise load the sample document
-    document: fileToLoad ? { data: fileToLoad } : sampleDocument,
-
     editorExtensions: [CustomMark],
     onReady: myCustomOnReady,
 
     modules: {
-
       // Customize the toolbar
       toolbar: {
         selector: '#toolbar',
@@ -100,7 +96,12 @@ const init = (fileToLoad) => {
       }
 
     }
-  });
+  };
+
+  if (fileToLoad) config.document = { data: fileToLoad };
+  // config.document = sampleDocument; // or try sample document
+
+  superdoc.value = new SuperDoc(config);
 };
 
 

@@ -31,6 +31,8 @@ export const HardBreak = Node.create({
       htmlAttributes: {
         contentEditable: 'false',
         lineBreakType: 'page',
+        'aria-hidden': 'true',
+        'aria-label': 'Hard break node'
       },
     }
   },

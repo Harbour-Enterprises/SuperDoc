@@ -9,6 +9,7 @@ import Toolbar from './Toolbar.vue';
 import { startImageUpload, getFileOpener } from '../../extensions/image/imageHelpers/index.js';
 import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
+import { toolbarTexts } from './toolbarTexts.js';
 import { getQuickFormatList } from '@extensions/linked-styles/linked-styles.js';
 import { getAvailableColorOptions, makeColorOption, renderColorOptions } from './color-dropdown-helpers.js';
 import { isInTable } from '@helpers/isInTable.js';
@@ -21,6 +22,7 @@ import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
  * @property {string} [role='editor'] - Role of the toolbar ('editor' or 'viewer')
  * @property {boolean} [pagination=false] - Whether pagination is enabled
  * @property {Object} [icons] - Custom icons for toolbar items
+ * @property {Object} [texts] - Custom texts for toolbar items
  * @property {string} [mode='docx'] - Editor mode
  * @property {string[]} [excludeItems=[]] - Items to exclude from the toolbar
  * @property {Object} [groups=null] - Custom groups configuration
@@ -132,6 +134,7 @@ export class SuperToolbar extends EventEmitter {
     role: 'editor',
     pagination: false,
     icons: { ...toolbarIcons },
+    texts: { ...toolbarTexts },
     fonts: null,
     hideButtons: true,
     responsiveToContainer: false,
@@ -169,6 +172,11 @@ export class SuperToolbar extends EventEmitter {
       ...toolbarIcons,
       ...config.icons,
     };
+
+    this.config.texts = {
+      ...toolbarTexts,
+      ...config.texts,
+    };
     
     this.config.hideButtons = config.hideButtons ?? true;
     this.config.responsiveToContainer = config.responsiveToContainer ?? false;
@@ -178,21 +186,21 @@ export class SuperToolbar extends EventEmitter {
       this.config.selector = this.config.element;
     }
 
-    this.toolbarContainer = this.getElementBySelector(this.config.selector);
-
-    if (!this.toolbarContainer) {
-      return;
-    }
-
+    this.toolbarContainer = this.findElementBySelector(this.config.selector);
     this.#initToolbarGroups();
     this.#makeToolbarItems({
       superToolbar: this,
       icons: this.config.icons,
+      texts: this.config.texts,
       fonts: this.config.fonts,
       hideButtons: this.config.hideButtons,
       isDev: config.isDev,
     });
 
+    if (this.config.selector && !this.toolbarContainer) {
+      return;
+    }
+    
     this.app = createApp(Toolbar);
     this.app.directive('click-outside', vClickOutside);
     this.app.config.globalProperties.$toolbar = this;
@@ -203,7 +211,7 @@ export class SuperToolbar extends EventEmitter {
     this.updateToolbarState();
   }
 
-  getElementBySelector(selector) {
+  findElementBySelector(selector) {
     let el = null;
 
     if (selector) {
@@ -584,6 +592,7 @@ export class SuperToolbar extends EventEmitter {
    * @private
    * @param {SuperToolbar} options.superToolbar - The toolbar instance
    * @param {Object} options.icons - Icons to use for toolbar items
+   * @param {Object} options.texts - Texts to use for toolbar items
    * @param {Array} options.fonts - Fonts for the toolbar item
    * @param {boolean} options.isDev - Whether in development mode
    * @returns {void}
@@ -591,17 +600,19 @@ export class SuperToolbar extends EventEmitter {
   #makeToolbarItems({
     superToolbar, 
     icons,
+    texts,
     fonts,
     hideButtons,
     isDev = false,
   } = {}) {
     const documentWidth = document.documentElement.clientWidth; // take into account the scrollbar
-    const containerWidth = this.toolbarContainer.offsetWidth;
+    const containerWidth = this.toolbarContainer?.offsetWidth ?? 0;
     const availableWidth = this.config.responsiveToContainer ? containerWidth : documentWidth;
 
     const { defaultItems, overflowItems } = makeDefaultItems({
       superToolbar,
       toolbarIcons: icons,
+      toolbarTexts: texts,
       toolbarFonts: fonts,
       hideButtons,
       availableWidth,
@@ -756,6 +767,7 @@ export class SuperToolbar extends EventEmitter {
     this.#makeToolbarItems({
       superToolbar: this,
       icons: this.config.icons,
+      texts: this.config.texts,
       fonts: this.config.fonts,
       hideButtons: this.config.hideButtons,
       isDev: this.isDev,
@@ -810,8 +822,8 @@ export class SuperToolbar extends EventEmitter {
    * @param {*} [params.argument] - The argument passed to the command
    * @returns {*} The result of the executed command, undefined if no result is returned
   */
-  emitCommand({ item, argument, option }) {
-    if (this.activeEditor && !this.activeEditor.options.isHeaderOrFooter) {
+  emitCommand({ item, argument, option, switchFocusToEditor = true }) {
+    if (this.activeEditor && !this.activeEditor.options.isHeaderOrFooter && switchFocusToEditor) {
       this.activeEditor.focus();
     }
     

@@ -14,7 +14,7 @@ const editor = shallowRef(null);
 const snapshot = shallowRef(null);
 
 const init = (fileToLoad) => {
-  superdoc.value = new SuperDoc({
+  const config = {
     // Can also be a class ie: .main-editor
     selector: '#editor',
 
@@ -26,15 +26,17 @@ const init = (fileToLoad) => {
     // Enable annotation import
     annotations: true,
 
-    document: fileToLoad ? { data: fileToLoad } : sampleDocument,
-
     // Initialize the toolbar
     toolbar: '#toolbar',
     toolbarGroups: ['center'],
 
     // Listen for ready event
     onReady,
-  });
+  }
+  if (fileToLoad) config.document = { data: fileToLoad };
+  // config.document = sampleDocument; // or try sample document
+
+  superdoc.value = new SuperDoc(config);
 };
 
 const handleFileUpdate = (file) => {

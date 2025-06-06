@@ -35,11 +35,18 @@ onMounted(() => {
 });
 </script>
 <template>
-  <div class="option-row" v-for="(row, rowIndex) in icons" :key="rowIndex">
+  <div 
+    class="option-row" 
+    v-for="(row, rowIndex) in icons" 
+    :key="rowIndex"
+    role="group"
+  >
     <div
       class="option"
       v-for="(option, optionIndex) in row"
       :key="optionIndex"
+      :aria-label="option.label"
+      role="menuitem"
       @click.stop.prevent="handleClick(option)"
     >
       <div

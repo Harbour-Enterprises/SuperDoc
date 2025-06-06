@@ -33,6 +33,8 @@ const handleSelect = (option) => {
     <div 
       v-if="hasNoneIcon"
       class="none-option"
+      role="menuitem"
+      aria-label="Clear color selection"
       @click="handleSelect('none')"
     >
       <span 

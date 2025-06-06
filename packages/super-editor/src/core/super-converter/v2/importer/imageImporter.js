@@ -96,14 +96,16 @@ export function handleImageImport(node, currentFileName, params) {
       alignV,
     };
   }
-  
+
   const marginOffset = {
     left: positionHValue,
     top: positionVValue,
   };
 
-  const { attributes: blipAttributes } = blip;
+  const { attributes: blipAttributes = {} } = blip;
   const rEmbed = blipAttributes['r:embed'];
+  if (!rEmbed) return null;
+
   const currentFile = currentFileName || 'document.xml';
   let rels = docx[`word/_rels/${currentFile}.rels`];
   if (!rels) rels = docx[`word/_rels/document.xml.rels`];

@@ -9,7 +9,9 @@ export const TableRow = Node.create({
 
   addOptions() {
     return {
-      htmlAttributes: {},
+      htmlAttributes: {
+        'aria-label': 'Table row node'
+      },
     };
   },
 

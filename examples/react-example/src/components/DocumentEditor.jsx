@@ -10,11 +10,10 @@ const DocumentEditor = ({
   const editorRef = useRef(null);
 
   useEffect(() => {
-    const editor = new SuperDoc({
+    const config = {
       selector: '#superdoc',
       toolbar: '#superdoc-toolbar',
       documentMode: readOnly ? 'viewing' : 'editing',
-      document: initialData ? initialData : '/sample.docx',
       pagination: true,
       rulers: true,
       onReady: () => {
@@ -28,7 +27,12 @@ const DocumentEditor = ({
       onEditorDestroy: () => {
         console.log('Editor is destroyed');
       }
-    });
+    }
+
+    if (initialData) config.document = initialData;
+    // config.document = './sample.docx'; // or use path to file
+
+    const editor = new SuperDoc(config);
 
     editorRef.current = editor;
 

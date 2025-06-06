@@ -11,6 +11,7 @@ export const PageNumber = Node.create({
     return {
       htmlAttributes: {
         'data-id': 'auto-page-number',
+        'aria-label': 'Page number node'
       },
     }
   },
@@ -35,6 +36,7 @@ export const TotalPageCount = Node.create({
     return {
       htmlAttributes: {
         'data-id': 'auto-total-pages',
+        'aria-label': 'Total page count node'
       },
     }
   },

@@ -14,7 +14,9 @@ export const ListItem = Node.create({
 
   addOptions() {
     return {
-      htmlAttributes: {},
+      htmlAttributes: {
+        'aria-label': 'List item node'
+      },
       bulletListTypeName: 'bulletList',
       orderedListTypeName: 'orderedList',
     };

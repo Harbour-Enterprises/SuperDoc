@@ -10,7 +10,9 @@ export const StructuredContent = Node.create({
   addOptions() {
     return {
       annotationClass: 'sd-structured-content-tag',
-      htmlAttributes: {},
+      htmlAttributes: {
+        'aria-label': 'Structured content node'
+      },
     }
   },
 

@@ -13,6 +13,7 @@ export const ShapeTextbox = Node.create({
     return {
       htmlAttributes: {
         class: 'sd-editor-shape-textbox',
+        'aria-label': 'Shape textbox node'
       },
     };
   },

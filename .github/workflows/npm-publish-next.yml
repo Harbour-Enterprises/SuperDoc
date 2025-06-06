@@ -1,0 +1,66 @@
+name: Publish develop branch to npm ("next" tag)
+
+on:
+  push:
+    branches:
+      - develop
+    paths-ignore:
+      - '*.md'
+      - 'LICENSE'
+      - '.github/**'
+      - '.vscode/**'
+      - '.gitignore'
+      - '*.toml'
+      - '*.yml'
+      - '*.yaml'
+      - '.prettierrc'
+      - 'examples/**'
+      - '.github/**'
+
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  run-unit-tests:
+    uses: ./.github/workflows/run-unit-tests.yml
+
+  release-next:
+    # Block the workflow until the run-unit-tests job is complete
+    needs: run-unit-tests
+    # Only run if:
+    # 1. It's a workflow_dispatch event OR
+    # 2. It's a push event AND commit message doesn't contain [skip ci] or release
+    if: |
+      github.event_name == 'workflow_dispatch' || 
+      (github.event_name == 'push' && !contains(github.event.head_commit.message, '[skip ci]'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SUPERDOC_PAT }}
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org/
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Publish "next" npm tag
+        working-directory: packages/superdoc
+        env:
+          GITHUB_TOKEN: ${{ secrets.SUPERDOC_PAT }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm run release:next

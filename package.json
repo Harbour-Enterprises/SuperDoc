@@ -18,6 +18,7 @@
     "build:super-editor": "npm run build --workspace=packages/super-editor",
     "build": "npm run build:super-editor && npm run build:superdoc",
     "release:superdoc": "npm run release --workspace=packages/superdoc",
+    "release:next": "npm run release:next --workspace=packages/superdoc",
     "clean:packages": "rm -rf ./packages/*/dist",
     "reset": "npm run clean:packages && rm -rf ./node_modules && rm -rf ./packages/*/node_modules && rm -rf ./package-lock.json && npm install",
     "publish": "npm run build && cd packages/superdoc && npm publish --access public",

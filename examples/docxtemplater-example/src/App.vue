@@ -171,14 +171,19 @@ const getProcessedTemplateAndUpdateOutput = async ({ codeString, templateFileBlo
 
 // init editor driver
 const initSuperdoc = async ({ file, name, selector, editorRef }) => {
-  editorRef.value = new SuperDoc({
-    selector,
-    documents: [{
+  const config = {
+    selector
+  }
+
+  if (file) {
+    config.documents = [{
       id: `superdoc-${name}-${selector}`,
       type: 'docx',
       data: file
-    }],
-  });
+    }]
+  }
+
+  editorRef.value = new SuperDoc(config);
 }
 
 // simulate the typing of code with setTimeout
@@ -261,7 +266,7 @@ onMounted(async () => {
   // init template editor
   const file = await getFileObject(templateFileUrl, 'template.docx');
   await initSuperdoc({
-    file,
+    // file,
     name: 'template.docx',
     selector: '#template-editor',
     editorRef: templateEditorInstance,

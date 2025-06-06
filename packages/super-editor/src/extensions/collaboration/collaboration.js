@@ -2,6 +2,7 @@ import { Extension } from '@core/index.js';
 import { PluginKey } from 'prosemirror-state';
 import { encodeStateAsUpdate } from 'yjs';
 import { ySyncPlugin, yUndoPlugin, yUndoPluginKey, undo, redo, prosemirrorToYDoc } from 'y-prosemirror';
+import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 
 export const CollaborationPluginKey = new PluginKey('collaboration');
 
@@ -27,6 +28,7 @@ export const Collaboration = Extension.create({
     // Listen for document lock changes
     initDocumentLockHandler(this.options.ydoc, this.editor);
     initSyncListener(this.options.ydoc, this.editor, this);
+    initDocumentListener({ ydoc: this.options.ydoc, editor: this.editor });
 
     const [syncPlugin, fragment] = createSyncPlugin(this.options.ydoc, this.editor);
     this.options.fragment = fragment;
@@ -128,6 +130,39 @@ const initDocumentLockHandler = (ydoc, editor) => {
     editor.emit('locked', { editor, isLocked, lockedBy });
   });
 };
+
+const checkDocxChanged = (transaction) => {
+  for (const [key, value] of transaction.changed?.entries()) {
+    if (value instanceof Set && value.has('docx')) {
+      return true;
+    };
+  };
+
+  return false;
+};
+
+const initDocumentListener = ({ ydoc, editor }) => {
+  const debouncedUpdate = debounce((editor) => {
+    updateYdocDocxData(editor);
+  }, 1000);
+
+  ydoc.on('afterTransaction', (transaction) => {
+    const { local } = transaction;
+
+    const hasChangedDocx = checkDocxChanged(transaction);
+    if (!hasChangedDocx && transaction.changed?.size && local) {
+      debouncedUpdate(editor);
+    }
+  });
+};
+
+const debounce = (fn, wait) => {
+  let timeout = null;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => fn.apply(this, args), wait);
+  };
+}
 
 const initSyncListener = (ydoc, editor, extension) => {
   const provider = editor.options.collaborationProvider;

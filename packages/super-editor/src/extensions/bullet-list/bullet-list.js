@@ -19,7 +19,9 @@ export const BulletList = Node.create({
   addOptions() {
     return {
       itemTypeName: 'listItem',
-      htmlAttributes: {},
+      htmlAttributes: {
+        'aria-label': 'Bullet list node'
+      },
       keepMarks: true,
       keepAttributes: false,
     };

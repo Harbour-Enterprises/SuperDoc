@@ -13,6 +13,7 @@ export const ShapeContainer = Node.create({
     return {
       htmlAttributes: {
         class: 'sd-editor-shape-container',
+        'aria-label': 'Shape container node'
       },
     };
   },

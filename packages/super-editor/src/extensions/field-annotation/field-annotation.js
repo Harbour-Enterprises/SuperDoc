@@ -27,6 +27,7 @@ export const FieldAnnotation = Node.create({
     return {
       htmlAttributes: {
         class: annotationClass,
+        'aria-label': 'Field annotation node'
       },
       annotationClass,
       annotationContentClass,

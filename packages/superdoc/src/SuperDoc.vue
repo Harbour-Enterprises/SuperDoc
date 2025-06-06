@@ -1,5 +1,6 @@
 <script setup>
 import '@harbour-enterprises/common/styles/common-styles.css';
+
 import { superdocIcons } from './icons.js';
 //prettier-ignore
 import {
@@ -31,7 +32,7 @@ import useComment from './components/CommentsLayer/use-comment';
 import AiLayer from './components/AiLayer/AiLayer.vue';
 import { useSelectedText } from './composables/use-selected-text';
 import { useAi } from './composables/use-ai';
-
+import { useHighContrastMode } from './composables/use-high-contrast-mode';
 // Stores
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
@@ -68,6 +69,8 @@ const {
 const { showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
 const { proxy } = getCurrentInstance();
 commentsStore.proxy = proxy;
+
+const { isHighContrastMode } = useHighContrastMode();
 
 // Refs
 const layers = ref(null);
@@ -287,7 +290,8 @@ const editorOptions = (doc) => {
     handleImageUpload: proxy.$superdoc.config.handleImageUpload,
     telemetry: proxy.$superdoc.telemetry,
     externalExtensions: proxy.$superdoc.config.editorExtensions || [],
-    htmlOverride: proxy.$superdoc.config.htmlOverride,
+    suppressDefaultDocxStyles: proxy.$superdoc.config.suppressDefaultDocxStyles,
+    jsonOverride: proxy.$superdoc.config.jsonOverride,
   };
 
   return options;
@@ -538,11 +542,13 @@ watch(getFloatingComments, () => {
     hasInitializedLocations.value = true;
   });
 });
+
+
 </script>
 
 <template>
-  <div class="superdoc" :class="{ 'superdoc--with-sidebar': showCommentsSidebar }">
-    <div class="superdoc__layers layers" ref="layers">
+  <div class="superdoc" :class="{ 'superdoc--with-sidebar': showCommentsSidebar, 'high-contrast': isHighContrastMode }">
+    <div class="superdoc__layers layers" ref="layers" role="group">
 
       <!-- Floating tools menu (shows up when user has text selection)-->
       <div v-if="showToolsFloatingMenu" class="superdoc__tools tools" :style="toolsMenuPosition">
@@ -550,125 +556,88 @@ watch(getFloatingComments, () => {
           <div class="superdoc__tools-icon" v-html="superdocIcons.comment"></div>
         </div>
         <!-- AI tool button -->
-        <div
-          v-if="proxy.$superdoc.config.modules.ai"
-          class="tools-item"
-          data-id="is-tool"
-          @click.stop.prevent="handleToolClick('ai')"
-        >
+        <div v-if="proxy.$superdoc.config.modules.ai" class="tools-item" data-id="is-tool"
+          @click.stop.prevent="handleToolClick('ai')">
           <div class="superdoc__tools-icon ai-tool"></div>
         </div>
       </div>
 
       <div class="superdoc__document document">
-        <div
-          v-if="isCommentsEnabled"
-          class="superdoc__selection-layer selection-layer"
-          @mousedown="handleSelectionStart"
-          @mouseup="handleDragEnd"
-          ref="selectionLayer"
-        >
-          <div
-            :style="getSelectionPosition"
+        <div v-if="isCommentsEnabled" class="superdoc__selection-layer selection-layer"
+          @mousedown="handleSelectionStart" @mouseup="handleDragEnd" ref="selectionLayer">
+          <div :style="getSelectionPosition"
             class="superdoc__temp-selection temp-selection sd-highlight sd-initial-highlight"
-            v-if="selectionPosition && shouldShowSelection"
-          ></div>
+            v-if="selectionPosition && shouldShowSelection"></div>
         </div>
 
         <!-- Fields layer -->
-        <HrbrFieldsLayer
-          v-if="'hrbr-fields' in modules && layers"
-          :fields="modules['hrbr-fields']"
-          class="superdoc__comments-layer comments-layer"
-          style="z-index: 2"
-          ref="hrbrFieldsLayer"
-        />
+        <HrbrFieldsLayer v-if="'hrbr-fields' in modules && layers" :fields="modules['hrbr-fields']"
+          class="superdoc__comments-layer comments-layer" style="z-index: 2" ref="hrbrFieldsLayer" />
 
         <!-- On-document comments layer -->
-        <CommentsLayer
-          v-if="layers"
-          class="superdoc__comments-layer comments-layer"
-          style="z-index: 3"
-          ref="commentsLayer"
-          :parent="layers"
-          :user="user"
-          @highlight-click="handleHighlightClick"
-        />
+        <CommentsLayer v-if="layers" class="superdoc__comments-layer comments-layer" style="z-index: 3"
+          ref="commentsLayer" :parent="layers" :user="user" @highlight-click="handleHighlightClick" />
 
         <!-- AI Layer for temporary highlights -->
-        <AiLayer v-if="showAiLayer" class="ai-layer" style="z-index: 4" ref="aiLayer" :editor="proxy.$superdoc.activeEditor" />
+        <AiLayer v-if="showAiLayer" class="ai-layer" style="z-index: 4" ref="aiLayer"
+          :editor="proxy.$superdoc.activeEditor" />
 
         <div class="superdoc__sub-document sub-document" v-for="doc in documents" :key="doc.id">
           <!-- PDF renderer -->
 
-          <PdfViewer
-            v-if="doc.type === PDF"
-            :document-data="doc"
-            @selection-change="handleSelectionChange"
-            @ready="handleDocumentReady"
-            @page-loaded="handlePageReady"
-            @bypass-selection="handlePdfClick"
-          />
+          <PdfViewer v-if="doc.type === PDF" :document-data="doc" @selection-change="handleSelectionChange"
+            @ready="handleDocumentReady" @page-loaded="handlePageReady" @bypass-selection="handlePdfClick" />
 
-          <SuperEditor
-            v-if="doc.type === DOCX"
-            :file-source="doc.data"
-            :state="doc.state"
-            :document-id="doc.id"
-            :options="editorOptions(doc)"
-            @pageMarginsChange="handleSuperEditorPageMarginsChange(doc, $event)"
-          />
+          <SuperEditor v-if="doc.type === DOCX" :file-source="doc.data" :state="doc.state" :document-id="doc.id"
+            :options="editorOptions(doc)" @pageMarginsChange="handleSuperEditorPageMarginsChange(doc, $event)" />
 
           <!-- omitting field props -->
-          <HtmlViewer
-            v-if="doc.type === HTML"
-            @ready="(id) => handleDocumentReady(id, null)"
-            @selection-change="handleSelectionChange"
-            :file-source="doc.data"
-            :document-id="doc.id"
-          />
+          <HtmlViewer v-if="doc.type === HTML" @ready="(id) => handleDocumentReady(id, null)"
+            @selection-change="handleSelectionChange" :file-source="doc.data" :document-id="doc.id" />
         </div>
       </div>
     </div>
 
     <div class="superdoc__right-sidebar right-sidebar" v-if="showCommentsSidebar">
-      <CommentDialog
-        v-if="pendingComment"
-        :comment="pendingComment"
-        :auto-focus="true"
-        :is-floating="true"
-        v-click-outside="cancelPendingComment"
-      />
+      <CommentDialog v-if="pendingComment" :comment="pendingComment" :auto-focus="true" :is-floating="true"
+        v-click-outside="cancelPendingComment" />
 
       <div class="floating-comments">
-        <FloatingComments
-          v-if="hasInitializedLocations && getFloatingComments.length > 0"
-          v-for="doc in documentsWithConverations"
-          :parent="layers"
-          :current-document="doc"
-        />
+        <FloatingComments v-if="hasInitializedLocations && getFloatingComments.length > 0"
+          v-for="doc in documentsWithConverations" :parent="layers" :current-document="doc" />
       </div>
     </div>
 
+    
+
     <!-- AI Writer at cursor position -->
     <div class="ai-writer-container" v-if="showAiWriter" :style="aiWriterPosition">
-      <AIWriter 
-        :selected-text="selectedText"
-        :handle-close="handleAiWriterClose"
-        :editor="proxy.$superdoc.activeEditor"
-        :api-key="proxy.$superdoc.toolbar?.config?.aiApiKey"
-        :endpoint="proxy.$superdoc.config?.modules?.ai?.endpoint"
-        @ai-highlight="handleAiHighlight"
-      />
+      <AIWriter :selected-text="selectedText" :handle-close="handleAiWriterClose" :editor="proxy.$superdoc.activeEditor"
+        :api-key="proxy.$superdoc.toolbar?.config?.aiApiKey" :endpoint="proxy.$superdoc.config?.modules?.ai?.endpoint"
+        @ai-highlight="handleAiHighlight" />
     </div>
   </div>
 </template>
 
 <style>
-.superdoc .super-editor {
-  border-radius: 8px;
-  border: 1px solid #d3d3d3;
-  box-shadow:0 0 5px hsla( 0,0%,0%,.05);
+.superdoc {
+  &.high-contrast {
+    border-color: #000;
+
+    .super-editor {
+      border-color: #000;
+
+      &:focus-within {
+        border-color: blue;
+      }
+    }
+  }
+
+  .super-editor {
+    border-radius: 8px;
+    border: 1px solid #d3d3d3;
+    box-shadow: 0 0 5px hsla(0, 0%, 0%, .05);
+  }
 }
 </style>
 
@@ -685,8 +654,6 @@ watch(getFloatingComments, () => {
   min-width: 300px;
   width: 300px;
 }
-
-.superdoc--with-sidebar { /*  */ }
 
 .superdoc__layers {
   height: 100%;

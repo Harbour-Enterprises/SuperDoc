@@ -197,7 +197,7 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
     lineSpaceBefore: 0,
     line: 0,
     lineRule: null,
-  }
+  };
   
   const { spacing: pDefaultSpacing = {} } = getDefaultParagraphStyle(docx, styleId);
   let lineSpaceAfter, lineSpaceBefore, line, lineRuleStyle;

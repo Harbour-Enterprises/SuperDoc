@@ -214,6 +214,13 @@ export const inputRulesPlugin = ({ editor, rules }) => {
         const clipboard = event.clipboardData;
         const html = clipboard.getData("text/html");
         const text = clipboard.getData("text/plain");
+        const fieldAnnotationContent = slice.content.content.filter((item) => item.type.name === 'fieldAnnotation');
+
+        if (fieldAnnotationContent.length) {
+          // The paste event will be handled here.
+          // packages/super-editor/src/extensions/field-annotation/FieldAnnotationPlugin.js
+          return false;
+        }
 
         let source;
         if (!html) {

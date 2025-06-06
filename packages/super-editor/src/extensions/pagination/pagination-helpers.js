@@ -1,7 +1,7 @@
 import { PluginKey } from 'prosemirror-state';
 import { Editor as SuperEditor } from '@core/Editor.js';
 import { getStarterExtensions } from '@extensions/index.js';
-
+import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 
 export const PaginationPluginKey = new PluginKey('paginationPlugin');
 
@@ -135,10 +135,13 @@ export const createHeaderFooterEditor = ({
   const pm = editorContainer.querySelector('.ProseMirror');
   pm.style.maxHeight = '100%';
   pm.style.minHeight = '100%';
-  pm.style.overflow = 'auto';
   pm.style.outline = 'none';
   pm.style.border = 'none';
-
+  
+  pm.setAttribute('role', 'textbox');
+  pm.setAttribute('aria-multiline', true);
+  pm.setAttribute('aria-label', `${type} content area. Double click to start typing.`);
+  
   return headerFooterEditor;
 };
 
@@ -162,15 +165,18 @@ export const broadcastEditorEvents = (editor, sectionEditor) => {
 export const toggleHeaderFooterEditMode = (editor, focusedSectionEditor, isEditMode) => {
   editor.converter.headerEditors.forEach(item => {
     item.editor.setEditable(isEditMode, false);
+    item.editor.view.dom.setAttribute('aria-readonly', !isEditMode);
   });
   
   editor.converter.footerEditors.forEach(item => {
     item.editor.setEditable(isEditMode, false);
+    item.editor.view.dom.setAttribute('aria-readonly', !isEditMode);
   });
   
   if (isEditMode) {
     const pm = document.querySelector('.ProseMirror');
     pm.classList.add('header-footer-edit');
+    pm.setAttribute('aria-readonly', true);
   }
   
   if (focusedSectionEditor) {
@@ -203,27 +209,3 @@ const setEditorToolbar = ({ editor }, mainEditor) => {
   editor.setToolbar(mainEditor.toolbar);
 };
 
-const updateYdocDocxData = async (editor) => {
-  if (!editor.options.ydoc) return;
-  
-  const metaMap = editor.options.ydoc.getMap('meta');
-  const docx = [...metaMap.get('docx')];
-
-  const newXml = await editor.exportDocx({ getUpdatedDocs: true });
-
-  Object.keys(newXml).forEach(key => {
-    if (key.includes('header') || key.includes('footer')) {
-      const fileIndex = docx.findIndex(item => item.name === key);
-      if (fileIndex === -1) return;
-      docx.splice(fileIndex, 1);
-      docx.push({
-        name: key,
-        content: newXml[key],
-      });
-    }
-  })
-
-  editor.options.ydoc.transact(() => {
-    metaMap.set('docx', docx);
-  });
-}

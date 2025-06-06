@@ -138,8 +138,19 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
 };
 
 const handleSuperEditorKeydown = (event) => {
+  // cmd/ctrl + opt/alt + shift + M
+  if ((event.metaKey || event.ctrlKey) && event.altKey && event.shiftKey) {
+    if (event.code === 'KeyM') {
+      const toolbar = document.querySelector('.superdoc-toolbar');
+      if (toolbar) {
+        toolbar.setAttribute('tabindex', '0');
+        toolbar.focus();
+      }
+    }
+  }
   emit('editor-keydown', { editor: editor.value });
 };
+
 
 const handleSuperEditorClick = (event) => {
   emit('editor-click', { editor: editor.value });
@@ -208,7 +219,7 @@ onBeforeUnmount(() => {
       @click="handleSuperEditorClick"
       @mousedown="handleMarginClick"
     >
-      <div ref="editorElem" class="editor-element super-editor__element"></div>
+      <div ref="editorElem" class="editor-element super-editor__element" role="presentation"></div>
     </div>
 
     <div class="placeholder-editor" v-if="!editorReady">

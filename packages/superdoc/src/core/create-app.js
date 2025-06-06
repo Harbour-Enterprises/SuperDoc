@@ -5,7 +5,7 @@ import { vClickOutside } from '@harbour-enterprises/common';
 import { useSuperdocStore } from '../stores/superdoc-store';
 import { useCommentsStore } from '../stores/comments-store';
 import App from '../SuperDoc.vue';
-
+import { useHighContrastMode } from '../composables/use-high-contrast-mode';
 /**
  * Generate the superdoc vue app
  * 
@@ -19,5 +19,7 @@ export const createSuperdocVueApp = () => {
 
   const superdocStore = useSuperdocStore();
   const commentsStore = useCommentsStore();
-  return { app, pinia, superdocStore, commentsStore };
+  const highContrastModeStore = useHighContrastMode();
+
+  return { app, pinia, superdocStore, commentsStore, highContrastModeStore };
 };

@@ -8,7 +8,7 @@ import { ExtensionService } from './ExtensionService.js';
 import { CommandService } from './CommandService.js';
 import { Attribute } from './Attribute.js';
 import { SuperConverter } from '@core/super-converter/SuperConverter.js';
-import { Commands, Keymap, Editable, EditorFocus } from './extensions/index.js';
+import { Commands, Editable, EditorFocus, Keymap } from './extensions/index.js';
 import { createDocument } from './helpers/createDocument.js';
 import { isActive } from './helpers/isActive.js';
 import { trackedTransaction } from '@extensions/track-changes/trackChangesHelpers/trackedTransaction.js';
@@ -17,16 +17,13 @@ import { initPaginationData, PaginationPluginKey } from '@extensions/pagination/
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
 import { getRichTextExtensions } from '../extensions/index.js';
-import { AnnotatorServices } from '@helpers/annotator.js';
-import {
-  prepareCommentsForExport,
-  prepareCommentsForImport,
-} from '@extensions/comment/comments-helpers.js';
+import { AnnotatorHelpers } from '@helpers/annotator.js';
+import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
 import { generateCollaborationData } from '@extensions/collaboration/collaboration.js';
 import { toggleHeaderFooterEditMode } from '../extensions/pagination/pagination-helpers.js';
 import { hasSomeParentWithClass } from './super-converter/helpers.js';
-
+import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -101,7 +98,8 @@ import { hasSomeParentWithClass } from './super-converter/helpers.js';
  * @property {Function} [onException] - Called when an exception occurs
  * @property {Function} [handleImageUpload] - Handler for image uploads
  * @property {Object} [telemetry] - Telemetry configuration
- * @property {boolean} [htmlOverride] - Whether to override content with provided html
+ * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
+ * @property {boolean} [jsonOverride] - Whether to override content with provided json
  * @property {string} [html] - HTML content to initialize the editor with
  */
 
@@ -188,7 +186,8 @@ export class Editor extends EventEmitter {
     numbering: {},
     isHeaderOrFooter: false,
     lastSelection: null,
-    htmlOverride: false,
+    suppressDefaultDocxStyles: false,
+    jsonOverride: false,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -240,6 +239,8 @@ export class Editor extends EventEmitter {
 
     let initMode = modes[this.options.mode] ?? modes.default;
 
+    const { setHighContrastMode } = useHighContrastMode();
+    this.setHighContrastMode = setHighContrastMode;
     initMode();
   }
 
@@ -865,6 +866,7 @@ export class Editor extends EventEmitter {
 
           // If we have a new doc, and have html data, we initialize from html
           if (this.options.html) doc = this.#createDocFromHTML(this.options.html)
+          else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
           if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
         }
@@ -944,6 +946,7 @@ export class Editor extends EventEmitter {
           toggleHeaderFooterEditMode(this, null, false);
           const pm = document.querySelector('.ProseMirror');
           pm.classList.remove('header-footer-edit');
+          pm.setAttribute('aria-readonly', false);
         }
       }
     });
@@ -1002,7 +1005,7 @@ export class Editor extends EventEmitter {
     * @returns {void}
     */
   initDefaultStyles(element = this.element) {
-    if (this.options.isHeadless || this.options.htmlOverride) return;
+    if (this.options.isHeadless || this.options.suppressDefaultDocxStyles) return;
 
     const proseMirror = element?.querySelector('.ProseMirror');
     const { pageSize, pageMargins } = this.converter.pageStyles ?? {};
@@ -1010,6 +1013,11 @@ export class Editor extends EventEmitter {
     if (!proseMirror || !pageSize || !pageMargins) {
       return;
     }
+    
+    proseMirror.setAttribute('role', 'document');
+    proseMirror.setAttribute('aria-multiline', true);
+    proseMirror.setAttribute('aria-label', 'Main content area, start typing to enter text.');
+    proseMirror.setAttribute('aria-description', '');
 
     // Set fixed dimensions and padding that won't change with scaling
     element.style.width = pageSize.width + 'in';
@@ -1447,10 +1455,16 @@ export class Editor extends EventEmitter {
       updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
       updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
     }
-    
-    if (getUpdatedDocs) return updatedDocs;
 
     const zipper = new DocxZipper();
+    
+    if (getUpdatedDocs) {
+      updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes({
+        files: this.options.content
+      }, media, true);
+      return updatedDocs;
+    }
+    
     const result = await zipper.updateZip({
       docx: this.options.content,
       updatedDocs: updatedDocs,
@@ -1543,10 +1557,10 @@ export class Editor extends EventEmitter {
   /**
    * Replace the current file
    * @async
-   * @param {Object} file - New file data
+   * @param {Object} newFile - New file data
    * @returns {Promise<void>}
    */
-  async replaceFile(file) {
+  async replaceFile(newFile) {
     this.setOptions({ annotations: true })
     const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(newFile);
     this.setOptions({
@@ -1615,11 +1629,8 @@ export class Editor extends EventEmitter {
    */
   prepareForAnnotations(annotationValues = []) {
     const { tr } = this.state;
-    const { dispatch } = this.view;
-    const newTr = AnnotatorServices.processTables({ editor: this, tr, annotationValues });
-    this.view.dispatch(newTr);
-  
-    AnnotatorServices.annotateHeadersAndFooters({ editor: this, annotationValues });
+    const newTr = AnnotatorHelpers.processTables({ state: this.state, tr, annotationValues });
+    this.view.dispatch(newTr);  
   }
 
   /**
@@ -1629,16 +1640,17 @@ export class Editor extends EventEmitter {
    * @param {String[]} hiddenIds List of field ids to remove from the document.
    * @returns {void}
    */
-  annotate(annotationValues = [], hiddenIds = []) {
+  annotate(annotationValues = [], hiddenIds = [], removeEmptyFields = false) {
     const { state, view, schema } = this;
     let tr = state.tr;
 
-    tr = AnnotatorServices.processTables({ state: this.state, tr, annotationValues });
-    tr = AnnotatorServices.annotateDocument({
+    tr = AnnotatorHelpers.processTables({ state: this.state, tr, annotationValues });
+    tr = AnnotatorHelpers.annotateDocument({
       tr,
       schema,
       annotationValues,
       hiddenFieldIds: hiddenIds,
+      removeEmptyFields,
       editor: this,
     });
 

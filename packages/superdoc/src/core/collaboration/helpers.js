@@ -14,7 +14,21 @@ import {
  * @returns {void}
  */
 export const initCollaborationComments = (superdoc) => {
-  if (!superdoc.config.modules.comments) return;
+  if (!superdoc.config.modules.comments || !superdoc.provider) return;
+
+  // If we have comments and collaboration, wait for sync and then let the store know when its ready
+  const onSuperDocYdocSynced = () => {
+    // Update the editor comment locations
+    const parent = superdoc.commentsStore.commentsParentElement;
+    const ids = superdoc.commentsStore.editorCommentIds;
+    superdoc.commentsStore.handleEditorLocationsUpdate(parent, ids);
+    superdoc.commentsStore.hasSyncedCollaborationComments = true;
+
+    superdoc.provider.off('synced', onSuperDocYdocSynced);
+  };
+
+  // Listen for the synced event
+  superdoc.provider.on('synced', onSuperDocYdocSynced);
 
   // Get the comments map from the Y.Doc
   const commentsArray = superdoc.ydoc.getArray('comments');
@@ -67,24 +81,7 @@ export const initSuperdocYdoc = (superdoc) => {
   };
   const { provider: superdocProvider, ydoc: superdocYdoc } = createProvider(superdocCollaborationOptions);
 
-  // If we have comments and collaboration, wait for sync and then let the store know when its ready
-  if (superdoc.config.modules.comments && superdoc.provider) {
-    const onSuperDocYdocSynced = () => {
-      // Update the editor comment locations
-      const parent = superdoc.commentsStore.commentsParentElement;
-      const ids = superdoc.commentsStore.editorCommentIds;
-      superdoc.commentsStore.handleEditorLocationsUpdate(parent, ids);
-      superdoc.commentsStore.hasSyncedCollaborationComments = true;
-
-      superdocProvider.off('synced', onSuperDocYdocSynced);
-    };
-
-    // Listen for the synced event
-    superdocProvider.on('synced', onSuperDocYdocSynced);
-  };
-
-  superdoc.ydoc = superdocYdoc;
-  superdoc.provider = superdocProvider;
+  return { ydoc: superdocYdoc, provider: superdocProvider };
 };
 
 

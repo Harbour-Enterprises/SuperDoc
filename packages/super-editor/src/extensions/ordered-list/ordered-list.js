@@ -22,7 +22,9 @@ export const OrderedList = Node.create({
   addOptions() {
     return {
       itemTypeName: 'listItem',
-      htmlAttributes: {},
+      htmlAttributes: {
+        'aria-label': 'Ordered list node'
+      },
       keepMarks: true,
       keepAttributes: false,
       listStyleTypes: ['decimal', 'lowerAlpha', 'lowerRoman'],

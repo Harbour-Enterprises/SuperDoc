@@ -46,7 +46,9 @@ export const Table = Node.create({
 
   addOptions() {
     return {
-      htmlAttributes: {},
+      htmlAttributes: {
+        'aria-label': 'Table node'
+      },
       resizable: true,
       handleWidth: 5,
       cellMinWidth: 25,

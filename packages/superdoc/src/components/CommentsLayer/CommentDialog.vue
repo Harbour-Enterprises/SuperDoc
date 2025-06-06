@@ -278,6 +278,7 @@ onMounted(() => {
     @click.stop.prevent="setFocus"
     :style="getSidebarCommentStyle"
     ref="commentDialogElement"
+    role="dialog"
   >
 
     <div v-if="shouldShowInternalExternal" class="existing-internal-input">

@@ -8,7 +8,11 @@ export const BookmarkStart = Node.create({
 
   addOptions() {
     return {
-      htmlAttributes: { style: 'height: 0; width: 0;' },
+      htmlAttributes: { 
+        style: 'height: 0; width: 0;' ,
+        'aria-label': 'Bookmark start node',
+        role: 'link'
+      },
     };
   },
 

@@ -547,7 +547,7 @@ export const useCommentsStore = defineStore('comments', () => {
    * @returns {void}
    */
   const handleEditorLocationsUpdate = (allCommentPositions, activeThreadId) => {
-    editorCommentPositions.value = allCommentPositions;
+    editorCommentPositions.value = allCommentPositions || {};
   };
 
   const getFloatingComments = computed(() => {

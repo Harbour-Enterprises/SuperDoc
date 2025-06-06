@@ -15,6 +15,7 @@ export const Mention = Node.create({
     return {
       htmlAttributes: {
         class: 'sd-editor-mention',
+        'aria-label': 'Mention node'
       },
     };
   },

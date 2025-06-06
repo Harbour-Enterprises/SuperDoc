@@ -19,6 +19,7 @@ export const Document = Node.create({
     return {
       attributes: {
         rendered: false,
+        'aria-label': 'Document node'
       },
     };
   },

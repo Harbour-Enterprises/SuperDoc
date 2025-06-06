@@ -1,5 +1,11 @@
 <script setup>
+import { ref } from 'vue';
+import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
+
 const emit = defineEmits(['select']);
+
+const { isHighContrastMode } = useHighContrastMode();
+
 const props = defineProps({
   options: {
     type: Array,
@@ -12,13 +18,14 @@ const handleClick = (item) => {
 </script>
 
 <template>
-  <div class="document-mode">
+  <div class="document-mode" :class="{ 'high-contrast': isHighContrastMode }">
     <div
       class="option-item"
       v-for="option in options"
       @click="handleClick(option)"
       :class="{ disabled: option.disabled }"
       data-item="btn-documentMode-option"
+      role="menuitem"
     >
       <div class="document-mode-column icon-column">
         <div class="icon-column__icon" v-html="option.icon"></div>
@@ -37,24 +44,19 @@ const handleClick = (item) => {
 </template>
 
 <style scoped>
-.document-mode :deep(svg) {
-  width: 100%;
-  height: 100%;
-  display: block;
-  fill: currentColor;
-}
-
-.disabled {
-  opacity: 0.5;
-  cursor: not-allowed !important;
-  pointer-events: none;
-}
-.document-mode {
+.document-mode  {
   display: flex;
   flex-direction: column;
   padding: 10px;
   box-sizing: border-box;
-}
+  
+  :deep(svg) {
+    width: 100%;
+  height: 100%;
+  display: block;
+  fill: currentColor;
+  }
+
 .option-item {
   display: flex;
   flex-direction: row;
@@ -63,11 +65,44 @@ const handleClick = (item) => {
   border-radius: 4px;
   cursor: pointer;
   box-sizing: border-box;
+
+  &:hover {
+    background-color: #c8d0d8;
+  }
+}
+
+&.high-contrast {
+  .option-item {
+    &:hover {
+      background-color: #000;
+      color: #fff;
+
+      .icon-column__icon {
+        color: #fff;
+      }
+
+      .text-column {
+
+        >.document-mode-type,
+        >.document-mode-description {
+          color: #fff;
+        }
+      }
+    }
+    }
+}
+}
+
+.disabled {
+  opacity: 0.5;
+  cursor: not-allowed !important;
+  pointer-events: none;
 }
 .document-mode-column {
   display: flex;
   flex-direction: column;
 }
+
 .document-mode-type {
   font-weight: 400;
   font-size: 15px;
@@ -82,27 +117,25 @@ const handleClick = (item) => {
   color: black;
   height: 100%;
   box-sizing: border-box;
-}
 
-.icon-column__icon {
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  flex-shrink: 0;
-  height: 18px;
-  color: #47484a;
+  &__icon {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    flex-shrink: 0;
+    height: 18px;
+    color: #47484a;
+  }
 }
 
 .icon-column__icon :deep(svg) {
-  width: auto; /* needed for safari */
+  width: auto;
+  /* needed for safari */
   max-height: 18px;
 }
 
 .document-mode-description {
   font-size: 12px;
   color: #666;
-}
-.option-item:hover {
-  background-color: #c8d0d8;
 }
 </style>

@@ -11,7 +11,9 @@ export const TableHeader = Node.create({
 
   addOptions() {
     return {
-      htmlAttributes: {},
+      htmlAttributes: {
+        'aria-label': 'Table head node'
+      },
     };
   },
 
