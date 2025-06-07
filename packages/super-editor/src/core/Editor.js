@@ -188,6 +188,7 @@ export class Editor extends EventEmitter {
     lastSelection: null,
     suppressDefaultDocxStyles: false,
     jsonOverride: false,
+    paginationFloating: {},
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
