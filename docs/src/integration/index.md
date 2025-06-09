@@ -501,38 +501,9 @@ superdoc.on('awarenessUpdate', ({ users }) => {
 });
 ```
 
-### Server Setup with Hocuspocus
+### Setting up the collaboration service
 
-SuperDoc works well with [Hocuspocus](https://tiptap.dev/hocuspocus) as a collaboration backend:
-
-```javascript
-// server.js
-import { Server } from '@hocuspocus/server';
-import { Logger } from '@hocuspocus/extension-logger';
-import { Database } from '@hocuspocus/extension-database';
-
-const server = Server.configure({
-  port: 1234,
-  extensions: [
-    new Logger(),
-    new Database({
-      // Database configuration for document persistence
-    }),
-  ],
-  onAuthenticate: async ({ token }) => {
-    // Validate user token
-    // Return user data or throw an error if validation fails
-    return {
-      user: {
-        id: 'user-123',
-        name: 'Jane Doe',
-      },
-    };
-  },
-});
-
-server.listen();
-```
+Contact us for help setting up your collaboration service
 
 ## Next Steps
 
