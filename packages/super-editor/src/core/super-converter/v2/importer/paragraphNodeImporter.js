@@ -192,12 +192,7 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
 
 export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
   // Check if we have default paragraph styles to override
-  const spacing = {
-    lineSpaceAfter: 0,
-    lineSpaceBefore: 0,
-    line: 0,
-    lineRule: null,
-  };
+  const spacing = {};
   
   const { spacing: pDefaultSpacing = {} } = getDefaultParagraphStyle(docx, styleId);
   let lineSpaceAfter, lineSpaceBefore, line, lineRuleStyle;
