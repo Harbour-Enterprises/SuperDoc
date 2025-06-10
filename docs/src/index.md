@@ -251,6 +251,24 @@ const editor = new SuperDoc(config);
 editor.setHighContrastMode(true);
 ```
 
+### ARIA Attributes
+In order to give screen readers the contextual information about elements we use [ARIA](https://www.w3.org/TR/wai-aria/) attributes for Toolbar and Editor components.
+
+- **role=application** - Main app container.
+- **role=presentation** - Editor wrapper.
+- **role=document** - Prosemirror editor.
+- **role=textarea** - Use it for header/footer editors.
+- **role=group** - Grouped item's wrapper.
+- **role=toolbar** - Super Toolbar component.
+
+We use role=button for toolbar item on desktop and role=menuitem for overflow items. Meanwhile, we use role=menu for dropdown items (including overflow button).
+
+- **role=separator** - Toolbar separator
+- **aria-label** - used to provide information about the current focused item.
+- **aria-description** - used to provide additional information about the current selected item.
+
+We use semantic markup for elements like tables which are accessible by default.
+
 
 ## Next Steps
 
