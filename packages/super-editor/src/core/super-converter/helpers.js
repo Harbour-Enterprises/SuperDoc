@@ -171,11 +171,7 @@ const getLineHeightValueString = (lineHeight, defaultUnit, lineRule = '', isObje
   let [value, unit] = parseSizeUnit(lineHeight);
   if (Number.isNaN(value) || value === 0) return {};
   if (lineRule === 'atLeast' && value < 1) return {};
-  
   unit = unit ? unit : defaultUnit;
-
-  // MS Word has a slightly bigger gap with line spacing equal to Superdoc's
-  value += unit ? 4 : 0.2;
   return isObject ? { ['line-height']: `${value}${unit}` } : `line-height: ${value}${unit}`;
 }
 

@@ -28,8 +28,9 @@ export const Paragraph = Node.create({
         renderDOM: (attrs) => {
           const { spacing } = attrs;
           if (!spacing) return {};
-
-          const style = getSpacingStyleString(spacing);
+          const spacingCopy = { ...spacing };
+          if (attrs.lineHeight) delete spacingCopy.line; // we'll get line-height from lineHeight
+          const style = getSpacingStyleString(spacingCopy);
           if (style) return { style };
           return {};
         },
