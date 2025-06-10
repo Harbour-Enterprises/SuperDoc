@@ -575,6 +575,7 @@ export class Editor extends EventEmitter {
     
     const doc = this.#generatePmData();
     const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc);
+    tr.setMeta('replaceContent', true);
     this.view.dispatch(tr);
   }
 
