@@ -401,30 +401,34 @@ export const cleanUpListsWithAnnotations = (fieldsToDelete = [], editor) => {
     );
     if (!listItem) return;
 
-    if (listItem.node.childCount !== 1) {
-      let remainingNodes = listItem.node.childCount;
-      let matchingNodesFound = 0;
-      let hasOtherNodes = false;
-      listItem.node.children.forEach((child, index) => {
-        const { type } = child;
-        if (type.name !== 'paragraph') return;
+    let remainingNodes = 0;
+    listItem.node.descendants((node) => {
+      if (node.type.name === 'fieldAnnotation') {
+        remainingNodes += 1;
+      }
+    })
 
-        child.children.forEach((inline) => {
-          const isFieldToDelete = fieldsToDelete.includes(inline.attrs.fieldId);
-          const isMatchingField = inline.type.name === 'fieldAnnotation' && isFieldToDelete;
-          const isEmpty = inline.childCount === 0;
-          if (!isEmpty && !isMatchingField) hasOtherNodes = true;
-          if (isMatchingField) matchingNodesFound += 1;
-        });
+    let matchingNodesFound = 0;
+    let hasOtherNodes = false;
+    listItem.node.children.forEach((child, index) => {
+      const { type } = child;
+      if (type.name !== 'paragraph' && type.name !== 'fieldAnnotation') return;
+
+      child.children.forEach((inline) => {
+        const isFieldToDelete = fieldsToDelete.includes(inline.attrs.fieldId);
+        const isMatchingField = inline.type.name === 'fieldAnnotation' && isFieldToDelete;
+        const isEmpty = inline.childCount === 0;
+        if (!isEmpty && !isMatchingField) hasOtherNodes = true;
+        if (isMatchingField) matchingNodesFound += 1;
       });
+    });
 
-      if (!hasOtherNodes && matchingNodesFound > 0) {
-        remainingNodes -= matchingNodesFound;
-      }
+    if (!hasOtherNodes && matchingNodesFound > 0) {
+      remainingNodes -= matchingNodesFound;
+    }
 
-      if (remainingNodes > 0) {
-        return;
-      }
+    if (remainingNodes > 0) {
+      return;
     }
 
     // now “bubble up” as long as each parent has exactly one child

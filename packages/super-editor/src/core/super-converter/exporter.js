@@ -792,7 +792,10 @@ function translateList(params) {
       if (Array.isArray(outputNode)) {
         const mapped = [];
         outputNode.forEach((el, index) => {
-          mapped.push(...el.elements);
+          el.elements.forEach((element) => {
+            if (element.name === 'w:pPr') return;
+            mapped.push(element);
+          });
           if (index < outputNode.length - 1) mapped.push({ name: 'w:br', type: 'element' });
         });
 
