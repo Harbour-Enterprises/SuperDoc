@@ -84,7 +84,8 @@ export const createHeaderFooterEditor = ({
   appendToBody = true,
   sectionId,
   type,
-  availableHeight
+  availableHeight,
+  currentPageNumber,
 }) => {
   const parentStyles = editor.converter.getDocumentDefaultStyles();
   const { fontSizePt, typeface } = parentStyles;
@@ -128,6 +129,8 @@ export const createHeaderFooterEditor = ({
     fonts: editor.options.fonts,
     isHeaderOrFooter: true,
     annotations: true,
+    currentPageNumber,
+    parentEditor: editor,
     onCreate: (evt) => setEditorToolbar(evt, editor),
     onBlur: (evt) => onHeaderFooterDataUpdate(evt, editor, sectionId, type),
   });

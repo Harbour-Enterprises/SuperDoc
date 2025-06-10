@@ -308,7 +308,6 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
   const decorations = [];
   const { pageSize, pageMargins } = editor.converter.pageStyles;
   const pageHeight = pageSize.height * 96; // Convert inches to pixels
-  const scale = editor.options.scale;
 
   let currentPageNumber = 1;
   let pageHeightThreshold = pageHeight;
@@ -316,12 +315,12 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
   let footer = null, header = null;
 
   const firstHeaderId = getHeaderFooterId(currentPageNumber, 'headerIds', editor);
-  const firstHeader = createHeader(pageMargins, pageSize, sectionData, firstHeaderId, editor);
+  const firstHeader = createHeader(pageMargins, pageSize, sectionData, firstHeaderId, editor, currentPageNumber);
   const pageBreak = createPageBreak({ editor, header: firstHeader, isFirstHeader: true });
   decorations.push(Decoration.widget(0, pageBreak, { key: 'stable-key' }));
 
   const lastFooterId = getHeaderFooterId(currentPageNumber, 'footerIds', editor);
-  const lastFooter = createFooter(pageMargins, pageSize, sectionData, lastFooterId, editor);
+  const lastFooter = createFooter(pageMargins, pageSize, sectionData, lastFooterId, editor, currentPageNumber);
 
   // Reduce the usable page height by the header and footer heights now that they are prepped
   pageHeightThreshold -= firstHeader.headerHeight + lastFooter.footerHeight;
@@ -352,7 +351,7 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
       if (currentPageNumber === 1) {
         const headerId = getHeaderFooterId(currentPageNumber, 'headerIds', editor, currentNode);
         decorations.pop(); // Remove the first header and replace with sectPr header
-        const newFirstHeader = createHeader(pageMargins, pageSize, sectionData, headerId);
+        const newFirstHeader = createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber - 1);
         const pageBreak = createPageBreak({ editor, header: newFirstHeader, isFirstHeader: true });
         decorations.push(Decoration.widget(0, pageBreak, { key: 'stable-key' }));
       }
@@ -400,7 +399,7 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
 
       currentPageNumber++;
       const headerId = getHeaderFooterId(currentPageNumber, 'headerIds', editor);
-      header = createHeader(pageMargins, pageSize, sectionData, headerId, editor);
+      header = createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber - 1);
       footer = createFooter(pageMargins, pageSize, sectionData, footerId, editor, currentPageNumber - 1);
 
       const bufferHeight = pageHeightThreshold - actualBreakBottom;
@@ -427,7 +426,7 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
   const lastNodeCoords = view.coordsAtPos(finalPos);
   const headerId = getHeaderFooterId(currentPageNumber, 'headerIds', editor);
   const footerId = getHeaderFooterId(currentPageNumber, 'footerIds', editor);
-  header = createHeader(pageMargins, pageSize, sectionData, headerId, editor);
+  header = createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber);
   footer = createFooter(pageMargins, pageSize, sectionData, footerId, editor, currentPageNumber);
   const bufferHeight = pageHeightThreshold - lastNodeCoords.bottom;
   const { node: spacingNode } = createFinalPagePadding(bufferHeight);
@@ -450,6 +449,9 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
       totalPageNumber.innerText = currentPageNumber;
     }
   });
+
+  // Track the total pages in the editor instance
+  editor.currentTotalPages = currentPageNumber;
 
   // Return the widget decorations array
   return decorations;
@@ -481,7 +483,7 @@ function createFinalPagePadding(bufferHeight) {
  * @param {string} editor SuperEditor instance
  * @returns {Object} The header element and its height
  */
-function createHeader(pageMargins, pageSize, sectionData, headerId, editor) {
+function createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber) {
   const headerDef = sectionData.headers?.[headerId];
   const minHeaderHeight = pageMargins.top * 96; // pageMargins are in inches
   const headerMargin = pageMargins.header * 96;
@@ -515,6 +517,7 @@ function createHeader(pageMargins, pageSize, sectionData, headerId, editor) {
     sectionId: headerId,
     type: 'header',
     availableHeight,
+    currentPageNumber,
   });
   editor.converter.headerEditors.push({
     id: headerId,
@@ -557,16 +560,6 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, editor, curr
   const minFooterHeight = pageMargins.bottom * 96; // pageMargins are in inches
   const footerPaddingFromEdge = pageMargins.footer * 96;
   const footerHeight = Math.max(footerDef?.height || 0, minFooterHeight - footerPaddingFromEdge);
-
-  const sectionContainer = footerDef?.sectionContainer?.cloneNode(true);
-  const autoPageNumber = sectionContainer?.querySelector('span[data-id="auto-page-number"]');
-  if (autoPageNumber) {
-    const fontSize = autoPageNumber.previousElementSibling?.style?.fontSize ||
-      autoPageNumber.nextElementSibling?.style?.fontSize;
-    if (fontSize) autoPageNumber.style.fontSize = fontSize;
-    autoPageNumber.innerText = currentPageNumber;
-  }
-
   const editorContainer = document.createElement('div');
 
   if (!footerId && !editor.converter.footerIds['default']) {
@@ -590,7 +583,9 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, editor, curr
     sectionId: footerId,
     type: 'footer',
     availableHeight: footerHeight,
+    currentPageNumber,
   });
+
   editor.converter.footerEditors.push({
     id: footerId,
     editor: editorSection,

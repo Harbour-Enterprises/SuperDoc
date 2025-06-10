@@ -1,0 +1,11 @@
+.sd-editor-auto-page-number,
+.sd-editor-auto-total-pages {
+  transition: all 250ms ease;
+  border-bottom: 1px solid #9A9A9A;
+  cursor: not-allowed;
+}
+
+.sd-editor-auto-page-numbe:hover,
+.sd-editor-auto-total-pages:hover {
+  border-bottom: 1px solid #4f4f4f;
+}
