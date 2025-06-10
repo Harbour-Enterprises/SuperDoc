@@ -416,9 +416,9 @@ export const cleanUpListsWithAnnotations = (fieldsToDelete = [], editor) => {
 
       child.children.forEach((inline) => {
         const isFieldToDelete = fieldsToDelete.includes(inline.attrs.fieldId);
-        const isMatchingField = inline.type.name === 'fieldAnnotation' && isFieldToDelete;
-        const isEmpty = inline.childCount === 0;
-        if (!isEmpty && !isMatchingField) hasOtherNodes = true;
+        const isFieldType = inline.type.name === 'fieldAnnotation';
+        const isMatchingField = isFieldType && isFieldToDelete;
+        if (!isFieldType && !isMatchingField) hasOtherNodes = true;
         if (isMatchingField) matchingNodesFound += 1;
       });
     });
