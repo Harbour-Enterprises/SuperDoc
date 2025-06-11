@@ -34,6 +34,8 @@ export const handleListNode = (params) => {
       listItems.push(possibleList);
       possibleList = siblings.shift();
       if (possibleList?.elements && !hasTextNode(possibleList.elements)) {
+        const { name } = possibleList;
+        if (name === 'w:tbl') continue;
         listItems.push(possibleList);
         possibleList = siblings.shift();
       }
