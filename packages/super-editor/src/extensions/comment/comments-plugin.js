@@ -146,7 +146,7 @@ export const CommentsPlugin = Extension.create({
           const meta = tr.getMeta(CommentsPluginKey);
           const { type } = meta || {};
 
-          if (type === 'force') shouldUpdate = true;
+          if (type === 'force' || type === 'forceTrackChanges') shouldUpdate = true;
 
           if (!isPaginationInit && !shouldUpdate && meta && meta.decorations) {
             return {

@@ -16,6 +16,7 @@ export const ImagePositionPlugin = ({ editor }) => {
       },
 
       apply(tr, oldDecorationSet, oldState, newState) {
+        if (!tr.docChanged) return oldDecorationSet;
         const decorations = getImagePositionDecorations(newState, view);
         return DecorationSet.create(newState.doc, decorations);
       },

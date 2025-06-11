@@ -138,6 +138,7 @@ export const Paragraph = Node.create({
         },
 
         apply(tr, oldDecorationSet, oldState, newState) {
+          if (!tr.docChanged) return oldDecorationSet;
           const decorations = getDropcapDecorations(newState, view);
           return DecorationSet.create(newState.doc, decorations);
         },
@@ -155,13 +156,17 @@ export const Paragraph = Node.create({
 
 const getDropcapDecorations = (state, view) => {
   let decorations = [];
+
   state.doc.descendants((node, pos) => {
-    if (node.attrs.dropcap?.type === 'margin') {
-      const width = getDropcapWidth(view, pos);
+    if (node.type.name === 'paragraph') {
+      if (node.attrs.dropcap?.type === 'margin') {
+        const width = getDropcapWidth(view, pos);
+        decorations.push(
+          Decoration.inline(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }),
+        );
+      }
       
-      decorations.push(
-        Decoration.inline(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }),
-      );
+      return false; // no need to descend into a paragraph
     }
   });
   return decorations;

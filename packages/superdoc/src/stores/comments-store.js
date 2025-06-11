@@ -484,34 +484,55 @@ export const useCommentsStore = defineStore('comments', () => {
       addComment({ superdoc, comment: newComment });
     });
 
-    const trackedChanges = trackChangesHelpers.getTrackChanges(editor.state);
+    setTimeout(() => {
+      // do not block the first rendering of the doc 
+      // and create comments asynchronously.
+      createCommentForTrackChanges(editor);
+    }, 0);
+  }
 
+  const createCommentForTrackChanges = (editor) => {
+    let trackedChanges = trackChangesHelpers.getTrackChanges(editor.state);
+    let isLargeDoc = editor.state.doc.nodeSize >= 100_000;
+
+    if (isLargeDoc && trackedChanges.length) {
+      trackedChanges = trackedChanges.slice(0, 100);
+    }
+    
     // Create comments for tracked changes 
     // that do not have a corresponding comment (created in Word).
-    trackedChanges.forEach(({ mark }) => {
-      const foundComment = commentsList.value.find((i) => i.commentId === mark.attrs.id);
-
-      if (foundComment) {
-        return;
-      }
+    trackedChanges.forEach(({ mark }, index) => {
+      console.debug(`Create comment for track change: ${index}`);
 
       const { dispatch } = editor.view;
       const { tr } = editor.view.state;
+
+      const foundComment = commentsList.value.find((i) => i.commentId === mark.attrs.id);
+      const isLastIteration = trackedChanges.length === index + 1;
+
+      if (foundComment) {
+        if (isLastIteration) {
+          tr.setMeta(CommentsPluginKey, { type: 'force' });
+          dispatch(tr);
+        }
+        return;
+      }
 
       const markMetaKeys = {
         trackInsert: 'insertedMark',
         trackDelete: 'deletionMark',
         trackFormat: 'formatMark',
       };
-
       const markKeyName = markMetaKeys[mark.type.name];
+
       if (markKeyName) {
-        tr.setMeta(CommentsPluginKey, { type: 'force' });
+        if (isLastIteration) tr.setMeta(CommentsPluginKey, { type: 'force' });
+        tr.setMeta(CommentsPluginKey, { type: 'forceTrackChanges' });
         tr.setMeta(TrackChangesBasePluginKey, { [markKeyName]: mark });
         dispatch(tr);
       }
     });
-  }
+  };
 
   const translateCommentsForExport = () => {
     const processedComments = []

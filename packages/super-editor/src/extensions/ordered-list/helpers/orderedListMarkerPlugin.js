@@ -115,6 +115,11 @@ function getOrderedListItemsByList(state) {
   let { doc } = state;
   let map = new Map();
   doc.descendants((node, pos) => {
+    // no need to descend into a paragraph
+    if (node.type.name === 'paragraph') {
+      return false;
+    }
+
     let { attrs } = node;
     let isListItem = node.type.name === 'listItem';
     let hasListLevel = !!attrs.listLevel?.length;
@@ -137,6 +142,11 @@ function getAllChildListItemsOfList({ state, list }) {
   let { doc } = state;
   let allItems = [];
   doc.descendants((node, pos) => {
+    // no need to descend into a paragraph
+    if (node.type.name === 'paragraph') {
+      return false;
+    }
+    
     let isListItem = node.type.name === 'listItem';
     let $pos = doc.resolve(pos);
     if (isListItem && $pos.parent === list) {
