@@ -1,5 +1,4 @@
 import { Node, Attribute } from '@core/index.js';
-import { marks } from 'prosemirror-schema-basic';
 
 export const PageNumber = Node.create({
   name: 'page-number',
@@ -71,7 +70,7 @@ export const PageNumber = Node.create({
 
   addShortcuts() {
     return {
-      'Mod-Shift-p': () => this.editor.commands.addAutoPageNumber(),
+      'Mod-Shift-alt-p': () => this.editor.commands.addAutoPageNumber(),
     }
   }
 });
@@ -141,7 +140,7 @@ export const TotalPageCount = Node.create({
 
   addShortcuts() {
     return {
-      'Mod-Shift-c': () => this.editor.commands.addTotalPageCount(),
+      'Mod-Shift-alt-c': () => this.editor.commands.addTotalPageCount(),
     }
   }
 });
