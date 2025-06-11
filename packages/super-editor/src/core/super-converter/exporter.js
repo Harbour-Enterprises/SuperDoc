@@ -92,6 +92,8 @@ export function exportSchemaToJson(params) {
     shapeTextbox: translateShapeTextbox,
     contentBlock: translateContentBlock,
     structuredContent: translateStructuredContent,
+    "page-number": translatePageNumberNode,
+    "total-page-number": translateTotalPageNumberNode,
   };
 
   if (!router[type]) {
@@ -2405,4 +2407,82 @@ function translateStructuredContent(params) {
     name: 'w:sdt',
     elements: nodeElements,
   };
+};
+
+const translatePageNumberNode = (params) => {
+  const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
+  return getAutoPageJson('PAGE', outputMarks)
+}
+
+const translateTotalPageNumberNode = (params) => {
+  const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
+  return getAutoPageJson('NUMPAGES', outputMarks)
+}
+
+const getAutoPageJson = (type, outputMarks = []) => {
+  return [
+    {
+      "name": "w:r",
+      "elements": [
+        {
+          "name": "w:rPr",
+          "elements": outputMarks,
+        },
+        {
+          "name": "w:fldChar",
+          "attributes": {
+            "w:fldCharType": "begin"
+          }
+        }
+      ]
+    },
+    {
+      "name": "w:r",
+      "elements": [
+        {
+          "name": "w:rPr",
+          "elements": outputMarks,
+        },
+        {
+          "name": "w:instrText",
+          "elements": [
+            {
+              "type": "text",
+              "text": ` ${type}`
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "w:r",
+      "elements": [
+        {
+          "name": "w:rPr",
+          "elements": outputMarks,
+        },
+        {
+          "name": "w:fldChar",
+          "attributes": {
+            "w:fldCharType": "separate"
+          }
+        }
+      ]
+    },
+    {
+      "name": "w:r",
+      "elements": [
+        {
+          "name": "w:rPr",
+          "elements": outputMarks,
+        },
+        {
+          "name": "w:fldChar",
+          "attributes": {
+            "w:fldCharType": "end"
+          }
+        }
+      ]
+    }
+  ]
 };

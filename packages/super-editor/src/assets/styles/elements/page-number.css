@@ -9,3 +9,7 @@
 .sd-editor-auto-total-pages:hover {
   border-bottom: 1px solid #4f4f4f;
 }
+
+.sd-editor-auto-page-number-content {
+  pointer-events: none;
+}

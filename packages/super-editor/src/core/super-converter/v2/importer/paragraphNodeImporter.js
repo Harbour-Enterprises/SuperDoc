@@ -483,18 +483,31 @@ const processCombinedNodesForFldChar = (nodesToCombine = []) => {
 
   // If we have a page marker, we need to replace the last node with a page number node.
   if (hasPageMarker) {
-    processedNodes.push({
+    const pageNumNode = {
       name: 'sd:autoPageNumber',
-      type: 'element',
+      type: 'element', 
+    };
+
+    nodesToCombine.forEach((n) => {
+      const rPrNode = n.elements.find((el) => el.name === 'w:rPr');
+      if (rPrNode) pageNumNode.elements = [rPrNode]
     });
+
+    processedNodes.push(pageNumNode);
   }
 
   // If we have a NUMPAGES marker, we need to replace the last node with a total page number node.
   else if (isNumPages) {
-    processedNodes.push({
+    const totalPageNumNode = {
       name: 'sd:totalPageNumber',
       type: 'element',
+    };
+
+    nodesToCombine.forEach((n) => {
+      const rPrNode = n.elements.find((el) => el.name === 'w:rPr');
+      if (rPrNode) totalPageNumNode.elements = [rPrNode];
     });
+    processedNodes.push(totalPageNumNode);
   }
 
   // If we have a hyperlink, we need to replace the last node with a link node.

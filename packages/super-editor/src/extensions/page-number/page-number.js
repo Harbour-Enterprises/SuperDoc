@@ -1,4 +1,5 @@
 import { Node, Attribute } from '@core/index.js';
+import { marks } from 'prosemirror-schema-basic';
 
 export const PageNumber = Node.create({
   name: 'page-number',
@@ -19,6 +20,15 @@ export const PageNumber = Node.create({
         'data-id': 'auto-page-number',
         'aria-label': 'Page number node'
       },
+    }
+  },
+
+  addAttributes() {
+    return {
+      marksAsAttrs: {
+        default: null,
+        rendered: false,
+      }
     }
   },
 
@@ -47,7 +57,9 @@ export const PageNumber = Node.create({
         const pageNumberType = schema?.nodes?.['page-number'];
         if (!pageNumberType) return false;
 
-        const pageNumberNode = pageNumberType.createAndFill();
+        const pageNumberNodeJSON = { type: 'page-number' };
+        const pageNumberNode = schema.nodeFromJSON(pageNumberNodeJSON);
+
         if (dispatch) {
           tr.replaceSelectionWith(pageNumberNode, false);
           tr.setMeta('forceUpdatePagination', true);
@@ -86,6 +98,15 @@ export const TotalPageCount = Node.create({
     }
   },
 
+  addAttributes() {
+    return {
+      marksAsAttrs: {
+        default: null,
+        rendered: false,
+      }
+    }
+  },
+  
   parseDOM() {
     return [{ tag: 'span[data-id="auto-total-pages"' }];
   },
@@ -134,29 +155,55 @@ export class AutoPageNumberNodeView {
     this.getPos = getPos;
     this.editor = editor;
 
-    this.#init(htmlAttributes);
+    this.dom = this.#renderDom(node, htmlAttributes)
   }
 
-  #init(htmlAttributes) {
-    // Container for the entire node view
-    this.dom = document.createElement("span");
-    this.dom.className = "sd-editor-auto-page-number";
+  #renderDom(node, htmlAttributes) {
+    const pageText = this.editor.options.currentPageNumber || '1';
+    const content = document.createTextNode(String(pageText));
 
-    // Container for the content
+    const nodeContent = document.createElement('span');
+    nodeContent.className = 'sd-editor-auto-page-number';
+    nodeContent.setAttribute('data-id', 'auto-page-number');
+    nodeContent.setAttribute('aria-label', 'Page number node');
+
     const currentPos = this.getPos();
-    const styleObject = getMarksFromNeighbors(currentPos, this.view);
-    // this.contentDOM = document.createElement("span");
-    Object.assign(this.dom.style, styleObject);
+    const { styles, marks } = getMarksFromNeighbors(currentPos, this.view);
+    this.#scheduleUpdateNodeStyle(currentPos, marks);
+    Object.assign(nodeContent.style, styles);
 
-    // Set attributes from the node
-    this.dom.innerText = this.editor.options.currentPageNumber;
-    // this.dom.appendChild(this.contentDOM);
+    nodeContent.appendChild(content);
 
-    // Set HTML attributes
     Object.entries(htmlAttributes).forEach(([key, value]) => {
-      if (value) this.dom.setAttribute(key, value);
+      if (value) nodeContent.setAttribute(key, value);
     });
 
+    return nodeContent;
+  }
+
+  #scheduleUpdateNodeStyle(pos, marks) {
+    setTimeout(() => {
+      const { state } = this.editor;
+      const { dispatch } = this.view;
+
+      const node = state.doc.nodeAt(pos);
+      if (!node) return;
+
+      const currentMarks = node.attrs.marksAsAttrs || [];
+      const newMarks = marks.map(m => ({ type: m.type.name, attrs: m.attrs }));
+
+      // Avoid infinite loop: only update if marks actually changed
+      const isEqual = JSON.stringify(currentMarks) === JSON.stringify(newMarks);
+      if (isEqual) return;
+
+      const newAttrs = {
+        ...node.attrs,
+        marksAsAttrs: newMarks,
+      };
+
+      const tr = state.tr.setNodeMarkup(pos, undefined, newAttrs);
+      dispatch(tr);
+    }, 0);
   }
 
   update(node) {
@@ -175,14 +222,24 @@ export class AutoPageNumberNodeView {
 const getMarksFromNeighbors = (currentPos, view) => {
   const $pos = view.state.doc.resolve(currentPos);
   const styles = {};
+  const marks = []
 
   const before = $pos.nodeBefore;
-  if (before) Object.assign(styles, processMarks(before.marks));
+  if (before) {
+    Object.assign(styles, processMarks(before.marks));
+    marks.push(...before.marks);
+  };
 
   const after = $pos.nodeAfter;
-  if (after) Object.assign(styles, { ...styles, ...processMarks(after.marks) });
+  if (after) {
+    Object.assign(styles, { ...styles, ...processMarks(after.marks) });
+    marks.push(...after.marks);
+  };
 
-  return styles;
+  return {
+    styles,
+    marks,
+  }
 };
 
 /**

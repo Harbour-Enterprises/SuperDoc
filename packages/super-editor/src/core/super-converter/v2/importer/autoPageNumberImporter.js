@@ -1,3 +1,5 @@
+import { parseMarks } from './markImporter.js';
+
 /**
  * @type {import("docxImporter").NodeHandler}
  */
@@ -7,8 +9,13 @@ const handleAutoPageNumber = (params) => {
     return { nodes: [], consumed: 0 };
   }
   
+  const rPr = nodes[0].elements?.find((el) => el.name === 'w:rPr');
+  const marks = parseMarks(rPr || { elements: [] });
   const processedNode = {
     type: 'page-number',
+    attrs: {
+      marksAsAttrs: marks,
+    },
   };
   return { nodes: [processedNode], consumed: 1 };
 };
@@ -30,8 +37,13 @@ const handleAutoTotalPageNumber = (params) => {
     return { nodes: [], consumed: 0 };
   }
 
+  const rPr = nodes[0].elements?.find((el) => el.name === 'w:rPr');
+  const marks = parseMarks(rPr || { elements: [] });
   const processedNode = {
     type: 'total-page-number',
+    attrs: {
+      marksAsAttrs: marks,
+    },
   };
   return { nodes: [processedNode], consumed: 1 };
 };
