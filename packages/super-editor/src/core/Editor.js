@@ -1,4 +1,4 @@
-import { EditorState } from 'prosemirror-state';
+import { EditorState, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMParser, DOMSerializer } from 'prosemirror-model';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
@@ -24,6 +24,7 @@ import { generateCollaborationData } from '@extensions/collaboration/collaborati
 import { toggleHeaderFooterEditMode } from '../extensions/pagination/pagination-helpers.js';
 import { hasSomeParentWithClass } from './super-converter/helpers.js';
 import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
+import { findWordBounds } from './helpers/findWordBounds.js';
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -934,7 +935,7 @@ export class Editor extends EventEmitter {
           return;
         }
         event.stopPropagation();
-        
+
         if (!this.options.editable) {
           // ToDo don't need now but consider to update pagination when recalculate header/footer height
           // this.storage.pagination.sectionData = await initPaginationData(this);
@@ -949,6 +950,12 @@ export class Editor extends EventEmitter {
           pm.classList.remove('header-footer-edit');
           pm.setAttribute('aria-readonly', false);
         }
+
+        // Imitate default double click behavior - word selection
+        const { state, dispatch } = view;
+        const word = findWordBounds(state.doc, pos);
+        const tr = state.tr.setSelection(TextSelection.create(state.doc, word.from, word.to));
+        dispatch(tr);
       }
     });
     
