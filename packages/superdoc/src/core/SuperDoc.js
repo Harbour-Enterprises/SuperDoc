@@ -104,7 +104,6 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {Object} [pdfViewer] The PDF viewer configuration
  * @property {function(File): Promise<string>} [handleImageUpload] The function to handle image uploads
  * @property {User} [lockedBy] The user who locked the SuperDoc
- * @property {WebsocketProvider} [socket] The socket connection for collaboration
  * @property {boolean} [rulers] Whether to show the ruler in the editor
  * @property {boolean} [suppressDefaultDocxStyles] Whether to suppress default styles in docx mode
  * @property {boolean} [jsonOverride] Whether to override content with provided JSON
@@ -352,9 +351,11 @@ export class SuperDoc extends EventEmitter {
     this.isCollaborative = true;
 
     // Start a socket for all documents and general metaMap for this SuperDoc
-    // this.config.socket = new HocuspocusProviderWebsocket({
-    //   url: collaborationModuleConfig.url,
-    // });
+    if (collaborationModuleConfig.providerType === 'hocuspocus') {
+      this.config.socket = new HocuspocusProviderWebsocket({
+        url: collaborationModuleConfig.url,
+      });
+    };
 
     // Initialize collaboration for documents
     const processedDocuments = makeDocumentsCollaborative(this);
