@@ -25,6 +25,7 @@ import { toggleHeaderFooterEditMode } from '../extensions/pagination/pagination-
 import { hasSomeParentWithClass } from './super-converter/helpers.js';
 import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { findWordBounds } from './helpers/findWordBounds.js';
+import { setWordSelection } from './helpers/setWordSelection.js';
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -932,6 +933,9 @@ export class Editor extends EventEmitter {
         if (isHeader || isFooter) {
           const eventClone = new event.constructor(event.type);
           event.target.dispatchEvent(eventClone);
+
+          // Imitate default double click behavior - word selection
+          if (this.options.isHeaderOrFooter && this.options.editable) setWordSelection(view, pos);
           return;
         }
         event.stopPropagation();
@@ -952,10 +956,7 @@ export class Editor extends EventEmitter {
         }
 
         // Imitate default double click behavior - word selection
-        const { state, dispatch } = view;
-        const word = findWordBounds(state.doc, pos);
-        const tr = state.tr.setSelection(TextSelection.create(state.doc, word.from, word.to));
-        dispatch(tr);
+        setWordSelection(view, pos);
       }
     });
     
