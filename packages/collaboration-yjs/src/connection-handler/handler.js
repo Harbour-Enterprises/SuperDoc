@@ -84,6 +84,11 @@ export class ConnectionHandler {
       });
     }
 
+    socket.on('close', (code, reason) => {
+      this.#log('🔌 Socket closed, cleaning up connection for', params.documentId);
+      this.documentManager.releaseConnection(params.documentId, socket);
+    });
+  
     /** Initialieze the socket connection  */
     setupConnection(this.#socket, sharedDoc);
 

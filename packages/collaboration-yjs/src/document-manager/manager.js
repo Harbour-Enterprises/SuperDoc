@@ -19,6 +19,12 @@ export class DocumentManager {
   /** @type {ReturnType<import('../internal-logger/logger.js').createLogger>} */
   #log = createLogger('DocumentManager');
 
+  /** @type {Map<string, NodeJS.Timeout>} */
+  #cleanupTimers = new Map();
+
+  /** @type {number} */
+  #cacheDocumentsMs = 1000 * 60; // 1 minutes
+
   /** @type {number} */
   debounceMs;
 
@@ -49,6 +55,7 @@ export class DocumentManager {
       this.#setupAutoSave(doc, userParams);
     }
 
+    clearTimeout(this.#cleanupTimers.get(documentId)); // Clear any pending deletions
     return this.#documents.get(documentId);
   }
 
@@ -82,6 +89,48 @@ export class DocumentManager {
     }
   }
 
+  /**
+   * Public API: let us know this socket is gone for that doc.
+   * @param {string} documentId
+   * @param {WebSocket} socket
+   */
+  releaseConnection(documentId, socket) {
+    const doc = this.#documents.get(documentId);
+    if (!doc) return;
+
+    doc.conns.delete(socket);
+
+    // If nobody else is connected, schedule a cleanup
+    if (doc.conns.size === 0) {
+      this.#scheduleDocCleanup(documentId);
+    }
+  }
+
+  /**
+   * @param {string} documentId
+   */
+  #scheduleDocCleanup(documentId) {
+    // clear any existing timer
+    clearTimeout(this.#cleanupTimers?.get(documentId));
+
+    // after X ms (or immediately) remove the doc
+    const timeout = setTimeout(() => {
+      const doc = this.#documents.get(documentId);
+      if (doc.conns.size === 0) {
+        this.#log(`🗑️  Cleaning up document "${documentId}" from memory.`);
+        this.#documents.delete(documentId);
+        this.#cleanupTimers.delete(documentId);
+      }
+    }, this.#cacheDocumentsMs);
+
+    this.#cleanupTimers.set(documentId, timeout);
+  }
+
+  /**
+   * Check if a document exists in the manager.
+   * @param {string} documentId 
+   * @returns {boolean} True if the document exists, false otherwise.
+   */
   has(documentId) {
     return this.#documents.has(documentId);
   }
