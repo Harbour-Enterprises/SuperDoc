@@ -6,7 +6,7 @@ const handleAutoPageNumber = (params) => {
   if (nodes.length === 0 || nodes[0].name !== 'sd:autoPageNumber') {
     return { nodes: [], consumed: 0 };
   }
-  
+
   const processedNode = {
     type: 'page-number',
   };

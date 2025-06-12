@@ -116,7 +116,7 @@ export const Pagination = Extension.create({
           shouldUpdate = true;
           if (isDebugging) console.debug('🚀 UPDATE DECORATIONS')
           if (isForceUpdate) shouldUpdate = true;
-          
+
           return {
             ...oldState,
             isReadyToInit: shouldInitialize,
@@ -160,10 +160,10 @@ export const Pagination = Extension.create({
 /**
  * Get the correct header or footer ID based on the current page number and section type
  * Consider wether or not we need to alternate odd/even pages or if we have a title page
- * 
- * @param {Number} currentPageNumber 
- * @param {String} sectionType 
- * @param {Editor} editor 
+ *
+ * @param {Number} currentPageNumber
+ * @param {String} sectionType
+ * @param {Editor} editor
  * @returns {String|null} The header or footer ID
  */
 const getHeaderFooterId = (currentPageNumber, sectionType, editor, node = null) => {
@@ -288,7 +288,7 @@ const calculatePageBreaks = (view, editor, sectionData) => {
   // Clean up
   tempView.destroy();
   document.body.removeChild(tempContainer);
-  
+
   // Return a list of page break decorations
   return DecorationSet.create(view.state.doc, decorations);
 };
@@ -336,10 +336,10 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
   doc.descendants((node, pos) => {
     let currentNode = node;
     let currentPos = pos;
-  
+
     coords = view?.coordsAtPos(currentPos);
     if (!coords) return;
-    
+
     let shouldAddPageBreak = coords.bottom > pageHeightThreshold;
     let isHardBreakNode = currentNode.type.name === 'hardBreak';
 
@@ -507,10 +507,10 @@ function createHeader(pageMargins, pageSize, sectionData, headerId, editor) {
   }
 
   const data = editor.converter.headers[headerId];
-  const editorSection = createHeaderFooterEditor({ 
-    editor, 
-    data, 
-    editorContainer, 
+  const editorSection = createHeaderFooterEditor({
+    editor,
+    data,
+    editorContainer,
     appendToBody: false,
     sectionId: headerId,
     type: 'header',
@@ -534,7 +534,7 @@ function createHeader(pageMargins, pageSize, sectionData, headerId, editor) {
   if (isDebugging) editorContainer.style.backgroundColor = '#00aaaa55';
 
   editorContainer.addEventListener('dblclick', () => onHeaderFooterDblClick(editor, editorSection));
-  
+
   return {
     section: editorContainer,
     headerHeight: headerHeight,
@@ -582,10 +582,10 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, editor, curr
   }
 
   const data = editor.converter.footers[footerId];
-  const editorSection = createHeaderFooterEditor({ 
-    editor, 
-    data, 
-    editorContainer, 
+  const editorSection = createHeaderFooterEditor({
+    editor,
+    data,
+    editorContainer,
     appendToBody: false,
     sectionId: footerId,
     type: 'footer',
@@ -631,7 +631,7 @@ const onHeaderFooterDblClick = (editor, currentFocusedSectionEditor) => {
 
 /**
  * Combine header and footer into a page break element
- * @param {Object} param0 
+ * @param {Object} param0
  * @param {Editor} param0.editor The editor instance
  * @param {HTMLElement} param0.header The header element
  * @param {HTMLElement} param0.footer The footer element
@@ -651,7 +651,7 @@ function createPageBreak({ editor, header, footer, footerBottom = null, isFirstH
   if (isFirstHeader) innerDiv.style.borderRadius = '8px 8px 0 0';
   else if (isLastFooter) innerDiv.style.borderRadius = '0 0 8px 8px';
   paginationDiv.appendChild(innerDiv);
-  
+
   if (footer) {
     innerDiv.appendChild(footer.section);
     sectionHeight += footer.footerHeight;
@@ -688,14 +688,14 @@ function createPageBreak({ editor, header, footer, footerBottom = null, isFirstH
     paginationDiv.style.position = 'absolute';
     paginationDiv.style.bottom = footerBottom + 'px';
   }
-  
+
   return paginationDiv;
 }
 
 /**
  * Get the actual break coordinates for a page split based on the approximate position (pos)
  * and the calculated threshold (which accounts for 'scale')
- * 
+ *
  * Since we know the node at pos extends past the threshold, we iterate
  * backwards through all positions from there to find the exact break point
  * @param {EditorView} view The current editor view

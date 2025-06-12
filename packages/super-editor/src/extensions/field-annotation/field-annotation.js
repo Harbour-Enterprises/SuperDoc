@@ -227,7 +227,7 @@ export const FieldAnnotation = Node.create({
         default: false,
         parseDOM: (elem) => elem.getAttribute('data-italic') === 'true',
         renderDOM: (attrs) => {
-          if (!attrs.italic) return {};
+          if (!attrs.italic || attrs.rawHtml) return {};
           return {
             'data-italic': 'true',
             style: 'font-style: italic',
@@ -239,7 +239,7 @@ export const FieldAnnotation = Node.create({
         default: false,
         parseDOM: (elem) => elem.getAttribute('data-underline') === 'true',
         renderDOM: (attrs) => {
-          if (!attrs.underline) return {};
+          if (!attrs.underline || attrs.rawHtml) return {};
           return {
             'data-underline': 'true',
             style: 'text-decoration: underline',
@@ -251,7 +251,7 @@ export const FieldAnnotation = Node.create({
         default: null,
         parseDOM: (elem) => elem.getAttribute('data-font-family') || elem.style.fontFamily || null,
         renderDOM: (attrs) => {
-          if (!attrs.fontFamily) return {};
+          if (!attrs.fontFamily || attrs.rawHtml) return {};
           return {
             'data-font-family': attrs.fontFamily,
             style: `font-family: ${attrs.fontFamily}`,
@@ -263,7 +263,7 @@ export const FieldAnnotation = Node.create({
         default: null,
         parseDOM: (elem) => elem.getAttribute('data-font-size') || elem.style.fontSize || null,
         renderDOM: (attrs) => {
-          if (!attrs.fontSize) return {};
+          if (!attrs.fontSize || attrs.rawHtml) return {};
           let [value, unit] = parseSizeUnit(attrs.fontSize);
           if (Number.isNaN(value)) return {};
           unit = unit ? unit : 'pt';
@@ -279,7 +279,7 @@ export const FieldAnnotation = Node.create({
         default: null,
         parseDOM: (element) => element.getAttribute('data-text-highlight'),
         renderDOM: (attrs) => {
-          if (!attrs.textHighlight)  return {};
+          if (!attrs.textHighlight || attrs.rawHtml)  return {};
           return {
             'data-text-highlight': attrs.textHighlight,
             // takes precedence over the fieldColor.
@@ -292,7 +292,7 @@ export const FieldAnnotation = Node.create({
         default: null,
         parseDOM: (element) => element.getAttribute('data-text-color'),
         renderDOM: (attrs) => {
-          if (!attrs.textColor)  return {};
+          if (!attrs.textColor || attrs.rawHtml)  return {};
           return {
             'data-text-color': attrs.textColor,
             style: `color: ${attrs.textColor}`,

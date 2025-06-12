@@ -933,7 +933,7 @@ export class Editor extends EventEmitter {
           return;
         }
         event.stopPropagation();
-        
+
         if (!this.options.editable) {
           // ToDo don't need now but consider to update pagination when recalculate header/footer height
           // this.storage.pagination.sectionData = await initPaginationData(this);
