@@ -78,6 +78,7 @@ export const initSuperdocYdoc = (superdoc) => {
     documentId,
     socket: superdoc.config.socket,
     superdocInstance: superdoc,
+    provider: 'superdoc',
   };
   const { provider: superdocProvider, ydoc: superdocYdoc } = createProvider(superdocCollaborationOptions);
 

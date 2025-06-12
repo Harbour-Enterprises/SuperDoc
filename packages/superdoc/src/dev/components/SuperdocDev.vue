@@ -106,6 +106,11 @@ const init = async () => {
       //   url: 'ws://localhost:3050/docs/superdoc-id',
       //   token: 'token',
       // },
+      collaboration: {
+        url: 'ws://localhost:3050/collaboration',
+        token: 'token',
+        providerType: 'superdoc',
+      },
       ai: {
         // Provide your Harbour API key here for direct endpoint access
         // apiKey: 'test',
