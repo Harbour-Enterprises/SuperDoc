@@ -170,7 +170,7 @@ We recognize contributions in several ways:
 If you have questions, feel free to:
 
 - Start a [GitHub Discussion](https://github.com/Harbour-Enterprises/SuperDoc/discussions)
-- Join our [Discord server](https://discord.gg/HydwD7Kq)
+- Join our [Discord server](https://discord.gg/wjMccuygvy)
 - Email us at [support@harbourshare.com](mailto:support@harbourshare.com)
 
 ---
