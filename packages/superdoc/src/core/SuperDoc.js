@@ -4,7 +4,8 @@ import '@harbour-enterprises/super-editor/style.css';
 
 import { EventEmitter } from 'eventemitter3';
 import { v4 as uuidv4 } from 'uuid';
-import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
+import { HocuspocusProvider } from '@hocuspocus/provider';
+import { WebsocketProvider } from 'y-websocket'
 
 import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
 import { SuperToolbar, createZip } from '@harbour-enterprises/super-editor';
@@ -103,7 +104,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {Object} [pdfViewer] The PDF viewer configuration
  * @property {function(File): Promise<string>} [handleImageUpload] The function to handle image uploads
  * @property {User} [lockedBy] The user who locked the SuperDoc
- * @property {HocuspocusProviderWebsocket} [socket] The socket connection for collaboration
+ * @property {WebsocketProvider} [socket] The socket connection for collaboration
  * @property {boolean} [rulers] Whether to show the ruler in the editor
  * @property {boolean} [suppressDefaultDocxStyles] Whether to suppress default styles in docx mode
  * @property {boolean} [jsonOverride] Whether to override content with provided JSON
@@ -351,25 +352,25 @@ export class SuperDoc extends EventEmitter {
     this.isCollaborative = true;
 
     // Start a socket for all documents and general metaMap for this SuperDoc
-    this.config.socket = new HocuspocusProviderWebsocket({
-      url: collaborationModuleConfig.url,
-    });
+    // this.config.socket = new HocuspocusProviderWebsocket({
+    //   url: collaborationModuleConfig.url,
+    // });
 
     // Initialize collaboration for documents
     const processedDocuments = makeDocumentsCollaborative(this);
 
     // Optionally, initialize separate superdoc sync - for comments, view, etc.
-    if (commentsConfig.useInternalExternalComments && !commentsConfig.suppressInternalExternalComments) {
-      const { ydoc: sdYdoc, provider: sdProvider } = initSuperdocYdoc(this);
-      this.ydoc = sdYdoc;
-      this.provider = sdProvider;
-    } else {
-      this.ydoc = processedDocuments[0].ydoc;
-      this.provider = processedDocuments[0].provider;
-    };
+    // if (commentsConfig.useInternalExternalComments && !commentsConfig.suppressInternalExternalComments) {
+    //   const { ydoc: sdYdoc, provider: sdProvider } = initSuperdocYdoc(this);
+    //   this.ydoc = sdYdoc;
+    //   this.provider = sdProvider;
+    // } else {
+    //   this.ydoc = processedDocuments[0].ydoc;
+    //   this.provider = processedDocuments[0].provider;
+    // };
 
     // Initialize comments sync, if enabled
-    initCollaborationComments(this);
+    // initCollaborationComments(this);
 
     return processedDocuments;
   }

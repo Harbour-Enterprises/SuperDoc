@@ -1,3 +1,4 @@
+import { WebsocketProvider } from 'y-websocket'
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { awarenessStatesToArray } from '@harbour-enterprises/common/collaboration/awareness.js';
 import { Doc as YDoc } from 'yjs';
@@ -29,11 +30,38 @@ function createAwarenessHandler(context, states) {
  * @returns {Object} The provider and socket
  */
 function createProvider({ config, user, documentId, socket, superdocInstance }) {
-  config.providerType = 'hocuspocus';
+  console.debug('CONFIG', config)
+  if (!config.providerType) config.providerType = 'hocuspocus';
+
   const providers = {
     hocuspocus: () => createHocuspocusProvider({ config, user, documentId, socket, superdocInstance }),
+    superdoc: () => createSuperDocProvider({ config, user, documentId, socket, superdocInstance }),
   };
+  if (!providers) throw new Error(`Provider type ${config.providerType} is not supported.`);
+
   return providers[config.providerType]();
+}
+
+/**
+ *
+ * @param {Object} param The config object
+ * @param {Object} param.config The configuration object
+ * @param {Object} param.ydoc The Yjs document
+ * @param {Object} param.user The user object
+ * @param {string} param.documentId The document ID
+ * @returns {Object} The provider and socket
+ */
+function createSuperDocProvider({ config, user, documentId, socket, superdocInstance }) {
+  const ydoc = new YDoc({ gc: false });
+  const options = {
+    params: {
+      token: config.token || '',
+      someCustom: 'custom',
+    }
+  };
+  const provider = new WebsocketProvider(config.url, documentId, ydoc, options);
+  // provider.setAwarenessField('user', user);
+  return { provider, ydoc };
 }
 
 /**
