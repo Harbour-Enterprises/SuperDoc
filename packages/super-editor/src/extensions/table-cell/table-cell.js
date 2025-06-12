@@ -96,7 +96,7 @@ export const TableCell = Node.create({
             .map((side) => {
               const border = borders?.[side];
               if (border && border.val === 'none') return `border-${side}: ${border.val};`;
-              if (border) return `border-${side}: ${border.size}px solid ${border.color || 'black'};`;
+              if (border) return `border-${side}: ${Math.ceil(border.size)}px solid ${border.color || 'black'};`;
               return '';
             })
             .join(' ');
