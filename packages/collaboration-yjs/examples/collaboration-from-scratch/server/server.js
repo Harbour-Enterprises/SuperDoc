@@ -10,10 +10,17 @@ app.register(async function (app) {
   app.get('/collaboration/:documentId', { websocket: true }, (socket, request) => {
     const { documentId } = request.params;
     console.debug('WebSocket connection requested for document:', documentId);
-    const options = {
-      docName: documentId,
-    };
-    setupWSConnection(socket, request.request, options);
+  
+    const options = { docName: documentId };
+    const doc = setupWSConnection(socket, request.request, options);
+
+    // You could add some listeners...
+  
+    /** Note: The update listener will get called a lot. You might want to debounce this. */
+    doc.on('update', (update) => {
+      console.debug(`Document ${documentId} updated with size: ${update.byteLength} bytes`);
+    });
+  
   })
 });
 

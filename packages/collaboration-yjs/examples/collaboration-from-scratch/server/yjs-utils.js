@@ -280,14 +280,17 @@ export const setupWSConnection = (conn, req, { docName = (req.url || '').slice(1
         clearInterval(pingInterval)
       }
     }
-  }, pingTimeout)
+  }, pingTimeout);
+
   conn.on('close', () => {
     closeConn(doc, conn)
     clearInterval(pingInterval)
-  })
+  });
+
   conn.on('pong', () => {
     pongReceived = true
-  })
+  });
+
   // put the following in a variables in a block so the interval handlers don't keep in in
   // scope
   {
@@ -304,4 +307,6 @@ export const setupWSConnection = (conn, req, { docName = (req.url || '').slice(1
       send(doc, conn, encoding.toUint8Array(encoder))
     }
   }
+
+  return doc;
 }
