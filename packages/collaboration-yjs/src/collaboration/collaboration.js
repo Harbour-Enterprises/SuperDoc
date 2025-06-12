@@ -42,8 +42,12 @@ export class SuperDocCollaboration {
    * @returns {Promise<void>}
    */
   async welcome(socket, request) {
-    const params = generateParams(request);
+    const params = generateParams(request, this);
     this.#log('New connection request', params);
     await this.#connectionHandler.handle(socket, request, params);
+  }
+
+  has(documentId) {
+    return this.documentManager.has(documentId);
   }
 }

@@ -82,4 +82,7 @@ export class DocumentManager {
     }
   }
 
+  has(documentId) {
+    return this.#documents.has(documentId);
+  }
 }

@@ -60,7 +60,7 @@ export class ConnectionHandler {
      * Attempt to authenticate the connection.
      * If the authentication hook throws an error, we abort the connection
      */
-    const userContext = await this.#authenticate(this.#socket, this.#params);
+    const userContext = await this.#authenticate(this.#socket, this.#request, this.#params);
     const userParams = { ...this.#params, userContext };
   
     /**
@@ -99,7 +99,7 @@ export class ConnectionHandler {
    * @param {import('../types.js').CollaborationParams} params - The parameters for this connection.
    * @returns {Promise<import('../types.js').UserContext | void>} Context object if authentication is successful, else closes the socket.
    */
-  async #authenticate(socket, params) {
+  async #authenticate(socket, request, params) {
     if (!this.#hooks.authenticate) {
       return true;
     }
