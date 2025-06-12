@@ -41,7 +41,23 @@
 
 ## [0.12.34-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.34-next.1...v0.12.34-next.2) (2025-06-06)
 
-## [0.12.34-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.31-next.5...v0.12.34-next.1) (2025-06-06)
+
+### Features
+
+* added extra accessibility features ([6a0f9d8](https://github.com/Harbour-Enterprises/SuperDoc/commit/6a0f9d80ae281f21ebc39beb8a14be027ef24619))
+
+
+
+## [0.12.33](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.34-next.2...v0.12.35) (2025-06-06)
+
+
+### Features
+
+* (accessibility) simulate click with enter ([f9cd0b4](https://github.com/Harbour-Enterprises/SuperDoc/commit/f9cd0b4f5f8148ad0d0afad091288b32333f4cd3))
+* added initial toolbar keyboard navigation ([e37d79b](https://github.com/Harbour-Enterprises/SuperDoc/commit/e37d79bd284265f9b22f9a1ec23d05e58c21263a))
+* added roving tabindex ([6c77015](https://github.com/Harbour-Enterprises/SuperDoc/commit/6c770155532b805888d37bc91cb4d120129d541f))
+
+## [0.12.33](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.31-next.5...v0.12.33) (2025-06-06)
 
 ## [0.12.31-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.31-next.4...v0.12.31-next.5) (2025-06-06)
 
