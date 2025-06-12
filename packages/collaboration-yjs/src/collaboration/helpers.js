@@ -12,6 +12,7 @@ export const generateParams = (request, instance) => {
 
   const cookies = parseCookie(request.headers?.cookie);
   const headers = request.headers || {};
+  const connection = {};
 
   return {
     ...queryParams,
@@ -19,6 +20,7 @@ export const generateParams = (request, instance) => {
     cookies,
     instance,
     headers,
+    connection,
   };
 };
 
