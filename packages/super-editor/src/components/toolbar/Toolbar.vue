@@ -46,8 +46,8 @@ const onWindowResized = async () => {
 };
 const onResizeThrottled = throttle(onWindowResized, 300);
 
-const handleCommand = ({ item, argument, option, switchFocusToEditor = true }) => {
-  proxy.$toolbar.emitCommand({ item, argument, option, switchFocusToEditor });
+const handleCommand = ({ item, argument, option }) => {
+  proxy.$toolbar.emitCommand({ item, argument, option });
 };
 
 </script>

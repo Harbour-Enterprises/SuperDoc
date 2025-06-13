@@ -8,6 +8,7 @@ import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
 
 const emit = defineEmits(['command']);
 
+const toolbarItemRefs = ref([]);
 const props = defineProps({
   toolbarItems: {
     type: Array,
@@ -55,11 +56,11 @@ const isButton = (item) => item.type === 'button';
 const isDropdown = (item) => item.type === 'dropdown';
 const isSeparator = (item) => item.type === 'separator';
 const isOverflow = (item) => item.type === 'overflow';
-const handleToolbarButtonClick = (item, argument = null, switchFocusToEditor = true) => {
+const handleToolbarButtonClick = (item, argument = null) => {
   currentItem.value = item;
-  currentItem.value.expand = true;
+  currentItem.value.expand = !currentItem.value.expand;
   if (item.disabled.value) return;
-  emit('command', { item, argument, switchFocusToEditor });
+  emit('command', { item, argument });
 };
 
 const handleToolbarButtonTextSubmit = (item, argument) => {
@@ -78,7 +79,7 @@ const selectedOption = ref(null);
 const handleSelect = (item, option) => {
   closeDropdowns();
   const value = item.dropdownValueKey.value ? option[item.dropdownValueKey.value] : option.label;
-  emit('command', { item, argument: value, option, switchFocusToEditor: true });
+  emit('command', { item, argument: value, option });
   selectedOption.value = option.key;
 };
 
@@ -155,8 +156,10 @@ const moveToPreviousButtonGroup = (e) => {
 // Set tabindex to -1 for all other buttons
 const handleKeyDown = (e, item) => {
   e.preventDefault();
+
   switch (e.key) {
     case 'Enter':
+      console.log('Enter');
       handleToolbarButtonClick(item, null, false);
       break;
     case 'Escape':
@@ -183,11 +186,13 @@ const handleKeyDown = (e, item) => {
 };
 const handleFocus = (e) => {
   // Set the focus to the first button inside the button group that is not disabled
-  const firstButton = e.target.closest('.button-group').querySelector('.toolbar-item-ctn:not(.disabled)');
+  const firstButton = toolbarItemRefs.value.find((item) => !item.classList.contains('disabled'));
   if (firstButton) {
+    firstButton.setAttribute('tabindex', '0');
     firstButton.focus();
   }
 };
+
 </script>
 
 <template>
@@ -207,6 +212,7 @@ const handleFocus = (e) => {
       }"
       @keydown="(e) => handleKeyDown(e, item)"
       class="toolbar-item-ctn"
+      ref="toolbarItemRefs"
       :tabindex="index === 0 ? 0 : -1"
     >
       <!-- toolbar separator -->
@@ -263,6 +269,7 @@ const handleFocus = (e) => {
 
       <!-- Overflow menu -->
       <OverflowMenu v-if="isOverflow(item) && overflowItems.length" :toolbar-item="item"
+        @buttonClick="handleToolbarButtonClick(item)"
         :overflow-items="overflowItems" />
     </div>
   </div>

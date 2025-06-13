@@ -5,6 +5,8 @@ import ButtonGroup from './ButtonGroup.vue';
 
 const { proxy } = getCurrentInstance();
 
+const emit = defineEmits(['buttonClick']);
+
 const props = defineProps({
   toolbarItem: {
     type: Object,
@@ -16,15 +18,15 @@ const props = defineProps({
   },
 });
 
-const isDropdownOpened = ref(false);
+const isDropdownOpened = computed(() => props.toolbarItem.expand.value);
 
 const overflowToolbarItem = computed(() => ({
   ...props.toolbarItem,
-  active: isDropdownOpened,
+  active: isDropdownOpened.value,
 }));
 
 const toggleOverflowMenu = () => {
-  isDropdownOpened.value = !isDropdownOpened.value;
+  emit('buttonClick', props.toolbarItem);
 };
 
 const handleCommand = ({ item, argument }) => {
@@ -39,7 +41,7 @@ const handleCommand = ({ item, argument }) => {
     <div class="overflow-menu-trigger">
       <ToolbarButton 
         :toolbar-item="overflowToolbarItem"
-        @buttonClick="toggleOverflowMenu" 
+        @buttonClick="toggleOverflowMenu"
       />
     </div>
     <div v-if="isDropdownOpened" class="overflow-menu_items" role="group">

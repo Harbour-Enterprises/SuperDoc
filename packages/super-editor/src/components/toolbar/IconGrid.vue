@@ -1,7 +1,6 @@
 <script setup>
 import IconGridRow from './IconGridRow.vue';
 import DropIcon from '@harbour-enterprises/common/icons/droplet-slash.svg?raw';
-
 const emit = defineEmits(['select', 'clickoutside']);
 const props = defineProps({
   icons: {

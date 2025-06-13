@@ -1,9 +1,10 @@
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import { toolbarIcons } from './toolbarIcons.js';
 import { generateLinkedStyleString, getQuickFormatList } from '@extensions/linked-styles/index.js';
 
 const emit = defineEmits(['select']);
+const styleRefs = ref([]);
 const props = defineProps({
   editor: {
     type: Object,
@@ -18,12 +19,58 @@ const select = (style) => {
   emit('select', style);
 };
 
+const moveToNextStyle = (index) => {
+  if (index === styleRefs.value.length - 1) {
+    return;
+  }
+  const nextItem = styleRefs.value[index + 1];
+  nextItem.setAttribute('tabindex', '0');
+  nextItem.focus();
+};
+
+const moveToPreviousStyle = (index) => {
+  if (index === 0) {
+    return;
+  }
+  const previousItem = styleRefs.value[index - 1];
+  previousItem.setAttribute('tabindex', '0');
+  previousItem.focus();
+};
+
+const handleKeyDown = (event, index, style) => {
+  switch(event.key) {
+    case 'ArrowDown':
+      moveToNextStyle(index);
+      break;
+    case 'ArrowUp':
+      moveToPreviousStyle(index);
+      break;
+    case 'Enter':
+      console.log('style', style);
+      select(style);
+      break;
+    default:
+      break;
+  }
+};
+onMounted(() => {
+  // Focus on the first style item
+  styleRefs.value[0].setAttribute('tabindex', '0');
+  styleRefs.value[0].focus();
+});
+
 </script>
 
 <template>
   <div class="linked-style-buttons" v-if="props.editor">
     <div
-      v-for="style in getQuickFormatList(editor)" class="style-item" @click="select(style)" :class="{ 'selected': selectedOption === style.id }">
+      v-for="(style, index) in getQuickFormatList(editor)"
+      class="style-item"
+      @click="select(style)"
+      @keydown="event => handleKeyDown(event, index, style)"
+      :class="{ 'selected': selectedOption === style.id }"
+      ref="styleRefs"
+    >
       <div class="style-name" :style="generateLinkedStyleString(style, null, false)" data-item="btn-linkedStyles-option">
         {{ style.definition.attrs.name }}
       </div>

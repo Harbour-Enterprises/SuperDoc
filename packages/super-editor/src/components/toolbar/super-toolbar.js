@@ -822,8 +822,8 @@ export class SuperToolbar extends EventEmitter {
    * @param {*} [params.argument] - The argument passed to the command
    * @returns {*} The result of the executed command, undefined if no result is returned
   */
-  emitCommand({ item, argument, option, switchFocusToEditor = true }) {
-    if (this.activeEditor && !this.activeEditor.options.isHeaderOrFooter && switchFocusToEditor) {
+  emitCommand({ item, argument, option }) {
+    if (this.activeEditor && !this.activeEditor.options.isHeaderOrFooter) {
       this.activeEditor.focus();
     }
     

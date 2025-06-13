@@ -1,9 +1,10 @@
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
 
 const emit = defineEmits(['select']);
 
+const documentModeRefs = ref([]);
 const { isHighContrastMode } = useHighContrastMode();
 
 const props = defineProps({
@@ -15,17 +16,59 @@ const props = defineProps({
 const handleClick = (item) => {
   emit('select', item);
 };
+
+const moveToNextOption = (index) => {
+  if (index === documentModeRefs.value.length - 1) return;
+  const nextOption = documentModeRefs.value[index + 1];
+  if (nextOption) {
+    nextOption.setAttribute('tabindex', '0');
+    nextOption.focus();
+  }
+}
+
+const moveToPreviousOption = (index) => {
+  if (index === 0) return;
+  const previousOption = documentModeRefs.value[index - 1];
+  if (previousOption) {
+    previousOption.setAttribute('tabindex', '0');
+    previousOption.focus();
+  }
+}
+
+const handleKeyDown = (e, index) => {
+  switch(e.key) {
+    case 'ArrowDown':
+      moveToNextOption(index);
+      break;
+    case 'ArrowUp':
+      moveToPreviousOption(index);
+      break;
+    case 'Enter':
+      handleClick(props.options[index]);
+      break;
+    default:
+      break;
+  }
+}
+
+onMounted(() => {
+  // Focus on the first option
+  documentModeRefs.value[0].setAttribute('tabindex', '0');
+  documentModeRefs.value[0].focus();
+});
 </script>
 
 <template>
   <div class="document-mode" :class="{ 'high-contrast': isHighContrastMode }">
     <div
       class="option-item"
-      v-for="option in options"
+      v-for="(option, index) in options"
       @click="handleClick(option)"
       :class="{ disabled: option.disabled }"
       data-item="btn-documentMode-option"
       role="menuitem"
+      ref="documentModeRefs"
+      @keydown.prevent="(event) => handleKeyDown(event, index)"
     >
       <div class="document-mode-column icon-column">
         <div class="icon-column__icon" v-html="option.icon"></div>

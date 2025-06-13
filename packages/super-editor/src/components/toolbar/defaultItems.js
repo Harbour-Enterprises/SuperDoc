@@ -223,7 +223,7 @@ export const makeDefaultItems = ({
       {
         key: 'color',
         type: 'render',
-        render: () => renderColorOptions(superToolbar, highlight, [], true),
+        render: () => renderColorOptions(superToolbar, highlight, [], true)
       },
     ],
     onActivate: ({ color }) => {

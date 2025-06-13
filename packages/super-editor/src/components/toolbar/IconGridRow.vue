@@ -1,8 +1,8 @@
 <script setup>
-import { computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { toolbarIcons } from './toolbarIcons.js';
 
-const emit = defineEmits(['select']);
+const emit = defineEmits(['select', 'clickoutside']);
 const props = defineProps({
   icons: {
     type: Array,
@@ -29,10 +29,82 @@ const handleClick = (option) => {
   emit('select', option.value);
 };
 
+const rowRefs = ref([]);
+const iconRefs = ref([]);
+
+const ROW_SIZE = 7;
 onMounted(() => {
   const isMatrix = props.icons.every((row) => Array.isArray(row));
   if (!isMatrix) throw new Error('icon props must be 2d array');
+
+  // Focus on the first icon
+  const firstIcon = iconRefs.value[0];
+  if (firstIcon) {
+    firstIcon.setAttribute('tabindex', '0');
+    firstIcon.focus();
+  }
 });
+
+const moveToNextIcon = (rowIndex, optionIndex) => {
+  const iconIndex = (ROW_SIZE * rowIndex) + optionIndex + 1;
+  const nextIcon = iconRefs.value[iconIndex];
+  if (nextIcon) {
+    nextIcon.setAttribute('tabindex', '0');
+    nextIcon.focus();
+  }
+}
+
+const moveToPreviousIcon = (rowIndex, optionIndex) => {
+  const iconIndex = (ROW_SIZE * rowIndex) + optionIndex - 1;
+  const previousIcon = iconRefs.value[iconIndex];
+  if (previousIcon) {
+    previousIcon.setAttribute('tabindex', '0');
+    previousIcon.focus();
+  }
+}
+
+const moveToNextRow = (rowIndex, optionIndex) => {
+  const iconIndex = optionIndex + (ROW_SIZE * (rowIndex + 1));
+  const nextIcon = iconRefs.value[iconIndex];
+  if (nextIcon) {
+    nextIcon.setAttribute('tabindex', '0');
+    nextIcon.focus();
+  }
+}
+
+const moveToPreviousRow = (rowIndex, optionIndex) => {
+  const iconIndex = optionIndex + (ROW_SIZE * (rowIndex - 1));
+  const previousIcon = iconRefs.value[iconIndex];
+  if (previousIcon) {
+    previousIcon.setAttribute('tabindex', '0');
+    previousIcon.focus();
+  }
+}
+
+const handleKeyDown = (event, rowIndex, optionIndex, option) => {
+  switch (event.key) {
+    case 'ArrowRight':
+      moveToNextIcon(rowIndex, optionIndex);
+      break;
+    case 'ArrowLeft':
+      moveToPreviousIcon(rowIndex, optionIndex);
+      break;
+    case 'ArrowDown':
+      moveToNextRow(rowIndex, optionIndex);
+      break;
+    case 'ArrowUp':
+      moveToPreviousRow(rowIndex, optionIndex);
+      break;
+    case 'Enter':
+      handleClick(option);
+      break;
+    case 'Escape':
+      emit('clickoutside');
+      break;
+    default:
+      break;
+  }
+}
 </script>
 <template>
   <div 
@@ -40,6 +112,7 @@ onMounted(() => {
     v-for="(row, rowIndex) in icons" 
     :key="rowIndex"
     role="group"
+    ref="rowRefs"
   >
     <div
       class="option"
@@ -47,7 +120,9 @@ onMounted(() => {
       :key="optionIndex"
       :aria-label="option.label"
       role="menuitem"
+      ref="iconRefs"
       @click.stop.prevent="handleClick(option)"
+      @keydown.prevent="(event) => handleKeyDown(event, rowIndex, optionIndex, option)"
     >
       <div
         class="option__icon"
