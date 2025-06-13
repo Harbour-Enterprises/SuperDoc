@@ -40,7 +40,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {string} [url] The URL of the document
  * @property {boolean} [isNewFile] Whether the document is a new file
  * @property {import('yjs').Doc} [ydoc] The Yjs document for collaboration
- * @property {import('@hocuspocus/provider').HocuspocusProvider} [provider] The provider for collaboration
+ * @property {WebsocketProvider | HocuspocusProvider} [provider] The provider for collaboration
  */
 
 /**

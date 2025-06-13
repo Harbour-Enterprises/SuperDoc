@@ -72,6 +72,17 @@ function createSuperDocProvider({ config, user, documentId, socket, superdocInst
   };
 
   const provider = new WebsocketProvider(config.url, documentId, ydoc, options);
+
+  provider.on('status', (event) => {
+    switch (event.status) {
+      case 'connected':
+        onConnect(superdocInstance, documentId);
+        break;
+      case 'disconnected':
+        onDisconnect(superdocInstance, documentId);
+        break;
+    };
+  });
   provider.awareness.setLocalStateField('user', user);
   provider.awareness.on('update', (changes = {}) => {
     return awarenessHandler(superdocInstance, { changes, states: provider.awareness.getStates() });
