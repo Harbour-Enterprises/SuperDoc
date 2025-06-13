@@ -5,7 +5,7 @@
  */
 export const generateParams = (request, instance) => {
   const { params } = request;
-  const { documentId } = params;
+  const { documentId, ...rest } = params;
   const urlParts = request.url.split('?');
   const queryString = urlParts[1] || '';
   const queryParams = Object.fromEntries(new URLSearchParams(queryString));
@@ -15,12 +15,12 @@ export const generateParams = (request, instance) => {
   const connection = {};
 
   return {
-    ...queryParams,
     documentId,
     cookies,
     instance,
     headers,
     connection,
+    params: { ...rest, ...queryParams },
   };
 };
 

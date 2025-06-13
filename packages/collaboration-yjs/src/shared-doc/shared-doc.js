@@ -1,4 +1,4 @@
-import { writeUpdate, readSyncMessage, writeSyncStep1 } from 'y-protocols/sync';
+import { writeUpdate, readSyncMessage, writeSyncStep1, writeSyncStep2 } from 'y-protocols/sync';
 import {
   createEncoder,
   writeVarUint,
@@ -164,6 +164,7 @@ export const setupConnection = (conn, doc) => {
     }
   );
 
+  // Send initial sync step 1
   const encoder = createEncoder();
   writeVarUint(encoder, messageSync);
   writeSyncStep1(encoder, doc);
@@ -187,25 +188,35 @@ const messageListener = (conn, doc, message) => {
     const encoder = createEncoder();
     const decoder = createDecoder(message);
     const messageType = readVarUint(decoder);
+
     switch (messageType) {
       case messageSync:
         writeVarUint(encoder, messageSync);
         readSyncMessage(decoder, encoder, doc, conn);
 
-        // If the `encoder` only contains the type of reply message and no
-        // message, there is no need to send the message. When `encoder` only
-        // contains the type of reply, its length is 1.
+        // Check if readSyncMessage added content
         if (encodingLength(encoder) > 1) {
           send(doc, conn, toUint8Array(encoder));
+        } else {
+          // readSyncMessage didn't add anything, but we still need to send sync-step2
+          // This happens when the client sends sync-step2 and we need to respond with our state
+          writeSyncStep2(encoder, doc);
+          if (encodingLength(encoder) > 1) {
+            send(doc, conn, toUint8Array(encoder));
+          }
         }
         break;
+
       case messageAwareness: {
         applyAwarenessUpdate(doc.awareness, readVarUint8Array(decoder), conn);
         break;
       }
+
+      default:
+        console.warn('Unknown message type:', messageType);
     }
   } catch (err) {
-    console.error(err);
+    console.error('Error in messageListener:', err);
     // @ts-ignore
     doc.emit('error', [err]);
   }
