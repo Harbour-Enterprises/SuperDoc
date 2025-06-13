@@ -18,6 +18,11 @@ export function orderedListSync(options = {}) {
 
       let listsBySyncId = {};
       doc.descendants((node, pos) => {
+        // no need to descend into a paragraph
+        if (node.type.name === 'paragraph') {
+          return false;
+        }
+
         if (node.type.name === 'orderedList' && !!node.attrs.syncId) {
           let syncId = node.attrs.syncId;
           if (!listsBySyncId[syncId]) listsBySyncId[syncId] = [];

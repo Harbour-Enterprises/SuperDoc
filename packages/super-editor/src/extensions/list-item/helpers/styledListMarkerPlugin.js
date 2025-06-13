@@ -47,7 +47,17 @@ function getListMarkerDecorations(state, marks = []) {
 
   if (Array.isArray(storedMarks)) marks.push(...storedMarks);
 
-  let listItems = findChildren(doc, (node) => node.type.name === 'listItem');
+  let listItems = [];
+  doc.descendants((node, pos) => {
+    // no need to descend into a paragraph
+    if (node.type.name === 'paragraph') {
+      return false;
+    }
+
+    if (node.type.name === 'listItem') {
+      listItems.push({ node, pos });
+    }
+  });
 
   if (!listItems.length) {
     return decorations;
