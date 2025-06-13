@@ -78,7 +78,6 @@ function sidebar() {
         link: '/components',
         items: [
           { text: 'SuperDoc', link: '/components/#superdoc' },
-          { text: 'SuperEditor', link: '/components/#supereditor' },
         ],
       },
       {
@@ -114,6 +113,13 @@ function sidebar() {
             text: 'License',
             link: '/resources/#license',
           },
+        ],
+      },
+      {
+        text: 'Advanced',
+        link: '/advanced',
+        items: [
+          { text: 'SuperEditor', link: '/advanced/#supereditor' },
         ],
       },
     ],
