@@ -1,5 +1,6 @@
 import { DOMParser } from 'prosemirror-model';
-import { convertEmToPt } from '../../InputRule.js';
+import {cleanHtmlUnnecessaryTags, convertEmToPt} from '../../InputRule.js';
+
 
 /**
  * Main handler for pasted DOCX content.
@@ -14,7 +15,9 @@ export const handleDocxPaste = (html, editor, view, plugin) => {
   const { converter } = editor;
   if (!converter || !converter.convertedXml) return handleHtmlPaste(html, editor, view, plugin);
 
-  const cleanedHtml = convertEmToPt(html);
+  let cleanedHtml = convertEmToPt(html);
+  cleanedHtml = cleanHtmlUnnecessaryTags(cleanedHtml);
+
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = cleanedHtml;
 

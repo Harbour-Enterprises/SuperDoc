@@ -293,3 +293,18 @@ export const convertEmToPt = (html) => {
     }
   )
 };
+
+/**
+ *  Cleans and sanitizes HTML content by removing unnecessary tags, entities, and extra whitespace.
+ *
+ * @param {String} html The HTML string to be processed.
+ * @returns {String} The processed HTML string with em units converted to pt units.
+ */
+export function cleanHtmlUnnecessaryTags(html) {
+  return html
+      .replace(/<o:p>.*?<\/o:p>/gi, '')
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/<span[^>]*>\s*<\/span>/gi, '')
+      .replace(/<p[^>]*>\s*<\/p>/gi, '')
+      .trim();
+}
