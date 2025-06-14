@@ -380,7 +380,23 @@ const deleteHeaderFooterFieldAnnotations = ({ editor, fieldIdOrArray }) => {
       type,
     );
   });
+};
 
+const resetHeaderFooterFieldAnnotations = ({ editor }) => {
+  if (!editor) return;
+
+  const sectionEditors = getAllHeaderFooterEditors(editor);
+
+  sectionEditors.forEach(({ editor: sectionEditor, sectionId, type }) => {
+    sectionEditor.commands.resetFieldAnnotations();
+
+    onHeaderFooterDataUpdate(
+      { editor: sectionEditor },
+      editor,
+      sectionId,
+      type,
+    );
+  });
 };
 
 export const cleanUpListsWithAnnotations = (fieldsToDelete = [], editor) => {
@@ -475,5 +491,6 @@ export const AnnotatorHelpers = {
   getAllHeaderFooterEditors,
   updateHeaderFooterFieldAnnotations,
   deleteHeaderFooterFieldAnnotations,
+  resetHeaderFooterFieldAnnotations,
   cleanUpListsWithAnnotations,
 };

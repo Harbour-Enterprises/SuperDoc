@@ -55,8 +55,19 @@ export const FieldAnnotation = Node.create({
         },
       },
 
+      defaultDisplayLabel: {
+        default: '',
+        parseDOM: (elem) => elem.getAttribute('data-default-display-label'),
+        renderDOM: (attrs) => {
+          if (!attrs.defaultDisplayLabel) return {};
+          return {
+            'data-default-display-label': attrs.defaultDisplayLabel,
+          };
+        },
+      },
+
       displayLabel: {
-        default: 'Text field',
+        default: '',
         parseDOM: (elem) => elem.getAttribute('data-display-label'),
         renderDOM: (attrs) => {
           if (!attrs.displayLabel) return {};
@@ -407,6 +418,8 @@ export const FieldAnnotation = Node.create({
   },
 
   addCommands() {
+    const annotationTypes = this.options.types;
+
     return {
       /**
        * Add field annotation.
@@ -435,7 +448,16 @@ export const FieldAnnotation = Node.create({
             let formatAttrs = getFormatAttrsFromMarks(currentMarks);
             ///
 
-            let node = schema.nodes[this.name].create({ ...attrs, ...formatAttrs }, null, null);
+            let defaultDisplayLabel = attrs.defaultDisplayLabel 
+              ? attrs.defaultDisplayLabel 
+              : (attrs.displayLabel || '');
+
+            let node = schema.nodes[this.name].create({ 
+              ...attrs, 
+              ...formatAttrs, 
+              defaultDisplayLabel, 
+            }, null, null);
+
             state.tr
               .insert(newPos, node)
               .setSelection(Selection.near(tr.doc.resolve(newPos + node.nodeSize)));
@@ -450,9 +472,9 @@ export const FieldAnnotation = Node.create({
 
       addFieldAnnotationAtSelection:
         (attrs = {}, editorFocus = false) =>
-        ({ editor, dispatch, state, tr, commands }) => {
+        ({ state, commands }) => {
           const { from } = state.selection;
-          commands.addFieldAnnotation(from, attrs, editorFocus);
+          return commands.addFieldAnnotation(from, attrs, editorFocus);
         },
 
       /**
@@ -463,30 +485,156 @@ export const FieldAnnotation = Node.create({
        *  from: 20,
        *  to: 45,
        *  attrs: {
-       *  fieldType: 'TEXTINPUT'
-       *  fieldColor: '#980043'
+       *    fieldType: 'TEXTINPUT'
+       *    fieldColor: '#980043'
        *  }
        * ])
        */
       replaceWithFieldAnnotation:
-          (fieldsArray) =>
-          ({editor, dispatch, state, tr}) => {
-             if (!dispatch) return true;
-             tr.setMeta('fieldAnnotationReplace', true);
+        (fieldsArray) =>
+        ({ editor, dispatch, tr }) => {
+          if (!dispatch) return true;
 
-            fieldsArray.forEach((annotation) => {
-               let {from, to, attrs} = annotation;
-               let {schema} = editor;
+          fieldsArray.forEach((annotation) => {
+            let { from, to, attrs } = annotation;
+            let { schema } = editor;
 
-               let newPosFrom = tr.mapping.map(from);
-               let newPosTo = tr.mapping.map(to);
-               let node = schema.nodes[this.name].create({...attrs}, null, null);
+            let newPosFrom = tr.mapping.map(from);
+            let newPosTo = tr.mapping.map(to);
 
-               tr.replaceWith(newPosFrom, newPosTo, node);
-             });
+            let defaultDisplayLabel = attrs.defaultDisplayLabel 
+              ? attrs.defaultDisplayLabel 
+              : (attrs.displayLabel || '');
 
-             return true;
-          },
+            let node = schema.nodes[this.name].create({ 
+              ...attrs,
+              defaultDisplayLabel, 
+            }, null, null);
+
+            tr.replaceWith(newPosFrom, newPosTo, node);
+          });
+
+          return true;
+        },
+
+      /**
+       * Replace annotations with a label (as text node) in selection.
+       * @param options Additional options.
+       * @example
+       * editor.commands.replaceFieldAnnotationsWithLabelInSelection()
+       */
+      replaceFieldAnnotationsWithLabelInSelection:
+        (options = {}) =>
+        ({ commands }) => {
+          return commands.replaceFieldAnnotationsWithLabel(null, {
+            ...options,
+            isInSelection: true,
+          });
+        },
+      
+      /**
+       * Replace annotations with a label (as text node).
+       * @param fieldIdOrArray The field ID or array of field IDs.
+       * @param options.isInSelection Find in selection instead of field IDs.
+       * @param options.addToHistory Add to history or not.
+       * @param options.types Annotation types to replace.
+       * @example
+       * editor.commands.replaceFieldAnnotationsWithLabel(['1', '2'])
+       */
+      replaceFieldAnnotationsWithLabel:
+        (fieldIdOrArray, {
+          isInSelection = false,
+          addToHistory = false,
+          types = annotationTypes,
+        } = {}) =>
+        ({ dispatch, state, tr }) => {
+          let { from, to } = state.selection;
+
+          let annotations = isInSelection 
+            ? findFieldAnnotationsBetween(from, to, state.doc) 
+            : findFieldAnnotationsByFieldId(fieldIdOrArray, state);
+
+          annotations = types.length 
+            ? annotations.filter(({ node }) => types.includes(node.attrs.type))
+            : annotations;
+                        
+          if (!annotations.length) {
+            return true;
+          }
+
+          if (!addToHistory) {
+            tr.setMeta('addToHistory', false);
+          }
+
+          if (dispatch) {
+            annotations.forEach((annotation) => {
+              let { pos, node } = annotation;
+
+              let newPosFrom = tr.mapping.map(pos);
+              let newPosTo = tr.mapping.map(pos + node.nodeSize);
+
+              let currentNode = tr.doc.nodeAt(newPosFrom);
+              let nodeEqual = node.attrs.fieldId === currentNode?.attrs?.fieldId;
+
+              let $newPosFrom = tr.doc.resolve(newPosFrom);
+              let currentMarks = $newPosFrom.marks();
+              currentMarks = currentMarks.length ? [...currentMarks] : null;
+
+              if (nodeEqual) {
+                // empty text nodes are not allowed.
+                let label = node.attrs.displayLabel || ' ';
+                let textNode = state.schema.text(label, currentMarks);
+                tr.replaceWith(newPosFrom, newPosTo, textNode);
+              }
+            });
+          }
+
+          return true;
+        },
+      
+      /**
+       * Resets all annotations to default values.
+       * @example
+       * editor.commands.resetFieldAnnotations()
+       */
+      resetFieldAnnotations:
+        () =>
+        ({ dispatch, state, tr }) => {
+          let annotations = getAllFieldAnnotations(state);
+
+          if (!annotations.length) {
+            return true;
+          }
+
+          // Specify that we are updating annotations
+          // so they are not detected as deletions.
+          tr.setMeta('fieldAnnotationUpdate', true);
+
+          if (dispatch) {
+            annotations.forEach(({ pos, node }) => {
+              let newPos = tr.mapping.map(pos);
+              let currentNode = tr.doc.nodeAt(newPos);
+              let nodeEqual = node.attrs.fieldId === currentNode?.attrs?.fieldId;
+
+              if (nodeEqual) {
+                // if defaultDisplayLabel is not defined then we fallback to displayLabel.
+                let displayLabel = node.attrs.defaultDisplayLabel || node.attrs.displayLabel || '';
+
+                tr.setNodeMarkup(newPos, undefined, {
+                  ...node.attrs,
+                  // reset displayLabel to default.
+                  displayLabel,
+                  // reset attrs ​​for specific types.
+                  imageSrc: null,
+                  rawHtml: null,
+                  linkUrl: null,
+                });
+              }
+            });
+          }
+
+          return true;
+        },
 
       /**
        * Update annotations associated with a field.
