@@ -55,6 +55,7 @@ export const TabNode = Node.create({
         },
 
         apply(tr, oldDecorationSet, oldState, newState) {
+          if (!tr.docChanged) return oldDecorationSet;
           const decorations = getTabDecorations(newState, view);
           return DecorationSet.create(newState.doc, decorations);
         },
