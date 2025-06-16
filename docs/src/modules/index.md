@@ -18,8 +18,6 @@ const config {
 }
 ```
 
-
-
 # Search
 
 SuperDoc 0.11 adds a new .docx search feature.
@@ -51,11 +49,14 @@ const regexResults = superdoc.search(/\b\w+ng\b/gi);
 ```
 
 ### Commands
+
+```javascript
 superdoc.search(...)
 // Or editor.commands.search(...)
 
 superdoc.goToSearchResult(match); // Pass in a match from the result of search()
 // Or editor.commands.goToSearchResult(match);
+```
 
 ### Customization
 You can customize the color of the highlights from these styles:
@@ -73,13 +74,10 @@ The comments module can be added by adding the comments config to the modules.
 
 ```javascript
 const comments = {
-  
   // Defaults to false. Set to true if you only want to show comments
   readOnly: false, 
-
   // Defaults to true. Set to false if you do not want to allow comment resolution.
   allowResolve: true,
-
 };
 ```
 
@@ -105,13 +103,11 @@ const config = {
 
   // Handle comment updates
   onCommentsUpdate: myCommentsUpdateHandler,
-
-}
+};
 
 // Your handler
 const myCommentsUpdateHandler = ({ type, comment meta }) => {
   switch (type) {
-
     // When a user has highlighted text and clicked the add comment button,
     // but has not actually created the comment yet
     case 'pending':
@@ -136,7 +132,6 @@ const myCommentsUpdateHandler = ({ type, comment meta }) => {
     // On comment resolved
     case 'resolved':
       break;
-
   };
 };
 ```
@@ -198,7 +193,7 @@ const config = {
       responsiveToContainer: true,
     }
   }
-}
+};
 ```
 
 ### Default toolbar buttons
@@ -295,7 +290,7 @@ const mySuperDocConfig = {
       ]
     }
   }
-}
+};
 ```
 
 # Fields
@@ -313,11 +308,11 @@ Fields can be used when placeholder / variable content is needed inside the docu
 ```javascript
 // Add a field annotation at the specified position
 // editorFocus = true will re-focus the editor after the command, in cases where it is not in focus (ie: drag and drop)
-addFieldAnnotation(pos, attrs = {}, editorFocus = false)
+editor.commands.addFieldAnnotation(pos, attrs = {}, editorFocus = false)
 
 // Add a field annotation at the current selection
 // editorFocus = true will re-focus the editor after the command, in cases where it is not in focus (ie: drag and drop)
-addFieldAnnotationAtSelection(attrs = {}, editorFocus = false)
+editor.commands.addFieldAnnotationAtSelection(attrs = {}, editorFocus = false)
 ```
 
 ## Field schema
@@ -332,7 +327,7 @@ const myField = {
 }
 
 // Add the field to the editor
-addFieldAnnotationAtSelection(myField)
+editor.commands.addFieldAnnotationAtSelection(myField)
 ```
 
 ## Drag-and-drop
@@ -340,17 +335,19 @@ If you create a drag-and-drop system ([See this example](https://github.com/Harb
 
 Example:
 ```javascript
- superdoc.activeEditor.on('fieldAnnotationDropped', ({ sourceField }) => {
-    superdoc.activeEditor.commands.addFieldAnnotationAtSelection(sourceField);
-  });
+superdoc.activeEditor.on('fieldAnnotationDropped', ({ sourceField }) => {
+  superdoc.activeEditor.commands.addFieldAnnotationAtSelection(sourceField);
+});
 ```
 
 ## Fields docx export
 SuperDoc supports full export and re-import of fields. By default, SuperDoc will not re-import document fields and will convert them to mustache style templates only.
 
 To enable fields import simply add the below to your config when instantiating `new SuperDoc`
-```
-annotations: true
+```javascript
+const config = {
+  annotations: true,
+};
 ```
 
 

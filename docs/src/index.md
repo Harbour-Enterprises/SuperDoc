@@ -112,8 +112,8 @@ const config = {
     image: 'image-url.jpg',
   },
 
-  // Optional: A DOM element ID to render the toolbar into
-  toolbar: 'superdoc-toolbar',
+  // Optional: A DOM element selector to render superdoc into
+  toolbar: '#superdoc-toolbar',
 
   // Optional: modules
   modules: {
@@ -125,7 +125,7 @@ const config = {
     
     // Toolbar config, overrides the 'toolbar' key, if provided, above
     toolbar: {
-      selector: 'superdoc-toolbar',
+      selector: '#superdoc-toolbar',
     },
 
     // More coming soon
@@ -138,13 +138,13 @@ const config = {
   rulers: true,
 
   // Optional: events - pass in your own functions for each
-    onEditorBeforeCreate: () => null,
-    onEditorCreate: () => null,
-    onEditorDestroy: () => null,
-    onContentError: () => null,
-    onReady: () => null,
-    onPdfDocumentReady: () => null,
-    onException: () => null,
+  onEditorBeforeCreate: () => null,
+  onEditorCreate: () => null,
+  onEditorDestroy: () => null,
+  onContentError: () => null,
+  onReady: () => null,
+  onPdfDocumentReady: () => null,
+  onException: () => null,
 };
 ```
 
@@ -171,7 +171,7 @@ The user's role restricts which document modes they can access. For example, a u
 SuperDoc consists of two main packages:
 
 ```
-/packages/super-editor  // Core editor component
+/packages/super-editor  // Core editor package
 /packages/superdoc      // Main SuperDoc package
 ```
 
@@ -205,9 +205,7 @@ const superdoc = new SuperDoc({
   document: '/sample.docx',
 });
 
-
-// Remove event listeners
-superdoc.off('ready', myReadyHandler);
+superdoc.on('ready', () => {});
 ```
 
 ## Document Operations
