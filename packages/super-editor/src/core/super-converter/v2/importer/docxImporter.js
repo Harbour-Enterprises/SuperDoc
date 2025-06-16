@@ -423,9 +423,9 @@ export function addDefaultStylesIfMissing(styles) {
  * 
  * @param {Object} docx The parsed docx object
  * @param {Object} converter The converter instance
- * @param {Editor} editor The editor instance
+ * @param {Editor} mainEditor The editor instance
  */
-const importHeadersFooters = (docx, converter, editor) => {
+const importHeadersFooters = (docx, converter, mainEditor) => {
   const rels = docx['word/_rels/document.xml.rels'];
   const relationships = rels.elements.find((el) => el.name === 'Relationships');
   const { elements } = relationships;
@@ -437,6 +437,9 @@ const importHeadersFooters = (docx, converter, editor) => {
 
   const sectPr = findSectPr(docx['word/document.xml']) || [];
   const allSectPrElements = sectPr.flatMap((el) => el.elements);
+
+  const editor = { ...mainEditor };
+  editor.options.annotations = true;
 
   headers.forEach((header) => {
     const { rId, referenceFile, currentFileName } = getHeaderFooterSectionData(header, docx);
