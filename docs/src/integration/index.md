@@ -503,7 +503,14 @@ superdoc.on('awarenessUpdate', ({ users }) => {
 
 ### Setting up the collaboration service
 
-Contact us for help setting up your collaboration service
+We recommend starting from our [quick-start collaboration](https://github.com/Harbour-Enterprises/SuperDoc/tree/develop/packages/collaboration-yjs) service which can be used in any NodeJS server like Fastify, Express etc.
+
+Installation
+```
+npm install @harbour-enterprises/superdoc-yjs-collaboration
+```
+
+Documentation: https://github.com/Harbour-Enterprises/SuperDoc/tree/develop/packages/collaboration-yjs
 
 ## Next Steps
 
