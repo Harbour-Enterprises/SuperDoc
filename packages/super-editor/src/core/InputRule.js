@@ -263,12 +263,9 @@ function isWordHtml(html) {
  * @returns {Boolean} Returns true if the paste was handled.
  */
 const handleHtmlPaste = (html, editor, plugin) => {
-  const cleanedHtml = convertEmToPt(html);
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = cleanedHtml;
-
-  const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv)
-  tempDiv.remove();
+  const htmlWithPtSizing = convertEmToPt(html);
+  const cleanedHtml = sanitizeHtml(htmlWithPtSizing);
+  const doc = DOMParser.fromSchema(editor.schema).parse(cleanedHtml)
 
   const { dispatch } = editor.view;
   if (!dispatch) return false;
@@ -307,4 +304,34 @@ export function cleanHtmlUnnecessaryTags(html) {
       .replace(/<span[^>]*>\s*<\/span>/gi, '')
       .replace(/<p[^>]*>\s*<\/p>/gi, '')
       .trim();
+}
+
+/**
+ * Recursive function to sanitize HTML and remove forbidden tags.
+ * @param {string} html The HTML string to be sanitized.
+ * @param {string[]} forbiddenTags The list of forbidden tags to remove from the HTML.
+ * @returns {DocumentFragment} The sanitized HTML as a DocumentFragment.
+ */
+function sanitizeHtml(html, forbiddenTags = ['meta', 'svg', 'script', 'style', 'button']) {
+  const container = document.createElement('div');
+  container.innerHTML = html;
+
+  const walkAndClean = node => {
+    for (const child of [...node.children]) {
+      if (forbiddenTags.includes(child.tagName.toLowerCase())) {
+        child.remove();
+        continue;
+      }
+
+      // Remove linebreaktype here - we don't want it when pasting HTML
+      if (child.hasAttribute('linebreaktype')) {
+        child.removeAttribute('linebreaktype');
+      }
+
+      walkAndClean(child);
+    }
+  };
+
+  walkAndClean(container);
+  return container;
 }

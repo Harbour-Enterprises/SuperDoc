@@ -51,7 +51,16 @@ export const HardBreak = Node.create({
   },
 
   parseDOM() {
-    return [{ tag: 'span' }];
+    return [{
+      tag: 'span[linebreaktype="page"]',
+      getAttrs: dom => {
+        if (!(dom instanceof HTMLElement)) return false;
+        return {
+          pageBreakSource: dom.getAttribute('pagebreaksource') || null,
+          pageBreakType: dom.getAttribute('linebreaktype') || null,
+        };
+      },
+    }];
   },
 
   renderDOM({ htmlAttributes }) {
