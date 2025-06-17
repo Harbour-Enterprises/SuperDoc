@@ -97,13 +97,15 @@ function sidebar() {
         text: 'Collaboration',
         link: '/collaboration',
         items: [
-          { text: 'Features', link: '/collaboration/#superdoc-yjs-collaboration-library' },
+          { text: 'Frontend setup', link: '/collaboration/#frontend-setup' },
+          { text: 'Backend setup', link: '/collaboration/#backend-setup' },
           { text: 'Examples', link: '/collaboration/#examples' },
           { text: 'Quick Start', link: '/collaboration/#installation' },
           { text: 'API reference', link: '/collaboration/#api-reference' },
           { text: 'onAuthenticate', link: '/collaboration/#onauthenticate' },
           { text: 'onLoad', link: '/collaboration/#onload' },
           { text: 'onAutoSave', link: '/collaboration/#onautosave' },
+          { text: 'Resources', link: '/collaboration/#additional-resources' },
         ],
       },
       {

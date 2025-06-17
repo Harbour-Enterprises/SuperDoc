@@ -1,3 +1,24 @@
+# Collaboration
+
+Learn how to set-up ```SuperDoc``` for **real-time collaboration** in the frontend and backend.
+
+## Frontend setup
+Simply add the ```collaboration``` configuration object to your **SuperDoc** modules config.
+
+```
+modules: {
+  // ...other module config
+  collaboration: {
+    url: 'wss://your-collaboration-server.com', // Required: Path to your collaboration backend
+    token: 'your-auth-token',                   // Optional: Your auth token
+  }
+}
+```
+:::info :bulb: If your server is in the same domain as your frontend, and you set it up to accept credentials, you can pass in ```cookies``` directly as well, in which case the ```token``` key is not required.
+:::
+
+## Backend Setup
+
 # The SuperDoc Yjs collaboration library
 
 `@harbour-enterprises/superdoc-yjs-collaboration` is a library for integrating Yjs-based real-time collaborative editing into any Node.js WebSocket-enabled server framework. It is designed to work out-of-the-box for **SuperDoc**.
@@ -164,7 +185,7 @@ const myOnAutoSaveHandler = (context) => {
 }
 ```
 
-# Resources
+# Additional Resources
 If you are new to the wonderful **YJS** library, we recommend you read a bit about it here: https://docs.yjs.dev/
 
 ## License
