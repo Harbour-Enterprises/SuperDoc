@@ -159,6 +159,8 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 
   overflow-x: auto;
   scrollbar-width: thin;
+  overflow: hidden;
+
   /* 
   The border width does not need to be multiplied by two, 
   for tables it works differently. */
@@ -169,7 +171,6 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   border-collapse: collapse;
   border-spacing: 0;
   table-layout: fixed;
-  overflow: hidden;
   margin: 0;
   /* width: 100%; */
 }

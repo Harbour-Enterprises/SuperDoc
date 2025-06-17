@@ -24,6 +24,7 @@ import { generateCollaborationData } from '@extensions/collaboration/collaborati
 import { toggleHeaderFooterEditMode } from '../extensions/pagination/pagination-helpers.js';
 import { hasSomeParentWithClass } from './super-converter/helpers.js';
 import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
+import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 import { findWordBounds } from './helpers/findWordBounds.js';
 import { setWordSelection } from './helpers/setWordSelection.js';
 /**
@@ -1592,6 +1593,7 @@ export class Editor extends EventEmitter {
     this.initDefaultStyles();
 
     if (this.options.ydoc && this.options.collaborationProvider) {
+      updateYdocDocxData(this);
       this.initializeCollaborationData(true);
     } else {
       this.#insertNewFileData();
