@@ -73,8 +73,8 @@ on the right if it is inside shape textbox.
   pointer-events: none;
 }
 
-.pagination-section-header div[contenteditable="false"],
-.pagination-section-footer div[contenteditable="false"] {
+.pagination-section-header div[contenteditable="false"]:not([documentmode="viewing"]),
+.pagination-section-footer div[contenteditable="false"]:not([documentmode="viewing"]) {
   opacity: 0.5;
 }
 
