@@ -116,14 +116,14 @@ function translateBodyNode(params) {
   let sectPr = params.bodyNode?.elements.find((n) => n.name === 'w:sectPr') || {};
 
   if (params.converter) {
-    const hasHeader = sectPr.elements.some((n) => n.name === 'w:headerReference');
+    const hasHeader = sectPr?.elements?.some((n) => n.name === 'w:headerReference');
     const hasDefaultHeader = params.converter.headerIds?.default;
     if (!hasHeader && hasDefaultHeader && !params.editor.options.isHeaderOrFooter) {
       const defaultHeader = generateDefaultHeaderFooter('header', params.converter.headerIds?.default);
       sectPr.elements.push(defaultHeader);
     }
     
-    const hasFooter = sectPr.elements.some((n) => n.name === 'w:footerReference');
+    const hasFooter = sectPr?.elements?.some((n) => n.name === 'w:footerReference');
     const hasDefaultFooter = params.converter.footerIds?.default;
     if (!hasFooter && hasDefaultFooter && !params.editor.options.isHeaderOrFooter) {
       const defaultFooter = generateDefaultHeaderFooter('footer', params.converter.footerIds?.default);
