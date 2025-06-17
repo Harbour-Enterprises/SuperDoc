@@ -701,7 +701,12 @@ const onHeaderFooterDblClick = (editor, currentFocusedSectionEditor) => {
   if (editor.options.documentMode !== 'editing') return;
 
   editor.setEditable(false, false);
-  toggleHeaderFooterEditMode(editor, currentFocusedSectionEditor, true);
+  toggleHeaderFooterEditMode({
+    editor,
+    focusedSectionEditor: currentFocusedSectionEditor,
+    isEditMode: true,
+    documentMode: editor.options.documentMode,
+  });
 };
 
 /**

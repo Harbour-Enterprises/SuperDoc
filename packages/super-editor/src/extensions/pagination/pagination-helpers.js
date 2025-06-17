@@ -168,17 +168,19 @@ export const broadcastEditorEvents = (editor, sectionEditor) => {
   });
 };
 
-export const toggleHeaderFooterEditMode = (editor, focusedSectionEditor, isEditMode) => {
-  editor.converter.headerEditors.forEach(item => {
+export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEditMode, documentMode }) => {
+  editor.converter.headerEditors.forEach((item) => {
     item.editor.setEditable(isEditMode, false);
     item.editor.view.dom.setAttribute('aria-readonly', !isEditMode);
+    item.editor.view.dom.setAttribute('documentmode', documentMode);
   });
-  
-  editor.converter.footerEditors.forEach(item => {
+
+  editor.converter.footerEditors.forEach((item) => {
     item.editor.setEditable(isEditMode, false);
     item.editor.view.dom.setAttribute('aria-readonly', !isEditMode);
+    item.editor.view.dom.setAttribute('documentmode', documentMode);
   });
-  
+
   if (isEditMode) {
     const pm = document.querySelector('.ProseMirror');
     pm.classList.add('header-footer-edit');
