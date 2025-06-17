@@ -1,3 +1,4 @@
+import { link } from 'fs';
 import { defineConfig } from 'vitepress';
 
 // https://vitepress.dev/reference/site-config
@@ -91,6 +92,19 @@ function sidebar() {
           { text: 'Annotate', link: '/modules/#annotate' },
           { text: 'Convert to PDF', link: '/modules/#pdf-conversion' },
         ]
+      },
+      {
+        text: 'Collaboration',
+        link: '/collaboration',
+        items: [
+          { text: 'Features', link: '/collaboration/#superdoc-yjs-collaboration-library' },
+          { text: 'Examples', link: '/collaboration/#examples' },
+          { text: 'Quick Start', link: '/collaboration/#installation' },
+          { text: 'API reference', link: '/collaboration/#api-reference' },
+          { text: 'onAuthenticate', link: '/collaboration/#onauthenticate' },
+          { text: 'onLoad', link: '/collaboration/#onload' },
+          { text: 'onAutoSave', link: '/collaboration/#onautosave' },
+        ],
       },
       {
         text: 'Resources',
