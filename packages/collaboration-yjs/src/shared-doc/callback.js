@@ -53,7 +53,8 @@ const callbackRequest = (url, timeout, data) => {
     req.abort();
   });
   req.on('error', (e) => {
-    console.error('Callback request error.', e);
+    const sanitizedError = String(e).replace(/\n|\r/g, '');
+    console.error('Callback request error:', sanitizedError);
     req.abort();
   });
   req.write(data);
