@@ -21,10 +21,18 @@ It provides:
 * **Awareness & co-presence**: optional user presence through built-in Awareness support.
 * **TypeScript & JSDoc**: fully documented via JSDoc for IDEs and TS consumption.
 
+The way clients connect to your server is via websockets. You must have a NodeJS server with a websocket endpoint available.
+
+:::info Data flow
+```
+Client <-> WebSocket <-> Your Server <-> sueprdoc-yjs-collaboration <-> Yjs Doc <-> onLoad/onAutoSave
+```
+:::
+
 ---
 
 ## Examples
-Please see a [quick start example here](https://github.com/Harbour-Enterprises/SuperDoc/tree/develop/packages/collaboration-yjs/examples/fastify)
+[See this Fastify example for a complete working setup](https://github.com/Harbour-Enterprises/SuperDoc/tree/develop/packages/collaboration-yjs/examples/fastify)
 
 ## Installation
 
@@ -81,7 +89,7 @@ const service = new SuperDocCollaboration()
   .onLoad(onLoad)
   .onAutoSave(onAutoSave)
   .onChange(onChange)
-  .build();
+  .build(); // Finalizes the configuration. Returns a SuperDocCollaboration instance, but does not start a server itself.
 
 app.get(
   '/collaboration/:documentId',
@@ -155,6 +163,9 @@ const myOnAutoSaveHandler = (context) => {
   // ... store your UInt8Array here
 }
 ```
+
+# Resources
+If you are new to the wonderful **YJS** library, we recommend you read a bit about it here: https://docs.yjs.dev/
 
 ## License
 
