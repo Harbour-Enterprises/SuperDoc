@@ -437,6 +437,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
 
   const sectPr = findSectPr(docx['word/document.xml']) || [];
   const allSectPrElements = sectPr.flatMap((el) => el.elements);
+  if (!mainEditor) return;
 
   const editor = { ...mainEditor };
   editor.options.annotations = true;
