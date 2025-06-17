@@ -27,6 +27,9 @@ export class CollaborationBuilder {
 
     /** @type {Extension[]} */
     this._extensions = [];
+  
+    /** @type {number} */
+    this._documentExpiryMs = 5000;
   }
 
   /**
@@ -35,6 +38,15 @@ export class CollaborationBuilder {
    */
   withName(name) {
     this._name = name;
+    return this;
+  }
+
+  /**
+   * @param {number} ms  Time before expiring documents in cache in milliseconds.
+   * @returns {CollaborationBuilder}
+   */
+  withDocumentExpiryMs(ms) {
+    this._documentExpiryMs = ms;
     return this;
   }
 
@@ -122,6 +134,7 @@ export class CollaborationBuilder {
 
     const config = {
       name: this._name,
+      documentExpiryMs: this._documentExpiryMs,
       debounce: this._debounceMs,
       hooks: this._hooks,
       extensions: this._extensions,

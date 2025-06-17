@@ -26,14 +26,22 @@ export class DocumentManager {
   #cacheDocumentsMs = 1000 * 60; // 1 minutes
 
   /** @type {number} */
-  debounceMs;
+  debounceMs = 5000; // 5 seconds
 
   /**
-   * @param {import('../types.js').config} config
+   * @param {import('../types.js').ServiceConfig} config
    */
   constructor(config) {
     this.#hooks = config.hooks;
-    this.debounceMs = config.debounce ?? 0;
+    this.debounceMs = config.debounce ?? 0;1
+    this.#cacheDocumentsMs = config.documentExpiryMs ?? this.#cacheDocumentsMs;
+  }
+
+  get(documentId) {
+    if (this.#documents.has(documentId)) {
+      return this.#documents.get(documentId);
+    }
+    return null;
   }
 
   /**
@@ -44,7 +52,7 @@ export class DocumentManager {
   async getDocument(documentId, userParams) {
     if (!this.#documents.has(documentId)) {
       const doc = new SharedSuperDoc(documentId);
-      this.#log(`Creating new document: ${documentId}`);
+      this.#log(`Tracking new document: ${documentId}`);
       this.#documents.set(documentId, doc);
 
       if (this.#hooks.load) {

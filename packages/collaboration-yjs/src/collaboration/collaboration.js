@@ -8,7 +8,7 @@ import { ConnectionHandler } from '../connection-handler/handler.js';
  * Create and configure a SuperDoc collaboration service.
  * Simply call service.welcome(socket, request) in your WebSocket endpoint.
  *
- * @property {config} config - Configuration object
+ * @property {ServiceConfig} config - Configuration object
  * @property {DocumentManager} documentManager  - Manages SharedSuperDoc instances
  */
 export class SuperDocCollaboration {
@@ -18,7 +18,7 @@ export class SuperDocCollaboration {
   #log = createLogger('SuperDocCollaboration');
 
   /**
-   * @param {import('../types.js').config} config
+   * @param {import('../types.js').ServiceConfig} config
    */
   constructor(config) {
     this.config = config;

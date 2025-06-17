@@ -59,19 +59,25 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import { v4 as uuidv4 } from 'uuid';
 import SuperDocCollaboration from '@harbour-enterprises/superdoc-yjs-collaboration';
-import hooks from './hooks'; // your hook implementations
 
 const app = Fastify();
 app.register(websocket);
 
+/**
+ * Hooks
+ */
+const onAuthenticate = (params) => {}; // Custom auth logic
+const onLoad = (params) => {}; // Load your document from persistence (ie: S3)
+const onAutoSave = (params) => {}; // Debounced onChange hook based on 'withDebounce' setting. Save to persistence.
+const onChange = (params) => {}; // On change hook. This gets triggered a lot!
+
 const service = new SuperDocCollaboration()
   .withName(`sdc-${uuidv4()}`)
   .withDebounce(500)
-  .onAuthenticate(hooks.onAuthenticate)
-  .onLoad(hooks.onLoad)
-  .onStore(hooks.onStore)
-  .onChange(hooks.onChange)
-  .useExtensions(hooks.getExtensions())
+  .onAuthenticate(onAuthenticate)
+  .onLoad(onLoad)
+  .onAutoSave(onAutoSave)
+  .onChange(onChange)
   .build();
 
 app.get(

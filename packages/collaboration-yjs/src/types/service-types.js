@@ -6,16 +6,17 @@
  */
 
 /**
- * @typedef {Object} config Configuration for the CollaborationBuilder
+ * @typedef {Object} ServiceConfig Configuration for the CollaborationBuilder
  * @property {string} name - Unique service identifier
  * @property {number} [debounce] - Debounce interval in milliseconds
+ * @property {number} [documentExpiryMs] - Time before expiring documents in cache in milliseconds
  * @property {Hooks} [hooks] - Lifecycle hooks (authenticate, load, etc.)
  * @property {Extension[]} [extensions] - Array of custom extensions
  */
 
 /** 
  * @callback ConfigureFn 
- * @param {config} config
+ * @param {ServiceConfig} config
  * @returns {void}
 */
 

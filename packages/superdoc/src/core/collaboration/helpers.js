@@ -19,8 +19,9 @@ export const initCollaborationComments = (superdoc) => {
   // If we have comments and collaboration, wait for sync and then let the store know when its ready
   const onSuperDocYdocSynced = () => {
     // Update the editor comment locations
-    const parent = superdoc.commentsStore.commentsParentElement;
-    const ids = superdoc.commentsStore.editorCommentIds;
+    const parent = superdoc.commentsStore?.commentsParentElement;
+    const ids = superdoc.commentsStore?.editorCommentIds;
+    if (!parent || !ids) return;
     superdoc.commentsStore.handleEditorLocationsUpdate(parent, ids);
     superdoc.commentsStore.hasSyncedCollaborationComments = true;
 
@@ -82,7 +83,6 @@ export const initSuperdocYdoc = (superdoc) => {
     documentId,
     socket: superdoc.config.socket,
     superdocInstance: superdoc,
-    provider: 'superdoc',
   };
 
   const { provider: superdocProvider, ydoc: superdocYdoc } = createProvider(superdocCollaborationOptions);

@@ -65,10 +65,11 @@ function createProvider({ config, user, documentId, socket, superdocInstance }) 
  */
 function createSuperDocProvider({ config, user, documentId, socket, superdocInstance }) {
   const ydoc = new YDoc({ gc: false });
+  const commentsConfig = superdocInstance.config.modules.comments || {};
+  const useInternalExternal = commentsConfig.useInternalExternalComments;
   const options = {
-    params: {
-      ...config.params,
-    }
+    useInternalExternal,
+    ...config,
   };
 
   const provider = new WebsocketProvider(config.url, documentId, ydoc, options);
