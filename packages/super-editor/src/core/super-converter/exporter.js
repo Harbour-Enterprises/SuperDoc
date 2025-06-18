@@ -20,7 +20,7 @@ import { carbonCopy } from '../utilities/carbonCopy.js';
 import { baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/base-list.definitions.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
-
+import { sanitizeHtml } from '../InputRule.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -1924,14 +1924,13 @@ function prepareHtmlAnnotation(params) {
     node: { attrs = {}, marks = [] },
     editorSchema,
   } = params;
-  
-  const parser = new window.DOMParser();
-  const paragraphHtml = parser.parseFromString(attrs.rawHtml || attrs.displayLabel, 'text/html');
+
+  const paragraphHtmlContainer = sanitizeHtml(attrs.rawHtml);
   const marksFromAttrs = translateFieldAttrsToMarks(attrs);
   const allMarks = [...marks, ...marksFromAttrs]
 
   let state = EditorState.create({
-    doc: PMDOMParser.fromSchema(editorSchema).parse(paragraphHtml),
+    doc: PMDOMParser.fromSchema(editorSchema).parse(paragraphHtmlContainer),
   });
 
   if (allMarks.length) {
