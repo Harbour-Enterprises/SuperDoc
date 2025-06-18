@@ -312,7 +312,7 @@ export function cleanHtmlUnnecessaryTags(html) {
  * @param {string[]} forbiddenTags The list of forbidden tags to remove from the HTML.
  * @returns {DocumentFragment} The sanitized HTML as a DocumentFragment.
  */
-export function sanitizeHtml(html, forbiddenTags = ['meta', 'svg', 'script', 'style', 'button']) {
+function sanitizeHtml(html, forbiddenTags = ['meta', 'svg', 'script', 'style', 'button']) {
   const container = document.createElement('div');
   container.innerHTML = html;
 

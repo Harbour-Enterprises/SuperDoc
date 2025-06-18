@@ -20,7 +20,7 @@ import { carbonCopy } from '../utilities/carbonCopy.js';
 import { baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/base-list.definitions.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
-import { sanitizeHtml } from '../InputRule.js';
+
 
 /**
  * @typedef {Object} ExportParams
@@ -1926,8 +1926,7 @@ function prepareHtmlAnnotation(params) {
   } = params;
   
   const parser = new window.DOMParser();
-  const initialHTML = parser.parseFromString(attrs.rawHtml || attrs.displayLabel, 'text/html');
-  const paragraphHtml = sanitizeHtml(initialHTML);
+  const paragraphHtml = parser.parseFromString(attrs.rawHtml || attrs.displayLabel, 'text/html');
   const marksFromAttrs = translateFieldAttrsToMarks(attrs);
   const allMarks = [...marks, ...marksFromAttrs]
 
