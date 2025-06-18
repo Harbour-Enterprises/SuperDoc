@@ -10,7 +10,6 @@ import { createTableBorders } from './tableHelpers/createTableBorders.js';
 import { createCellBorders } from '../table-cell/helpers/createCellBorders.js';
 import { findParentNode } from '@helpers/findParentNode.js';
 import { TextSelection } from 'prosemirror-state';
-import { getNodeType } from '@core/helpers/getNodeType.js';
 import { isCellSelection } from './tableHelpers/isCellSelection.js';
 import {
   addColumnBefore,
@@ -26,12 +25,16 @@ import {
   goToNextCell,
   mergeCells,
   setCellAttr,
-  splitCell,
+  splitCell as originalSplitCell,
   tableEditing,
   toggleHeader,
   toggleHeaderCell,
   // TableView,
+  tableNodeTypes,
+  selectedRect,
 } from 'prosemirror-tables';
+import { cellAround } from './tableHelpers/cellAround.js';
+import { cellWrapping } from './tableHelpers/cellWrapping.js';
 
 export const Table = Node.create({
   name: 'table',
@@ -152,9 +155,7 @@ export const Table = Node.create({
     return {
       insertTable:
         ({ rows = 3, cols = 3, withHeaderRow = false } = {}) => ({ tr, dispatch, editor }) => {
-          const zeroWidthText = editor.schema.text('\u200B');
-          const emptyPar = getNodeType('paragraph', editor.schema).create(null, zeroWidthText);
-          const node = createTable(editor.schema, rows, cols, withHeaderRow, emptyPar);
+          const node = createTable(editor.schema, rows, cols, withHeaderRow);
 
           if (dispatch) {
             const offset = tr.selection.from + 1;
@@ -207,8 +208,104 @@ export const Table = Node.create({
         },
 
       splitCell:
-        () => ({ state, dispatch }) => {
-          return splitCell(state, dispatch);
+        () => ({ state, dispatch, commands }) => {
+          if (originalSplitCell(state, dispatch)) {
+            return true;
+          }
+          return commands.splitSingleCell();
+        },
+
+      splitSingleCell:
+        () => ({ state, dispatch, tr }) => {
+          const getCellType = ({ node }) => {
+            const nodeTypes = tableNodeTypes(state.schema);
+            return nodeTypes[node.type.spec.tableRole];
+          };
+
+          // For reference.
+          // https://github.com/ProseMirror/prosemirror-tables/blob/a99f70855f2b3e2433bc77451fedd884305fda5b/src/commands.ts#L497
+          const sel = state.selection;
+          let cellNode;
+          let cellPos;
+          if (!(sel instanceof CellSelection)) {
+            cellNode = cellWrapping(sel.$from);
+            if (!cellNode) return false;
+            cellPos = cellAround(sel.$from)?.pos;
+          } else {
+            if (sel.$anchorCell.pos != sel.$headCell.pos) return false;
+            cellNode = sel.$anchorCell.nodeAfter;
+            cellPos = sel.$anchorCell.pos;
+          }
+          if (cellNode == null || cellPos == null) {
+            return false;
+          }
+          if (cellNode.attrs.colspan != 1 || cellNode.attrs.rowspan != 1) {
+            return false;
+          }
+          //
+
+          if (dispatch) {
+            let rect = selectedRect(state);
+            let currentRow = rect.top;
+            let currentCol = rect.left;
+            let baseAttrs = { ...cellNode.attrs };
+            let currentColWidth = baseAttrs.colwidth;
+            let newCellWidth = null;
+
+            // Get new width for the current and new cells.
+            if (currentColWidth?.[0]) {
+              newCellWidth = Math.ceil(currentColWidth[0] / 2);
+            }
+
+            // Update width of the current cell.
+            if (newCellWidth) {
+              tr.setNodeMarkup(tr.mapping.map(cellPos, 1), null, { ...baseAttrs, colwidth: [newCellWidth] });
+            }
+            
+            // Insert new cell after the current one.
+            const newCell = getCellType({ node: cellNode }).createAndFill({
+              ...baseAttrs,
+              colwidth: newCellWidth ? [newCellWidth] : null,
+            });
+            tr.insert(tr.mapping.map(cellPos + cellNode.nodeSize, 1), newCell);
+
+            // Update colspan and colwidth for cells in other rows.
+            for (let row = 0; row < rect.map.height; row++) {
+              if (row === currentRow) continue;
+
+              let rowCells = new Set();
+              for (let col = 0; col < rect.map.width; col++) {
+                let cellIndex = rect.map.map[row * rect.map.width + col];
+                if (cellIndex != null) rowCells.add(cellIndex);
+              }
+
+              [...rowCells].forEach((cellIndex) => {
+                let cellRect = rect.map.findCell(cellIndex);
+
+                // If cell covers the column where we added new cell.
+                if (cellRect.left <= currentCol && cellRect.right > currentCol)  {
+                  let cellPos = tr.mapping.map(rect.tableStart + cellIndex, 1);
+                  let cell = tr.doc.nodeAt(cellPos);
+                  if (cell) {
+                    let newColspan = (cell.attrs.colspan || 1) + 1;
+                    let updatedColwidth = cell.attrs.colwidth;
+                    if (updatedColwidth && newCellWidth) {
+                      let originalColIndex = currentCol - cellRect.left;
+                      updatedColwidth = [
+                        ...updatedColwidth.slice(0, originalColIndex),
+                        newCellWidth, // current cell width
+                        newCellWidth, // new cell width
+                        ...updatedColwidth.slice(originalColIndex + 1)
+                      ];
+                    }
+                    tr.setNodeMarkup(cellPos, null, { ...cell.attrs, colspan: newColspan, colwidth: updatedColwidth });
+                  }
+                }
+              });
+            }
+          }
+
+          return true;
         },
 
       mergeOrSplit:
