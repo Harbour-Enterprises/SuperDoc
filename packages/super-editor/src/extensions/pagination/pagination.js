@@ -23,6 +23,7 @@ export const Pagination = Extension.create({
     return {
       height: 0,
       sectionData: null,
+      headerFooterEditors: new Map(),
     };
   },
 
@@ -77,6 +78,13 @@ export const Pagination = Extension.create({
             shouldUpdate = true;
             shouldInitialize = meta.isReadyToInit;
           }
+
+          // TODO: NEED TO FIX THIS.
+          shouldUpdate = true;
+          return {
+            ...oldState,
+            decorations: meta?.decorations?.map(tr.mapping, tr.doc) || DecorationSet.empty,
+          };
 
           // We need special handling for images / the image placeholder plugin
           const imagePluginTransaction = tr.getMeta(ImagePlaceholderPluginKey);
@@ -165,6 +173,9 @@ export const Pagination = Extension.create({
 
   onDestroy() {
     cleanupFloatingSeparators();
+
+    const { headerFooterEditors } = this.editor.storage.pagination;
+    if (headerFooterEditors) headerFooterEditors.clear();
   },
 });
 
@@ -272,6 +283,8 @@ const calculatePageBreaks = (view, editor, sectionData) => {
   if (!editor.converter) return DecorationSet.empty;
 
   const pageSize = editor.converter.pageStyles?.pageSize;
+  if (!pageSize) return DecorationSet.empty;
+
   const { width, height } = pageSize; // Page width and height are in inches
 
   // We can't calculate page breaks without a page width and height
@@ -338,12 +351,14 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
   let footer = null, header = null;
 
   const firstHeaderId = getHeaderFooterId(currentPageNumber, 'headerIds', editor);
-  const firstHeader = createHeader(pageMargins, pageSize, sectionData, firstHeaderId, editor, currentPageNumber);
+  const isFirstHeader = true;
+  const firstHeader = createHeader(pageMargins, pageSize, sectionData, firstHeaderId, editor, currentPageNumber, isFirstHeader);
   const pageBreak = createPageBreak({ editor, header: firstHeader, isFirstHeader: true });
   decorations.push(Decoration.widget(0, pageBreak, { key: 'stable-key' }));
 
   const lastFooterId = getHeaderFooterId(currentPageNumber, 'footerIds', editor);
-  const lastFooter = createFooter(pageMargins, pageSize, sectionData, lastFooterId, editor, currentPageNumber);
+  const isLastFooter = true;
+  const lastFooter = createFooter(pageMargins, pageSize, sectionData, lastFooterId, editor, currentPageNumber, isLastFooter);
 
   // Reduce the usable page height by the header and footer heights now that they are prepped
   pageHeightThreshold -= firstHeader.headerHeight + lastFooter.footerHeight;
@@ -374,7 +389,8 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
       if (currentPageNumber === 1) {
         const headerId = getHeaderFooterId(currentPageNumber, 'headerIds', editor, currentNode);
         decorations.pop(); // Remove the first header and replace with sectPr header
-        const newFirstHeader = createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber - 1);
+        const isFirstHeader = true;
+        const newFirstHeader = createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber, isFirstHeader);
         const pageBreak = createPageBreak({ editor, header: newFirstHeader, isFirstHeader: true });
         decorations.push(Decoration.widget(0, pageBreak, { key: 'stable-key' }));
       }
@@ -509,8 +525,8 @@ function createFinalPagePadding(bufferHeight) {
  * @param {string} editor SuperEditor instance
  * @returns {Object} The header element and its height
  */
-function createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber) {
-  const headerDef = sectionData.headers?.[headerId];
+function createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber, isFirstHeader = false) {
+  const headerDef = sectionData?.headers?.[headerId];
   const minHeaderHeight = pageMargins.top * 96; // pageMargins are in inches
   const headerMargin = pageMargins.header * 96;
 
@@ -535,24 +551,37 @@ function createHeader(pageMargins, pageSize, sectionData, headerId, editor, curr
   }
 
   const data = editor.converter.headers[headerId];
-  const editorSection = createHeaderFooterEditor({ 
-    editor, 
-    data, 
-    editorContainer, 
-    appendToBody: false,
-    sectionId: headerId,
-    type: 'header',
-    availableHeight,
-    currentPageNumber,
-  });
-  editor.converter.headerEditors.push({
-    id: headerId,
-    editor: editorSection,
-  });
+
+  const pageNumberIndex = currentPageNumber - 1;
+  const editorKey = getHeaderFooterEditorKey({ pageNumber: pageNumberIndex, isHeader: true, isFirstHeader });
+
+  let editorSection = null;
+
+  const { headerFooterEditors } = editor.storage.pagination;
+  if (headerFooterEditors.has(editorKey) && editor.converter.headerEditors[pageNumberIndex]) {
+    const editorData = headerFooterEditors.get(editorKey);
+    editorSection = editorData.editor;
+    editorSection.unmount();
+    editorSection.mount(editorContainer);
+  } else {
+    editorSection = createHeaderFooterEditor({ 
+      editor, 
+      data, 
+      editorContainer, 
+      appendToBody: false,
+      sectionId: headerId,
+      type: 'header',
+      availableHeight,
+      currentPageNumber,
+    });
+    editor.converter.headerEditors.push({ id: headerId, editor: editorSection });
+    headerFooterEditors.set(editorKey, { editor: editorSection });
+    broadcastEditorEvents(editor, editorSection);
+  }
+
   editorSection.setEditable(false, false);
 
-  broadcastEditorEvents(editor, editorSection);
-  editorContainer.className = 'pagination-section-header';
+  editorContainer.classList.add('pagination-section-header');
   editorContainer.style.paddingTop = headerMargin + 'px';
   editorContainer.style.paddingLeft = pageMargins.left * 96 + 'px';
   editorContainer.style.paddingRight = pageMargins.right * 96 + 'px';
@@ -581,8 +610,8 @@ function createHeader(pageMargins, pageSize, sectionData, headerId, editor, curr
  * @param {Number} currentPageNumber The number of the page
  * @returns {Object} The footer element and its height
  */
-function createFooter(pageMargins, pageSize, sectionData, footerId, editor, currentPageNumber) {
-  const footerDef = sectionData.footers?.[footerId];
+function createFooter(pageMargins, pageSize, sectionData, footerId, editor, currentPageNumber, isLastFooter = false) {
+  const footerDef = sectionData?.footers?.[footerId];
   const minFooterHeight = pageMargins.bottom * 96; // pageMargins are in inches
   const footerPaddingFromEdge = pageMargins.footer * 96;
   const footerHeight = Math.max(footerDef?.height || 0, minFooterHeight - footerPaddingFromEdge);
@@ -601,26 +630,37 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, editor, curr
   }
 
   const data = editor.converter.footers[footerId];
-  const editorSection = createHeaderFooterEditor({ 
-    editor, 
-    data, 
-    editorContainer, 
-    appendToBody: false,
-    sectionId: footerId,
-    type: 'footer',
-    availableHeight: footerHeight,
-    currentPageNumber,
-  });
 
-  editor.converter.footerEditors.push({
-    id: footerId,
-    editor: editorSection,
-  });
+  const pageNumberIndex = currentPageNumber - 1;
+  const editorKey = getHeaderFooterEditorKey({ pageNumber: pageNumberIndex, isFooter: true, isLastFooter });
+  
+  let editorSection = null;
+
+  const { headerFooterEditors } = editor.storage.pagination;
+  if (headerFooterEditors.has(editorKey) && editor.converter.footerEditors[pageNumberIndex]) {
+    const editorData = headerFooterEditors.get(editorKey);
+    editorSection = editorData.editor;
+    editorSection.unmount();
+    editorSection.mount(editorContainer);
+  } else {
+    editorSection = createHeaderFooterEditor({ 
+      editor, 
+      data, 
+      editorContainer, 
+      appendToBody: false,
+      sectionId: footerId,
+      type: 'footer',
+      availableHeight: footerHeight,
+      currentPageNumber,
+    });
+    editor.converter.footerEditors.push({ id: footerId, editor: editorSection });
+    headerFooterEditors.set(editorKey, { editor: editorSection });
+    broadcastEditorEvents(editor, editorSection);
+  }
+
   editorSection.setEditable(false, false);
 
-  broadcastEditorEvents(editor, editorSection);
-
-  editorContainer.className = 'pagination-section-footer';
+  editorContainer.classList.add('pagination-section-footer');
   editorContainer.style.height = footerHeight + 'px';
   editorContainer.style.marginBottom = footerPaddingFromEdge + 'px';
   editorContainer.style.paddingLeft = pageMargins.left * 96 + 'px';
@@ -637,6 +677,20 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, editor, curr
     footerHeight: footerHeight + footerPaddingFromEdge,
   };
 }
+
+const getHeaderFooterEditorKey = ({ 
+  pageNumber, 
+  isHeader,
+  isFooter,
+  isFirstHeader = false,
+  isLastFooter = false, 
+}) => {
+  if (isFirstHeader) return `first-header-${pageNumber}`;
+  if (isLastFooter) return `last-footer-${pageNumber}`;
+  if (isHeader) return `header-${pageNumber}`;
+  if (isFooter) return `footer-${pageNumber}`;
+  return undefined;
+};
 
 /**
  * Handles header/footer edit mode activation

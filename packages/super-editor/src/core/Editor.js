@@ -295,7 +295,7 @@ export class Editor extends EventEmitter {
     this.on('contentError', this.options.onContentError);
     this.on('exception', this.options.onException);
 
-    this.#createView();
+    this.mount(this.options.element);
     this.initDefaultStyles();
     this.setDocumentMode(options.documentMode);
 
@@ -326,11 +326,6 @@ export class Editor extends EventEmitter {
       this.#initPagination();
       this.#initComments();
     }
-
-    window.setTimeout(() => {
-      if (this.isDestroyed) return;
-      this.emit('create', { editor: this });
-    }, 0);
   }
 
   /**
@@ -352,7 +347,7 @@ export class Editor extends EventEmitter {
     this.emit('beforeCreate', { editor: this });
     this.on('contentError', this.options.onContentError);
 
-    this.#createView();
+    this.mount(this.options.element);
 
     this.on('create', this.options.onCreate);
     this.on('update', this.options.onUpdate);
@@ -365,10 +360,23 @@ export class Editor extends EventEmitter {
     this.on('commentClick', this.options.onCommentClicked);
     this.on('locked', this.options.onDocumentLocked);
 
+  }
+
+  mount(el) {
+    this.#createView(el);
+  
     window.setTimeout(() => {
       if (this.isDestroyed) return;
       this.emit('create', { editor: this });
     }, 0);
+  }
+
+  unmount() {
+    if (this.view) {
+      this.view.destroy();
+    }
+
+    this.view = null;
   }
 
   /**
@@ -457,7 +465,7 @@ export class Editor extends EventEmitter {
    * @returns {boolean}
    */
   get isDestroyed() {
-    return this.view.isDestroyed; // !this.view?.docView
+    return this.view?.isDestroyed ?? true;
   }
 
   /**
@@ -911,19 +919,20 @@ export class Editor extends EventEmitter {
     return DOMParser.fromSchema(this.schema).parse(parsedContent);
   }
 
+
   /**
    * Create the PM editor view
    * @private
    * @returns {void}
    */
-  #createView() {
+  #createView(element) {
     let doc = this.#generatePmData();
 
-    // Only initialize the doc if we are not using Yjs/collaboration
+    // Only initialize the doc if we are not using Yjs/collaboration.
     const state = { schema: this.schema };
     if (!this.options.ydoc) state.doc = doc;
 
-    this.view = new EditorView(this.options.element, {
+    this.view = new EditorView(element, {
       ...this.options.editorProps,
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: EditorState.create(state),
@@ -971,9 +980,6 @@ export class Editor extends EventEmitter {
     this.view.updateState(newState);
 
     this.createNodeViews();
-
-    const dom = this.view.dom;
-    dom.editor = this;
 
     this.options.telemetry?.sendReport();
   }
@@ -1181,7 +1187,9 @@ export class Editor extends EventEmitter {
    * @returns {Promise<void>}
    */
   async #initPagination() {
-    if (this.options.isHeadless || !this.extensionService) return;
+    if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
+      return;
+    }
 
     const pagination = this.options.extensions.find((e) => e.name === 'pagination');
     if (pagination && this.options.pagination) {
@@ -1516,9 +1524,26 @@ export class Editor extends EventEmitter {
    */
   destroy() {
     this.emit('destroy');
-    if (this.view) this.view.destroy();
+
+    this.unmount();
+
+    this.destroyHeaderFooterEditors();
+    this.converter = null;
+
     this.#endCollaboration();
     this.removeAllListeners();
+  }
+
+  destroyHeaderFooterEditors() {
+    const editors = [
+      ...this.converter.headerEditors, 
+      ...this.converter.footerEditors,
+    ];
+    for (let editorData of editors) {
+      editorData.editor.destroy();
+    }
+    this.converter.headerEditors.length = 0;
+    this.converter.footerEditors.length = 0;
   }
 
   /**
