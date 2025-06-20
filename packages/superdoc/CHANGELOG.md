@@ -1,36 +1,81 @@
 # Changelog
 
-## [0.13.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.2...v0.13.3) (2025-06-17)
+## [0.13.3-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.0-next.6...v0.13.3-next.1) (2025-06-16)
+
+# [0.13.0-next.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.0-next.5...v0.13.0-next.6) (2025-06-16)
+
+# [0.13.0-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.0-next.4...v0.13.0-next.5) (2025-06-16)
+
+# [0.13.0-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.0-next.3...v0.13.0-next.4) (2025-06-16)
+
+# [0.13.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.0-next.2...v0.13.0-next.3) (2025-06-16)
+
+# [0.13.0-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.0-next.0...v0.13.0-next.2) (2025-06-16)
+
+# [0.13.0-next.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.37-next.2...v0.13.0-next.0) (2025-06-16)
+
+
+### Bug Fixes
+
+* switch focus to editor ([38985a0](https://github.com/Harbour-Enterprises/SuperDoc/commit/38985a0408ef133fecfec9deb93363a9b6bb98c8))
+
+
+### Features
+
+* make toolbar more accessible ([0176e32](https://github.com/Harbour-Enterprises/SuperDoc/commit/0176e3200ba909936730960308ad39d87d499e86))
+
+## [0.12.37-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.37-next.1...v0.12.37-next.2) (2025-06-16)
 
 
 
-## [0.13.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.2...v0.13.3) (2025-06-16)
+## [0.12.35](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.37-next.1...v0.12.37-next.2) (2025-06-06)
 
 
 
-## [0.12.36](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.2...v0.13.3) (2025-06-10)
+## [0.12.33](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.37-next.1...v0.12.37-next.2) (2025-06-06)
+
+## [0.12.37-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.12...v0.12.37-next.1) (2025-06-16)
+
+## [0.12.36-next.12](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.11...v0.12.36-next.12) (2025-06-12)
+
+## [0.12.36-next.11](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.10...v0.12.36-next.11) (2025-06-11)
+
+## [0.12.36-next.10](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.9...v0.12.36-next.10) (2025-06-11)
+
+## [0.12.36-next.9](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.8...v0.12.36-next.9) (2025-06-11)
+
+## [0.12.36-next.8](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.7...v0.12.36-next.8) (2025-06-11)
+
+## [0.12.36-next.7](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.6...v0.12.36-next.7) (2025-06-10)
+
+## [0.12.36-next.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.5...v0.12.36-next.6) (2025-06-10)
+
+## [0.12.36-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.4...v0.12.36-next.5) (2025-06-10)
+
+## [0.12.36-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.3...v0.12.36-next.4) (2025-06-10)
 
 
+### Reverts
 
-## [0.13.3-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.2...v0.13.3) (2025-06-16)
+* Revert "Undo tests around spacing - will refactor" ([f40647f](https://github.com/Harbour-Enterprises/SuperDoc/commit/f40647f7788f97db7a678282f0d197f59af981f3))
 
-## [0.13.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.0-next.6...v0.13.2) (2025-06-16)
+## [0.12.36-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.2...v0.12.36-next.3) (2025-06-09)
 
+## [0.12.36-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.1...v0.12.36-next.2) (2025-06-09)
 
+## [0.12.36-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.35-next.1...v0.12.36-next.1) (2025-06-06)
 
-## [0.12.36](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.13.0-next.6...v0.13.2) (2025-06-10)
-
-## [0.12.36](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.6...v0.12.36) (2025-06-10)
-
-
-
-## [0.12.35](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.6...v0.12.36) (2025-06-06)
+## [0.12.35-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.34-next.2...v0.12.35-next.1) (2025-06-06)
 
 
+### Features
 
-## [0.12.33](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.36-next.6...v0.12.36) (2025-06-06)
+* (accessibility) simulate click with enter ([f9cd0b4](https://github.com/Harbour-Enterprises/SuperDoc/commit/f9cd0b4f5f8148ad0d0afad091288b32333f4cd3))
+* added extra accessibility features ([6a0f9d8](https://github.com/Harbour-Enterprises/SuperDoc/commit/6a0f9d80ae281f21ebc39beb8a14be027ef24619))
+* added initial toolbar keyboard navigation ([e37d79b](https://github.com/Harbour-Enterprises/SuperDoc/commit/e37d79bd284265f9b22f9a1ec23d05e58c21263a))
+* added roving tabindex ([6c77015](https://github.com/Harbour-Enterprises/SuperDoc/commit/6c770155532b805888d37bc91cb4d120129d541f))
 
-## [0.12.35](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.34-next.2...v0.12.35) (2025-06-06)
+## [0.12.34-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.12.34-next.1...v0.12.34-next.2) (2025-06-06)
 
 
 ### Features
