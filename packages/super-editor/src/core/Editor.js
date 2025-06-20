@@ -1016,20 +1016,12 @@ export class Editor extends EventEmitter {
   }
 
   /**
-    * Initialize default styles for the editor container and ProseMirror.
-    * Get page size and margins from the converter.
-    * Set document default font and font size.
-    *
-    * @param {HTMLElement} [element=this.element] - The DOM element to apply styles to
-    * @returns {void}
-    */
-  initDefaultStyles(element = this.element) {
-    if (this.options.isHeadless || this.options.suppressDefaultDocxStyles) return;
-
-    const proseMirror = element?.querySelector('.ProseMirror');
+   * Attach styles and attributes to the editor element
+   */
+  updateEditorStyles(element, proseMirror) {
     const { pageSize, pageMargins } = this.converter.pageStyles ?? {};
 
-    if (!proseMirror || !pageSize || !pageMargins) {
+    if (!proseMirror || !element) {
       return;
     }
     
@@ -1039,11 +1031,17 @@ export class Editor extends EventEmitter {
     proseMirror.setAttribute('aria-description', '');
 
     // Set fixed dimensions and padding that won't change with scaling
-    element.style.width = pageSize.width + 'in';
-    element.style.minWidth = pageSize.width + 'in';
-    element.style.minHeight = pageSize.height + 'in';
-    element.style.paddingLeft = pageMargins.left + 'in';
-    element.style.paddingRight = pageMargins.right + 'in';
+    if (pageSize) {
+      element.style.width = pageSize.width + 'in';
+      element.style.minWidth = pageSize.width + 'in';
+      element.style.minHeight = pageSize.height + 'in';
+    }
+   
+    if (pageMargins) {
+      element.style.paddingLeft = pageMargins.left + 'in';
+      element.style.paddingRight = pageMargins.right + 'in';
+    }
+    
     element.style.boxSizing = 'border-box';
     element.style.isolation = 'isolate'; // to create new stacking context.
 
@@ -1074,6 +1072,22 @@ export class Editor extends EventEmitter {
       proseMirror.style.paddingTop = '1in';
       proseMirror.style.paddingBottom = '1in';
     }
+  }
+
+  /**
+    * Initialize default styles for the editor container and ProseMirror.
+    * Get page size and margins from the converter.
+    * Set document default font and font size.
+    *
+    * @param {HTMLElement} [element=this.element] - The DOM element to apply styles to
+    * @returns {void}
+    */
+  initDefaultStyles(element = this.element) {
+    if (this.options.isHeadless || this.options.suppressDefaultDocxStyles) return;
+
+    const proseMirror = element?.querySelector('.ProseMirror');
+
+    this.updateEditorStyles(element, proseMirror);
 
     this.initMobileStyles(element);
   };

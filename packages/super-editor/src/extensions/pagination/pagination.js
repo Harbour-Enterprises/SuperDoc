@@ -79,13 +79,6 @@ export const Pagination = Extension.create({
             shouldInitialize = meta.isReadyToInit;
           }
 
-          // TODO: NEED TO FIX THIS.
-          shouldUpdate = true;
-          return {
-            ...oldState,
-            decorations: meta?.decorations?.map(tr.mapping, tr.doc) || DecorationSet.empty,
-          };
-
           // We need special handling for images / the image placeholder plugin
           const imagePluginTransaction = tr.getMeta(ImagePlaceholderPluginKey);
           if (imagePluginTransaction) {
@@ -133,6 +126,7 @@ export const Pagination = Extension.create({
           
           return {
             ...oldState,
+            decorations: meta?.decorations?.map(tr.mapping, tr.doc) || DecorationSet.empty,
             isReadyToInit: shouldInitialize,
           };
         },
@@ -563,6 +557,7 @@ function createHeader(pageMargins, pageSize, sectionData, headerId, editor, curr
     editorSection = editorData.editor;
     editorSection.unmount();
     editorSection.mount(editorContainer);
+    editorSection.updateEditorStyles(editorSection.element, editorSection.view.dom);
   } else {
     editorSection = createHeaderFooterEditor({ 
       editor, 
@@ -642,6 +637,7 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, editor, curr
     editorSection = editorData.editor;
     editorSection.unmount();
     editorSection.mount(editorContainer);
+    editorSection.updateEditorStyles(editorSection.element, editorSection.view.dom);
   } else {
     editorSection = createHeaderFooterEditor({ 
       editor, 
