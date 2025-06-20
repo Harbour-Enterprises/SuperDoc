@@ -538,7 +538,7 @@ function createHeader(pageMargins, pageSize, sectionData, headerId, editor, curr
   const headerHeight = Math.max(headerDef?.height || 0, minHeaderHeight) + headerOffset;
 
   const availableHeight = headerHeight - headerMargin;
-  const editorContainer = document.createElement('div');
+  let editorContainer = document.createElement('div');
 
   if (!headerId && !editor?.converter?.headerIds?.['default']) {
     headerId = 'rId' + generateDocxRandomId();
@@ -563,9 +563,7 @@ function createHeader(pageMargins, pageSize, sectionData, headerId, editor, curr
   if (headerFooterEditors.has(editorKey) && editor.converter.headerEditors[pageNumberIndex]) {
     const editorData = headerFooterEditors.get(editorKey);
     editorSection = editorData.editor;
-    editorSection.unmount();
-    editorSection.mount(editorContainer);
-    editorSection.updateEditorStyles(editorSection.element, editorSection.view.dom);
+    editorContainer = editorSection.element;
   } else {
     editorSection = createHeaderFooterEditor({ 
       editor, 
@@ -618,7 +616,7 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, editor, curr
   const minFooterHeight = pageMargins.bottom * 96; // pageMargins are in inches
   const footerPaddingFromEdge = pageMargins.footer * 96;
   const footerHeight = Math.max(footerDef?.height || 0, minFooterHeight - footerPaddingFromEdge);
-  const editorContainer = document.createElement('div');
+  let editorContainer = document.createElement('div');
 
   if (!footerId && !editor.converter.footerIds['default']) {
     footerId = 'rId' + generateDocxRandomId();
@@ -643,9 +641,7 @@ function createFooter(pageMargins, pageSize, sectionData, footerId, editor, curr
   if (headerFooterEditors.has(editorKey) && editor.converter.footerEditors[pageNumberIndex]) {
     const editorData = headerFooterEditors.get(editorKey);
     editorSection = editorData.editor;
-    editorSection.unmount();
-    editorSection.mount(editorContainer);
-    editorSection.updateEditorStyles(editorSection.element, editorSection.view.dom);
+    editorContainer = editorSection.element;
   } else {
     editorSection = createHeaderFooterEditor({ 
       editor, 
