@@ -169,7 +169,10 @@ export const Pagination = Extension.create({
     cleanupFloatingSeparators();
 
     const { headerFooterEditors } = this.editor.storage.pagination;
-    if (headerFooterEditors) headerFooterEditors.clear();
+
+    if (headerFooterEditors) {
+      headerFooterEditors.clear();
+    }
   },
 });
 

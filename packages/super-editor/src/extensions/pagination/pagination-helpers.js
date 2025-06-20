@@ -128,6 +128,7 @@ export const createHeaderFooterEditor = ({
     mediaFiles: editor.storage.image.media,
     fonts: editor.options.fonts,
     isHeaderOrFooter: true,
+    isHeadless: editor.options.isHeadless,
     annotations: true,
     currentPageNumber,
     parentEditor: editor,
@@ -136,14 +137,16 @@ export const createHeaderFooterEditor = ({
   });
 
   const pm = editorContainer.querySelector('.ProseMirror');
-  pm.style.maxHeight = '100%';
-  pm.style.minHeight = '100%';
-  pm.style.outline = 'none';
-  pm.style.border = 'none';
-  
-  pm.setAttribute('role', 'textbox');
-  pm.setAttribute('aria-multiline', true);
-  pm.setAttribute('aria-label', `${type} content area. Double click to start typing.`);
+  if (pm) {
+    pm.style.maxHeight = '100%';
+    pm.style.minHeight = '100%';
+    pm.style.outline = 'none';
+    pm.style.border = 'none';
+
+    pm.setAttribute('role', 'textbox');
+    pm.setAttribute('aria-multiline', true);
+    pm.setAttribute('aria-label', `${type} content area. Double click to start typing.`);
+  }
   
   return headerFooterEditor;
 };
