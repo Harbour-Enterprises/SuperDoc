@@ -79,6 +79,11 @@ export const Pagination = Extension.create({
             shouldInitialize = meta.isReadyToInit;
           }
 
+          const syncMeta = tr.getMeta('y-sync$');
+          if (syncMeta && syncMeta.isChangeOrigin) {
+            return { ...oldState }
+          }
+
           // We need special handling for images / the image placeholder plugin
           const imagePluginTransaction = tr.getMeta(ImagePlaceholderPluginKey);
           if (imagePluginTransaction) {
