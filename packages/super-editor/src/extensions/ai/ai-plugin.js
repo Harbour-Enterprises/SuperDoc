@@ -28,6 +28,18 @@ export const AiPlugin = Extension.create({
         if (dispatch) dispatch(tr);
         return true;
       },
+      /**
+       * Remove selection before ai pulse styles
+       */
+      removeSelectionAfterAiPulse: () => ({ tr, dispatch, state }) => {
+        const { selection } = tr;
+        const { $from, $to } = selection;
+        
+        tr.setSelection(state.selection.constructor.create(tr.doc, $to.pos, $to.pos));
+
+        if (dispatch) dispatch(tr);
+        return true;
+      },
 
       /**
        * Update the AI highlights with custom styling

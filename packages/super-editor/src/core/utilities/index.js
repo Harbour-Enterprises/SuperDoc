@@ -7,3 +7,4 @@ export * from './objectIncludes.js';
 export * from './deleteProps.js';
 export * from './parseSizeUnit.js';
 export * from './minMax.js';
+export * from './clipboardUtils.js';

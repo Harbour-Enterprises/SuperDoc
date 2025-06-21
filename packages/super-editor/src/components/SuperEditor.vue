@@ -4,9 +4,12 @@ import { NSkeleton } from 'naive-ui';
 import { ref, onMounted, onBeforeUnmount, computed, shallowRef, reactive, nextTick } from 'vue';
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
+import SlashMenu from './slash-menu/SlashMenu.vue';
 import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
 import Ruler from './rulers/Ruler.vue';
+import GenericPopover from './popovers/GenericPopover.vue';
+import { checkNodeSpecificClicks } from './cursor-helpers.js';
 
 const emit = defineEmits([
   'editor-ready',
@@ -45,6 +48,29 @@ const editor = shallowRef(null);
 
 const editorWrapper = ref(null);
 const editorElem = ref(null);
+
+/**
+ * Generic popover controls including state, open and close functions
+ */
+const popoverControls = reactive({
+  visible: false,
+  position: { left: '0px', top: '0px' },
+  component: null,
+  props: {}
+});
+
+const closePopover = () => {
+  popoverControls.visible = false;
+  popoverControls.component = null;
+  popoverControls.props = {};
+};
+
+const openPopover = (component, props, position) => {
+  popoverControls.component = component;
+  popoverControls.props = props;
+  popoverControls.position = position;
+  popoverControls.visible = true;
+};
 
 let dataPollTimeout;
 
@@ -165,6 +191,13 @@ const handleSuperEditorClick = (event) => {
   if (!isInsideEditor && editor.value.isEditable) {
     editor.value.view?.focus();
   }
+
+  // Add logic here to handle a click in the editor
+  // Get the node at the click position and check if it has a node in the parent tree
+  // example: hasParentNode(node, 'p')
+  if (isInsideEditor && editor.value.isEditable) {
+    checkNodeSpecificClicks(editor.value, event, popoverControls);
+  }
 };
 
 onMounted(() => {
@@ -220,6 +253,7 @@ onBeforeUnmount(() => {
       @mousedown="handleMarginClick"
     >
       <div ref="editorElem" class="editor-element super-editor__element" role="presentation"></div>
+      <SlashMenu v-if="editorReady && editor" :editor="editor" :popoverControls="popoverControls" :openPopover="openPopover" :closePopover="closePopover" />
     </div>
 
     <div class="placeholder-editor" v-if="!editorReady">
@@ -239,6 +273,15 @@ onBeforeUnmount(() => {
       <n-skeleton text :repeat="6" />
       <n-skeleton text style="width: 70%" />
     </div>
+
+    <GenericPopover
+      :editor="editor ?? {}"
+      :visible="popoverControls.visible"
+      :position="popoverControls.position"
+      @close="closePopover"
+    >
+      <component :is="popoverControls.component" v-bind="{ ...popoverControls.props, editor, closePopover }" />
+    </GenericPopover>
   </div>
 </template>
 

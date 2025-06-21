@@ -12,6 +12,7 @@ import { Node, Attribute } from '@core/index.js';
 import { Extension } from '@core/Extension.js';
 import { Plugin } from 'prosemirror-state';
 import { Mark } from '@core/Mark.js';
+import SlashMenu from './components/slash-menu/SlashMenu.vue';
 
 import SuperEditor from './components/SuperEditor.vue';
 import BasicUpload from './dev/components/BasicUpload.vue';
@@ -54,6 +55,7 @@ export {
   BasicUpload,
   Toolbar,
   AIWriter,
+  SlashMenu,
 
   // Helpers
   helpers,

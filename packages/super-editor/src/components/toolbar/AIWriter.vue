@@ -25,18 +25,7 @@ const props = defineProps({
     type: String,
     required: false,
   },
-/**
-   * AIWriter component is used both in the superToolbar and SuperDoc directly
-   * When we are rending in the toolbar menu, our events are emitted through toolbar to Superdoc
-   * When we are rendering directly in SuperDoc, we need to emit the events through Superdoc and do not need to 
-   * emit any events through 
-   */
-  superToolbar: {
-    type: Object,
-  },
 });
-
-const emits = defineEmits(['ai-highlight']);
 
 // Store the selection state
 const selectionState = ref(null);
@@ -48,7 +37,7 @@ const handleClickOutside = (event) => {
   if (aiWriterRef.value && !aiWriterRef.value.contains(event.target)) {
     // Only emit 'remove' if we're not in a loading state
     if (!isLoading.value) {
-      emitAiHighlight('remove');
+      props.editor.commands.removeAiMark();
     }
     props.handleClose();
   }
@@ -56,17 +45,6 @@ const handleClickOutside = (event) => {
 
 // Add ref for the textarea
 const editableRef = ref(null);
-
-// Helper function to emit AI highlight events
-// We need to emit through the superToolbar if it exists, otherwise emit through the emits
-// Hoping we can simplify this logic in the future if we combine SE and SD
-const emitAiHighlight = (type, data = null) => {
-  if (props.superToolbar) {
-    props.superToolbar.emit('ai-highlight', { type, data });
-  } else {
-    emits('ai-highlight', { type, data });
-  }
-};
 
 // Helper functions
 const saveSelection = () => {
@@ -81,16 +59,19 @@ const saveSelection = () => {
     props.editor.commands.setMeta('storedSelection', selectionState.value);
 
     // Emit ai highlight when the writer mounts through the toolbar
-    emitAiHighlight('add');
+    props.editor.commands.insertAiMark();
   }
 };
 
 const focusTextarea = () => {
-  nextTick(() => {
-    if (editableRef.value) {
-      editableRef.value.focus();
-    }
-  });
+  // Defer focus to after all event handlers (including browser's default)
+  setTimeout(() => {
+    nextTick(() => {
+      if (editableRef.value) {
+        editableRef.value.focus();
+      }
+    });
+  }, 0);
 };
 
 const addEventListeners = () => {
@@ -111,9 +92,9 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  // Only emit 'remove' if we're not in a loading state
+  // Only remove the ai mark if we're not in a loading state
   if (!isLoading.value) {
-    emitAiHighlight('remove');
+    props.editor.commands.removeAiMark();
   }
   // Remove all event listeners
   removeEventListeners();
@@ -168,7 +149,7 @@ const handleTextChunk = async (text) => {
 
     // If this is the first chunk and we're rewriting, handle the selection
     if (props.selectedText && !textProcessingStarted.value) {
-      emitAiHighlight('remove');
+      props.editor.commands.removeAiMark();
       
       // Clear the pulsing animation when we start inserting text
       props.editor.commands.clearAiHighlightStyle();
@@ -289,7 +270,7 @@ const handleDone = async () => {
   // We need to wait for the animation to finish before removing the mark
   setTimeout(() => {
     props.editor.commands.removeAiMark('aiAnimationMark');
-    emitAiHighlight('remove');
+    props.editor.commands.removeAiMark();
   }, 1000);
 };
 
@@ -305,9 +286,10 @@ const handleSubmit = async () => {
     // Close the AI Writer immediately and transition to loading states
     props.handleClose();
 
-    // If there is selected text, emit the update event to start pulsing animation
+    // If there is selected text, update the ai highlight style to start pulsing animation
     if (props.selectedText) {
-      emitAiHighlight('update');
+      props.editor.commands.updateAiHighlightStyle('sd-ai-highlight-pulse');
+      props.editor.commands.removeSelectionAfterAiPulse();
     } else {
       // Insert the loader node at the current cursor position
       props.editor.commands.insertContent({
@@ -408,6 +390,7 @@ const handleInput = (event) => {
 }
 
 .ai-writer {
+  background-color: white;
   display: flex;
   flex-direction: column;
   width: 300px;

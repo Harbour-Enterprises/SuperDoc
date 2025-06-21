@@ -4,51 +4,15 @@ import { ref, reactive } from 'vue';
  * Composable to manage AI layer and AI writer functionality
  * 
  * @param {Object} options - Configuration options
- * @param {Function} options.emitAiHighlight - Function to emit AI highlight events
  * @param {Object} options.activeEditorRef - Ref to the active editor
  * @returns {Object} - AI state and methods
  */
-export function useAi({ emitAiHighlight, activeEditorRef }) {
+export function useAi({ activeEditorRef }) {
   // Shared state
   const showAiLayer = ref(false);
   const showAiWriter = ref(false);
   const aiWriterPosition = reactive({ top: 0, left: 0 });
   const aiLayer = ref(null);
-
-  /**
-   * Handle AI highlighting events
-   * 
-   * @param {Object} params - Event parameters
-   * @param {String} params.type - Type of event (add/remove)
-   * @param {Object} params.data - Additional data (optional)
-   */
-  const handleAiHighlight = ({ type, data }) => {
-    if (!aiLayer.value) return;
-    
-    // Get the editor from the ref
-    const editor = activeEditorRef.value;
-
-    switch (type) {
-      case 'add':
-        // First clear any existing pulse animation if the editor is available
-        if (editor && !editor.isDestroyed) {
-          editor.commands.clearAiHighlightStyle();
-        }
-        // Then add the highlight
-        aiLayer.value.addAiHighlight();
-        break;
-      case 'remove':
-        // Clear any pulse animation before removing highlight
-        if (editor && !editor.isDestroyed) {
-          editor.commands.clearAiHighlightStyle();
-        }
-        aiLayer.value.removeAiHighlight();
-        break;
-      case 'update':
-        aiLayer.value.updateAiHighlight();
-        break;
-    }
-  };
 
   /**
    * Show the AI writer at the current cursor position
@@ -67,8 +31,8 @@ export function useAi({ emitAiHighlight, activeEditorRef }) {
       
       // If we have selected text, add AI highlighting
       if (!selection.empty) {
-        // Emit the highlight event to trigger the AI highlighting
-        emitAiHighlight({ type: 'add', data: null });
+        // Add the ai mark to the document
+        editor.commands.insertAiMark();
       }
       
       let coords;
@@ -131,9 +95,14 @@ export function useAi({ emitAiHighlight, activeEditorRef }) {
    * Handle tool click for AI functionality
    */
   const handleAiToolClick = () => {
-    // Emit the highlight event before showing the AI writer
-    // @todo: is this double?
-    emitAiHighlight({ type: 'add', data: null });
+    // Add the ai mark to the document
+    const editor = activeEditorRef.value;
+    if (!editor || editor.isDestroyed) {
+      console.error('[useAi] Editor not available');
+      return;
+    }
+    editor.commands.insertAiMark();
+    // Show the AI writer at the cursor position
     showAiWriterAtCursor();
   };
 
@@ -146,7 +115,6 @@ export function useAi({ emitAiHighlight, activeEditorRef }) {
     
     // Methods
     initAiLayer,
-    handleAiHighlight,
     showAiWriterAtCursor,
     handleAiWriterClose,
     handleAiToolClick

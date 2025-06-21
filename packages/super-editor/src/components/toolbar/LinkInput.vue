@@ -1,18 +1,10 @@
 <script setup>
-import { ref, computed, watch, getCurrentInstance, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from "vue";
 import { toolbarIcons } from './toolbarIcons.js';
 import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
+import { TextSelection } from 'prosemirror-state';
 
-const emit = defineEmits(['submit', 'cancel']);
 const props = defineProps({
-  initialText: {
-    type: String,
-    default: '',
-  },
-  href: {
-    type: String,
-    default: '',
-  },
   showInput: {
     type: Boolean,
     default: true,
@@ -25,30 +17,55 @@ const props = defineProps({
     type: Function,
     default: () => {},
   },
+  editor: {
+    type: Object,
+    required: true,
+  },
+  closePopover: {
+    type: Function,
+    default: () => {},
+  },
 });
 const { isHighContrastMode } = useHighContrastMode();
 
-const { proxy } = getCurrentInstance();
-const handleSubmit = () => {
-  if (proxy?.$submit instanceof Function) proxy.$submit();
-  if (rawUrl.value && validUrl.value) {
-    emit('submit', { text: text.value, href: url.value });
-    return;
-  } else if (!rawUrl.value) {
-    emit('submit', { text: text.value, href: null });
-    return;
-  }
-  console.debug('[LinkInput] Invalid URL in handleSubmit');
-  urlError.value = true;
-};
-
-const handleRemove = () => {
-  emit('submit', { text: text.value, href: null });
-};
-
 const urlError = ref(false);
-const text = ref(props.initialText);
-const rawUrl = ref(props.href);
+
+// --- Derive selected text and link href from editor ---
+const getSelectedText = () => {
+  if (!props.editor || !props.editor.state) return '';
+  const { state } = props.editor;
+  const { from, to } = state.selection;
+  return state.doc.textBetween(from, to, ' ');
+};
+
+const getLinkHrefAtSelection = () => {
+  if (!props.editor || !props.editor.state) return '';
+  const { state } = props.editor;
+  const { schema, selection } = state;
+  const linkMark = schema.marks.link;
+  if (!linkMark) return '';
+  let href = '';
+  // Check marks at selection
+  const { $from, empty } = selection;
+  if (empty) {
+    const marks = state.storedMarks || $from.marks();
+    const link = marks.find(mark => mark.type === linkMark);
+    if (link) href = link.attrs.href;
+  } else {
+    state.doc.nodesBetween(selection.from, selection.to, (node) => {
+      if (node.marks) {
+        const link = node.marks.find(mark => mark.type === linkMark);
+        if (link) href = link.attrs.href;
+      }
+    });
+  }
+  return href || '';
+};
+
+const text = ref('');
+const rawUrl = ref('');
+const isAnchor = ref(false);
+
 const url = computed(() => {
   if (!rawUrl.value?.startsWith('http')) return 'http://' + rawUrl.value;
   return rawUrl.value;
@@ -59,21 +76,29 @@ const validUrl = computed(() => {
   return url.value.includes('.') && urlSplit.length > 1;
 });
 
+// --- CASE LOGIC ---
+const isEditing = computed(() => !isAnchor.value && !!getLinkHrefAtSelection());
+
 const getApplyText = computed(() => (showApply.value ? 'Apply' : 'Remove'));
 const isDisabled = computed(() => !validUrl.value);
 const showApply = computed(() => !showRemove.value);
-const showRemove = computed(() => props.href && !rawUrl.value);
-const isAnchor = computed(() => props.href.startsWith('#'));
+const showRemove = computed(() => rawUrl.value === '' && getLinkHrefAtSelection());
 
 const openLink = () => {
   window.open(url.value, '_blank');
 };
 
+const updateFromEditor = () => {
+  text.value = getSelectedText();
+  rawUrl.value = getLinkHrefAtSelection();
+};
+
 watch(
-  () => props.href,
-  (newVal) => {
-  rawUrl.value = newVal;
+  () => props.editor?.state?.selection,
+  () => {
+    updateFromEditor();
   },
+  { immediate: true }
 );
 
 const focusInput = () => {
@@ -83,15 +108,54 @@ const focusInput = () => {
 };
 
 onMounted(() => {
+  updateFromEditor();
+  isAnchor.value = rawUrl.value.startsWith('#');
   if (props.showInput) focusInput();
 });
+
+// --- Link logic moved here ---
+const handleSubmit = () => {
+  if (rawUrl.value && validUrl.value) {
+    // Insert or update link
+    if (props.editor && props.editor.commands && props.editor.commands.toggleLink) {
+      props.editor.commands.toggleLink({ href: url.value, text: text.value });
+      // Move cursor to end of link
+      const { view } = props.editor;
+      let { selection } = view.state;
+      const endPos = selection.$to.pos;
+      const tr = view.state.tr.setSelection(new TextSelection(view.state.doc.resolve(endPos)));
+      const state = view.state.apply(tr);
+      view.updateState(state);
+      setTimeout(() => {
+        view.focus();
+      }, 100);
+    }
+    props.closePopover();
+    return;
+  } else if (!rawUrl.value) {
+    // Remove link
+    if (props.editor && props.editor.commands && props.editor.commands.unsetLink) {
+      props.editor.commands.unsetLink();
+    }
+    props.closePopover();
+    return;
+  }
+  urlError.value = true;
+};
+
+const handleRemove = () => {
+  if (props.editor && props.editor.commands && props.editor.commands.unsetLink) {
+    props.editor.commands.unsetLink();
+    props.closePopover();
+  }
+};
 </script>
 
 <template>
   <div class="link-input-ctn" :class="{'high-contrast': isHighContrastMode}">
-    <div class="link-title" v-if="!href">Add link</div>
-    <div class="link-title" v-else-if="isAnchor">Page anchor</div>
-    <div class="link-title" v-else>Edit link</div>
+    <div class="link-title" v-if="isAnchor">Page anchor</div>
+    <div class="link-title" v-else-if="isEditing">Edit link</div>
+    <div class="link-title" v-else>Add link</div>
 
     <div v-if="showInput && !isAnchor">
       <div class="input-row">
@@ -111,7 +175,7 @@ onMounted(() => {
         </div>
       </div>
       <div class="input-row link-buttons">
-        <button class="remove-btn" @click="handleRemove" v-if="href" data-item="btn-link-remove">
+        <button class="remove-btn" @click="handleRemove" v-if="rawUrl" data-item="btn-link-remove">
           <div class="remove-btn__icon" v-html="toolbarIcons.removeLink"></div>
           Remove
         </button>
@@ -123,7 +187,7 @@ onMounted(() => {
     </div>
 
     <div v-else-if="isAnchor" class="input-row go-to-anchor clickable">
-      <a @click.stop.prevent="goToAnchor">Go to {{ href.startsWith('#_') ? href.substring(2) : href }}</a>
+      <a @click.stop.prevent="goToAnchor">Go to {{ rawUrl.startsWith('#_') ? rawUrl.substring(2) : rawUrl }}</a>
     </div>
   </div>
 </template>
@@ -266,7 +330,6 @@ onMounted(() => {
   margin-bottom: 1em;
 }
 
-
 .remove-btn {
   display: inline-flex;
   justify-content: center;
@@ -310,7 +373,6 @@ onMounted(() => {
     background-color: #0d47c1;
   }
 }
-
 
 .error {
   border-color: red !important;

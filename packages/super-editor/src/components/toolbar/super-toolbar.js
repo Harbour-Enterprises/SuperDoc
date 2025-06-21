@@ -1,7 +1,6 @@
 import { EventEmitter } from 'eventemitter3';
 import { createApp } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
-import { TextSelection } from 'prosemirror-state';
 import { makeDefaultItems } from './defaultItems';
 import { getActiveFormatting } from '@core/helpers/getActiveFormatting.js';
 import { vClickOutside } from '@harbour-enterprises/common';
@@ -473,41 +472,6 @@ export class SuperToolbar extends EventEmitter {
     },
 
     /**
-     * Toggles link formatting and updates cursor position
-     * @param {Object} params - Command parameters
-     * @param {CommandItem} params.item - The command item
-     * @param {*} params.argument - Command arguments
-     * @returns {void}
-     */
-    toggleLink: ({ item, argument }) => {
-      let command = item.command;
-
-      if (command in this.activeEditor.commands) {
-        this.activeEditor.commands[command](argument);
-
-        // move cursor to end
-        const { view } = this.activeEditor;
-        let { selection } = view.state;
-        if (this.activeEditor.options.isHeaderOrFooter) {
-          selection = this.activeEditor.options.lastSelection;
-        }
-        const endPos = selection.$to.pos;
-        
-        const newSelection = new TextSelection(view.state.doc.resolve(endPos));
-        const tr = view.state.tr.setSelection(newSelection);
-        const state = view.state.apply(tr);
-        view.updateState(state);
-
-        if (!this.activeEditor.options.isHeaderOrFooter) {
-          setTimeout(() => {
-            view.focus();
-          }, 100);
-        }
-      }
-      this.updateToolbarState();
-    },
-
-    /**
      * Inserts a table into the document
      * @param {Object} params - Command parameters
      * @param {CommandItem} params.item - The command item
@@ -591,16 +555,12 @@ export class SuperToolbar extends EventEmitter {
    * Create toolbar items based on configuration
    * @private
    * @param {SuperToolbar} options.superToolbar - The toolbar instance
-   * @param {Object} options.icons - Icons to use for toolbar items
-   * @param {Object} options.texts - Texts to use for toolbar items
    * @param {Array} options.fonts - Fonts for the toolbar item
    * @param {boolean} options.isDev - Whether in development mode
    * @returns {void}
    */
   #makeToolbarItems({
     superToolbar, 
-    icons,
-    texts,
     fonts,
     hideButtons,
     isDev = false,
@@ -611,8 +571,6 @@ export class SuperToolbar extends EventEmitter {
 
     const { defaultItems, overflowItems } = makeDefaultItems({
       superToolbar,
-      toolbarIcons: icons,
-      toolbarTexts: texts,
       toolbarFonts: fonts,
       hideButtons,
       availableWidth,
@@ -766,8 +724,6 @@ export class SuperToolbar extends EventEmitter {
   onToolbarResize = () => {
     this.#makeToolbarItems({
       superToolbar: this,
-      icons: this.config.icons,
-      texts: this.config.texts,
       fonts: this.config.fonts,
       hideButtons: this.config.hideButtons,
       isDev: this.isDev,
@@ -812,6 +768,7 @@ export class SuperToolbar extends EventEmitter {
    */
   onEditorTransaction({ editor, transaction }) {
     if (!transaction.docChanged && !transaction.selectionSet) return;
+
     this.updateToolbarState();
   }
 

@@ -45,6 +45,9 @@ import wrenchIconSvg from '@harbour-enterprises/common/icons/wrench-solid.svg?ra
 import borderNoneIconSvg from '@harbour-enterprises/common/icons/border-none-solid.svg?raw';
 import upDownIconSvg from '@harbour-enterprises/common/icons/up-down.svg?raw';
 import magnifyingGlassSvg from '@harbour-enterprises/common/icons/magnifying-glass.svg?raw';
+import scissorsIconSvg from '@harbour-enterprises/common/icons/scissors-solid.svg?raw';
+import copyIconSvg from '@harbour-enterprises/common/icons/copy-solid.svg?raw';
+import pasteIconSvg from '@harbour-enterprises/common/icons/paste-solid.svg?raw';
 
 export const toolbarIcons = {
   undo: rotateLeftIconSvg,
@@ -102,4 +105,7 @@ export const toolbarIcons = {
   fixTables: wrenchIconSvg,
   lineHeight: upDownIconSvg,
   search: magnifyingGlassSvg,
+  cut: scissorsIconSvg,
+  copy: copyIconSvg,
+  paste: pasteIconSvg,
 }
