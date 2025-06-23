@@ -34,14 +34,18 @@ export const startImageUpload = async ({ editor, view, file }) => {
 
   // Replace the selection with a placeholder
   let { tr, schema } = view.state;
+  let { selection } = tr;
+  if (editor.options.isHeaderOrFooter) {
+    selection = editor.options.lastSelection;
+  }
 
-  if (!tr.selection.empty) {
+  if (!selection.empty && !editor.options.isHeaderOrFooter) {
     tr.deleteSelection();
   }
 
   let imageMeta = {
     type: 'add',
-    pos: tr.selection.from,
+    pos: selection.from,
     id,
   };
 
@@ -58,7 +62,7 @@ export const startImageUpload = async ({ editor, view, file }) => {
       if (placeholderPos == null) {
         return;
       }
-
+      
       // Otherwise, insert it at the placeholder's position, and remove
       // the placeholder
       let removeMeta = { type: 'remove', id };

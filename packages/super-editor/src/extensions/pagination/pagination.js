@@ -88,10 +88,7 @@ export const Pagination = Extension.create({
           const imagePluginTransaction = tr.getMeta(ImagePlaceholderPluginKey);
           if (imagePluginTransaction) {
             if (imagePluginTransaction.type === 'remove') {
-              const imagePos = imagePluginTransaction.pos;
-              const domImage = editor.view.domAtPos(imagePos).node.querySelector("img");
-              if (domImage.complete) onImageLoad(editor);
-              else domImage.onload = () => onImageLoad(editor);
+              onImageLoad(editor);
             }
             return { ...oldState }
           }

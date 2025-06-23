@@ -1,4 +1,4 @@
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, NodeSelection, TextSelection } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMParser, DOMSerializer } from 'prosemirror-model';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
@@ -25,8 +25,8 @@ import { toggleHeaderFooterEditMode } from '../extensions/pagination/pagination-
 import { hasSomeParentWithClass } from './super-converter/helpers.js';
 import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
-import { findWordBounds } from './helpers/findWordBounds.js';
 import { setWordSelection } from './helpers/setWordSelection.js';
+import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -946,6 +946,7 @@ export class Editor extends EventEmitter {
       ...this.options.editorProps,
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: EditorState.create(state),
+      handleClick: this.#handleNodeSelection.bind(this),
       handleDoubleClick: async (view, pos, event) => {
         // Prevent edits if editor is not editable
         if (this.options.documentMode !== 'editing') return;
@@ -1393,6 +1394,17 @@ export class Editor extends EventEmitter {
     }
   }
 
+
+  /**
+   * Handles image node selection for header/footer editor
+   */
+  #handleNodeSelection(view, pos) {
+    if (this.options.isHeaderOrFooter) {
+      return setImageNodeSelection(view, pos);
+    }
+  }
+  
+  
   /**
    * Perform any post conversion pre prosemirror import processing.
    * Comments are processed here.
