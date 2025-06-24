@@ -13,6 +13,9 @@ export function findRemovedFieldAnnotations(tr) {
     return removedNodes;
   }
 
+  const hasDeletion = transactionDeletedAnything(tr);
+  if (!hasDeletion) return removedNodes;
+
   tr.steps.forEach((step, stepIndex) => {
     if (step instanceof ReplaceStep && step.from !== step.to) {
       let mapping = tr.mapping.maps[stepIndex];
@@ -31,4 +34,13 @@ export function findRemovedFieldAnnotations(tr) {
   });
 
   return removedNodes;
+}
+
+function transactionDeletedAnything(tr) {
+  return tr.steps.some(step => {
+    if (step instanceof ReplaceStep || step instanceof ReplaceAroundStep) {
+      return step.from !== step.to;
+    }
+    return false;
+  });
 }
