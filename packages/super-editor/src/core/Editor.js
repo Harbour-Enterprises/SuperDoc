@@ -323,10 +323,7 @@ export class Editor extends EventEmitter {
 
     this.initializeCollaborationData();
     this.initDefaultStyles();
-
-    setTimeout(() => {
-      this.setDocumentMode(this.options.documentMode);
-    }, 50)
+    this.setDocumentMode(this.options.documentMode);
 
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady
