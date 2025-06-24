@@ -301,8 +301,6 @@ export class Editor extends EventEmitter {
     this.on('exception', this.options.onException);
 
     this.mount(this.options.element);
-    this.initDefaultStyles();
-    this.setDocumentMode(options.documentMode);
 
     // If we are running headless, we can stop here
     if (this.options.isHeadless) return;
@@ -324,6 +322,11 @@ export class Editor extends EventEmitter {
     this.on('comment-positions', this.options.onCommentLocationsUpdate);
 
     this.initializeCollaborationData();
+    this.initDefaultStyles();
+
+    setTimeout(() => {
+      this.setDocumentMode(this.options.documentMode);
+    }, 50)
 
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady

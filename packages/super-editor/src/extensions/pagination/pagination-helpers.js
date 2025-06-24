@@ -118,6 +118,8 @@ export const createHeaderFooterEditor = ({
   if (appendToBody) document.body.appendChild(editorContainer);
   
   const headerFooterEditor = new SuperEditor({
+    documentMode: editor.options.documentMode,
+    role: editor.options.role,
     loadFromSchema: true,
     mode: 'docx',
     element: editorContainer,
@@ -186,7 +188,7 @@ export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEdi
     pm.classList.add('header-footer-edit');
     pm.setAttribute('aria-readonly', true);
   }
-  
+
   if (focusedSectionEditor) {
     focusedSectionEditor.view.focus();
   }
