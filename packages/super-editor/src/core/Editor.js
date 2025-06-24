@@ -1574,15 +1574,17 @@ export class Editor extends EventEmitter {
   }
 
   destroyHeaderFooterEditors() {
-    const editors = [
-      ...this.converter.headerEditors, 
-      ...this.converter.footerEditors,
-    ];
-    for (let editorData of editors) {
-      editorData.editor.destroy();
-    }
-    this.converter.headerEditors.length = 0;
-    this.converter.footerEditors.length = 0;
+    try {
+      const editors = [
+        ...this.converter.headerEditors, 
+        ...this.converter.footerEditors,
+      ];
+      for (let editorData of editors) {
+        editorData.editor.destroy();
+      }
+      this.converter.headerEditors.length = 0;
+      this.converter.footerEditors.length = 0;
+    } catch (error) {}
   }
 
   /**
