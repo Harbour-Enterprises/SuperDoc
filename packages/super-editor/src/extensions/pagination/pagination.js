@@ -33,7 +33,22 @@ export const Pagination = Extension.create({
         return commands.insertContent({
           type: 'hardBreak',
         });
-      }
+      },
+
+      /**
+       * Toggle pagination on/off
+       * @returns {void}
+       */
+      togglePagination: () => ({ tr, state, dispatch, editor }) => {
+        const isEnabled = PaginationPluginKey.getState(state)?.isEnabled;
+        tr.setMeta(PaginationPluginKey, { isEnabled: !isEnabled });
+        if (dispatch) {
+          dispatch(tr);
+          editor.initDefaultStyles(editor.element, !isEnabled);
+          return true;
+        }
+      },
+
     }
   },
 
@@ -67,12 +82,25 @@ export const Pagination = Extension.create({
             isReadyToInit: false,
             decorations: DecorationSet.empty,
             isDebugging,
+            isEnabled: editor.options.pagination,
           }
         },
         apply(tr, oldState, prevEditorState, newEditorState) {
-          // Check for new decorations passed via metadata
 
           const meta = tr.getMeta(PaginationPluginKey);
+          if (meta && 'isEnabled' in meta) {
+            const newEnabled = meta.isEnabled;
+
+            if (newEnabled) shouldUpdate = true;
+
+            return {
+              ...oldState,
+              decorations: newEnabled ? oldState.decorations : DecorationSet.empty,
+              isEnabled: newEnabled,
+            };
+          }
+
+          // Check for new decorations passed via metadata
           if (meta && meta.isReadyToInit) {
             if (isDebugging) console.debug('✅ INIT READY')
             shouldUpdate = true;
@@ -140,6 +168,7 @@ export const Pagination = Extension.create({
 
         return {
           update: (view, prevState) => {
+            if (!PaginationPluginKey.getState(view.state)?.isEnabled) return;
             if (!shouldUpdate || isUpdating) return;
 
             isUpdating = true;
@@ -159,7 +188,8 @@ export const Pagination = Extension.create({
       },
       props: {
         decorations(state) {
-          return PaginationPluginKey.getState(state).decorations;
+          const pluginState = PaginationPluginKey.getState(state);
+          return pluginState.isEnabled ? pluginState.decorations : DecorationSet.empty;
         },
       },
     });
