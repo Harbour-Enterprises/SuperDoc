@@ -554,7 +554,7 @@ export const baseBulletList = {
           "type": "element",
           "name": "w:lvlText",
           "attributes": {
-            "w:val": ""
+            "w:val": "•"
           }
         },
         {
@@ -622,7 +622,7 @@ export const baseBulletList = {
           "type": "element",
           "name": "w:lvlText",
           "attributes": {
-            "w:val": "o"
+            "w:val": "◦"
           }
         },
         {
@@ -691,7 +691,7 @@ export const baseBulletList = {
           "type": "element",
           "name": "w:lvlText",
           "attributes": {
-            "w:val": ""
+            "w:val": "▪"
           }
         },
         {
@@ -759,7 +759,7 @@ export const baseBulletList = {
           "type": "element",
           "name": "w:lvlText",
           "attributes": {
-            "w:val": ""
+            "w:val": "•"
           }
         },
         {
@@ -827,7 +827,7 @@ export const baseBulletList = {
           "type": "element",
           "name": "w:lvlText",
           "attributes": {
-            "w:val": "o"
+            "w:val": "◦"
           }
         },
         {
@@ -896,7 +896,7 @@ export const baseBulletList = {
           "type": "element",
           "name": "w:lvlText",
           "attributes": {
-            "w:val": ""
+            "w:val": "▪"
           }
         },
         {

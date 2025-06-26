@@ -1,5 +1,5 @@
 import { Node, Attribute } from '@core/index.js';
-import { generateDocxListAttributes } from '@helpers/index.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { wrappingInputRule } from '../../core/inputRules/wrappingInputRule.js';
 
 /**
@@ -57,8 +57,8 @@ export const BulletList = Node.create({
   addCommands() {
     return {
       toggleBulletList: () => (props) => {
-        const { commands, chain } = props;
-        return commands.toggleList(this.name, this.options.itemTypeName, this.options.keepMarks);
+        const { commands, chain, editor } = props;
+        return ListHelpers.createNewList({ listType: this, editor, chain });
       },
     };
   },

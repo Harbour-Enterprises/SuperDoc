@@ -1,7 +1,7 @@
 import { Node, Attribute } from '@core/index.js';
+import { ListItemNodeView } from './ListItemNodeView.js';
 import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
-import { styledListMarker as styledListMarkerPlugin } from './helpers/styledListMarkerPlugin.js';
-import { findParentNode } from '@helpers/index.js';
+import { orderedListSync } from '../ordered-list/helpers/orderedListSyncPlugin.js';
 
 export const ListItem = Node.create({
   name: 'listItem',
@@ -28,6 +28,20 @@ export const ListItem = Node.create({
 
   renderDOM({ htmlAttributes }) {
     return ['li', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  },
+
+  addPmPlugins() {
+    return this.editor?.converter?.convertedXml ? [orderedListSync(this.editor)] : [];
+  },
+
+  /**
+   * Important: The listItem node uses a custom node view.
+   * @returns {import('@core/NodeView.js').NodeView}
+   */
+  addNodeView() {
+    return ({ node, editor, getPos, decorations }) => {
+      return new ListItemNodeView(node, getPos, decorations, editor);
+    }
   },
 
   addAttributes() {
@@ -61,6 +75,7 @@ export const ListItem = Node.create({
 
       lvlText: {
         default: null,
+        keepOnSplit: true,
         parseDOM: (elem) => elem.getAttribute('data-lvl-text'),
         renderDOM: (attrs) => {
           if (!attrs.lvlText) return {};
@@ -72,6 +87,7 @@ export const ListItem = Node.create({
 
       listNumberingType: {
         default: null,
+        keepOnSplit: true,
         parseDOM: (elem) => elem.getAttribute('data-num-fmt'),
         renderDOM: (attrs) => {
           if (!attrs.listNumberingType) return {};
@@ -83,6 +99,7 @@ export const ListItem = Node.create({
 
       listLevel: {
         default: null,
+        keepOnSplit: true,
         parseDOM: (elem) => {
           let listLevel = elem.getAttribute('data-list-level');
           try {
@@ -100,6 +117,7 @@ export const ListItem = Node.create({
       
       // JC = justification. Expect left, right, center
       lvlJc: {
+        keepOnSplit: true,
         default: null,
         rendered: false,
       },
@@ -107,33 +125,69 @@ export const ListItem = Node.create({
       // This will contain indentation and space info.
       // ie: w:left (left indent), w:hanging (hanging indent)
       listParagraphProperties: {
+        keepOnSplit: true,
         default: null,
         rendered: false,
       },
 
       // This will contain run properties for the list item
       listRunProperties: {
+        keepOnSplit: true,
         default: null,
         rendered: false,
       },
 
       numId: {
+        keepOnSplit: true,
         default: null,
         parseDOM: (elem) => elem.getAttribute('data-num-id'),
       },
 
+      numPrType: {
+        rendered: false,
+        default: null,
+        keepOnSplit: true,
+      },
+
+      level: {
+        default: null,
+        rendered: false,
+        keepOnSplit: true,
+      },
+
       attributes: {
+        keepOnSplit: true,
         rendered: false,
       },
 
-      importedFontSize: {
-        parseDOM: (elem) => elem.getAttribute('data-font-size'),
-        renderDOM: (attrs) => {
-          if (!attrs.importedFontSize) return {};
-          return {
-            'data-font-size': attrs.importedFontSize,
-          };
-        }
+      spacing: {
+        keepOnSplit: true,
+        default: null,
+        rendered: false,
+      },
+
+      indent: {
+        keepOnSplit: true,
+        default: null,
+        rendered: false,
+      },
+
+      markerStyle: {
+        default: null,
+        rendered: false,
+        keepOnSplit: true,
+      },
+
+      styleId: {
+        rendered: false,
+        keepOnSplit: true,
+        keepOnSplit: true,
+      },
+
+      customFormat: {
+        default: null,
+        rendered: false,
+        keepOnSplit: true,
       },
 
       importedFontFamily: {
@@ -145,87 +199,55 @@ export const ListItem = Node.create({
           };
         }
       },
-  
-      spacing: {
-        default: null,
-        rendered: false,
+
+      importedFontSize: {
+        parseDOM: (elem) => elem.getAttribute('data-font-size'),
+        renderDOM: (attrs) => {
+          if (!attrs.importedFontSize) return {};
+          return {
+            'data-font-size': attrs.importedFontSize,
+          };
+        },
       },
 
-      indent: {
-        default: null,
-        rendered: false,
-      }
     };
-  },
-
-  addCommands() {
-    return {
-      getCurrentListNode: () => ({ state }) => {
-        return findParentNode((node) => node.type.name === this.name)(state.selection);
-      },
-
-      increaseListIndent: () => ({ commands }) => {
-        if (!commands.sinkListItem(this.name)) { return false }
-        commands.updateNodeStyle();
-        commands.updateOrderedListStyleType();
-        return true;
-      },
-
-      decreaseListIndent: () => ({ commands }) => {
-        const currentList = commands.getCurrentList();
-        const depth = currentList?.depth;
-
-        if (depth === 1) return false;
-        if (!commands.liftListItem(this.name)) { return true }
-        if (!commands.updateNodeStyle()) { return false }
-
-        const currentNode = commands.getCurrentListNode();
-        const currentNodeIndex = currentList?.node?.children.findIndex((child) => child === currentNode.node);
-        const nextNodePos = currentNode?.pos + currentNode?.node.nodeSize;
-        const followingNodes = currentList?.node?.children.slice(currentNodeIndex + 1) || [];
-
-        commands.updateOrderedListStyleType();
-        commands.restartListNodes(followingNodes, nextNodePos);
-        return true;
-      },
-
-      updateNodeStyle: () => ({ tr, state }) => {
-        let list = findParentNode((node) => node.type.name === 'orderedList')(tr.selection);
-        const current = findParentNode((node) => node.type.name === this.name)(state.selection);
-
-        if (!list) return false;
-
-        const firstNodeAttrs = list?.node.children[0]?.attrs;
-        const newPos = tr.mapping.map(current.pos);
-        tr.setNodeMarkup(newPos, undefined, {
-          ...firstNodeAttrs,
-        });
-        return true;
-      },
-    }
   },
 
   addShortcuts() {
     return {
+
       Enter: () => {
-        return this.editor.commands.splitListItem(this.name);
+        return this.editor.commands.first(({ commands }) => [
+          () => commands.splitListItem(),
+        ]);
       },
+
+      Backspace: () => {
+        return this.editor.commands.first(({ commands }) => [
+          () => commands.deleteListItem(),
+        ]);
+      },
+
       'Shift-Enter': () => {
         return this.editor.commands.first(({ commands }) => [
           () => commands.createParagraphNear(),
           () => commands.splitBlock(),
         ]);
       },
+
       Tab: () => {
-        return this.editor.commands.increaseListIndent();
+        return this.editor.commands.first(({ commands }) => [
+          () => commands.increaseListIndent(),
+        ]);
       },
+
       'Shift-Tab': () => {
-        return this.editor.commands.decreaseListIndent();
+        return this.editor.commands.first(({ commands }) => [
+          () => commands.decreaseListIndent(),
+        ]);
       },
+
     };
   },
 
-  addPmPlugins() {
-    return [styledListMarkerPlugin()];
-  },
 });

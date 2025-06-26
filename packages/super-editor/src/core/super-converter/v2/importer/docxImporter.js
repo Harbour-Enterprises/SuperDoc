@@ -97,7 +97,7 @@ export const createDocumentJson = (docx, converter, editor) => {
         attributes: json.elements[0].attributes,
       },
     };
-
+  
     // Not empty document
     if (result.content.length > 1) {
       converter?.telemetry?.trackUsage(
@@ -126,8 +126,8 @@ export const defaultNodeListHandler = () => {
     alternateChoiceHandler,
     runNodeHandlerEntity,
     pictNodeHandlerEntity,
-    paragraphNodeHandlerEntity,
     listHandlerEntity,
+    paragraphNodeHandlerEntity,
     textNodeHandlerEntity,
     lineBreakNodeHandlerEntity,
     annotationNodeHandlerEntity,
@@ -140,7 +140,7 @@ export const defaultNodeListHandler = () => {
     tabNodeEntityHandler,
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
-    standardNodeHandlerEntity, //this should be the last one, bcs this parses everything!!!
+    standardNodeHandlerEntity, // This is the last one as it can handle everything
   ];
 
   const handler = createNodeListHandler(entities);
@@ -464,6 +464,9 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     converter.headers[rId] = { type: 'doc', content: [...schema] };
     sectionType && (converter.headerIds[sectionType] = rId);
   });
+
+  const titlePg = allSectPrElements?.find((el) => el.name === 'w:titlePg');
+  if (titlePg) converter.headerIds.titlePg = true;
 
   footers.forEach((footer) => {
     const { rId, referenceFile, currentFileName } = getHeaderFooterSectionData(footer, docx)

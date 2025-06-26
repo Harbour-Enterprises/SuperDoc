@@ -2,7 +2,7 @@ import { canJoin } from 'prosemirror-transform';
 import { getNodeType } from '../helpers/getNodeType.js';
 import { findParentNode } from '../helpers/findParentNode.js';
 import { isList } from '../helpers/isList.js';
-import { baseBulletList, baseOrderedListDef } from '../helpers/baseListDefinitions';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 /**
  * Join list backwards.
@@ -76,7 +76,7 @@ export const toggleList =
       // then execute `liftListItem` command.
       if (parentList.node.type === listType) {
         const { listId } = parentList.node.attrs;
-        if (editor.converter) editor.converter.numbering = removeListDefinitions(listId, numbering);
+        if (editor.converter) ListHelpers.removeListDefinitions(listId, editor);
         return commands.liftListItem(itemType);
       }
 
@@ -108,8 +108,8 @@ export const toggleList =
     };
 
     // Update the numbering definition for this document
-    const newListId = numbering?.definitions ? getNewListId(numbering.definitions) : null;
-    if (editor.converter) editor.converter.numbering = generateNewListDefinition(newListId, numbering, listType);
+    const newListId = numbering?.definitions ? ListHelpers.getNewListId(editor) : null;
+    if (editor.converter) ListHelpers.generateNewListDefinition(newListId, numbering, listType);
     attributes.listId = newListId;
 
     // This is the case when there is no need to ensureMarks.
@@ -136,49 +136,4 @@ export const toggleList =
       .run();
 
     return result;
-  };
-
-
-  const getNewListId = (definitions) => Math.max(...Object.keys(definitions).map(Number)) + 1;
-
-  const generateNewListDefinition = (newListId, numbering, listType) => {
-    // Generate a new numId to add to numbering.xml
-    const definition = listType.name === 'orderedList' ? baseOrderedListDef : baseBulletList;
-    const newNumbering = { ...numbering };
-  
-    // Generate the new abstractNum definition
-    const newAbstractId = getNewListId(newNumbering.abstracts);
-    const newAbstractDef = {
-      ...definition,
-      attributes: {
-        ...definition.attributes,
-        'w:abstractNumId': String(newAbstractId),
-      }
-    };
-    newNumbering.abstracts[newAbstractId] = newAbstractDef;
-  
-    // Generate the new numId definition
-    const newNumDef = {
-      type: 'element',
-      name: 'w:num',
-      attributes: {
-        'w:numId': String(newListId),
-        'w16cid:durableId': '485517411'
-      },
-      elements: [
-        { name: 'w:abstractNumId', attributes: { 'w:val': String(newAbstractId) } },
-      ]
-    };
-    newNumbering.definitions[newListId] = newNumDef;  
-    return newNumbering;
-  };
-  
-  const removeListDefinitions = (listId, numbering) => {
-    const { definitions, abstracts } = numbering;
-
-    const abstractId = definitions[listId].elements[0].attributes['w:val'];
-    delete definitions[listId];
-    delete abstracts[abstractId];
-
-    return numbering;
   };

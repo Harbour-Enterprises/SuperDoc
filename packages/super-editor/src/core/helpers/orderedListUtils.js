@@ -1,6 +1,6 @@
-export const generateOrderedListIndex = ({ listLevel, lvlText, listNumberingType }) => {
+export const generateOrderedListIndex = ({ listLevel, lvlText, listNumberingType, customFormat }) => {
   const handler = listIndexMap[listNumberingType];
-  return handler ? handler(listLevel, lvlText) : null;
+  return handler ? handler(listLevel, lvlText, customFormat) : null;
 };
 
 const handleDecimal = (path, lvlText) => generateNumbering(path, lvlText, String);
@@ -8,6 +8,8 @@ const handleRoman = (path, lvlText) => generateNumbering(path, lvlText, intToRom
 const handleLowerRoman = (path, lvlText) => handleRoman(path, lvlText).toLowerCase();
 const handleLowerAlpha = (path, lvlText) => handleAlpha(path, lvlText).toLowerCase();
 const handleAlpha = (path, lvlText) => generateNumbering(path, lvlText, (p) => intToAlpha(p));
+const handleOrdinal = (path, lvlText) => generateNumbering(path, lvlText, ordinalFormatter);
+const handleCustom = (path, lvlText, customFormat) => generateFromCustom(path, lvlText, customFormat);
 
 const listIndexMap = {
   decimal: handleDecimal,
@@ -15,6 +17,8 @@ const listIndexMap = {
   upperRoman: handleRoman,
   lowerLetter: handleLowerAlpha,
   upperLetter: handleAlpha,
+  ordinal: handleOrdinal,
+  custom: handleCustom,
 };
 
 const createNumbering = (values, lvlText) => {
@@ -26,6 +30,26 @@ const createNumbering = (values, lvlText) => {
 const generateNumbering = (path, lvlText, formatter) => {
   const formattedValues = path.map(formatter);
   return createNumbering(formattedValues, lvlText);
+};
+
+const ordinalFormatter = (level) => {
+  const suffixes = ['th', 'st', 'nd', 'rd'];
+  const value = level % 100;
+  const suffix = suffixes[(value - 20) % 10] || suffixes[value] || suffixes[0];
+  const p = level + suffix;
+  return p;
+};
+
+const generateFromCustom = (path, lvlText, customFormat) => {
+  if (customFormat !== '001, 002, 003, ...') return generateNumbering(path, lvlText, String)
+
+  const match = customFormat.match(/(\d+)/);
+  if (!match) throw new Error("Invalid format string: no numeric pattern found");
+
+  const sample = match[1];
+  const digitCount = sample.length;
+  const index = path.pop();
+  return String(index).padStart(digitCount, '0');
 };
 
 /**

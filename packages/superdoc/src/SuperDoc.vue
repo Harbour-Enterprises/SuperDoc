@@ -162,8 +162,6 @@ const onEditorCreate = ({ editor }) => {
   doc.setEditor(editor);
   proxy.$superdoc.setActiveEditor(editor);
   proxy.$superdoc.broadcastEditorCreate(editor);
-  proxy.$superdoc.log('[SuperDoc] Editor created', proxy.$superdoc.activeEditor);
-  proxy.$superdoc.log('[SuperDoc] Page styles (pixels)', editor.getPageStyles());
   // Initialize the ai layer
   initAiLayer(true);
 };

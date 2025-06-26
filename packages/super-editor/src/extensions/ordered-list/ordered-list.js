@@ -1,13 +1,9 @@
 import { Node, Attribute } from '@core/index.js';
 import { toKebabCase } from '@harbour-enterprises/common';
 import { findParentNode } from '@helpers/index.js';
-import { orderedListSync as orderedListSyncPlugin, randomId } from './helpers/orderedListSyncPlugin.js';
-import { orderedListMarker as orderedListMarkerPlugin } from './helpers/orderedListMarkerPlugin.js';
-import { wrappingInputRule } from '../../core/inputRules/wrappingInputRule.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { wrappingInputRule } from '@core/inputRules/wrappingInputRule.js';
 
-/**
- * Matches an ordered list to a 1. on input (or any number followed by a dot).
- */
 const inputRegex = /^(\d+)\.\s$/;
 
 export const OrderedList = Node.create({
@@ -16,7 +12,7 @@ export const OrderedList = Node.create({
   group: 'block list',
 
   content() {
-    return `${this.options.itemTypeName}+`;
+    return `${this.options.itemTypeName}`;
   },
 
   addOptions() {
@@ -58,7 +54,7 @@ export const OrderedList = Node.create({
       },
 
       listId: {
-        default: null,
+        keepOnSplit: true,
         parseDOM: (elem) => elem.getAttribute('data-list-id'),
         renderDOM: (attrs) => {
           if (!attrs.listId) return {};
@@ -107,14 +103,10 @@ export const OrderedList = Node.create({
     return {
       toggleOrderedList:
         () =>
-        ({ commands }) => {
-          return commands.toggleList(this.name, this.options.itemTypeName, this.options.keepMarks);
+        ({ tr, editor, chain }) => {
+          return ListHelpers.createNewList({ listType: this, editor, chain });
         },
-  
-      getCurrentList: () => ({ state }) => {
-        return findParentNode((node) => node.type.name === this.name)(state.selection);
-      },
-  
+
       restartListNodes: (followingNodes, pos) => ({ tr, state }) => {      
         let currentNodePos = pos
         const nodes = followingNodes.map((node) => {
@@ -171,79 +163,6 @@ export const OrderedList = Node.create({
           return true;
         },
 
-      /**
-       * Continue list numbering after `liftEmptyBlock` command.
-       * @example
-       * <ol start="1">
-       *  <li>item</li>
-       *  <li>item</li>
-       * </ol>
-       * <ol start="3">
-       *  <li>item</li>
-       *  <li>item</li>
-       * </ol>
-       */
-      liftEmptyBlockAndContinueListOrder:
-        () =>
-        ({ editor, dispatch, state, tr, commands }) => {
-          let list = findParentNode((node) => node.type.name === this.name)(state.selection);
-
-          if (!list) {
-            return false;
-          }
-
-          let canLiftEmptyBlock = editor.can().liftEmptyBlock();
-          let isRootDepth = list.depth === 1; // Only first level lists.
-          let isOneItem = list.node.childCount === 1;
-          let currentListItem = state.selection.$from.node(-1);
-          let isLastItem = list.node.lastChild.eq(currentListItem);
-
-          let canRunCommand = canLiftEmptyBlock && isRootDepth && !isOneItem && !isLastItem;
-
-          if (!canRunCommand) {
-            return false;
-          }
-
-          if (dispatch) {
-            // Save pos before liftEmptyBlock command.
-            let prevListPos = list.pos;
-
-            if (!commands.liftEmptyBlock(state, dispatch)) {
-              return false;
-            }
-
-            let { $from } = tr.selection;
-            let prevListNode = tr.doc.nodeAt(prevListPos);
-            let newListPos = $from.after();
-            let newListNode = tr.doc.nodeAt(newListPos);
-
-            let isPrevOrderedList = prevListNode?.type.name === this.name;
-            let isNewOrderedList = newListNode?.type.name === this.name;
-
-            if (isPrevOrderedList && isNewOrderedList) {
-              let lastOrder = prevListNode.attrs.order || 1;
-              let lastIndex = prevListNode.childCount;
-              let lastSyncId = prevListNode.attrs.syncId;
-              let newOrder = lastIndex + lastOrder;
-              let syncId = !!lastSyncId ? lastSyncId : randomId();
-
-              tr.setNodeMarkup(newListPos, undefined, {
-                ...newListNode.attrs,
-                order: newOrder,
-                syncId,
-              });
-
-              if (!lastSyncId) {
-                tr.setNodeMarkup(prevListPos, undefined, {
-                  ...prevListNode.attrs,
-                  syncId,
-                });
-              }
-            }
-          }
-
-          return true;
-        },
     };
   },
 
@@ -252,14 +171,7 @@ export const OrderedList = Node.create({
       'Mod-Shift-7': () => {
         return this.editor.commands.toggleOrderedList();
       },
-      Enter: () => {
-        return this.editor.commands.liftEmptyBlockAndContinueListOrder();
-      },
     };
-  },
-
-  addPmPlugins() {
-    return [orderedListMarkerPlugin(this.editor), orderedListSyncPlugin()];
   },
 
   addInputRules() {
@@ -286,4 +198,3 @@ export const OrderedList = Node.create({
     ];
   },
 });
-

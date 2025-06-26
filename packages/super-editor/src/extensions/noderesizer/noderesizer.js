@@ -338,6 +338,9 @@ export const NodeResizer = Extension.create({
   name: 'nodeResizer',
 
   addPmPlugins() {
+    const isHeadless = this.editor.options.isHeadless;
+    const hasDocument = typeof document !== 'undefined';
+    if (isHeadless || !hasDocument) return [];
     return [nodeResizer(['image'], this.editor)];
   },
 });

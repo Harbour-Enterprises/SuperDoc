@@ -10,6 +10,8 @@ export const LinkedStylesPluginKey = new PluginKey('linkedStyles');
 export const LinkedStyles = Extension.create({
   name: 'linkedStyles',
 
+  priority: 1, // We need this plugin to run before the list plugins
+
   addPmPlugins() {
     return [createLinkedStylesPlugin(this.editor)];
   },
@@ -162,13 +164,14 @@ export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpac
         if (firstLine) markValue['text-indent'] = firstLine + 'px';
       } else if (key === 'bold') {
         markValue['font-weight'] = 'bold';
-      } else {
+      } else if (typeof value === 'string') {
         markValue[key] = value;
       }
     }
   });
   
-  return Object.entries(markValue).map(([key, value]) => `${key}: ${value}`).join(';');
+  const final = Object.entries(markValue).map(([key, value]) => `${key}: ${value}`).join(';');
+  return final;
 };
 
 /**
