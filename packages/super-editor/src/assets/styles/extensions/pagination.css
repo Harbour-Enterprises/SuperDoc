@@ -73,6 +73,12 @@ on the right if it is inside shape textbox.
   pointer-events: none;
 }
 
+.pagination-break-wrapper {
+  font-weight: normal;
+  font-style: normal;
+  color: initial;
+}
+
 /* TODO: This is going to be enabled again */
 /* .pagination-section-header div[contenteditable="false"]:not([documentmode="viewing"]),
 .pagination-section-footer div[contenteditable="false"]:not([documentmode="viewing"]) {
