@@ -239,7 +239,7 @@ export const inputRulesPlugin = ({ editor, rules }) => {
               return handleDocxPaste(html, editor, view, plugin);
             }
           case "browser-html":
-            return handleHtmlPaste(html, editor, view, plugin);
+            return handleHtmlPaste(html, editor);
         }
 
         return false;
@@ -262,15 +262,32 @@ function isWordHtml(html) {
  * @param {Editor} editor The editor instance.
  * @returns {Boolean} Returns true if the paste was handled.
  */
-const handleHtmlPaste = (html, editor, plugin) => {
+const handleHtmlPaste = (html, editor) => {
   const htmlWithPtSizing = convertEmToPt(html);
   const cleanedHtml = sanitizeHtml(htmlWithPtSizing);
-  const doc = DOMParser.fromSchema(editor.schema).parse(cleanedHtml)
+  const doc = DOMParser.fromSchema(editor.schema).parse(cleanedHtml);
 
-  const { dispatch } = editor.view;
+  const { dispatch, state } = editor.view;
   if (!dispatch) return false;
 
-  dispatch(editor.view.state.tr.replaceSelectionWith(doc, true));
+  // Check if we're pasting into an existing paragraph
+  const { $from } = state.selection;
+  const isInParagraph = $from.parent.type.name === 'paragraph';
+  
+  // Check if the pasted content is a single paragraph
+  const isSingleParagraph = doc.childCount === 1 && 
+                           doc.firstChild.type.name === 'paragraph';
+
+  if (isInParagraph && isSingleParagraph) {
+    // Extract the contents of the paragraph and paste only those
+    const paragraphContent = doc.firstChild.content;
+    const tr = state.tr.replaceSelectionWith(paragraphContent, false);
+    dispatch(tr);
+  } else {
+    // Use the original behavior for other cases
+    dispatch(state.tr.replaceSelectionWith(doc, true));
+  }
+  
   return true;
 };
 

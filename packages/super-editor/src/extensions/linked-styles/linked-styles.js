@@ -96,7 +96,7 @@ const generateDecorations = (state, styles) => {
     // Track the current StyleId
     if (node?.attrs?.styleId) lastStyleId = node.attrs.styleId;
     if (name === 'paragraph' && !node.attrs?.styleId) lastStyleId = null;
-    if (name !== 'text') return;
+    if (name !== 'text' && name !== 'listItem' && name !== 'orderedList') return;
 
     const linkedStyle = getLinkedStyle(lastStyleId, styles);
     if (!linkedStyle) return;

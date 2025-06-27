@@ -393,8 +393,9 @@ export const getAbstractDefinition = (numId, docx) => {
       const tmpl = el.elements?.find((el) => el.name === 'w:tmpl');
       if (!tmpl) return false;
 
+      const hasLevels = el.elements?.some((el) => el.name === 'w:lvl');
       const tmplId = tmpl.attributes?.['w:val'];
-      return tmplId && tmplId === templateId;
+      return tmplId && hasLevels && tmplId === templateId;
     });
   };
 

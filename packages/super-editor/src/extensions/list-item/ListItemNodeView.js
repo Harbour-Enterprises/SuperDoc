@@ -71,7 +71,7 @@ export class ListItemNodeView {
     this.dom = document.createElement("li");
     this.dom.className = "sd-editor-list-item-node-view";
     this.dom.style.fontSize = fontSize;
-    this.dom.style.fontFamily = fontFamily;
+    this.dom.style.fontFamily = fontFamily ? fontFamily : 'inherit';
     this.dom.setAttribute("data-marker-type", orderMarker);
 
     // A container for the numbering

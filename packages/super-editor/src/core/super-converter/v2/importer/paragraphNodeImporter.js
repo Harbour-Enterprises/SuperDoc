@@ -1,5 +1,4 @@
 import { twipsToInches, twipsToLines, twipsToPixels, twipsToPt } from '../../helpers.js';
-import { testForList } from './listImporter.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { mergeTextNodes } from './mergeTextNodes.js';
 import { parseMarks } from './markImporter.js';

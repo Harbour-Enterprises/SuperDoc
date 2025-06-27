@@ -22,13 +22,6 @@ export const baseOrderedListDef = {
     },
     {
       "type": "element",
-      "name": "w:tmpl",
-      "attributes": {
-        "w:val": "EE6417C4"
-      }
-    },
-    {
-      "type": "element",
       "name": "w:lvl",
       "attributes": {
         "w:ilvl": "0",
@@ -526,13 +519,6 @@ export const baseBulletList = {
       "name": "w:multiLevelType",
       "attributes": {
         "w:val": "hybridMultilevel"
-      }
-    },
-    {
-      "type": "element",
-      "name": "w:tmpl",
-      "attributes": {
-        "w:val": "51EC4E08"
       }
     },
     {
@@ -1226,13 +1212,6 @@ export const baseNumbering = {
             },
             {
               "type": "element",
-              "name": "w:tmpl",
-              "attributes": {
-                "w:val": "51EC4E08"
-              }
-            },
-            {
-              "type": "element",
               "name": "w:lvl",
               "attributes": {
                 "w:ilvl": "0",
@@ -1867,13 +1846,6 @@ export const baseNumbering = {
               "name": "w:multiLevelType",
               "attributes": {
                 "w:val": "hybridMultilevel"
-              }
-            },
-            {
-              "type": "element",
-              "name": "w:tmpl",
-              "attributes": {
-                "w:val": "EE6417C4"
               }
             },
             {

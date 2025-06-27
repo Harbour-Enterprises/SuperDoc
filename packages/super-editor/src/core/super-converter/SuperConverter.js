@@ -235,7 +235,17 @@ class SuperConverter {
         fontSizeNormal = Number(rPr?.elements?.find((el) => el.name === 'w:sz')?.attributes['w:val']) / 2;
       });
 
-      const fontSizePt = fontSizeNormal || Number(rElements.find((el) => el.name === 'w:sz')?.attributes['w:val']) / 2 || 12;
+      const rPrDefaults = defaults?.elements?.find((el) => el.name === 'w:rPrDefault');
+      if (rPrDefaults) {
+        const rPr = rPrDefaults.elements?.find((el) => el.name === 'w:rPr');
+        const fonts = rPr?.elements?.find((el) => el.name === 'w:rFonts');
+        typeface = fonts?.attributes['w:ascii'];
+
+        const fontSize = typeface ?? rPr?.elements?.find((el) => el.name === 'w:sz')?.attributes['w:val'];
+        fontSizeNormal = !fontSizeNormal && fontSize ? Number(fontSize) / 2 : null;
+      };
+  
+      const fontSizePt = fontSizeNormal || Number(rElements.find((el) => el.name === 'w:sz')?.attributes['w:val']) / 2 || 10;
       const kern = rElements.find((el) => el.name === 'w:kern')?.attributes['w:val'];
       return { fontSizePt, kern, typeface, panose };
     }
