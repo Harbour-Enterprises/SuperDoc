@@ -1,7 +1,7 @@
 import { Node, Attribute } from '@core/index.js';
 import { toKebabCase } from '@harbour-enterprises/common';
 import { findParentNode } from '@helpers/index.js';
-import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { toggleList } from '@core/commands/index.js';
 import { wrappingInputRule } from '@core/inputRules/wrappingInputRule.js';
 
 const inputRegex = /^(\d+)\.\s$/;
@@ -11,8 +11,10 @@ export const OrderedList = Node.create({
 
   group: 'block list',
 
+  selectable: false,
+
   content() {
-    return `${this.options.itemTypeName}`;
+    return `${this.options.itemTypeName}+`;
   },
 
   addOptions() {
@@ -101,11 +103,9 @@ export const OrderedList = Node.create({
 
   addCommands() {
     return {
-      toggleOrderedList:
-        () =>
-        ({ tr, editor, chain }) => {
-          return ListHelpers.createNewList({ listType: this, editor, chain });
-        },
+      toggleOrderedList: () => (params) => {
+        return toggleList(this.type)(params)
+      },
 
       restartListNodes: (followingNodes, pos) => ({ tr, state }) => {      
         let currentNodePos = pos

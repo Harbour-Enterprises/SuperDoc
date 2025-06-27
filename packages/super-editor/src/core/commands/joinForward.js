@@ -12,4 +12,27 @@ import { joinForward as originalJoinForward } from 'prosemirror-commands';
  * https://prosemirror.net/docs/ref/#commands.joinForward
  */
 //prettier-ignore
-export const joinForward = () => ({ state, dispatch }) => originalJoinForward(state, dispatch);
+export const joinForward = () => ({ state, dispatch }) => {
+  const { selection, doc, schema } = state;
+  const { $from } = selection;
+
+  if (
+    !$from.parent.isTextblock || 
+    $from.parentOffset > 0
+  ) {
+    // Normal case, let original handle it
+    return originalJoinForward(state, dispatch);
+  }
+
+  const beforePos = $from.before();
+  const nodeBefore = doc.resolve(beforePos).nodeBefore;
+  const nodeAfter = doc.resolve(beforePos).nodeAfter;
+
+  // Dont join lists
+  const isList = (node) => node?.type.name === 'orderedList' || node?.type.name === 'bulletList';
+  if (isList(nodeBefore) || isList(nodeAfter)) {
+    return false;
+  }
+
+  return originalJoinForward(state, dispatch);
+};

@@ -3,6 +3,7 @@ import { TextSelection } from 'prosemirror-state';
 import { Attribute } from '../Attribute.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { findParentNode, getNodeType } from '@helpers/index.js';
+import { decreaseListIndent } from './decreaseListIndent.js';
 
 /**
  * Splits one list item into two separate list items.
@@ -15,7 +16,7 @@ import { findParentNode, getNodeType } from '@helpers/index.js';
  * https://github.com/ProseMirror/prosemirror-schema-list/blob/master/src/schema-list.ts#L114
  */
 export const splitListItem = () => (props) => {
-  const { tr, state, dispatch, editor } = props;
+  const { tr, state, editor } = props;
   const type = getNodeType('listItem', state.schema);
   const { $from, $to } = state.selection;
 
@@ -27,11 +28,6 @@ export const splitListItem = () => (props) => {
     return false;
   }
 
-  /** 
-   * In an empty block. If this is a nested list, the wrapping
-   * list item should be split. Otherwise, bail out and let next
-   * command handle lifting.
-   */
   if ($from.parent.content.size === 0 && $from.node(-1).childCount === $from.indexAfter(-1)) {
     return handleSplitInEmptyBlock(props, currentListItem);
   }
@@ -47,34 +43,36 @@ export const splitListItem = () => (props) => {
   // If we have something in the selection, we need to remove it
   if ($from.pos !== $to.pos) tr.delete($from.pos, $to.pos);
 
-  if (!dispatch) return true;
-
   const paragraphNode = $from.node();
   const paraOffset = $from.parentOffset;
-  const tail = paragraphNode.content.cut(paraOffset);
+  const beforeCursor = paragraphNode.content.cut(0, paraOffset);
+  const afterCursor = paragraphNode.content.cut(paraOffset);
 
-  const listItemPos = matchedListItem.pos;
-  const cutPos = $from.pos;
-  const listItemEnd = listItemPos + listItemNode.nodeSize;
+  // Create the first list with content before cursor
+  const firstParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, beforeCursor);
+  const firstListItem = editor.schema.nodes.listItem.create({...listItemNode.attrs}, firstParagraph);
+  const firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
 
-  // This deletes the tail (everything after cursor)
-  tr.delete(cutPos, listItemEnd);
+  // Create the second list with content after cursor
+  const secondParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, afterCursor);
+  const secondListItem = editor.schema.nodes.listItem.create({...listItemNode.attrs}, secondParagraph);
+  const secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
 
-  // Duplicate the list and list item
-  const paragraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, tail);
-  const newListItem = editor.schema.nodes.listItem.create({...listItemNode.attrs}, paragraph);
-  const newList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(newListItem));
-  if (!newListItem || !newList) return false;
+  if (!firstList || !secondList) return false;
 
-  // Insert the new orderedList after the current one
-  const resolvedListPos = tr.doc.resolve(matchedParentList.pos);
-  const updatedParentList = resolvedListPos.nodeAfter;
-  const insertPosition = resolvedListPos.pos + updatedParentList.nodeSize;
-  tr.insert(insertPosition, newList);
+  // Replace the entire original list with the first list
+  const listStart = matchedParentList.pos;
+  const listEnd = matchedParentList.pos + parentListNode.nodeSize;
+  tr.replaceWith(listStart, listEnd, firstList);
 
-  // Set selection inside the new paragraph
-  const newListResolved = tr.doc.resolve(insertPosition);
-  tr.setSelection(TextSelection.near(newListResolved)).scrollIntoView();
+  // Insert the second list after the first one
+  const insertPosition = listStart + firstList.nodeSize;
+  tr.insert(insertPosition, secondList);
+
+  // Set selection at the beginning of the second list's paragraph
+  const secondListStart = insertPosition + 2; // +1 for list, +1 for listItem
+  tr.setSelection(TextSelection.near(tr.doc.resolve(secondListStart)));
+  tr.scrollIntoView();
 
   // Retain any marks
   const marks = state.storedMarks || $from.marks() || [];
@@ -83,7 +81,6 @@ export const splitListItem = () => (props) => {
   }
   tr.setMeta('splitListItem', true);
 
-  dispatch(tr);
   return true;
 };
 
@@ -94,51 +91,62 @@ export const splitListItem = () => (props) => {
  * @returns {boolean} Returns true if the split was handled, false otherwise.
  */
 const handleSplitInEmptyBlock = (props) => {
-  const { tr, state, dispatch, editor } = props;
-  const type = getNodeType('listItem', state.schema);
-  const { $from } = state.selection;
+  const { state, editor, tr } = props;
+  const { schema } = state;
   const extensionAttrs = editor.extensionService.attributes;
 
-  if (
-    $from.depth === 2 || // 3
-    $from.node(-3).type !== type ||
-    $from.index(-2) !== $from.node(-2).childCount - 1
-  ) {
-    return false;
-  }
+  // Find the list item node
+  const listItemNode = findParentNode((node) => node.type.name === 'listItem')(state.selection);
+  if (!listItemNode) return false;
 
-  if (dispatch) {
-    let wrap = Fragment.empty;
-    const depthBefore = $from.index(-1) ? 1 : $from.index(-2) ? 2 : 3;
+  // Check if the list item is empty
+  if (listItemNode.node.content.size > 2) return false;
 
-    // Build a fragment containing empty versions of the structure
-    // from the outer list item to the parent node of the cursor
-    for (let d = $from.depth - depthBefore; d >= $from.depth - 3; d--) {
-      wrap = Fragment.from($from.node(d).copy(wrap));
+  // First, try to outdent
+  const didOutdent = decreaseListIndent()({ editor, tr })
+  if (didOutdent) return true;
+  
+  try {
+    // Find the parent list (orderedList or bulletList)
+    const listTypes = ['orderedList', 'bulletList'];
+    const parentList = findParentNode((node) => listTypes.includes(node.type.name))(state.selection);
+    
+    if (!parentList) {
+      console.error('No parent list found');
+      return false;
     }
 
-    //prettier-ignore
-    const depthAfter = $from.indexAfter(-1) < $from.node(-2).childCount ? 1 : $from.indexAfter(-2) < $from.node(-3).childCount ? 2 : 3;
-
-    const newNextTypeAttrs = Attribute.getSplittedAttributes(
+    // Get attributes for the new paragraph
+    const newParagraphAttrs = Attribute.getSplittedAttributes(
       extensionAttrs,
-      $from.node().type.name,
-      $from.node().attrs,
+      'paragraph',
+      {}
     );
 
-    const nextType = type.contentMatch.defaultType?.createAndFill(newNextTypeAttrs) || undefined;
-    wrap = wrap.append(Fragment.from(type.createAndFill(null, nextType) || undefined));
-    const start = $from.before($from.depth - (depthBefore - 1));
-    tr.replace(start, $from.after(-depthAfter), new Slice(wrap, 4 - depthBefore, 0));
+    // Create a new paragraph node
+    const paragraphType = schema.nodes.paragraph;
+    let newParagraph = paragraphType.createAndFill(newParagraphAttrs);
+    
+    if (!newParagraph) {
+      newParagraph = paragraphType.create();
+    }
 
-    let sel = -1;
-    tr.doc.nodesBetween(start, tr.doc.content.size, (n, pos) => {
-      if (sel > -1) return false;
-      if (n.isTextblock && n.content.size === 0) sel = pos + 1;
-    });
-    if (sel > -1) tr.setSelection(TextSelection.near(tr.doc.resolve(sel))); // Selection
+    // Replace the ENTIRE LIST with a paragraph
+    const listStart = parentList.pos;
+    const listEnd = parentList.pos + parentList.node.nodeSize;
+    
+    tr.replaceWith(listStart, listEnd, newParagraph);
+
+    // Position cursor at start of new paragraph
+    const newPos = listStart + 1;
+    tr.setSelection(TextSelection.near(tr.doc.resolve(newPos)));
+    
     tr.scrollIntoView();
-  }
+    
+    return true;
 
-  return true;
+  } catch (error) {
+    console.error('Error destroying list:', error);
+    return false;
+  }
 };

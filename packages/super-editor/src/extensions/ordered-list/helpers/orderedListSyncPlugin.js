@@ -4,7 +4,6 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 export const orderedListSyncPluginKey = new PluginKey('orderedListSync');
 
-const isDebugging = true;
 export function orderedListSync(editor) {
   const docx = editor.converter.convertedXml;
   return new Plugin({
@@ -44,7 +43,6 @@ export function orderedListSync(editor) {
         // Initialize tracking for this numId if not exists
         if (!listMap.has(numId)) {
           // Get the initial path to understand the starting state
-          const currentList = [];
           const generatedLevels = {};
           const initialPath = docxNumberigHelpers.generateListPath(level, numId, styleId, generatedLevels, docx);
 

@@ -19,6 +19,8 @@ import { findParentNode } from '@helpers/index.js';
  */
 export const generateNewListDefinition = ({ numId, listType, editor }) => {
   // Generate a new numId to add to numbering.xml
+  if (typeof listType === 'string') listType = editor.schema.nodes[listType];
+
   const definition = listType.name === 'orderedList' ? baseOrderedListDef : baseBulletList;
   const numbering = editor.converter.numbering;
   const newNumbering = { ...numbering };
@@ -80,8 +82,12 @@ export const getNewListId = (editor) => {
  * @property {string} listNumberingType - The type of numbering used in the list (e.g., decimal, lowerRoman).
  * @property {string} customFormat - The custom format for the list, if applicable.
  */
-export const getListDefinitionDetails = ({ numId, level, editor }) => {
-  const { definitions, abstracts } = editor.converter.numbering
+export const getListDefinitionDetails = ({ numId, level, listType, editor }) => {
+  const { definitions, abstracts } = editor.converter.numbering;
+  const numDef = definitions[numId];
+  if (!numDef && listType) {
+    generateNewListDefinition({ numId, listType, editor });
+  };
   const abstractId = definitions[numId]?.elements?.find((item) => item.name === "w:abstractNumId")?.attributes?.["w:val"];
   const abstract = abstracts[abstractId];
 
@@ -172,12 +178,11 @@ export const createListItemNodeJSON = ({ level, lvlText, numId, numFmt, start, c
  * @param {Object} param0.contentNode - The content node to be included in the ordered list.
  * @returns {Object} A ProseMirror node representing the ordered list.
  */
-export const createSchemaOrderedListNode = ({ level, numId, editor, contentNode }) => {
+export const createSchemaOrderedListNode = ({ level, numId, listType, editor, contentNode }) => {
   level = Number(level);
   numId = Number(numId);
-  const { start, lvlText, numFmt } = ListHelpers.getListDefinitionDetails({ numId, level, editor });
+  const { start, lvlText, numFmt } = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
   const listNodeJSON = createListItemNodeJSON({ level, lvlText, numFmt, numId, start, contentNode });
-
   const node = {
     type: 'orderedList',
     attrs: {
@@ -195,36 +200,35 @@ export const createSchemaOrderedListNode = ({ level, numId, editor, contentNode 
  * @param {Object} param0
  * @param {string|Object} param0.listType - The type of the list to be created (e.g., 'orderedList', 'bulletList').
  * @param {Editor} param0.editor - The editor instance where the new list will be created.
- * @param {Function} param0.chain - The command chain function to execute the insertion.
  * @param {Object} param0.node - The node to be inserted, if applicable.
  * @param {Object} param0.content - The content to be included in the new list.
  * @returns {Function} A command function that inserts the new list into the editor.
  */
-export const createNewList = ({ listType, editor, chain }) => {
+export const createNewList = ({ listType, tr, editor }) => {
   const numId = ListHelpers.getNewListId(editor);
-
-  // Parse the listType if its a string
-  if (typeof node === 'string') listType = editor.schema.nodes[listType];
+  if (typeof listType === 'string') listType = editor.schema.nodes[listType];
 
   ListHelpers.generateNewListDefinition({ numId, listType, editor });
-  const { state } = editor;
-  const { $from } = state.selection;
-  const content = $from.parent;
 
-  const level = 0; // For new lists we start at level 0
+  const { selection } = tr;
+  const { $from } = selection;
+  const content = $from.parent;
+  const level = 0;
+
   const listNode = ListHelpers.createSchemaOrderedListNode({
     level,
     numId,
+    listType,
     editor,
     contentNode: content?.toJSON(),
   });
 
-  // insert the new list node
-  const parentDepth = $from.depth;
-  const replaceFrom = $from.before(parentDepth)
-  const replaceTo = $from.after(parentDepth);
-  return insertNewList(chain, replaceFrom, replaceTo, listNode);
+  const replaceFrom = $from.before($from.depth);
+  const replaceTo = $from.after($from.depth);
+
+  return insertNewList(tr, replaceFrom, replaceTo, listNode);
 };
+
 
 /**
  * Get the current list item from the editor state.
@@ -304,40 +308,29 @@ export const convertListItemToParagraph = ({ state, tr, currentNode, replaceFrom
 
 /**
  * Insert a new list into the ProseMirror transaction.
- * @param {Function} chain - The command chain function to execute the insertion.
  * @param {number} replaceFrom - The starting position where the list will be inserted.
  * @param {number} replaceTo - The ending position where the list will be inserted.
  * @param {Node} listNode - The new list node to be inserted.
  * @param {Array} [marks=[]] - Optional array of marks to be applied to the new list item.
  * @returns {Function} A command function that performs the insertion and sets the selection.
  */
-export const insertNewList = (chain, replaceFrom, replaceTo, listNode, marks = []) => {
-  return chain()
-    .command(({ tr, dispatch }) => {
-      // Replace the content with the new list
-      tr.replaceWith(replaceFrom, replaceTo, listNode);
-      tr.ensureMarks(marks);
-      
-      // Calculate the selection position inside the new list item
-      // The list structure is: list > listItem > paragraph
-      // So we need to go: replaceFrom + list(1) + listItem(1) + paragraph(1) = replaceFrom + 3
-      const newSelectionPos = replaceFrom + 3;
-      
-      try {
-        const $pos = tr.doc.resolve(newSelectionPos);
-        tr.setSelection(TextSelection.near($pos));
-      } catch (error) {
-        // Fallback: try to find a valid position near the inserted content
-        console.warn('Could not set selection at calculated position, using fallback');
-        const $pos = tr.doc.resolve(replaceFrom + 1);
-        tr.setSelection(TextSelection.near($pos));
-      }
-      
-      dispatch(tr);
-      return true;
-    })
-    .run();
+
+export const insertNewList = (tr, replaceFrom, replaceTo, listNode, marks = []) => {
+  tr.replaceWith(replaceFrom, replaceTo, listNode);
+  tr.ensureMarks(marks);
+
+  // Find the actual end position of the text content in the list
+  const listStart = replaceFrom;
+  const $paragraphStart = tr.doc.resolve(listStart + 2);
+  const paragraphNode = $paragraphStart.parent;
+  const endPos = $paragraphStart.pos + paragraphNode.content.size;
+  
+  const $endPos = tr.doc.resolve(endPos);
+  tr.setSelection(TextSelection.near($endPos));
+
+  return true;
 };
+
 
 /**
  * Get style definitions for a list item based on its styleId and numId.
@@ -387,6 +380,184 @@ export const addInlineTextMarks = (currentNode, filteredMarks) => {
 };
 
 /**
+ * Migration for lists v1 to v2
+ * This function checks if the editor has any lists that need to be migrated from v1 to v2.
+ * It splits list nodes that have more than one item into single-item lists,
+ * @param {Editor} editor - The editor instance containing the lists to be migrated.
+ * @return {void}
+ */
+export const migrateListsToV2IfNecessary = (editor) => {
+  const numbering = editor.converter.numbering;
+  if (!numbering) return;
+
+  const { state } = editor;
+  const { doc } = state;
+  const { dispatch } = editor.view;
+
+  const LIST_TYPES = ['orderedList', 'bulletList'];
+  const replacements = [];
+
+  // Collect all list nodes that need to be replaced
+  doc.descendants((node, pos) => {
+    if (!LIST_TYPES.includes(node.type.name)) return;
+
+    // Skip if it's already a single-item list (optional optimization)
+    if (node.content?.content?.length <= 1) return;
+
+    const { extracted } = splitListNodeFully(node, editor, 0);    
+    if (extracted.length > 0) {
+      replacements.push({ 
+        from: pos, 
+        to: pos + node.nodeSize, 
+        replacement: extracted 
+      });
+    }
+  });
+
+  // Apply replacements in reverse order to avoid position drift
+  if (replacements.length > 0) {
+    let tr = state.tr;
+    
+    for (let i = replacements.length - 1; i >= 0; i--) {
+      const { from, to, replacement } = replacements[i];
+      tr = tr.replaceWith(from, to, replacement);
+    }
+    
+    dispatch(tr);
+  }
+};
+
+/**
+ * Extract nested lists recursively from a ProseMirror node.
+ * @param {Node} node - The ProseMirror node to process.
+ * @param {Editor} editor - The editor instance where the node is being processed.
+ * @param {number} nestingLevel - The current nesting level of the list.
+ * @param {number|null} sharedNumId - The shared numId from the parent list
+ * @return {Object} An object containing the cleaned node and an array of extracted lists.
+ */
+function extractNestedListsRecursively(node, editor, nestingLevel, sharedNumId) {
+  // Handle text nodes and leaf nodes
+  if (node.isText || !node.content || !node.content.content) {
+    return { cleanedNode: node, extractedLists: [] };
+  }
+
+  const extractedLists = [];
+  const cleanedContent = [];
+
+  for (const child of node.content.content) {
+    if (['orderedList', 'bulletList'].includes(child.type.name)) {
+      // Extract nested lists - pass down the shared numId
+      const { extracted: nestedSplitLists } = splitListNodeFully(child, editor, nestingLevel + 1, sharedNumId);
+      extractedLists.push(...nestedSplitLists);
+    } else {
+      // Recursively process non-list children
+      const { cleanedNode: cleanedChild, extractedLists: deepExtracted } =
+        extractNestedListsRecursively(child, editor, nestingLevel, sharedNumId);
+
+      cleanedContent.push(cleanedChild);
+      extractedLists.push(...deepExtracted);
+    }
+  }
+
+  // Create the cleaned node with nested lists removed
+  const cleanedNode = node.type.create(
+    node.attrs,
+    cleanedContent.length > 0 ? cleanedContent : undefined,
+    node.marks
+  );
+
+  return { cleanedNode, extractedLists };
+}
+
+/**
+ * Split a list node fully into single-item lists.
+ * @param {Node} listNode - The ProseMirror node representing the list to be split.
+ * @param {Editor} editor - The editor instance where the list node is being processed.
+ * @param {number} [nestingLevel=0] - The current nesting level of the list.
+ * @param {number|null} [parentSharedNumId=null] - The shared numId from the parent list, if any.
+ * @returns {Object} An object containing an array of extracted single-item lists.
+ */
+function splitListNodeFully(listNode, editor, nestingLevel = 0, parentSharedNumId = null) {
+  const extracted = [];
+  const listType = listNode.type.name; // 'orderedList' or 'bulletList'
+
+  // Get the list numId which will be used for all children unless otherwise specified
+  let sharedNumId = parentSharedNumId;
+  if (!sharedNumId) {
+    let numId = parseInt(listNode.attrs?.listId);
+
+    // In some legacy cases, we might not find any list ID at all but we can infer
+    // the list style from the list-style-type attribute.
+    if (!numId) {
+      const listStyleType = listNode.attrs?.['list-style-type'];
+      const currentListType = listStyleType === 'bullet' ? 'bulletList' : 'orderedList';
+      numId = getNewListId(editor);
+      generateNewListDefinition({
+        numId,
+        listType: currentListType,
+        editor,
+      });
+    }
+    sharedNumId = numId;
+  }
+
+  for (const listItemNode of listNode.content.content) {
+    // Process the list item to extract any nested lists
+    const {
+      cleanedNode,
+      extractedLists
+    } = extractNestedListsRecursively(listItemNode, editor, nestingLevel, sharedNumId);
+
+    // Create a single-item list with the cleaned content
+    if (cleanedNode.content && cleanedNode.content.content.length > 0) {
+      const singleItemList = createSingleItemList(
+        listType,
+        cleanedNode,
+        listNode.attrs,
+        editor,
+        nestingLevel,
+        sharedNumId
+      );
+      extracted.push(singleItemList);
+    }
+
+    // Add any extracted nested lists
+    extracted.push(...extractedLists);
+  }
+
+  return { extracted };
+}
+
+/**
+ * Create a single-item list (v2) from a list item node (v1)
+ * @param {string} listType The type of the list (e.g., 'orderedList', 'bulletList').
+ * @param {Node} listItemNode The ProseMirror node representing the list item.
+ * @param {Object} originalAttrs The original attributes of the list item node.
+ * @param {Editor} editor The editor instance where the list item will be created.
+ * @param {number} [nestingLevel=0] The nesting level of the list item.
+ * @param {number} sharedNumId The shared numId for the list item,
+ * @returns {Node} A ProseMirror node representing a single-item list.
+ */
+function createSingleItemList(listType, listItemNode, originalAttrs, editor, nestingLevel = 0, sharedNumId) {
+  const { attrs } = listItemNode;
+  const listLevel = attrs.listLevel;
+  const level = Math.max(0, listLevel?.length - 1) || nestingLevel || 0;
+
+  const contentNodes = listItemNode.content?.content || [];
+  const contentJSON = contentNodes.map(node => node.toJSON());
+  const result = createSchemaOrderedListNode({
+    level,
+    numId: sharedNumId, // Use the shared numId
+    listType,
+    editor,
+    contentNode: contentJSON[0],
+    nestingLevel,
+  });
+  return result;
+}
+
+
+/**
  * ListHelpers is a collection of utility functions for managing lists in the editor.
  * It includes functions for creating, modifying, and retrieving list items and definitions,
  * as well as handling schema nodes and styles.
@@ -411,6 +582,7 @@ export const ListHelpers = {
   createSchemaOrderedListNode,
   createListItemNodeJSON,
   addInlineTextMarks,
+  migrateListsToV2IfNecessary,
 
   // Base list definitions
   baseOrderedListDef,

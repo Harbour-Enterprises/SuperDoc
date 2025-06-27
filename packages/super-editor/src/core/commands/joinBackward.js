@@ -14,4 +14,27 @@ import { joinBackward as originalJoinBackward } from 'prosemirror-commands';
  * https://prosemirror.net/docs/ref/#commands.joinBackward
  */
 //prettier-ignore
-export const joinBackward = () => ({ state, dispatch }) => originalJoinBackward(state, dispatch);
+export const joinBackward = () => ({ state, dispatch }) => {
+  const { selection, doc, schema } = state;
+  const { $from } = selection;
+
+  if (
+    !$from.parent.isTextblock || 
+    $from.parentOffset > 0
+  ) {
+    // Normal case, let original handle it
+    return originalJoinBackward(state, dispatch);
+  }
+
+  const beforePos = $from.before();
+  const nodeBefore = doc.resolve(beforePos).nodeBefore;
+  const nodeAfter = doc.resolve(beforePos).nodeAfter;
+
+  // Dont join lists
+  const isList = (node) => node?.type.name === 'orderedList' || node?.type.name === 'bulletList';
+  if (isList(nodeBefore) || isList(nodeAfter)) {
+    return false;
+  }
+
+  return originalJoinBackward(state, dispatch);
+};

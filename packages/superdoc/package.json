@@ -47,7 +47,7 @@
     "release:next": "release-it --ci --increment=patch --no.conventional-changelog --preRelease next --npm.tag next",
     "clean": "rm -rf dist",
     "pack:local": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz",
-    "pack": "npm run build && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz"
+    "pack": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz"
   },
   "dependencies": {
     "buffer-crc32": "^1.0.0",

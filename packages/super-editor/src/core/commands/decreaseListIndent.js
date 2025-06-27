@@ -6,12 +6,12 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
  * If the current item is at level 1 or higher, it decreases the level and updates the list structure.
  * @returns {Function} A ProseMirror command function.
  */
-export const decreaseListIndent = () => ({ editor, tr, dispatch }) => {
+export const decreaseListIndent = () => ({ editor, tr }) => {
   const { state } = editor;
   const $from = state.selection.$from;
   const content = $from.parent;
   const currentNode = ListHelpers.getCurrentListItem(state);
-  if (!currentNode || !dispatch) return false;
+  if (!currentNode) return false;
 
   const parentList = ListHelpers.getParentOrderedList(state);
   if (!parentList) return false;
@@ -29,16 +29,15 @@ export const decreaseListIndent = () => ({ editor, tr, dispatch }) => {
   }
 
   if (newLevel < 0) {
-    const success = ListHelpers.convertListItemToParagraph({ state, tr, currentNode, replaceFrom, replaceTo });
-    if (!success) return false;
-    dispatch(tr);
-    return true;
+    return false;
   }
 
   try {
+    const listType = parentList.node.type.name === 'orderedList' ? 'orderedList' : 'bulletList';
     const listNode = ListHelpers.createSchemaOrderedListNode({
       level: newLevel,
       numId,
+      listType,
       editor,
       contentNode: content?.toJSON(),
     });
@@ -48,7 +47,6 @@ export const decreaseListIndent = () => ({ editor, tr, dispatch }) => {
     tr.ensureMarks(newMarks);
     ListHelpers.setSelectionInsideNewList(tr, replaceFrom);
 
-    dispatch(tr);
     return true;
   } catch (error) {
     console.error('Error decreasing indent:', error);

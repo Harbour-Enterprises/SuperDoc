@@ -9,7 +9,7 @@ import { findParentNode } from '@helpers/index.js';
  * @returns {Function} A ProseMirror command function.
  */
 export const deleteListItem = () => (props) => {
-  const { tr, state, dispatch } = props;
+  const { tr, state } = props;
   const { $from } = state.selection;
   
   // Early return if not at the beginning of a text node
@@ -26,8 +26,6 @@ export const deleteListItem = () => (props) => {
 
   const currentParagraphNode = findParentNode((node) => node.type.name === 'paragraph')(state.selection);
 
-  if (!dispatch) return true;
-
   const listFrom = parentList.pos;
   const listTo = listFrom + parentList.node.nodeSize;
   const paragraphNode = currentListItem.node.content.firstChild;
@@ -38,7 +36,6 @@ export const deleteListItem = () => (props) => {
    */
   if (!paragraphNode || paragraphNode.content.size === 0) {
     tr.delete(listFrom, listTo);
-    dispatch(tr.scrollIntoView());
     return true;
   }
 
@@ -59,6 +56,5 @@ export const deleteListItem = () => (props) => {
   const $newPos = tr.doc.resolve(newPos);
   tr.setSelection(TextSelection.near($newPos));
 
-  dispatch(tr.scrollIntoView());
   return true;
 };

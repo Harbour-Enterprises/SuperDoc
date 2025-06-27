@@ -30,7 +30,7 @@ import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 import { setWordSelection } from './helpers/setWordSelection.js';
 import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
-
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -1197,8 +1197,15 @@ export class Editor extends EventEmitter {
     if (this.options.collaborationIsReady) return;
     console.debug('🔗 [super-editor] Collaboration ready');
 
+    // Add lists v2 migration for collaborative docs
+    this.migrateListsToV2IfNecessary();
+
     this.options.onCollaborationReady({ editor, ydoc });
     this.options.collaborationIsReady = true;
+
+    const { tr } = this.state;
+    tr.setMeta('collaborationReady', true);
+    this.view.dispatch(tr);
 
     if (!this.options.isNewFile) {
       this.initPagination();
@@ -1428,7 +1435,6 @@ export class Editor extends EventEmitter {
    * @returns {Object} The updated prosemirror document
    */
   #prepareDocumentForImport(doc) {
-
     const newState = EditorState.create({
       schema: this.schema,
       doc,
@@ -1441,6 +1447,10 @@ export class Editor extends EventEmitter {
 
     const updatedState = newState.apply(tr);
     return updatedState.doc;
+  }
+
+  migrateListsToV2IfNecessary() {
+    return ListHelpers.migrateListsToV2IfNecessary(this);
   }
 
   /**

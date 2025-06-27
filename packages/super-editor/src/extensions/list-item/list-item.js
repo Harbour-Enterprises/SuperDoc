@@ -99,7 +99,6 @@ export const ListItem = Node.create({
 
       listLevel: {
         default: null,
-        keepOnSplit: true,
         parseDOM: (elem) => {
           let listLevel = elem.getAttribute('data-list-level');
           try {
@@ -114,7 +113,7 @@ export const ListItem = Node.create({
           };
         },
       },
-      
+
       // JC = justification. Expect left, right, center
       lvlJc: {
         keepOnSplit: true,
@@ -217,15 +216,11 @@ export const ListItem = Node.create({
     return {
 
       Enter: () => {
-        return this.editor.commands.first(({ commands }) => [
-          () => commands.splitListItem(),
-        ]);
+        return this.editor.commands.splitListItem();
       },
 
       Backspace: () => {
-        return this.editor.commands.first(({ commands }) => [
-          () => commands.deleteListItem(),
-        ]);
+        return this.editor.commands.deleteListItem();
       },
 
       'Shift-Enter': () => {

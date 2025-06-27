@@ -790,7 +790,7 @@ function translateList(params) {
 
   const paragraphNode = node.content[0]?.content[0];
   const outputNode = exportSchemaToJson({ ...params, node: paragraphNode });
-  const pPr = outputNode.elements.find((n) => n.name === 'w:pPr');
+  const pPr = outputNode.elements?.find((n) => n.name === 'w:pPr');
   if (pPr && pPr.elements && numPrTag) pPr.elements.unshift(numPrTag);
 
   const indentTag = restoreIndent(listItem.attrs.indent);
