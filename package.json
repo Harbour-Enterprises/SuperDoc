@@ -16,7 +16,7 @@
     "watch:super-editor": "npm run build:watch --workspace=packages/super-editor",
     "build:superdoc": "npm run build --workspace=packages/superdoc",
     "build:super-editor": "npm run build --workspace=packages/super-editor",
-    "build": "npm run build:super-editor && npm run build:superdoc",
+    "build": "npm run build:super-editor && npm run build:superdoc && cp packages/superdoc/dist/superdoc.umd.js /Users/mattconndev/Documents/Development/superdoc-extension/lib",
     "release:superdoc": "npm run release --workspace=packages/superdoc",
     "release:next": "npm run release:next --workspace=packages/superdoc",
     "clean:packages": "rm -rf ./packages/*/dist",

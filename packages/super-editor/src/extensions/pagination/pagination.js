@@ -272,7 +272,8 @@ const calculatePageBreaks = (view, editor, sectionData) => {
   if (!editor.converter) return DecorationSet.empty;
 
   const pageSize = editor.converter.pageStyles?.pageSize;
-  const { width, height } = pageSize; // Page width and height are in inches
+  const width = pageSize?.width; // Page width in inches
+  const height = pageSize?.height; // Page height in inches
 
   // We can't calculate page breaks without a page width and height
   // Under normal docx operation, these are always set

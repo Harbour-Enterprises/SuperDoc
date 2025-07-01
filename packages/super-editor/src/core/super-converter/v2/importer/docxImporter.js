@@ -367,7 +367,7 @@ function getStyleDefinitions(docx) {
   // Track latent style exceptions
   const latentStyles = elements.find((el) => el.name === 'w:latentStyles');
   const matchedLatentStyles = [];
-  latentStyles?.elements.forEach((el) => {
+  latentStyles?.elements?.forEach((el) => {
     const { attributes } = el;
     const match = styleDefinitions.find((style) => style.attributes['w:styleId'] === attributes['w:name']);
     if (match) matchedLatentStyles.push(el);

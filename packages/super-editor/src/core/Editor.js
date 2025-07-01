@@ -1010,7 +1010,8 @@ export class Editor extends EventEmitter {
   getMaxContentSize() {
     if (!this.converter) return {};
     const { pageSize = {}, pageMargins = {} } = this.converter.pageStyles ?? {};
-    const { width, height } = pageSize;
+    const width = pageSize.width;
+    const height = pageSize.height;
     const { top = 0, bottom = 0, left = 0, right = 0 } = pageMargins;
 
     // All sizes are in inches so we multiply by 96 to get pixels
@@ -1048,8 +1049,8 @@ export class Editor extends EventEmitter {
     proseMirror.setAttribute('aria-description', '');
 
     // Set fixed dimensions and padding that won't change with scaling
-    element.style.width = pageSize.width + 'in';
-    element.style.minWidth = pageSize.width + 'in';
+      element.style.width = pageSize.width + 'in';
+      element.style.minWidth = pageSize.width + 'in';
     element.style.minHeight = pageSize.height + 'in';
     element.style.paddingLeft = pageMargins.left + 'in';
     element.style.paddingRight = pageMargins.right + 'in';

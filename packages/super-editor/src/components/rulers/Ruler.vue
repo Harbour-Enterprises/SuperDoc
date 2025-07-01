@@ -43,7 +43,17 @@ const initRuler = () => {
   if (props.editor.options.mode !== 'docx') return;
   const rulerItems = [];
 
-  const { pageMargins: docMargins, pageSize: docSize } = props.editor.getPageStyles();
+  const pageStyles = props.editor.getPageStyles();
+  let docMargins = pageStyles?.pageMargins;
+  let docSize = pageStyles?.pageSize;
+  
+  // Fallback to standard US Letter size if pageSize is missing
+  if (!docSize) {
+    docSize = { width: 8.5, height: 11 };
+  }
+  if (!docMargins) {
+    docMargins = { top: 1, right: 1, bottom: 1, left: 1 };
+  }
   pageSize.value = docSize;
   pageMargins.value = docMargins;
 
