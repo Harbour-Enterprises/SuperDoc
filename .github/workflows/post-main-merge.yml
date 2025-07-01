@@ -1,0 +1,59 @@
+name: Bump feature/gha version on direct merge
+
+on:
+  push:
+    branches:
+      - gha
+
+permissions:
+  contents: write
+
+jobs:
+  detect-and-bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout gha
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Fetch feature/gha
+        run: git fetch origin feature/gha:feature/gha
+
+      - name: Detect merge from feature/gha
+        id: detect
+        run: |
+          # grab both parents (if there aren't two, it's not a merge)
+          parents=($(git rev-parse HEAD^1 HEAD^2 2>/dev/null)) || true
+          if [ -z "${parents[1]}" ]; then
+            echo "from_feature=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # check if parent #2 is an ancestor of feature/gha
+          if git merge-base --is-ancestor "${parents[1]}" feature/gha; then
+            echo "from_feature=true"  >> $GITHUB_OUTPUT
+          else
+            echo "from_feature=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Bump patch & reset next
+        if: steps.detect.outputs.from_feature == 'true'
+        id: bump
+        run: |
+          version=$(jq -r '.version' package.json)
+          base=${version%-next.*}
+          IFS='.' read -r major minor patch <<< "$base"
+          patch=$((patch + 1))
+          new_version="$major.$minor.$patch-next.0"
+          jq ".version = \"$new_version\"" package.json > tmp.json && mv tmp.json package.json
+          echo "new_version=$new_version" >> $GITHUB_OUTPUT
+
+      - name: Commit & push bump
+        if: steps.detect.outputs.from_feature == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add package.json
+          git commit -m "chore: bump version → ${{ steps.bump.outputs.new_version }}"
+          git push origin feature/gha
