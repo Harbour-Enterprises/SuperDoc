@@ -43,12 +43,12 @@ jobs:
         if: steps.detect.outputs.from_feature == 'true'
         id: bump
         run: |
-          version=$(jq -r '.version' package.json)
+          version=$(jq -r '.version' packages/superdoc/package.json)
           base=${version%-next.*}
           IFS='.' read -r major minor patch <<< "$base"
           patch=$((patch + 1))
           new_version="$major.$minor.$patch-next.0"
-          jq ".version = \"$new_version\"" package.json > tmp.json && mv tmp.json package.json
+          jq ".version = \"$new_version\"" packages/superdoc/package.json > tmp.json && mv tmp.json packages/superdoc/package.json
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
 
       - name: Commit & push bump
