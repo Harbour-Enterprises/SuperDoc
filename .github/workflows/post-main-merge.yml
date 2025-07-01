@@ -14,27 +14,27 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1) Get full history of gha for merge detection
       - name: Checkout gha (full history)
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      # 2) Also fetch the remote feature/gha branch
+      # 2) Fetch feature/gha so we can inspect it
       - name: Fetch feature/gha
         run: git fetch origin feature/gha:feature/gha
 
-      # 3) Detect whether we just merged feature/gha (either via ff or merge-commit)
+      # 3) Detect whether we just merged feature/gha
       - name: Detect merge or fast-forward from feature/gha
         id: detect
         run: |
           from_feature=false
 
-          # 3a) Fast-forward case: HEAD now exactly matches feature/gha
+          # Fast-forward case: HEAD now matches feature/gha
           if [ "$(git rev-parse HEAD)" = "$(git rev-parse feature/gha)" ]; then
             from_feature=true
           else
-            # 3b) “real” merge-commit case: look for two parents,
-            #     and see if the second parent is an ancestor of feature/gha
+            # Merge-commit case: check second parent
             parents=($(git log -1 --pretty=%P))
             if [ "${#parents[@]}" -eq 2 ] && \
                git merge-base --is-ancestor "${parents[1]}" feature/gha; then
@@ -44,23 +44,26 @@ jobs:
 
           echo "from_feature=$from_feature" >> $GITHUB_OUTPUT
 
-      # 4) If we did merge, bump the patch and reset the “next” counter
+      # 4) Switch to feature/gha so our bump lands there
+      - name: Checkout feature/gha for bump
+        if: steps.detect.outputs.from_feature == 'true'
+        run: git checkout feature/gha
+
+      # 5) Bump patch & reset next in packages/superdoc/package.json
       - name: Bump patch & reset next
         if: steps.detect.outputs.from_feature == 'true'
         id: bump
         run: |
           version=$(jq -r '.version' packages/superdoc/package.json)
-          base=${version%-next.*}                         # strip "-next.X"
-          IFS='.' read -r major minor patch <<< "$base"   # split into 3 segments
-          patch=$((patch + 1))                            # bump patch
+          base=${version%-next.*}
+          IFS='.' read -r major minor patch <<< "$base"
+          patch=$((patch + 1))
           new_version="$major.$minor.$patch-next.0"
-
-          jq ".version = \"$new_version\"" packages/superdoc/package.json > tmp.json && \
-            mv tmp.json packages/superdoc/package.json
-
+          jq ".version = \"$new_version\"" packages/superdoc/package.json > tmp.json
+          mv tmp.json packages/superdoc/package.json
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
 
-      # 5) Commit & push that back to feature/gha
+      # 6) Commit & push bump back to feature/gha
       - name: Commit & push bump
         if: steps.detect.outputs.from_feature == 'true'
         run: |
