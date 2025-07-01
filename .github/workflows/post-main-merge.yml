@@ -1,4 +1,5 @@
-name: Bump feature/gha version on direct merge 
+# .github/workflows/bump-feature-gha-on-direct-merge.yml
+name: Bump feature/gha version on direct merge
 
 on:
   push:
@@ -11,8 +12,9 @@ permissions:
 jobs:
   detect-and-bump:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout gha
+      - name: Checkout gha (full history)
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
@@ -23,16 +25,16 @@ jobs:
       - name: Detect merge from feature/gha
         id: detect
         run: |
-          # grab both parents (if there aren't two, it's not a merge)
-          parents=($(git rev-parse HEAD^1 HEAD^2 2>/dev/null)) || true
-          if [ -z "${parents[1]}" ]; then
+          # get the two parents of the HEAD commit (if any)
+          parents=($(git log -1 --pretty=%P))
+          # if there's not exactly two parents, it's not a merge commit → skip
+          if [ "${#parents[@]}" -ne 2 ]; then
             echo "from_feature=false" >> $GITHUB_OUTPUT
             exit 0
           fi
-
-          # check if parent #2 is an ancestor of feature/gha
+          # parents[1] is the merged-in commit; check if it's an ancestor of feature/gha
           if git merge-base --is-ancestor "${parents[1]}" feature/gha; then
-            echo "from_feature=true"  >> $GITHUB_OUTPUT
+            echo "from_feature=true" >> $GITHUB_OUTPUT
           else
             echo "from_feature=false" >> $GITHUB_OUTPUT
           fi
