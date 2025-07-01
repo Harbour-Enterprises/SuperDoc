@@ -1,5 +1,5 @@
-# .github/workflows/bump-feature-gha-on-direct-merge.yml
-name: Bump feature/gha version on direct merge
+# .github/workflows/bump-feature-gha-on-merge.yml
+name: Bump feature/gha version on merge (ff or merge-commit)
 
 on:
   push:
@@ -10,47 +10,58 @@ permissions:
   contents: write
 
 jobs:
-  detect-and-bump:
+  bump-feature-gha:
     runs-on: ubuntu-latest
 
     steps:
+      # 1) Get full history of gha so we can inspect parents
       - name: Checkout gha (full history)
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
+      # 2) Also fetch the remote feature/gha branch
       - name: Fetch feature/gha
         run: git fetch origin feature/gha:feature/gha
 
-      - name: Detect merge from feature/gha
+      # 3) Detect whether we just merged feature/gha (either via ff or merge-commit)
+      - name: Detect merge or fast-forward from feature/gha
         id: detect
         run: |
-          # get the two parents of the HEAD commit (if any)
-          parents=($(git log -1 --pretty=%P))
-          # if there's not exactly two parents, it's not a merge commit → skip
-          if [ "${#parents[@]}" -ne 2 ]; then
-            echo "from_feature=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          # parents[1] is the merged-in commit; check if it's an ancestor of feature/gha
-          if git merge-base --is-ancestor "${parents[1]}" feature/gha; then
-            echo "from_feature=true" >> $GITHUB_OUTPUT
+          from_feature=false
+
+          # 3a) Fast-forward case: HEAD now exactly matches feature/gha
+          if [ "$(git rev-parse HEAD)" = "$(git rev-parse feature/gha)" ]; then
+            from_feature=true
           else
-            echo "from_feature=false" >> $GITHUB_OUTPUT
+            # 3b) “real” merge-commit case: look for two parents,
+            #     and see if the second parent is an ancestor of feature/gha
+            parents=($(git log -1 --pretty=%P))
+            if [ "${#parents[@]}" -eq 2 ] && \
+               git merge-base --is-ancestor "${parents[1]}" feature/gha; then
+              from_feature=true
+            fi
           fi
 
+          echo "from_feature=$from_feature" >> $GITHUB_OUTPUT
+
+      # 4) If we did merge, bump the patch and reset the “next” counter
       - name: Bump patch & reset next
         if: steps.detect.outputs.from_feature == 'true'
         id: bump
         run: |
-          version=$(jq -r '.version' packages/superdoc/package.json)
-          base=${version%-next.*}
-          IFS='.' read -r major minor patch <<< "$base"
-          patch=$((patch + 1))
+          version=$(jq -r '.version' package.json)
+          base=${version%-next.*}                         # strip "-next.X"
+          IFS='.' read -r major minor patch <<< "$base"   # split into 3 segments
+          patch=$((patch + 1))                            # bump patch
           new_version="$major.$minor.$patch-next.0"
-          jq ".version = \"$new_version\"" packages/superdoc/package.json > tmp.json && mv tmp.json packages/superdoc/package.json
+
+          jq ".version = \"$new_version\"" package.json > tmp.json && \
+            mv tmp.json package.json
+
           echo "new_version=$new_version" >> $GITHUB_OUTPUT
 
+      # 5) Commit & push that back to feature/gha
       - name: Commit & push bump
         if: steps.detect.outputs.from_feature == 'true'
         run: |
