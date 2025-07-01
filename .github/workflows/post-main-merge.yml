@@ -1,4 +1,4 @@
-name: Bump feature/gha version on direct merge
+name: Bump feature/gha version on direct merge 
 
 on:
   push:
