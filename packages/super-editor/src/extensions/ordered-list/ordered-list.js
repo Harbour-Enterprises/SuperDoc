@@ -69,18 +69,7 @@ export const OrderedList = Node.create({
 
       'list-style-type': {
         default: 'decimal',
-        renderDOM: (attrs) => {
-          let listStyleType = attrs['list-style-type'];
-          if (!listStyleType) return {};
-
-          if (listStyleType === 'lowerLetter') {
-            listStyleType = 'lowerAlpha';
-          }
-
-          return {
-            style: `list-style-type: ${toKebabCase(listStyleType)};`,
-          };
-        },
+        rendered: false,
       },
 
       attributes: {
