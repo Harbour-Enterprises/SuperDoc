@@ -25,8 +25,6 @@ export const Collaboration = Extension.create({
     this.options.ydoc = this.editor.options.ydoc;
     const undoPlugin = createUndoPlugin();
 
-    // Listen for document lock changes
-    initDocumentLockHandler(this.options.ydoc, this.editor);
     initSyncListener(this.options.ydoc, this.editor, this);
     initDocumentListener({ ydoc: this.options.ydoc, editor: this.editor });
 
