@@ -483,6 +483,35 @@ export const cleanUpListsWithAnnotations = (fieldsToDelete = [], editor) => {
   editor.view.dispatch(tr);
 };
 
+export const cleanUpParagraphWithAnnotations = (fieldsToDelete = [], editor) => {
+  const { state } = editor;
+  const { doc, tr } = state;
+  let annotations = fieldAnnotationHelpers.findFieldAnnotationsByFieldId(fieldsToDelete, state) || [];
+  const nodesToDelete = [];
+  annotations.forEach((annotation) => {
+    let { pos, node } = annotation;
+    let newPosFrom = tr.mapping.map(pos);
+
+    const resolvedPos = doc.resolve(newPosFrom);
+    const parent = resolvedPos.parent;
+
+    let currentNode = tr.doc.nodeAt(newPosFrom);
+    if (node.eq(currentNode) && parent?.children?.length < 2) {
+      nodesToDelete.push({ pos: newPosFrom, node: parent });
+    }
+  });
+
+  if (!nodesToDelete.length) return;
+
+  nodesToDelete
+    .sort((a, b) => b.pos - a.pos)
+    .forEach(({ pos, node }) => {
+      tr.delete(pos, pos + node.nodeSize);
+    });
+
+  editor.view.dispatch(tr);
+}
+
 export const AnnotatorHelpers = {
   getFieldAttrs,
   processTables,
@@ -493,4 +522,5 @@ export const AnnotatorHelpers = {
   deleteHeaderFooterFieldAnnotations,
   resetHeaderFooterFieldAnnotations,
   cleanUpListsWithAnnotations,
+  cleanUpParagraphWithAnnotations
 };
