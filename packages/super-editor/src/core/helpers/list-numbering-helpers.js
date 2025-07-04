@@ -43,6 +43,10 @@ export const generateNewListDefinition = ({ numId, listType, editor }) => {
   // Update the editor's numbering with the new definition
   editor.converter.numbering = newNumbering;
 
+  // Emit a change to numbering event
+  const change = { numDef: newNumDef, abstractDef: newAbstractDef, editor }
+  editor.emit('list-definitions-change', { change, numbering: newNumbering, editor });
+
   return { abstract: newAbstractDef, definition: newNumDef };
 };
 
@@ -355,6 +359,10 @@ export const insertNewList = (tr, replaceFrom, replaceTo, listNode, marks = []) 
  */
 export const getListItemStyleDefinitions = ({ styleId, node, numId, level, editor, tries }) => {  
   if (tries) return {};
+
+  if (typeof numId === 'string') numId = Number(numId);
+  if (typeof level === 'string') level = Number(level);
+
   const docx = { ...editor?.converter?.convertedXml };
   const newNumbering = { ...editor?.converter?.numbering };
 

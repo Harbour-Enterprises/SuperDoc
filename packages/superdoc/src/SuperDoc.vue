@@ -253,6 +253,10 @@ const onEditorException = ({ error, editor }) => {
   proxy.$superdoc.emit('exception', { error, editor });
 };
 
+const onEditorListdefinitionsChange = (params) => {
+  proxy.$superdoc.emit('list-definitions-change', params);
+};
+
 const editorOptions = (doc) => {
   const options = {
     pagination: proxy.$superdoc.config.pagination,
@@ -281,6 +285,7 @@ const editorOptions = (doc) => {
     onCommentsLoaded,
     onCommentsUpdate: onEditorCommentsUpdate,
     onCommentLocationsUpdate: onEditorCommentLocationsUpdate,
+    onListDefinitionsChange: onEditorListdefinitionsChange,
     ydoc: doc.ydoc,
     collaborationProvider: doc.provider || null,
     isNewFile: doc.isNewFile || false,

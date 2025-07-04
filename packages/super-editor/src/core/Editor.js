@@ -30,7 +30,8 @@ import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 import { setWordSelection } from './helpers/setWordSelection.js';
 import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
-import { migrateListsToV2IfNecessary } from '@core/migrations/0.14-listsv2/listsv2migration.js';
+import { migrateListsToV2IfNecessary, migrateParagraphFieldsListsV2 } from '@core/migrations/0.14-listsv2/listsv2migration.js';
+import { createLinkedChildEditor } from '@core/child-editor/index.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -109,6 +110,7 @@ import { migrateListsToV2IfNecessary } from '@core/migrations/0.14-listsv2/lists
  * @property {Function} [onCollaborationReady] - Called when collaboration is ready
  * @property {Function} [onPaginationUpdate] - Called when pagination updates
  * @property {Function} [onException] - Called when an exception occurs
+ * @property {Function} [onListDefinitionsChange] - Called when list definitions change
  * @property {Function} [handleImageUpload] - Handler for image uploads
  * @property {Object} [telemetry] - Telemetry configuration
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
@@ -222,6 +224,7 @@ export class Editor extends EventEmitter {
     onCollaborationReady: () => null,
     onPaginationUpdate: () => null,
     onException: () => null,
+    onListDefinitionsChange: () => null,
     // async (file) => url;
     handleImageUpload: null,
 
@@ -318,9 +321,6 @@ export class Editor extends EventEmitter {
 
     this.mount(this.options.element);
 
-    // If we are running headless, we can stop here
-    if (this.options.isHeadless) return;
-
     this.on('create', this.options.onCreate);
     this.on('update', this.options.onUpdate);
     this.on('selectionUpdate', this.options.onSelectionUpdate);
@@ -336,19 +336,24 @@ export class Editor extends EventEmitter {
     this.on('collaborationReady', this.#onCollaborationReady);
     this.on('paginationUpdate', this.options.onPaginationUpdate);
     this.on('comment-positions', this.options.onCommentLocationsUpdate);
+    this.on('list-definitions-change', this.options.onListDefinitionsChange);
 
-    this.initializeCollaborationData();
-    this.initDefaultStyles();
+    if (!this.options.isHeadless) {
+      this.initializeCollaborationData();
+      this.initDefaultStyles();
+    };
 
-    setTimeout(() => {
-      this.setDocumentMode(this.options.documentMode);
-    }, 50)
+    if (!this.options.ydoc) this.migrateListsToV2();
+
+    this.setDocumentMode(this.options.documentMode);      
 
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady
     if (!this.options.ydoc) {
-      this.initPagination();
-      this.#initComments();
+      if (!this.options.isChildEditor) {
+        this.initPagination();
+        this.#initComments();
+      }
     }
   }
 
@@ -383,7 +388,7 @@ export class Editor extends EventEmitter {
     this.on('commentsLoaded', this.options.onCommentsLoaded);
     this.on('commentClick', this.options.onCommentClicked);
     this.on('locked', this.options.onDocumentLocked);
-
+    this.on('list-definitions-change', this.options.onListDefinitionsChange);
   }
 
   mount(el) {
@@ -530,7 +535,7 @@ export class Editor extends EventEmitter {
    */
   setDocumentMode(documentMode) {
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
-    if (!this.extensionService) return;
+    if (!this.extensionService || !this.state) return;
 
     if (this.options.role === 'viewer') cleanedMode = 'viewing';
     if (this.options.role === 'suggester' && cleanedMode === 'editing') cleanedMode = 'suggesting';
@@ -657,7 +662,7 @@ export class Editor extends EventEmitter {
    */
   #registerPluginByNameIfNotExists(name) {
     const plugin = this.extensionService?.plugins.find((p) => p.key.startsWith(name));
-    const hasPlugin = this.state.plugins.find((p) => p.key.startsWith(name));
+    const hasPlugin = this.state?.plugins?.find((p) => p.key.startsWith(name));
     if (plugin && !hasPlugin) this.registerPlugin(plugin);
     return plugin?.key;
   }
@@ -716,6 +721,7 @@ export class Editor extends EventEmitter {
    * @returns {void}
    */
   registerPlugin(plugin, handlePlugins) {
+    if (!this.state?.plugins) return;
     const plugins =
       typeof handlePlugins === 'function'
         ? handlePlugins(plugin, [...this.state.plugins])
@@ -1393,6 +1399,17 @@ export class Editor extends EventEmitter {
   }
 
   /**
+   * Create a child editor linked to this editor.
+   * This is useful for creating header/footer editors that are linked to the main editor.
+   * Or paragraph fields that rely on the same underlying document and list defintions
+   * @param {EditorOptions} options - Options for the child editor
+   * @returns {Editor} A new child editor instance linked to this editor
+   */
+  createChildEditor(options) {
+    return createLinkedChildEditor(this, options);
+  }
+
+  /**
    * Get page styles
    */
   /**
@@ -1461,7 +1478,9 @@ export class Editor extends EventEmitter {
   }
 
   migrateListsToV2() {
-    return migrateListsToV2IfNecessary(this);
+    if (this.options.isHeaderOrFooter) return [];
+    const replacements = migrateListsToV2IfNecessary(this);
+    return replacements;
   }
 
   /**
@@ -1790,7 +1809,17 @@ export class Editor extends EventEmitter {
   prepareForAnnotations(annotationValues = []) {
     const { tr } = this.state;
     const newTr = AnnotatorHelpers.processTables({ state: this.state, tr, annotationValues });
-    this.view.dispatch(newTr);  
+    this.view.dispatch(newTr);
+  }
+
+  /**
+   * Migrate paragraph fields to lists V2 structure if necessary.
+   * @param {FieldValue[]} annotationValues - List of field values to migrate.
+   * @returns {Promise<FieldValue[]>} - Returns a promise that resolves to the migrated
+   */
+  async migrateParagraphFields(annotationValues = []) {
+    if (!Array.isArray(annotationValues) || !annotationValues.length) return annotationValues;
+    return await migrateParagraphFieldsListsV2(annotationValues, this);
   }
 
   /**

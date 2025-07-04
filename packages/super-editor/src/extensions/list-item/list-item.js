@@ -140,25 +140,28 @@ export const ListItem = Node.create({
         keepOnSplit: true,
         default: null,
         parseDOM: (elem) => elem.getAttribute('data-num-id'),
+        renderDOM: (attrs) => {
+          if (!attrs.numId) return {};
+          return {
+            'data-num-id': attrs.numId,
+          };
+        }
       },
 
       numPrType: {
         rendered: false,
-        default: null,
+        default: 'inline',
         keepOnSplit: true,
       },
 
       level: {
-        default: null,
-        rendered: false,
-        keepOnSplit: true,
         parseDOM: (elem) => {
-          return elem.getAttribute('data-item-level');
+          return elem.getAttribute('data-level');
         },
         renderDOM: (attrs) => {
-          if (!attrs.level) return {};
+          if (attrs.level === undefined || attrs.level === null) return {};
           return {
-            'data-item-level': JSON.stringify(attrs.level),
+            'data-level': JSON.stringify(attrs.level),
           };
         },
       },
@@ -223,7 +226,7 @@ export const ListItem = Node.create({
 
   addShortcuts() {
     return {
-
+ 
       Enter: () => {
         return this.editor.commands.splitListItem();
       },

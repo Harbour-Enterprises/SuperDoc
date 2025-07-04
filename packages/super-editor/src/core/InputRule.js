@@ -1,11 +1,12 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
-import { Fragment, DOMParser } from 'prosemirror-model';
+import { Fragment, DOMParser as PMDOMParser } from 'prosemirror-model';
 import { CommandService } from './CommandService.js';
 import { chainableEditorState } from './helpers/chainableEditorState.js';
 import { getHTMLFromFragment } from './helpers/getHTMLFromFragment.js';
 import { getTextContentFromNodes } from './helpers/getTextContentFromNodes.js';
 import { isRegExp } from './utilities/isRegExp.js';
 import { handleDocxPaste } from './inputRules/docx-paste/docx-paste.js';
+import { flattenListsInHtml } from './inputRules/html/html-helpers.js';
 
 
 export class InputRule {
@@ -244,9 +245,11 @@ export function isWordHtml(html) {
  * @returns {Boolean} Returns true if the paste was handled.
  */
 export function handleHtmlPaste(html, editor) {
-  const htmlWithPtSizing = convertEmToPt(html);
+  const flatHtml = flattenListsInHtml(html, editor);
+
+  const htmlWithPtSizing = convertEmToPt(flatHtml);
   const cleanedHtml = sanitizeHtml(htmlWithPtSizing);
-  const doc = DOMParser.fromSchema(editor.schema).parse(cleanedHtml);
+  const doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
 
   const { dispatch, state } = editor.view;
   if (!dispatch) return false;

@@ -24,6 +24,9 @@ const IS_DEBUGGING = false;
  * @param {Editor} editor - The editor instance
  * @returns {ListItemNodeView} The node view instance
  */
+// Add a registry to track active node views
+const activeListItemNodeViews = new Set();
+
 export class ListItemNodeView {
   constructor(node, getPos, decorations, editor) {
     this.node = node;
@@ -31,15 +34,17 @@ export class ListItemNodeView {
     this.decorations = decorations;
     this.view = editor.view;
     this.getPos = getPos;
-    this.editor = editor;
+
+    // Register this node view
+    activeListItemNodeViews.add(this);
 
     this.#init();
   }
 
   #init() {
     const { attrs } = this.node;
-    const { styleId, listLevel, listNumberingType, lvlText, numId, level, indent: inlineIndent, customFormat } = attrs;
-  
+    const { listLevel, listNumberingType, lvlText, numId, level, indent: inlineIndent, customFormat } = attrs;
+    
     let orderMarker = '';
     if (listLevel) {
       if (listNumberingType !== 'bullet') {
@@ -52,7 +57,7 @@ export class ListItemNodeView {
       } else {
         orderMarker = docxNumberigHelpers.normalizeLvlTextChar(lvlText);
       }
-    };
+    }
 
     const pos = this.getPos();
     const { fontSize, fontFamily } = getTextStyleMarksFromLinkedStyles({
@@ -60,12 +65,6 @@ export class ListItemNodeView {
       pos,
       editor: this.editor,
     });
-  
-    // Gather visible indents
-    const defs = getListItemStyleDefinitions({ styleId, node: this.node, numId, level, editor: this.editor });
-    const visibleIndent = getVisibleIndent(defs.stylePpr, defs.numDefPpr, inlineIndent);
-    let absoluteLeft = visibleIndent.left - (visibleIndent.hanging || 0);
-    if (!absoluteLeft && absoluteLeft !== 0) absoluteLeft = 0;
 
     // Container for the entire node view
     this.dom = document.createElement("li");
@@ -89,6 +88,24 @@ export class ListItemNodeView {
     this.contentDOM = document.createElement("div");
     this.contentDOM.className = "sd-editor-list-item-content-dom";
 
+    this.dom.appendChild(this.numberingDOM);
+    this.dom.appendChild(this.contentDOM);
+
+    // Apply initial indent styling
+    this.refreshIndentStyling();
+  }
+
+  refreshIndentStyling() {
+    const { attrs } = this.node;
+    const { styleId, numId, level, indent: inlineIndent } = attrs;
+
+    // Gather visible indents
+    const defs = getListItemStyleDefinitions({ styleId, node: this.node, numId, level, editor: this.editor });
+    const visibleIndent = getVisibleIndent(defs.stylePpr, defs.numDefPpr, inlineIndent);
+    
+    let absoluteLeft = visibleIndent.left - (visibleIndent.hanging || 0);
+    if (!absoluteLeft && absoluteLeft !== 0) absoluteLeft = 0;
+
     // Place the content at the visible indent left
     let contentLeft = visibleIndent.left;
     if (IS_DEBUGGING) {
@@ -99,13 +116,10 @@ export class ListItemNodeView {
     if (visibleIndent.left === absoluteLeft) {
       absoluteLeft -= 24;
     }
+
+    // Apply the styling
     this.contentDOM.style.marginLeft = `${contentLeft}px`;
-
-    // We use the absolute left for the numbering (left - hanging)
     this.numberingDOM.style.left = `${absoluteLeft}px`;
-
-    this.dom.appendChild(this.numberingDOM);
-    this.dom.appendChild(this.contentDOM);
   }
 
   handleNumberingClick = (event) => {
@@ -114,9 +128,24 @@ export class ListItemNodeView {
   }
 
   destroy() {
+    // Unregister this node view
+    activeListItemNodeViews.delete(this);
     this.numberingDOM.removeEventListener('click', this.handleNumberingClick);
   }
-};
+}
+
+// Export function to refresh all active list item node views
+export function refreshAllListItemNodeViews() {
+  activeListItemNodeViews.forEach(nodeView => {
+    try {
+      nodeView.refreshIndentStyling();
+    } catch (error) {
+      console.error('Error refreshing list item node view:', error);
+      // Remove broken node views from the set
+      activeListItemNodeViews.delete(nodeView);
+    }
+  });
+}
 
 /**
  * Get the text style marks from a list item

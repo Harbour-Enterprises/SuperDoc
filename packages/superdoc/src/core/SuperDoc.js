@@ -94,6 +94,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {(params: { editor: Editor }) => void} [onEditorUpdate] Callback when document is updated
  * @property {(params: { error: Error }) => void} [onException] Callback when an exception is thrown
  * @property {(params: { isRendered: boolean }) => void} [onCommentsListChange] Callback when the comments list is rendered
+ * @property {(params: {})} [onListDefinitionsChange] Callback when the list definitions change
  * @property {string} [format] The format of the document (docx, pdf, html)
  * @property {Object[]} [editorExtensions] The extensions to load for the editor
  * @property {boolean} [isInternal] Whether the SuperDoc is internal
@@ -182,6 +183,7 @@ export class SuperDoc extends EventEmitter {
     onEditorUpdate: () => null,
     onCommentsListChange: () => null,
     onException: () => null,
+    onListDefinitionsChange: () => null,
 
     // Image upload handler
     // async (file) => url;
@@ -340,6 +342,7 @@ export class SuperDoc extends EventEmitter {
     this.on('editor-update', this.config.onEditorUpdate);
     this.on('content-error', this.onContentError);
     this.on('exception', this.config.onException);
+    this.on('list-definitions-change', this.config.onListDefinitionsChange);
   }
 
   /**

@@ -1,6 +1,7 @@
+import { getAllFieldAnnotations } from '@extensions/field-annotation/fieldAnnotationHelpers/index.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
-const isDebugging = true;
+const isDebugging = false;
 const log = (...args) => {
   if (isDebugging) console.debug("[lists v2 migration]", ...args);
 };
@@ -17,9 +18,8 @@ const log = (...args) => {
  */
 export const migrateListsToV2IfNecessary = (editor) => {
   const replacements = [];
-  if (!editor.options.ydoc) return replacements;
 
-  log('\n\n\nATTEMPTING MIGRATIONS')
+  log('ATTEMPTING MIGRATIONS');
 
   const numbering = editor.converter.numbering;
   if (!numbering) return replacements;
@@ -33,8 +33,8 @@ export const migrateListsToV2IfNecessary = (editor) => {
   // Collect all list nodes that need to be replaced
   let lastListEndPos = 0;
   doc.descendants((node, pos) => {
-    if (!LIST_TYPES.includes(node.type.name)) return;
-  
+    if (!LIST_TYPES.includes(node.type.name)) return;  
+
     if (pos < lastListEndPos) return;
 
     const extracted = flattenListCompletely(node, editor, 0);
@@ -51,8 +51,8 @@ export const migrateListsToV2IfNecessary = (editor) => {
   });
 
   // Apply replacements in reverse order to avoid position drift
+  let tr = state.tr;
   if (replacements.length > 0) {
-    let tr = state.tr;
     
     for (let i = replacements.length - 1; i >= 0; i--) {
       const { from, to, replacement, listNode } = replacements[i];
@@ -72,13 +72,15 @@ export const migrateListsToV2IfNecessary = (editor) => {
           nodesToInsert.push(item.node);
         }
       }
-      
+
       log('NODES TO INSERT', nodesToInsert);
       tr = tr.replaceWith(from, to, nodesToInsert);
     }
-    
-    dispatch(tr);
   }
+
+  tr.setMeta('listsv2migration', replacements);
+  editor.options.migrated = true;
+  dispatch(tr);
 
   return replacements;
 };
@@ -94,10 +96,18 @@ export const migrateListsToV2IfNecessary = (editor) => {
 function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = null) {
   const result = [];
   const listTypes = ['orderedList', 'bulletList'];
+  const currentListType = listNode.type.name;
 
   const needsMigration = shouldMigrateList(listNode);
+  const needsDefinition = checkValidDefinition(listNode, editor);
   log("Needs migration?", needsMigration);
-  if (!needsMigration) return result;
+  if (!needsMigration) {
+    if (needsDefinition) {
+      return generateMissingListDefinition(listNode, editor)
+    } else {
+      return result;
+    }
+  }
 
   let numId = parseInt(listNode.attrs?.listId);
   log('LIST ID', numId, 'SHARED NUM ID', sharedNumId);
@@ -105,7 +115,6 @@ function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = nu
   if (!listHasDef || (!sharedNumId && !numId)) {
     // In some legacy cases, we might not find any list ID at all but we can infer
     // the list style from the list-style-type attribute.
-    const currentListType = listNode.type.name;
     numId = ListHelpers.getNewListId(editor);
     log('Genearted new list ID', numId, 'for list type', currentListType);
     ListHelpers.generateNewListDefinition({
@@ -214,7 +223,7 @@ const shouldMigrateList = (listItem) => {
 
     // After v2, we expect level and listNumberingType to be defined
     const { level, listNumberingType } = attrs || {};
-    if (typeof level !== 'number' || !listNumberingType) {
+    if (typeof level === undefined || !listNumberingType) {
       return true;
     } 
 
@@ -224,4 +233,102 @@ const shouldMigrateList = (listItem) => {
   }
 
   return false;
+}
+
+/**
+ * Check if a list definition is valid.
+ * This function checks if a list node has a valid definition for lists v2 based on its attributes.
+ * It returns true if the definition is valid, and false otherwise.
+ * @param {Object} listNode - The list node to check for a valid definition.
+ * @param {Editor} editor - The editor instance to use for checking the definition.
+ * @returns {boolean} True if the list definition is valid, false otherwise.
+ */
+const checkValidDefinition = (listNode, editor) => {
+  const listType = listNode.type.name;
+  const listItem = listNode.content.firstChild;
+  const { attrs } = listItem;
+  const { numId, level } = attrs || {};
+  const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
+  const { abstract } = listDef || {};
+
+  if (!abstract) return true;
+  return false;
+}
+
+/**
+ * Generate a missing list definition for a list node.
+ * This function creates a new list definition based on the attributes of the list item
+ * and the editor instance. It returns the generated list definition.
+ * @param {Object} listNode - The list node to generate a definition for.
+ * @param {Editor} editor - The editor instance to use for generating the definition.
+ * @returns {Object} The generated list definition.
+ */
+const generateMissingListDefinition = (listNode, editor) => {
+  const listType = listNode.type.name;
+  const listItem = listNode.content.firstChild;
+  const { attrs } = listItem;
+  const { numId } = attrs || {};
+  return ListHelpers.generateNewListDefinition({
+    numId,
+    listType,
+    editor,
+  });
+}
+
+/**
+  * Migrate paragraph fields to lists v2.
+  * This function processes all field annotations in the editor state,
+  * specifically those with type 'html', and migrates their content to the new lists v2 format.
+  * It creates a child editor for each field annotation, processes the HTML content,
+  * and updates the input values accordingly.
+  * @param {Array} annotationValues - The array of field annotations to migrate.
+  * @returns {Promise<Array>} A promise that resolves to an array of updated field annotations
+  *                            with their input values migrated to the new lists v2 format.
+ */
+export const migrateParagraphFieldsListsV2 = async (annotationValues = [], editor) => {
+  const annotations = getAllFieldAnnotations(editor.state);
+  const newValues = [];
+    
+  // Process annotations sequentially
+  for (const annotation of annotations) {
+    const type = annotation.node?.attrs?.type;
+    
+    const matchedAnnotation = annotationValues.find((v) => v.input_id === annotation.node.attrs.fieldId);
+    
+    if (!type || type !== 'html') {
+      newValues.push(matchedAnnotation);
+      continue;
+    }
+
+    const value = matchedAnnotation?.input_value;
+    if (!value) continue;
+    
+    // Wait for each child editor to complete
+    await new Promise((resolve, reject) => {
+      // const tempDiv = document.createElement('div');
+      const mockDocument = editor.options.mockDocument;
+      const element = mockDocument.createElement('div');
+      element.id = `child-editor-${Date.now()}-${Math.random()}`;
+
+      const childEditor = editor.createChildEditor({
+        element: { mount: element },
+        html: value,
+        onCreate: ({ editor: localEditor }) => {
+          const { migrated } = localEditor.options;
+          
+          if (migrated) {
+            const newHTML = localEditor.getHTML();
+            matchedAnnotation.input_value = newHTML;
+            newValues.push(matchedAnnotation);
+          }
+          resolve();
+        },
+        onError: (error) => {
+          reject(error);
+        }
+      });
+    });
+  }
+  
+  return newValues;
 }

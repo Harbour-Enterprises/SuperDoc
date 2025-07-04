@@ -1,19 +1,26 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { docxNumberigHelpers } from '@core/super-converter/v2/importer/listImporter.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { refreshAllListItemNodeViews } from '@extensions/list-item/ListItemNodeView.js';
 
 export const orderedListSyncPluginKey = new PluginKey('orderedListSync');
 
 export function orderedListSync(editor) {
+  let hasInitialized = false;
   const docx = editor.converter.convertedXml;
   return new Plugin({
     key: orderedListSyncPluginKey,
 
     appendTransaction(transactions, oldState, newState) {
-      const isFromPlugin = transactions.some(tr => tr.getMeta('orderedListSync'));
-      if (isFromPlugin || !transactions.some(tr => tr.docChanged)) {
+      const updateNodeViews = transactions.some((tr) => tr.getMeta('updatedListItemNodeViews'));
+      if (updateNodeViews || !hasInitialized) refreshAllListItemNodeViews();
+
+      const isFromPlugin = transactions.some((tr) => tr.getMeta('orderedListSync'));
+      if (isFromPlugin || !transactions.some((tr) => tr.docChanged)) {
         return null;
       };
+
+      hasInitialized = true;
 
       const tr = newState.tr;
       tr.setMeta('orderedListSync', true);

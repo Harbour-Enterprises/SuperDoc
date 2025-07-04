@@ -134,6 +134,19 @@ export class FieldAnnotationView {
 
   buildHTMLView() {
     let { displayLabel, rawHtml } = this.node.attrs;
+  
+    if (!this.editor.options.isHeadless && !!rawHtml) {
+      try {
+        const tempDiv = document.createElement('div');
+        const childEditor = this.editor.createChildEditor({
+          element: tempDiv,
+          html: rawHtml,
+        });
+        rawHtml = childEditor.view.dom.innerHTML;
+      } catch (error) {
+        console.warn('Error parsing HTML in FieldAnnotationView:', error);
+      }
+    }
 
     let { annotation, content } = this.#createAnnotation();
 
@@ -304,3 +317,4 @@ export class FieldAnnotationView {
     });
   }
 }
+

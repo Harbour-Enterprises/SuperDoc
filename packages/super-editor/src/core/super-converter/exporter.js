@@ -21,6 +21,9 @@ import { baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/base-l
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 import { sanitizeHtml } from '../InputRule.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { flattenListsInHtml } from '@core/inputRules/html/html-helpers.js';
+
 
 /**
  * @typedef {Object} ExportParams
@@ -776,10 +779,19 @@ function addNewImageRelationship(params, imagePath) {
  * @returns {XmlReadyNode} The translated list node
  */
 function translateList(params) {
-  const { node } = params;
+  const { node, editor } = params;
 
   const listItem = node.content[0];
   const { numId, level } = listItem.attrs;
+  const listType = node.type.name;
+  const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
+  if (!listDef) {
+    ListHelpers.generateNewListDefinition({
+      numId,
+      listType,
+      editor,
+    })
+  }
 
   let numPrTag;
 
