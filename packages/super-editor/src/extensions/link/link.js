@@ -1,6 +1,25 @@
 import { Mark, Attribute } from '@core/index.js';
 import { getMarkRange } from '@/core/helpers/getMarkRange.js';
 
+/**
+ * Move `from` forward and `to` backward until the first / last
+ * non-whitespace character is reached.
+ */
+const trimRange = (doc, from, to) => {
+  // trim leading spaces until a non-space character is found
+  while (from < to && !/\S/.test(doc.textBetween(from, from + 1, ''))) {
+    from += 1;
+  }
+  // trim trailing spaces until a non-space character is found
+  while (to > from && !/\S/.test(doc.textBetween(to - 1, to, ''))) {
+    to -= 1;
+  }
+
+  // This should now normalize the from and to selections to require
+  // starting and ending without whitespace
+  return { from, to };
+};
+
 export const Link = Mark.create({
   name: 'link',
 
@@ -82,11 +101,27 @@ export const Link = Mark.create({
               from = range.from;
               to = range.to;
             }
+          } else {
+            // When the current selection spans outside a link but its start
+            // or end is within a link, operate only on that link, not on the
+            // full selection. This prevents replacing surrounding non-link text.
+            const fromLinkRange = getMarkRange(selection.$from, linkMarkType);
+            const toLinkRange = getMarkRange(selection.$to, linkMarkType);
+
+            if (fromLinkRange || toLinkRange) {
+              // Prefer the range that actually lies inside a link. If both ends
+              // are in (possibly different) links we pick the first one.
+              const linkRange = fromLinkRange || toLinkRange;
+              from = linkRange.from;
+              to = linkRange.to;
+            }
           }
 
-          const currentText = state.doc.textBetween(from, to, ' ');
-          const finalText = (text ?? currentText) || href || '';
+          ({ from, to } = trimRange(state.doc, from, to));
 
+          const currentText = state.doc.textBetween(from, to);
+          const computedText = text ?? currentText;
+          const finalText = (computedText || href || '').trim();
           let tr = state.tr;
 
           // Replace the text if it has changed (or if there was no text yet).
