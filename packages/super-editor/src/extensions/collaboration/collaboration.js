@@ -185,8 +185,9 @@ const initSyncListener = (ydoc, editor, extension) => {
   provider.on('synced', emit);
 };
 
-export const generateCollaborationData = (editor) => {
+export const generateCollaborationData = async (editor) => {
   const ydoc = prosemirrorToYDoc(editor.state.doc, 'supereditor');
   initializeMetaMap(ydoc, editor);
+  await updateYdocDocxData(editor, ydoc);
   return encodeStateAsUpdate(ydoc);
 };
