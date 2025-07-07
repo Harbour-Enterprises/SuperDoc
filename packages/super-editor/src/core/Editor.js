@@ -236,6 +236,8 @@ export class Editor extends EventEmitter {
     
     isHeaderFooterChanged: false,
     isCustomXmlChanged: false,
+    
+    parentEditor: null,
   };
 
   /**

@@ -231,7 +231,7 @@ export function handleTableCellNode(
 
   return {
     type: 'tableCell',
-    content: nodeListHandler.handler({ ...params, nodes: node.elements }),
+    content: nodeListHandler.handler({ ...params, nodes: node.elements, mainParent: node }),
     attrs: attributes,
   };
 }
