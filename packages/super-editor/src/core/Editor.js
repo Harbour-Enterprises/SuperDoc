@@ -583,10 +583,10 @@ export class Editor extends EventEmitter {
 
   /**
    * Export the yjs binary from the current state.
-   * @returns {Uint8Array} The exported yjs binary
+   * @returns {Promise<Uint8Array>} The exported yjs binary
    */
-  generateCollaborationUpdate() {
-    return generateCollaborationData(this);
+  async generateCollaborationUpdate() {
+    return await generateCollaborationData(this);
   }
 
   /**

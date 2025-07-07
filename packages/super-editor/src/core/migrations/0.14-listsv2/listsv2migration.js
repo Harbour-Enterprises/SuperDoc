@@ -121,6 +121,8 @@ function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = nu
       numId,
       listType: currentListType,
       editor,
+      listStyleTypeMigrated: listNode.attrs.listStyleTypeMigrated,
+      baseLevel,
     });
   }
 

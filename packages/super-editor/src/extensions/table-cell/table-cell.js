@@ -1,5 +1,6 @@
 import { Node, Attribute } from '@core/index.js';
 import { createCellBorders } from './helpers/createCellBorders.js';
+import { toHex } from 'color2k';
 
 export const TableCell = Node.create({
   name: 'tableCell',
@@ -56,6 +57,16 @@ export const TableCell = Node.create({
       }, */
       
       background: {
+        parseDOM: (elem) => {
+          const bgColor = elem.style.backgroundColor;
+          if (bgColor) {
+            let hexColor = toHex(bgColor);
+            if (hexColor.startsWith('#')) {
+              return { color: hexColor.slice(1) };
+            }
+          }
+          return null;
+        },
         renderDOM({ background }) {
           if (!background) return {};
           const { color } = background || {};

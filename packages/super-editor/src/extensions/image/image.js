@@ -125,6 +125,23 @@ export const Image = Node.create({
     return [
       {
         tag: this.options.allowBase64 ? 'img[src]' : 'img[src]:not([src^="data:"])',
+        getAttrs: (node) => {
+          const attrs = {};
+          const imageSrc = node.getAttribute('data-image-src');
+          const mediaPath = node.getAttribute('data-media-path');
+          const width = node.getAttribute('data-image-width');
+          const height = node.getAttribute('data-image-height');
+
+          if (imageSrc && mediaPath) {
+            this.editor.storage.image.media[mediaPath] = imageSrc;
+          }
+
+          if (width && height) {
+            attrs.size = { width, height };
+          }
+
+          return attrs;
+        },
       },
     ];
   },

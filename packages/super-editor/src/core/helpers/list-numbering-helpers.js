@@ -4,7 +4,7 @@ import {
   getAbstractDefinition,
   getDefinitionForLevel,
 } from '@core/super-converter/v2/importer/listImporter.js';
-import { baseBulletList, baseOrderedListDef } from './baseListDefinitions';
+import { baseBulletList, baseOrderedListDef, baseOrderedListDefLowerLetter } from './baseListDefinitions';
 import { findParentNode } from '@helpers/index.js';
 
 /**
@@ -17,11 +17,18 @@ import { findParentNode } from '@helpers/index.js';
  * @param {Editor} param0.editor - The editor instance where the list definition will be added.
  * @returns {Object} The new abstract and num definitions.
  */
-export const generateNewListDefinition = ({ numId, listType, editor }) => {
+export const generateNewListDefinition = ({ numId, listType, editor, listStyleTypeMigrated, baseLevel }) => {
   // Generate a new numId to add to numbering.xml
   if (typeof listType === 'string') listType = editor.schema.nodes[listType];
 
-  const definition = listType.name === 'orderedList' ? baseOrderedListDef : baseBulletList;
+  let definition = listType.name === 'orderedList'
+    ? JSON.parse(JSON.stringify(baseOrderedListDef))
+    : JSON.parse(JSON.stringify(baseBulletList));
+
+  if (listType.name === 'orderedList' && baseLevel === 0 && listStyleTypeMigrated === 'lowerLetter') {
+    definition = JSON.parse(JSON.stringify(baseOrderedListDefLowerLetter));
+  }
+
   const numbering = editor.converter.numbering;
   const newNumbering = { ...numbering };
 
@@ -34,6 +41,15 @@ export const generateNewListDefinition = ({ numId, listType, editor }) => {
       'w:abstractNumId': String(newAbstractId),
     }
   };
+
+  // if (baseLevel === 0 && listStyleTypeMigrated === 'lowerLetter') {
+  //   const listDefinition = newAbstractDef.elements?.find((item) => item.name === 'w:lvl' && item.attributes['w:ilvl'] == '0');
+  //   const numFmt = listDefinition?.elements?.find((item) => item.name === 'w:numFmt');
+  //   if (numFmt && numFmt.attributes['w:val']) {
+  //     numFmt.attributes['w:val'] = 'lowerLetter';
+  //   }
+  // }
+  
   newNumbering.abstracts[newAbstractId] = newAbstractDef;
 
   // Generate the new numId definition
@@ -237,6 +253,7 @@ export const createSchemaOrderedListNode = ({ level, numId, listType, editor, li
     },
     content: [listNodeJSON],
   };
+
   return editor.schema.nodeFromJSON(node);
 };
 

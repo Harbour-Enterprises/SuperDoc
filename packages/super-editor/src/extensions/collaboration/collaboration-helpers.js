@@ -4,15 +4,16 @@
  * @param {Editor} editor The editor instance
  * @returns {Promise<void>}
  */
-export const updateYdocDocxData = async (editor) => {
-  if (!editor.options.ydoc) return;
-  
-  const metaMap = editor.options.ydoc.getMap('meta');
+export const updateYdocDocxData = async (editor, ydoc) => {
+  ydoc = ydoc || editor.options.ydoc;
+  if (!ydoc) return;
+
+  const metaMap = ydoc.getMap('meta');
   const docx = [...metaMap.get('docx')];
   const newXml = await editor.exportDocx({ getUpdatedDocs: true });
-  
-  Object.keys(newXml).forEach(key => {
-    const fileIndex = docx.findIndex(item => item.name === key);
+
+  Object.keys(newXml).forEach((key) => {
+    const fileIndex = docx.findIndex((item) => item.name === key);
     if (fileIndex > -1) {
       docx.splice(fileIndex, 1);
     }
@@ -22,7 +23,10 @@ export const updateYdocDocxData = async (editor) => {
     });
   });
 
-  editor.options.ydoc.transact(() => {
-    metaMap.set('docx', docx);
-  }, { event: 'docx-update', user: editor.options.user });
-}
+  ydoc.transact(
+    () => {
+      metaMap.set('docx', docx);
+    },
+    { event: 'docx-update', user: editor.options.user },
+  );
+};

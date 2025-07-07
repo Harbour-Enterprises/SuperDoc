@@ -76,6 +76,12 @@ export const OrderedList = Node.create({
         rendered: false,
         keepOnSplit: true,
       },
+
+      listStyleTypeMigrated: {
+        default: null,
+        parseDOM: (elem) => elem.getAttribute('data-list-style-type-migrated'),
+        rendered: false,
+      },
     };
   },
 
