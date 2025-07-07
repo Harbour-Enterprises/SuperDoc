@@ -40,6 +40,8 @@ export const Paragraph = Node.create({
         parseDOM: (element) => {
           const extra = {};
           Array.from(element.attributes).forEach((attr) => {
+            const excludeAttrs = getExcludedAttrs();
+            if (excludeAttrs.includes(attr.name)) return;
             extra[attr.name] = attr.value;
           });
           return extra;
@@ -119,9 +121,25 @@ export const Paragraph = Node.create({
       getAttrs: (node) => {
         let extra = {};
         Array.from(node.attributes).forEach((attr) => {
+          const excludeAttrs = getExcludedAttrs();
+          if (excludeAttrs.includes(attr.name)) return;
           extra[attr.name] = attr.value;
         });
-        return { extraAttrs: extra };
+
+        const attrs = {
+          extraAttrs: extra,
+        };
+
+        const indent = parseIndent(node);
+        if (Object.keys(indent).length > 0) {
+          attrs.indent = indent;
+        }
+        const spacing = parseSpacing(node);
+        if (Object.keys(spacing).length > 0) {
+          attrs.spacing = spacing;
+        }
+
+        return attrs;
       },
     }];
   },
@@ -185,4 +203,46 @@ function getDropcapWidth(view, pos) {
     return range.getBoundingClientRect().width;
   }
   return 0;
+}
+
+function getExcludedAttrs() {
+  const attrs = [
+    'style',
+    'data-margin-left',
+    'data-margin-right',
+    'data-margin-top',
+    'data-margin-bottom',
+    'data-text-indent',
+  ];
+  return attrs;
+}
+
+function parseIndent(node) {
+  let indent = {};
+  if (node.hasAttribute('data-margin-left')) {
+    let value = Number.parseFloat(node.getAttribute('data-margin-left'));
+    if (value) indent.left = value;
+  }
+  if (node.hasAttribute('data-margin-right')) {
+    let value = Number.parseFloat(node.getAttribute('data-margin-right'));
+    if (value) indent.right = value;
+  }
+  if (node.hasAttribute('data-text-indent')) {
+    let value = Number.parseFloat(node.getAttribute('data-text-indent'));
+    if (value) indent.firstLine = value;
+  }
+  return indent;
+}
+
+function parseSpacing(node) {
+  let spacing = {};
+  if (node.hasAttribute('data-margin-top')) {
+    let value = Number.parseFloat(node.getAttribute('data-margin-top'));
+    if (value) spacing.lineSpaceBefore = value;
+  }
+  if (node.hasAttribute('data-margin-bottom')) {
+    let value = Number.parseFloat(node.getAttribute('data-margin-bottom'));
+    if (value) spacing.lineSpaceAfter = value;
+  }
+  return spacing;
 }
