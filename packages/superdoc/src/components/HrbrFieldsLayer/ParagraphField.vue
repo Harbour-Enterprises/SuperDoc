@@ -19,8 +19,8 @@ const props = defineProps({
 });
 
 const getStyle = computed(() => {
-  return { 
-    fontSize: '11pt', 
+  return {
+    fontSize: '11pt',
   };
 });
 </script>

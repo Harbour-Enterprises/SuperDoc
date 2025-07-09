@@ -198,7 +198,7 @@ export const FieldAnnotation = Node.create({
       generatorIndex: {
         default: null,
         rendered: false,
-      }
+      },
     };
   },
 
@@ -440,20 +440,20 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-        deleteFieldAnnotation:
-          (annotation) =>
-          ({ dispatch, state, tr }) => {
-            if (!annotation) {
-              return true;
-            }
-
-            if (dispatch) {
-              let { pos, node } = annotation;
-              tr.delete(pos, node.nodeSize);
-            }
-
+      deleteFieldAnnotation:
+        (annotation) =>
+        ({ dispatch, state, tr }) => {
+          if (!annotation) {
             return true;
-          },
+          }
+
+          if (dispatch) {
+            let { pos, node } = annotation;
+            tr.delete(pos, node.nodeSize);
+          }
+
+          return true;
+        },
 
       /**
        * Delete a portion of annotations associated with a field.

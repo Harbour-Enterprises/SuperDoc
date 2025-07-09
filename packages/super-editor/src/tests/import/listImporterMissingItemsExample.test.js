@@ -5,7 +5,6 @@ import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { createDocumentJson } from '../../core/super-converter/v2/importer/docxImporter.js';
 import { handleParagraphNode } from '@converter/v2/importer/paragraphNodeImporter.js';
 
-
 describe('it correctly imports list with recursive style def', async () => {
   const fileName = 'broken-list-missing-items.docx';
   let docx, doc, content;
@@ -18,7 +17,7 @@ describe('it correctly imports list with recursive style def', async () => {
     content = body.elements;
   });
 
-  it ('correctly imports list style that uses "basedOn" pointer', () => {
+  it('correctly imports list style that uses "basedOn" pointer', () => {
     const item2 = content[2];
     const nodes = handleListNode({ nodes: [item2], docx, nodeListHandler: defaultNodeListHandler(), lists: {} })?.nodes;
 
@@ -26,5 +25,4 @@ describe('it correctly imports list with recursive style def', async () => {
     const text = node.content[0].text;
     expect(text).toBe('Item 2');
   });
-
 });

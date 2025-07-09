@@ -146,7 +146,7 @@ function getAllChildListItemsOfList({ state, list }) {
     if (node.type.name === 'paragraph') {
       return false;
     }
-    
+
     let isListItem = node.type.name === 'listItem';
     let $pos = doc.resolve(pos);
     if (isListItem && $pos.parent === list) {

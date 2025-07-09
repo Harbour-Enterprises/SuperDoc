@@ -8,7 +8,7 @@ import useComment from './use-comment';
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 const { COMMENT_EVENTS } = commentsStore;
-const { documentsWithConverations, activeComment, floatingCommentsOffset, commentsList} = storeToRefs(commentsStore);
+const { documentsWithConverations, activeComment, floatingCommentsOffset, commentsList } = storeToRefs(commentsStore);
 const { documents, activeZoom } = storeToRefs(superdocStore);
 const { proxy } = getCurrentInstance();
 

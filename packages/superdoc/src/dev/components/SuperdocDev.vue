@@ -40,7 +40,6 @@ const handleNewFile = async (file) => {
 };
 
 const init = async () => {
-
   let testId = 'document-123';
   // const testId = "document_6a9fb1e0725d46989bdbb3f9879e9e1b";
   const config = {
@@ -122,7 +121,7 @@ const init = async () => {
     onCommentsUpdate,
     onCommentsListChange: ({ isRendered }) => {
       isCommentsListOpen.value = isRendered;
-    }
+    },
   };
 
   superdoc.value = new SuperDoc(config);
@@ -222,7 +221,6 @@ onMounted(async () => {
 
       <div class="dev-app__main">
         <div class="dev-app__view">
-
           <div class="dev-app__content" v-if="currentFile">
             <div class="dev-app__content-container">
               <div id="superdoc"></div>
@@ -263,7 +261,7 @@ onMounted(async () => {
   position: absolute;
   right: 0;
   height: 100%;
-  background-color: #FAFAFA;
+  background-color: #fafafa;
   z-index: 100;
 }
 .dev-app {

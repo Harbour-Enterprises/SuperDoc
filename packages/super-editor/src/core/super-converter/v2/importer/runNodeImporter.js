@@ -17,19 +17,19 @@ const handleRunNode = (params) => {
   const defaultNodeStyles = getMarksFromStyles(docx, parentStyleId);
   if (hasRunProperties) {
     const { marks = [], attributes = {} } = parseProperties(node);
-    
+
     // Apply fonts from related style definition if there is no marks
-    const textStyleMark = marks.find(m => m.type === 'textStyle');
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
     const hasFontStyle = textStyleMark && Object.keys(textStyleMark.attrs).length > 0;
     if (defaultNodeStyles.marks && !hasFontStyle) {
       marks.push(...defaultNodeStyles.marks);
     }
-    
+
     if (node.marks) marks.push(...node.marks);
     const newMarks = createImportMarks(marks);
-    processedRun = processedRun.map((n) => { 
+    processedRun = processedRun.map((n) => {
       const existingMarks = n.marks || [];
-      return { ...n, marks: [...newMarks, ...existingMarks], attributes }
+      return { ...n, marks: [...newMarks, ...existingMarks], attributes };
     });
   } else if (defaultNodeStyles.marks) {
     processedRun = processedRun.map((n) => ({ ...n, marks: createImportMarks(defaultNodeStyles.marks) }));
@@ -49,7 +49,7 @@ const getMarksFromStyles = (docx, styleId) => {
   if (!style) return {};
 
   return parseProperties(style, docx);
-}
+};
 
 /**
  * @type {import("docxImporter").NodeHandlerEntry}

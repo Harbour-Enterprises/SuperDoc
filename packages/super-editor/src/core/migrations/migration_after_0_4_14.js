@@ -1,10 +1,10 @@
 import { twipsToLines, pixelsToTwips } from '@converter/helpers.js';
 
 /**
- * This migration is necessary after 0.4.14 line change upgrades as we went from using pixels in 
+ * This migration is necessary after 0.4.14 line change upgrades as we went from using pixels in
  * line spacing to unitless line spacing.
- * 
- * @param {Editor} editor 
+ *
+ * @param {Editor} editor
  */
 export const migration_after_0_4_14 = (editor) => {
   const { state } = editor;
@@ -22,13 +22,13 @@ export const migration_after_0_4_14 = (editor) => {
         line: twipsToLines(pixelsToTwips(spacing.line)),
         lineSpaceBefore: twipsToLines(pixelsToTwips(spacing.lineSpaceBefore)),
         lineSpaceAfter: twipsToLines(pixelsToTwips(spacing.lineSpaceAfter)),
-      }
+      };
       tr.setNodeMarkup(pos, undefined, {
         ...attrs,
         spacing: {
           ...spacing,
-          ...newSpacing
-        }
+          ...newSpacing,
+        },
       });
     }
   });

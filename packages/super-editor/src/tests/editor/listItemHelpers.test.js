@@ -4,7 +4,6 @@ import { getListItemStyleDefinitions } from '@helpers/list-numbering-helpers.js'
 import { expect } from 'vitest';
 
 describe(' test list item rendering indents from styles', () => {
-
   const filename = 'base-custom.docx';
   let docx, media, mediaFiles, fonts, editor;
   beforeAll(async () => ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename)));
@@ -16,7 +15,12 @@ describe(' test list item rendering indents from styles', () => {
   it('[getListItemStyleDefinitions] can import the list item style definitions []', () => {
     const numId = 1;
     const level = 1;
-    const { stylePpr: stylePprResult, numDefPpr: numDefPprResult } = getListItemStyleDefinitions({ styleId: 'ListParagraph', numId, level, editor });
+    const { stylePpr: stylePprResult, numDefPpr: numDefPprResult } = getListItemStyleDefinitions({
+      styleId: 'ListParagraph',
+      numId,
+      level,
+      editor,
+    });
 
     stylePpr = stylePprResult;
     numDefPpr = numDefPprResult;
@@ -26,7 +30,7 @@ describe(' test list item rendering indents from styles', () => {
     const indentTag = stylePpr.elements.find((el) => el.name === 'w:ind');
     expect(indentTag).toBeDefined();
     const indentLeft = indentTag.attributes['w:left'];
-    expect(indentLeft).toBe("720");
+    expect(indentLeft).toBe('720');
     expect(indentTag.attributes['w:hanging']).toBeUndefined();
     expect(indentTag.attributes['w:firstLine']).toBeUndefined();
     expect(indentTag.attributes['w:right']).toBeUndefined();
@@ -37,8 +41,8 @@ describe(' test list item rendering indents from styles', () => {
     expect(numDefIndentTag).toBeDefined();
     const numDefIndentLeft = numDefIndentTag.attributes['w:left'];
     const numDefIndentHanging = numDefIndentTag.attributes['w:hanging'];
-    expect(numDefIndentLeft).toBe("1440");
-    expect(numDefIndentHanging).toBe("360");
+    expect(numDefIndentLeft).toBe('1440');
+    expect(numDefIndentHanging).toBe('360');
     expect(numDefIndentTag.attributes['w:firstLine']).toBeUndefined();
     expect(numDefIndentTag.attributes['w:right']).toBeUndefined();
   });
@@ -49,6 +53,5 @@ describe(' test list item rendering indents from styles', () => {
     expect(visibleIndent.left).toBe(96);
     expect(visibleIndent.hanging).toBe(24);
     expect(visibleIndent.right).toBeUndefined();
-  })
-
+  });
 });

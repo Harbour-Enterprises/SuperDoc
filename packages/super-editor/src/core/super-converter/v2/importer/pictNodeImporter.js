@@ -7,7 +7,7 @@ export const handlePictNode = (params) => {
   if (!nodes.length || nodes[0].name !== 'w:p') {
     return { nodes: [], consumed: 0 };
   }
-  
+
   const [pNode] = nodes;
   const run = pNode.elements?.find((el) => el.name === 'w:r');
   const pict = run?.elements?.find((el) => el.name === 'w:pict');
@@ -42,7 +42,7 @@ export const handlePictNode = (params) => {
       result = handleShapTextboxImport({
         pict,
         pNode,
-        shape, 
+        shape,
         params,
       });
     }
@@ -51,12 +51,7 @@ export const handlePictNode = (params) => {
   return { nodes: result ? [result] : [], consumed: 1 };
 };
 
-export function handleShapTextboxImport({
-  pict, 
-  pNode,
-  shape, 
-  params,
-}) {
+export function handleShapTextboxImport({ pict, pNode, shape, params }) {
   const schemaAttrs = {};
   const schemaTextboxAttrs = {};
 
@@ -89,14 +84,14 @@ export function handleShapTextboxImport({
   const textboxContent = textbox?.elements?.find((el) => el.name === 'w:txbxContent');
   const textboxContentElems = textboxContent?.elements || [];
 
-  const content = textboxContentElems.map((elem) => handleParagraphNode({ 
-    nodes: [elem],
-    docx: params.docx,
-    nodeListHandler: defaultNodeListHandler(),
-  }));
-  const contentNodes = content.reduce((acc, current) => (
-    [...acc, ...current.nodes]
-  ), []);
+  const content = textboxContentElems.map((elem) =>
+    handleParagraphNode({
+      nodes: [elem],
+      docx: params.docx,
+      nodeListHandler: defaultNodeListHandler(),
+    }),
+  );
+  const contentNodes = content.reduce((acc, current) => [...acc, ...current.nodes], []);
 
   const shapeTextbox = {
     type: 'shapeTextbox',
@@ -130,7 +125,7 @@ function buildStyles(styleObject) {
     'width',
     'height',
 
-    // these styles should probably work relative to the page, 
+    // these styles should probably work relative to the page,
     // since in the doc it is positioned absolutely.
     // 'margin-left',
     // 'margin-right',

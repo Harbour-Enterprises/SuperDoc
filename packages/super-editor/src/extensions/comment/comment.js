@@ -21,12 +21,12 @@ export const CommentRangeStart = Node.create({
     return {
       htmlAttributes: {
         contentEditable: 'false',
-        'aria-label': 'Comment range start node'
-      }
-    }
+        'aria-label': 'Comment range start node',
+      },
+    };
   },
 
-  renderDOM({ htmlAttributes}) {
+  renderDOM({ htmlAttributes }) {
     return ['commentRangeStart', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
   },
 
@@ -60,9 +60,9 @@ export const CommentRangeEnd = Node.create({
     return {
       htmlAttributes: {
         contentEditable: 'false',
-        'aria-label': 'Comment range end node'
-      }
-    }
+        'aria-label': 'Comment range end node',
+      },
+    };
   },
 
   parseDOM() {
@@ -99,9 +99,9 @@ export const CommentReference = Node.create({
     return {
       htmlAttributes: {
         contentEditable: 'false',
-        'aria-label': 'Comment reference node'
-      }
-    }
+        'aria-label': 'Comment reference node',
+      },
+    };
   },
 
   parseDOM() {

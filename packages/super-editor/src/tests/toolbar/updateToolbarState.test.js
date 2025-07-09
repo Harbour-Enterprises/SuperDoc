@@ -65,7 +65,6 @@ describe('updateToolbarState', () => {
       role: 'editor',
     });
 
-    
     toolbar.toolbarItems = [
       {
         name: { value: 'bold' },
@@ -145,7 +144,7 @@ describe('updateToolbarState', () => {
   it('should update toolbar state with active formatting marks', () => {
     mockGetActiveFormatting.mockReturnValue([
       { name: 'bold', attrs: {} },
-      { name: 'italic', attrs: { } },
+      { name: 'italic', attrs: {} },
     ]);
 
     mockIsInTable.mockReturnValue(false);
@@ -153,9 +152,9 @@ describe('updateToolbarState', () => {
 
     toolbar.updateToolbarState();
 
-    expect(toolbar.toolbarItems[0].resetDisabled).toHaveBeenCalled(); 
+    expect(toolbar.toolbarItems[0].resetDisabled).toHaveBeenCalled();
     expect(toolbar.toolbarItems[0].activate).toHaveBeenCalledWith({}); // bold
-    expect(toolbar.toolbarItems[1].resetDisabled).toHaveBeenCalled(); 
+    expect(toolbar.toolbarItems[1].resetDisabled).toHaveBeenCalled();
     expect(toolbar.toolbarItems[1].activate).toHaveBeenCalledWith({}); // italic
 
     expect(mockGetActiveFormatting).toHaveBeenCalledWith(mockEditor);
@@ -166,7 +165,7 @@ describe('updateToolbarState', () => {
 
     toolbar.updateToolbarState();
 
-    toolbar.toolbarItems.forEach(item => {
+    toolbar.toolbarItems.forEach((item) => {
       expect(item.setDisabled).toHaveBeenCalledWith(true);
     });
   });
@@ -176,7 +175,7 @@ describe('updateToolbarState', () => {
 
     toolbar.updateToolbarState();
 
-    toolbar.toolbarItems.forEach(item => {
+    toolbar.toolbarItems.forEach((item) => {
       expect(item.setDisabled).toHaveBeenCalledWith(true);
     });
   });
@@ -196,7 +195,7 @@ describe('updateToolbarState', () => {
 
     toolbar.updateToolbarState();
 
-    const fontFamilyItem = toolbar.toolbarItems.find(item => item.name.value === 'fontFamily');
+    const fontFamilyItem = toolbar.toolbarItems.find((item) => item.name.value === 'fontFamily');
     expect(fontFamilyItem.activate).toHaveBeenCalledWith({ fontFamily: 'Roboto' });
     expect(fontFamilyItem.activate).not.toHaveBeenCalledWith({ fontFamily: 'Arial' });
   });
@@ -216,7 +215,7 @@ describe('updateToolbarState', () => {
 
     toolbar.updateToolbarState();
 
-    const fontSizeItem = toolbar.toolbarItems.find(item => item.name.value === 'fontSize'); 
+    const fontSizeItem = toolbar.toolbarItems.find((item) => item.name.value === 'fontSize');
     expect(fontSizeItem.activate).toHaveBeenCalledWith({ fontSize: '20pt' });
     expect(fontSizeItem.activate).not.toHaveBeenCalledWith({ fontSize: '14pt' });
   });

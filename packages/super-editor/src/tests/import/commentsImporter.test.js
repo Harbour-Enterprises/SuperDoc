@@ -1,4 +1,3 @@
-
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { importCommentData } from '@converter/v2/importer/documentCommentsImporter.js';
 
@@ -15,7 +14,7 @@ describe('basic comment import [basic-comment.docx]', () => {
     content = body.elements;
 
     // Import comment data
-    comments = importCommentData({ docx })
+    comments = importCommentData({ docx });
   });
 
   it('can import basic comments', async () => {
@@ -59,7 +58,7 @@ describe('threaded comment import [threaded-comment.docx]', () => {
     content = body.elements;
 
     // Import comment data
-    comments = importCommentData({ docx })
+    comments = importCommentData({ docx });
   });
 
   it('can import threaded comments', async () => {
@@ -86,7 +85,7 @@ describe('comment import with resolved comment [basic-resolved-comment.docx]', (
     content = body.elements;
 
     // Import comment data
-    comments = importCommentData({ docx })
+    comments = importCommentData({ docx });
   });
 
   it('can import threaded comments', async () => {
@@ -94,7 +93,7 @@ describe('comment import with resolved comment [basic-resolved-comment.docx]', (
 
     const notResolved = comments[0];
     const resolvedComment = comments[1];
-    expect(notResolved.isDone).toBe(false); 
+    expect(notResolved.isDone).toBe(false);
     expect(resolvedComment.isDone).toBe(true);
   });
 });

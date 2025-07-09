@@ -270,14 +270,14 @@ export class SuperDoc extends EventEmitter {
   #patchNaiveUIStyles() {
     const cspNonce = this.config.cspNonce;
 
-    const originalCreateElement = document.createElement
-    document.createElement = function(tagName) {
-      const element = originalCreateElement.call(this, tagName)
+    const originalCreateElement = document.createElement;
+    document.createElement = function (tagName) {
+      const element = originalCreateElement.call(this, tagName);
       if (tagName.toLowerCase() === 'style') {
-        element.setAttribute('nonce', cspNonce)
+        element.setAttribute('nonce', cspNonce);
       }
-      return element
-    }
+      return element;
+    };
   }
 
   #initDocuments() {
@@ -361,7 +361,7 @@ export class SuperDoc extends EventEmitter {
       this.config.socket = new HocuspocusProviderWebsocket({
         url: collaborationModuleConfig.url,
       });
-    };
+    }
 
     // Initialize collaboration for documents
     const processedDocuments = makeDocumentsCollaborative(this);
@@ -374,7 +374,7 @@ export class SuperDoc extends EventEmitter {
     } else {
       this.ydoc = processedDocuments[0].ydoc;
       this.provider = processedDocuments[0].provider;
-    };
+    }
 
     // Initialize comments sync, if enabled
     initCollaborationComments(this);

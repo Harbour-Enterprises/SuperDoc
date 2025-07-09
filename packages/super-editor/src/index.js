@@ -71,7 +71,6 @@ export {
 
   // External extensions classes
   Extensions,
-
   TrackChangesBasePluginKey,
   CommentsPluginKey,
 };

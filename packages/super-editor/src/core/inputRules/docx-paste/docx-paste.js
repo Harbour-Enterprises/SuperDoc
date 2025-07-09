@@ -1,15 +1,14 @@
 import { DOMParser } from 'prosemirror-model';
-import {cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste} from '../../InputRule.js';
-
+import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste } from '../../InputRule.js';
 
 /**
  * Main handler for pasted DOCX content.
- * 
+ *
  * @param {string} html The string being pasted
  * @param {Editor} editor The SuperEditor instance
  * @param {Object} view The ProseMirror view
  * @param {Object} plugin The plugin instance
- * @returns 
+ * @returns
  */
 export const handleDocxPaste = (html, editor, view, plugin) => {
   const { converter } = editor;
@@ -34,7 +33,7 @@ export const handleDocxPaste = (html, editor, view, plugin) => {
       const [, abstractId, level] = msoListMatch;
       const listNumId = getListNumIdFromAbstract(abstractId, editor);
       if (!listNumId) return;
-  
+
       const abstractDefinition = getListAbstractDefinition(abstractId, editor);
       const { lvlText, start, numFmt } = getLevelDefinition(abstractDefinition, level - 1);
 
@@ -91,7 +90,6 @@ const getListAbstractDefinition = (abstractId, editor) => {
   return abstracts[abstractId] || null;
 };
 
-
 const transformWordLists = (container) => {
   const paragraphs = Array.from(container.querySelectorAll('p[data-num-id]'));
   const listMap = new Map();
@@ -104,7 +102,7 @@ const transformWordLists = (container) => {
     const level = parseInt(p.getAttribute('data-list-level'));
     const numFmt = p.getAttribute('data-num-fmt');
     const start = p.getAttribute('data-start');
-    const lvlText = p.getAttribute('data-lvl-text')
+    const lvlText = p.getAttribute('data-lvl-text');
 
     if (!listMap.has(listId)) listMap.set(listId, []);
     listMap.get(listId).push({ p, level, numFmt, start, lvlText });
@@ -115,8 +113,8 @@ const transformWordLists = (container) => {
       listLevels[id] = {
         stack: [],
         counts: {},
-        prevLevel: null
-      }
+        prevLevel: null,
+      };
     }
 
     const parentStack = [];
@@ -186,14 +184,15 @@ function generateListNestingPath(listLevels, listId, currentLevel) {
 
   levelState.prevLevel = currentLevel;
   return [...levelState.stack];
-};
+}
 
 function extractAndRemoveConditionalPrefix(p) {
   const nodes = Array.from(p.childNodes);
   let fontFamily = null;
   let fontSize = null;
 
-  let start = -1, end = -1;
+  let start = -1,
+    end = -1;
   nodes.forEach((node, index) => {
     if (node.nodeType === Node.COMMENT_NODE && node.nodeValue.includes('[if !supportLists]')) {
       start = index;
@@ -221,4 +220,4 @@ function extractAndRemoveConditionalPrefix(p) {
     if (fontFamily) p.setAttribute('data-font-family', fontFamily);
     if (fontSize) p.setAttribute('data-font-size', fontSize);
   }
-};
+}

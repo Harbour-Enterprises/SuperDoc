@@ -134,7 +134,7 @@ export class FieldAnnotationView {
 
   buildHTMLView() {
     let { displayLabel, rawHtml } = this.node.attrs;
-  
+
     if (!this.editor.options.isHeadless && !!rawHtml) {
       try {
         const tempDiv = document.createElement('div');
@@ -203,7 +203,12 @@ export class FieldAnnotationView {
     annotation.append(content);
 
     let omitHighlight = highlighted === false;
-    let styles = [`border: 2px solid ${this.borderColor}`, `border-radius: 2px`, `padding: 1px 2px`, `box-sizing: border-box`];
+    let styles = [
+      `border: 2px solid ${this.borderColor}`,
+      `border-radius: 2px`,
+      `padding: 1px 2px`,
+      `box-sizing: border-box`,
+    ];
     let annotationStyle = styles.join('; ');
 
     let mergedAttrs = Attribute.mergeAttributes(this.htmlAttributes, {
@@ -317,4 +322,3 @@ export class FieldAnnotationView {
     });
   }
 }
-

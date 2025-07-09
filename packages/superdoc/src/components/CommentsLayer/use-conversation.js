@@ -29,7 +29,7 @@ export default function useConversation(params) {
 
   /**
    * Mark this conversation as done with UTC date
-   * 
+   *
    */
   const markDone = (email, name) => {
     markedDone.value = new Date().toISOString();
@@ -40,7 +40,7 @@ export default function useConversation(params) {
 
   /**
    * Get the raw values of this comment
-   * 
+   *
    * @returns {Object} - The raw values of this comment
    */
   const getValues = () => {

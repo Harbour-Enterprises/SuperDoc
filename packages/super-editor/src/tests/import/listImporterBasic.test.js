@@ -1,7 +1,6 @@
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { expect } from 'vitest';
 
-
 describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
   const filename = 'sublist-issue.docx';
   let docx, media, mediaFiles, fonts, editor, dispatch, content;
@@ -21,7 +20,7 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
     expect(item1.attrs.indent.left).toBeUndefined();
     expect(item1.attrs.indent.hanging).toBeUndefined();
     expect(item1.attrs.indent.right).toBe(-14);
-    expect(item1.attrs.numId).toBe("5");
+    expect(item1.attrs.numId).toBe('5');
 
     const spacerP1 = content.content[3];
     expect(spacerP1.type).toBe('paragraph');
@@ -41,7 +40,7 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
     expect(item.attrs.indent.left).toBeUndefined();
     expect(item.attrs.indent.hanging).toBeUndefined();
     expect(item.attrs.indent.right).toBeUndefined;
-    expect(item.attrs.numId).toBe("5");
+    expect(item.attrs.numId).toBe('5');
 
     // Ensure we're importing the empty paragraprh
     const emptyParagraph = content.content[5];
@@ -60,7 +59,7 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
     expect(item.attrs.indent.hanging).toBeUndefined();
     expect(item.attrs.indent.right).toBe(-14);
     expect(item.attrs.indent.firstLine).toBe(0);
-    expect(item.attrs.numId).toBe("3");
+    expect(item.attrs.numId).toBe('3');
     expect(item.attrs.listLevel).toStrictEqual([1]);
   });
 });
@@ -83,11 +82,11 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     const list = item1.content[0];
     expect(list.type).toBe('listItem');
     expect(list.content.length).toBe(1);
-    
+
     const { attrs: listAttrs } = list;
     expect(listAttrs).toBeDefined();
     expect(listAttrs.listLevel).toStrictEqual([1]);
-    expect(listAttrs.numId).toBe("1");
+    expect(listAttrs.numId).toBe('1');
     expect(listAttrs.indent.left).toBeUndefined();
     expect(listAttrs.indent.hanging).toBeUndefined();
 
@@ -96,7 +95,7 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     expect(paragraph.content.length).toBe(1);
     expect(paragraph.content[0].type).toBe('text');
     expect(paragraph.content[0].text).toBe('One');
-    
+
     const { attrs: paragraphAttrs } = paragraph;
     expect(paragraphAttrs).toBeDefined();
     expect(paragraphAttrs.indent).toBeNull();
@@ -109,10 +108,10 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     const list = item2.content[0];
     expect(list.type).toBe('listItem');
     expect(list.content.length).toBe(1);
-    
+
     const { attrs: listAttrs } = list;
     expect(listAttrs.listLevel).toStrictEqual([2]);
-    expect(listAttrs.numId).toBe("1");
+    expect(listAttrs.numId).toBe('1');
     expect(listAttrs.indent.left).toBeUndefined();
     expect(listAttrs.indent.hanging).toBeUndefined();
   });
@@ -124,10 +123,10 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     const list = item2.content[0];
     expect(list.type).toBe('listItem');
     expect(list.content.length).toBe(1);
-    
+
     const { attrs: listAttrs } = list;
     expect(listAttrs.listLevel).toStrictEqual([3]);
-    expect(listAttrs.numId).toBe("1");
+    expect(listAttrs.numId).toBe('1');
     expect(listAttrs.indent.left).toBeUndefined();
     expect(listAttrs.indent.hanging).toBeUndefined();
   });
@@ -150,11 +149,11 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     const list = item1.content[0];
     expect(list.type).toBe('listItem');
     expect(list.content.length).toBe(1);
-    
+
     const { attrs: listAttrs } = list;
     expect(listAttrs).toBeDefined();
     expect(listAttrs.listLevel).toStrictEqual([1]);
-    expect(listAttrs.numId).toBe("2");
+    expect(listAttrs.numId).toBe('2');
     expect(listAttrs.indent.left).toBeUndefined();
     expect(listAttrs.indent.hanging).toBeUndefined();
 
@@ -163,7 +162,7 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     expect(paragraph.content.length).toBe(1);
     expect(paragraph.content[0].type).toBe('text');
     expect(paragraph.content[0].text).toBe('One');
-    
+
     const { attrs: paragraphAttrs } = paragraph;
     expect(paragraphAttrs).toBeDefined();
     expect(paragraphAttrs.indent).toBeNull();

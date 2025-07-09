@@ -14,7 +14,7 @@ export const PERMISSIONS = Object.freeze({
 const ROLES = Object.freeze({
   EDITOR: 'editor',
   SUGGESTER: 'suggester',
-  VIEWER: 'viewer'
+  VIEWER: 'viewer',
 });
 
 const permissions = Object.freeze({
@@ -62,7 +62,7 @@ const permissions = Object.freeze({
 
 /**
  * Check if a role is allowed to perform a permission
- * 
+ *
  * @param {String} permission The permission to check
  * @param {String} role The role to check
  * @param {Boolean} isInternal The internal/external flag

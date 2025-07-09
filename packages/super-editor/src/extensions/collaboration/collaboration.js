@@ -138,8 +138,8 @@ const checkDocxChanged = (transaction) => {
   for (const [key, value] of transaction.changed?.entries()) {
     if (value instanceof Set && value.has('docx')) {
       return true;
-    };
-  };
+    }
+  }
 
   return false;
 };
@@ -165,7 +165,7 @@ const debounce = (fn, wait) => {
     clearTimeout(timeout);
     timeout = setTimeout(() => fn.apply(this, args), wait);
   };
-}
+};
 
 const initSyncListener = (ydoc, editor, extension) => {
   const provider = editor.options.collaborationProvider;

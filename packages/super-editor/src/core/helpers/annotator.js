@@ -5,10 +5,10 @@ import { findParentNodeClosestToPos } from './findParentNodeClosestToPos';
 
 /**
  * Get the field attributes based on the field type and value
- * 
+ *
  * @param {Object} field The field node
  * @param {Object} value The value we want to annotate the field with
- * @returns 
+ * @returns
  */
 export const getFieldAttrs = (field, value, input) => {
   const { type } = field.attrs;
@@ -20,7 +20,7 @@ export const getFieldAttrs = (field, value, input) => {
     link: annotateLink,
     yesno: annotateYesNo,
     date: annotateDate,
-  }
+  };
 
   const handler = annotatorHandlers[type];
   if (!handler) return {};
@@ -46,16 +46,16 @@ const annotateLink = (value) => {
 
 const annotateYesNo = (value) => {
   const yesNoValues = {
-    'YES': 'Yes',
-    'NO': 'No',
-  }
+    YES: 'Yes',
+    NO: 'No',
+  };
   const parsedValue = yesNoValues[value[0].toUpperCase()];
   return { displayLabel: parsedValue };
 };
 
 /**
  * Pre-process tables in the document to generate rows from annotations if necessary
- * 
+ *
  * @param {Object} param0 The editor instance and annotation values
  * @param {Object} param0.editor The editor instance
  * @param {Array} param0.annotationValues The annotation values to process
@@ -90,7 +90,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
     tableRow: RowType,
     tableCell: CellType,
     fieldAnnotation: FieldType,
-    paragraph: ParaType
+    paragraph: ParaType,
   } = state.schema.nodes;
 
   // Find rows with field annotations that have array values
@@ -105,7 +105,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
   let rowNodeToGenerate = null;
   for (const row of rows) {
     let hasArrayAnnotation = false;
-    
+
     row.node.descendants((node, pos) => {
       if (node.type === FieldType) {
         const annotationValue = getAnnotationValue(node.attrs.fieldId, annotationValues);
@@ -114,7 +114,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
         }
       }
     });
-    
+
     if (hasArrayAnnotation) {
       rowNodeToGenerate = row;
       break;
@@ -124,10 +124,10 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
   if (!rowNodeToGenerate) return;
 
   const { node: rowNode, pos: rowStartPos } = rowNodeToGenerate;
-  
+
   // Calculate the absolute position of the row in the document
   const absoluteRowStart = tableNode.pos + 1 + rowStartPos; // +1 for table node itself
-  
+
   // Count how many rows we need to generate based on array lengths
   let rowsToGenerate = 0;
   rowNode.descendants((childNode, childPos) => {
@@ -144,7 +144,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
   // Validate and clean attributes to ensure proper rendering
   const validateAttributes = (attrs) => {
     const cleaned = {};
-    
+
     for (const [key, value] of Object.entries(attrs)) {
       if (value !== undefined && value !== null) {
         // Ensure displayLabel is always a string for proper rendering
@@ -163,7 +163,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
         }
       }
     }
-    
+
     return cleaned;
   };
 
@@ -192,36 +192,32 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
             console.error('Error getting field attrs:', error);
             extraAttrs = {};
           }
-          
+
           // Build new attributes
           const baseAttrs = validateAttributes(inlineNode.attrs || {});
-          const newAttrs = { 
-            ...baseAttrs, 
-            ...extraAttrs, 
-            generatorIndex: rowIndex 
+          const newAttrs = {
+            ...baseAttrs,
+            ...extraAttrs,
+            generatorIndex: rowIndex,
           };
-          
+
           // Create new field node
           try {
-            return FieldType.create(
-              newAttrs,
-              inlineNode.content || Fragment.empty,
-              inlineNode.marks || []
-            );
+            return FieldType.create(newAttrs, inlineNode.content || Fragment.empty, inlineNode.marks || []);
           } catch (error) {
             console.error('Error creating field node:', error);
-            
+
             // Fallback: minimal attributes
             try {
               const fallbackAttrs = {
                 ...baseAttrs,
                 generatorIndex: rowIndex,
-                displayLabel: String(value || '')
+                displayLabel: String(value || ''),
               };
               return FieldType.create(
                 validateAttributes(fallbackAttrs),
                 inlineNode.content || Fragment.empty,
-                inlineNode.marks || []
+                inlineNode.marks || [],
               );
             } catch (fallbackError) {
               console.error('Fallback also failed:', fallbackError);
@@ -233,9 +229,9 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
         // Create new paragraph
         try {
           return ParaType.create(
-            validateAttributes(blockNode.attrs || {}), 
-            Fragment.from(updatedInlines), 
-            blockNode.marks || []
+            validateAttributes(blockNode.attrs || {}),
+            Fragment.from(updatedInlines),
+            blockNode.marks || [],
           );
         } catch (error) {
           console.error('Error creating paragraph node:', error);
@@ -245,11 +241,10 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
 
       // Create new cell
       return CellType.create(
-        validateAttributes(cellNode.attrs || {}), 
-        Fragment.from(updatedBlocks), 
-        cellNode.marks || []
+        validateAttributes(cellNode.attrs || {}),
+        Fragment.from(updatedBlocks),
+        cellNode.marks || [],
       );
-      
     } catch (error) {
       console.error(`Failed to rebuild cell for row ${rowIndex}:`, error);
       throw error;
@@ -262,9 +257,9 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
     for (let rowIndex = 0; rowIndex < rowsToGenerate; rowIndex++) {
       const newCells = rowNode.content.content.map((cellNode) => rebuildCell(cellNode, rowIndex));
       const newRow = RowType.create(
-        validateAttributes(rowNode.attrs || {}), 
-        Fragment.from(newCells), 
-        rowNode.marks || []
+        validateAttributes(rowNode.attrs || {}),
+        Fragment.from(newCells),
+        rowNode.marks || [],
       );
       newRows.push(newRow);
     }
@@ -272,9 +267,8 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
     // Replace the original row with all new rows in a single atomic operation
     const mappedRowStart = tr.mapping.map(absoluteRowStart);
     const rowEnd = mappedRowStart + rowNode.nodeSize;
-    
+
     tr.replaceWith(mappedRowStart, rowEnd, Fragment.from(newRows));
-    
   } catch (error) {
     console.error('Error during row generation:', error);
     throw error;
@@ -320,7 +314,7 @@ export const getAllHeaderFooterEditors = (editor) => {
           key: editorsKey,
           type,
           sectionId,
-        })
+        });
       }
     });
   });
@@ -330,23 +324,23 @@ export const getAllHeaderFooterEditors = (editor) => {
 
 /**
  * Annotate headers and footers in the document
- * 
- * @param {Object} param0 
+ *
+ * @param {Object} param0
  * @param {Object} param0.editor The editor instance
  * @param {Array} param0.annotationValues The annotation values to apply
  * @param {Array} param0.hiddenFieldIds List of field IDs to hide
  * @returns {void}
  */
-const annotateHeadersAndFooters = ({ editor, annotationValues = [], hiddenFieldIds = [], removeEmptyFields = false }) => {
+const annotateHeadersAndFooters = ({
+  editor,
+  annotationValues = [],
+  hiddenFieldIds = [],
+  removeEmptyFields = false,
+}) => {
   const allEditors = getAllHeaderFooterEditors(editor);
   allEditors.forEach(({ sectionId, editor: sectionEditor, type }) => {
     sectionEditor.annotate(annotationValues, hiddenFieldIds, removeEmptyFields);
-    onHeaderFooterDataUpdate(
-      { editor: sectionEditor },
-      editor,
-      sectionId,
-      type
-    );
+    onHeaderFooterDataUpdate({ editor: sectionEditor }, editor, sectionId, type);
   });
 };
 
@@ -358,7 +352,6 @@ export const annotateDocument = ({
   tr,
   editor,
 }) => {
-
   // Annotate headers and footers first
   annotateHeadersAndFooters({ editor, annotationValues, hiddenFieldIds, removeEmptyFields });
 
@@ -386,14 +379,11 @@ export const annotateDocument = ({
     if (toDelete.has(pos)) continue;
 
     let newValue = null;
-    const input = annotationValues.find(i => i.input_id === fieldId);
+    const input = annotationValues.find((i) => i.input_id === fieldId);
 
     if (!input) {
-      const checkboxInputs = annotationValues.filter(
-        i => i.input_field_type === 'CHECKBOXINPUT'
-      );
-      inputsLoop:
-      for (const cb of checkboxInputs) {
+      const checkboxInputs = annotationValues.filter((i) => i.input_field_type === 'CHECKBOXINPUT');
+      inputsLoop: for (const cb of checkboxInputs) {
         for (const opt of cb.input_options) {
           if (opt.itemid === fieldId) {
             newValue = cb.input_link_value[opt.itemid] || ' ';
@@ -410,8 +400,7 @@ export const annotateDocument = ({
     }
 
     if (type === 'checkbox' || fieldType === 'CHECKBOXINPUT') {
-      const isEmptyOrSquare = !newValue
-        || (typeof newValue === 'string' && newValue.codePointAt(0) === 0x2610);
+      const isEmptyOrSquare = !newValue || (typeof newValue === 'string' && newValue.codePointAt(0) === 0x2610);
       if (isEmptyOrSquare) newValue = ' ';
     }
 
@@ -422,7 +411,7 @@ export const annotateDocument = ({
       const attrs = getFieldAttrs(node, newValue, input);
       tr = tr.setNodeMarkup(pos, undefined, {
         ...node.attrs,
-        ...attrs
+        ...attrs,
       });
     }
   }
@@ -431,19 +420,19 @@ export const annotateDocument = ({
     // perform deletes all in one go (descending positions)
     Array.from(toDelete)
       .sort((a, b) => b - a)
-      .forEach(pos => {
-        const ann = annotations.find(a => a.pos === pos);
+      .forEach((pos) => {
+        const ann = annotations.find((a) => a.pos === pos);
         if (!ann) return;
         tr = tr.delete(pos, pos + ann.node.nodeSize);
       });
-  };
+  }
 
-    return tr;
+  return tr;
 };
 
 /**
  * Format the date to the given format
- * 
+ *
  * @param {String} input The date value
  * @param {String} format The date format
  */
@@ -461,9 +450,9 @@ const getFormattedDate = (input = null, format = '') => {
 
   // 4. Otherwise, do a single toLocaleDateString call:
   return date.toLocaleDateString('en-US', {
-    month: 'short',  // e.g. “May”
-    day: '2-digit',  // e.g. “05”
-    year: 'numeric'  // e.g. “2025”
+    month: 'short', // e.g. “May”
+    day: '2-digit', // e.g. “05”
+    year: 'numeric', // e.g. “2025”
   });
 };
 
@@ -475,12 +464,7 @@ const updateHeaderFooterFieldAnnotations = ({ editor, fieldIdOrArray, attrs = {}
   sectionEditors.forEach(({ editor: sectionEditor, sectionId, type }) => {
     sectionEditor.commands.updateFieldAnnotations(fieldIdOrArray, attrs);
 
-    onHeaderFooterDataUpdate(
-      { editor: sectionEditor },
-      editor,
-      sectionId,
-      type,
-    );
+    onHeaderFooterDataUpdate({ editor: sectionEditor }, editor, sectionId, type);
   });
 };
 
@@ -492,12 +476,7 @@ const deleteHeaderFooterFieldAnnotations = ({ editor, fieldIdOrArray }) => {
   sectionEditors.forEach(({ editor: sectionEditor, sectionId, type }) => {
     sectionEditor.commands.deleteFieldAnnotations(fieldIdOrArray);
 
-    onHeaderFooterDataUpdate(
-      { editor: sectionEditor },
-      editor,
-      sectionId,
-      type,
-    );
+    onHeaderFooterDataUpdate({ editor: sectionEditor }, editor, sectionId, type);
   });
 };
 
@@ -509,12 +488,7 @@ const resetHeaderFooterFieldAnnotations = ({ editor }) => {
   sectionEditors.forEach(({ editor: sectionEditor, sectionId, type }) => {
     sectionEditor.commands.resetFieldAnnotations();
 
-    onHeaderFooterDataUpdate(
-      { editor: sectionEditor },
-      editor,
-      sectionId,
-      type,
-    );
+    onHeaderFooterDataUpdate({ editor: sectionEditor }, editor, sectionId, type);
   });
 };
 
@@ -526,14 +500,11 @@ export const cleanUpListsWithAnnotations = (fieldsToDelete = [], editor) => {
   const nodesToDelete = [];
 
   fieldsToDelete.forEach((fieldId) => {
-    const matched = docxAnnotations.find(a => a.node.attrs.fieldId === fieldId);
+    const matched = docxAnnotations.find((a) => a.node.attrs.fieldId === fieldId);
     if (!matched) return;
 
     // find the nearest listItem
-    const listItem = findParentNodeClosestToPos(
-      doc.resolve(matched.pos),
-      node => node.type.name === 'listItem'
-    );
+    const listItem = findParentNodeClosestToPos(doc.resolve(matched.pos), (node) => node.type.name === 'listItem');
     if (!listItem) return;
 
     let remainingNodes = 0;
@@ -541,7 +512,7 @@ export const cleanUpListsWithAnnotations = (fieldsToDelete = [], editor) => {
       if (node.type.name === 'fieldAnnotation') {
         remainingNodes += 1;
       }
-    })
+    });
 
     let matchingNodesFound = 0;
     let hasOtherNodes = false;
@@ -575,16 +546,16 @@ export const cleanUpListsWithAnnotations = (fieldsToDelete = [], editor) => {
       if (parent.childCount === 1) {
         // climb one level
         depth -= 1;
-        pos    = $pos.before(depth);
-        node   = parent;
-        $pos   = doc.resolve(pos);
+        pos = $pos.before(depth);
+        node = parent;
+        $pos = doc.resolve(pos);
       } else {
         break;
       }
     }
 
     // dedupe
-    if (!nodesToDelete.some(n => n.pos === pos)) {
+    if (!nodesToDelete.some((n) => n.pos === pos)) {
       nodesToDelete.push({ pos, node });
     }
   });

@@ -1,6 +1,6 @@
 /**
  * Comments helper to format dates from timestamp
- * 
+ *
  * @param {Number} timestamp The timestamp to format
  * @returns {String} The formatted date
  */
@@ -16,4 +16,4 @@ export function formatDate(timestamp) {
   const formattedTime = `${formattedHours}:${minutes.toString().padStart(2, '0')}${meridiem}`;
   const formattedDate = `${formattedTime} ${month} ${day}`;
   return formattedDate;
-};
+}

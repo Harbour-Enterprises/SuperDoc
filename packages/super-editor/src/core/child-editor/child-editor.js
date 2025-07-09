@@ -36,7 +36,7 @@ export const createLinkedChildEditor = (currentEditor, options = {}) => {
   });
 
   return editor;
-}
+};
 
 /**
  * Default handler for when the list definitions change in a linked child editor.

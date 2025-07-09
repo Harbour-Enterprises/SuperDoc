@@ -14,4 +14,4 @@ export const getHeaderFooterAnnotations = (editor) => {
     allAnnotations.push(...annotations);
   });
   return allAnnotations;
-}
+};

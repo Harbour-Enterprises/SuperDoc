@@ -21,7 +21,7 @@ export const RunItem = Node.create({
     return {
       attributes: {
         rendered: false,
-        'aria-label': 'Run node'
+        'aria-label': 'Run node',
       },
     };
   },

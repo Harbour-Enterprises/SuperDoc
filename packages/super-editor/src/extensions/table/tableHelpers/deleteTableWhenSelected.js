@@ -15,7 +15,7 @@ export const deleteTableWhenSelected = ({ editor }) => {
     if (node.type.name === 'table') return false;
     if (['tableCell', 'tableHeader'].includes(node.type.name)) {
       cellCount += 1;
-    };
+    }
   });
 
   const allCellsSelected = cellCount === selection.ranges.length;
@@ -25,6 +25,6 @@ export const deleteTableWhenSelected = ({ editor }) => {
   }
 
   editor.commands.deleteTable();
-  
+
   return true;
 };

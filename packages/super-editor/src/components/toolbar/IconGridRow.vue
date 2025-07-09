@@ -46,40 +46,40 @@ onMounted(() => {
 });
 
 const moveToNextIcon = (rowIndex, optionIndex) => {
-  const iconIndex = (ROW_SIZE * rowIndex) + optionIndex + 1;
+  const iconIndex = ROW_SIZE * rowIndex + optionIndex + 1;
   const nextIcon = iconRefs.value[iconIndex];
   if (nextIcon) {
     nextIcon.setAttribute('tabindex', '0');
     nextIcon.focus();
   }
-}
+};
 
 const moveToPreviousIcon = (rowIndex, optionIndex) => {
-  const iconIndex = (ROW_SIZE * rowIndex) + optionIndex - 1;
+  const iconIndex = ROW_SIZE * rowIndex + optionIndex - 1;
   const previousIcon = iconRefs.value[iconIndex];
   if (previousIcon) {
     previousIcon.setAttribute('tabindex', '0');
     previousIcon.focus();
   }
-}
+};
 
 const moveToNextRow = (rowIndex, optionIndex) => {
-  const iconIndex = optionIndex + (ROW_SIZE * (rowIndex + 1));
+  const iconIndex = optionIndex + ROW_SIZE * (rowIndex + 1);
   const nextIcon = iconRefs.value[iconIndex];
   if (nextIcon) {
     nextIcon.setAttribute('tabindex', '0');
     nextIcon.focus();
   }
-}
+};
 
 const moveToPreviousRow = (rowIndex, optionIndex) => {
-  const iconIndex = optionIndex + (ROW_SIZE * (rowIndex - 1));
+  const iconIndex = optionIndex + ROW_SIZE * (rowIndex - 1);
   const previousIcon = iconRefs.value[iconIndex];
   if (previousIcon) {
     previousIcon.setAttribute('tabindex', '0');
     previousIcon.focus();
   }
-}
+};
 
 const handleKeyDown = (event, rowIndex, optionIndex, option) => {
   switch (event.key) {
@@ -104,16 +104,10 @@ const handleKeyDown = (event, rowIndex, optionIndex, option) => {
     default:
       break;
   }
-}
+};
 </script>
 <template>
-  <div 
-    class="option-row" 
-    v-for="(row, rowIndex) in icons" 
-    :key="rowIndex"
-    role="group"
-    ref="rowRefs"
-  >
+  <div class="option-row" v-for="(row, rowIndex) in icons" :key="rowIndex" role="group" ref="rowRefs">
     <div
       class="option"
       v-for="(option, optionIndex) in row"
@@ -124,18 +118,14 @@ const handleKeyDown = (event, rowIndex, optionIndex, option) => {
       @click.stop.prevent="handleClick(option)"
       @keydown.prevent="(event) => handleKeyDown(event, rowIndex, optionIndex, option)"
     >
-      <div
-        class="option__icon"
-        v-html="option.icon"
-        :style="option.style">
-      </div>
+      <div class="option__icon" v-html="option.icon" :style="option.style"></div>
 
       <div
         v-if="isActive(option)"
         class="option__check"
         v-html="toolbarIcons.colorOptionCheck"
-        :style="getCheckStyle(option.value, optionIndex)">
-      </div>
+        :style="getCheckStyle(option.value, optionIndex)"
+      ></div>
     </div>
   </div>
 </template>

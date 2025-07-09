@@ -12,7 +12,8 @@ export const findWordBounds = (doc, pos) => {
 
   if (!text) return { from: pos, to: pos };
 
-  let start = offset, end = offset;
+  let start = offset,
+    end = offset;
 
   // Adjust start to the beginning of the word
   while (start > 0 && /\w/.test(text[start - 1])) start--;

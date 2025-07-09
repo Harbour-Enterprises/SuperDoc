@@ -75,11 +75,7 @@ export const removeMarkStep = ({ state, tr, step, newTr, map, doc, user, date })
           after,
         });
 
-        newTr.addMark(
-          Math.max(step.from, pos),
-          Math.min(step.to, pos + node.nodeSize),
-          newFormatMark,
-        );
+        newTr.addMark(Math.max(step.from, pos), Math.min(step.to, pos + node.nodeSize), newFormatMark);
 
         meta.formatMark = newFormatMark;
         meta.step = step;

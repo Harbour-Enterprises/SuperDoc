@@ -38,7 +38,7 @@ const onKeyDown = async (e) => {
       }
     }
   }
-}
+};
 
 const onWindowResized = async () => {
   await proxy.$toolbar.onToolbarResize();
@@ -49,16 +49,10 @@ const onResizeThrottled = throttle(onWindowResized, 300);
 const handleCommand = ({ item, argument, option }) => {
   proxy.$toolbar.emitCommand({ item, argument, option });
 };
-
 </script>
 
 <template>
-  <div 
-    class="superdoc-toolbar" 
-    :key="toolbarKey"
-    role="toolbar"
-    aria-label="Toolbar"
-  >
+  <div class="superdoc-toolbar" :key="toolbarKey" role="toolbar" aria-label="Toolbar">
     <ButtonGroup
       tabindex="0"
       v-if="showLeftSide"

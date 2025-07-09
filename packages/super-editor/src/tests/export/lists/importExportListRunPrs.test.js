@@ -40,12 +40,12 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
   it('exports list with inline run properties', () => {
     const { result: exported } = editor.converter.exportToXmlJson({
       data: editor.getJSON(),
-      editor
+      editor,
     });
 
     const body = exported.elements.find((el) => el.name === 'w:body');
     const listItem = body.elements[0].elements;
-  
+
     // We are looking for the w:rPr tag inside the list item w:pPr
     const pPr = listItem.find((el) => el.name === 'w:pPr');
     expect(pPr).toBeDefined();
@@ -58,6 +58,5 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     const { attributes } = wsz;
     expect(attributes).toBeDefined();
     expect(attributes['w:val']).toBe(16);
-    
   });
 });

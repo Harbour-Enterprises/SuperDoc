@@ -176,7 +176,7 @@ export class SuperToolbar extends EventEmitter {
       ...toolbarTexts,
       ...config.texts,
     };
-    
+
     this.config.hideButtons = config.hideButtons ?? true;
     this.config.responsiveToContainer = config.responsiveToContainer ?? false;
 
@@ -199,7 +199,7 @@ export class SuperToolbar extends EventEmitter {
     if (this.config.selector && !this.toolbarContainer) {
       return;
     }
-    
+
     this.app = createApp(Toolbar);
     this.app.directive('click-outside', vClickOutside);
     this.app.config.globalProperties.$toolbar = this;
@@ -230,10 +230,10 @@ export class SuperToolbar extends EventEmitter {
   }
 
   /**
-  * Initiate toolbar groups
-  * @private
-  * @returns {void}
-  */
+   * Initiate toolbar groups
+   * @private
+   * @returns {void}
+   */
   #initToolbarGroups() {
     // If groups is configured, override toolbarGroups
     if (this.config.groups && !Array.isArray(this.config.groups) && Object.keys(this.config.groups).length) {
@@ -350,7 +350,7 @@ export class SuperToolbar extends EventEmitter {
      * @param {Object} [_params=null] - Command parameters (not used)
      * @returns {void}
      */
-    toggleRuler: (_params=null) => {
+    toggleRuler: (_params = null) => {
       this.superdoc.toggleRuler();
     },
 
@@ -360,7 +360,7 @@ export class SuperToolbar extends EventEmitter {
      * @param {Object} [_params=null - Command parameters (not used)
      * @returns {Promise<void>}
      */
-    startImageUpload: async (_params=null) => {
+    startImageUpload: async (_params = null) => {
       let open = getFileOpener();
       let result = await open();
 
@@ -491,7 +491,7 @@ export class SuperToolbar extends EventEmitter {
           selection = this.activeEditor.options.lastSelection;
         }
         const endPos = selection.$to.pos;
-        
+
         const newSelection = new TextSelection(view.state.doc.resolve(endPos));
         const tr = view.state.tr.setSelection(newSelection);
         const state = view.state.apply(tr);
@@ -596,14 +596,7 @@ export class SuperToolbar extends EventEmitter {
    * @param {boolean} options.isDev - Whether in development mode
    * @returns {void}
    */
-  #makeToolbarItems({
-    superToolbar, 
-    icons,
-    texts,
-    fonts,
-    hideButtons,
-    isDev = false,
-  } = {}) {
+  #makeToolbarItems({ superToolbar, icons, texts, fonts, hideButtons, isDev = false } = {}) {
     const documentWidth = document.documentElement.clientWidth; // take into account the scrollbar
     const containerWidth = this.toolbarContainer?.offsetWidth ?? 0;
     const availableWidth = this.config.responsiveToContainer ? containerWidth : documentWidth;
@@ -621,8 +614,8 @@ export class SuperToolbar extends EventEmitter {
 
     const customItems = this.config.customButtons || [];
     if (customItems.length) {
-      defaultItems.push(...customItems.map((item) => useToolbarItem({...item})));
-    };
+      defaultItems.push(...customItems.map((item) => useToolbarItem({ ...item })));
+    }
 
     let allConfigItems = [
       ...defaultItems.map((item) => item.name.value),
@@ -632,7 +625,7 @@ export class SuperToolbar extends EventEmitter {
 
     const filteredItems = defaultItems
       .filter((item) => allConfigItems.includes(item.name.value))
-      .filter((item) => !this.config.excludeItems.includes(item.name.value))
+      .filter((item) => !this.config.excludeItems.includes(item.name.value));
 
     this.toolbarItems = filteredItems;
     this.overflowItems = overflowItems.filter((item) => allConfigItems.includes(item.name.value));
@@ -682,11 +675,10 @@ export class SuperToolbar extends EventEmitter {
       key: 'color',
       type: 'render',
       render: () => renderColorOptions(this, highlightItem, result, true),
-    }
+    };
 
     highlightItem.nestedOptions.value = [option];
   }
-
 
   /**
    * Update the toolbar state based on the current editor state
@@ -737,7 +729,9 @@ export class SuperToolbar extends EventEmitter {
           bold: 'bold',
           textAlign: 'textAlign',
         };
-        const linkedStyles = this.activeEditor.converter?.linkedStyles.find((style) => style.id === styleIdMark.attrs.styleId);
+        const linkedStyles = this.activeEditor.converter?.linkedStyles.find(
+          (style) => style.id === styleIdMark.attrs.styleId,
+        );
         if (linkedStyles && markToStyleMap[item.name.value] in linkedStyles?.definition.styles) {
           const linkedStylesItem = linkedStyles?.definition.styles[markToStyleMap[item.name.value]];
           const value = {
@@ -782,7 +776,7 @@ export class SuperToolbar extends EventEmitter {
 
     if (this.role === 'viewer') {
       this.#deactivateAll();
-    };
+    }
   };
 
   /**
@@ -828,12 +822,12 @@ export class SuperToolbar extends EventEmitter {
    * @param {ToolbarItem} params.item - An instance of the useToolbarItem composable
    * @param {*} [params.argument] - The argument passed to the command
    * @returns {*} The result of the executed command, undefined if no result is returned
-  */
+   */
   emitCommand({ item, argument, option }) {
     if (this.activeEditor && !this.activeEditor.options.isHeaderOrFooter) {
       this.activeEditor.focus();
     }
-    
+
     const { command } = item;
 
     if (!command) {

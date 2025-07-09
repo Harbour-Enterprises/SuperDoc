@@ -30,8 +30,8 @@ const getValue = computed(() => {
 
 const getPreviewStyle = computed(() => {
   const borderWidth = 2;
-  const width = (Number.parseFloat(props.styleOverride?.coordinates?.minWidth || 0) - borderWidth) + 'px';
-  const height = (Number.parseFloat(props.styleOverride?.coordinates?.minHeight || 0) - borderWidth) + 'px';
+  const width = Number.parseFloat(props.styleOverride?.coordinates?.minWidth || 0) - borderWidth + 'px';
+  const height = Number.parseFloat(props.styleOverride?.coordinates?.minHeight || 0) - borderWidth + 'px';
   const fontSize = parseFloat(width) + 'pt';
   return {
     width,

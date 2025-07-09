@@ -25,7 +25,7 @@ const props = defineProps({
   fromOverflow: {
     type: Boolean,
     default: false,
-  }
+  },
 });
 
 const currentItem = ref(null);
@@ -106,7 +106,6 @@ const getDropdownAttributes = (option, item) => {
 const handleClickOutside = (e) => {
   closeDropdowns();
 };
-
 
 const moveToNextButton = (e) => {
   const currentButton = e.target;
@@ -199,16 +198,10 @@ const handleFocus = (e) => {
     firstButton.focus();
   }
 };
-
 </script>
 
 <template>
-  <div 
-    :style="getPositionStyle" 
-    class="button-group" 
-    role="group"
-    @focus="handleFocus"
-  >
+  <div :style="getPositionStyle" class="button-group" role="group" @focus="handleFocus">
     <div
       v-for="(item, index) in toolbarItems"
       :key="item.id.value"
@@ -238,9 +231,11 @@ const handleFocus = (e) => {
         @select="(key, option) => handleSelect(item, option)"
         @clickoutside="handleClickOutside"
         :style="item.dropdownStyles.value"
-        :menu-props="() => ({
-          role: 'menu'
-        })"
+        :menu-props="
+          () => ({
+            role: 'menu',
+          })
+        "
         :node-props="(option) => getDropdownAttributes(option, item)"
       >
         <n-tooltip trigger="hover" :disabled="!item.tooltip?.value">
@@ -275,9 +270,12 @@ const handleFocus = (e) => {
       </n-tooltip>
 
       <!-- Overflow menu -->
-      <OverflowMenu v-if="isOverflow(item) && overflowItems.length" :toolbar-item="item"
+      <OverflowMenu
+        v-if="isOverflow(item) && overflowItems.length"
+        :toolbar-item="item"
         @buttonClick="handleToolbarButtonClick(item)"
-        :overflow-items="overflowItems" />
+        :overflow-items="overflowItems"
+      />
     </div>
   </div>
 </template>
@@ -293,7 +291,6 @@ const handleFocus = (e) => {
   &.high-contrast {
     .n-dropdown-option-body {
       &:hover {
-
         &::before,
         &::after {
           background-color: #000 !important;
@@ -310,7 +307,6 @@ const handleFocus = (e) => {
 
   .n-dropdown-option-body {
     &:hover {
-
       &::before,
       &::after {
         background-color: #d8dee5 !important;

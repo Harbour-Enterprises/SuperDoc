@@ -1,26 +1,10 @@
 import { writeUpdate, readSyncMessage, writeSyncStep1, writeSyncStep2 } from 'y-protocols/sync';
-import {
-  createEncoder,
-  writeVarUint,
-  writeVarUint8Array,
-  toUint8Array,
-  length as encodingLength,
-} from 'lib0/encoding';
+import { createEncoder, writeVarUint, writeVarUint8Array, toUint8Array, length as encodingLength } from 'lib0/encoding';
 import { readVarUint8Array, createDecoder, readVarUint } from 'lib0/decoding';
-import {
-  Awareness,
-  encodeAwarenessUpdate,
-  removeAwarenessStates,
-  applyAwarenessUpdate,
-} from 'y-protocols/awareness';
+import { Awareness, encodeAwarenessUpdate, removeAwarenessStates, applyAwarenessUpdate } from 'y-protocols/awareness';
 import { Doc as YDoc } from 'yjs';
 import { callbackHandler, isCallbackSet, debouncer } from './index.js';
-import {
-  messageSync,
-  messageAwareness,
-  wsReadyStateConnecting,
-  wsReadyStateOpen,
-} from './index.js';
+import { messageSync, messageAwareness, wsReadyStateConnecting, wsReadyStateOpen } from './index.js';
 
 /**
  * Represents a shared document that can be collaboratively edited.

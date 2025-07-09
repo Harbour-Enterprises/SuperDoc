@@ -89,4 +89,4 @@ export const toolbarIcons = {
   cut: scissorsIconSvg,
   copy: copyIconSvg,
   paste: pasteIconSvg,
-}
+};

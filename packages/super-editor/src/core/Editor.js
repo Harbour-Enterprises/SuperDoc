@@ -16,7 +16,7 @@ import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/ind
 import {
   initPaginationData,
   PaginationPluginKey,
-  toggleHeaderFooterEditMode
+  toggleHeaderFooterEditMode,
 } from '@extensions/pagination/pagination-helpers';
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
@@ -30,7 +30,10 @@ import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 import { setWordSelection } from './helpers/setWordSelection.js';
 import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
-import { migrateListsToV2IfNecessary, migrateParagraphFieldsListsV2 } from '@core/migrations/0.14-listsv2/listsv2migration.js';
+import {
+  migrateListsToV2IfNecessary,
+  migrateParagraphFieldsListsV2,
+} from '@core/migrations/0.14-listsv2/listsv2migration.js';
 import { createLinkedChildEditor } from '@core/child-editor/index.js';
 import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 
@@ -47,11 +50,11 @@ import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
  * @class
  */
 /**
-* @typedef {Object} User The current user of this superdoc
-* @property {string} name The user's name
-* @property {string} email The user's email
-* @property {string | null} image The user's photo
-*/
+ * @typedef {Object} User The current user of this superdoc
+ * @property {string} name The user's name
+ * @property {string} email The user's email
+ * @property {string | null} image The user's photo
+ */
 
 /**
  * @typedef {Object} DocxNode A JSON representation of a docx node
@@ -231,10 +234,10 @@ export class Editor extends EventEmitter {
 
     // telemetry
     telemetry: null,
-    
+
     // Docx xml updated by User
     customUpdatedFiles: {},
-    
+
     isHeaderFooterChanged: false,
     isCustomXmlChanged: false,
   };
@@ -272,7 +275,11 @@ export class Editor extends EventEmitter {
    * @returns {boolean}
    */
   get docChanged() {
-    return this.options.isHeaderFooterChanged || this.options.isCustomXmlChanged || !this.options.initialState.doc.eq(this.state.doc);
+    return (
+      this.options.isHeaderFooterChanged ||
+      this.options.isCustomXmlChanged ||
+      !this.options.initialState.doc.eq(this.state.doc)
+    );
   }
 
   /**
@@ -288,7 +295,7 @@ export class Editor extends EventEmitter {
         options.element = document.querySelector(selector);
       } else {
         options.element = document.getElementById(selector);
-      };
+      }
 
       const textModes = ['text', 'html'];
       if (textModes.includes(options.mode) && options.element) {
@@ -342,11 +349,11 @@ export class Editor extends EventEmitter {
     if (!this.options.isHeadless) {
       this.initializeCollaborationData();
       this.initDefaultStyles();
-    };
+    }
 
     if (!this.options.ydoc) this.migrateListsToV2();
 
-    this.setDocumentMode(this.options.documentMode);      
+    this.setDocumentMode(this.options.documentMode);
 
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady
@@ -394,7 +401,7 @@ export class Editor extends EventEmitter {
 
   mount(el) {
     this.#createView(el);
-  
+
     window.setTimeout(() => {
       if (this.isDestroyed) return;
       this.emit('create', { editor: this });
@@ -410,13 +417,13 @@ export class Editor extends EventEmitter {
   }
 
   /**
-  *
-  * @private
-  * @param {Object} param0
-  * @param {Object} param0.editor
-  * @param {Object} param0.event
-  * @returns {void}
-  */
+   *
+   * @private
+   * @param {Object} param0
+   * @param {Object} param0.editor
+   * @param {Object} param0.event
+   * @returns {void}
+   */
   #onFocus({ editor, event }) {
     this.toolbar?.setActiveEditor(editor);
     this.options.onFocus({ editor, event });
@@ -590,7 +597,7 @@ export class Editor extends EventEmitter {
   }
 
   /**
-  * Initialize data for collaborative editing
+   * Initialize data for collaborative editing
    * If we are replacing data and have a valid provider, listen for synced event
    * so that we can initialize the data
    * @returns {void}
@@ -612,7 +619,7 @@ export class Editor extends EventEmitter {
   /**
    * Replace content of editor that was created with loadFromSchema option
    * Used to replace content of other header/footer when one of it was edited
-   * 
+   *
    * @param {object} content - new editor content json (retrieved from editor.getUpdatedJson)
    * @returns {void}
    */
@@ -626,7 +633,7 @@ export class Editor extends EventEmitter {
 
     this.#createConverter();
     this.#initMedia();
-    
+
     const doc = this.#generatePmData();
     const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc);
     tr.setMeta('replaceContent', true);
@@ -680,7 +687,7 @@ export class Editor extends EventEmitter {
     };
 
     if (this.options.collaborationProvider && this.options.ydoc) {
-      const nonCollabHistoryIndex = this.options.extensions.findIndex((e) => e.name === "history");
+      const nonCollabHistoryIndex = this.options.extensions.findIndex((e) => e.name === 'history');
       if (nonCollabHistoryIndex !== -1) {
         this.options.extensions.splice(nonCollabHistoryIndex, 1);
       }
@@ -875,7 +882,7 @@ export class Editor extends EventEmitter {
   static getDocumentVersion(doc) {
     const version = SuperConverter.getStoredSuperdocVersion(doc);
     return version;
-  };
+  }
 
   /**
    * Update the document version
@@ -887,7 +894,7 @@ export class Editor extends EventEmitter {
   static updateDocumentVersion(doc, version) {
     const updatedContent = SuperConverter.updateDocumentVersion(doc, version);
     return updatedContent;
-  };
+  }
 
   /**
    * Creates document PM schema.
@@ -913,15 +920,14 @@ export class Editor extends EventEmitter {
         if (loadFromSchema) {
           doc = this.schema.nodeFromJSON(content);
           doc = this.#prepareDocumentForImport(doc);
-        }
-        else {
+        } else {
           doc = createDocument(this.converter, this.schema, this);
 
           // Perform any additional document processing prior to finalizing the doc here
           doc = this.#prepareDocumentForImport(doc);
 
           // If we have a new doc, and have html data, we initialize from html
-          if (this.options.html) doc = this.#createDocFromHTML(this.options.html)
+          if (this.options.html) doc = this.#createDocFromHTML(this.options.html);
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
           if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
@@ -955,11 +961,10 @@ export class Editor extends EventEmitter {
       tempDiv.innerHTML = content;
       parsedContent = tempDiv;
       tempDiv.remove();
-    };
+    }
 
     return DOMParser.fromSchema(this.schema).parse(parsedContent);
   }
-
 
   /**
    * Create the PM editor view
@@ -972,7 +977,7 @@ export class Editor extends EventEmitter {
     // Only initialize the doc if we are not using Yjs/collaboration.
     const state = { schema: this.schema };
     if (!this.options.ydoc) state.doc = doc;
-    
+
     this.options.initialState = EditorState.create(state);
 
     this.view = new EditorView(element, {
@@ -1019,9 +1024,9 @@ export class Editor extends EventEmitter {
 
         // Imitate default double click behavior - word selection
         setWordSelection(view, pos);
-      }
+      },
     });
-    
+
     const newState = this.state.reconfigure({
       plugins: [...this.extensionService.plugins],
     });
@@ -1061,7 +1066,7 @@ export class Editor extends EventEmitter {
     return {
       width: maxWidth,
       height: maxHeight,
-    }
+    };
   }
 
   /**
@@ -1073,7 +1078,7 @@ export class Editor extends EventEmitter {
     if (!proseMirror || !element) {
       return;
     }
-    
+
     proseMirror.setAttribute('role', 'document');
     proseMirror.setAttribute('aria-multiline', true);
     proseMirror.setAttribute('aria-label', 'Main content area, start typing to enter text.');
@@ -1085,12 +1090,12 @@ export class Editor extends EventEmitter {
       element.style.minWidth = pageSize.width + 'in';
       element.style.minHeight = pageSize.height + 'in';
     }
-   
+
     if (pageMargins) {
       element.style.paddingLeft = pageMargins.left + 'in';
       element.style.paddingRight = pageMargins.right + 'in';
     }
-    
+
     element.style.boxSizing = 'border-box';
     element.style.isolation = 'isolate'; // to create new stacking context.
 
@@ -1127,13 +1132,13 @@ export class Editor extends EventEmitter {
   }
 
   /**
-    * Initialize default styles for the editor container and ProseMirror.
-    * Get page size and margins from the converter.
-    * Set document default font and font size.
-    *
-    * @param {HTMLElement} [element=this.element] - The DOM element to apply styles to
-    * @returns {void}
-    */
+   * Initialize default styles for the editor container and ProseMirror.
+   * Get page size and margins from the converter.
+   * Set document default font and font size.
+   *
+   * @param {HTMLElement} [element=this.element] - The DOM element to apply styles to
+   * @returns {void}
+   */
   initDefaultStyles(element = this.element, isPaginationEnabled = true) {
     if (this.options.isHeadless || this.options.suppressDefaultDocxStyles) return;
 
@@ -1142,7 +1147,7 @@ export class Editor extends EventEmitter {
     this.updateEditorStyles(element, proseMirror, isPaginationEnabled);
 
     this.initMobileStyles(element);
-  };
+  }
 
   /**
    * Initializes responsive styles for mobile devices.
@@ -1181,7 +1186,7 @@ export class Editor extends EventEmitter {
         superEditorElement.style.maxWidth = '';
         superEditorContainer.style.minWidth = '';
 
-        element.style.transform = "none";
+        element.style.transform = 'none';
       }
     };
 
@@ -1195,13 +1200,13 @@ export class Editor extends EventEmitter {
     };
 
     if ('orientation' in screen && 'addEventListener' in screen.orientation) {
-      screen.orientation.addEventListener("change", handleResize);
+      screen.orientation.addEventListener('change', handleResize);
     } else {
-      window.matchMedia("(orientation: portrait)").addEventListener("change", handleResize);
+      window.matchMedia('(orientation: portrait)').addEventListener('change', handleResize);
     }
 
     window.addEventListener('resize', () => handleResize);
-  };
+  }
 
   /**
    * Handler called when collaboration is ready.
@@ -1229,7 +1234,7 @@ export class Editor extends EventEmitter {
       this.initPagination();
       this.#initComments();
     }
-  };
+  }
 
   /**
    * Initialize comments plugin
@@ -1249,7 +1254,7 @@ export class Editor extends EventEmitter {
       const tr = state.tr.setMeta(CommentsPluginKey, { type: 'force' });
       dispatch(tr);
     }, 50);
-  };
+  }
 
   /**
    * Initialize pagination, if the pagination extension is enabled.
@@ -1272,7 +1277,7 @@ export class Editor extends EventEmitter {
       const tr = state.tr.setMeta(PaginationPluginKey, { isReadyToInit: true });
       dispatch(tr);
     }
-  };
+  }
 
   /**
    * Dispatch a transaction to update the editor state
@@ -1368,8 +1373,7 @@ export class Editor extends EventEmitter {
    */
   isActive(nameOrAttributes, attributesOrUndefined) {
     const name = typeof nameOrAttributes === 'string' ? nameOrAttributes : null;
-    const attributes =
-      typeof nameOrAttributes === 'string' ? attributesOrUndefined : nameOrAttributes;
+    const attributes = typeof nameOrAttributes === 'string' ? attributesOrUndefined : nameOrAttributes;
     return isActive(this.state, name, attributes);
   }
 
@@ -1440,7 +1444,6 @@ export class Editor extends EventEmitter {
     }
   }
 
-
   /**
    * Handles image node selection for header/footer editor
    */
@@ -1449,8 +1452,7 @@ export class Editor extends EventEmitter {
       return setImageNodeSelection(view, pos);
     }
   }
-  
-  
+
   /**
    * Perform any post conversion pre prosemirror import processing.
    * Comments are processed here.
@@ -1489,7 +1491,7 @@ export class Editor extends EventEmitter {
     const newState = EditorState.create({
       schema: this.schema,
       doc: this.state.doc,
-      plugins: this.state.plugins
+      plugins: this.state.plugins,
     });
 
     const { tr, doc } = newState;
@@ -1498,7 +1500,7 @@ export class Editor extends EventEmitter {
     const updatedState = newState.apply(tr);
     return updatedState.doc.toJSON();
   }
-  
+
   getUpdatedJson() {
     return this.#prepareDocumentForExport();
   }
@@ -1519,9 +1521,8 @@ export class Editor extends EventEmitter {
     exportJsonOnly = false,
     exportXmlOnly = false,
     comments = [],
-    getUpdatedDocs = false
+    getUpdatedDocs = false,
   } = {}) {
-
     // Pre-process the document state to prepare for export
     const json = this.#prepareDocumentForExport(comments);
 
@@ -1544,7 +1545,7 @@ export class Editor extends EventEmitter {
     const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
     const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
     const media = this.converter.addedMedia;
-    
+
     const updatedHeadersFooters = {};
     Object.entries(this.converter.convertedXml).forEach(([name, json]) => {
       if (name.includes('header') || name.includes('footer')) {
@@ -1570,9 +1571,15 @@ export class Editor extends EventEmitter {
 
     if (comments.length) {
       const commentsXml = this.converter.schemaToXml(this.converter.convertedXml['word/comments.xml'].elements[0]);
-      const commentsExtendedXml = this.converter.schemaToXml(this.converter.convertedXml['word/commentsExtended.xml'].elements[0]);
-      const commentsExtensibleXml = this.converter.schemaToXml(this.converter.convertedXml['word/commentsExtensible.xml'].elements[0]);
-      const commentsIdsXml = this.converter.schemaToXml(this.converter.convertedXml['word/commentsIds.xml'].elements[0]);
+      const commentsExtendedXml = this.converter.schemaToXml(
+        this.converter.convertedXml['word/commentsExtended.xml'].elements[0],
+      );
+      const commentsExtensibleXml = this.converter.schemaToXml(
+        this.converter.convertedXml['word/commentsExtensible.xml'].elements[0],
+      );
+      const commentsIdsXml = this.converter.schemaToXml(
+        this.converter.convertedXml['word/commentsIds.xml'].elements[0],
+      );
 
       updatedDocs['word/comments.xml'] = String(commentsXml);
       updatedDocs['word/commentsExtended.xml'] = String(commentsExtendedXml);
@@ -1581,14 +1588,18 @@ export class Editor extends EventEmitter {
     }
 
     const zipper = new DocxZipper();
-    
+
     if (getUpdatedDocs) {
-      updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes({
-        files: this.options.content
-      }, media, true);
+      updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes(
+        {
+          files: this.options.content,
+        },
+        media,
+        true,
+      );
       return updatedDocs;
     }
-    
+
     const result = await zipper.updateZip({
       docx: this.options.content,
       updatedDocs: updatedDocs,
@@ -1600,7 +1611,7 @@ export class Editor extends EventEmitter {
 
     this.options.telemetry?.trackUsage('document_export', {
       documentType: 'docx',
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
     });
 
     return result;
@@ -1636,10 +1647,7 @@ export class Editor extends EventEmitter {
 
   destroyHeaderFooterEditors() {
     try {
-      const editors = [
-        ...this.converter.headerEditors, 
-        ...this.converter.footerEditors,
-      ];
+      const editors = [...this.converter.headerEditors, ...this.converter.footerEditors];
       for (let editorData of editors) {
         editorData.editor.destroy();
       }
@@ -1693,7 +1701,7 @@ export class Editor extends EventEmitter {
     // Return the updated ydoc
     const pluginState = syncPlugin?.getState(this.state);
     return pluginState.doc;
-  };
+  }
 
   /**
    * Replace the current file
@@ -1702,7 +1710,7 @@ export class Editor extends EventEmitter {
    * @returns {Promise<void>}
    */
   async replaceFile(newFile) {
-    this.setOptions({ annotations: true })
+    this.setOptions({ annotations: true });
     const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(newFile);
     this.setOptions({
       fileSource: newFile,
@@ -1740,16 +1748,16 @@ export class Editor extends EventEmitter {
    */
   getInternalXmlFile(name, type = 'json') {
     if (!this.converter.convertedXml[name]) {
-      console.warn('Cannot find file in docx')
+      console.warn('Cannot find file in docx');
       return null;
     }
-    
+
     if (type === 'json') {
       return this.converter.convertedXml[name].elements[0] || null;
     }
     return this.converter.schemaToXml(this.converter.convertedXml[name].elements[0]);
   }
-  
+
   /**
    * Update internal docx file content
    * @param {string} name - File name
@@ -1847,9 +1855,9 @@ export class Editor extends EventEmitter {
   /**
    * Preview annotations in the editor. It stores a copy of the original state.
    * This can be reverted via closePreview()
-   * 
-   * @param {Object[]} annotationValues 
-   * @param {string[]} hiddenIds 
+   *
+   * @param {Object[]} annotationValues
+   * @param {string[]} hiddenIds
    * @returns {void}
    */
   previewAnnotations(annotationValues = [], hiddenIds = []) {
@@ -1859,12 +1867,11 @@ export class Editor extends EventEmitter {
 
   /**
    * If there is a preview active, this will revert the editor to the original state.
-   * 
-   * @returns {void} 
+   *
+   * @returns {void}
    */
   closePreview() {
     if (!this.originalState) return;
     this.view.updateState(this.originalState);
   }
-
 }

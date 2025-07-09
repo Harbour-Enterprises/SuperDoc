@@ -7,7 +7,7 @@ import { SharedSuperDoc } from '../shared-doc/index.js';
  * It handles document retrieval and debouncing updates.
  */
 export class DocumentManager {
-  /** @type {Map<string, SharedSuperDoc>} */ 
+  /** @type {Map<string, SharedSuperDoc>} */
   #documents = new Map();
 
   /** @type {import('../types.js').Hooks} */
@@ -33,7 +33,8 @@ export class DocumentManager {
    */
   constructor(config) {
     this.#hooks = config.hooks;
-    this.debounceMs = config.debounce ?? 0;1
+    this.debounceMs = config.debounce ?? 0;
+    1;
     this.#cacheDocumentsMs = config.documentExpiryMs ?? this.#cacheDocumentsMs;
   }
 
@@ -90,7 +91,7 @@ export class DocumentManager {
         documentId,
         setTimeout(() => {
           this.#hooks.autoSave(userParams);
-        }, this.debounceMs),
+        }, this.debounceMs)
       );
     } else {
       this.#hooks.autoSave(userParams);
@@ -136,7 +137,7 @@ export class DocumentManager {
 
   /**
    * Check if a document exists in the manager.
-   * @param {string} documentId 
+   * @param {string} documentId
    * @returns {boolean} True if the document exists, false otherwise.
    */
   has(documentId) {

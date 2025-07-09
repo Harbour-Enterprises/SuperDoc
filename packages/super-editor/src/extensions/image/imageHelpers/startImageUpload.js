@@ -62,7 +62,7 @@ export const startImageUpload = async ({ editor, view, file }) => {
       if (placeholderPos == null) {
         return;
       }
-      
+
       // Otherwise, insert it at the placeholder's position, and remove
       // the placeholder
       let removeMeta = { type: 'remove', id };

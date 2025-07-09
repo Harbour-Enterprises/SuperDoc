@@ -29,7 +29,7 @@ const alignmentButtons = [
     ariaLabel: 'Justify',
     icon: toolbarIcons.alignJustify,
   },
-]
+];
 const select = (alignment) => {
   emit('select', alignment);
 };
@@ -41,7 +41,7 @@ const moveToNextButton = (index) => {
     nextButton.setAttribute('tabindex', '0');
     nextButton.focus();
   }
-}
+};
 
 const moveToPreviousButton = (index) => {
   if (index === 0) return;
@@ -50,10 +50,10 @@ const moveToPreviousButton = (index) => {
     previousButton.setAttribute('tabindex', '0');
     previousButton.focus();
   }
-}
+};
 
 const handleKeyDown = (e, index) => {
-  switch(e.key) {
+  switch (e.key) {
     case 'ArrowLeft':
       moveToPreviousButton(index);
       break;
@@ -66,7 +66,7 @@ const handleKeyDown = (e, index) => {
     default:
       break;
   }
-} 
+};
 onMounted(() => {
   // Focus on the first button
   const firstButton = alignmentButtonsRefs.value[0];
@@ -74,8 +74,7 @@ onMounted(() => {
     firstButton.setAttribute('tabindex', '0');
     firstButton.focus();
   }
-})
-
+});
 </script>
 
 <template>
@@ -83,9 +82,9 @@ onMounted(() => {
     <div
       v-for="(button, index) in alignmentButtons"
       :key="button.key"
-      class="button-icon" 
-      @click="select(button.key)" 
-      v-html="button.icon" 
+      class="button-icon"
+      @click="select(button.key)"
+      v-html="button.icon"
       data-item="btn-textAlign-option"
       role="menuitem"
       :aria-label="button.ariaLabel"

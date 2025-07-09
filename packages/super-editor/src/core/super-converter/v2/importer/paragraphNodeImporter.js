@@ -35,7 +35,7 @@ export const handleParagraphNode = (params) => {
     return { nodes: [], consumed: 0 };
   }
 
-  const updatedParams = {...params, nodes: [node]};
+  const updatedParams = { ...params, nodes: [node] };
   const result = handleStandardNode(updatedParams);
   if (result.nodes.length === 1) {
     schemaNode = result.nodes[0];
@@ -45,17 +45,17 @@ export const handleParagraphNode = (params) => {
   const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
   const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
   const framePr = pPr?.elements?.find((el) => el.name === 'w:framePr');
-  
+
   if (nestedRPr) {
     let marks = parseMarks(nestedRPr, []);
 
     if (!schemaNode.content?.length) {
       let highlightIndex = marks?.findIndex((i) => i.type === 'highlight');
       if (highlightIndex !== -1) {
-        marks.splice(highlightIndex, 1)
+        marks.splice(highlightIndex, 1);
       }
     }
-    
+
     schemaNode.attrs.marksAttrs = marks;
   }
 
@@ -93,7 +93,7 @@ export const handleParagraphNode = (params) => {
   if (justify && justify.attributes) {
     schemaNode.attrs['textAlign'] = justify.attributes['w:val'];
   }
-  
+
   const keepLines = pPr?.elements?.find((el) => el.name === 'w:keepLines');
   if (keepLines && keepLines.attributes) {
     schemaNode.attrs['keepLines'] = keepLines.attributes['w:val'];
@@ -126,7 +126,7 @@ export const handleParagraphNode = (params) => {
       wrap: framePr.attributes['w:wrap'],
       hAnchor: framePr.attributes['w:hAnchor'],
       vAnchor: framePr.attributes['w:vAnchor'],
-    }
+    };
   }
 
   schemaNode.attrs['filename'] = filename;
@@ -145,7 +145,7 @@ export const handleParagraphNode = (params) => {
     if (!schemaNode.attrs.paragraphProperties) schemaNode.attrs.paragraphProperties = {};
     schemaNode.attrs.paragraphProperties.sectPr = sectPr;
     schemaNode.attrs.pageBreakSource = 'sectPr';
-  };
+  }
 
   return { nodes: schemaNode ? [schemaNode] : [], consumed: 1 };
 };
@@ -195,14 +195,14 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
 export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
   // Check if we have default paragraph styles to override
   const spacing = {};
-  
+
   const { spacing: pDefaultSpacing = {} } = getDefaultParagraphStyle(docx, styleId);
   let lineSpaceAfter, lineSpaceBefore, line, lineRuleStyle;
 
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');
   const inLineSpacingTag = pPr?.elements?.find((el) => el.name === 'w:spacing');
   const inLineSpacing = inLineSpacingTag?.attributes || {};
-  
+
   const textStyleMark = marks.find((el) => el.type === 'textStyle');
   const fontSize = textStyleMark?.attrs?.fontSize;
 
@@ -215,17 +215,17 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
 
   const lineRule = inLineSpacing?.['w:lineRule'] || lineRuleStyle || pDefaultSpacing?.['w:lineRule'];
   if (lineRule) spacing.lineRule = lineRule;
-  
+
   if (lineRule === 'exact' && lineSpacing) {
     spacing.line = `${twipsToPt(lineSpacing)}pt`;
   }
 
   const beforeSpacing = inLineSpacing?.['w:before'] || lineSpaceBefore || pDefaultSpacing?.['w:before'];
   if (beforeSpacing) spacing.lineSpaceBefore = twipsToPixels(beforeSpacing);
-  
+
   const beforeAutospacing = inLineSpacing?.['w:beforeAutospacing'];
   if (beforeAutospacing === '1' && fontSize) {
-    spacing.lineSpaceBefore += Math.round((parseInt(fontSize) * 0.5) * 96 / 72);
+    spacing.lineSpaceBefore += Math.round((parseInt(fontSize) * 0.5 * 96) / 72);
   }
 
   const afterSpacing = inLineSpacing?.['w:after'] || lineSpaceAfter || pDefaultSpacing?.['w:after'];
@@ -233,7 +233,7 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
 
   const afterAutospacing = inLineSpacing?.['w:afterAutospacing'];
   if (afterAutospacing === '1' && fontSize) {
-    spacing.lineSpaceAfter += Math.round((parseInt(fontSize) * 0.5) * 96 / 72);
+    spacing.lineSpaceAfter += Math.round((parseInt(fontSize) * 0.5 * 96) / 72);
   }
 
   return spacing;
@@ -249,26 +249,30 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
   const pPrDefault = pDefault?.elements?.find((el) => el.name === 'w:pPr');
   const pPrDefaultSpacingTag = pPrDefault?.elements?.find((el) => el.name === 'w:spacing') || {};
   const pPrDefaultIndentTag = pPrDefault?.elements?.find((el) => el.name === 'w:ind') || {};
-  
+
   // Paragraph 'Normal' styles
-  const stylesNormal = styles.elements[0].elements?.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === 'Normal');
+  const stylesNormal = styles.elements[0].elements?.find(
+    (el) => el.name === 'w:style' && el.attributes['w:styleId'] === 'Normal',
+  );
   const pPrNormal = stylesNormal?.elements?.find((el) => el.name === 'w:pPr');
   const pPrNormalSpacingTag = pPrNormal?.elements?.find((el) => el.name === 'w:spacing') || {};
   const pPrNormalIndentTag = pPrNormal?.elements?.find((el) => el.name === 'w:ind') || {};
-  
+
   // Styles based on styleId
   let pPrStyleIdSpacingTag = {};
   let pPrStyleIdIndentTag = {};
   let pPrStyleJc = {};
   if (styleId) {
-    const stylesById = styles.elements[0].elements?.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId);
+    const stylesById = styles.elements[0].elements?.find(
+      (el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId,
+    );
     const pPrById = stylesById?.elements?.find((el) => el.name === 'w:pPr');
 
     pPrStyleIdSpacingTag = pPrById?.elements?.find((el) => el.name === 'w:spacing') || {};
     pPrStyleIdIndentTag = pPrById?.elements?.find((el) => el.name === 'w:ind') || {};
     pPrStyleJc = pPrById?.elements?.find((el) => el.name === 'w:jc') || {};
   }
-  
+
   const { attributes: pPrDefaultSpacingAttr } = pPrDefaultSpacingTag;
   const { attributes: pPrNormalSpacingAttr } = pPrNormalSpacingTag;
   const { attributes: pPrByIdSpacingAttr } = pPrStyleIdSpacingTag;
@@ -318,9 +322,9 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
     return qFormat;
   });
 
-  const name = elementsWithId.find(el =>
-    el.elements.some(inner => inner.name === 'w:name')
-  )?.elements.find(inner => inner.name === 'w:name')?.attributes['w:val'];
+  const name = elementsWithId
+    .find((el) => el.elements.some((inner) => inner.name === 'w:name'))
+    ?.elements.find((inner) => inner.name === 'w:name')?.attributes['w:val'];
 
   // pPr
   const pPr = firstMatch.elements.find((el) => el.name === 'w:pPr');
@@ -333,7 +337,7 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
     lineSpaceBefore = twipsToPixels(spacing?.attributes['w:before']);
     lineSpaceAfter = twipsToPixels(spacing?.attributes['w:after']);
     line = twipsToLines(spacing?.attributes['w:line']);
-  };
+  }
 
   let textAlign, leftIndent, rightIndent, firstLine;
   if (indent) {
@@ -341,7 +345,7 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
     leftIndent = twipsToPixels(indent?.attributes['w:left']);
     rightIndent = twipsToPixels(indent?.attributes['w:right']);
     firstLine = twipsToPixels(indent?.attributes['w:firstLine']);
-  };
+  }
 
   const keepNext = pPr?.elements?.find((el) => el.name === 'w:keepNext');
   const keepLines = pPr?.elements?.find((el) => el.name === 'w:keepLines');
@@ -352,15 +356,15 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
   const pageBreakBefore = pPr?.elements?.find((el) => el.name === 'w:pageBreakBefore');
   let pageBreakBeforeVal = 0;
   if (pageBreakBefore) {
-     if (!pageBreakBefore.attributes?.['w:val']) pageBreakBeforeVal = 1;
-     else pageBreakBeforeVal = Number(pageBreakBefore?.attributes?.['w:val'])
+    if (!pageBreakBefore.attributes?.['w:val']) pageBreakBeforeVal = 1;
+    else pageBreakBeforeVal = Number(pageBreakBefore?.attributes?.['w:val']);
   }
   const pageBreakAfter = pPr?.elements?.find((el) => el.name === 'w:pageBreakAfter');
   let pageBreakAfterVal;
   if (pageBreakAfter) {
     if (!pageBreakAfter.attributes?.['w:val']) pageBreakAfterVal = 1;
-    else pageBreakAfterVal = Number(pageBreakAfter?.attributes?.['w:val'])
- }
+    else pageBreakAfterVal = Number(pageBreakAfter?.attributes?.['w:val']);
+  }
 
   const parsedAttrs = {
     name,
@@ -385,7 +389,7 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
     const { type, attrs } = mark;
     if (type === 'textStyle') {
       Object.entries(attrs).forEach(([key, value]) => {
-        parsedStyles[kebabCase(key)] = value
+        parsedStyles[kebabCase(key)] = value;
       });
       return;
     }
@@ -393,7 +397,7 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
     parsedStyles[type] = attrs;
   });
 
-  // pPr marks 
+  // pPr marks
   return {
     attrs: parsedAttrs,
     styles: parsedStyles,
@@ -448,11 +452,11 @@ export function preProcessNodesForFldChar(nodes = []) {
   }
 
   return processedNodes;
-};
+}
 
 /**
  * Process the combined nodes for fldChar
- * 
+ *
  * @param {Array} nodesToCombine List of nodes to combine
  * @returns {Array} Processed nodes
  */
@@ -482,12 +486,12 @@ const processCombinedNodesForFldChar = (nodesToCombine = []) => {
   if (hasPageMarker) {
     const pageNumNode = {
       name: 'sd:autoPageNumber',
-      type: 'element', 
+      type: 'element',
     };
 
     nodesToCombine.forEach((n) => {
       const rPrNode = n.elements.find((el) => el.name === 'w:rPr');
-      if (rPrNode) pageNumNode.elements = [rPrNode]
+      if (rPrNode) pageNumNode.elements = [rPrNode];
     });
 
     processedNodes.push(pageNumNode);
@@ -530,7 +534,7 @@ const processCombinedNodesForFldChar = (nodesToCombine = []) => {
       type: 'element',
       elements: [rPr, ...textNodes],
     });
-  };
+  }
 
   return processedNodes;
 };

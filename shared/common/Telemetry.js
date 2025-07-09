@@ -15,7 +15,7 @@ function randomBytes(length) {
     array[i] = Math.floor(Math.random() * 256);
   }
   return array;
-};
+}
 
 class Telemetry {
   /** @type {boolean} */
@@ -133,17 +133,17 @@ class Telemetry {
       this.statistics.nodeTypes[data.elementName] = (this.statistics.nodeTypes[data.elementName] || 0) + 1;
       this.fileStructure.totalNodes++;
     } else if (category === 'unknown') {
-      const addedElement = this.unknownElements.find(e => e.elementName === data.elementName);
+      const addedElement = this.unknownElements.find((e) => e.elementName === data.elementName);
       if (addedElement) {
         addedElement.count += 1;
         addedElement.attributes = {
           ...addedElement.attributes,
-          ...data.attributes
+          ...data.attributes,
         };
       } else {
         this.unknownElements.push({
           ...data,
-          count: 1
+          count: 1,
         });
       }
     } else if (category === 'error') {
@@ -172,7 +172,7 @@ class Telemetry {
         'lvlText',
         'lvlJc',
         'listNumberingType',
-        'numId'
+        'numId',
       ];
       Object.keys(data.attributes).forEach((attribute) => {
         if (!styleAttributes.includes(attribute)) return;
@@ -252,11 +252,16 @@ class Telemetry {
       maxDepth: 0,
       totalNodes: 0,
       files: [],
-    }
+    };
     // Empty document case
     if (Object.keys(this.statistics.nodeTypes).length <= 1) return;
 
-    return this.statistics !== initialStatistics || initialFileStructure !== this.fileStructure || this.errors.length > 0 || this.unknownElements.length > 0;
+    return (
+      this.statistics !== initialStatistics ||
+      initialFileStructure !== this.fileStructure ||
+      this.errors.length > 0 ||
+      this.unknownElements.length > 0
+    );
   }
 
   /**
@@ -266,21 +271,23 @@ class Telemetry {
   async sendReport() {
     if (!this.enabled || !this.isTelemetryDataChanged()) return;
 
-    const report = [{
-      id: this.generateId(),
-      type: 'parsing',
-      timestamp: new Date().toISOString(),
-      sessionId: this.sessionId,
-      superdocId: this.superdocId,
-      superdocVersion: this.superdocVersion,
-      file: this.documentInfo,
-      browser: this.getBrowserInfo(),
-      statistics: this.statistics,
-      fileStructure: this.fileStructure,
-      unknownElements: this.unknownElements,
-      errors: this.errors,
-    }];
-    
+    const report = [
+      {
+        id: this.generateId(),
+        type: 'parsing',
+        timestamp: new Date().toISOString(),
+        sessionId: this.sessionId,
+        superdocId: this.superdocId,
+        superdocVersion: this.superdocVersion,
+        file: this.documentInfo,
+        browser: this.getBrowserInfo(),
+        statistics: this.statistics,
+        fileStructure: this.fileStructure,
+        unknownElements: this.unknownElements,
+        errors: this.errors,
+      },
+    ];
+
     await this.sendDataToTelemetry(report);
   }
 

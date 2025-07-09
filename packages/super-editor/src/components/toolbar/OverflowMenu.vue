@@ -35,21 +35,16 @@ const handleCommand = ({ item, argument }) => {
 </script>
 
 <template>
-  <div 
-    class="overflow-menu"
-  >
+  <div class="overflow-menu">
     <div class="overflow-menu-trigger">
-      <ToolbarButton 
-        :toolbar-item="overflowToolbarItem"
-        @buttonClick="toggleOverflowMenu"
-      />
+      <ToolbarButton :toolbar-item="overflowToolbarItem" @buttonClick="toggleOverflowMenu" />
     </div>
     <div v-if="isDropdownOpened" class="overflow-menu_items" role="group">
       <ButtonGroup
         class="superdoc-toolbar-overflow"
         :toolbar-items="overflowItems"
         from-overflow
-        @command="handleCommand"  
+        @command="handleCommand"
       />
     </div>
   </div>

@@ -33,7 +33,7 @@ export class ExtensionService {
         isExternal: true,
       };
     });
-  
+
     this.extensions = ExtensionService.getResolvedExtensions([...extensions, ...this.externalExtensions]);
     this.schema = Schema.createSchemaByExtensions(this.extensions, editor);
     this.#setupExtensions();
@@ -167,7 +167,7 @@ export class ExtensionService {
         editor,
         rules: inputRules,
       }),
-      ...allPlugins
+      ...allPlugins,
     ];
   }
 

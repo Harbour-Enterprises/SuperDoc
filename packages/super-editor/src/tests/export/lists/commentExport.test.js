@@ -15,7 +15,10 @@ describe('[basic-comment.docx] interrupted ordered list tests', async () => {
   const body = {};
 
   beforeEach(() => {
-    Object.assign(body, result.elements?.find((el) => el.name === 'w:body'));
+    Object.assign(
+      body,
+      result.elements?.find((el) => el.name === 'w:body'),
+    );
   });
 
   it('correctly exports first list item', () => {

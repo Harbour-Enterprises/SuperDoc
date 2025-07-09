@@ -28,7 +28,7 @@ const onTableGridMouseOver = (event) => {
 const selectGridItems = (allItems, cols, rows) => {
   selectedCols.value = cols;
   selectedRows.value = rows;
-  
+
   for (let i = 0; i < allItems.length; i++) {
     let item = allItems[i];
     let itemsCols = parseInt(item.dataset.cols, 10);
@@ -40,7 +40,7 @@ const selectGridItems = (allItems, cols, rows) => {
       item.classList.remove('selected');
     }
   }
-}
+};
 
 const handleClick = ({ cols, rows }) => {
   emit('select', { cols, rows });
@@ -50,7 +50,7 @@ const handleKeyDown = (event, cols, rows) => {
   let normalizedCols = cols - 1;
   let normalizedRows = rows - 1;
 
-  switch(event.key) {
+  switch (event.key) {
     case 'ArrowRight': {
       if (normalizedCols >= 4) {
         return;
@@ -88,7 +88,7 @@ const handleKeyDown = (event, cols, rows) => {
       tableGridItems.value[nextRow + normalizedCols].focus();
       selectGridItems(tableGridItems.value, cols, rows + 1);
       break;
-    } 
+    }
     case 'ArrowUp': {
       if (normalizedRows <= 0) {
         return;
@@ -109,7 +109,7 @@ const handleKeyDown = (event, cols, rows) => {
     default:
       break;
   }
-}
+};
 
 onMounted(() => {
   // Focus on the first item
@@ -117,26 +117,28 @@ onMounted(() => {
   tableGridItems.value[0].focus();
 
   selectGridItems(tableGridItems.value, 1, 1);
-})
+});
 </script>
 
 <template>
   <div class="toolbar-table-grid-wrapper" :class="{ 'high-contrast': isHighContrastMode }">
     <div class="toolbar-table-grid" @mouseover="onTableGridMouseOver" data-grid="true">
       <template v-for="i in 5" :key="i">
-        <div class="toolbar-table-grid__item" v-for="n in 5" :key="`${i}_${n}`" :data-cols="n" :data-rows="i"
+        <div
+          class="toolbar-table-grid__item"
+          v-for="n in 5"
+          :key="`${i}_${n}`"
+          :data-cols="n"
+          :data-rows="i"
           data-item="true"
           ref="tableGridItems"
           @keydown.prevent="(event) => handleKeyDown(event, n, i)"
-          @click.stop.prevent="handleClick({ cols: n, rows: i })">
-        </div>
+          @click.stop.prevent="handleClick({ cols: n, rows: i })"
+        ></div>
       </template>
     </div>
 
-    <div 
-      class="toolbar-table-grid-value"
-      :aria-valuetext="`${selectedRows} x ${selectedCols}`"
-    >
+    <div class="toolbar-table-grid-value" :aria-valuetext="`${selectedRows} x ${selectedCols}`">
       {{ selectedRows }} x {{ selectedCols }}
     </div>
   </div>
@@ -157,7 +159,7 @@ onMounted(() => {
     height: 20px;
     border: 1px solid #d3d3d3;
     cursor: pointer;
-    transition: all .15s;
+    transition: all 0.15s;
   }
 
   .toolbar-table-grid__item.selected {
@@ -179,5 +181,5 @@ onMounted(() => {
     line-height: 1.1;
     padding: 0px 8px 2px;
   }
-    }
+}
 </style>

@@ -71,19 +71,11 @@ function handleListNodes(params, node) {
   // If no iLvl, try an outline level
   if (!iLvl && iLvl !== 0) iLvl = getOutlineLevelFromStyleTag(styleId, docx);
 
-  const {
-    listType,
-    listOrderingType,
-    listrPrs,
-    listpPrs,
-    start,
-    lvlText,
-    lvlJc,
-    customFormat,
-  } = getNodeNumberingDefinition(node, iLvl, docx);
+  const { listType, listOrderingType, listrPrs, listpPrs, start, lvlText, lvlJc, customFormat } =
+    getNodeNumberingDefinition(node, iLvl, docx);
 
   // Fallback if the list definition is not found or is invalid
-  // See invalid-list-def-fallback.docx for example and 
+  // See invalid-list-def-fallback.docx for example and
   if (!listType) {
     const pPrIndex = node.elements.findIndex((el) => el.name === 'w:pPr');
     const pPr = node.elements[pPrIndex];
@@ -91,7 +83,7 @@ function handleListNodes(params, node) {
     if (numPrIndex >= 0) {
       pPr?.elements?.splice(numPrIndex, 1);
       node.elements[pPrIndex] = pPr;
-    };
+    }
 
     const styleIdIndex = pPr?.elements?.findIndex((el) => el.name === 'w:pStyle');
     if (styleIdIndex >= 0) pPr?.elements?.splice(styleIdIndex, 1);
@@ -114,13 +106,7 @@ function handleListNodes(params, node) {
     }
   });
 
-  const path = generateListPath(
-    iLvl,
-    currentListNumId,
-    styleId,
-    currentListByNumId.levels,
-    docx
-  );
+  const path = generateListPath(iLvl, currentListNumId, styleId, currentListByNumId.levels, docx);
   if (!path.length) path.push(currentListByNumId.levels[iLvl]);
 
   // Prepare list item attrs
@@ -158,7 +144,7 @@ function handleListNodes(params, node) {
     return {
       ...el,
       attrs: rest,
-    }
+    };
   });
 
   // Generate the list item
@@ -167,7 +153,7 @@ function handleListNodes(params, node) {
     content: processedContents || [],
     attrs,
   };
-  
+
   // Generate the list node
   const resultingList = {
     type: listType,
@@ -175,18 +161,17 @@ function handleListNodes(params, node) {
     attrs: {
       'list-style-type': listOrderingType,
       listId: currentListNumId,
-    }
+    },
   };
 
   return resultingList;
-
-};
+}
 
 const getOutlineLevelFromStyleTag = (styleTag, docx) => {
   const matchedStyle = getStyleTagFromStyleId(styleTag, docx);
   const pPr = matchedStyle?.elements?.find((style) => style.name === 'w:pPr');
   const outlineLevel = pPr?.elements?.find((style) => style.name === 'w:outlineLvl');
-  
+
   try {
     return parseInt(outlineLevel?.attributes['w:val']);
   } catch (e) {}
@@ -194,7 +179,7 @@ const getOutlineLevelFromStyleTag = (styleTag, docx) => {
 
 /**
  * Checks if the given node is a list or not.
- * 
+ *
  * @param {XmlNode} node The node to check.
  * @returns {boolean} Whether the node is a list or not.
  */
@@ -202,7 +187,7 @@ export function testForList(node, docx) {
   const { elements } = node;
   const pPr = elements?.find((el) => el.name === 'w:pPr');
   if (!pPr) return false;
-  
+
   const paragraphStyle = pPr.elements?.find((el) => el.name === 'w:pStyle');
   let numPr = pPr.elements?.find((el) => el.name === 'w:numPr');
   let numId = getNumIdFromTag(numPr);
@@ -213,10 +198,10 @@ export function testForList(node, docx) {
   const styleId = paragraphStyle?.attributes['w:val'];
   const styleTag = getStyleTagFromStyleId(styleId, docx);
   if (styleTag && !numId) {
-    const { numPr: numPrRecursve, type }= getNumPrRecursive({ node, styleId, docx });
+    const { numPr: numPrRecursve, type } = getNumPrRecursive({ node, styleId, docx });
     numPr = numPrRecursve;
     numId = getNumIdFromTag(numPr);
-  
+
     const stylePpr = styleTag?.elements?.find((el) => el.name === 'w:pPr');
     ilvl = stylePpr?.elements?.find((el) => el.name === 'w:ilvl')?.attributes['w:val'];
     outlinelvl = stylePpr?.elements?.find((el) => el.name === 'w:outlineLvl')?.attributes['w:val'];
@@ -224,11 +209,13 @@ export function testForList(node, docx) {
   }
 
   const abstractNumDefinition = getAbstractDefinition(numId, docx);
-  const levelDefinition = abstractNumDefinition?.elements?.find((el) => el.name === 'w:lvl' && el.attributes?.['w:ilvl'] == ilvl);
+  const levelDefinition = abstractNumDefinition?.elements?.find(
+    (el) => el.name === 'w:lvl' && el.attributes?.['w:ilvl'] == ilvl,
+  );
   if (!levelDefinition) return false;
 
   return !!numId;
-};
+}
 
 const getNumIdFromTag = (tag) => {
   return tag?.elements?.find((el) => el.name === 'w:numId')?.attributes['w:val'];
@@ -236,7 +223,7 @@ const getNumIdFromTag = (tag) => {
 
 /**
  * Get the style tag from the style ID
- * 
+ *
  * @param {string} styleId The style ID to search for
  * @param {Object} docx The docx data
  * @returns {Object} The style tag
@@ -257,7 +244,7 @@ export function getStyleTagFromStyleId(styleId, docx) {
  * This is a recursive function that will check the style definition for the numId
  * If it doesn't exist, it will check the basedOn style definition for the numId
  * This will continue until we find a numId or we run out of basedOn styles
- * 
+ *
  * @param {Object} node The node to check
  * @param {string} styleId The style ID to check
  * @param {Object} docx The docx data
@@ -353,7 +340,7 @@ const getListNumIdFromStyleRef = (styleId, docx) => {
   while (numPr && !numId && loopCount < 10) {
     const basedOnStyle = styleTags.find((tag) => tag.attributes['w:styleId'] === basedOnId) || {};
     const basedOnPPr = basedOnStyle?.elements?.find((style) => style.name === 'w:pPr');
-    numPr = basedOnPPr?.elements?.find((style) => style.name === 'w:numPr')
+    numPr = basedOnPPr?.elements?.find((style) => style.name === 'w:numPr');
     numIdTag = numPr?.elements?.find((style) => style.name === 'w:numId') || {};
     numId = numIdTag?.attributes?.['w:val'];
 
@@ -397,23 +384,23 @@ export const getAbstractDefinition = (numId, docx) => {
       const tmplId = tmpl.attributes?.['w:val'];
       return tmplId && hasLevels && tmplId === templateId;
     });
-  };
+  }
 
   return listDefinitionForThisNumId;
-}
+};
 
 export const generateListPath = (level, numId, styleId, levels, docx) => {
   const iLvl = Number(level);
   const path = [];
-  if (iLvl > 0) {  
+  if (iLvl > 0) {
     for (let i = iLvl; i >= 0; i--) {
       const { start: lvlStart } = getListLevelDefinitionTag(numId, i, styleId, docx);
       if (!levels[i]) levels[i] = Number(lvlStart);
       path.unshift(levels[i]);
-    };
-  };
+    }
+  }
   return path;
-}
+};
 
 /**
  * Helper to get the list level definition tag for a specific list level
@@ -444,8 +431,8 @@ export const getListLevelDefinitionTag = (numId, level, pStyleId, docx) => {
   let numFmt = numFmtTag?.attributes['w:val'];
 
   if (!numFmt) {
-    const altChoice = currentLevel?.elements.find((style) => style.name === "mc:AlternateContent");
-    const choice = altChoice?.elements.find((style) => style.name === "mc:Choice");
+    const altChoice = currentLevel?.elements.find((style) => style.name === 'mc:AlternateContent');
+    const choice = altChoice?.elements.find((style) => style.name === 'mc:Choice');
     const choiceNumFmtTag = choice?.elements.find((style) => style.name === 'w:numFmt');
     const choiceNumFmt = choiceNumFmtTag?.attributes['w:val'];
     if (choiceNumFmt) {
@@ -534,7 +521,7 @@ export function getNodeNumberingDefinition(item, level, docx) {
   // If we do not have a valid list, attempt to return a standard paragraph
   else {
     return {};
-  };
+  }
   return { listType, listOrderingType: listTypeDef, listrPrs, listpPrs, start, lvlText, lvlJc, customFormat };
 }
 
@@ -543,20 +530,20 @@ export function getDefinitionForLevel(data, level) {
 }
 
 export function parseIndentElement(indElem) {
-  if (!indElem || !indElem.attributes) return {}
-  const out = {}
+  if (!indElem || !indElem.attributes) return {};
+  const out = {};
 
-  if (indElem.attributes['w:left'] != null) out.left = twipsToPixels(indElem.attributes['w:left'])
-  if (indElem.attributes['w:right'] != null) out.right = twipsToPixels(indElem.attributes['w:right'])
-  if (indElem.attributes['w:firstLine'] != null) out.firstLine = twipsToPixels(indElem.attributes['w:firstLine'])
-  if (indElem.attributes['w:hanging'] != null) out.hanging = twipsToPixels(indElem.attributes['w:hanging'])
-  if (indElem.attributes['w:leftChars'] != null) out.leftChars = twipsToPixels(indElem.attributes['w:leftChars'])
-  return out
-};
+  if (indElem.attributes['w:left'] != null) out.left = twipsToPixels(indElem.attributes['w:left']);
+  if (indElem.attributes['w:right'] != null) out.right = twipsToPixels(indElem.attributes['w:right']);
+  if (indElem.attributes['w:firstLine'] != null) out.firstLine = twipsToPixels(indElem.attributes['w:firstLine']);
+  if (indElem.attributes['w:hanging'] != null) out.hanging = twipsToPixels(indElem.attributes['w:hanging']);
+  if (indElem.attributes['w:leftChars'] != null) out.leftChars = twipsToPixels(indElem.attributes['w:leftChars']);
+  return out;
+}
 
 export function combineIndents(ind1, ind2) {
-  ind1 = (ind1 && typeof ind1 === 'object') ? ind1 : {};
-  ind2 = (ind2 && typeof ind2 === 'object') ? ind2 : {};
+  ind1 = ind1 && typeof ind1 === 'object' ? ind1 : {};
+  ind2 = ind2 && typeof ind2 === 'object' ? ind2 : {};
 
   const indent = {};
   ['left', 'right', 'firstLine', 'hanging'].forEach((prop) => {
@@ -564,7 +551,7 @@ export function combineIndents(ind1, ind2) {
     const v2 = ind2[prop] !== undefined ? Number(ind2[prop]) : null;
 
     if (v1 != null && v2 != null) {
-      indent[prop] = (prop === 'left' || prop === 'hanging') ? Math.max(v1, v2) : v1;
+      indent[prop] = prop === 'left' || prop === 'hanging' ? Math.max(v1, v2) : v1;
     } else if (v1 != null) {
       indent[prop] = v1;
     } else if (v2 != null) {
@@ -575,7 +562,6 @@ export function combineIndents(ind1, ind2) {
   return indent;
 }
 
-
 function _processListParagraphProperties(data, inlinePpr) {
   const { elements } = data;
   const expectedTypes = ['w:ind', 'w:jc', 'w:tabs'];
@@ -585,7 +571,7 @@ function _processListParagraphProperties(data, inlinePpr) {
   elements.forEach((item) => {
     if (!expectedTypes.includes(item.name)) {
       console.warn(`[numbering.xml] Unexpected list paragraph prop found: ${item.name}`);
-    };
+    }
   });
 
   const inlineIndent = inlinePpr?.elements?.find((item) => item.name === 'w:ind');
@@ -603,7 +589,7 @@ function _processListParagraphProperties(data, inlinePpr) {
     if (!justify.attributes) justify.attributes = {};
     if (justify.attributes['w:val'] !== undefined) justifyAttrs.val = justify.attributes['w:val'];
     paragraphProperties.justify = justifyAttrs;
-  };
+  }
 
   const tabs = elements.find((item) => item.name === 'w:tabs');
   if (tabs) {
@@ -618,7 +604,7 @@ function _processListParagraphProperties(data, inlinePpr) {
       tabStops.push(tabStop);
     });
     paragraphProperties.tabStops = tabStops;
-  };
+  }
   return paragraphProperties;
 }
 
@@ -666,5 +652,5 @@ export const docxNumberigHelpers = {
   combineIndents,
   parseIndentElement,
   generateListPath,
-  normalizeLvlTextChar
+  normalizeLvlTextChar,
 };

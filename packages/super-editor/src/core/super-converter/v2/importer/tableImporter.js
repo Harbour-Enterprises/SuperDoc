@@ -110,16 +110,7 @@ export function handleTableNode(node, params) {
  * @param {boolean} insideTrackChange
  * @returns {{type: string, content: (*|*[]), attrs: {}}}
  */
-export function handleTableCellNode(
-  node,
-  row,
-  table,
-  rowBorders,
-  columnWidth = null,
-  styleTag,
-  params,
-  cellIndex,
-) {
+export function handleTableCellNode(node, row, table, rowBorders, columnWidth = null, styleTag, params, cellIndex) {
   const { docx, nodeListHandler } = params;
   const tcPr = node.elements.find((el) => el.name === 'w:tcPr');
   const borders = tcPr?.elements?.find((el) => el.name === 'w:tcBorders');

@@ -13,7 +13,7 @@ export const ShapeTextbox = Node.create({
     return {
       htmlAttributes: {
         class: 'sd-editor-shape-textbox',
-        'aria-label': 'Shape textbox node'
+        'aria-label': 'Shape textbox node',
       },
     };
   },
@@ -30,14 +30,14 @@ export const ShapeTextbox = Node.create({
     return [
       {
         tag: `div[data-type="${this.name}"]`,
-      }
+      },
     ];
   },
 
   renderDOM({ htmlAttributes }) {
     return [
-      'div', 
-      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }), 
+      'div',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }),
       0,
     ];
   },

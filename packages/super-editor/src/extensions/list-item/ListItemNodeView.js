@@ -44,7 +44,7 @@ export class ListItemNodeView {
   #init() {
     const { attrs } = this.node;
     const { listLevel, listNumberingType, lvlText, numId, level, indent: inlineIndent, customFormat } = attrs;
-    
+
     let orderMarker = '';
     if (listLevel) {
       if (listNumberingType !== 'bullet') {
@@ -52,7 +52,7 @@ export class ListItemNodeView {
           listLevel,
           lvlText: lvlText,
           listNumberingType,
-          customFormat
+          customFormat,
         });
       } else {
         orderMarker = docxNumberigHelpers.normalizeLvlTextChar(lvlText);
@@ -67,26 +67,26 @@ export class ListItemNodeView {
     });
 
     // Container for the entire node view
-    this.dom = document.createElement("li");
-    this.dom.className = "sd-editor-list-item-node-view";
+    this.dom = document.createElement('li');
+    this.dom.className = 'sd-editor-list-item-node-view';
     this.dom.style.fontSize = fontSize;
     this.dom.style.fontFamily = fontFamily ? fontFamily : 'inherit';
-    this.dom.setAttribute("data-marker-type", orderMarker);
-    this.dom.setAttribute("data-num-id", numId);
-    this.dom.setAttribute("data-list-level", JSON.stringify(listLevel));
-    this.dom.setAttribute("data-list-numbering-type", listNumberingType);
-    this.dom.setAttribute("data-level", level);
+    this.dom.setAttribute('data-marker-type', orderMarker);
+    this.dom.setAttribute('data-num-id', numId);
+    this.dom.setAttribute('data-list-level', JSON.stringify(listLevel));
+    this.dom.setAttribute('data-list-numbering-type', listNumberingType);
+    this.dom.setAttribute('data-level', level);
 
     // A container for the numbering
-    this.numberingDOM = document.createElement("span");
-    this.numberingDOM.className = "sd-editor-list-item-numbering";
+    this.numberingDOM = document.createElement('span');
+    this.numberingDOM.className = 'sd-editor-list-item-numbering';
     this.numberingDOM.textContent = orderMarker;
-    this.numberingDOM.setAttribute("contenteditable", "false");
+    this.numberingDOM.setAttribute('contenteditable', 'false');
     this.numberingDOM.addEventListener('click', this.handleNumberingClick);
 
     // Container for the content
-    this.contentDOM = document.createElement("div");
-    this.contentDOM.className = "sd-editor-list-item-content-dom";
+    this.contentDOM = document.createElement('div');
+    this.contentDOM.className = 'sd-editor-list-item-content-dom';
 
     this.dom.appendChild(this.numberingDOM);
     this.dom.appendChild(this.contentDOM);
@@ -102,7 +102,7 @@ export class ListItemNodeView {
     // Gather visible indents
     const defs = getListItemStyleDefinitions({ styleId, node: this.node, numId, level, editor: this.editor });
     const visibleIndent = getVisibleIndent(defs.stylePpr, defs.numDefPpr, inlineIndent);
-    
+
     let absoluteLeft = visibleIndent.left - (visibleIndent.hanging || 0);
     if (!absoluteLeft && absoluteLeft !== 0) absoluteLeft = 0;
 
@@ -125,7 +125,7 @@ export class ListItemNodeView {
   handleNumberingClick = (event) => {
     // Respond to numbering clicks here in the future
     // ie: open a modal to customize numbering
-  }
+  };
 
   destroy() {
     // Unregister this node view
@@ -136,7 +136,7 @@ export class ListItemNodeView {
 
 // Export function to refresh all active list item node views
 export function refreshAllListItemNodeViews() {
-  activeListItemNodeViews.forEach(nodeView => {
+  activeListItemNodeViews.forEach((nodeView) => {
     try {
       nodeView.refreshIndentStyling();
     } catch (error) {
@@ -167,7 +167,7 @@ function getListItemTextStyleMarks(listItem, markType) {
     });
   });
   return textStyleMarks;
-};
+}
 
 /**
  * Pull font and size defaults from linked styles,
@@ -187,19 +187,17 @@ function getTextStyleMarksFromLinkedStyles({ node, pos, editor }) {
   // 2. Find all textStyle marks on this node
   const textStyleType = getMarkType('textStyle', editor.schema);
   const allMarks = getListItemTextStyleMarks(node, textStyleType);
-  const styleMarks = allMarks.filter(m => m.type === textStyleType);
+  const styleMarks = allMarks.filter((m) => m.type === textStyleType);
 
   // 3. Helpers to find the first mark that has a fontSize / fontFamily attr
-  const sizeMark = styleMarks.find(m => m.attrs.fontSize);
-  const familyMark = styleMarks.find(m => m.attrs.fontFamily);
+  const sizeMark = styleMarks.find((m) => m.attrs.fontSize);
+  const familyMark = styleMarks.find((m) => m.attrs.fontFamily);
 
   // 4. Compute final fontSize (parse it, fall back to default if invalid)
   const fontSize = sizeMark
     ? (() => {
         const [value, unit = 'pt'] = parseSizeUnit(sizeMark.attrs.fontSize);
-        return Number.isNaN(value)
-          ? defaultSize
-          : `${value}${unit}`;
+        return Number.isNaN(value) ? defaultSize : `${value}${unit}`;
       })()
     : defaultSize;
 
@@ -207,11 +205,11 @@ function getTextStyleMarksFromLinkedStyles({ node, pos, editor }) {
   const fontFamily = familyMark?.attrs.fontFamily ?? defaultFont;
 
   return { fontSize, fontFamily };
-};
+}
 
 /**
  * Get the styles from linked styles
- * @param {Object} param0 
+ * @param {Object} param0
  * @param {Node} param0.node - The node to get the styles from
  * @param {number} param0.pos - The position of the node
  * @param {Editor} param0.editor - The editor instance
@@ -227,13 +225,19 @@ const getStylesFromLinkedStyles = ({ node, pos, editor }) => {
   const style = styleDeco?.type.attrs?.style;
 
   const stylesArray = style?.split(';') || [];
-  const fontSizeFromStyles = stylesArray.find((s) => s.includes('font-size'))?.split(':')[1].trim();
-  const fontFamilyFromStyles = stylesArray.find((s) => s.includes('font-family'))?.split(':')[1].trim();
+  const fontSizeFromStyles = stylesArray
+    .find((s) => s.includes('font-size'))
+    ?.split(':')[1]
+    .trim();
+  const fontFamilyFromStyles = stylesArray
+    .find((s) => s.includes('font-family'))
+    ?.split(':')[1]
+    .trim();
 
   return {
     font: fontFamilyFromStyles,
     size: fontSizeFromStyles,
-  }
+  };
 };
 
 /**
@@ -248,7 +252,7 @@ export const getVisibleIndent = (stylePpr, numDefPpr, inlineIndent) => {
 
   const styleIndentTag = stylePpr?.elements?.find((el) => el.name === 'w:ind') || {};
   const styleIndent = parseIndentElement(styleIndentTag);
-  
+
   if (IS_DEBUGGING) console.debug('[getVisibleIndent] styleIndent', styleIndent, styleIndentTag);
 
   const numDefIndentTag = numDefPpr?.elements?.find((el) => el.name === 'w:ind') || {};

@@ -16,7 +16,7 @@ export const Image = Node.create({
       allowBase64: true,
       htmlAttributes: {
         style: 'display: inline-block;',
-        'aria-label': 'Image node'
+        'aria-label': 'Image node',
       },
     };
   },

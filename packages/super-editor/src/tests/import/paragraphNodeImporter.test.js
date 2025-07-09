@@ -1,4 +1,3 @@
-
 import { handleParagraphNode } from '@converter/v2/importer/paragraphNodeImporter.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
@@ -21,7 +20,12 @@ describe('paragraph tests to check spacing', () => {
     const doc = documentXml.elements[0];
     const body = doc.elements[0];
     const content = body.elements;
-    const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler(), lists });
+    const { nodes } = handleParagraphNode({
+      nodes: [content[0]],
+      docx,
+      nodeListHandler: defaultNodeListHandler(),
+      lists,
+    });
 
     const node = nodes[0];
     expect(node.type).toBe('paragraph');
@@ -48,7 +52,12 @@ describe('paragraph tests to check spacing', () => {
     const tcNode = trNode.elements[1];
 
     // Check all nodes after the known tcPr
-    const { nodes } = handleParagraphNode({ nodes: tcNode.elements.slice(1), docx, nodeListHandler: defaultNodeListHandler(), lists });
+    const { nodes } = handleParagraphNode({
+      nodes: tcNode.elements.slice(1),
+      docx,
+      nodeListHandler: defaultNodeListHandler(),
+      lists,
+    });
     const node = nodes[0];
 
     expect(node.type).toBe('paragraph');
@@ -71,7 +80,12 @@ describe('paragraph tests to check spacing', () => {
     const body = doc.elements[0];
     const content = body.elements;
 
-    const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler(), lists });
+    const { nodes } = handleParagraphNode({
+      nodes: [content[0]],
+      docx,
+      nodeListHandler: defaultNodeListHandler(),
+      lists,
+    });
 
     const node = nodes[0];
     expect(node.type).toBe('paragraph');
@@ -171,16 +185,16 @@ describe('paragraph tests to check spacing', () => {
     const result = handleParagraphNode({
       nodes: [],
       docx: {},
-      nodeListHandler: defaultNodeListHandler()
+      nodeListHandler: defaultNodeListHandler(),
     });
     expect(result).toEqual({ nodes: [], consumed: 0 });
   });
 
   it('should return empty result for non w:p node', () => {
     const result = handleParagraphNode({
-      nodes: [{ name: 'w:r' }], 
+      nodes: [{ name: 'w:r' }],
       docx: {},
-      nodeListHandler: defaultNodeListHandler()
+      nodeListHandler: defaultNodeListHandler(),
     });
     expect(result).toEqual({ nodes: [], consumed: 0 });
   });
@@ -195,18 +209,18 @@ describe('paragraph tests to check spacing', () => {
             {
               name: 'w:jc',
               attributes: {
-                'w:val': 'center'
-              }
-            }
-          ]
-        }
-      ]
+                'w:val': 'center',
+              },
+            },
+          ],
+        },
+      ],
     };
 
     const { nodes } = handleParagraphNode({
       nodes: [mockParagraph],
       docx: {},
-      nodeListHandler: defaultNodeListHandler()
+      nodeListHandler: defaultNodeListHandler(),
     });
 
     const node = nodes[0];
@@ -227,18 +241,18 @@ describe('paragraph tests to check spacing', () => {
                 'w:left': '2880',
                 'w:right': '1440',
                 'w:firstLine': '720',
-                'w:hanging': '270'
-              }
-            }
-          ]
-        }
-      ]
+                'w:hanging': '270',
+              },
+            },
+          ],
+        },
+      ],
     };
 
     const { nodes } = handleParagraphNode({
       nodes: [mockParagraph],
       docx: {},
-      nodeListHandler: defaultNodeListHandler()
+      nodeListHandler: defaultNodeListHandler(),
     });
 
     const node = nodes[0];
@@ -254,7 +268,6 @@ describe('paragraph tests to check spacing', () => {
 });
 
 describe('paragraph tests to check indentation', () => {
-  
   it('correctly gets indents from paragraph Normal styles', async () => {
     const dataName = 'paragraph_indent_normal_styles.docx';
     const docx = await getTestDataByFileName(dataName);
@@ -277,7 +290,6 @@ describe('paragraph tests to check indentation', () => {
 });
 
 describe('paragraph with dropcaps', () => {
-
   it('correctly gets dropcaps data', async () => {
     const dataName = 'dropcaps.docx';
     const docx = await getTestDataByFileName(dataName);
@@ -351,7 +363,7 @@ describe('Check that paragraph-level sectPr is retained', () => {
   it('correctly exports the pass-through sectPr', () => {
     const { result: exported } = editor.converter.exportToXmlJson({
       data: editor.getJSON(),
-      editor
+      editor,
     });
     expect(exported).toBeDefined();
     expect(exported.elements.length).toBe(1);
@@ -376,5 +388,5 @@ describe('Check that paragraph-level sectPr is retained', () => {
     const pPr2 = p2Exported.elements.find((el) => el.name === 'w:pPr');
     const sectPr2 = pPr2.elements.find((el) => el.name === 'w:sectPr');
     expect(p2sectPrData).toEqual(sectPr2);
-  })
+  });
 });

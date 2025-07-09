@@ -13,15 +13,15 @@ export const TableCell = Node.create({
   addOptions() {
     return {
       htmlAttributes: {
-        'aria-label': 'Table cell node'
+        'aria-label': 'Table cell node',
       },
     };
   },
 
   addAttributes() {
     return {
-      colspan: { 
-        default: 1, 
+      colspan: {
+        default: 1,
       },
 
       rowspan: {
@@ -32,9 +32,7 @@ export const TableCell = Node.create({
         default: [100],
         parseDOM: (elem) => {
           const colwidth = elem.getAttribute('data-colwidth');
-          const value = colwidth
-            ? colwidth.split(',').map((width) => parseInt(width, 10))
-            : null;
+          const value = colwidth ? colwidth.split(',').map((width) => parseInt(width, 10)) : null;
           return value;
         },
         renderDOM: (attrs) => {
@@ -54,7 +52,7 @@ export const TableCell = Node.create({
           return { style };
         },
       }, */
-      
+
       background: {
         renderDOM({ background }) {
           if (!background) return {};
@@ -104,14 +102,14 @@ export const TableCell = Node.create({
         },
       },
 
-      widthType: { 
-        default: 'auto', 
-        rendered: false, 
+      widthType: {
+        default: 'auto',
+        rendered: false,
       },
 
-      widthUnit: { 
-        default: 'px', 
-        rendered: false, 
+      widthUnit: {
+        default: 'px',
+        rendered: false,
       },
     };
   },

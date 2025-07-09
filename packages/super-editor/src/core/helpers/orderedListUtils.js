@@ -41,10 +41,10 @@ const ordinalFormatter = (level) => {
 };
 
 const generateFromCustom = (path, lvlText, customFormat) => {
-  if (customFormat !== '001, 002, 003, ...') return generateNumbering(path, lvlText, String)
+  if (customFormat !== '001, 002, 003, ...') return generateNumbering(path, lvlText, String);
 
   const match = customFormat.match(/(\d+)/);
-  if (!match) throw new Error("Invalid format string: no numeric pattern found");
+  if (!match) throw new Error('Invalid format string: no numeric pattern found');
 
   const sample = match[1];
   const digitCount = sample.length;

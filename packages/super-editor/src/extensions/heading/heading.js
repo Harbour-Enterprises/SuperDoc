@@ -13,7 +13,7 @@ export const Heading = Node.create({
     return {
       levels: [1, 2, 3, 4, 5, 6],
       htmlAttributes: {
-        'aria-label': 'Heading node'
+        'aria-label': 'Heading node',
       },
     };
   },

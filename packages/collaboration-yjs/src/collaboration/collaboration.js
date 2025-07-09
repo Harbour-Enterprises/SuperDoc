@@ -13,7 +13,7 @@ import { ConnectionHandler } from '../connection-handler/handler.js';
  */
 export class SuperDocCollaboration {
   /** @type {import('../connection-handler/handler.js').ConnectionHandler} */
-  #connectionHandler
+  #connectionHandler;
 
   #log = createLogger('SuperDocCollaboration');
 

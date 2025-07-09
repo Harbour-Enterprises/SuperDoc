@@ -13,9 +13,11 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
   const body = {};
 
   beforeEach(() => {
-    Object.assign(body, result.elements?.find((el) => el.name === 'w:body'));
+    Object.assign(
+      body,
+      result.elements?.find((el) => el.name === 'w:body'),
+    );
   });
-
 
   it('can export the first list', () => {
     const titleIndex = 0;
@@ -25,10 +27,10 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
 
     const item1 = body.elements[titleIndex + 2];
     testListNodes({ node: item1, expectedLevel: 0, expectedNumPr: 0, text: 'Item 1' });
-  
+
     const item2 = body.elements[titleIndex + 3];
     testListNodes({ node: item2, expectedLevel: 0, expectedNumPr: 0, text: 'Item 2' });
-  
+
     const item3 = body.elements[titleIndex + 4];
     testListNodes({ node: item3, expectedLevel: 0, expectedNumPr: 0 });
 
@@ -81,12 +83,12 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
     const item1 = list1.content[0];
     expect(item1.type).toBe('listItem');
-    
+
     const { attrs } = item1;
     expect(attrs).toBeDefined();
     expect(attrs.listLevel).toStrictEqual([1]);
 
-    const expectedNumId = "1";
+    const expectedNumId = '1';
     const expectedLevel = 0;
     expect(attrs.numId).toBe(expectedNumId);
     expect(attrs.indent.left).toBeUndefined();
@@ -115,7 +117,7 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const indentHanging = indentTag?.attributes['w:hanging'];
     expect(indentLeft).toBeUndefined();
     expect(indentHanging).toBeUndefined();
-  
+
     // Ensure styleId is passed through correctly
     const styleId = pPr?.elements.find((s) => s.name === 'w:pStyle');
     expect(styleId).toBeDefined();
@@ -129,9 +131,9 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
     const item1 = list1.content[0];
     expect(item1.type).toBe('listItem');
-    
+
     const { attrs } = item1;
-    const expectedNumId = "1";
+    const expectedNumId = '1';
     const expectedLevel = 1;
     expect(attrs).toBeDefined();
     expect(attrs.numId).toBe(expectedNumId);
@@ -181,9 +183,9 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
     const item1 = list1.content[0];
     expect(item1.type).toBe('listItem');
-    
+
     const { attrs } = item1;
-    const expectedNumId = "4";
+    const expectedNumId = '4';
     const expectedLevel = 1;
     expect(attrs).toBeDefined();
     expect(attrs.numId).toBe(expectedNumId);
@@ -223,5 +225,4 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     expect(indentHanging).toBeUndefined();
     expect(indentRight).toBe(15);
   });
-
 });

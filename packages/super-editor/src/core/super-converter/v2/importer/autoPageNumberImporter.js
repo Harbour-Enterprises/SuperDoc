@@ -8,7 +8,7 @@ const handleAutoPageNumber = (params) => {
   if (nodes.length === 0 || nodes[0].name !== 'sd:autoPageNumber') {
     return { nodes: [], consumed: 0 };
   }
-  
+
   const rPr = nodes[0].elements?.find((el) => el.name === 'w:rPr');
   const marks = parseMarks(rPr || { elements: [] });
   const processedNode = {
@@ -55,4 +55,3 @@ export const autoTotalPageCountEntity = {
   handlerName: 'autoTotalPageCountEntity',
   handler: handleAutoTotalPageNumber,
 };
-

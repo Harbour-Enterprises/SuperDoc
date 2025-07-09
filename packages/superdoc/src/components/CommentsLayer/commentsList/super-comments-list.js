@@ -6,11 +6,10 @@ import CommentsList from './commentsList.vue';
 
 /**
  * Comments list renderer (not floating comments)
- * 
+ *
  * This renders a list of comments into an element, connected to main SuperDoc instance
  */
 export class SuperComments extends EventEmitter {
-
   element;
 
   config = {
@@ -26,7 +25,7 @@ export class SuperComments extends EventEmitter {
     this.app = null;
     this.superdoc = superdoc;
     this.open();
-  };
+  }
 
   createVueApp() {
     this.app = createApp(CommentsList);
@@ -54,4 +53,4 @@ export class SuperComments extends EventEmitter {
       this.createVueApp();
     }
   }
-};
+}

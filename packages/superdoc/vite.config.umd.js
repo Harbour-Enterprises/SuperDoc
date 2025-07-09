@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 import { version } from './package.json';
 import { getAliases } from './vite.config.js';
 
-export default defineConfig(({ mode, command}) => {
+export default defineConfig(({ mode, command }) => {
   const plugins = [vue()];
   const isDev = command === 'serve';
 
@@ -22,10 +22,10 @@ export default defineConfig(({ mode, command}) => {
       target: 'es2022',
       cssCodeSplit: false,
       lib: {
-        entry: "src/index.js",
+        entry: 'src/index.js',
         formats: ['umd'],
-        name: "SuperDocLibrary",
-        fileName: (format) => `superdoc.${format}.js`
+        name: 'SuperDocLibrary',
+        fileName: (format) => `superdoc.${format}.js`,
       },
       minify: false,
       sourcemap: true,
@@ -41,13 +41,13 @@ export default defineConfig(({ mode, command}) => {
         ],
         output: {
           globals: {
-            'yjs': 'Yjs',
+            yjs: 'Yjs',
             '@hocuspocus/provider': 'HocuspocusProvider',
             'pdfjs-dist': 'PDFJS',
-            'vite-plugin-node-polyfills': 'NodePolyfills'
+            'vite-plugin-node-polyfills': 'NodePolyfills',
           },
         },
-      }
-    }
+      },
+    },
   };
 });
