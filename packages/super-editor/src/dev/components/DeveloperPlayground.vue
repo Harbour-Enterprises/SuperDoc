@@ -46,13 +46,22 @@ const onCreate = ({ editor }) => {
   // Set debugging pagination value from editor plugin state
   isDebuggingPagination.value = PaginationPluginKey.getState(editor.state)?.isDebugging;
 
-  // editor.commands.addFieldAnnotation(0, {
-  //   type: 'text',
-  //   displayLabel: 'Some text',
-  //   fieldId: '123',
-  //   fieldType: 'TEXTINPUT',
-  //   fieldColor: '#980043',
-  // });
+  editor.commands.addFieldAnnotation(0, {
+    type: 'html',
+    displayLabel: 'Some text',
+    fieldId: '123',
+    fieldType: 'HTMLINPUT',
+    fieldColor: '#980043',
+    rawHtml: '<ol aria-label="Ordered list node" start="0" data-list-id="8" list-style-type="bullet"><li aria-label="List item node" data-lvl-text="•" data-num-fmt="bullet" data-list-level="[1]" data-num-id="8" data-level="0"><p>item</p></li></ol><ol aria-label="Ordered list node" start="0" data-list-id="8" list-style-type="bullet"><li aria-label="List item node" data-lvl-text="•" data-num-fmt="bullet" data-list-level="[2]" data-num-id="8" data-level="0"><p>item</p></li></ol><ol aria-label="Ordered list node" start="0" data-list-id="8" list-style-type="bullet"><li aria-label="List item node" data-lvl-text="◦" data-num-fmt="bullet" data-list-level="[2,1]" data-num-id="8" data-level="1"><p>Item</p></li></ol><ol aria-label="Ordered list node" start="0" data-list-id="8" list-style-type="bullet"><li aria-label="List item node" data-lvl-text="◦" data-num-fmt="bullet" data-list-level="[2,2]" data-num-id="8" data-level="1"><p>Item</p></li></ol><ol aria-label="Ordered list node" start="0" data-list-id="8" list-style-type="bullet"><li aria-label="List item node" data-lvl-text="•" data-num-fmt="bullet" data-list-level="[3,0]" data-num-id="8" data-level="0"><p>Item</p></li></ol>'
+  });
+  editor.commands.addFieldAnnotation(0, {
+    type: 'html',
+    displayLabel: 'Some text',
+    fieldId: '1234',
+    fieldType: 'HTMLINPUT',
+    fieldColor: '#980043',
+    rawHtml: '<ol aria-label="Ordered list node" start="0" data-list-id="7" list-style-type="decimal"><li aria-label="List item node" data-marker-type="1." data-lvl-text="%1." data-num-fmt="decimal" data-list-level="[1]" data-num-id="7" data-level="0"><p>item</p></li></ol><ol aria-label="Ordered list node" start="0" data-list-id="7" list-style-type="decimal"><li aria-label="List item node" data-marker-type="2." data-lvl-text="%1." data-num-fmt="decimal" data-list-level="[2]" data-num-id="7" data-level="0"><p>item</p></li></ol><ol aria-label="Ordered list node" start="0" data-list-id="7" list-style-type="decimal"><li aria-label="List item node" data-marker-type="a." data-lvl-text="%2." data-num-fmt="lowerLetter" data-list-level="[2,1]" data-num-id="7" data-level="1"><p>item</p></li></ol><ol aria-label="Ordered list node" start="0" data-list-id="7" list-style-type="decimal"><li aria-label="List item node" data-marker-type="b." data-lvl-text="%2." data-num-fmt="lowerLetter" data-list-level="[2,2]" data-num-id="7" data-level="1"><p>item</p></li></ol><ol aria-label="Ordered list node" start="0" data-list-id="7" list-style-type="decimal"><li aria-label="List item node" data-marker-type="3." data-lvl-text="%1." data-num-fmt="decimal" data-list-level="[3,0]" data-num-id="7" data-level="0"><p>item</p></li></ol>',
+  });
 };
 
 const onCommentClicked = ({ conversation }) => {
@@ -85,7 +94,7 @@ const onCommentsLoaded = ({ comments }) => {
 };
 
 const exportDocx = async () => {
-  const result = await activeEditor?.exportDocx();
+  const result = await activeEditor?.exportDocx({ isFinalDoc: true });
   const blob = new Blob([result], { type: DOCX });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

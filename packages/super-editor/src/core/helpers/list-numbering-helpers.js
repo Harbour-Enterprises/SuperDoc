@@ -101,6 +101,9 @@ export const getListDefinitionDetails = ({ numId, level, listType, editor }) => 
   if (!numDef && listType) {
     generateNewListDefinition({ numId, listType, editor });
   };
+
+  // console.log({ numDef, definitions, listType, numId, abstracts });
+
   const abstractId = definitions[numId]?.elements?.find((item) => item.name === "w:abstractNumId")?.attributes?.["w:val"];
   const abstract = abstracts[abstractId];
 

@@ -779,18 +779,36 @@ function addNewImageRelationship(params, imagePath) {
  * @returns {XmlReadyNode} The translated list node
  */
 function translateList(params) {
-  const { node, editor } = params;
+  const { node, editor, fromHtmlAnnotation = false } = params;
 
   const listItem = node.content[0];
   const { numId, level } = listItem.attrs;
-  const listType = node.type.name;
-  const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
-  if (!listDef) {
+  const listType = node.type;
+
+  if (fromHtmlAnnotation) {
+    console.log({
+      node,
+      listItem,
+      numId,
+      level,
+      listType,
+    });
+    const listStyleType = node.attrs['list-style-type'];
+    const nodeType = listStyleType === 'bullet' ? 'bulletList' : 'orderedList';
     ListHelpers.generateNewListDefinition({
       numId,
-      listType,
+      listType: nodeType,
       editor,
     })
+  } else {
+    const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
+    if (!listDef) {
+      ListHelpers.generateNewListDefinition({
+        numId,
+        listType,
+        editor,
+      })
+    }
   }
 
   let numPrTag;
@@ -2064,15 +2082,17 @@ function prepareHtmlAnnotation(params) {
   const {
     node: { attrs = {}, marks = [] },
     editorSchema,
+    editor,
   } = params;
 
   const paragraphHtmlContainer = sanitizeHtml(attrs.rawHtml);
   const marksFromAttrs = translateFieldAttrsToMarks(attrs);
-  const allMarks = [...marks, ...marksFromAttrs]
+  const allMarks = [...marks, ...marksFromAttrs];
 
   let state = EditorState.create({
     doc: PMDOMParser.fromSchema(editorSchema).parse(paragraphHtmlContainer),
   });
+
 
   if (allMarks.length) {
     state = applyMarksToHtmlAnnotation(state, allMarks);
@@ -2084,6 +2104,7 @@ function prepareHtmlAnnotation(params) {
     name: 'htmlAnnotation',
     elements: translateChildNodes({
       ...params,
+      fromHtmlAnnotation: true,
       node: htmlAnnotationNode,
     }),
   };
