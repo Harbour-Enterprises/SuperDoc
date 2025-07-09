@@ -4,7 +4,7 @@ const emit = defineEmits(['file-change']);
 const props = defineProps({
   accept: {
     type: String,
-    default: '.docx, .pdf, .html',
+    default: '.docx, .pdf, .html, .md',
   },
 });
 const onFileChange = (event) => {

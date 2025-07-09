@@ -1,6 +1,7 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMParser, DOMSerializer } from 'prosemirror-model';
+import { marked } from 'marked';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -117,6 +118,7 @@ import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
  * @property {boolean} [jsonOverride] - Whether to override content with provided json
  * @property {string} [html] - HTML content to initialize the editor with
+ * @property {string} [markdown] - Markdown content to initialize the editor with
  */
 
 /**
@@ -231,10 +233,10 @@ export class Editor extends EventEmitter {
 
     // telemetry
     telemetry: null,
-    
+
     // Docx xml updated by User
     customUpdatedFiles: {},
-    
+
     isHeaderFooterChanged: false,
     isCustomXmlChanged: false,
   };
@@ -346,7 +348,7 @@ export class Editor extends EventEmitter {
 
     if (!this.options.ydoc) this.migrateListsToV2();
 
-    this.setDocumentMode(this.options.documentMode);      
+    this.setDocumentMode(this.options.documentMode);
 
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady
@@ -394,7 +396,7 @@ export class Editor extends EventEmitter {
 
   mount(el) {
     this.#createView(el);
-  
+
     window.setTimeout(() => {
       if (this.isDestroyed) return;
       this.emit('create', { editor: this });
@@ -626,7 +628,7 @@ export class Editor extends EventEmitter {
 
     this.#createConverter();
     this.#initMedia();
-    
+
     const doc = this.#generatePmData();
     const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc);
     tr.setMeta('replaceContent', true);
@@ -920,8 +922,12 @@ export class Editor extends EventEmitter {
           // Perform any additional document processing prior to finalizing the doc here
           doc = this.#prepareDocumentForImport(doc);
 
+          // Check for markdown BEFORE html (since markdown gets converted to HTML)
+          if (this.options.markdown) {
+            doc = this.#createDocFromMarkdown(this.options.markdown);
+          }
           // If we have a new doc, and have html data, we initialize from html
-          if (this.options.html) doc = this.#createDocFromHTML(this.options.html)
+          else if (this.options.html) doc = this.#createDocFromHTML(this.options.html)
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
           if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
@@ -960,6 +966,85 @@ export class Editor extends EventEmitter {
     return DOMParser.fromSchema(this.schema).parse(parsedContent);
   }
 
+  /**
+   * Create a document from Markdown content
+   * @private
+   * @param {string} content - Markdown content
+   * @returns {Object} Document node
+   */
+  #createDocFromMarkdown(content) {
+    // First, convert markdown to HTML
+    const html = this.#convertMarkdownToHTML(content);
+
+    // Then use existing HTML parser
+    return this.#createDocFromHTML(html);
+  }
+
+  /**
+   * Convert Markdown to HTML with proper structure
+   * @private
+   * @param {string} markdown - Markdown content
+   * @returns {string} HTML content
+   */
+  #convertMarkdownToHTML(markdown) {
+    // Configure marked for compatibility with your schema
+    marked.setOptions({
+      breaks: true,      // Convert \n to <br>
+      gfm: true,         // GitHub Flavored Markdown
+      headerIds: false,  // Don't add IDs to headers
+      mangle: false,     // Don't escape autolinks
+    });
+
+    // Convert markdown to HTML
+    let html = marked.parse(markdown);
+
+    // Apply any necessary transformations for SuperDoc compatibility
+    html = this.#transformMarkdownHTML(html);
+
+    return html;
+  }
+
+  /**
+   * Transform markdown-generated HTML to be compatible with SuperDoc
+   * @private
+   * @param {string} html - HTML from markdown parser
+   * @returns {string} Transformed HTML
+   */
+  #transformMarkdownHTML(html) {
+    // Create a temporary container
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+
+    // Transform elements as needed for your schema
+    // Example: Convert <h1> to <h1 data-level="1"> if needed
+    const headings = tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    headings.forEach(heading => {
+      const level = parseInt(heading.tagName[1]);
+      heading.setAttribute('data-level', level);
+    });
+
+    // Transform lists to ensure compatibility
+    const lists = tempDiv.querySelectorAll('ul, ol');
+    lists.forEach((list, index) => {
+      // Add any attributes your list schema expects
+      if (list.tagName === 'OL') {
+        list.setAttribute('data-list-id', index + 1);
+      }
+    });
+
+    // Transform code blocks
+    const codeBlocks = tempDiv.querySelectorAll('pre code');
+    codeBlocks.forEach(code => {
+      // Add language class if specified
+      const parent = code.parentElement;
+      if (code.className) {
+        parent.setAttribute('data-language', code.className.replace('language-', ''));
+      }
+    });
+
+    return tempDiv.innerHTML;
+  }
+
 
   /**
    * Create the PM editor view
@@ -972,7 +1057,7 @@ export class Editor extends EventEmitter {
     // Only initialize the doc if we are not using Yjs/collaboration.
     const state = { schema: this.schema };
     if (!this.options.ydoc) state.doc = doc;
-    
+
     this.options.initialState = EditorState.create(state);
 
     this.view = new EditorView(element, {
@@ -1021,7 +1106,7 @@ export class Editor extends EventEmitter {
         setWordSelection(view, pos);
       }
     });
-    
+
     const newState = this.state.reconfigure({
       plugins: [...this.extensionService.plugins],
     });
@@ -1073,7 +1158,7 @@ export class Editor extends EventEmitter {
     if (!proseMirror || !element) {
       return;
     }
-    
+
     proseMirror.setAttribute('role', 'document');
     proseMirror.setAttribute('aria-multiline', true);
     proseMirror.setAttribute('aria-label', 'Main content area, start typing to enter text.');
@@ -1085,12 +1170,12 @@ export class Editor extends EventEmitter {
       element.style.minWidth = pageSize.width + 'in';
       element.style.minHeight = pageSize.height + 'in';
     }
-   
+
     if (pageMargins) {
       element.style.paddingLeft = pageMargins.left + 'in';
       element.style.paddingRight = pageMargins.right + 'in';
     }
-    
+
     element.style.boxSizing = 'border-box';
     element.style.isolation = 'isolate'; // to create new stacking context.
 
@@ -1289,10 +1374,10 @@ export class Editor extends EventEmitter {
 
       const tr = isTrackChangesActive
         ? trackedTransaction({
-            tr: transaction,
-            state: this.state,
-            user: this.options.user,
-          })
+          tr: transaction,
+          state: this.state,
+          user: this.options.user,
+        })
         : transaction;
 
       const { state: newState } = this.view.state.applyTransaction(tr);
@@ -1449,8 +1534,8 @@ export class Editor extends EventEmitter {
       return setImageNodeSelection(view, pos);
     }
   }
-  
-  
+
+
   /**
    * Perform any post conversion pre prosemirror import processing.
    * Comments are processed here.
@@ -1498,7 +1583,7 @@ export class Editor extends EventEmitter {
     const updatedState = newState.apply(tr);
     return updatedState.doc.toJSON();
   }
-  
+
   getUpdatedJson() {
     return this.#prepareDocumentForExport();
   }
@@ -1544,7 +1629,7 @@ export class Editor extends EventEmitter {
     const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
     const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
     const media = this.converter.addedMedia;
-    
+
     const updatedHeadersFooters = {};
     Object.entries(this.converter.convertedXml).forEach(([name, json]) => {
       if (name.includes('header') || name.includes('footer')) {
@@ -1581,14 +1666,14 @@ export class Editor extends EventEmitter {
     }
 
     const zipper = new DocxZipper();
-    
+
     if (getUpdatedDocs) {
       updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes({
         files: this.options.content
       }, media, true);
       return updatedDocs;
     }
-    
+
     const result = await zipper.updateZip({
       docx: this.options.content,
       updatedDocs: updatedDocs,
@@ -1617,7 +1702,7 @@ export class Editor extends EventEmitter {
       console.debug('🔗 [super-editor] Ending collaboration');
       if (this.options.collaborationProvider) this.options.collaborationProvider.disconnect();
       if (this.options.ydoc) this.options.ydoc.destroy();
-    } catch (error) {}
+    } catch (error) { }
   }
 
   /**
@@ -1637,7 +1722,7 @@ export class Editor extends EventEmitter {
   destroyHeaderFooterEditors() {
     try {
       const editors = [
-        ...this.converter.headerEditors, 
+        ...this.converter.headerEditors,
         ...this.converter.footerEditors,
       ];
       for (let editorData of editors) {
@@ -1645,7 +1730,7 @@ export class Editor extends EventEmitter {
       }
       this.converter.headerEditors.length = 0;
       this.converter.footerEditors.length = 0;
-    } catch (error) {}
+    } catch (error) { }
   }
 
   /**
@@ -1743,13 +1828,13 @@ export class Editor extends EventEmitter {
       console.warn('Cannot find file in docx')
       return null;
     }
-    
+
     if (type === 'json') {
       return this.converter.convertedXml[name].elements[0] || null;
     }
     return this.converter.schemaToXml(this.converter.convertedXml[name].elements[0]);
   }
-  
+
   /**
    * Update internal docx file content
    * @param {string} name - File name

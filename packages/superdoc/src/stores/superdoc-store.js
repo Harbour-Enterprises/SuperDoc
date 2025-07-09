@@ -72,8 +72,9 @@ export const useSuperdocStore = defineStore('superdoc', () => {
       };
 
       if (config.html) newDocConfig.html = config.html;
+      if (config.markdown) newDocConfig.markdown = config.markdown;
       configDocs.push(newDocConfig);
-    } 
+    }
 
     // Initialize documents
     await initializeDocuments(configDocs);
