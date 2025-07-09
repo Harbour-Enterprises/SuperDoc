@@ -26,10 +26,37 @@ const props = defineProps({
     type: Function,
     default: () => {},
   },
+  tocEntryContext: {
+    type: Object,
+    default: null,
+  },
 });
 const { isHighContrastMode } = useHighContrastMode();
 
 const urlError = ref(false);
+
+// --- Unified anchor/TOC logic ---
+const isAnchor = computed(() =>
+  (props.tocEntryContext && props.tocEntryContext.anchor) ||
+  (rawUrl.value && rawUrl.value.startsWith('#'))
+);
+const anchorValue = computed(() =>
+  props.tocEntryContext?.anchor
+    ? `#${props.tocEntryContext.anchor}`
+    : rawUrl.value
+);
+const anchorText = computed(() =>
+  props.tocEntryContext?.text || text.value
+);
+
+const handleScrollToSection = () => {
+  const anchor = props.tocEntryContext?.anchor || rawUrl.value.replace(/^#/, '');
+  const el = document.getElementById(anchor);
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (props.closePopover) props.closePopover();
+  }
+};
 
 // --- Derive selected text and link href from editor ---
 // Three cases:
@@ -88,7 +115,6 @@ const getLinkHrefAtSelection = () => {
 
 const text = ref('');
 const rawUrl = ref('');
-const isAnchor = ref(false);
 
 // Prepend http if missing
 const url = computed(() => {
@@ -107,7 +133,6 @@ const validUrl = computed(() => {
 
 // --- CASE LOGIC ---
 const isEditing = computed(() => !isAnchor.value && !!getLinkHrefAtSelection());
-
 const getApplyText = computed(() => (showApply.value ? 'Apply' : 'Remove'));
 const isDisabled = computed(() => !validUrl.value);
 const showApply = computed(() => !showRemove.value);
@@ -138,11 +163,9 @@ const focusInput = () => {
 
 onMounted(() => {
   updateFromEditor();
-  isAnchor.value = rawUrl.value.startsWith('#');
   if (props.showInput) focusInput();
 });
 
-// --- Link logic moved here ---
 const handleSubmit = () => {
   const editor = props.editor;
   if (!editor) return;
@@ -153,7 +176,6 @@ const handleSubmit = () => {
     props.closePopover();
     return;
   }
-
   if (!validUrl.value) {
     urlError.value = true;
     return;
@@ -173,7 +195,6 @@ const handleSubmit = () => {
     ),
   );
   setTimeout(() => editor.view.focus(), 100);
-
   props.closePopover();
 };
 
@@ -187,55 +208,52 @@ const handleRemove = () => {
 
 <template>
   <div class="link-input-ctn" :class="{'high-contrast': isHighContrastMode}">
-    <div class="link-title" v-if="isAnchor">Page anchor</div>
-    <div class="link-title" v-else-if="isEditing">Edit link</div>
-    <div class="link-title" v-else>Add link</div>
-
-    <div v-if="showInput && !isAnchor" class="link-input-wrapper">
-      <!-- Text input -->
-      <div class="input-row text-input-row">
-        <div class="input-icon text-input-icon">T</div>
-        <input
-          type="text"
-          name="text"
-          placeholder="Text"
-          v-model="text"
-          @keydown.enter.stop.prevent="handleSubmit"
-        />
-      </div>
-
-      <!-- URL input -->
-      <div class="input-row url-input-row">
-        <div class="input-icon" v-html="toolbarIcons.linkInput"></div>
-        <input
-          type="text"
-          name="link"
-          placeholder="Type or paste a link"
-          :class="{ error: urlError }"
-          v-model="rawUrl"
-          @keydown.enter.stop.prevent="handleSubmit"
-          @keydown="urlError = false"
-        />
-
-        <div class="open-link-icon" :class="{ disabled: !validUrl }" v-html="toolbarIcons.openLink" @click="openLink"
-          data-item="btn-link-open">
+    <div v-if="isAnchor" class="input-row go-to-anchor clickable">
+      <a @click.stop.prevent="handleScrollToSection">
+        Go to {{ anchorText }}
+      </a>
+    </div>
+    <template v-else>
+      <div class="link-title" v-if="isEditing">Edit link</div>
+      <div class="link-title" v-else>Add link</div>
+      <div v-if="showInput" class="link-input-wrapper">
+        <div class="input-row text-input-row">
+          <div class="input-icon text-input-icon">T</div>
+          <input
+            type="text"
+            name="text"
+            placeholder="Text"
+            v-model="text"
+            @keydown.enter.stop.prevent="handleSubmit"
+          />
+        </div>
+        <div class="input-row url-input-row">
+          <div class="input-icon" v-html="toolbarIcons.linkInput"></div>
+          <input
+            type="text"
+            name="link"
+            placeholder="Type or paste a link"
+            :class="{ error: urlError }"
+            v-model="rawUrl"
+            @keydown.enter.stop.prevent="handleSubmit"
+            @keydown="urlError = false"
+          />
+          <div class="open-link-icon" :class="{ disabled: !validUrl }" v-html="toolbarIcons.openLink" @click="openLink"
+            data-item="btn-link-open">
+          </div>
+        </div>
+        <div class="input-row link-buttons">
+          <button class="remove-btn" @click="handleRemove" v-if="rawUrl" data-item="btn-link-remove">
+            <div class="remove-btn__icon" v-html="toolbarIcons.removeLink"></div>
+            Remove
+          </button>
+          <button class="submit-btn" v-if="showApply" @click="handleSubmit"
+            :class="{ 'disable-btn': isDisabled }" data-item="btn-link-apply">
+            {{ getApplyText }}
+          </button>
         </div>
       </div>
-      <div class="input-row link-buttons">
-        <button class="remove-btn" @click="handleRemove" v-if="rawUrl" data-item="btn-link-remove">
-          <div class="remove-btn__icon" v-html="toolbarIcons.removeLink"></div>
-          Remove
-        </button>
-        <button class="submit-btn" v-if="showApply" @click="handleSubmit"
-          :class="{ 'disable-btn': isDisabled }" data-item="btn-link-apply">
-          {{ getApplyText }}
-        </button>
-      </div>
-    </div>
-
-    <div v-else-if="isAnchor" class="input-row go-to-anchor clickable">
-      <a @click.stop.prevent="goToAnchor">Go to {{ rawUrl.startsWith('#_') ? rawUrl.substring(2) : rawUrl }}</a>
-    </div>
+    </template>
   </div>
 </template>
 

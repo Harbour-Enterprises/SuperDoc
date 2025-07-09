@@ -90,9 +90,61 @@ export const createDocumentJson = (docx, converter, editor) => {
       lists,
     });
 
+    // --- TOC WRAPPING PATCH ---
+    // Wrap any consecutive tocEntry nodes in a tableOfContents node if not already wrapped
+    function wrapLooseTocEntries(nodes) {
+      const result = [];
+      let buffer = [];
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        if (node.type === 'tocEntry') {
+          // Generate heading ID if not already set
+          if (!node.attrs.headingId) {
+            const textContent = node.content?.map(item => item.text || '').join(' ') || '';
+            node.attrs.headingId = generateHeadingId(textContent);
+          }
+          buffer.push(node);
+        } else {
+          if (buffer.length > 0) {
+            const firstEntry = buffer[0] || {};
+            result.push({
+              type: 'tableOfContents',
+              content: buffer,
+              attrs: {
+                headingLevels: [1, 2, 3],
+                hasLeaders: firstEntry.attrs?.hasLeaders ?? false,
+                leaderType: firstEntry.attrs?.leaderType ?? '',
+                title: 'Table of Contents',
+              },
+            });
+            buffer = [];
+          }
+          // If this is already a tableOfContents, just push it
+          result.push(node);
+        }
+      }
+      // Flush any remaining buffer
+      if (buffer.length > 0) {
+        const firstEntry = buffer[0] || {};
+        result.push({
+          type: 'tableOfContents',
+          content: buffer,
+          attrs: {
+            headingLevels: [1, 2, 3],
+            hasLeaders: firstEntry.attrs?.hasLeaders ?? false,
+            leaderType: firstEntry.attrs?.leaderType ?? '',
+            title: 'Table of Contents',
+          },
+        });
+      }
+      return result;
+    }
+    const postProcessedContent = wrapLooseTocEntries(parsedContent);
+    // --- END PATCH ---
+
     const result = {
       type: 'doc',
-      content: parsedContent,
+      content: postProcessedContent,
       attrs: {
         attributes: json.elements[0].attributes,
       },
@@ -567,3 +619,21 @@ const isAlternatingHeadersOddEven = (docx) => {
   const evenOdd = elements.find((el) => el.name === 'w:evenAndOddHeaders');
   return !!evenOdd;
 };
+
+/**
+ * Generate a heading ID from text content
+ * @param {string} text The text to convert to an ID
+ * @returns {string} A URL-safe heading ID
+ */
+function generateHeadingId(text) {
+  if (!text) return '';
+  
+  // Convert to lowercase and replace spaces/special chars with hyphens
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s-]/g, '') // Remove special characters except hyphens
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .replace(/^-|-$/g, ''); // Remove leading/trailing hyphens
+}

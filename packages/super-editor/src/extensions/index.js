@@ -39,6 +39,7 @@ import { ShapeContainer } from './shape-container/index.js';
 import { ShapeTextbox } from './shape-textbox/index.js';
 import { ContentBlock } from './content-block/index.js';
 import { StructuredContent } from './structured-content/index.js';
+import { TableOfContents, TocEntry, TocPlugin } from './table-of-contents/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -169,6 +170,9 @@ const getStarterExtensions = () => {
     ContentBlock,
     Search,
     StructuredContent,
+    TableOfContents,
+    TocEntry,
+    TocPlugin,
     NodeResizer,
   ];
 };
@@ -232,5 +236,8 @@ export {
   AiPlugin,
   Search,
   StructuredContent,
+  TableOfContents,
+  TocEntry,
+  TocPlugin,
   NodeResizer,
 };

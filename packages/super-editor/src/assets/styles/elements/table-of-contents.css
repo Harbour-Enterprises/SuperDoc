@@ -1,0 +1,191 @@
+/* Table of Contents Styling */
+.sd-table-of-contents {
+  margin: 1rem 0;
+  padding: 1rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.375rem;
+  background-color: #f9fafb;
+}
+
+/* Selection styling for TOC block - Step 1 implementation */
+.sd-toc-selected {
+  outline: 2px solid var(--brand-300, #3b82f6);
+  border-radius: 4px;
+  position: relative;
+}
+
+.sd-toc-selected::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  border: 2px solid var(--brand-300, #3b82f6);
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+/* TOC Block NodeView styling */
+.sd-toc-block {
+  position: relative;
+  transition: outline 0.2s ease;
+}
+
+.sd-toc-block .toc-content {
+  width: 100%;
+}
+
+.sd-table-of-contents .sd-toc-entry {
+  margin: 0;
+  padding: 0.25rem 0;
+  border: none;
+  background: none;
+  transition: color 0.2s ease;
+}
+
+.sd-table-of-contents .sd-toc-entry:hover {
+  color: inherit;
+}
+
+.sd-table-of-contents .sd-toc-entry:hover .toc-text {
+  color: inherit;
+}
+
+/* Level-based indentation */
+.sd-table-of-contents .sd-toc-entry[data-level="1"] {
+  font-weight: 600;
+  font-size: 1rem;
+}
+
+.sd-table-of-contents .sd-toc-entry[data-level="1"] .toc-text {
+  padding-left: 0;
+}
+
+.sd-table-of-contents .sd-toc-entry[data-level="2"] {
+  font-weight: 500;
+  font-size: 0.95rem;
+}
+
+.sd-table-of-contents .sd-toc-entry[data-level="2"] .toc-text {
+  padding-left: 1rem;
+}
+
+.sd-table-of-contents .sd-toc-entry[data-level="3"] {
+  font-weight: 400;
+  font-size: 0.9rem;
+}
+
+.sd-table-of-contents .sd-toc-entry[data-level="3"] .toc-text {
+  padding-left: 2rem;
+}
+
+.sd-table-of-contents .sd-toc-entry[data-level="4"] {
+  font-weight: 400;
+  font-size: 0.85rem;
+}
+
+.sd-table-of-contents .sd-toc-entry[data-level="4"] .toc-text {
+  padding-left: 3rem;
+}
+
+.sd-table-of-contents .sd-toc-entry[data-level="5"],
+.sd-table-of-contents .sd-toc-entry[data-level="6"] {
+  font-weight: 400;
+  font-size: 0.8rem;
+}
+
+.sd-table-of-contents .sd-toc-entry[data-level="5"] .toc-text,
+.sd-table-of-contents .sd-toc-entry[data-level="6"] .toc-text {
+  padding-left: 4rem;
+}
+
+/* TOC Entry content elements */
+.sd-toc-entry .toc-text {
+  flex-shrink: 0;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Leader styles for different types */
+.sd-toc-entry .toc-leaders {
+  flex-grow: 1;
+  margin: 0 0.5rem;
+  height: 1px;
+
+  min-width: 2rem;
+}
+
+/* Default dotted leaders */
+.sd-toc-entry .toc-leaders-dot {
+  border-bottom: 1px dotted #9ca3af;
+}
+
+/* Hyphen leaders */
+.sd-toc-entry .toc-leaders-hyphen {
+  border-bottom: 1px dashed #9ca3af;
+}
+
+/* Underscore leaders */
+.sd-toc-entry .toc-leaders-underscore {
+  border-bottom: 1px solid #9ca3af;
+}
+
+/* Heavy leaders */
+.sd-toc-entry .toc-leaders-heavy {
+  border-bottom: 2px solid #9ca3af;
+}
+
+.sd-toc-entry .toc-page-number {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: #6b7280;
+  font-size: 0.9em;
+  text-align: right;
+  margin-left: auto;
+}
+
+/* Make only the page number clickable */
+.sd-toc-entry .toc-page-number.clickable {
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.sd-toc-entry .toc-page-number.clickable:hover {
+  color: #2563eb;
+}
+
+/* Remove hyperlink styling since we're not using anchor tags anymore */
+.sd-toc-entry a {
+  text-decoration: none;
+  color: inherit;
+  width: 100%;
+}
+
+.sd-toc-entry a:hover {
+  color: inherit;
+}
+
+.sd-toc-entry a:hover .toc-text,
+.sd-toc-entry a:hover .toc-page-number {
+  color: inherit;
+}
+
+/* Print-specific styles */
+@media print {
+  .sd-table-of-contents {
+    border: none;
+    background-color: transparent;
+    page-break-inside: avoid;
+  }
+  
+  .sd-toc-entry .toc-leaders {
+    border-bottom: 1px dotted #000;
+  }
+  
+  .sd-toc-entry .toc-page-number {
+    color: #000;
+  }
+} 

@@ -3,6 +3,7 @@ import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { mergeTextNodes } from './mergeTextNodes.js';
 import { parseMarks } from './markImporter.js';
 import { kebabCase } from '@harbour-enterprises/common';
+import { processTocField } from './tocFieldProcessor.js';
 
 /**
  * Special cases of w:p based on paragraph properties
@@ -20,6 +21,65 @@ export const handleParagraphNode = (params) => {
 
   const node = carbonCopy(nodes[0]);
   let schemaNode;
+
+  // Check if this is a TOC paragraph first
+  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
+  const pStyle = pPr?.elements?.find((el) => el.name === 'w:pStyle');
+  const styleVal = pStyle?.attributes?.['w:val'];
+  
+  // Check for TOC-related paragraph styles and field codes
+  const hasTocStyle = styleVal && (styleVal.includes('TOC') || styleVal.includes('toc'));
+  const hasFieldCodes = node.elements?.some(el => 
+    el.name === 'w:r' && el.elements?.some(subEl => 
+      subEl.name === 'w:fldChar' || subEl.name === 'w:instrText'
+    )
+  );
+
+  if (hasTocStyle || hasFieldCodes) {
+    // Use the TOC field processor to extract TOC data
+    const tocEntry = processTocField(node.elements);
+    
+    if (tocEntry) {
+      return { nodes: [tocEntry], consumed: 1 };
+    }
+  }
+
+  // Check if this is a heading paragraph
+  const isHeading = checkIfHeading(node, docx);
+  if (isHeading) {
+    const headingLevel = getHeadingLevel(node, docx);
+    
+    // We need to pre-process paragraph nodes to combine various possible elements we will find ie: lists, links.
+    // Also older MS word versions store auto page numbers here
+    let processedElements = preProcessNodesForFldChar(node.elements);
+    node.elements = processedElements;
+
+    // If it is a standard paragraph node, process normally
+    const handleStandardNode = nodeListHandler.handlerEntities.find(
+      (e) => e.handlerName === 'standardNodeHandler',
+    )?.handler;
+    if (!handleStandardNode) {
+      return { nodes: [], consumed: 0 };
+    }
+
+    const updatedParams = {...params, nodes: [node]};
+    const result = handleStandardNode(updatedParams);
+    if (result.nodes.length === 1) {
+      schemaNode = result.nodes[0];
+    }
+
+    // Convert to heading node
+    const headingNode = {
+      type: 'heading',
+      content: schemaNode.content || [],
+      attrs: {
+        level: headingLevel,
+        ...schemaNode.attrs
+      }
+    };
+
+    return { nodes: [headingNode], consumed: 1 };
+  }
 
   // We need to pre-process paragraph nodes to combine various possible elements we will find ie: lists, links.
   // Also older MS word versions store auto page numbers here
@@ -41,7 +101,6 @@ export const handleParagraphNode = (params) => {
     schemaNode = result.nodes[0];
   }
 
-  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
   const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
   const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
   const framePr = pPr?.elements?.find((el) => el.name === 'w:framePr');
@@ -534,3 +593,81 @@ const processCombinedNodesForFldChar = (nodesToCombine = []) => {
 
   return processedNodes;
 };
+
+/**
+ * Check if a paragraph node is a heading
+ * @param {Object} node The paragraph node
+ * @param {Object} docx The parsed docx object
+ * @returns {boolean} True if the node is a heading
+ */
+function checkIfHeading(node, docx) {
+  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
+  const pStyle = pPr?.elements?.find((el) => el.name === 'w:pStyle');
+  const styleId = pStyle?.attributes?.['w:val'];
+  
+  if (!styleId) return false;
+  
+  // Check if it's a heading style
+  if (styleId.includes('Heading') || styleId.includes('heading')) {
+    return true;
+  }
+  
+  // Check for outline level in the style definition
+  const styles = docx['word/styles.xml'];
+  if (styles) {
+    const styleElement = styles.elements[0].elements?.find(
+      (el) => el.name === 'w:style' && el.attributes?.['w:styleId'] === styleId
+    );
+    
+    if (styleElement) {
+      const pPrElement = styleElement.elements?.find((el) => el.name === 'w:pPr');
+      const outlineLvl = pPrElement?.elements?.find((el) => el.name === 'w:outlineLvl');
+      
+      if (outlineLvl) {
+        return true;
+      }
+    }
+  }
+  
+  return false;
+}
+
+/**
+ * Get the heading level from a heading paragraph
+ * @param {Object} node The paragraph node
+ * @param {Object} docx The parsed docx object
+ * @returns {number} The heading level (1-6)
+ */
+function getHeadingLevel(node, docx) {
+  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
+  const pStyle = pPr?.elements?.find((el) => el.name === 'w:pStyle');
+  const styleId = pStyle?.attributes?.['w:val'];
+  
+  if (!styleId) return 1;
+  
+  // Extract level from style name
+  const levelMatch = styleId.match(/Heading(\d+)/i);
+  if (levelMatch) {
+    return parseInt(levelMatch[1]);
+  }
+  
+  // Check for outline level in the style definition
+  const styles = docx['word/styles.xml'];
+  if (styles) {
+    const styleElement = styles.elements[0].elements?.find(
+      (el) => el.name === 'w:style' && el.attributes?.['w:styleId'] === styleId
+    );
+    
+    if (styleElement) {
+      const pPrElement = styleElement.elements?.find((el) => el.name === 'w:pPr');
+      const outlineLvl = pPrElement?.elements?.find((el) => el.name === 'w:outlineLvl');
+      
+      if (outlineLvl) {
+        const level = parseInt(outlineLvl.attributes?.['w:val']);
+        return level + 1; // outlineLvl is 0-based, heading levels are 1-based
+      }
+    }
+  }
+  
+  return 1;
+}

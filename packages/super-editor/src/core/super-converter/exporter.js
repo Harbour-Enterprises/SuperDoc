@@ -97,6 +97,8 @@ export function exportSchemaToJson(params) {
     structuredContent: translateStructuredContent,
     "page-number": translatePageNumberNode,
     "total-page-number": translateTotalPageNumberNode,
+    tableOfContents: translateTableOfContents,
+    tocEntry: translateTocEntry,
   };
 
   if (!router[type]) {
@@ -2605,4 +2607,140 @@ const getFieldHighlightJson = () => {
       }
     ]
   }
+}
+
+/**
+ * Translate a table of contents node
+ *
+ * @param {ExportParams} params
+ * @returns {XmlReadyNode} JSON of the XML-ready TOC node
+ */
+function translateTableOfContents(params) {
+  const { node } = params;
+  const { attrs = {} } = node;
+  
+  // Create the structured document tag (SDT) for TOC
+  const sdtPr = {
+    name: 'w:sdtPr',
+    elements: [
+      {
+        name: 'w:docPartObj',
+        elements: [
+          {
+            name: 'w:docPartGallery',
+            attributes: {
+              'w:val': 'Table of Contents'
+            }
+          },
+          {
+            name: 'w:docPartUnique',
+            attributes: {
+              'w:val': 'true'
+            }
+          }
+        ]
+      }
+    ]
+  };
+
+  // Add TOC title if specified
+  if (attrs.title && attrs.title !== 'Table of Contents') {
+    sdtPr.elements.push({
+      name: 'w:alias',
+      attributes: {
+        'w:val': attrs.title
+      }
+    });
+  }
+
+  // Process TOC entries
+  const tocEntries = translateChildNodes(params);
+  
+  const sdtContent = {
+    name: 'w:sdtContent',
+    elements: tocEntries
+  };
+
+  return {
+    name: 'w:sdt',
+    elements: [sdtPr, sdtContent]
+  };
+}
+
+/**
+ * Translate a TOC entry node
+ *
+ * @param {ExportParams} params
+ * @returns {XmlReadyNode} JSON of the XML-ready TOC entry
+ */
+function translateTocEntry(params) {
+  const { node } = params;
+  const { attrs = {} } = node;
+  
+  // Create paragraph with TOC styling
+  const pPr = {
+    name: 'w:pPr',
+    elements: []
+  };
+
+  // Add TOC style based on level
+  const tocLevel = attrs.level || 1;
+  const tocStyleId = `TOC${tocLevel}`;
+  pPr.elements.push({
+    name: 'w:pStyle',
+    attributes: {
+      'w:val': tocStyleId
+    }
+  });
+
+  // Add tab stops for page numbers if enabled
+  if (attrs.showPageNumbers !== false) {
+    const tabs = {
+      name: 'w:tabs',
+      elements: [
+        {
+          name: 'w:tab',
+          attributes: {
+            'w:val': 'right',
+            'w:leader': 'dot',
+            'w:pos': '9350' // Right-aligned tab position
+          }
+        }
+      ]
+    };
+    pPr.elements.push(tabs);
+  }
+
+  // Process the content (text and hyperlinks)
+  const elements = [pPr];
+  const contentElements = translateChildNodes(params);
+  
+  // Add the content
+  elements.push(...contentElements);
+
+  // Add page number if specified
+  if (attrs.pageNumber && attrs.showPageNumbers !== false) {
+    elements.push({
+      name: 'w:r',
+      elements: [
+        {
+          name: 'w:tab'
+        },
+        {
+          name: 'w:t',
+          elements: [
+            {
+              type: 'text',
+              text: attrs.pageNumber.toString()
+            }
+          ]
+        }
+      ]
+    });
+  }
+
+  return {
+    name: 'w:p',
+    elements
+  };
 }
