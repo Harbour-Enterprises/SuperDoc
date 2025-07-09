@@ -2628,42 +2628,34 @@ function translateTableOfContents(params) {
         elements: [
           {
             name: 'w:docPartGallery',
-            attributes: {
-              'w:val': 'Table of Contents'
-            }
+            attributes: { 'w:val': 'Table of Contents' }
           },
           {
             name: 'w:docPartUnique',
-            attributes: {
-              'w:val': 'true'
-            }
+            attributes: { 'w:val': 'true' }
           }
         ]
       }
     ]
   };
 
-  // Add TOC title if specified
+  // Add TOC title if specified and different from default
   if (attrs.title && attrs.title !== 'Table of Contents') {
     sdtPr.elements.push({
       name: 'w:alias',
-      attributes: {
-        'w:val': attrs.title
-      }
+      attributes: { 'w:val': attrs.title }
     });
   }
 
-  // Process TOC entries
-  const tocEntries = translateChildNodes(params);
-  
-  const sdtContent = {
-    name: 'w:sdtContent',
-    elements: tocEntries
-  };
-
   return {
     name: 'w:sdt',
-    elements: [sdtPr, sdtContent]
+    elements: [
+      sdtPr,
+      {
+        name: 'w:sdtContent',
+        elements: translateChildNodes(params)
+      }
+    ]
   };
 }
 
@@ -2680,22 +2672,22 @@ function translateTocEntry(params) {
   // Create paragraph with TOC styling
   const pPr = {
     name: 'w:pPr',
-    elements: []
+    elements: [
+      {
+        name: 'w:pStyle',
+        attributes: {
+          'w:val': `TOC${attrs.level || 1}`
+        }
+      }
+    ]
   };
 
-  // Add TOC style based on level
-  const tocLevel = attrs.level || 1;
-  const tocStyleId = `TOC${tocLevel}`;
-  pPr.elements.push({
-    name: 'w:pStyle',
-    attributes: {
-      'w:val': tocStyleId
-    }
-  });
+  // Cache page number visibility check
+  const showPageNumbers = attrs.showPageNumbers !== false;
 
   // Add tab stops for page numbers if enabled
-  if (attrs.showPageNumbers !== false) {
-    const tabs = {
+  if (showPageNumbers) {
+    pPr.elements.push({
       name: 'w:tabs',
       elements: [
         {
@@ -2707,8 +2699,7 @@ function translateTocEntry(params) {
           }
         }
       ]
-    };
-    pPr.elements.push(tabs);
+    });
   }
 
   // Process the content (text and hyperlinks)
@@ -2718,8 +2709,8 @@ function translateTocEntry(params) {
   // Add the content
   elements.push(...contentElements);
 
-  // Add page number if specified
-  if (attrs.pageNumber && attrs.showPageNumbers !== false) {
+  // Add page number if specified and enabled
+  if (attrs.pageNumber && showPageNumbers) {
     elements.push({
       name: 'w:r',
       elements: [

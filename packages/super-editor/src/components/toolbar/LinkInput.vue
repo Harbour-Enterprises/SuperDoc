@@ -40,11 +40,6 @@ const isAnchor = computed(() =>
   (props.tocEntryContext && props.tocEntryContext.anchor) ||
   (rawUrl.value && rawUrl.value.startsWith('#'))
 );
-const anchorValue = computed(() =>
-  props.tocEntryContext?.anchor
-    ? `#${props.tocEntryContext.anchor}`
-    : rawUrl.value
-);
 const anchorText = computed(() =>
   props.tocEntryContext?.text || text.value
 );

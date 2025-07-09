@@ -72,27 +72,15 @@ export const TocEntry = Node.create({
       textContent
     ];
 
-    // Try to inherit from parent if not set
-    let hasLeaders = node.attrs.hasLeaders;
-    let leaderType = node.attrs.leaderType;
-
-    // If not set, try to get from parent
-    if (hasLeaders === undefined || leaderType === undefined) {
-      const parent = node?.parent;
-      if (parent && parent.type.name === 'tableOfContents') {
-        if (hasLeaders === undefined) hasLeaders = parent.attrs.hasLeaders;
-        if (leaderType === undefined) leaderType = parent.attrs.leaderType;
-      }
-    }
-
-    // Fallbacks
-    if (hasLeaders === undefined) hasLeaders = false;
-    if (leaderType === undefined) leaderType = '';
+    // Get leader settings from parent or use defaults
+    const parent = node?.parent;
+    const hasLeaders = parent?.attrs?.hasLeaders ?? false;
+    const leaderType = parent?.attrs?.leaderType ?? '';
     
     const contentElements = [textElement];
 
     // Optional leader dots/dashes
-    if (hasLeaders !== false) {
+    if (hasLeaders) {
       const leadersElement = [
         'span',
         {
@@ -117,7 +105,7 @@ export const TocEntry = Node.create({
 
     contentElements.push(pageNumberElement);
 
-    // Wrap everything in a single <a> so the whole row is clickable & recognised by existing link tooling
+    // Wrap everything in a single <a> so the whole row is clickable & recognized by existing link tooling
     const anchorAttributes = {
       class: 'toc-entry-link',
       href: headingId ? `#${headingId}` : `#toc-${level}-${pageNumber || 'unknown'}`,

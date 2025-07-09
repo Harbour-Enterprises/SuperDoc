@@ -57,16 +57,20 @@ export const onMarginClickCursorChange = (event, editor) => {
 export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
   if (!editor) return;
 
+  // Cache editor rect calculation - used multiple times
+  const editorRect = editor.element.getBoundingClientRect();
+  const position = {
+    left: `${event.clientX - editorRect.left}px`,
+    top: `${event.clientY - editorRect.top + 15}px`,
+  };
+
   // Check if we're clicking on a TOC entry link
   const tocLinkElement = event.target.closest('a.toc-entry-link');
   if (tocLinkElement) {
     const headingText = tocLinkElement.querySelector('.toc-text')?.textContent || '';
     const headingId = tocLinkElement.getAttribute('data-heading-id');
     popoverControls.component = LinkInput;
-    popoverControls.position = {
-      left: `${event.clientX - editor.element.getBoundingClientRect().left}px`,
-      top: `${event.clientY - editor.element.getBoundingClientRect().top + 15}px`,
-    };
+    popoverControls.position = position;
     popoverControls.props = {
       showInput: false, // Hide editing for TOC
       tocEntryContext: { text: headingText, anchor: headingId },
@@ -81,10 +85,7 @@ export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
   const hasLink = selectionHasNodeOrMark(editor.view.state, 'link', { requireEnds: true });
   if(hasLink) {
     popoverControls.component = LinkInput;
-    popoverControls.position = {
-      left: `${event.clientX - editor.element.getBoundingClientRect().left}px`,
-      top: `${event.clientY - editor.element.getBoundingClientRect().top + 15}px`,
-    };
+    popoverControls.position = position;
     popoverControls.props = {
       showInput: true,
       editor,
@@ -114,31 +115,24 @@ export function selectionHasNodeOrMark(state, name, options = {}) {
 
   // Special handling for TOC nodes - check if we're inside a TOC and look for links in TOC entries
   if (name === 'link') {
-    // Check if we're inside a tableOfContents node
-    let isInsideToc = false;
-    let tocNode = null;
-    
+    // Check if we're inside a tableOfContents node and look for links in one pass
     for (let d = $from.depth; d > 0; d--) {
-      if ($from.node(d).type.name === 'tableOfContents') {
-        isInsideToc = true;
-        tocNode = $from.node(d);
-        break;
-      }
-    }
-    
-    if (isInsideToc && tocNode) {
-      // Look for links within the TOC entries
-      let hasLinkInToc = false;
-      tocNode.descendants((node, pos) => {
-        if (node.marks && node.marks.some(mark => mark.type.name === 'link')) {
-          hasLinkInToc = true;
-          return false; // Stop traversing
+      const node = $from.node(d);
+      if (node.type.name === 'tableOfContents') {
+        // Found TOC node, now check for links within it
+        let hasLinkInToc = false;
+        node.descendants((node, pos) => {
+          if (node.marks && node.marks.some(mark => mark.type.name === 'link')) {
+            hasLinkInToc = true;
+            return false; // Stop traversing
+          }
+          return true;
+        });
+        
+        if (hasLinkInToc) {
+          return true;
         }
-        return true;
-      });
-      
-      if (hasLinkInToc) {
-        return true;
+        break; // Found TOC, no need to check deeper
       }
     }
   }
