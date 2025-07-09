@@ -376,9 +376,9 @@ export const getAbstractDefinition = (numId, docx) => {
   const listData = elements[0];
 
   const numberingElements = listData.elements;
-  const abstractDefinitions = numberingElements.filter((style) => style.name === 'w:abstractNum');
-  const numDefinitions = numberingElements.filter((style) => style.name === 'w:num');
-  const numDefinition = numDefinitions.find((style) => style.attributes['w:numId'] == numId);
+  const abstractDefinitions = numberingElements?.filter((style) => style.name === 'w:abstractNum');
+  const numDefinitions = numberingElements?.filter((style) => style.name === 'w:num');
+  const numDefinition = numDefinitions?.find((style) => style.attributes['w:numId'] == numId);
 
   const abstractNumId = numDefinition?.elements[0].attributes['w:val'];
   let listDefinitionForThisNumId = abstractDefinitions?.find(
