@@ -75,6 +75,11 @@ const closeDropdowns = () => {
   currentItem.value = null;
 };
 
+const clearSelection = () => {
+  const activeEditor = currentItem?.value.getActiveEditor();
+  if (activeEditor) activeEditor.toggleCustomSelectionDecorations();
+};
+
 const selectedOption = ref(null);
 const handleSelect = (item, option) => {
   closeDropdowns();
@@ -104,6 +109,7 @@ const getDropdownAttributes = (option, item) => {
 };
 
 const handleClickOutside = (e) => {
+  clearSelection();
   closeDropdowns();
 };
 

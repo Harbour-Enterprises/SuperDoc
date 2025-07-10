@@ -1,5 +1,5 @@
 import { EditorState } from 'prosemirror-state';
-import { EditorView } from 'prosemirror-view';
+import { Decoration, DecorationSet, EditorView } from 'prosemirror-view';
 import { DOMParser, DOMSerializer } from 'prosemirror-model';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
@@ -19,6 +19,7 @@ import {
   toggleHeaderFooterEditMode
 } from '@extensions/pagination/pagination-helpers';
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
+import { CustomSelectionPluginKey } from '@extensions/custom-selection/custom-selection.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
 import { getRichTextExtensions } from '../extensions/index.js';
 import { AnnotatorHelpers } from '@helpers/annotator.js';
@@ -420,6 +421,25 @@ export class Editor extends EventEmitter {
   #onFocus({ editor, event }) {
     this.toolbar?.setActiveEditor(editor);
     this.options.onFocus({ editor, event });
+  }
+
+  /**
+   * Set custom selection decorations for editor when no custom selection could be applied
+   * @param {Object} selection - Current selection
+   * @returns {void}
+   */
+  toggleCustomSelectionDecorations(selection = null) {
+    if (!this.view) return;
+
+    this.#registerPluginByNameIfNotExists('CustomSelection');
+    
+    const decorations = selection ? DecorationSet.create(this.view.state.doc, [
+      Decoration.inline(selection.from, selection.to, { class: 'custom-selection' }),
+    ]) : DecorationSet.empty;
+    
+    this.view.dispatch(
+      this.view.state.tr.setMeta(CustomSelectionPluginKey, decorations)
+    );
   }
 
   /**
