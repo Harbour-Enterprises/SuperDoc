@@ -40,7 +40,7 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
       const { attributes = {} } = element;
       const newMark = { type: m.type };
 
-      if (attributes['w:val'] == '0' || attributes['w:val'] === 'none') {
+      if (attributes['w:val'] === '0' || attributes['w:val'] === 'none') {
         return;
       }
 
@@ -132,6 +132,7 @@ function getMarkValue(markType, attributes, docx) {
     bold: () => attributes?.['w:val'] || null,
     italic: () => attributes?.['w:val'] || null,
     highlight: () => getHighLightValue(attributes),
+    strike: () => getStrikeValue(attributes)
   };
 
   if (!(markType in markValueMapper)) {
@@ -190,4 +191,8 @@ function getHighLightValue(attributes) {
   if (fill && fill !== 'auto') return `#${fill}`;
   if (isValidHexColor(attributes?.['w:val'])) return `#${attributes['w:val']}`;
   return getHexColorFromDocxSystem(attributes?.['w:val']) || null;
+}
+
+function getStrikeValue(attributes) {
+  return attributes?.['w:val'] === '1' ? attributes['w:val'] : null;
 }
