@@ -109,6 +109,8 @@ export const useToolbarItem = (options) => {
     });
     return flattened;
   };
+  
+  const getActiveEditor = options.getActiveEditor;
 
   const refs = {
     id,
@@ -160,5 +162,6 @@ export const useToolbarItem = (options) => {
     resetDisabled,
     onActivate,
     onDeactivate,
+    getActiveEditor
   };
 };
