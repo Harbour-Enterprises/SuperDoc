@@ -201,6 +201,18 @@ export const makeDefaultItems = ({
       ariaLabel: 'Underline',
     },
   });
+
+  const strikethrough = useToolbarItem({
+    type: 'button',
+    name: 'strikethrough',
+    command: 'toggleStrike',
+    icon: toolbarIcons.strikethrough,
+    active: false,
+    tooltip: toolbarTexts.strikethrough,
+    attributes: {
+      ariaLabel: 'Strikethrough',
+    },
+  });
   
   // highlight
   const highlight = useToolbarItem({
@@ -919,6 +931,7 @@ export const makeDefaultItems = ({
     bold,
     italic,
     underline,
+    strikethrough,
     colorButton,
     highlight,
     separator,

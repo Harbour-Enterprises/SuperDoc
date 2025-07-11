@@ -41,6 +41,7 @@ import magnifyingGlassSvg from '@harbour-enterprises/common/icons/magnifying-gla
 import scissorsIconSvg from '@harbour-enterprises/common/icons/scissors-solid.svg?raw';
 import copyIconSvg from '@harbour-enterprises/common/icons/copy-solid.svg?raw';
 import pasteIconSvg from '@harbour-enterprises/common/icons/paste-solid.svg?raw';
+import strikethroughSvg from '@harbour-enterprises/common/icons/strikethrough.svg?raw';
 
 export const toolbarIcons = {
   undo: rotateLeftIconSvg,
@@ -89,4 +90,5 @@ export const toolbarIcons = {
   cut: scissorsIconSvg,
   copy: copyIconSvg,
   paste: pasteIconSvg,
+  strikethrough: strikethroughSvg,
 }

@@ -34,11 +34,11 @@ const { isHighContrastMode } = useHighContrastMode();
 const isMobile = window.matchMedia('(max-width: 768px)').matches;
 const styleMap = {
   left: {
-    minWidth: '140px',
+    minWidth: '120px',
     justifyContent: 'flex-start',
   },
   right: {
-    minWidth: '140px',
+    minWidth: '120px',
     justifyContent: 'flex-end',
   },
   default: {
