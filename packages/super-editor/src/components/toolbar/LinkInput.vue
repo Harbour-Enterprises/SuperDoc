@@ -108,10 +108,7 @@ const validUrl = computed(() => {
 // --- CASE LOGIC ---
 const isEditing = computed(() => !isAnchor.value && !!getLinkHrefAtSelection());
 
-const getApplyText = computed(() => (showApply.value ? 'Apply' : 'Remove'));
 const isDisabled = computed(() => !validUrl.value);
-const showApply = computed(() => !showRemove.value);
-const showRemove = computed(() => rawUrl.value === '' && getLinkHrefAtSelection());
 
 const openLink = () => {
   window.open(url.value, '_blank');
@@ -222,13 +219,13 @@ const handleRemove = () => {
         </div>
       </div>
       <div class="input-row link-buttons">
-        <button class="remove-btn" @click="handleRemove" v-if="rawUrl" data-item="btn-link-remove">
+        <button class="remove-btn" @click="handleRemove" v-if="isEditing" data-item="btn-link-remove">
           <div class="remove-btn__icon" v-html="toolbarIcons.removeLink"></div>
           Remove
         </button>
-        <button class="submit-btn" v-if="showApply" @click="handleSubmit"
+        <button class="submit-btn" @click="handleSubmit"
           :class="{ 'disable-btn': isDisabled }" data-item="btn-link-apply">
-          {{ getApplyText }}
+          Apply
         </button>
       </div>
     </div>
