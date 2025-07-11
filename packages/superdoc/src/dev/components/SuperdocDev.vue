@@ -32,17 +32,66 @@ const user = {
 const handleNewFile = async (file) => {
   // Generate a file url
   const url = URL.createObjectURL(file);
-  currentFile.value = await getFileObject(url, file.name, file.type);
+
+  // Detect file type by extension
+  const fileExtension = file.name.split('.').pop()?.toLowerCase();
+  const isMarkdown = fileExtension === 'md';
+  const isHtml = fileExtension === 'html' || fileExtension === 'htm';
+
+  if (isMarkdown || isHtml) {
+    // For text-based files, read the content and use a blank DOCX as base
+    const content = await readFileAsText(file);
+    currentFile.value = await getFileObject(BlankDOCX, 'blank.docx', DOCX);
+
+    // Store the content to be passed to SuperDoc
+    if (isMarkdown) {
+      currentFile.value.markdownContent = content;
+    } else if (isHtml) {
+      currentFile.value.htmlContent = content;
+    }
+  } else {
+    // For binary files (DOCX, PDF), use as-is
+    currentFile.value = await getFileObject(url, file.name, file.type);
+  }
 
   nextTick(() => {
     init();
   });
 };
 
-const init = async () => {
+/**
+ * Read a file as text content
+ * @param {File} file - The file to read
+ * @returns {Promise<string>} The file content as text
+ */
+const readFileAsText = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = (e) => reject(e);
+    reader.readAsText(file);
+  });
+};
 
+const init = async () => {
   let testId = 'document-123';
   // const testId = "document_6a9fb1e0725d46989bdbb3f9879e9e1b";
+
+  // Prepare document config with content if available
+  const documentConfig = {
+    data: currentFile.value,
+    id: testId,
+    isNewFile: true,
+  };
+
+  // Add markdown/HTML content if present
+  if (currentFile.value.markdownContent) {
+    documentConfig.markdown = currentFile.value.markdownContent;
+  }
+  if (currentFile.value.htmlContent) {
+    documentConfig.html = currentFile.value.htmlContent;
+  }
+
   const config = {
     superdocId: 'superdoc-dev',
     selector: '#superdoc',
@@ -66,11 +115,7 @@ const init = async () => {
       { name: 'Nick Bernal', email: 'nick@harbourshare.com', access: 'internal' },
       { name: 'Eric Doversberger', email: 'eric@harbourshare.com', access: 'external' },
     ],
-    document: {
-      data: currentFile.value,
-      id: testId,
-      isNewFile: true,
-    },
+    document: documentConfig,
     // documents: [
     //   {
     //     data: currentFile.value,
@@ -122,7 +167,7 @@ const init = async () => {
     onCommentsUpdate,
     onCommentsListChange: ({ isRendered }) => {
       isCommentsListOpen.value = isRendered;
-    }
+    },
   };
 
   superdoc.value = new SuperDoc(config);
@@ -205,7 +250,7 @@ onMounted(async () => {
             <h2>🦋 SuperDoc Dev</h2>
           </div>
           <div class="dev-app__header-upload">
-            Upload docx, pdf or (soon) html
+            Upload docx, pdf, html or markdown
             <BasicUpload @file-change="handleNewFile" />
           </div>
         </div>
@@ -222,7 +267,6 @@ onMounted(async () => {
 
       <div class="dev-app__main">
         <div class="dev-app__view">
-
           <div class="dev-app__content" v-if="currentFile">
             <div class="dev-app__content-container">
               <div id="superdoc"></div>
@@ -263,7 +307,7 @@ onMounted(async () => {
   position: absolute;
   right: 0;
   height: 100%;
-  background-color: #FAFAFA;
+  background-color: #fafafa;
   z-index: 100;
 }
 .dev-app {
