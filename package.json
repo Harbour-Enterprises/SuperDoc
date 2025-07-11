@@ -22,25 +22,43 @@
     "clean:packages": "rm -rf ./packages/*/dist",
     "reset": "npm run clean:packages && rm -rf ./node_modules && rm -rf ./packages/*/node_modules && rm -rf ./package-lock.json && npm install",
     "publish": "npm run build && cd packages/superdoc && npm publish --access public",
-    "fix:prettier": "prettier --write \"**/*.{js,css,vue}\"",
-    "lint:prettier": "prettier --check \"**/*.{js,css,vue}\"",
+    "format": "prettier --write \"**/*.{js,jsx,vue,css,scss,json,md}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,vue,css,scss,json,md}\"",
+    "lint": "echo 'No linting configured yet. Run: npm install --save-dev eslint eslint-plugin-vue to add ESLint'",
+    "lint:fix": "echo 'No linting configured yet. Run: npm install --save-dev eslint eslint-plugin-vue to add ESLint'",
     "docs:dev": "vuepress dev docs",
     "docs:build": "vuepress build docs",
-    "prettier": "if [ \"$(echo $npm_config_argv | grep -o '\"remain\":\\[\\]' | wc -l)\" -eq 1 ]; then echo 'Error: No arguments passed to prettier'; exit 1; fi && npx prettier --write",
-    "pack": "npm run build:super-editor && npm --prefix ./packages/superdoc run pack"
+    "pack": "npm run build:super-editor && npm --prefix ./packages/superdoc run pack",
+    "prepare": "husky",
+    "lint:staged": "lint-staged"
+  },
+  "lint-staged": {
+    "*.{js,jsx,vue}": [
+      "prettier --write"
+    ],
+    "*.{css,scss}": [
+      "prettier --write"
+    ],
+    "*.{json,md}": [
+      "prettier --write"
+    ]
   },
   "devDependencies": {
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@playwright/test": "^1.50.1",
+    "@types/node": "^22.13.1",
     "@vuepress/bundler-vite": "^2.0.0-rc.18",
     "@vuepress/plugin-redirect": "^2.0.0-rc.60",
     "@vuepress/theme-default": "^2.0.0-rc.60",
-    "@playwright/test": "^1.50.1",
-    "@types/node": "^22.13.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.2",
     "prettier": "3.3.3",
     "rollup": "^4.26.0",
     "rollup-plugin-visualizer": "^5.12.0",
-    "vitest": "^3.0.8",
-    "xml-js": "^1.6.11",
     "sass-embedded": "^1.80.7",
-    "vuepress": "^2.0.0-rc.18"
+    "vitest": "^3.0.8",
+    "vuepress": "^2.0.0-rc.18",
+    "xml-js": "^1.6.11"
   }
 }
