@@ -39,3 +39,5 @@ packages/super-editor/src/tests/data/*/
 # Playwright
 test-results
 *.tgz
+
+!examples/chrome-extension/dist

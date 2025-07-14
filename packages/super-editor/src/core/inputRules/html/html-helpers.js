@@ -206,3 +206,151 @@ export function flattenSingleList(listElem, editor, level = 0, parentNumId, Node
   
   return results;
 }
+
+/**
+ * Converts flatten lists back to normal list structure.
+ */
+export function unflattenListsInHtml(html) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  const allNodes = [...doc.body.children];
+
+  const listSequences = [];
+  let currentSequence = null;
+
+  allNodes.forEach((node, index) => {
+    const isFlattenList = node.tagName &&
+      (node.tagName === 'OL' || node.tagName === 'UL') && 
+      node.hasAttribute('data-list-id');
+      
+    if (isFlattenList) {
+      const listId = node.getAttribute('data-list-id');
+      
+      if (currentSequence && currentSequence.id === listId) {
+        currentSequence.lists.push({ element: node, index });
+      } else {
+        currentSequence = {
+          id: listId,
+          lists: [{ element: node, index }]
+        };
+        listSequences.push(currentSequence);
+      }
+    } else {
+      currentSequence = null;
+    }
+  });
+
+  // Process each sequence in reverse order to avoid index issues.
+  listSequences.reverse().forEach((sequence) => {
+    const sequenceLists = sequence.lists;
+
+    if (sequenceLists.length === 0) {
+      return;
+    }
+    
+    const items = sequenceLists
+      .map(({ element: list }) => {
+        const liElement = list.querySelector('li');
+        if (!liElement) return null;
+        return {
+          element: liElement,
+          level: parseInt(liElement.getAttribute('data-level') || '0'),
+          numFmt: liElement.getAttribute('data-num-fmt') || 'bullet',
+          listLevel: JSON.parse(liElement.getAttribute('data-list-level') || '[1]'),
+        };
+      })
+      .filter((item) => item !== null);
+    
+    if (items.length === 0) {
+      return;
+    }
+
+    const rootList = buildNestedList({ items });
+    const firstOriginalList = sequenceLists[0].element;
+
+    // Replace the first original list with the new nested structure.
+    firstOriginalList?.parentNode?.insertBefore(rootList, firstOriginalList);
+    
+    // Remove all original flatten lists in this sequence.
+    sequenceLists.forEach(({ element: list }) => {
+      if (list.parentNode) list.parentNode.removeChild(list);
+    });
+  });
+
+  return doc.body.innerHTML;
+}
+
+/**
+ * Builds a nested list structure from flat items.
+ */
+function buildNestedList({ items }) {
+  if (!items.length) {
+    return null;
+  }
+
+  const [rootItem] = items;
+  const doc = rootItem.element.ownerDocument;
+  const isOrderedList = rootItem.numFmt && !['bullet', 'none'].includes(rootItem.numFmt);
+  const rootList = doc.createElement(isOrderedList ? 'ol' : 'ul');
+
+  if (isOrderedList && rootItem.listLevel?.[0] && rootItem.listLevel[0] > 1) {
+    rootList.setAttribute('start', rootItem.listLevel[0]);
+  }
+
+  const lastLevelItem = new Map();
+  items.forEach((item) => {
+    const { element: liElement, level, numFmt, listLevel } = item;
+    const cleanLi = cleanListItem(liElement.cloneNode(true));
+
+    if (level === 0) {
+      rootList.append(cleanLi);
+      lastLevelItem.set(0, cleanLi);
+    } else {
+      const parentLi = lastLevelItem.get(level - 1);
+
+      if (!parentLi) {
+        // Fallback: add to root if no parent found.
+        rootList.append(cleanLi);
+        lastLevelItem.set(level, cleanLi);
+        return;
+      }
+
+      let nestedList = null;
+      [...parentLi.children].forEach((child) => {
+        if (child.tagName && (child.tagName === 'OL' || child.tagName === 'UL')) {
+          nestedList = child;
+        }
+      });
+
+      if (!nestedList) {
+        const listType = numFmt && !['bullet', 'none'].includes(numFmt) ? 'ol' : 'ul';
+        nestedList = doc.createElement(listType);
+        parentLi.append(nestedList);
+      }
+      
+      nestedList.append(cleanLi);
+      lastLevelItem.set(level, cleanLi);
+    }
+  });
+
+  return rootList;
+}
+
+/**
+ * Removes flatten attributes from list item.
+ */
+function cleanListItem(listItem) {
+  const attrs = [
+    'data-num-id',
+    'data-level', 
+    'data-num-fmt',
+    'data-lvl-text',
+    'data-list-level',
+    'data-marker-type',
+    'aria-label'
+  ];
+  attrs.forEach((attr) => {
+    listItem.removeAttribute(attr);
+  });
+  return listItem;
+}

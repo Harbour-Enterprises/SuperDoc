@@ -1,5 +1,6 @@
 import { handleDocPartObj } from './docPartObjImporter';
 import { parseMarks } from './markImporter.js';
+import { generateDocxRandomId } from '../../../helpers/index.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -50,6 +51,7 @@ export const handleAnnotationNode = (params) => {
 
   const { attrs: marksAsAttrs, marks } = parseAnnotationMarks(sdtContent);
   const allAttrs = { ...attrs, ...marksAsAttrs };
+  allAttrs.hash = generateDocxRandomId(4);
 
   if (!attrs.fieldId || !attrs.displayLabel) {
     return { nodes: [], consumed: 0 };
@@ -67,7 +69,7 @@ export const handleAnnotationNode = (params) => {
       type: 'fieldAnnotation',
       attrs: allAttrs,
     };
-  };
+  }
   
   return {
     nodes: [result],

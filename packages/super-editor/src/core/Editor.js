@@ -32,6 +32,7 @@ import { setWordSelection } from './helpers/setWordSelection.js';
 import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
 import { migrateListsToV2IfNecessary, migrateParagraphFieldsListsV2 } from '@core/migrations/0.14-listsv2/listsv2migration.js';
 import { createLinkedChildEditor } from '@core/child-editor/index.js';
+import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -1373,9 +1374,6 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Get the document as JSON.
-   */
-  /**
    * Get the editor content as JSON
    * @returns {Object} Editor content as JSON
    */
@@ -1384,18 +1382,19 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Get HTML string of the document
-   */
-  /**
    * Get the editor content as HTML
    * @returns {string} Editor content as HTML
    */
-  getHTML() {
-    const div = document.createElement('div');
+  getHTML({ unflattenLists = false } = {}) {
+    const tempDocument = document.implementation.createHTMLDocument();
+    const container = tempDocument.createElement('div');
     const fragment = DOMSerializer.fromSchema(this.schema).serializeFragment(this.state.doc.content);
-
-    div.appendChild(fragment);
-    return div.innerHTML;
+    container.appendChild(fragment);
+    let html = container.innerHTML;
+    if (unflattenLists) {
+      html = unflattenListsInHtml(html);
+    }
+    return html;
   }
 
   /**
@@ -1409,9 +1408,6 @@ export class Editor extends EventEmitter {
     return createLinkedChildEditor(this, options);
   }
 
-  /**
-   * Get page styles
-   */
   /**
    * Get page styles
    * @returns {Object} Page styles
@@ -1819,7 +1815,8 @@ export class Editor extends EventEmitter {
    */
   async migrateParagraphFields(annotationValues = []) {
     if (!Array.isArray(annotationValues) || !annotationValues.length) return annotationValues;
-    return await migrateParagraphFieldsListsV2(annotationValues, this);
+    const result = await migrateParagraphFieldsListsV2(annotationValues, this);
+    return result;
   }
 
   /**

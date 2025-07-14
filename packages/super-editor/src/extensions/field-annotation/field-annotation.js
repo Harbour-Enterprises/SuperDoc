@@ -5,6 +5,7 @@ import { findFieldAnnotationsByFieldId, getAllFieldAnnotations, findFieldAnnotat
 import { toHex } from 'color2k';
 import { parseSizeUnit, minMax } from '@core/utilities/index.js';
 import { NodeSelection, Selection } from 'prosemirror-state';
+import { generateDocxRandomId } from '../../core/helpers/index.js';
 
 export const fieldAnnotationName = 'fieldAnnotation';
 export const annotationClass = 'annotation';
@@ -317,6 +318,11 @@ export const FieldAnnotation = Node.create({
       generatorIndex: {
         rendered: false,
         default: null,
+      },
+      
+      hash: {
+        rendered: false,
+        default: null,
       }
     };
   },
@@ -448,6 +454,8 @@ export const FieldAnnotation = Node.create({
               ? attrs.defaultDisplayLabel 
               : (attrs.displayLabel || '');
 
+            attrs.hash = generateDocxRandomId(4);
+
             let node = schema.nodes[this.name].create({ 
               ...attrs, 
               ...formatAttrs, 
@@ -501,6 +509,8 @@ export const FieldAnnotation = Node.create({
             let defaultDisplayLabel = attrs.defaultDisplayLabel 
               ? attrs.defaultDisplayLabel 
               : (attrs.displayLabel || '');
+
+            attrs.hash = generateDocxRandomId(4);
 
             let node = schema.nodes[this.name].create({ 
               ...attrs,

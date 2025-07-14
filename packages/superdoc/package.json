@@ -1,7 +1,7 @@
 {
   "name": "@harbour-enterprises/superdoc",
   "type": "module",
-  "version": "0.14.9-rev3",
+  "version": "0.14.9-next.13",
   "license": "AGPL-3.0",
   "readme": "../../README.md",
   "files": [
@@ -44,7 +44,7 @@
     "build:es": "cd ../super-editor && npm run build && cd ../superdoc && vite build",
     "build:umd": "vite build --config vite.config.umd.js",
     "release": "release-it --ci --increment=patch",
-    "release:next": "release-it --ci --increment=patch --no.conventional-changelog --preRelease next --npm.tag next",
+    "release:next": "release-it --ci --no.conventional-changelog --preRelease=next --npm.tag=next",
     "clean": "rm -rf dist",
     "pack:local": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz",
     "pack": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz"

@@ -1731,6 +1731,7 @@ function translateImageNode(params, imageSize) {
   
   const src = attrs.src || attrs.imageSrc;
   const { originalWidth, originalHeight } = getPngDimensions(src);
+  const imageName = params.node.type === 'image' ? src?.split('word/media/')[1] : attrs.fieldId?.replace('-', '_');
   
   let size = attrs.size
     ? {
@@ -1767,12 +1768,10 @@ function translateImageNode(params, imageSize) {
       return prepareTextAnnotation(params);
     }
     
-    const hash = generateDocxRandomId(4);
-    const cleanUrl = attrs.fieldId.replace('-', '_');
-    const imageUrl = `media/${cleanUrl}_${hash}.${type}`;
+    const imageUrl = `media/${imageName}_${attrs.hash}.${type}`;
 
     imageId = addNewImageRelationship(params, imageUrl);
-    params.media[`${cleanUrl}_${hash}.${type}`] = src;
+    params.media[`${imageName}_${attrs.hash}.${type}`] = src;
   }
 
   let inlineAttrs = attrs.originalPadding || {
@@ -1907,8 +1906,7 @@ function translateImageNode(params, imageSize) {
               name: 'wp:docPr',
               attributes: {
                 id: attrs.id || 0,
-                name: attrs.alt,
-                descr: attrs.title,
+                name: attrs.alt || `Picture ${imageName}`,
               },
             },
             {
@@ -1942,7 +1940,7 @@ function translateImageNode(params, imageSize) {
                               name: 'pic:cNvPr',
                               attributes: {
                                 id: attrs.id || 0,
-                                name: attrs.title,
+                                name: attrs.title || `Picture ${imageName}`,
                               },
                             },
                             {
@@ -2202,8 +2200,6 @@ function translateFieldAnnotation(params) {
     }
   }
   sdtContentElements = [ getFieldHighlightJson(), ...sdtContentElements ];
-
-  const customXmlns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 
   // Contains only the main attributes.
   const annotationAttrs = {

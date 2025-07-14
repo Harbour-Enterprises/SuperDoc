@@ -288,6 +288,10 @@ const generateMissingListDefinition = (listNode, editor) => {
 export const migrateParagraphFieldsListsV2 = async (annotationValues = [], editor) => {
   const annotations = getAllFieldAnnotations(editor.state);
   const newValues = [];
+
+  if (!annotations.length) {
+    return annotationValues;
+  }
     
   // Process annotations sequentially
   for (const annotation of annotations) {

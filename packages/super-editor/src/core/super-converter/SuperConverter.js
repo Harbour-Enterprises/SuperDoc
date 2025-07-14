@@ -670,8 +670,6 @@ class SuperConverter {
     });
 
     relationships.elements = [...relationships.elements, ...newRels];
-
-    this.convertedXml['word/_rels/document.xml.rels'] = relsData;
   };
 
   async #exportProcessMediaFiles(media, editor) {

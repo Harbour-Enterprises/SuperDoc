@@ -162,6 +162,7 @@ const exportDocxBlob = async () => {
 
 const onEditorCreate = ({ editor }) => {
   activeEditor.value = editor;
+  window.editor = editor;
 
   editor.on('fieldAnnotationClicked', (params) => {
     console.log('fieldAnnotationClicked', { params });

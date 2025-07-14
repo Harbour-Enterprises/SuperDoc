@@ -700,7 +700,7 @@ export class SuperDoc extends EventEmitter {
    * Get the HTML content of all editors
    * @returns {Array<string>} The HTML content of all editors
    */
-  getHTML() {
+  getHTML(options = {}) {
     const editors = [];
     this.superdocStore.documents.forEach((doc) => {
       const editor = doc.getEditor();
@@ -709,7 +709,7 @@ export class SuperDoc extends EventEmitter {
       }
     });
 
-    return editors.map((editor) => editor.getHTML());
+    return editors.map((editor) => editor.getHTML(options));
   }
 
   /**

@@ -6,6 +6,7 @@ export const toolbarTexts = {
   italic: 'Italic',
   underline: 'Underline',
   highlight: 'Highlight color',
+  strikethrough: 'Strikethrough',
   color: 'Text color',
   search: 'Search',
   link: 'Link',

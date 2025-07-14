@@ -39,7 +39,7 @@ export const Image = Node.create({
       },
 
       alt: {
-        default: null,
+        default: 'Uploaded picture',
       },
 
       id: { rendered: false },
@@ -95,11 +95,17 @@ export const Image = Node.create({
 
       marginOffset: {
         default: {},
-        renderDOM: ({ marginOffset }) => {
+        renderDOM: ({ marginOffset, anchorData }) => {
+          const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
+          const maxMarginV = 500;
           const { left = 0, top = 0 } = marginOffset ?? {};
+
           let style = '';
           if (left) style += `margin-left: ${left}px;`;
-          if (top) style += `margin-top: ${top}px;`;
+          if (top) {
+            if (relativeFromPageV && top >= maxMarginV) style += `margin-top: ${maxMarginV}px;`;
+            else style += `margin-top: ${top}px;`;
+          }
           return { style };
         },
       },
