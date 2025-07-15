@@ -108,6 +108,8 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {boolean} [suppressDefaultDocxStyles] Whether to suppress default styles in docx mode
  * @property {boolean} [jsonOverride] Whether to override content with provided JSON
  * @property {boolean} [disableContextMenu] Whether to disable slash / right-click custom context menu
+ * @property {string} [html] HTML content to initialize the editor with  
+ * @property {string} [markdown] Markdown content to initialize the editor with
  */
 
 /**
@@ -271,7 +273,7 @@ export class SuperDoc extends EventEmitter {
     const cspNonce = this.config.cspNonce;
 
     const originalCreateElement = document.createElement
-    document.createElement = function(tagName) {
+    document.createElement = function (tagName) {
       const element = originalCreateElement.call(this, tagName)
       if (tagName.toLowerCase() === 'style') {
         element.setAttribute('nonce', cspNonce)
