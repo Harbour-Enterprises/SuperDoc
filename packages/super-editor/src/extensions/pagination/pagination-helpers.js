@@ -118,7 +118,7 @@ export const createHeaderFooterEditor = ({
   if (appendToBody) document.body.appendChild(editorContainer);
   
   const headerFooterEditor = new SuperEditor({
-    documentMode: editor.options.documentMode,
+    documentMode: 'viewing',
     role: editor.options.role,
     loadFromSchema: true,
     mode: 'docx',
@@ -135,7 +135,6 @@ export const createHeaderFooterEditor = ({
     currentPageNumber,
     parentEditor: editor,
     editable: false,
-    documentMode: 'viewing',
     onCreate: (evt) => setEditorToolbar(evt, editor),
     onBlur: (evt) => onHeaderFooterDataUpdate(evt, editor, sectionId, type),
   });

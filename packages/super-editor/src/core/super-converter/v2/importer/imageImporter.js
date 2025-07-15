@@ -27,7 +27,6 @@ export const handleDrawingNode = (params) => {
   // Some images are identified by wp:anchor
   const isAnchor = elements.find((el) => el.name === 'wp:anchor');
   if (isAnchor) {
-    
     result = handleImageImport(elements[0], currentFileName, params);
     result.attrs.isAnchor = isAnchor;
   }
@@ -94,6 +93,7 @@ export function handleImageImport(node, currentFileName, params) {
       vRelativeFrom,
       alignH,
       alignV,
+      parent: params.mainParent?.name,
     };
   }
 
