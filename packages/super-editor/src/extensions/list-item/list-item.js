@@ -161,7 +161,7 @@ export const ListItem = Node.create({
         renderDOM: (attrs) => {
           if (attrs.level === undefined || attrs.level === null) return {};
           return {
-            'data-level': JSON.stringify(attrs.level),
+            'data-level': attrs.level,
           };
         },
       },

@@ -22,7 +22,6 @@ import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
-import { flattenListsInHtml } from '@core/inputRules/html/html-helpers.js';
 
 
 /**
@@ -821,7 +820,6 @@ function translateList(params) {
       pPr?.elements?.splice(numPrIndex, 1);
     }
   }
-
   return [outputNode];
 };
 
@@ -2079,13 +2077,33 @@ function prepareHtmlAnnotation(params) {
   }
 
   const htmlAnnotationNode = state.doc.toJSON();
+  const listTypes = ['bulletList', 'orderedList'];
+  const { editor } = params;
+  const seenLists = new Map();
+  state.doc.descendants((node, pos) => {
+    if (listTypes.includes(node.type.name)) {
+      const listItem = node.firstChild;
+      const { attrs } = listItem;
+      const { level, numId } = attrs;
+      if (!seenLists.has(numId)) {
+        const newNumId = ListHelpers.changeNumIdSameAbstract(numId, level, node.type.name, editor);
+        listItem.attrs.numId = newNumId;
+        seenLists.set(numId, newNumId);
+      } else {
+        const newNumId = seenLists.get(numId);
+        listItem.attrs.numId = newNumId;
+      }
+    }
+  });
+
+  const elements = translateChildNodes({
+    ...params,
+    node: htmlAnnotationNode,
+  });
 
   return {
     name: 'htmlAnnotation',
-    elements: translateChildNodes({
-      ...params,
-      node: htmlAnnotationNode,
-    }),
+    elements,
   };
 }
 

@@ -50,6 +50,36 @@ export const generateNewListDefinition = ({ numId, listType, editor }) => {
   return { abstract: newAbstractDef, definition: newNumDef };
 };
 
+/**
+ * Change the numId of a list definition and clone the abstract definition.
+ * @param {number} numId - The current numId of the list definition.
+ * @param {number} level - The level of the list definition.
+ * @param {string} listType - The type of the list (e.g., 'orderedList', 'bulletList').
+ * @param {Editor} editor - The editor instance where the list definition is stored.
+ * @returns {number} The new numId for the list definition.
+ */
+export const changeNumIdSameAbstract = (numId, level, listType, editor) => {
+  const newId = getNewListId(editor, 'definitions');
+  const { abstract } = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
+
+  const numbering = editor.converter.numbering;
+  const newNumbering = { ...numbering };
+
+  const newAbstractId = getNewListId(editor, 'abstracts');
+  const newAbstractDef = {
+    ...abstract,
+    attributes: {
+      ...abstract.attributes,
+      'w:abstractNumId': String(newAbstractId),
+    }
+  };
+  newNumbering.abstracts[newAbstractId] = newAbstractDef;
+
+  const newNumDef = getBasicNumIdTag(newId, newAbstractId);
+  newNumbering.definitions[newId] = newNumDef;
+  return newId;
+};
+
 export const getBasicNumIdTag = (numId, abstractId) => {
   return {
     type: 'element',
@@ -114,7 +144,7 @@ export const getListDefinitionDetails = ({ numId, level, listType, editor }) => 
   let customFormat;
   if (numFmt === 'custom') customFormat = numFmtTag?.attributes?.['w:format'];
 
-  return { start, numFmt, lvlText, listNumberingType, customFormat, abstract };
+  return { start, numFmt, lvlText, listNumberingType, customFormat, abstract, abstractId };
 };
 
 /**
@@ -430,6 +460,7 @@ export const ListHelpers = {
   createSchemaOrderedListNode,
   createListItemNodeJSON,
   addInlineTextMarks,
+  changeNumIdSameAbstract,
 
   // Base list definitions
   baseOrderedListDef,
