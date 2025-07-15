@@ -299,7 +299,7 @@ export const migrateParagraphFieldsListsV2 = async (annotationValues = [], edito
     
     const matchedAnnotation = annotationValues.find((v) => v.input_id === annotation.node.attrs.fieldId);
     
-    if (!type || type !== 'html') {
+    if (!!matchedAnnotation && (!type || type !== 'html')) {
       newValues.push(matchedAnnotation);
       continue;
     }
