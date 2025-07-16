@@ -242,6 +242,6 @@ export const getQuickFormatList = (editor) => {
       return style.type === 'paragraph' && style.definition.attrs;
     })
     .sort((a, b) => {
-      return a.definition.attrs?.name.localeCompare(b.definition.attrs?.name);
+      return a.definition.attrs?.name?.localeCompare(b.definition.attrs?.name);
     });
 };
