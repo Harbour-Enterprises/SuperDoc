@@ -1,0 +1,3 @@
+--ignore-directory=packages/superdoc/dist/
+--ignore-directory=packages/super-editor/dist
+--ignore-directory=examples/chrome-extension/lib/

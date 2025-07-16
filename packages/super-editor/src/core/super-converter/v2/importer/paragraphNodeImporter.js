@@ -108,9 +108,17 @@ export const handleParagraphNode = (params) => {
     const defaultStyleId = node.attributes?.['w:rsidRDefault'];
     schemaNode.attrs['spacing'] = getParagraphSpacing(node, docx, styleId, schemaNode.attrs.marksAttrs);
     schemaNode.attrs['rsidRDefault'] = defaultStyleId;
-  }
 
-  if (docx) {
+    // Handle right-aligned tabs for paragraph floating
+    const tabs = getParagraphTabs(node, docx, styleId);
+    if (tabs.hasRightTab) {
+      schemaNode.attrs['tabs'] = tabs;
+      // If there's a right tab, it typically means the paragraph content should align right
+      if (!schemaNode.attrs['textAlign']) {
+        schemaNode.attrs['textAlign'] = 'right';
+      }
+    }
+
     const { justify } = getDefaultParagraphStyle(docx, styleId);
     if (justify) {
       schemaNode.attrs.justify = {
@@ -239,6 +247,38 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
   return spacing;
 };
 
+export const getParagraphTabs = (node, docx, styleId = '') => {
+  const tabs = {
+    rightTab: null,
+    hasRightTab: false,
+  };
+
+  const { tabs: pDefaultTabs = {} } = getDefaultParagraphStyle(docx, styleId);
+
+  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
+  const inLineTabsTag = pPr?.elements?.find((el) => el.name === 'w:tabs');
+  const inLineTabs = inLineTabsTag?.elements || [];
+
+  // Check for right-aligned tabs in inline tabs
+  const rightTab = inLineTabs.find((tab) => tab.name === 'w:tab' && tab.attributes?.['w:val'] === 'right');
+
+  if (rightTab) {
+    tabs.rightTab = {
+      position: rightTab.attributes?.['w:pos'] ? twipsToPixels(rightTab.attributes['w:pos']) : null,
+      val: rightTab.attributes?.['w:val'],
+    };
+    tabs.hasRightTab = true;
+  }
+
+  // Check for right-aligned tabs in default styles if not found inline
+  if (!tabs.hasRightTab && pDefaultTabs.rightTab) {
+    tabs.rightTab = pDefaultTabs.rightTab;
+    tabs.hasRightTab = true;
+  }
+
+  return tabs;
+};
+
 const getDefaultParagraphStyle = (docx, styleId = '') => {
   const styles = docx['word/styles.xml'];
   if (!styles) {
@@ -262,6 +302,8 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
   let pPrStyleIdSpacingTag = {};
   let pPrStyleIdIndentTag = {};
   let pPrStyleJc = {};
+  let styleRightTab = null;
+
   if (styleId) {
     const stylesById = styles.elements[0].elements?.find(
       (el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId,
@@ -271,6 +313,11 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
     pPrStyleIdSpacingTag = pPrById?.elements?.find((el) => el.name === 'w:spacing') || {};
     pPrStyleIdIndentTag = pPrById?.elements?.find((el) => el.name === 'w:ind') || {};
     pPrStyleJc = pPrById?.elements?.find((el) => el.name === 'w:jc') || {};
+
+    // Check for tabs in style definition
+    const pPrStyleIdTabsTag = pPrById?.elements?.find((el) => el.name === 'w:tabs');
+    const pPrStyleIdTabs = pPrStyleIdTabsTag?.elements || [];
+    styleRightTab = pPrStyleIdTabs.find((tab) => tab.name === 'w:tab' && tab.attributes?.['w:val'] === 'right');
   }
 
   const { attributes: pPrDefaultSpacingAttr } = pPrDefaultSpacingTag;
@@ -282,10 +329,19 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
   const { attributes: pPrNormalIndentAttr } = pPrNormalIndentTag;
   const { attributes: pPrByIdIndentAttr } = pPrStyleIdIndentTag;
 
+  let tabs = {};
+  if (styleRightTab) {
+    tabs.rightTab = {
+      position: styleRightTab.attributes?.['w:pos'] ? twipsToPixels(styleRightTab.attributes['w:pos']) : null,
+      val: styleRightTab.attributes?.['w:val'],
+    };
+  }
+
   return {
     spacing: pPrByIdSpacingAttr || pPrDefaultSpacingAttr || pPrNormalSpacingAttr,
     indent: pPrByIdIndentAttr || pPrDefaultIndentAttr || pPrNormalIndentAttr,
     justify: pPrByIdJcAttr,
+    tabs,
   };
 };
 
