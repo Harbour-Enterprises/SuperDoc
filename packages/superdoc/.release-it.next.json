@@ -2,8 +2,7 @@
   "dryRun": true,
   "git": {
     "commitMessage": "chore: release v${version} [skip ci]",
-    "tagName": "v${version}",
-    "tagAnnotation": "Release v${version}",
+    "tag": false,
     "push": true,
     "requireCleanWorkingDir": false
   },

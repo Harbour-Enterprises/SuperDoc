@@ -6,6 +6,13 @@
     "push": true,
     "requireCleanWorkingDir": false
   },
+  "github": {
+    "release": true,
+    "releaseName": "Release v${version}",
+    "autoGenerate": true,
+    "draft": false,
+    "tokenRef": "GITHUB_TOKEN"
+  },
   "npm": {
     "publish": true,
     "skipChecks": true

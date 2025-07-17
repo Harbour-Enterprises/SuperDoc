@@ -2377,7 +2377,7 @@ export class DocxExporter {
     return result.join('');
   }
 
-  #generate_xml_as_list(data, debug = falase) {
+  #generate_xml_as_list(data, debug = false) {
     const json = JSON.parse(JSON.stringify(data));
     const declaration = this.converter.declaration.attributes;
     const xmlTag = `<?xml${Object.entries(declaration)

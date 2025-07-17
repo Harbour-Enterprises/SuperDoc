@@ -217,7 +217,7 @@ const shouldMigrateList = (listItem) => {
 
     // After v2, we expect level and listNumberingType to be defined
     const { level, listNumberingType } = attrs || {};
-    if (typeof level === undefined || !listNumberingType) {
+    if (typeof level === 'undefined' || !listNumberingType) {
       return true;
     }
 

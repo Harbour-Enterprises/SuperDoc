@@ -49,6 +49,9 @@ export const splitListItem = () => (props) => {
   const beforeCursor = paragraphNode.content.cut(0, paraOffset);
   const afterCursor = paragraphNode.content.cut(paraOffset);
 
+  // Declare variables that will be used across if-else blocks
+  let firstList, secondList;
+
   // Check if the list item has multiple paragraphs
   const listItemHasMultipleParagraphs = listItemNode.childCount > 1;
 
@@ -107,22 +110,22 @@ export const splitListItem = () => (props) => {
       { ...listItemNode.attrs },
       Fragment.from(firstListContent),
     );
-    var firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
+    firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
 
     const secondListItem = editor.schema.nodes.listItem.create(
       { ...listItemNode.attrs },
       Fragment.from(secondListContent),
     );
-    var secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
+    secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
   } else {
     // Simple case: single paragraph, use original logic
     const firstParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, beforeCursor);
     const firstListItem = editor.schema.nodes.listItem.create({ ...listItemNode.attrs }, firstParagraph);
-    var firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
+    firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
 
     const secondParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, afterCursor);
     const secondListItem = editor.schema.nodes.listItem.create({ ...listItemNode.attrs }, secondParagraph);
-    var secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
+    secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
   }
 
   if (!firstList || !secondList) return false;

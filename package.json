@@ -24,8 +24,8 @@
     "publish": "npm run build && cd packages/superdoc && npm publish --access public",
     "format": "prettier --write \"**/*.{js,jsx,vue,css,scss,json,md}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,vue,css,scss,json,md}\"",
-    "lint": "echo 'No linting configured yet. Run: npm install --save-dev eslint eslint-plugin-vue to add ESLint'",
-    "lint:fix": "echo 'No linting configured yet. Run: npm install --save-dev eslint eslint-plugin-vue to add ESLint'",
+    "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "docs:dev": "vuepress dev docs",
     "docs:build": "vuepress build docs",
     "pack": "npm run build:super-editor && npm --prefix ./packages/superdoc run pack",
@@ -33,24 +33,28 @@
     "lint:staged": "lint-staged"
   },
   "lint-staged": {
-    "*.{js,jsx,vue}": [
+    "*.{js,jsx}": [
+      "eslint --fix",
       "prettier --write"
     ],
-    "*.{css,scss}": [
+    "*.{css,scss,json,md}": [
       "prettier --write"
     ],
-    "*.{json,md}": [
+    "*.vue": [
       "prettier --write"
     ]
   },
   "devDependencies": {
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
+    "@eslint/js": "^9.31.0",
     "@playwright/test": "^1.50.1",
     "@types/node": "^22.13.1",
     "@vuepress/bundler-vite": "^2.0.0-rc.18",
     "@vuepress/plugin-redirect": "^2.0.0-rc.60",
     "@vuepress/theme-default": "^2.0.0-rc.60",
+    "eslint": "^9.31.0",
+    "eslint-config-prettier": "^9.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.2",
     "prettier": "3.3.3",

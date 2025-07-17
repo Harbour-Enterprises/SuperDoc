@@ -49,6 +49,10 @@ const onResizeThrottled = throttle(onWindowResized, 300);
 const handleCommand = ({ item, argument, option }) => {
   proxy.$toolbar.emitCommand({ item, argument, option });
 };
+
+const restoreSelection = () => {
+  proxy.$toolbar.activeEditor?.commands?.restoreSelection();
+};
 </script>
 
 <template>
@@ -59,6 +63,7 @@ const handleCommand = ({ item, argument, option }) => {
       :toolbar-items="getFilteredItems('left')"
       position="left"
       @command="handleCommand"
+      @item-clicked="restoreSelection"
       class="superdoc-toolbar-group-side"
     />
     <ButtonGroup
@@ -67,6 +72,7 @@ const handleCommand = ({ item, argument, option }) => {
       :overflow-items="proxy.$toolbar.overflowItems"
       position="center"
       @command="handleCommand"
+      @item-clicked="restoreSelection"
     />
     <ButtonGroup
       tabindex="0"
@@ -74,6 +80,7 @@ const handleCommand = ({ item, argument, option }) => {
       :toolbar-items="getFilteredItems('right')"
       position="right"
       @command="handleCommand"
+      @item-clicked="restoreSelection"
       class="superdoc-toolbar-group-side"
     />
   </div>

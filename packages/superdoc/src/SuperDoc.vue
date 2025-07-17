@@ -1,5 +1,6 @@
 <script setup>
 import '@harbour-enterprises/common/styles/common-styles.css';
+import '@harbour-enterprises/super-editor/style.css';
 
 import { superdocIcons } from './icons.js';
 //prettier-ignore

@@ -1,7 +1,7 @@
 name: Run unit tests
 
 on:
-  workflow_call: # No inputs needed, but this needs to be here to be called by other workflows
+  workflow_call:
 
 jobs:
   run-unit-tests:

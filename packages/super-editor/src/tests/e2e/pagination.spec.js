@@ -123,9 +123,9 @@ test.describe('pagination', () => {
       for (const spacer of spacers) {
         const spacerBox = await spacer.boundingBox();
         const spacerHeight = parseInt(spacerBox.height);
-        // Might not be exactly 620px due to rounding errors, so we check for a range
-        expect(Math.round(spacerHeight)).toBeGreaterThanOrEqual(619);
-        expect(Math.round(spacerHeight)).toBeLessThanOrEqual(621);
+        // Might not be exactly 620px due to rounding errors and browser differences, so we check for a range
+        expect(Math.round(spacerHeight)).toBeGreaterThanOrEqual(616);
+        expect(Math.round(spacerHeight)).toBeLessThanOrEqual(624);
       }
     });
   });

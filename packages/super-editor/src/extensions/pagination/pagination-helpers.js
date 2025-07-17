@@ -118,7 +118,6 @@ export const createHeaderFooterEditor = ({
   if (appendToBody) document.body.appendChild(editorContainer);
 
   const headerFooterEditor = new SuperEditor({
-    documentMode: editor.options.documentMode,
     role: editor.options.role,
     loadFromSchema: true,
     mode: 'docx',

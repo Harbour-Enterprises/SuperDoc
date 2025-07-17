@@ -7,6 +7,10 @@ node_modules
 **/node_modules
 **/node_modules/**
 
+# docs cache and build files
+docs/.vitepress/cache
+docs/.vitepress/dist
+
 # vite config
 vite.config.js
 

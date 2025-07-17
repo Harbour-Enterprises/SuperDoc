@@ -55,7 +55,7 @@ export const Table = Node.create({
       },
       resizable: true,
       handleWidth: 5,
-      cellMinWidth: 25,
+      cellMinWidth: 10,
       lastColumnResizable: true,
       allowTableNodeSelection: false,
     };

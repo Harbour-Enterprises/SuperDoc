@@ -192,7 +192,6 @@ export const ListItem = Node.create({
       styleId: {
         rendered: false,
         keepOnSplit: true,
-        keepOnSplit: true,
       },
 
       customFormat: {

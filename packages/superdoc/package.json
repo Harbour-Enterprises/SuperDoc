@@ -1,7 +1,7 @@
 {
   "name": "@harbour-enterprises/superdoc",
   "type": "module",
-  "version": "0.14.11-next.5",
+  "version": "0.14.14-next.4",
   "license": "AGPL-3.0",
   "readme": "../../README.md",
   "files": [
@@ -33,7 +33,7 @@
     "./file-zipper": {
       "import": "./dist/super-editor/file-zipper.es.js"
     },
-    "./style.css": "./dist/style.css"
+    "./style.css": "./dist/superdoc.css"
   },
   "types": "./dist/index.d.ts",
   "main": "./dist/superdoc.umd.js",

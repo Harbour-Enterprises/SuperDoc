@@ -62,6 +62,7 @@ import { Pagination } from './pagination/index.js';
 import { LinkedStyles } from './linked-styles/linked-styles.js';
 import { Search } from './search/index.js';
 import { NodeResizer } from './noderesizer/index.js';
+import { CustomSelection } from './custom-selection/index.js';
 
 // Helpers
 import { trackChangesHelpers } from './track-changes/index.js';
@@ -107,6 +108,7 @@ const getRichTextExtensions = () => {
     NodeResizer,
     TocEntry,
     TocWrapper,
+    CustomSelection,
   ];
 };
 
@@ -176,6 +178,7 @@ const getStarterExtensions = () => {
     NodeResizer,
     TocEntry,
     TocWrapper,
+    CustomSelection,
   ];
 };
 
@@ -241,4 +244,5 @@ export {
   NodeResizer,
   TocEntry,
   TocWrapper,
+  CustomSelection,
 };

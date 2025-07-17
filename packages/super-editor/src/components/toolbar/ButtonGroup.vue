@@ -57,6 +57,7 @@ const isDropdown = (item) => item.type === 'dropdown';
 const isSeparator = (item) => item.type === 'separator';
 const isOverflow = (item) => item.type === 'overflow';
 const handleToolbarButtonClick = (item, argument = null) => {
+  emit('item-clicked');
   currentItem.value = item;
   currentItem.value.expand = !currentItem.value.expand;
   if (item.disabled.value) return;

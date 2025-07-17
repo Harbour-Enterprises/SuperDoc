@@ -17,5 +17,6 @@ module.exports = {
         'revert', // Revert commits
       ],
     ],
+    'body-max-line-length': [0, 'always'], // Disable body line length limit
   },
 };

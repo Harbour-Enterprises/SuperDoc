@@ -630,7 +630,7 @@ export const FieldAnnotation = Node.create({
                   ...node.attrs,
                   // reset displayLabel to default.
                   displayLabel,
-                  // reset attrs ​​for specific types.
+                  // reset attrs for specific types.
                   imageSrc: null,
                   rawHtml: null,
                   linkUrl: null,
