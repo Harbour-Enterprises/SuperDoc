@@ -6,6 +6,7 @@ import { tableNodeHandlerEntity } from './tableImporter.js';
 import { drawingNodeHandlerEntity } from './imageImporter.js';
 import { trackChangeNodeHandlerEntity } from './trackChangesImporter.js';
 import { hyperlinkNodeHandlerEntity } from './hyperlinkImporter.js';
+import { tocNodeHandlerEntity } from './tocNodeImporter.js';
 import { runNodeHandlerEntity } from './runNodeImporter.js';
 import { textNodeHandlerEntity } from './textNodeImporter.js';
 import { paragraphNodeHandlerEntity } from './paragraphNodeImporter.js';
@@ -124,6 +125,7 @@ export const defaultNodeListHandler = () => {
     runNodeHandlerEntity,
     pictNodeHandlerEntity,
     listHandlerEntity,
+    tocNodeHandlerEntity,
     paragraphNodeHandlerEntity,
     textNodeHandlerEntity,
     lineBreakNodeHandlerEntity,

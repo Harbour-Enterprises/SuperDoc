@@ -30,6 +30,8 @@ import { Table } from './table/index.js';
 import { TableHeader } from './table-header/index.js';
 import { TableRow } from './table-row/index.js';
 import { TableCell } from './table-cell/index.js';
+import { TocEntry } from './toc-entry/index.js';
+import { TocWrapper } from './toc-wrapper/index.js';
 import { FieldAnnotation, fieldAnnotationHelpers } from './field-annotation/index.js';
 import { Image } from './image/index.js';
 import { BookmarkStart } from './bookmarks/index.js';
@@ -103,6 +105,8 @@ const getRichTextExtensions = () => {
     AiPlugin,
     Image,
     NodeResizer,
+    TocEntry,
+    TocWrapper,
   ];
 };
 
@@ -170,6 +174,8 @@ const getStarterExtensions = () => {
     Search,
     StructuredContent,
     NodeResizer,
+    TocEntry,
+    TocWrapper,
   ];
 };
 
@@ -233,4 +239,6 @@ export {
   Search,
   StructuredContent,
   NodeResizer,
+  TocEntry,
+  TocWrapper,
 };
