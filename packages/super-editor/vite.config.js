@@ -34,6 +34,7 @@ export default defineConfig(({ mode }) => {
         entry: "src/index.js",
         formats: ['es'],
         name: "super-editor",
+        cssFileName: 'style',
       },
       rollupOptions: {
         external: [

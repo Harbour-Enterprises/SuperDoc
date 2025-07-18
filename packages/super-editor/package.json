@@ -32,7 +32,7 @@
     "./ai-writer": {
       "import": "./dist/ai-writer.es.js"
     },
-    "./style.css": "./dist/super-editor.css"
+    "./style.css": "./dist/style.css"
   },
   "main": "./dist/super-editor.es.js",
   "module": "./dist/super-editor.es.js",
