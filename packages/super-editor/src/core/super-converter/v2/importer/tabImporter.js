@@ -21,6 +21,7 @@ const handleTabNode = (params) => {
   }
 
   const { attributes = {} } = node;
+
   const processedNode = {
     type: 'tab',
     attrs: {
