@@ -1113,6 +1113,125 @@ export const FieldAnnotation = Node.create({
             }
           }
 
+            return true;
+          },
+
+        cleanUpListsWithAnnotations:
+          (fieldsToDelete = []) => 
+          ({ dispatch, tr, state }) => {
+            if (!dispatch) return true;
+            
+            if (!Array.isArray(fieldsToDelete)) fieldsToDelete = [fieldsToDelete];
+            const { doc } = state;
+            const docxAnnotations = getAllFieldAnnotations(state) || [];
+
+            const nodesToDelete = [];
+
+            fieldsToDelete.forEach((fieldId) => {
+              const matched = docxAnnotations.find(a => a.node.attrs.fieldId === fieldId);
+              if (!matched) return;
+
+              // find the nearest listItem
+              const listItem = findParentNodeClosestToPos(
+                doc.resolve(matched.pos),
+                node => node.type.name === 'listItem'
+              );
+              if (!listItem) return;
+
+              let remainingNodes = 0;
+              listItem.node.descendants((node) => {
+                if (node.type.name === 'fieldAnnotation') {
+                  remainingNodes += 1;
+                }
+              })
+
+              let matchingNodesFound = 0;
+              let hasOtherNodes = false;
+              listItem.node.children.forEach((child, index) => {
+                const { type } = child;
+                if (type.name !== 'paragraph' && type.name !== 'fieldAnnotation') return;
+
+                child.children.forEach((inline) => {
+                  const isFieldToDelete = fieldsToDelete.includes(inline.attrs.fieldId);
+                  const isFieldType = inline.type.name === 'fieldAnnotation';
+                  const isMatchingField = isFieldType && isFieldToDelete;
+                  if (!isFieldType && !isMatchingField) hasOtherNodes = true;
+                  if (isMatchingField) matchingNodesFound += 1;
+                });
+              });
+
+              if (!hasOtherNodes && matchingNodesFound > 0) {
+                remainingNodes -= matchingNodesFound;
+              }
+
+              if (remainingNodes > 0) {
+                return;
+              }
+
+              // now “bubble up” as long as each parent has exactly one child
+              let { pos, node, depth } = listItem;
+              let $pos = doc.resolve(pos);
+
+              while (depth > 0) {
+                const parent = $pos.node(depth - 1);
+                if (parent.childCount === 1) {
+                  // climb one level
+                  depth -= 1;
+                  pos    = $pos.before(depth);
+                  node   = parent;
+                  $pos   = doc.resolve(pos);
+                } else {
+                  break;
+                }
+              }
+
+              // dedupe
+              if (!nodesToDelete.some(n => n.pos === pos)) {
+                nodesToDelete.push({ pos, node });
+              }
+            });
+
+            if (!nodesToDelete.length) return true;
+
+            // delete from back to front
+            nodesToDelete
+              .sort((a, b) => b.pos - a.pos)
+              .forEach(({ pos, node }) => {
+                tr.delete(pos, pos + node.nodeSize);
+              });
+            
+            return true;
+          },
+
+      cleanUpParagraphWithAnnotations:
+        (fieldsToDelete = []) =>
+        ({ dispatch, tr, state }) => {
+          if (!dispatch) return true;
+          const annotations = findFieldAnnotationsByFieldId(fieldsToDelete, state) || [];
+          const nodesToDelete = [];
+          const { doc } = state;
+          
+          annotations.forEach((annotation) => {
+            let { pos, node } = annotation;
+            let newPosFrom = tr.mapping.map(pos);
+
+            const resolvedPos = doc.resolve(newPosFrom);
+            const parent = resolvedPos.parent;
+
+            let currentNode = tr.doc.nodeAt(newPosFrom);
+            if (node.eq(currentNode) && parent?.children?.length < 2) {
+              nodesToDelete.push({ pos: newPosFrom, node: parent });
+            }
+          });
+
+          if (!nodesToDelete.length) return true;
+          
+          nodesToDelete
+            .sort((a, b) => b.pos - a.pos)
+            .forEach(({ pos, node }) => {
+              tr.delete(pos, pos + node.nodeSize);
+            });
+          
           return true;
         },
       /// Formatting commands - end.
