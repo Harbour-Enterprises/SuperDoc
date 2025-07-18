@@ -18,7 +18,6 @@ export const FontFamily = Extension.create({
             default: null,
             parseDOM: (el) => el.style.fontFamily?.replace(/['"]+/g, ''),
             renderDOM: (attrs) => {
-              return { style: `font-family: 'Arial'` };
               if (!attrs.fontFamily) return {};
               return { style: `font-family: ${attrs.fontFamily}` };
             },
