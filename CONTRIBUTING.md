@@ -1,15 +1,29 @@
+test 
+
 # Contributing to SuperDoc
 
 Thank you for your interest in contributing to SuperDoc! We're excited to have you join our community. This document provides guidelines and information about contributing to the project.
 
 ## Table of Contents
 
-- [Code of Conduct](#code-of-conduct)
-- [How Can I Contribute?](#how-can-i-contribute)
-- [Development Setup](#development-setup)
-- [Pull Request Process](#pull-request-process)
-- [Style Guidelines](#style-guidelines)
-- [Community](#community)
+- [Contributing to SuperDoc](#contributing-to-superdoc)
+  - [Table of Contents](#table-of-contents)
+  - [Code of Conduct](#code-of-conduct)
+  - [How Can I Contribute?](#how-can-i-contribute)
+    - [Reporting Bugs](#reporting-bugs)
+    - [Suggesting Features](#suggesting-features)
+    - [Documentation Improvements](#documentation-improvements)
+    - [Code Contributions](#code-contributions)
+      - [Types of Contributions](#types-of-contributions)
+  - [Development Setup](#development-setup)
+  - [Pull Request Process](#pull-request-process)
+  - [Style Guidelines](#style-guidelines)
+    - [JavaScript](#javascript)
+    - [Documentation](#documentation)
+    - [Testing](#testing)
+  - [Community](#community)
+    - [Recognition](#recognition)
+  - [Questions?](#questions)
 
 ## Code of Conduct
 
