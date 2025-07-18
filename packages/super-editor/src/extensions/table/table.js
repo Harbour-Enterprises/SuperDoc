@@ -36,6 +36,7 @@ import {
 } from 'prosemirror-tables';
 import { cellAround } from './tableHelpers/cellAround.js';
 import { cellWrapping } from './tableHelpers/cellWrapping.js';
+import { deleteOnDeleteKeyPlugin } from './tableHelpers/deleteOnKeyboardPlugin.js';
 
 export const Table = Node.create({
   name: 'table',
@@ -592,8 +593,9 @@ export const Table = Node.create({
                 editor: this.editor,
               }),
             }),
+            deleteOnDeleteKeyPlugin,
           ]
-        : []),
+        : [deleteOnDeleteKeyPlugin]),
 
       tableEditing({
         allowTableNodeSelection: this.options.allowTableNodeSelection,
