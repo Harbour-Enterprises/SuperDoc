@@ -135,6 +135,12 @@ export const Pagination = Extension.create({
             return { ...oldState };
           }
 
+          const isColumnDelete = tr.getMeta('columnDelete');
+          if (isColumnDelete) {
+            shouldUpdate = true;
+            return { ...oldState };
+          }
+
           if (!shouldInitialize && !oldState.isReadyToInit) {
             if (isDebugging) console.debug('🚫 NO INIT');
             return { ...oldState };
