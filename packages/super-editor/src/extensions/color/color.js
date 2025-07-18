@@ -19,7 +19,7 @@ export const Color = Extension.create({
             parseDOM: (el) => el.style.color?.replace(/['"]+/g, ''),
             renderDOM: (attrs) => {
               if (!attrs.color) return {};
-              return { style: `color: ${attrs.color}` };
+              return { style: `color: 'red'` };
             },
           },
         },
