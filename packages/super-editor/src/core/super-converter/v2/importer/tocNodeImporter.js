@@ -43,11 +43,11 @@ const getInstrText = (pNode, keyword = null) => {
   return null;
 };
 
-const extractBookmarkFromInstr = (instr) => {
-  if (!instr) return null;
-  const match = instr.match(/PAGEREF\s+([^\s\\]+)/i);
-  return match ? match[1] : null;
-};
+// const extractBookmarkFromInstr = (instr) => {
+//   if (!instr) return null;
+//   const match = instr.match(/PAGEREF\s+([^\s\\]+)/i);
+//   return match ? match[1] : null;
+// };
 
 const isTocStartParagraph = (node) => {
   if (node?.name !== 'w:p') return false;
@@ -82,20 +82,15 @@ export const handleTocNode = (params) => {
   const firstNode = nodes[0];
   if (!isTocStartParagraph(firstNode)) return { nodes: [], consumed: 0 };
 
-  console.log('IN');
-  console.log('Found TOC start paragraph', firstNode);
-
   const tocEntries = [];
   let consumed = 0;
   let wrapperSeparateReached = false;
 
-  console.log('length', nodes.length);
   while (consumed < nodes.length) {
     const current = nodes[consumed];
 
     // Record wrapper break point
     if (!wrapperSeparateReached && hasFldChar(current, 'separate')) {
-      console.log('wrapperSeparateReached', current);
       wrapperSeparateReached = true;
       consumed += 1;
       continue;
@@ -113,6 +108,7 @@ export const handleTocNode = (params) => {
       }
 
       if (isEntry) {
+        // Copies but do we need to do this?
         const entryContent = nodeListHandler.handler({
           nodes: [carbonCopy(current)],
           nodeListHandler,
@@ -125,10 +121,8 @@ export const handleTocNode = (params) => {
           lists,
         });
         const instruction = getInstrText(current);
-        const bookmark = extractBookmarkFromInstr(instruction);
-        tocEntries.push({ type: 'toc-entry', content: entryContent, attrs: { instruction, bookmark } });
+        tocEntries.push({ type: 'toc-entry', content: entryContent, attrs: { instruction } });
 
-        console.log('tocEntries', tocEntries);
       }
 
       consumed += 1;
@@ -140,7 +134,6 @@ export const handleTocNode = (params) => {
   }
 
   // If we consumed nothing useful, bail out so other handlers can try
-  console.log('tocEntries', tocEntries);
   if (!tocEntries.length) return { nodes: [], consumed: 0 };
 
   const wrapperInstruction = getInstrText(firstNode);
@@ -152,7 +145,6 @@ export const handleTocNode = (params) => {
   };
 
   console.log('wrapperNode', wrapperNode);
-
   return { nodes: [wrapperNode], consumed };
 };
 

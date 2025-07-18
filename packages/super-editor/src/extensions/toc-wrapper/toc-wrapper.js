@@ -5,7 +5,7 @@ export const TocWrapper = Node.create({
 
   group: 'block',
 
-  content: '',
+  content: 'block*',
 
   inline: false,
 
@@ -13,7 +13,9 @@ export const TocWrapper = Node.create({
     return {
       htmlAttributes: {
         'data-id': 'toc-wrapper',
+        'contenteditable': 'false',
         'aria-label': 'Table of Contents wrapper',
+        'class': 'toc-wrapper',
       },
     };
   },
