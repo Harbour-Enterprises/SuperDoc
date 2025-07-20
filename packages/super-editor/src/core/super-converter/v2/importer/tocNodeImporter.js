@@ -189,9 +189,30 @@ export const handleTocNode = (params) => {
       const hasEnd = hasFldChar(current, 'end');
 
       if (hasEnd && !isEntry) {
-        // This is the wrapper closing paragraph (no PAGEREF), finish processing
+        // This is the wrapper closing paragraph (contains fldChar end and possibly page break)
+        const footerNodes = nodeListHandler.handler({
+          nodes: [carbonCopy(current)],
+          docx,
+          nodeListHandler,
+          insideTrackChange,
+          converter,
+          editor,
+          filename,
+          parentStyleId,
+          lists,
+        });
         consumed += 1;
-        break;
+
+        // Build wrapper node first
+        const wrapperInstruction = getInstrText(firstNode);
+        const wrapperNode = {
+          type: 'toc-wrapper',
+          content: tocEntries,
+          attrs: { instruction: wrapperInstruction },
+        };
+
+        const resultNodes = [wrapperNode, ...footerNodes];
+        return { nodes: resultNodes, consumed };
       }
 
       if (isEntry) {
@@ -220,17 +241,13 @@ export const handleTocNode = (params) => {
     consumed += 1;
   }
 
-  // If we consumed nothing useful, bail out so other handlers can try
-  if (!tocEntries.length) return { nodes: [], consumed: 0 };
-
+  // If we exited loop without encountering wrapper closing paragraph
   const wrapperInstruction = getInstrText(firstNode);
-
   const wrapperNode = {
     type: 'toc-wrapper',
     content: tocEntries,
     attrs: { instruction: wrapperInstruction },
   };
-
   return { nodes: [wrapperNode], consumed };
 };
 
