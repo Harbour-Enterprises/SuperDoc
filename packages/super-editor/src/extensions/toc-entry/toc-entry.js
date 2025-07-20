@@ -36,10 +36,14 @@ export const TocEntry = Node.create({
         default: null,
         rendered: false,
       },
-      // bookmark: {
-      //   default: null,
-      //   rendered: false,
-      // },
+      bookmark: {
+        default: null,
+        rendered: false,
+      },
+      pageNumber: {
+        default: null,
+        rendered: false,
+      },
       attributes: {
         rendered: false,
       },

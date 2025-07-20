@@ -536,5 +536,13 @@ const processCombinedNodesForFldChar = (nodesToCombine = []) => {
     });
   }
 
+  // If none of the above conditions matched (e.g., PAGEREF fields in TOC),
+  // simply pass through the captured text nodes so that cached page numbers
+  // (and any associated rich-text styling) are preserved.
+  else if (!hasPageMarker && !isNumPages) {
+    console.log('no page marker or num pages, passing through text nodes', textNodes);
+    processedNodes.push(...textNodes);
+  }
+
   return processedNodes;
 };

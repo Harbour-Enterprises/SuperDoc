@@ -4,13 +4,23 @@ import { parseMarks } from './markImporter.js';
  * @type {import("docxImporter").NodeHandler}
  */
 const handleAutoPageNumber = (params) => {
-  const { nodes } = params;
+  const { nodes, insideToc } = params;
+
+  // Ignore auto page numbers when we are parsing inside a Table of Contents entry
+  if (insideToc) {
+    return { nodes: [], consumed: 0 };
+  }
+
   if (nodes.length === 0 || nodes[0].name !== 'sd:autoPageNumber') {
     return { nodes: [], consumed: 0 };
   }
 
+  console.log('running auto page number handler on nodes', nodes);
+
   const rPr = nodes[0].elements?.find((el) => el.name === 'w:rPr');
   const marks = parseMarks(rPr || { elements: [] });
+
+  console.log('marks', marks);
   const processedNode = {
     type: 'page-number',
     attrs: {

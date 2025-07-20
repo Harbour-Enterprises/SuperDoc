@@ -191,6 +191,7 @@ const createNodeListHandler = (nodeHandlers) => {
     filename,
     parentStyleId,
     lists,
+    insideToc,
   }) => {
     if (!elements || !elements.length) return [];
 
@@ -218,6 +219,7 @@ const createNodeListHandler = (nodeHandlers) => {
                 filename,
                 parentStyleId,
                 lists,
+                insideToc,
               });
             },
             { nodes: [], consumed: 0 },

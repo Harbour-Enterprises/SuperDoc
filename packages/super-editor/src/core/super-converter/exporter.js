@@ -95,6 +95,8 @@ export function exportSchemaToJson(params) {
     structuredContent: translateStructuredContent,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
+    'toc-wrapper': translateTocWrapper,
+    'toc-entry': translateTocEntry,
   };
 
   if (!router[type]) {
@@ -2540,6 +2542,142 @@ function translateStructuredContent(params) {
   return {
     name: 'w:sdt',
     elements: nodeElements,
+  };
+}
+
+function translateTocWrapper(params) {
+  const { node } = params;
+  const { instruction } = node.attrs;
+
+  const header = {
+    name: 'w:p',
+    elements: [
+      {
+        name: 'w:r',
+        elements: [
+          {
+            name: 'w:fldChar',
+            attributes: {
+              'w:fldCharType': 'begin',
+            },
+          },
+        ],
+      },
+      {
+        name: 'w:r',
+        elements: [
+          {
+            name: 'w:instrText',
+            elements: [
+              {
+                type: 'text',
+                text: ` ${instruction}`,
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'w:r',
+        elements: [
+          {
+            name: 'w:fldChar',
+            attributes: {
+              'w:fldCharType': 'separate',
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  const childContent = translateChildNodes(params);
+
+  const footer = {
+    name: 'w:p',
+    elements: [
+      {
+        name: 'w:r',
+        elements: [
+          {
+            name: 'w:fldChar',
+            attributes: {
+              'w:fldCharType': 'end',
+            },
+          },
+        ],
+      },
+    ],
+  };
+
+  return [header, ...childContent, footer];
+}
+
+function translateTocEntry(params) {
+  const { node } = params;
+  const { instruction } = node.attrs;
+
+  const translatedChildren = translateChildNodes(params);
+  if (!translatedChildren.length || !translatedChildren[0].elements) {
+    return null;
+  }
+  
+  const pPr = translatedChildren[0].elements.find((e) => e.name === 'w:pPr') || { name: 'w:pPr', elements: [] };
+  const contentRuns = translatedChildren[0].elements.filter((e) => e.name !== 'w:pPr');
+
+  const pageRefField = [
+    {
+      name: 'w:r',
+      elements: [
+        {
+          name: 'w:fldChar',
+          attributes: {
+            'w:fldCharType': 'begin',
+          },
+        },
+      ],
+    },
+    {
+      name: 'w:r',
+      elements: [
+        {
+          name: 'w:instrText',
+          elements: [
+            {
+              type: 'text',
+              text: ` ${instruction}`,
+            },
+          ],
+        },
+      ],
+    },
+    {
+      name: 'w:r',
+      elements: [
+        {
+          name: 'w:fldChar',
+          attributes: {
+            'w:fldCharType': 'separate',
+          },
+        },
+      ],
+    },
+    {
+      name: 'w:r',
+      elements: [
+        {
+          name: 'w:fldChar',
+          attributes: {
+            'w:fldCharType': 'end',
+          },
+        },
+      ],
+    },
+  ];
+
+  return {
+    name: 'w:p',
+    elements: [pPr, ...contentRuns, ...pageRefField],
   };
 }
 

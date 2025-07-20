@@ -2,6 +2,7 @@
  * @type {import("docxImporter").NodeHandler}
  */
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
+import { parseMarks } from './markImporter.js';
 
 /**
  * Checks if a node contains a field character of a specific type
@@ -43,11 +44,97 @@ const getInstrText = (pNode, keyword = null) => {
   return null;
 };
 
-// const extractBookmarkFromInstr = (instr) => {
-//   if (!instr) return null;
-//   const match = instr.match(/PAGEREF\s+([^\s\\]+)/i);
-//   return match ? match[1] : null;
-// };
+const extractBookmarkFromInstr = (instr) => {
+  if (!instr) return null;
+  const match = instr.match(/PAGEREF\s+([^\s\\]+)/i);
+  return match ? match[1] : null;
+};
+
+const getTextFromRun = (run) => {
+  if (!run?.elements) return '';
+  const tEl = run.elements.find((el) => el.name === 'w:t');
+  if (!tEl) return '';
+  if (typeof tEl.text === 'string') return tEl.text;
+  if (tEl.elements?.length) {
+    const inner = tEl.elements.find((e) => typeof e.text === 'string');
+    return inner ? inner.text : '';
+  }
+  return '';
+};
+
+const parseTocEntry = (pNode, params) => {
+  const { docx, nodeListHandler } = params;
+  const elements = pNode.elements || [];
+
+  // Identify the positions of field char runs
+  const beginIdx = elements.findIndex((r) =>
+    r.elements?.some((el) => el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === 'begin'),
+  );
+  const separateIdx = elements.findIndex((r) =>
+    r.elements?.some((el) => el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === 'separate'),
+  );
+  const endIdx = elements.findIndex((r) =>
+    r.elements?.some((el) => el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === 'end'),
+  );
+
+  // Title runs are before the fldChar begin
+  const titleRuns = beginIdx > 0 ? elements.slice(0, beginIdx) : [];
+
+  // Runs containing cached page number are between separate and end
+  const pageNumberRuns = separateIdx > -1 ? elements.slice(separateIdx + 1, endIdx > -1 ? endIdx : elements.length) : [];
+
+  // Process title runs through standard run handling to preserve styling
+  let titleContent = [];
+  if (titleRuns.length) {
+    titleContent = nodeListHandler.handler({
+      ...params,
+      nodes: titleRuns,
+    });
+  }
+
+  // Extract page number text and marks (use first run for marks)
+  let pageNumText = '';
+  let pageNumMarks = [];
+  if (pageNumberRuns.length) {
+    pageNumberRuns.forEach((r) => {
+      pageNumText += getTextFromRun(r);
+    });
+
+    // Marks from first run's rPr
+    const firstRun = pageNumberRuns.find((r) => r.elements?.some((el) => el.name === 'w:t'));
+    const rPr = firstRun?.elements?.find((el) => el.name === 'w:rPr');
+    pageNumMarks = parseMarks(rPr || { elements: [] }, docx);
+  }
+
+  // Build hyperlink mark applied to all nodes
+  const instrText = getInstrText(pNode);
+  const bookmark = extractBookmarkFromInstr(instrText);
+  const linkMark = bookmark ? { type: 'link', attrs: { href: `#${bookmark}` } } : null;
+
+  if (linkMark) {
+    // Apply to title nodes
+    titleContent = titleContent.map((n) => ({
+      ...n,
+      marks: [...(n.marks || []), linkMark],
+    }));
+    pageNumMarks.push(linkMark);
+  }
+
+  const pageNumNode = pageNumText
+    ? {
+        type: 'text',
+        text: pageNumText,
+        marks: pageNumMarks,
+      }
+    : null;
+
+  const content = [...titleContent];
+  // Ensure a tab separator between title and page number
+  content.push({ type: 'tab' });
+  if (pageNumNode) content.push(pageNumNode);
+
+  return content;
+};
 
 const isTocStartParagraph = (node) => {
   if (node?.name !== 'w:p') return false;
@@ -109,10 +196,10 @@ export const handleTocNode = (params) => {
 
       if (isEntry) {
         // Copies but do we need to do this?
-        const entryContent = nodeListHandler.handler({
-          nodes: [carbonCopy(current)],
-          nodeListHandler,
+        console.log('calling recursive handler')
+        const entryContent = parseTocEntry(current, {
           docx,
+          nodeListHandler,
           insideTrackChange,
           converter,
           editor,
@@ -144,7 +231,6 @@ export const handleTocNode = (params) => {
     attrs: { instruction: wrapperInstruction },
   };
 
-  console.log('wrapperNode', wrapperNode);
   return { nodes: [wrapperNode], consumed };
 };
 
