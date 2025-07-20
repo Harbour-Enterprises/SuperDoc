@@ -77,18 +77,17 @@ const parseTocEntry = (pNode, params) => {
     r.elements?.some((el) => el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === 'end'),
   );
 
-  // Title runs are before the fldChar begin
-  const titleRuns = beginIdx > 0 ? elements.slice(0, beginIdx) : [];
+  const sectionRuns = beginIdx > 0 ? elements.slice(0, beginIdx) : [];
 
   // Runs containing cached page number are between separate and end
   const pageNumberRuns = separateIdx > -1 ? elements.slice(separateIdx + 1, endIdx > -1 ? endIdx : elements.length) : [];
 
   // Process title runs through standard run handling to preserve styling
   let titleContent = [];
-  if (titleRuns.length) {
+  if (sectionRuns.length) {
     titleContent = nodeListHandler.handler({
       ...params,
-      nodes: titleRuns,
+      nodes: sectionRuns,
     });
   }
 
