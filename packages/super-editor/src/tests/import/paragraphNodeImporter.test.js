@@ -390,3 +390,126 @@ describe('Check that paragraph-level sectPr is retained', () => {
     expect(p2sectPrData).toEqual(sectPr2);
   });
 });
+
+describe('paragraph tests to check right-aligned tabs', () => {
+  it('correctly handles paragraph with right-aligned tabs', () => {
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:tabs',
+              elements: [
+                {
+                  name: 'w:tab',
+                  attributes: {
+                    'w:val': 'right',
+                    'w:pos': '9270',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+    expect(node.attrs.tabs).toBeDefined();
+    expect(node.attrs.tabs.hasRightTab).toBe(true);
+    expect(node.attrs.tabs.rightTab.val).toBe('right');
+    expect(node.attrs.tabs.rightTab.position).toBe(618); // 9270 twips converted to pixels
+    expect(node.attrs.textAlign).toBe('right');
+  });
+
+  it('correctly handles paragraph with right-aligned tabs and existing textAlign', () => {
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:jc',
+              attributes: {
+                'w:val': 'center',
+              },
+            },
+            {
+              name: 'w:tabs',
+              elements: [
+                {
+                  name: 'w:tab',
+                  attributes: {
+                    'w:val': 'right',
+                    'w:pos': '9270',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+    expect(node.attrs.tabs).toBeDefined();
+    expect(node.attrs.tabs.hasRightTab).toBe(true);
+    expect(node.attrs.tabs.rightTab.val).toBe('right');
+    expect(node.attrs.tabs.rightTab.position).toBe(618);
+    // Should preserve existing textAlign, not override with 'right'
+    expect(node.attrs.textAlign).toBe('center');
+  });
+
+  it('correctly handles paragraph without right-aligned tabs', () => {
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:tabs',
+              elements: [
+                {
+                  name: 'w:tab',
+                  attributes: {
+                    'w:val': 'left',
+                    'w:pos': '1440',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+    expect(node.attrs.tabs).toBeUndefined();
+    expect(node.attrs.textAlign).toBeUndefined();
+  });
+});
