@@ -4,6 +4,10 @@
 
 .pagination-section-header {
   cursor: default;
+  /* To not inherit styles from the wrapper paragraph */
+  p {
+    text-align: initial;
+  }
 }
 
 .pagination-section-footer {
@@ -14,6 +18,10 @@
   flex-direction: column;
   justify-content: flex-end;
   cursor: default;
+  /* To not inherit styles from the wrapper paragraph */
+  p {
+    text-align: initial;
+  }
 }
 
 .pagination-break-wrapper {
