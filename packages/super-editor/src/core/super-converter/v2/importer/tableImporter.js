@@ -84,9 +84,13 @@ export function handleTableNode(node, params) {
   // const tblLook = tblPr.elements.find((el) => el.name === 'w:tblLook');
 
   const rows = node.elements.filter((el) => el.name === 'w:tr');
+  const refStylesBorders = referencedStyles?.borders || {};
+  const refStylesRowBorders = refStylesBorders?.rowBorders || {};
 
-  const borderData = Object.keys(borders)?.length ? borders : referencedStyles?.borders;
-  const borderRowData = Object.keys(rowBorders)?.length ? rowBorders : referencedStyles?.rowBorders;
+  const borderData = Object.keys(borders)?.length ? Object.assign(refStylesBorders, borders) : refStylesBorders;
+  const borderRowData = Object.keys(rowBorders)?.length
+    ? Object.assign(refStylesRowBorders, rowBorders)
+    : refStylesRowBorders;
   attrs['borders'] = borderData;
 
   const content = [];
