@@ -5,21 +5,63 @@ import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { parseMarks } from './markImporter.js';
 
 /**
- * Checks if a node contains a field character of a specific type
+ * Checks if a node contains a field character of a specific type with optional instruction text matching.
+ * 
+ * This function can be used in two ways:
+ * 1. With keyword: Checks for field char AND matching instruction text (for TOC detection)
+ * 2. Without keyword: Checks only for field char (for general field char detection)
+ * 
  * @param {Object} node - The node to check
- * @param {string} type - The field character type to look for
- * @returns {boolean} True if the node contains a field char of the specified type
+ * @param {string} type - The field character type to look for ('begin', 'separate', 'end')
+ * @param {string|null} [keyword=null] - The instruction text keyword to match (null for no keyword check)
+ * @returns {boolean} True if the node contains a field char of the specified type with matching instruction
+ * 
+ * @example
+ * // TOC detection - check for field char AND instruction text
+ * hasFldCharWithInstr(node, 'begin', 'TOC')     // TOC wrapper detection
+ * hasFldCharWithInstr(node, 'begin', 'PAGEREF') // TOC entry detection
+ * 
+ * @example
+ * // General field char detection - check only for field char
+ * hasFldCharWithInstr(node, 'separate') // Check for separate field char
+ * hasFldCharWithInstr(node, 'end')      // Check for end field char
+ * hasFldCharWithInstr(node, 'begin')    // Check for begin field char
  */
-const hasFldChar = (node, type) => {
+const hasFldCharWithInstr = (node, type, keyword = null) => {
   if (!node?.elements) return false;
-  return node.elements.some((r) => {
-    if (!r?.elements) return false;
-    return r.elements.some((el) => el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === type);
-  });
+  
+  // Find field char and check if it has matching instruction text
+  let hasFieldChar = false;
+  let hasMatchingInstr = keyword === null; // If no keyword, we don't need to check instruction text
+  
+  for (const r of node.elements) {
+    if (!r?.elements) continue;
+    
+    for (const el of r.elements) {
+      if (el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === type) {
+        hasFieldChar = true;
+      } else if (keyword && el.name === 'w:instrText') {
+        let textVal;
+        if (typeof el.text === 'string') textVal = el.text;
+        else if (el.elements?.length) {
+          const txt = el.elements.find((t) => typeof t.text === 'string');
+          if (txt) textVal = txt.text;
+        }
+        if (textVal && textVal.trim().includes(keyword)) {
+          hasMatchingInstr = true;
+        }
+      }
+    }
+  }
+  
+  return hasFieldChar && hasMatchingInstr;
 };
 
 const getInstrText = (pNode, keyword = null) => {
   if (!pNode?.elements) return null;
+  
+  // Always extract instruction texts fresh to capture all types
+  const texts = [];
   for (const r of pNode.elements) {
     if (!r?.elements) continue;
     for (const el of r.elements) {
@@ -31,17 +73,19 @@ const getInstrText = (pNode, keyword = null) => {
           if (txt) textVal = txt.text;
         }
         if (textVal) {
-          textVal = textVal.trim();
-          if (keyword) {
-            if (textVal.includes(keyword)) return textVal;
-          } else {
-            return textVal;
-          }
+          texts.push(textVal.trim());
         }
       }
     }
   }
-  return null;
+  
+  if (keyword) {
+    // Find the first text that contains the keyword
+    return texts.find(text => text.includes(keyword)) || null;
+  } else {
+    // Return the first instruction text (most common case)
+    return texts.length > 0 ? texts[0] : null;
+  }
 };
 
 const extractBookmarkFromInstr = (instr) => {
@@ -62,24 +106,48 @@ const getTextFromRun = (run) => {
   return '';
 };
 
+/**
+ * Extract style ID from paragraph node with caching
+ */
+const getStyleId = (pNode) => {
+  if (!pNode?.elements) return null;
+  
+  const pPr = pNode.elements.find((el) => el.name === 'w:pPr');
+  const pStyleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
+  return pStyleTag?.attributes?.['w:val'] || null;
+};
+
+/**
+ * Find field character indices in a single pass
+ */
+const findFieldCharIndices = (elements) => {
+  const indices = { begin: -1, separate: -1, end: -1 };
+  
+  for (let i = 0; i < elements.length; i++) {
+    const r = elements[i];
+    if (!r?.elements) continue;
+    
+    for (const el of r.elements) {
+      if (el.name === 'w:fldChar') {
+        const type = el.attributes?.['w:fldCharType'];
+        if (type && indices[type] === -1) {
+          indices[type] = i;
+        }
+      }
+    }
+  }
+  
+  return indices;
+};
+
 const parseTocEntry = (pNode, params) => {
   const { docx, nodeListHandler } = params;
   const elements = pNode.elements || [];
 
-  const pPr = pNode.elements?.find((el) => el.name === 'w:pPr');
-  const pStyleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
-  const styleId = pStyleTag?.attributes?.['w:val'];
+  const styleId = getStyleId(pNode);
 
-  // Identify the positions of field char runs
-  const beginIdx = elements.findIndex((r) =>
-    r.elements?.some((el) => el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === 'begin'),
-  );
-  const separateIdx = elements.findIndex((r) =>
-    r.elements?.some((el) => el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === 'separate'),
-  );
-  const endIdx = elements.findIndex((r) =>
-    r.elements?.some((el) => el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === 'end'),
-  );
+  // Find all field char indices in a single pass
+  const { begin: beginIdx, separate: separateIdx, end: endIdx } = findFieldCharIndices(elements);
 
   const sectionRuns = beginIdx > 0 ? elements.slice(0, beginIdx) : [];
 
@@ -107,9 +175,13 @@ const parseTocEntry = (pNode, params) => {
   let pageNumText = '';
   let pageNumMarks = [];
   if (pageNumberRuns.length) {
+    // Use array join instead of string concatenation for better performance
+    const pageNumParts = [];
     pageNumberRuns.forEach((r) => {
-      pageNumText += getTextFromRun(r);
+      const text = getTextFromRun(r);
+      if (text) pageNumParts.push(text);
     });
+    pageNumText = pageNumParts.join('');
 
     // Marks from first run's rPr
     const firstRun = pageNumberRuns.find((r) => r.elements?.some((el) => el.name === 'w:t'));
@@ -150,13 +222,12 @@ const parseTocEntry = (pNode, params) => {
 
 const isTocStartParagraph = (node) => {
   if (node?.name !== 'w:p') return false;
-  if (!hasFldChar(node, 'begin')) return false;
-  return !!getInstrText(node, 'TOC');
+  return hasFldCharWithInstr(node, 'begin', 'TOC');
 };
 
 const isTocEntryParagraph = (node) => {
   if (node?.name !== 'w:p') return false;
-  return !!getInstrText(node, 'PAGEREF');
+  return hasFldCharWithInstr(node, 'begin', 'PAGEREF');
 };
 
 /**
@@ -185,11 +256,14 @@ export const handleTocNode = (params) => {
   let consumed = 0;
   let wrapperSeparateReached = false;
 
+  // Cache the wrapper instruction to avoid repeated calls
+  const wrapperInstruction = getInstrText(firstNode);
+
   while (consumed < nodes.length) {
     const current = nodes[consumed];
 
     // Record wrapper break point
-    if (!wrapperSeparateReached && hasFldChar(current, 'separate')) {
+    if (!wrapperSeparateReached && hasFldCharWithInstr(current, 'separate')) {
       wrapperSeparateReached = true;
       consumed += 1;
       continue;
@@ -198,7 +272,7 @@ export const handleTocNode = (params) => {
     // When separate reached, collect entries until we hit wrapper end
     if (wrapperSeparateReached) {
       const isEntry = isTocEntryParagraph(current);
-      const hasEnd = hasFldChar(current, 'end');
+      const hasEnd = hasFldCharWithInstr(current, 'end');
 
       if (hasEnd && !isEntry) {
         // This is the wrapper closing paragraph (contains fldChar end and possibly page break)
@@ -216,7 +290,6 @@ export const handleTocNode = (params) => {
         consumed += 1;
 
         // Build wrapper node first
-        const wrapperInstruction = getInstrText(firstNode);
         const wrapperNode = {
           type: 'toc-wrapper',
           content: tocEntries,
@@ -254,7 +327,6 @@ export const handleTocNode = (params) => {
   }
 
   // If we exited loop without encountering wrapper closing paragraph
-  const wrapperInstruction = getInstrText(firstNode);
   const wrapperNode = {
     type: 'toc-wrapper',
     content: tocEntries,
@@ -270,3 +342,4 @@ export const tocNodeHandlerEntity = {
   handlerName: 'tocNodeHandler',
   handler: handleTocNode,
 };
+
