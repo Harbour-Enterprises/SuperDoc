@@ -541,11 +541,20 @@ function getNumberingDefinitions(docx) {
     abstractDefinitions[abstractId] = el;
   });
 
-  const importListDefs = {};
+  let importListDefs = {};
   definitions.forEach((el) => {
     const numId = Number(el.attributes['w:numId']);
     importListDefs[numId] = el;
   });
+
+  const listDefsEntries = Object.entries(importListDefs);
+  const foundByDurableId = listDefsEntries.filter(([_id, def]) => def.attributes?.['w16cid:durableId'] === '485517411');
+  // To fix corrupted numbering.xml file.
+  if (foundByDurableId.length > 1) {
+    importListDefs = Object.fromEntries(
+      listDefsEntries.filter(([_id, def]) => def.attributes?.['w16cid:durableId'] !== '485517411'),
+    );
+  }
 
   return {
     abstracts: abstractDefinitions,
