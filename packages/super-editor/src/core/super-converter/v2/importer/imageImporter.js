@@ -114,6 +114,8 @@ export function handleImageImport(node, currentFileName, params) {
   const { elements } = relationships;
 
   const rel = elements.find((el) => el.attributes['Id'] === rEmbed);
+  if (!rel) return null;
+
   const { attributes: relAttributes } = rel;
 
   const path = `word/${relAttributes['Target']}`;
