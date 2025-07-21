@@ -808,6 +808,7 @@ export class Editor extends EventEmitter {
    * @returns {void}
    */
   #initMedia() {
+    if (this.options.isChildEditor) return;
     if (!this.options.ydoc) return (this.storage.image.media = this.options.mediaFiles);
 
     const mediaMap = this.options.ydoc.getMap('media');
