@@ -66,6 +66,10 @@ const parseTocEntry = (pNode, params) => {
   const { docx, nodeListHandler } = params;
   const elements = pNode.elements || [];
 
+  const pPr = pNode.elements?.find((el) => el.name === 'w:pPr');
+  const pStyleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
+  const styleId = pStyleTag?.attributes?.['w:val'];
+
   // Identify the positions of field char runs
   const beginIdx = elements.findIndex((r) =>
     r.elements?.some((el) => el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === 'begin'),
@@ -89,6 +93,14 @@ const parseTocEntry = (pNode, params) => {
       ...params,
       nodes: sectionRuns,
     });
+
+    // Attach styleId to each title node so it can be rendered with the correct paragraph style later
+    if (styleId) {
+      titleContent = titleContent.map((n) => ({
+        ...n,
+        attrs: { ...(n.attrs || {}), styleId },
+      }));
+    }
   }
 
   // Extract page number text and marks (use first run for marks)
@@ -119,20 +131,21 @@ const parseTocEntry = (pNode, params) => {
     pageNumMarks.push(linkMark);
   }
 
-  const pageNumNode = pageNumText
-    ? {
-        type: 'text',
-        text: pageNumText,
-        marks: pageNumMarks,
-      }
-    : null;
+  let pageNumNode = null;
+  if (pageNumText) {
+    pageNumNode = {
+      type: 'text',
+      text: pageNumText,
+      marks: pageNumMarks,
+    };
+  }
 
   const content = [...titleContent];
   // Ensure a tab separator between title and page number
   content.push({ type: 'tab' });
   if (pageNumNode) content.push(pageNumNode);
 
-  return content;
+  return { content, styleId };
 };
 
 const isTocStartParagraph = (node) => {
@@ -215,9 +228,7 @@ export const handleTocNode = (params) => {
       }
 
       if (isEntry) {
-        // Copies but do we need to do this?
-        console.log('calling recursive handler')
-        const entryContent = parseTocEntry(current, {
+        const { content: entryContent, styleId } = parseTocEntry(current, {
           docx,
           nodeListHandler,
           insideTrackChange,
@@ -228,7 +239,9 @@ export const handleTocNode = (params) => {
           lists,
         });
         const instruction = getInstrText(current);
-        tocEntries.push({ type: 'toc-entry', content: entryContent, attrs: { instruction } });
+        const attrs = { instruction };
+        if (styleId) attrs.styleId = styleId;
+        tocEntries.push({ type: 'toc-entry', content: entryContent, attrs });
 
       }
 

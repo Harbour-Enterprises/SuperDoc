@@ -47,6 +47,10 @@ export const TocEntry = Node.create({
       attributes: {
         rendered: false,
       },
+      styleId: {
+        default: null,
+        rendered: false,
+      },
     };
   },
 }); 
