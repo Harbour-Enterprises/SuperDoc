@@ -34,7 +34,7 @@ export const CustomSelection = Extension.create({
       props: {
         handleDOMEvents: {
           focusout: (view, event) => {
-            if (document.activeElement && !event.relatedTarget) {
+            if (document.activeElement && !event.relatedTarget && !view.state.selection.empty) {
               this.editor.setOptions({
                 lastSelection: view.state.selection,
               });
