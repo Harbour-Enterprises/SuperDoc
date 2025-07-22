@@ -1,7 +1,7 @@
 <script setup>
 import 'tippy.js/dist/tippy.css';
 import { NSkeleton } from 'naive-ui';
-import { ref, onMounted, onBeforeUnmount, computed, shallowRef, reactive, nextTick, markRaw } from 'vue';
+import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw, onDeactivated } from 'vue';
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import SlashMenu from './slash-menu/SlashMenu.vue';
@@ -223,9 +223,26 @@ const handleSuperEditorClick = (event) => {
   }
 };
 
+const handleClickOutside = (event) => {
+  const pmElement = editorElem.value?.querySelector('.ProseMirror');
+  const isInsideEditor = pmElement?.contains(event.target);
+
+  if (!isInsideEditor) {
+    editor.value.setOptions({
+      focusTarget: event.target,
+    });
+  }
+};
+
 onMounted(() => {
   initializeData();
   if (props.options?.suppressSkeletonLoader || !props.options?.collaborationProvider) editorReady.value = true;
+
+  document.addEventListener('mousedown', handleClickOutside);
+});
+
+onDeactivated(() => {
+  document.removeEventListener('mousedown', handleClickOutside);
 });
 
 const handleMarginClick = (event) => {

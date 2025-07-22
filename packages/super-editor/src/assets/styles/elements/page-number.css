@@ -5,11 +5,18 @@
   cursor: not-allowed;
 }
 
-.sd-editor-auto-page-numbe:hover,
+.sd-editor-auto-page-number:hover,
 .sd-editor-auto-total-pages:hover {
-  border-bottom: 1px solid #4f4f4f;
+  border-bottom-color: #4f4f4f;
 }
 
 .sd-editor-auto-page-number-content {
   pointer-events: none;
+}
+
+.ProseMirror.view-mode {
+  .sd-editor-auto-page-number,
+  .sd-editor-auto-total-pages {
+    border: none;
+  }
 }

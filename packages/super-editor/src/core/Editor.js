@@ -240,6 +240,8 @@ export class Editor extends EventEmitter {
 
     isHeaderFooterChanged: false,
     isCustomXmlChanged: false,
+
+    focusTarget: null,
   };
 
   /**
@@ -545,6 +547,8 @@ export class Editor extends EventEmitter {
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
     if (!this.extensionService || !this.state) return;
 
+    const pm = document.querySelector('.ProseMirror');
+
     if (this.options.role === 'viewer') cleanedMode = 'viewing';
     if (this.options.role === 'suggester' && cleanedMode === 'editing') cleanedMode = 'suggesting';
     // Viewing mode: Not editable, no tracked changes, no comments
@@ -559,6 +563,7 @@ export class Editor extends EventEmitter {
         isEditMode: false,
         documentMode: cleanedMode,
       });
+      if (!this.options.isHeaderOrFooter && pm) pm.classList.add('view-mode');
     }
 
     // Suggesting: Editable, tracked changes plugin enabled, comments
@@ -569,6 +574,7 @@ export class Editor extends EventEmitter {
       this.commands.enableTrackChanges();
       this.setOptions({ documentMode: 'suggesting' });
       this.setEditable(true, false);
+      if (pm) pm.classList.remove('view-mode');
     }
 
     // Editing: Editable, tracked changes plguin disabled, comments
@@ -585,6 +591,7 @@ export class Editor extends EventEmitter {
         isEditMode: false,
         documentMode: cleanedMode,
       });
+      if (pm) pm.classList.remove('view-mode');
     }
   }
 
@@ -815,6 +822,7 @@ export class Editor extends EventEmitter {
    * @returns {void}
    */
   #initMedia() {
+    if (this.options.isChildEditor) return;
     if (!this.options.ydoc) return (this.storage.image.media = this.options.mediaFiles);
 
     const mediaMap = this.options.ydoc.getMap('media');
@@ -1083,6 +1091,7 @@ export class Editor extends EventEmitter {
     proseMirror.setAttribute('aria-multiline', true);
     proseMirror.setAttribute('aria-label', 'Main content area, start typing to enter text.');
     proseMirror.setAttribute('aria-description', '');
+    proseMirror.classList.remove('view-mode');
 
     // Set fixed dimensions and padding that won't change with scaling
     if (pageSize) {
@@ -1233,6 +1242,7 @@ export class Editor extends EventEmitter {
     if (!this.options.isNewFile) {
       this.initPagination();
       this.#initComments();
+      updateYdocDocxData(this);
     }
   }
 

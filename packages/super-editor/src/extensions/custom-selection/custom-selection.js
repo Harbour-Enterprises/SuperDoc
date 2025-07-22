@@ -34,7 +34,8 @@ export const CustomSelection = Extension.create({
       props: {
         handleDOMEvents: {
           focusout: (view, event) => {
-            if (document.activeElement && !event.relatedTarget) {
+            const isDropDownOption = this.editor.options.focusTarget.getAttribute('data-dropdown-option');
+            if (document.activeElement && !event.relatedTarget && !view.state.selection.empty && !isDropDownOption) {
               this.editor.setOptions({
                 lastSelection: view.state.selection,
               });
