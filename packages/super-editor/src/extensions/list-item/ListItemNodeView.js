@@ -127,6 +127,19 @@ export class ListItemNodeView {
     // ie: open a modal to customize numbering
   };
 
+  update(node, decorations) {
+    this.node = node;
+    this.decorations = decorations;
+
+    const { fontSize, fontFamily } = getTextStyleMarksFromLinkedStyles({
+      node,
+      pos: this.getPos(),
+      editor: this.editor,
+    });
+    this.dom.style.fontSize = fontSize;
+    this.dom.style.fontFamily = fontFamily || 'inherit';
+  }
+
   destroy() {
     // Unregister this node view
     activeListItemNodeViews.delete(this);

@@ -52,6 +52,8 @@ export const splitListItem = () => (props) => {
   // Declare variables that will be used across if-else blocks
   let firstList, secondList;
 
+  const marks = state.storedMarks || $from.marks() || [];
+
   // Check if the list item has multiple paragraphs
   const listItemHasMultipleParagraphs = listItemNode.childCount > 1;
 
@@ -119,11 +121,21 @@ export const splitListItem = () => (props) => {
     secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
   } else {
     // Simple case: single paragraph, use original logic
-    const firstParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, beforeCursor);
+    let firstParagraphContent = beforeCursor;
+    if (marks.length > 0 && beforeCursor.size === 0) {
+      firstParagraphContent = editor.schema.text(' ', marks);
+    }
+
+    const firstParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, firstParagraphContent);
     const firstListItem = editor.schema.nodes.listItem.create({ ...listItemNode.attrs }, firstParagraph);
     firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
 
-    const secondParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, afterCursor);
+    let secondParagraphContent = afterCursor;
+    if (marks.length > 0 && afterCursor.size === 0) {
+      secondParagraphContent = editor.schema.text(' ', marks);
+    }
+
+    const secondParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, secondParagraphContent);
     const secondListItem = editor.schema.nodes.listItem.create({ ...listItemNode.attrs }, secondParagraph);
     secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
   }
@@ -145,7 +157,7 @@ export const splitListItem = () => (props) => {
   tr.scrollIntoView();
 
   // Retain any marks
-  const marks = state.storedMarks || $from.marks() || [];
+  // const marks = state.storedMarks || $from.marks() || [];
   if (marks?.length) {
     tr.ensureMarks(marks);
   }
