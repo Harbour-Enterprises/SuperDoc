@@ -213,11 +213,14 @@ const parseTocEntry = (pNode, params) => {
   }
 
   const content = [...titleContent];
+  // Filter out any existing tab nodes from titleContent to ensure we have only one tab
+  const filteredContent = content.filter(node => node.type !== 'tab');
+  
   // Ensure a tab separator between title and page number
-  content.push({ type: 'tab' });
-  if (pageNumNode) content.push(pageNumNode);
+  filteredContent.push({ type: 'tab' });
+  if (pageNumNode) filteredContent.push(pageNumNode);
 
-  return { content, styleId };
+  return { content: filteredContent, styleId };
 };
 
 const isTocStartParagraph = (node) => {
