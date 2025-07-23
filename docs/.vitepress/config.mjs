@@ -91,6 +91,7 @@ function sidebar() {
           { text: 'Fields', link: '/modules/#fields' },
           { text: 'Annotate', link: '/modules/#annotate' },
           { text: 'Convert to PDF', link: '/modules/#pdf-conversion' },
+          { text: 'DocumentSection node', link: '/modules/#documentsection-node-api' },
         ]
       },
       {
