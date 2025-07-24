@@ -353,7 +353,10 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 .ProseMirror-active-search-match {
   background-color: #ff6a0054;
 }
-
-.ProseMirror span::selection {
+.ProseMirror span.sd-custom-selection::selection {
   background: transparent;
+}
+.sd-custom-selection {
+  background-color: #d9d9d9;
+  border-radius: 0.1em;
 }
