@@ -805,9 +805,65 @@ function translateList(params) {
   // In docx we need a single paragraph, but can include line breaks in a run
   const collapsedParagraphNode = convertMultipleListItemsIntoSingleNode(listItem);
 
-  const outputNode = exportSchemaToJson({ ...params, node: collapsedParagraphNode });
+  let outputNode = exportSchemaToJson({ ...params, node: collapsedParagraphNode });
+
+  /**
+   * MS Word does not allow paragraphs inside lists (which are just paragraphs in OOXML)
+   * So we need to turn paragraphs into runs and add line breaks
+   *
+   * Two cases:
+   *  1. Final doc (keep paragraph field content inside list item)
+   *  2. Not final doc (keep w:sdt node, process its content)
+   */
+  let nodesToFlatten = [];
+  if (Array.isArray(outputNode) && params.isFinalDoc) {
+    const parsedElements = [];
+    outputNode?.forEach((node, index) => {
+      if (node?.elements) {
+        const runs = node.elements?.filter((n) => n.name === 'w:r');
+        parsedElements.push(...runs);
+
+        if (node.name === 'w:p' && index < outputNode.length - 1) {
+          parsedElements.push({
+            name: 'w:br',
+          });
+        }
+      }
+    });
+
+    outputNode = {
+      name: 'w:p',
+      elements: [{ name: 'w:pPr', elements: [] }, ...parsedElements],
+    };
+  }
+
+  /** Case 2: Process w:sdt content */
+  const sdtNodes = outputNode.elements?.filter((n) => n.name === 'w:sdt');
+  if (sdtNodes && sdtNodes.length > 0) {
+    nodesToFlatten = sdtNodes;
+    nodesToFlatten?.forEach((sdtNode) => {
+      const sdtContent = sdtNode.elements.find((n) => n.name === 'w:sdtContent');
+      if (sdtContent && sdtContent.elements) {
+        const parsedElements = [];
+        sdtContent.elements.forEach((element, index) => {
+          const runs = element.elements?.filter((n) => n.name === 'w:r');
+          parsedElements.push(...runs);
+
+          if (element.name === 'w:p' && index < sdtContent.elements.length - 1) {
+            parsedElements.push({
+              name: 'w:br',
+            });
+          }
+        });
+        sdtContent.elements = parsedElements;
+      }
+    });
+  }
+
   const pPr = outputNode.elements?.find((n) => n.name === 'w:pPr');
-  if (pPr && pPr.elements && numPrTag) pPr.elements.unshift(numPrTag);
+  if (pPr && pPr.elements && numPrTag) {
+    pPr.elements.unshift(numPrTag);
+  }
 
   const indentTag = restoreIndent(listItem.attrs.indent);
   indentTag && pPr?.elements?.push(indentTag);
@@ -822,6 +878,7 @@ function translateList(params) {
       pPr?.elements?.splice(numPrIndex, 1);
     }
   }
+
   return [outputNode];
 }
 
@@ -2079,7 +2136,8 @@ function prepareHtmlAnnotation(params) {
     editorSchema,
   } = params;
 
-  const paragraphHtmlContainer = sanitizeHtml(attrs.rawHtml);
+  let html = attrs.rawHtml || attrs.displayLabel;
+  const paragraphHtmlContainer = sanitizeHtml(html);
   const marksFromAttrs = translateFieldAttrsToMarks(attrs);
   const allMarks = [...marks, ...marksFromAttrs];
 
@@ -2244,7 +2302,7 @@ function translateFieldAnnotation(params) {
   };
   const annotationAttrsJson = JSON.stringify(annotationAttrs);
 
-  return {
+  const result = {
     name: 'w:sdt',
     elements: [
       {
@@ -2260,6 +2318,7 @@ function translateFieldAnnotation(params) {
       },
     ],
   };
+  return result;
 }
 
 export function translateHardBreak(params) {
