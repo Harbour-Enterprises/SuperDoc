@@ -5,7 +5,9 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 export const CustomSelectionPluginKey = new PluginKey('CustomSelection');
 
 const handleClickOutside = (event, editor) => {
-  const editorElem = document.querySelector('.editor-element');
+  const editorElem = editor?.options?.element;
+  if (!editorElem) return;
+
   const isInsideEditor = editorElem?.contains(event.target);
 
   if (!isInsideEditor) {
