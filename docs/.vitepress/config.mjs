@@ -137,6 +137,8 @@ function sidebar() {
         link: '/advanced',
         items: [
           { text: 'SuperEditor', link: '/advanced/#supereditor' },
+          { text: 'Editor commands', link: '/advanced/#editor-commands' },
+          { text: 'Editor nodes', link: '/advanced/#editor-nodes' },
         ],
       },
     ],
