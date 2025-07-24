@@ -549,7 +549,7 @@ watch(getFloatingComments, () => {
     <div class="superdoc__layers layers" ref="layers" role="group">
       <!-- Floating tools menu (shows up when user has text selection)-->
       <div v-if="showToolsFloatingMenu" class="superdoc__tools tools" :style="toolsMenuPosition">
-        <div class="tools-item" data-id="is-tool" @click.stop.prevent="handleToolClick('comments')">
+        <div class="tools-item" data-id="is-tool" @mousedown.stop.prevent="handleToolClick('comments')">
           <div class="superdoc__tools-icon" v-html="superdocIcons.comment"></div>
         </div>
         <!-- AI tool button -->
@@ -557,7 +557,7 @@ watch(getFloatingComments, () => {
           v-if="proxy.$superdoc.config.modules.ai"
           class="tools-item"
           data-id="is-tool"
-          @click.stop.prevent="handleToolClick('ai')"
+          @mousedown.stop.prevent="handleToolClick('ai')"
         >
           <div class="superdoc__tools-icon ai-tool"></div>
         </div>
