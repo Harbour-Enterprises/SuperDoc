@@ -1943,6 +1943,13 @@ function translateImageNode(params, imageSize) {
         name: 'wp:wrapTopAndBottom',
       });
     }
+
+    // Important: wp:anchor will break if no wrapping is specified. We need to use wrapNone.
+    if (attrs.isAnchor && !wrapProp.length) {
+      wrapProp.push({
+        name: 'wp:wrapNone',
+      });
+    }
   }
 
   const drawingXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -2091,7 +2098,7 @@ function translateImageNode(params, imageSize) {
     },
     [],
   );
-
+  
   return textNode;
 }
 
