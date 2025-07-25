@@ -149,7 +149,7 @@ class DocxZipper {
     }
 
     Object.keys(docx.files).forEach((name) => {
-      if (!name.includes('header') && !name.includes('footer')) return;
+      if (name.includes('.rels') || (!name.includes('header') && !name.includes('footer'))) return;
       const hasExtensible = types.elements?.some(
         (el) => el.name === 'Override' && el.attributes.PartName === `/${name}`,
       );
