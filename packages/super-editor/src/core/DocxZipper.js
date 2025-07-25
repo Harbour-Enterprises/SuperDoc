@@ -141,9 +141,10 @@ class DocxZipper {
       if (!hasCommentsExtensible) typesString += commentsExtendedDef;
     }
     
-    
     Object.keys(docx.files).forEach((name) => {
-      if (!name.includes('header') && !name.includes('footer')) return;
+      // Skip relationship files and non-header/footer files
+      if (name.includes('.rels') || (!name.includes('header') && !name.includes('footer'))) return;
+      
       const hasExtensible = types.elements?.some((el) => el.name === 'Override' && el.attributes.PartName === `/${name}`);
       const type = name.includes('header') ? 'header' : 'footer';
       const extendedDef = `<Override PartName="/${name}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${type}+xml"/>`;
