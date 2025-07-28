@@ -322,7 +322,7 @@ const onEditorCommentsUpdate = (params = {}) => {
 
   nextTick(() => {
     if (pendingComment.value) return;
-    commentsStore.setActiveComment(activeCommentId);
+    commentsStore.setActiveComment(proxy.$superdoc, activeCommentId);
   });
 
   // Bubble up the event to the user, if handled
@@ -367,7 +367,7 @@ const scrollToComment = (commentId) => {
   const element = document.querySelector(`[data-thread-id=${commentId}]`);
   if (element) {
     element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    commentsStore.setActiveComment(commentId);
+    commentsStore.setActiveComment(proxy.$superdoc, commentId);
   }
 };
 

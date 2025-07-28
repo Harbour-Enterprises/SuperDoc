@@ -113,8 +113,13 @@ const hasTextContent = computed(() => {
 
 const setFocus = () => {
   if (props.comment.resolvedTime) return;
+  const editor = proxy.$superdoc.activeEditor;
   activeComment.value = props.comment.commentId;
   props.comment.setActive(proxy.$superdoc);
+  if (editor?.commands?.setCursorById) {
+    const cursorId = props.comment.importedId || props.comment.commentId;
+    editor.commands.setCursorById(cursorId);
+  }
 };
 
 const handleClickOutside = (e) => {
@@ -124,8 +129,8 @@ const handleClickOutside = (e) => {
     floatingCommentsOffset.value = 0;
     emit('dialog-exit');
   }
-
   activeComment.value = null;
+  commentsStore.setActiveComment(proxy.$superdoc, activeComment.value);
 };
 
 const handleAddComment = () => {
@@ -159,6 +164,7 @@ const handleReject = () => {
   nextTick(() => {
     commentsStore.lastUpdate = new Date();
     activeComment.value = null;
+    commentsStore.setActiveComment(proxy.$superdoc, activeComment.value);
   });
 };
 
@@ -176,6 +182,7 @@ const handleResolve = () => {
   nextTick(() => {
     commentsStore.lastUpdate = new Date();
     activeComment.value = null;
+    commentsStore.setActiveComment(proxy.$superdoc, activeComment.value);
   });
 };
 
@@ -185,6 +192,7 @@ const handleOverflowSelect = (value, comment) => {
       currentCommentText.value = comment.commentText;
       activeComment.value = comment.commentId;
       editingCommentId.value = comment.commentId;
+      commentsStore.setActiveComment(proxy.$superdoc, activeComment.value);
       break;
     case 'delete':
       deleteComment({ superdoc: proxy.$superdoc, commentId: comment.commentId });

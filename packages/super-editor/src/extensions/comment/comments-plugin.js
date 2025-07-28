@@ -1,4 +1,4 @@
-import { Plugin, PluginKey } from 'prosemirror-state';
+import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { removeCommentsById, getHighlightColor } from './comments-helpers.js';
@@ -51,8 +51,8 @@ export const CommentsPlugin = Extension.create({
       setActiveComment:
         ({ commentId }) =>
         ({ tr, dispatch }) => {
-          let activeThreadId = commentId;
-          tr.setMeta(CommentsPluginKey, { type: 'setActiveComment', activeThreadId });
+          tr.setMeta(CommentsPluginKey, { type: 'setActiveComment', activeThreadId: commentId, forceUpdate: true });
+          dispatch(tr);
           return true;
         },
 
@@ -105,13 +105,24 @@ export const CommentsPlugin = Extension.create({
           tr.setMeta(CommentsPluginKey, { event: 'update' });
           removeCommentsById({ commentId, state, tr, dispatch });
         },
+      setCursorById:
+        (id) =>
+        ({ state, dispatch, editor }) => {
+          const { from } = findRangeById(state.doc, id) || {};
+          if (from != null) {
+            const tr = state.tr.setSelection(TextSelection.create(state.doc, from));
+            dispatch(tr);
+            editor.view.focus();
+            return true;
+          }
+          return false;
+        },
     };
   },
 
   addPmPlugins() {
     const editor = this.editor;
     let shouldUpdate;
-    let activeThreadId;
 
     if (editor.options.isHeadless) return [];
 
@@ -142,6 +153,16 @@ export const CommentsPlugin = Extension.create({
 
           if (type === 'force' || type === 'forceTrackChanges') shouldUpdate = true;
 
+          if (type === 'setActiveComment') {
+            shouldUpdate = true;
+            pluginState.activeThreadId = meta.activeThreadId; // Update the outer scope variable
+            return {
+              ...pluginState,
+              activeThreadId: meta.activeThreadId,
+              changedActiveThread: true,
+            };
+          }
+
           if (!isPaginationInit && !shouldUpdate && meta && meta.decorations) {
             return {
               ...pluginState,
@@ -169,12 +190,13 @@ export const CommentsPlugin = Extension.create({
             let currentActiveThread = getActiveCommentId(newEditorState.doc, selection);
             if (trChangedActiveComment) currentActiveThread = meta.activeThreadId;
 
-            const previousSelectionId = activeThreadId;
+            const previousSelectionId = pluginState.activeThreadId;
             if (previousSelectionId !== currentActiveThread) {
-              activeThreadId = currentActiveThread;
+              // Update both the plugin state and the local variable
+              pluginState.activeThreadId = currentActiveThread;
               const update = {
                 type: comments_module_events.SELECTED,
-                activeCommentId: activeThreadId ? activeThreadId : null,
+                activeCommentId: currentActiveThread ? currentActiveThread : null,
               };
 
               shouldUpdate = true;
@@ -200,13 +222,29 @@ export const CommentsPlugin = Extension.create({
       view(editorView) {
         let prevDoc;
         let prevDecorations;
+        let prevActiveThreadId; // Add this to track active thread changes
 
         return {
           update(view, prevState) {
             const { state } = view;
             const { doc, tr } = state;
+            const pluginState = CommentsPluginKey.getState(state);
+            const currentActiveThreadId = pluginState.activeThreadId;
 
+            const meta = tr.getMeta(CommentsPluginKey);
+            if (meta?.type === 'setActiveComment' || meta?.forceUpdate) {
+              shouldUpdate = true;
+            }
+
+            // Check if document changed
             if (prevDoc && !prevDoc.eq(doc)) shouldUpdate = true;
+
+            // Check if active thread changed
+            if (prevActiveThreadId !== currentActiveThreadId) {
+              shouldUpdate = true;
+              prevActiveThreadId = currentActiveThreadId;
+            }
+
             if (!shouldUpdate) return;
             prevDoc = doc;
             shouldUpdate = false;
@@ -233,8 +271,16 @@ export const CommentsPlugin = Extension.create({
                 });
 
                 const isInternal = attrs.internal;
-                if (!hasActive) hasActive = activeThreadId === threadId;
-                let color = getHighlightColor({ activeThreadId, threadId, isInternal, editor });
+                if (!hasActive) hasActive = currentActiveThreadId === threadId;
+
+                // Get the color based on current activeThreadId
+                let color = getHighlightColor({
+                  activeThreadId: currentActiveThreadId,
+                  threadId,
+                  isInternal,
+                  editor,
+                });
+
                 const deco = Decoration.inline(pos, pos + node.nodeSize, {
                   style: `background-color: ${color};`,
                   'data-thread-id': threadId,
@@ -242,7 +288,7 @@ export const CommentsPlugin = Extension.create({
                 });
 
                 // Ignore inner marks if we need to show an outer active one
-                if (hasActive && activeThreadId !== threadId) return;
+                if (hasActive && currentActiveThreadId !== threadId) return;
                 decorations.push(deco);
               });
 
@@ -262,13 +308,23 @@ export const CommentsPlugin = Extension.create({
                   currentBounds,
                   node,
                 });
+                // Add decoration for tracked changes when activated
+                const isActiveTrackedChange = currentActiveThreadId === id;
+                if (isActiveTrackedChange) {
+                  const trackedChangeDeco = Decoration.inline(pos, pos + node.nodeSize, {
+                    style: `border-width: 2px;`,
+                    'data-thread-id': id,
+                    class: 'sd-editor-tracked-change-highlight',
+                  });
+
+                  decorations.push(trackedChangeDeco);
+                }
               }
             });
 
             const decorationSet = DecorationSet.create(doc, decorations);
 
             // Compare new decorations with the old state to avoid infinite loop
-            const pluginState = CommentsPluginKey.getState(state);
             const oldDecorations = pluginState.decorations;
 
             // We only dispatch if something actually changed
@@ -277,6 +333,7 @@ export const CommentsPlugin = Extension.create({
               const tr = state.tr.setMeta(CommentsPluginKey, {
                 decorations: decorationSet,
                 allCommentPositions,
+                forceUpdate: true,
               });
               // Dispatch the transaction to update pluginState
               view.dispatch(tr);
@@ -598,4 +655,24 @@ function findNode(node, predicate) {
     if (found) return false;
   });
   return found;
+}
+
+function findRangeById(doc, id) {
+  let from = null,
+    to = null;
+  doc.descendants((node, pos) => {
+    const trackedMark = node.marks.find((m) => TRACK_CHANGE_MARKS.includes(m.type.name) && m.attrs.id === id);
+    if (trackedMark) {
+      if (from === null || pos < from) from = pos;
+      if (to === null || pos + node.nodeSize > to) to = pos + node.nodeSize;
+    }
+    const commentMark = node.marks.find(
+      (m) => m.type.name === CommentMarkName && (m.attrs.commentId === id || m.attrs.importedId === id),
+    );
+    if (commentMark) {
+      if (from === null || pos < from) from = pos;
+      if (to === null || pos + node.nodeSize > to) to = pos + node.nodeSize;
+    }
+  });
+  return from !== null && to !== null ? { from, to } : null;
 }
