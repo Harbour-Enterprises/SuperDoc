@@ -145,18 +145,17 @@ const checkDocxChanged = (transaction) => {
 };
 
 const initDocumentListener = ({ ydoc, editor }) => {
-  const debouncedUpdate = debounce((editor) => {
-    updateYdocDocxData(editor);
-  }, 1000);
-
-  ydoc.on('afterTransaction', (transaction) => {
-    const { local } = transaction;
-
-    const hasChangedDocx = checkDocxChanged(transaction);
-    if (!hasChangedDocx && transaction.changed?.size && local) {
-      debouncedUpdate(editor);
-    }
-  });
+  // Removing for now since checkDocxChanged is not working as intended
+  // const debouncedUpdate = debounce((editor) => {
+  //   updateYdocDocxData(editor);
+  // }, 1000);
+  // ydoc.on('afterTransaction', (transaction) => {
+  //   const { local } = transaction;
+  //   const hasChangedDocx = checkDocxChanged(transaction);
+  //   if (!hasChangedDocx && transaction.changed?.size && local) {
+  //     debouncedUpdate(editor);
+  //   }
+  // });
 };
 
 const debounce = (fn, wait) => {
