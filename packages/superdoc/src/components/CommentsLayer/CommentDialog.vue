@@ -116,9 +116,9 @@ const setFocus = () => {
   const editor = proxy.$superdoc.activeEditor;
   activeComment.value = props.comment.commentId;
   props.comment.setActive(proxy.$superdoc);
-  if (editor?.commands?.setCursorById) {
+  if (editor) {
     const cursorId = props.comment.importedId || props.comment.commentId;
-    editor.commands.setCursorById(cursorId);
+    editor.commands?.setCursorById(cursorId);
   }
 };
 

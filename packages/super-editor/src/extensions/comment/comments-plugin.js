@@ -50,9 +50,8 @@ export const CommentsPlugin = Extension.create({
 
       setActiveComment:
         ({ commentId }) =>
-        ({ tr, dispatch }) => {
+        ({ tr }) => {
           tr.setMeta(CommentsPluginKey, { type: 'setActiveComment', activeThreadId: commentId, forceUpdate: true });
-          dispatch(tr);
           return true;
         },
 
@@ -107,11 +106,10 @@ export const CommentsPlugin = Extension.create({
         },
       setCursorById:
         (id) =>
-        ({ state, dispatch, editor }) => {
+        ({ state, editor }) => {
           const { from } = findRangeById(state.doc, id) || {};
           if (from != null) {
-            const tr = state.tr.setSelection(TextSelection.create(state.doc, from));
-            dispatch(tr);
+            state.tr.setSelection(TextSelection.create(state.doc, from));
             editor.view.focus();
             return true;
           }

@@ -102,9 +102,7 @@ const getCurrentComments = computed(() => {
 watch(activeComment, (newVal) => {
   if (!newVal) return;
   const element = document.querySelector(`[data-id="${newVal}"]`);
-  if (element) {
-    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }
+  element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
 defineExpose({

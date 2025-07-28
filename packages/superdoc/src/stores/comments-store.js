@@ -94,8 +94,8 @@ export const useCommentsStore = defineStore('comments', () => {
 
     const comment = getComment(id);
     if (comment) activeComment.value = comment.commentId;
-    if (superdoc.activeEditor?.commands) {
-      superdoc.activeEditor.commands.setActiveComment({ commentId: activeComment.value });
+    if (superdoc.activeEditor) {
+      superdoc.activeEditor.commands?.setActiveComment({ commentId: activeComment.value });
     }
   };
 
