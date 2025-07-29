@@ -44,12 +44,19 @@ export function orderedListSync(editor) {
         const level = parseInt(attrLvl);
         const numId = parseInt(attrNumId);
 
-        const {
+        let {
           lvlText,
           customFormat,
           listNumberingType,
           start: numberingDefStart,
         } = ListHelpers.getListDefinitionDetails({ numId, level, editor });
+
+        if (listNumberingType !== node.attrs.listNumberingType) {
+          listNumberingType = node.attrs.listNumberingType;
+        }
+        if (lvlText !== node.attrs.lvlText) {
+          lvlText = node.attrs.lvlText;
+        }
 
         const start = parseInt(numberingDefStart) || 1;
 
