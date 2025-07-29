@@ -51,13 +51,6 @@ export function orderedListSync(editor) {
           start: numberingDefStart,
         } = ListHelpers.getListDefinitionDetails({ numId, level, editor });
 
-        if (listNumberingType !== node.attrs.listNumberingType) {
-          listNumberingType = node.attrs.listNumberingType;
-        }
-        if (lvlText !== node.attrs.lvlText) {
-          lvlText = node.attrs.lvlText;
-        }
-
         const start = parseInt(numberingDefStart) || 1;
 
         // Initialize tracking for this numId if not exists
