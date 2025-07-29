@@ -1,5 +1,6 @@
 import { DOMParser } from 'prosemirror-model';
 import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste } from '../../InputRule.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 function extractListLevelStyles(cssText, listId, level) {
   const pattern = new RegExp(`@list\\s+l${listId}:level${level}\\s*\\{([^}]+)\\}`, 'i');
@@ -93,7 +94,7 @@ export const handleDocxPaste = (html, editor, view, plugin) => {
     extractAndRemoveConditionalPrefix(p);
   });
 
-  transformWordLists(tempDiv);
+  transformWordLists(tempDiv, editor);
   const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
   tempDiv.remove();
 
@@ -125,18 +126,28 @@ const getListAbstractDefinition = (abstractId, editor) => {
   return abstracts[abstractId] || null;
 };
 
-const transformWordLists = (container) => {
+const transformWordLists = (container, editor) => {
   const paragraphs = Array.from(container.querySelectorAll('p[data-num-id]'));
 
   const lists = {};
+  const mappedLists = {};
 
   for (const p of paragraphs) {
-    const id = p.getAttribute('data-num-id');
     const level = parseInt(p.getAttribute('data-list-level'));
     const numFmt = p.getAttribute('data-num-fmt');
     const start = p.getAttribute('data-start');
     const lvlText = p.getAttribute('data-lvl-text');
     const indent = p.getAttribute('data-left-indent');
+
+    // MS Word copy-pasted lists always start with num Id 1 and increment from there.
+    // Which way not match the target documents numbering.xml lists
+    // We will generate new definitions for all pasted lists
+    // But keep track of a map of original ID to new ID so that we can keep lists together
+    const importedId = p.getAttribute('data-num-id');
+    if (!mappedLists[importedId]) mappedLists[importedId] = ListHelpers.getNewListId(editor);
+    const id = mappedLists[importedId];
+    const listType = numFmt === 'bullet' ? 'bulletList' : 'orderedList';
+    ListHelpers.generateNewListDefinition({ numId: id, listType, editor });
 
     if (!lists[id]) lists[id] = { levels: {} };
     const currentListByNumId = lists[id];
