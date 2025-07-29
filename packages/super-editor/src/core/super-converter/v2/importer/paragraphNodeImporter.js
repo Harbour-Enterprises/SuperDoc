@@ -138,6 +138,37 @@ export const handleParagraphNode = (params) => {
 
   schemaNode.attrs['filename'] = filename;
 
+  // Parse tab stops
+  const tabs = pPr?.elements?.find((el) => el.name === 'w:tabs');
+  if (tabs && tabs.elements) {
+    const tabStops = tabs.elements
+      .filter((el) => el.name === 'w:tab')
+      .map((tab) => {
+        let val = tab.attributes['w:val'] || 'start';
+        // Test files continue to contain "left" and "right" rather than "start" and "end"
+        if (val == 'left') {
+          val = 'start';
+        } else if (val == 'right') {
+          val = 'end';
+        }
+        const tabStop = {
+          val,
+          pos: twipsToPixels(tab.attributes['w:pos']),
+        };
+
+        // Add leader if present
+        if (tab.attributes['w:leader']) {
+          tabStop.leader = tab.attributes['w:leader'];
+        }
+
+        return tabStop;
+      });
+
+    if (tabStops.length > 0) {
+      schemaNode.attrs.tabStops = tabStops;
+    }
+  }
+
   // Normalize text nodes.
   if (schemaNode && schemaNode.content) {
     schemaNode = {
@@ -278,7 +309,7 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
 
     const basedOn = stylesById?.elements.find((el) => el.name === 'w:basedOn');
     const baseStyles = styles.elements[0].elements?.find(
-      (el) => el.name === 'w:style' && el.attributes['w:styleId'] === basedOn?.attributes['w:val']
+      (el) => el.name === 'w:style' && el.attributes['w:styleId'] === basedOn?.attributes['w:val'],
     );
     const rprBaseStyles = baseStyles?.elements?.find((el) => el.name === 'w:rPr');
 

@@ -115,9 +115,10 @@ export const Paragraph = Node.create({
           if (!attrs.textCase) return {};
           return {
             style: `text-transform: ${attrs.textCase}`,
-          }
+          };
         },
       },
+      tabStops: { rendered: false },
     };
   },
 

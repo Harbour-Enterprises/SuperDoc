@@ -50,19 +50,18 @@ export const TabNode = Node.create({
       key: new PluginKey('tabPlugin'),
       state: {
         init(_, state) {
-          let decorations = getTabDecorations(state, view);
-          return DecorationSet.create(state.doc, decorations);
+          let decorations = getTabDecorations(state, state, state.tr, view);
+          return { decorations: DecorationSet.create(state.doc, decorations), initial: true };
         },
-
-        apply(tr, oldDecorationSet, oldState, newState) {
-          if (!tr.docChanged) return oldDecorationSet;
-          const decorations = getTabDecorations(newState, view);
-          return DecorationSet.create(newState.doc, decorations);
+        apply(tr, oldValue, oldState, newState) {
+          if (!tr.docChanged && !oldValue.initial) return oldValue;
+          const decorations = getTabDecorations(oldState, newState, tr, view);
+          return { decorations: DecorationSet.create(newState.doc, decorations), initial: false };
         },
       },
       props: {
         decorations(state) {
-          return this.getState(state);
+          return this.getState(state).decorations;
         },
       },
     });
@@ -72,31 +71,93 @@ export const TabNode = Node.create({
 
 const tabWidthPx = 48;
 
-const getTabDecorations = (state, view) => {
+const getTabDecorations = (oldState, newState, tr, view) => {
   let decorations = [];
-  state.doc.descendants((node, pos) => {
+  const invertMapping = tr.mapping.invert();
+  newState.doc.descendants((node, pos, parent) => {
     if (node.type.name === 'tab') {
-      let $pos = state.doc.resolve(pos);
-      const prevNodeSize = $pos.nodeBefore?.nodeSize || 0;
-
-      let textWidth = 0;
-
-      try {
-        state.doc.nodesBetween(pos - prevNodeSize - 1, pos - 1, (node, nodePos) => {
-          if (node.isText && node.textContent !== ' ') {
-            const textWidthForNode = calcTextWidth(view, nodePos);
-            textWidth += textWidthForNode;
+      let extraStyles = '';
+      let $pos = newState.doc.resolve(pos);
+      let tabWidth;
+      if ($pos.depth === 1 && parent.attrs.tabStops && parent.attrs.tabStops.length > 0) {
+        let tabCount = -1,
+          childCount = -1,
+          child;
+        while (child !== node) {
+          child = parent.child(++childCount);
+          if (child.type.name === 'tab') {
+            tabCount++;
           }
-        });
-      } catch (e) {
-        return;
+        }
+
+        const tabStop = parent.attrs.tabStops[tabCount];
+        if (tabStop) {
+          tabWidth = tabStop.pos - calcNodeLeftOffset(view, invertMapping.map(pos));
+          if (['end', 'center'].includes(tabStop.val)) {
+            // TODO: support for "bar", "clear", "decimal", "num" (deprecated).
+            let nextTextWidth = 0,
+              foundTab = false;
+            let text = '';
+            newState.doc.nodesBetween(
+              pos + node.nodeSize,
+              pos - $pos.parentOffset + parent.nodeSize,
+              (node, nodePos) => {
+                if (node.type.name === 'tab') {
+                  foundTab = true;
+                }
+                if (foundTab) {
+                  return false;
+                }
+                if (node.isText) {
+                  const textWidthForNode = calcTextWidth(view, invertMapping.map(nodePos));
+                  text += node.text;
+                  nextTextWidth += textWidthForNode;
+                }
+              },
+            );
+            tabWidth -= tabStop.val === 'end' ? nextTextWidth : nextTextWidth / 2;
+          }
+          if (tabStop.leader) {
+            // TODO: The following styles will likely not correspond 1:1 to the original. Adjust as needed.
+            if (tabStop.leader === 'dot') {
+              extraStyles += `border-bottom: 1px dotted black;`;
+            } else if (tabStop.leader === 'heavy') {
+              extraStyles += `border-bottom: 2px solid black;`;
+            } else if (tabStop.leader === 'hyphen') {
+              extraStyles += `border-bottom: 1px solid black;`;
+            } else if (tabStop.leader === 'middleDot') {
+              extraStyles += `border-bottom: 1px dotted black; margin-bottom: 2px;`;
+            } else if (tabStop.leader === 'underscore') {
+              extraStyles += `border-bottom: 1px solid black;`;
+            }
+          }
+        }
       }
 
-      const tabWidth = $pos.nodeBefore?.type.name === 'tab' ? tabWidthPx : tabWidthPx - (textWidth % tabWidthPx);
+      if (!tabWidth || tabWidth < 0) {
+        const prevNodeSize = $pos.nodeBefore?.nodeSize || 0;
+
+        let prevTextWidth = 0;
+
+        try {
+          newState.doc.nodesBetween(pos - prevNodeSize - 1, pos - 1, (node, nodePos) => {
+            if (node.isText && node.textContent !== ' ') {
+              const textWidthForNode = calcTextWidth(view, invertMapping.map(nodePos));
+              prevTextWidth += textWidthForNode;
+            }
+          });
+        } catch (_e) {
+          return;
+        }
+        tabWidth = $pos.nodeBefore?.type.name === 'tab' ? tabWidthPx : tabWidthPx - (prevTextWidth % tabWidthPx);
+      }
+
       const tabHeight = calcTabHeight($pos);
 
       decorations.push(
-        Decoration.node(pos, pos + node.nodeSize, { style: `width: ${tabWidth}px; height: ${tabHeight};` }),
+        Decoration.node(pos, pos + node.nodeSize, {
+          style: `width: ${tabWidth}px; height: ${tabHeight};${extraStyles}`,
+        }),
       );
     }
   });
@@ -105,12 +166,46 @@ const getTabDecorations = (state, view) => {
 
 function calcTextWidth(view, pos) {
   const domNode = view.nodeDOM(pos);
-  if (domNode) {
-    const range = document.createRange();
-    range.selectNodeContents(domNode);
-    return range.getBoundingClientRect().width;
+  if (!domNode || !domNode.textContent) return 0;
+  const temp = document.createElement('span');
+  const style = window.getComputedStyle(domNode.nodeName === '#text' ? domNode.parentNode : domNode);
+
+  // Copy relevant styles
+  temp.style.cssText = `
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+        white-space: nowrap;
+        font-family: ${style.fontFamily};
+        font-size: ${style.fontSize};
+        font-weight: ${style.fontWeight};
+        font-style: ${style.fontStyle};
+        letter-spacing: ${style.letterSpacing};
+        word-spacing: ${style.wordSpacing};
+        text-transform: ${style.textTransform};
+        display: inline-block;
+    `;
+
+  temp.textContent = domNode.textContent;
+  document.body.appendChild(temp);
+
+  const width = temp.offsetWidth;
+  document.body.removeChild(temp);
+
+  return width;
+}
+
+function calcNodeLeftOffset(view, pos) {
+  let domNode = view.nodeDOM(pos);
+  if (!domNode) {
+    return 0;
   }
-  return 0;
+  const range = document.createRange();
+  range.selectNode(domNode);
+  const childLeft = range.getBoundingClientRect().left;
+  range.selectNodeContents(domNode.parentElement);
+  const parentLeft = range.getBoundingClientRect().left;
+  return childLeft - parentLeft;
 }
 
 function calcTabHeight(pos) {

@@ -324,6 +324,31 @@ function generateParagraphProperties(node) {
     pPrElements.push(sectPr);
   }
 
+  // Add tab stops
+  const { tabStops } = attrs;
+  if (tabStops && tabStops.length > 0) {
+    const tabElements = tabStops.map((tab) => {
+      const tabAttributes = {
+        'w:val': tab.val || 'start',
+        'w:pos': pixelsToTwips(tab.pos).toString(),
+      };
+
+      if (tab.leader) {
+        tabAttributes['w:leader'] = tab.leader;
+      }
+
+      return {
+        name: 'w:tab',
+        attributes: tabAttributes,
+      };
+    });
+
+    pPrElements.push({
+      name: 'w:tabs',
+      elements: tabElements,
+    });
+  }
+
   const numPr = node.attrs?.paragraphProperties?.elements?.find((n) => n.name === 'w:numPr');
   const hasNumPr = pPrElements.some((n) => n.name === 'w:numPr');
   if (numPr && !hasNumPr) pPrElements.push(numPr);
@@ -2077,7 +2102,7 @@ function translateImageNode(params, imageSize) {
     },
     [],
   );
-  
+
   return textNode;
 }
 
