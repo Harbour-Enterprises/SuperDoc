@@ -88,7 +88,7 @@ export default [
         __APP_VERSION__: 'readonly',
         version: 'readonly',
         superdoc: 'readonly',
-      }
+      },
     },
     rules: {
       'no-unused-vars': 'warn', // See warnings but don't block
@@ -102,6 +102,6 @@ export default [
       // Keep as warnings to address gradually
       'no-unsafe-optional-chaining': 'warn', // Important but not critical
       'no-unused-private-class-members': 'warn', // Clean up when refactoring
-    }
+    },
   },
 ];
