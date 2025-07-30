@@ -178,6 +178,7 @@ export const ListItem = Node.create({
       },
 
       indent: {
+        parseDOM: (elem) => JSON.parse(elem.getAttribute('data-indent')),
         keepOnSplit: true,
         default: null,
         rendered: false,

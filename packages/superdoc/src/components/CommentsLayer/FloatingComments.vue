@@ -65,7 +65,8 @@ const handleDialog = (dialog) => {
     const editorBounds = props.parent.getBoundingClientRect();
 
     const comment = getFloatingComments.value.find((c) => c.commentId === id || c.importedId == id);
-    let position = editorCommentPositions.value[id]?.bounds || {};
+    const positionKey = id || comment?.importedId;
+    let position = editorCommentPositions.value[positionKey]?.bounds || {};
 
     // If this is a PDF, set the position based on selection bounds
     if (props.currentDocument.type === 'application/pdf') {
@@ -127,8 +128,8 @@ watch(activeComment, (newVal, oldVal) => {
 
     const comment = commentsStore.getComment(activeComment.value);
     if (!comment) return (verticalOffset.value = 0);
-
-    const renderedItem = renderedSizes.value.find((item) => item.id === comment.commentId);
+    const commentKey = comment.commentId || comment.importedId;
+    const renderedItem = renderedSizes.value.find((item) => item.id === commentKey);
     if (!renderedItem) return (verticalOffset.value = 0);
 
     const selectionTop = comment.selection.selectionBounds.top;

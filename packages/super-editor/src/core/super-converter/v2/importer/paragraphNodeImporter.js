@@ -119,6 +119,13 @@ export const handleParagraphNode = (params) => {
     }
   }
 
+  if (docx) {
+    const { textCase } = getDefaultParagraphStyle(docx, styleId);
+    if (textCase) {
+      schemaNode.attrs.textCase = textCase;
+    }
+  }
+
   if (framePr && framePr.attributes['w:dropCap']) {
     schemaNode.attrs.dropcap = {
       type: framePr.attributes['w:dropCap'],
@@ -257,16 +264,27 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
   const pPrNormal = stylesNormal?.elements?.find((el) => el.name === 'w:pPr');
   const pPrNormalSpacingTag = pPrNormal?.elements?.find((el) => el.name === 'w:spacing') || {};
   const pPrNormalIndentTag = pPrNormal?.elements?.find((el) => el.name === 'w:ind') || {};
+  const isNormalAsDefault = stylesNormal?.attributes?.['w:default'] === '1';
 
   // Styles based on styleId
   let pPrStyleIdSpacingTag = {};
   let pPrStyleIdIndentTag = {};
   let pPrStyleJc = {};
+  let textCase = null;
   if (styleId) {
     const stylesById = styles.elements[0].elements?.find(
       (el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId,
     );
     const pPrById = stylesById?.elements?.find((el) => el.name === 'w:pPr');
+
+    const basedOn = stylesById?.elements.find((el) => el.name === 'w:basedOn');
+    const baseStyles = styles.elements[0].elements?.find(
+      (el) => el.name === 'w:style' && el.attributes['w:styleId'] === basedOn?.attributes['w:val']
+    );
+    const rprBaseStyles = baseStyles?.elements?.find((el) => el.name === 'w:rPr');
+
+    const caps = rprBaseStyles?.elements?.find((el) => el.name === 'w:caps');
+    if (caps) textCase = 'uppercase';
 
     pPrStyleIdSpacingTag = pPrById?.elements?.find((el) => el.name === 'w:spacing') || {};
     pPrStyleIdIndentTag = pPrById?.elements?.find((el) => el.name === 'w:ind') || {};
@@ -282,10 +300,19 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
   const { attributes: pPrNormalIndentAttr } = pPrNormalIndentTag;
   const { attributes: pPrByIdIndentAttr } = pPrStyleIdIndentTag;
 
+  const spacingRest = isNormalAsDefault 
+    ? (pPrNormalSpacingAttr || pPrDefaultSpacingAttr)
+    : (pPrDefaultSpacingAttr || pPrNormalSpacingAttr);
+
+  const indentRest = isNormalAsDefault
+    ? (pPrNormalIndentAttr || pPrDefaultIndentAttr)
+    : (pPrDefaultIndentAttr || pPrNormalIndentAttr);
+
   return {
-    spacing: pPrByIdSpacingAttr || pPrDefaultSpacingAttr || pPrNormalSpacingAttr,
-    indent: pPrByIdIndentAttr || pPrDefaultIndentAttr || pPrNormalIndentAttr,
+    spacing: pPrByIdSpacingAttr || spacingRest,
+    indent: pPrByIdIndentAttr || indentRest,
     justify: pPrByIdJcAttr,
+    textCase,
   };
 };
 
@@ -366,6 +393,10 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
     else pageBreakAfterVal = Number(pageBreakAfter?.attributes?.['w:val']);
   }
 
+  const basedOn = elementsWithId
+    .find((el) => el.elements.some((inner) => inner.name === 'w:basedOn'))
+    ?.elements.find((inner) => inner.name === 'w:basedOn')?.attributes['w:val'];
+
   const parsedAttrs = {
     name,
     qFormat: qFormat ? true : false,
@@ -374,6 +405,7 @@ export function getDefaultStyleDefinition(defaultStyleId, docx) {
     outlineLevel: outlineLevel ? parseInt(outlineLvlValue) : null,
     pageBreakBefore: pageBreakBeforeVal ? true : false,
     pageBreakAfter: pageBreakAfterVal ? true : false,
+    basedOn: basedOn ?? null,
   };
 
   // rPr

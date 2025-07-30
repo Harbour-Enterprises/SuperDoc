@@ -17,11 +17,12 @@ import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
-import { baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/base-list.definitions.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { translateChildNodes, baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/index.js';
+import { translateDocumentSection } from './v2/exporter/index.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -93,6 +94,7 @@ export function exportSchemaToJson(params) {
     shapeTextbox: translateShapeTextbox,
     contentBlock: translateContentBlock,
     structuredContent: translateStructuredContent,
+    documentSection: translateDocumentSection,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
     'toc-wrapper': translateTocWrapper,
@@ -193,11 +195,13 @@ export function translateParagraphNode(params) {
     attributes['w:rsidRDefault'] = params.node.attrs.rsidRDefault;
   }
 
-  return {
+  const result = {
     name: 'w:p',
     elements,
     attributes,
   };
+
+  return result;
 }
 
 /**
@@ -375,31 +379,6 @@ function processAttributes(attrs) {
     processedAttrs = { ...processedAttrs, ...newAttr };
   });
   return processedAttrs;
-}
-
-/**
- * Process child nodes, ignoring any that are not valid
- *
- * @param {SchemaNode[]} nodes The input nodes
- * @returns {XmlReadyNode[]} The processed child nodes
- */
-function translateChildNodes(params) {
-  const { content: nodes } = params.node;
-  if (!nodes) return [];
-
-  const translatedNodes = [];
-  nodes.forEach((node) => {
-    let translatedNode = exportSchemaToJson({ ...params, node });
-
-    const nodeType = translatedNode?.name || translatedNode?.type;
-    // if (nodeType !== 'w:sdt') translatedNode = isolateAnnotations(translatedNode);
-
-    if (translatedNode instanceof Array) translatedNodes.push(...translatedNode);
-    else translatedNodes.push(translatedNode);
-  });
-
-  // Filter out any null nodes
-  return translatedNodes.filter((n) => n);
 }
 
 /**
@@ -807,9 +786,65 @@ function translateList(params) {
   // In docx we need a single paragraph, but can include line breaks in a run
   const collapsedParagraphNode = convertMultipleListItemsIntoSingleNode(listItem);
 
-  const outputNode = exportSchemaToJson({ ...params, node: collapsedParagraphNode });
+  let outputNode = exportSchemaToJson({ ...params, node: collapsedParagraphNode });
+
+  /**
+   * MS Word does not allow paragraphs inside lists (which are just paragraphs in OOXML)
+   * So we need to turn paragraphs into runs and add line breaks
+   *
+   * Two cases:
+   *  1. Final doc (keep paragraph field content inside list item)
+   *  2. Not final doc (keep w:sdt node, process its content)
+   */
+  let nodesToFlatten = [];
+  if (Array.isArray(outputNode) && params.isFinalDoc) {
+    const parsedElements = [];
+    outputNode?.forEach((node, index) => {
+      if (node?.elements) {
+        const runs = node.elements?.filter((n) => n.name === 'w:r');
+        parsedElements.push(...runs);
+
+        if (node.name === 'w:p' && index < outputNode.length - 1) {
+          parsedElements.push({
+            name: 'w:br',
+          });
+        }
+      }
+    });
+
+    outputNode = {
+      name: 'w:p',
+      elements: [{ name: 'w:pPr', elements: [] }, ...parsedElements],
+    };
+  }
+
+  /** Case 2: Process w:sdt content */
+  const sdtNodes = outputNode.elements?.filter((n) => n.name === 'w:sdt');
+  if (sdtNodes && sdtNodes.length > 0) {
+    nodesToFlatten = sdtNodes;
+    nodesToFlatten?.forEach((sdtNode) => {
+      const sdtContent = sdtNode.elements.find((n) => n.name === 'w:sdtContent');
+      if (sdtContent && sdtContent.elements) {
+        const parsedElements = [];
+        sdtContent.elements.forEach((element, index) => {
+          const runs = element.elements?.filter((n) => n.name === 'w:r');
+          parsedElements.push(...runs);
+
+          if (element.name === 'w:p' && index < sdtContent.elements.length - 1) {
+            parsedElements.push({
+              name: 'w:br',
+            });
+          }
+        });
+        sdtContent.elements = parsedElements;
+      }
+    });
+  }
+
   const pPr = outputNode.elements?.find((n) => n.name === 'w:pPr');
-  if (pPr && pPr.elements && numPrTag) pPr.elements.unshift(numPrTag);
+  if (pPr && pPr.elements && numPrTag) {
+    pPr.elements.unshift(numPrTag);
+  }
 
   const indentTag = restoreIndent(listItem.attrs.indent);
   indentTag && pPr?.elements?.push(indentTag);
@@ -824,6 +859,7 @@ function translateList(params) {
       pPr?.elements?.splice(numPrIndex, 1);
     }
   }
+
   return [outputNode];
 }
 
@@ -1271,7 +1307,16 @@ function generateTableProperties(node) {
   const elements = [];
 
   const { attrs } = node;
-  const { tableWidth, tableWidthType, tableStyleId, borders, tableIndent, tableLayout, tableCellSpacing } = attrs;
+  const { 
+    tableWidth, 
+    tableWidthType, 
+    tableStyleId, 
+    borders, 
+    tableIndent, 
+    tableLayout, 
+    tableCellSpacing, 
+    justification, 
+  } = attrs;
 
   if (tableStyleId) {
     const tableStyleElement = {
@@ -1321,6 +1366,14 @@ function generateTableProperties(node) {
     });
   }
 
+  if (justification) {
+    const justificationElement = {
+      name: 'w:jc',
+      attributes: { 'w:val': justification },
+    };
+    elements.push(justificationElement);
+  }
+  
   return {
     name: 'w:tblPr',
     elements,
@@ -1888,6 +1941,13 @@ function translateImageNode(params, imageSize) {
         name: 'wp:wrapTopAndBottom',
       });
     }
+
+    // Important: wp:anchor will break if no wrapping is specified. We need to use wrapNone.
+    if (attrs.isAnchor && !wrapProp.length) {
+      wrapProp.push({
+        name: 'wp:wrapNone',
+      });
+    }
   }
 
   const drawingXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
@@ -2036,7 +2096,7 @@ function translateImageNode(params, imageSize) {
     },
     [],
   );
-
+  
   return textNode;
 }
 
@@ -2081,7 +2141,8 @@ function prepareHtmlAnnotation(params) {
     editorSchema,
   } = params;
 
-  const paragraphHtmlContainer = sanitizeHtml(attrs.rawHtml);
+  let html = attrs.rawHtml || attrs.displayLabel;
+  const paragraphHtmlContainer = sanitizeHtml(html);
   const marksFromAttrs = translateFieldAttrsToMarks(attrs);
   const allMarks = [...marks, ...marksFromAttrs];
 
@@ -2246,7 +2307,7 @@ function translateFieldAnnotation(params) {
   };
   const annotationAttrsJson = JSON.stringify(annotationAttrs);
 
-  return {
+  const result = {
     name: 'w:sdt',
     elements: [
       {
@@ -2262,6 +2323,7 @@ function translateFieldAnnotation(params) {
       },
     ],
   };
+  return result;
 }
 
 export function translateHardBreak(params) {

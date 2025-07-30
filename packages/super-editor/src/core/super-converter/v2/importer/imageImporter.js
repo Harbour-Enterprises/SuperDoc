@@ -28,7 +28,7 @@ export const handleDrawingNode = (params) => {
   const isAnchor = elements.find((el) => el.name === 'wp:anchor');
   if (isAnchor) {
     result = handleImageImport(elements[0], currentFileName, params);
-    result.attrs.isAnchor = isAnchor;
+    if (result && result.attrs) result.attrs.isAnchor = isAnchor;
   }
 
   // Others, wp:inline

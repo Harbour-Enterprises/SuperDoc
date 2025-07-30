@@ -25,6 +25,7 @@ export default defineConfig(({ mode, command }) => {
         entry: 'src/index.js',
         formats: ['umd'],
         name: 'SuperDocLibrary',
+        cssFileName: 'style',
         fileName: (format) => `superdoc.${format}.js`,
       },
       minify: false,

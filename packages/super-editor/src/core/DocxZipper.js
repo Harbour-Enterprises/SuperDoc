@@ -149,7 +149,9 @@ class DocxZipper {
     }
 
     Object.keys(docx.files).forEach((name) => {
-      if (!name.includes('header') && !name.includes('footer')) return;
+      // Important: We need to filter out .rels files - they should not be included in content types
+      // Otherwise this generates MS word validation error
+      if (name.includes('.rels') || (!name.includes('header') && !name.includes('footer'))) return;
       const hasExtensible = types.elements?.some(
         (el) => el.name === 'Override' && el.attributes.PartName === `/${name}`,
       );

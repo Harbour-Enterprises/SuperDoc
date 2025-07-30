@@ -48,7 +48,7 @@ class SuperConverter {
     { name: 'w:strike', type: 'strike', mark: 'strike' },
     { name: 'w:color', type: 'color', mark: 'textStyle', property: 'color' },
     { name: 'w:sz', type: 'fontSize', mark: 'textStyle', property: 'fontSize' },
-    { name: 'w:szCs', type: 'fontSize', mark: 'textStyle', property: 'fontSize' },
+    // { name: 'w:szCs', type: 'fontSize', mark: 'textStyle', property: 'fontSize' },
     { name: 'w:rFonts', type: 'fontFamily', mark: 'textStyle', property: 'fontFamily' },
     { name: 'w:jc', type: 'textAlign', mark: 'textStyle', property: 'textAlign' },
     { name: 'w:ind', type: 'textIndent', mark: 'textStyle', property: 'textIndent' },

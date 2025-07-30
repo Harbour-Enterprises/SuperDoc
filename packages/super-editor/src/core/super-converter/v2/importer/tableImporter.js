@@ -80,6 +80,11 @@ export function handleTableNode(node, params) {
     attrs['borderCollapse'] = 'separate';
   }
 
+  const tblJustification = tblPr.elements.find((el) => el.name === 'w:jc');
+  if (tblJustification?.attributes) {
+    attrs['justification'] = tblJustification.attributes['w:val'];
+  }
+
   // TODO: What does this do?
   // const tblLook = tblPr.elements.find((el) => el.name === 'w:tblLook');
 

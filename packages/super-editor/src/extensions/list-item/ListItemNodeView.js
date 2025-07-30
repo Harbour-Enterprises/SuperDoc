@@ -127,6 +127,19 @@ export class ListItemNodeView {
     // ie: open a modal to customize numbering
   };
 
+  update(node, decorations) {
+    this.node = node;
+    this.decorations = decorations;
+
+    const { fontSize, fontFamily } = getTextStyleMarksFromLinkedStyles({
+      node,
+      pos: this.getPos(),
+      editor: this.editor,
+    });
+    this.dom.style.fontSize = fontSize;
+    this.dom.style.fontFamily = fontFamily || 'inherit';
+  }
+
   destroy() {
     // Unregister this node view
     activeListItemNodeViews.delete(this);
@@ -221,7 +234,9 @@ const getStylesFromLinkedStyles = ({ node, pos, editor }) => {
   const { state } = editor.view;
   const linkedStyles = LinkedStylesPluginKey.getState(state)?.decorations;
   const decorationsInPlace = linkedStyles?.find(pos, pos + node.nodeSize);
-  const styleDeco = decorationsInPlace?.find((dec) => dec.type.attrs?.style);
+  // We are looking from the end as there may be several decorations 
+  // and we need to find the most specific one.
+  const styleDeco = decorationsInPlace?.findLast((dec) => dec.type.attrs?.style);
   const style = styleDeco?.type.attrs?.style;
 
   const stylesArray = style?.split(';') || [];

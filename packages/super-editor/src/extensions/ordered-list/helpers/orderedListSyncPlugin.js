@@ -44,7 +44,7 @@ export function orderedListSync(editor) {
         const level = parseInt(attrLvl);
         const numId = parseInt(attrNumId);
 
-        const {
+        let {
           lvlText,
           customFormat,
           listNumberingType,

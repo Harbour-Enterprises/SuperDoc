@@ -101,7 +101,7 @@ const getCurrentComments = computed(() => {
 
 watch(activeComment, (newVal) => {
   if (!newVal) return;
-  const element = document.getElementById(newVal);
+  const element = document.querySelector(`[data-id="${newVal}"]`);
   element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 

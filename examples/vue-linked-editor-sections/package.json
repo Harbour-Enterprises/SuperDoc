@@ -1,5 +1,5 @@
 {
-  "name": "playwright-test",
+  "name": "vue-section-editors",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,11 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@harbour-enterprises/super-editor": "file:../../../..",
+    "@harbour-enterprises/superdoc": "^0.15",
     "vue": "^3.5.13"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2.1",
-    "vite": "^6.1.0"
+    "@vitejs/plugin-vue": "^5.2.2",
+    "vite": "^6.3.1"
   }
 }

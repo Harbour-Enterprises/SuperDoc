@@ -86,14 +86,17 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {string | undefined | null} id The comment ID
    * @returns {void}
    */
-  const setActiveComment = (id) => {
+  const setActiveComment = (superdoc, id) => {
     // If no ID, we clear any focused comments
     if (id === undefined || id === null) {
-      return (activeComment.value = null);
+      activeComment.value = null;
     }
 
     const comment = getComment(id);
     if (comment) activeComment.value = comment.commentId;
+    if (superdoc.activeEditor) {
+      superdoc.activeEditor.commands?.setActiveComment({ commentId: activeComment.value });
+    }
   };
 
   /**
@@ -581,7 +584,8 @@ export const useCommentsStore = defineStore('comments', () => {
         const keys = Object.keys(editorCommentPositions.value);
         const isPdfComment = c.selection?.source !== 'super-editor';
         if (isPdfComment) return true;
-        return keys.includes(c.commentId);
+        const commentKey = c.commentId || c.importedId;
+        return keys.includes(commentKey);
       });
     return comments;
   });

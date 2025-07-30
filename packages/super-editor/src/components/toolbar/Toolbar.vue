@@ -28,9 +28,9 @@ onDeactivated(() => {
 
 const onKeyDown = async (e) => {
   if (e.metaKey && e.key === 'f') {
-    e.preventDefault();
     const searchItem = proxy.$toolbar.getToolbarItemByName('search');
     if (searchItem) {
+      e.preventDefault();
       searchItem.expand.value = true;
       await nextTick();
       if (searchItem.inputRef.value) {

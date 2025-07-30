@@ -322,7 +322,7 @@ const onEditorCommentsUpdate = (params = {}) => {
 
   nextTick(() => {
     if (pendingComment.value) return;
-    commentsStore.setActiveComment(activeCommentId);
+    commentsStore.setActiveComment(proxy.$superdoc, activeCommentId);
   });
 
   // Bubble up the event to the user, if handled
@@ -367,7 +367,7 @@ const scrollToComment = (commentId) => {
   const element = document.querySelector(`[data-thread-id=${commentId}]`);
   if (element) {
     element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    commentsStore.setActiveComment(commentId);
+    commentsStore.setActiveComment(proxy.$superdoc, commentId);
   }
 };
 
@@ -549,7 +549,7 @@ watch(getFloatingComments, () => {
     <div class="superdoc__layers layers" ref="layers" role="group">
       <!-- Floating tools menu (shows up when user has text selection)-->
       <div v-if="showToolsFloatingMenu" class="superdoc__tools tools" :style="toolsMenuPosition">
-        <div class="tools-item" data-id="is-tool" @click.stop.prevent="handleToolClick('comments')">
+        <div class="tools-item" data-id="is-tool" @mousedown.stop.prevent="handleToolClick('comments')">
           <div class="superdoc__tools-icon" v-html="superdocIcons.comment"></div>
         </div>
         <!-- AI tool button -->
@@ -557,7 +557,7 @@ watch(getFloatingComments, () => {
           v-if="proxy.$superdoc.config.modules.ai"
           class="tools-item"
           data-id="is-tool"
-          @click.stop.prevent="handleToolClick('ai')"
+          @mousedown.stop.prevent="handleToolClick('ai')"
         >
           <div class="superdoc__tools-icon ai-tool"></div>
         </div>

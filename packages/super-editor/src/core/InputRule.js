@@ -240,10 +240,7 @@ export function isWordHtml(html) {
  * @returns {Boolean} Returns true if the paste was handled.
  */
 export function handleHtmlPaste(html, editor) {
-  const flatHtml = flattenListsInHtml(html, editor);
-
-  const htmlWithPtSizing = convertEmToPt(flatHtml);
-  const cleanedHtml = sanitizeHtml(htmlWithPtSizing);
+  const cleanedHtml = htmlHandler(html, editor);
   const doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
 
   const { dispatch, state } = editor.view;
@@ -267,6 +264,20 @@ export function handleHtmlPaste(html, editor) {
   }
 
   return true;
+}
+
+/**
+ * Handle HTML content before it is inserted into the editor.
+ * This function is used to clean and sanitize HTML content,
+ * converting em units to pt and removing unnecessary tags.
+ * @param {String} html The HTML string to be processed.
+ * @param {Editor} editor The editor instance.
+ * @returns {String} The processed HTML string.
+ */
+export function htmlHandler(html, editor) {
+  const flatHtml = flattenListsInHtml(html, editor);
+  const htmlWithPtSizing = convertEmToPt(flatHtml);
+  return sanitizeHtml(htmlWithPtSizing);
 }
 
 /**

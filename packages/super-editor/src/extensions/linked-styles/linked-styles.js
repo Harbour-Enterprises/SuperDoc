@@ -96,13 +96,13 @@ const generateDecorations = (state, styles) => {
     if (name === 'paragraph' && !node.attrs?.styleId) lastStyleId = null;
     if (name !== 'text' && name !== 'listItem' && name !== 'orderedList') return;
 
-    const linkedStyle = getLinkedStyle(lastStyleId, styles);
+    const { linkedStyle, basedOnStyle } = getLinkedStyle(lastStyleId, styles);
     if (!linkedStyle) return;
 
     const $pos = state.doc.resolve(pos);
     const parent = $pos.parent;
 
-    const styleString = generateLinkedStyleString(linkedStyle, node, parent);
+    const styleString = generateLinkedStyleString(linkedStyle, basedOnStyle, node, parent);
     if (!styleString) return;
 
     const decoration = Decoration.inline(pos, pos + node.nodeSize, { style: styleString });
@@ -116,15 +116,24 @@ const generateDecorations = (state, styles) => {
  * If the node contains a given mark, we don't override it with the linked style per MS Word behavior
  *
  * @param {Object} linkedStyle The linked style object
+ * @param {Object} basedOnStyle The basedOn style object
  * @param {Object} node The current node
  * @param {Object} parent The parent of current
  * @returns {String} The style string
  */
-export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpacing = true) => {
+export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, parent, includeSpacing = true) => {
   if (!linkedStyle?.definition?.styles) return '';
   const markValue = {};
 
-  Object.entries(linkedStyle.definition.styles).forEach(([k, value]) => {
+  const linkedDefinitionStyles = { ...linkedStyle.definition.styles };
+  const basedOnDefinitionStyles = { ...basedOnStyle?.definition?.styles };
+  const resultStyles = { ...linkedDefinitionStyles };
+
+  if (!linkedDefinitionStyles['font-size'] && basedOnDefinitionStyles['font-size']) {
+    resultStyles['font-size'] = basedOnDefinitionStyles['font-size'];
+  }
+
+  Object.entries(resultStyles).forEach(([k, value]) => {
     const key = kebabCase(k);
     const flattenedMarks = [];
 
@@ -182,7 +191,10 @@ export const generateLinkedStyleString = (linkedStyle, node, parent, includeSpac
  * @returns {Object} The linked style
  */
 const getLinkedStyle = (styleId, styles = []) => {
-  return styles.find((style) => style.id === styleId);
+  const linkedStyle = styles.find((style) => style.id === styleId);
+  const basedOn = linkedStyle?.definition?.attrs?.basedOn;
+  const basedOnStyle = styles.find((style) => style.id === basedOn);
+  return { linkedStyle, basedOnStyle };
 };
 
 export const getSpacingStyle = (spacing) => {

@@ -29,6 +29,8 @@ export const ICONS = {
   cut: scissorsIconSvg,
   copy: copyIconSvg,
   paste: pasteIconSvg,
+  addDocumentSection: plusIconSvg,
+  removeDocumentSection: trashIconSvg,
 };
 
 // Table actions constant
@@ -52,6 +54,8 @@ export const TEXTS = {
   cut: 'Cut',
   copy: 'Copy',
   paste: 'Paste',
+  removeDocumentSection: 'Remove section',
+  createDocumentSection: 'Create section',
 };
 
 export const tableActionsOptions = [

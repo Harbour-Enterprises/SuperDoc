@@ -22,7 +22,6 @@ export const handleListNode = (params) => {
   if (isList) {
     node.isList = true;
     const result = handleListNodes(params, node);
-
     return {
       nodes: [result],
       consumed: 1,
@@ -71,9 +70,15 @@ function handleListNodes(params, node) {
   // If no iLvl, try an outline level
   if (!iLvl && iLvl !== 0) iLvl = getOutlineLevelFromStyleTag(styleId, docx);
 
-  const { listType, listOrderingType, listrPrs, listpPrs, start, lvlText, lvlJc, customFormat } =
-    getNodeNumberingDefinition(node, iLvl, docx);
+  let numberingDefinition = getNodeNumberingDefinition(node, iLvl, docx);
+  if (!Object.keys(numberingDefinition).length) {
+    const { definition, ilvl } = getNodeNumberingDefinitionByStyle(node, docx);
+    if (definition) numberingDefinition = definition;
+    if (Number.isNaN(iLvl)) iLvl = ilvl;    
+  }
 
+  const { listType, listOrderingType, listrPrs, listpPrs, start, lvlText, lvlJc, customFormat } = numberingDefinition;
+      
   // Fallback if the list definition is not found or is invalid
   // See invalid-list-def-fallback.docx for example and
   if (!listType) {
@@ -196,6 +201,7 @@ export function testForList(node, docx) {
   let outlinelvl;
 
   const styleId = paragraphStyle?.attributes['w:val'];
+  
   const styleTag = getStyleTagFromStyleId(styleId, docx);
   if (styleTag && !numId) {
     const { numPr: numPrRecursve, type } = getNumPrRecursive({ node, styleId, docx });
@@ -212,6 +218,11 @@ export function testForList(node, docx) {
   const levelDefinition = abstractNumDefinition?.elements?.find(
     (el) => el.name === 'w:lvl' && el.attributes?.['w:ilvl'] == ilvl,
   );
+
+  if (numId && !levelDefinition && abstractNumDefinition) {
+    return true;
+  }
+
   if (!levelDefinition) return false;
 
   return !!numId;
@@ -478,7 +489,7 @@ export function normalizeLvlTextChar(lvlText) {
  * @returns
  */
 export function getNodeNumberingDefinition(item, level, docx) {
-  if (!item) return;
+  if (!item) return {};
   const { attributes = {} } = item;
 
   const { paragraphProperties = {} } = attributes;
@@ -523,6 +534,137 @@ export function getNodeNumberingDefinition(item, level, docx) {
     return {};
   }
   return { listType, listOrderingType: listTypeDef, listrPrs, listpPrs, start, lvlText, lvlJc, customFormat };
+}
+
+export function getNodeNumberingDefinitionByStyle(item, docx) {
+  if (!item) return {};
+
+  const initialPpr = item.elements?.find((el) => el.name === 'w:pPr');
+  const styleTag = initialPpr?.elements?.find((el) => el.name === 'w:pStyle');
+  const styleId = styleTag?.attributes['w:val'];
+  const styleDef = getStyleTagFromStyleId(styleId, docx);
+  if (!styleDef) return {};
+  
+  const pPr = styleDef.elements?.find((el) => el.name === 'w:pPr');
+  const numPr = pPr?.elements?.find((el) => el.name === 'w:numPr');
+  const numIdTag = numPr?.elements?.find((el) => el.name === 'w:numId');
+  const numId = numIdTag?.attributes?.['w:val'];
+  if (!numId) return {};
+
+  const abstractNumId = getAbstractNumIdByNumId(numId, docx);
+  if (!abstractNumId) return {};
+
+  const levelData = getLevelDataFromAbstractNum(abstractNumId, styleId, docx);
+  if (!levelData) return {};
+
+  const definition = extractDefinitionFromLevel(levelData.level, initialPpr);
+
+  return {
+    definition,
+    ilvl: levelData.ilvl,
+  };
+}
+
+function getAbstractNumIdByNumId(numId, docx) {
+  const numbering = docx['word/numbering.xml'];
+  if (!numbering) return null;
+
+  const { elements } = numbering;
+  const listData = elements[0];
+  const numberingElements = listData.elements || [];
+
+  const numDef = numberingElements.find((el) => 
+    el.name === 'w:num' && 
+    el.attributes?.['w:numId'] === numId
+  );
+
+  if (!numDef) return null;
+
+  const abstractNumIdRef = numDef.elements?.find((el) => el.name === 'w:abstractNumId');
+  return abstractNumIdRef?.attributes?.['w:val'];
+}
+
+function getLevelDataFromAbstractNum(abstractNumId, styleId, docx) {
+  const numbering = docx['word/numbering.xml'];
+  if (!numbering) return null;
+
+  const { elements } = numbering;
+  const listData = elements[0];
+  const numberingElements = listData.elements || [];
+
+  const abstractNum = numberingElements.find((el) => 
+    el.name === 'w:abstractNum' && 
+    el.attributes?.['w:abstractNumId'] === abstractNumId
+  );
+
+  if (!abstractNum) return null;
+
+  const levels = abstractNum.elements?.filter(el => el.name === 'w:lvl') || [];
+  for (const level of levels) {
+    const pStyle = level.elements?.find((el) => el.name === 'w:pStyle');
+    if (pStyle?.attributes?.['w:val'] === styleId) {
+      const found = {
+        level,
+        ilvl: Number(level.attributes?.['w:ilvl']) || 0
+      };
+      return found;
+    }
+  }
+
+  const level0 = levels.find((level) => level.attributes?.['w:ilvl'] === '0');
+  if (level0) {
+    return {
+      level: level0,
+      ilvl: 0,
+    };
+  }
+
+  return null;
+}
+
+function extractDefinitionFromLevel(level, initialPpr) {
+  if (!level) return {};
+
+  const start = level.elements?.find((el) => el.name === 'w:start')?.attributes?.['w:val'];
+
+  let numFmtTag = level.elements?.find((el) => el.name === 'w:numFmt');
+  let numFmt = numFmtTag?.attributes?.['w:val'];
+
+  let lvlText = level.elements?.find((el) => el.name === 'w:lvlText')?.attributes?.['w:val'];
+  lvlText = normalizeLvlTextChar(lvlText);
+
+  let customFormat;
+  if (numFmt === 'custom') customFormat = numFmtTag?.attributes?.['w:format'];
+
+  const lvlJc = level.elements?.find((el) => el.name === 'w:lvlJc')?.attributes?.['w:val'];
+  const pPr = level.elements?.find((el) => el.name === 'w:pPr');
+  const rPr = level.elements?.find((el) => el.name === 'w:rPr');
+
+  let listpPrs, listrPrs;
+  if (pPr) listpPrs = _processListParagraphProperties(pPr, initialPpr);
+  if (rPr) listrPrs = _processListRunProperties(rPr);
+
+  let listType;
+  if (unorderedListTypes.includes(numFmt?.toLowerCase())) {
+    listType = 'bulletList';
+  } else if (orderedListTypes.includes(numFmt)) {
+    listType = 'orderedList';
+  } else if (numFmt === 'custom') {
+    listType = 'orderedList';
+  } else {
+    return {};
+  }
+
+  return {
+    listType,
+    listOrderingType: numFmt,
+    listrPrs,
+    listpPrs,
+    start,
+    lvlText,
+    lvlJc,
+    customFormat,
+  };
 }
 
 export function getDefinitionForLevel(data, level) {

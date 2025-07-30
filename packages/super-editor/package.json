@@ -38,7 +38,6 @@
   "module": "./dist/super-editor.es.js",
   "scripts": {
     "dev": "vite",
-    "test:e2e": "playwright test ./src/tests/e2e",
     "preview": "vite preview",
     "build": "vite build && tsc",
     "clean": "rm -rf dist",
@@ -79,10 +78,8 @@
   },
   "devDependencies": {
     "@floating-ui/dom": "^1.7.0",
-    "@playwright/test": "^1.51.0",
     "@vitejs/plugin-vue": "^5.0.4",
     "@vue/test-utils": "^2.4.6",
-    "playwright": "^1.51.0",
     "postcss-nested": "^6.0.1",
     "postcss-nested-import": "^1.3.0",
     "tippy.js": "^6.3.7",

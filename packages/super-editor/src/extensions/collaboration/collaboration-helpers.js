@@ -4,10 +4,11 @@
  * @param {Editor} editor The editor instance
  * @returns {Promise<void>}
  */
-export const updateYdocDocxData = async (editor) => {
-  if (!editor.options.ydoc) return;
+export const updateYdocDocxData = async (editor, ydoc) => {
+  ydoc = ydoc || editor.options.ydoc;
+  if (!ydoc) return;
 
-  const metaMap = editor.options.ydoc.getMap('meta');
+  const metaMap = ydoc.getMap('meta');
   const docx = [...metaMap.get('docx')];
   const newXml = await editor.exportDocx({ getUpdatedDocs: true });
 
@@ -22,7 +23,7 @@ export const updateYdocDocxData = async (editor) => {
     });
   });
 
-  editor.options.ydoc.transact(
+  ydoc.transact(
     () => {
       metaMap.set('docx', docx);
     },

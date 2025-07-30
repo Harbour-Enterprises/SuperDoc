@@ -11,6 +11,9 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
   const marks = [];
   const seen = new Set();
 
+  const lang = property?.elements?.find((el) => el.name === 'w:lang');
+  const langAttrs = lang?.attributes || {};
+
   property?.elements?.forEach((element) => {
     const marksForType = SuperConverter.markTypes.filter((mark) => mark.name === element.name);
     if (!marksForType.length) {
@@ -41,6 +44,11 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
       const newMark = { type: m.type };
 
       if (attributes['w:val'] === '0' || attributes['w:val'] === 'none') {
+        return;
+      }
+
+      // this probably requires a more thorough check.
+      if (['w:bCs'].includes(m.name) && langAttrs['w:eastAsia']) {
         return;
       }
 

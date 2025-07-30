@@ -64,7 +64,6 @@ describe('AnnotationNodeExporter', async () => {
     expect(attrs.fieldTypeShort).toBe('signature');
 
     const mediaIds = Object.keys(params.media);
-    console.dir({ tag }, { depth: 5 });
     expect(mediaIds[1].replace('_', '-').startsWith(attrs.fieldId)).toBe(true);
   });
 

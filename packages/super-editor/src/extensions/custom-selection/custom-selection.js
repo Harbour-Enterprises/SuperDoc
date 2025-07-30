@@ -4,38 +4,66 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 
 export const CustomSelectionPluginKey = new PluginKey('CustomSelection');
 
+const handleClickOutside = (event, editor) => {
+  const editorElem = editor?.options?.element;
+  if (!editorElem) return;
+
+  const isInsideEditor = editorElem?.contains(event.target);
+
+  if (!isInsideEditor) {
+    editor.setOptions({
+      focusTarget: event.target,
+    });
+  } else {
+    editor.setOptions({
+      focusTarget: null,
+    });
+  }
+};
+
+function getFocusMeta(tr) {
+  return tr.getMeta(CustomSelectionPluginKey);
+}
+
+function setFocusMeta(tr, value) {
+  return tr.setMeta(CustomSelectionPluginKey, value);
+}
+
+function getFocusState(state) {
+  return CustomSelectionPluginKey.getState(state);
+}
+
 export const CustomSelection = Extension.create({
   name: 'customSelection',
-
   addPmPlugins() {
+    const editor = this.editor;
     const customSelectionPlugin = new Plugin({
       key: CustomSelectionPluginKey,
-
       state: {
-        init(_, { doc }) {
-          return DecorationSet.empty;
+        init: () => false,
+        apply: (tr, value) => {
+          return getFocusMeta(tr) ?? value;
         },
-        apply(tr, oldDecorationSet, oldState, newState) {
-          const sel = tr.selection;
-          let newDecos = [];
+      },
+      view: () => {
+        document?.addEventListener('mousedown', (event) => handleClickOutside(event, editor));
 
-          // Only apply to text selections
-          if (sel.from !== sel.to && tr.doc.resolve(sel.from).parent.isTextblock) {
-            newDecos.push(
-              Decoration.inline(sel.from, sel.to, {
-                class: 'sd-custom-selection',
-              }),
-            );
-          }
-
-          return DecorationSet.create(newState.doc, newDecos);
-        },
+        return {
+          destroy: () => {
+            document?.removeEventListener('mouseout', handleClickOutside);
+          },
+        };
       },
       props: {
         handleDOMEvents: {
-          focusout: (view, event) => {
-            const isDropDownOption = this.editor.options.focusTarget.getAttribute('data-dropdown-option');
-            if (document.activeElement && !event.relatedTarget && !view.state.selection.empty && !isDropDownOption) {
+          mousedown: (view) => {
+            const { selection } = view.state;
+            const isToolbarButton = this.editor.options.focusTarget?.closest('.toolbar-button');
+
+            if (!isToolbarButton) {
+              view.dispatch(setFocusMeta(view.state.tr, false));
+            }
+            if (!selection.empty) {
               this.editor.setOptions({
                 lastSelection: view.state.selection,
               });
@@ -43,11 +71,40 @@ export const CustomSelection = Extension.create({
 
               view.dispatch(clearSelectionTr);
             }
-            return false;
+          },
+          focus: (view) => {
+            const isToolbarButton = this.editor.options.focusTarget?.closest('.toolbar-button');
+
+            if (isToolbarButton) {
+              return;
+            }
+
+            view.dispatch(setFocusMeta(view.state.tr, false));
+          },
+
+          blur: (view) => {
+            const isToolbarButton = this.editor.options.focusTarget?.closest('.toolbar-button');
+
+            if (isToolbarButton) {
+              view.dispatch(setFocusMeta(view.state.tr, true));
+              return;
+            }
+
+            view.dispatch(setFocusMeta(view.state.tr, false));
           },
         },
-        decorations(state) {
-          return CustomSelectionPluginKey.getState(state);
+        decorations: (state) => {
+          const { selection, doc } = state;
+
+          if (selection.empty || !getFocusState(state)) {
+            return null;
+          }
+
+          return DecorationSet.create(doc, [
+            Decoration.inline(selection.from, selection.to, {
+              class: 'sd-custom-selection',
+            }),
+          ]);
         },
       },
     });

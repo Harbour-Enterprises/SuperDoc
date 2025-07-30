@@ -1,5 +1,34 @@
 import { DOMParser } from 'prosemirror-model';
 import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste } from '../../InputRule.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+
+function extractListLevelStyles(cssText, listId, level) {
+  const pattern = new RegExp(`@list\\s+l${listId}:level${level}\\s*\\{([^}]+)\\}`, 'i');
+  const match = cssText.match(pattern);
+  if (!match) return null;
+
+  const rawStyles = match[1]
+    .split(';')
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const styleMap = {};
+  for (const style of rawStyles) {
+    const [key, value] = style.split(':').map((s) => s.trim());
+    styleMap[key] = value;
+  }
+
+  return styleMap;
+}
+
+const numDefMap = new Map([
+  ['decimal', { def: 'decimal', abstractNum: 1 }],
+  ['alpha-lower', { def: 'lowerLetter', abstractNum: 1 }],
+  ['alpha-upper', { def: 'upperLetter', abstractNum: 1 }],
+  ['roman-lower', { def: 'lowerRoman', abstractNum: 1 }],
+  ['roman-upper', { def: 'upperRoman', abstractNum: 1 }],
+  ['bullet', { def: 'bullet', abstractNum: 0 }],
+]);
 
 /**
  * Main handler for pasted DOCX content.
@@ -28,27 +57,44 @@ export const handleDocxPaste = (html, editor, view, plugin) => {
     if (!innerHTML.includes('<!--[if !supportLists]')) return;
 
     const styleAttr = p.getAttribute('style') || '';
-    const msoListMatch = styleAttr.match(/mso-list:\s*l(\d+)\s+level(\d+)/);
+    const msoListMatch = styleAttr.match(/mso-list:\s*l(\d+)\s+level(\d+)\s+lfo(\d+)/);
+    const css = tempDiv.querySelector('style').innerHTML;
+
     if (msoListMatch) {
-      const [, abstractId, level] = msoListMatch;
-      const listNumId = getListNumIdFromAbstract(abstractId, editor);
-      if (!listNumId) return;
+      const [, abstractId, level, numId] = msoListMatch;
 
-      const abstractDefinition = getListAbstractDefinition(abstractId, editor);
-      const { lvlText, start, numFmt } = getLevelDefinition(abstractDefinition, level - 1);
+      // Get numbering format from Word styles
+      const styles = extractListLevelStyles(css, abstractId, level);
+      const msoNumFormat = styles['mso-level-number-format'] || 'decimal';
+      const abstractOverride = numDefMap.get(msoNumFormat);
 
-      p.setAttribute('data-num-id', listNumId);
+      if (!numId) return;
+
+      const abstractDefinition = getListAbstractDefinition(
+        abstractOverride ? abstractOverride.abstractNum : numId,
+        editor,
+      );
+      let { lvlText, start, numFmt } = getLevelDefinition(abstractDefinition, level);
+
+      // Define level text template for ordered lists
+      if (abstractOverride.abstractNum === 1) lvlText = `%${level}.`;
+
+      p.setAttribute('data-num-id', numId);
       p.setAttribute('data-list-level', level - 1);
       p.setAttribute('data-start', start);
-      p.setAttribute('data-lvl-text', lvlText);
-      p.setAttribute('data-num-fmt', numFmt);
+      p.setAttribute('data-lvl-text', styles['mso-level-text'] || lvlText);
+      p.setAttribute('data-num-fmt', abstractOverride.def || numFmt);
+
+      const ptToPxRatio = 1.333;
+      const indent = parseInt(styles['margin-left']) * ptToPxRatio || 0;
+      if (indent > 0) p.setAttribute('data-left-indent', indent);
     }
 
     // Strip literal prefix inside conditional span
     extractAndRemoveConditionalPrefix(p);
   });
 
-  transformWordLists(tempDiv);
+  transformWordLists(tempDiv, editor);
   const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
   tempDiv.remove();
 
@@ -75,116 +121,93 @@ const getLevelDefinition = (abstractDefinition, level) => {
   return { lvlText, start, numFmt, elements };
 };
 
-const getListNumIdFromAbstract = (abstractId, editor) => {
-  const { definitions } = editor?.converter?.numbering;
-  if (!definitions) return null;
-
-  const matchedDefinition = Object.values(definitions).find((def) => {
-    return def.elements.some((el) => el.name === 'w:abstractNumId' && el.attributes?.['w:val'] == abstractId);
-  });
-  return matchedDefinition?.attributes?.['w:numId'];
-};
-
 const getListAbstractDefinition = (abstractId, editor) => {
   const { abstracts = {} } = editor?.converter?.numbering;
   return abstracts[abstractId] || null;
 };
 
-const transformWordLists = (container) => {
+const transformWordLists = (container, editor) => {
   const paragraphs = Array.from(container.querySelectorAll('p[data-num-id]'));
-  const listMap = new Map();
 
-  const listLevels = {};
+  const lists = {};
+  const mappedLists = {};
 
-  // Group paragraphs by abstractNum
   for (const p of paragraphs) {
-    const listId = p.getAttribute('data-num-id');
     const level = parseInt(p.getAttribute('data-list-level'));
     const numFmt = p.getAttribute('data-num-fmt');
     const start = p.getAttribute('data-start');
     const lvlText = p.getAttribute('data-lvl-text');
+    const indent = p.getAttribute('data-left-indent');
 
-    if (!listMap.has(listId)) listMap.set(listId, []);
-    listMap.get(listId).push({ p, level, numFmt, start, lvlText });
-  }
+    // MS Word copy-pasted lists always start with num Id 1 and increment from there.
+    // Which way not match the target documents numbering.xml lists
+    // We will generate new definitions for all pasted lists
+    // But keep track of a map of original ID to new ID so that we can keep lists together
+    const importedId = p.getAttribute('data-num-id');
+    if (!mappedLists[importedId]) mappedLists[importedId] = ListHelpers.getNewListId(editor);
+    const id = mappedLists[importedId];
+    const listType = numFmt === 'bullet' ? 'bulletList' : 'orderedList';
+    ListHelpers.generateNewListDefinition({ numId: id, listType, editor });
 
-  for (const [id, items] of listMap.entries()) {
-    if (!listLevels[id]) {
-      listLevels[id] = {
-        stack: [],
-        counts: {},
-        prevLevel: null,
-      };
+    if (!lists[id]) lists[id] = { levels: {} };
+    const currentListByNumId = lists[id];
+
+    if (!currentListByNumId.levels[level]) currentListByNumId.levels[level] = Number(start) || 1;
+    else currentListByNumId.levels[level]++;
+
+    // Reset deeper levels when this level is updated
+    Object.keys(currentListByNumId.levels).forEach((key) => {
+      const level1 = Number(key);
+      if (level1 > level) {
+        delete currentListByNumId.levels[level1];
+      }
+    });
+
+    const path = generateListPath(level, currentListByNumId.levels, start);
+    if (!path.length) path.push(currentListByNumId.levels[level]);
+
+    const li = document.createElement('li');
+    li.innerHTML = p.innerHTML;
+    li.setAttribute('data-num-id', id);
+    li.setAttribute('data-list-level', JSON.stringify(path));
+    li.setAttribute('data-level', level);
+    li.setAttribute('data-lvl-text', lvlText);
+    li.setAttribute('data-num-fmt', numFmt);
+    if (indent) li.setAttribute('data-indent', JSON.stringify({ left: indent }));
+
+    if (p.hasAttribute('data-font-family')) {
+      li.setAttribute('data-font-family', p.getAttribute('data-font-family'));
+    }
+    if (p.hasAttribute('data-font-size')) {
+      li.setAttribute('data-font-size', p.getAttribute('data-font-size'));
     }
 
-    const parentStack = [];
+    const parentNode = p.parentNode;
 
-    items.forEach(({ p, level, numFmt, start, lvlText }, index) => {
-      const listLevel = generateListNestingPath(listLevels, id, level);
+    let listForLevel;
+    const newList = numFmt === 'bullet' ? document.createElement('ul') : document.createElement('ol');
+    newList.setAttribute('data-list-id', id);
+    newList.level = level;
 
-      const li = document.createElement('li');
-      li.innerHTML = p.innerHTML;
-      li.setAttribute('data-list-level', JSON.stringify(listLevel));
-      li.setAttribute('data-num-id', id);
-      li.setAttribute('data-lvl-text', lvlText);
-      li.setAttribute('data-num-fmt', numFmt);
+    parentNode.insertBefore(newList, p);
+    listForLevel = newList;
 
-      if (p.hasAttribute('data-font-family')) {
-        li.setAttribute('data-font-family', p.getAttribute('data-font-family'));
-      }
-      if (p.hasAttribute('data-font-size')) {
-        li.setAttribute('data-font-size', p.getAttribute('data-font-size'));
-      }
-
-      const parentNode = p.parentNode;
-
-      let listForLevel = parentStack[level];
-      if (!listForLevel) {
-        const newList = document.createElement('ol');
-        newList.setAttribute('data-list-id', id);
-        newList.level = level;
-
-        if (level > 0) {
-          const parentLi = parentStack[level - 1]?.querySelector('li:last-child');
-          if (parentLi) parentLi.appendChild(newList);
-        } else {
-          parentNode.insertBefore(newList, p);
-        }
-
-        parentStack[level] = newList;
-        parentStack.length = level + 1;
-        listForLevel = newList;
-      }
-
-      listForLevel.appendChild(li);
-      p.remove();
-    });
+    listForLevel.appendChild(li);
+    p.remove();
   }
 };
 
-function generateListNestingPath(listLevels, listId, currentLevel) {
-  const levelState = listLevels[listId];
-
-  if (!levelState.stack) levelState.stack = [];
-  if (levelState.prevLevel === undefined) levelState.prevLevel = null;
-
-  if (levelState.prevLevel === null) {
-    // Initialize with left-padding if starting at non-zero level
-    levelState.stack = Array(currentLevel).fill(1).concat(1);
-  } else {
-    if (currentLevel > levelState.prevLevel) {
-      levelState.stack.push(1);
-    } else if (currentLevel === levelState.prevLevel) {
-      levelState.stack[levelState.stack.length - 1]++;
-    } else {
-      levelState.stack = levelState.stack.slice(0, currentLevel + 1);
-      levelState.stack[currentLevel] = (levelState.stack[currentLevel] || 1) + 1;
+export const generateListPath = (level, levels, start) => {
+  const iLvl = Number(level);
+  const path = [];
+  if (iLvl > 0) {
+    for (let i = iLvl; i >= 0; i--) {
+      if (!levels[i]) levels[i] = Number(start);
+      path.unshift(levels[i]);
     }
   }
-
-  levelState.prevLevel = currentLevel;
-  return [...levelState.stack];
-}
+  return path;
+};
 
 function extractAndRemoveConditionalPrefix(p) {
   const nodes = Array.from(p.childNodes);

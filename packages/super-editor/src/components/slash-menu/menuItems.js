@@ -45,6 +45,7 @@ const isModuleEnabled = (editorOptions, moduleName) => {
  *     requiresSelection?: boolean,
  *     requiresClipboard?: boolean
  *     requiresTableParent?: boolean
+ *     requiredSectionParent?: boolean,
  *     requiresModule?: string
  *   }>
  * }>} Array of menu sections
@@ -53,6 +54,7 @@ export function getItems(context) {
   const { editor, selectedText, trigger, clipboardContent } = context;
 
   const isInTable = selectionHasNodeOrMark(editor.view.state, 'table', { requireEnds: true });
+  const isInSectionNode = selectionHasNodeOrMark(editor.view.state, 'documentSection', { requireEnds: true });
 
   const sections = [
     {
@@ -71,6 +73,30 @@ export function getItems(context) {
           },
           allowedTriggers: [TRIGGERS.slash, TRIGGERS.click],
           requiresModule: 'ai',
+        },
+      ],
+    },
+    {
+      id: 'document-sections',
+      items: [
+        {
+          id: 'insert-document-section',
+          label: TEXTS.createDocumentSection,
+          icon: ICONS.addDocumentSection,
+          action: (editor) => {
+            editor.commands.createDocumentSection();
+          },
+          allowedTriggers: [TRIGGERS.click],
+        },
+        {
+          id: 'remove-section',
+          label: TEXTS.removeDocumentSection,
+          icon: ICONS.removeDocumentSection,
+          action: (editor) => {
+            editor.commands.removeSectionAtSelection();
+          },
+          allowedTriggers: [TRIGGERS.click],
+          requiresSectionParent: true,
         },
       ],
     },
@@ -189,6 +215,8 @@ export function getItems(context) {
         // If the item requires a table parent and there is no table parent, return false
         // Or if we are in a table, do not show 'insert table'
         if ((item.requiresTableParent && !isInTable) || (item.id === 'insert-table' && isInTable)) return false;
+        // If the item requires a section parent and there is no section parent, return false
+        if (item.requiresSectionParent && !isInSectionNode) return false;
         return true;
       });
 

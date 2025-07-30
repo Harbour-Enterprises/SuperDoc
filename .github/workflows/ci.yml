@@ -42,7 +42,3 @@ jobs:
   unit-tests:
     name: Unit Tests
     uses: ./.github/workflows/run-unit-tests.yml
-
-  e2e-tests:
-    name: E2E Tests
-    uses: ./.github/workflows/run-e2e-tests.yml

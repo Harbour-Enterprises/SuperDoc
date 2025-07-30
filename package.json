@@ -8,7 +8,6 @@
   ],
   "scripts": {
     "test": "vitest --root ./packages/super-editor",
-    "test:e2e": "cd packages/super-editor && npx playwright install --with-deps && npm run test:e2e",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "npm --workspace=@harbour-enterprises/superdoc run dev",
     "dev:superdoc": "npm run dev --workspace=packages/superdoc",
@@ -30,7 +29,8 @@
     "docs:build": "vuepress build docs",
     "pack": "npm run build:super-editor && npm --prefix ./packages/superdoc run pack",
     "prepare": "husky",
-    "lint:staged": "lint-staged"
+    "lint:staged": "lint-staged",
+    "watch": "npm run watch:es --workspace=packages/superdoc"
   },
   "lint-staged": {
     "*.{js,jsx}": [
@@ -48,7 +48,6 @@
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@eslint/js": "^9.31.0",
-    "@playwright/test": "^1.50.1",
     "@types/node": "^22.13.1",
     "@vuepress/bundler-vite": "^2.0.0-rc.18",
     "@vuepress/plugin-redirect": "^2.0.0-rc.60",

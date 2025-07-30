@@ -72,7 +72,7 @@ onMounted(() => {
     >
       <div
         class="style-name"
-        :style="generateLinkedStyleString(style, null, false)"
+        :style="generateLinkedStyleString(style, null, null, false)"
         data-item="btn-linkedStyles-option"
       >
         {{ style.definition.attrs.name }}
