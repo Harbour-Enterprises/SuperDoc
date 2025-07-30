@@ -234,7 +234,7 @@ const getStylesFromLinkedStyles = ({ node, pos, editor }) => {
   const { state } = editor.view;
   const linkedStyles = LinkedStylesPluginKey.getState(state)?.decorations;
   const decorationsInPlace = linkedStyles?.find(pos, pos + node.nodeSize);
-  // We are looking from the end as there may be several decorations 
+  // We are looking from the end as there may be several decorations
   // and we need to find the most specific one.
   const styleDeco = decorationsInPlace?.findLast((dec) => dec.type.attrs?.style);
   const style = styleDeco?.type.attrs?.style;

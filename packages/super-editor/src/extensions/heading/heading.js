@@ -24,6 +24,7 @@ export const Heading = Node.create({
         default: 1,
         rendered: false,
       },
+      tabStops: { rendered: false },
     };
   },
 

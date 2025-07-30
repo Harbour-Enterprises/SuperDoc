@@ -389,4 +389,149 @@ describe('Check that paragraph-level sectPr is retained', () => {
     const sectPr2 = pPr2.elements.find((el) => el.name === 'w:sectPr');
     expect(p2sectPrData).toEqual(sectPr2);
   });
+
+  describe('paragraph tests to check tab stops', () => {
+    it('correctly handles paragraph with tab stops', () => {
+      const mockParagraph = {
+        name: 'w:p',
+        elements: [
+          {
+            name: 'w:pPr',
+            elements: [
+              {
+                name: 'w:tabs',
+                elements: [
+                  {
+                    name: 'w:tab',
+                    attributes: {
+                      'w:val': 'start',
+                      'w:pos': '2160',
+                    },
+                  },
+                  {
+                    name: 'w:tab',
+                    attributes: {
+                      'w:val': 'center',
+                      'w:pos': '5040',
+                      'w:leader': 'dot',
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { nodes } = handleParagraphNode({
+        nodes: [mockParagraph],
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      });
+
+      const node = nodes[0];
+      expect(node.type).toBe('paragraph');
+      expect(node.attrs.tabStops).toBeDefined();
+      expect(node.attrs.tabStops.length).toBe(2);
+
+      const firstTab = node.attrs.tabStops[0];
+      expect(firstTab.val).toBe('start');
+      expect(firstTab.pos).toBe(144);
+      expect(firstTab.leader).toBeUndefined();
+
+      const secondTab = node.attrs.tabStops[1];
+      expect(secondTab.val).toBe('center');
+      expect(secondTab.pos).toBe(336);
+      expect(secondTab.leader).toBe('dot');
+    });
+
+    it('correctly handles paragraph without tab stops', () => {
+      const mockParagraph = {
+        name: 'w:p',
+        elements: [
+          {
+            name: 'w:pPr',
+            elements: [],
+          },
+        ],
+      };
+
+      const { nodes } = handleParagraphNode({
+        nodes: [mockParagraph],
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      });
+
+      const node = nodes[0];
+      expect(node.type).toBe('paragraph');
+      expect(node.attrs.tabStops).toBeUndefined();
+    });
+
+    it('correctly handles empty tabs element', () => {
+      const mockParagraph = {
+        name: 'w:p',
+        elements: [
+          {
+            name: 'w:pPr',
+            elements: [
+              {
+                name: 'w:tabs',
+                elements: [],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { nodes } = handleParagraphNode({
+        nodes: [mockParagraph],
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      });
+
+      const node = nodes[0];
+      expect(node.type).toBe('paragraph');
+      expect(node.attrs.tabStops).toBeUndefined();
+    });
+
+    it('correctly handles tab with default values', () => {
+      const mockParagraph = {
+        name: 'w:p',
+        elements: [
+          {
+            name: 'w:pPr',
+            elements: [
+              {
+                name: 'w:tabs',
+                elements: [
+                  {
+                    name: 'w:tab',
+                    attributes: {
+                      'w:pos': '1440',
+                      // No w:val provided, should default to 'start'
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { nodes } = handleParagraphNode({
+        nodes: [mockParagraph],
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      });
+
+      const node = nodes[0];
+      expect(node.type).toBe('paragraph');
+      expect(node.attrs.tabStops).toBeDefined();
+      expect(node.attrs.tabStops.length).toBe(1);
+
+      const tab = node.attrs.tabStops[0];
+      expect(tab.val).toBe('start');
+      expect(tab.pos).toBe(96);
+    });
+  });
 });
