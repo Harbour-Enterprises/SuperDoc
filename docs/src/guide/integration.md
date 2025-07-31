@@ -511,9 +511,3 @@ npm install @harbour-enterprises/superdoc-yjs-collaboration
 ```
 
 Documentation: https://github.com/Harbour-Enterprises/SuperDoc/tree/develop/packages/collaboration-yjs
-
-## Next Steps
-
-- See [Components](/components/) for detailed component reference
-- Check out [Resources](/resources/) for examples, FAQ, and community resources
-- Learn more about [Getting Started](/) for basic concepts and setup

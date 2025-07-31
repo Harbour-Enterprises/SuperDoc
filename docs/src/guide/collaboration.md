@@ -1,3 +1,7 @@
+---
+{ 'home': False, 'prev': False, 'next': False }
+---
+
 # Collaboration
 
 Learn how to set-up ```SuperDoc``` for **real-time collaboration** in the frontend and backend.

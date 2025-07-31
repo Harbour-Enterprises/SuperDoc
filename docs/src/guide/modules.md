@@ -66,8 +66,6 @@ You can customize the color of the highlights from these styles:
 .ProseMirror-active-search-match
 ```
 
-
-
 # Comments
 
 The comments module can be added by adding the comments config to the modules.
@@ -292,121 +290,6 @@ const mySuperDocConfig = {
   }
 };
 ```
-
-# Fields
-
-SuperDoc by default has the **fields** extension enabled.  You can learn more about the [**Field Annotation** node here](https://github.com/Harbour-Enterprises/SuperDoc/blob/main/packages/super-editor/src/extensions/field-annotation/field-annotation.js)
-
-Fields can be used when placeholder / variable content is needed inside the document. They can contain various types of data:
-- Plain text
-- HTML rich text
-- Images
-- Links
-- Checkboxes
-
-## Field Commands
-```javascript
-// Add a field annotation at the specified position
-// editorFocus = true will re-focus the editor after the command, in cases where it is not in focus (ie: drag and drop)
-editor.commands.addFieldAnnotation(pos, attrs = {}, editorFocus = false)
-
-// Add a field annotation at the current selection
-// editorFocus = true will re-focus the editor after the command, in cases where it is not in focus (ie: drag and drop)
-editor.commands.addFieldAnnotationAtSelection(attrs = {}, editorFocus = false)
-```
-
-## Field schema
-To create a field, we just pass in a JSON config to the addFieldAnnotationAtSelection command
-```javascript
-const fieldTypes = ['text', 'image', 'signature', 'checkbox', 'html', 'link']
-const myField = {
-  displayLabel: 'My placeholder field',     // Placeholder text
-  fieldId: MY_FIELD_ID,                     // The ID you'd like for this field
-  type: 'html',                             // from fieldTypes
-  fieldColor: '#000099',                    // Styling
-}
-
-// Add the field to the editor
-editor.commands.addFieldAnnotationAtSelection(myField)
-```
-
-## Drag-and-drop
-If you create a drag-and-drop system ([See this example](https://github.com/Harbour-Enterprises/SuperDoc/tree/main/examples/vue-fields-example)) for fields, you should listen for the Editor event 'fieldAnnotationDropped'.
-
-Example:
-```javascript
-superdoc.activeEditor.on('fieldAnnotationDropped', ({ sourceField }) => {
-  superdoc.activeEditor.commands.addFieldAnnotationAtSelection(sourceField);
-});
-```
-
-## Fields docx export
-SuperDoc supports full export and re-import of fields. By default, SuperDoc will not re-import document fields and will convert them to mustache style templates only.
-
-To enable fields import simply add the below to your config when instantiating `new SuperDoc`
-```javascript
-const config = {
-  annotations: true,
-};
-```
-
-
-
-
-# Annotate
-__available in SuperDoc > 0.11.35__
-
-SuperDoc's editor instance (`superdoc.activeEditor`) exposes the `annotate()` function, allowing you to insert values into the Field nodes, either for preview or final document export.
-
-This command is fully undo/redo friendly.
-
-### Usage
-
-```ts
-type FieldValue = {
-  input_id: string                // The ID of the input field being annotated
-  input_value: string             // The value to insert into that field
-}
-
-editor.annotate(
-  fieldValues: FieldValue[],      // Array of field annotations to insert or update
-  hiddenFieldIds?: string[],      // Optional array of field IDs to hide from the annotated view
-): void
-```
-
-## Example use
-```javascript
-editor.annotate(
-  [
-    {
-      input_id: "name-123",
-      input_value: "Alice Smith"
-    },
-    {
-      input_id: "image-field-456",
-      input_value: "http://some-image-url.jpg" // Images should be Object URLs (URL.createObjectURL) or base64
-    }
-  ],
-  ["obsolete-field-id"]
-)
-
-// If you want to undo the annotation
-editor.commands.undo()
-
-// You can also redo it
-editor.commands.redo()
-
-```
-
-## Exporting after annotate()
-If using annotate() to do field value replacement, and then exporting the `.docx` document via `superdoc.export()` the `.docx` file will be exported with the fields still in the document (rather than replacing the fields with their expected values, ie: for final document export).
-
-You can pass in the `isFinalDoc` flag to export() in order to actually replace fields with their values, creating a seamless final document that contains no field objects.
-```javascript
-// Example:
-superdoc.export({ isFinalDoc: true })
-```
-
 
 # PDF conversion
 
