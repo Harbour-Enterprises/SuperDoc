@@ -570,6 +570,7 @@ export const cleanUpListsWithAnnotations = (fieldsToDelete = [], editor) => {
       tr.delete(pos, pos + node.nodeSize);
     });
 
+  tr.setMeta('updateListSync', true);
   editor.view.dispatch(tr);
 };
 
