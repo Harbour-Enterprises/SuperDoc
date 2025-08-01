@@ -339,9 +339,3 @@ We welcome contributions from the community! Here's how you can help:
 4. Submit a PR with detailed description of your changes
 
 See our [Contributing Guide](https://github.com/Harbour-Enterprises/SuperDoc/blob/main/CONTRIBUTING.md) for more details.
-
-## Next Steps
-
-- See [Components](/components/) for detailed component reference
-- Check out [Integration](/integration/) for framework-specific integration guides
-- Learn more about [Getting Started](/) for basic concepts and setup

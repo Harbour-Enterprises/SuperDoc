@@ -107,9 +107,3 @@ modules: {
 | onPdfDocumentReady   | -                         | Called when the PDF version of the document is ready.   |
 | onCollaborationReady | `{ editor }`              | Called when collaboration is ready.                     |
 | onException          | `{ error, editor }`       | Called when an exception occurs.                        |
-
-## Next Steps
-
-- See [Integration](/integration/) for framework-specific integration guides
-- Check out [Resources](/resources/) for examples, FAQ, and community resources
-- Learn more about [Getting Started](/) for basic concepts and setup
