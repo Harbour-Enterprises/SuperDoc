@@ -17,24 +17,70 @@ import { findParentNode } from '@helpers/index.js';
  * @param {Editor} param0.editor - The editor instance where the list definition will be added.
  * @returns {Object} The new abstract and num definitions.
  */
-export const generateNewListDefinition = ({ numId, listType, editor }) => {
+export const generateNewListDefinition = ({ numId, listType, level, start, text, fmt, editor }) => {
   // Generate a new numId to add to numbering.xml
   if (typeof listType === 'string') listType = editor.schema.nodes[listType];
 
   const definition = listType.name === 'orderedList' ? baseOrderedListDef : baseBulletList;
   const numbering = editor.converter.numbering;
   const newNumbering = { ...numbering };
+  let skipAddingNewAbstract = false;
 
   // Generate the new abstractNum definition
-  const newAbstractId = getNewListId(editor, 'abstracts');
-  const newAbstractDef = {
-    ...definition,
-    attributes: {
-      ...definition.attributes,
-      'w:abstractNumId': String(newAbstractId),
-    },
-  };
-  newNumbering.abstracts[newAbstractId] = newAbstractDef;
+  let newAbstractId = getNewListId(editor, 'abstracts');
+  let newAbstractDef = JSON.parse(
+    JSON.stringify({
+      ...definition,
+      attributes: {
+        ...definition.attributes,
+        'w:abstractNumId': String(newAbstractId),
+      },
+    }),
+  );
+
+  // Generate the new abstractNum definition for copy/paste lists
+  if (level && start && text && fmt) {
+    if (newNumbering.definitions[numId]) {
+      const abstractId = newNumbering.definitions[numId]?.elements[0]?.attributes['w:val'];
+      newAbstractId = abstractId;
+      const abstract = editor.converter.numbering.abstracts[abstractId];
+      newAbstractDef = { ...abstract };
+      skipAddingNewAbstract = true;
+    }
+
+    const levelDefIndex = newAbstractDef.elements.findIndex(
+      (el) => el.name === 'w:lvl' && el.attributes['w:ilvl'] === level,
+    );
+    const levelProps = newAbstractDef.elements[levelDefIndex];
+    const elToFilter = ['w:numFmt', 'w:lvlText', 'w:start'];
+    const oldElements = levelProps.elements.filter((el) => !elToFilter.includes(el.name));
+    levelProps.elements = [
+      ...oldElements,
+      {
+        type: 'element',
+        name: 'w:start',
+        attributes: {
+          'w:val': start,
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:numFmt',
+        attributes: {
+          'w:val': fmt,
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:lvlText',
+        attributes: {
+          'w:val': text,
+        },
+      },
+    ];
+  }
+
+  if (!skipAddingNewAbstract) newNumbering.abstracts[newAbstractId] = newAbstractDef;
 
   // Generate the new numId definition
   const newNumDef = getBasicNumIdTag(numId, newAbstractId);
