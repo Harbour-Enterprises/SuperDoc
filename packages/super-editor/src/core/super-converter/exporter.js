@@ -1617,7 +1617,7 @@ function generateTableCellProperties(node) {
     const cellBordersElement = {
       name: 'w:tcBorders',
       elements: Object.entries(borders).map(([key, value]) => {
-        if (!value.size) {
+        if (!value.size || value.val === 'none') {
           return {
             name: `w:${key}`,
             attributes: {
