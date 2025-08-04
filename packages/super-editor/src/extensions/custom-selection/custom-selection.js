@@ -56,7 +56,9 @@ export const CustomSelection = Extension.create({
       },
       props: {
         handleDOMEvents: {
-          mousedown: (view) => {
+          mousedown: (view, event) => {
+            if (event.button === 2) return false;
+
             const { selection } = view.state;
             const isToolbarButton = this.editor.options.focusTarget?.closest('.toolbar-button');
 

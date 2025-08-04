@@ -9,6 +9,22 @@ export const Bold = Mark.create({
     };
   },
 
+  addAttributes() {
+    return {
+      value: {
+        default: null,
+        renderDOM: (attrs) => {
+          if (!attrs.value) return {};
+
+          if (attrs.value === '0') {
+            return { style: 'font-weight: normal' };
+          }
+          return {};
+        },
+      },
+    };
+  },
+
   parseDOM() {
     return [
       { tag: 'strong' },

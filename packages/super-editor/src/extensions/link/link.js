@@ -184,7 +184,6 @@ function isAllowedUri(uri, protocols) {
     });
   }
 
-  // eslint-disable-next-line no-useless-escape
   return (
     !uri ||
     uri

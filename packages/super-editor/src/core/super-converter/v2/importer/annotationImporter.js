@@ -41,6 +41,7 @@ export const handleAnnotationNode = (params) => {
       fontSize: parsedAttrs.fieldFontSize,
       textColor: parsedAttrs.fieldTextColor,
       textHighlight: parsedAttrs.fieldTextHighlight,
+      hash: parsedAttrs.hash,
     };
     attrs = attrsFromJSON;
   } else {
@@ -51,7 +52,7 @@ export const handleAnnotationNode = (params) => {
 
   const { attrs: marksAsAttrs, marks } = parseAnnotationMarks(sdtContent);
   const allAttrs = { ...attrs, ...marksAsAttrs };
-  allAttrs.hash = generateDocxRandomId(4);
+  if (!allAttrs.hash) allAttrs.hash = generateDocxRandomId(4);
 
   if (!attrs.fieldId || !attrs.displayLabel) {
     return { nodes: [], consumed: 0 };

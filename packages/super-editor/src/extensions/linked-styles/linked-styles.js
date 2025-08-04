@@ -132,6 +132,9 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
   if (!linkedDefinitionStyles['font-size'] && basedOnDefinitionStyles['font-size']) {
     resultStyles['font-size'] = basedOnDefinitionStyles['font-size'];
   }
+  if (!linkedDefinitionStyles['text-transform'] && basedOnDefinitionStyles['text-transform']) {
+    resultStyles['text-transform'] = basedOnDefinitionStyles['text-transform'];
+  }
 
   Object.entries(resultStyles).forEach(([k, value]) => {
     const key = kebabCase(k);
@@ -156,6 +159,8 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
     const hasParentIndent = Object.keys(parent?.attrs?.indent || {});
     const hasParentSpacing = Object.keys(parent?.attrs?.spacing || {});
 
+    const listTypes = ['orderedList', 'listItem'];
+
     // If no mark already in the node, we override the style
     if (!mark) {
       if (key === 'spacing' && includeSpacing && !hasParentSpacing) {
@@ -170,7 +175,18 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
         if (rightIndent) markValue['margin-right'] = rightIndent + 'px';
         if (firstLine) markValue['text-indent'] = firstLine + 'px';
       } else if (key === 'bold') {
-        markValue['font-weight'] = 'bold';
+        const val = value?.value;
+        if (!listTypes.includes(node.type.name) && val !== '0') {
+          markValue['font-weight'] = 'bold';
+        }
+      } else if (key === 'text-transform') {
+        if (!listTypes.includes(node.type.name)) {
+          markValue[key] = value;
+        }
+      } else if (key === 'font-size') {
+        if (!listTypes.includes(node.type.name)) {
+          markValue[key] = value;
+        }
       } else if (typeof value === 'string') {
         markValue[key] = value;
       }

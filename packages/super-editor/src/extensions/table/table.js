@@ -108,6 +108,22 @@ export const Table = Node.create({
         },
       },
 
+      justification: {
+        default: null,
+        renderDOM: (attrs) => {
+          if (!attrs.justification) return {};
+
+          if (attrs.justification === 'center') {
+            return { style: `margin: 0 auto` };
+          }
+          if (attrs.justification === 'right') {
+            return { style: `margin-left: auto` };
+          }
+
+          return {};
+        },
+      },
+
       tableStyleId: {
         rendered: false,
       },

@@ -15,6 +15,7 @@ const handleRunNode = (params) => {
   let processedRun = nodeListHandler.handler(childParams)?.filter((n) => n) || [];
   const hasRunProperties = node.elements?.some((el) => el.name === 'w:rPr');
   const defaultNodeStyles = getMarksFromStyles(docx, parentStyleId);
+
   if (hasRunProperties) {
     const { marks = [], attributes = {} } = parseProperties(node);
 
@@ -22,7 +23,11 @@ const handleRunNode = (params) => {
     const textStyleMark = marks.find((m) => m.type === 'textStyle');
     const hasFontStyle = textStyleMark && Object.keys(textStyleMark.attrs).length > 0;
     if (defaultNodeStyles.marks && !hasFontStyle) {
-      marks.push(...defaultNodeStyles.marks);
+      const hasBoldDisabled = marks.find((m) => m.type === 'bold')?.attrs?.value === '0';
+      for (let mark of defaultNodeStyles.marks) {
+        if (['bold'].includes(mark.type) && hasBoldDisabled) continue;
+        marks.push(mark);
+      }
     }
 
     if (node.marks) marks.push(...node.marks);

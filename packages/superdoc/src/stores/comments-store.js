@@ -90,6 +90,10 @@ export const useCommentsStore = defineStore('comments', () => {
     // If no ID, we clear any focused comments
     if (id === undefined || id === null) {
       activeComment.value = null;
+      if (superdoc.activeEditor) {
+        superdoc.activeEditor.commands?.setActiveComment({ commentId: null });
+      }
+      return;
     }
 
     const comment = getComment(id);

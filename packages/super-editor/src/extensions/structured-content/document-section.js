@@ -108,9 +108,63 @@ export const DocumentSection = Node.create({
           // Replace the selection with the new node
           tr.replaceRangeWith(from, to, node);
 
+          // Calculate where the node ends after insertion
+          const nodeEnd = from + node.nodeSize;
+
+          // Only insert paragraph if we're not at the document boundary and there's space
+          let shouldInsertParagraph = true;
+          let insertPos = nodeEnd;
+
+          // Check if we can safely insert at this position
+          if (nodeEnd >= tr.doc.content.size) {
+            // We're at or beyond the document end
+            insertPos = tr.doc.content.size;
+
+            // Check if there's already content at the end
+            if (insertPos > 0) {
+              const $endPos = tr.doc.resolve(insertPos);
+              if ($endPos.nodeBefore && $endPos.nodeBefore.type.name === 'paragraph') {
+                shouldInsertParagraph = false; // There's already a paragraph
+              }
+            }
+          }
+
+          if (shouldInsertParagraph) {
+            const emptyParagraph = tr.doc.type.schema.nodes.paragraph.create();
+            tr.insert(insertPos, emptyParagraph);
+          }
+
           if (dispatch) {
             tr.setMeta('documentSection', { action: 'create' });
             dispatch(tr);
+
+            // Set selection after the DOM has updated
+            setTimeout(() => {
+              try {
+                const currentState = editor.state;
+                const docSize = currentState.doc.content.size;
+
+                // Calculate target position more safely
+                let targetPos = from + node.nodeSize;
+
+                // If we inserted a paragraph, position inside it
+                if (shouldInsertParagraph) {
+                  targetPos += 1; // +1 to get inside the paragraph
+                }
+
+                // Ensure we don't go beyond document bounds
+                targetPos = Math.min(targetPos, docSize);
+
+                // Ensure we have a valid position (at least 1 if document has content)
+                if (targetPos < docSize && targetPos > 0) {
+                  const newSelection = Selection.near(currentState.doc.resolve(targetPos));
+                  const newTr = currentState.tr.setSelection(newSelection);
+                  editor.view.dispatch(newTr);
+                }
+              } catch (e) {
+                console.warn('Could not set delayed selection:', e);
+              }
+            }, 0);
           }
 
           return true;
