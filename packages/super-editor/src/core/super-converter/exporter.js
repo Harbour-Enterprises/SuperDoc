@@ -199,6 +199,24 @@ export function translateParagraphNode(params) {
 }
 
 /**
+ * Normalize line height values
+ * This function converts line height values from strings with percentage to a decimal value.
+ * For example, "150%" becomes 1.5.
+ * If the value is not a valid number, it returns null.
+ * @param {string|number} value The line height value to normalize
+ * @return {number|null} The normalized line height value or null if invalid
+ */
+function normalizeLineHeight(value) {
+  if (typeof value === 'string' && value.trim().endsWith('%')) {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed / 100 : null;
+  }
+
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
  * Generate the w:pPr props for a paragraph node
  *
  * @param {SchemaNode} node
@@ -222,9 +240,13 @@ function generateParagraphProperties(node) {
     if (lineSpaceBefore >= 0) attributes['w:before'] = pixelsToTwips(lineSpaceBefore);
     if (lineSpaceAfter >= 0) attributes['w:after'] = pixelsToTwips(lineSpaceAfter);
 
-    if (lineHeight && !Number.isNaN(parseFloat(lineHeight))) {
-      if (lineRule === 'exact') attributes['w:line'] = ptToTwips(parseFloat(lineHeight));
-      else attributes['w:line'] = linesToTwips(lineHeight);
+    const normalized = normalizeLineHeight(lineHeight);
+    if (normalized !== null) {
+      if (lineRule === 'exact') {
+        attributes['w:line'] = ptToTwips(normalized);
+      } else {
+        attributes['w:line'] = linesToTwips(normalized);
+      }
     }
 
     attributes['w:lineRule'] = lineRule || 'auto';
