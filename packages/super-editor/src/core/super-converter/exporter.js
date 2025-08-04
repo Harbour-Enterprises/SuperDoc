@@ -222,10 +222,9 @@ function generateParagraphProperties(node) {
     if (lineSpaceBefore >= 0) attributes['w:before'] = pixelsToTwips(lineSpaceBefore);
     if (lineSpaceAfter >= 0) attributes['w:after'] = pixelsToTwips(lineSpaceAfter);
 
-    if (lineRule === 'exact') {
-      if (lineHeight) attributes['w:line'] = ptToTwips(parseFloat(lineHeight));
-    } else {
-      if (lineHeight) attributes['w:line'] = linesToTwips(lineHeight);
+    if (lineHeight && !Number.isNaN(parseFloat(lineHeight))) {
+      if (lineRule === 'exact') attributes['w:line'] = ptToTwips(parseFloat(lineHeight));
+      else attributes['w:line'] = linesToTwips(lineHeight);
     }
 
     attributes['w:lineRule'] = lineRule || 'auto';
@@ -1825,7 +1824,6 @@ function translateImageNode(params, imageSize) {
     }
 
     const imageUrl = `media/${imageName}_${attrs.hash}.${type}`;
-
     imageId = addNewImageRelationship(params, imageUrl);
     params.media[`${imageName}_${attrs.hash}.${type}`] = src;
   }
