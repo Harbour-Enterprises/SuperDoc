@@ -4,6 +4,7 @@ import { Extension } from '@core/Extension.js';
 import { kebabCase } from '@harbour-enterprises/common';
 import { findParentNode } from '@helpers/index.js';
 import { getLineHeightValueString } from '../../core/super-converter/helpers.js';
+import { CustomSelectionPluginKey } from '../custom-selection/custom-selection.js';
 
 export const LinkedStylesPluginKey = new PluginKey('linkedStyles');
 
@@ -20,22 +21,106 @@ export const LinkedStyles = Extension.create({
     return {
       setLinkedStyle: (style) => (params) => {
         if (!style) return;
-        const { tr } = params;
-        const selection = tr.selection;
-        const { from, to } = selection;
-        if (from === to) return;
+        const { tr, state } = params;
+        let selection = tr.selection;
 
-        let pos = from;
-        let paragraphNode = tr.doc.nodeAt(from);
-        if (paragraphNode.type.name !== 'paragraph') {
-          const parentNode = findParentNode((node) => node.type.name === 'paragraph')(tr.selection) || {};
-          pos = parentNode.pos;
-          paragraphNode = parentNode.node;
+        // Check for preserved selection from custom selection plugin
+        const focusState = CustomSelectionPluginKey.getState(state);
+        if (selection.empty && focusState?.preservedSelection) {
+          selection = focusState.preservedSelection;
+          tr.setSelection(selection);
+        }
+        // Fallback to lastSelection if no preserved selection
+        else if (selection.empty && this.editor.options.lastSelection) {
+          selection = this.editor.options.lastSelection;
+          tr.setSelection(selection);
         }
 
-        tr.setNodeMarkup(pos, undefined, {
-          ...paragraphNode.attrs,
-          styleId: style.id,
+        const { from, to } = selection;
+
+        // Function to get clean paragraph attributes (strips existing styles)
+        const getCleanParagraphAttrs = (node) => {
+          // Keep only essential attributes, strip style-related ones
+          const cleanAttrs = {};
+
+          // You may want to preserve some attributes - adjust this list based on your needs
+          const preservedAttrs = ['id', 'class']; // Add any other non-style attributes you want to keep
+
+          preservedAttrs.forEach((attr) => {
+            if (node.attrs[attr] !== undefined) {
+              cleanAttrs[attr] = node.attrs[attr];
+            }
+          });
+
+          // Apply the new style
+          cleanAttrs.styleId = style.id;
+
+          return cleanAttrs;
+        };
+
+        // Function to clear formatting marks from text content
+        const clearFormattingMarks = (startPos, endPos) => {
+          tr.doc.nodesBetween(startPos, endPos, (node, pos) => {
+            if (node.isText && node.marks.length > 0) {
+              // Define marks to remove (formatting-related marks)
+              const marksToRemove = [
+                'textStyle',
+                'bold',
+                'italic',
+                'underline',
+                'strike',
+                'subscript',
+                'superscript',
+                'highlight',
+              ];
+
+              node.marks.forEach((mark) => {
+                if (marksToRemove.includes(mark.type.name)) {
+                  tr.removeMark(pos, pos + node.nodeSize, mark);
+                }
+              });
+            }
+            return true;
+          });
+        };
+
+        // Handle cursor position (no selection)
+        if (from === to) {
+          let pos = from;
+          let paragraphNode = tr.doc.nodeAt(from);
+
+          if (paragraphNode?.type.name !== 'paragraph') {
+            const parentNode = findParentNode((node) => node.type.name === 'paragraph')(tr.selection);
+            if (!parentNode) return;
+            pos = parentNode.pos;
+            paragraphNode = parentNode.node;
+          }
+
+          // Clear formatting marks within the paragraph
+          clearFormattingMarks(pos + 1, pos + paragraphNode.nodeSize - 1);
+
+          // Apply clean paragraph attributes
+          tr.setNodeMarkup(pos, undefined, getCleanParagraphAttrs(paragraphNode));
+          return;
+        }
+
+        // Handle selection spanning multiple nodes
+        const paragraphPositions = [];
+
+        tr.doc.nodesBetween(from, to, (node, pos) => {
+          if (node.type.name === 'paragraph') {
+            paragraphPositions.push({ node, pos });
+          }
+          return true;
+        });
+
+        // Apply style to all paragraphs in selection (with clean attributes and cleared marks)
+        paragraphPositions.forEach(({ node, pos }) => {
+          // Clear formatting marks within this paragraph
+          clearFormattingMarks(pos + 1, pos + node.nodeSize - 1);
+
+          // Apply clean paragraph attributes
+          tr.setNodeMarkup(pos, undefined, getCleanParagraphAttrs(node));
         });
       },
     };
@@ -174,16 +259,16 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
         if (leftIndent) markValue['margin-left'] = leftIndent + 'px';
         if (rightIndent) markValue['margin-right'] = rightIndent + 'px';
         if (firstLine) markValue['text-indent'] = firstLine + 'px';
-      } else if (key === 'bold') {
+      } else if (key === 'bold' && node) {
         const val = value?.value;
         if (!listTypes.includes(node.type.name) && val !== '0') {
           markValue['font-weight'] = 'bold';
         }
-      } else if (key === 'text-transform') {
+      } else if (key === 'text-transform' && node) {
         if (!listTypes.includes(node.type.name)) {
           markValue[key] = value;
         }
-      } else if (key === 'font-size') {
+      } else if (key === 'font-size' && node) {
         if (!listTypes.includes(node.type.name)) {
           markValue[key] = value;
         }

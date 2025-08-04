@@ -23,7 +23,7 @@ HTML only: http://localhost:3000?html=<p>I am a paragraph</p><p></p><p><strong>I
 ```
 
 ## Additional docs
-Please see [SuperDoc docs](https://docs.superdoc.dev/components/#supereditor) for additinoal editor commands and hooks.
+Please see [SuperDoc docs](https://docs.superdoc.dev/guide/components#superdoc) for additinoal editor commands and hooks.
 
 You can get a list of all available editor commands from editor.commands as well. For instnace, commands such as the examples below all will work while using the SuperDoc editor in the backend:
 ```

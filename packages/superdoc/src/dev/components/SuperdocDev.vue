@@ -40,8 +40,9 @@ const handleNewFile = async (file) => {
 };
 
 const init = async () => {
-  let testId = 'document-123';
-  // const testId = "document_6a9fb1e0725d46989bdbb3f9879e9e1b";
+  let testId = 'file_id';
+  let testDocumentId = 'doc_id';
+
   const config = {
     superdocId: 'superdoc-dev',
     selector: '#superdoc',
@@ -65,18 +66,13 @@ const init = async () => {
       { name: 'Nick Bernal', email: 'nick@harbourshare.com', access: 'internal' },
       { name: 'Eric Doversberger', email: 'eric@harbourshare.com', access: 'external' },
     ],
-    document: {
-      data: currentFile.value,
-      id: testId,
-      isNewFile: true,
-    },
-    // documents: [
-    //   {
-    //     data: currentFile.value,
-    //     id: testId,
-    //     isNewFile: true,
-    //   },
-    // ],
+    documents: [
+      {
+        data: currentFile.value,
+        id: testId,
+        type: 'docx',
+      },
+    ],
     // cspNonce: 'testnonce123',
     modules: {
       comments: {
@@ -103,8 +99,9 @@ const init = async () => {
 
       // To test this dev env with collaboration you must run a local collaboration server here.
       // collaboration: {
-      //   url: 'ws://localhost:3050/docs/superdoc-id',
+      //   url: `ws://localhost:3050/docs/${testDocumentId}`,
       //   token: 'token',
+      //   providerType: 'hocuspocus',
       // },
       ai: {
         // Provide your Harbour API key here for direct endpoint access

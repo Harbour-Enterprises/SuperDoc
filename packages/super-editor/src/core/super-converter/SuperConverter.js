@@ -12,6 +12,7 @@ import {
   prepareCommentsXmlFilesForExport,
 } from './v2/exporter/commentsExporter.js';
 import { FOOTER_RELATIONSHIP_TYPE, HEADER_RELATIONSHIP_TYPE, HYPERLINK_RELATIONSHIP_TYPE } from './constants.js';
+import { DocxHelpers } from './docx-helpers/index.js';
 
 class SuperConverter {
   static allowedElements = Object.freeze({
@@ -131,6 +132,14 @@ class SuperConverter {
 
     // Parse the initial XML, if provided
     if (this.docx.length || this.xml) this.parseFromXml();
+  }
+
+  /**
+   * Get the DocxHelpers object that contains utility functions for working with docx files.
+   * @returns {import('./docx-helpers/docx-helpers.js').DocxHelpers} The DocxHelpers object.
+   */
+  get docxHelpers() {
+    return DocxHelpers;
   }
 
   parseFromXml() {

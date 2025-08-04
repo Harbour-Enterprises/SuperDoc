@@ -7,6 +7,8 @@
     "outDir": "dist",
     "declarationMap": true,
     "skipLibCheck": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "typeRoots": ["./node_modules/@types/*"]
   }
 }

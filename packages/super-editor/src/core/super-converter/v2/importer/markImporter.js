@@ -44,10 +44,7 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
       const newMark = { type: m.type };
 
       const exceptionMarks = ['w:b', 'w:caps'];
-      if (
-        (attributes['w:val'] === '0' || attributes['w:val'] === 'none') 
-        && !exceptionMarks.includes(m.name)
-      ) {
+      if ((attributes['w:val'] === '0' || attributes['w:val'] === 'none') && !exceptionMarks.includes(m.name)) {
         return;
       }
 
@@ -76,7 +73,7 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
         newMark.attrs = {};
         newMark.attrs[m.property] = value;
       }
-      
+
       marks.push(newMark);
     });
   });

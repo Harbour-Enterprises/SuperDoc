@@ -282,13 +282,13 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
   const { attributes: pPrNormalIndentAttr } = pPrNormalIndentTag;
   const { attributes: pPrByIdIndentAttr } = pPrStyleIdIndentTag;
 
-  const spacingRest = isNormalAsDefault 
-    ? (pPrNormalSpacingAttr || pPrDefaultSpacingAttr)
-    : (pPrDefaultSpacingAttr || pPrNormalSpacingAttr);
+  const spacingRest = isNormalAsDefault
+    ? pPrNormalSpacingAttr || pPrDefaultSpacingAttr
+    : pPrDefaultSpacingAttr || pPrNormalSpacingAttr;
 
   const indentRest = isNormalAsDefault
-    ? (pPrNormalIndentAttr || pPrDefaultIndentAttr)
-    : (pPrDefaultIndentAttr || pPrNormalIndentAttr);
+    ? pPrNormalIndentAttr || pPrDefaultIndentAttr
+    : pPrDefaultIndentAttr || pPrNormalIndentAttr;
 
   return {
     spacing: pPrByIdSpacingAttr || spacingRest,

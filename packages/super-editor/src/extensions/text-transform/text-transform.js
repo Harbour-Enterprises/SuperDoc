@@ -18,7 +18,7 @@ export const TextTransform = Extension.create({
             default: null,
             renderDOM: (attrs) => {
               if (!attrs.textCase) return {};
-              return { 
+              return {
                 style: `text-transform: ${attrs.textCase}`,
               };
             },
