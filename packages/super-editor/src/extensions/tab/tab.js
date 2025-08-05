@@ -146,8 +146,6 @@ const getTabDecorations = (oldState, newState, tr, view, domSerializer, from = 0
 
         const tabStop = parent.attrs.tabStops[tabCount];
         if (tabStop) {
-          //tabWidth = tabStop.pos - calcNodeLeftOffset(view, invertMapping.map(pos));
-          //tabWidth = tabStop.pos - calcNodeLeftOffset(parent, tabIndex, pos - $pos.parentOffset, domSerializer, invertMapping, nodeWidthCache);
           tabWidth =
             tabStop.pos -
             calcChildNodesWidth(
