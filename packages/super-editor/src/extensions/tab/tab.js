@@ -1,6 +1,7 @@
 import { Node, Attribute } from '@core/index.js';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { ReplaceStep, ReplaceAroundStep } from 'prosemirror-transform';
 
 export const TabNode = Node.create({
   name: 'tab',
@@ -50,13 +51,61 @@ export const TabNode = Node.create({
       key: new PluginKey('tabPlugin'),
       state: {
         init(_, state) {
-          let decorations = getTabDecorations(state, state, state.tr, view);
-          return { decorations: DecorationSet.create(state.doc, decorations), initial: true };
+          //return { decorations: DecorationSet.empty, initial: true };
+          //let decorations = DecorationSet.empty
+          const decorations = DecorationSet.create(state.doc, getTabDecorations(state, state, state.tr, view));
+          return { decorations, initial: true };
         },
-        apply(tr, oldValue, oldState, newState) {
-          if (!tr.docChanged && !oldValue.initial) return oldValue;
-          const decorations = getTabDecorations(oldState, newState, tr, view);
-          return { decorations: DecorationSet.create(newState.doc, decorations), initial: false };
+        apply(tr, { initial, decorations }, oldState, newState) {
+          if (initial) {
+            decorations = DecorationSet.create(newState.doc, getTabDecorations(oldState, newState, tr, view));
+            return { initial: false, decorations };
+          }
+          if (!tr.docChanged) {
+            return { initial, decorations };
+          }
+          decorations = decorations.map(tr.mapping, tr.doc);
+
+          let rangesToRecalculate = [];
+          tr.steps.forEach((step, index) => {
+            const stepMap = step.getMap();
+            if (step instanceof ReplaceStep || step instanceof ReplaceAroundStep) {
+              const $from = tr.docs[index].resolve(step.from);
+              const $to = tr.docs[index].resolve(step.to);
+              const start = $from.start(1); // start of node at level 1
+              const end = $to.end(1); // end of node at level 1
+              let addRange = false;
+              tr.docs[index].nodesBetween(start, end, (node) => {
+                if (node.type.name === 'tab') {
+                  // Node contains or contained a tab
+                  addRange = true;
+                }
+              });
+              if (!addRange && step.slice?.content) {
+                step.slice.content.descendants((node) => {
+                  if (node.type.name === 'tab') {
+                    // A tab was added.
+                    addRange = true;
+                  }
+                });
+              }
+              if (addRange) {
+                rangesToRecalculate.push([start, end]);
+              }
+            }
+            rangesToRecalculate = rangesToRecalculate.map(([from, to]) => {
+              const mappedFrom = stepMap.map(from, -1);
+              const mappedTo = stepMap.map(to, 1);
+              return [mappedFrom, mappedTo];
+            });
+          });
+          rangesToRecalculate.forEach(([start, end]) => {
+            const oldDecorations = decorations.find(start, end);
+            decorations = decorations.remove(oldDecorations);
+            const newDecorations = getTabDecorations(oldState, newState, tr, view, start, end);
+            decorations = decorations.add(newState.doc, newDecorations);
+          });
+          return { decorations, initial: false };
         },
       },
       props: {
@@ -71,10 +120,13 @@ export const TabNode = Node.create({
 
 const tabWidthPx = 48;
 
-const getTabDecorations = (oldState, newState, tr, view) => {
+const getTabDecorations = (oldState, newState, tr, view, from = 0, to = null) => {
+  if (!to) {
+    to = newState.doc.content.size;
+  }
   let decorations = [];
   const invertMapping = tr.mapping.invert();
-  newState.doc.descendants((node, pos, parent) => {
+  newState.doc.nodesBetween(from, to, (node, pos, parent) => {
     if (node.type.name === 'tab') {
       let extraStyles = '';
       let $pos = newState.doc.resolve(pos);
@@ -101,7 +153,7 @@ const getTabDecorations = (oldState, newState, tr, view) => {
             newState.doc.nodesBetween(
               pos + node.nodeSize,
               pos - $pos.parentOffset + parent.nodeSize,
-              (node, nodePos) => {
+              (node, nodePos, parent, index) => {
                 if (node.type.name === 'tab') {
                   foundTab = true;
                 }
@@ -139,16 +191,13 @@ const getTabDecorations = (oldState, newState, tr, view) => {
 
         let prevTextWidth = 0;
 
-        try {
-          newState.doc.nodesBetween(pos - prevNodeSize - 1, pos - 1, (node, nodePos) => {
-            if (node.isText && node.textContent !== ' ') {
-              const textWidthForNode = calcTextWidth(view, invertMapping.map(nodePos));
-              prevTextWidth += textWidthForNode;
-            }
-          });
-        } catch (_e) {
-          return;
-        }
+        newState.doc.nodesBetween(pos - prevNodeSize - 1, pos - 1, (node, nodePos, parent, index) => {
+          if (node.isText && node.textContent !== ' ') {
+            const textWidthForNode = calcTextWidth(view, invertMapping.map(nodePos));
+            //const textWidthForNode = newCalcTextWidth(parent, index);
+            prevTextWidth += textWidthForNode;
+          }
+        });
         tabWidth = $pos.nodeBefore?.type.name === 'tab' ? tabWidthPx : tabWidthPx - (prevTextWidth % tabWidthPx);
       }
 
@@ -163,6 +212,11 @@ const getTabDecorations = (oldState, newState, tr, view) => {
   });
   return decorations;
 };
+
+// function newCalcTextWidth(parent, index) {
+//   // Create dom node of parent. Then calculate width of child.
+
+// }
 
 function calcTextWidth(view, pos) {
   const domNode = view.nodeDOM(pos);
