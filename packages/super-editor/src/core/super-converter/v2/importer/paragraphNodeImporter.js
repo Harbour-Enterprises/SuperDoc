@@ -299,16 +299,6 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
       (el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId,
     );
     const pPrById = stylesById?.elements?.find((el) => el.name === 'w:pPr');
-
-    const basedOn = stylesById?.elements.find((el) => el.name === 'w:basedOn');
-    const baseStyles = styles.elements[0].elements?.find(
-      (el) => el.name === 'w:style' && el.attributes['w:styleId'] === basedOn?.attributes['w:val'],
-    );
-    const rprBaseStyles = baseStyles?.elements?.find((el) => el.name === 'w:rPr');
-
-    const caps = rprBaseStyles?.elements?.find((el) => el.name === 'w:caps');
-    if (caps) textCase = 'uppercase';
-
     pPrStyleIdSpacingTag = pPrById?.elements?.find((el) => el.name === 'w:spacing') || {};
     pPrStyleIdIndentTag = pPrById?.elements?.find((el) => el.name === 'w:ind') || {};
     pPrStyleJc = pPrById?.elements?.find((el) => el.name === 'w:jc') || {};
