@@ -72,8 +72,8 @@ export const TabNode = Node.create({
             if (step instanceof ReplaceStep || step instanceof ReplaceAroundStep) {
               const $from = tr.docs[index].resolve(step.from);
               const $to = tr.docs[index].resolve(step.to);
-              const start = $from.start(1); // start of node at level 1
-              const end = $to.end(1); // end of node at level 1
+              const start = $from.start(Math.min($from.depth, 1)); // start of node at level 1
+              const end = $to.end(Math.min($to.depth, 1)); // end of node at level 1
               let addRange = false;
               tr.docs[index].nodesBetween(start, end, (node) => {
                 if (node.type.name === 'tab') {

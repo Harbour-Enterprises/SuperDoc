@@ -65,7 +65,7 @@ describe('[custom_list1.docx] interrupted ordered list tests', async () => {
     const firstList = body.elements[0];
     const firstListPprList = firstList.elements.filter((n) => (n.name = 'w:pPr' && n.elements.length));
     const firstListPpr = firstListPprList[0];
-    expect(firstListPpr.elements.length).toBe(4);
+    expect(firstListPpr.elements.length).toBe(5);
 
     const numPr = firstListPpr.elements.find((n) => n.name === 'w:numPr');
     const numIdTag = numPr.elements.find((n) => n.name === 'w:numId');
