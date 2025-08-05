@@ -31,7 +31,7 @@ export const numDefByTypeMap = new Map([
   ['a', 'lowerLetter'],
   ['A', 'upperLetter'],
   ['I', 'upperRoman'],
-  ['i', 'upperRoman'],
+  ['i', 'lowerRoman'],
 ]);
 
 function getStartNumber(lvlText) {
