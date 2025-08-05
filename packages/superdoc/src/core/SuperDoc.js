@@ -211,7 +211,7 @@ export class SuperDoc extends EventEmitter {
 
     // @ts-ignore
     this.version = __APP_VERSION__;
-    console.debug('🦋 [superdoc] Using SuperDoc version:', this.version);
+    this.#log('🦋 [superdoc] Using SuperDoc version:', this.version);
 
     this.superdocId = config.superdocId || uuidv4();
     this.colors = this.config.colors;
@@ -478,8 +478,8 @@ export class SuperDoc extends EventEmitter {
     this.emit('sidebar-toggle', isOpened);
   }
 
-  log(...args) {
-    console.debug('🦋 🦸‍♀️ [superdoc]', ...args);
+  #log(...args) {
+    (console.debug ? console.debug : console.log)('🦋 🦸‍♀️ [superdoc]', ...args);
   }
 
   /**
@@ -558,7 +558,7 @@ export class SuperDoc extends EventEmitter {
    */
   addCommentsList(element) {
     if (!this.config?.modules?.comments || this.config.role === 'viewer') return;
-    console.debug('🦋 [superdoc] Adding comments list to:', element);
+    this.#log('🦋 [superdoc] Adding comments list to:', element);
     if (element) this.config.modules.comments.element = element;
     this.commentsList = new SuperComments(this.config.modules?.comments, this);
     if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: true });
@@ -718,7 +718,7 @@ export class SuperDoc extends EventEmitter {
   lockSuperdoc(isLocked = false, lockedBy) {
     this.isLocked = isLocked;
     this.lockedBy = lockedBy;
-    console.debug('🦋 [superdoc] Locking superdoc:', isLocked, lockedBy, '\n\n\n');
+    this.#log('🦋 [superdoc] Locking superdoc:', isLocked, lockedBy, '\n\n\n');
     this.emit('locked', { isLocked, lockedBy });
   }
 
@@ -801,7 +801,7 @@ export class SuperDoc extends EventEmitter {
    * @returns {Promise<void>} Resolves when all documents have saved
    */
   async #triggerCollaborationSaves() {
-    console.debug('🦋 [superdoc] Triggering collaboration saves');
+    this.#log('🦋 [superdoc] Triggering collaboration saves');
     return new Promise((resolve, reject) => {
       this.superdocStore.documents.forEach((doc) => {
         this.pendingCollaborationSaves = 0;
@@ -832,9 +832,9 @@ export class SuperDoc extends EventEmitter {
       // this.exportEditorsToDOCX(),
     ];
 
-    console.debug('🦋 [superdoc] Saving superdoc');
+    this.#log('🦋 [superdoc] Saving superdoc');
     const result = await Promise.all(savePromises);
-    console.debug('🦋 [superdoc] Save complete:', result);
+    this.#log('🦋 [superdoc] Save complete:', result);
     return result;
   }
 
@@ -847,7 +847,7 @@ export class SuperDoc extends EventEmitter {
       return;
     }
 
-    this.log('[superdoc] Unmounting app');
+    this.#log('[superdoc] Unmounting app');
 
     this.config.socket?.cancelWebsocketRetry();
     this.config.socket?.disconnect();
