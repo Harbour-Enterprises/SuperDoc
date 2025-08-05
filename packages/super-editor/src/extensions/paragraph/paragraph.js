@@ -110,6 +110,7 @@ export const Paragraph = Node.create({
           return { style };
         },
       },
+      tabStops: { rendered: false },
     };
   },
 
