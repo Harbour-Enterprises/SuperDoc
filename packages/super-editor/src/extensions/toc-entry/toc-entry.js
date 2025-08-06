@@ -36,6 +36,10 @@ export const TocEntry = Node.create({
         default: null,
         rendered: false,
       },
+      space: {
+        default: null,
+        rendered: false,
+      },
       bookmark: {
         default: null,
         rendered: false,
@@ -53,4 +57,4 @@ export const TocEntry = Node.create({
       },
     };
   },
-}); 
+});

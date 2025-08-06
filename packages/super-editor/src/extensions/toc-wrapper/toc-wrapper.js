@@ -13,9 +13,9 @@ export const TocWrapper = Node.create({
     return {
       htmlAttributes: {
         'data-id': 'toc-wrapper',
-        'contenteditable': 'false',
+        contenteditable: 'false',
         'aria-label': 'Table of Contents wrapper',
-        'class': 'toc-wrapper',
+        class: 'toc-wrapper',
       },
     };
   },
@@ -38,9 +38,13 @@ export const TocWrapper = Node.create({
         default: null,
         rendered: false,
       },
+      space: {
+        default: null,
+        rendered: false,
+      },
       attributes: {
         rendered: false,
       },
     };
   },
-}); 
+});

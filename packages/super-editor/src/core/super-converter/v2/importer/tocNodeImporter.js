@@ -6,21 +6,21 @@ import { parseMarks } from './markImporter.js';
 
 /**
  * Checks if a node contains a field character of a specific type with optional instruction text matching.
- * 
+ *
  * This function can be used in two ways:
  * 1. With keyword: Checks for field char AND matching instruction text (for TOC detection)
  * 2. Without keyword: Checks only for field char (for general field char detection)
- * 
+ *
  * @param {Object} node - The node to check
  * @param {string} type - The field character type to look for ('begin', 'separate', 'end')
  * @param {string|null} [keyword=null] - The instruction text keyword to match (null for no keyword check)
  * @returns {boolean} True if the node contains a field char of the specified type with matching instruction
- * 
+ *
  * @example
  * // TOC detection - check for field char AND instruction text
  * hasFldCharWithInstr(node, 'begin', 'TOC')     // TOC wrapper detection
  * hasFldCharWithInstr(node, 'begin', 'PAGEREF') // TOC entry detection
- * 
+ *
  * @example
  * // General field char detection - check only for field char
  * hasFldCharWithInstr(node, 'separate') // Check for separate field char
@@ -29,14 +29,14 @@ import { parseMarks } from './markImporter.js';
  */
 const hasFldCharWithInstr = (node, type, keyword = null) => {
   if (!node?.elements) return false;
-  
+
   // Find field char and check if it has matching instruction text
   let hasFieldChar = false;
   let hasMatchingInstr = keyword === null; // If no keyword, we don't need to check instruction text
-  
+
   for (const r of node.elements) {
     if (!r?.elements) continue;
-    
+
     for (const el of r.elements) {
       if (el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === type) {
         hasFieldChar = true;
@@ -53,15 +53,20 @@ const hasFldCharWithInstr = (node, type, keyword = null) => {
       }
     }
   }
-  
+
   return hasFieldChar && hasMatchingInstr;
 };
 
+/*
+  Get the instruction text and also any space value we need to store
+*/
 const getInstrText = (pNode, keyword = null) => {
-  if (!pNode?.elements) return null;
-  
+  if (!pNode?.elements) return { text: null, space: null };
+
   // Always extract instruction texts fresh to capture all types
   const texts = [];
+  let spaceValue = null;
+
   for (const r of pNode.elements) {
     if (!r?.elements) continue;
     for (const el of r.elements) {
@@ -73,19 +78,27 @@ const getInstrText = (pNode, keyword = null) => {
           if (txt) textVal = txt.text;
         }
         if (textVal) {
-          texts.push(textVal.trim());
+          texts.push(textVal); // Don't trim - preserve original spacing
+        }
+
+        // Extract xml:space attribute if present
+        if (el.attributes && el.attributes['xml:space']) {
+          spaceValue = el.attributes['xml:space'];
         }
       }
     }
   }
-  
+
+  let resultText = null;
   if (keyword) {
     // Find the first text that contains the keyword
-    return texts.find(text => text.includes(keyword)) || null;
+    resultText = texts.find((text) => text.includes(keyword)) || null;
   } else {
     // Return the first instruction text (most common case)
-    return texts.length > 0 ? texts[0] : null;
+    resultText = texts.length > 0 ? texts[0] : null;
   }
+
+  return { text: resultText, space: spaceValue };
 };
 
 const extractBookmarkFromInstr = (instr) => {
@@ -111,7 +124,7 @@ const getTextFromRun = (run) => {
  */
 const getStyleId = (pNode) => {
   if (!pNode?.elements) return null;
-  
+
   const pPr = pNode.elements.find((el) => el.name === 'w:pPr');
   const pStyleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
   return pStyleTag?.attributes?.['w:val'] || null;
@@ -122,11 +135,11 @@ const getStyleId = (pNode) => {
  */
 const findFieldCharIndices = (elements) => {
   const indices = { begin: -1, separate: -1, end: -1 };
-  
+
   for (let i = 0; i < elements.length; i++) {
     const r = elements[i];
     if (!r?.elements) continue;
-    
+
     for (const el of r.elements) {
       if (el.name === 'w:fldChar') {
         const type = el.attributes?.['w:fldCharType'];
@@ -136,7 +149,7 @@ const findFieldCharIndices = (elements) => {
       }
     }
   }
-  
+
   return indices;
 };
 
@@ -152,7 +165,8 @@ const parseTocEntry = (pNode, params) => {
   const sectionRuns = beginIdx > 0 ? elements.slice(0, beginIdx) : [];
 
   // Runs containing cached page number are between separate and end
-  const pageNumberRuns = separateIdx > -1 ? elements.slice(separateIdx + 1, endIdx > -1 ? endIdx : elements.length) : [];
+  const pageNumberRuns =
+    separateIdx > -1 ? elements.slice(separateIdx + 1, endIdx > -1 ? endIdx : elements.length) : [];
 
   // Process title runs through standard run handling to preserve styling
   let titleContent = [];
@@ -190,8 +204,8 @@ const parseTocEntry = (pNode, params) => {
   }
 
   // Build hyperlink mark applied to all nodes
-  const instrText = getInstrText(pNode);
-  const bookmark = extractBookmarkFromInstr(instrText);
+  const instrData = getInstrText(pNode);
+  const bookmark = extractBookmarkFromInstr(instrData.text);
   const linkMark = bookmark ? { type: 'link', attrs: { href: `#${bookmark}` } } : null;
 
   if (linkMark) {
@@ -214,13 +228,13 @@ const parseTocEntry = (pNode, params) => {
 
   const content = [...titleContent];
   // Filter out any existing tab nodes from titleContent to ensure we have only one tab
-  const filteredContent = content.filter(node => node.type !== 'tab');
-  
+  const filteredContent = content.filter((node) => node.type !== 'tab');
+
   // Ensure a tab separator between title and page number
   filteredContent.push({ type: 'tab' });
   if (pageNumNode) filteredContent.push(pageNumNode);
 
-  return { content: filteredContent, styleId };
+  return { content: filteredContent, styleId, space: instrData.space };
 };
 
 const isTocStartParagraph = (node) => {
@@ -237,17 +251,7 @@ const isTocEntryParagraph = (node) => {
  * @type {import("docxImporter").NodeHandler}
  */
 export const handleTocNode = (params) => {
-  const {
-    nodes,
-    docx,
-    nodeListHandler,
-    insideTrackChange,
-    converter,
-    editor,
-    filename,
-    parentStyleId,
-    lists,
-  } = params;
+  const { nodes, docx, nodeListHandler, insideTrackChange, converter, editor, filename, parentStyleId, lists } = params;
 
   if (!nodes || !nodes.length) return { nodes: [], consumed: 0 };
 
@@ -260,7 +264,7 @@ export const handleTocNode = (params) => {
   let wrapperSeparateReached = false;
 
   // Cache the wrapper instruction to avoid repeated calls
-  const wrapperInstruction = getInstrText(firstNode);
+  const wrapperInstrData = getInstrText(firstNode);
 
   while (consumed < nodes.length) {
     const current = nodes[consumed];
@@ -296,7 +300,10 @@ export const handleTocNode = (params) => {
         const wrapperNode = {
           type: 'toc-wrapper',
           content: tocEntries,
-          attrs: { instruction: wrapperInstruction },
+          attrs: {
+            instruction: wrapperInstrData.text,
+            space: wrapperInstrData.space,
+          },
         };
 
         const resultNodes = [wrapperNode, ...footerNodes];
@@ -304,7 +311,11 @@ export const handleTocNode = (params) => {
       }
 
       if (isEntry) {
-        const { content: entryContent, styleId } = parseTocEntry(current, {
+        const {
+          content: entryContent,
+          styleId,
+          space,
+        } = parseTocEntry(current, {
           docx,
           nodeListHandler,
           insideTrackChange,
@@ -314,11 +325,11 @@ export const handleTocNode = (params) => {
           parentStyleId,
           lists,
         });
-        const instruction = getInstrText(current);
-        const attrs = { instruction };
+        const instrData = getInstrText(current);
+        const attrs = { instruction: instrData.text };
         if (styleId) attrs.styleId = styleId;
+        if (space) attrs.space = space;
         tocEntries.push({ type: 'toc-entry', content: entryContent, attrs });
-
       }
 
       consumed += 1;
@@ -333,7 +344,10 @@ export const handleTocNode = (params) => {
   const wrapperNode = {
     type: 'toc-wrapper',
     content: tocEntries,
-    attrs: { instruction: wrapperInstruction },
+    attrs: {
+      instruction: wrapperInstrData.text,
+      space: wrapperInstrData.space,
+    },
   };
   return { nodes: [wrapperNode], consumed };
 };
@@ -345,4 +359,3 @@ export const tocNodeHandlerEntity = {
   handlerName: 'tocNodeHandler',
   handler: handleTocNode,
 };
-

@@ -2663,7 +2663,7 @@ function translateStructuredContent(params) {
 
 function translateTocWrapper(params) {
   const { node } = params;
-  const { instruction } = node.attrs;
+  const { instruction, space } = node.attrs;
 
   const header = {
     name: 'w:p',
@@ -2690,6 +2690,7 @@ function translateTocWrapper(params) {
         elements: [
           {
             name: 'w:instrText',
+            attributes: space ? { 'xml:space': space } : {},
             elements: [
               {
                 type: 'text',
@@ -2737,17 +2738,38 @@ function translateTocWrapper(params) {
 
 function translateTocEntry(params) {
   const { node } = params;
-  const { instruction } = node.attrs;
+  const { instruction, space } = node.attrs;
 
   const translatedChildren = translateChildNodes(params);
   if (!translatedChildren.length || !translatedChildren[0].elements) {
     return null;
   }
 
-  const pPr = translatedChildren[0].elements.find((e) => e.name === 'w:pPr') || { name: 'w:pPr', elements: [] };
+  // Determine or create paragraph properties node
+  let pPr = translatedChildren[0].elements.find((e) => e.name === 'w:pPr');
+  if (!pPr) {
+    pPr = { name: 'w:pPr', elements: [] };
+  }
+
+  // Ensure the TOC paragraph style (e.g. TOC1, TOC2) is preserved
+  const { styleId } = node.attrs || {};
+  const tocStyle = styleId || 'TOC1';
+  if (tocStyle) {
+    const hasPStyle = pPr.elements?.some((e) => e.name === 'w:pStyle');
+    if (!hasPStyle) {
+      if (!pPr.elements) pPr.elements = [];
+      pPr.elements.unshift({ name: 'w:pStyle', attributes: { 'w:val': tocStyle } });
+    }
+  }
+
   const contentRuns = translatedChildren[0].elements.filter((e) => e.name !== 'w:pPr');
 
   const pageRefField = [
+    // Eventually we should store the tab properties and add them here
+    {
+      name: 'w:r',
+      elements: [{ name: 'w:tab' }],
+    },
     {
       name: 'w:r',
       elements: [
@@ -2766,6 +2788,7 @@ function translateTocEntry(params) {
       elements: [
         {
           name: 'w:instrText',
+          attributes: space ? { 'xml:space': space } : {},
           elements: [{ type: 'text', text: instruction }],
         },
       ],
@@ -2784,7 +2807,7 @@ function translateTocEntry(params) {
     //   name: 'w:r',
     //   elements: [{
     //     name: 'w:t',
-    //     elements: [{ type: 'text', text: instruction }],
+    //     elements: [{ type: 'text', text: '' }],
     //   }],
     // },
     {
@@ -2798,6 +2821,7 @@ function translateTocEntry(params) {
     },
   ];
 
+  console.log('pageRefField', pageRefField);
   return {
     name: 'w:p',
     elements: [pPr, ...contentRuns, ...pageRefField],
