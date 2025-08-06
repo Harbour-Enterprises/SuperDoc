@@ -527,10 +527,12 @@ export const getListItemStyleDefinitions = ({ styleId, node, numId, level, edito
 
   const numDefinition = getDefinitionForLevel(abstractDefinition, level);
   const numDefPpr = numDefinition?.elements.find((el) => el.name === 'w:pPr');
+  const numLvlJs = numDefinition?.elements.find((el) => el.name === 'w:lvlJc');
 
   return {
     stylePpr,
     numDefPpr,
+    numLvlJs,
   };
 };
 
