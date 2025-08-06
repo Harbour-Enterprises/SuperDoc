@@ -12,6 +12,7 @@ import {
   prepareCommentsXmlFilesForExport,
 } from './v2/exporter/commentsExporter.js';
 import { FOOTER_RELATIONSHIP_TYPE, HEADER_RELATIONSHIP_TYPE, HYPERLINK_RELATIONSHIP_TYPE } from './constants.js';
+import { DocxHelpers } from './docx-helpers/index.js';
 
 class SuperConverter {
   static allowedElements = Object.freeze({
@@ -40,10 +41,10 @@ class SuperConverter {
   });
 
   static markTypes = [
-    { name: 'w:b', type: 'bold' },
-    { name: 'w:bCs', type: 'bold' },
+    { name: 'w:b', type: 'bold', property: 'value' },
+    // { name: 'w:bCs', type: 'bold' },
     { name: 'w:i', type: 'italic' },
-    { name: 'w:iCs', type: 'italic' },
+    // { name: 'w:iCs', type: 'italic' },
     { name: 'w:u', type: 'underline', mark: 'underline', property: 'underlineType' },
     { name: 'w:strike', type: 'strike', mark: 'strike' },
     { name: 'w:color', type: 'color', mark: 'textStyle', property: 'color' },
@@ -56,6 +57,7 @@ class SuperConverter {
     { name: 'link', type: 'link', mark: 'link', property: 'href' },
     { name: 'w:highlight', type: 'highlight', mark: 'highlight', property: 'color' },
     { name: 'w:shd', type: 'highlight', mark: 'highlight', property: 'color' },
+    { name: 'w:caps', type: 'textTransform', mark: 'textStyle', property: 'textTransform' },
   ];
 
   static propertyTypes = Object.freeze({
@@ -130,6 +132,14 @@ class SuperConverter {
 
     // Parse the initial XML, if provided
     if (this.docx.length || this.xml) this.parseFromXml();
+  }
+
+  /**
+   * Get the DocxHelpers object that contains utility functions for working with docx files.
+   * @returns {import('./docx-helpers/docx-helpers.js').DocxHelpers} The DocxHelpers object.
+   */
+  get docxHelpers() {
+    return DocxHelpers;
   }
 
   parseFromXml() {
@@ -693,7 +703,7 @@ class SuperConverter {
   async #exportProcessMediaFiles(media, editor) {
     const processedData = {};
     for (const filePath in media) {
-      if (typeof media[filePath] !== 'string') return;
+      if (typeof media[filePath] !== 'string') continue;
       const name = filePath.split('/').pop();
       processedData[name] = await getArrayBufferFromUrl(media[filePath], editor.options.isHeadless);
     }

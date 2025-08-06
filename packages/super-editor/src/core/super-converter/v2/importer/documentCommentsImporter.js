@@ -12,7 +12,7 @@ import { defaultNodeListHandler } from './docxImporter';
  * @param {Editor} param0.editor The editor instance
  * @returns {Array} The parsed comments
  */
-export function importCommentData({ docx }) {
+export function importCommentData({ docx, editor, converter }) {
   const nodeListHandler = defaultNodeListHandler();
   const comments = docx['word/comments.xml'];
   if (!comments) return;
@@ -47,6 +47,8 @@ export function importCommentData({ docx }) {
       nodes: el.elements,
       nodeListHandler,
       docx,
+      editor,
+      converter,
     });
 
     const { attrs } = parsedComment[0];

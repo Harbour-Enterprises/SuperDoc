@@ -77,16 +77,20 @@ class DocxZipper {
   }
 
   getFileExtension(fileName) {
-    return fileName.split('.').pop();
+    const fileSplit = fileName.split('.');
+    if (fileSplit.length < 2) return null;
+    return fileSplit[fileSplit.length - 1];
   }
 
   /**
    * Update [Content_Types].xml with extensions of new Image annotations
    */
   async updateContentTypes(docx, media, fromJson) {
-    const newMediaTypes = Object.keys(media).map((name) => {
-      return this.getFileExtension(name);
-    });
+    const newMediaTypes = Object.keys(media)
+      .map((name) => {
+        return this.getFileExtension(name);
+      })
+      .filter(Boolean);
 
     const contentTypesPath = '[Content_Types].xml';
     let contentTypesXml;

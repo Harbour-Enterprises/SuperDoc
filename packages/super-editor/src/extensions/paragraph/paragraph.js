@@ -110,14 +110,6 @@ export const Paragraph = Node.create({
           return { style };
         },
       },
-      textCase: {
-        renderDOM: (attrs) => {
-          if (!attrs.textCase) return {};
-          return {
-            style: `text-transform: ${attrs.textCase}`,
-          }
-        },
-      },
     };
   },
 

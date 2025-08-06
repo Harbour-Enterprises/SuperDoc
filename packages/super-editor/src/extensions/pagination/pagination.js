@@ -10,7 +10,7 @@ import {
 } from './pagination-helpers.js';
 import { CollaborationPluginKey } from '@extensions/collaboration/collaboration.js';
 import { ImagePlaceholderPluginKey } from '@extensions/image/imageHelpers/imagePlaceholderPlugin.js';
-import { LinkedStylesPluginKey } from '@extensions/linked-styles/linked-styles.js';
+import { LinkedStylesPluginKey } from '@extensions/linked-styles/index.js';
 import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestToPos.js';
 import { generateDocxRandomId } from '../../core/helpers/index.js';
 import { computePosition, autoUpdate, hide } from '@floating-ui/dom';

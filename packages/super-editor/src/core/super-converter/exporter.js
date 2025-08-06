@@ -205,6 +205,24 @@ export function translateParagraphNode(params) {
 }
 
 /**
+ * Normalize line height values
+ * This function converts line height values from strings with percentage to a decimal value.
+ * For example, "150%" becomes 1.5.
+ * If the value is not a valid number, it returns null.
+ * @param {string|number} value The line height value to normalize
+ * @return {number|null} The normalized line height value or null if invalid
+ */
+function normalizeLineHeight(value) {
+  if (typeof value === 'string' && value.trim().endsWith('%')) {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed / 100 : null;
+  }
+
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
  * Generate the w:pPr props for a paragraph node
  *
  * @param {SchemaNode} node
@@ -228,10 +246,13 @@ function generateParagraphProperties(node) {
     if (lineSpaceBefore >= 0) attributes['w:before'] = pixelsToTwips(lineSpaceBefore);
     if (lineSpaceAfter >= 0) attributes['w:after'] = pixelsToTwips(lineSpaceAfter);
 
-    if (lineRule === 'exact') {
-      if (lineHeight) attributes['w:line'] = ptToTwips(parseFloat(lineHeight));
-    } else {
-      if (lineHeight) attributes['w:line'] = linesToTwips(lineHeight);
+    const normalized = normalizeLineHeight(lineHeight);
+    if (normalized !== null) {
+      if (lineRule === 'exact') {
+        attributes['w:line'] = ptToTwips(normalized);
+      } else {
+        attributes['w:line'] = linesToTwips(normalized);
+      }
     }
 
     attributes['w:lineRule'] = lineRule || 'auto';
@@ -796,7 +817,6 @@ function translateList(params) {
    *  1. Final doc (keep paragraph field content inside list item)
    *  2. Not final doc (keep w:sdt node, process its content)
    */
-  let nodesToFlatten = [];
   if (Array.isArray(outputNode) && params.isFinalDoc) {
     const parsedElements = [];
     outputNode?.forEach((node, index) => {
@@ -819,16 +839,24 @@ function translateList(params) {
   }
 
   /** Case 2: Process w:sdt content */
+  let nodesToFlatten = [];
   const sdtNodes = outputNode.elements?.filter((n) => n.name === 'w:sdt');
   if (sdtNodes && sdtNodes.length > 0) {
     nodesToFlatten = sdtNodes;
     nodesToFlatten?.forEach((sdtNode) => {
       const sdtContent = sdtNode.elements.find((n) => n.name === 'w:sdtContent');
-      if (sdtContent && sdtContent.elements) {
+      const foundRun = sdtContent.elements?.find((el) => el.name === 'w:r'); // this is a regular text field.
+      if (sdtContent && sdtContent.elements && !foundRun) {
         const parsedElements = [];
         sdtContent.elements.forEach((element, index) => {
+          if (element.name === 'w:rPr' && element.elements?.length) {
+            parsedElements.push(element);
+          }
+
           const runs = element.elements?.filter((n) => n.name === 'w:r');
-          parsedElements.push(...runs);
+          if (runs && runs.length) {
+            parsedElements.push(...runs);
+          }
 
           if (element.name === 'w:p' && index < sdtContent.elements.length - 1) {
             parsedElements.push({
@@ -1307,15 +1335,15 @@ function generateTableProperties(node) {
   const elements = [];
 
   const { attrs } = node;
-  const { 
-    tableWidth, 
-    tableWidthType, 
-    tableStyleId, 
-    borders, 
-    tableIndent, 
-    tableLayout, 
-    tableCellSpacing, 
-    justification, 
+  const {
+    tableWidth,
+    tableWidthType,
+    tableStyleId,
+    borders,
+    tableIndent,
+    tableLayout,
+    tableCellSpacing,
+    justification,
   } = attrs;
 
   if (tableStyleId) {
@@ -1373,7 +1401,7 @@ function generateTableProperties(node) {
     };
     elements.push(justificationElement);
   }
-  
+
   return {
     name: 'w:tblPr',
     elements,
@@ -1437,7 +1465,7 @@ function generateTableGrid(node, params) {
 
   try {
     const pmNode = editorSchema.nodeFromJSON(node);
-    const cellMinWidth = 25;
+    const cellMinWidth = 10;
     const { colgroupValues } = createColGroup(pmNode, cellMinWidth);
 
     colgroup = colgroupValues;
@@ -1598,7 +1626,7 @@ function generateTableCellProperties(node) {
     const cellBordersElement = {
       name: 'w:tcBorders',
       elements: Object.entries(borders).map(([key, value]) => {
-        if (!value.size) {
+        if (!value.size || value.val === 'none') {
           return {
             name: `w:${key}`,
             attributes: {
@@ -1681,6 +1709,14 @@ function translateMark(mark) {
 
   switch (mark.type) {
     case 'bold':
+      if (attrs?.value) {
+        markElement.attributes['w:val'] = attrs.value;
+      } else {
+        delete markElement.attributes;
+      }
+      markElement.type = 'element';
+      break;
+
     case 'italic':
       delete markElement.attributes;
       markElement.type = 'element';
@@ -1719,6 +1755,15 @@ function translateMark(mark) {
 
     case 'textIndent':
       markElement.attributes['w:firstline'] = inchesToTwips(attrs.textIndent);
+      break;
+
+    case 'textTransform':
+      if (attrs?.textTransform === 'none') {
+        markElement.attributes['w:val'] = '0';
+      } else {
+        delete markElement.attributes;
+      }
+      markElement.type = 'element';
       break;
 
     case 'lineHeight':
@@ -1823,7 +1868,6 @@ function translateImageNode(params, imageSize) {
     }
 
     const imageUrl = `media/${imageName}_${attrs.hash}.${type}`;
-
     imageId = addNewImageRelationship(params, imageUrl);
     params.media[`${imageName}_${attrs.hash}.${type}`] = src;
   }
@@ -2096,7 +2140,7 @@ function translateImageNode(params, imageSize) {
     },
     [],
   );
-  
+
   return textNode;
 }
 
@@ -2279,6 +2323,10 @@ function translateFieldAnnotation(params) {
   let processedNode;
   let sdtContentElements;
 
+  if ((attrs.type === 'image' || attrs.type === 'signature') && !attrs.hash) {
+    attrs.hash = generateDocxRandomId(4);
+  }
+
   if (isFinalDoc) {
     return annotationHandler(params);
   } else {
@@ -2304,6 +2352,7 @@ function translateFieldAnnotation(params) {
     fieldFontSize: attrs.fontSize,
     fieldTextColor: attrs.textColor,
     fieldTextHighlight: attrs.textHighlight,
+    hash: attrs.hash,
   };
   const annotationAttrsJson = JSON.stringify(annotationAttrs);
 

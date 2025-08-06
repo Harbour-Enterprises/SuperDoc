@@ -74,11 +74,11 @@ function handleListNodes(params, node) {
   if (!Object.keys(numberingDefinition).length) {
     const { definition, ilvl } = getNodeNumberingDefinitionByStyle(node, docx);
     if (definition) numberingDefinition = definition;
-    if (Number.isNaN(iLvl)) iLvl = ilvl;    
+    if (Number.isNaN(iLvl)) iLvl = ilvl;
   }
 
   const { listType, listOrderingType, listrPrs, listpPrs, start, lvlText, lvlJc, customFormat } = numberingDefinition;
-      
+
   // Fallback if the list definition is not found or is invalid
   // See invalid-list-def-fallback.docx for example and
   if (!listType) {
@@ -201,7 +201,7 @@ export function testForList(node, docx) {
   let outlinelvl;
 
   const styleId = paragraphStyle?.attributes['w:val'];
-  
+
   const styleTag = getStyleTagFromStyleId(styleId, docx);
   if (styleTag && !numId) {
     const { numPr: numPrRecursve, type } = getNumPrRecursive({ node, styleId, docx });
@@ -544,7 +544,7 @@ export function getNodeNumberingDefinitionByStyle(item, docx) {
   const styleId = styleTag?.attributes['w:val'];
   const styleDef = getStyleTagFromStyleId(styleId, docx);
   if (!styleDef) return {};
-  
+
   const pPr = styleDef.elements?.find((el) => el.name === 'w:pPr');
   const numPr = pPr?.elements?.find((el) => el.name === 'w:numPr');
   const numIdTag = numPr?.elements?.find((el) => el.name === 'w:numId');
@@ -573,10 +573,7 @@ function getAbstractNumIdByNumId(numId, docx) {
   const listData = elements[0];
   const numberingElements = listData.elements || [];
 
-  const numDef = numberingElements.find((el) => 
-    el.name === 'w:num' && 
-    el.attributes?.['w:numId'] === numId
-  );
+  const numDef = numberingElements.find((el) => el.name === 'w:num' && el.attributes?.['w:numId'] === numId);
 
   if (!numDef) return null;
 
@@ -592,20 +589,19 @@ function getLevelDataFromAbstractNum(abstractNumId, styleId, docx) {
   const listData = elements[0];
   const numberingElements = listData.elements || [];
 
-  const abstractNum = numberingElements.find((el) => 
-    el.name === 'w:abstractNum' && 
-    el.attributes?.['w:abstractNumId'] === abstractNumId
+  const abstractNum = numberingElements.find(
+    (el) => el.name === 'w:abstractNum' && el.attributes?.['w:abstractNumId'] === abstractNumId,
   );
 
   if (!abstractNum) return null;
 
-  const levels = abstractNum.elements?.filter(el => el.name === 'w:lvl') || [];
+  const levels = abstractNum.elements?.filter((el) => el.name === 'w:lvl') || [];
   for (const level of levels) {
     const pStyle = level.elements?.find((el) => el.name === 'w:pStyle');
     if (pStyle?.attributes?.['w:val'] === styleId) {
       const found = {
         level,
-        ilvl: Number(level.attributes?.['w:ilvl']) || 0
+        ilvl: Number(level.attributes?.['w:ilvl']) || 0,
       };
       return found;
     }

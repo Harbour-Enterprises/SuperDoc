@@ -17,24 +17,70 @@ import { findParentNode } from '@helpers/index.js';
  * @param {Editor} param0.editor - The editor instance where the list definition will be added.
  * @returns {Object} The new abstract and num definitions.
  */
-export const generateNewListDefinition = ({ numId, listType, editor }) => {
+export const generateNewListDefinition = ({ numId, listType, level, start, text, fmt, editor }) => {
   // Generate a new numId to add to numbering.xml
   if (typeof listType === 'string') listType = editor.schema.nodes[listType];
 
   const definition = listType.name === 'orderedList' ? baseOrderedListDef : baseBulletList;
   const numbering = editor.converter.numbering;
   const newNumbering = { ...numbering };
+  let skipAddingNewAbstract = false;
 
   // Generate the new abstractNum definition
-  const newAbstractId = getNewListId(editor, 'abstracts');
-  const newAbstractDef = {
-    ...definition,
-    attributes: {
-      ...definition.attributes,
-      'w:abstractNumId': String(newAbstractId),
-    },
-  };
-  newNumbering.abstracts[newAbstractId] = newAbstractDef;
+  let newAbstractId = getNewListId(editor, 'abstracts');
+  let newAbstractDef = JSON.parse(
+    JSON.stringify({
+      ...definition,
+      attributes: {
+        ...definition.attributes,
+        'w:abstractNumId': String(newAbstractId),
+      },
+    }),
+  );
+
+  // Generate the new abstractNum definition for copy/paste lists
+  if (level && start && text && fmt) {
+    if (newNumbering.definitions[numId]) {
+      const abstractId = newNumbering.definitions[numId]?.elements[0]?.attributes['w:val'];
+      newAbstractId = abstractId;
+      const abstract = editor.converter.numbering.abstracts[abstractId];
+      newAbstractDef = { ...abstract };
+      skipAddingNewAbstract = true;
+    }
+
+    const levelDefIndex = newAbstractDef.elements.findIndex(
+      (el) => el.name === 'w:lvl' && el.attributes['w:ilvl'] === level,
+    );
+    const levelProps = newAbstractDef.elements[levelDefIndex];
+    const elToFilter = ['w:numFmt', 'w:lvlText', 'w:start'];
+    const oldElements = levelProps.elements.filter((el) => !elToFilter.includes(el.name));
+    levelProps.elements = [
+      ...oldElements,
+      {
+        type: 'element',
+        name: 'w:start',
+        attributes: {
+          'w:val': start,
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:numFmt',
+        attributes: {
+          'w:val': fmt,
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:lvlText',
+        attributes: {
+          'w:val': text,
+        },
+      },
+    ];
+  }
+
+  if (!skipAddingNewAbstract) newNumbering.abstracts[newAbstractId] = newAbstractDef;
 
   // Generate the new numId definition
   const newNumDef = getBasicNumIdTag(numId, newAbstractId);
@@ -110,42 +156,114 @@ export const getNewListId = (editor, grouping = 'definitions') => {
 /**
  * Get the details of a list definition based on the numId and level.
  * This function retrieves the start value, numbering format, level text, and custom format
- * for a given list definition.
- * @param {Object} param0
- * @param {number} param0.numId - The numId of the list definition.
- * @param {number} param0.level - The level of the list definition.
- * @param {Editor} param0.editor - The editor instance where the list definition is stored.
- * @returns {Object} An object containing the start value, numbering format, level text, and custom format.
- * @property {number} start - The starting number for the list.
- * @property {string} numFmt - The numbering format (e.g., decimal, lowerRoman).
- * @property {string} lvlText - The text format for the list level.
- * @property {string} listNumberingType - The type of numbering used in the list (e.g., decimal, lowerRoman).
- * @property {string} customFormat - The custom format for the list, if applicable.
+ * for a given list definition. It handles style link recursion and generates new definitions when needed.
+ *
+ * @param {Object} params - The parameters object
+ * @param {number} params.numId - The numId of the list definition
+ * @param {number} params.level - The level of the list definition (0-based)
+ * @param {string} [params.listType] - The type of the list (e.g., 'orderedList', 'bulletList'). Required when generating new definitions
+ * @param {Object} params.editor - The editor instance containing converter and numbering data
+ * @param {number} [params.tries=0] - The number of recursion attempts to avoid infinite loops (max 1)
+ *
+ * @returns {Object} The list definition details
+ * @returns {string|null} returns.start - The starting number/value for the list level
+ * @returns {string|null} returns.numFmt - The numbering format (e.g., 'decimal', 'lowerRoman', 'bullet')
+ * @returns {string|null} returns.lvlText - The text template for the list level (e.g., '%1.', '•')
+ * @returns {string|null} returns.listNumberingType - The numbering type (same as numFmt for compatibility)
+ * @returns {string|undefined} returns.customFormat - The custom format string when numFmt is 'custom'
+ * @returns {Object|null} returns.abstract - The abstract numbering definition object
+ * @returns {string|undefined} returns.abstractId - The ID of the abstract numbering definition
  */
-export const getListDefinitionDetails = ({ numId, level, listType, editor }) => {
+export const getListDefinitionDetails = ({ numId, level, listType, editor, tries = 0 }) => {
   const { definitions, abstracts } = editor.converter.numbering;
   const numDef = definitions[numId];
+
+  // Generate new definition if needed
   if (!numDef && listType) {
-    generateNewListDefinition({ numId, listType, editor });
+    ListHelpers.generateNewListDefinition({ numId, listType, editor });
   }
+
+  // Get abstract definition
   const abstractId = definitions[numId]?.elements?.find((item) => item.name === 'w:abstractNumId')?.attributes?.[
     'w:val'
   ];
+
   const abstract = abstracts[abstractId];
+  if (!abstract) {
+    return {
+      start: null,
+      numFmt: null,
+      lvlText: null,
+      listNumberingType: null,
+      customFormat: null,
+      abstract: null,
+      abstractId,
+    };
+  }
 
-  const listDefinition = abstract?.elements?.find(
-    (item) => item.name === 'w:lvl' && item.attributes['w:ilvl'] == level,
+  // Handle style link recursion (max 1 retry)
+  const numStyleLink = abstract.elements?.find((item) => item.name === 'w:numStyleLink');
+  const styleId = numStyleLink?.attributes?.['w:val'];
+
+  if (styleId && tries < 1) {
+    const styleDefinition = getStyleTagFromStyleId(styleId, editor.converter.convertedXml);
+    const linkedNumId = styleDefinition?.elements
+      ?.find((el) => el.name === 'w:pPr')
+      ?.elements?.find((el) => el.name === 'w:numPr')
+      ?.elements?.find((el) => el.name === 'w:numId')?.attributes?.['w:val'];
+
+    if (linkedNumId) {
+      return getListDefinitionDetails({
+        numId: Number(linkedNumId),
+        level,
+        listType,
+        editor,
+        tries: tries + 1,
+      });
+    }
+  }
+
+  // Find level definition
+  const listDefinition = abstract.elements?.find(
+    (item) => item.name === 'w:lvl' && item.attributes?.['w:ilvl'] == level,
   );
-  const start = listDefinition?.elements?.find((item) => item.name === 'w:start')?.attributes['w:val'];
-  const numFmtTag = listDefinition?.elements?.find((item) => item.name === 'w:numFmt');
-  const numFmt = numFmtTag?.attributes['w:val'];
-  const lvlText = listDefinition?.elements?.find((item) => item.name === 'w:lvlText')?.attributes['w:val'];
-  const listNumberingType = listDefinition?.elements?.find((item) => item.name === 'w:numFmt')?.attributes['w:val'];
 
-  let customFormat;
-  if (numFmt === 'custom') customFormat = numFmtTag?.attributes?.['w:format'];
+  if (!listDefinition) {
+    return {
+      start: null,
+      numFmt: null,
+      lvlText: null,
+      listNumberingType: null,
+      customFormat: null,
+      abstract,
+      abstractId,
+    };
+  }
 
-  return { start, numFmt, lvlText, listNumberingType, customFormat, abstract, abstractId };
+  // Extract level properties safely
+  const findElement = (name) => listDefinition.elements?.find((item) => item.name === name);
+
+  const startElement = findElement('w:start');
+  const numFmtElement = findElement('w:numFmt');
+  const lvlTextElement = findElement('w:lvlText');
+
+  const start = startElement?.attributes?.['w:val'];
+  const numFmt = numFmtElement?.attributes?.['w:val'];
+  const lvlText = lvlTextElement?.attributes?.['w:val'];
+  const listNumberingType = numFmt;
+
+  // Handle custom format
+  const customFormat = numFmt === 'custom' ? numFmtElement?.attributes?.['w:format'] : undefined;
+
+  return {
+    start,
+    numFmt,
+    lvlText,
+    listNumberingType,
+    customFormat,
+    abstract,
+    abstractId,
+  };
 };
 
 /**

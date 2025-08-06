@@ -33,6 +33,14 @@ function getFocusState(state) {
   return CustomSelectionPluginKey.getState(state);
 }
 
+const isToolbarInput = (target) => {
+  return target?.closest('.button-text-input') || target?.classList?.contains('button-text-input');
+};
+
+const isToolbarButton = (target) => {
+  return target?.closest('.toolbar-button') || target?.classList?.contains('toolbar-button');
+};
+
 export const CustomSelection = Extension.create({
   name: 'customSelection',
   addPmPlugins() {
@@ -40,9 +48,17 @@ export const CustomSelection = Extension.create({
     const customSelectionPlugin = new Plugin({
       key: CustomSelectionPluginKey,
       state: {
-        init: () => false,
+        init: () => ({
+          focused: false,
+          preservedSelection: null,
+          showVisualSelection: false,
+        }),
         apply: (tr, value) => {
-          return getFocusMeta(tr) ?? value;
+          const meta = getFocusMeta(tr);
+          if (meta !== undefined) {
+            return { ...value, ...meta };
+          }
+          return value;
         },
       },
       view: () => {
@@ -50,58 +66,193 @@ export const CustomSelection = Extension.create({
 
         return {
           destroy: () => {
-            document?.removeEventListener('mouseout', handleClickOutside);
+            document?.removeEventListener('mousedown', handleClickOutside);
           },
         };
       },
       props: {
         handleDOMEvents: {
-          mousedown: (view) => {
+          contextmenu: (view, event) => {
+            // Prevent context menu from removing focus/selection
+            event.preventDefault();
             const { selection } = view.state;
-            const isToolbarButton = this.editor.options.focusTarget?.closest('.toolbar-button');
-
-            if (!isToolbarButton) {
-              view.dispatch(setFocusMeta(view.state.tr, false));
-            }
             if (!selection.empty) {
-              this.editor.setOptions({
-                lastSelection: view.state.selection,
-              });
-              const clearSelectionTr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 0));
+              view.dispatch(
+                setFocusMeta(view.state.tr, {
+                  focused: true,
+                  preservedSelection: selection,
+                  showVisualSelection: true,
+                }),
+              );
+            }
 
-              view.dispatch(clearSelectionTr);
+            // Re-focus the editor to maintain selection visibility
+            setTimeout(() => {
+              view.focus();
+            }, 0);
+
+            return false;
+          },
+
+          mousedown: (view, event) => {
+            // Handle right clicks - prevent focus loss
+            if (event.button === 2) {
+              event.preventDefault(); // Prevent default right-click behavior
+              const { selection } = view.state;
+              if (!selection.empty) {
+                // Ensure selection stays visible for right-click/context menu
+                view.dispatch(
+                  setFocusMeta(view.state.tr, {
+                    focused: true,
+                    preservedSelection: selection,
+                    showVisualSelection: true,
+                  }),
+                );
+
+                // Store selection in editor options too
+                this.editor.setOptions({
+                  lastSelection: selection,
+                  preservedSelection: selection,
+                });
+              }
+              return false;
+            }
+
+            const { selection } = view.state;
+            const target = event.target;
+            const isToolbarBtn = isToolbarButton(target);
+            const isToolbarInp = isToolbarInput(target);
+
+            // Store focus target for other components
+            this.editor.setOptions({
+              focusTarget: target,
+            });
+
+            // Handle toolbar input clicks - preserve selection
+            if (isToolbarInp && !selection.empty) {
+              // Store the selection and show visual selection
+              view.dispatch(
+                setFocusMeta(view.state.tr, {
+                  focused: true,
+                  preservedSelection: selection,
+                  showVisualSelection: true,
+                }),
+              );
+
+              // Store in editor options as well for commands
+              this.editor.setOptions({
+                lastSelection: selection,
+                preservedSelection: selection,
+              });
+              return false; // Don't prevent the input from getting focus
+            }
+
+            // Handle toolbar button clicks
+            if (isToolbarBtn && !isToolbarInp) {
+              if (!selection.empty) {
+                this.editor.setOptions({
+                  lastSelection: selection,
+                });
+                // Keep selection visible for toolbar buttons
+                view.dispatch(
+                  setFocusMeta(view.state.tr, {
+                    focused: true,
+                    preservedSelection: selection,
+                    showVisualSelection: true,
+                  }),
+                );
+              }
+              return false;
+            }
+
+            // Handle clicks outside toolbar
+            if (!isToolbarBtn && !isToolbarInp) {
+              // Clear preserved selection and visual selection
+              view.dispatch(
+                setFocusMeta(view.state.tr, {
+                  focused: false,
+                  preservedSelection: null,
+                  showVisualSelection: false,
+                }),
+              );
+
+              // Clear selection if clicking outside editor
+              if (!selection.empty && !this.editor.options.element?.contains(target)) {
+                this.editor.setOptions({
+                  lastSelection: selection,
+                });
+                const clearSelectionTr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 0));
+                view.dispatch(clearSelectionTr);
+              }
             }
           },
+
           focus: (view) => {
-            const isToolbarButton = this.editor.options.focusTarget?.closest('.toolbar-button');
+            const target = this.editor.options.focusTarget;
+            const isToolbarBtn = isToolbarButton(target);
+            const isToolbarInp = isToolbarInput(target);
 
-            if (isToolbarButton) {
-              return;
+            // Don't change state if toolbar element caused the focus
+            if (!isToolbarBtn && !isToolbarInp) {
+              view.dispatch(
+                setFocusMeta(view.state.tr, {
+                  focused: false,
+                  preservedSelection: null,
+                  showVisualSelection: false,
+                }),
+              );
             }
-
-            view.dispatch(setFocusMeta(view.state.tr, false));
           },
 
           blur: (view) => {
-            const isToolbarButton = this.editor.options.focusTarget?.closest('.toolbar-button');
+            const target = this.editor.options.focusTarget;
+            const isToolbarBtn = isToolbarButton(target);
+            const isToolbarInp = isToolbarInput(target);
+            const state = getFocusState(view.state);
 
-            if (isToolbarButton) {
-              view.dispatch(setFocusMeta(view.state.tr, true));
-              return;
+            if (isToolbarBtn || isToolbarInp) {
+              // Maintain visual selection when toolbar elements are focused
+              view.dispatch(
+                setFocusMeta(view.state.tr, {
+                  focused: true,
+                  preservedSelection: state.preservedSelection || view.state.selection,
+                  showVisualSelection: true,
+                }),
+              );
+            } else {
+              // Clear everything when focus goes elsewhere
+              view.dispatch(
+                setFocusMeta(view.state.tr, {
+                  focused: false,
+                  preservedSelection: null,
+                  showVisualSelection: false,
+                }),
+              );
             }
-
-            view.dispatch(setFocusMeta(view.state.tr, false));
           },
         },
         decorations: (state) => {
           const { selection, doc } = state;
+          const focusState = getFocusState(state);
 
-          if (selection.empty || !getFocusState(state)) {
+          // Show visual selection if we have a preserved selection or current selection with focus
+          const shouldShowSelection =
+            focusState.showVisualSelection &&
+            (focusState.preservedSelection || (!selection.empty && focusState.focused));
+
+          if (!shouldShowSelection) {
+            return null;
+          }
+
+          // Use preserved selection if available, otherwise current selection
+          const targetSelection = focusState.preservedSelection || selection;
+
+          if (targetSelection.empty) {
             return null;
           }
 
           return DecorationSet.create(doc, [
-            Decoration.inline(selection.from, selection.to, {
+            Decoration.inline(targetSelection.from, targetSelection.to, {
               class: 'sd-custom-selection',
             }),
           ]);
@@ -110,5 +261,24 @@ export const CustomSelection = Extension.create({
     });
 
     return [customSelectionPlugin];
+  },
+
+  addCommands() {
+    return {
+      restorePreservedSelection:
+        () =>
+        ({ tr, state }) => {
+          const focusState = getFocusState(state);
+          if (focusState.preservedSelection) {
+            return tr.setSelection(focusState.preservedSelection);
+          }
+
+          const lastSelection = this.editor.options.lastSelection;
+          if (lastSelection) {
+            return tr.setSelection(lastSelection);
+          }
+          return tr;
+        },
+    };
   },
 });

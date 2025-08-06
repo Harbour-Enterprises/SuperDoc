@@ -7,7 +7,6 @@ export const undoInputRule =
       const plugin = plugins[i];
       let undoable;
 
-      // eslint-disable-next-line
       if (plugin.spec.isInputRules && (undoable = plugin.getState(state))) {
         if (dispatch) {
           const tr = state.tr;

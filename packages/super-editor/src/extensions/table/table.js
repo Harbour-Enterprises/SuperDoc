@@ -117,7 +117,7 @@ export const Table = Node.create({
             return { style: `margin: 0 auto` };
           }
           if (attrs.justification === 'right') {
-            return  { style: `margin-left: auto` };
+            return { style: `margin-left: auto` };
           }
 
           return {};

@@ -123,8 +123,20 @@ const setFocus = () => {
 };
 
 const handleClickOutside = (e) => {
-  if (e.target.classList.contains('n-dropdown-option-body__label')) return;
-  if (e.target.classList.contains('sd-editor-comment-highlight')) return;
+  const excludedClasses = [
+    'n-dropdown-option-body__label',
+    'sd-editor-comment-highlight',
+    'sd-editor-tracked-change-highlight',
+    'track-insert',
+    'track-insert-dec',
+    'track-delete',
+    'track-delete-dec',
+    'track-format',
+    'track-format-dec',
+  ];
+
+  if (excludedClasses.some((className) => e.target.classList.contains(className))) return;
+
   if (activeComment.value === props.comment.commentId) {
     floatingCommentsOffset.value = 0;
     emit('dialog-exit');

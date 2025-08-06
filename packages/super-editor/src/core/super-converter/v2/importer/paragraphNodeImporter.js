@@ -119,13 +119,6 @@ export const handleParagraphNode = (params) => {
     }
   }
 
-  if (docx) {
-    const { textCase } = getDefaultParagraphStyle(docx, styleId);
-    if (textCase) {
-      schemaNode.attrs.textCase = textCase;
-    }
-  }
-
   if (framePr && framePr.attributes['w:dropCap']) {
     schemaNode.attrs.dropcap = {
       type: framePr.attributes['w:dropCap'],
@@ -270,22 +263,11 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
   let pPrStyleIdSpacingTag = {};
   let pPrStyleIdIndentTag = {};
   let pPrStyleJc = {};
-  let textCase = null;
   if (styleId) {
     const stylesById = styles.elements[0].elements?.find(
       (el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId,
     );
     const pPrById = stylesById?.elements?.find((el) => el.name === 'w:pPr');
-
-    const basedOn = stylesById?.elements.find((el) => el.name === 'w:basedOn');
-    const baseStyles = styles.elements[0].elements?.find(
-      (el) => el.name === 'w:style' && el.attributes['w:styleId'] === basedOn?.attributes['w:val']
-    );
-    const rprBaseStyles = baseStyles?.elements?.find((el) => el.name === 'w:rPr');
-
-    const caps = rprBaseStyles?.elements?.find((el) => el.name === 'w:caps');
-    if (caps) textCase = 'uppercase';
-
     pPrStyleIdSpacingTag = pPrById?.elements?.find((el) => el.name === 'w:spacing') || {};
     pPrStyleIdIndentTag = pPrById?.elements?.find((el) => el.name === 'w:ind') || {};
     pPrStyleJc = pPrById?.elements?.find((el) => el.name === 'w:jc') || {};
@@ -300,19 +282,18 @@ const getDefaultParagraphStyle = (docx, styleId = '') => {
   const { attributes: pPrNormalIndentAttr } = pPrNormalIndentTag;
   const { attributes: pPrByIdIndentAttr } = pPrStyleIdIndentTag;
 
-  const spacingRest = isNormalAsDefault 
-    ? (pPrNormalSpacingAttr || pPrDefaultSpacingAttr)
-    : (pPrDefaultSpacingAttr || pPrNormalSpacingAttr);
+  const spacingRest = isNormalAsDefault
+    ? pPrNormalSpacingAttr || pPrDefaultSpacingAttr
+    : pPrDefaultSpacingAttr || pPrNormalSpacingAttr;
 
   const indentRest = isNormalAsDefault
-    ? (pPrNormalIndentAttr || pPrDefaultIndentAttr)
-    : (pPrDefaultIndentAttr || pPrNormalIndentAttr);
+    ? pPrNormalIndentAttr || pPrDefaultIndentAttr
+    : pPrDefaultIndentAttr || pPrNormalIndentAttr;
 
   return {
     spacing: pPrByIdSpacingAttr || spacingRest,
     indent: pPrByIdIndentAttr || indentRest,
     justify: pPrByIdJcAttr,
-    textCase,
   };
 };
 

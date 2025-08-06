@@ -9,7 +9,7 @@ import { startImageUpload, getFileOpener } from '../../extensions/image/imageHel
 import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { toolbarTexts } from './toolbarTexts.js';
-import { getQuickFormatList } from '@extensions/linked-styles/linked-styles.js';
+import { getQuickFormatList } from '@extensions/linked-styles/index.js';
 import { getAvailableColorOptions, makeColorOption, renderColorOptions } from './color-dropdown-helpers.js';
 import { isInTable } from '@helpers/isInTable.js';
 import { useToolbarItem } from '@components/toolbar/use-toolbar-item';

@@ -41,6 +41,7 @@ export const handleAnnotationNode = (params) => {
       fontSize: parsedAttrs.fieldFontSize,
       textColor: parsedAttrs.fieldTextColor,
       textHighlight: parsedAttrs.fieldTextHighlight,
+      hash: parsedAttrs.hash,
     };
     attrs = attrsFromJSON;
   } else {
@@ -51,9 +52,11 @@ export const handleAnnotationNode = (params) => {
 
   const { attrs: marksAsAttrs, marks } = parseAnnotationMarks(sdtContent);
   const allAttrs = { ...attrs, ...marksAsAttrs };
-  allAttrs.hash = generateDocxRandomId(4);
+  if (!allAttrs.hash) allAttrs.hash = generateDocxRandomId(4);
 
-  if (!attrs.fieldId || !attrs.displayLabel) {
+  // Some w:sdt nodes have attrs.fieldId (coming from GoogleDocs) so we need a secondary check
+  // Expecting fieldType if its a field annotation
+  if (!attrs.fieldId || !attrs.fieldType) {
     return { nodes: [], consumed: 0 };
   }
 

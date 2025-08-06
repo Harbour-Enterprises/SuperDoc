@@ -36,11 +36,22 @@ import {
 } from '@core/migrations/0.14-listsv2/listsv2migration.js';
 import { createLinkedChildEditor } from '@core/child-editor/index.js';
 import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
+import { SuperValidator } from '@core/super-validator/index.js';
 
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
  * @property {string} input_value The value to insert into the field
+ */
+
+/**
+ * A map of plugin names to their helper API objects.
+ * Each plugin defines its own helper methods.
+ *
+ * Example:
+ * editor.helpers.linkedStyles.getStyles()
+ *
+ * @typedef {Object<string, Object<string, Function>>} EditorHelpers
  */
 
 /**
@@ -363,6 +374,8 @@ export class Editor extends EventEmitter {
       if (!this.options.isChildEditor) {
         this.initPagination();
         this.#initComments();
+
+        this.#validateDocumentInit();
       }
     }
   }
@@ -489,6 +502,14 @@ export class Editor extends EventEmitter {
    */
   get commands() {
     return this.#commandService?.commands;
+  }
+
+  /**
+   * Get extension helpers.
+   * @returns {EditorHelpers} Object with helper methods for extensions
+   */
+  get helpers() {
+    return this.extensionService.helpers;
   }
 
   /**
@@ -1232,6 +1253,8 @@ export class Editor extends EventEmitter {
     if (this.options.collaborationIsReady) return;
     console.debug('🔗 [super-editor] Collaboration ready');
 
+    this.#validateDocumentInit();
+
     this.options.onCollaborationReady({ editor, ydoc });
     this.options.collaborationIsReady = true;
     this.options.initialState = this.state;
@@ -1888,5 +1911,17 @@ export class Editor extends EventEmitter {
   closePreview() {
     if (!this.originalState) return;
     this.view.updateState(this.originalState);
+  }
+
+  /**
+   * Run the SuperValidator's active document validation to check and fix potential known issues.
+   * @returns {void}
+   */
+  #validateDocumentInit() {
+    if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
+
+    /** @type {import('./super-validator/index.js').SuperValidator} */
+    const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
+    validator.validateActiveDocument();
   }
 }

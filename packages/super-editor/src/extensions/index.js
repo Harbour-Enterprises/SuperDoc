@@ -52,6 +52,7 @@ import { Strike } from './strike/index.js';
 import { Link } from './link/index.js';
 import { TrackInsert, TrackDelete, TrackFormat } from './track-changes/index.js';
 import { CommentsMark } from './comment/index.js';
+import { TextTransform } from './text-transform/index.js';
 
 // Plugins
 import { CommentsPlugin } from './comment/index.js';
@@ -180,6 +181,7 @@ const getStarterExtensions = () => {
     TocEntry,
     TocWrapper,
     CustomSelection,
+    TextTransform,
   ];
 };
 
@@ -247,4 +249,5 @@ export {
   TocEntry,
   TocWrapper,
   CustomSelection,
+  TextTransform,
 };

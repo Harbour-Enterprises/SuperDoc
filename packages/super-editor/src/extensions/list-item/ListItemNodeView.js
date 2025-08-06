@@ -1,4 +1,4 @@
-import { LinkedStylesPluginKey } from '../linked-styles/linked-styles.js';
+import { LinkedStylesPluginKey } from '../linked-styles/index.js';
 import { getMarkType } from '@core/helpers/index.js';
 import { parseSizeUnit } from '@core/utilities/index.js';
 import { parseIndentElement, combineIndents } from '@core/super-converter/v2/importer/listImporter.js';
@@ -234,7 +234,7 @@ const getStylesFromLinkedStyles = ({ node, pos, editor }) => {
   const { state } = editor.view;
   const linkedStyles = LinkedStylesPluginKey.getState(state)?.decorations;
   const decorationsInPlace = linkedStyles?.find(pos, pos + node.nodeSize);
-  // We are looking from the end as there may be several decorations 
+  // We are looking from the end as there may be several decorations
   // and we need to find the most specific one.
   const styleDeco = decorationsInPlace?.findLast((dec) => dec.type.attrs?.style);
   const style = styleDeco?.type.attrs?.style;

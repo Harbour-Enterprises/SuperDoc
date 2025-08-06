@@ -43,17 +43,25 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
       const { attributes = {} } = element;
       const newMark = { type: m.type };
 
-      if (attributes['w:val'] === '0' || attributes['w:val'] === 'none') {
-        return;
-      }
-
-      // this probably requires a more thorough check.
-      if (['w:bCs'].includes(m.name) && langAttrs['w:eastAsia']) {
+      const exceptionMarks = ['w:b', 'w:caps'];
+      if ((attributes['w:val'] === '0' || attributes['w:val'] === 'none') && !exceptionMarks.includes(m.name)) {
         return;
       }
 
       // Use the parent mark (ie: textStyle) if present
       if (m.mark) newMark.type = m.mark;
+
+      // Special handling of "w:caps".
+      if (m.name === 'w:caps') {
+        newMark.attrs = {};
+        if (attributes['w:val'] === '0') {
+          newMark.attrs[m.property] = 'none';
+        } else {
+          newMark.attrs[m.property] = 'uppercase';
+        }
+        marks.push(newMark);
+        return;
+      }
 
       // Marks with attrs: we need to get their values
       if (Object.keys(attributes).length) {
@@ -65,6 +73,7 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
         newMark.attrs = {};
         newMark.attrs[m.property] = value;
       }
+
       marks.push(newMark);
     });
   });
