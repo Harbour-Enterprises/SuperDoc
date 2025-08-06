@@ -119,7 +119,7 @@ export function handleTableNode(node, params) {
  * @param {boolean} insideTrackChange
  * @returns {{type: string, content: (*|*[]), attrs: {}}}
  */
-export function handleTableCellNode(node, row, table, rowBorders, columnWidth = null, styleTag, params, cellIndex) {
+export function handleTableCellNode(node, row, table, rowBorders, columnWidth = null, styleTag, params, columnIndex) {
   const { docx, nodeListHandler } = params;
   const tcPr = node.elements.find((el) => el.name === 'w:tcPr');
   const borders = tcPr?.elements?.find((el) => el.name === 'w:tcBorders');
@@ -163,13 +163,13 @@ export function handleTableCellNode(node, row, table, rowBorders, columnWidth = 
 
     const defaultColWidths = gridColumnWidths;
     const hasDefaultColWidths = gridColumnWidths && gridColumnWidths.length > 0;
-    const colspanNum = parseInt(colspan, 10);
+    const colspanNum = parseInt(colspan || 1, 10);
 
     if (colspanNum && colspanNum > 1 && hasDefaultColWidths) {
       let colwidth = [];
 
       for (let i = 0; i < colspanNum; i++) {
-        let colwidthValue = defaultColWidths[cellIndex + i];
+        let colwidthValue = defaultColWidths[columnIndex + i];
         let defaultColwidth = 100;
 
         if (typeof colwidthValue !== 'undefined') {
@@ -416,14 +416,21 @@ export function handleTableRowNode(node, table, rowBorders, styleTag, params) {
   }
 
   const gridColumnWidths = getGridColumnWidths(table);
-
   const cellNodes = node.elements.filter((el) => el.name === 'w:tc');
-  const content =
-    cellNodes?.map((n, index) => {
-      const colWidth = cellNodes.length > 1 ? gridColumnWidths[index] : null;
-      return handleTableCellNode(n, node, table, borders, colWidth, styleTag, params, index);
-    }) || [];
 
+  let currentColumnIndex = 0;
+  const content = cellNodes?.map((n, index) => {
+    let colWidth = gridColumnWidths?.[currentColumnIndex] || null;
+
+    const result = handleTableCellNode(n, node, table, borders, colWidth, styleTag, params, currentColumnIndex);
+
+    const tcPr = n.elements?.find((el) => el.name === 'w:tcPr');
+    const colspanTag = tcPr?.elements?.find((el) => el.name === 'w:gridSpan');
+    const colspan = parseInt(colspanTag?.attributes['w:val'] || 1, 10);
+    currentColumnIndex += colspan;
+
+    return result;
+  }) || [];
   const newNode = {
     type: 'tableRow',
     content,
@@ -468,10 +475,12 @@ const getTableCellMargins = (marginTag, referencedStyles) => {
 
 const getGridColumnWidths = (tableNode) => {
   const tblGrid = tableNode.elements.find((el) => el.name === 'w:tblGrid');
-  return (
+  if (!tblGrid) return [];
+  const columnWidths = (
     tblGrid?.elements?.flatMap((el) => {
       if (el.name !== 'w:gridCol') return [];
       return twipsToPixels(el.attributes['w:w']);
     }) || []
   );
+  return columnWidths;
 };
