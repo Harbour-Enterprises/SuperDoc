@@ -217,7 +217,7 @@ const getTabDecorations = (oldState, newState, tr, view, domSerializer, from = 0
         );
       }
 
-      nodeWidthCache.set(node, tabWidth);
+      nodeWidthCache[pos] = tabWidth;
 
       const tabHeight = calcTabHeight($pos);
 
