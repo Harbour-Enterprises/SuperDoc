@@ -47,13 +47,38 @@ export const handleBookmarkNode = (params) => {
     };
   }
 
-  const updatedParams = { ...params, nodes: [node] };
-  const result = handleStandardNode(updatedParams);
-  if (result.nodes.length === 1) {
-    result.nodes[0].attrs.name = node.attributes['w:name'];
-    result.nodes[0].attrs.id = node.attributes['w:id'];
+  // Default behaviour – treat standard Word bookmarks as a wrapper around the
+  // content up until the matching bookmarkEnd.
+  const bookmarkEndIndex = nodes.findIndex(
+    (n) => n.name === 'w:bookmarkEnd' && n.attributes['w:id'] === node.attributes['w:id'],
+  );
+
+  // If we can’t find the closing tag we’ll just fall back to the old behaviour.
+  if (bookmarkEndIndex === -1) {
+    const updatedParams = { ...params, nodes: [node] };
+    const fallback = handleStandardNode(updatedParams);
+    if (fallback.nodes.length === 1) {
+      fallback.nodes[0].attrs.name = node.attributes['w:name'];
+      fallback.nodes[0].attrs.id = node.attributes['w:id'];
+    }
+    return fallback;
   }
-  return result;
+
+  // Translate everything between start- and end-tags.
+  const innerNodes = nodes.slice(1, bookmarkEndIndex);
+  const translatedInner = nodeListHandler.handler({ ...params, nodes: innerNodes });
+
+  const bookmarkWrapperNode = {
+    type: 'bookmarkStart',
+    attrs: {
+      name: node.attributes['w:name'],
+      id: node.attributes['w:id'],
+    },
+    content: translatedInner,
+    marks: [],
+  };
+
+  return { nodes: [bookmarkWrapperNode], consumed: bookmarkEndIndex + 1 };
 };
 
 /**

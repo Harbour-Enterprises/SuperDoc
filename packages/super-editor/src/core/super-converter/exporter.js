@@ -1680,13 +1680,18 @@ function translateBookmarkStart(params) {
       'w:name': params.node.attrs.name,
     },
   };
+
+  // Translate the inner content so that it appears between the start and end tags.
+  const innerElements = translateChildNodes(params);
+
   const bookmarkEndNode = {
     name: 'w:bookmarkEnd',
     attributes: {
       'w:id': params.node.attrs.id,
     },
   };
-  return [bookmarkStartNode, bookmarkEndNode];
+
+  return [bookmarkStartNode, ...innerElements, bookmarkEndNode];
 }
 
 /**
@@ -2664,6 +2669,12 @@ function translateTocWrapper(params) {
     name: 'w:p',
     elements: [
       {
+        name: 'w:updateFields',
+        attributes: {
+          'w:val': 'true',
+        },
+      },
+      {
         name: 'w:r',
         elements: [
           {
@@ -2732,7 +2743,7 @@ function translateTocEntry(params) {
   if (!translatedChildren.length || !translatedChildren[0].elements) {
     return null;
   }
-  
+
   const pPr = translatedChildren[0].elements.find((e) => e.name === 'w:pPr') || { name: 'w:pPr', elements: [] };
   const contentRuns = translatedChildren[0].elements.filter((e) => e.name !== 'w:pPr');
 
@@ -2744,6 +2755,8 @@ function translateTocEntry(params) {
           name: 'w:fldChar',
           attributes: {
             'w:fldCharType': 'begin',
+            // mark it dirty so Word recalculates
+            // 'w:dirty': 'true',
           },
         },
       ],
@@ -2753,12 +2766,7 @@ function translateTocEntry(params) {
       elements: [
         {
           name: 'w:instrText',
-          elements: [
-            {
-              type: 'text',
-              text: ` ${instruction}`,
-            },
-          ],
+          elements: [{ type: 'text', text: instruction }],
         },
       ],
     },
@@ -2767,20 +2775,24 @@ function translateTocEntry(params) {
       elements: [
         {
           name: 'w:fldChar',
-          attributes: {
-            'w:fldCharType': 'separate',
-          },
+          attributes: { 'w:fldCharType': 'separate' },
         },
       ],
     },
+    // This is optional Word should add back in
+    // {
+    //   name: 'w:r',
+    //   elements: [{
+    //     name: 'w:t',
+    //     elements: [{ type: 'text', text: instruction }],
+    //   }],
+    // },
     {
       name: 'w:r',
       elements: [
         {
           name: 'w:fldChar',
-          attributes: {
-            'w:fldCharType': 'end',
-          },
+          attributes: { 'w:fldCharType': 'end' },
         },
       ],
     },
