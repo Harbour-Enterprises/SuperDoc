@@ -7,7 +7,7 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
  * Remove mark step.
  * @param {import('prosemirror-state').EditorState} options.state Editor state.
  * @param {import('prosemirror-transform').RemoveMarkStep} options.step Step.
- * @param {import('prosemirror-state').Transaction}} options.newTr New transaction.
+ * @param {import('prosemirror-state').Transaction} options.newTr New transaction.
  * @param {import('prosemirror-model').Node} options.doc Doc.
  * @param {object} options.user User object ({ name, email }).
  * @param {string} options.date Date.

@@ -8,10 +8,6 @@ import { findMark } from '@core/helpers/index.js';
 import { CommentsPluginKey } from '../../comment/comments-plugin.js';
 
 /**
- * @typedef {import('prosemirror-transform').ReplaceStep} Transaction
- */
-
-/**
  * Tracked transaction to track changes.
  * @param {import('prosemirror-state').Transaction} options.tr Transaction.
  * @param {import('prosemirror-state').EditorState} options.state Editor state.
