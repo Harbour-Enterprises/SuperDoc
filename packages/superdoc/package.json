@@ -62,13 +62,13 @@
     "y-websocket": "^3.0.0"
   },
   "peerDependencies": {
-    "@hocuspocus/provider": "^2.13.6",
+    "@hocuspocus/provider": "^3.2.3",
     "pdfjs-dist": "4.3.136",
     "y-prosemirror": "^1.2.12",
     "yjs": "13.6.19"
   },
   "devDependencies": {
-    "@hocuspocus/provider": "^2.13.6",
+    "@hocuspocus/provider": "^3.2.3",
     "@release-it/conventional-changelog": "^10.0.1",
     "@rollup/plugin-replace": "^6.0.2",
     "@vitejs/plugin-vue": "^5.2.1",
