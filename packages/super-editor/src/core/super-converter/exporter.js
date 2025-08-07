@@ -666,7 +666,7 @@ function translateLinkNode(params) {
   node.marks = node.marks.filter((m) => m.type !== 'link');
 
   const outputNode = exportSchemaToJson({ ...params, node });
-  const contentNode = processLinkContentNode(outputNode);
+  const contentNode = params.disableHyperlinkForTocEntryExport ? outputNode : processLinkContentNode(outputNode);
 
   const newNode = {
     name: 'w:hyperlink',
@@ -2740,7 +2740,8 @@ function translateTocEntry(params) {
   const { node } = params;
   const { instruction, space } = node.attrs;
 
-  const translatedChildren = translateChildNodes(params);
+  // Translate child nodes but disable automatic hyperlink styling inside TOC entries
+  const translatedChildren = translateChildNodes({ ...params, disableHyperlinkForTocEntryExport: true });
   if (!translatedChildren.length || !translatedChildren[0].elements) {
     return null;
   }
