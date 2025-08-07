@@ -57,7 +57,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^16.1.4",
     "prettier": "3.3.3",
-    "rollup": "^4.26.0",
+    "rollup": "^4.46.2",
     "rollup-plugin-visualizer": "^5.12.0",
     "sass-embedded": "^1.80.7",
     "vitest": "^3.0.8",
