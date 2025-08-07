@@ -419,18 +419,19 @@ export function handleTableRowNode(node, table, rowBorders, styleTag, params) {
   const cellNodes = node.elements.filter((el) => el.name === 'w:tc');
 
   let currentColumnIndex = 0;
-  const content = cellNodes?.map((n, index) => {
-    let colWidth = gridColumnWidths?.[currentColumnIndex] || null;
+  const content =
+    cellNodes?.map((n, index) => {
+      let colWidth = gridColumnWidths?.[currentColumnIndex] || null;
 
-    const result = handleTableCellNode(n, node, table, borders, colWidth, styleTag, params, currentColumnIndex);
+      const result = handleTableCellNode(n, node, table, borders, colWidth, styleTag, params, currentColumnIndex);
 
-    const tcPr = n.elements?.find((el) => el.name === 'w:tcPr');
-    const colspanTag = tcPr?.elements?.find((el) => el.name === 'w:gridSpan');
-    const colspan = parseInt(colspanTag?.attributes['w:val'] || 1, 10);
-    currentColumnIndex += colspan;
+      const tcPr = n.elements?.find((el) => el.name === 'w:tcPr');
+      const colspanTag = tcPr?.elements?.find((el) => el.name === 'w:gridSpan');
+      const colspan = parseInt(colspanTag?.attributes['w:val'] || 1, 10);
+      currentColumnIndex += colspan;
 
-    return result;
-  }) || [];
+      return result;
+    }) || [];
   const newNode = {
     type: 'tableRow',
     content,
@@ -476,11 +477,10 @@ const getTableCellMargins = (marginTag, referencedStyles) => {
 const getGridColumnWidths = (tableNode) => {
   const tblGrid = tableNode.elements.find((el) => el.name === 'w:tblGrid');
   if (!tblGrid) return [];
-  const columnWidths = (
+  const columnWidths =
     tblGrid?.elements?.flatMap((el) => {
       if (el.name !== 'w:gridCol') return [];
       return twipsToPixels(el.attributes['w:w']);
-    }) || []
-  );
+    }) || [];
   return columnWidths;
 };
