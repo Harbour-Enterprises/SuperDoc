@@ -207,7 +207,7 @@ function getTextStyleMarksFromLinkedStyles({ node, pos, editor }) {
   const familyMark = styleMarks.find((m) => m.attrs.fontFamily);
 
   // 4. Compute final fontSize (parse it, fall back to default if invalid)
-  const fontSize = sizeMark
+  let fontSize = sizeMark
     ? (() => {
         const [value, unit = 'pt'] = parseSizeUnit(sizeMark.attrs.fontSize);
         return Number.isNaN(value) ? defaultSize : `${value}${unit}`;
@@ -215,8 +215,24 @@ function getTextStyleMarksFromLinkedStyles({ node, pos, editor }) {
     : defaultSize;
 
   // 5. Compute final fontFamily (or fall back)
-  const fontFamily = familyMark?.attrs.fontFamily ?? defaultFont;
-
+  let fontFamily = familyMark?.attrs.fontFamily ?? defaultFont;
+  
+  const firstChild = node.firstChild;
+  const hasOnlyOnePar = node.childCount === 1 && firstChild?.type.name === 'paragraph';
+  
+  // If a list item contains only one annotation, 
+  // then we try to take the font from there.
+  if (hasOnlyOnePar) {
+    const par = firstChild;
+    const parFirstChild = par?.firstChild;
+    if (par?.childCount === 1 && parFirstChild?.type.name === 'fieldAnnotation') {
+      const aFontSize = parFirstChild.attrs.fontSize;
+      const aFontFamily = parFirstChild.attrs.fontFamily;
+      if (!sizeMark && aFontSize) fontSize = aFontSize;
+      if (!familyMark && aFontFamily) fontFamily = aFontFamily;
+    }
+  }
+  
   return { fontSize, fontFamily };
 }
 
