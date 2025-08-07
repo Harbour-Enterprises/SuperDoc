@@ -28,31 +28,46 @@ import { parseMarks } from './markImporter.js';
  * hasFldCharWithInstr(node, 'begin')    // Check for begin field char
  */
 const hasFldCharWithInstr = (node, type, keyword = null) => {
-  if (!node?.elements) return false;
+  // Recursive base case
+  if (!node) return false;
 
-  // Find field char and check if it has matching instruction text
+  // Track whether we've already found the pieces we need so we can exit early
   let hasFieldChar = false;
-  let hasMatchingInstr = keyword === null; // If no keyword, we don't need to check instruction text
+  let hasMatchingInstr = keyword === null; // If no keyword, instruction text match is not required
 
-  for (const r of node.elements) {
-    if (!r?.elements) continue;
+  /**
+   * Recursively walk the element tree. WordML often nests the runs we care about
+   * (e.g. inside a w:hyperlink). A two-level scan misses those, so we keep going
+   * until we either satisfy both conditions or exhaust the descendants.
+   *
+   * @param {Object} n – current node in the walk
+   */
+  const walk = (n) => {
+    if (!n?.elements || (hasFieldChar && hasMatchingInstr)) return;
 
-    for (const el of r.elements) {
-      if (el.name === 'w:fldChar' && el.attributes?.['w:fldCharType'] === type) {
+    for (const child of n.elements) {
+      if (hasFieldChar && hasMatchingInstr) return; // early exit once satisfied
+
+      if (child.name === 'w:fldChar' && child.attributes?.['w:fldCharType'] === type) {
         hasFieldChar = true;
-      } else if (keyword && el.name === 'w:instrText') {
+      } else if (keyword && child.name === 'w:instrText') {
         let textVal;
-        if (typeof el.text === 'string') textVal = el.text;
-        else if (el.elements?.length) {
-          const txt = el.elements.find((t) => typeof t.text === 'string');
+        if (typeof child.text === 'string') textVal = child.text;
+        else if (child.elements?.length) {
+          const txt = child.elements.find((t) => typeof t.text === 'string');
           if (txt) textVal = txt.text;
         }
         if (textVal && textVal.trim().includes(keyword)) {
           hasMatchingInstr = true;
         }
       }
+
+      // Continue deeper as long as we still need information
+      walk(child);
     }
-  }
+  };
+
+  walk(node);
 
   return hasFieldChar && hasMatchingInstr;
 };
@@ -132,6 +147,8 @@ const getStyleId = (pNode) => {
 
 /**
  * Find field character indices in a single pass
+ * This goes 3 levels deep - Should be enough to find the fldChar
+ * We thought 2 would be enough but it was not working
  */
 const findFieldCharIndices = (elements) => {
   const indices = { begin: -1, separate: -1, end: -1 };
@@ -146,27 +163,54 @@ const findFieldCharIndices = (elements) => {
         if (type && indices[type] === -1) {
           indices[type] = i;
         }
+      } else if (el.elements) {
+        for (const el2 of el.elements) {
+          if (el2.name === 'w:fldChar') {
+            const type = el2.attributes?.['w:fldCharType'];
+            if (type && indices[type] === -1) {
+              indices[type] = i;
+            }
+          }
+        }
       }
     }
   }
 
+  console.log('indices', indices);
   return indices;
 };
 
 const parseTocEntry = (pNode, params) => {
+  console.log('parseTocEntry', pNode);
   const { docx, nodeListHandler } = params;
   const elements = pNode.elements || [];
 
   const styleId = getStyleId(pNode);
 
-  // Find all field char indices in a single pass
-  const { begin: beginIdx, separate: separateIdx, end: endIdx } = findFieldCharIndices(elements);
+  // Collect every w:r in document order (handles nested hyperlink etc.)
+  const runNodes = [];
+  const collectRuns = (nodes) => {
+    nodes.forEach((n) => {
+      if (!n) return;
+      if (n.name === 'w:r') runNodes.push(n);
+      if (n.elements?.length) collectRuns(n.elements);
+    });
+  };
+  collectRuns(elements);
 
-  const sectionRuns = beginIdx > 0 ? elements.slice(0, beginIdx) : [];
+  // Find field char indices in the flattened run list
+  const { begin: beginIdx, separate: separateIdx, end: endIdx } = findFieldCharIndices(runNodes);
+
+  // Runs before the first fldChar begin make up the visible section title
+  const sectionRuns = beginIdx > 0 ? runNodes.slice(0, beginIdx) : [];
+
+  console.log('sectionRuns', sectionRuns);
 
   // Runs containing cached page number are between separate and end
   const pageNumberRuns =
-    separateIdx > -1 ? elements.slice(separateIdx + 1, endIdx > -1 ? endIdx : elements.length) : [];
+    separateIdx > -1 ? runNodes.slice(separateIdx + 1, endIdx > -1 ? endIdx : runNodes.length) : [];
+
+  console.log('pageNumberRuns', pageNumberRuns);
 
   // Process title runs through standard run handling to preserve styling
   let titleContent = [];
@@ -234,6 +278,9 @@ const parseTocEntry = (pNode, params) => {
   filteredContent.push({ type: 'tab' });
   if (pageNumNode) filteredContent.push(pageNumNode);
 
+  console.log('filteredContent', filteredContent);
+  console.log('styleId', styleId);
+  console.log('space', instrData.space);
   return { content: filteredContent, styleId, space: instrData.space };
 };
 
@@ -271,6 +318,7 @@ export const handleTocNode = (params) => {
 
     // Record wrapper break point
     if (!wrapperSeparateReached && hasFldCharWithInstr(current, 'separate')) {
+      console.log('found first break point', current);
       wrapperSeparateReached = true;
       consumed += 1;
       continue;
@@ -278,9 +326,12 @@ export const handleTocNode = (params) => {
 
     // When separate reached, collect entries until we hit wrapper end
     if (wrapperSeparateReached) {
+      console.log('wrapperSeparateReached', wrapperSeparateReached);
       const isEntry = isTocEntryParagraph(current);
       const hasEnd = hasFldCharWithInstr(current, 'end');
 
+      console.log('hasEnd', hasEnd);
+      console.log('isEntry', isEntry);
       if (hasEnd && !isEntry) {
         // This is the wrapper closing paragraph (contains fldChar end and possibly page break)
         const footerNodes = nodeListHandler.handler({
@@ -305,8 +356,8 @@ export const handleTocNode = (params) => {
             space: wrapperInstrData.space,
           },
         };
-
         const resultNodes = [wrapperNode, ...footerNodes];
+        console.log('wrapperNodes', wrapperNode);
         return { nodes: resultNodes, consumed };
       }
 
@@ -330,6 +381,7 @@ export const handleTocNode = (params) => {
         if (styleId) attrs.styleId = styleId;
         if (space) attrs.space = space;
         tocEntries.push({ type: 'toc-entry', content: entryContent, attrs });
+        console.log('tocEntries', tocEntries);
       }
 
       consumed += 1;
