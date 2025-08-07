@@ -101,7 +101,7 @@ export const FieldAnnotationPlugin = (options = {}) => {
         return;
       }
 
-      let { tr, doc } = newState;
+      let { tr } = newState;
       let changed = false;
 
       let annotations = getAllFieldAnnotations(newState);

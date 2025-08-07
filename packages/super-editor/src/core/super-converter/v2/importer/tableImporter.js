@@ -1,4 +1,4 @@
-import { eigthPointsToPixels, halfPointToPoints, twipsToInches, twipsToPixels } from '../../helpers.js';
+import { eigthPointsToPixels, halfPointToPoints, twipsToPixels } from '../../helpers.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -285,7 +285,7 @@ const processInlineCellBorders = (borders, rowBorders) => {
  * @param {NodeListHandler} nodeListHandler
  * @returns {{uiPriotity: *, borders: {}, name: *, rowBorders: {}, basedOn: *}|null}
  */
-function getReferencedTableStyles(tblStyleTag, docx, nodeListHandler) {
+function getReferencedTableStyles(tblStyleTag, docx) {
   if (!tblStyleTag) return null;
 
   const stylesToReturn = {};
@@ -303,7 +303,6 @@ function getReferencedTableStyles(tblStyleTag, docx, nodeListHandler) {
 
   // TODO: Do we need this?
   const basedOn = styleTag.elements.find((el) => el.name === 'w:basedOn');
-  const uiPriotity = styleTag.elements.find((el) => el.name === 'w:uiPriority');
 
   let baseTblPr;
   if (basedOn?.attributes) {
@@ -404,7 +403,6 @@ export function handleTableRowNode(node, table, rowBorders, styleTag, params) {
   const tPr = node.elements.find((el) => el.name === 'w:trPr');
   const rowHeightTag = tPr?.elements?.find((el) => el.name === 'w:trHeight');
   const rowHeight = rowHeightTag?.attributes['w:val'];
-  const rowHeightRule = rowHeightTag?.attributes['w:hRule'];
 
   const borders = {};
   if (rowBorders?.insideH) borders['bottom'] = rowBorders.insideH;
@@ -420,7 +418,7 @@ export function handleTableRowNode(node, table, rowBorders, styleTag, params) {
 
   let currentColumnIndex = 0;
   const content =
-    cellNodes?.map((n, index) => {
+    cellNodes?.map((n) => {
       let colWidth = gridColumnWidths?.[currentColumnIndex] || null;
 
       const result = handleTableCellNode(n, node, table, borders, colWidth, styleTag, params, currentColumnIndex);

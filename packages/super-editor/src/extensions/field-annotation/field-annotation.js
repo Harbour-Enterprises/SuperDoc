@@ -768,7 +768,7 @@ export const FieldAnnotation = Node.create({
 
       deleteFieldAnnotationsByNode:
         (annotations) =>
-        ({ dispatch, state, tr }) => {
+        ({ dispatch, tr }) => {
           if (!annotations.length) {
             return true;
           }
@@ -791,7 +791,7 @@ export const FieldAnnotation = Node.create({
 
       deleteFieldAnnotation:
         (annotation) =>
-        ({ dispatch, state, tr }) => {
+        ({ dispatch, tr }) => {
           if (!annotation) {
             return true;
           }

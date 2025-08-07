@@ -86,7 +86,7 @@ export const Pagination = Extension.create({
       key: PaginationPluginKey,
       state: {
         isReadyToInit: false,
-        init(_, state) {
+        init() {
           return {
             isReadyToInit: false,
             decorations: DecorationSet.empty,
@@ -172,11 +172,11 @@ export const Pagination = Extension.create({
       },
 
       /* The view method is the most important part of the plugin */
-      view: (view) => {
+      view: () => {
         let previousDecorations = DecorationSet.empty;
 
         return {
-          update: (view, prevState) => {
+          update: (view) => {
             if (!PaginationPluginKey.getState(view.state)?.isEnabled) return;
             if (!shouldUpdate || isUpdating) return;
 
@@ -384,7 +384,6 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
 
   let currentPageNumber = 1;
   let pageHeightThreshold = pageHeight;
-  let hardBreakOffsets = 0;
   let footer = null,
     header = null;
 
@@ -526,12 +525,6 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
 
       const pageBreak = createPageBreak({ editor, header, footer, isInTable });
       decorations.push(Decoration.widget(breakPos, pageBreak, { key: 'stable-key' }));
-
-      // Check if we have a hard page break node
-      // If so, calculate and add spacer to push us into a next page
-      if (isHardBreakNode) {
-        hardBreakOffsets += pageHeight;
-      }
 
       // Recalculate the page threshold based on where we actually inserted the break
       pageHeightThreshold = actualBreakBottom + (pageHeight - header.headerHeight - footer.footerHeight);

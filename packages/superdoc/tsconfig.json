@@ -10,6 +10,7 @@
     "skipLibCheck": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
-    "typeRoots": ["./node_modules/@types/*"]
+    "typeRoots": ["./node_modules/@types/*"],
+    "target": "ES2019"
   }
 }

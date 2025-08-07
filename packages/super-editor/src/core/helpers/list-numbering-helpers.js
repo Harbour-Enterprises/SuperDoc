@@ -303,8 +303,7 @@ export const removeListDefinitions = (listId, editor) => {
  * @param {Object} param0.contentNode - The content node to be included in the list item.
  * @returns {Object} A JSON object representing the list item node.
  */
-export const createListItemNodeJSON = ({ level, lvlText, numId, numFmt, start, listLevel, contentNode }) => {
-  start = Number(start);
+export const createListItemNodeJSON = ({ level, lvlText, numId, numFmt, listLevel, contentNode }) => {
   if (!contentNode) {
     contentNode = {
       type: 'paragraph',
@@ -504,7 +503,7 @@ export const insertNewList = (tr, replaceFrom, replaceTo, listNode, marks = []) 
  * @param {Editor} param0.editor - The editor instance containing the converted XML and numbering definitions.
  * @returns {Object} An object containing the style properties and numbering definitions.
  */
-export const getListItemStyleDefinitions = ({ styleId, node, numId, level, editor, tries }) => {
+export const getListItemStyleDefinitions = ({ styleId, numId, level, editor, tries }) => {
   if (tries) return {};
 
   if (typeof numId === 'string') numId = Number(numId);
@@ -547,7 +546,7 @@ export const addInlineTextMarks = (currentNode, filteredMarks) => {
     const textMarks = currentNode.children[0].children[0].marks;
     const inlineTextStyleFromSplitBlock = textMarks.find((m) => m.type.name === 'textStyle');
     inlineTextStyleFromSplitBlock && newMarks.push(inlineTextStyleFromSplitBlock);
-  } catch (e) {}
+  } catch {}
   return newMarks;
 };
 

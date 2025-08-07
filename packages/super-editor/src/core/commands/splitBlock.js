@@ -1,4 +1,3 @@
-import { splitBlock as originalSplitBlock } from 'prosemirror-commands';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { canSplit } from 'prosemirror-transform';
 import { defaultBlockAt } from '../helpers/defaultBlockAt.js';

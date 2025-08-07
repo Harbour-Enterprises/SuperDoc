@@ -76,7 +76,7 @@ export const Table = Node.create({
       tableIndent: {
         renderDOM: ({ tableIndent }) => {
           if (!tableIndent) return {};
-          const { width, type = 'dxa' } = tableIndent;
+          const { width } = tableIndent;
           let style = '';
           if (width) style += `margin-left: ${width}px`;
           return {
@@ -539,7 +539,7 @@ export const Table = Node.create({
 
       deleteCellAndTableBorders:
         () =>
-        ({ chain, state, tr }) => {
+        ({ state, tr }) => {
           if (!isInTable(state)) {
             return false;
           }
@@ -637,6 +637,7 @@ function getCellType({ node, state }) {
 
 function copyCellAttrs(node) {
   // Exclude colspan, rowspan and colwidth attrs.
+  // eslint-disable-next-line no-unused-vars
   const { colspan, rowspan, colwidth, ...attrs } = node.attrs;
   return attrs;
 }

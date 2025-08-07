@@ -33,7 +33,7 @@ export const Collaboration = Extension.create({
 
     const metaMap = this.options.ydoc.getMap('media');
     metaMap.observe((event) => {
-      event.changes.keys.forEach((change, key) => {
+      event.changes.keys.forEach((_, key) => {
         if (!(key in this.editor.storage.image.media)) {
           const fileData = metaMap.get(key);
           this.editor.storage.image.media[key] = fileData;
@@ -111,31 +111,10 @@ const createUndoPlugin = () => {
   return yUndoPluginInstance;
 };
 
-const initDocumentLockHandler = (ydoc, editor) => {
-  const metaMap = ydoc.getMap('meta');
-  metaMap.observe((event) => {
-    const lockedBy = metaMap.get('lockedBy');
-    const isLocked = metaMap.get('locked');
-    if (!editor.options.user || !lockedBy) return;
-    const emitEvent = lockedBy?.email !== editor.options.user?.email;
-
-    // If the event was initiated by this user, don't emit anything
-    const editableChanged = editor.options.editable !== !isLocked;
-    if (!emitEvent || !editableChanged) return;
-
-    // Otherwise, we need to emit the event for all other users
-    if (isLocked) {
-      console.debug('--- Locking editor ---', lockedBy, editor.options.user);
-    } else {
-      console.debug('--- Unlocking editor ---', lockedBy);
-    }
-    editor.setEditable(!isLocked);
-    editor.emit('locked', { editor, isLocked, lockedBy });
-  });
-};
-
 const checkDocxChanged = (transaction) => {
-  for (const [key, value] of transaction.changed?.entries()) {
+  if (!transaction.changed) return false;
+
+  for (const [, value] of transaction.changed.entries()) {
     if (value instanceof Set && value.has('docx')) {
       return true;
     }

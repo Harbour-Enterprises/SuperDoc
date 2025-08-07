@@ -22,7 +22,7 @@ export const CommentsPlugin = Extension.create({
     return {
       insertComment:
         (conversation) =>
-        ({ tr, dispatch, state }) => {
+        ({ tr, dispatch }) => {
           const { selection } = tr;
           const { $from, $to } = selection;
           const { commentId, isInternal } = conversation;
@@ -217,13 +217,12 @@ export const CommentsPlugin = Extension.create({
         },
       },
 
-      view(editorView) {
+      view() {
         let prevDoc;
-        let prevDecorations;
         let prevActiveThreadId; // Add this to track active thread changes
 
         return {
-          update(view, prevState) {
+          update(view) {
             const { state } = view;
             const { doc, tr } = state;
             const pluginState = CommentsPluginKey.getState(state);
@@ -338,9 +337,6 @@ export const CommentsPlugin = Extension.create({
             }
 
             editor.emit('comment-positions', { allCommentPositions });
-
-            // Remember the new decorations for next time
-            prevDecorations = decorationSet;
           },
         };
       },
@@ -522,7 +518,7 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
 
   // Track format has no nodes, we need to find the node
   if (!nodes.length) {
-    newEditorState.doc.descendants((node, pos) => {
+    newEditorState.doc.descendants((node) => {
       const hasFormatMark = node.marks.find((mark) => mark.type.name === TrackFormatMarkName);
       if (hasFormatMark) {
         nodes = [node];
@@ -549,15 +545,7 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
   return newTrackedChanges;
 };
 
-const getTrackedChangeText = ({
-  state,
-  node,
-  mark,
-  marks,
-  trackedChangeType,
-  isDeletionInsertion,
-  deletionNodes = [],
-}) => {
+const getTrackedChangeText = ({ state, node, mark, marks, trackedChangeType, isDeletionInsertion }) => {
   let trackedChangeText = '';
   let deletionText = '';
 
@@ -604,7 +592,7 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   const isDeletionInsertion = !!(marks.insertedMark && marks.deletionMark);
 
   let existingNode;
-  newEditorState.doc.descendants((node, pos) => {
+  newEditorState.doc.descendants((node) => {
     const { marks = [] } = node;
     const changeMarks = marks.filter((mark) => TRACK_CHANGE_MARKS.includes(mark.type.name));
     if (!changeMarks.length) return;

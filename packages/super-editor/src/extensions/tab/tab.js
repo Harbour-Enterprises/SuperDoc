@@ -88,7 +88,7 @@ const getTabDecorations = (state, view) => {
             textWidth += textWidthForNode;
           }
         });
-      } catch (e) {
+      } catch {
         return;
       }
 

@@ -13,7 +13,7 @@ import { normalizeLvlTextChar } from '../../super-converter/v2/importer/listImpo
  * @param {Object} plugin The plugin instance
  * @returns
  */
-export const handleDocxPaste = (html, editor, view, plugin) => {
+export const handleDocxPaste = (html, editor, view) => {
   const { converter } = editor;
   if (!converter || !converter.convertedXml) return handleHtmlPaste(html, editor);
 

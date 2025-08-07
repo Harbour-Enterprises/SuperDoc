@@ -1,4 +1,4 @@
-import { ref, reactive, toRaw } from 'vue';
+import { ref, reactive } from 'vue';
 import { v4 as uuidv4 } from 'uuid';
 
 import { syncCommentsToClients } from '@superdoc/core/collaboration/helpers.js';

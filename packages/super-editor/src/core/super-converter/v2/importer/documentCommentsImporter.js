@@ -39,10 +39,6 @@ export function importCommentData({ docx, editor, converter }) {
     const date = new Date(createdDate);
     const unixTimestampMs = date.getTime();
 
-    const { elements } = el;
-    const commentData = elements[0];
-
-    const { elements: commentElements } = commentData;
     const parsedComment = nodeListHandler.handler({
       nodes: el.elements,
       nodeListHandler,
@@ -96,7 +92,7 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
     const extendedDef = commentEx.find((ce) => ce.attributes['w15:paraId'] === comment.paraId);
     if (!extendedDef) return { ...comment };
 
-    const { isDone, paraIdParent, superdocCommentId } = getExtendedDetails(extendedDef);
+    const { isDone, paraIdParent } = getExtendedDetails(extendedDef);
 
     let parentComment;
     if (paraIdParent) parentComment = comments.find((c) => c.paraId === paraIdParent);

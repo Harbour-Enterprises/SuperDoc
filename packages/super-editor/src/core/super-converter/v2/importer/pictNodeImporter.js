@@ -19,7 +19,6 @@ export const handlePictNode = (params) => {
 
   const node = pict;
   const shape = node.elements?.find((el) => el.name === 'v:shape');
-  const shapetype = node.elements?.find((el) => el.name === 'v:shapetype');
   const group = node.elements?.find((el) => el.name === 'v:group');
 
   // such a case probably shouldn't exist.
@@ -51,7 +50,7 @@ export const handlePictNode = (params) => {
   return { nodes: result ? [result] : [], consumed: 1 };
 };
 
-export function handleShapTextboxImport({ pict, pNode, shape, params }) {
+export function handleShapTextboxImport({ shape, params }) {
   const schemaAttrs = {};
   const schemaTextboxAttrs = {};
 

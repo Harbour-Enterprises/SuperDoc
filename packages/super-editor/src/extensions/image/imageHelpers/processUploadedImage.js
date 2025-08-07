@@ -23,7 +23,7 @@ export const processUploadedImage = (fileData, editor) => {
         ctx.imageSmoothingEnabled = true;
         try {
           ctx.imageSmoothingQuality = 'high';
-        } catch (e) {}
+        } catch {}
       }
 
       // Draw original image at full size

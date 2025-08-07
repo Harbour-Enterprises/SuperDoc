@@ -5,7 +5,7 @@ import { getTrackChanges } from '../trackChangesHelpers/getTrackChanges.js';
 
 export const TrackChangesBasePluginKey = new PluginKey('TrackChangesBase');
 
-export const TrackChangesBasePlugin = (options = {}) => {
+export const TrackChangesBasePlugin = () => {
   return new Plugin({
     key: TrackChangesBasePluginKey,
 

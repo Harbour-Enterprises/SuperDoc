@@ -1,4 +1,3 @@
-import { marks } from 'prosemirror-schema-basic';
 import { objectIncludes } from '../../../utilities/objectIncludes.js';
 
 export const mergeTextNodes = (nodes) => {

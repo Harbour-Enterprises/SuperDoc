@@ -8,7 +8,7 @@ export const createLinkedStylesPlugin = (editor) => {
   return new Plugin({
     key: LinkedStylesPluginKey,
     state: {
-      init(_, { doc, selection }) {
+      init() {
         if (!editor.converter || editor.options.mode !== 'docx') return {};
         const styles = editor.converter?.linkedStyles || [];
         return {

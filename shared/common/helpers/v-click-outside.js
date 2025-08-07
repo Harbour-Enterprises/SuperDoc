@@ -1,5 +1,5 @@
 export default {
-  mounted(el, binding, vnode) {
+  mounted(el, binding) {
     const clickOutsideHandler = (event) => {
       if (!el.contains(event.target)) {
         binding.value(event);

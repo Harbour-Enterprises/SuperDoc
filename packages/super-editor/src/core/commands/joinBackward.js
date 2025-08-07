@@ -15,7 +15,7 @@ import { joinBackward as originalJoinBackward } from 'prosemirror-commands';
  */
 //prettier-ignore
 export const joinBackward = () => ({ state, dispatch }) => {
-  const { selection, doc, schema } = state;
+  const { selection, doc } = state;
   const { $from } = selection;
 
   if (

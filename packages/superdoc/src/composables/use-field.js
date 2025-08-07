@@ -1,10 +1,9 @@
-import { ref, reactive, watch, computed } from 'vue';
+import { ref, reactive, watch } from 'vue';
 
 export function useFieldValueWatcher(field, originalValue) {
   const fieldId = field.itemid;
   const rawField = field;
 
-  const original = originalValue;
   const valueIsObject = originalValue !== null && typeof originalValue === 'object';
   const value = valueIsObject ? reactive({ ...originalValue }) : ref(originalValue);
   const change = ref(null);

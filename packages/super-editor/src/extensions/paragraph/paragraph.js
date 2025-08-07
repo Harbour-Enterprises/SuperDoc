@@ -1,6 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { Node, Attribute, Schema } from '@core/index.js';
+import { Node, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 
@@ -156,8 +156,7 @@ export const Paragraph = Node.create({
       },
     });
 
-    // Disabling dropcap for now
-    return [];
+    return [dropcapPlugin];
   },
 });
 

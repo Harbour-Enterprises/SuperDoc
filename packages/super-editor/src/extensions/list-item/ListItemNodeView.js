@@ -43,7 +43,7 @@ export class ListItemNodeView {
 
   #init() {
     const { attrs } = this.node;
-    const { listLevel, listNumberingType, lvlText, numId, level, indent: inlineIndent, customFormat } = attrs;
+    const { listLevel, listNumberingType, lvlText, numId, level, customFormat } = attrs;
 
     let orderMarker = '';
     if (listLevel) {
@@ -122,7 +122,7 @@ export class ListItemNodeView {
     this.numberingDOM.style.left = `${absoluteLeft}px`;
   }
 
-  handleNumberingClick = (event) => {
+  handleNumberingClick = () => {
     // Respond to numbering clicks here in the future
     // ie: open a modal to customize numbering
   };

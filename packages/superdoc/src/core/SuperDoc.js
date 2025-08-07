@@ -751,7 +751,7 @@ export class SuperDoc extends EventEmitter {
 
     // If we are exporting docx files, add them to the zip
     if (exportType.includes('docx')) {
-      docxFiles.forEach((blob, index) => {
+      docxFiles.forEach((blob) => {
         blobsToZip.push(blob);
         filenames.push(`${baseFileName}.docx`);
       });
@@ -783,7 +783,9 @@ export class SuperDoc extends EventEmitter {
   async exportEditorsToDOCX({ commentsType, isFinalDoc } = {}) {
     const comments = [];
     if (commentsType !== 'clean') {
-      comments.push(...this.commentsStore?.translateCommentsForExport());
+      if (this.commentsStore && typeof this.commentsStore.translateCommentsForExport === 'function') {
+        comments.push(...this.commentsStore.translateCommentsForExport());
+      }
     }
 
     const docxPromises = [];
@@ -802,7 +804,7 @@ export class SuperDoc extends EventEmitter {
    */
   async #triggerCollaborationSaves() {
     this.#log('🦋 [superdoc] Triggering collaboration saves');
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       this.superdocStore.documents.forEach((doc) => {
         this.pendingCollaborationSaves = 0;
         if (doc.ydoc) {

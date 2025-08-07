@@ -242,7 +242,7 @@ export class FieldAnnotationView {
     this.editor.off('selectionUpdate', this.handleSelectionUpdate);
   }
 
-  handleSelectionUpdate({ editor, transaction }) {
+  handleSelectionUpdate({ editor }) {
     if (!this.editor.isEditable) {
       return;
     }
@@ -302,11 +302,11 @@ export class FieldAnnotationView {
 
   // Can be used to manually update the NodeView.
   // Otherwise the NodeView is recreated.
-  update(updatedNode) {
+  update() {
     return false;
   }
 
-  ignoreMutation(mutation) {
+  ignoreMutation() {
     // https://github.com/ueberdosis/tiptap/blob/main/packages/core/src/NodeView.ts
     // a leaf/atom node is like a black box for ProseMirror
     // and should be fully handled by the node view

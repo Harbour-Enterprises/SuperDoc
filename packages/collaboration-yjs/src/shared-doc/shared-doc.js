@@ -65,14 +65,15 @@ export class SharedSuperDoc extends YDoc {
         debouncer(() => callbackHandler(/** @type {SharedSuperDoc} */ (doc)));
       });
     }
-    this.whenInitialized = contentInitializer(this);
+
+    this.whenInitialized = contentInitializer();
   }
 }
 
 /**
- * @type {(ydoc: YDoc) => Promise<void>}
+ * @type {() => Promise<void>}
  */
-let contentInitializer = (_ydoc) => Promise.resolve();
+let contentInitializer = () => Promise.resolve();
 
 /**
  * The main handler for updates to the Yjs document.
@@ -80,9 +81,8 @@ let contentInitializer = (_ydoc) => Promise.resolve();
  * @param {Uint8Array} update
  * @param {any} _origin
  * @param {SharedSuperDoc} doc
- * @param {any} _tr
  */
-const updateHandler = (update, _origin, doc, _tr) => {
+const updateHandler = (update, _origin, doc) => {
   const encoder = createEncoder();
   writeVarUint(encoder, messageSync);
   writeUpdate(encoder, update);
@@ -121,7 +121,7 @@ export const send = (doc, conn, message) => {
     conn.send(message, {}, (err) => {
       err != null && closeConn(doc, conn);
     });
-  } catch (e) {
+  } catch {
     closeConn(doc, conn);
   }
 };

@@ -12,7 +12,7 @@ export const AiPlugin = Extension.create({
     return {
       insertAiMark:
         () =>
-        ({ tr, dispatch, state }) => {
+        ({ tr, dispatch }) => {
           const { selection } = tr;
           const { $from, $to } = selection;
 
@@ -37,7 +37,7 @@ export const AiPlugin = Extension.create({
         () =>
         ({ tr, dispatch, state }) => {
           const { selection } = tr;
-          const { $from, $to } = selection;
+          const { $to } = selection;
 
           tr.setSelection(state.selection.constructor.create(tr.doc, $to.pos, $to.pos));
 

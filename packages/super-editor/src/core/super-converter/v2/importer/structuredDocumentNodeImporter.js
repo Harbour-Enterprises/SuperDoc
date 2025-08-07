@@ -25,7 +25,7 @@ export const handleSdtNode = (params) => {
     tagValue = JSON.parse(tagValue);
     const { type } = tagValue;
     if (type === 'documentSection') return handleDocumentSectionNode(params, tagValue);
-  } catch (e) {}
+  } catch {}
 
   const sdtContent = node.elements.find((el) => el.name === 'w:sdtContent');
   const { marks } = parseAnnotationMarks(sdtContent);

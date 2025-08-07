@@ -130,7 +130,7 @@ function getJsonBetweenFencesFromResponse(buffer) {
     }
 
     return null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -238,7 +238,7 @@ export async function rewriteStreaming(text, prompt = '', options = {}, onChunk,
   }
 
   const message = prompt
-    ? `Rewrite the following text: "${text}". Instructions: ${prompt}`
+    ? `Rewrite the following text: "${text}" using these instructions: ${prompt}`
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
@@ -248,7 +248,7 @@ export async function rewriteStreaming(text, prompt = '', options = {}, onChunk,
       {
         type: 'custom_prompt',
         name: 'text_rewrite',
-        message: `Rewrite the following text: "${text}" using these instructions: ${prompt}`,
+        message,
       },
     ],
   };
@@ -276,7 +276,7 @@ export async function rewrite(text, prompt = '', options = {}) {
   }
 
   const message = prompt
-    ? `Rewrite the following text: "${text}". Instructions: ${prompt}`
+    ? `Rewrite the following text: "${text}" using these instructions: ${prompt}`
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
@@ -286,7 +286,7 @@ export async function rewrite(text, prompt = '', options = {}) {
       {
         type: 'custom_prompt',
         name: 'text_rewrite',
-        message: `Rewrite the following text: "${text}" using these instructions: ${prompt}`,
+        message,
         format: [{ value: '' }],
       },
     ],
@@ -306,7 +306,7 @@ const formatRegistry = {
     {
       name: 'bold',
       pattern: /\*\*(.*?)\*\*/g,
-      transform: (_match, content, _editor) => ({
+      transform: (_match, content) => ({
         type: 'text',
         marks: [{ type: 'bold' }],
         text: content,
@@ -315,7 +315,7 @@ const formatRegistry = {
     {
       name: 'italic',
       pattern: /\*(.*?)\*/g,
-      transform: (_match, content, _editor) => ({
+      transform: (_match, content) => ({
         type: 'text',
         marks: [{ type: 'italic' }],
         text: content,
@@ -324,7 +324,7 @@ const formatRegistry = {
     {
       name: 'underline',
       pattern: /<(?:u|ins)>(.*?)<\/(?:u|ins)>/g,
-      transform: (_match, content, _editor) => ({
+      transform: (_match, content) => ({
         type: 'text',
         marks: [{ type: 'underline' }],
         text: content,

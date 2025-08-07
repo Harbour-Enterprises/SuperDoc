@@ -264,45 +264,6 @@ export const useCommentsStore = defineStore('comments', () => {
     };
   };
 
-  const checkOverlaps = (currentElement, dialog, doc) => {
-    const currentDialogs = document.querySelectorAll('.sd-comment-box');
-    const currentBounds = currentElement.getBoundingClientRect();
-
-    const overlaps = [];
-    currentDialogs.forEach((d) => {
-      if (d.dataset.id === dialog.conversationId) return;
-      const bounds = d.getBoundingClientRect();
-
-      if (Math.abs(bounds.top - currentBounds.top) < 50 || Math.abs(bounds.bottom - currentBounds.bottom) < 50) {
-        if (!d.dataset?.id) {
-          // Then this is a group
-          const groupIndex = d.dataset.index;
-          const group = overlappingComments.value[groupIndex];
-          group?.unshift(dialog);
-        } else {
-          let dialogObject = dialog.doc?.conversations?.find((c) => c.conversationId === d.dataset.id);
-          if (!dialogObject) dialogObject = doc.conversations.find((c) => c.conversationId === d.dataset.id);
-          overlaps.unshift(dialogObject);
-          overlaps.unshift(dialog);
-          dialogObject.group = true;
-        }
-        dialog.group = true;
-      }
-    });
-    if (overlaps.length) {
-      const overlapsGroup = overlappingComments.value.find((group) => {
-        return group.some((c) => c.conversationId === dialog.conversationId);
-      });
-
-      if (overlapsGroup) {
-        const filtered = overlaps.filter((o) => !overlapsGroup.some((o) => o.conversationId === o.conversationId));
-        overlapsGroup.push(...filtered);
-      } else {
-        overlappingComments.value.unshift(overlaps);
-      }
-    }
-  };
-
   /**
    * Get a new pending comment
    *
@@ -577,7 +538,7 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {DOMElement} parentElement The parent element of the editor
    * @returns {void}
    */
-  const handleEditorLocationsUpdate = (allCommentPositions, activeThreadId) => {
+  const handleEditorLocationsUpdate = (allCommentPositions) => {
     editorCommentPositions.value = allCommentPositions || {};
   };
 
@@ -659,7 +620,6 @@ export const useCommentsStore = defineStore('comments', () => {
     setActiveComment,
     getCommentLocation,
     hasOverlapId,
-    checkOverlaps,
     getPendingComment,
     showAddComment,
     addComment,

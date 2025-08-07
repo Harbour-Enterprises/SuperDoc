@@ -7,7 +7,7 @@ import { SuperConverter } from '../../SuperConverter.js';
  * @returns {{elements: *, attributes: {}, marks: *}}
  *
  */
-export function parseProperties(node, docx) {
+export function parseProperties(node) {
   /**
    * What does it mean for a node to have a properties element?
    * It would have a child element that is: w:pPr, w:rPr, w:sectPr

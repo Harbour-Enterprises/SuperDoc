@@ -814,10 +814,6 @@ export const makeDefaultItems = ({
     },
   });
 
-  const toolbarItemsMobile = [bold, italic, underline, indentRight, indentLeft, search, overflow].map(
-    (item) => item.name,
-  );
-
   const copyFormat = useToolbarItem({
     type: 'button',
     name: 'copyFormat',
@@ -1191,7 +1187,7 @@ export const makeDefaultItems = ({
 
 export const setHistoryButtonStateOnUpdate =
   (toolbarItemsRef) =>
-  ({ editor, transaction }) => {
+  ({ editor }) => {
     // console.debug('[SuperEditor dev] Document updated', editor);
     // activeEditor = editor;
 
