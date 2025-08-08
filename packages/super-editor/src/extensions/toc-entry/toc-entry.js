@@ -13,6 +13,7 @@ export const TocEntry = Node.create({
     return {
       htmlAttributes: {
         'data-id': 'toc-entry',
+        class: 'sd-toc-entry',
         'aria-label': 'Table of Contents entry',
       },
     };

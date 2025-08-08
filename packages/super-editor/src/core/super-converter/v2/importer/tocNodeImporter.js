@@ -139,6 +139,29 @@ const getTextFromRun = (run) => {
 };
 
 /**
+ * Extract the tab leader value from a paragraph node if present.
+ * Looks for w:pPr > w:tabs > w:tab and returns its w:leader attribute.
+ * If multiple tabs are present, prefers the right-aligned tab, otherwise the first.
+ */
+const getTabLeader = (pNode) => {
+  if (!pNode?.elements) return null;
+
+  const pPr = pNode.elements.find((el) => el.name === 'w:pPr');
+  if (!pPr?.elements?.length) return null;
+
+  const tabs = pPr.elements.find((el) => el.name === 'w:tabs');
+  if (!tabs?.elements?.length) return null;
+
+  const tabElements = tabs.elements.filter((el) => el.name === 'w:tab');
+  if (!tabElements.length) return null;
+
+  // Prefer a right-aligned tab if available, otherwise use the first
+  const rightTab = tabElements.find((t) => t.attributes?.['w:val'] === 'right');
+  const targetTab = rightTab || tabElements[0];
+  return targetTab.attributes?.['w:leader'] || null;
+};
+
+/**
  * Extract style ID from paragraph node with caching
  */
 const getStyleId = (pNode) => {
@@ -231,6 +254,7 @@ const findFieldCharIndicesForKeyword = (pNode, keyword) => {
 const parseTocEntry = (pNode, params) => {
   const { docx, nodeListHandler } = params;
   const styleId = getStyleId(pNode);
+  const leader = getTabLeader(pNode);
 
   // Identify fldChar indices tied to the PAGEREF field specifically
   const {
@@ -321,7 +345,9 @@ const parseTocEntry = (pNode, params) => {
   const filteredContent = content.filter((node) => node.type !== 'tab');
 
   // Ensure a tab separator between title and page number
-  filteredContent.push({ type: 'tab' });
+  const tabAttrs = { isToc: true };
+  if (leader) tabAttrs.leader = leader;
+  filteredContent.push({ type: 'tab', attrs: tabAttrs });
   if (pageNumNode) filteredContent.push(pageNumNode);
 
   return {

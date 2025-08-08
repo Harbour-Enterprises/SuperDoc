@@ -1,0 +1,52 @@
+.sd-toc-wrapper {
+  --content: ' . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . '
+    '. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . '
+    '. . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . ';
+  display: flex;
+  flex-direction: column;
+}
+
+.sd-toc-entry {
+  display: flex;
+  align-items: center; /* Ensure all elements are vertically centered */
+  min-height: 1.2em; /* Provide consistent minimum height */
+}
+
+.sd-toc-entry > .sd-toc-tab {
+  flex-grow: 1;
+  display: flex;
+  align-items: center; /* Center the dots vertically */
+  min-height: 1em; /* Ensure consistent height */
+}
+
+.sd-toc-tab {
+  position: relative;
+  overflow: hidden;
+  &[data-leader='dot'] {
+    /* Create dot leader using background pattern */
+    &::after {
+      height: 18px;
+      content: var(--content);
+      position: absolute;
+      padding: 0 0.25ch;
+      text-align: center;
+    }
+  }
+
+  &[data-leader='hyphen'] {
+    /* Create hyphen leader using background pattern */
+    &::after {
+      content: var(--content);
+      position: absolute;
+      top: 55%;
+      left: 0.5rem;
+      right: 0.5rem;
+      bottom: 0;
+      background-image: linear-gradient(to right, currentColor 2px, transparent 2px);
+      background-size: 6px 1px;
+      background-repeat: repeat-x;
+      background-position: center; /* Center the dashes vertically */
+      pointer-events: none;
+    }
+  }
+}

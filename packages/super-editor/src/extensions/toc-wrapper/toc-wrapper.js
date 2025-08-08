@@ -15,7 +15,7 @@ export const TocWrapper = Node.create({
         'data-id': 'toc-wrapper',
         contenteditable: 'false',
         'aria-label': 'Table of Contents wrapper',
-        class: 'toc-wrapper',
+        class: 'sd-toc-wrapper',
       },
     };
   },

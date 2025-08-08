@@ -40,6 +40,21 @@ export const TabNode = Node.create({
           return { style };
         },
       },
+      // Leader type for TOC tabs (e.g., dot, hyphen, heavy, middleDot, none)
+      leader: {
+        default: null,
+        renderDOM: ({ leader }) => {
+          if (!leader) return {};
+          return { 'data-leader': leader };
+        },
+      },
+      // Marks this tab as coming from a Table of Contents
+      isToc: {
+        default: false,
+        renderDOM: ({ isToc }) => {
+          return isToc ? { class: 'sd-toc-tab' } : {};
+        },
+      },
     };
   },
 
