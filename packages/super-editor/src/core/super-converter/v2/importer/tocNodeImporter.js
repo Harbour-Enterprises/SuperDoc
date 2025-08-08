@@ -73,18 +73,22 @@ const hasFldCharWithInstr = (node, type, keyword = null) => {
 };
 
 /*
-  Get the instruction text and also any space value we need to store
+  Get the instruction text (recursively) and also any space value we need to store.
+  If a keyword is provided, return the first instrText that contains it; otherwise
+  return the first instrText found in document order. The corresponding xml:space
+  for the matched instrText is also returned.
 */
 const getInstrText = (pNode, keyword = null) => {
-  if (!pNode?.elements) return { text: null, space: null };
+  if (!pNode) return { text: null, space: null };
 
-  // Always extract instruction texts fresh to capture all types
-  const texts = [];
-  let spaceValue = null;
+  /**
+   * Collect all instrText nodes in document order with their text and xml:space
+   */
+  const collected = [];
 
-  for (const r of pNode.elements) {
-    if (!r?.elements) continue;
-    for (const el of r.elements) {
+  const walk = (n) => {
+    if (!n || !n.elements) return;
+    for (const el of n.elements) {
       if (el.name === 'w:instrText') {
         let textVal;
         if (typeof el.text === 'string') textVal = el.text;
@@ -92,28 +96,28 @@ const getInstrText = (pNode, keyword = null) => {
           const txt = el.elements.find((t) => typeof t.text === 'string');
           if (txt) textVal = txt.text;
         }
-        if (textVal) {
-          texts.push(textVal); // Don't trim - preserve original spacing
-        }
-
-        // Extract xml:space attribute if present
-        if (el.attributes && el.attributes['xml:space']) {
-          spaceValue = el.attributes['xml:space'];
+        if (typeof textVal === 'string') {
+          collected.push({
+            text: textVal, // preserve original spacing
+            space: el.attributes?.['xml:space'] || null,
+          });
         }
       }
+      if (el.elements?.length) walk(el);
     }
-  }
+  };
 
-  let resultText = null;
+  walk(pNode);
+
+  if (collected.length === 0) return { text: null, space: null };
+
   if (keyword) {
-    // Find the first text that contains the keyword
-    resultText = texts.find((text) => text.includes(keyword)) || null;
-  } else {
-    // Return the first instruction text (most common case)
-    resultText = texts.length > 0 ? texts[0] : null;
+    const match = collected.find((c) => c.text.includes(keyword));
+    return match || { text: null, space: null };
   }
 
-  return { text: resultText, space: spaceValue };
+  // Default: first instrText encountered
+  return collected[0];
 };
 
 const extractBookmarkFromInstr = (instr) => {
@@ -146,71 +150,112 @@ const getStyleId = (pNode) => {
 };
 
 /**
- * Find field character indices in a single pass
- * This goes 3 levels deep - Should be enough to find the fldChar
- * We thought 2 would be enough but it was not working
+ * Find the run indices for the fldChar begin/separate/end that belong to the field
+ * whose instruction text contains the given keyword (e.g., 'PAGEREF').
+ *
+ * This function uses a stack to track nested fields in a Word document paragraph.
+ * Each field in Word is marked by three special characters:
+ * - begin: Marks the start of a field
+ * - separate: Divides the field's instruction from its result
+ * - end: Marks the end of a field
+ *
+ * The stack works by:
+ * 1. Pushing a new field object when 'begin' is found
+ * 2. Accumulating instruction text for the current field on top of stack
+ * 3. Setting 'separate' index when found for current field
+ * 4. Popping and completing field when 'end' is found
+ *
+ * This stack approach ensures we correctly match begin/separate/end markers
+ * even when fields are nested (like TOC fields containing PAGEREF fields),
+ * by tying each triple to its specific instruction text containing keywords
+ * like 'PAGEREF' or 'TOC'.
  */
-const findFieldCharIndices = (elements) => {
-  const indices = { begin: -1, separate: -1, end: -1 };
+const findFieldCharIndicesForKeyword = (pNode, keyword) => {
+  if (!pNode) return { begin: -1, separate: -1, end: -1, runNodes: [] };
 
-  for (let i = 0; i < elements.length; i++) {
-    const r = elements[i];
-    if (!r?.elements) continue;
+  const runNodes = [];
 
-    for (const el of r.elements) {
-      if (el.name === 'w:fldChar') {
-        const type = el.attributes?.['w:fldCharType'];
-        if (type && indices[type] === -1) {
-          indices[type] = i;
-        }
-      } else if (el.elements) {
-        for (const el2 of el.elements) {
-          if (el2.name === 'w:fldChar') {
-            const type = el2.attributes?.['w:fldCharType'];
-            if (type && indices[type] === -1) {
-              indices[type] = i;
+  // Stack-based matcher for field triples with accumulated instruction text
+  const openStack = [];
+  const completed = [];
+
+  const walk = (n) => {
+    if (!n?.elements) return;
+    for (const el of n.elements) {
+      if (el.name === 'w:r') {
+        const runIdx = runNodes.length;
+        runNodes.push(el);
+
+        if (el.elements?.length) {
+          for (const child of el.elements) {
+            if (child.name === 'w:fldChar') {
+              const type = child.attributes?.['w:fldCharType'];
+              if (type === 'begin') {
+                openStack.push({ begin: runIdx, separate: -1, end: -1, instrText: '' });
+              } else if (type === 'separate') {
+                if (openStack.length) openStack[openStack.length - 1].separate = runIdx;
+              } else if (type === 'end') {
+                if (openStack.length) {
+                  const f = openStack.pop();
+                  f.end = runIdx;
+                  completed.push(f);
+                }
+              }
+            } else if (child.name === 'w:instrText') {
+              let textVal;
+              if (typeof child.text === 'string') textVal = child.text;
+              else if (child.elements?.length) {
+                const txt = child.elements.find((t) => typeof t.text === 'string');
+                if (txt) textVal = txt.text;
+              }
+              if (typeof textVal === 'string' && openStack.length) {
+                openStack[openStack.length - 1].instrText += textVal;
+              }
             }
           }
         }
       }
+      if (el.elements?.length) walk(el);
     }
-  }
+  };
 
-  console.log('indices', indices);
-  return indices;
+  walk(pNode);
+
+  // Pick the first completed field whose instruction text contains the keyword
+  const match = completed.find((f) => typeof f.instrText === 'string' && f.instrText.includes(keyword));
+  if (!match) return { begin: -1, separate: -1, end: -1, runNodes };
+
+  return { begin: match.begin, separate: match.separate, end: match.end, runNodes };
 };
 
 const parseTocEntry = (pNode, params) => {
-  console.log('parseTocEntry', pNode);
   const { docx, nodeListHandler } = params;
-  const elements = pNode.elements || [];
-
   const styleId = getStyleId(pNode);
 
-  // Collect every w:r in document order (handles nested hyperlink etc.)
-  const runNodes = [];
-  const collectRuns = (nodes) => {
-    nodes.forEach((n) => {
-      if (!n) return;
-      if (n.name === 'w:r') runNodes.push(n);
-      if (n.elements?.length) collectRuns(n.elements);
-    });
-  };
-  collectRuns(elements);
+  // Identify fldChar indices tied to the PAGEREF field specifically
+  const {
+    begin: beginIdx,
+    separate: separateIdx,
+    end: endIdx,
+    runNodes,
+  } = findFieldCharIndicesForKeyword(pNode, 'PAGEREF');
 
-  // Find field char indices in the flattened run list
-  const { begin: beginIdx, separate: separateIdx, end: endIdx } = findFieldCharIndices(runNodes);
+  // If this paragraph is also the wrapper paragraph, exclude everything before
+  // the wrapper's separate from the title runs so we don't accidentally include
+  // wrapper field bits (TOC instrText, wrapper begin, etc.) in the title.
+  const { separate: wrapperSeparateIdx } = findFieldCharIndicesForKeyword(pNode, 'TOC');
 
-  // Runs before the first fldChar begin make up the visible section title
-  const sectionRuns = beginIdx > 0 ? runNodes.slice(0, beginIdx) : [];
-
-  console.log('sectionRuns', sectionRuns);
+  // Runs before the entry's fldChar begin make up the visible section title,
+  // but start after the wrapper's separate if present.
+  let sectionRuns = [];
+  if (beginIdx > 0) {
+    const startIdx = wrapperSeparateIdx > -1 ? wrapperSeparateIdx + 1 : 0;
+    sectionRuns = runNodes.slice(startIdx, beginIdx);
+  }
 
   // Runs containing cached page number are between separate and end
   const pageNumberRuns =
     separateIdx > -1 ? runNodes.slice(separateIdx + 1, endIdx > -1 ? endIdx : runNodes.length) : [];
-
-  console.log('pageNumberRuns', pageNumberRuns);
 
   // Process title runs through standard run handling to preserve styling
   let titleContent = [];
@@ -244,11 +289,12 @@ const parseTocEntry = (pNode, params) => {
     // Marks from first run's rPr
     const firstRun = pageNumberRuns.find((r) => r.elements?.some((el) => el.name === 'w:t'));
     const rPr = firstRun?.elements?.find((el) => el.name === 'w:rPr');
-    pageNumMarks = parseMarks(rPr || { elements: [] }, docx);
+    // parseMarks signature: parseMarks(property, unknownMarks = [], docx = null)
+    pageNumMarks = parseMarks(rPr || { elements: [] }, [], docx);
   }
 
   // Build hyperlink mark applied to all nodes
-  const instrData = getInstrText(pNode);
+  const instrData = getInstrText(pNode, 'PAGEREF');
   const bookmark = extractBookmarkFromInstr(instrData.text);
   const linkMark = bookmark ? { type: 'link', attrs: { href: `#${bookmark}` } } : null;
 
@@ -278,10 +324,13 @@ const parseTocEntry = (pNode, params) => {
   filteredContent.push({ type: 'tab' });
   if (pageNumNode) filteredContent.push(pageNumNode);
 
-  console.log('filteredContent', filteredContent);
-  console.log('styleId', styleId);
-  console.log('space', instrData.space);
-  return { content: filteredContent, styleId, space: instrData.space };
+  return {
+    content: filteredContent,
+    styleId,
+    space: instrData.space,
+    pageNumber: pageNumText,
+    bookmark,
+  };
 };
 
 const isTocStartParagraph = (node) => {
@@ -304,88 +353,97 @@ export const handleTocNode = (params) => {
 
   // Only proceed if the current position is the TOC wrapper start
   const firstNode = nodes[0];
-  if (!isTocStartParagraph(firstNode)) return { nodes: [], consumed: 0 };
+  const firstIsWrapper = isTocStartParagraph(firstNode);
+  if (!firstIsWrapper) {
+    return { nodes: [], consumed: 0 };
+  }
 
   const tocEntries = [];
   let consumed = 0;
   let wrapperSeparateReached = false;
 
   // Cache the wrapper instruction to avoid repeated calls
-  const wrapperInstrData = getInstrText(firstNode);
+  const wrapperInstrData = getInstrText(firstNode, 'TOC');
 
   while (consumed < nodes.length) {
     const current = nodes[consumed];
 
     // Record wrapper break point
     if (!wrapperSeparateReached && hasFldCharWithInstr(current, 'separate')) {
-      console.log('found first break point', current);
       wrapperSeparateReached = true;
-      consumed += 1;
-      continue;
+      // consumed += 1;
+      // continue;
     }
 
     // When separate reached, collect entries until we hit wrapper end
     if (wrapperSeparateReached) {
-      console.log('wrapperSeparateReached', wrapperSeparateReached);
-      const isEntry = isTocEntryParagraph(current);
-      const hasEnd = hasFldCharWithInstr(current, 'end');
+      try {
+        const isEntry = isTocEntryParagraph(current);
+        const hasEnd = hasFldCharWithInstr(current, 'end');
+        if (hasEnd && !isEntry) {
+          // This is the wrapper closing paragraph (contains fldChar end and possibly page break)
+          const footerNodes = nodeListHandler.handler({
+            nodes: [carbonCopy(current)],
+            docx,
+            nodeListHandler,
+            insideTrackChange,
+            converter,
+            editor,
+            filename,
+            parentStyleId,
+            lists,
+          });
+          consumed += 1;
 
-      console.log('hasEnd', hasEnd);
-      console.log('isEntry', isEntry);
-      if (hasEnd && !isEntry) {
-        // This is the wrapper closing paragraph (contains fldChar end and possibly page break)
-        const footerNodes = nodeListHandler.handler({
-          nodes: [carbonCopy(current)],
-          docx,
-          nodeListHandler,
-          insideTrackChange,
-          converter,
-          editor,
-          filename,
-          parentStyleId,
-          lists,
-        });
+          // Build wrapper node first
+          const wrapperNode = {
+            type: 'toc-wrapper',
+            content: tocEntries,
+            attrs: {
+              instruction: wrapperInstrData.text,
+              space: wrapperInstrData.space,
+            },
+          };
+          const resultNodes = [wrapperNode, ...footerNodes];
+          return { nodes: resultNodes, consumed };
+        }
+
+        if (isEntry) {
+          try {
+            const {
+              content: entryContent,
+              styleId,
+              space,
+              pageNumber,
+              bookmark,
+            } = parseTocEntry(current, {
+              docx,
+              nodeListHandler,
+              insideTrackChange,
+              converter,
+              editor,
+              filename,
+              parentStyleId,
+              lists,
+            });
+            const instrData = getInstrText(current, 'PAGEREF');
+            const attrs = { instruction: instrData.text };
+            if (styleId) attrs.styleId = styleId;
+            if (space) attrs.space = space;
+            if (typeof pageNumber === 'string') attrs.pageNumber = pageNumber;
+            if (typeof bookmark === 'string') attrs.bookmark = bookmark;
+            const entry = { type: 'toc-entry', content: entryContent, attrs };
+            tocEntries.push(entry);
+          } catch {}
+        }
+
         consumed += 1;
-
-        // Build wrapper node first
-        const wrapperNode = {
-          type: 'toc-wrapper',
-          content: tocEntries,
-          attrs: {
-            instruction: wrapperInstrData.text,
-            space: wrapperInstrData.space,
-          },
-        };
-        const resultNodes = [wrapperNode, ...footerNodes];
-        console.log('wrapperNodes', wrapperNode);
-        return { nodes: resultNodes, consumed };
+        continue;
+      } catch {
+        // Fail-safe: increment to avoid infinite loop
+        consumed += 1;
+        continue;
       }
-
-      if (isEntry) {
-        const {
-          content: entryContent,
-          styleId,
-          space,
-        } = parseTocEntry(current, {
-          docx,
-          nodeListHandler,
-          insideTrackChange,
-          converter,
-          editor,
-          filename,
-          parentStyleId,
-          lists,
-        });
-        const instrData = getInstrText(current);
-        const attrs = { instruction: instrData.text };
-        if (styleId) attrs.styleId = styleId;
-        if (space) attrs.space = space;
-        tocEntries.push({ type: 'toc-entry', content: entryContent, attrs });
-        console.log('tocEntries', tocEntries);
-      }
-
-      consumed += 1;
-      continue;
     }
 
     // We are still in the wrapper start paragraph, just count it and move on
