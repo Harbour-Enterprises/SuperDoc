@@ -133,6 +133,8 @@ const handleClickOutside = (e) => {
     'track-delete-dec',
     'track-format',
     'track-format-dec',
+    'ProseMirror',
+    'ProseMirror-focused',
   ];
 
   if (excludedClasses.some((className) => e.target.classList.contains(className))) return;
