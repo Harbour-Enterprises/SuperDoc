@@ -315,7 +315,6 @@ Never expose API keys in frontend code. Call the conversion API from your backen
 
 ## Key Improvements
 
-Your new API is much better than the old one:
 - **Direct file upload** instead of base64 encoding (more efficient)
 - **Direct PDF response** instead of base64 response (simpler)
 - **Standard Bearer auth** instead of custom header
