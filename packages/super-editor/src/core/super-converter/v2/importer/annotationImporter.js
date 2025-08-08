@@ -55,8 +55,8 @@ export const handleAnnotationNode = (params) => {
   if (!allAttrs.hash) allAttrs.hash = generateDocxRandomId(4);
 
   // Some w:sdt nodes have attrs.fieldId (coming from GoogleDocs) so we need a secondary check
-  // Expecting fieldType if its a field annotation
-  if (!attrs.fieldId || !attrs.fieldType) {
+  // Expecting `type` if its a field annotation
+  if (!attrs.fieldId || !attrs.type) {
     return { nodes: [], consumed: 0 };
   }
 
