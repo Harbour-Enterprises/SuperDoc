@@ -291,117 +291,50 @@ const mySuperDocConfig = {
 };
 ```
 
-# PDF conversion
+# PDF Conversion <Badge text="new" type="tip" />
 
-You can convert .docx files to PDF with our conversion endpoint. This must be done from the backend, so if you need conversion in the frontend, make sure to set up an endpoint in your own backend that you call from the frontend (which then in turn calls our conversion endpoint)
+Convert DOCX files to PDF using the SuperDoc API.
 
-## Authentication
-
-To authenticate you need to add an `x-api-key` header with your API key:
+## Quick Start
 
 ```bash
-x-api-key: YOUR_API_KEY
+curl -X POST https://api.superdoc.dev/v1/convert?from=docx \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -F "file=@document.docx" \
+  -o output.pdf
 ```
 
-::: warning Security Note
+## Getting Started
 
-Your API keys carry many privileges, so be sure to keep them secure:
+1. **Get an API key**: Register at [api.superdoc.dev/v1/auth/register?email=you@email.com](https://api.superdoc.dev/v1/auth/register?email=you@email.com)
+2. **View full documentation**: [api.superdoc.dev/docs](https://api.superdoc.dev/docs)
 
-- You need to contact superdoc team for an API key: q@superdoc.dev
-- Never use API keys in client-side code, JavaScript, mobile apps, or public repositories
-- Store keys securely as environment variables or in secure configuration files
-- Limit API key access to only essential team members
-- Don't embed credentials directly in your code base, even if it's private
+::: warning Backend Only
+Never expose API keys in frontend code. Call the conversion API from your backend, then serve the PDF to your frontend.
 :::
 
-**Endpoint**
+## Key Improvements
 
-```http
-POST https://api.myharbourshare.com/v2/documents/convert
+- **Direct file upload** instead of base64 encoding (more efficient)
+- **Direct PDF response** instead of base64 response (simpler)
+- **Standard Bearer auth** instead of custom header
+- **RESTful design** with query parameters for format specification
+
+## Example
+
+```javascript
+// Backend endpoint example
+app.post('/convert-pdf', async (req, res) => {
+  const formData = new FormData();
+  formData.append('file', req.file.buffer, req.file.originalname);
+  
+  const response = await fetch('https://api.superdoc.dev/v1/convert?from=docx', {
+    method: 'POST',
+    headers: { 'Authorization': `Bearer ${process.env.SUPERDOC_API_KEY}` },
+    body: formData
+  });
+  
+  const pdf = await response.blob();
+  res.type('application/pdf').send(pdf);
+});
 ```
-
-
-**Request Body**
-| Field | Type | Description | Required |
-|:------|:-----|:------------|:--------:|
-| file_base64 | `string` | Base64 of original docx document | ✓ |
-| filename | `string` | Original name of the document | ✓ |
-| final_format | `string` | Format to convert to (default: `pdf`) | |
-
-**Response Body**
-
-| Field | Type | Description |
-|:------|:-----|:------------|
-| file_base64 | `string` | Base64 of converted document |
-| filename | `string` | Updated filename with proper format |
-
-:::warning Important
-- The document must be in a format that can be converted to the requested output format
-- The Base64 string should be valid
-:::
-
-:::details Example Request
-
-```json
-POST /documents/convert
-
-{
-  "file_base64": "UEsDBBQABgAIAAAAIQDTutUjug...",
-  "filename": "example_document.docx",
-  "final_format": "pdf"
-}
-```
-
-
-:::
-
-:::details Success Response
-
-```json
-{
-  "file_base64": "JVBERi0xLjcKJcOkw7zDtsOfCjIgMCBvYmoK...",
-  "filename": "example_document.pdf"
-}
-```
-
-:::
-
-:::details Error Response
-
-```json
-{
-    "code": 3001,
-    "message": "Invalid request",
-    "detail": "The request payload failed validation. Please check the errors array for details.",
-    "docs": "https://docs.harbourshare.com/errors/3001",
-    "errors": [
-        {
-            "path": "file_base64",
-            "code": "custom",
-            "message": "file_base64 must be a valid Base64-encoded string",
-            "internal_message": "Validation error: value_error",
-            "resolution": "Provide a valid value that meets all requirements",
-            "docs": "https://docs.harbourshare.com/errors/#custom"
-        }
-    ]
-}
-```
-
-:::
-
-**Supported Formats**
-
-The API currently supports the following conversion formats:
-
-1. **PDF**
-   > - Convert documents to PDF format
-   > - Maintains formatting and layout of the original document
-   > - Default format if none specified
-
-**Notes**
-
-- Conversion operations are asynchronous and may take a few seconds to complete
-- If the base64 is invalid, the conversion won't be possible
-- This approach is secure as data is not persisted on our servers and uploading a document is not required
-
-
