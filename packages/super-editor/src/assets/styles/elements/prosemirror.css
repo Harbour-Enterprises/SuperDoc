@@ -340,6 +340,11 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   z-index: -1;
 }
 
+.ProseMirror div[data-horizontal-rule='true'] {
+  margin-top: auto;
+  align-self: flex-end;
+}
+
 .sd-editor-dropcap {
   float: left;
   display: flex;

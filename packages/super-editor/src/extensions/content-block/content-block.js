@@ -19,6 +19,13 @@ export const ContentBlock = Node.create({
 
   addAttributes() {
     return {
+      horizontalRule: {
+        default: false,
+        renderDOM: ({ horizontalRule }) => {
+          if (!horizontalRule) return {};
+          return { 'data-horizontal-rule': 'true' };
+        },
+      },
       size: {
         default: null,
         renderDOM: ({ size }) => {
@@ -27,8 +34,9 @@ export const ContentBlock = Node.create({
           let style = '';
           if (size.top) style += `top: ${size.top}px; `;
           if (size.left) style += `left: ${size.left}px; `;
-          if (size.width) style += `width: ${size.width}px; `;
-          if (size.height) style += `height: ${size.height}px; `;
+          if (size.width) style += `width: ${size.width.toString().endsWith('%') ? size.width : `${size.width}px`}; `;
+          if (size.height)
+            style += `height: ${size.height.toString().endsWith('%') ? size.height : `${size.height}px`}; `;
           return { style };
         },
       },
