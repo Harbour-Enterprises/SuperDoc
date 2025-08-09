@@ -2675,6 +2675,10 @@ function translateTocWrapper(params) {
         },
       },
       {
+        name: 'w:pPr',
+        elements: [{ name: 'w:tabs', elements: [{ name: 'w:tab', attributes: { 'w:val': 'left' } }] }],
+      },
+      {
         name: 'w:r',
         elements: [
           {
@@ -2765,12 +2769,31 @@ function translateTocEntry(params) {
 
   const contentRuns = translatedChildren[0].elements.filter((e) => e.name !== 'w:pPr');
 
+  // Extract leader information from the TOC tab in this entry, if present
+  let tocTabLeader = null;
+  let anyTabNode = null;
+  try {
+    const contentNodes = Array.isArray(node.content) ? node.content : [];
+    // Prefer the tab explicitly marked as coming from TOC
+    const tocTabNode = contentNodes.find((n) => n && n.type === 'tab' && n.attrs && n.attrs.isToc === true);
+    anyTabNode = contentNodes.find((n) => n && n.type === 'tab' && n.attrs);
+    tocTabLeader = tocTabNode?.attrs?.leader || anyTabNode?.attrs?.leader || null;
+  } catch {}
+
+  // Build w:tab attributes; include leader if available
+  // @todo: fix this hardcoded
+  const tocTabAttributes = { 'w:val': 'left' };
+  if (typeof tocTabLeader === 'string' && tocTabLeader.length > 0) {
+    tocTabAttributes['w:leader'] = tocTabLeader;
+  }
+
+  // If we have a tab node add it to the ppr with any attributes
+  if (anyTabNode) {
+    pPr.elements.unshift({ name: 'w:tabs', elements: [{ name: 'w:tab', attributes: tocTabAttributes }] });
+  }
+
   const pageRefField = [
     // Eventually we should store the tab properties and add them here
-    {
-      name: 'w:r',
-      elements: [{ name: 'w:tab' }],
-    },
     {
       name: 'w:r',
       elements: [
@@ -2822,10 +2845,9 @@ function translateTocEntry(params) {
     },
   ];
 
-  console.log('pageRefField', pageRefField);
   return {
     name: 'w:p',
-    elements: [pPr, ...contentRuns, ...pageRefField],
+    elements: [pPr, ...contentRuns, { name: 'w:r', elements: [{ name: 'w:tab' }] }, ...pageRefField],
   };
 }
 
