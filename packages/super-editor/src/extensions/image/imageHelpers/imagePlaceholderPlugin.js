@@ -1,10 +1,9 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { Mapping, StepMap } from 'prosemirror-transform';
 
 export const ImagePlaceholderPluginKey = new PluginKey('ImagePlaceholder');
 
-export const ImagePlaceholderPlugin = (options = {}) => {
+export const ImagePlaceholderPlugin = () => {
   return new Plugin({
     key: ImagePlaceholderPluginKey,
 
@@ -13,7 +12,7 @@ export const ImagePlaceholderPlugin = (options = {}) => {
         return DecorationSet.empty;
       },
 
-      apply(tr, set, oldState, newState) {
+      apply(tr, set) {
         // For reference.
         // let diffStart = tr.doc.content.findDiffStart(oldState.doc.content);
         // let diffEnd = oldState.doc.content.findDiffEnd(tr.doc.content);

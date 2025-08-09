@@ -212,7 +212,7 @@ export const FieldAnnotation = Node.create({
   },
 
   renderDOM({ node, htmlAttributes }) {
-    let { type, displayLabel, imageSrc, rawHtml, linkUrl } = node.attrs;
+    let { type, displayLabel, imageSrc, linkUrl } = node.attrs;
 
     let textRenderer = () => {
       return [
@@ -442,7 +442,7 @@ export const FieldAnnotation = Node.create({
 
       deleteFieldAnnotation:
         (annotation) =>
-        ({ dispatch, state, tr }) => {
+        ({ dispatch, tr }) => {
           if (!annotation) {
             return true;
           }

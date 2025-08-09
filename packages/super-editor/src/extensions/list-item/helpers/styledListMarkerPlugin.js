@@ -5,7 +5,7 @@ import { findChildren, getMarkType } from '@core/helpers/index.js';
 import { parseSizeUnit } from '@core/utilities/index.js';
 import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 
-export function styledListMarker(options = {}) {
+export function styledListMarker() {
   return new Plugin({
     key: new PluginKey('styledListMarker'),
 

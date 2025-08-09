@@ -1,5 +1,4 @@
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
-import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 
 /**
  * Flattens ALL lists to ensure each list contains exactly ONE list item.
@@ -94,7 +93,7 @@ function flattenFoundList(listElem, editor, NodeInterface) {
   // Create single-item lists for each item
   const newLists = [];
 
-  items.forEach((li, index) => {
+  items.forEach((li) => {
     // Extract any nested lists first
     const nestedLists = Array.from(li.querySelectorAll('ol, ul'));
     const nestedListsData = nestedLists.map((nl) => ({
@@ -188,25 +187,6 @@ function createSingleItemList(li, tag, rootNumId, level, editor, NodeInterface) 
   return newList;
 }
 
-// Keep the original function signature for backwards compatibility
-export function flattenSingleList(listElem, editor, level = 0, parentNumId, NodeInterface) {
-  // This function is now just a wrapper that calls the main flattening logic
-  const results = [];
-  const tempDiv = listElem.ownerDocument.createElement('div');
-  tempDiv.appendChild(listElem.cloneNode(true));
-
-  const flattened = flattenListsInHtml(tempDiv.innerHTML, editor);
-  const tempDoc = new DOMParser().parseFromString(flattened, 'text/html');
-
-  Array.from(tempDoc.body.children).forEach((child) => {
-    if (child.tagName && (child.tagName.toLowerCase() === 'ol' || child.tagName.toLowerCase() === 'ul')) {
-      results.push(child);
-    }
-  });
-
-  return results;
-}
-
 /**
  * Converts flatten lists back to normal list structure.
  */
@@ -298,7 +278,7 @@ function buildNestedList({ items }) {
 
   const lastLevelItem = new Map();
   items.forEach((item) => {
-    const { element: liElement, level, numFmt, listLevel } = item;
+    const { element: liElement, level, numFmt } = item;
     const cleanLi = cleanListItem(liElement.cloneNode(true));
 
     if (level === 0) {

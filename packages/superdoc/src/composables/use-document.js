@@ -1,4 +1,4 @@
-import { ref, shallowRef, toRaw } from 'vue';
+import { ref, shallowRef } from 'vue';
 import { useField } from './use-field';
 import { documentTypes } from '@harbour-enterprises/common';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';

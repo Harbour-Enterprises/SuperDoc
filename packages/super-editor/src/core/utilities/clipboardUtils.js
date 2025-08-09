@@ -1,6 +1,6 @@
 // clipboardUtils.js
 
-import { DOMSerializer, DOMParser, Fragment } from 'prosemirror-model';
+import { DOMSerializer, DOMParser } from 'prosemirror-model';
 
 /**
  * Serializes the current selection in the editor state to HTML and plain text for clipboard use.
@@ -59,7 +59,7 @@ export async function readFromClipboard(state) {
           text = await (await item.getType('text/plain')).text();
         }
       }
-    } catch (e) {
+    } catch {
       text = await navigator.clipboard.readText();
     }
   } else {

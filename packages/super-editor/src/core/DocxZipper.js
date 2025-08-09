@@ -18,7 +18,7 @@ class DocxZipper {
   /**
    * Get all docx data from the zipped docx
    *
-   * [Content_Types].xml
+   * [ContentTypes].xml
    * _rels/.rels
    * word/document.xml
    * word/_rels/document.xml.rels
@@ -40,7 +40,7 @@ class DocxZipper {
     const mediaObjects = {};
     const validTypes = ['xml', 'rels'];
     for (const file of files) {
-      const [_, zipEntry] = file;
+      const [, zipEntry] = file;
 
       if (validTypes.some((validType) => zipEntry.name.endsWith(validType))) {
         const content = await zipEntry.async('string');

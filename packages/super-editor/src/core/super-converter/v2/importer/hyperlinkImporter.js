@@ -17,6 +17,7 @@ export const handleHyperlinkNode = (params) => {
   const anchor = attributes['w:anchor'];
 
   // TODO: Check if we need this atr
+  // eslint-disable-next-line no-unused-vars
   const history = attributes['w:history'];
 
   const rel = elements.find((el) => el.attributes['Id'] === rId) || {};

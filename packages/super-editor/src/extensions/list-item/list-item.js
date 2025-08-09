@@ -103,7 +103,7 @@ export const ListItem = Node.create({
           let listLevel = elem.getAttribute('data-list-level');
           try {
             listLevel = JSON.parse(listLevel);
-          } catch (e) {}
+          } catch {}
           return listLevel;
         },
         renderDOM: (attrs) => {

@@ -342,13 +342,7 @@ export const generateRelationship = (target) => {
  * @param {Object} param0
  * @returns
  */
-export const prepareCommentsXmlFilesForExport = ({
-  convertedXml,
-  defs,
-  commentsWithParaIds,
-  exportType,
-  converter,
-}) => {
+export const prepareCommentsXmlFilesForExport = ({ convertedXml, defs, commentsWithParaIds, exportType }) => {
   const relationships = [];
 
   // If we're exporting clean, simply remove the comments files

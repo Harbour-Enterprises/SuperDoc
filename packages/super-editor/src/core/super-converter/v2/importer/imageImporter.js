@@ -56,7 +56,7 @@ export function handleImageImport(node, currentFileName, params) {
 
   const graphic = node.elements.find((el) => el.name === 'a:graphic');
   const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
-  const { uri } = graphicData?.attributes;
+  const { uri } = graphicData?.attributes || {};
   const shapeURI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
   if (!!uri && uri === shapeURI) {
     return handleShapeDrawing(params, node, graphicData);
@@ -158,7 +158,9 @@ const handleShapeDrawing = (params, node, graphicData) => {
   const textBox = wsp.elements.find((el) => el.name === 'wps:txbx');
   const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
 
+  // eslint-disable-next-line no-unused-vars
   const isGraphicContainer = node.elements.find((el) => el.name === 'wp:docPr');
+
   const spPr = wsp.elements.find((el) => el.name === 'wps:spPr');
   const prstGeom = spPr?.elements.find((el) => el.name === 'a:prstGeom');
 
@@ -192,8 +194,11 @@ const getRectangleShape = (params, node) => {
   const xfrm = node.elements.find((el) => el.name === 'a:xfrm');
   const start = xfrm.elements.find((el) => el.name === 'a:off');
   const size = xfrm.elements.find((el) => el.name === 'a:ext');
-  const outline = node.elements.find((el) => el.name === 'a:ln');
   const solidFill = node.elements.find((el) => el.name === 'a:solidFill');
+
+  // TODO: We should handle this
+  // eslint-disable-next-line no-unused-vars
+  const outline = node.elements.find((el) => el.name === 'a:ln');
 
   const rectangleSize = {
     top: emuToPixels(start.attributes['y']),

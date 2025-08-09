@@ -65,9 +65,10 @@ export const getExportedResult = async (name, comments = []) => {
     media,
     mediaFiles,
     fonts,
+    annotations: true,
   });
 
-  const schema = editor.converter.getSchema();
+  const schema = editor.converter.getSchema(editor);
   const bodyNode = editor.converter.savedTagsToRestore.find((el) => el.name === 'w:body');
   const processedComments = comments.map((c) => ({
     ...c,

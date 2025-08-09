@@ -45,6 +45,16 @@ import { SuperValidator } from '@core/super-validator/index.js';
  */
 
 /**
+ * A map of plugin names to their helper API objects.
+ * Each plugin defines its own helper methods.
+ *
+ * Example:
+ * editor.helpers.linkedStyles.getStyles()
+ *
+ * @typedef {Object<string, Object<string, Function>>} EditorHelpers
+ */
+
+/**
  * Editor main class.
  *
  * Expects a config object.
@@ -165,12 +175,6 @@ export class Editor extends EventEmitter {
    */
   isFocused = false;
 
-  /**
-   * CSS styles for the editor
-   * @private
-   */
-  #css;
-
   options = {
     element: null,
     selector: null,
@@ -258,9 +262,9 @@ export class Editor extends EventEmitter {
     this.setOptions(options);
 
     let modes = {
-      docx: () => this.#init(this.options),
-      text: () => this.#initRichText(this.options),
-      html: () => this.#initRichText(this.options),
+      docx: () => this.#init(),
+      text: () => this.#initRichText(),
+      html: () => this.#initRichText(),
       default: () => {
         console.log('Not implemented.');
       },
@@ -311,10 +315,9 @@ export class Editor extends EventEmitter {
   /**
    * Initialize the editor with the given options
    * @private
-   * @param {EditorOptions} options - Editor options
    * @returns {void}
    */
-  #init(options) {
+  #init() {
     this.#createExtensionService();
     this.#createCommandService();
     this.#createSchema();
@@ -376,8 +379,8 @@ export class Editor extends EventEmitter {
    * @param {EditorOptions} options - Editor options
    * @returns {void}
    */
-  #initRichText(options) {
-    if (!options.extensions || !options.extensions.length) {
+  #initRichText() {
+    if (!this.options.extensions || !this.options.extensions.length) {
       this.options.extensions = getRichTextExtensions();
     }
 
@@ -492,6 +495,14 @@ export class Editor extends EventEmitter {
    */
   get commands() {
     return this.#commandService?.commands;
+  }
+
+  /**
+   * Get extension helpers.
+   * @returns {EditorHelpers} Object with helper methods for extensions
+   */
+  get helpers() {
+    return this.extensionService.helpers;
   }
 
   /**
@@ -926,7 +937,7 @@ export class Editor extends EventEmitter {
     let doc;
 
     try {
-      const { mode, fragment, isHeadless, content, loadFromSchema } = this.options;
+      const { mode, fragment, content, loadFromSchema } = this.options;
 
       if (mode === 'docx') {
         if (loadFromSchema) {
@@ -1648,7 +1659,7 @@ export class Editor extends EventEmitter {
       console.debug('🔗 [super-editor] Ending collaboration');
       if (this.options.collaborationProvider) this.options.collaborationProvider.disconnect();
       if (this.options.ydoc) this.options.ydoc.destroy();
-    } catch (error) {}
+    } catch {}
   }
 
   /**
@@ -1673,7 +1684,7 @@ export class Editor extends EventEmitter {
       }
       this.converter.headerEditors.length = 0;
       this.converter.footerEditors.length = 0;
-    } catch (error) {}
+    } catch {}
   }
 
   /**
@@ -1682,7 +1693,7 @@ export class Editor extends EventEmitter {
    * @param {Object} data - Document data
    * @returns {boolean} Whether migrations are needed
    */
-  static checkIfMigrationsNeeded(data) {
+  static checkIfMigrationsNeeded() {
     const dataVersion = version || 'initial';
     const migrations = getNecessaryMigrations(dataVersion) || [];
     console.debug('[checkVersionMigrations] Migrations needed:', dataVersion, migrations.length);

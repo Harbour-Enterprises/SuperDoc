@@ -1,6 +1,3 @@
-import { Transaction, EditorState } from 'prosemirror-state';
-import { Mapping, RemoveMarkStep } from 'prosemirror-transform';
-import { Node } from 'prosemirror-model';
 import { v4 as uuidv4 } from 'uuid';
 import { TrackDeleteMarkName, TrackFormatMarkName } from '../constants.js';
 import { TrackChangesBasePluginKey } from '../plugins/trackChangesBasePlugin.js';
@@ -8,16 +5,14 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
 
 /**
  * Remove mark step.
- * @param {EditorState} options.state Editor state.
- * @param {Transaction} options.tr Transaction.
- * @param {RemoveMarkStep} options.step Step.
- * @param {Transaction} options.newTr New transaction.
- * @param {Mapping} options.map Map.
- * @param {Node} options.doc Doc.
+ * @param {import('prosemirror-state').EditorState} options.state Editor state.
+ * @param {import('prosemirror-transform').RemoveMarkStep} options.step Step.
+ * @param {import('prosemirror-state').Transaction} options.newTr New transaction.
+ * @param {import('prosemirror-model').Node} options.doc Doc.
  * @param {object} options.user User object ({ name, email }).
  * @param {string} options.date Date.
  */
-export const removeMarkStep = ({ state, tr, step, newTr, map, doc, user, date }) => {
+export const removeMarkStep = ({ state, step, newTr, doc, user, date }) => {
   const meta = {};
 
   doc.nodesBetween(step.from, step.to, (node, pos) => {

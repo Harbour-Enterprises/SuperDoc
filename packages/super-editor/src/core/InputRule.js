@@ -209,7 +209,6 @@ export const inputRulesPlugin = ({ editor, rules }) => {
       handlePaste(view, event, slice) {
         const clipboard = event.clipboardData;
         const html = clipboard.getData('text/html');
-        const text = clipboard.getData('text/plain');
 
         // Allow specialised plugins (e.g., field-annotation) first shot.
         const fieldAnnotationContent = slice.content.content.filter((item) => item.type.name === 'fieldAnnotation');
@@ -217,7 +216,7 @@ export const inputRulesPlugin = ({ editor, rules }) => {
           return false;
         }
 
-        return handleClipboardPaste({ editor, view }, html, text);
+        return handleClipboardPaste({ editor, view }, html);
       },
     },
 
@@ -371,10 +370,9 @@ export function sanitizeHtml(html, forbiddenTags = ['meta', 'svg', 'script', 'st
  * @param {Editor}   params.editor  The SuperEditor instance.
  * @param {View}     params.view    The ProseMirror view associated with the editor.
  * @param {String}   html           HTML clipboard content (may be empty).
- * @param {String}   text           Plain text clipboard content (may be empty).
  * @returns {Boolean}               Whether the paste was handled.
  */
-export function handleClipboardPaste({ editor, view }, html, text) {
+export function handleClipboardPaste({ editor, view }, html) {
   let source;
   if (!html) {
     source = 'plain-text';

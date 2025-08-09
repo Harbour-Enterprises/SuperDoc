@@ -12,6 +12,8 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
   const seen = new Set();
 
   const lang = property?.elements?.find((el) => el.name === 'w:lang');
+
+  // eslint-disable-next-line no-unused-vars
   const langAttrs = lang?.attributes || {};
 
   property?.elements?.forEach((element) => {
@@ -158,7 +160,6 @@ function getMarkValue(markType, attributes, docx) {
 
   // Returned the mapped mark value
   if (markType in markValueMapper) {
-    const f = markValueMapper[markType];
     return markValueMapper[markType]();
   }
 }

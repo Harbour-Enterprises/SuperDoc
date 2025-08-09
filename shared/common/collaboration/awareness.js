@@ -7,7 +7,7 @@ export const awarenessStatesToArray = (context, states) => {
   const seenUsers = new Set();
 
   return Array.from(states.entries())
-    .filter(([_, value]) => {
+    .filter(([, value]) => {
       if (!value.user) return false;
       return !seenUsers.has(value.user?.email) && seenUsers.add(value.user?.email);
     })

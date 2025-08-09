@@ -98,7 +98,7 @@ function getActiveAttributes(state) {
     if (empty) state.doc.nodesBetween(start, end + 1, (node) => getAttrs(node));
     else state.doc.nodesBetween(from, to, (node) => getAttrs(node));
     return attributes;
-  } catch (error) {
+  } catch {
     return {};
   }
 }

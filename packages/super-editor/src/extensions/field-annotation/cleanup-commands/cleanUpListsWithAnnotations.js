@@ -35,7 +35,7 @@ export const cleanUpListsWithAnnotations =
 
       let matchingNodesFound = 0;
       let hasOtherNodes = false;
-      listItem.node.children.forEach((child, index) => {
+      listItem.node.children.forEach((child) => {
         const { type } = child;
         if (type.name !== 'paragraph' && type.name !== 'fieldAnnotation') return;
 

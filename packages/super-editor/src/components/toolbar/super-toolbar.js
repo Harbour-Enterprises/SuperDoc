@@ -9,7 +9,7 @@ import { startImageUpload, getFileOpener } from '../../extensions/image/imageHel
 import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { toolbarTexts } from './toolbarTexts.js';
-import { getQuickFormatList } from '@extensions/linked-styles/linked-styles.js';
+import { getQuickFormatList } from '@extensions/linked-styles/index.js';
 import { getAvailableColorOptions, makeColorOption, renderColorOptions } from './color-dropdown-helpers.js';
 import { isInTable } from '@helpers/isInTable.js';
 import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
@@ -348,20 +348,18 @@ export class SuperToolbar extends EventEmitter {
 
     /**
      * Toggles the ruler visibility
-     * @param {Object} [_params=null] - Command parameters (not used)
      * @returns {void}
      */
-    toggleRuler: (_params = null) => {
+    toggleRuler: () => {
       this.superdoc.toggleRuler();
     },
 
     /**
      * Initiates the image upload process
      * @async
-     * @param {Object} [_params=null - Command parameters (not used)
      * @returns {Promise<void>}
      */
-    startImageUpload: async (_params = null) => {
+    startImageUpload: async () => {
       let open = getFileOpener();
       let result = await open();
 
@@ -521,12 +519,11 @@ export class SuperToolbar extends EventEmitter {
     /**
      * Executes a table-related command
      * @param {Object} params - Command parameters
-     * @param {CommandItem} params.item - The command item
      * @param {Object} params.argument - The table command and its parameters
      * @param {string} params.argument.command - The specific table command to execute
      * @returns {void}
      */
-    executeTableCommand: ({ item, argument }) => {
+    executeTableCommand: ({ argument }) => {
       if (!argument) return;
 
       let command = argument.command;
@@ -733,8 +730,13 @@ export class SuperToolbar extends EventEmitter {
         const linkedStyles = this.activeEditor.converter?.linkedStyles.find(
           (style) => style.id === styleIdMark.attrs.styleId,
         );
-        if (linkedStyles && markToStyleMap[item.name.value] in linkedStyles?.definition.styles) {
-          const linkedStylesItem = linkedStyles?.definition.styles[markToStyleMap[item.name.value]];
+        if (
+          linkedStyles &&
+          linkedStyles.definition &&
+          linkedStyles.definition.styles &&
+          markToStyleMap[item.name.value] in linkedStyles.definition.styles
+        ) {
+          const linkedStylesItem = linkedStyles.definition.styles[markToStyleMap[item.name.value]];
           const value = {
             [item.name.value]: linkedStylesItem,
           };
@@ -815,11 +817,10 @@ export class SuperToolbar extends EventEmitter {
   /**
    * React to editor transactions. Might want to debounce this.
    * @param {Object} params - Transaction parameters
-   * @param {Object} params.editor - The editor instance (not used)
    * @param {Object} params.transaction - The transaction object
    * @returns {void}
    */
-  onEditorTransaction({ editor, transaction }) {
+  onEditorTransaction({ transaction }) {
     if (!transaction.docChanged && !transaction.selectionSet) return;
     this.updateToolbarState();
   }
@@ -849,7 +850,7 @@ export class SuperToolbar extends EventEmitter {
       return this.#interceptedCommands[command]({ item, argument });
     }
 
-    if (command in this.activeEditor?.commands) {
+    if (this.activeEditor && this.activeEditor.commands && command in this.activeEditor.commands) {
       this.activeEditor.commands[command](argument);
     }
 
@@ -882,14 +883,19 @@ export class SuperToolbar extends EventEmitter {
     let command = item.command;
     const noArgumentCommand = item.noArgumentCommand;
 
-    if (argument === 'none' && noArgumentCommand in this.activeEditor?.commands) {
+    if (
+      argument === 'none' &&
+      this.activeEditor &&
+      this.activeEditor.commands &&
+      noArgumentCommand in this.activeEditor.commands
+    ) {
       this.activeEditor.commands[noArgumentCommand]();
       if (typeof callback === 'function' && noArgumentCallback) callback(argument);
       this.updateToolbarState();
       return;
     }
 
-    if (command in this.activeEditor?.commands) {
+    if (this.activeEditor && this.activeEditor.commands && command in this.activeEditor.commands) {
       this.activeEditor.commands[command](argument);
       if (typeof callback === 'function') callback(argument);
       this.updateToolbarState();

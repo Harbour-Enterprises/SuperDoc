@@ -243,11 +243,9 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     event.stopPropagation();
 
     let deltaX = event.clientX - resizeState.startX;
-    let deltaY = event.clientY - resizeState.startY;
 
     // Adjust delta based on handle position
     if (resizeState.handle.includes('w')) deltaX = -deltaX;
-    if (resizeState.handle.includes('n')) deltaY = -deltaY;
 
     // Calculate new dimensions maintaining aspect ratio
     const newWidth = Math.max(20, resizeState.startWidth + deltaX);
@@ -268,11 +266,9 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     cleanupEventListeners();
 
     let deltaX = event.clientX - resizeState.startX;
-    let deltaY = event.clientY - resizeState.startY;
 
     // Adjust delta based on handle position
     if (resizeState.handle.includes('w')) deltaX = -deltaX;
-    if (resizeState.handle.includes('n')) deltaY = -deltaY;
 
     // Calculate final dimensions
     const newWidth = Math.max(20, resizeState.startWidth + deltaX);

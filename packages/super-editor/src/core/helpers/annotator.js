@@ -104,7 +104,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
   for (const row of rows) {
     let hasArrayAnnotation = false;
 
-    row.node.descendants((node, pos) => {
+    row.node.descendants((node) => {
       if (node.type === FieldType) {
         const annotationValue = getAnnotationValue(node.attrs.fieldId, annotationValues);
         if (Array.isArray(annotationValue) && node.attrs.generatorIndex === null) {
@@ -128,7 +128,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
 
   // Count how many rows we need to generate based on array lengths
   let rowsToGenerate = 0;
-  rowNode.descendants((childNode, childPos) => {
+  rowNode.descendants((childNode) => {
     if (childNode.type === FieldType) {
       const annotationValue = getAnnotationValue(childNode.attrs.fieldId, annotationValues);
       if (Array.isArray(annotationValue)) {

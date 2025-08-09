@@ -24,7 +24,7 @@ export const Search = Extension.create({
           const matches = storage?.searchResults;
           if (!matches?.length) return null;
 
-          const decorations = matches.map((match, index) =>
+          const decorations = matches.map((match) =>
             Decoration.inline(match.from, match.to, {
               id: `search-match-${match.id}`,
             }),
@@ -42,7 +42,7 @@ export const Search = Extension.create({
     return {
       goToFirstMatch:
         () =>
-        ({ state, editor, dispatch }) => {
+        ({ state, editor }) => {
           const highlights = getMatchHighlights(state);
           if (!highlights || !highlights.children?.length) return;
 
@@ -53,7 +53,7 @@ export const Search = Extension.create({
 
       search:
         (patternInput) =>
-        ({ state, editor, dispatch }) => {
+        ({ state, dispatch }) => {
           let pattern;
           let caseSensitive = false;
           let regexp = false;

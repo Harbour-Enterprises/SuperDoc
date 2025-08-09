@@ -10,7 +10,7 @@ import { floor } from '../helpers/floor.js';
 
 export const useHrbrFieldsStore = defineStore('hrbr-fields', () => {
   const superdocStore = useSuperdocStore();
-  const { documents, pages } = storeToRefs(superdocStore);
+  const { documents } = storeToRefs(superdocStore);
   const hrbrFieldsConfig = reactive({
     name: 'hrbr-fields',
   });

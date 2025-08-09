@@ -3,7 +3,7 @@ import { defineConfig } from 'vite';
 import { version } from './package.json';
 import { getAliases } from './vite.config.js';
 
-export default defineConfig(({ mode, command }) => {
+export default defineConfig(({ command }) => {
   const plugins = [vue()];
   const isDev = command === 'serve';
 

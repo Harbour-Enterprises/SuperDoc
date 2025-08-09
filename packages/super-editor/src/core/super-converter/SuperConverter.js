@@ -499,7 +499,7 @@ class SuperConverter {
     return { result, params };
   }
 
-  #exportNumberingFile(params) {
+  #exportNumberingFile() {
     const numberingPath = 'word/numbering.xml';
     let numberingXml = this.convertedXml[numberingPath];
 
@@ -736,7 +736,7 @@ function storeSuperdocVersion(docx) {
   let pid = 2;
   try {
     pid = cleanProperties.length ? Math.max(...elements.map((el) => el.attributes.pid)) + 1 : 2;
-  } catch (error) {}
+  } catch {}
 
   cleanProperties.push(generateSuperdocVersion(pid));
   properties.elements = cleanProperties;

@@ -39,7 +39,7 @@ export function useAi({ activeEditorRef }) {
       try {
         // Try to get coordinates from the selection head
         coords = view.coordsAtPos(selection.$head.pos);
-      } catch (e) {
+      } catch {
         // Fallback to using the DOM selection if ProseMirror position is invalid
         const domSelection = window.getSelection();
         if (domSelection.rangeCount > 0) {

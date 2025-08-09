@@ -2,7 +2,6 @@ import he from 'he';
 import { DOMParser as PMDOMParser } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { SuperConverter } from './SuperConverter.js';
-import { toKebabCase } from '@harbour-enterprises/common';
 import {
   emuToPixels,
   inchesToTwips,
@@ -21,7 +20,7 @@ import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
-import { translateChildNodes, baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/index.js';
+import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translateDocumentSection } from './v2/exporter/index.js';
 
 /**
@@ -236,7 +235,7 @@ function generateParagraphProperties(node) {
 
   const { spacing, indent, textAlign, textIndent, lineHeight, marksAttrs, keepLines, keepNext, dropcap } = attrs;
   if (spacing) {
-    const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
+    const { lineSpaceBefore, lineSpaceAfter, lineRule } = spacing;
 
     const attributes = {};
 
@@ -402,71 +401,6 @@ function translateDocumentNode(params) {
 
   return [node, params];
 }
-
-/**
- * The attributes to flatten and prepare for XML
- *
- * @param {SchemaAttributes} attrs
- * @returns {XmlAttributes} The processed attributes
- */
-function processAttributes(attrs) {
-  let processedAttrs = {};
-  if (!attrs) return processedAttrs;
-
-  Object.keys(attrs).forEach((key) => {
-    const value = attrs[key];
-    if (!value) return;
-
-    let newAttr = {};
-    if (value instanceof Object) newAttr = processAttributes(value);
-    else newAttr[toKebabCase(key)] = value;
-    processedAttrs = { ...processedAttrs, ...newAttr };
-  });
-  return processedAttrs;
-}
-
-/**
- * Process nodes to isolate sdt annotations from simple text nodes
- * since having sdt annotation with text run in one paragraph inside table cell
- * can lead to export issues
- */
-const isolateAnnotations = (node) => {
-  if (!node) return node;
-  const hasTextRun = node.elements?.some((item) => item.name === 'w:r');
-  const hasSdtContent = node.elements?.some((item) => item.name === 'w:sdt');
-
-  const sdtNode = node.elements?.find((item) => item.name === 'w:sdt');
-  const sdtPr = sdtNode?.elements?.find((item) => item.name === 'w:sdtPr');
-  const hasAlias = sdtPr?.elements?.some((item) => item.name === 'w:alias');
-  if (!hasAlias) return node;
-
-  let result = node;
-  if (hasTextRun && hasSdtContent) {
-    const sdtNodes = node.elements.filter((item) => item.name === 'w:sdt');
-    const otherNodes = node.elements.filter((item) => item.name !== 'w:sdt');
-    const hasText = otherNodes
-      .filter((item) => item.name === 'w:r')
-      .every((item) => {
-        const textElements = item.elements.filter((item) => item.name === 'w:t');
-        return textElements?.every((item) => item.elements[0].text.trim().length > 0);
-      });
-    result = [
-      ...(hasText
-        ? [
-            {
-              ...node,
-              elements: otherNodes,
-            },
-          ]
-        : []),
-      {
-        name: 'w:p',
-        elements: sdtNodes,
-      },
-    ];
-  }
-  return result;
-};
 
 /**
  * Helper function to be used for text node translation
@@ -658,8 +592,8 @@ function processOutputMarks(marks = []) {
   return marks.flatMap((mark) => {
     if (mark.type === 'textStyle') {
       return Object.entries(mark.attrs)
-        .filter(([key, value]) => value)
-        .map(([key, value]) => {
+        .filter(([, value]) => value)
+        .map(([key]) => {
           const unwrappedMark = { type: key, attrs: mark.attrs };
           return translateMark(unwrappedMark);
         });
@@ -840,7 +774,6 @@ function translateList(params) {
    *  1. Final doc (keep paragraph field content inside list item)
    *  2. Not final doc (keep w:sdt node, process its content)
    */
-  let nodesToFlatten = [];
   if (Array.isArray(outputNode) && params.isFinalDoc) {
     const parsedElements = [];
     outputNode?.forEach((node, index) => {
@@ -863,16 +796,24 @@ function translateList(params) {
   }
 
   /** Case 2: Process w:sdt content */
+  let nodesToFlatten = [];
   const sdtNodes = outputNode.elements?.filter((n) => n.name === 'w:sdt');
   if (sdtNodes && sdtNodes.length > 0) {
     nodesToFlatten = sdtNodes;
     nodesToFlatten?.forEach((sdtNode) => {
       const sdtContent = sdtNode.elements.find((n) => n.name === 'w:sdtContent');
-      if (sdtContent && sdtContent.elements) {
+      const foundRun = sdtContent.elements?.find((el) => el.name === 'w:r'); // this is a regular text field.
+      if (sdtContent && sdtContent.elements && !foundRun) {
         const parsedElements = [];
         sdtContent.elements.forEach((element, index) => {
+          if (element.name === 'w:rPr' && element.elements?.length) {
+            parsedElements.push(element);
+          }
+
           const runs = element.elements?.filter((n) => n.name === 'w:r');
-          parsedElements.push(...runs);
+          if (runs && runs.length) {
+            parsedElements.push(...runs);
+          }
 
           if (element.name === 'w:p' && index < sdtContent.elements.length - 1) {
             parsedElements.push({
@@ -988,263 +929,6 @@ const generateNumPrTag = (numId, level) => {
   };
 };
 
-function translateListOld(params) {
-  const { type } = params.node;
-  const flatContent = flattenContent(params);
-
-  const listNodes = [];
-  flatContent.forEach((listNode) => {
-    const { level, listType, pPrs: additionalPprs, content, attrs = {} } = listNode;
-    const attrsNumId = listNode.attrs.numId;
-
-    const actualNumId = attrsNumId || listNode.listId;
-    const listId = actualNumId ?? generateNewListDefinition(params, listType);
-    const pPr = getListParagraphProperties(level, listId, additionalPprs);
-
-    content.forEach((contentNode, index) => {
-      // Get paragraph attributes which were attached to list item node
-      const paragraphNode = Object.assign({}, contentNode);
-      paragraphNode.attrs = {
-        ...paragraphNode.attrs,
-        ...listNode.attrs,
-      };
-
-      const outputNode = exportSchemaToJson({ ...params, node: paragraphNode });
-      if (!outputNode.elements) {
-        outputNode.elements = [];
-      }
-
-      // Process html annotation if present
-      if (Array.isArray(outputNode)) {
-        const mapped = [];
-        outputNode.forEach((el, index) => {
-          el.elements.forEach((element) => {
-            if (element.name === 'w:pPr') return;
-            mapped.push(element);
-          });
-          if (index < outputNode.length - 1) mapped.push({ name: 'w:br', type: 'element' });
-        });
-
-        // Add the pPr for the list
-        mapped.unshift(carbonCopy(pPr));
-        return listNodes.push({ name: 'w:p', elements: mapped });
-      }
-
-      const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
-      const content = outputNode.elements.filter((e) => e.name !== 'w:pPr');
-      if (!content.length && !Array.isArray(outputNode)) {
-        // Apply initial properties to the empty nodes
-        const elements = contentNode.attrs.paragraphProperties ? [contentNode.attrs.paragraphProperties] : [];
-        const spacer = {
-          name: 'w:p',
-          type: 'element',
-          elements,
-        };
-        return listNodes.push(spacer);
-      }
-
-      outputNode.elements = outputNode.elements.map((el, index) => {
-        if (el.name === 'w:sdt') {
-          const contentIndex = el.elements.findIndex((e) => e.name === 'w:sdtContent');
-          const content = el.elements[contentIndex];
-
-          const innerContent = content.elements[0];
-          if (innerContent.name === 'w:p') {
-            content.elements = innerContent.elements;
-          }
-          return {
-            name: 'w:r',
-            type: 'element',
-            elements: [el],
-          };
-        } else {
-          return el;
-        }
-      });
-
-      // pPr processing
-      const { attributes: generalAttributes } = attrs;
-      const { originalInlineRunProps } = generalAttributes || {};
-      if (originalInlineRunProps) pPr.elements.push(originalInlineRunProps);
-
-      if (propsElementIndex === -1) {
-        outputNode.elements.unshift(carbonCopy(pPr));
-      } else {
-        // Check if there is any properties processed by translateParagraphNode
-        const resultProps = carbonCopy(pPr).elements.map((item) => {
-          const isChanged = outputNode.elements[propsElementIndex].elements.find((e) => e.name === item.name);
-          return isChanged ? isChanged : item;
-        });
-        outputNode.elements[propsElementIndex].elements = resultProps;
-      }
-
-      let importedFontSize;
-      if (listNode.attrs?.importedFontSize) {
-        const fontNoUnit = parseInt(listNode.attrs.importedFontSize.split('pt')[0]);
-        importedFontSize = {
-          name: 'w:sz',
-          attributes: { 'w:val': fontNoUnit * 2 },
-        };
-      }
-
-      let importedFontFamily;
-      if (listNode.attrs?.importedFontFamily) {
-        importedFontFamily = {
-          name: 'w:rFonts',
-          attributes: { 'w:ascii': listNode.attrs?.importedFontFamily, 'w:hAnsi': listNode.attrs?.importedFontFamily },
-        };
-      }
-
-      const rPrElement = outputNode.elements.find((e) => e.name === 'w:rPr');
-      if (rPrElement) {
-        rPrElement.elements.push(fontSize);
-      } else if (importedFontSize || importedFontFamily) {
-        const elements = [];
-        if (importedFontSize) elements.push(importedFontSize);
-        if (importedFontFamily) elements.push(importedFontFamily);
-        outputNode.elements.unshift({ name: 'w:rPr', elements });
-      }
-
-      // Remove the numPr properties from content nodes
-      if (index !== 0) {
-        const currentpPr = outputNode.elements.find((e) => e.name === 'w:pPr');
-        const numPrIndex = currentpPr.elements.findIndex((e) => e.name === 'w:numPr');
-        if (numPrIndex !== -1) currentpPr.elements.splice(numPrIndex, 1);
-      }
-      listNodes.push(outputNode);
-    });
-  });
-
-  return listNodes;
-}
-
-/**
- * Generate a new list definition to be inserted into numbering.xml
- * @param {Obect} param The parameters object
- * @param {Number} param.abstractId The abstract number id
- * @param {Number} param.listId The list id
- * @returns {Object} The new abstract and num definitions
- */
-function generateNewListDefinition(params, listType) {
-  // Generate a new numId to add to numbering.xml
-  const nextNumbering = getLargestListDefinitionIndex(params.converter?.numbering?.definitions);
-  const definition = listType === 'bullet' ? baseBulletList : baseOrderedListDef;
-  const listId = nextNumbering;
-  const abstractId = definition.attributes['w:abstractNumId'];
-
-  // Generate the new numId definition
-  const newNumDef = {
-    type: 'element',
-    name: 'w:num',
-    attributes: {
-      'w:numId': String(listId),
-      'w16cid:durableId': '485517411',
-    },
-    elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': String(abstractId) } }],
-  };
-
-  params.converter.numbering.definitions[listId] = newNumDef;
-  return listId;
-}
-
-/**
- * Get the largest list definition index
- *
- * @param {Object} definitions The list definitions
- * @returns {number} The largest list definition index
- */
-const getLargestListDefinitionIndex = (definitions) => {
-  if (!definitions || !Object.keys(definitions).length) return 0;
-  const maxKey = Math.max(...Object.keys(definitions).map((key) => parseInt(key, 10)));
-  return maxKey + 1;
-};
-
-/**
- * Get the paragraph properties for a list
- *
- * @param {SchemaNode} node The list node
- * @param {number} level The list level
- * @param {string} type The list type
- * @param {boolean} hasParentProps Does output node already have pPr
- * @returns {XmlReadyNode} The list paragraph properties node
- */
-function getListParagraphProperties(level, numId, additionalPprs = []) {
-  return {
-    name: 'w:pPr',
-    type: 'element',
-    elements: [
-      {
-        name: 'w:numPr',
-        type: 'element',
-        elements: [
-          {
-            name: 'w:ilvl',
-            type: 'element',
-            attributes: { 'w:val': level },
-          },
-          {
-            name: 'w:numId',
-            type: 'element',
-            attributes: { 'w:val': numId },
-          },
-        ],
-      },
-      ...additionalPprs,
-    ],
-  };
-}
-
-/**
- * Flatten list nodes for processing.
- */
-function flattenContent({ node }) {
-  const { content, attrs = {} } = node;
-  const { listId, syncId } = node.attrs || {};
-  const listType = node.attrs['list-style-type'];
-
-  const { attributes = {} } = attrs;
-  const pPrs = attributes?.parentAttributes?.paragraphProperties?.elements?.filter((el) => el.name !== 'w:numPr') || [];
-  const flatContent = [];
-
-  function recursiveFlatten(items, level = 0) {
-    if (!items || !items.length) return;
-    items.forEach((item) => {
-      const indent = item.attrs?.indent;
-      if (indent) {
-        const { left, right, firstLine, hanging } = indent;
-        const indentAttrs = {};
-        if (left !== undefined) indentAttrs['w:left'] = pixelsToTwips(left);
-        if (right !== undefined) indentAttrs['w:right'] = pixelsToTwips(right);
-        if (firstLine !== undefined) indentAttrs['w:firstLine'] = pixelsToTwips(firstLine);
-        if (hanging !== undefined) indentAttrs['w:hanging'] = pixelsToTwips(hanging);
-
-        const indentElement = {
-          type: 'element',
-          name: 'w:ind',
-          attributes: indentAttrs,
-        };
-
-        const existingIndentIndex = pPrs.findIndex((el) => el.name === 'w:ind');
-        if (existingIndentIndex !== -1) {
-          pPrs[existingIndentIndex] = indentElement;
-        }
-      }
-
-      const subList = item.content?.filter((c) => c.type === 'bulletList' || c.type === 'orderedList') || [];
-      const notLists = item.content?.filter((c) => c.type !== 'bulletList' && c.type !== 'orderedList') || [];
-      const newItem = { ...item, content: notLists, listId, level, listType, syncId, pPrs };
-      flatContent.push(newItem);
-
-      if (subList.length) {
-        recursiveFlatten(subList[0].content, level + 1);
-      }
-    });
-  }
-
-  recursiveFlatten(content);
-  return flatContent;
-}
-
 /**
  * Translate a line break node
  *
@@ -1319,7 +1003,7 @@ function preProcessVerticalMergeCells(table, { editorSchema }) {
           },
         };
 
-        rowsToChange.forEach((rowToChange, mergedIndex) => {
+        rowsToChange.forEach((rowToChange) => {
           rowToChange.content.splice(cellIndex, 0, mergedCell);
         });
       }
@@ -1329,8 +1013,6 @@ function preProcessVerticalMergeCells(table, { editorSchema }) {
 }
 
 function translateTab(params) {
-  const attributes = {};
-
   const { marks = [] } = params.node;
 
   const outputMarks = processOutputMarks(marks);
@@ -1351,16 +1033,7 @@ function generateTableProperties(node) {
   const elements = [];
 
   const { attrs } = node;
-  const {
-    tableWidth,
-    tableWidthType,
-    tableStyleId,
-    borders,
-    tableIndent,
-    tableLayout,
-    tableCellSpacing,
-    justification,
-  } = attrs;
+  const { tableWidth, tableStyleId, borders, tableIndent, tableLayout, tableCellSpacing, justification } = attrs;
 
   if (tableStyleId) {
     const tableStyleElement = {
@@ -1485,7 +1158,7 @@ function generateTableGrid(node, params) {
     const { colgroupValues } = createColGroup(pmNode, cellMinWidth);
 
     colgroup = colgroupValues;
-  } catch (err) {
+  } catch {
     colgroup = [];
   }
 
@@ -1837,7 +1510,7 @@ function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
 
 function translateImageNode(params, imageSize) {
   const {
-    node: { attrs = {}, marks = [] },
+    node: { attrs = {} },
     tableCell,
   } = params;
 
@@ -2218,7 +1891,7 @@ function prepareHtmlAnnotation(params) {
   const listTypes = ['bulletList', 'orderedList'];
   const { editor } = params;
   const seenLists = new Map();
-  state.doc.descendants((node, pos) => {
+  state.doc.descendants((node) => {
     if (listTypes.includes(node.type.name)) {
       const listItem = node.firstChild;
       const { attrs } = listItem;
@@ -2522,7 +2195,7 @@ export class DocxExporter {
     return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  #generateXml(node, debug = false) {
+  #generateXml(node) {
     if (!node) return null;
     let { name } = node;
     const { elements, attributes } = node;

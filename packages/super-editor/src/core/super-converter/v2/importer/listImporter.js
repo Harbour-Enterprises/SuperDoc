@@ -1,16 +1,11 @@
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
-import { hasTextNode, parseProperties } from './importerHelpers.js';
-import { preProcessNodesForFldChar, getParagraphSpacing } from './paragraphNodeImporter.js';
-import { mergeTextNodes } from './mergeTextNodes.js';
-import { ErrorWithDetails } from '../../../helpers/ErrorWithDetails.js';
-import { twipsToInches, twipsToPixels, twipsToLines } from '../../helpers.js';
-import { normalize } from 'path';
+import { twipsToPixels } from '../../helpers.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
  */
 export const handleListNode = (params) => {
-  const { nodes, lists, docx } = params;
+  const { nodes, docx } = params;
   if (nodes.length === 0 || nodes[0].name !== 'w:p' || nodes[0].isList) {
     return { nodes: [], consumed: 0 };
   }
@@ -77,7 +72,7 @@ function handleListNodes(params, node) {
     if (Number.isNaN(iLvl)) iLvl = ilvl;
   }
 
-  const { listType, listOrderingType, listrPrs, listpPrs, start, lvlText, lvlJc, customFormat } = numberingDefinition;
+  const { listType, listOrderingType, listpPrs, start, lvlText, customFormat } = numberingDefinition;
 
   // Fallback if the list definition is not found or is invalid
   // See invalid-list-def-fallback.docx for example and
@@ -136,11 +131,15 @@ function handleListNodes(params, node) {
   const innerParagraph = listContents.find((el) => el.type === 'paragraph');
   const firstElement = innerParagraph.content[0];
 
+  // eslint-disable-next-line no-unused-vars
   const textStyle = firstElement?.marks?.find((mark) => mark.type === 'textStyle');
+
   attrs.indent = listpPrs?.indent;
 
   const processedContents = listContents.map((el, index) => {
     const { attrs: elementAttrs } = el;
+
+    // eslint-disable-next-line no-unused-vars
     const { indent, textIndent, paragraphProperties, ...rest } = elementAttrs;
 
     // Take indent from the first paragraph if its not defined
@@ -179,7 +178,7 @@ const getOutlineLevelFromStyleTag = (styleTag, docx) => {
 
   try {
     return parseInt(outlineLevel?.attributes['w:val']);
-  } catch (e) {}
+  } catch {}
 };
 
 /**
@@ -204,7 +203,7 @@ export function testForList(node, docx) {
 
   const styleTag = getStyleTagFromStyleId(styleId, docx);
   if (styleTag && !numId) {
-    const { numPr: numPrRecursve, type } = getNumPrRecursive({ node, styleId, docx });
+    const { numPr: numPrRecursve } = getNumPrRecursive({ node, styleId, docx });
     numPr = numPrRecursve;
     numId = getNumIdFromTag(numPr);
 
@@ -284,22 +283,6 @@ export function getNumPrRecursive({ node, styleId, docx, seenStyleIds = new Set(
   }
 
   return { numPr, type: 'numbering' };
-}
-
-/**
- * Creates a list item node with specified content and marks.
- *
- * @param {Array} content - The content of the list item.
- * @param {Array} marks - The marks associated with the list item.
- * @returns {Object} The created list item node.
- */
-function createListItem(content, attrs, marks) {
-  return {
-    type: 'listItem',
-    content,
-    attrs,
-    marks,
-  };
 }
 
 const orderedListTypes = [
@@ -498,7 +481,7 @@ export function getNodeNumberingDefinition(item, level, docx) {
   const styleTag = initialPpr?.elements?.find((el) => el.name === 'w:pStyle');
   const styleId = styleTag?.attributes['w:val'];
 
-  const { numPr: numPrTag, type } = getNumPrRecursive({ node: item, styleId, docx });
+  const { numPr: numPrTag } = getNumPrRecursive({ node: item, styleId, docx });
   if (!numPrTag) return {};
 
   const numIdTag = numPrTag?.elements.find((style) => style.name === 'w:numId');
@@ -717,6 +700,7 @@ function _processListParagraphProperties(data, inlinePpr) {
   const styleIndent = elements.find((item) => item.name === 'w:ind');
 
   // TODO: We need the style indent for presentation but it is not included in the node's indent attribute
+  // eslint-disable-next-line no-unused-vars
   const parsedStyleIndent = parseIndentElement(styleIndent);
 
   paragraphProperties.indent = parsedInlineIndent;

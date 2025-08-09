@@ -1,4 +1,4 @@
-import { Mark, Attribute, Node } from '@core/index.js';
+import { Mark, Attribute } from '@core/index.js';
 import { AiMarkName, AiAnimationMarkName } from './ai-constants.js';
 
 export const AiMark = Mark.create({

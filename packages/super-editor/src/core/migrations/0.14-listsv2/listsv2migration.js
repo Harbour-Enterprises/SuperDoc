@@ -304,7 +304,7 @@ export const migrateParagraphFieldsListsV2 = async (annotationValues = [], edito
     // Wait for each child editor to complete
     await new Promise((resolve, reject) => {
       const element = document.createElement('div');
-      const childEditor = editor.createChildEditor({
+      editor.createChildEditor({
         element,
         html: value,
         onCreate: ({ editor: localEditor }) => {

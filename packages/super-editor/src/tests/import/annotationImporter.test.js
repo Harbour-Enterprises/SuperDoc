@@ -1,8 +1,10 @@
-import { it } from 'vitest';
+import { expect, it } from 'vitest';
 
 import { handleAnnotationNode, parseAnnotationMarks } from '@converter/v2/importer/annotationImporter.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
+import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
+import { getExportedResult } from '../export/export-helpers/index';
 
 describe('annotationImporter', () => {
   const mockEditor = {
@@ -156,5 +158,49 @@ describe('annotationImporter', () => {
       const result = parseAnnotationMarks();
       expect(result).toEqual({});
     });
+  });
+});
+
+describe('check annotation import in full docx importer', async () => {
+  const fileName = 'annotations_import_2.docx';
+  let docx, media, mediaFiles, fonts, editor, dispatch;
+  let doc;
+  let exported, body;
+
+  beforeAll(async () => {
+    ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(fileName));
+    ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts, annotations: true }));
+    doc = editor.getJSON();
+
+    exported = await getExportedResult(fileName);
+    body = exported.elements?.find((el) => el.name === 'w:body');
+  });
+
+  it('exports the field annotation correctly', () => {
+    const paragraphWithField = doc.content[4];
+    expect(paragraphWithField.type).toBe('paragraph');
+
+    const field = paragraphWithField.content.find((el) => el.type === 'fieldAnnotation');
+    expect(field).toBeDefined();
+    expect(field.attrs.fieldId).toBeDefined();
+    expect(field.attrs.fieldType).toBe('NAMETEXTINPUT');
+  });
+
+  it('exports the field annotation correctly', () => {
+    const fieldParagraph = body.elements[4];
+    expect(fieldParagraph.name).toBe('w:p');
+
+    const field = body.elements[4].elements.find((el) => el.name === 'w:sdt');
+    expect(field).toBeDefined();
+
+    const sdtPr = field.elements.find((el) => el.name === 'w:sdtPr');
+    expect(sdtPr).toBeDefined();
+
+    const tag = sdtPr?.elements.find((el) => el.name === 'w:tag');
+    const tagJSON = JSON.parse(tag?.attributes['w:val'] || '{}');
+    expect(tagJSON.fieldType).toBe('NAMETEXTINPUT');
+
+    const alias = sdtPr?.elements.find((el) => el.name === 'w:alias');
+    expect(alias?.attributes['w:val']).toBe('Enter your full name');
   });
 });

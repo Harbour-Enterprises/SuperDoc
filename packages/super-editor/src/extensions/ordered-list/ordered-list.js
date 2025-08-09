@@ -1,5 +1,4 @@
 import { Node, Attribute } from '@core/index.js';
-import { toKebabCase } from '@harbour-enterprises/common';
 import { findParentNode } from '@helpers/index.js';
 import { toggleList } from '@core/commands/index.js';
 import { InputRule } from '@core/InputRule.js';
@@ -99,7 +98,7 @@ export const OrderedList = Node.create({
 
       restartListNodes:
         (followingNodes, pos) =>
-        ({ tr, state }) => {
+        ({ tr }) => {
           let currentNodePos = pos;
           const nodes = followingNodes.map((node) => {
             const resultNode = {
@@ -127,7 +126,7 @@ export const OrderedList = Node.create({
        */
       updateOrderedListStyleType:
         () =>
-        ({ dispatch, state, tr }) => {
+        ({ dispatch, tr }) => {
           let list = findParentNode((node) => node.type.name === this.name)(tr.selection);
 
           if (!list) {

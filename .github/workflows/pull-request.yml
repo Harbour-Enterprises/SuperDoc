@@ -8,9 +8,6 @@ jobs:
   pre-commit:
     uses: ./.github/workflows/pre-commit.yml
 
-  run-unit-tests:
-    uses: ./.github/workflows/run-unit-tests.yml
-
   trigger-superdoc-tests:
     runs-on: ubuntu-latest
     steps:

@@ -8,7 +8,6 @@ export const increaseListIndent =
   () =>
   ({ editor, tr }) => {
     const { state } = editor;
-    const $from = state.selection.$from;
     const currentNode = ListHelpers.getCurrentListItem(state);
     if (!currentNode) return false;
 

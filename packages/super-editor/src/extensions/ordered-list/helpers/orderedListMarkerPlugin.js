@@ -1,6 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 
-export function orderedListMarker(editor) {
+export function orderedListMarker() {
   return new Plugin({
     key: new PluginKey('orderedListMarker'),
 
@@ -10,7 +10,7 @@ export function orderedListMarker(editor) {
         return;
       }
 
-      let { doc, tr } = newState;
+      let { tr } = newState;
       let listItemsByList = getOrderedListItemsByList(newState);
 
       if (!listItemsByList.size) {
@@ -18,11 +18,10 @@ export function orderedListMarker(editor) {
       }
 
       let changed = false;
-      Array.from(listItemsByList).forEach(([syncId, items]) => {
+      Array.from(listItemsByList).forEach(([, items]) => {
         const list = items[0];
         let listItems = items;
         let isBulletList = list.node.type.name === 'bulletList';
-        let listHasSyncId = !!list.node.attrs.syncId; // Lists with syncId?
         let listHasItemsWithoutAttrs = list.node.childCount !== listItems.length;
 
         // If the list was toggled to a bullet list,
@@ -201,7 +200,6 @@ function buildFirstListItemAttrs({ state, listItems }) {
     // Set default attributes.
     ({ lvlText, listLevel, listNumberingType } = defaultAttrs);
   } else {
-    let firstLevel = listLevelValue === 0;
     let nestedList = listLevelValue > 0;
 
     if (nestedList && listLevelValue >= 3) {

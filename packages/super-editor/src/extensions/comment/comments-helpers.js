@@ -1,5 +1,4 @@
 import { CommentMarkName } from './comments-constants.js';
-import { COMMENTS_XML_DEFINITIONS } from '@converter/exporter-docx-defs.js';
 import { CommentsPluginKey } from './comments-plugin.js';
 
 /**

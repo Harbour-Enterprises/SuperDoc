@@ -11,7 +11,7 @@ export const ImagePositionPlugin = ({ editor }) => {
     key: ImagePositionPluginKey,
 
     state: {
-      init(_, state) {
+      init() {
         return DecorationSet.empty;
       },
 
@@ -22,7 +22,7 @@ export const ImagePositionPlugin = ({ editor }) => {
       },
     },
 
-    view: (view) => {
+    view: () => {
       return {
         update: (view, lastState) => {
           const pagination = PaginationPluginKey.getState(lastState);

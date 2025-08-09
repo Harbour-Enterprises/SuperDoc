@@ -63,7 +63,7 @@ function createProvider({ config, user, documentId, socket, superdocInstance }) 
  * @param {string} param.documentId The document ID
  * @returns {Object} The provider and socket
  */
-function createSuperDocProvider({ config, user, documentId, socket, superdocInstance }) {
+function createSuperDocProvider({ config, user, documentId, superdocInstance }) {
   const ydoc = new YDoc({ gc: false });
   const options = {
     params: {
