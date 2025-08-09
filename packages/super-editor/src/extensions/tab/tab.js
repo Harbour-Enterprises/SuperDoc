@@ -1,7 +1,7 @@
 import { Node, Attribute } from '@core/index.js';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { ReplaceStep, ReplaceAroundStep } from 'prosemirror-transform';
+import { ReplaceStep, ReplaceAroundStep, StepMap } from 'prosemirror-transform';
 import { DOMSerializer } from 'prosemirror-model';
 
 export const TabNode = Node.create({
@@ -53,14 +53,17 @@ export const TabNode = Node.create({
       name: 'tabPlugin',
       key: new PluginKey('tabPlugin'),
       state: {
-        init(_, state) {
-          const decorations = DecorationSet.create(
-            state.doc,
-            getTabDecorations(state, state, state.tr, view, domSerializer),
-          );
-          return { decorations };
+        init() {
+          return { decorations: false };
         },
-        apply(tr, { decorations }, oldState, newState) {
+        apply(tr, { decorations }, _oldState, newState) {
+          if (!decorations) {
+            decorations = DecorationSet.create(
+              newState.doc,
+              getTabDecorations(newState.doc, StepMap.empty, view, domSerializer),
+            );
+          }
+
           if (!tr.docChanged) {
             return { decorations };
           }
@@ -102,7 +105,8 @@ export const TabNode = Node.create({
           rangesToRecalculate.forEach(([start, end]) => {
             const oldDecorations = decorations.find(start, end);
             decorations = decorations.remove(oldDecorations);
-            const newDecorations = getTabDecorations(oldState, newState, tr, view, domSerializer, start, end);
+            const invertMapping = tr.mapping.invert();
+            const newDecorations = getTabDecorations(newState.doc, invertMapping, view, domSerializer, start, end);
             decorations = decorations.add(newState.doc, newDecorations);
           });
           return { decorations };
@@ -118,49 +122,39 @@ export const TabNode = Node.create({
   },
 });
 
-const tabWidthPx = 48;
+const defaultTabDistance = 48;
+const defaultLineLength = 816;
 
-const getTabDecorations = (oldState, newState, tr, view, domSerializer, from = 0, to = null) => {
+const getTabDecorations = (doc, invertMapping, view, domSerializer, from = 0, to = null) => {
+  // TODO: Render "bar".
   if (!to) {
-    to = newState.doc.content.size;
+    to = doc.content.size;
   }
   const nodeWidthCache = {};
   let decorations = [];
-  const invertMapping = tr.mapping.invert();
-  newState.doc.nodesBetween(from, to, (node, pos, parent) => {
+  doc.nodesBetween(from, to, (node, pos, parent) => {
     if (node.type.name === 'tab') {
       let extraStyles = '';
-      const $pos = newState.doc.resolve(pos);
-      let tabWidth;
+      const $pos = doc.resolve(pos);
       const tabIndex = $pos.index($pos.depth);
+      const fistlineIndent = parent.attrs?.indent?.firstLine || 0;
+      const currentWidth =
+        calcChildNodesWidth(
+          parent,
+          pos - $pos.parentOffset,
+          0,
+          tabIndex,
+          domSerializer,
+          view,
+          invertMapping,
+          nodeWidthCache,
+        ) + fistlineIndent;
+      let tabWidth;
       if ($pos.depth === 1 && parent.attrs.tabStops && parent.attrs.tabStops.length > 0) {
-        let tabCount = -1,
-          childCount = -1,
-          child;
-        while (child !== node) {
-          child = parent.child(++childCount);
-          if (child.type.name === 'tab') {
-            tabCount++;
-          }
-        }
-
-        const tabStop = parent.attrs.tabStops[tabCount];
+        const tabStop = parent.attrs.tabStops.find((tabStop) => tabStop.pos > currentWidth && tabStop.val !== 'clear');
         if (tabStop) {
-          tabWidth =
-            tabStop.pos -
-            calcChildNodesWidth(
-              parent,
-              pos - $pos.parentOffset,
-              0,
-              tabIndex,
-              domSerializer,
-              view,
-              invertMapping,
-              nodeWidthCache,
-            );
-
+          tabWidth = tabStop.pos - currentWidth;
           if (['end', 'center'].includes(tabStop.val)) {
-            // TODO: support for "bar", "clear", "decimal", "num" (deprecated).
             let nextTabIndex = tabIndex + 1;
             while (nextTabIndex < parent.childCount && parent.child(nextTabIndex).type.name !== 'tab') {
               nextTabIndex++;
@@ -176,6 +170,29 @@ const getTabDecorations = (oldState, newState, tr, view, domSerializer, from = 0
               nodeWidthCache,
             );
             tabWidth -= tabStop.val === 'end' ? tabSectionWidth : tabSectionWidth / 2;
+          } else if (['decimal', 'num'].includes(tabStop.val)) {
+            const breakChar = '.'; // TODO: The break character should likely be document language dependent.
+            let nodeIndex = tabIndex + 1;
+            let integralWidth = 0;
+            let nodePos = pos - $pos.parentOffset;
+            while (nodeIndex < parent.childCount) {
+              const node = parent.child(nodeIndex);
+              if (node.type.name === 'tab') {
+                break;
+              }
+              const oldPos = invertMapping.map(nodePos);
+              if (node.type.name === 'text' && node.text.includes(breakChar)) {
+                // Only include text before the break character
+                const modifiedNode = node.cut(0, node.text.indexOf(breakChar));
+                integralWidth += calcNodeWidth(domSerializer, modifiedNode, view, oldPos);
+                break;
+              }
+              integralWidth += calcNodeWidth(domSerializer, node, view, oldPos);
+              nodeWidthCache[nodePos] = integralWidth;
+              nodePos += node.nodeSize;
+              nodeIndex += 1;
+            }
+            tabWidth -= integralWidth;
           }
           if (tabStop.leader) {
             // TODO: The following styles will likely not correspond 1:1 to the original. Adjust as needed.
@@ -194,30 +211,14 @@ const getTabDecorations = (oldState, newState, tr, view, domSerializer, from = 0
         }
       }
 
-      if (!tabWidth || tabWidth < 0) {
-        let lastTabIndex = tabIndex - 1;
-
-        while (lastTabIndex >= 0 && parent.child(lastTabIndex).type.name !== 'tab') {
-          lastTabIndex--;
+      if (!tabWidth || tabWidth < 1) {
+        tabWidth = defaultTabDistance - ((currentWidth % defaultLineLength) % defaultTabDistance);
+        if (tabWidth === 0) {
+          tabWidth = defaultTabDistance;
         }
-
-        tabWidth = Math.max(
-          0,
-          tabWidthPx -
-            calcChildNodesWidth(
-              parent,
-              pos - $pos.parentOffset,
-              lastTabIndex,
-              tabIndex,
-              domSerializer,
-              view,
-              invertMapping,
-              nodeWidthCache,
-            ),
-        );
       }
 
-      nodeWidthCache[pos] = tabWidth;
+      nodeWidthCache[pos] = tabWidth; // Update width with final tab width - important for subsequent tabs.
 
       const tabHeight = calcTabHeight($pos);
 
