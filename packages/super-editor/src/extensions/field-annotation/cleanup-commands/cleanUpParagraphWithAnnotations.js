@@ -11,30 +11,81 @@ export const cleanUpParagraphWithAnnotations =
   (fieldsToDelete = []) =>
   ({ dispatch, tr, state }) => {
     if (!dispatch) return true;
-    const annotations = findFieldAnnotationsByFieldId(fieldsToDelete, state) || [];
-    const nodesToDelete = [];
-    const { doc } = state;
 
-    annotations.forEach((annotation) => {
-      let { pos, node } = annotation;
-      let newPosFrom = tr.mapping.map(pos);
+    const annotations =
+      (typeof findFieldAnnotationsByFieldId === 'function'
+        ? findFieldAnnotationsByFieldId(fieldsToDelete, state)
+        : []) || [];
 
-      const resolvedPos = doc.resolve(newPosFrom);
-      const parent = resolvedPos.parent;
+    // Parent positions to delete (dedup)
+    const toDelete = new Map();
 
-      let currentNode = tr.doc.nodeAt(newPosFrom);
-      if (node.eq(currentNode) && parent?.children?.length < 2) {
-        nodesToDelete.push({ pos: newPosFrom, node: parent });
+    const sizeOf = (doc) => doc.content.size;
+    const inRange = (doc, pos) => Number.isInteger(pos) && pos >= 0 && pos <= sizeOf(doc);
+
+    for (const annotation of annotations) {
+      const origPos = annotation && annotation.pos;
+      if (!Number.isInteger(origPos)) continue;
+
+      // Map annotation position through current tr
+      const mappedPos = tr.mapping.map(origPos, 1);
+      if (!inRange(tr.doc, mappedPos)) continue;
+
+      // Resolve against live tr.doc
+      let $pos;
+      try {
+        $pos = tr.doc.resolve(mappedPos);
+      } catch {
+        continue;
       }
-    });
 
-    if (!nodesToDelete.length) return true;
+      const parent = $pos.parent;
+      if (!parent) continue;
 
-    nodesToDelete
-      .sort((a, b) => b.pos - a.pos)
-      .forEach(({ pos, node }) => {
-        tr.delete(pos, pos + node.nodeSize);
-      });
+      // Only delete parent if it's effectively a single-child container
+      if (parent.childCount >= 2) continue;
 
+      // Sanity: ensure we're still looking at the same kind of node
+      const currentNode = tr.doc.nodeAt(mappedPos);
+      const annotatedNode = annotation && annotation.node;
+      if (!currentNode) continue;
+      if (annotatedNode && !annotatedNode.sameMarkup?.(currentNode) && annotatedNode.type !== currentNode.type) {
+        continue;
+      }
+
+      // Delete the *parent* from its own start
+      const parentPos = $pos.before(); // start position of the parent node
+      if (!inRange(tr.doc, parentPos)) continue;
+
+      toDelete.set(parentPos, true);
+    }
+
+    if (toDelete.size === 0) return true;
+
+    // Delete from highest -> lowest; remap each target just before deleting
+    const sorted = [...toDelete.keys()].sort((a, b) => b - a);
+    let changed = false;
+
+    for (const originalParentPos of sorted) {
+      const mappedParentPos = tr.mapping.map(originalParentPos, -1);
+      if (!inRange(tr.doc, mappedParentPos)) continue;
+
+      const targetNode = tr.doc.nodeAt(mappedParentPos);
+      if (!targetNode) continue;
+
+      const from = mappedParentPos;
+      const to = mappedParentPos + targetNode.nodeSize;
+
+      if (!inRange(tr.doc, from) || !inRange(tr.doc, to) || to <= from) continue;
+
+      try {
+        tr.delete(from, to);
+        changed = true;
+      } catch {
+        continue;
+      }
+    }
+
+    if (changed) dispatch(tr);
     return true;
   };
