@@ -2153,15 +2153,8 @@ function translateVRectContentBlock(params) {
     id: attributes?.id || `_x0000_i${Math.floor(Math.random() * 10000)}`,
   };
 
-  // Build style string from exact stored style string
-  let styleString = node.attrs.attributes.style;
-
   if (style) {
-    styleString += style;
-  }
-
-  if (styleString) {
-    rectAttrs.style = styleString;
+    rectAttrs.style = style;
   }
 
   if (background) {
