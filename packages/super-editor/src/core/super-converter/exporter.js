@@ -2145,7 +2145,6 @@ function translateContentBlock(params) {
   return wrapTextInRun(alternateContent);
 }
 
-// NEW: Handle VML v:rect elements
 function translateVRectContentBlock(params) {
   const { node } = params;
   const { vmlAttributes, background, attributes, style } = node.attrs;

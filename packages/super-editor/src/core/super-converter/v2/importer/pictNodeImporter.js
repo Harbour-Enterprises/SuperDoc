@@ -242,7 +242,6 @@ function buildStyles(styleObject) {
   return style;
 }
 
-// NEW: Build styles specifically for v:rect elements
 function buildVRectStyles(styleObject) {
   let style = '';
   for (const [prop, value] of Object.entries(styleObject)) {
@@ -252,19 +251,26 @@ function buildVRectStyles(styleObject) {
   return style;
 }
 
-// NEW: Convert points to pixels (approximate conversion)
-function parsePointsToPixels(value) {
+export function parsePointsToPixels(value) {
   if (typeof value !== 'string') return value;
 
   // Convert points to pixels (1pt ≈ 1.33px)
   if (value.endsWith('pt')) {
-    const points = parseFloat(value.replace('pt', ''));
+    const val = value.replace('pt', '');
+    if (isNaN(val)) {
+      return 0;
+    }
+    const points = parseFloat(val);
     return Math.round(points * 1.33);
   }
 
   // Handle pixel values
   if (value.endsWith('px')) {
-    return parseInt(value.replace('px', ''));
+    const val = value.replace('px', '');
+    if (isNaN(val)) {
+      return 0;
+    }
+    return parseInt(val);
   }
 
   // Handle numeric values (assume pixels)
