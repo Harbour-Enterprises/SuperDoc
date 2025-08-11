@@ -62,8 +62,6 @@ const handleRunNode = (params) => {
       return {
         ...n,
         marks: [...newMarks, ...existingMarks],
-        attributes: { ...attributes, styleid: runStyleId },
-        attrs: { styleid: runStyleId },
       };
     });
   }
