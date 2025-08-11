@@ -19,25 +19,45 @@ const handleRunNode = (params) => {
   if (hasRunProperties) {
     const { marks = [], attributes = {} } = parseProperties(node);
 
-    // Apply fonts from related style definition if there is no marks
-    const textStyleMark = marks.find((m) => m.type === 'textStyle');
-    const hasFontStyle = textStyleMark && Object.keys(textStyleMark.attrs).length > 0;
-    if (defaultNodeStyles.marks && !hasFontStyle) {
-      const hasBoldDisabled = marks.find((m) => m.type === 'bold')?.attrs?.value === '0';
-      for (let mark of defaultNodeStyles.marks) {
-        if (['bold'].includes(mark.type) && hasBoldDisabled) continue;
-        marks.push(mark);
+    /* Store run style attributes in an array, then store the defaultNodeStyles (parent styles) in a second array
+    Then combine the two arrays and create a new array of marks, where the 
+    run style attributes override the defaultNodeStyles
+
+    */
+    // Collect run style attributes
+    let runStyleAttributes = [];
+    const runStyleElement = node.elements
+      ?.find((el) => el.name === 'w:rPr')
+      ?.elements?.find((el) => el.name === 'w:rStyle');
+    if (runStyleElement && runStyleElement.attributes?.['w:val'] && docx) {
+      const runStyleId = runStyleElement.attributes['w:val'];
+      const runStyleDefinition = getMarksFromStyles(docx, runStyleId);
+      if (runStyleDefinition.marks && runStyleDefinition.marks.length > 0) {
+        runStyleAttributes = runStyleDefinition.marks;
       }
     }
 
-    if (node.marks) marks.push(...node.marks);
-    const newMarks = createImportMarks(marks);
+    // Collect paragraph style attributes
+    let paragraphStyleAttributes = [];
+    if (defaultNodeStyles.marks) {
+      // Filter out bold if it's disabled
+      paragraphStyleAttributes = defaultNodeStyles.marks.filter((mark) => {
+        if (['bold'].includes(mark.type) && marks.find((m) => m.type === 'bold')?.attrs?.value === '0') {
+          return false;
+        }
+        return true;
+      });
+    }
+
+    // Combine with correct precedence: paragraph styles first, then run styles (which override)
+    const combinedMarks = [...paragraphStyleAttributes, ...runStyleAttributes, ...marks];
+
+    if (node.marks) combinedMarks.push(...node.marks);
+    const newMarks = createImportMarks(combinedMarks);
     processedRun = processedRun.map((n) => {
       const existingMarks = n.marks || [];
       return { ...n, marks: [...newMarks, ...existingMarks], attributes };
     });
-  } else if (defaultNodeStyles.marks) {
-    processedRun = processedRun.map((n) => ({ ...n, marks: createImportMarks(defaultNodeStyles.marks) }));
   }
   return { nodes: processedRun, consumed: 1 };
 };
