@@ -69,7 +69,7 @@
     "xml-js": "^1.6.11"
   },
   "peerDependencies": {
-    "@floating-ui/dom": "^1.7.0",
+    "@floating-ui/dom": "^1.7.3",
     "naive-ui": "^2.38.2",
     "tippy.js": "^6.3.7",
     "vite-plugin-node-polyfills": "^0.23.0",
@@ -77,7 +77,7 @@
     "yjs": "13.6.19"
   },
   "devDependencies": {
-    "@floating-ui/dom": "^1.7.0",
+    "@floating-ui/dom": "^1.7.3",
     "@vitejs/plugin-vue": "^5.0.4",
     "@vue/test-utils": "^2.4.6",
     "postcss-nested": "^6.0.1",
