@@ -1430,6 +1430,12 @@ function translateMark(mark) {
       });
       break;
 
+    // Add ability to get run styleIds from textStyle marks and inject to run properties in word
+    case 'styleId':
+      markElement.name = 'w:rStyle';
+      markElement.attributes['w:val'] = attrs.styleId;
+      break;
+
     case 'color':
       let processedColor = attrs.color.replace(/^#/, '').replace(/;$/, ''); // Remove `#` and `;` if present
       if (processedColor.startsWith('rgb')) {
@@ -1458,7 +1464,6 @@ function translateMark(mark) {
     case 'lineHeight':
       markElement.attributes['w:line'] = linesToTwips(attrs.lineHeight);
       break;
-
     case 'highlight':
       markElement.attributes['w:fill'] = attrs.color?.substring(1);
       markElement.attributes['w:color'] = 'auto';

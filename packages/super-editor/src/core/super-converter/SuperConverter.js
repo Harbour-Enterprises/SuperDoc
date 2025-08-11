@@ -51,6 +51,7 @@ class SuperConverter {
     { name: 'w:sz', type: 'fontSize', mark: 'textStyle', property: 'fontSize' },
     // { name: 'w:szCs', type: 'fontSize', mark: 'textStyle', property: 'fontSize' },
     { name: 'w:rFonts', type: 'fontFamily', mark: 'textStyle', property: 'fontFamily' },
+    { name: 'w:rStyle', type: 'styleId', mark: 'textStyle', property: 'styleId' },
     { name: 'w:jc', type: 'textAlign', mark: 'textStyle', property: 'textAlign' },
     { name: 'w:ind', type: 'textIndent', mark: 'textStyle', property: 'textIndent' },
     { name: 'w:spacing', type: 'lineHeight', mark: 'textStyle', property: 'lineHeight' },
