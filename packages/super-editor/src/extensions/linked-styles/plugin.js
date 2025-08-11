@@ -57,7 +57,7 @@ const generateDecorations = (state, styles) => {
     // Get the last styleId from the node marks
     // This allows run-level styles and styleIds to override paragraph-level styles
     for (const mark of node.marks) {
-      if (mark.type.name === 'textStyle') {
+      if (mark.type.name === 'textStyle' && mark.attrs.styleId) {
         lastStyleId = mark.attrs.styleId;
       }
     }
