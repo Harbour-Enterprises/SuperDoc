@@ -54,6 +54,7 @@ class SuperConverter {
     { name: 'w:jc', type: 'textAlign', mark: 'textStyle', property: 'textAlign' },
     { name: 'w:ind', type: 'textIndent', mark: 'textStyle', property: 'textIndent' },
     { name: 'w:spacing', type: 'lineHeight', mark: 'textStyle', property: 'lineHeight' },
+    { name: 'w:spacing', type: 'letterSpacing', mark: 'textStyle', property: 'letterSpacing' },
     { name: 'link', type: 'link', mark: 'link', property: 'href' },
     { name: 'w:highlight', type: 'highlight', mark: 'highlight', property: 'color' },
     { name: 'w:shd', type: 'highlight', mark: 'highlight', property: 'color' },

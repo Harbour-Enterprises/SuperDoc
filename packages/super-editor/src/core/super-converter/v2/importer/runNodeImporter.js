@@ -49,13 +49,20 @@ const handleRunNode = (params) => {
       });
     }
 
+    console.log('paragraphStyleAttributes', paragraphStyleAttributes);
+    console.log('runStyleAttributes', runStyleAttributes);
+    console.log('marks', marks);
     // Combine with correct precedence: paragraph styles first, then run styles (which override)
     const combinedMarks = [...paragraphStyleAttributes, ...runStyleAttributes, ...marks];
+    console.log('combinedMarks', combinedMarks);
 
     if (node.marks) combinedMarks.push(...node.marks);
     const newMarks = createImportMarks(combinedMarks);
+    console.log('newMarks', newMarks);
     processedRun = processedRun.map((n) => {
       const existingMarks = n.marks || [];
+      console.log('existingMarks', existingMarks);
+      console.log('returning', { ...n, marks: [...newMarks, ...existingMarks], attributes });
       return { ...n, marks: [...newMarks, ...existingMarks], attributes };
     });
   }
