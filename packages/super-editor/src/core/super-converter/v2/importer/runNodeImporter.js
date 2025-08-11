@@ -4,7 +4,7 @@ import { createImportMarks } from './markImporter.js';
 /**
  * @type {import("docxImporter").NodeHandler}
  */
-const handleRunNode = (params) => {
+export const handleRunNode = (params) => {
   const { nodes, nodeListHandler, parentStyleId, docx } = params;
   if (nodes.length === 0 || nodes[0].name !== 'w:r') {
     return { nodes: [], consumed: 0 };
@@ -79,7 +79,7 @@ const getMarksFromStyles = (docx, styleId) => {
 
   if (!style) return {};
 
-  return parseProperties(style, docx);
+  return parseProperties(style);
 };
 
 /**
