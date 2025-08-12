@@ -215,7 +215,7 @@ export class AutoPageNumberNodeView {
       const { dispatch } = this.view;
 
       const node = state.doc.nodeAt(pos);
-      if (!node) return;
+      if (!node || node.isText) return;
 
       const currentMarks = node.attrs.marksAsAttrs || [];
       const newMarks = marks.map((m) => ({ type: m.type.name, attrs: m.attrs }));
