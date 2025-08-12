@@ -50,8 +50,35 @@ export const handleRunNode = (params) => {
       });
     }
 
+    console.log('paragraphStyleAttributes', paragraphStyleAttributes);
+    console.log('runStyleAttributes', runStyleAttributes);
+    console.log('marks', marks);
+
     // Combine with correct precedence: paragraph styles first, then run styles (which override)
-    const combinedMarks = [...paragraphStyleAttributes, ...runStyleAttributes, ...marks];
+    const combinedMarks = [...paragraphStyleAttributes];
+
+    // Add run style attributes if they don't already exist
+    runStyleAttributes.forEach((runStyle) => {
+      const exists = combinedMarks.some(
+        (mark) =>
+          mark.type === runStyle.type && JSON.stringify(mark.attrs || {}) === JSON.stringify(runStyle.attrs || {}),
+      );
+      if (!exists) {
+        combinedMarks.push(runStyle);
+      }
+    });
+
+    // Add direct marks if they don't already exist
+    marks.forEach((mark) => {
+      const exists = combinedMarks.some(
+        (existing) =>
+          existing.type === mark.type && JSON.stringify(existing.attrs || {}) === JSON.stringify(mark.attrs || {}),
+      );
+      if (!exists) {
+        combinedMarks.push(mark);
+      }
+    });
+    console.log('combinedMarks', combinedMarks);
     // Attach the originating run style id so the span gets styleid like paragraph nodes
     if (runStyleId) combinedMarks.push({ type: 'textStyle', attrs: { styleId: runStyleId } });
 
@@ -59,6 +86,12 @@ export const handleRunNode = (params) => {
     const newMarks = createImportMarks(combinedMarks);
     processedRun = processedRun.map((n) => {
       const existingMarks = n.marks || [];
+      console.log('newMarks', newMarks);
+      console.log('existingMarks', existingMarks);
+      console.log('returning', {
+        ...n,
+        marks: [...newMarks, ...existingMarks],
+      });
       return {
         ...n,
         marks: [...newMarks, ...existingMarks],

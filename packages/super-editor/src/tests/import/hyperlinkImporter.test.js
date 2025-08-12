@@ -18,7 +18,6 @@ describe('HyperlinkNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     const { marks } = nodes[0];
-
     expect(marks.length).toBe(3);
     expect(marks[0].type).toBe('underline');
     expect(marks[1].type).toBe('link');
@@ -30,5 +29,12 @@ describe('HyperlinkNodeImporter', () => {
       'https://stackoverflow.com/questions/66669593/how-to-attach-image-at-first-page-in-docx-file-nodejs',
     );
     expect(marks[1].attrs.rId).toBe('rId4');
+
+    // Capture the textStyle mark
+    const textStyleMark = marks[2];
+    expect(textStyleMark.type).toBe('textStyle');
+    expect(textStyleMark.attrs.styleId).toBe('Hyperlink');
+    expect(textStyleMark.attrs.fontFamily).toBe('Arial');
+    expect(textStyleMark.attrs.fontSize).toBe('10pt');
   });
 });
