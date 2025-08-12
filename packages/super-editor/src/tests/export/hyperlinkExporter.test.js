@@ -21,8 +21,9 @@ describe('HyperlinkNodeExporter', async () => {
     );
 
     const rPr = hyperLinkNode.elements[0].elements[0];
-    expect(rPr.elements[1].name).toBe('w:u');
-    expect(rPr.elements[1].attributes['w:val']).toBe('single');
+    expect(rPr.elements[0].name).toBe('w:u');
+    expect(rPr.elements[0].attributes['w:val']).toBe('single');
+    expect(rPr.elements[1].name).toBe('w:color');
     expect(rPr.elements[2].name).toBe('w:rFonts');
     expect(rPr.elements[2].attributes['w:ascii']).toBe('Arial');
     expect(rPr.elements[3].name).toBe('w:sz');

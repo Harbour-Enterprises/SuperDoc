@@ -50,10 +50,6 @@ export const handleRunNode = (params) => {
       });
     }
 
-    console.log('paragraphStyleAttributes', paragraphStyleAttributes);
-    console.log('runStyleAttributes', runStyleAttributes);
-    console.log('marks', marks);
-
     // Combine with correct precedence: paragraph styles first, then run styles (which override)
     const combinedMarks = [...paragraphStyleAttributes];
 
@@ -78,7 +74,6 @@ export const handleRunNode = (params) => {
         combinedMarks.push(mark);
       }
     });
-    console.log('combinedMarks', combinedMarks);
     // Attach the originating run style id so the span gets styleid like paragraph nodes
     if (runStyleId) combinedMarks.push({ type: 'textStyle', attrs: { styleId: runStyleId } });
 
@@ -86,12 +81,6 @@ export const handleRunNode = (params) => {
     const newMarks = createImportMarks(combinedMarks);
     processedRun = processedRun.map((n) => {
       const existingMarks = n.marks || [];
-      console.log('newMarks', newMarks);
-      console.log('existingMarks', existingMarks);
-      console.log('returning', {
-        ...n,
-        marks: [...newMarks, ...existingMarks],
-      });
       return {
         ...n,
         marks: [...newMarks, ...existingMarks],
