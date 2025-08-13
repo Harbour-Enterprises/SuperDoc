@@ -742,10 +742,11 @@ export class SuperDoc extends EventEmitter {
     additionalFileNames = [],
     isFinalDoc = false,
     triggerDownload = true,
+    fieldsHighlightColor = null,
   } = {}) {
     // Get the docx files first
     const baseFileName = exportedName ? cleanName(exportedName) : cleanName(this.config.title);
-    const docxFiles = await this.exportEditorsToDOCX({ commentsType, isFinalDoc });
+    const docxFiles = await this.exportEditorsToDOCX({ commentsType, isFinalDoc, fieldsHighlightColor });
     const blobsToZip = [...additionalFiles];
     const filenames = [...additionalFileNames];
 
@@ -780,7 +781,7 @@ export class SuperDoc extends EventEmitter {
    * @param {{ commentsType?: string, isFinalDoc?: boolean }} [options]
    * @returns {Promise<Array<Blob>>}
    */
-  async exportEditorsToDOCX({ commentsType, isFinalDoc } = {}) {
+  async exportEditorsToDOCX({ commentsType, isFinalDoc, fieldsHighlightColor } = {}) {
     const comments = [];
     if (commentsType !== 'clean') {
       comments.push(...this.commentsStore?.translateCommentsForExport());
@@ -790,7 +791,7 @@ export class SuperDoc extends EventEmitter {
     this.superdocStore.documents.forEach((doc) => {
       const editor = doc.getEditor();
       if (editor) {
-        docxPromises.push(editor.exportDocx({ isFinalDoc, comments, commentsType }));
+        docxPromises.push(editor.exportDocx({ isFinalDoc, comments, commentsType, fieldsHighlightColor }));
       }
     });
     return await Promise.all(docxPromises);

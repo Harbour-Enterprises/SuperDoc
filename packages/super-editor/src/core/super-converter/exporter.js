@@ -2313,7 +2313,7 @@ const translateFieldAttrsToMarks = (attrs = {}) => {
  * @returns {XmlReadyNode} The translated field annotation node
  */
 function translateFieldAnnotation(params) {
-  const { node, isFinalDoc } = params;
+  const { node, isFinalDoc, fieldsHighlightColor } = params;
   const { attrs = {} } = node;
   const annotationHandler = getTranslationByAnnotationType(attrs.type);
   if (!annotationHandler) return {};
@@ -2335,7 +2335,14 @@ function translateFieldAnnotation(params) {
       sdtContentElements = [...processedNode.elements];
     }
   }
-  sdtContentElements = [getFieldHighlightJson(), ...sdtContentElements];
+
+  sdtContentElements = [...sdtContentElements];
+
+  // Set field background color only if param is provided, default to transparent
+  const fieldBackgroundTag = getFieldHighlightJson(fieldsHighlightColor);
+  if (fieldBackgroundTag) {
+    sdtContentElements.unshift(fieldBackgroundTag);
+  }
 
   // Contains only the main attributes.
   const annotationAttrs = {
@@ -2732,14 +2739,37 @@ const getAutoPageJson = (type, outputMarks = []) => {
   ];
 };
 
-const getFieldHighlightJson = () => {
+/**
+ * Get the JSON representation of the field highlight
+ * @param {string} fieldsHighlightColor - The highlight color for the field. Must be valid HEX.
+ * @returns {Object} The JSON representation of the field highlight
+ */
+export const getFieldHighlightJson = (fieldsHighlightColor) => {
+  if (!fieldsHighlightColor) return null;
+
+  // Normalize input
+  let parsedColor = fieldsHighlightColor.trim();
+
+  // Regex: optional '#' + 3/4/6/8 hex digits
+  const hexRegex = /^#?([A-Fa-f0-9]{3}|[A-Fa-f0-9]{4}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$/;
+
+  if (!hexRegex.test(parsedColor)) {
+    console.warn(`Invalid HEX color provided to fieldsHighlightColor export param: ${fieldsHighlightColor}`);
+    return null;
+  }
+
+  // Remove '#' if present
+  if (parsedColor.startsWith('#')) {
+    parsedColor = parsedColor.slice(1);
+  }
+
   return {
     name: 'w:rPr',
     elements: [
       {
         name: 'w:shd',
         attributes: {
-          'w:fill': '7AA6FF',
+          'w:fill': `#${parsedColor}`,
           'w:color': 'auto',
           'w:val': 'clear',
         },
