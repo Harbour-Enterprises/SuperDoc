@@ -12,6 +12,7 @@
 
 import { Mark, Attribute } from '@core/index.js';
 import { getMarkRange } from '@core/helpers/getMarkRange.js';
+import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
 
 /**
  * @module Link
@@ -134,7 +135,15 @@ export const Link = Mark.create({
           if (underlineMarkType) tr = tr.removeMark(from, to, underlineMarkType);
 
           if (underlineMarkType) tr = tr.addMark(from, to, underlineMarkType.create());
-          tr = tr.addMark(from, to, linkMarkType.create({ href, text: finalText }));
+
+          let rId = null;
+          if (editor.options.mode === 'docx') {
+            const id = addLinkRelationship({ editor, href });
+            if (id) rId = id;
+          }
+
+          const newLinkMarkType = linkMarkType.create({ href, text: finalText, rId });
+          tr = tr.addMark(from, to, newLinkMarkType);
 
           dispatch(tr.scrollIntoView());
           return true;
@@ -239,3 +248,14 @@ const trimRange = (doc, from, to) => {
   // starting and ending without doc specific whitespace
   return { from, to };
 };
+
+function addLinkRelationship({ editor, href }) {
+  const target = href;
+  const type = 'hyperlink';
+  try {
+    const id = insertNewRelationship(target, type, editor);
+    return id;
+  } catch {
+    return null;
+  }
+}

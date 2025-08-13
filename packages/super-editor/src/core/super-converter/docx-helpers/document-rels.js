@@ -138,6 +138,10 @@ export const insertNewRelationship = (target, type, editor) => {
     },
   };
 
+  if (type === 'hyperlink') {
+    newRel.attributes.TargetMode = 'External';
+  }
+
   // Insert the new relationship
   relationshipsTag.elements.push(newRel);
 
