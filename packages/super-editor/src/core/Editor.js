@@ -1553,6 +1553,7 @@ export class Editor extends EventEmitter {
     exportXmlOnly = false,
     comments = [],
     getUpdatedDocs = false,
+    fieldsHighlightColor = null,
   } = {}) {
     // Pre-process the document state to prepare for export
     const json = this.#prepareDocumentForExport(comments);
@@ -1567,6 +1568,7 @@ export class Editor extends EventEmitter {
       comments,
       this,
       exportJsonOnly,
+      fieldsHighlightColor,
     );
 
     if (exportXmlOnly || exportJsonOnly) return documentXml;

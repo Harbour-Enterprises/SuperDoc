@@ -409,6 +409,7 @@ class SuperConverter {
     comments = [],
     editor,
     exportJsonOnly = false,
+    fieldsHighlightColor,
   ) {
     const commentsWithParaIds = comments.map((c) => prepareCommentParaIds(c));
     const commentDefinitions = commentsWithParaIds.map((c, index) =>
@@ -423,6 +424,7 @@ class SuperConverter {
       commentsExportType,
       isFinalDoc,
       editor,
+      fieldsHighlightColor,
     });
 
     if (exportJsonOnly) return result;
@@ -478,6 +480,7 @@ class SuperConverter {
     isFinalDoc = false,
     editor,
     isHeaderFooter = false,
+    fieldsHighlightColor = null,
   }) {
     const bodyNode = this.savedTagsToRestore.find((el) => el.name === 'w:body');
 
@@ -496,6 +499,7 @@ class SuperConverter {
       exportedCommentDefs: commentDefinitions,
       editor,
       isHeaderFooter,
+      fieldsHighlightColor,
     });
 
     return { result, params };
