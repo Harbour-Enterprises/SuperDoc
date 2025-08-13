@@ -9,6 +9,9 @@ import { docxNumberigHelpers } from '@/core/super-converter/v2/importer/listImpo
 const MARKER_PADDING = 6;
 const MARKER_OFFSET_RIGHT = 4;
 const MIN_MARKER_WIDTH = 20;
+const POINT_TO_PIXEL_CONVERSION_FACTOR = 1.33;
+const DEFAULT_FONT_FAMILY = 'Arial, sans-serif';
+const DEFAULT_FONT_SIZE = '10pt';
 
 const IS_DEBUGGING = false;
 
@@ -338,11 +341,19 @@ export const getVisibleIndent = (stylePpr, numDefPpr, inlineIndent) => {
   return result;
 };
 
+/**
+ * Calculate the width of the list item marker.
+ * @param {HTMLElement} dom - The DOM element of the list item.
+ * @param {HTMLElement} numberingDOM - The DOM element of the numbering.
+ * @param {Object} param2 - Additional parameters.
+ * @param {boolean} param2.withPadding - Whether to include padding in the calculation.
+ * @returns {number} The width of the marker.
+ */
 function calculateMarkerWidth(dom, numberingDOM, { withPadding = true } = {}) {
   const markerText = numberingDOM.textContent || '';
-  const fontSize = dom.style.fontSize || '10pt';
+  const fontSize = dom.style.fontSize || DEFAULT_FONT_SIZE;
   const fontValue = dom.style.fontFamily;
-  const fontFamily = fontValue && fontValue !== 'inherit' ? fontValue : 'Arial';
+  const fontFamily = fontValue && fontValue !== 'inherit' ? fontValue : DEFAULT_FONT_FAMILY;
 
   if (!markerText.trim()) return 0;
 
@@ -350,14 +361,16 @@ function calculateMarkerWidth(dom, numberingDOM, { withPadding = true } = {}) {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
 
-    const fontSizePx = fontSize.includes('pt') ? Number.parseFloat(fontSize) * 1.33 : Number.parseFloat(fontSize);
+    const fontSizePx = fontSize.includes('pt')
+      ? Number.parseFloat(fontSize) * POINT_TO_PIXEL_CONVERSION_FACTOR
+      : Number.parseFloat(fontSize);
 
     context.font = `${fontSizePx}px ${fontFamily}`;
 
     const textWidth = context.measureText(markerText).width;
     const resultWidth = withPadding ? Math.ceil(textWidth + MARKER_PADDING) : Math.ceil(textWidth);
     return resultWidth;
-  } catch (err) {
+  } catch {
     return 0;
   }
 }

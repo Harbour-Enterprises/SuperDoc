@@ -17,7 +17,7 @@ export const handleRunNode = (params) => {
   const defaultNodeStyles = getMarksFromStyles(docx, parentStyleId);
 
   if (hasRunProperties) {
-    const { marks = [], attributes = {} } = parseProperties(node);
+    const { marks = [] } = parseProperties(node);
 
     /* Store run style attributes in an array, then store the defaultNodeStyles (parent styles) in a second array
     Then combine the two arrays and create a new array of marks, where the 
