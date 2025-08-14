@@ -163,7 +163,9 @@ class SuperConverter {
   }
 
   parseXmlToJson(xml) {
-    return JSON.parse(xmljs.xml2json(xml, null, 2));
+    // We need to preserve nodes with xml:space="preserve" and only have empty spaces
+    const newXml = xml.replace(/(<w:t xml:space="preserve">)(\s+)(<\/w:t>)/g, '$1[[sdspace]]$2[[sdspace]]$3');
+    return JSON.parse(xmljs.xml2json(newXml, null, 2));
   }
 
   static getStoredSuperdocVersion(docx) {
