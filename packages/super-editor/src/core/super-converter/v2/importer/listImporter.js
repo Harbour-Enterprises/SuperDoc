@@ -389,7 +389,7 @@ export const generateListPath = (level, numId, styleId, levels, docx) => {
   if (iLvl > 0) {
     for (let i = iLvl; i >= 0; i--) {
       const { start: lvlStart } = getListLevelDefinitionTag(numId, i, styleId, docx);
-      if (!levels[i]) levels[i] = Number(lvlStart);
+      if (!levels[i]) levels[i] = Number(lvlStart) || 1;
       path.unshift(levels[i]);
     }
   }

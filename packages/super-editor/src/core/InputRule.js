@@ -7,6 +7,7 @@ import { getTextContentFromNodes } from './helpers/getTextContentFromNodes.js';
 import { isRegExp } from './utilities/isRegExp.js';
 import { handleDocxPaste } from './inputRules/docx-paste/docx-paste.js';
 import { flattenListsInHtml } from './inputRules/html/html-helpers.js';
+import { handleGoogleDocsHtml } from './inputRules/google-docs-paste/google-docs-paste.js';
 
 export class InputRule {
   match;
@@ -231,15 +232,22 @@ export function isWordHtml(html) {
   );
 }
 
+function isGoogleDocsHtml(html) {
+  return /docs-internal-guid-/.test(html);
+}
+
 /**
  * Handle HTML paste events.
  *
  * @param {String} html The HTML string to be pasted.
  * @param {Editor} editor The editor instance.
+ * @param {String} source HTML content source
  * @returns {Boolean} Returns true if the paste was handled.
  */
-export function handleHtmlPaste(html, editor) {
-  const cleanedHtml = htmlHandler(html, editor);
+export function handleHtmlPaste(html, editor, source) {
+  let cleanedHtml;
+  if (source === 'google-docs') cleanedHtml = handleGoogleDocsHtml(html, editor);
+  else cleanedHtml = htmlHandler(html, editor);
   const doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
 
   const { dispatch, state } = editor.view;
@@ -378,6 +386,8 @@ export function handleClipboardPaste({ editor, view }, html) {
     source = 'plain-text';
   } else if (isWordHtml(html)) {
     source = 'word-html';
+  } else if (isGoogleDocsHtml(html)) {
+    source = 'google-docs';
   } else {
     source = 'browser-html';
   }
@@ -391,6 +401,9 @@ export function handleClipboardPaste({ editor, view }, html) {
       if (editor.options.mode === 'docx') {
         return handleDocxPaste(html, editor, view);
       }
+      break;
+    case 'google-docs':
+      return handleGoogleDocsHtml(html, editor, view);
     // falls through to browser-html handling when not in DOCX mode
     case 'browser-html':
       return handleHtmlPaste(html, editor);
