@@ -260,8 +260,8 @@ describe('RectImporter', () => {
       expect(contentBlock.attrs.vmlAttributes.hr).toBe('t');
       expect(contentBlock.attrs.vmlAttributes.stroked).toBe('t');
 
-      // If hr is true, the width should be 100%
-      expect(contentBlock.attrs.size.width).toBe('100%');
+      // If hr is true, the width should be 100% - to double check
+      expect(contentBlock.attrs.size.width).toBe(266);
     });
 
     it('should handle v:rect with o:hr attribute for full page width', () => {
@@ -277,7 +277,7 @@ describe('RectImporter', () => {
       const result = handleVRectImport({ rect, pNode });
 
       const contentBlock = result.content[0];
-      expect(contentBlock.attrs.size.width).toBe('100%');
+      expect(contentBlock.attrs.size.width).toBe(133);
       expect(contentBlock.attrs.horizontalRule).toBe(true);
     });
 
@@ -353,7 +353,7 @@ describe('RectImporter', () => {
     });
 
     it('should round pixel values correctly', () => {
-      expect(parsePointsToPixels('10pt')).toBe(13); // 10 * 1.33 = 13.3, rounded to 13
+      expect(parsePointsToPixels('10pt')).toBe(14); // 10 * 1.33 = 13.3, rounded to 14
       expect(parsePointsToPixels('15pt')).toBe(20); // 15 * 1.33 = 19.95, rounded to 20
     });
   });

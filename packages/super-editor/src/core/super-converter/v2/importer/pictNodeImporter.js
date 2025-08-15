@@ -83,10 +83,11 @@ export function handleVRectImport({ rect, pNode }) {
     // Extract dimensions for the size attribute
     const size = {};
     if (parsedStyle.width !== undefined) {
-      size.width = parsePointsToPixels(parsedStyle.width);
+      const inlineWidth = parsePointsToPixels(parsedStyle.width);
+      size.width = inlineWidth;
 
       // Check for full page width identifier and adjust width to be 100%
-      if (rectAttrs['o:hr'] === 't') {
+      if (rectAttrs['o:hr'] === 't' && !inlineWidth) {
         size.width = '100%';
       }
     }
@@ -123,6 +124,8 @@ export function handleVRectImport({ rect, pNode }) {
   const pPr = pNode.elements?.find((el) => el.name === 'w:pPr');
   const spacingElement = pPr?.elements?.find((el) => el.name === 'w:spacing');
   const spacingAttrs = spacingElement?.attributes || {};
+  const inLineIndentTag = pPr?.elements?.find((el) => el.name === 'w:ind');
+  const inLineIndent = inLineIndentTag?.attributes || {};
 
   // Parse spacing using the same logic as paragraphNodeImporter
   const spacing = {};
@@ -130,6 +133,22 @@ export function handleVRectImport({ rect, pNode }) {
   if (spacingAttrs['w:before']) spacing.lineSpaceBefore = twipsToPixels(spacingAttrs['w:before']);
   if (spacingAttrs['w:line']) spacing.line = twipsToLines(spacingAttrs['w:line']);
   if (spacingAttrs['w:lineRule']) spacing.lineRule = spacingAttrs['w:lineRule'];
+
+  const indent = {
+    left: 0,
+    right: 0,
+    firstLine: 0,
+    hanging: 0,
+  };
+  const leftIndent = inLineIndent?.['w:left'];
+  const rightIndent = inLineIndent?.['w:right'];
+
+  if (leftIndent) {
+    indent.left = twipsToPixels(leftIndent);
+  }
+  if (rightIndent) {
+    indent.right = twipsToPixels(rightIndent);
+  }
 
   return {
     type: 'paragraph',
@@ -142,6 +161,7 @@ export function handleVRectImport({ rect, pNode }) {
     attrs: {
       spacing: Object.keys(spacing).length > 0 ? spacing : undefined,
       rsidRDefault: pNode.attributes?.['w:rsidRDefault'],
+      indent,
     },
   };
 }
@@ -261,7 +281,7 @@ export function parsePointsToPixels(value) {
       return 0;
     }
     const points = parseFloat(val);
-    return Math.round(points * 1.33);
+    return Math.ceil(points * 1.33);
   }
 
   // Handle pixel values

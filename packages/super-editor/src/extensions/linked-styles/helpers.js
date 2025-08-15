@@ -154,6 +154,10 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
         if (!listTypes.includes(node.type.name)) {
           markValue[key] = value;
         }
+      } else if (key === 'color' && node) {
+        if (!listTypes.includes(node.type.name)) {
+          markValue[key] = value;
+        }
       } else if (typeof value === 'string') {
         markValue[key] = value;
       }
