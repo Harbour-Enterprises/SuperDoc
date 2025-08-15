@@ -1,5 +1,6 @@
 import { Mark, Attribute } from '@core/index.js';
 import { getMarkRange } from '@/core/helpers/getMarkRange.js';
+import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
 
 /**
  * Move `from` forward and `to` backward until the first / last
@@ -146,7 +147,15 @@ export const Link = Mark.create({
           if (underlineMarkType) tr = tr.removeMark(from, to, underlineMarkType);
 
           if (underlineMarkType) tr = tr.addMark(from, to, underlineMarkType.create());
-          tr = tr.addMark(from, to, linkMarkType.create({ href, text: finalText }));
+
+          let rId = null;
+          if (editor.options.mode === 'docx') {
+            const id = addLinkRelationship({ editor, href });
+            if (id) rId = id;
+          }
+
+          const newLinkMarkType = linkMarkType.create({ href, text: finalText, rId });
+          tr = tr.addMark(from, to, newLinkMarkType);
 
           dispatch(tr.scrollIntoView());
           return true;
@@ -190,4 +199,15 @@ function isAllowedUri(uri, protocols) {
       .replace(ATTR_WHITESPACE, '')
       .match(new RegExp(`^(?:(?:${allowedProtocols.join('|')}):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))`, 'i'))
   );
+}
+
+function addLinkRelationship({ editor, href }) {
+  const target = href;
+  const type = 'hyperlink';
+  try {
+    const id = insertNewRelationship(target, type, editor);
+    return id;
+  } catch (err) {
+    return null;
+  }
 }
