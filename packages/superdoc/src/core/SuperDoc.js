@@ -80,6 +80,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {TelemetryConfig} [telemetry] Telemetry configuration
  * @property {(editor: Editor) => void} [onEditorBeforeCreate] Callback before an editor is created
  * @property {(editor: Editor) => void} [onEditorCreate] Callback after an editor is created
+ * @property {(params: { editor: Editor, transaction: any, duration: number }) => void} [onTransaction] Callback when a transaction is made
  * @property {() => void} [onEditorDestroy] Callback after an editor is destroyed
  * @property {(params: { error: object, editor: Editor, documentId: string, file: File }) => void} [onContentError] Callback when there is an error in the content
  * @property {(editor: { superdoc: SuperDoc }) => void} [onReady] Callback when the SuperDoc is ready
