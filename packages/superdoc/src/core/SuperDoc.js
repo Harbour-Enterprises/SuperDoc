@@ -182,7 +182,7 @@ export class SuperDoc extends EventEmitter {
     onCommentsListChange: () => null,
     onException: () => null,
     onListDefinitionsChange: () => null,
-
+    onTransaction: () => null,
     // Image upload handler
     // async (file) => url;
     handleImageUpload: null,

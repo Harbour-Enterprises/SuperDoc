@@ -1313,6 +1313,7 @@ export class Editor extends EventEmitter {
    */
   #dispatchTransaction(transaction) {
     if (this.isDestroyed) return;
+    const start = Date.now();
 
     let state;
     try {
@@ -1338,9 +1339,11 @@ export class Editor extends EventEmitter {
     const selectionHasChanged = !this.state.selection.eq(state.selection);
     this.view.updateState(state);
 
+    const end = Date.now();
     this.emit('transaction', {
       editor: this,
       transaction,
+      duration: end - start,
     });
 
     if (selectionHasChanged) {

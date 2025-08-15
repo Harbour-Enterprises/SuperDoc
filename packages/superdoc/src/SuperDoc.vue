@@ -287,6 +287,7 @@ const editorOptions = (doc) => {
     onCommentsUpdate: onEditorCommentsUpdate,
     onCommentLocationsUpdate: onEditorCommentLocationsUpdate,
     onListDefinitionsChange: onEditorListdefinitionsChange,
+    onTransaction: onEditorTransaction,
     ydoc: doc.ydoc,
     collaborationProvider: doc.provider || null,
     isNewFile: doc.isNewFile || false,
@@ -328,6 +329,12 @@ const onEditorCommentsUpdate = (params = {}) => {
   // Bubble up the event to the user, if handled
   if (typeof proxy.$superdoc.config.onCommentsUpdate === 'function') {
     proxy.$superdoc.config.onCommentsUpdate(params);
+  }
+};
+
+const onEditorTransaction = ({ editor, transaction, duration }) => {
+  if (typeof proxy.$superdoc.config.onTransaction === 'function') {
+    proxy.$superdoc.config.onTransaction({ editor, transaction, duration });
   }
 };
 
