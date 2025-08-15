@@ -76,10 +76,17 @@ superdoc.activeEditor.on('fieldAnnotationDropped', ({ sourceField }) => {
 SuperDoc supports full export and re-import of fields. By default, SuperDoc will not re-import document fields and will convert them to mustache style templates only.
 
 To enable fields import simply add the below to your config when instantiating `new SuperDoc`.
+
 ```javascript
 const config = {
   annotations: true,
 };
+```
+
+When exporting, the background color of the fields will be transparent by default. If you want to highlight fields in the exported document, use `fieldsHighlightColor` property.
+
+```javascript
+superdoc.export({ fieldsHighlightColor: '#7AA6FF' }); // Use hex color
 ```
 
 ## Annotate
