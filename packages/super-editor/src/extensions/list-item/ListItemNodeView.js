@@ -6,6 +6,13 @@ import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 import { getListItemStyleDefinitions } from '@helpers/list-numbering-helpers.js';
 import { docxNumberigHelpers } from '@/core/super-converter/v2/importer/listImporter.js';
 
+const MARKER_PADDING = 6;
+const MARKER_OFFSET_RIGHT = 4;
+const MIN_MARKER_WIDTH = 20;
+const POINT_TO_PIXEL_CONVERSION_FACTOR = 1.33;
+const DEFAULT_FONT_FAMILY = 'Arial, sans-serif';
+const DEFAULT_FONT_SIZE = '10pt';
+
 const IS_DEBUGGING = false;
 
 /**
@@ -60,7 +67,7 @@ export class ListItemNodeView {
     }
 
     const pos = this.getPos();
-    const { fontSize, fontFamily } = getTextStyleMarksFromLinkedStyles({
+    const { fontSize, fontFamily, lineHeight } = getTextStyleMarksFromLinkedStyles({
       node: this.node,
       pos,
       editor: this.editor,
@@ -71,6 +78,7 @@ export class ListItemNodeView {
     this.dom.className = 'sd-editor-list-item-node-view';
     this.dom.style.fontSize = fontSize;
     this.dom.style.fontFamily = fontFamily ? fontFamily : 'inherit';
+    this.dom.style.lineHeight = lineHeight || '';
     this.dom.setAttribute('data-marker-type', orderMarker);
     this.dom.setAttribute('data-num-id', numId);
     this.dom.setAttribute('data-list-level', JSON.stringify(listLevel));
@@ -99,27 +107,44 @@ export class ListItemNodeView {
     const { attrs } = this.node;
     const { styleId, numId, level, indent: inlineIndent } = attrs;
 
-    // Gather visible indents
     const defs = getListItemStyleDefinitions({ styleId, node: this.node, numId, level, editor: this.editor });
     const visibleIndent = getVisibleIndent(defs.stylePpr, defs.numDefPpr, inlineIndent);
+    const lvlJc = defs.numLvlJs?.attributes?.['w:val'] || 'left';
 
-    let absoluteLeft = visibleIndent.left - (visibleIndent.hanging || 0);
-    if (!absoluteLeft && absoluteLeft !== 0) absoluteLeft = 0;
+    const contentLeft = visibleIndent.left || 0;
+    const hanging = visibleIndent.hanging || 0;
 
-    // Place the content at the visible indent left
-    let contentLeft = visibleIndent.left;
-    if (IS_DEBUGGING) {
-      console.debug('[ListItemNodeView] absoluteLeft', absoluteLeft);
-      console.debug('[ListItemNodeView] contentLeft', contentLeft);
-    }
+    const handlers = {
+      right: () => {
+        const calculatedWidth = calculateMarkerWidth(this.dom, this.numberingDOM);
+        const minMarkerWidth = Math.max(calculatedWidth, MIN_MARKER_WIDTH);
+        const effectiveHanging = Math.max(hanging, minMarkerWidth);
+        const markerLeft = contentLeft - effectiveHanging - MARKER_OFFSET_RIGHT;
+        this.contentDOM.style.marginLeft = `${contentLeft}px`;
+        this.numberingDOM.style.left = `${markerLeft}px`;
+        this.numberingDOM.style.width = `${effectiveHanging}px`;
+        this.numberingDOM.style.textAlign = 'right';
+      },
+      left: () => {
+        const calculatedWidth = calculateMarkerWidth(this.dom, this.numberingDOM);
+        const minMarkerWidth = Math.max(calculatedWidth, MIN_MARKER_WIDTH);
+        let markerLeft = contentLeft - hanging;
+        if (markerLeft === contentLeft) {
+          markerLeft -= minMarkerWidth;
+        } else if (minMarkerWidth > hanging) {
+          const diff = minMarkerWidth - hanging;
+          markerLeft -= diff;
+        }
+        this.contentDOM.style.marginLeft = `${contentLeft}px`;
+        this.numberingDOM.style.left = `${markerLeft}px`;
+        this.numberingDOM.style.width = '';
+        this.numberingDOM.style.textAlign = '';
+      },
+    };
 
-    if (visibleIndent.left === absoluteLeft) {
-      absoluteLeft -= 24;
-    }
+    const handleStyles = handlers[lvlJc] ?? handlers.left;
 
-    // Apply the styling
-    this.contentDOM.style.marginLeft = `${contentLeft}px`;
-    this.numberingDOM.style.left = `${absoluteLeft}px`;
+    handleStyles();
   }
 
   handleNumberingClick = () => {
@@ -131,13 +156,14 @@ export class ListItemNodeView {
     this.node = node;
     this.decorations = decorations;
 
-    const { fontSize, fontFamily } = getTextStyleMarksFromLinkedStyles({
+    const { fontSize, fontFamily, lineHeight } = getTextStyleMarksFromLinkedStyles({
       node,
       pos: this.getPos(),
       editor: this.editor,
     });
     this.dom.style.fontSize = fontSize;
     this.dom.style.fontFamily = fontFamily || 'inherit';
+    this.dom.style.lineHeight = lineHeight || '';
   }
 
   destroy() {
@@ -164,12 +190,14 @@ export function refreshAllListItemNodeViews() {
  * Get the text style marks from a list item
  * @param {Node} listItem - The list item node
  * @param {MarkType} markType - The mark type to look for
- * @returns {Array} An array of text style marks
+ * @returns {Object} An array of text style marks and attrs object
  */
 function getListItemTextStyleMarks(listItem, markType) {
   let textStyleMarks = [];
+  let attrs = {};
   listItem.forEach((childNode) => {
     if (childNode.type.name !== 'paragraph') return;
+    attrs.lineHeight = childNode.attrs.lineHeight;
     childNode.forEach((textNode) => {
       let isTextNode = textNode.type.name === 'text';
       let hasTextStyleMarks = markType.isInSet(textNode.marks);
@@ -179,7 +207,10 @@ function getListItemTextStyleMarks(listItem, markType) {
       }
     });
   });
-  return textStyleMarks;
+  return {
+    marks: textStyleMarks,
+    attrs,
+  };
 }
 
 /**
@@ -199,12 +230,13 @@ function getTextStyleMarksFromLinkedStyles({ node, pos, editor }) {
 
   // 2. Find all textStyle marks on this node
   const textStyleType = getMarkType('textStyle', editor.schema);
-  const allMarks = getListItemTextStyleMarks(node, textStyleType);
+  const { marks: allMarks, attrs: allAttrs } = getListItemTextStyleMarks(node, textStyleType);
   const styleMarks = allMarks.filter((m) => m.type === textStyleType);
 
   // 3. Helpers to find the first mark that has a fontSize / fontFamily attr
   const sizeMark = styleMarks.find((m) => m.attrs.fontSize);
   const familyMark = styleMarks.find((m) => m.attrs.fontFamily);
+  const lineHeight = allAttrs.lineHeight;
 
   // 4. Compute final fontSize (parse it, fall back to default if invalid)
   let fontSize = sizeMark
@@ -233,7 +265,7 @@ function getTextStyleMarksFromLinkedStyles({ node, pos, editor }) {
     }
   }
 
-  return { fontSize, fontFamily };
+  return { fontSize, fontFamily, lineHeight };
 }
 
 /**
@@ -250,9 +282,23 @@ const getStylesFromLinkedStyles = ({ node, pos, editor }) => {
   const { state } = editor.view;
   const linkedStyles = LinkedStylesPluginKey.getState(state)?.decorations;
   const decorationsInPlace = linkedStyles?.find(pos, pos + node.nodeSize);
-  // We are looking from the end as there may be several decorations
-  // and we need to find the most specific one.
-  const styleDeco = decorationsInPlace?.findLast((dec) => dec.type.attrs?.style);
+
+  // Predicates by priority.
+  const predicates = [
+    (style) => style.includes('font-size') && style.includes('font-family'),
+    (style) => style.includes('font-size'),
+    (style) => style.includes('font-family'),
+  ];
+
+  let styleDeco;
+  for (const predicateFn of predicates) {
+    styleDeco = decorationsInPlace?.find((dec) => {
+      const style = dec.type.attrs?.style || '';
+      return style && predicateFn(style);
+    });
+    if (styleDeco) break;
+  }
+
   const style = styleDeco?.type.attrs?.style;
 
   const stylesArray = style?.split(';') || [];
@@ -291,5 +337,40 @@ export const getVisibleIndent = (stylePpr, numDefPpr, inlineIndent) => {
   if (IS_DEBUGGING) console.debug('[getVisibleIndent] numDefIndent', numDefIndent, numDefIndentTag, '\n\n');
 
   const indent = combineIndents(styleIndent, numDefIndent);
-  return combineIndents(indent, inlineIndent);
+  const result = combineIndents(indent, inlineIndent);
+  return result;
 };
+
+/**
+ * Calculate the width of the list item marker.
+ * @param {HTMLElement} dom - The DOM element of the list item.
+ * @param {HTMLElement} numberingDOM - The DOM element of the numbering.
+ * @param {Object} param2 - Additional parameters.
+ * @param {boolean} param2.withPadding - Whether to include padding in the calculation.
+ * @returns {number} The width of the marker.
+ */
+function calculateMarkerWidth(dom, numberingDOM, { withPadding = true } = {}) {
+  const markerText = numberingDOM.textContent || '';
+  const fontSize = dom.style.fontSize || DEFAULT_FONT_SIZE;
+  const fontValue = dom.style.fontFamily;
+  const fontFamily = fontValue && fontValue !== 'inherit' ? fontValue : DEFAULT_FONT_FAMILY;
+
+  if (!markerText.trim()) return 0;
+
+  try {
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+
+    const fontSizePx = fontSize.includes('pt')
+      ? Number.parseFloat(fontSize) * POINT_TO_PIXEL_CONVERSION_FACTOR
+      : Number.parseFloat(fontSize);
+
+    context.font = `${fontSizePx}px ${fontFamily}`;
+
+    const textWidth = context.measureText(markerText).width;
+    const resultWidth = withPadding ? Math.ceil(textWidth + MARKER_PADDING) : Math.ceil(textWidth);
+    return resultWidth;
+  } catch {
+    return 0;
+  }
+}

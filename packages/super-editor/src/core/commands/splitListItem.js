@@ -122,7 +122,7 @@ export const splitListItem = () => (props) => {
   } else {
     // Simple case: single paragraph, use original logic
     let firstParagraphContent = beforeCursor;
-    if (marks.length > 0 && beforeCursor.size === 0) {
+    if (beforeCursor.size === 0) {
       firstParagraphContent = editor.schema.text(' ', marks);
     }
 
@@ -131,7 +131,7 @@ export const splitListItem = () => (props) => {
     firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
 
     let secondParagraphContent = afterCursor;
-    if (marks.length > 0 && afterCursor.size === 0) {
+    if (afterCursor.size === 0) {
       secondParagraphContent = editor.schema.text(' ', marks);
     }
 

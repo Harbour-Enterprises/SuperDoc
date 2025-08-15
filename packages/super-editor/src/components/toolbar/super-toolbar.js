@@ -222,7 +222,6 @@ export class SuperToolbar extends EventEmitter {
       }
 
       if (!el) {
-        console.warn(`[super-toolbar 🎨] Element not found: ${selector}`);
         return null;
       }
     }

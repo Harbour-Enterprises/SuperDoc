@@ -163,7 +163,9 @@ class SuperConverter {
   }
 
   parseXmlToJson(xml) {
-    return JSON.parse(xmljs.xml2json(xml, null, 2));
+    // We need to preserve nodes with xml:space="preserve" and only have empty spaces
+    const newXml = xml.replace(/(<w:t xml:space="preserve">)(\s+)(<\/w:t>)/g, '$1[[sdspace]]$2[[sdspace]]$3');
+    return JSON.parse(xmljs.xml2json(newXml, null, 2));
   }
 
   static getStoredSuperdocVersion(docx) {
@@ -409,6 +411,7 @@ class SuperConverter {
     comments = [],
     editor,
     exportJsonOnly = false,
+    fieldsHighlightColor,
   ) {
     const commentsWithParaIds = comments.map((c) => prepareCommentParaIds(c));
     const commentDefinitions = commentsWithParaIds.map((c, index) =>
@@ -423,6 +426,7 @@ class SuperConverter {
       commentsExportType,
       isFinalDoc,
       editor,
+      fieldsHighlightColor,
     });
 
     if (exportJsonOnly) return result;
@@ -478,6 +482,7 @@ class SuperConverter {
     isFinalDoc = false,
     editor,
     isHeaderFooter = false,
+    fieldsHighlightColor = null,
   }) {
     const bodyNode = this.savedTagsToRestore.find((el) => el.name === 'w:body');
 
@@ -496,6 +501,7 @@ class SuperConverter {
       exportedCommentDefs: commentDefinitions,
       editor,
       isHeaderFooter,
+      fieldsHighlightColor,
     });
 
     return { result, params };

@@ -88,6 +88,13 @@ Visit our <a href="https://docs.superdoc.dev" target="_blank">documentation site
 - Advanced customization
 - Best practices
 
+## 🎯️ Roadmap
+
+We keep our big work-in-progress items here:
+
+- Check out our [SuperDoc roadmap](https://github.com/Harbour-Enterprises/SuperDoc/wiki/%F0%9F%8E%AF%EF%B8%8F-SuperDoc-Roadmap)
+- We prioritize the solving of big DOCX import/export/formatting needs
+
 ## 🤝 Contribute
 
 We love contributions! Here's how you can help:

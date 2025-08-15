@@ -176,7 +176,7 @@ function getMarkValue(markType, attributes, docx) {
   };
 
   if (!(markType in markValueMapper)) {
-    console.debug('❗️❗️ No value mapper for:', markType, 'Attributes:', attributes);
+    // console.debug('❗️❗️ No value mapper for:', markType, 'Attributes:', attributes);
   }
 
   // Returned the mapped mark value
