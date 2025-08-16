@@ -1,8 +1,8 @@
 import './dev/style.css';
 import { createApp } from 'vue';
 import { vClickOutside } from '@harbour-enterprises/common';
-import DeveloperPlayground from './dev/components/DeveloperPlayground.vue';
+import Playground from './dev/components/Playground.vue';
 
-const app = createApp(DeveloperPlayground);
+const app = createApp(Playground);
 app.directive('click-outside', vClickOutside);
 app.mount('#app');

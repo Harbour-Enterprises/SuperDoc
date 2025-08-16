@@ -1,6 +1,7 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMParser, DOMSerializer } from 'prosemirror-model';
+import { marked } from 'marked';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -131,6 +132,7 @@ import { SuperValidator } from '@core/super-validator/index.js';
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
  * @property {boolean} [jsonOverride] - Whether to override content with provided json
  * @property {string} [html] - HTML content to initialize the editor with
+ * @property {string} [markdown] - Markdown content to initialize the editor with
  */
 
 /**
@@ -250,6 +252,29 @@ export class Editor extends EventEmitter {
   };
 
   /**
+   * Normalize content options to use consistent mode + content pattern
+   * @private
+   */
+  #normalizeContentOptions() {
+    // Handle markdown convenience attribute
+    if (this.options.markdown) {
+      this.options.mode = 'markdown';
+      this.options.content = this.options.markdown;
+    }
+
+    // Future: Can add other formats here
+    // if (this.options.rst) {
+    //   this.options.mode = 'rst';
+    //   this.options.content = this.options.rst;
+    // }
+
+    // if (this.options.latex) {
+    //   this.options.mode = 'latex';
+    //   this.options.content = this.options.latex;
+    // }
+  }
+
+  /**
    * Create a new Editor instance
    * @param {EditorOptions} options - Editor configuration options
    * @returns {void}
@@ -261,10 +286,14 @@ export class Editor extends EventEmitter {
     this.#checkHeadless(options);
     this.setOptions(options);
 
+    // Normalize content options for consistency
+    this.#normalizeContentOptions();
+
     let modes = {
       docx: () => this.#init(),
       text: () => this.#initRichText(),
       html: () => this.#initRichText(),
+      markdown: () => this.#initRichText(),
       default: () => {
         console.log('Not implemented.');
       },
@@ -934,40 +963,84 @@ export class Editor extends EventEmitter {
    * @returns {Object} ProseMirror data
    */
   #generatePmData() {
-    let doc;
-
     try {
       const { mode, fragment, content, loadFromSchema } = this.options;
 
-      if (mode === 'docx') {
-        if (loadFromSchema) {
-          doc = this.schema.nodeFromJSON(content);
-          doc = this.#prepareDocumentForImport(doc);
-        } else {
-          doc = createDocument(this.converter, this.schema, this);
-
-          // Perform any additional document processing prior to finalizing the doc here
-          doc = this.#prepareDocumentForImport(doc);
-
-          // If we have a new doc, and have html data, we initialize from html
-          if (this.options.html) doc = this.#createDocFromHTML(this.options.html);
-          else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
-
-          if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
-        }
+      // Handle schema loading (same for all modes)
+      if (loadFromSchema && content) {
+        return this.#prepareDocumentForImport(this.schema.nodeFromJSON(content));
       }
 
-      // If we are in HTML mode, we initialize from either content or html (or blank)
-      else if (mode === 'text' || mode === 'html') {
-        if (loadFromSchema) doc = this.schema.nodeFromJSON(content);
-        else if (content) doc = this.#createDocFromHTML(content);
-        else doc = this.schema.topNodeType.createAndFill();
-      }
+      // Route to appropriate handler based on mode
+      let doc = this.#createDocumentForMode(mode);
+
+      // Apply any overrides or fragments (mostly for docx mode)
+      doc = this.#applyDocumentOverrides(doc, fragment);
+
+      return doc;
     } catch (err) {
-      console.error(err);
+      console.error('[SuperDoc] Document generation failed:', err);
       this.emit('contentError', { editor: this, error: err });
+      // Return empty doc as fallback
+      return this.schema.topNodeType.createAndFill();
+    }
+  }
+
+  /**
+   * Create document based on mode
+   * @private
+   * @param {string} mode - The document mode
+   * @returns {Object} ProseMirror document
+   */
+  #createDocumentForMode(mode) {
+    const { content } = this.options;
+
+    switch (mode) {
+      case 'markdown':
+        return this.#createDocFromMarkdown(content || this.options.markdown);
+
+      case 'html':
+      case 'text':
+        return content ? this.#createDocFromHTML(content) : this.schema.topNodeType.createAndFill();
+
+      case 'docx':
+        return this.#createDocxDocument();
+
+      default:
+        return this.schema.topNodeType.createAndFill();
+    }
+  }
+
+  /**
+   * Handle DOCX-specific document creation
+   * @private
+   * @returns {Object} ProseMirror document
+   */
+  #createDocxDocument() {
+    let doc = createDocument(this.converter, this.schema, this);
+    doc = this.#prepareDocumentForImport(doc);
+
+    // Handle HTML override for DOCX mode
+    if (this.options.html) {
+      doc = this.#createDocFromHTML(this.options.html);
+    } else if (this.options.jsonOverride) {
+      doc = this.schema.nodeFromJSON(this.options.jsonOverride);
     }
 
+    return doc;
+  }
+
+  /**
+   * Apply any final overrides or fragments
+   * @private
+   * @param {Object} doc - The document to modify
+   * @param {Object} fragment - Optional fragment to apply
+   * @returns {Object} Final ProseMirror document
+   */
+  #applyDocumentOverrides(doc, fragment) {
+    if (fragment && this.options.mode === 'docx') {
+      return yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+    }
     return doc;
   }
 
@@ -987,6 +1060,64 @@ export class Editor extends EventEmitter {
     }
 
     return DOMParser.fromSchema(this.schema).parse(parsedContent);
+  }
+
+  /**
+   * Create a document from Markdown content
+   * @private
+   * @param {string} content - Markdown content
+   * @returns {Object} Document node
+   */
+  #createDocFromMarkdown(content) {
+    try {
+      const html = this.#convertMarkdownToHTML(content);
+      return this.#createDocFromHTML(html);
+    } catch (error) {
+      console.error('[SuperDoc] Markdown import failed:', error);
+      // Return empty doc so editor still initializes
+      return this.schema.nodeFromJSON({ type: 'doc', content: [] });
+    }
+  }
+
+  /**
+   * Convert Markdown to HTML with SuperDoc compatibility
+   * @private
+   * @param {string} markdown - Markdown content
+   * @returns {string} HTML content
+   */
+  #convertMarkdownToHTML(markdown) {
+    marked.setOptions({
+      breaks: true, // Respect line breaks
+      gfm: true, // GitHub flavored markdown (tables, etc)
+    });
+
+    // Convert and add SuperDoc compatibility
+    let html = marked.parse(markdown);
+    return this.#addSuperDocAttributes(html);
+  }
+
+  /**
+   * Add attributes SuperDoc requires
+   * @private
+   * @param {string} html - HTML from markdown parser
+   * @returns {string} HTML with SuperDoc attributes
+   */
+  #addSuperDocAttributes(html) {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+
+    // 1. Headings need data-level
+    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((h) => {
+      h.setAttribute('data-level', h.tagName[1]);
+    });
+
+    // 2. Code blocks benefit from language info
+    tempDiv.querySelectorAll('pre code').forEach((code) => {
+      const lang = code.className.replace('language-', '');
+      if (lang) code.parentElement.setAttribute('data-language', lang);
+    });
+
+    return tempDiv.innerHTML;
   }
 
   /**

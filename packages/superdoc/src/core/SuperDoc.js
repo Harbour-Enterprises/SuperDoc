@@ -107,6 +107,8 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {boolean} [suppressDefaultDocxStyles] Whether to suppress default styles in docx mode
  * @property {boolean} [jsonOverride] Whether to override content with provided JSON
  * @property {boolean} [disableContextMenu] Whether to disable slash / right-click custom context menu
+ * @property {string} [html] HTML content to initialize the editor with
+ * @property {string} [markdown] Markdown content to initialize the editor with
  */
 
 /**

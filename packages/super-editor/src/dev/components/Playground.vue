@@ -4,11 +4,10 @@ import '@harbour-enterprises/common/styles/common-styles.css';
 
 import { ref, shallowRef, computed, onMounted } from 'vue';
 import { SuperEditor } from '@/index.js';
-import { getFileObject } from '@harbour-enterprises/common/helpers/get-file-object';
+import { getFileObject, FileHandler, BasicUpload } from '@harbour-enterprises/common';
 import { DOCX } from '@harbour-enterprises/common';
 import { SuperToolbar } from '@components/toolbar/super-toolbar';
 import { PaginationPluginKey } from '@extensions/pagination/pagination-helpers.js';
-import BasicUpload from './BasicUpload.vue';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
 
@@ -21,8 +20,7 @@ const telemetry = shallowRef(null);
 
 const handleNewFile = async (file) => {
   currentFile.value = null;
-  const fileUrl = URL.createObjectURL(file);
-  currentFile.value = await getFileObject(fileUrl, file.name, file.type);
+  currentFile.value = await FileHandler.processFile(file);
 };
 
 const onCreate = ({ editor }) => {
@@ -65,7 +63,7 @@ const user = {
 };
 
 const editorOptions = computed(() => {
-  return {
+  const options = {
     documentId: 'dev-123',
     user,
     rulers: true,
@@ -78,6 +76,15 @@ const editorOptions = computed(() => {
     telemetry: telemetry.value,
     annotations: true,
   };
+
+  // Add content based on file type using FileHandler helpers
+  if (FileHandler.isMarkdown(currentFile.value)) {
+    options.markdown = currentFile.value.content;
+  } else if (FileHandler.isHtml(currentFile.value)) {
+    options.html = currentFile.value.content;
+  }
+
+  return options;
 });
 
 const onCommentsLoaded = ({ comments }) => {
@@ -136,11 +143,11 @@ onMounted(async () => {
       <div class="dev-app__header">
         <div class="dev-app__header-side dev-app__header-side--left">
           <div class="dev-app__header-title">
-            <h2>Super Editor Dev Area</h2>
+            <h2>🦋 SuperEditor - Playground</h2>
           </div>
           <div class="dev-app__header-upload">
-            Upload docx
-            <BasicUpload @file-change="handleNewFile" accept=".docx" />
+            Upload docx, html or markdown
+            <BasicUpload @file-change="handleNewFile" accept=".docx,.html,.md" />
           </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">

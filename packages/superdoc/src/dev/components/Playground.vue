@@ -4,7 +4,7 @@ import { nextTick, onMounted, provide, ref, shallowRef } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
 import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
-import { BasicUpload, getFileObject } from '@harbour-enterprises/common';
+import { BasicUpload, getFileObject, FileHandler } from '@harbour-enterprises/common';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
@@ -30,9 +30,7 @@ const user = {
 };
 
 const handleNewFile = async (file) => {
-  // Generate a file url
-  const url = URL.createObjectURL(file);
-  currentFile.value = await getFileObject(url, file.name, file.type);
+  currentFile.value = await FileHandler.processFile(file);
 
   nextTick(() => {
     init();
@@ -40,8 +38,13 @@ const handleNewFile = async (file) => {
 };
 
 const init = async () => {
-  let testId = 'file_id';
-  let testDocumentId = 'doc_id';
+  let testId = 'document-123';
+
+  // Build document config using FileHandler utility
+  const documentConfig = FileHandler.buildDocumentConfig(currentFile.value, {
+    id: testId,
+    isNewFile: true,
+  });
 
   const config = {
     superdocId: 'superdoc-dev',
@@ -61,18 +64,19 @@ const init = async () => {
     // html: '<p>Hello world</p>',
     // isDev: true,
     user,
-    title: 'Test document',
+    title: currentFile.value?.name || 'Test document',
     users: [
       { name: 'Nick Bernal', email: 'nick@harbourshare.com', access: 'internal' },
       { name: 'Eric Doversberger', email: 'eric@harbourshare.com', access: 'external' },
     ],
-    documents: [
-      {
-        data: currentFile.value,
-        id: testId,
-        type: 'docx',
-      },
-    ],
+    document: documentConfig,
+    // documents: [
+    //   {
+    //     data: currentFile.value,
+    //     id: testId,
+    //     isNewFile: true,
+    //   },
+    // ],
     // cspNonce: 'testnonce123',
     modules: {
       comments: {
@@ -198,10 +202,10 @@ onMounted(async () => {
       <div class="dev-app__header">
         <div class="dev-app__header-side dev-app__header-side--left">
           <div class="dev-app__header-title">
-            <h2>🦋 SuperDoc Dev</h2>
+            <h2>🦋 SuperDoc - Playground</h2>
           </div>
           <div class="dev-app__header-upload">
-            Upload docx, pdf or (soon) html
+            Upload docx, html or markdown
             <BasicUpload @file-change="handleNewFile" />
           </div>
         </div>

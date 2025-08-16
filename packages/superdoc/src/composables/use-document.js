@@ -12,6 +12,7 @@ export default function useDocument(params, superdocConfig) {
   const state = params.state;
   const role = params.role;
   const html = params.html;
+  const markdown = params.markdown;
 
   // Placement
   const container = ref(null);
@@ -79,6 +80,7 @@ export default function useDocument(params, superdocConfig) {
     id,
     data,
     html,
+    markdown,
     type,
     config,
     state,
