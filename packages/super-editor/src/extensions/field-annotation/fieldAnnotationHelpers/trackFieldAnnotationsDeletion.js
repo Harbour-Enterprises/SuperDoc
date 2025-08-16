@@ -4,7 +4,7 @@ export function trackFieldAnnotationsDeletion(editor, tr) {
   let removedAnnotations = [];
   try {
     removedAnnotations = findRemovedFieldAnnotations(tr);
-  } catch (e) {}
+  } catch {}
 
   if (removedAnnotations.length > 0) {
     setTimeout(() => {

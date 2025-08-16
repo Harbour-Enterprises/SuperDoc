@@ -1,6 +1,6 @@
 // clipboardUtils.js
 
-import { DOMSerializer, DOMParser, Fragment } from 'prosemirror-model';
+import { DOMSerializer, DOMParser } from 'prosemirror-model';
 
 /**
  * Serializes the current selection in the editor state to HTML and plain text for clipboard use.
@@ -11,9 +11,7 @@ export function serializeSelectionToClipboard(state) {
   const { from, to } = state.selection;
   const slice = state.selection.content();
   const htmlContainer = document.createElement('div');
-  htmlContainer.appendChild(
-    DOMSerializer.fromSchema(state.schema).serializeFragment(slice.content)
-  );
+  htmlContainer.appendChild(DOMSerializer.fromSchema(state.schema).serializeFragment(slice.content));
   const htmlString = htmlContainer.innerHTML;
   const text = state.doc.textBetween(from, to);
   return { htmlString, text };
@@ -61,7 +59,7 @@ export async function readFromClipboard(state) {
           text = await (await item.getType('text/plain')).text();
         }
       }
-    } catch (e) {
+    } catch {
       text = await navigator.clipboard.readText();
     }
   } else {
@@ -71,7 +69,7 @@ export async function readFromClipboard(state) {
   if (html) {
     try {
       content = DOMParser.fromSchema(state.schema).parseSlice(
-        new window.DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body
+        new window.DOMParser().parseFromString(`<body>${html}</body>`, 'text/html').body,
       ).content;
     } catch (e) {
       console.error('error parsing html', e);

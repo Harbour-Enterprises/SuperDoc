@@ -4,6 +4,7 @@ import {
   fieldAnnotationHelpers,
   trackChangesHelpers,
   AnnotatorHelpers,
+  SectionHelpers,
 } from '@harbour-enterprises/super-editor';
 import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@harbour-enterprises/common';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
@@ -26,6 +27,7 @@ export {
   fieldAnnotationHelpers,
   trackChangesHelpers,
   AnnotatorHelpers,
+  SectionHelpers,
 
   // Super Editor
   SuperConverter,

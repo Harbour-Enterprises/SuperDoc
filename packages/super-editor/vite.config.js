@@ -17,9 +17,7 @@ export default defineConfig(({ mode }) => {
       globals: true,
       environment: 'jsdom',
       exclude: [
-        '**/src/tests/e2e/**',
         '**/*.spec.js',
-        '**/src/tests/playwright/**',
       ],
     },
     define: {
@@ -34,6 +32,7 @@ export default defineConfig(({ mode }) => {
         entry: "src/index.js",
         formats: ['es'],
         name: "super-editor",
+        cssFileName: 'style',
       },
       rollupOptions: {
         external: [

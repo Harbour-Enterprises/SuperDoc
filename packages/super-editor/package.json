@@ -8,8 +8,8 @@
   ],
   "exports": {
     ".": {
-      "import": "./dist/super-editor.es.js",
-      "types": "./dist/index.d.ts"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/super-editor.es.js"
     },
     "./converter": {
       "import": "./dist/converter.es.js"
@@ -38,7 +38,6 @@
   "module": "./dist/super-editor.es.js",
   "scripts": {
     "dev": "vite",
-    "test:e2e": "playwright test ./src/tests/e2e",
     "preview": "vite preview",
     "build": "vite build && tsc",
     "clean": "rm -rf dist",
@@ -57,7 +56,7 @@
     "prosemirror-gapcursor": "^1.3.2",
     "prosemirror-history": "^1.4.0",
     "prosemirror-keymap": "^1.2.2",
-    "prosemirror-model": "^1.21.0",
+    "prosemirror-model": "^1.25.2",
     "prosemirror-schema-basic": "^1.2.2",
     "prosemirror-schema-list": "^1.3.0",
     "prosemirror-search": "^1.1.0",
@@ -65,31 +64,31 @@
     "prosemirror-tables": "^1.4.0",
     "prosemirror-transform": "^1.9.0",
     "prosemirror-view": "^1.33.8",
+    "release-it": "19.0.3",
     "uuidv4": "^6.2.13",
     "vue": "^3.4.21",
     "xml-js": "^1.6.11"
   },
   "peerDependencies": {
+    "@floating-ui/dom": "^1.7.0",
     "naive-ui": "^2.38.2",
     "tippy.js": "^6.3.7",
-    "vite-plugin-node-polyfills": "^0.22.0",
+    "vite-plugin-node-polyfills": "^0.23.0",
     "y-prosemirror": "^1.2.12",
-    "yjs": "13.6.19",
-    "@floating-ui/dom": "^1.7.0"
+    "yjs": "13.6.19"
   },
   "devDependencies": {
-    "@playwright/test": "^1.51.0",
+    "@floating-ui/dom": "^1.7.0",
     "@vitejs/plugin-vue": "^5.0.4",
     "@vue/test-utils": "^2.4.6",
-    "playwright": "^1.51.0",
     "postcss-nested": "^6.0.1",
     "postcss-nested-import": "^1.3.0",
     "tippy.js": "^6.3.7",
     "typescript": "^5.7.3",
-    "vite": "^5.4.12",
-    "vitest": "^1.6.1",
+    "vite": "^6.3.5",
+    "vite-plugin-node-polyfills": "^0.24.0",
+    "vitest": "^3.2.4",
     "vue-draggable-next": "^2.2.1",
-    "which": "^5.0.0",
-    "@floating-ui/dom": "^1.7.0"
+    "which": "^5.0.0"
   }
 }

@@ -121,7 +121,6 @@ export const useSuperdocStore = defineStore('superdoc', () => {
 
     // If we already have a File object, return it
     if (doc.data) return doc;
-
     // If we have a URL, fetch the file and return it
     else if (doc.url && doc.type) {
       if (doc.type.toLowerCase() === 'docx') doc.type = DOCX;

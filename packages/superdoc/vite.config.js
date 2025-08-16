@@ -75,6 +75,7 @@ export default defineConfig(({ mode, command}) => {
       lib: {
         entry: "src/index.js",
         name: "SuperDoc",
+        cssFileName: 'style',
       },
       minify: false,
       sourcemap: false,

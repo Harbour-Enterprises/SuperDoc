@@ -1,26 +1,10 @@
 import { writeUpdate, readSyncMessage, writeSyncStep1, writeSyncStep2 } from 'y-protocols/sync';
-import {
-  createEncoder,
-  writeVarUint,
-  writeVarUint8Array,
-  toUint8Array,
-  length as encodingLength,
-} from 'lib0/encoding';
+import { createEncoder, writeVarUint, writeVarUint8Array, toUint8Array, length as encodingLength } from 'lib0/encoding';
 import { readVarUint8Array, createDecoder, readVarUint } from 'lib0/decoding';
-import {
-  Awareness,
-  encodeAwarenessUpdate,
-  removeAwarenessStates,
-  applyAwarenessUpdate,
-} from 'y-protocols/awareness';
+import { Awareness, encodeAwarenessUpdate, removeAwarenessStates, applyAwarenessUpdate } from 'y-protocols/awareness';
 import { Doc as YDoc } from 'yjs';
 import { callbackHandler, isCallbackSet, debouncer } from './index.js';
-import {
-  messageSync,
-  messageAwareness,
-  wsReadyStateConnecting,
-  wsReadyStateOpen,
-} from './index.js';
+import { messageSync, messageAwareness, wsReadyStateConnecting, wsReadyStateOpen } from './index.js';
 
 /**
  * Represents a shared document that can be collaboratively edited.
@@ -81,14 +65,15 @@ export class SharedSuperDoc extends YDoc {
         debouncer(() => callbackHandler(/** @type {SharedSuperDoc} */ (doc)));
       });
     }
-    this.whenInitialized = contentInitializer(this);
+
+    this.whenInitialized = contentInitializer();
   }
 }
 
 /**
- * @type {(ydoc: YDoc) => Promise<void>}
+ * @type {() => Promise<void>}
  */
-let contentInitializer = (_ydoc) => Promise.resolve();
+let contentInitializer = () => Promise.resolve();
 
 /**
  * The main handler for updates to the Yjs document.
@@ -96,9 +81,8 @@ let contentInitializer = (_ydoc) => Promise.resolve();
  * @param {Uint8Array} update
  * @param {any} _origin
  * @param {SharedSuperDoc} doc
- * @param {any} _tr
  */
-const updateHandler = (update, _origin, doc, _tr) => {
+const updateHandler = (update, _origin, doc) => {
   const encoder = createEncoder();
   writeVarUint(encoder, messageSync);
   writeUpdate(encoder, update);
@@ -137,7 +121,7 @@ export const send = (doc, conn, message) => {
     conn.send(message, {}, (err) => {
       err != null && closeConn(doc, conn);
     });
-  } catch (e) {
+  } catch {
     closeConn(doc, conn);
   }
 };

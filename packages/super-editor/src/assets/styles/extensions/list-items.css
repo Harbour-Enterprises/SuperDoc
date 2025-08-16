@@ -18,3 +18,8 @@
   min-height: inherit;
   word-wrap: break-word;
 }
+
+/* temporary fix */
+.sd-editor-list-item-node-view .sd-custom-selection {
+  font-size: inherit !important;
+}

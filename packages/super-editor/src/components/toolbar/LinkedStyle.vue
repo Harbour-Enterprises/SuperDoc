@@ -38,7 +38,7 @@ const moveToPreviousStyle = (index) => {
 };
 
 const handleKeyDown = (event, index, style) => {
-  switch(event.key) {
+  switch (event.key) {
     case 'ArrowDown':
       moveToNextStyle(index);
       break;
@@ -58,7 +58,6 @@ onMounted(() => {
   styleRefs.value[0].setAttribute('tabindex', '0');
   styleRefs.value[0].focus();
 });
-
 </script>
 
 <template>
@@ -67,11 +66,15 @@ onMounted(() => {
       v-for="(style, index) in getQuickFormatList(editor)"
       class="style-item"
       @click="select(style)"
-      @keydown="event => handleKeyDown(event, index, style)"
-      :class="{ 'selected': selectedOption === style.id }"
+      @keydown="(event) => handleKeyDown(event, index, style)"
+      :class="{ selected: selectedOption === style.id }"
       ref="styleRefs"
     >
-      <div class="style-name" :style="generateLinkedStyleString(style, null, false)" data-item="btn-linkedStyles-option">
+      <div
+        class="style-name"
+        :style="generateLinkedStyleString(style, null, null, false)"
+        data-item="btn-linkedStyles-option"
+      >
         {{ style.definition.attrs.name }}
       </div>
     </div>

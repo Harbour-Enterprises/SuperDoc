@@ -15,33 +15,33 @@ import { createLogger } from '../internal-logger/logger.js';
  */
 export class ConnectionHandler {
   /** @type {import('../document-manager/manager.js').DocumentManager} */
-  documentManager
+  documentManager;
 
   /** @type {import('../types.js').Hooks} */
-  #hooks
+  #hooks;
 
   /** @type {ReturnType<import('../internal-logger/logger.js').createLogger>} */
-  #log
+  #log;
 
   /** @type {import('../types.js').WebSocket|null} */
-  #socket
+  #socket;
 
   /** @type {import('../types.js').SocketRequest} */
-  #request
+  #request;
 
   /** @type {string} */
-  #documentId
+  #documentId;
 
   /** @type {import('../types.js').CollaborationParams} */
-  #params
+  #params;
 
   /**
    * @param {ConnectionHandlerConfig} config
    */
   constructor({ documentManager, hooks }) {
-    this.documentManager = documentManager
-    this.#hooks = hooks
-    this.#log = createLogger('ConnectionHandler')
+    this.documentManager = documentManager;
+    this.#hooks = hooks;
+    this.#log = createLogger('ConnectionHandler');
   }
 
   /**
@@ -62,33 +62,38 @@ export class ConnectionHandler {
      */
     const userContext = await this.#authenticate(this.#socket, this.#request, this.#params);
     const userParams = { ...this.#params, userContext };
-  
+
     /**
      * If authenticated, load the document
      */
     const sharedDoc = await this.documentManager.getDocument(this.#documentId, userParams);
-    userParams["document"] = sharedDoc;
-  
+    userParams['document'] = sharedDoc;
+
     /**
      * Connect some listeners for our hooks, if provided
      */
     if (this.#hooks.beforeChange) {
+      // keeping transaction here for future reference
+      // eslint-disable-next-line no-unused-vars
       sharedDoc.on('beforeTransaction', (transaction) => {
         this.#hooks.beforeChange(userParams);
       });
     }
 
     if (this.#hooks.change) {
+      // keeping origin here for future reference
+      // eslint-disable-next-line no-unused-vars
       sharedDoc.on('update', (update, origin) => {
         this.#hooks.change(userParams);
       });
     }
 
-    socket.on('close', (code, reason) => {
-      this.#log('🔌 Socket closed, cleaning up connection for', params.documentId);
-      this.documentManager.releaseConnection(params.documentId, socket);
+    // eslint-disable-next-line no-unused-vars
+    socket.on('close', (/** @type {number} */ code, /** @type {Buffer} */ reason) => {
+      this.#log('🔌 Socket closed, cleaning up connection for', /** @type {string} */ (params.documentId));
+      this.documentManager.releaseConnection(/** @type {string} */ (params.documentId), socket);
     });
-  
+
     /** Initialieze the socket connection  */
     setupConnection(this.#socket, sharedDoc);
 

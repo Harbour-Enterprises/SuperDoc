@@ -1,6 +1,6 @@
 // prettier-ignore
 import { beforeAll, expect } from 'vitest';
-import { TextSelection } from "prosemirror-state";
+import { TextSelection } from 'prosemirror-state';
 import { loadTestDataForEditorTests, initTestEditor, getNewTransaction } from '@tests/helpers/helpers.js';
 
 describe('[blank-doc.docx] import, add node, export', () => {
@@ -36,14 +36,14 @@ describe('[blank-doc.docx] import, add node, export', () => {
     const { result: exported } = editor.converter.exportToXmlJson({
       data: editor.getJSON(),
       editorSchema: editor.schema,
-      editor
+      editor,
     });
     const body = exported.elements.find((el) => el.name === 'w:body');
     const content = body.elements;
 
     const paragraph = content[0];
     expect(paragraph.name).toBe('w:p');
-    
+
     const pPr = paragraph.elements.find((el) => el.name === 'w:pPr');
     expect(pPr).toBeDefined();
 
@@ -56,7 +56,7 @@ describe('[blank-doc.docx] import, add node, export', () => {
     const tr = getNewTransaction(editor);
     const listPosition = 3;
 
-    tr.insertText("hello world", listPosition);
+    tr.insertText('hello world', listPosition);
     dispatch(tr);
 
     const currentState = editor.getJSON();
@@ -68,7 +68,7 @@ describe('[blank-doc.docx] import, add node, export', () => {
     // We expect to see 2 separate ordered list nodes
     const content = currentState.content;
     expect(content[0].type).toBe('orderedList');
-  
+
     const firstListContent = content[0].content;
     expect(firstListContent.length).toBe(1);
 
@@ -87,7 +87,7 @@ describe('[blank-doc.docx] import, add node, export', () => {
   it('correctly exports after the first list item', () => {
     const { result: exported } = editor.converter.exportToXmlJson({
       data: editor.getJSON(),
-      editor
+      editor,
     });
 
     expect(exported).toBeDefined();
@@ -111,7 +111,6 @@ describe('[blank-doc.docx] import, add node, export', () => {
     const runNode = listItem.elements.find((el) => el.name === 'w:r');
     const runText = runNode.elements[0].elements[0].text;
     expect(runText).toBe('hello world');
-
   });
 
   it('can add a second list item by splitting the first', () => {
@@ -137,5 +136,4 @@ describe('[blank-doc.docx] import, add node, export', () => {
     expect(secondListItem.attrs.numPrType).toBe('inline');
     expect(secondListItem.attrs.listLevel).toStrictEqual([2]);
   });
-
 });

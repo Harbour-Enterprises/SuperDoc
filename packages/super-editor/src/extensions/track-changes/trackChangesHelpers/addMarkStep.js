@@ -1,6 +1,3 @@
-import { Transaction, EditorState } from 'prosemirror-state';
-import { Mapping, AddMarkStep } from 'prosemirror-transform';
-import { Node } from 'prosemirror-model';
 import { TrackDeleteMarkName, TrackFormatMarkName } from '../constants.js';
 import { v4 as uuidv4 } from 'uuid';
 import { objectIncludes } from '@core/utilities/objectIncludes.js';
@@ -9,16 +6,16 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
 
 /**
  * Add mark step.
- * @param {EditorState} options.state Editor state.
- * @param {Transaction} options.tr Transaction.
- * @param {AddMarkStep} options.step Step.
- * @param {Transaction} options.newTr New transaction.
- * @param {Mapping} options.map Map.
- * @param {Node} options.doc Doc.
+ * @param {import('prosemirror-state').EditorState} options.state Editor state.
+ * @param {import('prosemirror-state').Transaction} options.tr Transaction.
+ * @param {import('prosemirror-transform').AddMarkStep} options.step Step.
+ * @param {import('prosemirror-state').Transaction} options.newTr New transaction.
+ * @param {import('prosemirror-transform').Mapping} options.map Map.
+ * @param {import('prosemirror-model').Node} options.doc Doc.
  * @param {object} options.user User object ({ name, email }).
  * @param {string} options.date Date.
  */
-export const addMarkStep = ({ state, tr, step, newTr, map, doc, user, date }) => {
+export const addMarkStep = ({ state, step, newTr, doc, user, date }) => {
   const meta = {};
 
   doc.nodesBetween(step.from, step.to, (node, pos) => {
@@ -30,7 +27,9 @@ export const addMarkStep = ({ state, tr, step, newTr, map, doc, user, date }) =>
       return false;
     }
 
-    const existingChangeMark = node.marks.find((mark) => [TrackDeleteMarkName, TrackFormatMarkName].includes(mark.type.name));
+    const existingChangeMark = node.marks.find((mark) =>
+      [TrackDeleteMarkName, TrackFormatMarkName].includes(mark.type.name),
+    );
     const wid = existingChangeMark ? existingChangeMark.attrs.id : uuidv4();
     newTr.addMark(Math.max(step.from, pos), Math.min(step.to, pos + node.nodeSize), step.mark);
 

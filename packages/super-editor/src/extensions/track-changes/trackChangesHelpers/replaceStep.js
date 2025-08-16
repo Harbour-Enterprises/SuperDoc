@@ -1,6 +1,4 @@
-import { ReplaceStep, Mapping } from 'prosemirror-transform';
-import { Transaction, EditorState } from 'prosemirror-state';
-import { Node } from 'prosemirror-model';
+import { ReplaceStep } from 'prosemirror-transform';
 import { markInsertion } from './markInsertion.js';
 import { markDeletion } from './markDeletion.js';
 import { findMark } from '@core/helpers/index.js';
@@ -10,18 +8,18 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
 
 /**
  * Replace step.
- * @param {EditorState} options.state Editor state.
- * @param {Transaction} options.tr Transaction.
- * @param {ReplaceStep} options.step Step.
- * @param {Transaction} options.newTr New transaction.
- * @param {Mapping} options.map Map.
- * @param {Node} options.doc Doc.
+ * @param {import('prosemirror-state').EditorState} options.state Editor state.
+ * @param {import('prosemirror-state').Transaction} options.tr Transaction.
+ * @param {import('prosemirror-transform').ReplaceStep} options.step Step.
+ * @param {import('prosemirror-state').Transaction} options.newTr New transaction.
+ * @param {import('prosemirror-transform').Mapping} options.map Map.
+ * @param {import('prosemirror-model').Node} options.doc Doc.
  * @param {object} options.user User object ({ name, email }).
  * @param {string} options.date Date.
- * @param {ReplaceStep} options.originalStep Original step.
+ * @param {import('prosemirror-transform').ReplaceStep} options.originalStep Original step.
  * @param {number} options.originalStepIndex Original step index.
  */
-export const replaceStep = ({ state, tr, step, newTr, map, doc, user, date, originalStep, originalStepIndex }) => {
+export const replaceStep = ({ state, tr, step, newTr, map, user, date, originalStep, originalStepIndex }) => {
   const deletionMarkSchema = state.schema.marks[TrackDeleteMarkName];
   const deletionMark = findMark(state, deletionMarkSchema, false);
   const positionTo = deletionMark ? deletionMark.to : step.to;
@@ -73,7 +71,11 @@ export const replaceStep = ({ state, tr, step, newTr, map, doc, user, date, orig
   }
 
   if (step.from !== step.to) {
-    const { deletionMark, deletionMap, nodes: deletionNodes } = markDeletion({
+    const {
+      deletionMark,
+      deletionMap,
+      nodes: deletionNodes,
+    } = markDeletion({
       tr: newTr,
       from: step.from,
       to: step.to,

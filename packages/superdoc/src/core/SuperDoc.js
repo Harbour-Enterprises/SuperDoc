@@ -1,6 +1,4 @@
-// TODO: side-effect with styles
 import '../style.css';
-import '@harbour-enterprises/super-editor/style.css';
 
 import { EventEmitter } from 'eventemitter3';
 import { v4 as uuidv4 } from 'uuid';
@@ -82,6 +80,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {TelemetryConfig} [telemetry] Telemetry configuration
  * @property {(editor: Editor) => void} [onEditorBeforeCreate] Callback before an editor is created
  * @property {(editor: Editor) => void} [onEditorCreate] Callback after an editor is created
+ * @property {(params: { editor: Editor, transaction: any, duration: number }) => void} [onTransaction] Callback when a transaction is made
  * @property {() => void} [onEditorDestroy] Callback after an editor is destroyed
  * @property {(params: { error: object, editor: Editor, documentId: string, file: File }) => void} [onContentError] Callback when there is an error in the content
  * @property {(editor: { superdoc: SuperDoc }) => void} [onReady] Callback when the SuperDoc is ready
@@ -108,7 +107,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {boolean} [suppressDefaultDocxStyles] Whether to suppress default styles in docx mode
  * @property {boolean} [jsonOverride] Whether to override content with provided JSON
  * @property {boolean} [disableContextMenu] Whether to disable slash / right-click custom context menu
- * @property {string} [html] HTML content to initialize the editor with  
+ * @property {string} [html] HTML content to initialize the editor with
  * @property {string} [markdown] Markdown content to initialize the editor with
  */
 
@@ -186,7 +185,7 @@ export class SuperDoc extends EventEmitter {
     onCommentsListChange: () => null,
     onException: () => null,
     onListDefinitionsChange: () => null,
-
+    onTransaction: () => null,
     // Image upload handler
     // async (file) => url;
     handleImageUpload: null,
@@ -215,7 +214,7 @@ export class SuperDoc extends EventEmitter {
 
     // @ts-ignore
     this.version = __APP_VERSION__;
-    console.debug('🦋 [superdoc] Using SuperDoc version:', this.version);
+    this.#log('🦋 [superdoc] Using SuperDoc version:', this.version);
 
     this.superdocId = config.superdocId || uuidv4();
     this.colors = this.config.colors;
@@ -272,14 +271,14 @@ export class SuperDoc extends EventEmitter {
   #patchNaiveUIStyles() {
     const cspNonce = this.config.cspNonce;
 
-    const originalCreateElement = document.createElement
+    const originalCreateElement = document.createElement;
     document.createElement = function (tagName) {
-      const element = originalCreateElement.call(this, tagName)
+      const element = originalCreateElement.call(this, tagName);
       if (tagName.toLowerCase() === 'style') {
-        element.setAttribute('nonce', cspNonce)
+        element.setAttribute('nonce', cspNonce);
       }
-      return element
-    }
+      return element;
+    };
   }
 
   #initDocuments() {
@@ -363,7 +362,7 @@ export class SuperDoc extends EventEmitter {
       this.config.socket = new HocuspocusProviderWebsocket({
         url: collaborationModuleConfig.url,
       });
-    };
+    }
 
     // Initialize collaboration for documents
     const processedDocuments = makeDocumentsCollaborative(this);
@@ -376,7 +375,7 @@ export class SuperDoc extends EventEmitter {
     } else {
       this.ydoc = processedDocuments[0].ydoc;
       this.provider = processedDocuments[0].provider;
-    };
+    }
 
     // Initialize comments sync, if enabled
     initCollaborationComments(this);
@@ -482,8 +481,8 @@ export class SuperDoc extends EventEmitter {
     this.emit('sidebar-toggle', isOpened);
   }
 
-  log(...args) {
-    console.debug('🦋 🦸‍♀️ [superdoc]', ...args);
+  #log(...args) {
+    (console.debug ? console.debug : console.log)('🦋 🦸‍♀️ [superdoc]', ...args);
   }
 
   /**
@@ -562,7 +561,7 @@ export class SuperDoc extends EventEmitter {
    */
   addCommentsList(element) {
     if (!this.config?.modules?.comments || this.config.role === 'viewer') return;
-    console.debug('🦋 [superdoc] Adding comments list to:', element);
+    this.#log('🦋 [superdoc] Adding comments list to:', element);
     if (element) this.config.modules.comments.element = element;
     this.commentsList = new SuperComments(this.config.modules?.comments, this);
     if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: true });
@@ -722,7 +721,7 @@ export class SuperDoc extends EventEmitter {
   lockSuperdoc(isLocked = false, lockedBy) {
     this.isLocked = isLocked;
     this.lockedBy = lockedBy;
-    console.debug('🦋 [superdoc] Locking superdoc:', isLocked, lockedBy, '\n\n\n');
+    this.#log('🦋 [superdoc] Locking superdoc:', isLocked, lockedBy, '\n\n\n');
     this.emit('locked', { isLocked, lockedBy });
   }
 
@@ -746,16 +745,17 @@ export class SuperDoc extends EventEmitter {
     additionalFileNames = [],
     isFinalDoc = false,
     triggerDownload = true,
+    fieldsHighlightColor = null,
   } = {}) {
     // Get the docx files first
     const baseFileName = exportedName ? cleanName(exportedName) : cleanName(this.config.title);
-    const docxFiles = await this.exportEditorsToDOCX({ commentsType, isFinalDoc });
+    const docxFiles = await this.exportEditorsToDOCX({ commentsType, isFinalDoc, fieldsHighlightColor });
     const blobsToZip = [...additionalFiles];
     const filenames = [...additionalFileNames];
 
     // If we are exporting docx files, add them to the zip
     if (exportType.includes('docx')) {
-      docxFiles.forEach((blob, index) => {
+      docxFiles.forEach((blob) => {
         blobsToZip.push(blob);
         filenames.push(`${baseFileName}.docx`);
       });
@@ -784,17 +784,19 @@ export class SuperDoc extends EventEmitter {
    * @param {{ commentsType?: string, isFinalDoc?: boolean }} [options]
    * @returns {Promise<Array<Blob>>}
    */
-  async exportEditorsToDOCX({ commentsType, isFinalDoc } = {}) {
+  async exportEditorsToDOCX({ commentsType, isFinalDoc, fieldsHighlightColor } = {}) {
     const comments = [];
     if (commentsType !== 'clean') {
-      comments.push(...this.commentsStore?.translateCommentsForExport());
+      if (this.commentsStore && typeof this.commentsStore.translateCommentsForExport === 'function') {
+        comments.push(...this.commentsStore.translateCommentsForExport());
+      }
     }
 
     const docxPromises = [];
     this.superdocStore.documents.forEach((doc) => {
       const editor = doc.getEditor();
       if (editor) {
-        docxPromises.push(editor.exportDocx({ isFinalDoc, comments, commentsType }));
+        docxPromises.push(editor.exportDocx({ isFinalDoc, comments, commentsType, fieldsHighlightColor }));
       }
     });
     return await Promise.all(docxPromises);
@@ -805,8 +807,8 @@ export class SuperDoc extends EventEmitter {
    * @returns {Promise<void>} Resolves when all documents have saved
    */
   async #triggerCollaborationSaves() {
-    console.debug('🦋 [superdoc] Triggering collaboration saves');
-    return new Promise((resolve, reject) => {
+    this.#log('🦋 [superdoc] Triggering collaboration saves');
+    return new Promise((resolve) => {
       this.superdocStore.documents.forEach((doc) => {
         this.pendingCollaborationSaves = 0;
         if (doc.ydoc) {
@@ -836,9 +838,9 @@ export class SuperDoc extends EventEmitter {
       // this.exportEditorsToDOCX(),
     ];
 
-    console.debug('🦋 [superdoc] Saving superdoc');
+    this.#log('🦋 [superdoc] Saving superdoc');
     const result = await Promise.all(savePromises);
-    console.debug('🦋 [superdoc] Save complete:', result);
+    this.#log('🦋 [superdoc] Save complete:', result);
     return result;
   }
 
@@ -851,7 +853,7 @@ export class SuperDoc extends EventEmitter {
       return;
     }
 
-    this.log('[superdoc] Unmounting app');
+    this.#log('[superdoc] Unmounting app');
 
     this.config.socket?.cancelWebsocketRetry();
     this.config.socket?.disconnect();

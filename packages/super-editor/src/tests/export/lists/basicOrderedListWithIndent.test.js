@@ -8,14 +8,16 @@ describe('[list_with_indents.docx] simple ordered with indent', async () => {
   const body = {};
 
   beforeEach(() => {
-    Object.assign(body, result.elements?.find((el) => el.name === 'w:body'));
+    Object.assign(
+      body,
+      result.elements?.find((el) => el.name === 'w:body'),
+    );
   });
-
 
   it('should keep initial indent', () => {
     const itemIndex = 2;
     const firstItem = body.elements[itemIndex];
-    
+
     const pPr = firstItem.elements.find((el) => el.name === 'w:pPr');
     const indent = pPr.elements.find((el) => el.name === 'w:ind');
     expect(indent).toBeDefined();

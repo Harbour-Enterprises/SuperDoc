@@ -28,9 +28,9 @@ onDeactivated(() => {
 
 const onKeyDown = async (e) => {
   if (e.metaKey && e.key === 'f') {
-    e.preventDefault();
     const searchItem = proxy.$toolbar.getToolbarItemByName('search');
     if (searchItem) {
+      e.preventDefault();
       searchItem.expand.value = true;
       await nextTick();
       if (searchItem.inputRef.value) {
@@ -38,7 +38,7 @@ const onKeyDown = async (e) => {
       }
     }
   }
-}
+};
 
 const onWindowResized = async () => {
   await proxy.$toolbar.onToolbarResize();
@@ -50,21 +50,20 @@ const handleCommand = ({ item, argument, option }) => {
   proxy.$toolbar.emitCommand({ item, argument, option });
 };
 
+const restoreSelection = () => {
+  proxy.$toolbar.activeEditor?.commands?.restoreSelection();
+};
 </script>
 
 <template>
-  <div 
-    class="superdoc-toolbar" 
-    :key="toolbarKey"
-    role="toolbar"
-    aria-label="Toolbar"
-  >
+  <div class="superdoc-toolbar" :key="toolbarKey" role="toolbar" aria-label="Toolbar">
     <ButtonGroup
       tabindex="0"
       v-if="showLeftSide"
       :toolbar-items="getFilteredItems('left')"
       position="left"
       @command="handleCommand"
+      @item-clicked="restoreSelection"
       class="superdoc-toolbar-group-side"
     />
     <ButtonGroup
@@ -73,6 +72,7 @@ const handleCommand = ({ item, argument, option }) => {
       :overflow-items="proxy.$toolbar.overflowItems"
       position="center"
       @command="handleCommand"
+      @item-clicked="restoreSelection"
     />
     <ButtonGroup
       tabindex="0"
@@ -80,6 +80,7 @@ const handleCommand = ({ item, argument, option }) => {
       :toolbar-items="getFilteredItems('right')"
       position="right"
       @command="handleCommand"
+      @item-clicked="restoreSelection"
       class="superdoc-toolbar-group-side"
     />
   </div>

@@ -24,6 +24,7 @@ import * as trackChangesHelpers from './extensions/track-changes/trackChangesHel
 import { TrackChangesBasePluginKey } from './extensions/track-changes/plugins/index.js';
 import { CommentsPluginKey } from './extensions/comment/comments-plugin.js';
 import { AnnotatorHelpers } from '@helpers/annotator.js';
+import { SectionHelpers } from '@helpers/index.js';
 
 const Extensions = {
   Node,
@@ -62,6 +63,7 @@ export {
   fieldAnnotationHelpers,
   trackChangesHelpers,
   AnnotatorHelpers,
+  SectionHelpers,
   getMarksFromSelection,
   getActiveFormatting,
   getStarterExtensions,
@@ -71,7 +73,6 @@ export {
 
   // External extensions classes
   Extensions,
-
   TrackChangesBasePluginKey,
   CommentsPluginKey,
 };

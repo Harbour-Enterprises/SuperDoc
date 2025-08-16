@@ -24,3 +24,4 @@ export * from './findChildren.js';
 export * from './posToDOMRect.js';
 export * from './findMark.js';
 export * from './isInTable.js';
+export * from './documentSectionHelpers.js';

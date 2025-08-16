@@ -1,5 +1,5 @@
 import { Node, Attribute } from '@core/index.js';
-import { InputRule } from '@core/InputRule.js'
+import { InputRule } from '@core/InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { toggleList } from '@core/commands/index.js';
 
@@ -23,7 +23,7 @@ export const BulletList = Node.create({
     return {
       itemTypeName: 'listItem',
       htmlAttributes: {
-        'aria-label': 'Bullet list node'
+        'aria-label': 'Bullet list node',
       },
       keepMarks: true,
       keepAttributes: false,
@@ -60,7 +60,7 @@ export const BulletList = Node.create({
   addCommands() {
     return {
       toggleBulletList: () => (params) => {
-        return toggleList(this.type)(params)
+        return toggleList(this.type)(params);
       },
     };
   },
@@ -79,29 +79,28 @@ export const BulletList = Node.create({
         match: inputRegex,
         handler: ({ state, range }) => {
           // Check if we're currently inside a list item
-          const $pos = state.selection.$from
-          const listItemType = state.schema.nodes.listItem
-          
+          const $pos = state.selection.$from;
+          const listItemType = state.schema.nodes.listItem;
+
           // Look up the tree to see if we're inside a list item
           for (let depth = $pos.depth; depth >= 0; depth--) {
             if ($pos.node(depth).type === listItemType) {
               // We're inside a list item, don't trigger the rule
-              return null
+              return null;
             }
           }
-          
+
           // Not inside a list item, proceed with creating new list
-          const { tr } = state
-          tr.delete(range.from, range.to)
+          const { tr } = state;
+          tr.delete(range.from, range.to);
 
           ListHelpers.createNewList({
             listType: this.type,
             tr,
             editor: this.editor,
           });
-        }
-      })
-    ]
-  }
-
+        },
+      }),
+    ];
+  },
 });

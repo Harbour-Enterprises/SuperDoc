@@ -1,11 +1,10 @@
 import { CommentMarkName } from './comments-constants.js';
-import { COMMENTS_XML_DEFINITIONS } from '@converter/exporter-docx-defs.js';
 import { CommentsPluginKey } from './comments-plugin.js';
 
 /**
  * Remove comment by id
- * 
- * @param {Object} param0 
+ *
+ * @param {Object} param0
  * @param {string} param0.commentId The comment ID
  * @param {import('prosemirror-state').EditorState} state The current editor state
  * @param {import('prosemirror-state').Transaction} tr The current transaction
@@ -14,7 +13,7 @@ import { CommentsPluginKey } from './comments-plugin.js';
  */
 export const removeCommentsById = ({ commentId, state, tr, dispatch }) => {
   const positions = getCommentPositionsById(commentId, state.doc);
-  
+
   // Remove the mark
   positions.forEach(({ from, to }) => {
     tr.removeMark(from, to, state.schema.marks[CommentMarkName]);
@@ -22,10 +21,9 @@ export const removeCommentsById = ({ commentId, state, tr, dispatch }) => {
   dispatch(tr);
 };
 
-
 /**
  * Get the positions of a comment by ID
- * 
+ *
  * @param {String} commentId The comment ID
  * @param {import('prosemirror-model').Node} doc The prosemirror document
  * @returns {Array} The positions of the comment
@@ -35,10 +33,10 @@ export const getCommentPositionsById = (commentId, doc) => {
   doc.descendants((node, pos) => {
     const { marks } = node;
     const commentMark = marks.find((mark) => mark.type.name === CommentMarkName);
-  
+
     if (commentMark) {
       const { attrs } = commentMark;
-      const { commentId: currentCommentId, } = attrs;
+      const { commentId: currentCommentId } = attrs;
       if (commentId === currentCommentId) {
         positions.push({ from: pos, to: pos + node.nodeSize });
       }
@@ -49,7 +47,7 @@ export const getCommentPositionsById = (commentId, doc) => {
 
 /**
  * Prepare comments for export by converting the marks back to commentRange nodes
- * 
+ *
  * @param {import('prosemirror-model').Node} doc The prosemirror document
  * @param {import('prosemirror-state').Transaction} tr The preparation transaction
  * @param {import('prosemirror-model').Schema} schema The editor schema
@@ -63,10 +61,9 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
   const seen = new Set();
 
   doc.descendants((node, pos) => {
-    const commentMarks = node.marks?.filter(mark => mark.type.name === CommentMarkName);
+    const commentMarks = node.marks?.filter((mark) => mark.type.name === CommentMarkName);
     commentMarks.forEach((commentMark) => {
       if (commentMark) {
-
         const { attrs = {} } = commentMark;
         const { commentId } = attrs;
 
@@ -94,7 +91,7 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
             .sort((a, b) => a.createdTime - b.createdTime);
 
           childComments.forEach((c) => {
-            const childMark =  getPreparedComment(c);
+            const childMark = getPreparedComment(c);
             const childStartNode = schema.nodes.commentRangeStart.create(childMark);
             seen.add(c.commentId);
             startNodes.push({
@@ -130,10 +127,9 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
   return tr;
 };
 
-
 /**
  * Generate the prepared comment attrs for export
- * 
+ *
  * @param {Object} attrs The comment mark attributes
  * @returns {Object} The prepared comment attributes
  */
@@ -143,12 +139,11 @@ export const getPreparedComment = (attrs) => {
     'w:id': commentId,
     internal: internal,
   };
-}
-
+};
 
 /**
  * Prepare comments for import by removing the commentRange nodes and replacing with marks
- * 
+ *
  * @param {import('prosemirror-model').Node} doc The prosemirror document
  * @param {import('prosemirror-state').Transaction} tr The preparation transaction
  * @param {import('prosemirror-model').Schema} schema The editor schema
@@ -160,7 +155,7 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
 
   doc.descendants((node, pos) => {
     const { type } = node;
-    
+
     const commentNodes = ['commentRangeStart', 'commentRangeEnd', 'commentReference'];
     if (!commentNodes.includes(type.name)) return;
 
@@ -216,43 +211,43 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
  * Translate a list of before/after marks into a human-readable format we can
  * display in tracked change comments. This tells us what formatting changes
  * a suggester made
- * 
+ *
  * @param {Object} attrs The tracked change node attributes. Contains before/after lists
  * @returns {String} The human-readable format of the changes
  */
 export const translateFormatChangesToEnglish = (attrs = {}) => {
   const { before = [], after = [] } = attrs;
 
-  const beforeTypes = new Set(before.map(mark => mark.type));
-  const afterTypes = new Set(after.map(mark => mark.type));
+  const beforeTypes = new Set(before.map((mark) => mark.type));
+  const afterTypes = new Set(after.map((mark) => mark.type));
 
-  const added = [...afterTypes].filter(type => !beforeTypes.has(type));
-  const removed = [...beforeTypes].filter(type => !afterTypes.has(type));
+  const added = [...afterTypes].filter((type) => !beforeTypes.has(type));
+  const removed = [...beforeTypes].filter((type) => !afterTypes.has(type));
 
   const messages = [];
 
   // Detect added formatting (excluding textStyle, handled separately)
-  const nonTextStyleAdded = added.filter(type => !["textStyle", "commentMark"].includes(type));
+  const nonTextStyleAdded = added.filter((type) => !['textStyle', 'commentMark'].includes(type));
   if (nonTextStyleAdded.length) {
     messages.push(`Added formatting: ${nonTextStyleAdded.join(', ')}`);
   }
 
   // Detect removed formatting (excluding textStyle, handled separately)
-  const nonTextStyleRemoved = removed.filter(type => !["textStyle", "commentMark"].includes(type));
+  const nonTextStyleRemoved = removed.filter((type) => !['textStyle', 'commentMark'].includes(type));
   if (nonTextStyleRemoved.length) {
     messages.push(`Removed formatting: ${nonTextStyleRemoved.join(', ')}`);
   }
 
   // Handling textStyle changes separately
-  const beforeTextStyle = before.find(mark => mark.type === "textStyle")?.attrs || {};
-  const afterTextStyle = after.find(mark => mark.type === "textStyle")?.attrs || {};
+  const beforeTextStyle = before.find((mark) => mark.type === 'textStyle')?.attrs || {};
+  const afterTextStyle = after.find((mark) => mark.type === 'textStyle')?.attrs || {};
 
   const textStyleChanges = [];
 
   // Function to convert camelCase to human-readable format
   const formatAttrName = (attr) => attr.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 
-  Object.keys({ ...beforeTextStyle, ...afterTextStyle }).forEach(attr => {
+  Object.keys({ ...beforeTextStyle, ...afterTextStyle }).forEach((attr) => {
     const beforeValue = beforeTextStyle[attr];
     const afterValue = afterTextStyle[attr];
 
@@ -260,7 +255,7 @@ export const translateFormatChangesToEnglish = (attrs = {}) => {
       if (afterValue === null) {
         // Ignore attributes that are now null
         return;
-      } else if (attr === "color") {
+      } else if (attr === 'color') {
         // Special case: Simplify color change message
         textStyleChanges.push(`Changed color`);
       } else {
@@ -283,8 +278,8 @@ export const translateFormatChangesToEnglish = (attrs = {}) => {
 
 /**
  * Get the highlight color for a comment or tracked changes node
- * 
- * @param {Object} param0 
+ *
+ * @param {Object} param0
  * @param {String} param0.activeThreadId The active comment ID
  * @param {String} param0.threadId The current thread ID
  * @param {Boolean} param0.isInternal Whether the comment is internal or external
@@ -297,4 +292,4 @@ export const getHighlightColor = ({ activeThreadId, threadId, isInternal, editor
   const color = isInternal ? pluginState.internalColor : pluginState.externalColor;
   const alpha = activeThreadId == threadId ? '44' : '22';
   return `${color}${alpha}`;
-}
+};

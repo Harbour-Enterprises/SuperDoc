@@ -6,7 +6,7 @@ export const CommentsMark = Mark.create({
 
   group: 'comments',
 
-  excludes: "",
+  excludes: '',
 
   addOptions() {
     return {
@@ -29,7 +29,7 @@ export const CommentsMark = Mark.create({
     return [{ tag: CommentMarkName }];
   },
 
-  renderDOM({ htmlAttributes}) {
+  renderDOM({ htmlAttributes }) {
     return [CommentMarkName, Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
   },
 });

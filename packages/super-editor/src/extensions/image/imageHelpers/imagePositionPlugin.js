@@ -11,7 +11,7 @@ export const ImagePositionPlugin = ({ editor }) => {
     key: ImagePositionPluginKey,
 
     state: {
-      init(_, state) {
+      init() {
         return DecorationSet.empty;
       },
 
@@ -22,7 +22,7 @@ export const ImagePositionPlugin = ({ editor }) => {
       },
     },
 
-    view: (view) => {
+    view: () => {
       return {
         update: (view, lastState) => {
           const pagination = PaginationPluginKey.getState(lastState);
@@ -68,22 +68,22 @@ const getImagePositionDecorations = (state, view) => {
             style += 'display: block; margin-left: auto; margin-right: auto; ';
             break;
         }
-        const topPos = marginOffset.top !== undefined ? marginOffset.top : pageBreak?.offsetTop + pageBreak?.offsetHeight;
-        style +=
-          vRelativeFrom === 'margin'
-            ? `position: absolute; top: ${topPos}px; `
-            : '';
+        const topPos =
+          marginOffset.top !== undefined ? marginOffset.top : pageBreak?.offsetTop + pageBreak?.offsetHeight;
+        style += vRelativeFrom === 'margin' ? `position: absolute; top: ${topPos}px; ` : '';
         if (vRelativeFrom === 'margin') {
           const nextPos = view.posAtDOM(pageBreak, 1);
-          
+
           if (nextPos < 0) {
             const $pos = view.state.doc.resolve(pos);
             // When no placeholder can be added apply height to the parent node to occupy absolute image size
             decorations.push(
-              Decoration.node(pos - 1, pos + $pos.parent.nodeSize - 1, { style: `height: ${size.height + parseInt(padding.top) + parseInt(padding.bottom)}px` }),
+              Decoration.node(pos - 1, pos + $pos.parent.nodeSize - 1, {
+                style: `height: ${size.height + parseInt(padding.top) + parseInt(padding.bottom)}px`,
+              }),
             );
           }
-          
+
           const imageBlock = document.createElement('div');
           imageBlock.className = 'anchor-image-placeholder';
           imageBlock.style.float = alignH;
@@ -93,9 +93,7 @@ const getImagePositionDecorations = (state, view) => {
         }
       }
 
-      decorations.push(
-        Decoration.inline(pos, pos + node.nodeSize, { style, class: className }),
-      );
+      decorations.push(Decoration.inline(pos, pos + node.nodeSize, { style, class: className }));
     }
   });
   return decorations;

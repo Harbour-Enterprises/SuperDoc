@@ -14,11 +14,11 @@
  * @property {Extension[]} [extensions] - Array of custom extensions
  */
 
-/** 
- * @callback ConfigureFn 
+/**
+ * @callback ConfigureFn
  * @param {ServiceConfig} config
  * @returns {void}
-*/
+ */
 
 /** @typedef {HookFn<Promise<UserContext>>} AuthenticateFn */
 /** @typedef {HookFn<Promise<Uint8Array>>} LoadFn */

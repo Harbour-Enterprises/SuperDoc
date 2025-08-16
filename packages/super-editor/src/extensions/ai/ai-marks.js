@@ -1,4 +1,4 @@
-import { Mark, Attribute, Node } from '@core/index.js';
+import { Mark, Attribute } from '@core/index.js';
 import { AiMarkName, AiAnimationMarkName } from './ai-constants.js';
 
 export const AiMark = Mark.create({
@@ -19,7 +19,7 @@ export const AiMark = Mark.create({
       id: {
         default: null,
         rendered: false,
-      }
+      },
     };
   },
 
@@ -30,7 +30,7 @@ export const AiMark = Mark.create({
   renderDOM({ htmlAttributes }) {
     return [AiMarkName, Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
   },
-}); 
+});
 
 export const AiAnimationMark = Mark.create({
   name: AiAnimationMarkName,
@@ -57,10 +57,10 @@ export const AiAnimationMark = Mark.create({
         default: null,
         rendered: true,
       },
-      'dataMarkId': {
+      dataMarkId: {
         default: null,
         rendered: true,
-      }
+      },
     };
   },
 

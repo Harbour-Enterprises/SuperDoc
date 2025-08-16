@@ -19,13 +19,8 @@ const props = defineProps({
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 
-const {
-  getFloatingComments,
-  hasInitializedLocations,
-  activeComment,
-  commentsList,
-  editorCommentPositions
-} = storeToRefs(commentsStore);
+const { getFloatingComments, hasInitializedLocations, activeComment, commentsList, editorCommentPositions } =
+  storeToRefs(commentsStore);
 
 const floatingCommentsContainer = ref(null);
 const renderedSizes = ref([]);
@@ -46,7 +41,7 @@ const getCommentPosition = computed(() => (comment) => {
 
 const findScrollParent = (element) => {
   if (!element) return window;
-  
+
   let parent = element.parentNode;
   while (parent && parent !== document) {
     const style = getComputedStyle(parent);
@@ -64,14 +59,14 @@ const handleDialog = (dialog) => {
   if (!elementRef) return;
 
   nextTick(() => {
-
     const id = commentId;
     if (renderedSizes.value.some((item) => item.id == id)) return;
 
     const editorBounds = props.parent.getBoundingClientRect();
 
     const comment = getFloatingComments.value.find((c) => c.commentId === id || c.importedId == id);
-    let position = editorCommentPositions.value[id]?.bounds || {};
+    const positionKey = id || comment?.importedId;
+    let position = editorCommentPositions.value[positionKey]?.bounds || {};
 
     // If this is a PDF, set the position based on selection bounds
     if (props.currentDocument.type === 'application/pdf') {
@@ -80,7 +75,7 @@ const handleDialog = (dialog) => {
       });
       position.top += editorBounds.top;
     }
-  
+
     if (!position) return;
 
     const scrollParent = findScrollParent(props.parent);
@@ -129,13 +124,13 @@ const resetLayout = async () => {
 
 watch(activeComment, (newVal, oldVal) => {
   nextTick(() => {
-    if (!activeComment.value) return verticalOffset.value = 0;
+    if (!activeComment.value) return (verticalOffset.value = 0);
 
     const comment = commentsStore.getComment(activeComment.value);
-    if (!comment) return verticalOffset.value = 0;
-
-    const renderedItem = renderedSizes.value.find((item) => item.id === comment.commentId);
-    if (!renderedItem) return verticalOffset.value = 0;
+    if (!comment) return (verticalOffset.value = 0);
+    const commentKey = comment.commentId || comment.importedId;
+    const renderedItem = renderedSizes.value.find((item) => item.id === commentKey);
+    if (!renderedItem) return (verticalOffset.value = 0);
 
     const selectionTop = comment.selection.selectionBounds.top;
     const renderedTop = renderedItem.top;
@@ -146,17 +141,15 @@ watch(activeComment, (newVal, oldVal) => {
     setTimeout(() => {
       renderedItem.elementRef.value?.scrollIntoView({
         behavior: 'smooth',
-        block: 'center'
+        block: 'center',
       });
     }, 200);
   });
 });
-
 </script>
 
 <template>
   <div class="section-wrapper" ref="floatingCommentsContainer">
-
     <!-- First group: Detecting heights -->
     <div class="sidebar-container calculation-container">
       <div v-for="comment in getFloatingComments" :key="comment.commentId || comment.importedId">
@@ -174,19 +167,22 @@ watch(activeComment, (newVal, oldVal) => {
 
     <!-- Second group: Render only after first group is processed -->
     <div v-if="firstGroupRendered" class="sidebar-container" :style="{ top: verticalOffset + 'px' }">
-      <div v-for="comment in renderedSizes" :key="comment.id" :style="getCommentPosition(comment)" class="floating-comment">
-          <CommentDialog
-            :key="comment.id + commentsRenderKey"
-            class="floating-comment"
-            :parent="parent"
-            :comment="comment.commentRef"
-          />
+      <div
+        v-for="comment in renderedSizes"
+        :key="comment.id"
+        :style="getCommentPosition(comment)"
+        class="floating-comment"
+      >
+        <CommentDialog
+          :key="comment.id + commentsRenderKey"
+          class="floating-comment"
+          :parent="parent"
+          :comment="comment.commentRef"
+        />
       </div>
     </div>
-
   </div>
 </template>
-
 
 <style scoped>
 .measure-comment {

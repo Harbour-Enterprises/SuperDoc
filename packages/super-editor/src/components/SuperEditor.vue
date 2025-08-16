@@ -1,7 +1,7 @@
 <script setup>
 import 'tippy.js/dist/tippy.css';
 import { NSkeleton } from 'naive-ui';
-import { ref, onMounted, onBeforeUnmount, computed, shallowRef, reactive, nextTick, markRaw } from 'vue';
+import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw } from 'vue';
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import SlashMenu from './slash-menu/SlashMenu.vue';
@@ -12,13 +12,7 @@ import GenericPopover from './popovers/GenericPopover.vue';
 import LinkInput from './toolbar/LinkInput.vue';
 import { checkNodeSpecificClicks } from './cursor-helpers.js';
 
-const emit = defineEmits([
-  'editor-ready',
-  'editor-click',
-  'editor-keydown',
-  'comments-loaded',
-  'selection-update',
-]);
+const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 
 const props = defineProps({
   documentId: {
@@ -57,7 +51,7 @@ const popoverControls = reactive({
   visible: false,
   position: { left: '0px', top: '0px' },
   component: null,
-  props: {}
+  props: {},
 });
 
 const closePopover = () => {
@@ -126,7 +120,7 @@ const initializeData = async () => {
       // Remove the synced event listener.
       // Avoids re-initializing the editor in case the connection is lost and reconnected
       provider.off('synced', handleSynced);
-    }
+    };
     provider.on('synced', handleSynced);
   }
 };
@@ -134,7 +128,7 @@ const initializeData = async () => {
 const getExtensions = () => {
   const extensions = getStarterExtensions();
   if (!props.options.pagination) {
-    return extensions.filter(ext => ext.name !== 'pagination');
+    return extensions.filter((ext) => ext.name !== 'pagination');
   }
   return extensions;
 };
@@ -178,7 +172,12 @@ const handleSuperEditorKeydown = (event) => {
   }
 
   // cmd/ctrl + K → Open LinkInput popover
-  if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && (event.key === 'k' || event.key === 'K')) {
+  if (
+    (event.metaKey || event.ctrlKey) &&
+    !event.shiftKey &&
+    !event.altKey &&
+    (event.key === 'k' || event.key === 'K')
+  ) {
     event.preventDefault();
 
     if (!editor.value) return;
@@ -196,11 +195,7 @@ const handleSuperEditorKeydown = (event) => {
     const left = `${cursorCoords.left - containerRect.left}px`;
     const top = `${cursorCoords.bottom - containerRect.top + 6}px`; // small offset below selection
 
-    openPopover(
-      markRaw(LinkInput),
-      {},
-      { left, top }
-    );
+    openPopover(markRaw(LinkInput), {}, { left, top });
   }
 
   emit('editor-keydown', { editor: editor.value });
@@ -265,23 +260,23 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="super-editor-container">
-  
-    <Ruler
-      class="ruler"
-      v-if="options.rulers && !!editor"
-      :editor="editor"
-      @margin-change="handleMarginChange"
-    />
+    <Ruler class="ruler" v-if="options.rulers && !!editor" :editor="editor" @margin-change="handleMarginChange" />
 
-    <div 
+    <div
       class="super-editor"
       ref="editorWrapper"
-      @keydown="handleSuperEditorKeydown" 
+      @keydown="handleSuperEditorKeydown"
       @click="handleSuperEditorClick"
       @mousedown="handleMarginClick"
     >
       <div ref="editorElem" class="editor-element super-editor__element" role="presentation"></div>
-      <SlashMenu v-if="!props.options.disableContextMenu && editorReady && editor" :editor="editor" :popoverControls="popoverControls" :openPopover="openPopover" :closePopover="closePopover" />
+      <SlashMenu
+        v-if="!props.options.disableContextMenu && editorReady && editor"
+        :editor="editor"
+        :popoverControls="popoverControls"
+        :openPopover="openPopover"
+        :closePopover="closePopover"
+      />
     </div>
 
     <div class="placeholder-editor" v-if="!editorReady">
@@ -313,7 +308,6 @@ onBeforeUnmount(() => {
     </GenericPopover>
   </div>
 </template>
-
 
 <style scoped>
 .editor-element {

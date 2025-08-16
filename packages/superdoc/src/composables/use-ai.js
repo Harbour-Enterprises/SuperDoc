@@ -2,7 +2,7 @@ import { ref, reactive } from 'vue';
 
 /**
  * Composable to manage AI layer and AI writer functionality
- * 
+ *
  * @param {Object} options - Configuration options
  * @param {Object} options.activeEditorRef - Ref to the active editor
  * @returns {Object} - AI state and methods
@@ -28,18 +28,18 @@ export function useAi({ activeEditorRef }) {
       // Get the current cursor position
       const { view } = editor;
       const { selection } = view.state;
-      
+
       // If we have selected text, add AI highlighting
       if (!selection.empty) {
         // Add the ai mark to the document
         editor.commands.insertAiMark();
       }
-      
+
       let coords;
       try {
         // Try to get coordinates from the selection head
         coords = view.coordsAtPos(selection.$head.pos);
-      } catch (e) {
+      } catch {
         // Fallback to using the DOM selection if ProseMirror position is invalid
         const domSelection = window.getSelection();
         if (domSelection.rangeCount > 0) {
@@ -52,7 +52,7 @@ export function useAi({ activeEditorRef }) {
           coords = { top: editorRect.top + 50, left: editorRect.left + 50 };
         }
       }
-      
+
       // Position the AIWriter at the cursor position
       // Move down 30px to render under the cursor
       aiWriterPosition.top = coords.top + 30 + 'px';
@@ -84,7 +84,7 @@ export function useAi({ activeEditorRef }) {
 
   /**
    * Initialize the AI layer
-   * 
+   *
    * @param {Boolean} value - Whether to show the AI layer
    */
   const initAiLayer = (value = true) => {
@@ -112,11 +112,11 @@ export function useAi({ activeEditorRef }) {
     showAiWriter,
     aiWriterPosition,
     aiLayer,
-    
+
     // Methods
     initAiLayer,
     showAiWriterAtCursor,
     handleAiWriterClose,
-    handleAiToolClick
+    handleAiToolClick,
   };
-} 
+}

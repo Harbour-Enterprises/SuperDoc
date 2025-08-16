@@ -4,13 +4,16 @@ describe('ImageNodeExporter', async () => {
   window.URL.createObjectURL = vi.fn().mockImplementation((file) => {
     return file.name;
   });
-  
+
   const fileName = 'image_doc.docx';
   const result = await getExportedResult(fileName);
   const body = {};
 
   beforeEach(() => {
-    Object.assign(body, result.elements?.find((el) => el.name === 'w:body'));
+    Object.assign(
+      body,
+      result.elements?.find((el) => el.name === 'w:body'),
+    );
   });
 
   it('export image node correctly', () => {
@@ -19,16 +22,16 @@ describe('ImageNodeExporter', async () => {
     expect(imageNode.elements[0].attributes.distB).toBe('0');
     expect(imageNode.elements[0].attributes.distL).toBe('0');
     expect(imageNode.elements[0].attributes.distR).toBe('0');
-    
+
     expect(imageNode.elements[0].elements[0].attributes.cx).toBe(5734050);
     expect(imageNode.elements[0].elements[0].attributes.cy).toBe(8601075);
 
-    expect(imageNode.elements[0].elements[4].elements[0].elements[0].elements[1].elements[0].attributes['r:embed']).toBe('rId4');
+    expect(
+      imageNode.elements[0].elements[4].elements[0].elements[0].elements[1].elements[0].attributes['r:embed'],
+    ).toBe('rId4');
   });
 
-  it('exports anchor image node correctly', async() => {
-    
-  });
+  it('exports anchor image node correctly', async () => {});
 });
 
 describe('ImageNodeExporter anchor image', async () => {
@@ -41,13 +44,16 @@ describe('ImageNodeExporter anchor image', async () => {
   const body = {};
 
   beforeEach(() => {
-    Object.assign(body, result.elements?.find((el) => el.name === 'w:body'));
+    Object.assign(
+      body,
+      result.elements?.find((el) => el.name === 'w:body'),
+    );
   });
 
-  it('exports anchor image node correctly', async() => {
+  it('exports anchor image node correctly', async () => {
     const imageNode = body.elements[1].elements[4].elements[0];
     const anchorNode = imageNode.elements[0];
-    
+
     expect(anchorNode.attributes).toHaveProperty('simplePos', '0');
     expect(anchorNode.elements[0].name).toBe('wp:simplePos');
     expect(anchorNode.elements[1].attributes.relativeFrom).toBe('margin');

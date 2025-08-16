@@ -61,7 +61,7 @@ export class EventEmitter {
       this.off(name, wrapper);
       fn.apply(this, args);
     };
-    this.on(name, wrapper)
+    this.on(name, wrapper);
   }
 
   /**

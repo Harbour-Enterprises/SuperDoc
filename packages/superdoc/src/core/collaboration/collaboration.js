@@ -1,4 +1,4 @@
-import { WebsocketProvider } from 'y-websocket'
+import { WebsocketProvider } from 'y-websocket';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { awarenessStatesToArray } from '@harbour-enterprises/common/collaboration/awareness.js';
 import { Doc as YDoc } from 'yjs';
@@ -18,7 +18,7 @@ function awarenessHandler(context, { changes = {}, states }) {
   // Since co-presence is handled outside of superdoc,
   // we need to emit an awareness-update event
 
-  const { added = [], removed = []} = changes;
+  const { added = [], removed = [] } = changes;
   const awarenessArray = awarenessStatesToArray(context, states);
 
   const payload = {
@@ -63,12 +63,12 @@ function createProvider({ config, user, documentId, socket, superdocInstance }) 
  * @param {string} param.documentId The document ID
  * @returns {Object} The provider and socket
  */
-function createSuperDocProvider({ config, user, documentId, socket, superdocInstance }) {
+function createSuperDocProvider({ config, user, documentId, superdocInstance }) {
   const ydoc = new YDoc({ gc: false });
   const options = {
     params: {
       ...config.params,
-    }
+    },
   };
 
   const provider = new WebsocketProvider(config.url, documentId, ydoc, options);
@@ -110,7 +110,7 @@ function createHocuspocusProvider({ config, user, documentId, socket, superdocIn
       states: params.states,
     });
   });
-  
+
   return { provider, ydoc };
 }
 

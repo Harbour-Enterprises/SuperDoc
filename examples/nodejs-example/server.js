@@ -2,6 +2,7 @@
 import fs from 'fs/promises';
 import express from 'express';
 import { JSDOM } from 'jsdom';
+import documentBlob from './document.js';
 
 // In Node, we use the Editor class directly from superdoc/super-editor
 import { Editor, getStarterExtensions } from '@harbour-enterprises/superdoc/super-editor';
@@ -17,23 +18,26 @@ const server = express();
  * If no param is passed, the document will be returned as as-is (blank template with header and footer).
  */
 server.get('/', async (req, res, next) => {
-  // Load our example document - a blank template with a header and footer
-  let documentData = await fs.readFile('./sample-document.docx');
-
-  // Get the text and html from the query parameters
   const { text, html } = req.query;
 
+  // Load the specified document:
+  // if using stackblitz:
+  let documentData = documentBlob;
+  const arrayBuffer = await documentData.arrayBuffer();
+  documentData = Buffer.from(arrayBuffer);
+
+  // otherwise, you can read from disk:
+  // let documentData = await fs.readFile(`./sample-document.docx`);
+
+  const editor = await getEditor(documentData);
+  
   // If we have text or html, we will to load the editor and insert the content
-  if (text || html) {
-    const editor = await getEditor(documentData);
+  if (text) editor.commands.insertContent(text);
+  if (html) editor.commands.insertContent(html);
 
-    if (text) editor.commands.insertContent(text);
-    if (html) editor.commands.insertContent(html);
-
-    // Export the docx and create a buffer to return to the user
-    const zipBuffer = await editor.exportDocx();
-    documentData = Buffer.from(zipBuffer);    
-  }
+  // Export the docx and create a buffer to return to the user
+  const zipBuffer = await editor.exportDocx();
+  documentData = Buffer.from(zipBuffer);
 
   // Download the file
   res

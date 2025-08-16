@@ -9,4 +9,4 @@ export const setImageNodeSelection = (view, pos) => {
     return true;
   }
   return false;
-}
+};

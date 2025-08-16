@@ -39,8 +39,8 @@ const handleEditorUpdate = () => {
 // Flatten sections into items for navigation and filtering
 const flattenedItems = computed(() => {
   const items = [];
-  sections.value.forEach(section => {
-    section.items.forEach(item => {
+  sections.value.forEach((section) => {
+    section.items.forEach((item) => {
       items.push(item);
     });
   });
@@ -52,10 +52,8 @@ const filteredItems = computed(() => {
   if (!searchQuery.value) {
     return flattenedItems.value;
   }
-  
-  return flattenedItems.value.filter((item) =>
-    item.label?.toLowerCase().includes(searchQuery.value.toLowerCase())
-  );
+
+  return flattenedItems.value.filter((item) => item.label?.toLowerCase().includes(searchQuery.value.toLowerCase()));
 });
 
 // Get sections with filtered items for rendering
@@ -63,12 +61,14 @@ const filteredSections = computed(() => {
   if (!searchQuery.value) {
     return sections.value;
   }
-  
+
   // If searching, return a single section with filtered items
-  return [{
-    id: 'search-results',
-    items: filteredItems.value
-  }];
+  return [
+    {
+      id: 'search-results',
+      items: filteredItems.value,
+    },
+  ];
 });
 
 watch(isOpen, (open) => {
@@ -98,12 +98,9 @@ const handleGlobalKeyDown = (event) => {
   }
 
   // Only handle navigation/selection if menu is open and input is focused
-  if (
-    isOpen.value &&
-    (event.target === searchInput.value || (menuRef.value && menuRef.value.contains(event.target)))
-  ) {
+  if (isOpen.value && (event.target === searchInput.value || (menuRef.value && menuRef.value.contains(event.target)))) {
     const currentItems = filteredItems.value;
-    const currentIndex = currentItems.findIndex(item => item.id === selectedId.value);
+    const currentIndex = currentItems.findIndex((item) => item.id === selectedId.value);
     switch (event.key) {
       case 'ArrowDown': {
         event.preventDefault();
@@ -121,7 +118,7 @@ const handleGlobalKeyDown = (event) => {
       }
       case 'Enter': {
         event.preventDefault();
-        const selectedItem = currentItems.find(item => item.id === selectedId.value);
+        const selectedItem = currentItems.find((item) => item.id === selectedId.value);
         if (selectedItem) {
           executeCommand(selectedItem);
         }
@@ -154,7 +151,7 @@ const handleRightClick = async (event) => {
       pos: props.editor.view.state.selection.from,
       clientX: event.clientX,
       clientY: event.clientY,
-    })
+    }),
   );
   searchQuery.value = '';
   // Set sections and selectedId when menu opens
@@ -171,7 +168,10 @@ const executeCommand = async (item) => {
     if (item.component) {
       const menuElement = menuRef.value;
       const componentProps = getPropsByItemId(item.id, props);
-      props.openPopover(markRaw(item.component), componentProps, { left: menuPosition.value.left, top: menuPosition.value.top });
+      props.openPopover(markRaw(item.component), componentProps, {
+        left: menuPosition.value.left,
+        top: menuPosition.value.top,
+      });
       closeMenu({ restoreCursor: false });
     } else {
       // For paste operations, don't restore cursor
@@ -191,15 +191,13 @@ const closeMenu = (options = { restoreCursor: true }) => {
     props.editor.view.dispatch(
       props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
         type: 'close',
-      })
+      }),
     );
 
     // Restore cursor position and focus only if requested
     if (options.restoreCursor && anchorPos !== null) {
       const tr = props.editor.view.state.tr.setSelection(
-        props.editor.view.state.selection.constructor.near(
-          props.editor.view.state.doc.resolve(anchorPos)
-        )
+        props.editor.view.state.selection.constructor.near(props.editor.view.state.doc.resolve(anchorPos)),
       );
       props.editor.view.dispatch(tr);
       props.editor.view.focus();
@@ -277,19 +275,11 @@ onBeforeUnmount(() => {
     <div class="slash-menu-items">
       <template v-for="(section, sectionIndex) in filteredSections" :key="section.id">
         <!-- Render divider before section (except for first section) -->
-        <div 
-          v-if="sectionIndex > 0 && section.items.length > 0" 
-          class="slash-menu-divider" 
-          tabindex="0"
-        ></div>
-        
+        <div v-if="sectionIndex > 0 && section.items.length > 0" class="slash-menu-divider" tabindex="0"></div>
+
         <!-- Render section items -->
         <template v-for="item in section.items" :key="item.id">
-          <div
-            class="slash-menu-item"
-            :class="{ 'is-selected': item.id === selectedId }"
-            @click="executeCommand(item)"
-          >
+          <div class="slash-menu-item" :class="{ 'is-selected': item.id === selectedId }" @click="executeCommand(item)">
             <!-- Render the icon if it exists -->
             <span v-if="item.icon" class="slash-menu-item-icon" v-html="item.icon"></span>
             <span>{{ item.label }}</span>
@@ -307,7 +297,9 @@ onBeforeUnmount(() => {
   width: 175px;
   color: #47484a;
   background: white;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0px 10px 20px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0px 10px 20px rgba(0, 0, 0, 0.1);
   margin-top: 0.5rem;
   font-size: 12px;
 }
@@ -373,7 +365,6 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   margin-right: 10px;
-
 }
 
 .slash-menu-item-icon svg {
@@ -384,7 +375,9 @@ onBeforeUnmount(() => {
 .popover {
   background: white;
   border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0px 10px 20px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0px 10px 20px rgba(0, 0, 0, 0.1);
   z-index: 100;
 }
 
@@ -393,4 +386,4 @@ onBeforeUnmount(() => {
   background: #eee;
   margin: 4px 0;
 }
-</style> 
+</style>

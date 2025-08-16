@@ -3,66 +3,66 @@ import { tableActionsOptions } from './constants.js';
 import { markRaw } from 'vue';
 /**
  * Get props by item id
- * 
+ *
  * Takes in the itemId for the menu item and passes the SlashMenu props to help
- * compute the props needed 
+ * compute the props needed
  * @param {string} itemId
  * @param {Object} props
  * @returns {Object}
  */
 export const getPropsByItemId = (itemId, props) => {
-    // Common props that are needed regardless of trigger type
-    const editor = props.editor;
+  // Common props that are needed regardless of trigger type
+  const editor = props.editor;
 
-    const baseProps = {
-        editor: markRaw(props.editor),
-    };
+  const baseProps = {
+    editor: markRaw(props.editor),
+  };
 
-    switch (itemId) {
-        case 'insert-text':
-            const { state } = editor.view;
-            const { from, to, empty } = state.selection;
-            const selectedText = !empty ? state.doc.textBetween(from, to) : '';
+  switch (itemId) {
+    case 'insert-text':
+      const { state } = editor.view;
+      const { from, to, empty } = state.selection;
+      const selectedText = !empty ? state.doc.textBetween(from, to) : '';
 
-            return {
-                ...baseProps,
-                selectedText,
-                handleClose: props.closePopover || (() => null),
-                apiKey: editor.options?.aiApiKey,
-                endpoint: editor.options?.aiEndpoint,
-            };
-        case 'insert-link':
-            return baseProps;
-        case 'insert-table':
-            return {
-                ...baseProps,
-                onSelect: ({rows, cols}) => {
-                    editor.commands.insertTable({ rows, cols });
-                    props.closePopover();
-                },
-            };
-        case 'edit-table':
-            return {
-                ...baseProps,
-                options: tableActionsOptions,
-                onSelect: ( { command }) => {
-                  if (editor.commands[command]) {
-                    editor.commands[command]();
-                  }
-                  props.closePopover();
-                },
-            };
-        case 'copy':
-        case 'paste':
-            return {
-                ...baseProps,
-                // These actions don't need additional props
-            };
+      return {
+        ...baseProps,
+        selectedText,
+        handleClose: props.closePopover || (() => null),
+        apiKey: editor.options?.aiApiKey,
+        endpoint: editor.options?.aiEndpoint,
+      };
+    case 'insert-link':
+      return baseProps;
+    case 'insert-table':
+      return {
+        ...baseProps,
+        onSelect: ({ rows, cols }) => {
+          editor.commands.insertTable({ rows, cols });
+          props.closePopover();
+        },
+      };
+    case 'edit-table':
+      return {
+        ...baseProps,
+        options: tableActionsOptions,
+        onSelect: ({ command }) => {
+          if (editor.commands[command]) {
+            editor.commands[command]();
+          }
+          props.closePopover();
+        },
+      };
+    case 'copy':
+    case 'paste':
+      return {
+        ...baseProps,
+        // These actions don't need additional props
+      };
 
-        default:
-            return baseProps;
-    }
-}
+    default:
+      return baseProps;
+  }
+};
 
 /**
  * Get the current editor context for menu logic

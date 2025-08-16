@@ -21,5 +21,4 @@ describe('StandardNodeImporter', () => {
     expect(marks[0].attrs).toHaveProperty('fontFamily', 'Arial');
     expect(marks[0].attrs).toHaveProperty('lineHeight', '1.15');
   });
-
 });

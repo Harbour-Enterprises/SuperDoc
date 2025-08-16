@@ -1,6 +1,35 @@
 import { Mark, Attribute } from '@core/index.js';
 import { getMarkRange } from '@/core/helpers/getMarkRange.js';
 
+/**
+ * Move `from` forward and `to` backward until the first / last
+ * non-whitespace character is reached.
+ */
+const trimRange = (doc, from, to) => {
+  /*
+   * A "non-user" position is one that produces **no text** when we ask
+   * `doc.textBetween(pos, pos + 1, '')`.
+   * That happens at node boundaries (between the doc node and its first child,
+   * between paragraphs, etc.).
+   *
+   * A regular space typed by the user **does** produce text (" "), so it will
+   * NOT be trimmed.
+   */
+
+  // Skip positions that produce no text output (node boundaries).
+  while (from < to && doc.textBetween(from, from + 1, '') === '') {
+    from += 1;
+  }
+
+  while (to > from && doc.textBetween(to - 1, to, '') === '') {
+    to -= 1;
+  }
+
+  // This should now normalize the from and to selections to require
+  // starting and ending without doc specific whitespace
+  return { from, to };
+};
+
 export const Link = Mark.create({
   name: 'link',
 
@@ -82,11 +111,27 @@ export const Link = Mark.create({
               from = range.from;
               to = range.to;
             }
+          } else {
+            // When the current selection spans outside a link but its start
+            // or end is within a link, operate only on that link, not on the
+            // full selection. This prevents replacing surrounding non-link text.
+            const fromLinkRange = getMarkRange(selection.$from, linkMarkType);
+            const toLinkRange = getMarkRange(selection.$to, linkMarkType);
+
+            if (fromLinkRange || toLinkRange) {
+              // Prefer the range that actually lies inside a link. If both ends
+              // are in (possibly different) links we pick the first one.
+              const linkRange = fromLinkRange || toLinkRange;
+              from = linkRange.from;
+              to = linkRange.to;
+            }
           }
 
-          const currentText = state.doc.textBetween(from, to, ' ');
-          const finalText = (text ?? currentText) || href || '';
+          ({ from, to } = trimRange(state.doc, from, to));
 
+          const currentText = state.doc.textBetween(from, to);
+          const computedText = text ?? currentText;
+          const finalText = computedText && computedText.length > 0 ? computedText : href || '';
           let tr = state.tr;
 
           // Replace the text if it has changed (or if there was no text yet).
@@ -139,11 +184,10 @@ function isAllowedUri(uri, protocols) {
     });
   }
 
-  // eslint-disable-next-line no-useless-escape
   return (
     !uri ||
     uri
       .replace(ATTR_WHITESPACE, '')
-      .match(new RegExp(`^(?:(?:${allowedProtocols.join('|')}):|[^a-z]|[a-z+.\-]+(?:[^a-z+.\-:]|$))`, 'i'))
+      .match(new RegExp(`^(?:(?:${allowedProtocols.join('|')}):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))`, 'i'))
   );
 }

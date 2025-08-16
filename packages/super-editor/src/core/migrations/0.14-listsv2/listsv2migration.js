@@ -3,7 +3,7 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 const isDebugging = false;
 const log = (...args) => {
-  if (isDebugging) console.debug("[lists v2 migration]", ...args);
+  if (isDebugging) console.debug('[lists v2 migration]', ...args);
 };
 
 /**
@@ -33,17 +33,17 @@ export const migrateListsToV2IfNecessary = (editor) => {
   // Collect all list nodes that need to be replaced
   let lastListEndPos = 0;
   doc.descendants((node, pos) => {
-    if (!LIST_TYPES.includes(node.type.name)) return;  
+    if (!LIST_TYPES.includes(node.type.name)) return;
 
     if (pos < lastListEndPos) return;
 
     const extracted = flattenListCompletely(node, editor, 0);
     if (extracted.length > 0) {
-      replacements.push({ 
-        from: pos, 
-        to: pos + node.nodeSize, 
+      replacements.push({
+        from: pos,
+        to: pos + node.nodeSize,
         listNode: node,
-        replacement: extracted
+        replacement: extracted,
       });
     }
 
@@ -53,19 +53,15 @@ export const migrateListsToV2IfNecessary = (editor) => {
   // Apply replacements in reverse order to avoid position drift
   let tr = state.tr;
   if (replacements.length > 0) {
-    
     for (let i = replacements.length - 1; i >= 0; i--) {
       const { from, to, replacement, listNode } = replacements[i];
-      
+
       // Convert the flattened items to actual nodes
       const nodesToInsert = [];
       for (const item of replacement) {
         if (item.node.type.name === 'listItem') {
           // Create a single-item list containing this list item
-          const singleItemList = listNode.type.create(
-            listNode.attrs,
-            [item.node]
-          );
+          const singleItemList = listNode.type.create(listNode.attrs, [item.node]);
           nodesToInsert.push(singleItemList);
         } else {
           // Insert non-list content directly
@@ -85,7 +81,6 @@ export const migrateListsToV2IfNecessary = (editor) => {
   return replacements;
 };
 
-
 /**
  * Completely flatten a list structure into single-item lists
  * @param {Node} listNode - The list node to flatten
@@ -100,10 +95,10 @@ function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = nu
 
   const needsMigration = shouldMigrateList(listNode);
   const needsDefinition = checkValidDefinition(listNode, editor);
-  log("Needs migration?", needsMigration);
+  log('Needs migration?', needsMigration);
   if (!needsMigration) {
     if (needsDefinition) {
-      return generateMissingListDefinition(listNode, editor)
+      return generateMissingListDefinition(listNode, editor);
     } else {
       return result;
     }
@@ -150,7 +145,7 @@ function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = nu
           editor,
           contentNode: contentNode.toJSON(),
           listLevel: listItem.attrs.listLevel || [1],
-        })
+        });
         result.push({ node: newList, baseLevel });
       }
     }
@@ -159,7 +154,6 @@ function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = nu
     // Convert the first one to the list item
     // Everything else to root nodes
     else {
-  
       const firstItem = listItem.content.content[0];
       if (listTypes.includes(firstItem.type.name)) {
         // If the first item is a nested list, we need to flatten it completely
@@ -177,7 +171,7 @@ function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = nu
             editor,
             contentNode: firstItem.toJSON(),
             listLevel: listItem.attrs.listLevel || [1],
-          })
+          });
           result.push({ node: newList, baseLevel });
         } else {
           // If it's not valid listItem content, treat it as a standalone node
@@ -223,17 +217,17 @@ const shouldMigrateList = (listItem) => {
 
     // After v2, we expect level and listNumberingType to be defined
     const { level, listNumberingType } = attrs || {};
-    if (typeof level === undefined || !listNumberingType) {
+    if (typeof level === 'undefined' || !listNumberingType) {
       return true;
-    } 
+    }
 
     const childContent = firstChild?.content?.content;
-    const nestedLists = childContent.filter(child => ['bulletList', 'orderedList'].includes(child.type.name));
+    const nestedLists = childContent.filter((child) => ['bulletList', 'orderedList'].includes(child.type.name));
     return nestedLists.length > 0;
   }
 
   return false;
-}
+};
 
 /**
  * Check if a list definition is valid.
@@ -253,7 +247,7 @@ const checkValidDefinition = (listNode, editor) => {
 
   if (!abstract) return true;
   return false;
-}
+};
 
 /**
  * Generate a missing list definition for a list node.
@@ -273,17 +267,17 @@ const generateMissingListDefinition = (listNode, editor) => {
     listType,
     editor,
   });
-}
+};
 
 /**
-  * Migrate paragraph fields to lists v2.
-  * This function processes all field annotations in the editor state,
-  * specifically those with type 'html', and migrates their content to the new lists v2 format.
-  * It creates a child editor for each field annotation, processes the HTML content,
-  * and updates the input values accordingly.
-  * @param {Array} annotationValues - The array of field annotations to migrate.
-  * @returns {Promise<Array>} A promise that resolves to an array of updated field annotations
-  *                            with their input values migrated to the new lists v2 format.
+ * Migrate paragraph fields to lists v2.
+ * This function processes all field annotations in the editor state,
+ * specifically those with type 'html', and migrates their content to the new lists v2 format.
+ * It creates a child editor for each field annotation, processes the HTML content,
+ * and updates the input values accordingly.
+ * @param {Array} annotationValues - The array of field annotations to migrate.
+ * @returns {Promise<Array>} A promise that resolves to an array of updated field annotations
+ *                            with their input values migrated to the new lists v2 format.
  */
 export const migrateParagraphFieldsListsV2 = async (annotationValues = [], editor) => {
   const annotations = getAllFieldAnnotations(editor.state);
@@ -292,30 +286,30 @@ export const migrateParagraphFieldsListsV2 = async (annotationValues = [], edito
   if (!annotations.length) {
     return annotationValues;
   }
-    
+
   // Process annotations sequentially
   for (const annotation of annotations) {
     const type = annotation.node?.attrs?.type;
-    
+
     const matchedAnnotation = annotationValues.find((v) => v.input_id === annotation.node.attrs.fieldId);
-    
-    if (!type || type !== 'html') {
+
+    if (!!matchedAnnotation && (!type || type !== 'html')) {
       newValues.push(matchedAnnotation);
       continue;
     }
 
     const value = matchedAnnotation?.input_value;
     if (!value) continue;
-    
+
     // Wait for each child editor to complete
     await new Promise((resolve, reject) => {
-      const element = document.createElement('div')
-      const childEditor = editor.createChildEditor({
+      const element = document.createElement('div');
+      editor.createChildEditor({
         element,
         html: value,
         onCreate: ({ editor: localEditor }) => {
           const { migrated } = localEditor.options;
-          
+
           if (migrated) {
             const newHTML = localEditor.getHTML();
             matchedAnnotation.input_value = newHTML;
@@ -325,10 +319,10 @@ export const migrateParagraphFieldsListsV2 = async (annotationValues = [], edito
         },
         onError: (error) => {
           reject(error);
-        }
+        },
       });
     });
   }
-  
+
   return newValues;
-}
+};

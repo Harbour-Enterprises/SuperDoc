@@ -3,7 +3,6 @@ import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpe
 import { beforeAll, beforeEach, expect } from 'vitest';
 
 describe('[custom-list1.docx] test import custom lists', () => {
-
   const filename = 'custom-list1.docx';
   let docx, media, mediaFiles, fonts, editor;
   beforeAll(async () => ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename)));
@@ -19,19 +18,19 @@ describe('[custom-list1.docx] test import custom lists', () => {
 
     const { attrs: firstListAttrs } = firstList;
     expect(firstListAttrs).toBeDefined();
-    expect(firstListAttrs.listId).toBe("4");
+    expect(firstListAttrs.listId).toBe('4');
     expect(firstListAttrs.order).toBe(1);
   });
-  
+
   it('can import the first sub-element (1.1)', () => {
     const state = editor.getJSON();
-    const content = state.content
+    const content = state.content;
     expect(content.length).toBe(5);
 
     const listItem = content[2].content[0];
     const { attrs } = listItem;
     const lvlText = attrs.lvlText;
-    expect(lvlText).toBe("%1.%2.");
+    expect(lvlText).toBe('%1.%2.');
 
     // We expect the list level to be [1, 1]
     const listLevel = attrs.listLevel;
@@ -40,12 +39,12 @@ describe('[custom-list1.docx] test import custom lists', () => {
 
   it('can import the second sub-element (1.2)', () => {
     const state = editor.getJSON();
-    const content = state.content
+    const content = state.content;
     const listItem = content[2].content[0];
 
     const { attrs } = listItem;
     const lvlText = attrs.lvlText;
-    expect(lvlText).toBe("%1.%2.");
+    expect(lvlText).toBe('%1.%2.');
 
     // We expect the list level to be [2, 2]
     const listLevel = attrs.listLevel;
@@ -54,12 +53,12 @@ describe('[custom-list1.docx] test import custom lists', () => {
 
   it('can import the sub-sub-element (1.2.1)', () => {
     const state = editor.getJSON();
-    const content = state.content
+    const content = state.content;
     const listItem = content[3].content[0];
 
     const { attrs } = listItem;
     const lvlText = attrs.lvlText;
-    expect(lvlText).toBe("%1.%2.%3.");
+    expect(lvlText).toBe('%1.%2.%3.');
 
     // We expect the list level to be [1, 2, 1]
     const listLevel = attrs.listLevel;
@@ -68,11 +67,10 @@ describe('[custom-list1.docx] test import custom lists', () => {
 });
 
 describe('[broken-complex-list.docx] Tests with repeated list numbering item and complex indentation', () => {
-
   const filename = 'broken-complex-list.docx';
   let docx, media, mediaFiles, fonts, editor, dispatch, content;
   let exported, body;
-  
+
   beforeAll(async () => {
     ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename));
     ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts }));
@@ -86,12 +84,12 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     const item = list.content[0];
     expect(list.type).toBe('orderedList');
     expect(item.type).toBe('listItem');
-    expect(item.attrs.numId).toBe("5");
+    expect(item.attrs.numId).toBe('5');
     expect(item.attrs.indent.left).toBe(24);
     expect(item.attrs.indent.hanging).toBeUndefined();
     expect(item.attrs.level).toBe(0);
     expect(item.attrs.listLevel).toStrictEqual([1]);
-    
+
     const pNode = item.content[0];
     expect(pNode.type).toBe('paragraph');
 
@@ -105,12 +103,12 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     const item = list.content[0];
     expect(list.type).toBe('orderedList');
     expect(item.type).toBe('listItem');
-    expect(item.attrs.numId).toBe("5");
+    expect(item.attrs.numId).toBe('5');
     expect(item.attrs.indent.left).toBe(24);
     expect(item.attrs.indent.hanging).toBeUndefined();
     expect(item.attrs.level).toBe(1);
     expect(item.attrs.listLevel).toStrictEqual([1, 1]);
-    
+
     const pNode = item.content[0];
     expect(pNode.type).toBe('paragraph');
 
@@ -125,7 +123,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     // The spacing in this document is crucial to showing the indented list in the right place
     const { spacing } = pNodeAttrs;
     expect(spacing).toBeDefined();
-  
+
     expect(spacing.lineSpaceBefore).toBeUndefined();
     expect(spacing.lineSpaceAfter).toBe(0);
     expect(spacing.line).toBe(1);
@@ -133,7 +131,8 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
 
     // Compare with exported data
     const exportedList = body.elements[2];
-    const text = exportedList.elements.find((el) => el.name === 'w:r')?.elements.find((el) => el.name === 'w:t')?.elements[0].text;
+    const text = exportedList.elements.find((el) => el.name === 'w:r')?.elements.find((el) => el.name === 'w:t')
+      ?.elements[0].text;
     expect(text).toBe('a');
 
     const pPr = exportedList.elements.find((s) => s.name === 'w:pPr');
@@ -145,7 +144,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     expect(numPr.elements.length).toBe(2);
     const numIdTag = numPr.elements.find((s) => s.name === 'w:numId');
     const numId = numIdTag?.attributes['w:val'];
-    expect(numId).toBe("5");
+    expect(numId).toBe('5');
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
     expect(iLvl).toBe(1);
@@ -169,7 +168,6 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     expect(spacingAfter).toBe(0);
     expect(spacingBefore).toBeUndefined();
     expect(lineRule).toBe('auto');
-
   });
 
   it('can import the first "c" list item', () => {
@@ -178,7 +176,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
 
     expect(list.type).toBe('orderedList');
     expect(item.type).toBe('listItem');
-    expect(item.attrs.numId).toBe("5");
+    expect(item.attrs.numId).toBe('5');
     expect(item.attrs.indent.left).toBe(24);
     expect(item.attrs.indent.hanging).toBeUndefined();
     expect(item.attrs.level).toBe(1);
@@ -192,11 +190,10 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
 });
 
 describe('[brken-list.docx] Test list breaking indentation formatting', () => {
-
   const filename = 'broken-list.docx';
   let docx, media, mediaFiles, fonts, editor, dispatch, content;
   let exported, body;
-  
+
   beforeAll(async () => {
     ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename));
     ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts }));
@@ -211,7 +208,7 @@ describe('[brken-list.docx] Test list breaking indentation formatting', () => {
 
     expect(list.type).toBe('orderedList');
     const { attrs } = listItem;
-    expect(attrs.numId).toBe("1");
+    expect(attrs.numId).toBe('1');
     expect(attrs.level).toBe(0);
     expect(attrs.numPrType).toBe('inline');
     expect(attrs.listLevel).toStrictEqual([1]);
@@ -221,11 +218,10 @@ describe('[brken-list.docx] Test list breaking indentation formatting', () => {
 });
 
 describe('[restart-numbering-sub-list.docx] Test sublist restart nubering', () => {
-
   const filename = 'restart-numbering-sub-list.docx';
   let docx, media, mediaFiles, fonts, editor, dispatch, content;
   let exported, body;
-  
+
   beforeAll(async () => {
     ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename));
     ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts }));

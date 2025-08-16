@@ -33,7 +33,7 @@ export class ExtensionService {
         isExternal: true,
       };
     });
-  
+
     this.extensions = ExtensionService.getResolvedExtensions([...extensions, ...this.externalExtensions]);
     this.schema = Schema.createSchemaByExtensions(this.extensions, editor);
     this.#setupExtensions();
@@ -110,6 +110,37 @@ export class ExtensionService {
   }
 
   /**
+   * Get all helper methods defined in the extensions.
+   * Each extension can define its own helper methods.
+   * Example: editor.helpers.linkedStyles.getStyles()
+   * @returns {Object} Object with helper methods for extensions.
+   */
+  get helpers() {
+    const helpersObject = {};
+
+    for (const extension of this.extensions) {
+      const name = extension.name;
+      if (!name) continue;
+
+      const context = {
+        name: extension.name,
+        options: extension.options,
+        storage: extension.storage,
+        editor: this.editor,
+        type: getSchemaTypeByName(extension.name, this.schema),
+      };
+
+      const addHelpers = getExtensionConfigField(extension, 'addHelpers', context);
+
+      if (addHelpers) {
+        helpersObject[name] = addHelpers();
+      }
+    }
+
+    return helpersObject;
+  }
+
+  /**
    * Get all PM plugins defined in the extensions.
    * And also keyboard shortcuts.
    * @returns Array of PM plugins.
@@ -167,7 +198,7 @@ export class ExtensionService {
         editor,
         rules: inputRules,
       }),
-      ...allPlugins
+      ...allPlugins,
     ];
   }
 

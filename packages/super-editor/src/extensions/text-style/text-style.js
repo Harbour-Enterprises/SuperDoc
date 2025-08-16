@@ -29,6 +29,12 @@ export const TextStyle = Mark.create({
     return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
+  addAttributes() {
+    return {
+      styleId: {},
+    };
+  },
+
   addCommands() {
     return {
       removeEmptyTextStyle:

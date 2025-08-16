@@ -24,7 +24,7 @@ const moveToNextOption = (index) => {
     nextOption.setAttribute('tabindex', '0');
     nextOption.focus();
   }
-}
+};
 
 const moveToPreviousOption = (index) => {
   if (index === 0) return;
@@ -33,10 +33,10 @@ const moveToPreviousOption = (index) => {
     previousOption.setAttribute('tabindex', '0');
     previousOption.focus();
   }
-}
+};
 
 const handleKeyDown = (e, index) => {
-  switch(e.key) {
+  switch (e.key) {
     case 'ArrowDown':
       moveToNextOption(index);
       break;
@@ -49,7 +49,7 @@ const handleKeyDown = (e, index) => {
     default:
       break;
   }
-}
+};
 
 onMounted(() => {
   // Focus on the first option
@@ -87,53 +87,52 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.document-mode  {
+.document-mode {
   display: flex;
   flex-direction: column;
   padding: 10px;
   box-sizing: border-box;
-  
+
   :deep(svg) {
     width: 100%;
-  height: 100%;
-  display: block;
-  fill: currentColor;
+    height: 100%;
+    display: block;
+    fill: currentColor;
   }
 
-.option-item {
-  display: flex;
-  flex-direction: row;
-  background-color: white;
-  padding: 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  box-sizing: border-box;
-
-  &:hover {
-    background-color: #c8d0d8;
-  }
-}
-
-&.high-contrast {
   .option-item {
+    display: flex;
+    flex-direction: row;
+    background-color: white;
+    padding: 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    box-sizing: border-box;
+
     &:hover {
-      background-color: #000;
-      color: #fff;
+      background-color: #c8d0d8;
+    }
+  }
 
-      .icon-column__icon {
+  &.high-contrast {
+    .option-item {
+      &:hover {
+        background-color: #000;
         color: #fff;
-      }
 
-      .text-column {
-
-        >.document-mode-type,
-        >.document-mode-description {
+        .icon-column__icon {
           color: #fff;
+        }
+
+        .text-column {
+          > .document-mode-type,
+          > .document-mode-description {
+            color: #fff;
+          }
         }
       }
     }
-    }
-}
+  }
 }
 
 .disabled {

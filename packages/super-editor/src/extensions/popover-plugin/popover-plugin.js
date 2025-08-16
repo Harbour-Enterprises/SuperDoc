@@ -16,7 +16,7 @@ export const PopoverPlugin = Extension.create({
         init: () => {
           return {};
         },
-        apply: (tr, value, oldState, state) => {
+        apply: (tr, value) => {
           let newValue = { ...value };
 
           if (tr.docChanged) {
@@ -93,7 +93,7 @@ class Popover {
     this.tippyInstance.setContent(this.popover);
   }
 
-  update(view, lastState) {
+  update(view) {
     this.state = view.state;
     const showPopover = this.isShowMentions;
 

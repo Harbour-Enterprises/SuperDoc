@@ -13,7 +13,7 @@ export const ShapeContainer = Node.create({
     return {
       htmlAttributes: {
         class: 'sd-editor-shape-container',
-        'aria-label': 'Shape container node'
+        'aria-label': 'Shape container node',
       },
     };
   },
@@ -24,7 +24,7 @@ export const ShapeContainer = Node.create({
         renderDOM: (attrs) => {
           if (!attrs.fillcolor) return {};
           return {
-            'style': `background-color: ${attrs.fillcolor}`,
+            style: `background-color: ${attrs.fillcolor}`,
           };
         },
       },
@@ -33,7 +33,7 @@ export const ShapeContainer = Node.create({
         renderDOM: (attrs) => {
           if (!attrs.style) return {};
           return {
-            'style': attrs.style,
+            style: attrs.style,
           };
         },
       },
@@ -47,19 +47,19 @@ export const ShapeContainer = Node.create({
       },
     };
   },
-  
+
   parseDOM() {
     return [
       {
         tag: `div[data-type="${this.name}"]`,
-      }
+      },
     ];
   },
 
   renderDOM({ htmlAttributes }) {
     return [
-      'div', 
-      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }), 
+      'div',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }),
       0,
     ];
   },

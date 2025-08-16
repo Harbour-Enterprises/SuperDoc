@@ -8,7 +8,7 @@ import useComment from './use-comment';
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 const { COMMENT_EVENTS } = commentsStore;
-const { documentsWithConverations, activeComment, floatingCommentsOffset, commentsList} = storeToRefs(commentsStore);
+const { documentsWithConverations, activeComment, floatingCommentsOffset, commentsList } = storeToRefs(commentsStore);
 const { documents, activeZoom } = storeToRefs(superdocStore);
 const { proxy } = getCurrentInstance();
 
@@ -101,7 +101,7 @@ const getCurrentComments = computed(() => {
 
 watch(activeComment, (newVal) => {
   if (!newVal) return;
-  const element = document.getElementById(newVal);
+  const element = document.querySelector(`[data-id="${newVal}"]`);
   element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 

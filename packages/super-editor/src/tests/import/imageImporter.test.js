@@ -4,7 +4,7 @@ import { handleDrawingNode } from '../../core/super-converter/v2/importer/imageI
 import { handleParagraphNode } from '../../core/super-converter/v2/importer/paragraphNodeImporter.js';
 
 describe('ImageNodeImporter', () => {
-  it('imports image node correctly', async() => {
+  it('imports image node correctly', async () => {
     const dataName = 'image_doc.docx';
     const docx = await getTestDataByFileName(dataName);
     const documentXml = docx['word/document.xml'];
@@ -18,13 +18,13 @@ describe('ImageNodeImporter', () => {
     const drawingNode = paragraphNode.content[0];
     const { attrs } = drawingNode;
     const { padding, size } = attrs;
-    
+
     expect(paragraphNode.type).toBe('paragraph');
     expect(drawingNode.type).toBe('image');
 
     expect(attrs).toHaveProperty('rId', 'rId4');
     expect(attrs).toHaveProperty('src', 'word/media/image1.jpeg');
-    
+
     expect(size).toHaveProperty('width', 602);
     expect(size).toHaveProperty('height', 903);
 
@@ -34,7 +34,7 @@ describe('ImageNodeImporter', () => {
     expect(padding).toHaveProperty('right', 0);
   });
 
-  it('imports anchor image node correctly', async() => {
+  it('imports anchor image node correctly', async () => {
     const dataName = 'anchor_images.docx';
     const docx = await getTestDataByFileName(dataName);
     const documentXml = docx['word/document.xml'];

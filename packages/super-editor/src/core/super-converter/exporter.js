@@ -2,7 +2,6 @@ import he from 'he';
 import { DOMParser as PMDOMParser } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { SuperConverter } from './SuperConverter.js';
-import { toKebabCase } from '@harbour-enterprises/common';
 import {
   emuToPixels,
   inchesToTwips,
@@ -17,13 +16,12 @@ import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
-import { baseBulletList, baseOrderedListDef } from './v2/exporter/helpers/base-list.definitions.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
-import { flattenListsInHtml } from '@core/inputRules/html/html-helpers.js';
-
+import { translateChildNodes } from './v2/exporter/helpers/index.js';
+import { translateDocumentSection } from './v2/exporter/index.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -95,8 +93,9 @@ export function exportSchemaToJson(params) {
     shapeTextbox: translateShapeTextbox,
     contentBlock: translateContentBlock,
     structuredContent: translateStructuredContent,
-    "page-number": translatePageNumberNode,
-    "total-page-number": translateTotalPageNumberNode,
+    documentSection: translateDocumentSection,
+    'page-number': translatePageNumberNode,
+    'total-page-number': translateTotalPageNumberNode,
   };
 
   if (!router[type]) {
@@ -125,7 +124,7 @@ function translateBodyNode(params) {
       const defaultHeader = generateDefaultHeaderFooter('header', params.converter.headerIds?.default);
       sectPr.elements.push(defaultHeader);
     }
-    
+
     const hasFooter = sectPr?.elements?.some((n) => n.name === 'w:footerReference');
     const hasDefaultFooter = params.converter.footerIds?.default;
     if (!hasFooter && hasDefaultFooter && !params.editor.options.isHeaderOrFooter) {
@@ -144,14 +143,14 @@ function translateBodyNode(params) {
   }
 
   const elements = translateChildNodes(params);
-  
+
   if (params.isHeaderFooter) {
     return {
       name: 'w:body',
       elements: [...elements],
     };
   }
-  
+
   return {
     name: 'w:body',
     elements: [...elements, sectPr],
@@ -160,14 +159,14 @@ function translateBodyNode(params) {
 
 const generateDefaultHeaderFooter = (type, id) => {
   return {
-    "type": "element",
-    "name": `w:${type}Reference`,
-    "attributes": {
-        "w:type": "default",
-        "r:id": id
-    }
+    type: 'element',
+    name: `w:${type}Reference`,
+    attributes: {
+      'w:type': 'default',
+      'r:id': id,
+    },
   };
-}
+};
 
 /**
  * Translate a paragraph node
@@ -181,9 +180,9 @@ export function translateParagraphNode(params) {
   // Replace current paragraph with content of html annotation
   const htmlAnnotationChild = elements.find((element) => element.name === 'htmlAnnotation');
   if (htmlAnnotationChild) {
-    return htmlAnnotationChild.elements
+    return htmlAnnotationChild.elements;
   }
-  
+
   // Insert paragraph properties at the beginning of the elements array
   const pPr = generateParagraphProperties(params.node);
   if (pPr) elements.unshift(pPr);
@@ -193,11 +192,31 @@ export function translateParagraphNode(params) {
     attributes['w:rsidRDefault'] = params.node.attrs.rsidRDefault;
   }
 
-  return {
+  const result = {
     name: 'w:p',
     elements,
     attributes,
   };
+
+  return result;
+}
+
+/**
+ * Normalize line height values
+ * This function converts line height values from strings with percentage to a decimal value.
+ * For example, "150%" becomes 1.5.
+ * If the value is not a valid number, it returns null.
+ * @param {string|number} value The line height value to normalize
+ * @return {number|null} The normalized line height value or null if invalid
+ */
+function normalizeLineHeight(value) {
+  if (typeof value === 'string' && value.trim().endsWith('%')) {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed / 100 : null;
+  }
+
+  const parsed = parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**
@@ -213,10 +232,10 @@ function generateParagraphProperties(node) {
 
   const { styleId } = attrs;
   if (styleId) pPrElements.push({ name: 'w:pStyle', attributes: { 'w:val': styleId } });
-  
+
   const { spacing, indent, textAlign, textIndent, lineHeight, marksAttrs, keepLines, keepNext, dropcap } = attrs;
   if (spacing) {
-    const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
+    const { lineSpaceBefore, lineSpaceAfter, lineRule } = spacing;
 
     const attributes = {};
 
@@ -224,12 +243,15 @@ function generateParagraphProperties(node) {
     if (lineSpaceBefore >= 0) attributes['w:before'] = pixelsToTwips(lineSpaceBefore);
     if (lineSpaceAfter >= 0) attributes['w:after'] = pixelsToTwips(lineSpaceAfter);
 
-    if (lineRule === 'exact') {
-      if (lineHeight) attributes['w:line'] = ptToTwips(parseFloat(lineHeight));
-    } else {
-      if (lineHeight) attributes['w:line'] = linesToTwips(lineHeight);
+    const normalized = normalizeLineHeight(lineHeight);
+    if (normalized !== null) {
+      if (lineRule === 'exact') {
+        attributes['w:line'] = ptToTwips(normalized);
+      } else {
+        attributes['w:line'] = linesToTwips(normalized);
+      }
     }
-    
+
     attributes['w:lineRule'] = lineRule || 'auto';
 
     const spacingElement = {
@@ -238,17 +260,17 @@ function generateParagraphProperties(node) {
     };
     pPrElements.push(spacingElement);
   }
-  
+
   if (lineHeight && !spacing) {
     const spacingElement = {
       name: 'w:spacing',
       attributes: {
-        'w:line': linesToTwips(lineHeight)
+        'w:line': linesToTwips(lineHeight),
       },
     };
     pPrElements.push(spacingElement);
   }
-  
+
   if (indent && Object.values(indent).some((v) => v !== 0)) {
     const { left, right, firstLine, hanging } = indent;
     const attributes = {};
@@ -260,7 +282,7 @@ function generateParagraphProperties(node) {
     if (textIndent && !attributes['w:left']) {
       attributes['w:left'] = inchesToTwips(textIndent);
     }
-    
+
     const indentElement = {
       name: 'w:ind',
       attributes,
@@ -269,8 +291,8 @@ function generateParagraphProperties(node) {
   } else if (textIndent && textIndent !== '0in') {
     const indentElement = {
       name: 'w:ind',
-      attributes: { 
-        'w:left': inchesToTwips(textIndent), 
+      attributes: {
+        'w:left': inchesToTwips(textIndent),
       },
     };
     pPrElements.push(indentElement);
@@ -283,13 +305,13 @@ function generateParagraphProperties(node) {
     };
     pPrElements.push(textAlignElement);
   }
-  
+
   if (marksAttrs) {
     const outputMarks = processOutputMarks(marksAttrs);
     const rPrElement = generateRunProps(outputMarks);
     pPrElements.push(rPrElement);
   }
-  
+
   if (keepLines) {
     pPrElements.push({
       name: 'w:keepLines',
@@ -307,7 +329,7 @@ function generateParagraphProperties(node) {
   if (dropcap) {
     pPrElements.push({
       name: 'w:framePr',
-      attributes: { 
+      attributes: {
         'w:dropCap': dropcap.type,
         'w:lines': dropcap.lines,
         'w:wrap': dropcap.wrap,
@@ -320,6 +342,31 @@ function generateParagraphProperties(node) {
   const sectPr = node.attrs?.paragraphProperties?.sectPr;
   if (sectPr) {
     pPrElements.push(sectPr);
+  }
+
+  // Add tab stops
+  const { tabStops } = attrs;
+  if (tabStops && tabStops.length > 0) {
+    const tabElements = tabStops.map((tab) => {
+      const tabAttributes = {
+        'w:val': tab.val || 'start',
+        'w:pos': pixelsToTwips(tab.pos).toString(),
+      };
+
+      if (tab.leader) {
+        tabAttributes['w:leader'] = tab.leader;
+      }
+
+      return {
+        name: 'w:tab',
+        attributes: tabAttributes,
+      };
+    });
+
+    pPrElements.push({
+      name: 'w:tabs',
+      elements: tabElements,
+    });
   }
 
   const numPr = node.attrs?.paragraphProperties?.elements?.find((n) => n.name === 'w:numPr');
@@ -353,90 +400,6 @@ function translateDocumentNode(params) {
   };
 
   return [node, params];
-}
-
-/**
- * The attributes to flatten and prepare for XML
- *
- * @param {SchemaAttributes} attrs
- * @returns {XmlAttributes} The processed attributes
- */
-function processAttributes(attrs) {
-  let processedAttrs = {};
-  if (!attrs) return processedAttrs;
-
-  Object.keys(attrs).forEach((key) => {
-    const value = attrs[key];
-    if (!value) return;
-
-    let newAttr = {};
-    if (value instanceof Object) newAttr = processAttributes(value);
-    else newAttr[toKebabCase(key)] = value;
-    processedAttrs = { ...processedAttrs, ...newAttr };
-  });
-  return processedAttrs;
-}
-
-/**
- * Process child nodes, ignoring any that are not valid
- *
- * @param {SchemaNode[]} nodes The input nodes
- * @returns {XmlReadyNode[]} The processed child nodes
- */
-function translateChildNodes(params) {
-  const { content: nodes } = params.node;
-  if (!nodes) return [];
-
-  const translatedNodes = [];
-  nodes.forEach((node) => {
-    let translatedNode = exportSchemaToJson({ ...params, node });
-
-    const nodeType = translatedNode?.name || translatedNode?.type;
-    // if (nodeType !== 'w:sdt') translatedNode = isolateAnnotations(translatedNode);
-
-    if (translatedNode instanceof Array) translatedNodes.push(...translatedNode);
-    else translatedNodes.push(translatedNode);
-  });
-
-  // Filter out any null nodes
-  return translatedNodes.filter((n) => n);
-}
-
-/**
- * Process nodes to isolate sdt annotations from simple text nodes
- * since having sdt annotation with text run in one paragraph inside table cell
- * can lead to export issues
- */
-const isolateAnnotations = (node) => {
-  if (!node) return node;
-  const hasTextRun = node.elements?.some(item => item.name === 'w:r');
-  const hasSdtContent = node.elements?.some(item => item.name === 'w:sdt');
-
-  const sdtNode = node.elements?.find(item => item.name === 'w:sdt');
-  const sdtPr = sdtNode?.elements?.find(item => item.name === 'w:sdtPr');
-  const hasAlias = sdtPr?.elements?.some(item => item.name === 'w:alias');
-  if (!hasAlias) return node;
-
-  let result = node;
-  if (hasTextRun && hasSdtContent) {
-    const sdtNodes = node.elements.filter(item => item.name === 'w:sdt');
-    const otherNodes = node.elements.filter(item => item.name !== 'w:sdt');
-    const hasText = otherNodes.filter(item => item.name === 'w:r').every(item => {
-      const textElements = item.elements.filter(item => item.name === 'w:t');
-      return textElements?.every(item => item.elements[0].text.trim().length > 0);
-    });
-    result = [
-      ...(hasText ? [{
-        ...node,
-        elements: otherNodes,
-      }] : []),
-      {
-        name: 'w:p',
-        elements: sdtNodes,
-      }
-    ];
-  }
-  return result;
 }
 
 /**
@@ -474,13 +437,13 @@ function getTextNodeForExport(text, marks, params) {
       });
 
       if (!isCustomMark) return;
-  
+
       let attrsString = '';
       Object.entries(mark.attrs).forEach(([key, value]) => {
         if (value) {
           attrsString += `${key}=${value};`;
         }
-      }); 
+      });
 
       if (isCustomMark) {
         textNodes.unshift({
@@ -489,16 +452,16 @@ function getTextNodeForExport(text, marks, params) {
           attributes: {
             'w:id': '5000',
             'w:name': mark.type + ';' + attrsString,
-          }
+          },
         });
         textNodes.push({
           type: 'element',
           name: 'w:bookmarkEnd',
           attributes: {
             'w:id': '5000',
-          }
+          },
         });
-      };
+      }
     });
   }
 
@@ -629,8 +592,8 @@ function processOutputMarks(marks = []) {
   return marks.flatMap((mark) => {
     if (mark.type === 'textStyle') {
       return Object.entries(mark.attrs)
-        .filter(([key, value]) => value)
-        .map(([key, value]) => {
+        .filter(([, value]) => value)
+        .map(([key]) => {
           const unwrappedMark = { type: key, attrs: mark.attrs };
           return translateMark(unwrappedMark);
         });
@@ -658,7 +621,7 @@ function translateLinkNode(params) {
   }
 
   node.marks = node.marks.filter((m) => m.type !== 'link');
-  
+
   const outputNode = exportSchemaToJson({ ...params, node });
   const contentNode = processLinkContentNode(outputNode);
 
@@ -691,8 +654,8 @@ function processLinkContentNode(node) {
   const underline = {
     name: 'w:u',
     attributes: {
-      'w:val': 'none'
-    }
+      'w:val': 'none',
+    },
   };
 
   if (contentNode.name === 'w:r') {
@@ -709,10 +672,7 @@ function processLinkContentNode(node) {
       // we don't add underline by default
       const runProps = {
         name: 'w:rPr',
-        elements: [
-          hyperlinkStyle,
-          color,
-        ],
+        elements: [hyperlinkStyle, color],
       };
 
       contentNode.elements.unshift(runProps);
@@ -790,7 +750,7 @@ function translateList(params) {
       numId,
       listType,
       editor,
-    })
+    });
   }
 
   let numPrTag;
@@ -798,15 +758,78 @@ function translateList(params) {
   // These should exist for all imported nodes
   if (numId !== undefined && numId !== null) {
     numPrTag = generateNumPrTag(numId, level);
-  };
+  }
 
   // Collapse multiple paragraphs into a single node for this list item
   // In docx we need a single paragraph, but can include line breaks in a run
   const collapsedParagraphNode = convertMultipleListItemsIntoSingleNode(listItem);
 
-  const outputNode = exportSchemaToJson({ ...params, node: collapsedParagraphNode });
+  let outputNode = exportSchemaToJson({ ...params, node: collapsedParagraphNode });
+
+  /**
+   * MS Word does not allow paragraphs inside lists (which are just paragraphs in OOXML)
+   * So we need to turn paragraphs into runs and add line breaks
+   *
+   * Two cases:
+   *  1. Final doc (keep paragraph field content inside list item)
+   *  2. Not final doc (keep w:sdt node, process its content)
+   */
+  if (Array.isArray(outputNode) && params.isFinalDoc) {
+    const parsedElements = [];
+    outputNode?.forEach((node, index) => {
+      if (node?.elements) {
+        const runs = node.elements?.filter((n) => n.name === 'w:r');
+        parsedElements.push(...runs);
+
+        if (node.name === 'w:p' && index < outputNode.length - 1) {
+          parsedElements.push({
+            name: 'w:br',
+          });
+        }
+      }
+    });
+
+    outputNode = {
+      name: 'w:p',
+      elements: [{ name: 'w:pPr', elements: [] }, ...parsedElements],
+    };
+  }
+
+  /** Case 2: Process w:sdt content */
+  let nodesToFlatten = [];
+  const sdtNodes = outputNode.elements?.filter((n) => n.name === 'w:sdt');
+  if (sdtNodes && sdtNodes.length > 0) {
+    nodesToFlatten = sdtNodes;
+    nodesToFlatten?.forEach((sdtNode) => {
+      const sdtContent = sdtNode.elements.find((n) => n.name === 'w:sdtContent');
+      const foundRun = sdtContent.elements?.find((el) => el.name === 'w:r'); // this is a regular text field.
+      if (sdtContent && sdtContent.elements && !foundRun) {
+        const parsedElements = [];
+        sdtContent.elements.forEach((element, index) => {
+          if (element.name === 'w:rPr' && element.elements?.length) {
+            parsedElements.push(element);
+          }
+
+          const runs = element.elements?.filter((n) => n.name === 'w:r');
+          if (runs && runs.length) {
+            parsedElements.push(...runs);
+          }
+
+          if (element.name === 'w:p' && index < sdtContent.elements.length - 1) {
+            parsedElements.push({
+              name: 'w:br',
+            });
+          }
+        });
+        sdtContent.elements = parsedElements;
+      }
+    });
+  }
+
   const pPr = outputNode.elements?.find((n) => n.name === 'w:pPr');
-  if (pPr && pPr.elements && numPrTag) pPr.elements.unshift(numPrTag);
+  if (pPr && pPr.elements && numPrTag) {
+    pPr.elements.unshift(numPrTag);
+  }
 
   const indentTag = restoreIndent(listItem.attrs.indent);
   indentTag && pPr?.elements?.push(indentTag);
@@ -823,7 +846,7 @@ function translateList(params) {
   }
 
   return [outputNode];
-};
+}
 
 /**
  * Convert multiple list items into a single paragraph node
@@ -834,7 +857,7 @@ function translateList(params) {
  */
 const convertMultipleListItemsIntoSingleNode = (listItem) => {
   const { content } = listItem;
-  
+
   if (!content || content.length === 0) {
     return null;
   }
@@ -842,7 +865,7 @@ const convertMultipleListItemsIntoSingleNode = (listItem) => {
   const firstParagraph = content[0];
   const collapsedParagraph = {
     ...firstParagraph,
-    content: []
+    content: [],
   };
 
   // Collapse all paragraphs into a single paragraph node
@@ -852,10 +875,10 @@ const convertMultipleListItemsIntoSingleNode = (listItem) => {
         collapsedParagraph.content.push({
           type: 'lineBreak',
           attrs: {},
-          content: []
+          content: [],
         });
       }
-      
+
       // Add all text nodes and other content directly from this paragraph
       if (item.content && item.content.length > 0) {
         collapsedParagraph.content.push(...item.content);
@@ -884,7 +907,7 @@ const restoreIndent = (indent) => {
     name: 'w:ind',
     type: 'element',
     attributes,
-  }
+  };
 };
 
 const generateNumPrTag = (numId, level) => {
@@ -905,265 +928,6 @@ const generateNumPrTag = (numId, level) => {
     ],
   };
 };
-
-function translateListOld(params) {
-  const { type } = params.node;
-  const flatContent = flattenContent(params);
-
-  const listNodes = [];
-  flatContent.forEach((listNode) => {
-    const { level, listType, pPrs: additionalPprs, content, attrs = {} } = listNode;
-    const attrsNumId = listNode.attrs.numId;
-
-    const actualNumId = attrsNumId || listNode.listId;
-    const listId = actualNumId ?? generateNewListDefinition(params, listType);  
-    const pPr = getListParagraphProperties(level, listId, additionalPprs);
-    
-    content.forEach((contentNode, index) => {
-      // Get paragraph attributes which were attached to list item node
-      const paragraphNode = Object.assign({}, contentNode);
-      paragraphNode.attrs = {
-        ...paragraphNode.attrs,
-        ...listNode.attrs
-      };
-
-      const outputNode = exportSchemaToJson({ ...params, node: paragraphNode });
-      if (!outputNode.elements) {
-        outputNode.elements = [];
-      }
-
-      // Process html annotation if present
-      if (Array.isArray(outputNode)) {
-        const mapped = [];
-        outputNode.forEach((el, index) => {
-          el.elements.forEach((element) => {
-            if (element.name === 'w:pPr') return;
-            mapped.push(element);
-          });
-          if (index < outputNode.length - 1) mapped.push({ name: 'w:br', type: 'element' });
-        });
-
-        // Add the pPr for the list
-        mapped.unshift(carbonCopy(pPr));
-        return listNodes.push({ name: 'w:p', elements: mapped });
-      };
-
-      const propsElementIndex = outputNode.elements.findIndex((e) => e.name === 'w:pPr');
-      const content = outputNode.elements.filter((e) => e.name !== 'w:pPr');
-      if (!content.length && !Array.isArray(outputNode)) {
-        // Apply initial properties to the empty nodes
-        const elements = contentNode.attrs.paragraphProperties ? [contentNode.attrs.paragraphProperties] : [];
-        const spacer = { 
-          name: 'w:p',
-          type: 'element',
-          elements
-        };
-        return listNodes.push(spacer);
-      }
-
-      outputNode.elements = outputNode.elements.map((el, index) => {
-        if (el.name === 'w:sdt') {
-          const contentIndex = el.elements.findIndex((e) => e.name === 'w:sdtContent');
-          const content = el.elements[contentIndex];
-        
-          const innerContent = content.elements[0];
-          if (innerContent.name === 'w:p') {
-            content.elements = innerContent.elements;
-          };
-          return {
-            name: 'w:r',
-            type: 'element',
-            elements: [el],
-          }
-        } else {
-          return el;
-        }
-      });
-
-      // pPr processing
-      const { attributes: generalAttributes } = attrs;
-      const { originalInlineRunProps } = generalAttributes || {};
-      if (originalInlineRunProps) pPr.elements.push(originalInlineRunProps);
-
-      if (propsElementIndex === -1) {
-        outputNode.elements.unshift(carbonCopy(pPr));
-      } else {
-        // Check if there is any properties processed by translateParagraphNode
-        const resultProps = carbonCopy(pPr).elements.map(item => {
-          const isChanged = outputNode.elements[propsElementIndex].elements.find((e) => e.name === item.name);
-          return isChanged ? isChanged : item;
-        });
-        outputNode.elements[propsElementIndex].elements = resultProps;
-      }
-
-      let importedFontSize;
-      if (listNode.attrs?.importedFontSize) {
-        const fontNoUnit = parseInt(listNode.attrs.importedFontSize.split('pt')[0]);
-        importedFontSize = {
-          name: 'w:sz',
-          attributes: { 'w:val': fontNoUnit * 2 },
-        };
-      };
-
-      let importedFontFamily
-      if (listNode.attrs?.importedFontFamily) {
-        importedFontFamily = {
-          name: 'w:rFonts',
-          attributes: { 'w:ascii': listNode.attrs?.importedFontFamily, 'w:hAnsi': listNode.attrs?.importedFontFamily },
-        };
-      }
-
-      const rPrElement = outputNode.elements.find((e) => e.name === 'w:rPr');
-      if (rPrElement) {
-        rPrElement.elements.push(fontSize);
-      } else if (importedFontSize || importedFontFamily) {
-        const elements = [];
-        if (importedFontSize) elements.push(importedFontSize);
-        if (importedFontFamily) elements.push(importedFontFamily);
-        outputNode.elements.unshift({ name: 'w:rPr', elements });
-      }
-
-      // Remove the numPr properties from content nodes
-      if (index !== 0) {
-        const currentpPr = outputNode.elements.find((e) => e.name === 'w:pPr');
-        const numPrIndex = currentpPr.elements.findIndex((e) => e.name === 'w:numPr');
-        if (numPrIndex !== -1) currentpPr.elements.splice(numPrIndex, 1);
-      }
-      listNodes.push(outputNode);
-    });
-  });
-  
-  return listNodes;
-}
-
-/**
- * Generate a new list definition to be inserted into numbering.xml
- * @param {Obect} param The parameters object
- * @param {Number} param.abstractId The abstract number id
- * @param {Number} param.listId The list id
- * @returns {Object} The new abstract and num definitions
- */
-function generateNewListDefinition(params, listType) {
-  // Generate a new numId to add to numbering.xml
-  const nextNumbering = getLargestListDefinitionIndex(params.converter?.numbering?.definitions);
-  const definition = listType === 'bullet' ? baseBulletList : baseOrderedListDef;
-  const listId = nextNumbering;
-  const abstractId = definition.attributes['w:abstractNumId'];
-
-  // Generate the new numId definition
-  const newNumDef = {
-    type: 'element',
-    name: 'w:num',
-    attributes: {
-      'w:numId': String(listId),
-      'w16cid:durableId': '485517411'
-    },
-    elements: [
-      { name: 'w:abstractNumId', attributes: { 'w:val': String(abstractId) } },
-    ]
-  };
-
-  params.converter.numbering.definitions[listId] = newNumDef;
-  return listId;
-};
-
-/**
- * Get the largest list definition index
- * 
- * @param {Object} definitions The list definitions
- * @returns {number} The largest list definition index
- */
-const getLargestListDefinitionIndex = (definitions) => {
-  if (!definitions || !Object.keys(definitions).length) return 0;
-  const maxKey = Math.max(...Object.keys(definitions).map((key) => parseInt(key, 10)));
-  return maxKey + 1;
-};
-
-/**
- * Get the paragraph properties for a list
- *
- * @param {SchemaNode} node The list node
- * @param {number} level The list level
- * @param {string} type The list type
- * @param {boolean} hasParentProps Does output node already have pPr
- * @returns {XmlReadyNode} The list paragraph properties node
- */
-function getListParagraphProperties(level, numId, additionalPprs = []) {
-  return {
-    name: 'w:pPr',
-    type: 'element',
-    elements: [
-      {
-        name: 'w:numPr',
-        type: 'element',
-        elements: [
-          {
-            name: 'w:ilvl',
-            type: 'element',
-            attributes: { 'w:val': level },
-          },
-          {
-            name: 'w:numId',
-            type: 'element',
-            attributes: { 'w:val': numId },
-          },
-        ],
-      },
-      ...additionalPprs,
-    ],
-  };
-}
-
-/**
- * Flatten list nodes for processing.
- */
-function flattenContent({ node }) {
-  const { content, attrs = {} } = node;
-  const { listId, syncId } = node.attrs || {};
-  const listType = node.attrs['list-style-type'];
-
-  const { attributes = {} } = attrs;
-  const pPrs = attributes?.parentAttributes?.paragraphProperties?.elements?.filter((el) => el.name !== 'w:numPr') || [];
-  const flatContent = [];
-
-  function recursiveFlatten(items, level = 0) {
-    if (!items || !items.length) return;
-    items.forEach((item) => {
-      const indent = item.attrs?.indent;
-      if (indent) {
-        const { left, right, firstLine, hanging } = indent;
-        const indentAttrs = {};
-        if (left !== undefined) indentAttrs['w:left'] = pixelsToTwips(left);
-        if (right!== undefined) indentAttrs['w:right'] = pixelsToTwips(right);
-        if (firstLine !== undefined) indentAttrs['w:firstLine'] = pixelsToTwips(firstLine);
-        if (hanging !== undefined) indentAttrs['w:hanging'] = pixelsToTwips(hanging);
-
-        const indentElement = {
-          type: 'element',
-          name: 'w:ind',
-          attributes: indentAttrs,
-        };
-
-        const existingIndentIndex = pPrs.findIndex((el) => el.name === 'w:ind');
-        if (existingIndentIndex !== -1) {
-          pPrs[existingIndentIndex] = indentElement;
-        }
-      }
-
-      const subList = item.content?.filter((c) => c.type === 'bulletList' || c.type === 'orderedList') || [];
-      const notLists = item.content?.filter((c) => c.type !== 'bulletList' && c.type !== 'orderedList') || [];
-      const newItem = { ...item, content: notLists, listId, level, listType, syncId, pPrs };
-      flatContent.push(newItem);
-
-      if (subList.length) {
-        recursiveFlatten(subList[0].content, level + 1);
-      }
-    });
-  }
-
-  recursiveFlatten(content);
-  return flatContent;
-}
 
 /**
  * Translate a line break node
@@ -1239,7 +1003,7 @@ function preProcessVerticalMergeCells(table, { editorSchema }) {
           },
         };
 
-        rowsToChange.forEach((rowToChange, mergedIndex) => {
+        rowsToChange.forEach((rowToChange) => {
           rowToChange.content.splice(cellIndex, 0, mergedCell);
         });
       }
@@ -1249,8 +1013,6 @@ function preProcessVerticalMergeCells(table, { editorSchema }) {
 }
 
 function translateTab(params) {
-  const attributes = {};
-
   const { marks = [] } = params.node;
 
   const outputMarks = processOutputMarks(marks);
@@ -1271,7 +1033,7 @@ function generateTableProperties(node) {
   const elements = [];
 
   const { attrs } = node;
-  const { tableWidth, tableWidthType, tableStyleId, borders, tableIndent, tableLayout, tableCellSpacing } = attrs;
+  const { tableWidth, tableStyleId, borders, tableIndent, tableLayout, tableCellSpacing, justification } = attrs;
 
   if (tableStyleId) {
     const tableStyleElement = {
@@ -1321,6 +1083,14 @@ function generateTableProperties(node) {
     });
   }
 
+  if (justification) {
+    const justificationElement = {
+      name: 'w:jc',
+      attributes: { 'w:val': justification },
+    };
+    elements.push(justificationElement);
+  }
+
   return {
     name: 'w:tblPr',
     elements,
@@ -1343,7 +1113,7 @@ function generateTableBorders(node) {
   borderTypes.forEach((type) => {
     const border = borders[type];
     if (!border) return;
-    
+
     let attributes = {};
     if (!Object.keys(border).length || !border.size) {
       attributes = {
@@ -1355,12 +1125,12 @@ function generateTableBorders(node) {
         'w:sz': pixelsToEightPoints(border.size),
         'w:space': border.space || 0,
         'w:color': border?.color?.substring(1) || '000000',
-      }
+      };
     }
-    
+
     const borderElement = {
       name: `w:${type}`,
-      attributes
+      attributes,
     };
     elements.push(borderElement);
   });
@@ -1384,14 +1154,11 @@ function generateTableGrid(node, params) {
 
   try {
     const pmNode = editorSchema.nodeFromJSON(node);
-    const cellMinWidth = 25;
-    const { colgroupValues } = createColGroup(
-      pmNode,
-      cellMinWidth,
-    );
+    const cellMinWidth = 10;
+    const { colgroupValues } = createColGroup(pmNode, cellMinWidth);
 
     colgroup = colgroupValues;
-  } catch(err) {
+  } catch {
     colgroup = [];
   }
 
@@ -1402,7 +1169,7 @@ function generateTableGrid(node, params) {
       attributes: { 'w:w': pixelsToTwips(width) },
     });
   });
-  
+
   return {
     name: 'w:tblGrid',
     elements,
@@ -1459,9 +1226,9 @@ function translateTableCell(params) {
     ...params,
     tableCell: params.node,
   });
-  
+
   const cellProps = generateTableCellProperties(params.node);
-  
+
   elements.unshift(cellProps);
   return {
     name: 'w:tc',
@@ -1484,7 +1251,10 @@ function generateTableCellProperties(node) {
 
   const cellWidthElement = {
     name: 'w:tcW',
-    attributes: { 'w:w': widthUnit === 'px' ? pixelsToTwips(colwidthSum) : inchesToTwips(colwidthSum), 'w:type': cellWidthType },
+    attributes: {
+      'w:w': widthUnit === 'px' ? pixelsToTwips(colwidthSum) : inchesToTwips(colwidthSum),
+      'w:type': cellWidthType,
+    },
   };
   elements.push(cellWidthElement);
 
@@ -1522,10 +1292,10 @@ function generateTableCellProperties(node) {
     };
     elements.push(vertAlignElement);
   }
-  
+
   // const { vMerge } = attrs;
   // if (vMerge) {}
-   if (rowspan && rowspan > 1) {
+  if (rowspan && rowspan > 1) {
     const vMergeElement = {
       name: 'w:vMerge',
       type: 'element',
@@ -1545,12 +1315,12 @@ function generateTableCellProperties(node) {
     const cellBordersElement = {
       name: 'w:tcBorders',
       elements: Object.entries(borders).map(([key, value]) => {
-        if (!value.size) {
+        if (!value.size || value.val === 'none') {
           return {
             name: `w:${key}`,
             attributes: {
               'w:val': 'nil',
-            }
+            },
           };
         }
         return {
@@ -1628,6 +1398,14 @@ function translateMark(mark) {
 
   switch (mark.type) {
     case 'bold':
+      if (attrs?.value) {
+        markElement.attributes['w:val'] = attrs.value;
+      } else {
+        delete markElement.attributes;
+      }
+      markElement.type = 'element';
+      break;
+
     case 'italic':
       delete markElement.attributes;
       markElement.type = 'element';
@@ -1652,6 +1430,12 @@ function translateMark(mark) {
       });
       break;
 
+    // Add ability to get run styleIds from textStyle marks and inject to run properties in word
+    case 'styleId':
+      markElement.name = 'w:rStyle';
+      markElement.attributes['w:val'] = attrs.styleId;
+      break;
+
     case 'color':
       let processedColor = attrs.color.replace(/^#/, '').replace(/;$/, ''); // Remove `#` and `;` if present
       if (processedColor.startsWith('rgb')) {
@@ -1668,10 +1452,18 @@ function translateMark(mark) {
       markElement.attributes['w:firstline'] = inchesToTwips(attrs.textIndent);
       break;
 
+    case 'textTransform':
+      if (attrs?.textTransform === 'none') {
+        markElement.attributes['w:val'] = '0';
+      } else {
+        delete markElement.attributes;
+      }
+      markElement.type = 'element';
+      break;
+
     case 'lineHeight':
       markElement.attributes['w:line'] = linesToTwips(attrs.lineHeight);
       break;
-
     case 'highlight':
       markElement.attributes['w:fill'] = attrs.color?.substring(1);
       markElement.attributes['w:color'] = 'auto';
@@ -1682,7 +1474,7 @@ function translateMark(mark) {
     case 'link':
       break;
   }
-  
+
   return markElement;
 }
 
@@ -1694,17 +1486,17 @@ function getPngDimensions(base64) {
     return {
       originalWidth: undefined,
       originalHeight: undefined,
-    }
+    };
   }
-  
-  let header = base64.split(',')[1].slice(0, 50)
-  let uint8 = Uint8Array.from(atob(header), c => c.charCodeAt(0))
-  let dataView = new DataView(uint8.buffer, 0, 28)
+
+  let header = base64.split(',')[1].slice(0, 50);
+  let uint8 = Uint8Array.from(atob(header), (c) => c.charCodeAt(0));
+  let dataView = new DataView(uint8.buffer, 0, 28);
 
   return {
     originalWidth: dataView.getInt32(16),
-    originalHeight: dataView.getInt32(20)
-  }
+    originalHeight: dataView.getInt32(20),
+  };
 }
 
 function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
@@ -1723,20 +1515,22 @@ function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
 
 function translateImageNode(params, imageSize) {
   const {
-    node: { attrs = {}, marks = [] },
+    node: { attrs = {} },
     tableCell,
   } = params;
 
   let imageId = attrs.rId;
-  
+
   const src = attrs.src || attrs.imageSrc;
   const { originalWidth, originalHeight } = getPngDimensions(src);
-  
+  const imageName = params.node.type === 'image' ? src?.split('word/media/')[1] : attrs.fieldId?.replace('-', '_');
+
   let size = attrs.size
     ? {
-      w: pixelsToEmu(attrs.size.width),
-      h: pixelsToEmu(attrs.size.height),
-    } : imageSize;
+        w: pixelsToEmu(attrs.size.width),
+        h: pixelsToEmu(attrs.size.height),
+      }
+    : imageSize;
 
   if (originalWidth && originalHeight) {
     const boxWidthPx = emuToPixels(size.w);
@@ -1747,7 +1541,7 @@ function translateImageNode(params, imageSize) {
       h: pixelsToEmu(scaledHeight),
     };
   }
-  
+
   if (tableCell) {
     // Image inside tableCell
     const colwidthSum = tableCell.attrs.colwidth.reduce((acc, curr) => acc + curr, 0);
@@ -1757,7 +1551,7 @@ function translateImageNode(params, imageSize) {
     const { width: w, height: h } = resizeKeepAspectRatio(size.w, size.h, maxWidthEmu);
     if (w && h) size = { w, h };
   }
-  
+
   if (params.node.type === 'image' && !imageId) {
     const path = src?.split('word/')[1];
     imageId = addNewImageRelationship(params, path);
@@ -1766,13 +1560,10 @@ function translateImageNode(params, imageSize) {
     if (!type) {
       return prepareTextAnnotation(params);
     }
-    
-    const hash = generateDocxRandomId(4);
-    const cleanUrl = attrs.fieldId.replace('-', '_');
-    const imageUrl = `media/${cleanUrl}_${hash}.${type}`;
 
+    const imageUrl = `media/${imageName}_${attrs.hash}.${type}`;
     imageId = addNewImageRelationship(params, imageUrl);
-    params.media[`${cleanUrl}_${hash}.${type}`] = src;
+    params.media[`${imageName}_${attrs.hash}.${type}`] = src;
   }
 
   let inlineAttrs = attrs.originalPadding || {
@@ -1784,7 +1575,7 @@ function translateImageNode(params, imageSize) {
 
   const anchorElements = [];
   let wrapProp = [];
-  
+
   // Handle anchor image export
   if (attrs.isAnchor) {
     inlineAttrs = {
@@ -1802,7 +1593,7 @@ function translateImageNode(params, imageSize) {
         attributes: {
           x: 0,
           y: 0,
-        }
+        },
       });
     }
 
@@ -1813,23 +1604,31 @@ function translateImageNode(params, imageSize) {
           relativeFrom: attrs.anchorData.hRelativeFrom,
         },
         ...(attrs.marginOffset.left !== undefined && {
-          elements: [{
-            name: 'wp:posOffset',
-            elements: [{
-              type: 'text',
-              text: pixelsToEmu(attrs.marginOffset.left).toString(),
-            }],
-          }]
+          elements: [
+            {
+              name: 'wp:posOffset',
+              elements: [
+                {
+                  type: 'text',
+                  text: pixelsToEmu(attrs.marginOffset.left).toString(),
+                },
+              ],
+            },
+          ],
         }),
         ...(attrs.anchorData.alignH && {
-          elements: [{
-            name: 'wp:align',
-            elements: [{
-              type: 'text',
-              text: attrs.anchorData.alignH,
-            }],
-          }]
-        })
+          elements: [
+            {
+              name: 'wp:align',
+              elements: [
+                {
+                  type: 'text',
+                  text: attrs.anchorData.alignH,
+                },
+              ],
+            },
+          ],
+        }),
       });
 
       anchorElements.push({
@@ -1838,32 +1637,40 @@ function translateImageNode(params, imageSize) {
           relativeFrom: attrs.anchorData.vRelativeFrom,
         },
         ...(attrs.marginOffset.top !== undefined && {
-          elements: [{
-            name: 'wp:posOffset',
-            elements: [{
-              type: 'text',
-              text: pixelsToEmu(attrs.marginOffset.top).toString(),
-            }],
-          }]
+          elements: [
+            {
+              name: 'wp:posOffset',
+              elements: [
+                {
+                  type: 'text',
+                  text: pixelsToEmu(attrs.marginOffset.top).toString(),
+                },
+              ],
+            },
+          ],
         }),
         ...(attrs.anchorData.alignV && {
-          elements: [{
-            name: 'wp:align',
-            elements: [{
-              type: 'text',
-              text: attrs.anchorData.alignV,
-            }],
-          }]
-        })
+          elements: [
+            {
+              name: 'wp:align',
+              elements: [
+                {
+                  type: 'text',
+                  text: attrs.anchorData.alignV,
+                },
+              ],
+            },
+          ],
+        }),
       });
     }
-    
+
     if (attrs.wrapText) {
       wrapProp.push({
         name: 'wp:wrapSquare',
         attributes: {
           wrapText: attrs.wrapText,
-        }
+        },
       });
     }
 
@@ -1872,12 +1679,19 @@ function translateImageNode(params, imageSize) {
         name: 'wp:wrapTopAndBottom',
       });
     }
+
+    // Important: wp:anchor will break if no wrapping is specified. We need to use wrapNone.
+    if (attrs.isAnchor && !wrapProp.length) {
+      wrapProp.push({
+        name: 'wp:wrapNone',
+      });
+    }
   }
 
   const drawingXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
   const pictureXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-  
-  const textNode =  wrapTextInRun(
+
+  const textNode = wrapTextInRun(
     {
       name: 'w:drawing',
       elements: [
@@ -1907,8 +1721,7 @@ function translateImageNode(params, imageSize) {
               name: 'wp:docPr',
               attributes: {
                 id: attrs.id || 0,
-                name: attrs.alt,
-                descr: attrs.title,
+                name: attrs.alt || `Picture ${imageName}`,
               },
             },
             {
@@ -1942,7 +1755,7 @@ function translateImageNode(params, imageSize) {
                               name: 'pic:cNvPr',
                               attributes: {
                                 id: attrs.id || 0,
-                                name: attrs.title,
+                                name: attrs.title || `Picture ${imageName}`,
                               },
                             },
                             {
@@ -2005,8 +1818,8 @@ function translateImageNode(params, imageSize) {
                               elements: [{ name: 'a:avLst' }],
                             },
                             {
-                              name: 'a:noFill'
-                            }
+                              name: 'a:noFill',
+                            },
                           ],
                         },
                       ],
@@ -2021,7 +1834,7 @@ function translateImageNode(params, imageSize) {
     },
     [],
   );
-  
+
   return textNode;
 }
 
@@ -2066,9 +1879,10 @@ function prepareHtmlAnnotation(params) {
     editorSchema,
   } = params;
 
-  const paragraphHtmlContainer = sanitizeHtml(attrs.rawHtml);
+  let html = attrs.rawHtml || attrs.displayLabel;
+  const paragraphHtmlContainer = sanitizeHtml(html);
   const marksFromAttrs = translateFieldAttrsToMarks(attrs);
-  const allMarks = [...marks, ...marksFromAttrs]
+  const allMarks = [...marks, ...marksFromAttrs];
 
   let state = EditorState.create({
     doc: PMDOMParser.fromSchema(editorSchema).parse(paragraphHtmlContainer),
@@ -2079,13 +1893,33 @@ function prepareHtmlAnnotation(params) {
   }
 
   const htmlAnnotationNode = state.doc.toJSON();
+  const listTypes = ['bulletList', 'orderedList'];
+  const { editor } = params;
+  const seenLists = new Map();
+  state.doc.descendants((node) => {
+    if (listTypes.includes(node.type.name)) {
+      const listItem = node.firstChild;
+      const { attrs } = listItem;
+      const { level, numId } = attrs;
+      if (!seenLists.has(numId)) {
+        const newNumId = ListHelpers.changeNumIdSameAbstract(numId, level, node.type.name, editor);
+        listItem.attrs.numId = newNumId;
+        seenLists.set(numId, newNumId);
+      } else {
+        const newNumId = seenLists.get(numId);
+        listItem.attrs.numId = newNumId;
+      }
+    }
+  });
+
+  const elements = translateChildNodes({
+    ...params,
+    node: htmlAnnotationNode,
+  });
 
   return {
     name: 'htmlAnnotation',
-    elements: translateChildNodes({
-      ...params,
-      node: htmlAnnotationNode,
-    }),
+    elements,
   };
 }
 
@@ -2155,15 +1989,7 @@ function getTranslationByAnnotationType(annotationType) {
 }
 
 const translateFieldAttrsToMarks = (attrs = {}) => {
-  const {
-    fontFamily,
-    fontSize,
-    bold,
-    underline,
-    italic,
-    textColor,
-    textHighlight,
-  } = attrs;
+  const { fontFamily, fontSize, bold, underline, italic, textColor, textHighlight } = attrs;
 
   const marks = [];
   if (fontFamily) marks.push({ type: 'fontFamily', attrs: { fontFamily } });
@@ -2183,14 +2009,18 @@ const translateFieldAttrsToMarks = (attrs = {}) => {
  * @returns {XmlReadyNode} The translated field annotation node
  */
 function translateFieldAnnotation(params) {
-  const { node, isFinalDoc } = params;
+  const { node, isFinalDoc, fieldsHighlightColor } = params;
   const { attrs = {} } = node;
   const annotationHandler = getTranslationByAnnotationType(attrs.type);
   if (!annotationHandler) return {};
 
   let processedNode;
   let sdtContentElements;
-  
+
+  if ((attrs.type === 'image' || attrs.type === 'signature') && !attrs.hash) {
+    attrs.hash = generateDocxRandomId(4);
+  }
+
   if (isFinalDoc) {
     return annotationHandler(params);
   } else {
@@ -2201,9 +2031,14 @@ function translateFieldAnnotation(params) {
       sdtContentElements = [...processedNode.elements];
     }
   }
-  sdtContentElements = [ getFieldHighlightJson(), ...sdtContentElements ];
 
-  const customXmlns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
+  sdtContentElements = [...sdtContentElements];
+
+  // Set field background color only if param is provided, default to transparent
+  const fieldBackgroundTag = getFieldHighlightJson(fieldsHighlightColor);
+  if (fieldBackgroundTag) {
+    sdtContentElements.unshift(fieldBackgroundTag);
+  }
 
   // Contains only the main attributes.
   const annotationAttrs = {
@@ -2218,10 +2053,11 @@ function translateFieldAnnotation(params) {
     fieldFontSize: attrs.fontSize,
     fieldTextColor: attrs.textColor,
     fieldTextHighlight: attrs.textHighlight,
+    hash: attrs.hash,
   };
   const annotationAttrsJson = JSON.stringify(annotationAttrs);
 
-  return {
+  const result = {
     name: 'w:sdt',
     elements: [
       {
@@ -2237,7 +2073,8 @@ function translateFieldAnnotation(params) {
       },
     ],
   };
-};
+  return result;
+}
 
 export function translateHardBreak(params) {
   const { node = {} } = params;
@@ -2247,11 +2084,13 @@ export function translateHardBreak(params) {
 
   return {
     name: 'w:r',
-    elements: [{
-      name: 'w:br',
-      type: 'element',
-      attributes: { 'w:type': 'page' }
-    }]
+    elements: [
+      {
+        name: 'w:br',
+        type: 'element',
+        attributes: { 'w:type': 'page' },
+      },
+    ],
   };
 }
 
@@ -2267,21 +2106,21 @@ function translateShapeContainer(params) {
     },
     elements: [
       ...elements,
-      ...(
-        node.attrs.wrapAttributes
-        ? [{
-            name: 'w10:wrap',
-            attributes: { ...node.attrs.wrapAttributes },
-          }] 
-        : []
-      ),
+      ...(node.attrs.wrapAttributes
+        ? [
+            {
+              name: 'w10:wrap',
+              attributes: { ...node.attrs.wrapAttributes },
+            },
+          ]
+        : []),
     ],
   };
 
   const pict = {
     name: 'w:pict',
     attributes: {
-      'w14:anchorId':  Math.floor(Math.random() * 0xffffffff).toString(),
+      'w14:anchorId': Math.floor(Math.random() * 0xffffffff).toString(),
     },
     elements: [shape],
   };
@@ -2290,7 +2129,7 @@ function translateShapeContainer(params) {
     name: 'w:p',
     elements: [wrapTextInRun(pict)],
   };
-  
+
   return par;
 }
 
@@ -2316,17 +2155,17 @@ function translateShapeTextbox(params) {
 
 function translateContentBlock(params) {
   const { node } = params;
-  const { drawingContent } = node.attrs;
+  const { drawingContent, vmlAttributes, horizontalRule } = node.attrs;
 
+  // Handle VML v:rect elements (like horizontal rules)
+  if (vmlAttributes || horizontalRule) {
+    return translateVRectContentBlock(params);
+  }
+
+  // Handle modern DrawingML content (existing logic)
   const drawing = {
     name: 'w:drawing',
-    elements: [
-      ...(
-        drawingContent
-        ? [...(drawingContent.elements || [])]
-        : []
-      )
-    ],
+    elements: [...(drawingContent ? [...(drawingContent.elements || [])] : [])],
   };
 
   const choice = {
@@ -2340,12 +2179,56 @@ function translateContentBlock(params) {
     elements: [choice],
   };
 
-  const par = {
-    name: 'w:p',
-    elements: [wrapTextInRun(alternateContent)],
+  return wrapTextInRun(alternateContent);
+}
+
+function translateVRectContentBlock(params) {
+  const { node } = params;
+  const { vmlAttributes, background, attributes, style } = node.attrs;
+
+  const rectAttrs = {
+    id: attributes?.id || `_x0000_i${Math.floor(Math.random() * 10000)}`,
   };
 
-  return par;
+  if (style) {
+    rectAttrs.style = style;
+  }
+
+  if (background) {
+    rectAttrs.fillcolor = background;
+  }
+
+  if (vmlAttributes) {
+    if (vmlAttributes.hralign) rectAttrs['o:hralign'] = vmlAttributes.hralign;
+    if (vmlAttributes.hrstd) rectAttrs['o:hrstd'] = vmlAttributes.hrstd;
+    if (vmlAttributes.hr) rectAttrs['o:hr'] = vmlAttributes.hr;
+    if (vmlAttributes.stroked) rectAttrs.stroked = vmlAttributes.stroked;
+  }
+
+  if (attributes) {
+    Object.entries(attributes).forEach(([key, value]) => {
+      if (!rectAttrs[key] && value !== undefined) {
+        rectAttrs[key] = value;
+      }
+    });
+  }
+
+  // Create the v:rect element
+  const rect = {
+    name: 'v:rect',
+    attributes: rectAttrs,
+  };
+
+  // Wrap in w:pict
+  const pict = {
+    name: 'w:pict',
+    attributes: {
+      'w14:anchorId': Math.floor(Math.random() * 0xffffffff).toString(),
+    },
+    elements: [rect],
+  };
+
+  return wrapTextInRun(pict);
 }
 
 export class DocxExporter {
@@ -2358,7 +2241,7 @@ export class DocxExporter {
     return result.join('');
   }
 
-  #generate_xml_as_list(data, debug = falase) {
+  #generate_xml_as_list(data, debug = false) {
     const json = JSON.parse(JSON.stringify(data));
     const declaration = this.converter.declaration.attributes;
     const xmlTag = `<?xml${Object.entries(declaration)
@@ -2371,13 +2254,10 @@ export class DocxExporter {
 
   #replaceSpecialCharacters(text) {
     if (!text) return;
-    return text.replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  #generateXml(node, debug = false) {
+  #generateXml(node) {
     if (!node) return null;
     let { name } = node;
     const { elements, attributes } = node;
@@ -2385,7 +2265,8 @@ export class DocxExporter {
     let tag = `<${name}`;
 
     for (let attr in attributes) {
-      const parsedAttrName = typeof attributes[attr] === 'string' ? this.#replaceSpecialCharacters(attributes[attr]) : attributes[attr];
+      const parsedAttrName =
+        typeof attributes[attr] === 'string' ? this.#replaceSpecialCharacters(attributes[attr]) : attributes[attr];
       tag += ` ${attr}="${parsedAttrName}"`;
     }
 
@@ -2397,7 +2278,7 @@ export class DocxExporter {
     if (!name && node.type === 'text') {
       return node.text;
     }
-    
+
     if (elements) {
       if (name === 'w:instrText') {
         tags.push(elements[0].text);
@@ -2416,7 +2297,7 @@ export class DocxExporter {
             }
 
             const removeUndefined = newElements.filter((el) => {
-              return el !== '<undefined>' && el !== '</undefined>'
+              return el !== '<undefined>' && el !== '</undefined>';
             });
 
             tags.push(...removeUndefined);
@@ -2429,7 +2310,6 @@ export class DocxExporter {
     return tags;
   }
 }
-
 
 function resizeKeepAspectRatio(width, height, maxWidth) {
   if (width > maxWidth) {
@@ -2444,9 +2324,7 @@ function applyMarksToHtmlAnnotation(state, marks) {
   const { tr, doc, schema } = state;
   const allowedMarks = ['fontFamily', 'fontSize', 'highlight'];
 
-  if (
-    !marks.some((m) => allowedMarks.includes(m.type))
-  ) {
+  if (!marks.some((m) => allowedMarks.includes(m.type))) {
     return state;
   }
 
@@ -2462,35 +2340,51 @@ function applyMarksToHtmlAnnotation(state, marks) {
 
     const foundTextStyle = node.marks.find((m) => m.type.name === 'textStyle');
     const foundHighlight = node.marks.find((m) => m.type.name === 'highlight');
-    
+
     // text style (fontFamily, fontSize)
     if (!foundTextStyle) {
-      tr.addMark(pos, pos + node.nodeSize, textStyleType.create({
-        ...fontFamily?.attrs,
-        ...fontSize?.attrs,
-      }));
+      tr.addMark(
+        pos,
+        pos + node.nodeSize,
+        textStyleType.create({
+          ...fontFamily?.attrs,
+          ...fontSize?.attrs,
+        }),
+      );
     } else if (!foundTextStyle?.attrs.fontFamily && fontFamily) {
-      tr.addMark(pos, pos + node.nodeSize, textStyleType.create({
-        ...foundTextStyle?.attrs,
-        ...fontFamily.attrs,
-      }));
+      tr.addMark(
+        pos,
+        pos + node.nodeSize,
+        textStyleType.create({
+          ...foundTextStyle?.attrs,
+          ...fontFamily.attrs,
+        }),
+      );
     } else if (!foundTextStyle?.attrs.fontSize && fontSize) {
-      tr.addMark(pos, pos + node.nodeSize, textStyleType.create({
-        ...foundTextStyle?.attrs,
-        ...fontSize.attrs,
-      }));
+      tr.addMark(
+        pos,
+        pos + node.nodeSize,
+        textStyleType.create({
+          ...foundTextStyle?.attrs,
+          ...fontSize.attrs,
+        }),
+      );
     }
 
     // highlight
     if (!foundHighlight) {
-      tr.addMark(pos, pos + node.nodeSize, highlightType.create({
-        ...highlight?.attrs,
-      }));
+      tr.addMark(
+        pos,
+        pos + node.nodeSize,
+        highlightType.create({
+          ...highlight?.attrs,
+        }),
+      );
     }
   });
 
   return state.apply(tr);
-};
+}
 
 function translateStructuredContent(params) {
   const { node } = params;
@@ -2505,104 +2399,127 @@ function translateStructuredContent(params) {
       elements: childContent,
     },
   ];
-  nodeElements.unshift(attrs.sdtPr)
+  nodeElements.unshift(attrs.sdtPr);
 
   return {
     name: 'w:sdt',
     elements: nodeElements,
   };
-};
+}
 
 const translatePageNumberNode = (params) => {
   const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
-  return getAutoPageJson('PAGE', outputMarks)
-}
+  return getAutoPageJson('PAGE', outputMarks);
+};
 
 const translateTotalPageNumberNode = (params) => {
   const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
-  return getAutoPageJson('NUMPAGES', outputMarks)
-}
+  return getAutoPageJson('NUMPAGES', outputMarks);
+};
 
 const getAutoPageJson = (type, outputMarks = []) => {
   return [
     {
-      "name": "w:r",
-      "elements": [
+      name: 'w:r',
+      elements: [
         {
-          "name": "w:rPr",
-          "elements": outputMarks,
+          name: 'w:rPr',
+          elements: outputMarks,
         },
         {
-          "name": "w:fldChar",
-          "attributes": {
-            "w:fldCharType": "begin"
-          }
-        }
-      ]
+          name: 'w:fldChar',
+          attributes: {
+            'w:fldCharType': 'begin',
+          },
+        },
+      ],
     },
     {
-      "name": "w:r",
-      "elements": [
+      name: 'w:r',
+      elements: [
         {
-          "name": "w:rPr",
-          "elements": outputMarks,
+          name: 'w:rPr',
+          elements: outputMarks,
         },
         {
-          "name": "w:instrText",
-          "elements": [
+          name: 'w:instrText',
+          elements: [
             {
-              "type": "text",
-              "text": ` ${type}`
-            }
-          ]
-        }
-      ]
+              type: 'text',
+              text: ` ${type}`,
+            },
+          ],
+        },
+      ],
     },
     {
-      "name": "w:r",
-      "elements": [
+      name: 'w:r',
+      elements: [
         {
-          "name": "w:rPr",
-          "elements": outputMarks,
+          name: 'w:rPr',
+          elements: outputMarks,
         },
         {
-          "name": "w:fldChar",
-          "attributes": {
-            "w:fldCharType": "separate"
-          }
-        }
-      ]
+          name: 'w:fldChar',
+          attributes: {
+            'w:fldCharType': 'separate',
+          },
+        },
+      ],
     },
     {
-      "name": "w:r",
-      "elements": [
+      name: 'w:r',
+      elements: [
         {
-          "name": "w:rPr",
-          "elements": outputMarks,
+          name: 'w:rPr',
+          elements: outputMarks,
         },
         {
-          "name": "w:fldChar",
-          "attributes": {
-            "w:fldCharType": "end"
-          }
-        }
-      ]
-    }
-  ]
+          name: 'w:fldChar',
+          attributes: {
+            'w:fldCharType': 'end',
+          },
+        },
+      ],
+    },
+  ];
 };
 
-const getFieldHighlightJson = () => {
-  return {
-    "name": "w:rPr",
-    "elements": [
-      {
-        "name": "w:shd",
-        "attributes": {
-          "w:fill": '7AA6FF',
-          "w:color": "auto",
-          "w:val": "clear"
-        }
-      }
-    ]
+/**
+ * Get the JSON representation of the field highlight
+ * @param {string} fieldsHighlightColor - The highlight color for the field. Must be valid HEX.
+ * @returns {Object} The JSON representation of the field highlight
+ */
+export const getFieldHighlightJson = (fieldsHighlightColor) => {
+  if (!fieldsHighlightColor) return null;
+
+  // Normalize input
+  let parsedColor = fieldsHighlightColor.trim();
+
+  // Regex: optional '#' + 3/4/6/8 hex digits
+  const hexRegex = /^#?([A-Fa-f0-9]{3}|[A-Fa-f0-9]{4}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$/;
+
+  if (!hexRegex.test(parsedColor)) {
+    console.warn(`Invalid HEX color provided to fieldsHighlightColor export param: ${fieldsHighlightColor}`);
+    return null;
   }
-}
+
+  // Remove '#' if present
+  if (parsedColor.startsWith('#')) {
+    parsedColor = parsedColor.slice(1);
+  }
+
+  return {
+    name: 'w:rPr',
+    elements: [
+      {
+        name: 'w:shd',
+        attributes: {
+          'w:fill': `#${parsedColor}`,
+          'w:color': 'auto',
+          'w:val': 'clear',
+        },
+      },
+    ],
+  };
+};

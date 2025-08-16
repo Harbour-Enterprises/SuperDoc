@@ -40,13 +40,11 @@ export const onMarginClickCursorChange = (event, editor) => {
       cursorPos = node?.isText && charAtPos !== ' ' ? pos - 1 : pos;
     }
 
-    const transaction = view.state.tr.setSelection(
-      TextSelection.create(view.state.doc, cursorPos)
-    );
+    const transaction = view.state.tr.setSelection(TextSelection.create(view.state.doc, cursorPos));
     view.dispatch(transaction);
     view.focus();
   }
-}
+};
 
 /**
  * Checks if the current selection has a parent node of a given type
@@ -58,7 +56,7 @@ export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
   if (!editor) return;
 
   // Check if the selection has a parent node of a given type
-  if(selectionHasNodeOrMark(editor.view.state, 'link', { requireEnds: true })) {
+  if (selectionHasNodeOrMark(editor.view.state, 'link', { requireEnds: true })) {
     // Show popover with link input
     popoverControls.component = LinkInput;
     // Calculate the position of the popover relative to the editor
@@ -71,7 +69,7 @@ export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
     };
     popoverControls.visible = true;
   }
-}
+};
 
 /**
  * Checks if the current selection is inside a node or mark with the given name.
@@ -137,7 +135,7 @@ export function selectionHasNodeOrMark(state, name, options = {}) {
       } else {
         // Range: check if any text in the range has the mark
         let hasMark = false;
-        state.doc.nodesBetween(from, to, node => {
+        state.doc.nodesBetween(from, to, (node) => {
           if (markType.isInSet(node.marks)) {
             hasMark = true;
             return false;
@@ -162,9 +160,7 @@ export function moveCursorToMouseEvent(event, editor) {
   const coords = { left: event.clientX, top: event.clientY };
   const pos = view.posAtCoords(coords)?.pos;
   if (typeof pos === 'number') {
-    const tr = view.state.tr.setSelection(
-      TextSelection.create(view.state.doc, pos)
-    );
+    const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, pos));
     view.dispatch(tr);
     view.focus();
   }

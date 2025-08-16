@@ -33,7 +33,7 @@ const props = defineProps({
   isOverflowItem: {
     type: Boolean,
     default: false,
-  }
+  },
 });
 
 const {
@@ -91,8 +91,8 @@ const caretIcon = computed(() => {
 </script>
 
 <template>
-  <div 
-    :class="['toolbar-item', attributes.className]" 
+  <div
+    :class="['toolbar-item', attributes.className]"
     :style="getStyle"
     :role="isOverflowItem ? 'menuitem' : 'button'"
     :aria-label="attributes.ariaLabel"
@@ -102,7 +102,14 @@ const caretIcon = computed(() => {
   >
     <div
       class="toolbar-button"
-      :class="{ active, disabled, narrow: isNarrow, wide: isWide, 'has-inline-text-input': hasInlineTextInput, 'high-contrast': isHighContrastMode }"
+      :class="{
+        active,
+        disabled,
+        narrow: isNarrow,
+        wide: isWide,
+        'has-inline-text-input': hasInlineTextInput,
+        'high-contrast': isHighContrastMode,
+      }"
       :data-item="`btn-${name || ''}`"
     >
       <ToolbarButtonIcon v-if="icon" :color="iconColor" class="toolbar-icon" :icon="icon" :name="name">
@@ -113,17 +120,35 @@ const caretIcon = computed(() => {
       </div>
 
       <span v-if="inlineTextInputVisible">
-        <input v-if="name === 'fontSize'" v-model="inlineTextInput"
-          @keydown.enter.prevent="handleInputSubmit" type="text" class="button-text-input"
-          :class="{ 'high-contrast': isHighContrastMode }" :id="'inlineTextInput-' + name" autocomplete="off" ref="inlineInput" />
-        <input v-else v-model="inlineTextInput" :placeholder="label" @keydown.enter.prevent="handleInputSubmit"
-          type="text" class="button-text-input" :id="'inlineTextInput-' + name" autocomplete="off" ref="inlineInput" />
+        <input
+          v-if="name === 'fontSize'"
+          v-model="inlineTextInput"
+          @keydown.enter.prevent="handleInputSubmit"
+          type="text"
+          class="button-text-input"
+          :class="{ 'high-contrast': isHighContrastMode }"
+          :id="'inlineTextInput-' + name"
+          autocomplete="off"
+          ref="inlineInput"
+        />
+        <input
+          v-else
+          v-model="inlineTextInput"
+          :placeholder="label"
+          @keydown.enter.prevent="handleInputSubmit"
+          type="text"
+          class="button-text-input"
+          :id="'inlineTextInput-' + name"
+          autocomplete="off"
+          ref="inlineInput"
+        />
       </span>
 
-      <div v-if="hasCaret" class="dropdown-caret" v-html="caretIcon" :style="{ opacity: disabled ? 0.6 : 1 }">
-      </div>
+      <div v-if="hasCaret" class="dropdown-caret" v-html="caretIcon" :style="{ opacity: disabled ? 0.6 : 1 }"></div>
 
-      <div aria-live="polite" class="visually-hidden">{{ `${attributes.ariaLabel} ${active ? 'selected' : 'unset'}` }}</div>
+      <div aria-live="polite" class="visually-hidden">
+        {{ `${attributes.ariaLabel} ${active ? 'selected' : 'unset'}` }}
+      </div>
     </div>
   </div>
 </template>
@@ -164,7 +189,6 @@ const caretIcon = computed(() => {
 .toolbar-button:hover {
   background-color: #dbdbdb;
 
-
   .toolbar-icon {
     &.high-contrast {
       color: #fff;
@@ -193,7 +217,7 @@ const caretIcon = computed(() => {
   margin: 5px;
 }
 
-.toolbar-icon+.dropdown-caret {
+.toolbar-icon + .dropdown-caret {
   margin-left: 4px;
 }
 
@@ -275,7 +299,7 @@ const caretIcon = computed(() => {
   .toolbar-item--linked-styles {
     width: auto !important;
   }
-  
+
   .toolbar-item--linked-styles .button-label {
     display: none;
   }

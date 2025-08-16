@@ -11,30 +11,76 @@ import { findParentNode } from '@helpers/index.js';
  * Generate a new list definition for the given list type.
  * This function creates a new abstractNum and num definition for the list type.
  * It updates the editor's numbering with the new definitions.
- * @param {Object} param0 
+ * @param {Object} param0
  * @param {number} param0.numId - The numId to be used for the new list definition.
  * @param {Object} param0.listType - The type of the list (ordered or bullet).
  * @param {Editor} param0.editor - The editor instance where the list definition will be added.
  * @returns {Object} The new abstract and num definitions.
  */
-export const generateNewListDefinition = ({ numId, listType, editor }) => {
+export const generateNewListDefinition = ({ numId, listType, level, start, text, fmt, editor }) => {
   // Generate a new numId to add to numbering.xml
   if (typeof listType === 'string') listType = editor.schema.nodes[listType];
 
   const definition = listType.name === 'orderedList' ? baseOrderedListDef : baseBulletList;
   const numbering = editor.converter.numbering;
   const newNumbering = { ...numbering };
+  let skipAddingNewAbstract = false;
 
   // Generate the new abstractNum definition
-  const newAbstractId = getNewListId(editor, 'abstracts');
-  const newAbstractDef = {
-    ...definition,
-    attributes: {
-      ...definition.attributes,
-      'w:abstractNumId': String(newAbstractId),
+  let newAbstractId = getNewListId(editor, 'abstracts');
+  let newAbstractDef = JSON.parse(
+    JSON.stringify({
+      ...definition,
+      attributes: {
+        ...definition.attributes,
+        'w:abstractNumId': String(newAbstractId),
+      },
+    }),
+  );
+
+  // Generate the new abstractNum definition for copy/paste lists
+  if (level && start && text && fmt) {
+    if (newNumbering.definitions[numId]) {
+      const abstractId = newNumbering.definitions[numId]?.elements[0]?.attributes['w:val'];
+      newAbstractId = abstractId;
+      const abstract = editor.converter.numbering.abstracts[abstractId];
+      newAbstractDef = { ...abstract };
+      skipAddingNewAbstract = true;
     }
-  };
-  newNumbering.abstracts[newAbstractId] = newAbstractDef;
+
+    const levelDefIndex = newAbstractDef.elements.findIndex(
+      (el) => el.name === 'w:lvl' && el.attributes['w:ilvl'] === level,
+    );
+    const levelProps = newAbstractDef.elements[levelDefIndex];
+    const elToFilter = ['w:numFmt', 'w:lvlText', 'w:start'];
+    const oldElements = levelProps.elements.filter((el) => !elToFilter.includes(el.name));
+    levelProps.elements = [
+      ...oldElements,
+      {
+        type: 'element',
+        name: 'w:start',
+        attributes: {
+          'w:val': start,
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:numFmt',
+        attributes: {
+          'w:val': fmt,
+        },
+      },
+      {
+        type: 'element',
+        name: 'w:lvlText',
+        attributes: {
+          'w:val': text,
+        },
+      },
+    ];
+  }
+
+  if (!skipAddingNewAbstract) newNumbering.abstracts[newAbstractId] = newAbstractDef;
 
   // Generate the new numId definition
   const newNumDef = getBasicNumIdTag(numId, newAbstractId);
@@ -44,10 +90,40 @@ export const generateNewListDefinition = ({ numId, listType, editor }) => {
   editor.converter.numbering = newNumbering;
 
   // Emit a change to numbering event
-  const change = { numDef: newNumDef, abstractDef: newAbstractDef, editor }
+  const change = { numDef: newNumDef, abstractDef: newAbstractDef, editor };
   editor.emit('list-definitions-change', { change, numbering: newNumbering, editor });
 
   return { abstract: newAbstractDef, definition: newNumDef };
+};
+
+/**
+ * Change the numId of a list definition and clone the abstract definition.
+ * @param {number} numId - The current numId of the list definition.
+ * @param {number} level - The level of the list definition.
+ * @param {string} listType - The type of the list (e.g., 'orderedList', 'bulletList').
+ * @param {Editor} editor - The editor instance where the list definition is stored.
+ * @returns {number} The new numId for the list definition.
+ */
+export const changeNumIdSameAbstract = (numId, level, listType, editor) => {
+  const newId = getNewListId(editor, 'definitions');
+  const { abstract } = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
+
+  const numbering = editor.converter.numbering;
+  const newNumbering = { ...numbering };
+
+  const newAbstractId = getNewListId(editor, 'abstracts');
+  const newAbstractDef = {
+    ...abstract,
+    attributes: {
+      ...abstract.attributes,
+      'w:abstractNumId': String(newAbstractId),
+    },
+  };
+  newNumbering.abstracts[newAbstractId] = newAbstractDef;
+
+  const newNumDef = getBasicNumIdTag(newId, newAbstractId);
+  newNumbering.definitions[newId] = newNumDef;
+  return newId;
 };
 
 export const getBasicNumIdTag = (numId, abstractId) => {
@@ -57,64 +133,137 @@ export const getBasicNumIdTag = (numId, abstractId) => {
     attributes: {
       'w:numId': String(numId),
     },
-    elements: [
-      { name: 'w:abstractNumId', attributes: { 'w:val': String(abstractId) } },
-    ]
+    elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': String(abstractId) } }],
   };
-}
+};
 
 /**
  * Get a new list ID for the editor without creating a conflict.
  * This function calculates the next available list ID by finding the maximum existing ID
- * and adding 1 to it. 
+ * and adding 1 to it.
  * @param {Editor} editor The editor instance where the list ID will be generated.
  * @returns {number} The new list ID.
  */
 export const getNewListId = (editor, grouping = 'definitions') => {
-  const defs = editor.converter.numbering[grouping] || {}
-  const intKeys = Object
-    .keys(defs)
+  const defs = editor.converter.numbering[grouping] || {};
+  const intKeys = Object.keys(defs)
     .map((k) => Number(k))
-    .filter(n => Number.isInteger(n))
+    .filter((n) => Number.isInteger(n));
   const max = intKeys.length ? Math.max(...intKeys) : 0;
-  return max + 1
-}
+  return max + 1;
+};
 
 /**
  * Get the details of a list definition based on the numId and level.
  * This function retrieves the start value, numbering format, level text, and custom format
- * for a given list definition.
- * @param {Object} param0 
- * @param {number} param0.numId - The numId of the list definition.
- * @param {number} param0.level - The level of the list definition.
- * @param {Editor} param0.editor - The editor instance where the list definition is stored.
- * @returns {Object} An object containing the start value, numbering format, level text, and custom format.
- * @property {number} start - The starting number for the list.
- * @property {string} numFmt - The numbering format (e.g., decimal, lowerRoman).
- * @property {string} lvlText - The text format for the list level.
- * @property {string} listNumberingType - The type of numbering used in the list (e.g., decimal, lowerRoman).
- * @property {string} customFormat - The custom format for the list, if applicable.
+ * for a given list definition. It handles style link recursion and generates new definitions when needed.
+ *
+ * @param {Object} params - The parameters object
+ * @param {number} params.numId - The numId of the list definition
+ * @param {number} params.level - The level of the list definition (0-based)
+ * @param {string} [params.listType] - The type of the list (e.g., 'orderedList', 'bulletList'). Required when generating new definitions
+ * @param {Object} params.editor - The editor instance containing converter and numbering data
+ * @param {number} [params.tries=0] - The number of recursion attempts to avoid infinite loops (max 1)
+ *
+ * @returns {Object} The list definition details
+ * @returns {string|null} returns.start - The starting number/value for the list level
+ * @returns {string|null} returns.numFmt - The numbering format (e.g., 'decimal', 'lowerRoman', 'bullet')
+ * @returns {string|null} returns.lvlText - The text template for the list level (e.g., '%1.', '•')
+ * @returns {string|null} returns.listNumberingType - The numbering type (same as numFmt for compatibility)
+ * @returns {string|undefined} returns.customFormat - The custom format string when numFmt is 'custom'
+ * @returns {Object|null} returns.abstract - The abstract numbering definition object
+ * @returns {string|undefined} returns.abstractId - The ID of the abstract numbering definition
  */
-export const getListDefinitionDetails = ({ numId, level, listType, editor }) => {
+export const getListDefinitionDetails = ({ numId, level, listType, editor, tries = 0 }) => {
   const { definitions, abstracts } = editor.converter.numbering;
   const numDef = definitions[numId];
+
+  // Generate new definition if needed
   if (!numDef && listType) {
-    generateNewListDefinition({ numId, listType, editor });
-  };
-  const abstractId = definitions[numId]?.elements?.find((item) => item.name === "w:abstractNumId")?.attributes?.["w:val"];
+    ListHelpers.generateNewListDefinition({ numId, listType, editor });
+  }
+
+  // Get abstract definition
+  const abstractId = definitions[numId]?.elements?.find((item) => item.name === 'w:abstractNumId')?.attributes?.[
+    'w:val'
+  ];
+
   const abstract = abstracts[abstractId];
+  if (!abstract) {
+    return {
+      start: null,
+      numFmt: null,
+      lvlText: null,
+      listNumberingType: null,
+      customFormat: null,
+      abstract: null,
+      abstractId,
+    };
+  }
 
-  const listDefinition = abstract?.elements?.find((item) => item.name === "w:lvl" && item.attributes["w:ilvl"] == level);
-  const start = listDefinition?.elements?.find((item) => item.name === "w:start")?.attributes["w:val"];
-  const numFmtTag = listDefinition?.elements?.find((item) => item.name === "w:numFmt");
-  const numFmt = numFmtTag?.attributes["w:val"];
-  const lvlText = listDefinition?.elements?.find((item) => item.name === "w:lvlText")?.attributes["w:val"];
-  const listNumberingType = listDefinition?.elements?.find((item) => item.name === "w:numFmt")?.attributes["w:val"];
+  // Handle style link recursion (max 1 retry)
+  const numStyleLink = abstract.elements?.find((item) => item.name === 'w:numStyleLink');
+  const styleId = numStyleLink?.attributes?.['w:val'];
 
-  let customFormat;
-  if (numFmt === 'custom') customFormat = numFmtTag?.attributes?.['w:format'];
+  if (styleId && tries < 1) {
+    const styleDefinition = getStyleTagFromStyleId(styleId, editor.converter.convertedXml);
+    const linkedNumId = styleDefinition?.elements
+      ?.find((el) => el.name === 'w:pPr')
+      ?.elements?.find((el) => el.name === 'w:numPr')
+      ?.elements?.find((el) => el.name === 'w:numId')?.attributes?.['w:val'];
 
-  return { start, numFmt, lvlText, listNumberingType, customFormat, abstract };
+    if (linkedNumId) {
+      return getListDefinitionDetails({
+        numId: Number(linkedNumId),
+        level,
+        listType,
+        editor,
+        tries: tries + 1,
+      });
+    }
+  }
+
+  // Find level definition
+  const listDefinition = abstract.elements?.find(
+    (item) => item.name === 'w:lvl' && item.attributes?.['w:ilvl'] == level,
+  );
+
+  if (!listDefinition) {
+    return {
+      start: null,
+      numFmt: null,
+      lvlText: null,
+      listNumberingType: null,
+      customFormat: null,
+      abstract,
+      abstractId,
+    };
+  }
+
+  // Extract level properties safely
+  const findElement = (name) => listDefinition.elements?.find((item) => item.name === name);
+
+  const startElement = findElement('w:start');
+  const numFmtElement = findElement('w:numFmt');
+  const lvlTextElement = findElement('w:lvlText');
+
+  const start = startElement?.attributes?.['w:val'];
+  const numFmt = numFmtElement?.attributes?.['w:val'];
+  const lvlText = lvlTextElement?.attributes?.['w:val'];
+  const listNumberingType = numFmt;
+
+  // Handle custom format
+  const customFormat = numFmt === 'custom' ? numFmtElement?.attributes?.['w:format'] : undefined;
+
+  return {
+    start,
+    numFmt,
+    lvlText,
+    listNumberingType,
+    customFormat,
+    abstract,
+    abstractId,
+  };
 };
 
 /**
@@ -154,14 +303,13 @@ export const removeListDefinitions = (listId, editor) => {
  * @param {Object} param0.contentNode - The content node to be included in the list item.
  * @returns {Object} A JSON object representing the list item node.
  */
-export const createListItemNodeJSON = ({ level, lvlText, numId, numFmt, start, listLevel, contentNode }) => {
-  start = Number(start);
+export const createListItemNodeJSON = ({ level, lvlText, numId, numFmt, listLevel, contentNode }) => {
   if (!contentNode) {
     contentNode = {
       type: 'paragraph',
-      content: []
+      content: [],
     };
-  };
+  }
 
   if (!Array.isArray(contentNode)) contentNode = [contentNode];
 
@@ -245,7 +393,6 @@ export const createNewList = ({ listType, tr, editor }) => {
   return insertNewList(tr, replaceFrom, replaceTo, listNode);
 };
 
-
 /**
  * Get the current list item from the editor state.
  * @param {Object} state - The ProseMirror editor state.
@@ -253,7 +400,7 @@ export const createNewList = ({ listType, tr, editor }) => {
  */
 export const getCurrentListItem = (state) => {
   return findParentNode((node) => node.type.name === 'listItem')(state.selection);
-}
+};
 
 /**
  * Get the parent ordered list of the current selection.
@@ -262,7 +409,7 @@ export const getCurrentListItem = (state) => {
  */
 export const getParentOrderedList = (state) => {
   return findParentNode((node) => node.type.name === 'orderedList')(state.selection);
-}
+};
 
 /**
  * Set the selection inside a newly created list.
@@ -278,7 +425,7 @@ export const setSelectionInsideNewList = (tr, basePos) => {
     const $fallback = tr.doc.resolve(basePos + 1);
     tr.setSelection(TextSelection.near($fallback));
   }
-}
+};
 
 /**
  * Replace a list with a new node in the ProseMirror transaction.
@@ -291,7 +438,7 @@ export const setSelectionInsideNewList = (tr, basePos) => {
  */
 export const replaceListWithNode = ({ tr, from, to, newNode }) => {
   tr.replaceWith(from, to, newNode);
-}
+};
 
 /**
  * Convert a list item to a paragraph.
@@ -310,7 +457,7 @@ export const convertListItemToParagraph = ({ state, tr, currentNode, replaceFrom
   const paragraphNode = state.schema.nodes.paragraph.create(
     paragraphContent.attrs,
     paragraphContent.content,
-    paragraphContent.marks
+    paragraphContent.marks,
   );
 
   replaceListWithNode({ tr, from: replaceFrom, to: replaceTo, newNode: paragraphNode });
@@ -320,7 +467,7 @@ export const convertListItemToParagraph = ({ state, tr, currentNode, replaceFrom
   tr.setSelection(TextSelection.near($pos));
 
   return true;
-}
+};
 
 /**
  * Insert a new list into the ProseMirror transaction.
@@ -340,13 +487,12 @@ export const insertNewList = (tr, replaceFrom, replaceTo, listNode, marks = []) 
   const $paragraphStart = tr.doc.resolve(listStart + 2);
   const paragraphNode = $paragraphStart.parent;
   const endPos = $paragraphStart.pos + paragraphNode.content.size;
-  
+
   const $endPos = tr.doc.resolve(endPos);
   tr.setSelection(TextSelection.near($endPos));
 
   return true;
 };
-
 
 /**
  * Get style definitions for a list item based on its styleId and numId.
@@ -357,7 +503,7 @@ export const insertNewList = (tr, replaceFrom, replaceTo, listNode, marks = []) 
  * @param {Editor} param0.editor - The editor instance containing the converted XML and numbering definitions.
  * @returns {Object} An object containing the style properties and numbering definitions.
  */
-export const getListItemStyleDefinitions = ({ styleId, node, numId, level, editor, tries }) => {  
+export const getListItemStyleDefinitions = ({ styleId, numId, level, editor, tries }) => {
   if (tries) return {};
 
   if (typeof numId === 'string') numId = Number(numId);
@@ -380,11 +526,13 @@ export const getListItemStyleDefinitions = ({ styleId, node, numId, level, edito
 
   const numDefinition = getDefinitionForLevel(abstractDefinition, level);
   const numDefPpr = numDefinition?.elements.find((el) => el.name === 'w:pPr');
+  const numLvlJs = numDefinition?.elements.find((el) => el.name === 'w:lvlJc');
 
   return {
     stylePpr,
     numDefPpr,
-  }
+    numLvlJs,
+  };
 };
 
 /**
@@ -400,7 +548,7 @@ export const addInlineTextMarks = (currentNode, filteredMarks) => {
     const textMarks = currentNode.children[0].children[0].marks;
     const inlineTextStyleFromSplitBlock = textMarks.find((m) => m.type.name === 'textStyle');
     inlineTextStyleFromSplitBlock && newMarks.push(inlineTextStyleFromSplitBlock);
-  } catch (e) {};
+  } catch {}
   return newMarks;
 };
 
@@ -430,6 +578,7 @@ export const ListHelpers = {
   createSchemaOrderedListNode,
   createListItemNodeJSON,
   addInlineTextMarks,
+  changeNumIdSameAbstract,
 
   // Base list definitions
   baseOrderedListDef,

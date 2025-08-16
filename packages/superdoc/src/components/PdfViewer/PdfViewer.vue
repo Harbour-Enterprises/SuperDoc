@@ -245,7 +245,7 @@ onUnmounted(() => {
     width: 100%;
     min-width: 150px;
     min-height: 150px;
-    
+
     :deep(.n-spin) {
       --n-color: #1354ff !important;
       --n-text-color: #1354ff !important;

@@ -135,6 +135,290 @@ describe('table live xml test', () => {
       </w:tr>
     </w:tbl>`;
 
+  const tableCellsNoInlineWidth = `
+  <w:tbl>
+	<w:tblPr>
+		<w:tblStyle w:val="a"/>
+		<w:tblW w:w="10076" w:type="dxa"/>
+		<w:tblInd w:w="0" w:type="dxa"/>
+		<w:tblBorders>
+			<w:top w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+			<w:left w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+			<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+			<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+		</w:tblBorders>
+		<w:tblLayout w:type="fixed"/>
+		<w:tblLook w:val="0400" w:firstRow="0" w:lastRow="0" w:firstColumn="0" w:lastColumn="0" w:noHBand="0" w:noVBand="1"/>
+	</w:tblPr>
+	<w:tblGrid>
+		<w:gridCol w:w="5842"/>
+		<w:gridCol w:w="387"/>
+		<w:gridCol w:w="3847"/>
+	</w:tblGrid>
+	<w:tr w:rsidR="009F4290" w14:paraId="4139DE7B" w14:textId="77777777">
+		<w:tc>
+			<w:tcPr>
+				<w:gridSpan w:val="2"/>
+				<w:tcBorders>
+					<w:top w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:left w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+				</w:tcBorders>
+				<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+				<w:tcMar>
+					<w:top w:w="0" w:type="dxa"/>
+					<w:left w:w="210" w:type="dxa"/>
+					<w:bottom w:w="0" w:type="dxa"/>
+					<w:right w:w="210" w:type="dxa"/>
+				</w:tcMar>
+			</w:tcPr>
+			<w:p w14:paraId="61AF2643" w14:textId="3E765FEA" w:rsidR="009F4290" w:rsidRDefault="009F4290">
+				<w:pPr>
+					<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+				</w:pPr>
+			</w:p>
+		</w:tc>
+		<w:tc>
+			<w:tcPr>
+				<w:tcBorders>
+					<w:top w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+				</w:tcBorders>
+				<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+				<w:tcMar>
+					<w:top w:w="0" w:type="dxa"/>
+					<w:left w:w="210" w:type="dxa"/>
+					<w:bottom w:w="0" w:type="dxa"/>
+					<w:right w:w="210" w:type="dxa"/>
+				</w:tcMar>
+			</w:tcPr>
+			<w:p w14:paraId="35816CDB" w14:textId="12AAD33C" w:rsidR="009F4290" w:rsidRDefault="00C06379">
+				<w:pPr>
+					<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+				</w:pPr>
+				<w:r>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+					<w:t xml:space="preserve"></w:t>
+				</w:r>
+			</w:p>
+		</w:tc>
+	</w:tr>
+	<w:tr w:rsidR="009F4290" w14:paraId="51AF2876" w14:textId="77777777">
+		<w:tc>
+			<w:tcPr>
+				<w:gridSpan w:val="2"/>
+				<w:tcBorders>
+					<w:left w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+				</w:tcBorders>
+				<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+				<w:tcMar>
+					<w:top w:w="0" w:type="dxa"/>
+					<w:left w:w="210" w:type="dxa"/>
+					<w:bottom w:w="0" w:type="dxa"/>
+					<w:right w:w="210" w:type="dxa"/>
+				</w:tcMar>
+			</w:tcPr>
+			<w:p w14:paraId="6418F51D" w14:textId="285228B6" w:rsidR="009F4290" w:rsidRDefault="009F4290">
+				<w:pPr>
+					<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+				</w:pPr>
+			</w:p>
+		</w:tc>
+		<w:tc>
+			<w:tcPr>
+				<w:tcBorders>
+					<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+				</w:tcBorders>
+				<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+				<w:tcMar>
+					<w:top w:w="0" w:type="dxa"/>
+					<w:left w:w="210" w:type="dxa"/>
+					<w:bottom w:w="0" w:type="dxa"/>
+					<w:right w:w="210" w:type="dxa"/>
+				</w:tcMar>
+			</w:tcPr>
+			<w:p w14:paraId="2C8050F9" w14:textId="72F095AC" w:rsidR="009F4290" w:rsidRDefault="009F4290">
+				<w:pPr>
+					<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+				</w:pPr>
+			</w:p>
+		</w:tc>
+	</w:tr>
+	<w:tr w:rsidR="009F4290" w14:paraId="4BB0FC91" w14:textId="77777777">
+		<w:tc>
+			<w:tcPr>
+				<w:gridSpan w:val="3"/>
+				<w:tcBorders>
+					<w:left w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+				</w:tcBorders>
+				<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+				<w:tcMar>
+					<w:top w:w="0" w:type="dxa"/>
+					<w:left w:w="210" w:type="dxa"/>
+					<w:bottom w:w="0" w:type="dxa"/>
+					<w:right w:w="210" w:type="dxa"/>
+				</w:tcMar>
+			</w:tcPr>
+			<w:p w14:paraId="47B02610" w14:textId="7921FF75" w:rsidR="009F4290" w:rsidRDefault="009F4290">
+				<w:pPr>
+					<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+					<w:jc w:val="both"/>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+				</w:pPr>
+			</w:p>
+		</w:tc>
+	</w:tr>
+	<w:tr w:rsidR="009F4290" w14:paraId="47FA89A2" w14:textId="77777777">
+		<w:tc>
+			<w:tcPr>
+				<w:tcBorders>
+					<w:left w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+				</w:tcBorders>
+				<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+				<w:tcMar>
+					<w:top w:w="0" w:type="dxa"/>
+					<w:left w:w="210" w:type="dxa"/>
+					<w:bottom w:w="0" w:type="dxa"/>
+					<w:right w:w="210" w:type="dxa"/>
+				</w:tcMar>
+			</w:tcPr>
+			<w:p w14:paraId="5FD62ED3" w14:textId="4731FD03" w:rsidR="009F4290" w:rsidRDefault="009F4290">
+				<w:pPr>
+					<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+				</w:pPr>
+			</w:p>
+		</w:tc>
+		<w:tc>
+			<w:tcPr>
+				<w:gridSpan w:val="2"/>
+				<w:tcBorders>
+					<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+				</w:tcBorders>
+				<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+				<w:tcMar>
+					<w:top w:w="0" w:type="dxa"/>
+					<w:left w:w="210" w:type="dxa"/>
+					<w:bottom w:w="0" w:type="dxa"/>
+					<w:right w:w="210" w:type="dxa"/>
+				</w:tcMar>
+			</w:tcPr>
+			<w:p w14:paraId="36CF40ED" w14:textId="63C43494" w:rsidR="009F4290" w:rsidRDefault="009F4290">
+				<w:pPr>
+					<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+				</w:pPr>
+			</w:p>
+		</w:tc>
+	</w:tr>
+	<w:tr w:rsidR="009F4290" w14:paraId="787CEA56" w14:textId="77777777">
+		<w:tc>
+			<w:tcPr>
+				<w:gridSpan w:val="3"/>
+				<w:tcBorders>
+					<w:left w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+				</w:tcBorders>
+				<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+				<w:tcMar>
+					<w:top w:w="0" w:type="dxa"/>
+					<w:left w:w="210" w:type="dxa"/>
+					<w:bottom w:w="0" w:type="dxa"/>
+					<w:right w:w="210" w:type="dxa"/>
+				</w:tcMar>
+			</w:tcPr>
+			<w:p w14:paraId="29BAA5F1" w14:textId="7C7C4A0E" w:rsidR="009F4290" w:rsidRDefault="009F4290">
+				<w:pPr>
+					<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+					<w:jc w:val="both"/>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+				</w:pPr>
+			</w:p>
+		</w:tc>
+	</w:tr>
+	<w:tr w:rsidR="009F4290" w14:paraId="56580AE6" w14:textId="77777777">
+		<w:tc>
+			<w:tcPr>
+				<w:gridSpan w:val="3"/>
+				<w:tcBorders>
+					<w:left w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:bottom w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+					<w:right w:val="single" w:sz="6" w:space="0" w:color="000000"/>
+				</w:tcBorders>
+				<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>
+				<w:tcMar>
+					<w:top w:w="0" w:type="dxa"/>
+					<w:left w:w="210" w:type="dxa"/>
+					<w:bottom w:w="0" w:type="dxa"/>
+					<w:right w:w="210" w:type="dxa"/>
+				</w:tcMar>
+			</w:tcPr>
+			<w:p w14:paraId="313B988C" w14:textId="5E5EF8D1" w:rsidR="009F4290" w:rsidRDefault="009F4290">
+				<w:pPr>
+					<w:spacing w:before="120" w:after="120" w:line="240" w:lineRule="auto"/>
+					<w:jc w:val="both"/>
+					<w:rPr>
+						<w:rFonts w:ascii="Arial" w:eastAsia="Arial" w:hAnsi="Arial" w:cs="Arial"/>
+						<w:sz w:val="20"/>
+						<w:szCs w:val="20"/>
+					</w:rPr>
+				</w:pPr>
+			</w:p>
+		</w:tc>
+	</w:tr>
+  </w:tbl>`;
+
   it('parses simple xml', () => {
     const nodes = parseXmlToJson(simpleTableXml).elements;
     const styles = parseXmlToJson(simpleTableStyleXml);
@@ -200,10 +484,22 @@ describe('table live xml test', () => {
     expect(result.nodes[0].content[0].content[0].attrs.cellMargins.left).toBe(8);
     expect(result.nodes[0].content[0].content[0].attrs.cellMargins.right).toBe(8);
   });
+
+  it('correctly gets colwidth for cells without inline width', () => {
+    const nodes = parseXmlToJson(tableCellsNoInlineWidth).elements;
+    const styles = parseXmlToJson(simpleTableStyleXml);
+    const docx = { 'word/styles.xml': styles };
+    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+
+    expect(result.nodes[0].content[0].content[0].attrs.colwidth).toEqual([390, 26]);
+    expect(result.nodes[0].content[0].content[1].attrs.colwidth).toEqual([256]);
+    expect(result.nodes[0].content[1].content[0].attrs.colwidth).toEqual([390, 26]);
+    expect(result.nodes[0].content[1].content[1].attrs.colwidth).toEqual([256]);
+    expect(result.nodes[0].content[2].content[0].attrs.colwidth).toEqual([390, 26, 256]);
+  });
 });
 
 describe('table tests to check colwidth', () => {
-
   it('correctly gets colwidth for horizontally merged cells', async () => {
     const dataName = 'table-merged-cells.docx';
     const docx = await getTestDataByFileName(dataName);
@@ -224,7 +520,7 @@ describe('table tests to check colwidth', () => {
 
     expect(tr1.content[0].attrs.colspan).toBe(2);
     expect(tr1.content[0].attrs.colwidth).toEqual([94, 331]);
-    expect(tr1.content[1].attrs.colwidth).toEqual([176])
+    expect(tr1.content[1].attrs.colwidth).toEqual([176]);
 
     expect(tr2.content[0].attrs.colwidth).toEqual([94]);
     expect(tr2.content[1].attrs.colwidth).toEqual([331]);

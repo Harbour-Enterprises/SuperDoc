@@ -16,7 +16,11 @@ export const handleTextNode = (params) => {
 
   // Text nodes have no children. Only text, and there should only be one child
   let text;
-  if (elements.length === 1) text = elements[0].text;
+  if (elements.length === 1) {
+    text = elements[0].text;
+    // Handle the removal of a temporary wrapper that we added to preserve empty spaces
+    text = text.replace(/\[\[sdspace\]\]/g, '');
+  }
   // Word sometimes will have an empty text node with a space attribute, in that case it should be a space
   else if (!elements.length && 'attributes' in node && node.attributes['xml:space'] === 'preserve') {
     text = ' ';

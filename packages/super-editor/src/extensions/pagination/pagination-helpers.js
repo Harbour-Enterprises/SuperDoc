@@ -57,30 +57,30 @@ export const initPaginationData = async (editor) => {
  */
 const getSectionHeight = async (editor, data) => {
   if (!data) return {};
-  
+
   return new Promise((resolve) => {
     const editorContainer = document.createElement('div');
     editorContainer.className = 'super-editor';
     editorContainer.style.padding = '0';
     editorContainer.style.margin = '0';
-    
+
     const sectionEditor = createHeaderFooterEditor({ editor, data, editorContainer });
-    
+
     sectionEditor.on('create', () => {
       sectionEditor.setEditable(false, false);
       requestAnimationFrame(() => {
         const height = editorContainer.offsetHeight;
         document.body.removeChild(editorContainer);
         resolve({ height, sectionEditor, sectionContainer: editorContainer });
-      })
+      });
     });
   });
 };
 
-export const createHeaderFooterEditor = ({ 
-  editor, 
-  data, 
-  editorContainer, 
+export const createHeaderFooterEditor = ({
+  editor,
+  data,
+  editorContainer,
   appendToBody = true,
   sectionId,
   type,
@@ -93,15 +93,15 @@ export const createHeaderFooterEditor = ({
   const lineHeight = fontSizeInPixles * 1.2;
 
   Object.assign(editorContainer.style, {
-    padding: "0",
-    margin: "0",
-    border: "none",
-    boxSizing: "border-box",
-    position: "absolute",
-    top: "0",
-    left: "0",
-    width: "auto",
-    maxWidth: "none",
+    padding: '0',
+    margin: '0',
+    border: 'none',
+    boxSizing: 'border-box',
+    position: 'absolute',
+    top: '0',
+    left: '0',
+    width: 'auto',
+    maxWidth: 'none',
     fontFamily: typeface,
     fontSize: `${fontSizeInPixles}px`,
     lineHeight: `${lineHeight}px`,
@@ -116,9 +116,8 @@ export const createHeaderFooterEditor = ({
     overflow: 'hidden',
   });
   if (appendToBody) document.body.appendChild(editorContainer);
-  
+
   const headerFooterEditor = new SuperEditor({
-    documentMode: editor.options.documentMode,
     role: editor.options.role,
     loadFromSchema: true,
     mode: 'docx',
@@ -152,7 +151,7 @@ export const createHeaderFooterEditor = ({
     pm.setAttribute('aria-multiline', true);
     pm.setAttribute('aria-label', `${type} content area. Double click to start typing.`);
   }
-  
+
   return headerFooterEditor;
 };
 
@@ -199,9 +198,9 @@ export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEdi
 
 export const onHeaderFooterDataUpdate = async ({ editor, transaction }, mainEditor, sectionId, type) => {
   if (!type || !sectionId) return;
-  
+
   const updatedData = editor.getUpdatedJson();
-  mainEditor.converter[`${type}Editors`].forEach(item => {
+  mainEditor.converter[`${type}Editors`].forEach((item) => {
     if (item.id === sectionId) {
       item.editor.setOptions({
         media: editor.options.media,
@@ -222,4 +221,3 @@ export const onHeaderFooterDataUpdate = async ({ editor, transaction }, mainEdit
 const setEditorToolbar = ({ editor }, mainEditor) => {
   editor.setToolbar(mainEditor.toolbar);
 };
-

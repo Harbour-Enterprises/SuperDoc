@@ -14,9 +14,12 @@ export const handleLineBreakNode = (params) => {
 
   const breakType = lineBreakType === 'page' ? 'hardBreak' : 'lineBreak';
   return {
-    nodes: [{
-      type: breakType,
-    }], consumed: 1
+    nodes: [
+      {
+        type: breakType,
+      },
+    ],
+    consumed: 1,
   };
 };
 

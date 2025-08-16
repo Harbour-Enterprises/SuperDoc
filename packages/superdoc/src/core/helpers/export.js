@@ -1,6 +1,6 @@
 /**
  * Create a download link for a blob
- * 
+ *
  * @param {Blob} blob The blob to download
  * @param {string} name The name of the file
  * @param {string} extension The extension of the file
@@ -15,7 +15,7 @@ export const createDownload = (blob, name, extension) => {
 
 /**
  * Generate a filename safe string
- * 
+ *
  * @param {string} currentName The current name of the file
  * @returns {string} The cleaned name
  */

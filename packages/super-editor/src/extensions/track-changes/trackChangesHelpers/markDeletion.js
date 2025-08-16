@@ -58,7 +58,7 @@ export const markDeletion = ({ tr, from, to, user, date }) => {
         deletionMap.appendMap(removeStep.getMap());
       }
     } else if (node.isInline && !node.marks.find((mark) => mark.type.name === TrackDeleteMarkName)) {
-      nodes.push(node); 
+      nodes.push(node);
       tr.addMark(
         deletionMap.map(Math.max(from, pos)),
         deletionMap.map(Math.min(to, pos + node.nodeSize)),
