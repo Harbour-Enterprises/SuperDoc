@@ -186,7 +186,7 @@ cd packages/superdoc
 npm install && npm run dev
 ```
 
-This will run **SuperdocDev.vue**, with a Vue 3 based example of how to instantiate SuperDoc.
+This will run **Playground.vue**, with a Vue 3 based example of how to instantiate SuperDoc.
 
 ### SuperEditor Package
 

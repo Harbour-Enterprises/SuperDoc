@@ -4,7 +4,7 @@ import { nextTick, onMounted, provide, ref, shallowRef } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
 import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
-import { BasicUpload, getFileObject } from '@harbour-enterprises/common';
+import { BasicUpload, getFileObject, FileHandler } from '@harbour-enterprises/common';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
@@ -30,66 +30,21 @@ const user = {
 };
 
 const handleNewFile = async (file) => {
-  // Generate a file url
-  const url = URL.createObjectURL(file);
-
-  // Detect file type by extension
-  const fileExtension = file.name.split('.').pop()?.toLowerCase();
-  const isMarkdown = fileExtension === 'md';
-  const isHtml = fileExtension === 'html' || fileExtension === 'htm';
-
-  if (isMarkdown || isHtml) {
-    // For text-based files, read the content and use a blank DOCX as base
-    const content = await readFileAsText(file);
-    currentFile.value = await getFileObject(BlankDOCX, 'blank.docx', DOCX);
-
-    // Store the content to be passed to SuperDoc
-    if (isMarkdown) {
-      currentFile.value.markdownContent = content;
-    } else if (isHtml) {
-      currentFile.value.htmlContent = content;
-    }
-  } else {
-    // For binary files (DOCX, PDF), use as-is
-    currentFile.value = await getFileObject(url, file.name, file.type);
-  }
+  currentFile.value = await FileHandler.processFile(file);
 
   nextTick(() => {
     init();
   });
 };
 
-/**
- * Read a file as text content
- * @param {File} file - The file to read
- * @returns {Promise<string>} The file content as text
- */
-const readFileAsText = (file) => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (e) => resolve(e.target.result);
-    reader.onerror = (e) => reject(e);
-    reader.readAsText(file);
-  });
-};
-
 const init = async () => {
   let testId = 'document-123';
 
-  // Prepare document config with content if available
-  const documentConfig = {
-    data: currentFile.value,
+  // Build document config using FileHandler utility
+  const documentConfig = FileHandler.buildDocumentConfig(currentFile.value, {
     id: testId,
     isNewFile: true,
-  };
-
-  // Add markdown/HTML content if present
-  if (currentFile.value.markdownContent) {
-    documentConfig.markdown = currentFile.value.markdownContent;
-  }
-  if (currentFile.value.htmlContent) {
-    documentConfig.html = currentFile.value.htmlContent;
-  }
+  });
 
   const config = {
     superdocId: 'superdoc-dev',
@@ -109,7 +64,7 @@ const init = async () => {
     // html: '<p>Hello world</p>',
     // isDev: true,
     user,
-    title: 'Test document',
+    title: currentFile.value?.name || 'Test document',
     users: [
       { name: 'Nick Bernal', email: 'nick@harbourshare.com', access: 'internal' },
       { name: 'Eric Doversberger', email: 'eric@harbourshare.com', access: 'external' },
@@ -247,10 +202,10 @@ onMounted(async () => {
       <div class="dev-app__header">
         <div class="dev-app__header-side dev-app__header-side--left">
           <div class="dev-app__header-title">
-            <h2>🦋 SuperDoc Dev</h2>
+            <h2>🦋 SuperDoc - Playground</h2>
           </div>
           <div class="dev-app__header-upload">
-            Upload docx, pdf, html or markdown
+            Upload docx, html or markdown
             <BasicUpload @file-change="handleNewFile" />
           </div>
         </div>

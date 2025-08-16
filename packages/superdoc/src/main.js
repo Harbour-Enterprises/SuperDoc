@@ -1,5 +1,5 @@
 import './style.css';
 import { createApp } from 'vue';
-import SuperdocDev from './dev/components/SuperdocDev.vue';
+import Playground from './dev/components/Playground.vue';
 
-createApp(SuperdocDev).mount('#app');
+createApp(Playground).mount('#app');

@@ -252,6 +252,29 @@ export class Editor extends EventEmitter {
   };
 
   /**
+   * Normalize content options to use consistent mode + content pattern
+   * @private
+   */
+  #normalizeContentOptions() {
+    // Handle markdown convenience attribute
+    if (this.options.markdown) {
+      this.options.mode = 'markdown';
+      this.options.content = this.options.markdown;
+    }
+
+    // Future: Can add other formats here
+    // if (this.options.rst) {
+    //   this.options.mode = 'rst';
+    //   this.options.content = this.options.rst;
+    // }
+
+    // if (this.options.latex) {
+    //   this.options.mode = 'latex';
+    //   this.options.content = this.options.latex;
+    // }
+  }
+
+  /**
    * Create a new Editor instance
    * @param {EditorOptions} options - Editor configuration options
    * @returns {void}
@@ -263,10 +286,14 @@ export class Editor extends EventEmitter {
     this.#checkHeadless(options);
     this.setOptions(options);
 
+    // Normalize content options for consistency
+    this.#normalizeContentOptions();
+
     let modes = {
       docx: () => this.#init(),
       text: () => this.#initRichText(),
       html: () => this.#initRichText(),
+      markdown: () => this.#initRichText(),
       default: () => {
         console.log('Not implemented.');
       },
@@ -936,44 +963,84 @@ export class Editor extends EventEmitter {
    * @returns {Object} ProseMirror data
    */
   #generatePmData() {
-    let doc;
-
     try {
       const { mode, fragment, content, loadFromSchema } = this.options;
 
-      if (mode === 'docx') {
-        if (loadFromSchema) {
-          doc = this.schema.nodeFromJSON(content);
-          doc = this.#prepareDocumentForImport(doc);
-        } else {
-          doc = createDocument(this.converter, this.schema, this);
-
-          // Perform any additional document processing prior to finalizing the doc here
-          doc = this.#prepareDocumentForImport(doc);
-
-          // Check for markdown BEFORE html (since markdown gets converted to HTML)
-          if (this.options.markdown) {
-            doc = this.#createDocFromMarkdown(this.options.markdown);
-          }
-          // If we have a new doc, and have html data, we initialize from html
-          else if (this.options.html) doc = this.#createDocFromHTML(this.options.html);
-          else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
-
-          if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
-        }
+      // Handle schema loading (same for all modes)
+      if (loadFromSchema && content) {
+        return this.#prepareDocumentForImport(this.schema.nodeFromJSON(content));
       }
 
-      // If we are in HTML mode, we initialize from either content or html (or blank)
-      else if (mode === 'text' || mode === 'html') {
-        if (loadFromSchema) doc = this.schema.nodeFromJSON(content);
-        else if (content) doc = this.#createDocFromHTML(content);
-        else doc = this.schema.topNodeType.createAndFill();
-      }
+      // Route to appropriate handler based on mode
+      let doc = this.#createDocumentForMode(mode);
+
+      // Apply any overrides or fragments (mostly for docx mode)
+      doc = this.#applyDocumentOverrides(doc, fragment);
+
+      return doc;
     } catch (err) {
-      console.error(err);
+      console.error('[SuperDoc] Document generation failed:', err);
       this.emit('contentError', { editor: this, error: err });
+      // Return empty doc as fallback
+      return this.schema.topNodeType.createAndFill();
+    }
+  }
+
+  /**
+   * Create document based on mode
+   * @private
+   * @param {string} mode - The document mode
+   * @returns {Object} ProseMirror document
+   */
+  #createDocumentForMode(mode) {
+    const { content } = this.options;
+
+    switch (mode) {
+      case 'markdown':
+        return this.#createDocFromMarkdown(content || this.options.markdown);
+
+      case 'html':
+      case 'text':
+        return content ? this.#createDocFromHTML(content) : this.schema.topNodeType.createAndFill();
+
+      case 'docx':
+        return this.#createDocxDocument();
+
+      default:
+        return this.schema.topNodeType.createAndFill();
+    }
+  }
+
+  /**
+   * Handle DOCX-specific document creation
+   * @private
+   * @returns {Object} ProseMirror document
+   */
+  #createDocxDocument() {
+    let doc = createDocument(this.converter, this.schema, this);
+    doc = this.#prepareDocumentForImport(doc);
+
+    // Handle HTML override for DOCX mode
+    if (this.options.html) {
+      doc = this.#createDocFromHTML(this.options.html);
+    } else if (this.options.jsonOverride) {
+      doc = this.schema.nodeFromJSON(this.options.jsonOverride);
     }
 
+    return doc;
+  }
+
+  /**
+   * Apply any final overrides or fragments
+   * @private
+   * @param {Object} doc - The document to modify
+   * @param {Object} fragment - Optional fragment to apply
+   * @returns {Object} Final ProseMirror document
+   */
+  #applyDocumentOverrides(doc, fragment) {
+    if (fragment && this.options.mode === 'docx') {
+      return yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
+    }
     return doc;
   }
 
@@ -1002,73 +1069,52 @@ export class Editor extends EventEmitter {
    * @returns {Object} Document node
    */
   #createDocFromMarkdown(content) {
-    // First, convert markdown to HTML
-    const html = this.#convertMarkdownToHTML(content);
-
-    // Then use existing HTML parser
-    return this.#createDocFromHTML(html);
+    try {
+      const html = this.#convertMarkdownToHTML(content);
+      return this.#createDocFromHTML(html);
+    } catch (error) {
+      console.error('[SuperDoc] Markdown import failed:', error);
+      // Return empty doc so editor still initializes
+      return this.schema.nodeFromJSON({ type: 'doc', content: [] });
+    }
   }
 
   /**
-   * Convert Markdown to HTML with proper structure
+   * Convert Markdown to HTML with SuperDoc compatibility
    * @private
    * @param {string} markdown - Markdown content
    * @returns {string} HTML content
    */
   #convertMarkdownToHTML(markdown) {
-    // Configure marked for compatibility with your schema
     marked.setOptions({
-      breaks: true, // Convert \n to <br>
-      gfm: true, // GitHub Flavored Markdown
-      headerIds: false, // Don't add IDs to headers
-      mangle: false, // Don't escape autolinks
+      breaks: true, // Respect line breaks
+      gfm: true, // GitHub flavored markdown (tables, etc)
     });
 
-    // Convert markdown to HTML
+    // Convert and add SuperDoc compatibility
     let html = marked.parse(markdown);
-
-    // Apply any necessary transformations for SuperDoc compatibility
-    html = this.#transformMarkdownHTML(html);
-
-    return html;
+    return this.#addSuperDocAttributes(html);
   }
 
   /**
-   * Transform markdown-generated HTML to be compatible with SuperDoc
+   * Add attributes SuperDoc requires
    * @private
    * @param {string} html - HTML from markdown parser
-   * @returns {string} Transformed HTML
+   * @returns {string} HTML with SuperDoc attributes
    */
-  #transformMarkdownHTML(html) {
-    // Create a temporary container
+  #addSuperDocAttributes(html) {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = html;
 
-    // Transform elements as needed for your schema
-    // Example: Convert <h1> to <h1 data-level="1"> if needed
-    const headings = tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
-    headings.forEach((heading) => {
-      const level = parseInt(heading.tagName[1]);
-      heading.setAttribute('data-level', level);
+    // 1. Headings need data-level
+    tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6').forEach((h) => {
+      h.setAttribute('data-level', h.tagName[1]);
     });
 
-    // Transform lists to ensure compatibility
-    const lists = tempDiv.querySelectorAll('ul, ol');
-    lists.forEach((list, index) => {
-      // Add any attributes your list schema expects
-      if (list.tagName === 'OL') {
-        list.setAttribute('data-list-id', index + 1);
-      }
-    });
-
-    // Transform code blocks
-    const codeBlocks = tempDiv.querySelectorAll('pre code');
-    codeBlocks.forEach((code) => {
-      // Add language class if specified
-      const parent = code.parentElement;
-      if (code.className) {
-        parent.setAttribute('data-language', code.className.replace('language-', ''));
-      }
+    // 2. Code blocks benefit from language info
+    tempDiv.querySelectorAll('pre code').forEach((code) => {
+      const lang = code.className.replace('language-', '');
+      if (lang) code.parentElement.setAttribute('data-language', lang);
     });
 
     return tempDiv.innerHTML;

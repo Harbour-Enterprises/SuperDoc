@@ -15,7 +15,7 @@ import { Mark } from '@core/Mark.js';
 import SlashMenu from './components/slash-menu/SlashMenu.vue';
 
 import SuperEditor from './components/SuperEditor.vue';
-import BasicUpload from './dev/components/BasicUpload.vue';
+import BasicUpload from '@harbour-enterprises/common/components/BasicUpload.vue';
 import Toolbar from './components/toolbar/Toolbar.vue';
 import SuperInput from './components/SuperInput.vue';
 import AIWriter from './components/toolbar/AIWriter.vue';
