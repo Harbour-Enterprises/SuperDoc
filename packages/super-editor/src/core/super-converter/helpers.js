@@ -84,6 +84,18 @@ function ptToTwips(pt) {
   return pt * 20;
 }
 
+// There is an indent value in Whalar template which appears with pt unit and cause issues on export
+const getTextIndentExportValue = (indent) => {
+  const [value, unit] = parseSizeUnit(indent);
+  const functionsMap = {
+    pt: ptToTwips,
+    in: inchesToTwips,
+  };
+
+  const exportValue = functionsMap[unit] ? functionsMap[unit](value) : pixelsToTwips(value);
+  return exportValue;
+};
+
 const getArrayBufferFromUrl = async (input, isHeadless) => {
   // Check if it's a full URL or blob/file/data URI
   const isLikelyUrl = /^https?:|^blob:|^file:|^data:/i.test(input);
@@ -230,4 +242,5 @@ export {
   getLineHeightValueString,
   deobfuscateFont,
   hasSomeParentWithClass,
+  getTextIndentExportValue,
 };
