@@ -15,12 +15,15 @@ import { getLvlTextForGoogleList, googleNumDefMap } from '../../helpers/pasteLis
 export const handleGoogleDocsHtml = (html, editor, view) => {
   // convert lists
   const htmlWithPtSizing = convertEmToPt(html);
-  const cleanedHtml = sanitizeHtml(htmlWithPtSizing);
-  mergeSeparateLists(cleanedHtml);
+  const cleanedHtml = sanitizeHtml(htmlWithPtSizing).innerHTML;
 
-  const tempDiv = flattenListsInHtml(cleanedHtml, editor);
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = cleanedHtml;
 
-  const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+  const htmlWithMergedLists = mergeSeparateLists(tempDiv);
+  const flattenHtml = flattenListsInHtml(htmlWithMergedLists, editor);
+
+  const doc = DOMParser.fromSchema(editor.schema).parse(flattenHtml);
   tempDiv.remove();
 
   const { dispatch } = editor.view;
@@ -33,22 +36,22 @@ export const handleGoogleDocsHtml = (html, editor, view) => {
 /**
  * Flattens lists to ensure each list contains exactly ONE list item.
  */
-function flattenListsInHtml(doc, editor) {
+function flattenListsInHtml(container, editor) {
   // Keep processing until all lists are flattened
   let foundList;
-  while ((foundList = findListToFlatten(doc))) {
+  while ((foundList = findListToFlatten(container))) {
     flattenFoundList(foundList, editor);
   }
 
-  return doc;
+  return container;
 }
 
 /**
  * Finds lists to be flattened
  */
-function findListToFlatten(doc) {
+function findListToFlatten(container) {
   // First priority: unprocessed lists
-  let list = doc.querySelector('ol:not([data-list-id]), ul:not([data-list-id])');
+  let list = container.querySelector('ol:not([data-list-id]), ul:not([data-list-id])');
   if (list) return list;
 
   return null;
@@ -105,7 +108,9 @@ function flattenFoundList(listElem, editor) {
     nestedLists.forEach((list) => {
       newLists.push(list.cloneNode(true));
     });
-    if (nestedLists.length) li.nextSibling?.remove();
+    if (nestedLists.length && ['OL', 'UL'].includes(li.nextSibling.tagName)) {
+      li.nextSibling?.remove();
+    }
   });
 
   // Replace the original list with the new single-item lists
@@ -140,8 +145,10 @@ function getNestedLists(nodes) {
  * Method that combines separate lists with sequential start attribute into one list
  * Google Docs list items could be presented as separate lists with sequential start attribute
  */
-function mergeSeparateLists(doc) {
-  const rootLevelLists = Array.from(doc.querySelectorAll('ol:not(ol ol):not(ul ol)') || []);
+function mergeSeparateLists(container) {
+  const tempCont = container.cloneNode(true);
+
+  const rootLevelLists = Array.from(tempCont.querySelectorAll('ol:not(ol ol):not(ul ol)') || []);
   const mainList = rootLevelLists.find((list) => !list.getAttribute('start'));
   const hasStartAttr = rootLevelLists.some((list) => list.getAttribute('start') !== null);
 
@@ -149,9 +156,11 @@ function mergeSeparateLists(doc) {
     const listsWithStartAttr = rootLevelLists.filter((list) => list.getAttribute('start') !== null);
     for (let [index, item] of listsWithStartAttr.entries()) {
       if (item.getAttribute('start') === (index + 2).toString()) {
-        mainList.append(...item.cloneNode(true).childNodes);
+        mainList.append(...item.childNodes);
         item.remove();
       }
     }
   }
+
+  return tempCont;
 }
