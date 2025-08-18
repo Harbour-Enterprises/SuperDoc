@@ -25,6 +25,7 @@
     "format:check": "prettier --check \"**/*.{js,jsx,vue,css,scss,json,md}\"",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
+    "docs:check": "eslint packages/super-editor/src/extensions/field-annotation/**/*.js -c eslint.config.docs.mjs",
     "docs:dev": "vuepress dev docs",
     "docs:build": "vuepress build docs",
     "pack": "npm run build:super-editor && npm --prefix ./packages/superdoc run pack",
@@ -34,6 +35,11 @@
   },
   "lint-staged": {
     "*.{js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "packages/super-editor/src/extensions/field-annotation/**/*.js": [
+      "eslint -c eslint.config.docs.mjs",
       "eslint --fix",
       "prettier --write"
     ],
@@ -54,6 +60,7 @@
     "@vuepress/theme-default": "^2.0.0-rc.60",
     "eslint": "^9.31.0",
     "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-jsdoc": "^54.1.0",
     "husky": "^9.1.7",
     "lint-staged": "^16.1.4",
     "prettier": "3.3.3",
