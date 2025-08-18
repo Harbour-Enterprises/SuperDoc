@@ -84,7 +84,11 @@ function ptToTwips(pt) {
   return pt * 20;
 }
 
-// There is an indent value in Whalar template which appears with pt unit and cause issues on export
+/**
+ * Get the export value for text indent
+ * @param {string|number} indent - The text indent value to export
+ * @returns {number} - The export value in twips
+ */
 const getTextIndentExportValue = (indent) => {
   const [value, unit] = parseSizeUnit(indent);
   const functionsMap = {
