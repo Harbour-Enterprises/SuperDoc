@@ -654,7 +654,7 @@ export const makeDefaultItems = ({
   const overflow = useToolbarItem({
     type: 'overflow',
     name: 'overflow',
-    command: 'toggleOverflow',
+    command: null,
     icon: toolbarIcons.overflow,
     active: false,
     disabled: false,
