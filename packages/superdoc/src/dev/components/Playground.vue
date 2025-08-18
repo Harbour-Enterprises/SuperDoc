@@ -206,7 +206,7 @@ onMounted(async () => {
           </div>
           <div class="dev-app__header-upload">
             Upload docx, html or markdown
-            <BasicUpload @file-change="handleNewFile" />
+            <BasicUpload @file-change="handleNewFile" accept=".docx,.html,.md" />
           </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">
@@ -240,6 +240,7 @@ onMounted(async () => {
   position: relative;
   z-index: 1;
 }
+
 .comments-panel {
   width: 320px;
 }
@@ -258,6 +259,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
 }
+
 .comments-panel {
   position: absolute;
   right: 0;
@@ -265,6 +267,7 @@ onMounted(async () => {
   background-color: #fafafa;
   z-index: 100;
 }
+
 .dev-app {
   --header-height: 154px;
   --toolbar-height: 39px;
@@ -291,9 +294,11 @@ onMounted(async () => {
 .dev-app__header-side {
   display: flex;
 }
+
 .dev-app__header-side--left {
   flex-direction: column;
 }
+
 .dev-app__header-side--right {
   align-items: flex-end;
 }

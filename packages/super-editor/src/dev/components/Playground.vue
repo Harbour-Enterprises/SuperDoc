@@ -196,9 +196,11 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
 }
+
 .page-spacer:nth-child(odd) {
   background-color: #aa000055;
 }
+
 .dev-app {
   --header-height: 154px;
   --toolbar-height: 39px;
@@ -225,9 +227,11 @@ onMounted(async () => {
 .dev-app__header-side {
   display: flex;
 }
+
 .dev-app__header-side--left {
   flex-direction: column;
 }
+
 .dev-app__header-side--right {
   align-items: flex-end;
 }
