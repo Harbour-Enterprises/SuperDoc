@@ -28,15 +28,18 @@ function handleEscape(event) {
   }
 }
 
-watch(() => props.visible, (val) => {
-  if (val) {
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-  } else {
-    document.removeEventListener('mousedown', handleClickOutside);
-    document.removeEventListener('keydown', handleEscape);
-  }
-});
+watch(
+  () => props.visible,
+  (val) => {
+    if (val) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscape);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscape);
+    }
+  },
+);
 
 onMounted(() => {
   if (props.visible) {
@@ -54,23 +57,14 @@ const derivedStyles = computed(() => ({
   top: props.position.top,
   ...props.styles,
 }));
-
 </script>
 
 <template>
-  <div
-    v-if="visible"
-    class="generic-popover"
-    :style="derivedStyles"
-    ref="popover"
-    @mousedown.stop
-    @click.stop
-  >
+  <div v-if="visible" class="generic-popover" :style="derivedStyles" ref="popover" @mousedown.stop @click.stop>
     <slot />
   </div>
 </template>
 <style scoped>
-
 /* @remarks - popover adds a slight shadow, this can be removed if needed */
 .generic-popover {
   /* @remarks - this should ideally be handled by the content or component - but some are missing */
@@ -78,8 +72,10 @@ const derivedStyles = computed(() => ({
   position: absolute;
   z-index: 1000;
   border-radius: 6px;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0px 10px 20px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0px 10px 20px rgba(0, 0, 0, 0.1);
   min-width: 120px;
   min-height: 40px;
 }
-</style> 
+</style>

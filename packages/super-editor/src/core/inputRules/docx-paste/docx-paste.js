@@ -1,17 +1,19 @@
 import { DOMParser } from 'prosemirror-model';
-import {cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste} from '../../InputRule.js';
-
+import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste } from '../../InputRule.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { extractListLevelStyles, numDefByTypeMap, numDefMap, startHelperMap } from '@helpers/pasteListHelpers.js';
+import { normalizeLvlTextChar } from '../../super-converter/v2/importer/listImporter.js';
 
 /**
  * Main handler for pasted DOCX content.
- * 
+ *
  * @param {string} html The string being pasted
  * @param {Editor} editor The SuperEditor instance
  * @param {Object} view The ProseMirror view
  * @param {Object} plugin The plugin instance
- * @returns 
+ * @returns
  */
-export const handleDocxPaste = (html, editor, view, plugin) => {
+export const handleDocxPaste = (html, editor, view) => {
   const { converter } = editor;
   if (!converter || !converter.convertedXml) return handleHtmlPaste(html, editor);
 
@@ -21,35 +23,65 @@ export const handleDocxPaste = (html, editor, view, plugin) => {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = cleanedHtml;
 
-  const paragraphs = tempDiv.querySelectorAll('p');
-  paragraphs.forEach((p) => {
-    const innerHTML = p.innerHTML;
+  const data = tempDiv.querySelectorAll('p, li');
 
-    // Looking only for lists to extract list info
-    if (!innerHTML.includes('<!--[if !supportLists]')) return;
+  const startMap = {};
 
-    const styleAttr = p.getAttribute('style') || '';
-    const msoListMatch = styleAttr.match(/mso-list:\s*l(\d+)\s+level(\d+)/);
+  data.forEach((item) => {
+    let type;
+    if (item.localName === 'li') {
+      type = 'listItem';
+    } else {
+      const html = item.innerHTML;
+      type = 'p';
+      // Looking only for lists to extract list info
+      if (!html.includes('<!--[if !supportLists]')) return;
+    }
+
+    const styleAttr = item.getAttribute('style') || '';
+    const msoListMatch = styleAttr.match(/mso-list:\s*l(\d+)\s+level(\d+)\s+lfo(\d+)/);
+    const css = tempDiv.querySelector('style').innerHTML;
+
     if (msoListMatch) {
-      const [, abstractId, level] = msoListMatch;
-      const listNumId = getListNumIdFromAbstract(abstractId, editor);
-      if (!listNumId) return;
-  
-      const abstractDefinition = getListAbstractDefinition(abstractId, editor);
-      const { lvlText, start, numFmt } = getLevelDefinition(abstractDefinition, level - 1);
+      const [, abstractId, level, numId] = msoListMatch;
+      const styles = extractListLevelStyles(css, abstractId, level);
+      let start, numFmt, lvlText;
 
-      p.setAttribute('data-num-id', listNumId);
-      p.setAttribute('data-list-level', level - 1);
-      p.setAttribute('data-start', start);
-      p.setAttribute('data-lvl-text', lvlText);
-      p.setAttribute('data-num-fmt', numFmt);
+      if (type === 'listItem') {
+        const listType = item.parentNode.getAttribute('type');
+        const startAttr = item.parentNode.getAttribute('start');
+        if (!startMap[numId]) startMap[numId] = startAttr;
+        start = startMap[numId];
+        numFmt = numDefByTypeMap.get(listType);
+        lvlText = `%${level}.`;
+      } else {
+        // Get numbering format from Word styles
+        const msoNumFormat = styles['mso-level-number-format'] || 'decimal';
+        numFmt = numDefMap.get(msoNumFormat);
+        const punc = item.children[0]?.innerText?.slice(-1) || '.';
+        lvlText = numFmt === 'bullet' ? normalizeLvlTextChar(styles['mso-level-text']) : `%${level}${punc}`;
+
+        const startGetter = startHelperMap.get(numFmt);
+        if (!startMap[numId]) startMap[numId] = startGetter(item.children[0]?.innerText || '1');
+        start = startMap[numId];
+      }
+
+      item.setAttribute('data-num-id', numId);
+      item.setAttribute('data-list-level', parseInt(level) - 1);
+      item.setAttribute('data-start', start);
+      item.setAttribute('data-lvl-text', lvlText);
+      item.setAttribute('data-num-fmt', numFmt);
+
+      const ptToPxRatio = 1.333;
+      const indent = parseInt(styles['margin-left']) * ptToPxRatio || 0;
+      if (indent > 0) item.setAttribute('data-left-indent', indent);
     }
 
     // Strip literal prefix inside conditional span
-    extractAndRemoveConditionalPrefix(p);
+    extractAndRemoveConditionalPrefix(item);
   });
 
-  transformWordLists(tempDiv);
+  transformWordLists(tempDiv, editor);
   const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
   tempDiv.remove();
 
@@ -60,140 +92,104 @@ export const handleDocxPaste = (html, editor, view, plugin) => {
   return true;
 };
 
-const getLevelDefinition = (abstractDefinition, level) => {
-  if (!abstractDefinition || !abstractDefinition.elements) return null;
+const transformWordLists = (container, editor) => {
+  const listItems = Array.from(container.querySelectorAll('[data-num-id]'));
 
-  const levelElement = abstractDefinition.elements.find((el) => {
-    return el.name === 'w:lvl' && el.attributes?.['w:ilvl'] == level;
-  });
+  const lists = {};
+  const mappedLists = {};
 
-  if (!levelElement) return null;
+  for (const item of listItems) {
+    const level = parseInt(item.getAttribute('data-list-level'));
+    const numFmt = item.getAttribute('data-num-fmt');
+    const start = item.getAttribute('data-start');
+    const lvlText = item.getAttribute('data-lvl-text');
+    const indent = item.getAttribute('data-left-indent');
 
-  const { elements } = levelElement;
-  const lvlText = elements.find((el) => el.name === 'w:lvlText')?.attributes?.['w:val'];
-  const start = elements.find((el) => el.name === 'w:start')?.attributes?.['w:val'];
-  const numFmt = elements.find((el) => el.name === 'w:numFmt')?.attributes?.['w:val'];
-  return { lvlText, start, numFmt, elements };
-};
-
-const getListNumIdFromAbstract = (abstractId, editor) => {
-  const { definitions } = editor?.converter?.numbering;
-  if (!definitions) return null;
-
-  const matchedDefinition = Object.values(definitions).find((def) => {
-    return def.elements.some((el) => el.name === 'w:abstractNumId' && el.attributes?.['w:val'] == abstractId);
-  });
-  return matchedDefinition?.attributes?.['w:numId'];
-};
-
-const getListAbstractDefinition = (abstractId, editor) => {
-  const { abstracts = {} } = editor?.converter?.numbering;
-  return abstracts[abstractId] || null;
-};
-
-
-const transformWordLists = (container) => {
-  const paragraphs = Array.from(container.querySelectorAll('p[data-num-id]'));
-  const listMap = new Map();
-
-  const listLevels = {};
-
-  // Group paragraphs by abstractNum
-  for (const p of paragraphs) {
-    const listId = p.getAttribute('data-num-id');
-    const level = parseInt(p.getAttribute('data-list-level'));
-    const numFmt = p.getAttribute('data-num-fmt');
-    const start = p.getAttribute('data-start');
-    const lvlText = p.getAttribute('data-lvl-text')
-
-    if (!listMap.has(listId)) listMap.set(listId, []);
-    listMap.get(listId).push({ p, level, numFmt, start, lvlText });
-  }
-
-  for (const [id, items] of listMap.entries()) {
-    if (!listLevels[id]) {
-      listLevels[id] = {
-        stack: [],
-        counts: {},
-        prevLevel: null
-      }
-    }
-
-    const parentStack = [];
-
-    items.forEach(({ p, level, numFmt, start, lvlText }, index) => {
-      const listLevel = generateListNestingPath(listLevels, id, level);
-
-      const li = document.createElement('li');
-      li.innerHTML = p.innerHTML;
-      li.setAttribute('data-list-level', JSON.stringify(listLevel));
-      li.setAttribute('data-num-id', id);
-      li.setAttribute('data-lvl-text', lvlText);
-      li.setAttribute('data-num-fmt', numFmt);
-
-      if (p.hasAttribute('data-font-family')) {
-        li.setAttribute('data-font-family', p.getAttribute('data-font-family'));
-      }
-      if (p.hasAttribute('data-font-size')) {
-        li.setAttribute('data-font-size', p.getAttribute('data-font-size'));
-      }
-
-      const parentNode = p.parentNode;
-
-      let listForLevel = parentStack[level];
-      if (!listForLevel) {
-        const newList = document.createElement('ol');
-        newList.setAttribute('data-list-id', id);
-        newList.level = level;
-
-        if (level > 0) {
-          const parentLi = parentStack[level - 1]?.querySelector('li:last-child');
-          if (parentLi) parentLi.appendChild(newList);
-        } else {
-          parentNode.insertBefore(newList, p);
-        }
-
-        parentStack[level] = newList;
-        parentStack.length = level + 1;
-        listForLevel = newList;
-      }
-
-      listForLevel.appendChild(li);
-      p.remove();
+    // MS Word copy-pasted lists always start with num Id 1 and increment from there.
+    // Which way not match the target documents numbering.xml lists
+    // We will generate new definitions for all pasted lists
+    // But keep track of a map of original ID to new ID so that we can keep lists together
+    const importedId = item.getAttribute('data-num-id');
+    if (!mappedLists[importedId]) mappedLists[importedId] = ListHelpers.getNewListId(editor);
+    const id = mappedLists[importedId];
+    const listType = numFmt === 'bullet' ? 'bulletList' : 'orderedList';
+    ListHelpers.generateNewListDefinition({
+      numId: id,
+      listType,
+      level: level.toString(),
+      start,
+      fmt: numFmt,
+      text: lvlText,
+      editor,
     });
+
+    if (!lists[id]) lists[id] = { levels: {} };
+    const currentListByNumId = lists[id];
+
+    if (!currentListByNumId.levels[level]) currentListByNumId.levels[level] = Number(start) || 1;
+    else currentListByNumId.levels[level]++;
+
+    // Reset deeper levels when this level is updated
+    Object.keys(currentListByNumId.levels).forEach((key) => {
+      const level1 = Number(key);
+      if (level1 > level) {
+        delete currentListByNumId.levels[level1];
+      }
+    });
+
+    const path = generateListPath(level, currentListByNumId.levels, start);
+    if (!path.length) path.push(currentListByNumId.levels[level]);
+
+    const li = document.createElement('li');
+    li.innerHTML = item.innerHTML;
+    li.setAttribute('data-num-id', id);
+    li.setAttribute('data-list-level', JSON.stringify(path));
+    li.setAttribute('data-level', level);
+    li.setAttribute('data-lvl-text', lvlText);
+    li.setAttribute('data-num-fmt', numFmt);
+    if (indent) li.setAttribute('data-indent', JSON.stringify({ left: indent }));
+
+    if (item.hasAttribute('data-font-family')) {
+      li.setAttribute('data-font-family', item.getAttribute('data-font-family'));
+    }
+    if (item.hasAttribute('data-font-size')) {
+      li.setAttribute('data-font-size', item.getAttribute('data-font-size'));
+    }
+
+    const parentNode = item.parentNode;
+
+    let listForLevel;
+    const newList = numFmt === 'bullet' ? document.createElement('ul') : document.createElement('ol');
+    newList.setAttribute('data-list-id', id);
+    newList.level = level;
+
+    parentNode.insertBefore(newList, item);
+    listForLevel = newList;
+
+    listForLevel.appendChild(li);
+    item.remove();
   }
 };
 
-function generateListNestingPath(listLevels, listId, currentLevel) {
-  const levelState = listLevels[listId];
-
-  if (!levelState.stack) levelState.stack = [];
-  if (levelState.prevLevel === undefined) levelState.prevLevel = null;
-
-  if (levelState.prevLevel === null) {
-    // Initialize with left-padding if starting at non-zero level
-    levelState.stack = Array(currentLevel).fill(1).concat(1);
-  } else {
-    if (currentLevel > levelState.prevLevel) {
-      levelState.stack.push(1);
-    } else if (currentLevel === levelState.prevLevel) {
-      levelState.stack[levelState.stack.length - 1]++;
-    } else {
-      levelState.stack = levelState.stack.slice(0, currentLevel + 1);
-      levelState.stack[currentLevel] = (levelState.stack[currentLevel] || 1) + 1;
+export const generateListPath = (level, levels, start) => {
+  const iLvl = Number(level);
+  const path = [];
+  if (iLvl > 0) {
+    for (let i = iLvl; i >= 0; i--) {
+      if (!levels[i]) levels[i] = Number(start);
+      path.unshift(levels[i]);
     }
   }
-
-  levelState.prevLevel = currentLevel;
-  return [...levelState.stack];
+  return path;
 };
 
-function extractAndRemoveConditionalPrefix(p) {
-  const nodes = Array.from(p.childNodes);
+function extractAndRemoveConditionalPrefix(item) {
+  const nodes = Array.from(item.childNodes);
   let fontFamily = null;
   let fontSize = null;
 
-  let start = -1, end = -1;
+  let start = -1,
+    end = -1;
   nodes.forEach((node, index) => {
     if (node.nodeType === Node.COMMENT_NODE && node.nodeValue.includes('[if !supportLists]')) {
       start = index;
@@ -214,11 +210,11 @@ function extractAndRemoveConditionalPrefix(p) {
 
     // Remove all nodes in that range
     for (let i = end; i >= start; i--) {
-      p.removeChild(p.childNodes[i]);
+      item.removeChild(item.childNodes[i]);
     }
 
     // Store on <p> as attributes
-    if (fontFamily) p.setAttribute('data-font-family', fontFamily);
-    if (fontSize) p.setAttribute('data-font-size', fontSize);
+    if (fontFamily) item.setAttribute('data-font-family', fontFamily);
+    if (fontSize) item.setAttribute('data-font-size', fontSize);
   }
-};
+}

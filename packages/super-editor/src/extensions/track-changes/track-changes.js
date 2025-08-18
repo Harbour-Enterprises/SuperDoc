@@ -270,7 +270,7 @@ export const TrackChanges = Extension.create({
 
       toggleTrackChangesShowFinal:
         () =>
-        ({ state, dispatch }) => {
+        ({ state }) => {
           const trackChangeState = TrackChangesBasePluginKey.getState(state);
           if (trackChangeState === undefined) return false;
           state.tr.setMeta(TrackChangesBasePluginKey, {

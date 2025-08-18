@@ -16,9 +16,9 @@ export const PageNumber = Node.create({
       htmlAttributes: {
         contenteditable: false,
         'data-id': 'auto-page-number',
-        'aria-label': 'Page number node'
+        'aria-label': 'Page number node',
       },
-    }
+    };
   },
 
   addAttributes() {
@@ -26,15 +26,15 @@ export const PageNumber = Node.create({
       marksAsAttrs: {
         default: null,
         rendered: false,
-      }
-    }
+      },
+    };
   },
 
   addNodeView() {
     return ({ node, editor, getPos, decorations }) => {
       const htmlAttributes = this.options.htmlAttributes;
       return new AutoPageNumberNodeView(node, getPos, decorations, editor, htmlAttributes);
-    }
+    };
   },
 
   parseDOM() {
@@ -47,31 +47,33 @@ export const PageNumber = Node.create({
 
   addCommands() {
     return {
-      addAutoPageNumber: () => ({ tr, dispatch, state, editor }) => {
-        const { options } = editor;
-        if (!options.isHeaderOrFooter) return false;
+      addAutoPageNumber:
+        () =>
+        ({ tr, dispatch, state, editor }) => {
+          const { options } = editor;
+          if (!options.isHeaderOrFooter) return false;
 
-        const { schema } = state;
-        const pageNumberType = schema?.nodes?.['page-number'];
-        if (!pageNumberType) return false;
+          const { schema } = state;
+          const pageNumberType = schema?.nodes?.['page-number'];
+          if (!pageNumberType) return false;
 
-        const pageNumberNodeJSON = { type: 'page-number' };
-        const pageNumberNode = schema.nodeFromJSON(pageNumberNodeJSON);
+          const pageNumberNodeJSON = { type: 'page-number' };
+          const pageNumberNode = schema.nodeFromJSON(pageNumberNodeJSON);
 
-        if (dispatch) {
-          tr.replaceSelectionWith(pageNumberNode, false);
-          tr.setMeta('forceUpdatePagination', true);
-        }
-        return true;
-      },
-    }
+          if (dispatch) {
+            tr.replaceSelectionWith(pageNumberNode, false);
+            tr.setMeta('forceUpdatePagination', true);
+          }
+          return true;
+        },
+    };
   },
 
   addShortcuts() {
     return {
       'Mod-Shift-alt-p': () => this.editor.commands.addAutoPageNumber(),
-    }
-  }
+    };
+  },
 });
 
 export const TotalPageCount = Node.create({
@@ -90,9 +92,9 @@ export const TotalPageCount = Node.create({
         contenteditable: false,
         'data-id': 'auto-total-pages',
         'aria-label': 'Total page count node',
-        'class': 'sd-editor-auto-total-pages',
+        class: 'sd-editor-auto-total-pages',
       },
-    }
+    };
   },
 
   addAttributes() {
@@ -100,17 +102,17 @@ export const TotalPageCount = Node.create({
       marksAsAttrs: {
         default: null,
         rendered: false,
-      }
-    }
+      },
+    };
   },
 
   addNodeView() {
     return ({ node, editor, getPos, decorations }) => {
       const htmlAttributes = this.options.htmlAttributes;
       return new AutoPageNumberNodeView(node, getPos, decorations, editor, htmlAttributes);
-    }
+    };
   },
-  
+
   parseDOM() {
     return [{ tag: 'span[data-id="auto-total-pages"' }];
   },
@@ -121,33 +123,35 @@ export const TotalPageCount = Node.create({
 
   addCommands() {
     return {
-      addTotalPageCount: () => ({ tr, dispatch, state, editor }) => {
-        const { options } = editor;
-        if (!options.isHeaderOrFooter) return false;
+      addTotalPageCount:
+        () =>
+        ({ tr, dispatch, state, editor }) => {
+          const { options } = editor;
+          if (!options.isHeaderOrFooter) return false;
 
-        const { schema } = state;
-        const pageNumberType = schema.nodes?.['total-page-number'];
-        if (!pageNumberType) return false;
+          const { schema } = state;
+          const pageNumberType = schema.nodes?.['total-page-number'];
+          if (!pageNumberType) return false;
 
-        const currentPages = editor?.options?.parentEditor?.currentTotalPages || 1;
-        const pageNumberNode = {
-          type: 'total-page-number',
-          content: [{ type: 'text', text: String(currentPages) }],
-        };
-        const pageNode = schema.nodeFromJSON(pageNumberNode);
-        if (dispatch) {
-          tr.replaceSelectionWith(pageNode, false);
-        }
-        return true;
-      },
-    }
+          const currentPages = editor?.options?.parentEditor?.currentTotalPages || 1;
+          const pageNumberNode = {
+            type: 'total-page-number',
+            content: [{ type: 'text', text: String(currentPages) }],
+          };
+          const pageNode = schema.nodeFromJSON(pageNumberNode);
+          if (dispatch) {
+            tr.replaceSelectionWith(pageNode, false);
+          }
+          return true;
+        },
+    };
   },
 
   addShortcuts() {
     return {
       'Mod-Shift-alt-c': () => this.editor.commands.addTotalPageCount(),
-    }
-  }
+    };
+  },
 });
 
 const getNodeAttributes = (nodeName, editor) => {
@@ -166,10 +170,10 @@ const getNodeAttributes = (nodeName, editor) => {
         dataId: 'auto-total-pages',
         ariaLabel: 'Total page count node',
       };
-    default: return {};
+    default:
+      return {};
   }
-}
-
+};
 
 export class AutoPageNumberNodeView {
   constructor(node, getPos, decorations, editor, htmlAttributes = {}) {
@@ -179,7 +183,7 @@ export class AutoPageNumberNodeView {
     this.getPos = getPos;
     this.editor = editor;
 
-    this.dom = this.#renderDom(node, htmlAttributes)
+    this.dom = this.#renderDom(node, htmlAttributes);
   }
 
   #renderDom(node, htmlAttributes) {
@@ -211,10 +215,10 @@ export class AutoPageNumberNodeView {
       const { dispatch } = this.view;
 
       const node = state.doc.nodeAt(pos);
-      if (!node) return;
+      if (!node || node.isText) return;
 
       const currentMarks = node.attrs.marksAsAttrs || [];
-      const newMarks = marks.map(m => ({ type: m.type.name, attrs: m.attrs }));
+      const newMarks = marks.map((m) => ({ type: m.type.name, attrs: m.attrs }));
 
       // Avoid infinite loop: only update if marks actually changed
       const isEqual = JSON.stringify(currentMarks) === JSON.stringify(newMarks);
@@ -246,7 +250,7 @@ export class AutoPageNumberNodeView {
 const getMarksFromNeighbors = (currentPos, view) => {
   const $pos = view.state.doc.resolve(currentPos);
   const styles = {};
-  const marks = []
+  const marks = [];
 
   const before = $pos.nodeBefore;
   if (before) {
@@ -263,7 +267,7 @@ const getMarksFromNeighbors = (currentPos, view) => {
   return {
     styles,
     marks,
-  }
+  };
 };
 
 /**

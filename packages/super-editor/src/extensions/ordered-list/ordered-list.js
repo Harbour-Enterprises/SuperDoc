@@ -1,8 +1,7 @@
 import { Node, Attribute } from '@core/index.js';
-import { toKebabCase } from '@harbour-enterprises/common';
 import { findParentNode } from '@helpers/index.js';
 import { toggleList } from '@core/commands/index.js';
-import { InputRule } from '@core/InputRule.js'
+import { InputRule } from '@core/InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 const inputRegex = /^(\d+)\.\s$/;
@@ -22,7 +21,7 @@ export const OrderedList = Node.create({
     return {
       itemTypeName: 'listItem',
       htmlAttributes: {
-        'aria-label': 'Ordered list node'
+        'aria-label': 'Ordered list node',
       },
       keepMarks: true,
       keepAttributes: false,
@@ -94,30 +93,32 @@ export const OrderedList = Node.create({
   addCommands() {
     return {
       toggleOrderedList: () => (params) => {
-        return toggleList(this.type)(params)
+        return toggleList(this.type)(params);
       },
 
-      restartListNodes: (followingNodes, pos) => ({ tr, state }) => {      
-        let currentNodePos = pos
-        const nodes = followingNodes.map((node) => {
-          const resultNode = {
-            node,
-            pos: currentNodePos,
-          };
+      restartListNodes:
+        (followingNodes, pos) =>
+        ({ tr }) => {
+          let currentNodePos = pos;
+          const nodes = followingNodes.map((node) => {
+            const resultNode = {
+              node,
+              pos: currentNodePos,
+            };
 
-          currentNodePos += node.nodeSize;
-          return resultNode;
-        });
+            currentNodePos += node.nodeSize;
+            return resultNode;
+          });
 
-        nodes.forEach((item) => {
-          const { pos } = item
-          const newPos = tr.mapping.map(pos);
+          nodes.forEach((item) => {
+            const { pos } = item;
+            const newPos = tr.mapping.map(pos);
 
-          tr.setNodeMarkup(newPos, undefined, {});
-        });
+            tr.setNodeMarkup(newPos, undefined, {});
+          });
 
-        return true;
-      },
+          return true;
+        },
 
       /**
        * Updates ordered list style type when sink or lift `listItem`.
@@ -125,7 +126,7 @@ export const OrderedList = Node.create({
        */
       updateOrderedListStyleType:
         () =>
-        ({ dispatch, state, tr }) => {
+        ({ dispatch, tr }) => {
           let list = findParentNode((node) => node.type.name === this.name)(tr.selection);
 
           if (!list) {
@@ -152,7 +153,6 @@ export const OrderedList = Node.create({
 
           return true;
         },
-
     };
   },
 
@@ -170,29 +170,28 @@ export const OrderedList = Node.create({
         match: inputRegex,
         handler: ({ state, range }) => {
           // Check if we're currently inside a list item
-          const $pos = state.selection.$from
-          const listItemType = state.schema.nodes.listItem
-          
+          const $pos = state.selection.$from;
+          const listItemType = state.schema.nodes.listItem;
+
           // Look up the tree to see if we're inside a list item
           for (let depth = $pos.depth; depth >= 0; depth--) {
             if ($pos.node(depth).type === listItemType) {
               // We're inside a list item, don't trigger the rule
-              return null
+              return null;
             }
           }
-          
+
           // Not inside a list item, proceed with creating new list
-          const { tr } = state
-          tr.delete(range.from, range.to)
+          const { tr } = state;
+          tr.delete(range.from, range.to);
 
           ListHelpers.createNewList({
             listType: this.type,
             tr,
             editor: this.editor,
           });
-        }
-      })
-    ]
-  }
-
+        },
+      }),
+    ];
+  },
 });

@@ -32,9 +32,9 @@ export const HardBreak = Node.create({
         contentEditable: 'false',
         lineBreakType: 'page',
         'aria-hidden': 'true',
-        'aria-label': 'Hard break node'
+        'aria-label': 'Hard break node',
       },
-    }
+    };
   },
 
   addAttributes() {
@@ -46,24 +46,26 @@ export const HardBreak = Node.create({
       pageBreakType: {
         default: null,
         rendered: false,
-      }
-    }
+      },
+    };
   },
 
   parseDOM() {
-    return [{
-      tag: 'span[linebreaktype="page"]',
-      getAttrs: dom => {
-        if (!(dom instanceof HTMLElement)) return false;
-        return {
-          pageBreakSource: dom.getAttribute('pagebreaksource') || null,
-          pageBreakType: dom.getAttribute('linebreaktype') || null,
-        };
+    return [
+      {
+        tag: 'span[linebreaktype="page"]',
+        getAttrs: (dom) => {
+          if (!(dom instanceof HTMLElement)) return false;
+          return {
+            pageBreakSource: dom.getAttribute('pagebreaksource') || null,
+            pageBreakType: dom.getAttribute('linebreaktype') || null,
+          };
+        },
       },
-    }];
+    ];
   },
 
   renderDOM({ htmlAttributes }) {
     return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
-  }
+  },
 });

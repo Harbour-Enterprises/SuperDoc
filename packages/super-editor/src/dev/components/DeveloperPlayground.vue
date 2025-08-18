@@ -77,7 +77,7 @@ const editorOptions = computed(() => {
     pagination: true,
     telemetry: telemetry.value,
     annotations: true,
-  }
+  };
 });
 
 const onCommentsLoaded = ({ comments }) => {
@@ -109,14 +109,14 @@ const attachAnnotationEventHandlers = () => {
 };
 
 const initToolbar = () => {
-  return new SuperToolbar({ element: 'toolbar', editor: activeEditor, isDev: true, pagination: true, });
+  return new SuperToolbar({ element: 'toolbar', editor: activeEditor, isDev: true, pagination: true });
 };
 
 /* For pagination debugging / visual cues */
 const debugPageStyle = computed(() => {
   return {
     height: pageStyles.value?.pageSize.height + 'in',
-  }
+  };
 });
 
 onMounted(async () => {
@@ -153,17 +153,12 @@ onMounted(async () => {
       <div class="dev-app__main">
         <div class="dev-app__view" id="dev-parent">
           <!-- temporary - debugging pagination -->
-          <div style="display: flex; flex-direction: column; margin-right: 10px;" v-if="isDebuggingPagination">
-            <div v-for="i in 100" class="page-spacer" :style="debugPageStyle">
-              page: {{ i }}
-            </div>
+          <div style="display: flex; flex-direction: column; margin-right: 10px" v-if="isDebuggingPagination">
+            <div v-for="i in 100" class="page-spacer" :style="debugPageStyle">page: {{ i }}</div>
           </div>
 
           <div class="dev-app__content" v-if="currentFile">
-            <SuperEditor
-              :file-source="currentFile" 
-              :options="editorOptions"
-            />
+            <SuperEditor :file-source="currentFile" :options="editorOptions" />
           </div>
         </div>
       </div>
@@ -188,14 +183,14 @@ onMounted(async () => {
 .page-spacer {
   height: 11in;
   width: 60px;
-  background-color: #0000AA55;
+  background-color: #0000aa55;
   border: 1px solid black;
   margin-bottom: 18px;
   display: flex;
   justify-content: center;
 }
 .page-spacer:nth-child(odd) {
-  background-color: #AA000055;
+  background-color: #aa000055;
 }
 .dev-app {
   --header-height: 154px;

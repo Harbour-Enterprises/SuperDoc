@@ -1,14 +1,14 @@
 /**
  * Parse format list from string.
  * @param {string} str
- * @returns {Array} Array ({ type, attrs })
+ * @returns {Object[]} Array ({ type, attrs })
  */
 export const parseFormatList = (str) => {
   if (!str) return [];
   let formatList;
   try {
     formatList = JSON.parse(str);
-  } catch (error) {
+  } catch {
     return [];
   }
   if (!Array.isArray(formatList)) {

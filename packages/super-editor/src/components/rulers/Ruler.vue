@@ -14,7 +14,7 @@ const props = defineProps({
   editor: {
     type: Object,
     required: true,
-  }
+  },
 });
 
 const HANDLE_WIDTH = 5;
@@ -67,7 +67,7 @@ const initRuler = () => {
 
 /**
  * Generate a section of the ruler
- * 
+ *
  * @param {Number} qty - Number of elements in the section
  * @param {String} size - Size of the element
  * @param {String} height - Height of the element
@@ -80,7 +80,7 @@ const generateSection = (qty, size, height, margin, index) => {
     const item = {
       className: `${size}-unit ruler-section`,
       height,
-      margin
+      margin,
     };
 
     if (index !== undefined) item.numbering = index;
@@ -88,10 +88,9 @@ const generateSection = (qty, size, height, margin, index) => {
   });
 };
 
-
 /**
  * Get the style for a ruler element
- * 
+ *
  * @param {Object} unit - Ruler element
  * @returns {Object} - Style object
  */
@@ -109,7 +108,7 @@ const getStyle = computed(() => (unit) => {
 
 /**
  * Get the position of the margin handles
- * 
+ *
  * @param {String} side - Side of the margin handle
  * @returns {Object} - Style object
  */
@@ -122,7 +121,7 @@ const getHandlePosition = computed(() => (side) => {
 
 /**
  * Get the style for the vertical indicator
- * 
+ *
  * @returns {Object} - Style object
  */
 const getVerticalIndicatorStyle = computed(() => {
@@ -132,13 +131,13 @@ const getVerticalIndicatorStyle = computed(() => {
   const editorBounds = editor.getBoundingClientRect();
   return {
     left: `${currentHandle.value.x}px`,
-    minHeight : `${editorBounds.height}px`,
+    minHeight: `${editorBounds.height}px`,
   };
 });
 
 /**
  * On mouse down, prepare to drag a margin handle and show the vertical indicator
- * 
+ *
  * @param {Event} event - Mouse down event
  * @returns {void}
  */
@@ -158,13 +157,13 @@ const handleMouseDown = (event) => {
 
 /**
  * On mouse move, update the position of the margin handle
- * 
+ *
  * @param {Event} event - Mouse move event
  * @returns {void}
  */
 const handleMouseMove = (event) => {
-  if (!isDragging.value) return
-  
+  if (!isDragging.value) return;
+
   const newLeft = event.clientX - offsetX;
   currentHandle.value.x = newLeft;
 
@@ -185,7 +184,7 @@ const handleMouseMove = (event) => {
 
 /**
  * On mouse up, stop dragging the margin handle and emit the new margin value
- * 
+ *
  * @returns {void}
  */
 const handleMouseUp = () => {
@@ -205,25 +204,25 @@ const handleMouseUp = () => {
 
 /**
  * Set the ruler handle color to active
- * 
+ *
  * @returns {void}
  */
 const setRulerHandleActive = () => {
   rulerHandleOriginalColor.value = rulerHandleActiveColor.value;
-}
+};
 
 /**
  * Set the ruler handle color to inactive
- * 
+ *
  * @returns {void}
  */
 const setRulerHandleInactive = () => {
   rulerHandleOriginalColor.value = '#CCC';
-}
+};
 
 /**
  * Get the new margin value based on the current handle position
- * 
+ *
  * @returns {Number} - New margin value
  */
 const getNewMarginValue = () => {
@@ -233,7 +232,7 @@ const getNewMarginValue = () => {
 
 /**
  * Set ruler style variables
- * 
+ *
  * @returns {Object} - Style object
  */
 const getStyleVars = computed(() => {
@@ -246,20 +245,18 @@ const getStyleVars = computed(() => {
 
 onMounted(() => {
   rulerDefinition.value = initRuler();
-  window.addEventListener('mousemove', handleMouseMove)
-  window.addEventListener('mouseup', handleMouseUp)
+  window.addEventListener('mousemove', handleMouseMove);
+  window.addEventListener('mouseup', handleMouseUp);
 });
 
 onUnmounted(() => {
-  window.removeEventListener('mousemove', handleMouseMove)
-  window.removeEventListener('mouseup', handleMouseUp)
+  window.removeEventListener('mousemove', handleMouseMove);
+  window.removeEventListener('mouseup', handleMouseUp);
 });
-
 </script>
 
 <template>
   <div class="ruler" ref="ruler" :style="getStyleVars">
-
     <!-- Margin handles -->
     <div
       class="margin-handle handle-left"
@@ -274,18 +271,16 @@ onUnmounted(() => {
       :style="getHandlePosition('right')"
     ></div>
     <!-- Margin handles end -->
-  
+
     <div v-if="showVerticalIndicator" class="vertical-indicator" :style="getVerticalIndicatorStyle"></div>
-  
+
     <!-- The ruler display -->
     <div v-for="unit in rulerDefinition" :class="unit.className" :style="getStyle(unit)">
       <div class="numbering">{{ unit.numbering }}</div>
       <div v-for="half in unit.elements" :class="half.className" :style="getStyle(half)">
-        <div v-for="quarter in half.elements" :class="quarter.className" :style="getStyle(quarter)">
-        </div>
+        <div v-for="quarter in half.elements" :class="quarter.className" :style="getStyle(quarter)"></div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -294,7 +289,7 @@ onUnmounted(() => {
   position: absolute;
   height: 0px;
   min-width: 1px;
-  background-color: #AAA;
+  background-color: #aaa;
   top: 20px;
   z-index: 100;
 }

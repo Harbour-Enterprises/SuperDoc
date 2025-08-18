@@ -1,10 +1,9 @@
-import { EditorState } from 'prosemirror-state';
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../constants.js';
 import { findInlineNodes } from './documentHelpers.js';
 
 /**
  * Get track changes marks.
- * @param {EditorState} state
+ * @param {import('prosemirror-state').EditorState} state
  * @param {string} id
  * @returns {Array} Array with track changes marks.
  */

@@ -29,8 +29,8 @@ const getTestDataAsBuffer = async (name) => {
     const basePath = join(__dirname, '../../data', name);
     return await readFile(basePath);
   } catch (error) {
-      console.error('Error reading the file:', error);
-      throw error;
+    console.error('Error reading the file:', error);
+    throw error;
   }
 };
 
@@ -65,9 +65,10 @@ export const getExportedResult = async (name, comments = []) => {
     media,
     mediaFiles,
     fonts,
+    annotations: true,
   });
 
-  const schema = editor.converter.getSchema();
+  const schema = editor.converter.getSchema(editor);
   const bodyNode = editor.converter.savedTagsToRestore.find((el) => el.name === 'w:body');
   const processedComments = comments.map((c) => ({
     ...c,
@@ -98,7 +99,7 @@ export const getExportedResult = async (name, comments = []) => {
 export const getExportedResultForAnnotations = async (isFinalDoc) => {
   const buffer = await getTestDataAsBuffer('annotations_import.docx');
   const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
-  
+
   const editor = new Editor({
     isHeadless: true,
     extensions: getStarterExtensions(),
@@ -108,7 +109,7 @@ export const getExportedResultForAnnotations = async (isFinalDoc) => {
     mediaFiles,
     fonts,
   });
-  
+
   const [result, params] = exportSchemaToJson({
     editorSchema: editor.schema,
     node: annotationsNodeContent,

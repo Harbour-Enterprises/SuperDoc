@@ -4,12 +4,12 @@ import { findMark } from './findMark.js';
 export function getActiveFormatting(editor) {
   const { state } = editor;
   const { selection } = state;
-  
+
   const marks = getMarksFromSelection(state);
   const markAttrs = selection.$head.parent.attrs.marksAttrs;
 
   const marksToProcess = marks
-    .filter((mark) =>  !['textStyle', 'link'].includes(mark.type.name))
+    .filter((mark) => !['textStyle', 'link'].includes(mark.type.name))
     .map((mark) => ({ name: mark.type.name, attrs: mark.attrs }));
 
   const textStyleMarks = marks.filter((mark) => mark.type.name === 'textStyle');
@@ -18,11 +18,11 @@ export function getActiveFormatting(editor) {
   // Empty paragraphs could have marks defined as attributes
   if (markAttrs) {
     const marksFromAttrs = markAttrs
-      .filter((mark) =>  !['textStyle', 'link'].includes(mark.type))
+      .filter((mark) => !['textStyle', 'link'].includes(mark.type))
       .map((mark) => ({ name: mark.type, attrs: mark.attrs || {} }));
 
     const textStyleMarksFromAttrs = markAttrs.filter((mark) => mark.type === 'textStyle');
-    
+
     marksToProcess.push(...marksFromAttrs);
     marksToProcess.push(...textStyleMarksFromAttrs.flatMap(unwrapTextMarks));
   }
@@ -50,17 +50,17 @@ export function getActiveFormatting(editor) {
   // For fieldAnnotation.
   const textColor = marksToProcess.find((i) => i.name === 'textColor');
   const textHightlight = marksToProcess.find((i) => i.name === 'textHighlight');
-  
+
   if (textColor) {
-    marksToProcess.push({ 
-      name: 'color', 
-      attrs: { color: textColor.attrs?.textColor }, 
+    marksToProcess.push({
+      name: 'color',
+      attrs: { color: textColor.attrs?.textColor },
     });
   }
   if (textHightlight) {
-    marksToProcess.push({ 
-      name: 'highlight', 
-      attrs: { color: textHightlight.attrs?.textHighlight }, 
+    marksToProcess.push({
+      name: 'highlight',
+      attrs: { color: textHightlight.attrs?.textHighlight },
     });
   }
 
@@ -98,7 +98,7 @@ function getActiveAttributes(state) {
     if (empty) state.doc.nodesBetween(start, end + 1, (node) => getAttrs(node));
     else state.doc.nodesBetween(from, to, (node) => getAttrs(node));
     return attributes;
-  } catch (error) {
+  } catch {
     return {};
   }
 }

@@ -10,7 +10,7 @@ import { TEXTS, ICONS, TRIGGERS } from './constants.js';
 /**
  * Check if a module is enabled based on editor options
  * This is used for hiding menu items based on module availability
- * 
+ *
  * @param {Object} editorOptions - Editor options
  * @param {string} moduleName - Name of the module to check (e.g. 'ai')
  * @returns {boolean} Whether the module is enabled
@@ -45,6 +45,7 @@ const isModuleEnabled = (editorOptions, moduleName) => {
  *     requiresSelection?: boolean,
  *     requiresClipboard?: boolean
  *     requiresTableParent?: boolean
+ *     requiredSectionParent?: boolean,
  *     requiresModule?: string
  *   }>
  * }>} Array of menu sections
@@ -53,6 +54,7 @@ export function getItems(context) {
   const { editor, selectedText, trigger, clipboardContent } = context;
 
   const isInTable = selectionHasNodeOrMark(editor.view.state, 'table', { requireEnds: true });
+  const isInSectionNode = selectionHasNodeOrMark(editor.view.state, 'documentSection', { requireEnds: true });
 
   const sections = [
     {
@@ -71,8 +73,32 @@ export function getItems(context) {
           },
           allowedTriggers: [TRIGGERS.slash, TRIGGERS.click],
           requiresModule: 'ai',
-        }
-      ]
+        },
+      ],
+    },
+    {
+      id: 'document-sections',
+      items: [
+        {
+          id: 'insert-document-section',
+          label: TEXTS.createDocumentSection,
+          icon: ICONS.addDocumentSection,
+          action: (editor) => {
+            editor.commands.createDocumentSection();
+          },
+          allowedTriggers: [TRIGGERS.click],
+        },
+        {
+          id: 'remove-section',
+          label: TEXTS.removeDocumentSection,
+          icon: ICONS.removeDocumentSection,
+          action: (editor) => {
+            editor.commands.removeSectionAtSelection();
+          },
+          allowedTriggers: [TRIGGERS.click],
+          requiresSectionParent: true,
+        },
+      ],
     },
     {
       id: 'general',
@@ -98,8 +124,8 @@ export function getItems(context) {
           component: TableActions,
           allowedTriggers: [TRIGGERS.slash, TRIGGERS.click],
           requiresTableParent: true,
-        }
-      ]
+        },
+      ],
     },
     {
       id: 'clipboard',
@@ -113,7 +139,7 @@ export function getItems(context) {
             document.execCommand('cut');
           },
           allowedTriggers: [TRIGGERS.click],
-          requiresSelection: true
+          requiresSelection: true,
         },
         {
           id: 'copy',
@@ -124,7 +150,7 @@ export function getItems(context) {
             document.execCommand('copy');
           },
           allowedTriggers: [TRIGGERS.click],
-          requiresSelection: true
+          requiresSelection: true,
         },
         {
           id: 'paste',
@@ -168,34 +194,38 @@ export function getItems(context) {
             }
           },
           allowedTriggers: [TRIGGERS.click, TRIGGERS.slash],
-          requiresClipboard: true
-        }
-      ]
-    }
+          requiresClipboard: true,
+        },
+      ],
+    },
   ];
 
   // Filter sections and their items
-  const filteredSections = sections.map(section => {
-    const filteredItems = section.items.filter(item => {
-      // If the item requires a specific module and that module is not enabled, return false
-      if (item.requiresModule && !isModuleEnabled(editor?.options, item.requiresModule)) return false;
-      // If the item requires a selection and there is no selection, return false
-      if (item.requiresSelection && !selectedText) return false;
-      // If the item is not allowed to be triggered with the current trigger, return false
-      if (!item.allowedTriggers.includes(trigger)) return false;
-      // If the item requires clipboard content and there is no clipboard content, return false
-      if (item.requiresClipboard && !clipboardContent) return false;
-      // If the item requires a table parent and there is no table parent, return false
-      // Or if we are in a table, do not show 'insert table'
-      if ((item.requiresTableParent && !isInTable) || (item.id === 'insert-table' && isInTable)) return false;
-      return true;
-    });
+  const filteredSections = sections
+    .map((section) => {
+      const filteredItems = section.items.filter((item) => {
+        // If the item requires a specific module and that module is not enabled, return false
+        if (item.requiresModule && !isModuleEnabled(editor?.options, item.requiresModule)) return false;
+        // If the item requires a selection and there is no selection, return false
+        if (item.requiresSelection && !selectedText) return false;
+        // If the item is not allowed to be triggered with the current trigger, return false
+        if (!item.allowedTriggers.includes(trigger)) return false;
+        // If the item requires clipboard content and there is no clipboard content, return false
+        if (item.requiresClipboard && !clipboardContent) return false;
+        // If the item requires a table parent and there is no table parent, return false
+        // Or if we are in a table, do not show 'insert table'
+        if ((item.requiresTableParent && !isInTable) || (item.id === 'insert-table' && isInTable)) return false;
+        // If the item requires a section parent and there is no section parent, return false
+        if (item.requiresSectionParent && !isInSectionNode) return false;
+        return true;
+      });
 
-    return {
-      ...section,
-      items: filteredItems
-    };
-  }).filter(section => section.items.length > 0);
+      return {
+        ...section,
+        items: filteredItems,
+      };
+    })
+    .filter((section) => section.items.length > 0);
 
   return filteredSections;
 }

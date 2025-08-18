@@ -10,6 +10,7 @@ import LinkedStyle from './LinkedStyle.vue';
 import LinkInput from './LinkInput.vue';
 import { renderColorOptions } from './color-dropdown-helpers.js';
 import TableGrid from './TableGrid.vue';
+import TableActions from './TableActions.vue';
 import { scrollToElement } from './scroll-helpers.js';
 
 import checkIconSvg from '@harbour-enterprises/common/icons/check.svg?raw';
@@ -30,7 +31,6 @@ export const makeDefaultItems = ({
   role,
   isDev = false,
 } = {}) => {
-
   // bold
   const bold = useToolbarItem({
     type: 'button',
@@ -40,7 +40,7 @@ export const makeDefaultItems = ({
     tooltip: toolbarTexts.bold,
     attributes: {
       ariaLabel: 'Bold',
-    }
+    },
   });
 
   // font
@@ -102,20 +102,16 @@ export const makeDefaultItems = ({
             closeDropdown(aiButton);
           };
 
-          return h(
-            'div',
-            {},
-            [
-              h(AIWriter, {
-                handleClose,
-                selectedText,
-                editor: superToolbar.activeEditor,
-                apiKey: superToolbar.config.aiApiKey,
-                endpoint: superToolbar.config.aiEndpoint,
-                superToolbar: superToolbar,
-              }),
-            ],
-          );
+          return h('div', {}, [
+            h(AIWriter, {
+              handleClose,
+              selectedText,
+              editor: superToolbar.activeEditor,
+              apiKey: superToolbar.config.aiApiKey,
+              endpoint: superToolbar.config.aiEndpoint,
+              superToolbar: superToolbar,
+            }),
+          ]);
         },
       },
     ],
@@ -213,7 +209,7 @@ export const makeDefaultItems = ({
       ariaLabel: 'Strikethrough',
     },
   });
-  
+
   // highlight
   const highlight = useToolbarItem({
     type: 'dropdown',
@@ -234,14 +230,14 @@ export const makeDefaultItems = ({
       {
         key: 'color',
         type: 'render',
-        render: () => renderColorOptions(superToolbar, highlight, [], true)
+        render: () => renderColorOptions(superToolbar, highlight, [], true),
       },
     ],
     onActivate: ({ color }) => {
       highlight.iconColor.value = color || '';
     },
     onDeactivate: () => (highlight.iconColor.value = ''),
-  })
+  });
 
   // color
   const colorButton = useToolbarItem({
@@ -270,7 +266,7 @@ export const makeDefaultItems = ({
     },
     onDeactivate: () => (colorButton.iconColor.value = '#000'),
   });
-  
+
   // search
   const searchRef = ref(null);
   const search = useToolbarItem({
@@ -282,7 +278,7 @@ export const makeDefaultItems = ({
     group: 'right',
     inputRef: searchRef,
     attributes: {
-      ariaLabel: 'Search'
+      ariaLabel: 'Search',
     },
     options: [
       {
@@ -292,13 +288,12 @@ export const makeDefaultItems = ({
       },
     ],
   });
-  
+
   const renderSearchDropdown = () => {
-    
     const handleSubmit = ({ value }) => {
       superToolbar.activeEditor.commands.search(value);
     };
-    
+
     return h('div', {}, [
       h(SearchInput, {
         onSubmit: handleSubmit,
@@ -306,7 +301,6 @@ export const makeDefaultItems = ({
       }),
     ]);
   };
-
 
   // link
   const link = useToolbarItem({
@@ -410,6 +404,140 @@ export const makeDefaultItems = ({
         onSelect: handleSelect,
       }),
     ]);
+  }
+
+  // table actions
+  const tableActionsItem = useToolbarItem({
+    type: 'dropdown',
+    name: 'tableActions',
+    command: 'executeTableCommand',
+    icon: toolbarIcons.tableActions,
+    hideLabel: true,
+    disabled: true,
+    attributes: {
+      ariaLabel: 'Table actions',
+    },
+    options: [
+      {
+        type: 'render',
+        render: () => renderTableActions(tableActionsItem),
+      },
+    ],
+  });
+
+  const tableActionsOptions = [
+    {
+      label: toolbarTexts.addRowBefore,
+      command: 'addRowBefore',
+      icon: toolbarIcons.addRowBefore,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Add row before',
+      },
+    },
+    {
+      label: toolbarTexts.addRowAfter,
+      command: 'addRowAfter',
+      icon: toolbarIcons.addRowAfter,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Add row after',
+      },
+    },
+    {
+      label: toolbarTexts.addColumnBefore,
+      command: 'addColumnBefore',
+      icon: toolbarIcons.addColumnBefore,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Add column before',
+      },
+    },
+    {
+      label: toolbarTexts.addColumnAfter,
+      command: 'addColumnAfter',
+      icon: toolbarIcons.addColumnAfter,
+      bottomBorder: true,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Add column after',
+      },
+    },
+    {
+      label: toolbarTexts.deleteRow,
+      command: 'deleteRow',
+      icon: toolbarIcons.deleteRow,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Delete row',
+      },
+    },
+    {
+      label: toolbarTexts.deleteColumn,
+      command: 'deleteColumn',
+      icon: toolbarIcons.deleteColumn,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Delete column',
+      },
+    },
+    {
+      label: toolbarTexts.deleteTable,
+      command: 'deleteTable',
+      icon: toolbarIcons.deleteTable,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Delete table',
+      },
+    },
+    {
+      label: toolbarTexts.transparentBorders,
+      command: 'deleteCellAndTableBorders',
+      icon: toolbarIcons.deleteBorders,
+      bottomBorder: true,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Delete cell and table borders',
+      },
+    },
+    {
+      label: toolbarTexts.mergeCells,
+      command: 'mergeCells',
+      icon: toolbarIcons.mergeCells,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Merge cells',
+      },
+    },
+    {
+      label: toolbarTexts.splitCell,
+      command: 'splitCell',
+      icon: toolbarIcons.splitCell,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Split cells',
+      },
+    },
+    {
+      label: toolbarTexts.fixTables,
+      command: 'fixTables',
+      icon: toolbarIcons.fixTables,
+      props: {
+        'data-item': 'btn-tableActions-option',
+        ariaLabel: 'Fix tables',
+      },
+    },
+  ];
+
+  function renderTableActions(tableActionsItem) {
+    return h(TableActions, {
+      options: tableActionsOptions,
+      onSelect: (event) => {
+        closeDropdown(tableActionsItem);
+        const { command } = event;
+        superToolbar.emitCommand({ item: tableActionsItem, argument: { command } });
+      },
+    });
   }
 
   // alignment
@@ -633,7 +761,7 @@ export const makeDefaultItems = ({
     group: 'left',
     attributes: {
       ariaLabel: 'Accept tracked changes',
-    }
+    },
   });
 
   const rejectTrackedChangeOnSelection = useToolbarItem({
@@ -646,7 +774,7 @@ export const makeDefaultItems = ({
     group: 'left',
     attributes: {
       ariaLabel: 'Reject tracked changes',
-    }
+    },
   });
 
   const toggleTrackChangesOriginal = useToolbarItem({
@@ -659,7 +787,7 @@ export const makeDefaultItems = ({
     group: 'left',
     attributes: {
       ariaLabel: 'Toggle tracked changes show original',
-    }
+    },
   });
 
   const toggleTrackChangesFinal = useToolbarItem({
@@ -672,7 +800,7 @@ export const makeDefaultItems = ({
     group: 'left',
     attributes: {
       ariaLabel: 'Toggle tracked changes show final',
-    }
+    },
   });
 
   const clearFormatting = useToolbarItem({
@@ -683,18 +811,8 @@ export const makeDefaultItems = ({
     icon: toolbarIcons.clearFormatting,
     attributes: {
       ariaLabel: 'Clear formatting',
-    }
+    },
   });
-
-  const toolbarItemsMobile = [
-    bold,
-    italic,
-    underline,
-    indentRight,
-    indentLeft,
-    search,
-    overflow,
-  ].map((item) => item.name);
 
   const copyFormat = useToolbarItem({
     type: 'button',
@@ -705,7 +823,7 @@ export const makeDefaultItems = ({
     active: false,
     attributes: {
       ariaLabel: 'Copy formatting',
-    }
+    },
   });
 
   const getDocumentOptionsAfterRole = (role, documentOptions) => {
@@ -749,23 +867,23 @@ export const makeDefaultItems = ({
   });
 
   const documentOptions = [
-    { 
-      label: toolbarTexts.documentEditingMode, 
-      value: 'editing', 
-      icon: toolbarIcons.documentEditingMode, 
-      description: toolbarTexts.documentEditingModeDescription, 
+    {
+      label: toolbarTexts.documentEditingMode,
+      value: 'editing',
+      icon: toolbarIcons.documentEditingMode,
+      description: toolbarTexts.documentEditingModeDescription,
     },
-    { 
-      label: toolbarTexts.documentSuggestingMode, 
-      value: 'suggesting', 
-      icon: toolbarIcons.documentSuggestingMode, 
-      description: toolbarTexts.documentSuggestingModeDescription, 
+    {
+      label: toolbarTexts.documentSuggestingMode,
+      value: 'suggesting',
+      icon: toolbarIcons.documentSuggestingMode,
+      description: toolbarTexts.documentSuggestingModeDescription,
     },
-    { 
-      label: toolbarTexts.documentViewingMode, 
-      value: 'viewing', 
-      icon: toolbarIcons.documentViewingMode, 
-      description: toolbarTexts.documentViewingModeDescription, 
+    {
+      label: toolbarTexts.documentViewingMode,
+      value: 'viewing',
+      icon: toolbarIcons.documentViewingMode,
+      description: toolbarTexts.documentViewingModeDescription,
     },
   ];
 
@@ -792,7 +910,7 @@ export const makeDefaultItems = ({
     tooltip: toolbarTexts.pageBreak,
     attributes: {
       ariaLabel: 'Page break',
-    }
+    },
   });
 
   // define sizes to calculate toolbar overflow items
@@ -807,7 +925,7 @@ export const makeDefaultItems = ({
     ['ai', 32],
     ['default', 32],
   ]);
-  
+
   const ruler = useToolbarItem({
     type: 'button',
     name: 'ruler',
@@ -817,7 +935,7 @@ export const makeDefaultItems = ({
     tooltip: toolbarTexts.ruler,
     attributes: {
       ariaLabel: 'Ruler',
-    }
+    },
   });
 
   const selectedLinkedStyle = ref(null);
@@ -854,10 +972,10 @@ export const makeDefaultItems = ({
               editor: superToolbar.activeEditor,
               onSelect: handleSelect,
               selectedOption: selectedLinkedStyle.value,
-            })
-          ])
-        }
-      }
+            }),
+          ]);
+        },
+      },
     ],
     onActivate: () => {
       linkedStyles.disabled.value = false;
@@ -890,12 +1008,42 @@ export const makeDefaultItems = ({
       ariaLabel: 'Line height',
     },
     options: [
-      { label: '1,0', key: '1', icon: () => renderIcon('1', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '1,15', key: '1.15', icon: () => renderIcon('1.15', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '1,5', key: '1.5', icon: () => renderIcon('1.5', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '2,0', key: '2', icon: () => renderIcon('2', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '2,5', key: '2.5', icon: () => renderIcon('2.5', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
-      { label: '3,0', key: '3', icon: () => renderIcon('3', lineHeight.selectedValue), props: { 'data-item': 'btn-lineHeight-option' } },
+      {
+        label: '1,0',
+        key: '1',
+        icon: () => renderIcon('1', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '1,15',
+        key: '1.15',
+        icon: () => renderIcon('1.15', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '1,5',
+        key: '1.5',
+        icon: () => renderIcon('1.5', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '2,0',
+        key: '2',
+        icon: () => renderIcon('2', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '2,5',
+        key: '2.5',
+        icon: () => renderIcon('2.5', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
+      {
+        label: '3,0',
+        key: '3',
+        icon: () => renderIcon('3', lineHeight.selectedValue),
+        props: { 'data-item': 'btn-lineHeight-option' },
+      },
     ],
   });
 
@@ -938,6 +1086,7 @@ export const makeDefaultItems = ({
     link,
     image,
     tableItem,
+    tableActionsItem,
     separator,
     alignment,
     bulletedList,
@@ -1038,7 +1187,7 @@ export const makeDefaultItems = ({
 
 export const setHistoryButtonStateOnUpdate =
   (toolbarItemsRef) =>
-  ({ editor, transaction }) => {
+  ({ editor }) => {
     // console.debug('[SuperEditor dev] Document updated', editor);
     // activeEditor = editor;
 

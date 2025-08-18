@@ -29,9 +29,11 @@ export const ICONS = {
   cut: scissorsIconSvg,
   copy: copyIconSvg,
   paste: pasteIconSvg,
-}
+  addDocumentSection: plusIconSvg,
+  removeDocumentSection: trashIconSvg,
+};
 
-// Table actions constant 
+// Table actions constant
 export const TEXTS = {
   addRowBefore: 'Insert row above',
   addRowAfter: 'Insert row below',
@@ -52,109 +54,111 @@ export const TEXTS = {
   cut: 'Cut',
   copy: 'Copy',
   paste: 'Paste',
+  removeDocumentSection: 'Remove section',
+  createDocumentSection: 'Create section',
 };
 
 export const tableActionsOptions = [
-  { 
+  {
     label: TEXTS.addRowBefore,
     command: 'addRowBefore',
     icon: ICONS.addRowBefore,
-    props: { 
-      'data-item': 'btn-tableActions-option', 
+    props: {
+      'data-item': 'btn-tableActions-option',
       ariaLabel: 'Add row before',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.addRowAfter,
     command: 'addRowAfter',
     icon: ICONS.addRowAfter,
-    props: { 
+    props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Add row after',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.addColumnBefore,
     command: 'addColumnBefore',
     icon: ICONS.addColumnBefore,
-    props: { 
+    props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Add column before',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.addColumnAfter,
     command: 'addColumnAfter',
     icon: ICONS.addColumnAfter,
     bottomBorder: true,
-    props: { 
+    props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Add column after',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.deleteRow,
     command: 'deleteRow',
     icon: ICONS.deleteRow,
-    props: { 
+    props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Delete row',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.deleteColumn,
     command: 'deleteColumn',
     icon: ICONS.deleteColumn,
-    props: { 
+    props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Delete column',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.deleteTable,
     command: 'deleteTable',
     icon: ICONS.deleteTable,
-    props: { 
+    props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Delete table',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.transparentBorders,
     command: 'deleteCellAndTableBorders',
     icon: ICONS.deleteBorders,
     bottomBorder: true,
-    props: { 
+    props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Delete cell and table borders',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.mergeCells,
     command: 'mergeCells',
     icon: ICONS.mergeCells,
-    props: { 
+    props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Merge cells',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.splitCell,
     command: 'splitCell',
     icon: ICONS.splitCell,
     props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Split cells',
-    }
+    },
   },
-  { 
+  {
     label: TEXTS.fixTables,
     command: 'fixTables',
     icon: ICONS.fixTables,
     props: {
       'data-item': 'btn-tableActions-option',
       ariaLabel: 'Fix tables',
-    }
+    },
   },
 ];
 

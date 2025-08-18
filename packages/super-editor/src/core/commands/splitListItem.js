@@ -11,7 +11,7 @@ import { decreaseListIndent } from './decreaseListIndent.js';
  * The command is a heavily modified version of the original
  * `splitListItem` command to better manage attributes and marks
  * as well as custom SuperDoc lists.
- * 
+ *
  * https://github.com/ProseMirror/prosemirror-schema-list/blob/master/src/schema-list.ts#L114
  */
 export const splitListItem = () => (props) => {
@@ -49,35 +49,40 @@ export const splitListItem = () => (props) => {
   const beforeCursor = paragraphNode.content.cut(0, paraOffset);
   const afterCursor = paragraphNode.content.cut(paraOffset);
 
+  // Declare variables that will be used across if-else blocks
+  let firstList, secondList;
+
+  const marks = state.storedMarks || $from.marks() || [];
+
   // Check if the list item has multiple paragraphs
   const listItemHasMultipleParagraphs = listItemNode.childCount > 1;
 
   if (listItemHasMultipleParagraphs) {
     // Handle multi-paragraph case: preserve all content after cursor position
     const paragraphIndex = $from.index(-1); // Index of current paragraph within list item
-    
+
     // Get content before current paragraph
     let contentBeforeCurrentPara = [];
     for (let i = 0; i < paragraphIndex; i++) {
       contentBeforeCurrentPara.push(listItemNode.child(i));
     }
-    
-    // Get content after current paragraph  
+
+    // Get content after current paragraph
     let contentAfterCurrentPara = [];
     for (let i = paragraphIndex + 1; i < listItemNode.childCount; i++) {
       contentAfterCurrentPara.push(listItemNode.child(i));
     }
-    
+
     // Create first list item content
     let firstListContent = [...contentBeforeCurrentPara];
     if (beforeCursor.size > 0) {
       const modifiedFirstParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, beforeCursor);
       firstListContent.push(modifiedFirstParagraph);
     }
-    
+
     // Create second list item content
     let secondListContent = [];
-    
+
     // Always create a paragraph for the cursor position in the second list item
     // If there's content after cursor, use it; otherwise create an empty paragraph
     if (afterCursor && afterCursor.size > 0) {
@@ -88,10 +93,10 @@ export const splitListItem = () => (props) => {
       const emptyParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs);
       secondListContent.push(emptyParagraph);
     }
-    
+
     // Add any paragraphs that come after the current one
     secondListContent = secondListContent.concat(contentAfterCurrentPara);
-    
+
     // Ensure we have at least one paragraph in each list item
     if (firstListContent.length === 0) {
       const emptyParagraph = editor.schema.nodes.paragraph.create();
@@ -103,20 +108,36 @@ export const splitListItem = () => (props) => {
     }
 
     // Create the lists
-    const firstListItem = editor.schema.nodes.listItem.create({...listItemNode.attrs}, Fragment.from(firstListContent));
-    var firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
+    const firstListItem = editor.schema.nodes.listItem.create(
+      { ...listItemNode.attrs },
+      Fragment.from(firstListContent),
+    );
+    firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
 
-    const secondListItem = editor.schema.nodes.listItem.create({...listItemNode.attrs}, Fragment.from(secondListContent));
-    var secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
+    const secondListItem = editor.schema.nodes.listItem.create(
+      { ...listItemNode.attrs },
+      Fragment.from(secondListContent),
+    );
+    secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
   } else {
     // Simple case: single paragraph, use original logic
-    const firstParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, beforeCursor);
-    const firstListItem = editor.schema.nodes.listItem.create({...listItemNode.attrs}, firstParagraph);
-    var firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
+    let firstParagraphContent = beforeCursor;
+    if (beforeCursor.size === 0) {
+      firstParagraphContent = editor.schema.text(' ', marks);
+    }
 
-    const secondParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, afterCursor);
-    const secondListItem = editor.schema.nodes.listItem.create({...listItemNode.attrs}, secondParagraph);
-    var secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
+    const firstParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, firstParagraphContent);
+    const firstListItem = editor.schema.nodes.listItem.create({ ...listItemNode.attrs }, firstParagraph);
+    firstList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(firstListItem));
+
+    let secondParagraphContent = afterCursor;
+    if (afterCursor.size === 0) {
+      secondParagraphContent = editor.schema.text(' ', marks);
+    }
+
+    const secondParagraph = editor.schema.nodes.paragraph.create(paragraphNode.attrs, secondParagraphContent);
+    const secondListItem = editor.schema.nodes.listItem.create({ ...listItemNode.attrs }, secondParagraph);
+    secondList = editor.schema.nodes.orderedList.createAndFill(parentListNode.attrs, Fragment.from(secondListItem));
   }
 
   if (!firstList || !secondList) return false;
@@ -136,7 +157,7 @@ export const splitListItem = () => (props) => {
   tr.scrollIntoView();
 
   // Retain any marks
-  const marks = state.storedMarks || $from.marks() || [];
+  // const marks = state.storedMarks || $from.marks() || [];
   if (marks?.length) {
     tr.ensureMarks(marks);
   }
@@ -159,34 +180,30 @@ const handleSplitInEmptyBlock = (props, currentListItem) => {
 
   // Find the list item node
   const listItemNode = currentListItem.node;
-  
+
   // Check if we're in an empty paragraph but the list item has other content
   // This happens after shift+enter creates an empty line
   const isEmptyParagraph = $from.parent.content.size === 0;
   const listItemHasOtherContent = listItemNode.content.size > $from.parent.nodeSize; // More than just this empty paragraph
-  
+
   // Check if we're at the very end of the list item
   // If we're not at the end, we should split normally rather than create a new list
   const isAtEndOfListItem = $from.indexAfter(-1) === $from.node(-1).childCount;
-  
+
   if (isEmptyParagraph && listItemHasOtherContent && isAtEndOfListItem) {
     // We're in an empty paragraph after shift+enter AND we're at the end - create a new list item
     try {
       const listTypes = ['orderedList', 'bulletList'];
       const parentList = findParentNode((node) => listTypes.includes(node.type.name))(state.selection);
-      
+
       if (!parentList) return false;
 
       // Get attributes for the new paragraph
-      const newParagraphAttrs = Attribute.getSplittedAttributes(
-        extensionAttrs,
-        'paragraph',
-        {}
-      );
+      const newParagraphAttrs = Attribute.getSplittedAttributes(extensionAttrs, 'paragraph', {});
 
       // Create a new paragraph and list item with same attributes as current
       const newParagraph = schema.nodes.paragraph.create(newParagraphAttrs);
-      const newListItem = schema.nodes.listItem.create({...listItemNode.attrs}, newParagraph);
+      const newListItem = schema.nodes.listItem.create({ ...listItemNode.attrs }, newParagraph);
       const newList = schema.nodes.orderedList.createAndFill(parentList.node.attrs, Fragment.from(newListItem));
 
       if (!newList) return false;
@@ -216,7 +233,7 @@ const handleSplitInEmptyBlock = (props, currentListItem) => {
   // Check if the list item is completely empty (only contains empty paragraphs)
   const isListItemEmpty = () => {
     if (listItemNode.childCount === 0) return true;
-    
+
     // Check if all children are empty paragraphs
     for (let i = 0; i < listItemNode.childCount; i++) {
       const child = listItemNode.child(i);
@@ -235,28 +252,24 @@ const handleSplitInEmptyBlock = (props, currentListItem) => {
     // First, try to outdent
     const didOutdent = decreaseListIndent()({ editor, tr });
     if (didOutdent) return true;
-    
+
     try {
       // Find the parent list (orderedList or bulletList)
       const listTypes = ['orderedList', 'bulletList'];
       const parentList = findParentNode((node) => listTypes.includes(node.type.name))(state.selection);
-      
+
       if (!parentList) {
         console.error('No parent list found');
         return false;
       }
 
       // Get attributes for the new paragraph
-      const newParagraphAttrs = Attribute.getSplittedAttributes(
-        extensionAttrs,
-        'paragraph',
-        {}
-      );
+      const newParagraphAttrs = Attribute.getSplittedAttributes(extensionAttrs, 'paragraph', {});
 
       // Create a new paragraph node
       const paragraphType = schema.nodes.paragraph;
       let newParagraph = paragraphType.createAndFill(newParagraphAttrs);
-      
+
       if (!newParagraph) {
         newParagraph = paragraphType.create();
       }
@@ -264,17 +277,16 @@ const handleSplitInEmptyBlock = (props, currentListItem) => {
       // Replace the ENTIRE LIST with a paragraph
       const listStart = parentList.pos;
       const listEnd = parentList.pos + parentList.node.nodeSize;
-      
+
       tr.replaceWith(listStart, listEnd, newParagraph);
 
       // Position cursor at start of new paragraph
       const newPos = listStart + 1;
       tr.setSelection(TextSelection.near(tr.doc.resolve(newPos)));
-      
-      tr.scrollIntoView();
-      
-      return true;
 
+      tr.scrollIntoView();
+
+      return true;
     } catch (error) {
       console.error('Error destroying list:', error);
       return false;

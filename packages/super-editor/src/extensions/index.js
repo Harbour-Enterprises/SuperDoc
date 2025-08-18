@@ -38,7 +38,7 @@ import { PageNumber, TotalPageCount } from './page-number/index.js';
 import { ShapeContainer } from './shape-container/index.js';
 import { ShapeTextbox } from './shape-textbox/index.js';
 import { ContentBlock } from './content-block/index.js';
-import { StructuredContent } from './structured-content/index.js';
+import { StructuredContent, DocumentSection } from './structured-content/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -50,6 +50,7 @@ import { Strike } from './strike/index.js';
 import { Link } from './link/index.js';
 import { TrackInsert, TrackDelete, TrackFormat } from './track-changes/index.js';
 import { CommentsMark } from './comment/index.js';
+import { TextTransform } from './text-transform/index.js';
 
 // Plugins
 import { CommentsPlugin } from './comment/index.js';
@@ -60,6 +61,7 @@ import { Pagination } from './pagination/index.js';
 import { LinkedStyles } from './linked-styles/linked-styles.js';
 import { Search } from './search/index.js';
 import { NodeResizer } from './noderesizer/index.js';
+import { CustomSelection } from './custom-selection/index.js';
 
 // Helpers
 import { trackChangesHelpers } from './track-changes/index.js';
@@ -103,6 +105,7 @@ const getRichTextExtensions = () => {
     AiPlugin,
     Image,
     NodeResizer,
+    CustomSelection,
   ];
 };
 
@@ -169,7 +172,10 @@ const getStarterExtensions = () => {
     ContentBlock,
     Search,
     StructuredContent,
+    DocumentSection,
     NodeResizer,
+    CustomSelection,
+    TextTransform,
   ];
 };
 
@@ -232,5 +238,8 @@ export {
   AiPlugin,
   Search,
   StructuredContent,
+  DocumentSection,
   NodeResizer,
+  CustomSelection,
+  TextTransform,
 };

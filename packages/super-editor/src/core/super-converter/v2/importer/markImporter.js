@@ -11,6 +11,11 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
   const marks = [];
   const seen = new Set();
 
+  const lang = property?.elements?.find((el) => el.name === 'w:lang');
+
+  // eslint-disable-next-line no-unused-vars
+  const langAttrs = lang?.attributes || {};
+
   property?.elements?.forEach((element) => {
     const marksForType = SuperConverter.markTypes.filter((mark) => mark.name === element.name);
     if (!marksForType.length) {
@@ -33,30 +38,64 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
       }
     }
 
-    marksForType.forEach((m) => {
+    let filteredMarksForType = marksForType;
+
+    /**
+     * Now that we have 2 marks named 'spacing' we need to determine if its
+     * for line height or letter spacing.
+     *
+     * If the spacing has a w:val attribute, it's for letter spacing.
+     * If the spacing has a w:line, w:lineRule, w:before, w:after attribute, it's for line height.
+     */
+    if (element.name === 'w:spacing') {
+      const attrs = element.attributes || {};
+      const hasLetterSpacing = attrs['w:val'];
+      filteredMarksForType = marksForType.filter((m) => {
+        if (hasLetterSpacing) {
+          return m.type === 'letterSpacing';
+        }
+        return m.type === 'lineHeight';
+      });
+    }
+
+    filteredMarksForType.forEach((m) => {
       if (!m || seen.has(m.type)) return;
       seen.add(m.type);
 
       const { attributes = {} } = element;
       const newMark = { type: m.type };
 
-      if (attributes['w:val'] === '0' || attributes['w:val'] === 'none') {
+      const exceptionMarks = ['w:b', 'w:caps'];
+      if ((attributes['w:val'] === '0' || attributes['w:val'] === 'none') && !exceptionMarks.includes(m.name)) {
         return;
       }
 
       // Use the parent mark (ie: textStyle) if present
       if (m.mark) newMark.type = m.mark;
 
+      // Special handling of "w:caps".
+      if (m.name === 'w:caps') {
+        newMark.attrs = {};
+        if (attributes['w:val'] === '0') {
+          newMark.attrs[m.property] = 'none';
+        } else {
+          newMark.attrs[m.property] = 'uppercase';
+        }
+        marks.push(newMark);
+        return;
+      }
+
       // Marks with attrs: we need to get their values
       if (Object.keys(attributes).length) {
         const value = getMarkValue(m.type, attributes, docx);
-        
+
         // If there is no value for mark it can't be applied
         if (value === null || value === undefined) return;
-        
+
         newMark.attrs = {};
         newMark.attrs[m.property] = value;
       }
+
       marks.push(newMark);
     });
   });
@@ -126,22 +165,22 @@ function getMarkValue(markType, attributes, docx) {
     textIndent: () => getIndentValue(attributes),
     fontFamily: () => getFontFamilyValue(attributes, docx),
     lineHeight: () => getLineHeightValue(attributes),
+    letterSpacing: () => `${twipsToPt(attributes['w:val'])}pt`,
     textAlign: () => attributes['w:val'],
     link: () => attributes['href'],
     underline: () => attributes['w:val'],
     bold: () => attributes?.['w:val'] || null,
     italic: () => attributes?.['w:val'] || null,
     highlight: () => getHighLightValue(attributes),
-    strike: () => getStrikeValue(attributes)
+    strike: () => getStrikeValue(attributes),
   };
 
   if (!(markType in markValueMapper)) {
-    console.debug('❗️❗️ No value mapper for:', markType, 'Attributes:', attributes);
+    // console.debug('❗️❗️ No value mapper for:', markType, 'Attributes:', attributes);
   }
 
   // Returned the mapped mark value
   if (markType in markValueMapper) {
-    const f = markValueMapper[markType];
     return markValueMapper[markType]();
   }
 }
@@ -163,7 +202,6 @@ function getFontFamilyValue(attributes, docx) {
   const latin = majorFont.elements.find((el) => el.name === 'a:latin');
   const typeface = latin.attributes['typeface'];
   return typeface;
-
 }
 
 function getIndentValue(attributes) {
@@ -181,7 +219,7 @@ function getLineHeightValue(attributes) {
   // if (!value) value = attributes['w:after'];
   // if (!value) value = attributes['w:before'];
   if (!value || value === '0') return null;
-  
+
   if (lineRule === 'exact') return `${twipsToPt(value)}pt`;
   return `${twipsToLines(value)}`;
 }

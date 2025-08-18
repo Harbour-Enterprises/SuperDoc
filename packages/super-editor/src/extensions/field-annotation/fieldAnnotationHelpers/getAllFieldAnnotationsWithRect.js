@@ -1,4 +1,4 @@
-import { getNodeType, posToDOMRect } from '@core/helpers/index.js';
+import { posToDOMRect } from '@core/helpers/index.js';
 import { getAllFieldAnnotations } from './getAllFieldAnnotations.js';
 
 /**

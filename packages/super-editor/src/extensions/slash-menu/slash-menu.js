@@ -103,7 +103,7 @@ export const SlashMenu = Extension.create({
             editorView.dispatch(
               editorView.state.tr.setMeta(SlashMenuPluginKey, {
                 type: 'updatePosition',
-              })
+              }),
             );
           }
         };
@@ -159,7 +159,7 @@ export const SlashMenu = Extension.create({
               view.state.tr.setMeta(SlashMenuPluginKey, {
                 type: 'open',
                 pos: $cursor.pos,
-              })
+              }),
             );
             return true;
           }
@@ -167,20 +167,18 @@ export const SlashMenu = Extension.create({
           if (pluginState.open && (event.key === 'Escape' || event.key === 'ArrowLeft')) {
             // Store current state before closing
             const { anchorPos } = pluginState;
-            
+
             // Close menu
             view.dispatch(
               view.state.tr.setMeta(SlashMenuPluginKey, {
                 type: 'close',
-              })
+              }),
             );
 
             // Restore cursor position and focus
             if (anchorPos !== null) {
               const tr = view.state.tr.setSelection(
-                view.state.selection.constructor.near(
-                  view.state.doc.resolve(anchorPos)
-                )
+                view.state.selection.constructor.near(view.state.doc.resolve(anchorPos)),
               );
               view.dispatch(tr);
               view.focus();

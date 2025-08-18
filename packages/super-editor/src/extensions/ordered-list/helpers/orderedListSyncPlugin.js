@@ -18,7 +18,7 @@ export function orderedListSync(editor) {
       const isFromPlugin = transactions.some((tr) => tr.getMeta('orderedListSync'));
       if (isFromPlugin || !transactions.some((tr) => tr.docChanged)) {
         return null;
-      };
+      }
 
       hasInitialized = true;
 
@@ -29,18 +29,12 @@ export function orderedListSync(editor) {
       const listInitialized = new Map(); // Track if we've initialized each numId
 
       const shouldProcess = transactions.some((tr) => {
-          return tr.steps.some(step => {
-            const stepJSON = step.toJSON();
-            const hasUpdateMeta = tr.getMeta('updateListSync');
-            return (
-              hasUpdateMeta ||
-              stepJSON &&
-              stepJSON.slice &&
-              JSON.stringify(stepJSON).includes('"listItem"')
-            );
-          })
-        }
-      );
+        return tr.steps.some((step) => {
+          const stepJSON = step.toJSON();
+          const hasUpdateMeta = tr.getMeta('updateListSync');
+          return hasUpdateMeta || (stepJSON && stepJSON.slice && JSON.stringify(stepJSON).includes('"listItem"'));
+        });
+      });
       if (!shouldProcess) return null;
 
       newState.doc.descendants((node, pos) => {
@@ -50,11 +44,11 @@ export function orderedListSync(editor) {
         const level = parseInt(attrLvl);
         const numId = parseInt(attrNumId);
 
-        const {
+        let {
           lvlText,
           customFormat,
           listNumberingType,
-          start: numberingDefStart
+          start: numberingDefStart,
         } = ListHelpers.getListDefinitionDetails({ numId, level, editor });
 
         const start = parseInt(numberingDefStart) || 1;
@@ -119,14 +113,11 @@ export function orderedListSync(editor) {
           customFormat,
         };
 
-        const keysChanged = Object.keys(updatedAttrs).some(
-          key => node.attrs[key] !== updatedAttrs[key]
-        );
+        const keysChanged = Object.keys(updatedAttrs).some((key) => node.attrs[key] !== updatedAttrs[key]);
 
         if (keysChanged) {
           tr.setNodeMarkup(pos, undefined, updatedAttrs);
         }
-
       });
 
       return tr;
@@ -136,4 +127,4 @@ export function orderedListSync(editor) {
 
 export function randomId() {
   return Math.floor(Math.random() * 0xffffffff).toString();
-};
+}

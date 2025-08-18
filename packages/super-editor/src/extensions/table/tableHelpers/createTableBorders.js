@@ -1,7 +1,4 @@
-export const createTableBorders = ({ 
-  size = 0.66665,
-  color = '#000000',
-} = {}) => {
+export const createTableBorders = ({ size = 0.66665, color = '#000000' } = {}) => {
   return {
     top: { size, color },
     left: { size, color },

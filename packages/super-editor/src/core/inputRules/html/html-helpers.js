@@ -1,11 +1,10 @@
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
-import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 
 /**
  * Flattens ALL lists to ensure each list contains exactly ONE list item.
  * Handles both multi-item lists and nested lists.
  */
-export function flattenListsInHtml(html, editor) {  
+export function flattenListsInHtml(html, editor) {
   // pick the right parser & Node interface
   let parser, NodeInterface;
   if (editor.options.mockDocument) {
@@ -38,22 +37,22 @@ function findListToFlatten(doc) {
   // First priority: unprocessed lists
   let list = doc.querySelector('ol:not([data-list-id]), ul:not([data-list-id])');
   if (list) return list;
-  
+
   // Second priority: lists with multiple items
   const allLists = doc.querySelectorAll('ol[data-list-id], ul[data-list-id]');
   for (const list of allLists) {
-    const liChildren = Array.from(list.children).filter(c => c.tagName.toLowerCase() === 'li');
+    const liChildren = Array.from(list.children).filter((c) => c.tagName.toLowerCase() === 'li');
     if (liChildren.length > 1) {
       return list;
     }
-    
+
     // Third priority: lists with nested lists
     const nestedLists = list.querySelectorAll('ol, ul');
     if (nestedLists.length > 0) {
       return list;
     }
   }
-  
+
   return null;
 }
 
@@ -66,7 +65,7 @@ function findListToFlatten(doc) {
 function flattenFoundList(listElem, editor, NodeInterface) {
   const localDoc = listElem.ownerDocument;
   const tag = listElem.tagName.toLowerCase();
-  
+
   // Ensure the list has a data-list-id
   let rootNumId = listElem.getAttribute('data-list-id');
   if (!rootNumId) {
@@ -77,7 +76,7 @@ function flattenFoundList(listElem, editor, NodeInterface) {
       editor,
     });
   }
-  
+
   // Calculate the level of this list
   let level = 0;
   let ancestor = listElem.parentElement;
@@ -87,42 +86,40 @@ function flattenFoundList(listElem, editor, NodeInterface) {
     }
     ancestor = ancestor.parentElement;
   }
-  
+
   // Get all direct <li> children
-  const items = Array.from(listElem.children).filter(
-    c => c.tagName.toLowerCase() === 'li'
-  );
-  
+  const items = Array.from(listElem.children).filter((c) => c.tagName.toLowerCase() === 'li');
+
   // Create single-item lists for each item
   const newLists = [];
-  
-  items.forEach((li, index) => {
+
+  items.forEach((li) => {
     // Extract any nested lists first
     const nestedLists = Array.from(li.querySelectorAll('ol, ul'));
-    const nestedListsData = nestedLists.map(nl => ({
+    const nestedListsData = nestedLists.map((nl) => ({
       element: nl.cloneNode(true),
-      parent: nl.parentNode
+      parent: nl.parentNode,
     }));
-    
+
     // Remove nested lists from the li
-    nestedLists.forEach(nl => nl.parentNode.removeChild(nl));
-    
+    nestedLists.forEach((nl) => nl.parentNode.removeChild(nl));
+
     // Create a new single-item list for this li
     const newList = createSingleItemList(li, tag, rootNumId, level, editor, NodeInterface);
     newLists.push(newList);
-    
+
     // Add the nested lists (they'll be processed in the next iteration)
-    nestedListsData.forEach(data => {
+    nestedListsData.forEach((data) => {
       newLists.push(data.element);
     });
   });
-  
+
   // Replace the original list with the new single-item lists
   const parent = listElem.parentNode;
   const nextSibling = listElem.nextSibling;
   parent.removeChild(listElem);
-  
-  newLists.forEach(list => {
+
+  newLists.forEach((list) => {
     parent.insertBefore(list, nextSibling);
   });
 }
@@ -134,47 +131,49 @@ function createSingleItemList(li, tag, rootNumId, level, editor, NodeInterface) 
   const localDoc = li.ownerDocument;
   const ELEMENT_NODE = NodeInterface.ELEMENT_NODE;
   const TEXT_NODE = NodeInterface.TEXT_NODE;
-  
+
   // Create new list and list item
   const newList = localDoc.createElement(tag);
   const newLi = localDoc.createElement('li');
-  
+
   // Copy attributes from original li (except the ones we'll set ourselves)
-  Array.from(li.attributes).forEach(attr => {
-    if (!attr.name.startsWith('data-num-') && !attr.name.startsWith('data-level') && !attr.name.startsWith('data-list-')) {
+  Array.from(li.attributes).forEach((attr) => {
+    if (
+      !attr.name.startsWith('data-num-') &&
+      !attr.name.startsWith('data-level') &&
+      !attr.name.startsWith('data-list-')
+    ) {
       newLi.setAttribute(attr.name, attr.value);
     }
   });
-  
+
   // Set list attributes
   newList.setAttribute('data-list-id', rootNumId);
-  
+
   // Set list item attributes
   newLi.setAttribute('data-num-id', rootNumId);
   newLi.setAttribute('data-level', String(level));
-  
+
   // Get numbering info
   const { listNumberingType, lvlText } = ListHelpers.getListDefinitionDetails({
     numId: rootNumId,
     level,
     editor,
   });
-  
+
   newLi.setAttribute('data-num-fmt', listNumberingType);
   newLi.setAttribute('data-lvl-text', lvlText || '');
   newLi.setAttribute('data-list-level', JSON.stringify([level + 1]));
-  
+
   // Copy content from original li
-  Array.from(li.childNodes).forEach(node => {
-    if (node.nodeType === ELEMENT_NODE || 
-        (node.nodeType === TEXT_NODE && node.textContent.trim())) {
+  Array.from(li.childNodes).forEach((node) => {
+    if (node.nodeType === ELEMENT_NODE || (node.nodeType === TEXT_NODE && node.textContent.trim())) {
       newLi.appendChild(node.cloneNode(true));
     }
   });
-  
+
   // Handle case where li only contains text
-  if (newLi.childNodes.length === 0 || 
-      (newLi.childNodes.length === 1 && newLi.childNodes[0].nodeType === TEXT_NODE)) {
+  if (newLi.childNodes.length === 0 || (newLi.childNodes.length === 1 && newLi.childNodes[0].nodeType === TEXT_NODE)) {
     const textContent = newLi.textContent.trim();
     if (textContent) {
       newLi.innerHTML = '';
@@ -183,28 +182,9 @@ function createSingleItemList(li, tag, rootNumId, level, editor, NodeInterface) 
       newLi.appendChild(p);
     }
   }
-  
+
   newList.appendChild(newLi);
   return newList;
-}
-
-// Keep the original function signature for backwards compatibility
-export function flattenSingleList(listElem, editor, level = 0, parentNumId, NodeInterface) {
-  // This function is now just a wrapper that calls the main flattening logic
-  const results = [];
-  const tempDiv = listElem.ownerDocument.createElement('div');
-  tempDiv.appendChild(listElem.cloneNode(true));
-  
-  const flattened = flattenListsInHtml(tempDiv.innerHTML, editor);
-  const tempDoc = new DOMParser().parseFromString(flattened, 'text/html');
-  
-  Array.from(tempDoc.body.children).forEach(child => {
-    if (child.tagName && (child.tagName.toLowerCase() === 'ol' || child.tagName.toLowerCase() === 'ul')) {
-      results.push(child);
-    }
-  });
-  
-  return results;
 }
 
 /**
@@ -219,19 +199,18 @@ export function unflattenListsInHtml(html) {
   let currentSequence = null;
 
   allNodes.forEach((node, index) => {
-    const isFlattenList = node.tagName &&
-      (node.tagName === 'OL' || node.tagName === 'UL') && 
-      node.hasAttribute('data-list-id');
-      
+    const isFlattenList =
+      node.tagName && (node.tagName === 'OL' || node.tagName === 'UL') && node.hasAttribute('data-list-id');
+
     if (isFlattenList) {
       const listId = node.getAttribute('data-list-id');
-      
+
       if (currentSequence && currentSequence.id === listId) {
         currentSequence.lists.push({ element: node, index });
       } else {
         currentSequence = {
           id: listId,
-          lists: [{ element: node, index }]
+          lists: [{ element: node, index }],
         };
         listSequences.push(currentSequence);
       }
@@ -247,7 +226,7 @@ export function unflattenListsInHtml(html) {
     if (sequenceLists.length === 0) {
       return;
     }
-    
+
     const items = sequenceLists
       .map(({ element: list }) => {
         const liElement = list.querySelector('li');
@@ -260,7 +239,7 @@ export function unflattenListsInHtml(html) {
         };
       })
       .filter((item) => item !== null);
-    
+
     if (items.length === 0) {
       return;
     }
@@ -270,7 +249,7 @@ export function unflattenListsInHtml(html) {
 
     // Replace the first original list with the new nested structure.
     firstOriginalList?.parentNode?.insertBefore(rootList, firstOriginalList);
-    
+
     // Remove all original flatten lists in this sequence.
     sequenceLists.forEach(({ element: list }) => {
       if (list.parentNode) list.parentNode.removeChild(list);
@@ -299,7 +278,7 @@ function buildNestedList({ items }) {
 
   const lastLevelItem = new Map();
   items.forEach((item) => {
-    const { element: liElement, level, numFmt, listLevel } = item;
+    const { element: liElement, level, numFmt } = item;
     const cleanLi = cleanListItem(liElement.cloneNode(true));
 
     if (level === 0) {
@@ -327,7 +306,7 @@ function buildNestedList({ items }) {
         nestedList = doc.createElement(listType);
         parentLi.append(nestedList);
       }
-      
+
       nestedList.append(cleanLi);
       lastLevelItem.set(level, cleanLi);
     }
@@ -342,12 +321,12 @@ function buildNestedList({ items }) {
 function cleanListItem(listItem) {
   const attrs = [
     'data-num-id',
-    'data-level', 
+    'data-level',
     'data-num-fmt',
     'data-lvl-text',
     'data-list-level',
     'data-marker-type',
-    'aria-label'
+    'aria-label',
   ];
   attrs.forEach((attr) => {
     listItem.removeAttribute(attr);

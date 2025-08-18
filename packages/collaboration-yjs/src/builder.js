@@ -27,7 +27,7 @@ export class CollaborationBuilder {
 
     /** @type {Extension[]} */
     this._extensions = [];
-  
+
     /** @type {number} */
     this._documentExpiryMs = 5000;
   }

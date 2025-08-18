@@ -17,6 +17,7 @@ export const handleHyperlinkNode = (params) => {
   const anchor = attributes['w:anchor'];
 
   // TODO: Check if we need this atr
+  // eslint-disable-next-line no-unused-vars
   const history = attributes['w:history'];
 
   const rel = elements.find((el) => el.attributes['Id'] === rId) || {};
@@ -44,10 +45,10 @@ export const handleHyperlinkNode = (params) => {
         const style = styleElements.find((el) => el.attributes['w:styleId'] === 'Hyperlink');
         const styleRpr = style?.elements?.find((el) => el.name === 'w:rPr');
         if (styleRpr) {
-          styleRpr.elements.forEach(styleEl => {
+          styleRpr.elements.forEach((styleEl) => {
             const hasElInRPr = rPr.elements.find((el) => el.name === styleEl.name);
             if (!hasElInRPr) rPr.elements.push(styleEl);
-          })
+          });
         }
       }
     }

@@ -11,14 +11,16 @@ export const insertTabCharacter = ({ tr, state, dispatch }) => {
   return true;
 };
 
-export const insertTabNode = () => ({ tr, state, dispatch }) => {
-  const newPos = tr.selection.from;
-  const tabNode = state.schema?.nodes?.tab?.create();
+export const insertTabNode =
+  () =>
+  ({ tr, state, dispatch }) => {
+    const newPos = tr.selection.from;
+    const tabNode = state.schema?.nodes?.tab?.create();
 
-  // If tab node isn't defined, fallback to tab character
-  if (!tabNode) return insertTabCharacter({ tr, state, dispatch });
+    // If tab node isn't defined, fallback to tab character
+    if (!tabNode) return insertTabCharacter({ tr, state, dispatch });
 
-  tr.insert(newPos, tabNode);
-  if (dispatch) dispatch(tr);
-  return true;
-};
+    tr.insert(newPos, tabNode);
+    if (dispatch) dispatch(tr);
+    return true;
+  };

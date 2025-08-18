@@ -1,7 +1,6 @@
-import { Mapping, ReplaceStep, ReplaceAroundStep, AddMarkStep, RemoveMarkStep } from 'prosemirror-transform';
-import { TextSelection, Transaction, EditorState } from 'prosemirror-state';
+import { Mapping, ReplaceStep, AddMarkStep, RemoveMarkStep } from 'prosemirror-transform';
+import { TextSelection } from 'prosemirror-state';
 import { replaceStep } from './replaceStep.js';
-import { replaceAroundStep } from './replaceAroundStep.js';
 import { addMarkStep } from './addMarkStep.js';
 import { removeMarkStep } from './removeMarkStep.js';
 import { TrackDeleteMarkName } from '../constants.js';
@@ -10,10 +9,10 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
 
 /**
  * Tracked transaction to track changes.
- * @param {Transaction} options.tr Transaction.
- * @param {EditorState} options.state Editor state.
+ * @param {import('prosemirror-state').Transaction} options.tr Transaction.
+ * @param {import('prosemirror-state').EditorState} options.state Editor state.
  * @param {object} options.user User object ({ name, email }).
- * @returns {Transaction} Modified transaction.
+ * @returns {import('prosemirror-state').Transaction} Modified transaction.
  */
 export const trackedTransaction = ({ tr, state, user }) => {
   const onlyInputTypeMeta = ['inputType', 'uiEvent', 'paste', 'pointer'];
@@ -55,22 +54,7 @@ export const trackedTransaction = ({ tr, state, user }) => {
         originalStepIndex,
       });
       console.debug('[track-changes]: replaceStep');
-    } /* else if (step instanceof ReplaceAroundStep) {
-      // Skip for now.
-      replaceAroundStep({
-        state,
-        tr,
-        step,
-        newTr,
-        map,
-        doc,
-        user,
-        date,
-        originalStep,
-        originalStepIndex,
-      });
-      console.debug('[track-changes]: ReplaceAroundStep');
-    } */ else if (step instanceof AddMarkStep) {
+    } else if (step instanceof AddMarkStep) {
       addMarkStep({
         state,
         tr,

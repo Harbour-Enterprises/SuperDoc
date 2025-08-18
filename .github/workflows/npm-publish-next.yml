@@ -17,6 +17,8 @@ on:
       - 'examples/**'
       - '.github/**'
       - 'packages/collaboration-yjs/**'
+      - '**/package.json'
+      - '**/package-lock.json'
 
   workflow_dispatch:
 

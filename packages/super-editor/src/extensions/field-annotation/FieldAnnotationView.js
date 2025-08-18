@@ -134,7 +134,7 @@ export class FieldAnnotationView {
 
   buildHTMLView() {
     let { displayLabel, rawHtml } = this.node.attrs;
-  
+
     if (!this.editor.options.isHeadless && !!rawHtml) {
       try {
         const tempDiv = document.createElement('div');
@@ -203,7 +203,13 @@ export class FieldAnnotationView {
     annotation.append(content);
 
     let omitHighlight = highlighted === false;
-    let styles = [`border: 2px solid ${this.borderColor}`, `border-radius: 2px`, `padding: 1px 2px`, `box-sizing: border-box`];
+    let styles = [
+      `border: 2px solid ${this.borderColor}`,
+      `border-radius: 2px`,
+      `padding: 1px 2px`,
+      `box-sizing: border-box`,
+    ];
+
     let annotationStyle = styles.join('; ');
 
     let mergedAttrs = Attribute.mergeAttributes(this.htmlAttributes, {
@@ -211,7 +217,11 @@ export class FieldAnnotationView {
     });
 
     for (let [key, value] of Object.entries(mergedAttrs)) {
-      annotation.setAttribute(key, value);
+      if (key === 'style') {
+        annotation.style.cssText = value;
+      } else {
+        annotation.setAttribute(key, value);
+      }
     }
 
     return {
@@ -232,7 +242,7 @@ export class FieldAnnotationView {
     this.editor.off('selectionUpdate', this.handleSelectionUpdate);
   }
 
-  handleSelectionUpdate({ editor, transaction }) {
+  handleSelectionUpdate({ editor }) {
     if (!this.editor.isEditable) {
       return;
     }
@@ -292,11 +302,11 @@ export class FieldAnnotationView {
 
   // Can be used to manually update the NodeView.
   // Otherwise the NodeView is recreated.
-  update(updatedNode) {
+  update() {
     return false;
   }
 
-  ignoreMutation(mutation) {
+  ignoreMutation() {
     // https://github.com/ueberdosis/tiptap/blob/main/packages/core/src/NodeView.ts
     // a leaf/atom node is like a black box for ProseMirror
     // and should be fully handled by the node view
@@ -317,4 +327,3 @@ export class FieldAnnotationView {
     });
   }
 }
-

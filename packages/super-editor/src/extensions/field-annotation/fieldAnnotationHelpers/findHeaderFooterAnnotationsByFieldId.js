@@ -13,7 +13,10 @@ export function findHeaderFooterAnnotationsByFieldId(fieldIdOrArray, editor, act
   const sectionEditors = getAllHeaderFooterEditors(editor);
   const annotations = [];
   sectionEditors.forEach(({ editor: sectionEditor }) => {
-    const state = activeSectionEditor.options.documentId === sectionEditor.options.documentId ? activeSectionEditor.state : sectionEditor.state;
+    const state =
+      activeSectionEditor.options.documentId === sectionEditor.options.documentId
+        ? activeSectionEditor.state
+        : sectionEditor.state;
     const fieldAnnotations = findChildren(state.doc, (node) => {
       let isFieldAnnotation = node.type.name === 'fieldAnnotation';
       if (Array.isArray(fieldIdOrArray)) {
@@ -24,6 +27,6 @@ export function findHeaderFooterAnnotationsByFieldId(fieldIdOrArray, editor, act
     });
     annotations.push(...fieldAnnotations);
   });
-  
+
   return annotations;
 }

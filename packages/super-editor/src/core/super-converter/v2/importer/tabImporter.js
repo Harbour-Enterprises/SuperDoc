@@ -17,6 +17,8 @@ const handleTabNode = (params) => {
     const pPr = style?.elements?.find((s) => s.name === 'w:pPr');
     const tabsDef = pPr?.elements?.find((s) => s.name === 'w:tabs');
     const firstTab = tabsDef?.elements?.find((s) => s.name === 'w:tab');
+
+    // eslint-disable-next-line no-unused-vars
     stylePos = twipsToPixels(firstTab?.attributes?.['w:pos']);
   }
 

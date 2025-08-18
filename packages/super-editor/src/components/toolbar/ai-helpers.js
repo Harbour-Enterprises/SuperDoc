@@ -130,7 +130,7 @@ function getJsonBetweenFencesFromResponse(buffer) {
     }
 
     return null;
-  } catch (e) {
+  } catch {
     return null;
   }
 }
@@ -238,7 +238,7 @@ export async function rewriteStreaming(text, prompt = '', options = {}, onChunk,
   }
 
   const message = prompt
-    ? `Rewrite the following text: "${text}". Instructions: ${prompt}`
+    ? `Rewrite the following text: "${text}" using these instructions: ${prompt}`
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
@@ -248,7 +248,7 @@ export async function rewriteStreaming(text, prompt = '', options = {}, onChunk,
       {
         type: 'custom_prompt',
         name: 'text_rewrite',
-        message: `Rewrite the following text: "${text}" using these instructions: ${prompt}`,
+        message,
       },
     ],
   };
@@ -276,7 +276,7 @@ export async function rewrite(text, prompt = '', options = {}) {
   }
 
   const message = prompt
-    ? `Rewrite the following text: "${text}". Instructions: ${prompt}`
+    ? `Rewrite the following text: "${text}" using these instructions: ${prompt}`
     : `Rewrite the following text: "${text}"`;
 
   const payload = {
@@ -286,7 +286,7 @@ export async function rewrite(text, prompt = '', options = {}) {
       {
         type: 'custom_prompt',
         name: 'text_rewrite',
-        message: `Rewrite the following text: "${text}" using these instructions: ${prompt}`,
+        message,
         format: [{ value: '' }],
       },
     ],
@@ -306,7 +306,7 @@ const formatRegistry = {
     {
       name: 'bold',
       pattern: /\*\*(.*?)\*\*/g,
-      transform: (_match, content, _editor) => ({
+      transform: (_match, content) => ({
         type: 'text',
         marks: [{ type: 'bold' }],
         text: content,
@@ -315,7 +315,7 @@ const formatRegistry = {
     {
       name: 'italic',
       pattern: /\*(.*?)\*/g,
-      transform: (_match, content, _editor) => ({
+      transform: (_match, content) => ({
         type: 'text',
         marks: [{ type: 'italic' }],
         text: content,
@@ -324,7 +324,7 @@ const formatRegistry = {
     {
       name: 'underline',
       pattern: /<(?:u|ins)>(.*?)<\/(?:u|ins)>/g,
-      transform: (_match, content, _editor) => ({
+      transform: (_match, content) => ({
         type: 'text',
         marks: [{ type: 'underline' }],
         text: content,
@@ -336,12 +336,12 @@ const formatRegistry = {
 /**
  * Converts markdown-style formatting in the document text to ProseMirror's native formatting.
  * Uses a node-aware approach that safely handles formatting across node boundaries.
- * 
+ *
  * This function processes the entire document content and applies formatting rules defined in formatRegistry.
  * It handles cases where formatting markers (like **bold**) span across multiple text nodes by tracking
  * node positions and boundaries. The function works from the end of the document to the start to avoid
  * position shifts when making replacements.
- * 
+ *
  * @param {Object} editor - The ProseMirror editor instance containing the document state and view
  */
 export function formatDocument(editor) {
@@ -356,7 +356,7 @@ export function formatDocument(editor) {
       rule.pattern.lastIndex = 0;
       const matches = [];
       let match;
-      
+
       while ((match = rule.pattern.exec(docText)) !== null) {
         matches.push({
           rule,
@@ -365,21 +365,21 @@ export function formatDocument(editor) {
           originalText: match[0],
           contentText: match[1],
         });
-      } 
-      
+      }
+
       // We may have 0, 1, or more matches for a single rule in a chunk of text
       // Need to handle each match individually but preserve positions of the matches
       // Process matches from end to start to avoid position shifts
       matches.sort((a, b) => b.startPos - a.startPos);
-      
+
       for (const match of matches) {
         const { startPos, endPos, originalText, contentText } = match;
-        
+
         try {
           // Create transaction
           let tr = editor.state.tr;
           const replacement = rule.transform(originalText, contentText, editor);
-          
+
           // Gather nodes needed to replace the match
           const nodesInRange = [];
           doc.nodesBetween(startPos, Math.min(endPos, doc.content.size), (node, pos) => {
@@ -388,7 +388,7 @@ export function formatDocument(editor) {
             }
             return true;
           });
-          
+
           if (nodesInRange.length > 0) {
             // Try first to find match in a single node
             // This is best case scenario and would skip the need to reconstruct across nodes
@@ -400,40 +400,40 @@ export function formatDocument(editor) {
               const nodeInfo = nodesInRange[i];
               const nodeText = nodeInfo.node.text || '';
               const nodePos = nodeInfo.pos;
-              
+
               // Check if this node contains the entire pattern
               if (nodeText.includes(originalText)) {
                 const nodeMatchIndex = nodeText.indexOf(originalText);
                 actualStartPos = nodePos + nodeMatchIndex;
                 actualEndPos = actualStartPos + originalText.length;
-                
+
                 foundExactMatch = true;
                 break;
               }
             }
-            
+
             // If we couldn't find the pattern in a single node, try reconstructing across nodes
             if (!foundExactMatch) {
               // Build text spanning multiple nodes
               let combinedText = '';
               let offsets = [];
-              // Start of first node 
+              // Start of first node
               // This acts as an anchor point for the relative position of characters in other nodes
               let basePos = nodesInRange[0].pos;
-              
+
               // Build a mapping between combined text positions and actual document positions
               for (const nodeInfo of nodesInRange) {
                 const nodeText = nodeInfo.node.text || '';
                 const relativePos = nodeInfo.pos - basePos;
-                
+
                 // For each character in the node, record its position
                 for (let i = 0; i < nodeText.length; i++) {
                   offsets.push(relativePos + i);
                 }
-                
+
                 combinedText += nodeText;
               }
-              
+
               const matchIndex = combinedText.indexOf(originalText);
               if (matchIndex >= 0) {
                 // Use our offset map to find the actual position in the document
@@ -441,23 +441,23 @@ export function formatDocument(editor) {
                 // The end position might be beyond the last recorded offset if it falls at a node boundary
                 const endIndex = matchIndex + originalText.length - 1;
                 actualEndPos = basePos + (offsets[endIndex] || 0) + 1;
-                
+
                 foundExactMatch = true;
               }
             }
-            
+
             if (foundExactMatch) {
               const marks = replacement.marks
                 ? replacement.marks.map((mark) => editor.schema.marks[mark.type].create(mark.attrs))
                 : [];
-              
+
               // PM transactions
               tr = tr.delete(actualStartPos, actualEndPos);
               tr = tr.insert(actualStartPos, editor.schema.text(replacement.text, marks));
-              
+
               if (tr.docChanged) {
                 editor.view.dispatch(tr);
-                
+
                 // After making this change, we need to recalculate positions
                 // Get updated doc reference
                 doc = editor.state.doc;

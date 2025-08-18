@@ -3,7 +3,7 @@ import { getColStyleDeclaration } from './getColStyleDeclaration.js';
 export const createColGroup = (node, cellMinWidth, overrideCol, overrideValue) => {
   let totalWidth = 0;
   let fixedWidth = true;
-  
+
   const cols = [];
   const colsValues = [];
   const row = node.firstChild;
@@ -28,10 +28,10 @@ export const createColGroup = (node, cellMinWidth, overrideCol, overrideValue) =
   const colgroup = ['colgroup', {}, ...cols];
   const colgroupValues = [...colsValues];
 
-  return { 
-    colgroup, 
-    tableWidth, 
+  return {
+    colgroup,
+    tableWidth,
     tableMinWidth,
-    colgroupValues, 
+    colgroupValues,
   };
 };

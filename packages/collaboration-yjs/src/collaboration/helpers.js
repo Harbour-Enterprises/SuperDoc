@@ -34,12 +34,12 @@ export function parseCookie(rawCookie) {
 
   return rawCookie
     .split(';')
-    .map(pair => pair.trim())
+    .map((pair) => pair.trim())
     .reduce((cookies, pair) => {
       const eqIdx = pair.indexOf('=');
-      if (eqIdx < 0) return cookies; 
-      const name  = pair.slice(0, eqIdx).trim();
-      let   value = pair.slice(eqIdx + 1).trim();
+      if (eqIdx < 0) return cookies;
+      const name = pair.slice(0, eqIdx).trim();
+      let value = pair.slice(eqIdx + 1).trim();
 
       if (value.startsWith('"') && value.endsWith('"')) {
         value = value.slice(1, -1);

@@ -68,7 +68,7 @@ const superdoc = new SuperDoc({
   ],
   pagination: true,
   licenseKey: 'community-and-eval-agplv3',
-  telemetry: { 
+  telemetry: {
     enabled: true,
   } //basic usage metrics and exceptions
 })
@@ -98,7 +98,7 @@ const config = {
     {
       id: 'my-doc-id', // Required: This document's ID. This is also used as the room name in collaboration.
       type: 'docx', // Required: 'pdf', 'docx' or 'html'
-      
+
       // Document content - provide EITHER data OR url:
       data: fileObject, // Option 1: A JS File/Blob object of your document
       url: 'https://example.com/document.docx', // Option 2: URL to fetch the document from
@@ -130,7 +130,7 @@ const config = {
       url: 'wss://your-collaboration-server.com', // Required: Path to your collaboration backend
       token: 'your-auth-token', // Required: Your auth token
     },
-    
+
     // Toolbar config, overrides the 'toolbar' key, if provided, above
     toolbar: {
       selector: 'superdoc-toolbar',
@@ -140,13 +140,13 @@ const config = {
   },
 
   // Optional: events - pass in your own functions for each
-    onEditorBeforeCreate: () => null,
-    onEditorCreate: () => null,
-    onEditorDestroy: () => null,
-    onContentError: () => null,
-    onReady: () => null,
-    onPdfDocumentReady: () => null,
-    onException: () => null,
+  onEditorBeforeCreate: () => null,
+  onEditorCreate: () => null,
+  onEditorDestroy: () => null,
+  onContentError: () => null,
+  onReady: () => null,
+  onPdfDocumentReady: () => null,
+  onException: () => null,
 };
 ```
 
@@ -209,7 +209,6 @@ const superdoc = new SuperDoc({
   ],
 });
 
-
 // Remove event listeners
 superdoc.off('ready', myReadyHandler);
 ```
@@ -226,8 +225,7 @@ superdoc.setDocumentMode('suggesting');
 superdoc.setDocumentMode('editing');
 
 // Get a list of HTML strings (one per DOCX editor)
-superdoc.getHTML()
-
+superdoc.getHTML();
 ```
 
 ## Next Steps

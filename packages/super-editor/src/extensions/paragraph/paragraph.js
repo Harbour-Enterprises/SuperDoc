@@ -1,6 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { Node, Attribute, Schema } from '@core/index.js';
+import { Node, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 
@@ -80,12 +80,12 @@ export const Paragraph = Node.create({
       class: {
         renderDOM: (attributes) => {
           if (attributes.dropcap) {
-            return { class: `sd-editor-dropcap`};
+            return { class: `sd-editor-dropcap` };
           }
           return null;
-        }
+        },
       },
-      styleId: { },
+      styleId: {},
       attributes: {
         rendered: false,
       },
@@ -109,21 +109,24 @@ export const Paragraph = Node.create({
 
           return { style };
         },
-      }
+      },
+      tabStops: { rendered: false },
     };
   },
 
   parseDOM() {
-    return [{
-      tag: 'p',
-      getAttrs: (node) => {
-        let extra = {};
-        Array.from(node.attributes).forEach((attr) => {
-          extra[attr.name] = attr.value;
-        });
-        return { extraAttrs: extra };
+    return [
+      {
+        tag: 'p',
+        getAttrs: (node) => {
+          let extra = {};
+          Array.from(node.attributes).forEach((attr) => {
+            extra[attr.name] = attr.value;
+          });
+          return { extraAttrs: extra };
+        },
       },
-    }];
+    ];
   },
 
   renderDOM({ htmlAttributes }) {
@@ -154,9 +157,8 @@ export const Paragraph = Node.create({
       },
     });
 
-    // Disabling dropcap for now
-    return [];
-  }
+    return [dropcapPlugin];
+  },
 });
 
 const getDropcapDecorations = (state, view) => {
@@ -166,11 +168,9 @@ const getDropcapDecorations = (state, view) => {
     if (node.type.name === 'paragraph') {
       if (node.attrs.dropcap?.type === 'margin') {
         const width = getDropcapWidth(view, pos);
-        decorations.push(
-          Decoration.inline(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }),
-        );
+        decorations.push(Decoration.inline(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }));
       }
-      
+
       return false; // no need to descend into a paragraph
     }
   });

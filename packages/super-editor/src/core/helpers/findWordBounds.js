@@ -7,20 +7,52 @@
 export const findWordBounds = (doc, pos) => {
   const $pos = doc.resolve(pos);
   const parent = $pos.parent;
-  const offset = $pos.parentOffset;
-  const text = parent.textContent;
+  const offsetInParent = $pos.parentOffset;
 
-  if (!text) return { from: pos, to: pos };
+  let offset = 0;
+  let targetNode = null;
+  let nodeStart = 0;
 
-  let start = offset, end = offset;
+  parent.forEach((child, childOffset) => {
+    if (child.isText) {
+      const start = offset;
+      const end = offset + child.nodeSize;
+      if (start <= offsetInParent && offsetInParent <= end) {
+        targetNode = child;
+        nodeStart = childOffset;
+      }
+      offset = end;
+    } else {
+      offset += child.nodeSize;
+    }
+  });
 
-  // Adjust start to the beginning of the word
-  while (start > 0 && /\w/.test(text[start - 1])) start--;
-  // Adjust end to the end of the word
-  while (end < text.length && /\w/.test(text[end])) end++;
+  if (!targetNode) return;
 
-  const from = $pos.start() + start;
-  const to = $pos.start() + end;
+  const text = targetNode.text;
+  const cursorOffset = offsetInParent - nodeStart;
+
+  const isWordChar = (ch) => /\w/.test(ch);
+  const isPunctOrSpace = (ch) => /[.,;:!-?=()[\]{}"'\s]/.test(ch);
+
+  let from, to;
+
+  if (isPunctOrSpace(text[cursorOffset])) {
+    from = $pos.start() + nodeStart + cursorOffset;
+    to = from + 1;
+  } else {
+    // Select only word characters (no trailing punctuation)
+    let start = cursorOffset;
+    while (start > 0 && isWordChar(text[start - 1])) start--;
+
+    let end = cursorOffset;
+    while (end < text.length && isWordChar(text[end])) end++;
+
+    if (start === end) return;
+
+    from = $pos.start() + nodeStart + start;
+    to = $pos.start() + nodeStart + end;
+  }
 
   return { from, to };
 };

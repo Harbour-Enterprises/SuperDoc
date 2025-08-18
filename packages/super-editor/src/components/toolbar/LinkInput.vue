@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch, onMounted } from "vue";
+import { ref, computed, watch, onMounted } from 'vue';
 import { toolbarIcons } from './toolbarIcons.js';
 import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
 import { TextSelection } from 'prosemirror-state';
@@ -73,12 +73,12 @@ const getLinkHrefAtSelection = () => {
   const { $from, empty } = selection;
   if (empty) {
     const marks = state.storedMarks || $from.marks();
-    const link = marks.find(mark => mark.type === linkMark);
+    const link = marks.find((mark) => mark.type === linkMark);
     if (link) href = link.attrs.href;
   } else {
     state.doc.nodesBetween(selection.from, selection.to, (node) => {
       if (node.marks) {
-        const link = node.marks.find(mark => mark.type === linkMark);
+        const link = node.marks.find((mark) => mark.type === linkMark);
         if (link) href = link.attrs.href;
       }
     });
@@ -108,10 +108,7 @@ const validUrl = computed(() => {
 // --- CASE LOGIC ---
 const isEditing = computed(() => !isAnchor.value && !!getLinkHrefAtSelection());
 
-const getApplyText = computed(() => (showApply.value ? 'Apply' : 'Remove'));
 const isDisabled = computed(() => !validUrl.value);
-const showApply = computed(() => !showRemove.value);
-const showRemove = computed(() => rawUrl.value === '' && getLinkHrefAtSelection());
 
 const openLink = () => {
   window.open(url.value, '_blank');
@@ -127,7 +124,7 @@ watch(
   () => {
     updateFromEditor();
   },
-  { immediate: true }
+  { immediate: true },
 );
 
 const focusInput = () => {
@@ -167,11 +164,7 @@ const handleSubmit = () => {
 
   // Move cursor to end of link and refocus editor.
   const endPos = editor.view.state.selection.$to.pos;
-  editor.view.dispatch(
-    editor.view.state.tr.setSelection(
-      new TextSelection(editor.view.state.doc.resolve(endPos)),
-    ),
-  );
+  editor.view.dispatch(editor.view.state.tr.setSelection(new TextSelection(editor.view.state.doc.resolve(endPos))));
   setTimeout(() => editor.view.focus(), 100);
 
   props.closePopover();
@@ -186,7 +179,7 @@ const handleRemove = () => {
 </script>
 
 <template>
-  <div class="link-input-ctn" :class="{'high-contrast': isHighContrastMode}">
+  <div class="link-input-ctn" :class="{ 'high-contrast': isHighContrastMode }">
     <div class="link-title" v-if="isAnchor">Page anchor</div>
     <div class="link-title" v-else-if="isEditing">Edit link</div>
     <div class="link-title" v-else>Add link</div>
@@ -195,13 +188,7 @@ const handleRemove = () => {
       <!-- Text input -->
       <div class="input-row text-input-row">
         <div class="input-icon text-input-icon">T</div>
-        <input
-          type="text"
-          name="text"
-          placeholder="Text"
-          v-model="text"
-          @keydown.enter.stop.prevent="handleSubmit"
-        />
+        <input type="text" name="text" placeholder="Text" v-model="text" @keydown.enter.stop.prevent="handleSubmit" />
       </div>
 
       <!-- URL input -->
@@ -217,18 +204,26 @@ const handleRemove = () => {
           @keydown="urlError = false"
         />
 
-        <div class="open-link-icon" :class="{ disabled: !validUrl }" v-html="toolbarIcons.openLink" @click="openLink"
-          data-item="btn-link-open">
-        </div>
+        <div
+          class="open-link-icon"
+          :class="{ disabled: !validUrl }"
+          v-html="toolbarIcons.openLink"
+          @click="openLink"
+          data-item="btn-link-open"
+        ></div>
       </div>
       <div class="input-row link-buttons">
-        <button class="remove-btn" @click="handleRemove" v-if="rawUrl" data-item="btn-link-remove">
+        <button class="remove-btn" @click="handleRemove" v-if="isEditing" data-item="btn-link-remove">
           <div class="remove-btn__icon" v-html="toolbarIcons.removeLink"></div>
           Remove
         </button>
-        <button class="submit-btn" v-if="showApply" @click="handleSubmit"
-          :class="{ 'disable-btn': isDisabled }" data-item="btn-link-apply">
-          {{ getApplyText }}
+        <button
+          class="submit-btn"
+          @click="handleSubmit"
+          :class="{ 'disable-btn': isDisabled }"
+          data-item="btn-link-apply"
+        >
+          Apply
         </button>
       </div>
     </div>
@@ -257,60 +252,59 @@ const handleRemove = () => {
 
   :deep(svg) {
     width: 100%;
-      height: 100%;
-      display: block;
-      fill: currentColor;
-    }
-    
-    .input-row {
-      align-content: baseline;
-      display: flex;
-      align-items: center;
-      font-size: 16px;
-    
-      input {
-        font-size: 13px;
-        flex-grow: 1;
-        padding: 10px;
-        border-radius: 8px;
-        padding-left: 32px;
-        box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15);
-        color: #666;
-        border: 1px solid #ddd;
-        box-sizing: border-box;
-    
-        &:active,
-        &:focus {
-          outline: none;
-          border: 1px solid #1355ff;
-        }
-        
+    height: 100%;
+    display: block;
+    fill: currentColor;
+  }
+
+  .input-row {
+    align-content: baseline;
+    display: flex;
+    align-items: center;
+    font-size: 16px;
+
+    input {
+      font-size: 13px;
+      flex-grow: 1;
+      padding: 10px;
+      border-radius: 8px;
+      padding-left: 32px;
+      box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.15);
+      color: #666;
+      border: 1px solid #ddd;
+      box-sizing: border-box;
+
+      &:active,
+      &:focus {
+        outline: none;
+        border: 1px solid #1355ff;
       }
     }
+  }
 
-.input-icon {
-  position: absolute;
-  left: 25px;
-  width: auto;
-  color: #999;
-  pointer-events: none;
-}
-
-.input-icon:not(.text-input-icon) {
-  transform: rotate(45deg);
-  height: 12px;
-}
-
-&.high-contrast {
   .input-icon {
-    color: #000;
+    position: absolute;
+    left: 25px;
+    width: auto;
+    color: #999;
+    pointer-events: none;
   }
 
-  .input-row input {
-    color: #000;
-    border-color: #000;
+  .input-icon:not(.text-input-icon) {
+    transform: rotate(45deg);
+    height: 12px;
   }
-}
+
+  &.high-contrast {
+    .input-icon {
+      color: #000;
+    }
+
+    .input-row input {
+      color: #000;
+      border-color: #000;
+    }
+  }
 }
 .open-link-icon {
   margin-left: 10px;
@@ -422,7 +416,7 @@ const handleRemove = () => {
   cursor: pointer;
   transition: all 0.2s ease;
   box-sizing: border-box;
-/* &.high-contrast {
+  /* &.high-contrast {
     background-color: black;
   } */
   &:hover {

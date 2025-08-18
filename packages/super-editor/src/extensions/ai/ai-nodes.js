@@ -4,15 +4,15 @@ import { AiLoaderNodeName } from './ai-constants.js';
 
 export const AiLoaderNode = Node.create({
   name: AiLoaderNodeName,
-  
+
   group: 'inline',
-  
+
   inline: true,
-  
+
   atom: true,
-  
+
   selectable: false,
-  
+
   draggable: false,
 
   addOptions() {
@@ -20,8 +20,8 @@ export const AiLoaderNode = Node.create({
       htmlAttributes: {
         class: 'sd-ai-loader',
         contentEditable: 'false',
-        'aria-label': 'AI loader node'
-      }
+        'aria-label': 'AI loader node',
+      },
     };
   },
 
@@ -31,8 +31,9 @@ export const AiLoaderNode = Node.create({
 
   renderDOM({ htmlAttributes }) {
     const span = document.createElement('span');
-    Object.entries(Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes))
-      .forEach(([k, v]) => span.setAttribute(k, v));
+    Object.entries(Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)).forEach(([k, v]) =>
+      span.setAttribute(k, v),
+    );
 
     const img = document.createElement('img');
     img.src = dotsLoader;
@@ -41,5 +42,5 @@ export const AiLoaderNode = Node.create({
     img.height = 50;
     span.appendChild(img);
     return span;
-  }
+  },
 });

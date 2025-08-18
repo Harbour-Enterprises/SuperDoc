@@ -9,9 +9,9 @@ export const getHeaderFooterAnnotations = (editor) => {
   const editors = getAllHeaderFooterEditors(editor);
 
   const allAnnotations = [];
-  editors.forEach(({ id, editor }) => {
+  editors.forEach(({ editor }) => {
     const annotations = getAllFieldAnnotations(editor.state);
     allAnnotations.push(...annotations);
   });
   return allAnnotations;
-}
+};

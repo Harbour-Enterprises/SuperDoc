@@ -1,4 +1,3 @@
-import { Transaction } from 'prosemirror-state';
 import { v4 as uuidv4 } from 'uuid';
 import { TrackInsertMarkName, TrackDeleteMarkName } from '../constants.js';
 import { findTrackedMarkBetween } from './findTrackedMarkBetween.js';

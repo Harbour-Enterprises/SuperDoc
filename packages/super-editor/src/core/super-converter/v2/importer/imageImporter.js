@@ -27,9 +27,8 @@ export const handleDrawingNode = (params) => {
   // Some images are identified by wp:anchor
   const isAnchor = elements.find((el) => el.name === 'wp:anchor');
   if (isAnchor) {
-    
     result = handleImageImport(elements[0], currentFileName, params);
-    result.attrs.isAnchor = isAnchor;
+    if (result && result.attrs) result.attrs.isAnchor = isAnchor;
   }
 
   // Others, wp:inline
@@ -57,8 +56,8 @@ export function handleImageImport(node, currentFileName, params) {
 
   const graphic = node.elements.find((el) => el.name === 'a:graphic');
   const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
-  const { uri } = graphicData?.attributes;
-  const shapeURI = "http://schemas.microsoft.com/office/word/2010/wordprocessingShape";
+  const { uri } = graphicData?.attributes || {};
+  const shapeURI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
   if (!!uri && uri === shapeURI) {
     return handleShapeDrawing(params, node, graphicData);
   }
@@ -80,13 +79,13 @@ export function handleImageImport(node, currentFileName, params) {
   const positionVValue = emuToPixels(positionV?.elements[0]?.text);
   const vRelativeFrom = positionVTag?.attributes.relativeFrom;
   const alignV = positionVTag?.elements?.find((el) => el.name === 'wp:align')?.elements[0]?.text;
-  
+
   const simplePos = node.elements.find((el) => el.name === 'wp:simplePos');
   const wrapSquare = node.elements.find((el) => el.name === 'wp:wrapSquare');
   const wrapTopAndBottom = node.elements.find((el) => el.name === 'wp:wrapTopAndBottom');
-  
+
   const docPr = node.elements.find((el) => el.name === 'wp:docPr');
-  
+
   let anchorData = null;
   if (hRelativeFrom || alignH || vRelativeFrom || alignV) {
     anchorData = {
@@ -114,6 +113,8 @@ export function handleImageImport(node, currentFileName, params) {
   const { elements } = relationships;
 
   const rel = elements.find((el) => el.attributes['Id'] === rEmbed);
+  if (!rel) return null;
+
   const { attributes: relAttributes } = rel;
 
   const path = `word/${relAttributes['Target']}`;
@@ -134,10 +135,10 @@ export function handleImageImport(node, currentFileName, params) {
         simplePos: {
           x: simplePos.attributes.x,
           y: simplePos.attributes.y,
-        }
+        },
       }),
       ...(wrapSquare && {
-        wrapText: wrapSquare.attributes.wrapText
+        wrapText: wrapSquare.attributes.wrapText,
       }),
       wrapTopAndBottom: !!wrapTopAndBottom,
       originalPadding: {
@@ -157,7 +158,9 @@ const handleShapeDrawing = (params, node, graphicData) => {
   const textBox = wsp.elements.find((el) => el.name === 'wps:txbx');
   const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
 
+  // eslint-disable-next-line no-unused-vars
   const isGraphicContainer = node.elements.find((el) => el.name === 'wp:docPr');
+
   const spPr = wsp.elements.find((el) => el.name === 'wps:spPr');
   const prstGeom = spPr?.elements.find((el) => el.name === 'a:prstGeom');
 
@@ -173,7 +176,7 @@ const handleShapeDrawing = (params, node, graphicData) => {
   const translatedElement = nodeListHandler.handler({
     ...params,
     node: textBoxContent.elements[0],
-    nodes: textBoxContent.elements
+    nodes: textBoxContent.elements,
   });
 
   return translatedElement[0];
@@ -191,8 +194,11 @@ const getRectangleShape = (params, node) => {
   const xfrm = node.elements.find((el) => el.name === 'a:xfrm');
   const start = xfrm.elements.find((el) => el.name === 'a:off');
   const size = xfrm.elements.find((el) => el.name === 'a:ext');
-  const outline = node.elements.find((el) => el.name === 'a:ln');
   const solidFill = node.elements.find((el) => el.name === 'a:solidFill');
+
+  // TODO: We should handle this
+  // eslint-disable-next-line no-unused-vars
+  const outline = node.elements.find((el) => el.name === 'a:ln');
 
   const rectangleSize = {
     top: emuToPixels(start.attributes['y']),

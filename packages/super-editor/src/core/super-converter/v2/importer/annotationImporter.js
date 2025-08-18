@@ -41,6 +41,7 @@ export const handleAnnotationNode = (params) => {
       fontSize: parsedAttrs.fieldFontSize,
       textColor: parsedAttrs.fieldTextColor,
       textHighlight: parsedAttrs.fieldTextHighlight,
+      hash: parsedAttrs.hash,
     };
     attrs = attrsFromJSON;
   } else {
@@ -51,26 +52,28 @@ export const handleAnnotationNode = (params) => {
 
   const { attrs: marksAsAttrs, marks } = parseAnnotationMarks(sdtContent);
   const allAttrs = { ...attrs, ...marksAsAttrs };
-  allAttrs.hash = generateDocxRandomId(4);
+  if (!allAttrs.hash) allAttrs.hash = generateDocxRandomId(4);
 
-  if (!attrs.fieldId || !attrs.displayLabel) {
+  // Some w:sdt nodes have attrs.fieldId (coming from GoogleDocs) so we need a secondary check
+  // Expecting `type` if its a field annotation
+  if (!attrs.fieldId || !attrs.type) {
     return { nodes: [], consumed: 0 };
   }
-  
+
   let result = {
     type: 'text',
     text: `{{${attrs.displayLabel}}}`,
     attrs: allAttrs,
     marks,
   };
-  
+
   if (params.editor.options.annotations) {
     result = {
       type: 'fieldAnnotation',
       attrs: allAttrs,
     };
   }
-  
+
   return {
     nodes: [result],
     consumed: 1,
@@ -86,11 +89,11 @@ export const parseAnnotationMarks = (content = {}) => {
   let mainContent = content;
 
   /// if (type === 'html') {
-  /// Note: html annotation has a different structure and can include 
-  /// several paragraphs with different styles. We could find the first paragraph 
+  /// Note: html annotation has a different structure and can include
+  /// several paragraphs with different styles. We could find the first paragraph
   /// and take the marks from there, but we take fontFamily and fontSize from the annotation attributes.
 
-  /// Example: 
+  /// Example:
   /// const firstPar = content.elements?.find((el) => el.name === 'w:p');
   /// if (firstPar) mainContent = firstPar;
   // }
@@ -120,12 +123,12 @@ export const parseAnnotationMarks = (content = {}) => {
   marksWithFlatFontStyles?.forEach((mark) => {
     const { type } = mark;
     attrs[type] = mark.attrs || true;
-  })
+  });
   return {
     attrs,
-    marks
+    marks,
   };
-}
+};
 
 function getAttrsFromElements({ sdtPr, tag, alias }) {
   const type = sdtPr?.elements.find((el) => el.name === 'w:fieldTypeShort')?.attributes['w:val'];

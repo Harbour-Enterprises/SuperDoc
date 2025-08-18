@@ -15,7 +15,7 @@ export const ListItem = Node.create({
   addOptions() {
     return {
       htmlAttributes: {
-        'aria-label': 'List item node'
+        'aria-label': 'List item node',
       },
       bulletListTypeName: 'bulletList',
       orderedListTypeName: 'orderedList',
@@ -41,7 +41,7 @@ export const ListItem = Node.create({
   addNodeView() {
     return ({ node, editor, getPos, decorations }) => {
       return new ListItemNodeView(node, getPos, decorations, editor);
-    }
+    };
   },
 
   addAttributes() {
@@ -103,7 +103,7 @@ export const ListItem = Node.create({
           let listLevel = elem.getAttribute('data-list-level');
           try {
             listLevel = JSON.parse(listLevel);
-          } catch (e) {};
+          } catch {}
           return listLevel;
         },
         renderDOM: (attrs) => {
@@ -145,7 +145,7 @@ export const ListItem = Node.create({
           return {
             'data-num-id': attrs.numId,
           };
-        }
+        },
       },
 
       numPrType: {
@@ -161,7 +161,7 @@ export const ListItem = Node.create({
         renderDOM: (attrs) => {
           if (attrs.level === undefined || attrs.level === null) return {};
           return {
-            'data-level': JSON.stringify(attrs.level),
+            'data-level': attrs.level,
           };
         },
       },
@@ -178,6 +178,7 @@ export const ListItem = Node.create({
       },
 
       indent: {
+        parseDOM: (elem) => JSON.parse(elem.getAttribute('data-indent')),
         keepOnSplit: true,
         default: null,
         rendered: false,
@@ -191,7 +192,6 @@ export const ListItem = Node.create({
 
       styleId: {
         rendered: false,
-        keepOnSplit: true,
         keepOnSplit: true,
       },
 
@@ -208,7 +208,7 @@ export const ListItem = Node.create({
           return {
             'data-font-family': attrs.importedFontFamily,
           };
-        }
+        },
       },
 
       importedFontSize: {
@@ -220,13 +220,11 @@ export const ListItem = Node.create({
           };
         },
       },
-
     };
   },
 
   addShortcuts() {
     return {
- 
       Enter: () => {
         return this.editor.commands.splitListItem();
       },
@@ -239,18 +237,12 @@ export const ListItem = Node.create({
       },
 
       Tab: () => {
-        return this.editor.commands.first(({ commands }) => [
-          () => commands.increaseListIndent(),
-        ]);
+        return this.editor.commands.first(({ commands }) => [() => commands.increaseListIndent()]);
       },
 
       'Shift-Tab': () => {
-        return this.editor.commands.first(({ commands }) => [
-          () => commands.decreaseListIndent(),
-        ]);
+        return this.editor.commands.first(({ commands }) => [() => commands.decreaseListIndent()]);
       },
-
     };
   },
-
 });

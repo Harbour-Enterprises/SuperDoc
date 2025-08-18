@@ -5,20 +5,21 @@ import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.j
 
 export const Gapcursor = Extension.create({
   name: 'gapCursor',
-  
+
   addPmPlugins() {
-    return [
-      gapCursor(),
-    ];
+    return [gapCursor()];
   },
 
   extendNodeSchema(extension) {
     return {
-      allowGapCursor: callOrGet(getExtensionConfigField(extension, 'allowGapCursor', {
-        name: extension.name,
-        options: extension.options,
-        storage: extension.storage,
-      })) ?? null,
+      allowGapCursor:
+        callOrGet(
+          getExtensionConfigField(extension, 'allowGapCursor', {
+            name: extension.name,
+            options: extension.options,
+            storage: extension.storage,
+          }),
+        ) ?? null,
     };
   },
 });
