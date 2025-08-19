@@ -4,6 +4,7 @@ import { EditorState } from 'prosemirror-state';
 import { SuperConverter } from './SuperConverter.js';
 import {
   emuToPixels,
+  getTextIndentExportValue,
   inchesToTwips,
   linesToTwips,
   pixelsToEightPoints,
@@ -280,7 +281,7 @@ function generateParagraphProperties(node) {
     if (hanging || hanging === 0) attributes['w:hanging'] = pixelsToTwips(hanging);
 
     if (textIndent && !attributes['w:left']) {
-      attributes['w:left'] = inchesToTwips(textIndent);
+      attributes['w:left'] = getTextIndentExportValue(textIndent);
     }
 
     const indentElement = {
@@ -292,7 +293,7 @@ function generateParagraphProperties(node) {
     const indentElement = {
       name: 'w:ind',
       attributes: {
-        'w:left': inchesToTwips(textIndent),
+        'w:left': getTextIndentExportValue(textIndent),
       },
     };
     pPrElements.push(indentElement);
