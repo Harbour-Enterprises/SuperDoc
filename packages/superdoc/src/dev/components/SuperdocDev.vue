@@ -147,8 +147,6 @@ const onContentError = ({ editor, error, documentId, file }) => {
 };
 
 const exportDocx = async (commentsType) => {
-  console.log(editor.helpers.BlockNode.getBlockNodesInRange(2000, 4000));
-
   console.debug('Exporting docx', { commentsType });
   await superdoc.value.export({ commentsType });
 };

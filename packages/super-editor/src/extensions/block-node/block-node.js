@@ -7,18 +7,72 @@ export const BlockNode = Extension.create({
 
   addCommands() {
     return {
-      replaceBlockNodeById: (id, content) => (params) => {
-        const { tr } = params;
-        return null;
-      },
+      replaceBlockNodeById:
+        (id, contentNode) =>
+        ({ dispatch, tr }) => {
+          let blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
+          if (!blockNode || blockNode.length > 1) {
+            return true;
+          }
 
-      deleteBlockNodeById: (id) => (params) => {
-        return null;
-      },
+          if (dispatch) {
+            let { pos, node } = blockNode[0];
+            let newPosFrom = tr.mapping.map(pos); // map the position between transaction steps
+            let newPosTo = tr.mapping.map(pos + node.nodeSize);
 
-      updateBlockNodeAttrs: (id, attrs) => (params) => {
-        return null;
-      },
+            let currentNode = tr.doc.nodeAt(newPosFrom);
+            if (node.eq(currentNode)) {
+              tr.replaceWith(newPosFrom, newPosTo, contentNode);
+            }
+          }
+
+          return true;
+        },
+
+      deleteBlockNodeById:
+        (id) =>
+        ({ dispatch, tr }) => {
+          let blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
+          if (!blockNode || blockNode.length > 1) {
+            return true;
+          }
+
+          if (dispatch) {
+            let { pos, node } = blockNode[0];
+            let newPosFrom = tr.mapping.map(pos); // map the position between transaction steps
+            let newPosTo = tr.mapping.map(pos + node.nodeSize);
+
+            let currentNode = tr.doc.nodeAt(newPosFrom);
+            if (node.eq(currentNode)) {
+              tr.delete(newPosFrom, newPosTo);
+            }
+          }
+
+          return true;
+        },
+
+      updateBlockNodeAttributes:
+        (id, attrs = {}) =>
+        ({ dispatch, tr }) => {
+          if (!dispatch) return true;
+
+          let blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
+          if (!blockNode || blockNode.length > 1) {
+            return true;
+          }
+
+          let { pos, node } = blockNode[0];
+          let newPos = tr.mapping.map(pos);
+          let currentNode = tr.doc.nodeAt(newPos);
+          if (node.eq(currentNode)) {
+            tr.setNodeMarkup(newPos, undefined, {
+              ...node.attrs,
+              ...attrs,
+            });
+          }
+
+          return true;
+        },
     };
   },
 
