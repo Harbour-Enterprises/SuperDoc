@@ -1,4 +1,5 @@
 import { Node, Attribute } from '@core/index.js';
+import { generateBlockUniqueId } from '@core/utilities/sdBlockUniqueId.js';
 
 export const ShapeTextbox = Node.create({
   name: 'shapeTextbox',
@@ -20,6 +21,13 @@ export const ShapeTextbox = Node.create({
 
   addAttributes() {
     return {
+      sdBlockId: {
+        default: () => generateBlockUniqueId(this.name),
+        parseHTML: (elem) => elem.getAttribute('sd-block-id'),
+        renderHTML: (attrs) => {
+          return attrs.sdBlockId ? { 'sd-block-id': attrs.sdBlockId } : {};
+        },
+      },
       attributes: {
         rendered: false,
       },

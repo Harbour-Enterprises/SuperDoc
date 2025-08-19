@@ -3,7 +3,7 @@ import { findParentNode } from '@helpers/index.js';
 import { toggleList } from '@core/commands/index.js';
 import { InputRule } from '@core/InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
-
+import { generateBlockUniqueId } from '@core/utilities/index.js';
 const inputRegex = /^(\d+)\.\s$/;
 
 export const OrderedList = Node.create({
@@ -40,6 +40,14 @@ export const OrderedList = Node.create({
           return {
             start: attrs.order,
           };
+        },
+      },
+
+      sdBlockId: {
+        default: () => generateBlockUniqueId(this.name),
+        parseHTML: (elem) => elem.getAttribute('sd-block-id'),
+        renderHTML: (attrs) => {
+          return attrs.sdBlockId ? { 'sd-block-id': attrs.sdBlockId } : {};
         },
       },
 

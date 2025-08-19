@@ -2,6 +2,7 @@ import { Node, Attribute } from '@core/index.js';
 import { InputRule } from '@core/InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { toggleList } from '@core/commands/index.js';
+import { generateBlockUniqueId } from '@core/utilities/index.js';
 
 /**
  * Matches a bullet list to a dash or asterisk.
@@ -48,6 +49,14 @@ export const BulletList = Node.create({
 
       listId: {
         rendered: false,
+      },
+
+      sdBlockId: {
+        default: () => generateBlockUniqueId(this.name),
+        parseHTML: (elem) => elem.getAttribute('sd-block-id'),
+        renderHTML: (attrs) => {
+          return attrs.sdBlockId ? { 'sd-block-id': attrs.sdBlockId } : {};
+        },
       },
 
       attributes: {

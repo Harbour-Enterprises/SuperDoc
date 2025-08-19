@@ -1,5 +1,6 @@
 import { Node, Attribute } from '@core/index.js';
 import { callOrGet } from '@core/utilities/callOrGet.js';
+import { generateBlockUniqueId } from '@core/utilities/sdBlockUniqueId.js';
 import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.js';
 import { /* TableView */ createTableView } from './TableView.js';
 import { createTable } from './tableHelpers/createTable.js';
@@ -72,6 +73,13 @@ export const Table = Node.create({
           };
         },
       }, */
+      sdBlockId: {
+        default: () => generateBlockUniqueId(this.name),
+        parseHTML: (elem) => elem.getAttribute('sd-block-id'),
+        renderHTML: (attrs) => {
+          return attrs.sdBlockId ? { 'sd-block-id': attrs.sdBlockId } : {};
+        },
+      },
 
       tableIndent: {
         renderDOM: ({ tableIndent }) => {
