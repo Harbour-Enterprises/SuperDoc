@@ -945,7 +945,13 @@ function translateLineBreak(params) {
   }
 
   return {
-    name: 'w:br',
+    name: 'w:r',
+    elements: [
+      {
+        name: 'w:br',
+        attributes,
+      },
+    ],
     attributes,
   };
 }
