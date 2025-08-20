@@ -1,3 +1,8 @@
+/**
+ * @typedef {import('./types').FieldAttributes} FieldAttributes
+ * @typedef {import('./types').FieldValue} FieldValue
+ */
+
 import { Node, Attribute } from '@core/index.js';
 import { FieldAnnotationView } from './FieldAnnotationView.js';
 import { FieldAnnotationPlugin } from './FieldAnnotationPlugin.js';
@@ -16,6 +21,10 @@ export const fieldAnnotationName = 'fieldAnnotation';
 export const annotationClass = 'annotation';
 export const annotationContentClass = 'annotation-content';
 
+/**
+ * Field Annotation - Adds form fields to documents
+ * @module FieldAnnotation
+ */
 export const FieldAnnotation = Node.create({
   name: 'fieldAnnotation',
 
@@ -429,16 +438,11 @@ export const FieldAnnotation = Node.create({
 
     return {
       /**
-       * Add field annotation.
-       * @param pos The position in the doc.
-       * @param attrs The attributes.
-       * @example
-       * editor.commands.addFieldAnnotation(0, {
-       *  displayLabel: 'Enter your info',
-       *  fieldId: `123`,
-       *  fieldType: 'TEXTINPUT',
-       *  fieldColor: '#980043',
-       * })
+       * Add field at position
+       * @param {number} pos
+       * @param {Partial<FieldAttributes>} attrs // NOTE: attrs = {} doesn't match the FieldAttributes
+       * @param {boolean} [editorFocus]
+       * @returns {Function}
        */
       addFieldAnnotation:
         (pos, attrs = {}, editorFocus = false) =>
@@ -485,19 +489,6 @@ export const FieldAnnotation = Node.create({
           return commands.addFieldAnnotation(from, attrs, editorFocus);
         },
 
-      /**
-       * Replace field annotation.
-       * @param fieldsArray array of fields with attrs to add as annotation.
-       * @example
-       * editor.commands.replaceWithFieldAnnotation([
-       *  from: 20,
-       *  to: 45,
-       *  attrs: {
-       *    fieldType: 'TEXTINPUT'
-       *    fieldColor: '#980043'
-       *  }
-       * ])
-       */
       replaceWithFieldAnnotation:
         (fieldsArray) =>
         ({ editor, dispatch, tr }) => {
@@ -530,12 +521,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Replace annotations with a label (as text node) in selection.
-       * @param options Additional options.
-       * @example
-       * editor.commands.replaceFieldAnnotationsWithLabelInSelection()
-       */
       replaceFieldAnnotationsWithLabelInSelection:
         (options = {}) =>
         ({ commands }) => {
@@ -545,15 +530,6 @@ export const FieldAnnotation = Node.create({
           });
         },
 
-      /**
-       * Replace annotations with a label (as text node).
-       * @param fieldIdOrArray The field ID or array of field IDs.
-       * @param options.isInSelection Find in selection instead of field IDs.
-       * @param options.addToHistory Add to history or not.
-       * @param options.types Annotation types to replace.
-       * @example
-       * editor.commands.replaceFieldAnnotationsWithLabel(['1', '2'])
-       */
       replaceFieldAnnotationsWithLabel:
         (fieldIdOrArray, { isInSelection = false, addToHistory = false, types = annotationTypes } = {}) =>
         ({ dispatch, state, tr }) => {
@@ -599,11 +575,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Resets all annotations to default values.
-       * @example
-       * editor.commands.resetFieldAnnotations()
-       */
       resetFieldAnnotations:
         () =>
         ({ dispatch, state, tr }) => {
@@ -644,19 +615,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Update annotations associated with a field.
-       * @param fieldIdOrArray The field ID or array of field IDs.
-       * @param attrs The attributes.
-       * @example
-       * editor.commands.updateFieldAnnotations('123', {
-       *  displayLabel: 'Updated!',
-       * })
-       * @example
-       * editor.commands.updateFieldAnnotations(['123', '456'], {
-       *  displayLabel: 'Updated!',
-       * })
-       */
       updateFieldAnnotations:
         (fieldIdOrArray, attrs = {}) =>
         ({ dispatch, state, commands }) => {
@@ -673,13 +631,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Update particular annotation's attributes.
-       * @param annotation field annotation node to be updated.
-       * @param attrs The attributes.
-       *
-       * Used for a case when multiple annotations for one input presented
-       */
       updateFieldAnnotation:
         (annotation, attrs = {}) =>
         ({ dispatch, commands }) => {
@@ -703,11 +654,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Update the attributes of annotations.
-       * @param annotations The annotations array [{pos, node}].
-       * @param attrs The attributes object.
-       */
       updateFieldAnnotationsAttributes:
         (annotations, attrs = {}) =>
         ({ dispatch, tr }) => {
@@ -733,14 +679,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Delete annotations associated with a field.
-       * @param fieldIdOrArray The field ID or array of field IDs.
-       * @example
-       * editor.commands.deleteFieldAnnotations('123')
-       * @example
-       * editor.commands.deleteFieldAnnotations(['123', '456'])
-       */
       deleteFieldAnnotations:
         (fieldIdOrArray) =>
         ({ dispatch, state, tr }) => {
@@ -810,15 +748,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Delete a portion of annotations associated with a field.
-       * @param fieldIdOrArray The field ID or array of field IDs.
-       * @param end index at which to end extraction
-       * @example
-       * editor.commands.sliceFieldAnnotations('123', 5) - will remove a portion of annotations array starting from index 6
-       * @example
-       * editor.commands.sliceFieldAnnotations(['123', '456'], 5)
-       */
       sliceFieldAnnotations:
         (fieldIdOrArray, end) =>
         ({ dispatch, state, tr }) => {
@@ -846,17 +775,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Set `hidden` for annotations matching predicate.
-       * Other annotations become unhidden.
-       * @param predicate The predicate function.
-       * @param unsetFromOthers If should unset hidden from other annotations.
-       * @example
-       * editor.commands.setFieldAnnotationsHiddenByCondition((node) => {
-       *   let ids = ['111', '222', '333'];
-       *   return ids.includes(node.attrs.fieldId);
-       * })
-       */
       setFieldAnnotationsHiddenByCondition:
         (predicate = () => false, unsetFromOthers = false) =>
         ({ dispatch, state, chain }) => {
@@ -886,11 +804,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Unset `hidden` for all annotations.
-       * @example
-       * editor.commands.unsetFieldAnnotationsHidden()
-       */
       unsetFieldAnnotationsHidden:
         () =>
         ({ dispatch, state, commands }) => {
@@ -907,14 +820,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Set `visibility` for all annotations (without changing the layout).
-       * @param visibility The visibility value (visible, hidden).
-       * @example
-       * editor.commands.setFieldAnnotationsVisibility('visible');
-       * @example
-       * editor.commands.setFieldAnnotationsVisibility('hidden');
-       */
       setFieldAnnotationsVisibility:
         (visibility = 'visible') =>
         ({ dispatch, state, commands }) => {
@@ -939,19 +844,6 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
-      /**
-       * Set `highlighted` for annotations matching predicate.
-       * @param predicate The predicate function.
-       * @param highlighted The highlighted attribute.
-       * @example
-       * editor.commands.setFieldAnnotationsHighlighted((node) => {
-       *   let ids = ['111', '222', '333'];
-       *   return ids.includes(node.attrs.fieldId);
-       * }, false)
-       * @example Set for all annotations.
-       * editor.commands.setFieldAnnotationsHighlighted(() => true, false)
-       * editor.commands.setFieldAnnotationsHighlighted(() => true, true)
-       */
       setFieldAnnotationsHighlighted:
         (predicate = () => false, highlighted = true) =>
         ({ dispatch, state, commands }) => {

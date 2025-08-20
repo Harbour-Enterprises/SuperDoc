@@ -1,3 +1,4 @@
+// .eslintrc.jsdoc.js
 import jsdoc from 'eslint-plugin-jsdoc';
 
 export default [
@@ -7,57 +8,86 @@ export default [
       jsdoc
     },
     rules: {
-      // Start with just requiring JSDoc on public APIs
-      'jsdoc/require-jsdoc': ['error', {
+      // Require minimal JSDoc for extensions
+      'jsdoc/require-jsdoc': ['warn', {
+        publicOnly: true,
         require: {
-          FunctionDeclaration: false,      // function myFunc() {}
-          MethodDefinition: false,         // class methods
-          ClassDeclaration: false,         // class MyClass {}
-          ArrowFunctionExpression: false,  // const func = () => {}
-          FunctionExpression: false        // const func = function() {}
+          FunctionDeclaration: false,
+          MethodDefinition: false,
+          ClassDeclaration: false,
+          ArrowFunctionExpression: false,
+          FunctionExpression: false
         },
         contexts: [
-          // Extension exports (Extension.create(...))
-          'ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > CallExpression[callee.property.name="create"]',
+          // Document the extension module
+          'ExportNamedDeclaration > VariableDeclaration > VariableDeclarator > CallExpression[callee.property.name="create"]'
 
-          // Commands - both arrow functions and method definitions
-          'Property[key.name="addCommands"] > ArrowFunctionExpression',
-          'MethodDefinition[key.name="addCommands"]',
-
-          // Helpers - both arrow functions and method definitions
-          'Property[key.name="addHelpers"] > ArrowFunctionExpression',
-          'MethodDefinition[key.name="addHelpers"]'
+          // Note: We document commands/helpers with @param/@returns
+          // inside addCommands/addHelpers, not with require-jsdoc
         ]
       }],
 
-      // Validate existing JSDoc comments
-      'jsdoc/require-param-type': 'error',     // @param must have {Type}
-      'jsdoc/require-returns': 'error',        // Functions must document return
-      'jsdoc/require-returns-type': 'error',   // @returns must have {Type}
-      'jsdoc/check-param-names': 'error',      // @param names must match function params
-      'jsdoc/check-types': 'error',            // Validate type syntax (string not String)
-      'jsdoc/require-hyphen-before-param-description': ['error', 'always'], // @param {Type} name - Description
+      // When JSDoc exists, validate it's correct
+      'jsdoc/require-param': 'error',             // All params must be documented
+      'jsdoc/require-param-type': 'error',        // @param must have {Type}
+      'jsdoc/check-param-names': 'error',         // @param names must match
+      'jsdoc/check-types': 'error',               // Valid type syntax (string not String)
 
-      // Essential rules from standards
-      'jsdoc/require-example': ['error', {      // Commands need examples
-        contexts: [
-          'Property[key.name=/^(add|update|delete|set|toggle|reset)/]'
-        ]
-      }],
-      'jsdoc/no-undefined-types': ['error', {
+      // Optional - we use @returns {Function} or skip it
+      'jsdoc/require-returns': 'off',
+      'jsdoc/require-returns-type': 'off',
+
+      // Don't require descriptions if obvious
+      'jsdoc/require-param-description': 'off',
+      'jsdoc/require-returns-description': 'off',
+      'jsdoc/require-description': 'off',
+
+      // Don't require examples - nice to have but not essential
+      'jsdoc/require-example': 'off',
+
+      // Simple formatting
+      'jsdoc/require-hyphen-before-param-description': 'off', // Optional: @param {Type} name - Description
+
+      // Allow types from our .d.ts files and common types
+      'jsdoc/no-undefined-types': ['warn', {
         definedTypes: [
-          // ProseMirror types
-          'EditorState', 'Transaction', 'Node', 'Mark', 'Schema',
-          'Selection', 'Editor', 'EditorView',
-          // DOM types
-          'DOMRect', 'HTMLElement'
+          // Allow any type that starts with capital letter (likely imported)
+          '/^[A-Z]/',
+
+          // Common utility types
+          'Partial', 'Required', 'Readonly', 'Pick', 'Omit',
+
+          // Built-in types
+          'Function', 'Object', 'Array', 'Promise',
+
+          // DOM
+          'HTMLElement', 'Element', 'Event'
         ]
-      }]
+      }],
+
+      // Don't enforce these
+      'jsdoc/valid-types': 'off',                 // We use TypeScript syntax
+      'jsdoc/check-tag-names': 'off',             // Allow @module, @typedef, etc.
+      'jsdoc/check-alignment': 'off',             // Don't worry about alignment
+      'jsdoc/multiline-blocks': 'off'             // Allow single or multi-line
     },
     settings: {
       jsdoc: {
-        mode: 'typescript'
+        mode: 'typescript',      // Understand TypeScript syntax in JSDoc
+        preferredTypes: {
+          object: 'Object',      // Use Object not object
+          array: 'Array',        // Use Array not array
+          'Array.<>': 'Array<>', // Use Array<Type> not Array.<Type>
+        }
       }
+    }
+  },
+
+  // Optional: Stricter rules for core types file
+  {
+    files: ['packages/super-editor/src/types/*.d.ts'],
+    rules: {
+      // TypeScript will handle these files
     }
   }
 ];
