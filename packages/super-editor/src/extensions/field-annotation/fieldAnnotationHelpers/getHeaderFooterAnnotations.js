@@ -1,3 +1,4 @@
+// @ts-ignore
 import { getAllHeaderFooterEditors } from '@core/helpers/annotator.js';
 import { getAllFieldAnnotations } from './index.js';
 

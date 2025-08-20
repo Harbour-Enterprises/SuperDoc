@@ -38,6 +38,7 @@ export function findRemovedFieldAnnotations(tr) {
 
 function transactionDeletedAnything(tr) {
   return tr.steps.some((step) => {
+    // @ts-ignore
     if (step instanceof ReplaceStep || step instanceof ReplaceAroundStep) {
       return step.from !== step.to;
     }

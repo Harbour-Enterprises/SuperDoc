@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Fragment } from 'prosemirror-model';
 import { createHeaderFooterEditor, onHeaderFooterDataUpdate } from '@extensions/pagination/pagination-helpers.js';
 

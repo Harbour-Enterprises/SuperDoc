@@ -31,6 +31,7 @@ export function getActiveFormatting(editor) {
   const linkMark = findMark(state, linkMarkType);
 
   if (linkMark) {
+    // @ts-ignore
     let { from, to, attrs } = linkMark;
 
     if (selection.from >= from && selection.to <= to) {

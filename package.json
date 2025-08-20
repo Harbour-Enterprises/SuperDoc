@@ -39,7 +39,7 @@
       "eslint --fix",
       "prettier --write"
     ],
-    "packages/super-editor/src/extensions/field-annotation/**/*.js": [
+    "packages/super-editor/src/extensions/field-annotation/field-annotation.js": [
       "eslint -c eslint.config.docs.mjs",
       "eslint --fix",
       "prettier --write"

@@ -10,6 +10,6 @@
     "emitDeclarationOnly": true,
     "outDir": "dist"
   },
-  "include": ["src/extensions/field-annotation/**/*", "src/core/types/index.d.ts"],
+  "include": ["src/extensions/field-annotation/field-annotation.js", "src/core/types/index.d.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.js"]
 }

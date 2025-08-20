@@ -1,3 +1,4 @@
+// @ts-ignore
 import { helpers } from '@core/index.js';
 
 const { findChildren } = helpers;

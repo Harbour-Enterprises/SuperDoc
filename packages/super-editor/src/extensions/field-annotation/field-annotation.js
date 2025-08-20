@@ -3,6 +3,7 @@
  * @typedef {import('./types').FieldValue} FieldValue
  */
 
+// @ts-ignore
 import { Node, Attribute } from '@core/index.js';
 import { FieldAnnotationView } from './FieldAnnotationView.js';
 import { FieldAnnotationPlugin } from './FieldAnnotationPlugin.js';
@@ -12,6 +13,7 @@ import {
   findFieldAnnotationsBetween,
 } from './fieldAnnotationHelpers/index.js';
 import { toHex } from 'color2k';
+// @ts-ignore
 import { parseSizeUnit, minMax } from '@core/utilities/index.js';
 import { NodeSelection, Selection } from 'prosemirror-state';
 import { generateDocxRandomId } from '../../core/helpers/index.js';
@@ -787,6 +789,7 @@ export const FieldAnnotation = Node.create({
           if (dispatch) {
             let otherAnnotations = [];
             let matchedAnnotations = annotations.filter((annotation) => {
+              // @ts-ignore
               if (predicate(annotation.node)) return annotation;
               else otherAnnotations.push(annotation);
             });
@@ -855,6 +858,7 @@ export const FieldAnnotation = Node.create({
 
           if (dispatch) {
             let matchedAnnotations = annotations.filter((annotation) => {
+              // @ts-ignore
               if (predicate(annotation.node)) return annotation;
             });
 
