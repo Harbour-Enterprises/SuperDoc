@@ -38,7 +38,8 @@ export const DocumentSection = Node.create({
     return {
       id: {},
       sdBlockId: {
-        default: () => null,
+        default: null,
+        keepOnSplit: false,
         parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
         renderDOM: (attrs) => {
           return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};

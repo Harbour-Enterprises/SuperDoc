@@ -26,7 +26,8 @@ export const Heading = Node.create({
       },
       tabStops: { rendered: false },
       sdBlockId: {
-        default: () => null,
+        default: null,
+        keepOnSplit: false,
         parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
         renderDOM: (attrs) => {
           return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};

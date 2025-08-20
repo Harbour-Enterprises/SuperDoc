@@ -1,7 +1,7 @@
 import { Extension } from '@core/Extension.js';
 import { helpers } from '@core/index.js';
 const { findChildren } = helpers;
-import { Plugin, PluginKey } from 'prosemirror-state';
+import { Plugin } from 'prosemirror-state';
 import { generateBlockUniqueId } from '@core/utilities/index.js';
 
 export const BlockNode = Extension.create({
