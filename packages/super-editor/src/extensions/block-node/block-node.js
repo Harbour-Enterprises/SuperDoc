@@ -19,7 +19,7 @@ export const BlockNode = Extension.create({
 
           if (dispatch) {
             let { pos, node } = blockNode[0];
-            let newPosFrom = tr.mapping.map(pos); // map the position between transaction steps
+            let newPosFrom = tr.mapping.map(pos);
             let newPosTo = tr.mapping.map(pos + node.nodeSize);
 
             let currentNode = tr.doc.nodeAt(newPosFrom);
@@ -41,7 +41,7 @@ export const BlockNode = Extension.create({
 
           if (dispatch) {
             let { pos, node } = blockNode[0];
-            let newPosFrom = tr.mapping.map(pos); // map the position between transaction steps
+            let newPosFrom = tr.mapping.map(pos);
             let newPosTo = tr.mapping.map(pos + node.nodeSize);
 
             let currentNode = tr.doc.nodeAt(newPosFrom);
