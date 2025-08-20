@@ -1,6 +1,7 @@
 /**
  * @typedef {import('./types').FieldAttributes} FieldAttributes
  * @typedef {import('./types').FieldValue} FieldValue
+ * @typedef {import('./types').FieldType} FieldType
  */
 
 // @ts-ignore
@@ -440,10 +441,10 @@ export const FieldAnnotation = Node.create({
 
     return {
       /**
-       * Add field at position
-       * @param {number} pos
-       * @param {Partial<FieldAttributes>} attrs // NOTE: attrs = {} doesn't match the FieldAttributes
-       * @param {boolean} [editorFocus]
+       * Add a field annotation at a specific position
+       * @param {number} pos - Document position where to insert the field
+       * @param {Partial<FieldAttributes>} [attrs={}] - Field attributes
+       * @param {boolean} [editorFocus=false] - Whether to focus the editor after insertion
        * @returns {Function}
        */
       addFieldAnnotation:
@@ -484,6 +485,12 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
+      /**
+       * Add a field annotation at the current selection
+       * @param {Partial<FieldAttributes>} [attrs={}] - Field attributes
+       * @param {boolean} [editorFocus=false] - Whether to focus the editor
+       * @returns {Function}
+       */
       addFieldAnnotationAtSelection:
         (attrs = {}, editorFocus = false) =>
         ({ state, commands }) => {
@@ -491,6 +498,11 @@ export const FieldAnnotation = Node.create({
           return commands.addFieldAnnotation(from, attrs, editorFocus);
         },
 
+      /**
+       * Replace text ranges with field annotations
+       * @param {Array<{from: number, to: number, attrs: Partial<FieldAttributes>}>} fieldsArray - Array of replacements
+       * @returns {Function}
+       */
       replaceWithFieldAnnotation:
         (fieldsArray) =>
         ({ editor, dispatch, tr }) => {
@@ -523,6 +535,13 @@ export const FieldAnnotation = Node.create({
           return true;
         },
 
+      /**
+       * Replace field annotations with their display labels in selection
+       * @param {Object} [options={}] - Replacement options
+       * @param {boolean} [options.addToHistory=false] - Whether to add to undo history
+       * @param {FieldType[]} [options.types] - Limit to specific field types
+       * @returns {Function}
+       */
       replaceFieldAnnotationsWithLabelInSelection:
         (options = {}) =>
         ({ commands }) => {
@@ -532,6 +551,15 @@ export const FieldAnnotation = Node.create({
           });
         },
 
+      /**
+       * Replace field annotations with their display labels
+       * @param {string | string[] | null} fieldIdOrArray - Field ID(s) to replace, or null for selection
+       * @param {Object} [options={}] - Replacement options
+       * @param {boolean} [options.isInSelection=false] - Process only fields in selection
+       * @param {boolean} [options.addToHistory=false] - Whether to add to undo history
+       * @param {FieldType[]} [options.types] - Limit to specific field types
+       * @returns {Function}
+       */
       replaceFieldAnnotationsWithLabel:
         (fieldIdOrArray, { isInSelection = false, addToHistory = false, types = annotationTypes } = {}) =>
         ({ dispatch, state, tr }) => {
