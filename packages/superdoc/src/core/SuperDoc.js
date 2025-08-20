@@ -50,7 +50,17 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {Object} [toolbar] Toolbar module configuration
  */
 
-/** @typedef {import('@harbour-enterprises/super-editor').Editor} Editor */
+/**
+ * @typedef {Object} Editor
+ * @property {Object} options - Editor options
+ * @property {Function} commands - Editor commands
+ * @property {Function} getHTML - Get HTML content
+ * @property {Function} exportDocx - Export to DOCX
+ * @property {Function} setDocumentMode - Set document mode
+ * @property {Function} focus - Focus the editor
+ * @property {Function} setHighContrastMode - Set high contrast mode
+ * @property {Object} toolbar - Toolbar instance
+ */
 
 /**
  * @typedef {string} DocumentMode
