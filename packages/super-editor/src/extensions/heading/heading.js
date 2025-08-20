@@ -1,5 +1,4 @@
 import { Node, Attribute } from '@core/index.js';
-import { generateBlockUniqueId } from '@core/utilities/sdBlockUniqueId.js';
 
 export const Heading = Node.create({
   name: 'heading',
@@ -27,13 +26,10 @@ export const Heading = Node.create({
       },
       tabStops: { rendered: false },
       sdBlockId: {
-        default: generateBlockUniqueId(this.name),
-        parseHTML: (elem) => elem.getAttribute('sd-block-id'),
-        renderHTML: (attrs) => {
-          if (!attrs.sdBlockId) return { 'sd-block-id': generateBlockUniqueId(this.name) };
-          return {
-            'sd-block-id': attrs.sdBlockId,
-          };
+        default: () => null,
+        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs) => {
+          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
     };

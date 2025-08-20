@@ -1,5 +1,4 @@
 import { Node, Attribute } from '@core/index.js';
-import { generateBlockUniqueId } from '@core/utilities/sdBlockUniqueId.js';
 
 export const ShapeContainer = Node.create({
   name: 'shapeContainer',
@@ -30,10 +29,10 @@ export const ShapeContainer = Node.create({
         },
       },
       sdBlockId: {
-        default: () => generateBlockUniqueId(this.name),
-        parseHTML: (elem) => elem.getAttribute('sd-block-id'),
-        renderHTML: (attrs) => {
-          return attrs.sdBlockId ? { 'sd-block-id': attrs.sdBlockId } : {};
+        default: () => null,
+        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs) => {
+          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
       style: {

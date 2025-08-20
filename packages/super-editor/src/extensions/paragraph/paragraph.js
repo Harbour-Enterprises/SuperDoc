@@ -3,7 +3,6 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Node, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
-import { generateBlockUniqueId } from '@core/utilities/index.js';
 
 export const Paragraph = Node.create({
   name: 'paragraph',
@@ -88,10 +87,11 @@ export const Paragraph = Node.create({
       },
       styleId: {},
       sdBlockId: {
-        default: () => generateBlockUniqueId(this.name),
-        parseHTML: (elem) => elem.getAttribute('sd-block-id'),
-        renderHTML: (attrs) => {
-          return attrs.sdBlockId ? { 'sd-block-id': attrs.sdBlockId } : {};
+        default: null,
+        keepOnSplit: false,
+        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs) => {
+          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
       attributes: {

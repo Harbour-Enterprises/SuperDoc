@@ -1,6 +1,8 @@
 import { Extension } from '@core/Extension.js';
 import { helpers } from '@core/index.js';
 const { findChildren } = helpers;
+import { Plugin, PluginKey } from 'prosemirror-state';
+import { generateBlockUniqueId } from '@core/utilities/index.js';
 
 export const BlockNode = Extension.create({
   name: 'BlockNode',
@@ -108,5 +110,58 @@ export const BlockNode = Extension.create({
         return blockNodes;
       },
     };
+  },
+  onCreate() {
+    const { state, view } = this.editor;
+    const tr = state.tr;
+    let changed = false;
+
+    state.doc.descendants((node, pos) => {
+      if (!node.type.spec.group?.split(' ')?.includes('block')) return;
+      if (node.attrs?.sdBlockId) return;
+      tr.setNodeMarkup(
+        pos,
+        undefined,
+        {
+          ...node.attrs,
+          sdBlockId: generateBlockUniqueId(node.type.name),
+        },
+        node.marks,
+      );
+      changed = true;
+      return false;
+    });
+
+    if (changed) view.dispatch(tr);
+  },
+  addPmPlugins() {
+    return [
+      new Plugin({
+        appendTransaction: (transactions, _oldState, newState) => {
+          if (!transactions.some((tr) => tr.docChanged)) return null;
+
+          let tr = null;
+          let changed = false;
+          newState.doc.descendants((node, pos) => {
+            if (!node.type.spec.group?.split(' ')?.includes('block')) return;
+            if (node.attrs?.sdBlockId) return;
+
+            tr = tr ?? newState.tr;
+            tr.setNodeMarkup(
+              pos,
+              undefined,
+              {
+                ...node.attrs,
+                sdBlockId: generateBlockUniqueId(node.type.name),
+              },
+              node.marks,
+            );
+            changed = true;
+          });
+
+          return changed ? tr : null;
+        },
+      }),
+    ];
   },
 });

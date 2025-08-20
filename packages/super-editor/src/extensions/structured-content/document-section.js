@@ -4,7 +4,6 @@ import { htmlHandler } from '@core/InputRule.js';
 import { Selection } from 'prosemirror-state';
 import { DOMParser as PMDOMParser } from 'prosemirror-model';
 import { findParentNode, SectionHelpers } from '@helpers/index.js';
-import { generateBlockUniqueId } from '@core/utilities/sdBlockUniqueId.js';
 
 export const DocumentSection = Node.create({
   name: 'documentSection',
@@ -39,10 +38,10 @@ export const DocumentSection = Node.create({
     return {
       id: {},
       sdBlockId: {
-        default: () => generateBlockUniqueId(this.name),
-        parseHTML: (elem) => elem.getAttribute('sd-block-id'),
-        renderHTML: (attrs) => {
-          return attrs.sdBlockId ? { 'sd-block-id': attrs.sdBlockId } : {};
+        default: () => null,
+        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs) => {
+          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
       title: {},
