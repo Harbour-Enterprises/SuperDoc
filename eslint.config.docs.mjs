@@ -1,4 +1,3 @@
-// .eslintrc.jsdoc.js
 import jsdoc from 'eslint-plugin-jsdoc';
 
 export default [
@@ -80,14 +79,6 @@ export default [
           'Array.<>': 'Array<>', // Use Array<Type> not Array.<Type>
         }
       }
-    }
-  },
-
-  // Optional: Stricter rules for core types file
-  {
-    files: ['packages/super-editor/src/types/*.d.ts'],
-    rules: {
-      // TypeScript will handle these files
     }
   }
 ];
