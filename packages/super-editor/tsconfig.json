@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "checkJs": true,
+    "checkJs": false,
     "allowJs": true,
     "moduleResolution": "node",
     "target": "ES2020",
@@ -10,6 +10,5 @@
     "emitDeclarationOnly": true,
     "outDir": "dist"
   },
-  "include": ["src/extensions/field-annotation/field-annotation.js", "src/core/types/index.d.ts"],
   "exclude": ["node_modules", "dist", "**/*.test.js"]
 }

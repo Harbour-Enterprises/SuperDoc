@@ -1,3 +1,4 @@
+// @ts-check
 /**
  * @typedef {import('./types').FieldAttributes} FieldAttributes
  * @typedef {import('./types').FieldValue} FieldValue
