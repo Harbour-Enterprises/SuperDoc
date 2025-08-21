@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { ReplaceStep } from 'prosemirror-transform';
 import { nodeAllowsSdBlockIdAttr, nodeNeedsSdBlockId, checkForNewBlockNodesInTrs } from './block-node.js';
+import { initTestEditor, loadTestDataForEditorTests } from '../../tests/helpers/helpers.js';
 
 // Mock
 class OtherStep {}
@@ -439,5 +440,116 @@ describe('checkForNewBlockNodesInTrs', () => {
 
     // This should not throw an error
     expect(checkForNewBlockNodesInTrs(transactions)).toBe(false);
+  });
+});
+
+describe('BlockNode helpers', () => {
+  const filename = 'doc_with_spaces_from_styles.docx';
+  let docx, media, mediaFiles, fonts, editor;
+  beforeAll(async () => ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename)));
+  beforeEach(() => ({ editor } = initTestEditor({ content: docx, media, mediaFiles, fonts })));
+
+  it('getBlockNodes returns only nodes that allow sdBlockId', () => {
+    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    expect(blocks.length).toBeGreaterThan(0);
+    blocks.forEach(({ node }) => {
+      expect(node.type?.spec?.attrs?.sdBlockId).not.toBeUndefined();
+      expect(node.isBlock).toBe(true);
+    });
+  });
+
+  it('getBlockNodeById finds node by sdBlockId', () => {
+    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const sample = blocks.find((b) => !!b.node.attrs.sdBlockId);
+    expect(sample).toBeTruthy();
+    const id = sample.node.attrs.sdBlockId;
+    const byId = editor.helpers.BlockNode.getBlockNodeById(id);
+    expect(byId.length).toBe(1);
+    expect(byId[0].node.eq(sample.node)).toBe(true);
+  });
+
+  it('getBlockNodesByType returns nodes of the given type', () => {
+    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const targetType = blocks[0].node.type.name;
+    const byType = editor.helpers.BlockNode.getBlockNodesByType(targetType);
+    const expectedCount = blocks.filter((b) => b.node.type.name === targetType).length;
+    expect(byType.length).toBe(expectedCount);
+    byType.forEach((entry) => expect(entry.node.type.name).toBe(targetType));
+  });
+
+  it('getBlockNodesInRange returns nodes within the specified range', () => {
+    const allBlocks = editor.helpers.BlockNode.getBlockNodes();
+    const allInDoc = editor.helpers.BlockNode.getBlockNodesInRange(0, editor.state.doc.content.size);
+    expect(allInDoc.length).toBe(allBlocks.length);
+
+    const sample = allBlocks[0];
+    const from = sample.pos;
+    const to = sample.pos + sample.node.nodeSize;
+    const inRange = editor.helpers.BlockNode.getBlockNodesInRange(from, to);
+    expect(inRange.length).toBe(1);
+    expect(inRange[0].node.eq(sample.node)).toBe(true);
+  });
+});
+
+describe('BlockNode commands', () => {
+  const filename = 'doc_with_spaces_from_styles.docx';
+  let docx, media, mediaFiles, fonts, editor;
+  beforeAll(async () => ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename)));
+  beforeEach(() => ({ editor } = initTestEditor({ content: docx, media, mediaFiles, fonts })));
+
+  it('replaceBlockNodeById replaces node content', () => {
+    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const target = blocks.find((b) => ['paragraph', 'heading'].includes(b.node.type.name));
+    expect(target).toBeTruthy();
+    const oldId = target.node.attrs.sdBlockId;
+    const newId = `${oldId}-new`;
+
+    const typeName = target.node.type.name;
+    const replacement = editor.schema.nodes[typeName].create({ sdBlockId: newId }, editor.schema.text('Replaced'));
+
+    const result = editor.commands.replaceBlockNodeById(oldId, replacement);
+    expect(result).toBe(true);
+
+    const oldNode = editor.helpers.BlockNode.getBlockNodeById(oldId);
+    expect(oldNode.length).toBe(0);
+    const newNode = editor.helpers.BlockNode.getBlockNodeById(newId);
+    expect(newNode.length).toBe(1);
+    expect(newNode[0].node.textContent).toBe('Replaced');
+  });
+
+  it('deleteBlockNodeById removes the node', () => {
+    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const target = blocks.find((b) => ['paragraph', 'heading'].includes(b.node.type.name));
+    expect(target).toBeTruthy();
+    const id = target.node.attrs.sdBlockId;
+
+    const before = editor.helpers.BlockNode.getBlockNodeById(id);
+    expect(before.length).toBe(1);
+
+    const result = editor.commands.deleteBlockNodeById(id);
+    expect(result).toBe(true);
+
+    const after = editor.helpers.BlockNode.getBlockNodeById(id);
+    expect(after.length).toBe(0);
+  });
+
+  it('updateBlockNodeAttributes updates node attributes', () => {
+    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const target = blocks.find((b) => ['paragraph', 'heading'].includes(b.node.type.name));
+    expect(target).toBeTruthy();
+    const oldId = target.node.attrs.sdBlockId;
+    const newId = `${oldId}-updated`;
+
+    const before = editor.helpers.BlockNode.getBlockNodeById(oldId);
+    expect(before.length).toBe(1);
+
+    const result = editor.commands.updateBlockNodeAttributes(oldId, { sdBlockId: newId });
+    expect(result).toBe(true);
+
+    const oldNode = editor.helpers.BlockNode.getBlockNodeById(oldId);
+    expect(oldNode.length).toBe(0);
+    const updated = editor.helpers.BlockNode.getBlockNodeById(newId);
+    expect(updated.length).toBe(1);
+    expect(['heading', 'paragraph']).toContain(updated[0].node.type.name);
   });
 });
