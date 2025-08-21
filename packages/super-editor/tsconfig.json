@@ -4,11 +4,18 @@
     "allowJs": true,
     "moduleResolution": "node",
     "target": "ES2020",
-    "lib": ["ES2020", "DOM"],
+    "lib": [
+      "ES2020",
+      "DOM"
+    ],
     "skipLibCheck": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "outDir": "types"
+    "outDir": "dist"
   },
-  "exclude": ["node_modules", "dist", "**/*.test.js"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.js"
+  ]
 }
