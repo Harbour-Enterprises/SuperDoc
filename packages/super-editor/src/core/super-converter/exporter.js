@@ -1966,7 +1966,12 @@ function prepareUrlAnnotation(params) {
  * @param {String} annotationType
  * @returns {Function} handler for provided annotation type
  */
-function getTranslationByAnnotationType(annotationType) {
+function getTranslationByAnnotationType(annotationType, annotationFieldType) {
+  // invalid annotation
+  if (annotationType === 'text' && annotationFieldType === 'FILEUPLOADER') {
+    return null;
+  }
+
   const imageEmuSize = {
     w: 4286250,
     h: 4286250,
@@ -2012,7 +2017,7 @@ const translateFieldAttrsToMarks = (attrs = {}) => {
 function translateFieldAnnotation(params) {
   const { node, isFinalDoc, fieldsHighlightColor } = params;
   const { attrs = {} } = node;
-  const annotationHandler = getTranslationByAnnotationType(attrs.type);
+  const annotationHandler = getTranslationByAnnotationType(attrs.type, attrs.fieldType);
   if (!annotationHandler) return {};
 
   let processedNode;
@@ -2284,8 +2289,14 @@ export class DocxExporter {
       if (name === 'w:instrText') {
         tags.push(elements[0].text);
       } else if (name === 'w:t' || name === 'w:delText' || name === 'wp:posOffset') {
-        const text = this.#replaceSpecialCharacters(elements[0].text);
-        tags.push(text);
+        try {
+          // test for valid string
+          let text = String(elements[0].text);
+          text = this.#replaceSpecialCharacters(text);
+          tags.push(text);
+        } catch (error) {
+          console.error('Text element does not contain valid string:', error);
+        }
       } else {
         if (elements) {
           for (let child of elements) {
