@@ -11,9 +11,12 @@ import Ruler from './rulers/Ruler.vue';
 import GenericPopover from './popovers/GenericPopover.vue';
 import LinkInput from './toolbar/LinkInput.vue';
 import { checkNodeSpecificClicks } from './cursor-helpers.js';
+import { getFileObject } from '@harbour-enterprises/common';
+import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 
 const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 
+const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const props = defineProps({
   documentId: {
     type: String,
@@ -43,6 +46,8 @@ const editor = shallowRef(null);
 
 const editorWrapper = ref(null);
 const editorElem = ref(null);
+
+const fileSource = ref(null);
 
 /**
  * Generic popover controls including state, open and close functions
@@ -95,8 +100,14 @@ const pollForMetaMapData = (ydoc, retries = 10, interval = 500) => {
 };
 
 const loadNewFileData = async () => {
+  fileSource.value = props.fileSource;
+  if (!fileSource.value || fileSource.value.type !== DOCX) {
+    fileSource.value = await getFileObject(BlankDOCX, 'blank.docx', DOCX);
+    console.debug('file source', fileSource.value);
+  }
+
   try {
-    const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(props.fileSource);
+    const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(fileSource.value);
     return { content: docx, media, mediaFiles, fonts };
   } catch (err) {
     console.debug('Error loading new file data:', err);
@@ -137,7 +148,7 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
   editor.value = new Editor({
     mode: 'docx',
     element: editorElem.value,
-    fileSource: props.fileSource,
+    fileSource: fileSource.value,
     extensions: getExtensions(),
     externalExtensions: props.options.externalExtensions,
     documentId: props.documentId,
