@@ -1,4 +1,7 @@
+// @ts-check
+
 /**
+ * Base section attributes
  * @typedef {Object} SectionAttributes
  * @property {number} [id] - Section identifier
  * @property {string} [title] - Section title
@@ -8,19 +11,22 @@
  */
 
 /**
- * @typedef {Object} SectionOptions
+ * Options for creating a section
+ * @typedef {Object} SectionCreate
  * @property {number} [id] - Section identifier (auto-generated if not provided)
- * @property {string} [title] - Section title
+ * @property {string} [title] - Section title (defaults to "Document section")
  * @property {string} [description] - Section description
  * @property {string} [sectionType] - Type of section
+ * @property {boolean} [isLocked] - Whether section is locked
  * @property {string} [html] - HTML content to parse
  * @property {Object} [json] - ProseMirror JSON content (takes precedence over html)
  */
 
 /**
- * @typedef {Object} UpdateOptions
- * @property {number} id - Section ID to update
- * @property {string} [html] - HTML content
+ * Options for updating a section
+ * @typedef {Object} SectionUpdate
+ * @property {number} id - Section ID to update (required)
+ * @property {string} [html] - HTML content to parse
  * @property {Object} [json] - ProseMirror JSON content (takes precedence over html)
  * @property {Partial<SectionAttributes>} [attrs] - Attributes to update
  */
@@ -90,7 +96,7 @@ export const DocumentSection = Node.create({
       /**
        * Create a new document section
        * @category Command
-       * @param {SectionOptions} [options={}]
+       * @param {SectionCreate} [options={}]
        * @returns {Function} Command function - returns true if section was created successfully
        */
       createDocumentSection:
@@ -246,7 +252,7 @@ export const DocumentSection = Node.create({
       /**
        * Remove section by ID
        * @category Command
-       * @param {number} id
+       * @param {number} id - Section ID to remove
        * @returns {Function} Command function - returns true if section was removed, false if not found
        */
       removeSectionById:
@@ -274,7 +280,7 @@ export const DocumentSection = Node.create({
       /**
        * Lock section by ID
        * @category Command
-       * @param {string | number} id
+       * @param {number} id - Section ID to lock
        * @returns {Function} Command function - returns true if section was locked, false if not found
        * @private
        */
@@ -298,7 +304,7 @@ export const DocumentSection = Node.create({
       /**
        * Update section by ID
        * @category Command
-       * @param {UpdateOptions} options
+       * @param {SectionUpdate} options
        * @returns {Function} Command function - returns true if section was updated, false if not found
        */
       updateSectionById:
