@@ -8,4 +8,3 @@ export * from './deleteProps.js';
 export * from './parseSizeUnit.js';
 export * from './minMax.js';
 export * from './clipboardUtils.js';
-export * from './sdBlockUniqueId.js';

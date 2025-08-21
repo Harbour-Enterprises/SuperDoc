@@ -1,12 +1,12 @@
 import { Extension } from '@core/Extension.js';
 import { helpers } from '@core/index.js';
-import { Plugin } from 'prosemirror-state';
-import { generateBlockUniqueId } from '@core/utilities/index.js';
+import { Plugin, PluginKey } from 'prosemirror-state';
 import { ReplaceStep } from 'prosemirror-transform';
+import { v4 as uuidv4 } from 'uuid';
 
 const { findChildren } = helpers;
 const SD_BLOCK_ID_ATTRIBUTE_NAME = 'sdBlockId';
-
+export const BlockNodePluginKey = new PluginKey('blockNdePlugin');
 export const BlockNode = Extension.create({
   name: 'BlockNode',
 
@@ -15,9 +15,9 @@ export const BlockNode = Extension.create({
       replaceBlockNodeById:
         (id, contentNode) =>
         ({ dispatch, tr }) => {
-          let blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
+          const blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
-            return true;
+            return false;
           }
 
           if (dispatch) {
@@ -37,9 +37,9 @@ export const BlockNode = Extension.create({
       deleteBlockNodeById:
         (id) =>
         ({ dispatch, tr }) => {
-          let blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
+          const blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
-            return true;
+            return false;
           }
 
           if (dispatch) {
@@ -59,23 +59,23 @@ export const BlockNode = Extension.create({
       updateBlockNodeAttributes:
         (id, attrs = {}) =>
         ({ dispatch, tr }) => {
-          if (!dispatch) return true;
-          let blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
+          const blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
+            return false;
+          }
+          if (dispatch) {
+            let { pos, node } = blockNode[0];
+            let newPos = tr.mapping.map(pos);
+            let currentNode = tr.doc.nodeAt(newPos);
+            if (node.eq(currentNode)) {
+              tr.setNodeMarkup(newPos, undefined, {
+                ...node.attrs,
+                ...attrs,
+              });
+            }
+
             return true;
           }
-
-          let { pos, node } = blockNode[0];
-          let newPos = tr.mapping.map(pos);
-          let currentNode = tr.doc.nodeAt(newPos);
-          if (node.eq(currentNode)) {
-            tr.setNodeMarkup(newPos, undefined, {
-              ...node.attrs,
-              ...attrs,
-            });
-          }
-
-          return true;
         },
     };
   },
@@ -115,6 +115,7 @@ export const BlockNode = Extension.create({
 
     return [
       new Plugin({
+        key: BlockNodePluginKey,
         appendTransaction: (transactions, _oldState, newState) => {
           if (hasInitialized && !transactions.some((tr) => tr.docChanged)) return null;
 
@@ -133,7 +134,7 @@ export const BlockNode = Extension.create({
               undefined,
               {
                 ...node.attrs,
-                sdBlockId: generateBlockUniqueId(node.type.name),
+                sdBlockId: uuidv4(),
               },
               node.marks,
             );
