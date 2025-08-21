@@ -1008,10 +1008,10 @@ export class Editor extends EventEmitter {
    * @returns {Object} Document node
    */
   #createDocFromMarkdown(content) {
-    // First, convert markdown to HTML
+    // Convert markdown to HTML
     const html = this.#convertMarkdownToHTML(content);
 
-    // Then use existing HTML parser
+    // Use existing HTML parser
     return this.#createDocFromHTML(html);
   }
 
@@ -1022,62 +1022,36 @@ export class Editor extends EventEmitter {
    * @returns {string} HTML content
    */
   #convertMarkdownToHTML(markdown) {
-    // Configure marked for compatibility with your schema
-    // marked.setOptions({
-    //   breaks: true, // Convert \n to <br>
-    //   gfm: true, // GitHub Flavored Markdown
-    //   headerIds: false, // Don't add IDs to headers
-    //   mangle: false, // Don't escape autolinks
-    // });
+    // Configure marked for better compatibility
+    marked.setOptions({
+      breaks: false, // Use proper paragraphs, not <br> tags
+      gfm: true, // GitHub Flavored Markdown support
+      headerIds: false, // Don't add IDs to headers
+    });
 
     // Convert markdown to HTML
     let html = marked.parse(markdown);
 
-    // Apply any necessary transformations for SuperDoc compatibility
-    // html = this.#transformMarkdownHTML(html);
+    // Prepare HTML for SuperDoc/DOCX compatibility
+    html = this.#prepareHTMLForSuperDoc(html);
 
     return html;
   }
 
   /**
-   * Transform markdown-generated HTML to be compatible with SuperDoc
+   * Prepare markdown-generated HTML for SuperDoc/DOCX compatibility
    * @private
    * @param {string} html - HTML from markdown parser
-   * @returns {string} Transformed HTML
+   * @returns {string} HTML prepared for SuperDoc
    */
-  #transformMarkdownHTML(html) {
-    // Create a temporary container
-    const tempDiv = document.createElement('div');
-    tempDiv.innerHTML = html;
-
-    // Transform elements as needed for your schema
-    // Example: Convert <h1> to <h1 data-level="1"> if needed
-    const headings = tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
-    headings.forEach((heading) => {
-      const level = parseInt(heading.tagName[1]);
-      heading.setAttribute('data-level', level);
-    });
-
-    // Transform lists to ensure compatibility
-    const lists = tempDiv.querySelectorAll('ul, ol');
-    lists.forEach((list, index) => {
-      // Add any attributes your list schema expects
-      if (list.tagName === 'OL') {
-        list.setAttribute('data-list-id', index + 1);
-      }
-    });
-
-    // Transform code blocks
-    const codeBlocks = tempDiv.querySelectorAll('pre code');
-    codeBlocks.forEach((code) => {
-      // Add language class if specified
-      const parent = code.parentElement;
-      if (code.className) {
-        parent.setAttribute('data-language', code.className.replace('language-', ''));
-      }
-    });
-
-    return tempDiv.innerHTML;
+  #prepareHTMLForSuperDoc(html) {
+    // Add spacing between paragraphs and lists for proper DOCX rendering
+    // In DOCX, the space between text and lists is an actual empty paragraph
+    return html
+      .replace(/<\/p>\n<ul>/g, '</p>\n<p>&nbsp;</p>\n<ul>') // Add space before bullet lists
+      .replace(/<\/p>\n<ol>/g, '</p>\n<p>&nbsp;</p>\n<ol>') // Add space before numbered lists
+      .replace(/<\/ul>\n<h/g, '</ul>\n<p>&nbsp;</p>\n<h') // Add space after lists before headings
+      .replace(/<\/ol>\n<h/g, '</ol>\n<p>&nbsp;</p>\n<h'); // Add space after lists before headings
   }
 
   /**
