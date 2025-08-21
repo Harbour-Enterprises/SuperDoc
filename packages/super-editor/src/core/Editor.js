@@ -1,6 +1,7 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMParser, DOMSerializer } from 'prosemirror-model';
+import { marked } from 'marked';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -131,6 +132,7 @@ import { SuperValidator } from '@core/super-validator/index.js';
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
  * @property {boolean} [jsonOverride] - Whether to override content with provided json
  * @property {string} [html] - HTML content to initialize the editor with
+ * @property {string} [markdown] - Markdown content to initialize the editor with
  */
 
 /**
@@ -174,6 +176,12 @@ export class Editor extends EventEmitter {
    * @type {boolean}
    */
   isFocused = false;
+
+  /**
+   * CSS styles for the editor
+   * @private
+   */
+  #css;
 
   options = {
     element: null,
@@ -949,8 +957,12 @@ export class Editor extends EventEmitter {
           // Perform any additional document processing prior to finalizing the doc here
           doc = this.#prepareDocumentForImport(doc);
 
+          // Check for markdown BEFORE html (since markdown gets converted to HTML)
+          if (this.options.markdown) {
+            doc = this.#createDocFromMarkdown(this.options.markdown);
+          }
           // If we have a new doc, and have html data, we initialize from html
-          if (this.options.html) doc = this.#createDocFromHTML(this.options.html);
+          else if (this.options.html) doc = this.#createDocFromHTML(this.options.html);
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
           if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
@@ -987,6 +999,85 @@ export class Editor extends EventEmitter {
     }
 
     return DOMParser.fromSchema(this.schema).parse(parsedContent);
+  }
+
+  /**
+   * Create a document from Markdown content
+   * @private
+   * @param {string} content - Markdown content
+   * @returns {Object} Document node
+   */
+  #createDocFromMarkdown(content) {
+    // First, convert markdown to HTML
+    const html = this.#convertMarkdownToHTML(content);
+
+    // Then use existing HTML parser
+    return this.#createDocFromHTML(html);
+  }
+
+  /**
+   * Convert Markdown to HTML with proper structure
+   * @private
+   * @param {string} markdown - Markdown content
+   * @returns {string} HTML content
+   */
+  #convertMarkdownToHTML(markdown) {
+    // Configure marked for compatibility with your schema
+    // marked.setOptions({
+    //   breaks: true, // Convert \n to <br>
+    //   gfm: true, // GitHub Flavored Markdown
+    //   headerIds: false, // Don't add IDs to headers
+    //   mangle: false, // Don't escape autolinks
+    // });
+
+    // Convert markdown to HTML
+    let html = marked.parse(markdown);
+
+    // Apply any necessary transformations for SuperDoc compatibility
+    // html = this.#transformMarkdownHTML(html);
+
+    return html;
+  }
+
+  /**
+   * Transform markdown-generated HTML to be compatible with SuperDoc
+   * @private
+   * @param {string} html - HTML from markdown parser
+   * @returns {string} Transformed HTML
+   */
+  #transformMarkdownHTML(html) {
+    // Create a temporary container
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = html;
+
+    // Transform elements as needed for your schema
+    // Example: Convert <h1> to <h1 data-level="1"> if needed
+    const headings = tempDiv.querySelectorAll('h1, h2, h3, h4, h5, h6');
+    headings.forEach((heading) => {
+      const level = parseInt(heading.tagName[1]);
+      heading.setAttribute('data-level', level);
+    });
+
+    // Transform lists to ensure compatibility
+    const lists = tempDiv.querySelectorAll('ul, ol');
+    lists.forEach((list, index) => {
+      // Add any attributes your list schema expects
+      if (list.tagName === 'OL') {
+        list.setAttribute('data-list-id', index + 1);
+      }
+    });
+
+    // Transform code blocks
+    const codeBlocks = tempDiv.querySelectorAll('pre code');
+    codeBlocks.forEach((code) => {
+      // Add language class if specified
+      const parent = code.parentElement;
+      if (code.className) {
+        parent.setAttribute('data-language', code.className.replace('language-', ''));
+      }
+    });
+
+    return tempDiv.innerHTML;
   }
 
   /**

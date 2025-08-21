@@ -32,16 +32,65 @@ const user = {
 const handleNewFile = async (file) => {
   // Generate a file url
   const url = URL.createObjectURL(file);
-  currentFile.value = await getFileObject(url, file.name, file.type);
+
+  // Detect file type by extension
+  const fileExtension = file.name.split('.').pop()?.toLowerCase();
+  const isMarkdown = fileExtension === 'md';
+  const isHtml = fileExtension === 'html' || fileExtension === 'htm';
+
+  if (isMarkdown || isHtml) {
+    // For text-based files, read the content and use a blank DOCX as base
+    const content = await readFileAsText(file);
+    currentFile.value = await getFileObject(BlankDOCX, 'blank.docx', DOCX);
+
+    // Store the content to be passed to SuperDoc
+    if (isMarkdown) {
+      currentFile.value.markdownContent = content;
+    } else if (isHtml) {
+      currentFile.value.htmlContent = content;
+    }
+  } else {
+    // For binary files (DOCX, PDF), use as-is
+    currentFile.value = await getFileObject(url, file.name, file.type);
+  }
 
   nextTick(() => {
     init();
   });
 };
 
+/**
+ * Read a file as text content
+ * @param {File} file - The file to read
+ * @returns {Promise<string>} The file content as text
+ */
+const readFileAsText = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.onerror = (e) => reject(e);
+    reader.readAsText(file);
+  });
+};
+
 const init = async () => {
-  let testId = 'file_id';
-  let testDocumentId = 'doc_id';
+  let testId = 'document-123';
+  // const testId = "document_6a9fb1e0725d46989bdbb3f9879e9e1b";
+
+  // Prepare document config with content if available
+  const documentConfig = {
+    data: currentFile.value,
+    id: testId,
+    isNewFile: true,
+  };
+
+  // Add markdown/HTML content if present
+  if (currentFile.value.markdownContent) {
+    documentConfig.markdown = currentFile.value.markdownContent;
+  }
+  if (currentFile.value.htmlContent) {
+    documentConfig.html = currentFile.value.htmlContent;
+  }
 
   const config = {
     superdocId: 'superdoc-dev',
@@ -66,13 +115,14 @@ const init = async () => {
       { name: 'Nick Bernal', email: 'nick@harbourshare.com', access: 'internal' },
       { name: 'Eric Doversberger', email: 'eric@harbourshare.com', access: 'external' },
     ],
-    documents: [
-      {
-        data: currentFile.value,
-        id: testId,
-        type: 'docx',
-      },
-    ],
+    document: documentConfig,
+    // documents: [
+    //   {
+    //     data: currentFile.value,
+    //     id: testId,
+    //     isNewFile: true,
+    //   },
+    // ],
     // cspNonce: 'testnonce123',
     modules: {
       comments: {
@@ -99,9 +149,8 @@ const init = async () => {
 
       // To test this dev env with collaboration you must run a local collaboration server here.
       // collaboration: {
-      //   url: `ws://localhost:3050/docs/${testDocumentId}`,
+      //   url: 'ws://localhost:3050/docs/superdoc-id',
       //   token: 'token',
-      //   providerType: 'hocuspocus',
       // },
       ai: {
         // Provide your Harbour API key here for direct endpoint access
@@ -201,7 +250,7 @@ onMounted(async () => {
             <h2>🦋 SuperDoc Dev</h2>
           </div>
           <div class="dev-app__header-upload">
-            Upload docx, pdf or (soon) html
+            Upload docx, pdf, html or markdown
             <BasicUpload @file-change="handleNewFile" />
           </div>
         </div>
@@ -236,6 +285,7 @@ onMounted(async () => {
   position: relative;
   z-index: 1;
 }
+
 .comments-panel {
   width: 320px;
 }
@@ -254,6 +304,7 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
 }
+
 .comments-panel {
   position: absolute;
   right: 0;
@@ -261,6 +312,7 @@ onMounted(async () => {
   background-color: #fafafa;
   z-index: 100;
 }
+
 .dev-app {
   --header-height: 154px;
   --toolbar-height: 39px;
@@ -287,9 +339,11 @@ onMounted(async () => {
 .dev-app__header-side {
   display: flex;
 }
+
 .dev-app__header-side--left {
   flex-direction: column;
 }
+
 .dev-app__header-side--right {
   align-items: flex-end;
 }
