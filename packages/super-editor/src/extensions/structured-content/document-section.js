@@ -89,6 +89,7 @@ export const DocumentSection = Node.create({
     return {
       /**
        * Create a new document section
+       * @category Command
        * @param {SectionOptions} [options={}]
        * @returns {Function} Command function - returns true if section was created successfully
        */
@@ -204,6 +205,7 @@ export const DocumentSection = Node.create({
 
       /**
        * Remove section at current selection, keeping content
+       * @category Command
        * @returns {Function} Command function - returns true if section was removed, false if none found
        */
       removeSectionAtSelection:
@@ -243,6 +245,7 @@ export const DocumentSection = Node.create({
 
       /**
        * Remove section by ID
+       * @category Command
        * @param {number} id
        * @returns {Function} Command function - returns true if section was removed, false if not found
        */
@@ -270,6 +273,7 @@ export const DocumentSection = Node.create({
 
       /**
        * Lock section by ID
+       * @category Command
        * @param {string | number} id
        * @returns {Function} Command function - returns true if section was locked, false if not found
        * @private
@@ -293,6 +297,7 @@ export const DocumentSection = Node.create({
 
       /**
        * Update section by ID
+       * @category Command
        * @param {UpdateOptions} options
        * @returns {Function} Command function - returns true if section was updated, false if not found
        */
