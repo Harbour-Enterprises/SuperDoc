@@ -1321,10 +1321,10 @@ export class Editor extends EventEmitter {
 
       const tr = isTrackChangesActive
         ? trackedTransaction({
-          tr: transaction,
-          state: this.state,
-          user: this.options.user,
-        })
+            tr: transaction,
+            state: this.state,
+            user: this.options.user,
+          })
         : transaction;
 
       const { state: newState } = this.view.state.applyTransaction(tr);
@@ -1663,7 +1663,7 @@ export class Editor extends EventEmitter {
       console.debug('🔗 [super-editor] Ending collaboration');
       if (this.options.collaborationProvider) this.options.collaborationProvider.disconnect();
       if (this.options.ydoc) this.options.ydoc.destroy();
-    } catch { }
+    } catch {}
   }
 
   /**
@@ -1688,7 +1688,7 @@ export class Editor extends EventEmitter {
       }
       this.converter.headerEditors.length = 0;
       this.converter.footerEditors.length = 0;
-    } catch { }
+    } catch {}
   }
 
   /**
