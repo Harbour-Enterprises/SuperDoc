@@ -1,5 +1,4 @@
 import { getAllFieldAnnotations } from '../fieldAnnotationHelpers/index.js';
-// @ts-ignore
 import { findParentNodeClosestToPos } from '@core/helpers/index.js';
 
 /**

@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { DOMSerializer } from 'prosemirror-model';
 
 /**

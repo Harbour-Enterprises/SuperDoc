@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { Attribute } from '@core/index.js';
 import { NodeSelection } from 'prosemirror-state';
 
