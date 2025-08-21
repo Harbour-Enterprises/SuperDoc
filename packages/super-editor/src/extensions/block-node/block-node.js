@@ -1,8 +1,11 @@
 import { Extension } from '@core/Extension.js';
 import { helpers } from '@core/index.js';
-const { findChildren } = helpers;
 import { Plugin } from 'prosemirror-state';
 import { generateBlockUniqueId } from '@core/utilities/index.js';
+import { ReplaceStep } from 'prosemirror-transform';
+
+const { findChildren } = helpers;
+const SD_BLOCK_ID_ATTRIBUTE_NAME = 'sdBlockId';
 
 export const BlockNode = Extension.create({
   name: 'BlockNode',
@@ -57,7 +60,6 @@ export const BlockNode = Extension.create({
         (id, attrs = {}) =>
         ({ dispatch, tr }) => {
           if (!dispatch) return true;
-
           let blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
             return true;
@@ -81,7 +83,7 @@ export const BlockNode = Extension.create({
   addHelpers() {
     return {
       getBlockNodes: () => {
-        return findChildren(this.editor.state.doc, (node) => node.type.groups.includes('block'));
+        return findChildren(this.editor.state.doc, (node) => nodeAllowsSdBlockIdAttr(node));
       },
 
       getBlockNodeById: (id) => {
@@ -96,10 +98,7 @@ export const BlockNode = Extension.create({
         let blockNodes = [];
 
         this.editor.state.doc.nodesBetween(from, to, (node, pos) => {
-          if (!node || node?.nodeSize === undefined) {
-            return;
-          }
-          if (node.type.groups.includes('block')) {
+          if (nodeAllowsSdBlockIdAttr(node)) {
             blockNodes.push({
               node,
               pos,
@@ -111,40 +110,22 @@ export const BlockNode = Extension.create({
       },
     };
   },
-  onCreate() {
-    const { state, view } = this.editor;
-    const tr = state.tr;
-    let changed = false;
-
-    state.doc.descendants((node, pos) => {
-      if (!node.type.spec.group?.split(' ')?.includes('block')) return;
-      if (node.attrs?.sdBlockId) return;
-      tr.setNodeMarkup(
-        pos,
-        undefined,
-        {
-          ...node.attrs,
-          sdBlockId: generateBlockUniqueId(node.type.name),
-        },
-        node.marks,
-      );
-      changed = true;
-      return false;
-    });
-
-    if (changed) view.dispatch(tr);
-  },
   addPmPlugins() {
+    let hasInitialized = false;
+
     return [
       new Plugin({
         appendTransaction: (transactions, _oldState, newState) => {
-          if (!transactions.some((tr) => tr.docChanged)) return null;
+          if (hasInitialized && !transactions.some((tr) => tr.docChanged)) return null;
+
+          // Check for new block nodes and if none found, we don't need to do anything
+          if (hasInitialized && !checkForNewBlockNodesInTrs(transactions)) return null;
 
           let tr = null;
           let changed = false;
           newState.doc.descendants((node, pos) => {
-            if (!node.type.spec.group?.split(' ')?.includes('block')) return;
-            if (node.attrs?.sdBlockId) return;
+            // Only allow block nodes with a valid sdBlockId attribute
+            if (!nodeAllowsSdBlockIdAttr(node) || !nodeNeedsSdBlockId(node)) return null;
 
             tr = tr ?? newState.tr;
             tr.setNodeMarkup(
@@ -159,9 +140,44 @@ export const BlockNode = Extension.create({
             changed = true;
           });
 
+          if (changed && !hasInitialized) hasInitialized = true;
           return changed ? tr : null;
         },
       }),
     ];
   },
 });
+
+/**
+ * Check if a node allows sdBlockId attribute
+ * @param {import("prosemirror-model").Node} node - The node to check
+ * @returns {boolean} - True if the node type supports sdBlockId attribute
+ */
+export const nodeAllowsSdBlockIdAttr = (node) => {
+  return !!(node?.isBlock && node?.type?.spec?.attrs?.[SD_BLOCK_ID_ATTRIBUTE_NAME]);
+};
+
+/**
+ * Check if a node needs an sdBlockId (doesn't have one or has null/empty value)
+ * @param {import("prosemirror-model").Node} node - The node to check
+ * @returns {boolean} - True if the node needs an sdBlockId assigned
+ */
+export const nodeNeedsSdBlockId = (node) => {
+  const currentId = node?.attrs?.[SD_BLOCK_ID_ATTRIBUTE_NAME];
+  return !currentId;
+};
+
+/**
+ * Check for new block nodes in ProseMirror transactions.
+ * Iterate through the list of transactions, and in each tr check if there are any new block nodes.
+ * @param {Array<Transaction>} transactions - The ProseMirror transactions to check.
+ * @returns {boolean} - True if new block nodes are found, false otherwise.
+ */
+export const checkForNewBlockNodesInTrs = (transactions) => {
+  return transactions.some((tr) => {
+    return tr.steps.some((step) => {
+      const hasValidSdBlockNodes = step.slice?.content?.content?.some((node) => nodeAllowsSdBlockIdAttr(node));
+      return step instanceof ReplaceStep && hasValidSdBlockNodes;
+    });
+  });
+};
