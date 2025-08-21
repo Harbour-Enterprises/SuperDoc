@@ -365,7 +365,7 @@ export class Editor extends EventEmitter {
     // it will be in itialized via this.#onCollaborationReady
     if (!this.options.ydoc) {
       if (!this.options.isChildEditor) {
-        this.initPagination();
+        this.#initPagination();
         this.#initComments();
 
         this.#validateDocumentInit();
@@ -679,7 +679,7 @@ export class Editor extends EventEmitter {
     this.view.dispatch(tr);
 
     setTimeout(() => {
-      this.initPagination();
+      this.#initPagination();
       this.#initComments();
     }, 50);
   }
@@ -1257,7 +1257,7 @@ export class Editor extends EventEmitter {
     this.view.dispatch(tr);
 
     if (!this.options.isNewFile) {
-      this.initPagination();
+      this.#initPagination();
       this.#initComments();
       updateYdocDocxData(this);
     }
@@ -1321,10 +1321,10 @@ export class Editor extends EventEmitter {
 
       const tr = isTrackChangesActive
         ? trackedTransaction({
-            tr: transaction,
-            state: this.state,
-            user: this.options.user,
-          })
+          tr: transaction,
+          state: this.state,
+          user: this.options.user,
+        })
         : transaction;
 
       const { state: newState } = this.view.state.applyTransaction(tr);
@@ -1663,7 +1663,7 @@ export class Editor extends EventEmitter {
       console.debug('🔗 [super-editor] Ending collaboration');
       if (this.options.collaborationProvider) this.options.collaborationProvider.disconnect();
       if (this.options.ydoc) this.options.ydoc.destroy();
-    } catch {}
+    } catch { }
   }
 
   /**
@@ -1688,7 +1688,7 @@ export class Editor extends EventEmitter {
       }
       this.converter.headerEditors.length = 0;
       this.converter.footerEditors.length = 0;
-    } catch {}
+    } catch { }
   }
 
   /**
