@@ -1285,11 +1285,10 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize pagination, if the pagination extension is enabled.
-   * @private
    * @async
    * @returns {Promise<void>}
    */
-  async initPagination() {
+  async #initPagination() {
     if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
       return;
     }
@@ -1771,7 +1770,7 @@ export class Editor extends EventEmitter {
     }
 
     if (!this.options.ydoc) {
-      this.initPagination();
+      this.#initPagination();
       this.#initComments();
     }
   }
