@@ -38,16 +38,13 @@
   "module": "./dist/super-editor.es.js",
   "scripts": {
     "dev": "vite",
-    "preview": "vite preview",
-    "prebuild": "npm run types:check",
-    "build": "npm run build:js && npm run types:generate",
-    "build:js": "vite build",
-    "build:watch": "vite build --watch --logLevel warn",
-    "clean": "rm -rf dist",
-    "test": "vitest",
-    "types:generate": "tsc --emitDeclarationOnly",
-    "types:watch": "tsc --emitDeclarationOnly --watch",
+    "build": "vite build && npm run types:build",
+    "build:watch": "vite build --watch",
     "types:check": "tsc --noEmit",
+    "types:build": "tsc -p tsconfig.build.json",
+    "test": "vitest",
+    "preview": "vite preview",
+    "clean": "rm -rf dist types",
     "pack": "rm *.tgz 2>/dev/null || true && npm run build && npm pack && mv harbour-enterprises-super-editor-0.0.1-alpha.0.tgz ./super-editor.tgz"
   },
   "dependencies": {

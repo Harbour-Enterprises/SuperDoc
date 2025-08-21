@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "checkJs": false,
+    "checkJs": true,
     "allowJs": true,
     "moduleResolution": "node",
     "target": "ES2020",
@@ -8,7 +8,7 @@
     "skipLibCheck": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "outDir": "dist"
+    "outDir": "types"
   },
   "exclude": ["node_modules", "dist", "**/*.test.js"]
 }
