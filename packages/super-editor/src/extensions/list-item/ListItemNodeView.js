@@ -116,7 +116,7 @@ export class ListItemNodeView {
 
     const handlers = {
       right: () => {
-        const calculatedWidth = calculateMarkerWidth(this.dom, this.numberingDOM);
+        const calculatedWidth = calculateMarkerWidth(this.dom, this.numberingDOM, this.editor);
         const minMarkerWidth = Math.max(calculatedWidth, MIN_MARKER_WIDTH);
         const effectiveHanging = Math.max(hanging, minMarkerWidth);
         const markerLeft = contentLeft - effectiveHanging - MARKER_OFFSET_RIGHT;
@@ -126,7 +126,7 @@ export class ListItemNodeView {
         this.numberingDOM.style.textAlign = 'right';
       },
       left: () => {
-        const calculatedWidth = calculateMarkerWidth(this.dom, this.numberingDOM);
+        const calculatedWidth = calculateMarkerWidth(this.dom, this.numberingDOM, this.editor);
         const minMarkerWidth = Math.max(calculatedWidth, MIN_MARKER_WIDTH);
         let markerLeft = contentLeft - hanging;
         if (markerLeft === contentLeft) {
@@ -345,11 +345,12 @@ export const getVisibleIndent = (stylePpr, numDefPpr, inlineIndent) => {
  * Calculate the width of the list item marker.
  * @param {HTMLElement} dom - The DOM element of the list item.
  * @param {HTMLElement} numberingDOM - The DOM element of the numbering.
+ * @param {Editor} editor - The editor instance.
  * @param {Object} param2 - Additional parameters.
  * @param {boolean} param2.withPadding - Whether to include padding in the calculation.
  * @returns {number} The width of the marker.
  */
-function calculateMarkerWidth(dom, numberingDOM, { withPadding = true } = {}) {
+function calculateMarkerWidth(dom, numberingDOM, editor, { withPadding = true } = {}) {
   const markerText = numberingDOM.textContent || '';
   const fontSize = dom.style.fontSize || DEFAULT_FONT_SIZE;
   const fontValue = dom.style.fontFamily;
@@ -357,12 +358,13 @@ function calculateMarkerWidth(dom, numberingDOM, { withPadding = true } = {}) {
 
   if (!markerText.trim()) return 0;
 
-  // Try to use canvas, fallback if it fails
   try {
+    // If we're in headless mode, we can't use canvas, so we return 0
+    if (editor?.options?.isHeadless) return 0;
+
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
 
-    // If we get here, canvas works
     const fontSizePx = fontSize.includes('pt')
       ? Number.parseFloat(fontSize) * POINT_TO_PIXEL_CONVERSION_FACTOR
       : Number.parseFloat(fontSize);
@@ -372,9 +374,6 @@ function calculateMarkerWidth(dom, numberingDOM, { withPadding = true } = {}) {
     const resultWidth = withPadding ? Math.ceil(textWidth + MARKER_PADDING) : Math.ceil(textWidth);
     return resultWidth;
   } catch (error) {
-    // Canvas failed (headless/jsdom environment)
-    // Simple estimation: ~8px per character
-    const textWidth = markerText.length * 8;
-    return withPadding ? textWidth + MARKER_PADDING : textWidth;
+    return 0;
   }
 }
