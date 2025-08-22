@@ -15,7 +15,7 @@ export const BlockNode = Extension.create({
       replaceBlockNodeById:
         (id, contentNode) =>
         ({ dispatch, tr }) => {
-          const blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
+          const blockNode = this.editor.helpers.blockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
             return false;
           }
@@ -37,7 +37,7 @@ export const BlockNode = Extension.create({
       deleteBlockNodeById:
         (id) =>
         ({ dispatch, tr }) => {
-          const blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
+          const blockNode = this.editor.helpers.blockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
             return false;
           }
@@ -59,7 +59,7 @@ export const BlockNode = Extension.create({
       updateBlockNodeAttributes:
         (id, attrs = {}) =>
         ({ dispatch, tr }) => {
-          const blockNode = this.editor.helpers.BlockNode.getBlockNodeById(id);
+          const blockNode = this.editor.helpers.blockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
             return false;
           }

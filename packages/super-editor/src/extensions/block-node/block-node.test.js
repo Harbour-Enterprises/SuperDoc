@@ -450,7 +450,7 @@ describe('BlockNode helpers', () => {
   beforeEach(() => ({ editor } = initTestEditor({ content: docx, media, mediaFiles, fonts })));
 
   it('getBlockNodes returns only nodes that allow sdBlockId', () => {
-    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const blocks = editor.helpers.blockNode.getBlockNodes();
     expect(blocks.length).toBeGreaterThan(0);
     blocks.forEach(({ node }) => {
       expect(node.type?.spec?.attrs?.sdBlockId).not.toBeUndefined();
@@ -459,33 +459,33 @@ describe('BlockNode helpers', () => {
   });
 
   it('getBlockNodeById finds node by sdBlockId', () => {
-    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const blocks = editor.helpers.blockNode.getBlockNodes();
     const sample = blocks.find((b) => !!b.node.attrs.sdBlockId);
     expect(sample).toBeTruthy();
     const id = sample.node.attrs.sdBlockId;
-    const byId = editor.helpers.BlockNode.getBlockNodeById(id);
+    const byId = editor.helpers.blockNode.getBlockNodeById(id);
     expect(byId.length).toBe(1);
     expect(byId[0].node.eq(sample.node)).toBe(true);
   });
 
   it('getBlockNodesByType returns nodes of the given type', () => {
-    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const blocks = editor.helpers.blockNode.getBlockNodes();
     const targetType = blocks[0].node.type.name;
-    const byType = editor.helpers.BlockNode.getBlockNodesByType(targetType);
+    const byType = editor.helpers.blockNode.getBlockNodesByType(targetType);
     const expectedCount = blocks.filter((b) => b.node.type.name === targetType).length;
     expect(byType.length).toBe(expectedCount);
     byType.forEach((entry) => expect(entry.node.type.name).toBe(targetType));
   });
 
   it('getBlockNodesInRange returns nodes within the specified range', () => {
-    const allBlocks = editor.helpers.BlockNode.getBlockNodes();
-    const allInDoc = editor.helpers.BlockNode.getBlockNodesInRange(0, editor.state.doc.content.size);
+    const allBlocks = editor.helpers.blockNode.getBlockNodes();
+    const allInDoc = editor.helpers.blockNode.getBlockNodesInRange(0, editor.state.doc.content.size);
     expect(allInDoc.length).toBe(allBlocks.length);
 
     const sample = allBlocks[0];
     const from = sample.pos;
     const to = sample.pos + sample.node.nodeSize;
-    const inRange = editor.helpers.BlockNode.getBlockNodesInRange(from, to);
+    const inRange = editor.helpers.blockNode.getBlockNodesInRange(from, to);
     expect(inRange.length).toBe(1);
     expect(inRange[0].node.eq(sample.node)).toBe(true);
   });
@@ -498,7 +498,7 @@ describe('BlockNode commands', () => {
   beforeEach(() => ({ editor } = initTestEditor({ content: docx, media, mediaFiles, fonts })));
 
   it('replaceBlockNodeById replaces node content', () => {
-    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const blocks = editor.helpers.blockNode.getBlockNodes();
     const target = blocks.find((b) => ['paragraph', 'heading'].includes(b.node.type.name));
     expect(target).toBeTruthy();
     const oldId = target.node.attrs.sdBlockId;
@@ -510,45 +510,45 @@ describe('BlockNode commands', () => {
     const result = editor.commands.replaceBlockNodeById(oldId, replacement);
     expect(result).toBe(true);
 
-    const oldNode = editor.helpers.BlockNode.getBlockNodeById(oldId);
+    const oldNode = editor.helpers.blockNode.getBlockNodeById(oldId);
     expect(oldNode.length).toBe(0);
-    const newNode = editor.helpers.BlockNode.getBlockNodeById(newId);
+    const newNode = editor.helpers.blockNode.getBlockNodeById(newId);
     expect(newNode.length).toBe(1);
     expect(newNode[0].node.textContent).toBe('Replaced');
   });
 
   it('deleteBlockNodeById removes the node', () => {
-    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const blocks = editor.helpers.blockNode.getBlockNodes();
     const target = blocks.find((b) => ['paragraph', 'heading'].includes(b.node.type.name));
     expect(target).toBeTruthy();
     const id = target.node.attrs.sdBlockId;
 
-    const before = editor.helpers.BlockNode.getBlockNodeById(id);
+    const before = editor.helpers.blockNode.getBlockNodeById(id);
     expect(before.length).toBe(1);
 
     const result = editor.commands.deleteBlockNodeById(id);
     expect(result).toBe(true);
 
-    const after = editor.helpers.BlockNode.getBlockNodeById(id);
+    const after = editor.helpers.blockNode.getBlockNodeById(id);
     expect(after.length).toBe(0);
   });
 
   it('updateBlockNodeAttributes updates node attributes', () => {
-    const blocks = editor.helpers.BlockNode.getBlockNodes();
+    const blocks = editor.helpers.blockNode.getBlockNodes();
     const target = blocks.find((b) => ['paragraph', 'heading'].includes(b.node.type.name));
     expect(target).toBeTruthy();
     const oldId = target.node.attrs.sdBlockId;
     const newId = `${oldId}-updated`;
 
-    const before = editor.helpers.BlockNode.getBlockNodeById(oldId);
+    const before = editor.helpers.blockNode.getBlockNodeById(oldId);
     expect(before.length).toBe(1);
 
     const result = editor.commands.updateBlockNodeAttributes(oldId, { sdBlockId: newId });
     expect(result).toBe(true);
 
-    const oldNode = editor.helpers.BlockNode.getBlockNodeById(oldId);
+    const oldNode = editor.helpers.blockNode.getBlockNodeById(oldId);
     expect(oldNode.length).toBe(0);
-    const updated = editor.helpers.BlockNode.getBlockNodeById(newId);
+    const updated = editor.helpers.blockNode.getBlockNodeById(newId);
     expect(updated.length).toBe(1);
     expect(['heading', 'paragraph']).toContain(updated[0].node.type.name);
   });
