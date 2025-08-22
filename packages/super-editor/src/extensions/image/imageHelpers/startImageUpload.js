@@ -1,15 +1,15 @@
 import { ImagePlaceholderPluginKey, findPlaceholder } from './imagePlaceholderPlugin.js';
 import { handleImageUpload as handleImageUploadDefault } from './handleImageUpload.js';
 import { processUploadedImage } from './processUploadedImage.js';
+import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
 
 export const startImageUpload = async ({ editor, view, file }) => {
-  // Handler from config or default
-  let imageUploadHandler =
+  const imageUploadHandler =
     typeof editor.options.handleImageUpload === 'function'
       ? editor.options.handleImageUpload
       : handleImageUploadDefault;
 
-  let fileSizeMb = (file.size / (1024 * 1024)).toFixed(4);
+  let fileSizeMb = Number((file.size / (1024 * 1024)).toFixed(4));
 
   if (fileSizeMb > 5) {
     window.alert('Image size must be less than 5MB');
@@ -29,6 +29,16 @@ export const startImageUpload = async ({ editor, view, file }) => {
     return;
   }
 
+  await uploadImage({
+    editor,
+    view,
+    file,
+    size: { width, height },
+    uploadHandler: imageUploadHandler,
+  });
+};
+
+export async function uploadImage({ editor, view, file, size, uploadHandler }) {
   // A fresh object to act as the ID for this upload
   let id = {};
 
@@ -52,7 +62,7 @@ export const startImageUpload = async ({ editor, view, file }) => {
   tr.setMeta(ImagePlaceholderPluginKey, imageMeta);
   view.dispatch(tr);
 
-  imageUploadHandler(file).then(
+  await uploadHandler(file).then(
     (url) => {
       let fileName = file.name.replace(' ', '_');
       let placeholderPos = findPlaceholder(view.state, id);
@@ -68,9 +78,18 @@ export const startImageUpload = async ({ editor, view, file }) => {
       let removeMeta = { type: 'remove', id };
 
       let mediaPath = `word/media/${fileName}`;
+
+      let rId = null;
+      if (editor.options.mode === 'docx') {
+        const [, path] = mediaPath.split('word/'); // Path without 'word/' part.
+        const id = addImageRelationship({ editor, path });
+        if (id) rId = id;
+      }
+
       let imageNode = schema.nodes.image.create({
         src: mediaPath,
-        size: { width, height },
+        size,
+        rId,
       });
 
       editor.storage.image.media = Object.assign(editor.storage.image.media, { [mediaPath]: url });
@@ -93,4 +112,15 @@ export const startImageUpload = async ({ editor, view, file }) => {
       view.dispatch(tr.setMeta(ImagePlaceholderPluginKey, removeMeta));
     },
   );
-};
+}
+
+function addImageRelationship({ editor, path }) {
+  const target = path;
+  const type = 'image';
+  try {
+    const id = insertNewRelationship(target, type, editor);
+    return id;
+  } catch (err) {
+    return null;
+  }
+}
