@@ -6,9 +6,9 @@ import { v4 as uuidv4 } from 'uuid';
 
 const { findChildren } = helpers;
 const SD_BLOCK_ID_ATTRIBUTE_NAME = 'sdBlockId';
-export const BlockNodePluginKey = new PluginKey('blockNdePlugin');
+export const BlockNodePluginKey = new PluginKey('blockNodePlugin');
 export const BlockNode = Extension.create({
-  name: 'BlockNode',
+  name: 'blockNode',
 
   addCommands() {
     return {
