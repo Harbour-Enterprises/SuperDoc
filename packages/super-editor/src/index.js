@@ -13,9 +13,9 @@ import { Extension } from '@core/Extension.js';
 import { Plugin } from 'prosemirror-state';
 import { Mark } from '@core/Mark.js';
 import SlashMenu from './components/slash-menu/SlashMenu.vue';
+import { BasicUpload } from '@harbour-enterprises/common';
 
 import SuperEditor from './components/SuperEditor.vue';
-import BasicUpload from './dev/components/BasicUpload.vue';
 import Toolbar from './components/toolbar/Toolbar.vue';
 import SuperInput from './components/SuperInput.vue';
 import AIWriter from './components/toolbar/AIWriter.vue';

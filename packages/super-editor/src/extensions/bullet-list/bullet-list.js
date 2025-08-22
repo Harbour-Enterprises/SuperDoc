@@ -50,6 +50,15 @@ export const BulletList = Node.create({
         rendered: false,
       },
 
+      sdBlockId: {
+        default: null,
+        keepOnSplit: false,
+        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs) => {
+          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
+        },
+      },
+
       attributes: {
         rendered: false,
         keepOnSplit: true,

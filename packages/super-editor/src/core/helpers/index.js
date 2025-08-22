@@ -25,3 +25,5 @@ export * from './posToDOMRect.js';
 export * from './findMark.js';
 export * from './isInTable.js';
 export * from './documentSectionHelpers.js';
+export * from './importHtml.js';
+export * from './importMarkdown.js';

@@ -3,11 +3,13 @@ import { Node, Attribute } from '@core/index.js';
 export const ContentBlock = Node.create({
   name: 'contentBlock',
 
-  group: 'block',
+  group: 'inline',
 
   content: '',
 
   isolating: true,
+  atom: true,
+  inline: true,
 
   addOptions() {
     return {

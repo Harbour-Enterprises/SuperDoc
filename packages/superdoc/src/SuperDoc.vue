@@ -267,6 +267,7 @@ const editorOptions = (doc) => {
     colors: proxy.$superdoc.colors,
     role: proxy.$superdoc.config.role,
     html: doc.html,
+    markdown: doc.markdown,
     documentMode: proxy.$superdoc.config.documentMode,
     rulers: doc.rulers,
     isInternal: proxy.$superdoc.config.isInternal,
@@ -797,6 +798,7 @@ watch(getFloatingComments, () => {
   height: 20px;
   flex-shrink: 0;
 }
+
 /* Tools styles - end */
 
 /* .docx {
@@ -909,5 +911,6 @@ watch(getFloatingComments, () => {
 .ai-tool:hover::before {
   filter: brightness(1.3);
 }
+
 /* Tools styles - end */
 </style>

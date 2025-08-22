@@ -74,6 +74,7 @@ export function exportSchemaToJson(params) {
   const router = {
     doc: translateDocumentNode,
     body: translateBodyNode,
+    heading: translateHeadingNode,
     paragraph: translateParagraphNode,
     text: translateTextNode,
     bulletList: translateList,
@@ -168,6 +169,30 @@ const generateDefaultHeaderFooter = (type, id) => {
     },
   };
 };
+
+/**
+ * Translate a heading node to a paragraph with Word heading style
+ *
+ * @param {ExportParams} params The parameters object containing the heading node
+ * @returns {XmlReadyNode} JSON of the XML-ready paragraph node with heading style
+ */
+function translateHeadingNode(params) {
+  const { node } = params;
+  const { level = 1, ...otherAttrs } = node.attrs;
+
+  // Convert heading to paragraph with appropriate Word heading style
+  const paragraphNode = {
+    type: 'paragraph',
+    content: node.content,
+    attrs: {
+      ...otherAttrs,
+      styleId: `Heading${level}`, // Maps to Heading1, Heading2, etc. in Word
+    },
+  };
+
+  // Use existing paragraph translator with the modified node
+  return translateParagraphNode({ ...params, node: paragraphNode });
+}
 
 /**
  * Translate a paragraph node

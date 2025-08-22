@@ -43,6 +43,15 @@ export const OrderedList = Node.create({
         },
       },
 
+      sdBlockId: {
+        default: null,
+        keepOnSplit: false,
+        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs) => {
+          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
+        },
+      },
+
       syncId: {
         default: null,
         parseDOM: (elem) => elem.getAttribute('data-sync-id'),
