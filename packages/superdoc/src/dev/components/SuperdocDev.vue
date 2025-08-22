@@ -8,7 +8,7 @@ import { BasicUpload, getFileObject } from '@harbour-enterprises/common';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
-
+import { SuperValidator } from '@core/super-validator/index.js';
 /* For local dev */
 const superdoc = shallowRef(null);
 const activeEditor = shallowRef(null);
@@ -148,6 +148,7 @@ const onContentError = ({ editor, error, documentId, file }) => {
 
 const exportDocx = async (commentsType) => {
   console.debug('Exporting docx', { commentsType });
+  new SuperValidator({ editor: activeEditor.value }).validateActiveDocument();
   await superdoc.value.export({ commentsType });
 };
 

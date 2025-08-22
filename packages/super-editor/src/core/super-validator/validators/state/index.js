@@ -1,6 +1,7 @@
 // @ts-check
 import { createImageNodeValidator } from './nodes/image/image-validator.js';
 import { createLinkMarkValidator } from './nodes/link/link-validator.js';
+import { createNumberingValidator } from './nodes/numbering/numbering-validator.js';
 
 /**
  * @typedef {Object} StateValidators
@@ -10,4 +11,5 @@ import { createLinkMarkValidator } from './nodes/link/link-validator.js';
 export const StateValidators = {
   imageNodeValidator: createImageNodeValidator,
   linkMarkValidator: createLinkMarkValidator,
+  numberingValidator: createNumberingValidator,
 };
