@@ -178,12 +178,6 @@ export class Editor extends EventEmitter {
    */
   isFocused = false;
 
-  /**
-   * CSS styles for the editor
-   * @private
-   */
-  #css;
-
   options = {
     element: null,
     selector: null,

@@ -149,8 +149,9 @@ const init = async () => {
 
       // To test this dev env with collaboration you must run a local collaboration server here.
       // collaboration: {
-      //   url: 'ws://localhost:3050/docs/superdoc-id',
+      //   url: `ws://localhost:3050/docs/${testDocumentId}`,
       //   token: 'token',
+      //   providerType: 'hocuspocus',
       // },
       ai: {
         // Provide your Harbour API key here for direct endpoint access
