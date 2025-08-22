@@ -357,6 +357,13 @@ function calculateMarkerWidth(dom, numberingDOM, { withPadding = true } = {}) {
 
   if (!markerText.trim()) return 0;
 
+  // Check if canvas is available (browser environment)
+  if (typeof document === 'undefined' || !document.createElement('canvas').getContext) {
+    // Simple estimation for server-side: ~8px per character
+    const textWidth = markerText.length * 8;
+    return withPadding ? textWidth + MARKER_PADDING : textWidth;
+  }
+
   try {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
