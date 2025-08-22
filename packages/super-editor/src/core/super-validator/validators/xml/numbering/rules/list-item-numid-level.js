@@ -1,5 +1,5 @@
 // @ts-check
-import { ListHelpers } from '../../../../../helpers/list-numbering-helpers.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 function parseIntId(v) {
   if (v == null) return undefined; // catches undefined & null
@@ -9,7 +9,7 @@ function parseIntId(v) {
 }
 
 /**
- * Ensure each listItem has numId and level. If missing, infer parent list type,
+ * Ensure each listItem has numId and level. If missing, create parent list type,
  * create/generate a numbering definition and set attrs via tr.setNodeMarkup.
  * @param {import('../../../../types.js').ElementInfo[]} listItems
  * @param {import('../../../../types.js').Editor} editor
@@ -26,7 +26,6 @@ export function ensureListItemHasNumIdAndLevel(listItems, editor, tr, logger) {
 
     const isValidId = (n) => Number.isInteger(n) && n >= 0;
 
-    // in ensureListItemHasNumIdAndLevel:
     let numId = parseIntId(current.numId);
     let level = parseIntId(current.level);
 

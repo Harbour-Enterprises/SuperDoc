@@ -1,5 +1,5 @@
 // @ts-check
-import { ListHelpers } from '../../../../../helpers/list-numbering-helpers.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 function parseIntId(v) {
   if (v == null) return undefined; // catches undefined & null

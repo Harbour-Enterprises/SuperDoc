@@ -21,7 +21,6 @@ export function createNumberingValidator({ editor, logger }) {
     return { modified, results };
   };
 
-  // Only list items carry numbering attrs in this schema
   validator.requiredElements = {
     nodes: ['listItem'],
   };
