@@ -357,20 +357,24 @@ function calculateMarkerWidth(dom, numberingDOM, { withPadding = true } = {}) {
 
   if (!markerText.trim()) return 0;
 
+  // Try to use canvas, fallback if it fails
   try {
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
 
+    // If we get here, canvas works
     const fontSizePx = fontSize.includes('pt')
       ? Number.parseFloat(fontSize) * POINT_TO_PIXEL_CONVERSION_FACTOR
       : Number.parseFloat(fontSize);
 
     context.font = `${fontSizePx}px ${fontFamily}`;
-
     const textWidth = context.measureText(markerText).width;
     const resultWidth = withPadding ? Math.ceil(textWidth + MARKER_PADDING) : Math.ceil(textWidth);
     return resultWidth;
-  } catch {
-    return 0;
+  } catch (error) {
+    // Canvas failed (headless/jsdom environment)
+    // Simple estimation: ~8px per character
+    const textWidth = markerText.length * 8;
+    return withPadding ? textWidth + MARKER_PADDING : textWidth;
   }
 }

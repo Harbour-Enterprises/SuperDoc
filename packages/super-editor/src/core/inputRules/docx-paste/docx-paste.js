@@ -44,7 +44,7 @@ export const handleDocxPaste = (html, editor, view) => {
 
     if (msoListMatch) {
       const [, abstractId, level, numId] = msoListMatch;
-      const styles = extractListLevelStyles(css, abstractId, level);
+      const styles = extractListLevelStyles(css, abstractId, level, numId) || {};
       let start, numFmt, lvlText;
 
       if (type === 'listItem') {
@@ -58,7 +58,7 @@ export const handleDocxPaste = (html, editor, view) => {
         // Get numbering format from Word styles
         const msoNumFormat = styles['mso-level-number-format'] || 'decimal';
         numFmt = numDefMap.get(msoNumFormat);
-        const punc = item.children[0]?.innerText?.slice(-1) || '.';
+        const punc = item.innerText?.match(/^\s*[a-zA-Z0-9]+([.()])/i)?.[1] || '.';
         lvlText = numFmt === 'bullet' ? normalizeLvlTextChar(styles['mso-level-text']) : `%${level}${punc}`;
 
         const startGetter = startHelperMap.get(numFmt);
@@ -83,6 +83,7 @@ export const handleDocxPaste = (html, editor, view) => {
 
   transformWordLists(tempDiv, editor);
   const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+
   tempDiv.remove();
 
   const { dispatch } = editor.view;
