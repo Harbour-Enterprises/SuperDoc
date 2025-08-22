@@ -140,7 +140,7 @@ onMounted(async () => {
           </div>
           <div class="dev-app__header-upload">
             Upload docx
-            <BasicUpload @file-change="handleNewFile" accept=".docx" />
+            <BasicUpload @file-change="handleNewFile" />
           </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">
