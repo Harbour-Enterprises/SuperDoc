@@ -14,3 +14,8 @@
 a {
   text-decoration: auto;
 }
+
+u:has(u.underline-hidden),
+u.underline-hidden {
+  text-decoration: none;
+}

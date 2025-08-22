@@ -89,6 +89,16 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
       if (Object.keys(attributes).length) {
         const value = getMarkValue(m.type, attributes, docx);
 
+        // Handle a case here where Underline could have a color and other attributes
+        // but not a value, in which case it should not be expressed in Word and needs
+        // to override the parent underline
+        if (m.type === 'underline' && !attributes['w:val'] && Object.keys(attributes).length >= 1) {
+          newMark.attrs = attributes || {};
+          newMark.attrs['underlineType'] = 'none';
+          marks.push(newMark);
+          return;
+        }
+
         // If there is no value for mark it can't be applied
         if (value === null || value === undefined) return;
 

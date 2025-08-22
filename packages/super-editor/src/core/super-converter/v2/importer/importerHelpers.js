@@ -18,6 +18,10 @@ export function parseProperties(node) {
   const { nodes, paragraphProperties = {}, runProperties = {} } = splitElementsAndProperties(elements);
   const hasRun = elements.find((element) => element.name === 'w:r');
 
+  if (paragraphProperties && paragraphProperties.elements?.length) {
+    marks.push(...parseMarks(paragraphProperties, unknownMarks));
+  }
+
   if (hasRun) paragraphProperties.elements = paragraphProperties?.elements?.filter((el) => el.name !== 'w:rPr');
 
   // Get the marks from the run properties
@@ -25,10 +29,7 @@ export function parseProperties(node) {
     marks.push(...parseMarks(runProperties, unknownMarks));
   }
 
-  if (paragraphProperties && paragraphProperties.elements?.length) {
-    marks.push(...parseMarks(paragraphProperties, unknownMarks));
-  }
-  //add style change marks
+  // add style change marks
   marks.push(...handleStyleChangeMarks(runProperties, marks));
 
   // Maintain any extra properties
@@ -57,7 +58,8 @@ export function parseProperties(node) {
  */
 function splitElementsAndProperties(elements) {
   const pPr = elements.find((el) => el.name === 'w:pPr');
-  const rPr = elements.find((el) => el.name === 'w:rPr');
+  const run = elements?.find((el) => el.name === 'w:r');
+  const rPr = run?.elements?.find((el) => el.name === 'w:rPr');
   const sectPr = elements.find((el) => el.name === 'w:sectPr');
   const els = elements.filter((el) => el.name !== 'w:pPr' && el.name !== 'w:rPr' && el.name !== 'w:sectPr');
 

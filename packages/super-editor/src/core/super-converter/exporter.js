@@ -1414,7 +1414,11 @@ function translateMark(mark) {
 
     case 'underline':
       markElement.type = 'element';
-      markElement.attributes['w:val'] = attrs.underlineType;
+      // Only add w:val if it's not null
+      // Some word documents have underline nodes but no val (Word ignores them)
+      if (attrs.underlineType && attrs.underlineType !== 'none') {
+        markElement.attributes['w:val'] = attrs.underlineType;
+      }
       break;
 
     // Text style cases
