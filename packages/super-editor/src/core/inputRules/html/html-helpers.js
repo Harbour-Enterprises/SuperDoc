@@ -7,7 +7,7 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 export function flattenListsInHtml(html, editor) {
   // pick the right parser & Node interface
   let parser, NodeInterface;
-  if (editor.options.mockDocument) {
+  if (editor.options?.mockDocument) {
     const win = editor.options.mockDocument.defaultView;
     parser = new win.DOMParser();
     NodeInterface = win.Node;
@@ -105,7 +105,7 @@ function flattenFoundList(listElem, editor, NodeInterface) {
     nestedLists.forEach((nl) => nl.parentNode.removeChild(nl));
 
     // Create a new single-item list for this li
-    const newList = createSingleItemList(li, tag, rootNumId, level, editor, NodeInterface);
+    const newList = createSingleItemList({ li, tag, rootNumId, level, editor, NodeInterface });
     newLists.push(newList);
 
     // Add the nested lists (they'll be processed in the next iteration)
@@ -127,7 +127,7 @@ function flattenFoundList(listElem, editor, NodeInterface) {
 /**
  * Creates a single-item list from an <li> element
  */
-function createSingleItemList(li, tag, rootNumId, level, editor, NodeInterface) {
+export function createSingleItemList({ li, tag, rootNumId, level, listLevel, editor, NodeInterface }) {
   const localDoc = li.ownerDocument;
   const ELEMENT_NODE = NodeInterface.ELEMENT_NODE;
   const TEXT_NODE = NodeInterface.TEXT_NODE;
@@ -163,7 +163,7 @@ function createSingleItemList(li, tag, rootNumId, level, editor, NodeInterface) 
 
   newLi.setAttribute('data-num-fmt', listNumberingType);
   newLi.setAttribute('data-lvl-text', lvlText || '');
-  newLi.setAttribute('data-list-level', JSON.stringify([level + 1]));
+  newLi.setAttribute('data-list-level', JSON.stringify(listLevel || [level + 1]));
 
   // Copy content from original li
   Array.from(li.childNodes).forEach((node) => {

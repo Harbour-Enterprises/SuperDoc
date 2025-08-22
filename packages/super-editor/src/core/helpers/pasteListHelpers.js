@@ -1,5 +1,5 @@
-export const extractListLevelStyles = (cssText, listId, level) => {
-  const pattern = new RegExp(`@list\\s+l${listId}:level${level}\\s*\\{([^}]+)\\}`, 'i');
+export const extractListLevelStyles = (cssText, listId, level, numId) => {
+  const pattern = new RegExp(`@list\\s+l${listId}:level${level}(?:\\s+lfo${numId})?\\s*\\{([^}]+)\\}`, 'i');
   const match = cssText.match(pattern);
   if (!match) return null;
 
@@ -77,3 +77,30 @@ export const startHelperMap = new Map([
   ['upperRoman', getStartNumberFromRoman],
   ['bullet', () => 1],
 ]);
+
+export const googleNumDefMap = new Map([
+  ['decimal', 'decimal'],
+  ['decimal-leading-zero', 'decimal'],
+  ['lower-alpha', 'lowerLetter'],
+  ['upper-alpha', 'upperLetter'],
+  ['lower-roman', 'lowerRoman'],
+  ['upper-roman', 'upperRoman'],
+  ['bullet', 'bullet'],
+]);
+
+export const getLvlTextForGoogleList = (fmt, level, editor) => {
+  const bulletListDef = editor.converter.numbering.abstracts[0];
+  const bulletDefForLevel = bulletListDef.elements.find(
+    (el) => el.name === 'w:lvl' && el.attributes?.['w:ilvl'] === (level - 1).toString(),
+  );
+  const bulletLvlText = bulletDefForLevel.elements.find((el) => el.name === 'w:lvlText')?.attributes?.['w:val'];
+
+  switch (fmt) {
+    case 'decimal-leading-zero':
+      return `0%${level}.`;
+    case 'bullet':
+      return bulletLvlText;
+    default:
+      return `%${level}.`;
+  }
+};
