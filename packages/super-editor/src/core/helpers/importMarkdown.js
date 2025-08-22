@@ -1,3 +1,4 @@
+// @ts-check
 import { marked } from 'marked';
 import { createDocFromHTML } from './importHtml.js';
 
@@ -5,7 +6,6 @@ import { createDocFromHTML } from './importHtml.js';
 marked.use({
   breaks: false, // Use proper paragraphs, not <br> tags
   gfm: true, // GitHub Flavored Markdown support
-  headerIds: false, // Don't add IDs to headers
 });
 
 /**
@@ -25,7 +25,7 @@ export function createDocFromMarkdown(markdown, schema) {
  * @returns {string} HTML content
  */
 export function convertMarkdownToHTML(markdown) {
-  let html = marked.parse(markdown);
+  let html = marked.parse(markdown, { async: false });
 
   // Add spacing between paragraphs and lists for proper DOCX rendering
   return html

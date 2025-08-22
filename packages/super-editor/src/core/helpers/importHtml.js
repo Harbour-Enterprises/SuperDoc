@@ -1,3 +1,4 @@
+// @ts-check
 import { DOMParser } from 'prosemirror-model';
 
 /**
@@ -7,12 +8,13 @@ import { DOMParser } from 'prosemirror-model';
  * @returns {Object} Document node
  */
 export function createDocFromHTML(content, schema) {
-  let parsedContent = content;
+  let parsedContent;
   if (typeof content === 'string') {
     const tempDiv = document.createElement('div');
     tempDiv.innerHTML = content;
     parsedContent = tempDiv;
-    tempDiv.remove();
+  } else {
+    parsedContent = content;
   }
 
   return DOMParser.fromSchema(schema).parse(parsedContent);
