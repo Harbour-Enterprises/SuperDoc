@@ -808,11 +808,11 @@ export class SuperDoc extends EventEmitter {
     this.#log('🦋 [superdoc] Triggering collaboration saves');
     return new Promise((resolve) => {
       this.superdocStore.documents.forEach((doc, index) => {
-        console.log(`Before reset - Doc ${index}: pending = ${this.pendingCollaborationSaves}`);
+        this.#log(`Before reset - Doc ${index}: pending = ${this.pendingCollaborationSaves}`);
         this.pendingCollaborationSaves = 0;
         if (doc.ydoc) {
           this.pendingCollaborationSaves++;
-          console.log(`After increment - Doc ${index}: pending = ${this.pendingCollaborationSaves}`);
+          this.#log(`After increment - Doc ${index}: pending = ${this.pendingCollaborationSaves}`);
           const metaMap = doc.ydoc.getMap('meta');
           metaMap.observe((event) => {
             if (event.changes.keys.has('immediate-save-finished')) {
@@ -825,7 +825,7 @@ export class SuperDoc extends EventEmitter {
           metaMap.set('immediate-save', true);
         }
       });
-      console.log(
+      this.#log(
         `FINAL pending = ${this.pendingCollaborationSaves}, but we have ${this.superdocStore.documents.filter((d) => d.ydoc).length} docs!`,
       );
     });
