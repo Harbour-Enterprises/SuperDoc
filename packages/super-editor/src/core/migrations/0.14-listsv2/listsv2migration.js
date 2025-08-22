@@ -106,7 +106,7 @@ function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = nu
 
   let numId = parseInt(listNode.attrs?.listId);
   log('LIST ID', numId, 'SHARED NUM ID', sharedNumId);
-  if (!numId || numId instanceof NaN) numId = ListHelpers.getNewListId(editor);
+  if (!numId || Number.isNaN(numId)) numId = ListHelpers.getNewListId(editor);
   const listHasDef = ListHelpers.getListDefinitionDetails({ numId, level: baseLevel, editor });
   if (!listHasDef || (!sharedNumId && !numId)) {
     // In some legacy cases, we might not find any list ID at all but we can infer
