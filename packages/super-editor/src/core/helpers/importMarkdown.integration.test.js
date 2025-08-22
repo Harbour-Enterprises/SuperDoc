@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertMarkdownToHTML } from '../../core/helpers/importMarkdown.js';
+import { convertMarkdownToHTML } from './importMarkdown.js';
 
 describe('markdown to DOCX integration', () => {
   it('converts complete markdown document with headings and lists', () => {

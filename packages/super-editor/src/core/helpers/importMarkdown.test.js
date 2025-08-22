@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { createDocFromMarkdown, convertMarkdownToHTML } from '../../core/helpers/importMarkdown.js';
-import { createDocFromHTML } from '../../core/helpers/importHtml.js';
+import { createDocFromMarkdown, convertMarkdownToHTML } from './importMarkdown.js';
+import { createDocFromHTML } from './importHtml.js';
 
 vi.mock('../../core/helpers/importHtml.js', () => ({
   createDocFromHTML: vi.fn(),
