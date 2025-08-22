@@ -7,7 +7,7 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 export function flattenListsInHtml(html, editor) {
   // pick the right parser & Node interface
   let parser, NodeInterface;
-  if (editor.options.mockDocument) {
+  if (editor.options?.mockDocument) {
     const win = editor.options.mockDocument.defaultView;
     parser = new win.DOMParser();
     NodeInterface = win.Node;

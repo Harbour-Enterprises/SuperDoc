@@ -374,7 +374,7 @@ export class Editor extends EventEmitter {
     // it will be in itialized via this.#onCollaborationReady
     if (!this.options.ydoc) {
       if (!this.options.isChildEditor) {
-        this.initPagination();
+        this.#initPagination();
         this.#initComments();
 
         this.#validateDocumentInit();
@@ -688,7 +688,7 @@ export class Editor extends EventEmitter {
     this.view.dispatch(tr);
 
     setTimeout(() => {
-      this.initPagination();
+      this.#initPagination();
       this.#initComments();
     }, 50);
   }
@@ -1252,7 +1252,7 @@ export class Editor extends EventEmitter {
     this.view.dispatch(tr);
 
     if (!this.options.isNewFile) {
-      this.initPagination();
+      this.#initPagination();
       this.#initComments();
       updateYdocDocxData(this);
     }
@@ -1280,11 +1280,10 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize pagination, if the pagination extension is enabled.
-   * @private
    * @async
    * @returns {Promise<void>}
    */
-  async initPagination() {
+  async #initPagination() {
     if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
       return;
     }
@@ -1766,7 +1765,7 @@ export class Editor extends EventEmitter {
     }
 
     if (!this.options.ydoc) {
-      this.initPagination();
+      this.#initPagination();
       this.#initComments();
     }
   }
