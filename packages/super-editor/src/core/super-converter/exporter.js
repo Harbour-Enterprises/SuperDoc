@@ -739,43 +739,32 @@ function addNewImageRelationship(params, imagePath) {
  * @param {ExportParams} params
  * @returns {XmlReadyNode} The translated list node
  */
-function toIntOrUndef(v) {
-  if (v == null) return undefined; // catches undefined & null
-  if (typeof v === 'string' && v.trim().toLowerCase() === 'null') return undefined;
-  const n = Number(v);
-  return Number.isInteger(n) ? n : undefined;
-}
 function translateList(params) {
-  const { node, editor, logger } = params;
+  const { node, editor } = params;
 
   const listItem = node.content[0];
-  const listType = node.type.name === 'bulletList' ? 'bulletList' : 'orderedList';
-
-  // Normalize
-  const rawNumId = listItem.attrs.numId;
-  const rawLevel = listItem.attrs.level;
-  let numId = toIntOrUndef(rawNumId);
-  let level = toIntOrUndef(rawLevel);
-  if (!Number.isInteger(level)) level = 0;
-
-  // Allocate or ensure definition
-  if (!Number.isInteger(numId)) {
-    numId = ListHelpers.getNewListId(editor);
-    ListHelpers.generateNewListDefinition({ numId, listType, editor });
-    logger?.debug?.('translateList: allocated numId', numId, 'for', listType);
-  } else {
-    const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
-    if (!listDef) {
-      ListHelpers.generateNewListDefinition({ numId, listType, editor });
-      logger?.debug?.('translateList: created missing def for numId', numId);
-    }
+  const { numId, level } = listItem.attrs;
+  const listType = node.type.name;
+  const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
+  if (!listDef) {
+    ListHelpers.generateNewListDefinition({
+      numId,
+      listType,
+      editor,
+    });
   }
-  console.log(numId);
-  // Now it's safe to build <w:numPr>
-  const numPrTag = generateNumPrTag(numId, level);
 
-  // Collapse / export as before...
+  let numPrTag;
+
+  // These should exist for all imported nodes
+  if (numId !== undefined && numId !== null) {
+    numPrTag = generateNumPrTag(numId, level);
+  }
+
+  // Collapse multiple paragraphs into a single node for this list item
+  // In docx we need a single paragraph, but can include line breaks in a run
   const collapsedParagraphNode = convertMultipleListItemsIntoSingleNode(listItem);
+
   let outputNode = exportSchemaToJson({ ...params, node: collapsedParagraphNode });
 
   /**
@@ -842,6 +831,7 @@ function translateList(params) {
   if (pPr && pPr.elements && numPrTag) {
     pPr.elements.unshift(numPrTag);
   }
+
   const indentTag = restoreIndent(listItem.attrs.indent);
   indentTag && pPr?.elements?.push(indentTag);
 
