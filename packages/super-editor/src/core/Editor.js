@@ -37,8 +37,7 @@ import {
 import { createLinkedChildEditor } from '@core/child-editor/index.js';
 import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { SuperValidator } from '@core/super-validator/index.js';
-import { createDocFromMarkdown } from './helpers/importMarkdown.js';
-import { createDocFromHTML } from './helpers/importHtml.js';
+import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js';
 
 /**
  * @typedef {Object} FieldValue
