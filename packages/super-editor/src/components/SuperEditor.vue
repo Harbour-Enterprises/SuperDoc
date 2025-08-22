@@ -103,7 +103,6 @@ const loadNewFileData = async () => {
   fileSource.value = props.fileSource;
   if (!fileSource.value || fileSource.value.type !== DOCX) {
     fileSource.value = await getFileObject(BlankDOCX, 'blank.docx', DOCX);
-    console.debug('file source', fileSource.value);
   }
 
   try {
