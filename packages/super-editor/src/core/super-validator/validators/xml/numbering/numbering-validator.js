@@ -1,8 +1,8 @@
 // @ts-check
 /**
- * @typedef {import('../../../../types.js').ValidatorLogger} ValidatorLogger
- * @typedef {import('../../../../types.js').Editor} Editor
- * @typedef {import('../../../../types.js').ValidatorFunction} ValidatorFunction
+ * @typedef {import('../../../types.js').ValidatorLogger} ValidatorLogger
+ * @typedef {import('../../../types.js').Editor} Editor
+ * @typedef {import('../../../types.js').ValidatorFunction} ValidatorFunction
  */
 import { ensureListItemHasNumIdAndLevel, ensureNumIdHasDefinition } from './rules/index.js';
 

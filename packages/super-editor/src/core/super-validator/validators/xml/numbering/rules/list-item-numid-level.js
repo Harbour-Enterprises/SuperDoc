@@ -1,20 +1,20 @@
 // @ts-check
-import { ListHelpers } from '../../../../../../helpers/list-numbering-helpers.js';
+import { ListHelpers } from '../../../../../helpers/list-numbering-helpers.js';
 
-const parseIntId = (v) => {
-  if (v === undefined || v === null) return undefined;
-  const s = String(v).trim();
-  if (!/^\d+$/.test(s)) return undefined;
-  return Number(s);
-};
+function parseIntId(v) {
+  if (v == null) return undefined; // catches undefined & null
+  if (typeof v === 'string' && v.trim().toLowerCase() === 'null') return undefined;
+  const n = Number(v);
+  return Number.isInteger(n) ? n : undefined;
+}
 
 /**
  * Ensure each listItem has numId and level. If missing, infer parent list type,
  * create/generate a numbering definition and set attrs via tr.setNodeMarkup.
- * @param {import('../../../../../types.js').ElementInfo[]} listItems
- * @param {import('../../../../../types.js').Editor} editor
+ * @param {import('../../../../types.js').ElementInfo[]} listItems
+ * @param {import('../../../../types.js').Editor} editor
  * @param {import('prosemirror-state').Transaction} tr
- * @param {import('../../../../../types.js').ValidatorLogger} logger
+ * @param {import('../../../../types.js').ValidatorLogger} logger
  * @returns {{ modified: boolean, results: string[] }}
  */
 export function ensureListItemHasNumIdAndLevel(listItems, editor, tr, logger) {
@@ -23,14 +23,15 @@ export function ensureListItemHasNumIdAndLevel(listItems, editor, tr, logger) {
 
   listItems.forEach(({ node, pos }) => {
     const current = node.attrs || {};
+
+    const isValidId = (n) => Number.isInteger(n) && n >= 0;
+
+    // in ensureListItemHasNumIdAndLevel:
     let numId = parseIntId(current.numId);
     let level = parseIntId(current.level);
 
-    const needsNumId = numId === undefined;
-    const needsLevel = level === undefined;
-    console.log(current.numId);
-    if (!needsNumId && !needsLevel) return;
-
+    const needsNumId = !isValidId(numId);
+    const needsLevel = !isValidId(level);
     const $pos = tr.doc.resolve(pos);
     const parentList = $pos.parent;
     const listType = parentList?.type?.name === 'bulletList' ? 'bulletList' : 'orderedList';
