@@ -94,10 +94,10 @@ function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = nu
   const currentListType = listNode.type.name;
 
   const needsMigration = shouldMigrateList(listNode);
-  const needsDefinition = checkValidDefinition(listNode, editor);
+  const hasValidDefinition = checkValidDefinition(listNode, editor);
   log('Needs migration?', needsMigration);
   if (!needsMigration) {
-    if (needsDefinition) {
+    if (!hasValidDefinition) {
       return generateMissingListDefinition(listNode, editor);
     } else {
       return result;
@@ -106,6 +106,7 @@ function flattenListCompletely(listNode, editor, baseLevel = 0, sharedNumId = nu
 
   let numId = parseInt(listNode.attrs?.listId);
   log('LIST ID', numId, 'SHARED NUM ID', sharedNumId);
+  if (!numId || numId instanceof NaN) numId = ListHelpers.getNewListId(editor);
   const listHasDef = ListHelpers.getListDefinitionDetails({ numId, level: baseLevel, editor });
   if (!listHasDef || (!sharedNumId && !numId)) {
     // In some legacy cases, we might not find any list ID at all but we can infer
@@ -245,7 +246,7 @@ const checkValidDefinition = (listNode, editor) => {
   const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
   const { abstract } = listDef || {};
 
-  if (!abstract) return true;
+  if (abstract) return true;
   return false;
 };
 
