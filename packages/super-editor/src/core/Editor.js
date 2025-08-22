@@ -1,7 +1,6 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMParser, DOMSerializer } from 'prosemirror-model';
-import { marked } from 'marked';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -38,6 +37,7 @@ import {
 import { createLinkedChildEditor } from '@core/child-editor/index.js';
 import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { SuperValidator } from '@core/super-validator/index.js';
+import { createDocFromMarkdown } from './helpers/markdownHelpers.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -959,7 +959,7 @@ export class Editor extends EventEmitter {
 
           // Check for markdown BEFORE html (since markdown gets converted to HTML)
           if (this.options.markdown) {
-            doc = this.#createDocFromMarkdown(this.options.markdown);
+            doc = createDocFromMarkdown(this.options.markdown, this.schema);
           }
           // If we have a new doc, and have html data, we initialize from html
           else if (this.options.html) doc = this.#createDocFromHTML(this.options.html);
@@ -999,59 +999,6 @@ export class Editor extends EventEmitter {
     }
 
     return DOMParser.fromSchema(this.schema).parse(parsedContent);
-  }
-
-  /**
-   * Create a document from Markdown content
-   * @private
-   * @param {string} content - Markdown content
-   * @returns {Object} Document node
-   */
-  #createDocFromMarkdown(content) {
-    // Convert markdown to HTML
-    const html = this.#convertMarkdownToHTML(content);
-
-    // Use existing HTML parser
-    return this.#createDocFromHTML(html);
-  }
-
-  /**
-   * Convert Markdown to HTML with proper structure
-   * @private
-   * @param {string} markdown - Markdown content
-   * @returns {string} HTML content
-   */
-  #convertMarkdownToHTML(markdown) {
-    // Configure marked for better compatibility
-    marked.setOptions({
-      breaks: false, // Use proper paragraphs, not <br> tags
-      gfm: true, // GitHub Flavored Markdown support
-      headerIds: false, // Don't add IDs to headers
-    });
-
-    // Convert markdown to HTML
-    let html = marked.parse(markdown);
-
-    // Prepare HTML for SuperDoc/DOCX compatibility
-    html = this.#prepareHTMLForSuperDoc(html);
-
-    return html;
-  }
-
-  /**
-   * Prepare markdown-generated HTML for SuperDoc/DOCX compatibility
-   * @private
-   * @param {string} html - HTML from markdown parser
-   * @returns {string} HTML prepared for SuperDoc
-   */
-  #prepareHTMLForSuperDoc(html) {
-    // Add spacing between paragraphs and lists for proper DOCX rendering
-    // In DOCX, the space between text and lists is an actual empty paragraph
-    return html
-      .replace(/<\/p>\n<ul>/g, '</p>\n<p>&nbsp;</p>\n<ul>') // Add space before bullet lists
-      .replace(/<\/p>\n<ol>/g, '</p>\n<p>&nbsp;</p>\n<ol>') // Add space before numbered lists
-      .replace(/<\/ul>\n<h/g, '</ul>\n<p>&nbsp;</p>\n<h') // Add space after lists before headings
-      .replace(/<\/ol>\n<h/g, '</ol>\n<p>&nbsp;</p>\n<h'); // Add space after lists before headings
   }
 
   /**

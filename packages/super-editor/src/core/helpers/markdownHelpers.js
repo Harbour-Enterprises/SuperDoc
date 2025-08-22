@@ -1,0 +1,50 @@
+import { marked } from 'marked';
+import { DOMParser } from 'prosemirror-model';
+
+// Configure marked once
+marked.use({
+  breaks: false, // Use proper paragraphs, not <br> tags
+  gfm: true, // GitHub Flavored Markdown support
+  headerIds: false, // Don't add IDs to headers
+});
+
+/**
+ * Create a ProseMirror document from Markdown content
+ * @param {string} markdown - Markdown content
+ * @param {Object} schema - ProseMirror schema
+ * @returns {Object} Document node
+ */
+export function createDocFromMarkdown(markdown, schema) {
+  const html = convertMarkdownToHTML(markdown);
+  return createDocFromHTML(html, schema);
+}
+
+/**
+ * Convert Markdown to HTML with SuperDoc/DOCX compatibility
+ * @param {string} markdown - Markdown content
+ * @returns {string} HTML content
+ */
+export function convertMarkdownToHTML(markdown) {
+  let html = marked.parse(markdown);
+
+  // Add spacing between paragraphs and lists for proper DOCX rendering
+  return html
+    .replace(/<\/p>\n<ul>/g, '</p>\n<p>&nbsp;</p>\n<ul>')
+    .replace(/<\/p>\n<ol>/g, '</p>\n<p>&nbsp;</p>\n<ol>')
+    .replace(/<\/ul>\n<h/g, '</ul>\n<p>&nbsp;</p>\n<h')
+    .replace(/<\/ol>\n<h/g, '</ol>\n<p>&nbsp;</p>\n<h');
+}
+
+/**
+ * Create a document from HTML content
+ * @param {string} html - HTML content
+ * @param {Object} schema - ProseMirror schema
+ * @returns {Object} Document node
+ */
+function createDocFromHTML(html, schema) {
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  const doc = DOMParser.fromSchema(schema).parse(tempDiv);
+  tempDiv.remove();
+  return doc;
+}
