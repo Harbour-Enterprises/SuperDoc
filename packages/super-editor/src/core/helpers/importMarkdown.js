@@ -1,5 +1,5 @@
 import { marked } from 'marked';
-import { DOMParser } from 'prosemirror-model';
+import { createDocFromHTML } from './importHtml.js';
 
 // Configure marked once
 marked.use({
@@ -33,18 +33,4 @@ export function convertMarkdownToHTML(markdown) {
     .replace(/<\/p>\n<ol>/g, '</p>\n<p>&nbsp;</p>\n<ol>')
     .replace(/<\/ul>\n<h/g, '</ul>\n<p>&nbsp;</p>\n<h')
     .replace(/<\/ol>\n<h/g, '</ol>\n<p>&nbsp;</p>\n<h');
-}
-
-/**
- * Create a document from HTML content
- * @param {string} html - HTML content
- * @param {Object} schema - ProseMirror schema
- * @returns {Object} Document node
- */
-function createDocFromHTML(html, schema) {
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = html;
-  const doc = DOMParser.fromSchema(schema).parse(tempDiv);
-  tempDiv.remove();
-  return doc;
 }

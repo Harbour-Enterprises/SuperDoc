@@ -37,7 +37,8 @@ import {
 import { createLinkedChildEditor } from '@core/child-editor/index.js';
 import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { SuperValidator } from '@core/super-validator/index.js';
-import { createDocFromMarkdown } from './helpers/markdownHelpers.js';
+import { createDocFromMarkdown } from './helpers/importMarkdown.js';
+import { createDocFromHTML } from './helpers/importHtml.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -962,7 +963,7 @@ export class Editor extends EventEmitter {
             doc = createDocFromMarkdown(this.options.markdown, this.schema);
           }
           // If we have a new doc, and have html data, we initialize from html
-          else if (this.options.html) doc = this.#createDocFromHTML(this.options.html);
+          else if (this.options.html) doc = createDocFromHTML(this.options.html, this.schema);
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
           if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
@@ -972,7 +973,7 @@ export class Editor extends EventEmitter {
       // If we are in HTML mode, we initialize from either content or html (or blank)
       else if (mode === 'text' || mode === 'html') {
         if (loadFromSchema) doc = this.schema.nodeFromJSON(content);
-        else if (content) doc = this.#createDocFromHTML(content);
+        else if (content) doc = createDocFromHTML(content, this.schema);
         else doc = this.schema.topNodeType.createAndFill();
       }
     } catch (err) {
@@ -981,24 +982,6 @@ export class Editor extends EventEmitter {
     }
 
     return doc;
-  }
-
-  /**
-   * Create a document from HTML content
-   * @private
-   * @param {string} content - HTML content
-   * @returns {Object} Document node
-   */
-  #createDocFromHTML(content) {
-    let parsedContent = content;
-    if (typeof content === 'string') {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content;
-      parsedContent = tempDiv;
-      tempDiv.remove();
-    }
-
-    return DOMParser.fromSchema(this.schema).parse(parsedContent);
   }
 
   /**
@@ -1844,7 +1827,7 @@ export class Editor extends EventEmitter {
     if (!targetNode || !html) return;
     const start = targetNode.pos;
     const end = start + targetNode.node.nodeSize;
-    const htmlNode = this.#createDocFromHTML(html);
+    const htmlNode = createDocFromHTML(html, this.schema);
     tr.replaceWith(start, end, htmlNode);
     dispatch(tr);
   }
