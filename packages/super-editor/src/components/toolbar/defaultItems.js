@@ -200,7 +200,7 @@ export const makeDefaultItems = ({
 
   const strikethrough = useToolbarItem({
     type: 'button',
-    name: 'strikethrough',
+    name: 'strike',
     command: 'toggleStrike',
     icon: toolbarIcons.strikethrough,
     active: false,

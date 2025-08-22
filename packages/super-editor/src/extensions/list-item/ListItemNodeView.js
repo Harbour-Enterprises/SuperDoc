@@ -373,7 +373,7 @@ function calculateMarkerWidth(dom, numberingDOM, editor, { withPadding = true } 
     const textWidth = context.measureText(markerText).width;
     const resultWidth = withPadding ? Math.ceil(textWidth + MARKER_PADDING) : Math.ceil(textWidth);
     return resultWidth;
-  } catch (error) {
+  } catch {
     return 0;
   }
 }
