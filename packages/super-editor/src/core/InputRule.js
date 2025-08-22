@@ -293,7 +293,7 @@ export function handleHtmlPaste(html, editor) {
  * converting em units to pt and removing unnecessary tags.
  * @param {String} html The HTML string to be processed.
  * @param {Editor} editor The editor instance.
- * @returns {String} The processed HTML string.
+ * @returns {DocumentFragment} The processed HTML string.
  */
 export function htmlHandler(html, editor) {
   const flatHtml = flattenListsInHtml(html, editor);

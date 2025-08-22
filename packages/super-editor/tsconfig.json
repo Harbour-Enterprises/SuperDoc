@@ -8,7 +8,19 @@
     "skipLibCheck": true,
     "declaration": true,
     "emitDeclarationOnly": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "baseUrl": ".",
+    "paths": {
+      "@": ["./src/*"],
+      "@core/*": ["./src/core/*"],
+      "@extensions/*": ["./src/extensions/*"],
+      "@features/*": ["./src/features/*"],
+      "@components/*": ["./src/components/*"],
+      "@helpers/*": ["./src/core/helpers/*"],
+      "@packages/*": ["../*"],
+      "@converter/*": ["./src/core/super-converter/*"],
+      "@tests/*": ["./src/tests/*"]
+    }
   },
   "exclude": ["node_modules", "dist", "**/*.test.js"]
 }
