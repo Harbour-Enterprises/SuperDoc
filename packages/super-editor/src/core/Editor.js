@@ -1517,6 +1517,8 @@ export class Editor extends EventEmitter {
 
     const { tr, doc } = newState;
 
+    this.#validateDocumentExport();
+
     prepareCommentsForExport(doc, tr, this.schema, comments);
     const updatedState = newState.apply(tr);
     return updatedState.doc.toJSON();
@@ -1908,5 +1910,17 @@ export class Editor extends EventEmitter {
     /** @type {import('./super-validator/index.js').SuperValidator} */
     const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
     validator.validateActiveDocument();
+  }
+
+  /**
+   * Run the SuperValidator's on document upon export to check and fix potential known issues.
+   * @returns {void}
+   */
+  #validateDocumentExport() {
+    if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
+
+    /** @type {import('./super-validator/index.js').SuperValidator} */
+    const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
+    validator.validateDocumentExport();
   }
 }
