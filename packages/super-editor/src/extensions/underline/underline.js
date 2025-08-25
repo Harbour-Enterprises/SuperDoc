@@ -17,8 +17,14 @@ export const Underline = Mark.create({
     ];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['u', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes, mark }) {
+    const baseAttributes = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
+    // Add conditional class for hidden underlines (when w:u has no w:val)
+    if (mark.attrs.underlineType === 'none') {
+      baseAttributes.class = baseAttributes.class ? `${baseAttributes.class} underline-hidden` : 'underline-hidden';
+    }
+
+    return ['u', baseAttributes, 0];
   },
 
   addAttributes() {
