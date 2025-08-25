@@ -1,7 +1,12 @@
+// @ts-check
 import { Mark, Attribute } from '@core/index.js';
-
 import { annotationClass, annotationContentClass } from '../field-annotation/index.js';
 
+/**
+ * @module TextStyle
+ * @sidebarTitle Text Style
+ * @snippetPath /snippets/extensions/text-style.mdx
+ */
 export const TextStyle = Mark.create({
   name: 'textStyle',
 
@@ -37,6 +42,14 @@ export const TextStyle = Mark.create({
 
   addCommands() {
     return {
+      /**
+       * Remove empty text style marks
+       * @category Command
+       * @returns {Function} Command - Removes mark if no attributes present
+       * @example
+       * removeEmptyTextStyle()
+       * @note Cleanup utility to prevent empty span elements
+       */
       removeEmptyTextStyle:
         () =>
         ({ state, commands }) => {

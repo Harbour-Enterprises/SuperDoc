@@ -1,5 +1,16 @@
+// @ts-check
+/**
+ * Underline style types
+ * @typedef {'single'|'double'|'thick'|'dotted'|'dashed'|'wavy'} UnderlineType
+ */
+
 import { Mark, Attribute } from '@core/index.js';
 
+/**
+ * @module Underline
+ * @sidebarTitle Underline
+ * @snippetPath /snippets/extensions/underline.mdx
+ */
 export const Underline = Mark.create({
   name: 'underline',
 
@@ -29,12 +40,43 @@ export const Underline = Mark.create({
     };
   },
 
-  //prettier-ignore
   addCommands() {
     return {
-      setUnderline: () => ({ commands }) => commands.setMark(this.name),
-      unsetUnderline: () => ({ commands }) => commands.unsetMark(this.name),
-      toggleUnderline: () => ({ commands }) => commands.toggleMark(this.name),
+      /**
+       * Apply underline formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * setUnderline()
+       */
+      setUnderline:
+        () =>
+        ({ commands }) =>
+          commands.setMark(this.name),
+
+      /**
+       * Remove underline formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * unsetUnderline()
+       */
+      unsetUnderline:
+        () =>
+        ({ commands }) =>
+          commands.unsetMark(this.name),
+
+      /**
+       * Toggle underline formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * toggleUnderline()
+       */
+      toggleUnderline:
+        () =>
+        ({ commands }) =>
+          commands.toggleMark(this.name),
     };
   },
 
