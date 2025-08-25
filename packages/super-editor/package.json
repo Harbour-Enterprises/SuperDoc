@@ -90,7 +90,7 @@
     "vite": "^6.3.5",
     "vite-plugin-node-polyfills": "^0.24.0",
     "vitest": "^3.2.4",
-    "vue-draggable-next": "^2.2.1",
+    "vue-draggable-next": "^2.3.0",
     "which": "^5.0.0"
   }
 }
