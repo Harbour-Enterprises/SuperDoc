@@ -1,3 +1,42 @@
+// @ts-check
+
+/**
+ * Comment thread attributes
+ * @typedef {Object} CommentAttributes
+ * @property {string} commentId - Unique comment identifier
+ * @property {string} [importedId] - Original ID from imported documents
+ * @property {boolean} [internal=true] - Whether comment is internal (private) or external
+ */
+
+/**
+ * Create a new comment conversation
+ * @typedef {Object} CommentConversation
+ * @property {string} commentId - Unique identifier for the comment thread
+ * @property {boolean} [isInternal=false] - Mark as internal/private comment
+ */
+
+/**
+ * Plugin state for comments
+ * @typedef {Object} CommentsPluginState
+ * @property {string|null} activeThreadId - Currently active/selected comment
+ * @property {string} externalColor - Highlight color for external comments
+ * @property {string} internalColor - Highlight color for internal comments
+ * @property {Object} decorations - Visual decorations for comment highlights
+ * @property {Object} allCommentPositions - Map of comment positions in document
+ * @property {Array<string>} allCommentIds - List of all comment identifiers
+ * @property {boolean} changedActiveThread - Whether active thread changed
+ * @property {Object} trackedChanges - Map of tracked change comments
+ */
+
+/**
+ * Comment position information
+ * @typedef {Object} CommentPosition
+ * @property {string} threadId - Comment thread identifier
+ * @property {number} start - Start position in document
+ * @property {number} end - End position in document
+ * @property {DOMRect} bounds - Visual boundaries of comment
+ */
+
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
 import { Decoration, DecorationSet } from 'prosemirror-view';
@@ -5,7 +44,6 @@ import { removeCommentsById, getHighlightColor } from './comments-helpers.js';
 import { CommentMarkName } from './comments-constants.js';
 import { PaginationPluginKey } from '../pagination/pagination-helpers.js';
 
-// Example tracked-change keys, if needed
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../track-changes/constants.js';
 import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
 import { comments_module_events } from '@harbour-enterprises/common';
@@ -15,11 +53,34 @@ const TRACK_CHANGE_MARKS = [TrackInsertMarkName, TrackDeleteMarkName, TrackForma
 
 export const CommentsPluginKey = new PluginKey('comments');
 
+/**
+ * @module Comments
+ * @sidebarTitle Comments
+ * @snippetPath /snippets/extensions/comments.mdx
+ */
 export const CommentsPlugin = Extension.create({
   name: 'comments',
 
   addCommands() {
     return {
+      /**
+       * Insert a new comment at current selection
+       * @category Command
+       * @param {CommentConversation} conversation - Comment configuration
+       * @returns {Function} Command - true if created, false if invalid selection
+       * @example
+       * // Add external comment
+       * insertComment({
+       *   commentId: 'comment-123',
+       *   isInternal: false
+       * })
+       *
+       * // Add internal (private) comment
+       * insertComment({
+       *   commentId: 'internal-456',
+       *   isInternal: true
+       * })
+       */
       insertComment:
         (conversation) =>
         ({ tr, dispatch }) => {
@@ -41,6 +102,20 @@ export const CommentsPlugin = Extension.create({
           return true;
         },
 
+      /**
+       * Remove comment by ID
+       * @category Command
+       * @param {Object} options - Removal options
+       * @param {string} options.commentId - Comment to remove
+       * @param {string} [options.importedId] - Alternative imported ID
+       * @returns {Function} Command - Removes all instances of the comment
+       * @example
+       * // Remove by comment ID
+       * removeComment({ commentId: 'comment-123' })
+       *
+       * // Remove by imported ID
+       * removeComment({ importedId: 'word-comment-456' })
+       */
       removeComment:
         ({ commentId, importedId }) =>
         ({ tr, dispatch, state }) => {
@@ -48,13 +123,51 @@ export const CommentsPlugin = Extension.create({
           removeCommentsById({ commentId, importedId, state, tr, dispatch });
         },
 
+      /**
+       * Set the actively selected comment
+       * @category Command
+       * @param {Object} options - Selection options
+       * @param {string} options.commentId - Comment to activate
+       * @returns {Function} Command - true when selection updated
+       * @example
+       * // Highlight specific comment
+       * setActiveComment({ commentId: 'comment-123' })
+       *
+       * // Clear active selection
+       * setActiveComment({ commentId: null })
+       * @note Active comments receive special visual highlighting
+       */
       setActiveComment:
         ({ commentId }) =>
         ({ tr }) => {
-          tr.setMeta(CommentsPluginKey, { type: 'setActiveComment', activeThreadId: commentId, forceUpdate: true });
+          tr.setMeta(CommentsPluginKey, {
+            type: 'setActiveComment',
+            activeThreadId: commentId,
+            forceUpdate: true,
+          });
           return true;
         },
 
+      /**
+       * Toggle comment visibility (internal/external)
+       * @category Command
+       * @param {Object} options - Visibility options
+       * @param {string} options.commentId - Target comment
+       * @param {boolean} options.isInternal - New visibility state
+       * @returns {Function} Command - true if updated, false if not found
+       * @example
+       * // Make comment private
+       * setCommentInternal({
+       *   commentId: 'comment-123',
+       *   isInternal: true
+       * })
+       *
+       * // Make comment public
+       * setCommentInternal({
+       *   commentId: 'comment-123',
+       *   isInternal: false
+       * })
+       */
       setCommentInternal:
         ({ commentId, isInternal }) =>
         ({ tr, dispatch, state }) => {
@@ -62,7 +175,7 @@ export const CommentsPlugin = Extension.create({
           let foundStartNode;
           let foundPos;
 
-          // Find the commentRangeStart node that matches the comment ID
+          // Find the comment mark matching the ID
           tr.setMeta(CommentsPluginKey, { event: 'update' });
           doc.descendants((node, pos) => {
             if (foundStartNode) return;
@@ -83,7 +196,7 @@ export const CommentsPlugin = Extension.create({
           // If no matching node, return false
           if (!foundStartNode) return false;
 
-          // Update the mark itself
+          // Update the mark with new internal status
           tr.addMark(
             foundPos,
             foundPos + foundStartNode.nodeSize,
@@ -98,12 +211,35 @@ export const CommentsPlugin = Extension.create({
           return true;
         },
 
+      /**
+       * Mark comment as resolved (removes from document)
+       * @category Command
+       * @param {Object} options - Resolution options
+       * @param {string} options.commentId - Comment to resolve
+       * @returns {Function} Command - Removes comment marks from document
+       * @example
+       * resolveComment({ commentId: 'comment-123' })
+       * @note This is an alias for removeComment with different semantics
+       */
       resolveComment:
         ({ commentId }) =>
         ({ tr, dispatch, state }) => {
           tr.setMeta(CommentsPluginKey, { event: 'update' });
           removeCommentsById({ commentId, state, tr, dispatch });
         },
+
+      /**
+       * Move cursor to comment location
+       * @category Command
+       * @param {string} id - Comment or tracked change ID
+       * @returns {Function} Command - true if found and cursor moved, false otherwise
+       * @example
+       * // Jump to comment
+       * setCursorById('comment-123')
+       *
+       * // Jump to tracked change
+       * setCursorById('track-change-789')
+       */
       setCursorById:
         (id) =>
         ({ state, editor }) => {
