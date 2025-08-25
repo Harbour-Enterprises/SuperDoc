@@ -54,7 +54,7 @@
     "@vuepress/bundler-vite": "^2.0.0-rc.18",
     "@vuepress/plugin-redirect": "^2.0.0-rc.60",
     "@vuepress/theme-default": "^2.0.0-rc.60",
-    "eslint": "^9.31.0",
+    "eslint": "^9.34.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-jsdoc": "^54.1.0",
     "husky": "^9.1.7",
