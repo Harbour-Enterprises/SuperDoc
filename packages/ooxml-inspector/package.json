@@ -1,0 +1,53 @@
+{
+  "name": "@superdoc-dev/ooxml-inspector",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "AGPL-3.0",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "ooxml": "./dist/bin/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": "./dist/schema.transitional.json",
+    "./cli": "./dist/bin/cli.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist coverage",
+    "build:schema": "node generator/index.js",
+    "build:lib": "tsup src/index.js --format esm --dts --sourcemap --out-dir dist",
+    "build:cli": "tsup src/cli.js --format esm --sourcemap --out-dir dist/bin",
+    "build": "npm run clean && npm run build:schema && npm run build:lib && npm run build:cli",
+    "prepublishOnly": "npm run test && npm run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:cov": "vitest run --coverage"
+  },
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "tsup": "^8.1.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
