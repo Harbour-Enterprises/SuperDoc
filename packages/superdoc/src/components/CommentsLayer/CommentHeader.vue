@@ -61,7 +61,7 @@ const allowReject = computed(() => {
   if (!generallyAllowed.value) return false;
   if (!props.comment.trackedChange) return false;
 
-  if (isOwnComment) return isAllowed(PERMISSIONS.REJECT_OWN, role, isInternal);
+  if (isOwnComment || props.comment.trackedChange) return isAllowed(PERMISSIONS.REJECT_OWN, role, isInternal);
   else return isAllowed(PERMISSIONS.REJECT_OTHER, role, isInternal);
 });
 
