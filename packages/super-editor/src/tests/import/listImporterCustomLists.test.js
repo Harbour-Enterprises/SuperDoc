@@ -101,7 +101,6 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
   it('can import the first sub item (a) with indent', () => {
     const list = content.content[2];
     const item = list.content[0];
-    console.log(list.content[0]);
     expect(list.type).toBe('orderedList');
     expect(item.type).toBe('listItem');
     expect(item.attrs.numId).toBe('5');
@@ -160,7 +159,6 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     expect(indentFirstLine).toBe(0);
 
     const spacingTag = pPr?.elements.find((el) => el.name === 'w:spacing');
-    console.log('spacingTag', spacingTag);
     expect(spacingTag).toBeDefined();
     const spacingLine = spacingTag?.attributes['w:line'];
     const spacingAfter = spacingTag?.attributes['w:after'];
