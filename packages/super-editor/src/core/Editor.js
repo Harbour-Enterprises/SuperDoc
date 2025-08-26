@@ -924,8 +924,8 @@ export class Editor extends EventEmitter {
    * @param {string} version - New version
    * @returns {Object}
    */
-  static updateDocumentVersion(doc, version) {
-    const updatedContent = SuperConverter.updateDocumentVersion(doc, version);
+  static setDocumentVersion(doc, version) {
+    const updatedContent = SuperConverter.setStoredSuperdocVersion(doc, version);
     return updatedContent;
   }
 
@@ -1425,6 +1425,22 @@ export class Editor extends EventEmitter {
       html = unflattenListsInHtml(html);
     }
     return html;
+  }
+
+  /**
+   * Get the document ID from the converter
+   * @returns {string|null} The unique SuperDoc ID for this document
+   */
+  getDocumentId() {
+    return this.converter?.getSuperdocId() || null;
+  }
+
+  /**
+   * Get the document version from the converter
+   * @returns {string|null} The SuperDoc version stored in the document
+   */
+  getDocumentVersion() {
+    return this.converter?.getSuperdocVersion() || null;
   }
 
   /**

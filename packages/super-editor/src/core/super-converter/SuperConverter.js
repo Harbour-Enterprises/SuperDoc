@@ -221,6 +221,9 @@ class SuperConverter {
     this.fileSource = params?.fileSource || null;
     this.documentId = params?.documentId || null;
 
+    // SuperDoc ID - unique identifier for this document
+    this.superdocId = null;
+
     // Parse the initial XML, if provided
     if (this.docx.length || this.xml) this.parseFromXml();
   }
@@ -249,6 +252,13 @@ class SuperConverter {
 
     if (!this.initialJSON) this.initialJSON = this.parseXmlToJson(this.xml);
     this.declaration = this.initialJSON?.declaration;
+
+    // Read SuperDocId from the document if it exists
+    this.superdocId = SuperConverter.getStoredSuperdocId(this.docx);
+    if (!this.superdocId) {
+      // If document doesn't have an ID yet, it will be assigned during export
+      console.debug('No SuperDocId found in document, will be assigned on export');
+    }
   }
 
   parseXmlToJson(xml) {
@@ -257,53 +267,133 @@ class SuperConverter {
     return JSON.parse(xmljs.xml2json(newXml, null, 2));
   }
 
-  static getStoredSuperdocVersion(docx) {
+  /**
+   * Generic method to get a stored custom property from docx
+   * @static
+   * @param {Array} docx - Array of docx file objects
+   * @param {string} propertyName - Name of the property to retrieve
+   * @returns {string|null} The property value or null if not found
+   */
+  static getStoredCustomProperty(docx, propertyName) {
     try {
       const customXml = docx.find((doc) => doc.name === 'docProps/custom.xml');
-      if (!customXml) return;
+      if (!customXml) return null;
 
       const converter = new SuperConverter();
       const content = customXml.content;
       const contentJson = converter.parseXmlToJson(content);
       const properties = contentJson.elements.find((el) => el.name === 'Properties');
-      if (!properties.elements) return;
+      if (!properties.elements) return null;
 
-      const superdocVersion = properties.elements.find(
-        (el) => el.name === 'property' && el.attributes.name === 'SuperdocVersion',
-      );
-      if (!superdocVersion) return;
+      const property = properties.elements.find((el) => el.name === 'property' && el.attributes.name === propertyName);
+      if (!property) return null;
 
-      const version = superdocVersion.elements[0].elements[0].text;
-      return version;
+      return property.elements[0].elements[0].text;
     } catch (e) {
-      console.warn('Error getting Superdoc version', e);
-      return;
+      console.warn(`Error getting custom property ${propertyName}:`, e);
+      return null;
     }
   }
 
-  static updateDocumentVersion(docx = this.convertedXml, version = __APP_VERSION__) {
+  /**
+   * Generic method to set a stored custom property in docx
+   * @static
+   * @param {Object} docx - The docx object to store the property in
+   * @param {string} propertyName - Name of the property
+   * @param {string|Function} value - Value or function that returns the value
+   * @param {boolean} preserveExisting - If true, won't overwrite existing values
+   * @returns {string} The stored value
+   */
+  static setStoredCustomProperty(docx, propertyName, value, preserveExisting = false) {
     const customLocation = 'docProps/custom.xml';
-    if (!docx[customLocation]) {
-      docx[customLocation] = generateCustomXml(__APP_VERSION__);
-    }
+    if (!docx[customLocation]) docx[customLocation] = generateCustomXml();
 
-    const customXml = docx['docProps/custom.xml'];
-    if (!customXml) return;
-
+    const customXml = docx[customLocation];
     const properties = customXml.elements.find((el) => el.name === 'Properties');
     if (!properties.elements) properties.elements = [];
 
-    const superdocVersion = properties.elements.find(
-      (el) => el.name === 'property' && el.attributes.name === 'SuperdocVersion',
-    );
-    if (!superdocVersion) {
-      const newCustomXml = generateSuperdocVersion();
-      properties.elements.push(newCustomXml);
-    } else {
-      superdocVersion.elements[0].elements[0].elements[0].text = version;
+    // Check if property already exists
+    let property = properties.elements.find((el) => el.name === 'property' && el.attributes.name === propertyName);
+
+    if (property && preserveExisting) {
+      // Return existing value
+      return property.elements[0].elements[0].text;
     }
 
-    return docx;
+    // Generate value if it's a function
+    const finalValue = typeof value === 'function' ? value() : value;
+
+    if (!property) {
+      // Get next available pid
+      const existingPids = properties.elements
+        .filter((el) => el.attributes?.pid)
+        .map((el) => parseInt(el.attributes.pid));
+      const pid = existingPids.length > 0 ? Math.max(...existingPids) + 1 : 2;
+
+      property = {
+        type: 'element',
+        name: 'property',
+        attributes: {
+          name: propertyName,
+          fmtid: '{D5CDD505-2E9C-101B-9397-08002B2CF9AE}',
+          pid,
+        },
+        elements: [
+          {
+            type: 'element',
+            name: 'vt:lpwstr',
+            elements: [
+              {
+                type: 'text',
+                text: finalValue,
+              },
+            ],
+          },
+        ],
+      };
+
+      properties.elements.push(property);
+    } else {
+      // Update existing property
+      property.elements[0].elements[0].text = finalValue;
+    }
+
+    return finalValue;
+  }
+
+  static getStoredSuperdocVersion(docx) {
+    return SuperConverter.getStoredCustomProperty(docx, 'SuperdocVersion');
+  }
+
+  static setStoredSuperdocVersion(docx = this.convertedXml, version = __APP_VERSION__) {
+    return SuperConverter.setStoredCustomProperty(docx, 'SuperdocVersion', version, false);
+  }
+
+  static getStoredSuperdocId(docx) {
+    return SuperConverter.getStoredCustomProperty(docx, 'SuperDocId');
+  }
+
+  static setStoredSuperdocId(docx, id = null) {
+    return SuperConverter.setStoredCustomProperty(docx, 'SuperDocId', id || uuidv4(), true);
+  }
+
+  /**
+   * Get the SuperDoc ID for this converter instance
+   * @returns {string|null} The SuperDoc ID or null if not set
+   */
+  getSuperdocId() {
+    return this.superdocId;
+  }
+
+  /**
+   * Get the SuperDoc version for this converter instance
+   * @returns {string|null} The SuperDoc version or null if not available
+   */
+  getSuperdocVersion() {
+    if (this.docx) {
+      return SuperConverter.getStoredSuperdocVersion(this.docx);
+    }
+    return null;
   }
 
   getDocumentDefaultStyles() {
@@ -559,7 +649,10 @@ class SuperConverter {
     this.#exportProcessNewRelationships([...params.relationships, ...commentsRels, ...headFootRels]);
 
     // Store the SuperDoc version
-    storeSuperdocVersion(this.convertedXml);
+    SuperConverter.setStoredSuperdocVersion(this.convertedXml);
+
+    // Store the SuperDoc ID
+    this.superdocId = SuperConverter.setStoredSuperdocId(this.convertedXml);
 
     // Update the numbering.xml
     this.#exportNumberingFile(params);
@@ -818,58 +911,8 @@ class SuperConverter {
   }
 }
 
-function storeSuperdocVersion(docx) {
-  const customLocation = 'docProps/custom.xml';
-  if (!docx[customLocation]) docx[customLocation] = generateCustomXml();
-
-  const customXml = docx[customLocation];
-  const properties = customXml.elements.find((el) => el.name === 'Properties');
-  if (!properties.elements) properties.elements = [];
-  const elements = properties.elements;
-
-  const cleanProperties = elements
-    .filter((prop) => typeof prop === 'object' && prop !== null)
-    .filter((prop) => {
-      const { attributes } = prop;
-      return attributes.name !== 'SuperdocVersion';
-    });
-
-  let pid = 2;
-  try {
-    pid = cleanProperties.length ? Math.max(...elements.map((el) => el.attributes.pid)) + 1 : 2;
-  } catch {}
-
-  cleanProperties.push(generateSuperdocVersion(pid));
-  properties.elements = cleanProperties;
-  return docx;
-}
-
 function generateCustomXml() {
   return DEFAULT_CUSTOM_XML;
-}
-
-function generateSuperdocVersion(pid = 2, version = __APP_VERSION__) {
-  return {
-    type: 'element',
-    name: 'property',
-    attributes: {
-      name: 'SuperdocVersion',
-      fmtid: '{D5CDD505-2E9C-101B-9397-08002B2CF9AE}',
-      pid,
-    },
-    elements: [
-      {
-        type: 'element',
-        name: 'vt:lpwstr',
-        elements: [
-          {
-            type: 'text',
-            text: version,
-          },
-        ],
-      },
-    ],
-  };
 }
 
 export { SuperConverter };
