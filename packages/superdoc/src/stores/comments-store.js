@@ -122,6 +122,7 @@ export const useCommentsStore = defineStore('comments', () => {
       authorEmail,
       date,
       author: authorName,
+      importedAuthor,
       documentId,
       coords,
     } = params;
@@ -137,6 +138,7 @@ export const useCommentsStore = defineStore('comments', () => {
       creatorName: authorName,
       creatorEmail: authorEmail,
       isInternal: false,
+      importedAuthor,
       selection: {
         selectionBounds: coords,
       },
@@ -470,15 +472,22 @@ export const useCommentsStore = defineStore('comments', () => {
       trackedChanges = trackedChanges.slice(0, 100);
     }
 
+    const groupedChanges = groupChanges(trackedChanges);
+
     // Create comments for tracked changes
     // that do not have a corresponding comment (created in Word).
-    trackedChanges.forEach(({ mark }, index) => {
+    groupedChanges.forEach(({ insertedMark, deletionMark, formatMark }, index) => {
       console.debug(`Create comment for track change: ${index}`);
 
       const { dispatch } = editor.view;
       const { tr } = editor.view.state;
 
-      const foundComment = commentsList.value.find((i) => i.commentId === mark.attrs.id);
+      const foundComment = commentsList.value.find(
+        (i) =>
+          i.commentId === insertedMark?.mark.attrs.id ||
+          i.commentId === deletionMark?.mark.attrs.id ||
+          i.commentId === formatMark?.mark.attrs.id,
+      );
       const isLastIteration = trackedChanges.length === index + 1;
 
       if (foundComment) {
@@ -489,20 +498,57 @@ export const useCommentsStore = defineStore('comments', () => {
         return;
       }
 
-      const markMetaKeys = {
-        trackInsert: 'insertedMark',
-        trackDelete: 'deletionMark',
-        trackFormat: 'formatMark',
-      };
-      const markKeyName = markMetaKeys[mark.type.name];
+      if (insertedMark || deletionMark || formatMark) {
+        const trackChangesPayload = {
+          ...(insertedMark && { insertedMark: insertedMark.mark }),
+          ...(deletionMark && { deletionMark: deletionMark.mark }),
+          ...(formatMark && { formatMark: formatMark.mark }),
+        };
 
-      if (markKeyName) {
         if (isLastIteration) tr.setMeta(CommentsPluginKey, { type: 'force' });
         tr.setMeta(CommentsPluginKey, { type: 'forceTrackChanges' });
-        tr.setMeta(TrackChangesBasePluginKey, { [markKeyName]: mark });
+        tr.setMeta(TrackChangesBasePluginKey, trackChangesPayload);
         dispatch(tr);
       }
     });
+  };
+
+  /**
+   * Combines replace transaction which is represented by insertion + deletion
+   *
+   * @returns {Array} grouped track changes array
+   */
+  const groupChanges = (changes) => {
+    const markMetaKeys = {
+      trackInsert: 'insertedMark',
+      trackDelete: 'deletionMark',
+      trackFormat: 'formatMark',
+    };
+    const grouped = [];
+
+    for (let i = 0; i < changes.length; i++) {
+      const c1 = changes[i];
+      const c2 = changes[i + 1];
+      const c1Key = markMetaKeys[c1.mark.type.name];
+
+      if (c1 && c2 && c1.to === c2.from) {
+        const c2Key = markMetaKeys[c2.mark.type.name];
+        grouped.push({
+          from: c1.from,
+          to: c2.to,
+          [c1Key]: c1,
+          [c2Key]: c2,
+        });
+        i++;
+      } else {
+        grouped.push({
+          from: c1.from,
+          to: c1.to,
+          [c1Key]: c1,
+        });
+      }
+    }
+    return grouped;
   };
 
   const translateCommentsForExport = () => {

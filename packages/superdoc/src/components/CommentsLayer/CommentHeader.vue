@@ -53,7 +53,7 @@ const allowResolve = computed(() => {
   // Do not allow child comments to resolve
   if (props.comment.parentCommentId) return false;
 
-  if (isOwnComment) return isAllowed(PERMISSIONS.RESOLVE_OWN, role, isInternal);
+  if (isOwnComment || props.comment.trackedChange) return isAllowed(PERMISSIONS.RESOLVE_OWN, role, isInternal);
   else return isAllowed(PERMISSIONS.RESOLVE_OTHER, role, isInternal);
 });
 
