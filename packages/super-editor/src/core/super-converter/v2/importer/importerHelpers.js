@@ -27,9 +27,10 @@ export function parseProperties(node) {
 
   if (paragraphProperties && paragraphProperties.elements?.length) {
     const disallowedParagraphProperties = ['w:u'];
-    const filteredParagraphProperties = paragraphProperties.elements.filter(
-      (el) => !disallowedParagraphProperties.includes(el.name),
-    );
+    const filteredParagraphProperties = {
+      ...paragraphProperties,
+      elements: paragraphProperties.elements?.filter((el) => !disallowedParagraphProperties.includes(el.name)),
+    };
     marks.push(...parseMarks(filteredParagraphProperties, unknownMarks));
   }
   //add style change marks
