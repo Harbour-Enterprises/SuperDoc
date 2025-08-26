@@ -26,7 +26,11 @@ export function parseProperties(node) {
   }
 
   if (paragraphProperties && paragraphProperties.elements?.length) {
-    marks.push(...parseMarks(paragraphProperties, unknownMarks));
+    const disallowedParagraphProperties = ['w:u'];
+    const filteredParagraphProperties = paragraphProperties.elements.filter(
+      (el) => !disallowedParagraphProperties.includes(el.name),
+    );
+    marks.push(...parseMarks(filteredParagraphProperties, unknownMarks));
   }
   //add style change marks
   marks.push(...handleStyleChangeMarks(runProperties, marks));
@@ -46,7 +50,6 @@ export function parseProperties(node) {
       }
     });
   }
-
   return { elements: nodes, attributes, marks, unknownMarks };
 }
 
