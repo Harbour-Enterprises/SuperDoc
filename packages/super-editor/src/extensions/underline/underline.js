@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Underline style configuration
- * @typedef {Object} UnderlineType
+ * @typedef {Object} UnderlineConfig
  * @property {'single'|'double'|'thick'|'dotted'|'dashed'|'wavy'} value - Style variant
  */
 
@@ -39,7 +39,7 @@ export const Underline = Mark.create({
     return {
       /**
        * @category Attribute
-       * @param {UnderlineType} [underlineType='single'] - Style of underline
+       * @param {UnderlineConfig} [underlineType='single'] - Style of underline
        */
       underlineType: {
         default: 'single',
