@@ -11,6 +11,7 @@ import {
 } from '@harbour-enterprises/super-editor';
 import { getRichTextExtensions } from '@harbour-enterprises/super-editor';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
+import { groupChanges } from '../helpers/group-changes.js';
 
 export const useCommentsStore = defineStore('comments', () => {
   const superdocStore = useSuperdocStore();
@@ -511,44 +512,6 @@ export const useCommentsStore = defineStore('comments', () => {
         dispatch(tr);
       }
     });
-  };
-
-  /**
-   * Combines replace transaction which is represented by insertion + deletion
-   *
-   * @returns {Array} grouped track changes array
-   */
-  const groupChanges = (changes) => {
-    const markMetaKeys = {
-      trackInsert: 'insertedMark',
-      trackDelete: 'deletionMark',
-      trackFormat: 'formatMark',
-    };
-    const grouped = [];
-
-    for (let i = 0; i < changes.length; i++) {
-      const c1 = changes[i];
-      const c2 = changes[i + 1];
-      const c1Key = markMetaKeys[c1.mark.type.name];
-
-      if (c1 && c2 && c1.to === c2.from) {
-        const c2Key = markMetaKeys[c2.mark.type.name];
-        grouped.push({
-          from: c1.from,
-          to: c2.to,
-          [c1Key]: c1,
-          [c2Key]: c2,
-        });
-        i++;
-      } else {
-        grouped.push({
-          from: c1.from,
-          to: c1.to,
-          [c1Key]: c1,
-        });
-      }
-    }
-    return grouped;
   };
 
   const translateCommentsForExport = () => {

@@ -48,7 +48,8 @@
     "release:next": "release-it --config .release-it.next.json",
     "clean": "rm -rf dist",
     "pack:local": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz",
-    "pack": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz"
+    "pack": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz",
+    "test": "vitest"
   },
   "dependencies": {
     "buffer-crc32": "^1.0.0",
@@ -72,6 +73,7 @@
     "@release-it/conventional-changelog": "^10.0.1",
     "@rollup/plugin-replace": "^6.0.2",
     "@vitejs/plugin-vue": "^5.2.1",
+    "@vue/test-utils": "^2.4.6",
     "nodemon": "^3.1.10",
     "pdfjs-dist": "4.3.136",
     "postcss-nested": "^6.0.1",
@@ -79,6 +81,7 @@
     "release-it": "^19.0.3",
     "typescript": "^5.7.3",
     "vite": "^6.3.5",
+    "vitest": "^3.2.4",
     "vue-draggable-next": "^2.2.1"
   }
 }
