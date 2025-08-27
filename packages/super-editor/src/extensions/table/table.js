@@ -177,6 +177,7 @@ export const Table = Node.create({
       }, */
 
       /**
+       * @private
        * @category Attribute
        * @param {string} [sdBlockId] - Internal block tracking ID (not user-configurable)
        */
@@ -257,6 +258,7 @@ export const Table = Node.create({
       },
 
       /**
+       * @private
        * @category Attribute
        * @param {string} [tableStyleId] - Internal reference to table style (not user-configurable)
        */
@@ -265,6 +267,7 @@ export const Table = Node.create({
       },
 
       /**
+       * @private
        * @category Attribute
        * @param {string} [tableLayout] - CSS table-layout property (advanced usage)
        */

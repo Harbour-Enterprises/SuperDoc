@@ -18,6 +18,10 @@ export const Highlight = Mark.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [color] - Background color (CSS color value)
+       */
       color: {
         default: null,
         parseDOM: (element) => element.getAttribute('data-color') || element.style.backgroundColor,

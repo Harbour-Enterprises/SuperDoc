@@ -19,11 +19,14 @@ export const Bold = Mark.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [value] - Bold weight value ('0' renders as normal)
+       */
       value: {
         default: null,
         renderDOM: (attrs) => {
           if (!attrs.value) return {};
-
           if (attrs.value === '0') {
             return { style: 'font-weight: normal' };
           }

@@ -23,6 +23,10 @@ export const TableRow = Node.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {number} [rowHeight] - Fixed row height in pixels
+       */
       rowHeight: {
         renderDOM({ rowHeight }) {
           if (!rowHeight) return {};

@@ -36,6 +36,10 @@ export const Underline = Mark.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {UnderlineType} [underlineType='single'] - Style of underline
+       */
       underlineType: {
         default: 'single',
       },

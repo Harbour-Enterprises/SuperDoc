@@ -34,12 +34,26 @@ export const TableHeader = Node.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {number} [colspan=1] - Number of columns this header spans
+       */
       colspan: {
         default: 1,
       },
+
+      /**
+       * @category Attribute
+       * @param {number} [rowspan=1] - Number of rows this header spans
+       */
       rowspan: {
         default: 1,
       },
+
+      /**
+       * @category Attribute
+       * @param {number[]} [colwidth] - Column widths array in pixels
+       */
       colwidth: {
         default: null,
         parseDOM: (element) => {

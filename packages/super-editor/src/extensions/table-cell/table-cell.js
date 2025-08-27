@@ -71,14 +71,26 @@ export const TableCell = Node.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {number} [colspan=1] - Number of columns this cell spans
+       */
       colspan: {
         default: 1,
       },
 
+      /**
+       * @category Attribute
+       * @param {number} [rowspan=1] - Number of rows this cell spans
+       */
       rowspan: {
         default: 1,
       },
 
+      /**
+       * @category Attribute
+       * @param {number[]} [colwidth=[100]] - Column widths array in pixels
+       */
       colwidth: {
         default: [100],
         parseDOM: (elem) => {
@@ -94,16 +106,10 @@ export const TableCell = Node.create({
         },
       },
 
-      /* width: {
-        renderDOM: ({ width, widthType, widthUnit }) => {
-          if (!width) return {};
-          let unit = widthUnit === 'px' ? widthUnit : 'in';
-          if (widthType === 'pct') unit = '%';
-          const style = `width: ${width}${unit}`;
-          return { style };
-        },
-      }, */
-
+      /**
+       * @category Attribute
+       * @param {CellBackground} [background] - Cell background color configuration
+       */
       background: {
         renderDOM({ background }) {
           if (!background) return {};
@@ -113,6 +119,10 @@ export const TableCell = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [verticalAlign] - Vertical content alignment (top, middle, bottom)
+       */
       verticalAlign: {
         renderDOM({ verticalAlign }) {
           if (!verticalAlign) return {};
@@ -121,6 +131,10 @@ export const TableCell = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {CellMargins} [cellMargins] - Internal cell padding
+       */
       cellMargins: {
         renderDOM({ cellMargins }) {
           if (!cellMargins) return {};
@@ -136,6 +150,10 @@ export const TableCell = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {CellBorders} [borders] - Cell border configuration
+       */
       borders: {
         default: () => createCellBorders(),
         renderDOM({ borders }) {
@@ -153,11 +171,21 @@ export const TableCell = Node.create({
         },
       },
 
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [widthType='auto'] - Internal width type
+       */
       widthType: {
         default: 'auto',
         rendered: false,
       },
 
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [widthUnit='px'] - Internal width unit
+       */
       widthUnit: {
         default: 'px',
         rendered: false,
