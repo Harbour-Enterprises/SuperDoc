@@ -1,7 +1,12 @@
 import { arr } from './index.js';
 
+/** @type {number} */
+const MAX_XSD_DEPTH = 10;
+
 /**
- * Recursively collect elements from a given node.
+ * Recursively collect elements from a given node. Most nodes seem to max out around 7 levels
+ * so 10 seems like a sufficient max.
+ *
  * @param {Object} node - The XML node to collect elements from.
  * @param {string} tns - The target namespace.
  * @param {string} prefix - The namespace prefix.
@@ -10,7 +15,7 @@ import { arr } from './index.js';
  * @param {number} depth - The current depth in the XML structure.
  */
 export function collectElements(node, tns, prefix, elements, elementRefs, depth = 0) {
-  if (!node || depth > 10) return;
+  if (!node || depth > MAX_XSD_DEPTH) return;
 
   // Direct elements
   const els = arr(node['xs:element']).concat(arr(node['xsd:element']));
