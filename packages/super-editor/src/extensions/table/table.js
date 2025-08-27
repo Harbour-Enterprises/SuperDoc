@@ -9,11 +9,16 @@
  */
 
 /**
+ * Table indentation configuration
+ * @typedef {Object} TableIndent
+ * @property {number} width - Indent width in pixels
+ * @property {string} [type='dxa'] - Indent type
+ */
+
+/**
  * Table attributes
  * @typedef {Object} TableAttributes
- * @property {Object} [tableIndent] - Table indentation
- * @property {number} tableIndent.width - Indent width in pixels
- * @property {string} [tableIndent.type='dxa'] - Indent type
+ * @property {TableIndent} [tableIndent] - Table indentation
  * @property {import("./tableHelpers/createTableBorders.js").TableBorders} [borders] - Table border configuration
  * @property {string} [borderCollapse='collapse'] - CSS border-collapse value
  * @property {string} [tableStyleId] - Reference to table style ID
