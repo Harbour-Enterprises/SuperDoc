@@ -364,9 +364,8 @@ export const createSchemaOrderedListNode = ({ level, numId, listType, editor, li
  * Create a new list in the editor.
  * @param {Object} param0
  * @param {string|Object} param0.listType - The type of the list to be created (e.g., 'orderedList', 'bulletList').
+ * @param {Object} param0.tr - The ProseMirror transaction.
  * @param {Editor} param0.editor - The editor instance where the new list will be created.
- * @param {Object} param0.node - The node to be inserted, if applicable.
- * @param {Object} param0.content - The content to be included in the new list.
  * @returns {Function} A command function that inserts the new list into the editor.
  */
 export const createNewList = ({ listType, tr, editor }) => {
