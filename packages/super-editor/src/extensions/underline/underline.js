@@ -10,6 +10,8 @@ import { Mark, Attribute } from '@core/index.js';
  * @module Underline
  * @sidebarTitle Underline
  * @snippetPath /snippets/extensions/underline.mdx
+ * @shortcut Mod-u | toggleUnderline | Toggle underline formatting
+ * @shortcut Mod-U | toggleUnderline | Toggle underline formatting (uppercase)
  */
 export const Underline = Mark.create({
   name: 'underline',

@@ -1,5 +1,11 @@
+// @ts-check
 import { Node, Attribute } from '@core/index.js';
 
+/**
+ * @module TableRow
+ * @sidebarTitle Table Row
+ * @snippetPath /snippets/extensions/table-row.mdx
+ */
 export const TableRow = Node.create({
   name: 'tableRow',
 

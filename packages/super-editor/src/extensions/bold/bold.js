@@ -5,6 +5,8 @@ import { Mark, Attribute } from '@core/index.js';
  * @module Bold
  * @sidebarTitle Bold
  * @snippetPath /snippets/extensions/bold.mdx
+ * @shortcut Mod-b | toggleBold | Toggle bold formatting
+ * @shortcut Mod-B | toggleBold | Toggle bold formatting (uppercase)
  */
 export const Bold = Mark.create({
   name: 'bold',
