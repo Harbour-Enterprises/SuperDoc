@@ -65,4 +65,59 @@ export const BookmarkStart = Node.create({
   renderDOM({ htmlAttributes }) {
     return ['a', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
   },
+
+  addCommands() {
+    return {
+      /**
+       * Insert a bookmark at the current position
+       * @category Command
+       * @param {BookmarkConfig} config - Bookmark configuration
+       * @returns {Function} Command function
+       * @example
+       * // Insert a named bookmark
+       * insertBookmark({ name: 'chapter1' })
+       *
+       * // Insert with ID
+       * insertBookmark({ name: 'introduction', id: 'intro-001' })
+       * @note Bookmarks are invisible markers for navigation and cross-references
+       */
+      insertBookmark:
+        (config) =>
+        ({ commands }) => {
+          return commands.insertContent({
+            type: this.name,
+            attrs: config,
+          });
+        },
+
+      /**
+       * Navigate to a bookmark by name
+       * @category Command
+       * @param {string} name - Bookmark name to navigate to
+       * @returns {Function} Command function
+       * @example
+       * goToBookmark('chapter1')
+       * @note Scrolls the document to the bookmark position
+       */
+      goToBookmark:
+        (name) =>
+        ({ editor, tr }) => {
+          const { doc } = tr;
+          let targetPos = null;
+
+          doc.descendants((node, pos) => {
+            if (node.type.name === 'bookmarkStart' && node.attrs.name === name) {
+              targetPos = pos;
+              return false; // Stop iteration
+            }
+          });
+
+          if (targetPos !== null) {
+            editor.commands.focus(targetPos);
+            return true;
+          }
+          return false;
+        },
+    };
+  },
 });
