@@ -1,13 +1,4 @@
 // @ts-check
-
-/**
- * Table header attributes
- * @typedef {Object} TableHeaderAttributes
- * @property {number} [colspan=1] - Number of columns spanned
- * @property {number} [rowspan=1] - Number of rows spanned
- * @property {number[]} [colwidth] - Column widths array
- */
-
 import { Node, Attribute } from '@core/index.js';
 
 /**

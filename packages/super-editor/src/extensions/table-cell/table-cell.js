@@ -1,5 +1,4 @@
 // @ts-check
-
 /**
  * Cell border configuration
  * @typedef {Object} CellBorder
@@ -30,18 +29,6 @@
  * Cell background configuration
  * @typedef {Object} CellBackground
  * @property {string} color - Background color (hex without #)
- */
-
-/**
- * Table cell attributes
- * @typedef {Object} TableCellAttributes
- * @property {number} [colspan=1] - Number of columns spanned
- * @property {number} [rowspan=1] - Number of rows spanned
- * @property {number[]} [colwidth=[100]] - Column widths array
- * @property {CellBackground} [background] - Background configuration
- * @property {string} [verticalAlign] - Vertical alignment (top, middle, bottom)
- * @property {CellMargins} [cellMargins] - Cell padding margins
- * @property {CellBorders} [borders] - Cell border configuration
  */
 
 import { Node, Attribute } from '@core/index.js';
