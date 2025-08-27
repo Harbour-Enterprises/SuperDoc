@@ -182,7 +182,7 @@ export const Table = Node.create({
 
       /**
        * @category Attribute
-       * @param {TableBorders} [borders] - Border styling for this table
+       * @param {import("./tableHelpers/createTableBorders.js").TableBorders} [borders] - Border styling for this table
        */
       borders: {
         default: {},
