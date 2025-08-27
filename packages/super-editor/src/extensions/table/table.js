@@ -127,7 +127,7 @@ import { cellWrapping } from './tableHelpers/cellWrapping.js';
  * @shortcut Tab | goToNextCell/addRowAfter | Navigate to next cell or add row
  * @shortcut Shift-Tab | goToPreviousCell | Navigate to previous cell
  * @shortcut Backspace | deleteTableWhenSelected | Delete table when all cells selected
- * @shortcut Delete | deleteTableWhenSelected | Delete table when all cells selected*
+ * @shortcut Delete | deleteTableWhenSelected | Delete table when all cells selected
  */
 export const Table = Node.create({
   name: 'table',
