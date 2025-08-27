@@ -1,5 +1,11 @@
+// @ts-check
 import { Mark, Attribute } from '@core/index.js';
 
+/**
+ * @module Bold
+ * @sidebarTitle Bold
+ * @snippetPath /snippets/extensions/bold.mdx
+ */
 export const Bold = Mark.create({
   name: 'bold',
 
@@ -38,12 +44,44 @@ export const Bold = Mark.create({
     return ['strong', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
-  //prettier-ignore
   addCommands() {
     return {
-      setBold: () => ({ commands }) => commands.setMark(this.name),
-      unsetBold: () => ({ commands }) => commands.unsetMark(this.name),
-      toggleBold: () => ({ commands }) => commands.toggleMark(this.name),
+      /**
+       * Apply bold formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * setBold()
+       * @note '0' renders as normal weight
+       */
+      setBold:
+        () =>
+        ({ commands }) =>
+          commands.setMark(this.name),
+
+      /**
+       * Remove bold formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * unsetBold()
+       */
+      unsetBold:
+        () =>
+        ({ commands }) =>
+          commands.unsetMark(this.name),
+
+      /**
+       * Toggle bold formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * toggleBold()
+       */
+      toggleBold:
+        () =>
+        ({ commands }) =>
+          commands.toggleMark(this.name),
     };
   },
 

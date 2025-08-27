@@ -1,15 +1,37 @@
+// @ts-check
 import { objectIncludes } from '../utilities/objectIncludes.js';
 
+/**
+ * Get the range of a mark in a document
+ * @param {Array<import("prosemirror-model").Mark>} marks
+ * @param {import("prosemirror-model").MarkType} type
+ * @param {Object} attrs
+ * @returns {Object} The range of the mark in the document
+ */
 function findMarkInSet(marks, type, attrs = {}) {
   return marks.find((item) => {
     return item.type === type && objectIncludes(item.attrs, attrs);
   });
 }
 
+/**
+ * Check if a mark is in a set of marks
+ * @param {Array<import("prosemirror-model").Mark>} marks
+ * @param {import("prosemirror-model").MarkType} type
+ * @param {Object} attrs
+ * @returns {boolean} True if the mark is in the set, false otherwise
+ */
 function isMarkInSet(marks, type, attrs = {}) {
   return !!findMarkInSet(marks, type, attrs);
 }
 
+/**
+ * Get the range of a mark in a document
+ * @param {import("prosemirror-model").ResolvedPos} $pos - The position in the document
+ * @param {import("prosemirror-model").MarkType} type - The type of the mark
+ * @param {Object} attrs - The attributes of the mark
+ * @returns {Object} The range of the mark in the document
+ */
 export function getMarkRange($pos, type, attrs = {}) {
   if (!$pos || !type) return;
 

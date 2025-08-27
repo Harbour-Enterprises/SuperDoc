@@ -1,10 +1,49 @@
+// @ts-check
+
+/**
+ * Document section attributes
+ * @typedef {Object} SectionAttributes
+ * @property {number} [id] - Unique section identifier
+ * @property {string} [title] - Display label (becomes w:alias in Word)
+ * @property {string} [description] - Additional metadata stored in w:tag
+ * @property {string} [sectionType] - Business type for filtering/logic (e.g., 'legal', 'pricing')
+ * @property {boolean} [isLocked] - Lock state (maps to w:lock="sdtContentLocked")
+ */
+
+/**
+ * Create a new document section
+ * @typedef {Object} SectionCreate
+ * @property {number} [id] - Unique ID. Auto-increments from existing sections if omitted
+ * @property {string} [title="Document section"] - Label shown in section header
+ * @property {string} [description] - Metadata for tracking (stored in Word's w:tag)
+ * @property {string} [sectionType] - Business classification
+ * @property {boolean} [isLocked=false] - Prevent editing when true
+ * @property {string} [html] - HTML content to insert
+ * @property {Object} [json] - ProseMirror JSON (overrides html if both provided)
+ */
+
+/**
+ * Update an existing section
+ * @typedef {Object} SectionUpdate
+ * @property {number} id - Target section ID (required)
+ * @property {string} [html] - Replace content with HTML
+ * @property {Object} [json] - Replace content with ProseMirror JSON (overrides html)
+ * @property {Partial<SectionAttributes>} [attrs] - Update attributes only (preserves content)
+ */
+
 import { Node, Attribute } from '@core/index.js';
 import { DocumentSectionView } from './document-section/DocumentSectionView.js';
 import { htmlHandler } from '@core/InputRule.js';
 import { Selection } from 'prosemirror-state';
 import { DOMParser as PMDOMParser } from 'prosemirror-model';
-import { findParentNode, SectionHelpers } from '@helpers/index.js';
+import { findParentNode } from '@helpers/index.js';
+import { SectionHelpers } from './document-section/helpers.js';
 
+/**
+ * @module DocumentSection
+ * @sidebarTitle Document Section
+ * @snippetPath /snippets/extensions/document-section.mdx
+ */
 export const DocumentSection = Node.create({
   name: 'documentSection',
   group: 'block',
@@ -37,6 +76,14 @@ export const DocumentSection = Node.create({
   addAttributes() {
     return {
       id: {},
+      sdBlockId: {
+        default: null,
+        keepOnSplit: false,
+        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs) => {
+          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
+        },
+      },
       title: {},
       description: {},
       sectionType: {},
@@ -53,12 +100,17 @@ export const DocumentSection = Node.create({
   addCommands() {
     return {
       /**
-       * Create a new structured content block
-       * You can pass in options like title, description, html, or json.
-       * If html is provided, it will be parsed and converted to ProseMirror nodes.
-       * If json is provided, it will be used to create the content of the block.
-       * @param {Object} params - The command parameters
-       * @returns {boolean} Returns true if the command was executed successfully
+       * Create a lockable content section
+       * @category Command
+       * @param {SectionCreate} [options={}] - Section configuration
+       * @returns {Function} Command - true if created, false if position invalid
+       * @example
+       * createDocumentSection({
+       *   id: 'legal-1',
+       *   title: 'Terms & Conditions',
+       *   isLocked: true,
+       *   html: '<p>Legal content...</p>'
+       * })
        */
       createDocumentSection:
         (options = {}) =>
@@ -171,11 +223,12 @@ export const DocumentSection = Node.create({
         },
 
       /**
-       * Remove the structured content block at the current selection, retaining contents.
-       * This will remove the block node but keep its content in the document.
-       * If the selection is not within a structured content block, it does nothing.
-       * @param {Object} params - The command parameters
-       * @returns {boolean} Returns true if the command was executed successfully
+       * Remove section wrapper at cursor, preserving its content
+       * @category Command
+       * @returns {Function} Command - true if removed, false if no section at position
+       * @example
+       * removeSectionAtSelection()
+       * @note Content stays in document, only section wrapper is removed
        */
       removeSectionAtSelection:
         () =>
@@ -213,9 +266,12 @@ export const DocumentSection = Node.create({
         },
 
       /**
-       * Remove a document section by its ID.
-       * @param {string} id - The ID of the section to remove
-       * @returns {Function} A command function that takes the editor state and dispatch function
+       * Delete section and all its content
+       * @category Command
+       * @param {number} id - Section to delete
+       * @returns {Function} Command - true if deleted, false if ID doesn't exist
+       * @example
+       * removeSectionById(123)
        */
       removeSectionById:
         (id) =>
@@ -240,10 +296,12 @@ export const DocumentSection = Node.create({
         },
 
       /**
-       * Lock a document section by its ID.
-       * This command is a placeholder and does not perform any action yet.
-       * @param {string} id - The ID of the section to lock
-       * @returns {Function} A command function that takes the editor state and dispatch function
+       * Lock section against edits
+       * @category Command
+       * @param {number} id - Section to lock
+       * @returns {Function} Command - true if locked, false if ID doesn't exist
+       * @example
+       * lockSectionById(123)
        */
       lockSectionById:
         (id) =>
@@ -263,20 +321,26 @@ export const DocumentSection = Node.create({
         },
 
       /**
-       * Update a document section by its ID.
-       * You can pass in options like id, html, json, or attrs.
-       * The attrs include json, title, description, etc.
-       * If html is provided, it will be parsed and converted to ProseMirror nodes
-       * If json is provided, it will be used to create the content of the block.
-       * @param {Object} params - The command parameters
-       * @param {string} params.id - The ID of the section to update
-       * @param {string} [params.html] - The HTML content to set for the section
-       * @param {Object} [params.json] - The JSON content to set for the section
-       * @param {Object} [params.attrs] - Additional attributes to update (e.g., title, description)
-       * @returns {Function} A command function that takes the editor state and dispatch function
+       * Modify section attributes or content
+       * @category Command
+       * @param {SectionUpdate} options - Changes to apply
+       * @returns {Function} Command - true if updated, false if ID doesn't exist
+       * @example
+       * // Toggle lock
+       * updateSectionById({ id: 123, attrs: { isLocked: false } })
+       *
+       * // Replace content
+       * updateSectionById({ id: 123, html: '<p>New content</p>' })
+       *
+       * // Both
+       * updateSectionById({
+       *   id: 123,
+       *   html: '<p>Updated</p>',
+       *   attrs: { title: 'New Title' }
+       * })
        */
       updateSectionById:
-        ({ id, html, json, attrs } = {}) =>
+        ({ id, html, json, attrs }) =>
         ({ tr, dispatch, editor }) => {
           const sections = SectionHelpers.getAllSections(editor || this.editor);
           const sectionToUpdate = sections.find(({ node }) => node.attrs.id === id);
@@ -313,6 +377,12 @@ export const DocumentSection = Node.create({
 
           return true;
         },
+    };
+  },
+
+  addHelpers() {
+    return {
+      ...SectionHelpers,
     };
   },
 });

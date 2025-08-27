@@ -1,5 +1,11 @@
+// @ts-check
 import { Mark, Attribute } from '@core/index.js';
 
+/**
+ * @module Italic
+ * @sidebarTitle Italic
+ * @snippetPath /snippets/extensions/italic.mdx
+ */
 export const Italic = Mark.create({
   name: 'italic',
 
@@ -22,12 +28,43 @@ export const Italic = Mark.create({
     return ['em', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
-  //prettier-ignore
   addCommands() {
     return {
-      setItalic: () => ({ commands }) => commands.setMark(this.name),
-      unsetItalic: () => ({ commands }) => commands.unsetMark(this.name),
-      toggleItalic: () => ({ commands }) => commands.toggleMark(this.name),
+      /**
+       * Apply italic formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * setItalic()
+       */
+      setItalic:
+        () =>
+        ({ commands }) =>
+          commands.setMark(this.name),
+
+      /**
+       * Remove italic formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * unsetItalic()
+       */
+      unsetItalic:
+        () =>
+        ({ commands }) =>
+          commands.unsetMark(this.name),
+
+      /**
+       * Toggle italic formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * toggleItalic()
+       */
+      toggleItalic:
+        () =>
+        ({ commands }) =>
+          commands.toggleMark(this.name),
     };
   },
 

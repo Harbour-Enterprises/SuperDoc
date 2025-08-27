@@ -23,7 +23,7 @@ const listIndexMap = {
 
 const createNumbering = (values, lvlText) => {
   return values.reduce((acc, value, index) => {
-    return acc.replace(`%${index + 1}`, value);
+    return value > 9 ? acc.replace(/^0/, '').replace(`%${index + 1}`, value) : acc.replace(`%${index + 1}`, value);
   }, lvlText);
 };
 

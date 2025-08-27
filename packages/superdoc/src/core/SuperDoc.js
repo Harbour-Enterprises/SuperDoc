@@ -107,6 +107,8 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {boolean} [suppressDefaultDocxStyles] Whether to suppress default styles in docx mode
  * @property {boolean} [jsonOverride] Whether to override content with provided JSON
  * @property {boolean} [disableContextMenu] Whether to disable slash / right-click custom context menu
+ * @property {string} [html] HTML content to initialize the editor with
+ * @property {string} [markdown] Markdown content to initialize the editor with
  */
 
 /**
@@ -807,10 +809,12 @@ export class SuperDoc extends EventEmitter {
   async #triggerCollaborationSaves() {
     this.#log('🦋 [superdoc] Triggering collaboration saves');
     return new Promise((resolve) => {
-      this.superdocStore.documents.forEach((doc) => {
+      this.superdocStore.documents.forEach((doc, index) => {
+        this.#log(`Before reset - Doc ${index}: pending = ${this.pendingCollaborationSaves}`);
         this.pendingCollaborationSaves = 0;
         if (doc.ydoc) {
           this.pendingCollaborationSaves++;
+          this.#log(`After increment - Doc ${index}: pending = ${this.pendingCollaborationSaves}`);
           const metaMap = doc.ydoc.getMap('meta');
           metaMap.observe((event) => {
             if (event.changes.keys.has('immediate-save-finished')) {
@@ -823,6 +827,9 @@ export class SuperDoc extends EventEmitter {
           metaMap.set('immediate-save', true);
         }
       });
+      this.#log(
+        `FINAL pending = ${this.pendingCollaborationSaves}, but we have ${this.superdocStore.documents.filter((d) => d.ydoc).length} docs!`,
+      );
     });
   }
 

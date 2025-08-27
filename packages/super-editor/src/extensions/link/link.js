@@ -1,46 +1,38 @@
+// @ts-check
+/**
+ * Link attributes
+ * @typedef {Object} LinkAttributes
+ * @property {string} href - URL or anchor reference
+ * @property {string} [target='_blank'] - Link target
+ * @property {string} [rel='noopener noreferrer nofollow'] - Relationship attributes
+ * @property {string} [rId] - Word relationship ID for internal links
+ * @property {string} [text] - Display text for the link
+ * @property {string} [name] - Anchor name for internal references
+ */
+
 import { Mark, Attribute } from '@core/index.js';
-import { getMarkRange } from '@/core/helpers/getMarkRange.js';
+import { getMarkRange } from '@core/helpers/getMarkRange.js';
+import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
 
 /**
- * Move `from` forward and `to` backward until the first / last
- * non-whitespace character is reached.
+ * @module Link
+ * @sidebarTitle Link
+ * @snippetPath /snippets/extensions/link.mdx
+ * @note Non-inclusive mark that doesn't expand when typing at edges
  */
-const trimRange = (doc, from, to) => {
-  /*
-   * A "non-user" position is one that produces **no text** when we ask
-   * `doc.textBetween(pos, pos + 1, '')`.
-   * That happens at node boundaries (between the doc node and its first child,
-   * between paragraphs, etc.).
-   *
-   * A regular space typed by the user **does** produce text (" "), so it will
-   * NOT be trimmed.
-   */
-
-  // Skip positions that produce no text output (node boundaries).
-  while (from < to && doc.textBetween(from, from + 1, '') === '') {
-    from += 1;
-  }
-
-  while (to > from && doc.textBetween(to - 1, to, '') === '') {
-    to -= 1;
-  }
-
-  // This should now normalize the from and to selections to require
-  // starting and ending without doc specific whitespace
-  return { from, to };
-};
-
 export const Link = Mark.create({
   name: 'link',
-
   priority: 1000,
-
   keepOnSplit: false,
-
   inclusive: false,
 
   addOptions() {
     return {
+      /**
+       * Allowed URL protocols
+       * @type {string[]}
+       * @default ['http', 'https']
+       */
       protocols: ['http', 'https'],
       htmlAttributes: {
         target: '_blank',
@@ -56,9 +48,8 @@ export const Link = Mark.create({
 
   renderDOM({ htmlAttributes }) {
     if (!isAllowedUri(htmlAttributes.href, this.options.protocols)) {
-      return ['a', mergeAttributes(this.options.htmlAttributes, { ...htmlAttributes, href: '' }), 0];
+      return ['a', Attribute.mergeAttributes(this.options.htmlAttributes, { ...htmlAttributes, href: '' }), 0];
     }
-
     return ['a', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
@@ -72,30 +63,37 @@ export const Link = Mark.create({
           return {};
         },
       },
-      target: {
-        default: this.options.htmlAttributes.target,
-      },
-      rel: {
-        default: this.options.htmlAttributes.rel,
-      },
-      rId: {
-        default: this.options.htmlAttributes.rId || null,
-      },
-      text: {
-        default: null,
-      },
-      name: {
-        default: null,
-      },
+      target: { default: this.options.htmlAttributes.target },
+      rel: { default: this.options.htmlAttributes.rel },
+      rId: { default: this.options.htmlAttributes.rId || null },
+      text: { default: null },
+      name: { default: null },
     };
   },
 
   addCommands() {
     return {
+      /**
+       * Create or update a link
+       * @category Command
+       * @param {Object} options - Link configuration
+       * @param {string} [options.href] - URL for the link
+       * @param {string} [options.text] - Display text (uses selection if omitted)
+       * @returns {Function} Command - Creates link with underline
+       * @example
+       * // Link selected text
+       * setLink({ href: 'https://example.com' })
+       *
+       * // Link with custom text
+       * setLink({
+       *   href: 'https://example.com',
+       *   text: 'Visit Example'
+       * })
+       * @note Automatically adds underline formatting and trims whitespace from link boundaries
+       */
       setLink:
         ({ href, text } = {}) =>
         ({ state, dispatch, editor }) => {
-          // Determine the text range we need to operate on.
           const { selection } = state;
           const linkMarkType = editor.schema.marks.link;
           const underlineMarkType = editor.schema.marks.underline;
@@ -103,8 +101,7 @@ export const Link = Mark.create({
           let from = selection.from;
           let to = selection.to;
 
-          // If the cursor is inside an existing link with an empty selection,
-          // expand the range to cover the whole link so we can edit it.
+          // Expand empty selection to cover existing link
           if (selection.empty) {
             const range = getMarkRange(selection.$from, linkMarkType);
             if (range) {
@@ -112,15 +109,10 @@ export const Link = Mark.create({
               to = range.to;
             }
           } else {
-            // When the current selection spans outside a link but its start
-            // or end is within a link, operate only on that link, not on the
-            // full selection. This prevents replacing surrounding non-link text.
+            // Handle partial link selections
             const fromLinkRange = getMarkRange(selection.$from, linkMarkType);
             const toLinkRange = getMarkRange(selection.$to, linkMarkType);
-
             if (fromLinkRange || toLinkRange) {
-              // Prefer the range that actually lies inside a link. If both ends
-              // are in (possibly different) links we pick the first one.
               const linkRange = fromLinkRange || toLinkRange;
               from = linkRange.from;
               to = linkRange.to;
@@ -134,23 +126,37 @@ export const Link = Mark.create({
           const finalText = computedText && computedText.length > 0 ? computedText : href || '';
           let tr = state.tr;
 
-          // Replace the text if it has changed (or if there was no text yet).
           if (finalText && currentText !== finalText) {
             tr = tr.insertText(finalText, from, to);
             to = from + finalText.length;
           }
 
-          // Remove existing link and underline marks in the affected range.
-          // Then add the new link and underline marks.
           if (linkMarkType) tr = tr.removeMark(from, to, linkMarkType);
           if (underlineMarkType) tr = tr.removeMark(from, to, underlineMarkType);
 
           if (underlineMarkType) tr = tr.addMark(from, to, underlineMarkType.create());
-          tr = tr.addMark(from, to, linkMarkType.create({ href, text: finalText }));
+
+          let rId = null;
+          if (editor.options.mode === 'docx') {
+            const id = addLinkRelationship({ editor, href });
+            if (id) rId = id;
+          }
+
+          const newLinkMarkType = linkMarkType.create({ href, text: finalText, rId });
+          tr = tr.addMark(from, to, newLinkMarkType);
 
           dispatch(tr.scrollIntoView());
           return true;
         },
+
+      /**
+       * Remove link and associated formatting
+       * @category Command
+       * @returns {Function} Command - Removes link, underline, and color
+       * @example
+       * unsetLink()
+       * @note Also removes underline and text color
+       */
       unsetLink:
         () =>
         ({ chain }) => {
@@ -160,6 +166,21 @@ export const Link = Mark.create({
             .unsetMark('link', { extendEmptyMarkRange: true })
             .run();
         },
+
+      /**
+       * Toggle link on selection
+       * @category Command
+       * @param {Object} [options] - Link configuration
+       * @param {string} [options.href] - URL for the link
+       * @param {string} [options.text] - Display text
+       * @returns {Function} Command - Creates link if href provided, removes otherwise
+       * @example
+       * // Add link
+       * toggleLink({ href: 'https://example.com' })
+       *
+       * // Remove link
+       * toggleLink()
+       */
       toggleLink:
         ({ href, text } = {}) =>
         ({ commands }) => {
@@ -170,6 +191,13 @@ export const Link = Mark.create({
   },
 });
 
+/**
+ * Validate URI against allowed protocols
+ * @private
+ * @param {string} uri - URI to validate
+ * @param {string[]} protocols - Allowed protocols
+ * @returns {boolean} Whether URI is allowed
+ */
 const ATTR_WHITESPACE = /[\u0000-\u0020\u00A0\u1680\u180E\u2000-\u2029\u205F\u3000]/g;
 function isAllowedUri(uri, protocols) {
   const allowedProtocols = ['http', 'https', 'mailto'];
@@ -177,7 +205,6 @@ function isAllowedUri(uri, protocols) {
   if (protocols) {
     protocols.forEach((protocol) => {
       const nextProtocol = typeof protocol === 'string' ? protocol : protocol.scheme;
-
       if (nextProtocol) {
         allowedProtocols.push(nextProtocol);
       }
@@ -190,4 +217,45 @@ function isAllowedUri(uri, protocols) {
       .replace(ATTR_WHITESPACE, '')
       .match(new RegExp(`^(?:(?:${allowedProtocols.join('|')}):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))`, 'i'))
   );
+}
+
+/**
+ * Trim node boundaries from range
+ * @private
+ * @param {import("prosemirror-model").Node} doc - Document node
+ * @param {number} from - Start position
+ * @param {number} to - End position
+ * @returns {{from: number, to: number}} Trimmed range
+ * @note A "non-user" position is one that produces **no text** when we ask
+ * `doc.textBetween(pos, pos + 1, '')`.
+ * That happens at node boundaries (between the doc node and its first child,
+ * between paragraphs, etc.).
+ *
+ * A regular space typed by the user **does** produce text (" "), so it will
+ * NOT be trimmed.
+ */
+const trimRange = (doc, from, to) => {
+  // Skip positions that produce no text output (node boundaries).
+  while (from < to && doc.textBetween(from, from + 1, '') === '') {
+    from += 1;
+  }
+
+  while (to > from && doc.textBetween(to - 1, to, '') === '') {
+    to -= 1;
+  }
+
+  // This should now normalize the from and to selections to require
+  // starting and ending without doc specific whitespace
+  return { from, to };
+};
+
+function addLinkRelationship({ editor, href }) {
+  const target = href;
+  const type = 'hyperlink';
+  try {
+    const id = insertNewRelationship(target, type, editor);
+    return id;
+  } catch {
+    return null;
+  }
 }

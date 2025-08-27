@@ -3,7 +3,6 @@ import '@harbour-enterprises/superdoc/style.css';
 import { onMounted, shallowRef, ref } from 'vue';
 import { SuperDoc } from '@harbour-enterprises/superdoc';
 import UploadFile from './UploadFile.vue';
-import { SectionHelpers } from '@harbour-enterprises/superdoc';
 
 
 const superdoc = shallowRef(null);
@@ -69,7 +68,7 @@ const addSection = (section) => {
     html,
   }
 
-  const subEditor = SectionHelpers.getLinkedSectionEditor(id, options, editor.value);
+  const subEditor = editor.value.helpers.documentSection.getLinkedSectionEditor(id, options, editor.value);
 }
 
 const removeSection = (id) => {
@@ -90,12 +89,12 @@ const loadedMockHTML = {
 }
 
 const saveSectionsHTML = () => {
-  const sections = SectionHelpers.exportSectionsToHTML(editor.value);
+  const sections = editor.value.helpers.documentSection.exportSectionsToHTML(editor.value);
   console.log('Saving sections to DB:', sections);
 }
 
 const saveSectionsJSON = () => {
-  const sections = SectionHelpers.exportSectionsToJSON(editor.value);
+  const sections = editor.value.helpers.documentSection.exportSectionsToJSON(editor.value);
   console.log('Saving sections to DB:', sections);
 }
 

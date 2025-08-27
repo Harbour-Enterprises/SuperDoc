@@ -1,6 +1,6 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
-import { DOMParser, DOMSerializer } from 'prosemirror-model';
+import { DOMSerializer } from 'prosemirror-model';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -37,6 +37,7 @@ import {
 import { createLinkedChildEditor } from '@core/child-editor/index.js';
 import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { SuperValidator } from '@core/super-validator/index.js';
+import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -131,6 +132,7 @@ import { SuperValidator } from '@core/super-validator/index.js';
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
  * @property {boolean} [jsonOverride] - Whether to override content with provided json
  * @property {string} [html] - HTML content to initialize the editor with
+ * @property {string} [markdown] - Markdown content to initialize the editor with
  */
 
 /**
@@ -141,7 +143,7 @@ import { SuperValidator } from '@core/super-validator/index.js';
 export class Editor extends EventEmitter {
   /**
    * Command service for handling editor commands
-   * @private
+   * @type {CommandService}
    */
   #commandService;
 
@@ -291,7 +293,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize the container element for the editor
-   * @private
    * @param {EditorOptions} options - Editor options
    * @returns {void}
    */
@@ -314,7 +315,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize the editor with the given options
-   * @private
    * @returns {void}
    */
   #init() {
@@ -365,7 +365,7 @@ export class Editor extends EventEmitter {
     // it will be in itialized via this.#onCollaborationReady
     if (!this.options.ydoc) {
       if (!this.options.isChildEditor) {
-        this.initPagination();
+        this.#initPagination();
         this.#initComments();
 
         this.#validateDocumentInit();
@@ -375,7 +375,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize the editor in rich text mode
-   * @private
    * @param {EditorOptions} options - Editor options
    * @returns {void}
    */
@@ -426,7 +425,6 @@ export class Editor extends EventEmitter {
 
   /**
    *
-   * @private
    * @param {Object} param0
    * @param {Object} param0.editor
    * @param {Object} param0.event
@@ -448,7 +446,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Check if the editor should run in headless mode
-   * @private
    * @param {EditorOptions} options - Editor options
    * @returns {void}
    */
@@ -491,7 +488,7 @@ export class Editor extends EventEmitter {
 
   /**
    * Get object of registered commands.
-   * @returns {Object} Commands object
+   * @returns {import('./commands/types/index.js').EditorCommands} Commands object
    */
   get commands() {
     return this.#commandService?.commands;
@@ -667,7 +664,6 @@ export class Editor extends EventEmitter {
    */
   /**
    * Insert data for a new file
-   * @private
    * @returns {void}
    */
   #insertNewFileData() {
@@ -679,14 +675,13 @@ export class Editor extends EventEmitter {
     this.view.dispatch(tr);
 
     setTimeout(() => {
-      this.initPagination();
+      this.#initPagination();
       this.#initComments();
     }, 50);
   }
 
   /**
    * Register a plugin by name if it doesn't already exist
-   * @private
    * @param {string} name - Plugin name
    * @returns {string|void}
    */
@@ -780,7 +775,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Creates extension service.
-   * @private
    * @returns {void}
    */
   #createExtensionService() {
@@ -798,7 +792,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Creates a command service.
-   * @private
    * @returns {void}
    */
   #createCommandService() {
@@ -812,7 +805,6 @@ export class Editor extends EventEmitter {
    */
   /**
    * Create the document converter as this.converter.
-   * @private
    * @returns {void}
    */
   #createConverter() {
@@ -833,7 +825,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize media.
-   * @private
    * @returns {void}
    */
   #initMedia() {
@@ -860,7 +851,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize fonts
-   * @private
    * @returns {void}
    */
   #initFonts() {
@@ -921,7 +911,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Creates document PM schema.
-   * @private
    * @returns {void
    */
   #createSchema() {
@@ -930,7 +919,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Generate ProseMirror data from file
-   * @private
    * @returns {Object} ProseMirror data
    */
   #generatePmData() {
@@ -949,8 +937,12 @@ export class Editor extends EventEmitter {
           // Perform any additional document processing prior to finalizing the doc here
           doc = this.#prepareDocumentForImport(doc);
 
+          // Check for markdown BEFORE html (since markdown gets converted to HTML)
+          if (this.options.markdown) {
+            doc = createDocFromMarkdown(this.options.markdown, this.schema);
+          }
           // If we have a new doc, and have html data, we initialize from html
-          if (this.options.html) doc = this.#createDocFromHTML(this.options.html);
+          else if (this.options.html) doc = createDocFromHTML(this.options.html, this.schema);
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
           if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
@@ -960,7 +952,7 @@ export class Editor extends EventEmitter {
       // If we are in HTML mode, we initialize from either content or html (or blank)
       else if (mode === 'text' || mode === 'html') {
         if (loadFromSchema) doc = this.schema.nodeFromJSON(content);
-        else if (content) doc = this.#createDocFromHTML(content);
+        else if (content) doc = createDocFromHTML(content, this.schema);
         else doc = this.schema.topNodeType.createAndFill();
       }
     } catch (err) {
@@ -972,26 +964,7 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Create a document from HTML content
-   * @private
-   * @param {string} content - HTML content
-   * @returns {Object} Document node
-   */
-  #createDocFromHTML(content) {
-    let parsedContent = content;
-    if (typeof content === 'string') {
-      const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = content;
-      parsedContent = tempDiv;
-      tempDiv.remove();
-    }
-
-    return DOMParser.fromSchema(this.schema).parse(parsedContent);
-  }
-
-  /**
    * Create the PM editor view
-   * @private
    * @returns {void}
    */
   #createView(element) {
@@ -1236,7 +1209,6 @@ export class Editor extends EventEmitter {
    * Handler called when collaboration is ready.
    * Initializes pagination and comments if not a new file.
    *
-   * @private
    * @param {Object} params - Collaboration parameters
    * @param {Editor} params.editor - The editor instance
    * @param {Object} params.ydoc - The Yjs document
@@ -1257,7 +1229,7 @@ export class Editor extends EventEmitter {
     this.view.dispatch(tr);
 
     if (!this.options.isNewFile) {
-      this.initPagination();
+      this.#initPagination();
       this.#initComments();
       updateYdocDocxData(this);
     }
@@ -1265,7 +1237,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize comments plugin
-   * @private
    * @returns {void}
    */
   #initComments() {
@@ -1285,11 +1256,10 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize pagination, if the pagination extension is enabled.
-   * @private
    * @async
    * @returns {Promise<void>}
    */
-  async initPagination() {
+  async #initPagination() {
     if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
       return;
     }
@@ -1308,7 +1278,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Dispatch a transaction to update the editor state
-   * @private
    * @param {Object} transaction - ProseMirror transaction
    */
   #dispatchTransaction(transaction) {
@@ -1490,7 +1459,6 @@ export class Editor extends EventEmitter {
   /**
    * Perform any post conversion pre prosemirror import processing.
    * Comments are processed here.
-   * @private
    * @param {Object} doc The prosemirror document
    * @returns {Object} The updated prosemirror document
    */
@@ -1518,7 +1486,6 @@ export class Editor extends EventEmitter {
   /**
    * Prepare the document for export. Any necessary pre-export processing to the state
    * can happen here.
-   * @private
    * @returns {Object} The updated document in JSON
    */
   #prepareDocumentForExport(comments = []) {
@@ -1655,7 +1622,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Destroy collaboration provider and ydoc
-   * @private
    * @returns {void}
    */
   #endCollaboration() {
@@ -1771,7 +1737,7 @@ export class Editor extends EventEmitter {
     }
 
     if (!this.options.ydoc) {
-      this.initPagination();
+      this.#initPagination();
       this.#initComments();
     }
   }
@@ -1832,7 +1798,7 @@ export class Editor extends EventEmitter {
     if (!targetNode || !html) return;
     const start = targetNode.pos;
     const end = start + targetNode.node.nodeSize;
-    const htmlNode = this.#createDocFromHTML(html);
+    const htmlNode = createDocFromHTML(html, this.schema);
     tr.replaceWith(start, end, htmlNode);
     dispatch(tr);
   }

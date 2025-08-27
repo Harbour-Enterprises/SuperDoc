@@ -119,7 +119,7 @@ describe('annotationImporter', () => {
         expect(fontSize).toBe(undefined);
         expect(bold).toBe(true);
         expect(italic).toBe(true);
-        expect(underline).toBe(true);
+        expect(underline).toBe(undefined);
       });
 
       it('can parse annotation marks as attributes for textStyle marks [fields_attrs2_fonts]', async () => {

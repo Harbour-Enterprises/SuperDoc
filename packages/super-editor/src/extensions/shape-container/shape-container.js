@@ -28,7 +28,14 @@ export const ShapeContainer = Node.create({
           };
         },
       },
-
+      sdBlockId: {
+        default: null,
+        keepOnSplit: false,
+        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs) => {
+          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
+        },
+      },
       style: {
         renderDOM: (attrs) => {
           if (!attrs.style) return {};

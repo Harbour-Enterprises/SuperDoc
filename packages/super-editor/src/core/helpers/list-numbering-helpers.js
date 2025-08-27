@@ -176,6 +176,8 @@ export const getNewListId = (editor, grouping = 'definitions') => {
  */
 export const getListDefinitionDetails = ({ numId, level, listType, editor, tries = 0 }) => {
   const { definitions, abstracts } = editor.converter.numbering;
+  if (!numId) return {};
+
   const numDef = definitions[numId];
 
   // Generate new definition if needed

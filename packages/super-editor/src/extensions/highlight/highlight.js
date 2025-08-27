@@ -1,5 +1,11 @@
+// @ts-check
 import { Mark, Attribute } from '@core/index.js';
 
+/**
+ * @module Highlight
+ * @sidebarTitle Highlight
+ * @snippetPath /snippets/extensions/highlight.mdx
+ */
 export const Highlight = Mark.create({
   name: 'highlight',
 
@@ -18,7 +24,6 @@ export const Highlight = Mark.create({
           if (!attributes.color) {
             return {};
           }
-
           return {
             'data-color': attributes.color,
             style: `background-color: ${attributes.color}; color: inherit`,
@@ -36,12 +41,45 @@ export const Highlight = Mark.create({
     return ['mark', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
-  //prettier-ignore
   addCommands() {
     return {
-      setHighlight: (color) => ({ commands }) => commands.setMark(this.name, { color }),
-      unsetHighlight: () => ({ commands }) => commands.unsetMark(this.name),
-      toggleHighlight: () => ({ commands }) => commands.toggleMark(this.name),
+      /**
+       * Apply highlight with specified color
+       * @category Command
+       * @param {string} color - CSS color value
+       * @returns {Function} Command
+       * @example
+       * setHighlight('#FFEB3B')
+       * setHighlight('rgba(255, 235, 59, 0.5)')
+       */
+      setHighlight:
+        (color) =>
+        ({ commands }) =>
+          commands.setMark(this.name, { color }),
+
+      /**
+       * Remove highlight formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * unsetHighlight()
+       */
+      unsetHighlight:
+        () =>
+        ({ commands }) =>
+          commands.unsetMark(this.name),
+
+      /**
+       * Toggle highlight formatting
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * toggleHighlight()
+       */
+      toggleHighlight:
+        () =>
+        ({ commands }) =>
+          commands.toggleMark(this.name),
     };
   },
 

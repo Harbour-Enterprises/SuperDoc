@@ -13,9 +13,9 @@ import { Extension } from '@core/Extension.js';
 import { Plugin } from 'prosemirror-state';
 import { Mark } from '@core/Mark.js';
 import SlashMenu from './components/slash-menu/SlashMenu.vue';
+import { BasicUpload } from '@harbour-enterprises/common';
 
 import SuperEditor from './components/SuperEditor.vue';
-import BasicUpload from './dev/components/BasicUpload.vue';
 import Toolbar from './components/toolbar/Toolbar.vue';
 import SuperInput from './components/SuperInput.vue';
 import AIWriter from './components/toolbar/AIWriter.vue';
@@ -24,7 +24,7 @@ import * as trackChangesHelpers from './extensions/track-changes/trackChangesHel
 import { TrackChangesBasePluginKey } from './extensions/track-changes/plugins/index.js';
 import { CommentsPluginKey } from './extensions/comment/comments-plugin.js';
 import { AnnotatorHelpers } from '@helpers/annotator.js';
-import { SectionHelpers } from '@helpers/index.js';
+import { SectionHelpers } from '@extensions/structured-content/document-section/index.js';
 
 const Extensions = {
   Node,

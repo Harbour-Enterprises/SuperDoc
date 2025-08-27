@@ -70,6 +70,14 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
         return;
       }
 
+      // Filter out any underline without valid w:val
+      // This is invalid per XML spec (Word will strip this out)
+      // Can expand to other nodes if needed
+      const requiresValue = ['w:u'];
+      if (requiresValue.includes(m.name) && !attributes['w:val']) {
+        return;
+      }
+
       // Use the parent mark (ie: textStyle) if present
       if (m.mark) newMark.type = m.mark;
 
