@@ -9,31 +9,12 @@
  */
 
 /**
- * Table border configuration
- * @typedef {Object} TableBorder
- * @property {number} [size=1] - Border width in pixels
- * @property {string} [color='#000000'] - Border color (hex or CSS color)
- * @property {string} [style='solid'] - Border style (solid, dashed, dotted)
- */
-
-/**
- * Table borders object
- * @typedef {Object} TableBorders
- * @property {TableBorder} [top] - Top border configuration
- * @property {TableBorder} [right] - Right border configuration
- * @property {TableBorder} [bottom] - Bottom border configuration
- * @property {TableBorder} [left] - Left border configuration
- * @property {TableBorder} [insideH] - Inside horizontal borders
- * @property {TableBorder} [insideV] - Inside vertical borders
- */
-
-/**
  * Table attributes
  * @typedef {Object} TableAttributes
  * @property {Object} [tableIndent] - Table indentation
  * @property {number} tableIndent.width - Indent width in pixels
  * @property {string} [tableIndent.type='dxa'] - Indent type
- * @property {TableBorders} [borders] - Table border configuration
+ * @property {import("./tableHelpers/createTableBorders.js").TableBorders} [borders] - Table border configuration
  * @property {string} [borderCollapse='collapse'] - CSS border-collapse value
  * @property {string} [tableStyleId] - Reference to table style ID
  * @property {string} [tableLayout] - Table layout algorithm
@@ -72,13 +53,6 @@
  * @property {Object} rect - Selected rectangle from ProseMirror
  * @property {Object} cell - Current cell node
  * @property {Object} attrs - Cell attributes without span properties
- */
-
-/**
- * Border creation options
- * @typedef {Object} BorderOptions
- * @property {number} [size=0.66665] - Border width in pixels
- * @property {string} [color='#000000'] - Border color (hex)
  */
 
 import { Node, Attribute } from '@core/index.js';
@@ -953,73 +927,6 @@ export const Table = Node.create({
           storage: extension.storage,
         }),
       ),
-    };
-  },
-
-  addHelpers() {
-    return {
-      /**
-       * Create a new table with specified dimensions
-       * @category Helper
-       * @param {Object} schema - Editor schema
-       * @param {number} rowsCount - Number of rows
-       * @param {number} colsCount - Number of columns
-       * @param {boolean} withHeaderRow - Create first row as header
-       * @param {Object} [cellContent=null] - Initial cell content
-       * @returns {Object} Complete table node with borders
-       * @example
-       * const table = createTable(schema, 3, 3, true)
-       * @example
-       * const table = createTable(schema, 2, 4, false, paragraphNode)
-       */
-      createTable: (schema, rowsCount, colsCount, withHeaderRow, cellContent = null) => {
-        return createTable(schema, rowsCount, colsCount, withHeaderRow, cellContent);
-      },
-
-      /**
-       * Create table border configuration object
-       * @category Helper
-       * @param {BorderOptions} [options] - Border options
-       * @returns {TableBorders} Complete borders object for all sides
-       * @example
-       * // Using default values
-       * const borders = createTableBorders()
-       *
-       * // Using custom values
-       * const borders = createTableBorders({ size: 1, color: '#cccccc' })
-       * @note Creates uniform borders for all sides including inside borders
-       */
-      createTableBorders: ({ size = 0.66665, color = '#000000' } = {}) => {
-        return createTableBorders({ size, color });
-      },
-
-      /**
-       * Check if selection is a cell selection
-       * @category Helper
-       * @param {*} value - Selection to check
-       * @returns {boolean} True if cell selection
-       * @example
-       * if (isCellSelection(editor.state.selection)) {
-       *   // Handle cell selection
-       * }
-       */
-      isCellSelection: (value) => {
-        return isCellSelection(value);
-      },
-
-      /**
-       * Check if cursor is inside a table
-       * @category Helper
-       * @param {Object} state - Editor state
-       * @returns {boolean} True if cursor is in table
-       * @example
-       * if (isInTable(state)) {
-       *   // Enable table-specific commands
-       * }
-       */
-      isInTable: (state) => {
-        return isInTable(state);
-      },
     };
   },
 });
