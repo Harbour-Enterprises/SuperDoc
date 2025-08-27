@@ -950,8 +950,10 @@ export const Table = Node.create({
        * @param {BorderOptions} [options] - Border options
        * @returns {TableBorders} Complete borders object for all sides
        * @example
+       * // Using default values
        * const borders = createTableBorders()
-       * @example
+       *
+       * // Using custom values
        * const borders = createTableBorders({ size: 1, color: '#cccccc' })
        * @note Creates uniform borders for all sides including inside borders
        */
