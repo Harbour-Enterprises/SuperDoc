@@ -1,5 +1,18 @@
+// @ts-check
 import { Node, Attribute } from '@core/index.js';
 
+/**
+ * Bookmark configuration
+ * @typedef {Object} BookmarkConfig
+ * @property {string} name - Bookmark name for reference
+ * @property {string} [id] - Optional unique identifier
+ */
+
+/**
+ * @module BookmarkStart
+ * @sidebarTitle Bookmarks
+ * @snippetPath /snippets/extensions/bookmarks.mdx
+ */
 export const BookmarkStart = Node.create({
   name: 'bookmarkStart',
   group: 'inline',
@@ -8,6 +21,11 @@ export const BookmarkStart = Node.create({
 
   addOptions() {
     return {
+      /**
+       * @typedef {Object} BookmarkOptions
+       * @category Options
+       * @property {Object} [htmlAttributes] - HTML attributes for the bookmark element
+       */
       htmlAttributes: {
         style: 'height: 0; width: 0;',
         'aria-label': 'Bookmark start node',
@@ -18,6 +36,10 @@ export const BookmarkStart = Node.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [name] - Bookmark name for cross-references and navigation
+       */
       name: {
         default: null,
         renderDOM: ({ name }) => {
@@ -25,6 +47,11 @@ export const BookmarkStart = Node.create({
           return {};
         },
       },
+
+      /**
+       * @category Attribute
+       * @param {string} [id] - Unique identifier for the bookmark
+       */
       id: {
         default: null,
         renderDOM: ({ id }) => {
