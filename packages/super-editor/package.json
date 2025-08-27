@@ -48,6 +48,7 @@
     "pack": "rm *.tgz 2>/dev/null || true && npm run build && npm pack && mv harbour-enterprises-super-editor-0.0.1-alpha.0.tgz ./super-editor.tgz"
   },
   "dependencies": {
+    "@superdoc-dev/ooxml-inspector": "^1.0.0",
     "color2k": "^2.0.3",
     "eventemitter3": "^5.0.1",
     "he": "^1.2.0",

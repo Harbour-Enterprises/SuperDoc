@@ -13,6 +13,8 @@
     "skipLibCheck": true,
     "declaration": true,
     "emitDeclarationOnly": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
     "outDir": "dist",
     "baseUrl": "."
   },
