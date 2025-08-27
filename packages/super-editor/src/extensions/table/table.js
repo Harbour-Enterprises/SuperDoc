@@ -58,6 +58,7 @@
 
 /**
  * Position resolution result
+ * @private
  * @typedef {Object} CellPosition
  * @property {Object} $pos - Resolved position
  * @property {number} pos - Absolute position
@@ -66,6 +67,7 @@
 
 /**
  * Current cell information
+ * @private
  * @typedef {Object} CurrentCellInfo
  * @property {Object} rect - Selected rectangle from ProseMirror
  * @property {Object} cell - Current cell node
@@ -83,8 +85,6 @@ import { Node, Attribute } from '@core/index.js';
 import { callOrGet } from '@core/utilities/callOrGet.js';
 import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.js';
 import { /* TableView */ createTableView } from './TableView.js';
-import { createCell } from './tableHelpers/createCell.js';
-import { getColStyleDeclaration } from './tableHelpers/getColStyleDeclaration.js';
 import { createTable } from './tableHelpers/createTable.js';
 import { createColGroup } from './tableHelpers/createColGroup.js';
 import { deleteTableWhenSelected } from './tableHelpers/deleteTableWhenSelected.js';
@@ -140,6 +140,17 @@ export const Table = Node.create({
 
   tableRole: 'table',
 
+  /**
+   * Table extension options
+   * @category Options
+   * @typedef {Object} TableOptions
+   * @property {Object} [htmlAttributes={'aria-label': 'Table node'}] - Default HTML attributes for all tables
+   * @property {boolean} [resizable=true] - Enable column resizing functionality
+   * @property {number} [handleWidth=5] - Width of resize handles in pixels
+   * @property {number} [cellMinWidth=10] - Minimum cell width constraint in pixels
+   * @property {boolean} [lastColumnResizable=true] - Allow resizing of the last column
+   * @property {boolean} [allowTableNodeSelection=false] - Enable selecting the entire table node
+   */
   addOptions() {
     return {
       htmlAttributes: {
@@ -164,6 +175,11 @@ export const Table = Node.create({
           };
         },
       }, */
+
+      /**
+       * @category Attribute
+       * @param {string} [sdBlockId] - Internal block tracking ID (not user-configurable)
+       */
       sdBlockId: {
         default: null,
         keepOnSplit: false,
@@ -173,6 +189,10 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {TableIndent} [tableIndent] - Table indentation configuration
+       */
       tableIndent: {
         renderDOM: ({ tableIndent }) => {
           if (!tableIndent) return {};
@@ -185,6 +205,10 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {TableBorders} [borders] - Border styling for this table
+       */
       borders: {
         default: {},
         renderDOM({ borders }) {
@@ -199,6 +223,10 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [borderCollapse='collapse'] - CSS border-collapse property
+       */
       borderCollapse: {
         default: null,
         renderDOM({ borderCollapse }) {
@@ -208,6 +236,10 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [justification] - Table alignment ('left', 'center', 'right')
+       */
       justification: {
         default: null,
         renderDOM: (attrs) => {
@@ -224,14 +256,26 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [tableStyleId] - Internal reference to table style (not user-configurable)
+       */
       tableStyleId: {
         rendered: false,
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [tableLayout] - CSS table-layout property (advanced usage)
+       */
       tableLayout: {
         rendered: false,
       },
 
+      /**
+       * @category Attribute
+       * @param {number} [tableCellSpacing] - Cell spacing in pixels for this table
+       */
       tableCellSpacing: {
         default: null,
         rendered: false,
@@ -930,21 +974,6 @@ export const Table = Node.create({
       },
 
       /**
-       * Create a single table cell
-       * @category Helper
-       * @param {Object} cellType - Cell node type (tableCell or tableHeader)
-       * @param {Object} [cellContent=null] - Content to insert in cell
-       * @returns {Object} Cell node
-       * @example
-       * const cell = createCell(schema.nodes.tableCell)
-       * @example
-       * const headerCell = createCell(schema.nodes.tableHeader, paragraphNode)
-       */
-      createCell: (cellType, cellContent = null) => {
-        return createCell(cellType, cellContent);
-      },
-
-      /**
        * Create table border configuration object
        * @category Helper
        * @param {BorderOptions} [options] - Border options
@@ -962,39 +991,6 @@ export const Table = Node.create({
       },
 
       /**
-       * Generate column group structure for table rendering
-       * @category Helper
-       * @param {Object} node - Table node
-       * @param {number} cellMinWidth - Minimum cell width
-       * @param {number} [overrideCol] - Column index to override
-       * @param {number} [overrideValue] - Override width value
-       * @returns {ColGroupInfo} Column group information
-       * @example
-       * const { colgroup, tableWidth } = createColGroup(tableNode, 25)
-       * @note Calculates table width based on column widths and handles responsive sizing
-       */
-      createColGroup: (node, cellMinWidth, overrideCol, overrideValue) => {
-        return createColGroup(node, cellMinWidth, overrideCol, overrideValue);
-      },
-
-      /**
-       * Get column style declaration based on width
-       * @category Helper
-       * @param {number} minWidth - Minimum column width
-       * @param {number} [width] - Actual column width
-       * @returns {Array} Style property and value tuple
-       * @example
-       * const [prop, value] = getColStyleDeclaration(25, 100)
-       * // Returns: ['width', '100px']
-       * @example
-       * const [prop, value] = getColStyleDeclaration(25)
-       * // Returns: ['min-width', '25px']
-       */
-      getColStyleDeclaration: (minWidth, width) => {
-        return getColStyleDeclaration(minWidth, width);
-      },
-
-      /**
        * Check if selection is a cell selection
        * @category Helper
        * @param {*} value - Selection to check
@@ -1006,53 +1002,6 @@ export const Table = Node.create({
        */
       isCellSelection: (value) => {
         return isCellSelection(value);
-      },
-
-      /**
-       * Find cell position around given position
-       * @category Helper
-       * @param {Object} $pos - Resolved position
-       * @returns {CellPosition|null} Cell position or null if not in cell
-       * @example
-       * const cellPos = cellAround(selection.$from)
-       * if (cellPos) {
-       *   // Found cell around position
-       * }
-       * @note Traverses up the document tree to find containing cell
-       */
-      cellAround: ($pos) => {
-        return cellAround($pos);
-      },
-
-      /**
-       * Find wrapping cell node at position
-       * @category Helper
-       * @param {Object} $pos - Resolved position
-       * @returns {Object|null} Cell node or null if not in cell
-       * @example
-       * const cell = cellWrapping(selection.$from)
-       * if (cell) {
-       *   console.log(cell.attrs.colspan)
-       * }
-       * @note Returns the actual cell node, not just position
-       */
-      cellWrapping: ($pos) => {
-        return cellWrapping($pos);
-      },
-
-      /**
-       * Delete entire table when all cells are selected
-       * @category Helper
-       * @param {Object} params - Parameters object
-       * @param {Object} params.editor - Editor instance
-       * @returns {boolean} True if table was deleted
-       * @example
-       * deleteTableWhenSelected({ editor })
-       * @note Used internally for keyboard shortcuts (Backspace/Delete)
-       * @note Only deletes if ALL cells in table are selected
-       */
-      deleteTableWhenSelected: ({ editor }) => {
-        return deleteTableWhenSelected({ editor });
       },
 
       /**
