@@ -1,7 +1,8 @@
 // @ts-check
 /**
- * Underline style types
- * @typedef {'single'|'double'|'thick'|'dotted'|'dashed'|'wavy'} UnderlineType
+ * Underline style configuration
+ * @typedef {Object} UnderlineType
+ * @property {'single'|'double'|'thick'|'dotted'|'dashed'|'wavy'} value - Style variant
  */
 
 import { Mark, Attribute } from '@core/index.js';
