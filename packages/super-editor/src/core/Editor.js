@@ -1541,6 +1541,8 @@ export class Editor extends EventEmitter {
       fieldsHighlightColor,
     );
 
+    this.#validateDocumentExport();
+
     if (exportXmlOnly || exportJsonOnly) return documentXml;
 
     const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
@@ -1887,5 +1889,17 @@ export class Editor extends EventEmitter {
     /** @type {import('./super-validator/index.js').SuperValidator} */
     const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
     validator.validateActiveDocument();
+  }
+
+  /**
+   * Run the SuperValidator's on document upon export to check and fix potential known issues.
+   * @returns {void}
+   */
+  #validateDocumentExport() {
+    if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
+
+    /** @type {import('./super-validator/index.js').SuperValidator} */
+    const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
+    validator.validateDocumentExport();
   }
 }

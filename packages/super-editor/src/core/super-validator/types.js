@@ -21,6 +21,13 @@
  */
 
 /**
+ * @typedef {function} XmlValidator
+ * @param {Editor} editor - The editor instance to validate.
+ * @param {ValidatorLogger} logger - Logger for validation messages.
+ * @returns {{ modified: boolean, results: string[] }} - Validation results and whether the document was modified.
+ */
+
+/**
  * @typedef {Object} ElementInfo
  * @property {import('prosemirror-model').Node} [node]
  * @property {number} pos

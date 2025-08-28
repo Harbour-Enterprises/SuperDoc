@@ -547,7 +547,9 @@ function getNumberingDefinitions(docx) {
   let importListDefs = {};
   definitions.forEach((el) => {
     const numId = Number(el.attributes['w:numId']);
-    importListDefs[numId] = el;
+    if (Number.isInteger(numId)) {
+      importListDefs[numId] = el;
+    }
   });
 
   const listDefsEntries = Object.entries(importListDefs);
