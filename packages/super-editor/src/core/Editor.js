@@ -913,20 +913,37 @@ export class Editor extends EventEmitter {
    * @returns {string} Document version
    */
   static getDocumentVersion(doc) {
-    const version = SuperConverter.getStoredSuperdocVersion(doc);
-    return version;
+    return SuperConverter.getStoredSuperdocVersion(doc);
   }
 
   /**
-   * Update the document version
+   * Set the document version
    * @static
    * @param {Object} doc - Document object
    * @param {string} version - New version
-   * @returns {Object}
+   * @returns {string} The set version
    */
   static setDocumentVersion(doc, version) {
-    const updatedContent = SuperConverter.setStoredSuperdocVersion(doc, version);
-    return updatedContent;
+    return SuperConverter.setStoredSuperdocVersion(doc, version);
+  }
+
+  /**
+   * Get the document GUID
+   * @static
+   * @param {Object} doc - Document object
+   * @returns {string|null} Document GUID
+   */
+  static getDocumentGuid(doc) {
+    return SuperConverter.getDocumentGuid(doc);
+  }
+
+  // Deprecated method for backward compatibility
+  /**
+   * @deprecated use setDocumentVersion instead
+   */
+  static updateDocumentVersion(doc, version) {
+    console.warn('updateDocumentVersion is deprecated, use setDocumentVersion instead');
+    return Editor.setDocumentVersion(doc, version);
   }
 
   /**
@@ -1369,10 +1386,65 @@ export class Editor extends EventEmitter {
       return;
     }
 
+    // Document modified - promote to GUID if needed
+    this.#ensureDocumentGuid();
+
     this.emit('update', {
       editor: this,
       transaction,
     });
+  }
+
+  /**
+   * Ensure document has a permanent GUID if it's been modified
+   * @private
+   * @returns {void}
+   */
+  #ensureDocumentGuid() {
+    if (!this.converter) return;
+
+    // If we only have a hash, promote to GUID
+    if (this.converter.hasTemporaryId()) {
+      this.converter.promoteToGuid();
+      console.debug('Document modified - assigned permanent GUID');
+    }
+  }
+
+  /**
+   * Get the document GUID
+   * @returns {string|null} The unique document GUID
+   */
+  getDocumentGuid() {
+    return this.converter?.getDocumentGuid() || null;
+  }
+
+  /**
+   * Get document identifier for telemetry (works for both modified and unmodified)
+   * @returns {string|null} GUID for modified docs, hash for unmodified
+   */
+  getDocumentIdentifier() {
+    return this.converter?.getDocumentIdentifier() || null;
+  }
+
+  /**
+   * Check if document has been modified
+   * @returns {boolean}
+   */
+  isDocumentModified() {
+    return this.converter?.documentModified || false;
+  }
+
+  /**
+   * Get telemetry data including document identifier
+   * @returns {Object} Telemetry data object
+   */
+  getTelemetryData() {
+    return {
+      documentId: this.getDocumentIdentifier(), // Hash or GUID
+      isModified: this.isDocumentModified(),
+      isPermanentId: !this.converter?.hasTemporaryId(),
+      version: this.converter?.getSuperdocVersion(),
+    };
   }
 
   /**
@@ -1406,7 +1478,16 @@ export class Editor extends EventEmitter {
    * @returns {Object} Editor content as JSON
    */
   getJSON() {
-    return this.state.doc.toJSON();
+    const json = this.state.doc.toJSON();
+    return {
+      ...json,
+      metadata: {
+        documentId: this.getDocumentIdentifier(),
+        documentGuid: this.converter?.documentGuid || null, // Only if modified
+        isModified: this.isDocumentModified(),
+        version: this.converter?.getSuperdocVersion() || null,
+      },
+    };
   }
 
   /**

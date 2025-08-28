@@ -1,11 +1,11 @@
 import xmljs from 'xml-js';
 import { v4 as uuidv4 } from 'uuid';
-
+import crc32 from 'buffer-crc32';
 import { DocxExporter, exportSchemaToJson } from './exporter';
 import { createDocumentJson, addDefaultStylesIfMissing } from './v2/importer/docxImporter.js';
 import { deobfuscateFont, getArrayBufferFromUrl } from './helpers.js';
 import { baseNumbering } from './v2/exporter/helpers/base-list.definitions.js';
-import { DEFAULT_CUSTOM_XML, DEFAULT_DOCX_DEFS, SETTINGS_CUSTOM_XML } from './exporter-docx-defs.js';
+import { DEFAULT_CUSTOM_XML, DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import {
   getCommentDefinition,
   prepareCommentParaIds,
@@ -221,8 +221,10 @@ class SuperConverter {
     this.fileSource = params?.fileSource || null;
     this.documentId = params?.documentId || null;
 
-    // SuperDoc ID - unique identifier for this document
-    this.superdocId = null;
+    // Two-tier identification system
+    this.documentGuid = null; // Permanent GUID for modified documents
+    this.documentHash = null; // Temporary hash for unmodified documents
+    this.documentModified = false; // Track if document has been modified
 
     // Parse the initial XML, if provided
     if (this.docx.length || this.xml) this.parseFromXml();
@@ -253,12 +255,8 @@ class SuperConverter {
     if (!this.initialJSON) this.initialJSON = this.parseXmlToJson(this.xml);
     this.declaration = this.initialJSON?.declaration;
 
-    // Read SuperDocId from the document if it exists
-    this.superdocId = SuperConverter.getStoredSuperdocId(this.docx);
-    if (!this.superdocId) {
-      // If document doesn't have an ID yet, it will be assigned during export
-      console.debug('No SuperDocId found in document, will be assigned on export');
-    }
+    // Resolve document identifier (GUID or hash)
+    this.resolveDocumentIdentifier();
   }
 
   parseXmlToJson(xml) {
@@ -369,20 +367,36 @@ class SuperConverter {
     return SuperConverter.setStoredCustomProperty(docx, 'SuperdocVersion', version, false);
   }
 
-  static getStoredSuperdocId(docx) {
-    return SuperConverter.getStoredCustomProperty(docx, 'SuperDocId');
-  }
+  /**
+   * Get document GUID from docx files (static method)
+   * @static
+   * @param {Array} docx - Array of docx file objects
+   * @returns {string|null} The document GUID
+   */
+  static getDocumentGuid(docx) {
+    // Check Microsoft's GUID first (read-only)
+    try {
+      const settingsXml = docx.find((doc) => doc.name === 'word/settings.xml');
+      if (settingsXml) {
+        const match = settingsXml.content.match(/w15:docId[^>]*w15:val="([^"]+)"/);
+        if (match && match[1]) {
+          return match[1].replace(/[{}]/g, '');
+        }
+      }
+    } catch {
+      // Continue to check custom property
+    }
 
-  static setStoredSuperdocId(docx, id = null) {
-    return SuperConverter.setStoredCustomProperty(docx, 'SuperDocId', id || uuidv4(), true);
+    // Then check custom property
+    return SuperConverter.getStoredCustomProperty(docx, 'DocumentGuid');
   }
 
   /**
-   * Get the SuperDoc ID for this converter instance
-   * @returns {string|null} The SuperDoc ID or null if not set
+   * Get the permanent document GUID
+   * @returns {string|null} The document GUID (only for modified documents)
    */
-  getSuperdocId() {
-    return this.superdocId;
+  getDocumentGuid() {
+    return this.documentGuid;
   }
 
   /**
@@ -394,6 +408,94 @@ class SuperConverter {
       return SuperConverter.getStoredSuperdocVersion(this.docx);
     }
     return null;
+  }
+
+  /**
+   * Resolve document identifier - check for existing GUID or generate hash
+   */
+  resolveDocumentIdentifier() {
+    // Only run this once during initialization
+    if (this.documentGuid || this.documentHash) return;
+
+    // 1. Check for Microsoft's docId (READ ONLY - never modify settings.xml)
+    try {
+      this.getDocumentInternalId(); // This sets this.documentInternalId
+      if (this.documentInternalId) {
+        this.documentGuid = this.documentInternalId.replace(/[{}]/g, '');
+        return;
+      }
+    } catch {
+      // Continue to next check
+    }
+
+    // 2. Check our custom property
+    const customGuid = SuperConverter.getStoredCustomProperty(this.docx, 'DocumentGuid');
+    if (customGuid) {
+      this.documentGuid = customGuid;
+      return;
+    }
+
+    // 3. Generate hash for unmodified document (telemetry only)
+    this.documentHash = this.generateDocumentHash();
+  }
+
+  /**
+   * Generate hash for unmodified documents
+   * @returns {string|null} Hash-based temporary identifier
+   */
+  generateDocumentHash() {
+    if (!this.fileSource) return null;
+
+    try {
+      let buffer;
+      if (Buffer.isBuffer(this.fileSource)) {
+        buffer = this.fileSource;
+      } else if (this.fileSource instanceof ArrayBuffer) {
+        buffer = Buffer.from(this.fileSource);
+      } else {
+        // For File or Blob objects
+        buffer = Buffer.from(this.fileSource);
+      }
+
+      const hash = crc32(buffer);
+      return `HASH-${hash.toString('hex').toUpperCase()}`;
+    } catch (e) {
+      console.warn('Could not generate document hash:', e);
+      return `HASH-${Date.now()}`; // Fallback
+    }
+  }
+
+  /**
+   * Get document identifier (GUID or hash)
+   * @returns {string|null} Either permanent GUID or temporary hash
+   */
+  getDocumentIdentifier() {
+    return this.documentGuid || this.documentHash || null;
+  }
+
+  /**
+   * Check if this is a temporary identifier
+   * @returns {boolean}
+   */
+  hasTemporaryId() {
+    const id = this.getDocumentIdentifier();
+    return id && id.startsWith('HASH-');
+  }
+
+  /**
+   * Convert temporary hash to permanent GUID
+   * @returns {string} The new or existing GUID
+   */
+  promoteToGuid() {
+    if (this.documentGuid) return this.documentGuid;
+
+    // Generate new GUID
+    this.documentGuid = uuidv4();
+    this.documentModified = true;
+    this.documentHash = null; // Clear temporary hash
+
+    console.debug('Document promoted from hash to GUID:', this.documentGuid);
+    return this.documentGuid;
   }
 
   getDocumentDefaultStyles() {
@@ -506,28 +608,22 @@ class SuperConverter {
   getDocumentInternalId() {
     const settingsLocation = 'word/settings.xml';
     if (!this.convertedXml[settingsLocation]) {
-      this.convertedXml[settingsLocation] = SETTINGS_CUSTOM_XML;
-    }
-
-    const settings = Object.assign({}, this.convertedXml[settingsLocation]);
-    if (!settings.elements[0]?.elements?.length) {
-      const idElement = this.createDocumentIdElement(settings);
-
-      settings.elements[0].elements = [idElement];
-      if (!settings.elements[0].attributes['xmlns:w15']) {
-        settings.elements[0].attributes['xmlns:w15'] = 'http://schemas.microsoft.com/office/word/2012/wordml';
-      }
-      this.convertedXml[settingsLocation] = settings;
+      // Don't create settings if it doesn't exist during read
       return;
     }
 
-    // New versions of Word will have w15:docId
-    // It's possible to have w14:docId as well but Word(2013 and later) will convert it automatically when document opened
+    const settings = this.convertedXml[settingsLocation];
+    if (!settings.elements?.[0]?.elements?.length) {
+      return;
+    }
+
+    // Look for existing w15:docId only
     const w15DocId = settings.elements[0].elements.find((el) => el.name === 'w15:docId');
-    this.documentInternalId = w15DocId?.attributes['w15:val'];
+    this.documentInternalId = w15DocId?.attributes?.['w15:val'];
   }
 
   createDocumentIdElement() {
+    // This should only be called when WRITING, never when reading
     const docId = uuidv4().toUpperCase();
     this.documentInternalId = docId;
 
@@ -648,11 +744,19 @@ class SuperConverter {
     // Update the rels table
     this.#exportProcessNewRelationships([...params.relationships, ...commentsRels, ...headFootRels]);
 
-    // Store the SuperDoc version
-    SuperConverter.setStoredSuperdocVersion(this.convertedXml);
+    // Only store GUID in custom.xml if document was modified
+    if (this.documentModified && this.documentGuid) {
+      // Store SuperDoc version (indicates document was edited)
+      SuperConverter.setStoredSuperdocVersion(this.convertedXml);
 
-    // Store the SuperDoc ID
-    this.superdocId = SuperConverter.setStoredSuperdocId(this.convertedXml);
+      // Store document GUID in custom.xml (never modify settings.xml)
+      this.documentGuid = SuperConverter.setStoredCustomProperty(
+        this.convertedXml,
+        'DocumentGuid',
+        this.documentGuid,
+        true, // preserve existing
+      );
+    }
 
     // Update the numbering.xml
     this.#exportNumberingFile(params);
@@ -908,6 +1012,11 @@ class SuperConverter {
     };
     this.media = this.convertedXml.media;
     this.addedMedia = processedData;
+  }
+
+  static updateDocumentVersion(docx, version) {
+    console.warn('updateDocumentVersion is deprecated, use setStoredSuperdocVersion instead');
+    return SuperConverter.setStoredSuperdocVersion(docx, version);
   }
 }
 
