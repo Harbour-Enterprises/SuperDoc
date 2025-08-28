@@ -64,7 +64,7 @@
   },
   "peerDependencies": {
     "@hocuspocus/provider": "^2.13.6",
-    "pdfjs-dist": "4.3.136",
+    "pdfjs-dist": ">=4.3.136 <=4.6.82",
     "y-prosemirror": "^1.2.12",
     "yjs": "13.6.19"
   },
@@ -78,6 +78,7 @@
     "pdfjs-dist": "4.3.136",
     "postcss-nested": "^6.0.1",
     "postcss-nested-import": "^1.3.0",
+    "postcss-prefixwrap": "^1.56.2",
     "release-it": "^19.0.3",
     "typescript": "^5.7.3",
     "vite": "^6.3.5",

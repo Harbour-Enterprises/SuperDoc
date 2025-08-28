@@ -34,11 +34,11 @@ export default defineConfig(({ command }) => {
         external: [
           'yjs',
           '@hocuspocus/provider',
-          'pdfjs-dist',
           'vite-plugin-node-polyfills',
+          'pdfjs-dist',
+          'pdfjs-dist/build/pdf.mjs',
           'pdfjs-dist/legacy/build/pdf.mjs',
-          'pdfjs-dist/web/pdf_viewer',
-          'pdfjs-dist/build/pdf.worker.min.mjs',
+          'pdfjs-dist/web/pdf_viewer.mjs',
         ],
         output: {
           globals: {

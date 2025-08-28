@@ -93,9 +93,12 @@ export default defineConfig(({ mode, command}) => {
         },
         external: [
           'yjs',
-          '@hocuspocus/provider',
-          'pdfjs-dist',
+          '@hocuspocus/provider',,
           'vite-plugin-node-polyfills',
+          'pdfjs-dist',
+          'pdfjs-dist/build/pdf.mjs',
+          'pdfjs-dist/legacy/build/pdf.mjs',
+          'pdfjs-dist/web/pdf_viewer.mjs',
         ],
         output: [
           {
@@ -128,7 +131,7 @@ export default defineConfig(({ mode, command}) => {
       }
     },
     optimizeDeps: {
-      include: ['pdfjs-dist', 'yjs', '@hocuspocus/provider'],
+      include: ['yjs', '@hocuspocus/provider'],
       esbuildOptions: {
         target: 'es2020',
       },
