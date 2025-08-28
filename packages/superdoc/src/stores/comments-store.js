@@ -467,7 +467,6 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const createCommentForTrackChanges = (editor) => {
     let trackedChanges = trackChangesHelpers.getTrackChanges(editor.state);
-    trackedChanges = trackedChanges.slice(0, 100);
 
     const groupedChanges = groupChanges(trackedChanges);
 
