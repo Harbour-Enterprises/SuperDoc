@@ -2,19 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SuperConverter } from './SuperConverter.js';
 import { v4 as uuidv4 } from 'uuid';
 
-// Mock uuid
 vi.mock('uuid', () => ({
   v4: vi.fn(() => 'test-uuid-1234'),
 }));
 
-describe('SuperConverter Custom Properties', () => {
+describe('SuperConverter Document GUID', () => {
   let mockDocx;
   let mockCustomXml;
+  let mockSettingsXml;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Create a basic custom.xml structure
+    // These need to match the actual file structure expected by SuperConverter
     mockCustomXml = {
       name: 'docProps/custom.xml',
       content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -22,327 +22,171 @@ describe('SuperConverter Custom Properties', () => {
         </Properties>`,
     };
 
-    mockDocx = [mockCustomXml];
+    mockSettingsXml = {
+      name: 'word/settings.xml',
+      content: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+        <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        </w:settings>`,
+    };
+
+    // Add a minimal document.xml to prevent parsing errors
+    const mockDocumentXml = {
+      name: 'word/document.xml',
+      content: `<?xml version="1.0" encoding="UTF-8"?>
+        <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+          <w:body><w:p><w:r><w:t>Test</w:t></w:r></w:p></w:body>
+        </w:document>`,
+    };
+
+    mockDocx = [mockCustomXml, mockSettingsXml, mockDocumentXml];
   });
 
-  describe('getStoredCustomProperty', () => {
-    it('returns null when custom.xml is missing', () => {
-      const result = SuperConverter.getStoredCustomProperty([], 'TestProperty');
-      expect(result).toBeNull();
+  describe('Document Identifier Resolution', () => {
+    it('prioritizes Microsoft docId from settings.xml', () => {
+      mockSettingsXml.content = `<?xml version="1.0" encoding="UTF-8"?>
+        <w:settings xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" 
+                    xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml">
+          <w15:docId w15:val="{MICROSOFT-GUID-123}"/>
+        </w:settings>`;
+
+      const converter = new SuperConverter({ docx: mockDocx });
+      expect(converter.getDocumentGuid()).toBe('MICROSOFT-GUID-123');
+      expect(converter.hasTemporaryId()).toBe(false);
     });
 
-    it('returns null when property does not exist', () => {
-      const result = SuperConverter.getStoredCustomProperty(mockDocx, 'NonExistent');
-      expect(result).toBeNull();
-    });
-
-    it('returns property value when it exists', () => {
-      mockCustomXml.content = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
-          <property name="TestProp" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2">
-            <vt:lpwstr>TestValue</vt:lpwstr>
-          </property>
-        </Properties>`;
-
-      const result = SuperConverter.getStoredCustomProperty(mockDocx, 'TestProp');
-      expect(result).toBe('TestValue');
-    });
-
-    it('handles parsing errors gracefully', () => {
-      mockCustomXml.content = 'invalid xml';
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-
-      const result = SuperConverter.getStoredCustomProperty(mockDocx, 'TestProp');
-      expect(result).toBeNull();
-      expect(consoleWarnSpy).toHaveBeenCalled();
-    });
-  });
-
-  describe('setStoredCustomProperty', () => {
-    it('creates custom.xml if missing', () => {
-      const docx = {};
-      SuperConverter.setStoredCustomProperty(docx, 'NewProp', 'NewValue');
-
-      expect(docx['docProps/custom.xml']).toBeDefined();
-      expect(docx['docProps/custom.xml'].elements).toBeDefined();
-    });
-
-    it('adds new property with correct structure', () => {
-      const docx = {
-        'docProps/custom.xml': {
-          elements: [
-            {
-              name: 'Properties',
-              elements: [],
-            },
-          ],
-        },
+    it('uses custom DocumentGuid when no Microsoft GUID exists', () => {
+      // Override just the custom.xml with the GUID
+      const customDocx = [...mockDocx];
+      customDocx[0] = {
+        name: 'docProps/custom.xml',
+        content: `<?xml version="1.0" encoding="UTF-8"?>
+          <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
+            <property name="DocumentGuid" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2">
+              <vt:lpwstr xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">CUSTOM-GUID-456</vt:lpwstr>
+            </property>
+          </Properties>`,
       };
 
-      const result = SuperConverter.setStoredCustomProperty(docx, 'TestProp', 'TestValue');
-
-      expect(result).toBe('TestValue');
-      const props = docx['docProps/custom.xml'].elements[0].elements;
-      expect(props).toHaveLength(1);
-      expect(props[0].attributes.name).toBe('TestProp');
-      expect(props[0].elements[0].elements[0].text).toBe('TestValue');
+      const converter = new SuperConverter({ docx: customDocx });
+      expect(converter.getDocumentGuid()).toBe('CUSTOM-GUID-456');
+      expect(converter.hasTemporaryId()).toBe(false);
     });
 
-    it('updates existing property when preserveExisting is false', () => {
-      const docx = {
-        'docProps/custom.xml': {
-          elements: [
-            {
-              name: 'Properties',
-              elements: [
-                {
-                  type: 'element',
-                  name: 'property',
-                  attributes: { name: 'ExistingProp', pid: 2 },
-                  elements: [
-                    {
-                      name: 'vt:lpwstr',
-                      elements: [{ text: 'OldValue' }],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      };
+    it('generates hash for unmodified document without GUID', () => {
+      const fileSource = Buffer.from('test file content');
+      const converter = new SuperConverter({
+        docx: mockDocx,
+        fileSource,
+      });
 
-      const result = SuperConverter.setStoredCustomProperty(docx, 'ExistingProp', 'NewValue', false);
-      expect(result).toBe('NewValue');
-
-      const prop = docx['docProps/custom.xml'].elements[0].elements[0];
-      expect(prop.elements[0].elements[0].text).toBe('NewValue');
-    });
-
-    it('preserves existing property when preserveExisting is true', () => {
-      const docx = {
-        'docProps/custom.xml': {
-          elements: [
-            {
-              name: 'Properties',
-              elements: [
-                {
-                  type: 'element',
-                  name: 'property',
-                  attributes: { name: 'ExistingProp', pid: 2 },
-                  elements: [
-                    {
-                      name: 'vt:lpwstr',
-                      elements: [{ text: 'OldValue' }],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      const result = SuperConverter.setStoredCustomProperty(docx, 'ExistingProp', 'NewValue', true);
-      expect(result).toBe('OldValue');
-
-      const prop = docx['docProps/custom.xml'].elements[0].elements[0];
-      expect(prop.elements[0].elements[0].text).toBe('OldValue');
-    });
-
-    it('handles function values correctly', () => {
-      const docx = {
-        'docProps/custom.xml': {
-          elements: [
-            {
-              name: 'Properties',
-              elements: [],
-            },
-          ],
-        },
-      };
-
-      const valueFunc = () => 'GeneratedValue';
-      const result = SuperConverter.setStoredCustomProperty(docx, 'TestProp', valueFunc);
-
-      expect(result).toBe('GeneratedValue');
-    });
-
-    it('assigns sequential pids for multiple properties', () => {
-      const docx = {
-        'docProps/custom.xml': {
-          elements: [
-            {
-              name: 'Properties',
-              elements: [
-                {
-                  attributes: { pid: 2 },
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      SuperConverter.setStoredCustomProperty(docx, 'Prop1', 'Value1');
-      const props = docx['docProps/custom.xml'].elements[0].elements;
-      expect(props[props.length - 1].attributes.pid).toBe(3);
+      const identifier = converter.getDocumentIdentifier();
+      expect(identifier).toMatch(/^HASH-/);
+      expect(converter.hasTemporaryId()).toBe(true);
+      expect(converter.getDocumentGuid()).toBeNull();
     });
   });
 
-  describe('SuperDoc ID methods', () => {
-    it('getStoredSuperdocId retrieves stored ID', () => {
-      mockCustomXml.content = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
-          <property name="SuperDocId" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2">
-            <vt:lpwstr>doc-id-123</vt:lpwstr>
-          </property>
-        </Properties>`;
+  describe('GUID Promotion', () => {
+    it('promotes hash to GUID when document is modified', () => {
+      const fileSource = Buffer.from('test file content');
+      const converter = new SuperConverter({
+        docx: mockDocx,
+        fileSource,
+      });
 
-      const result = SuperConverter.getStoredSuperdocId(mockDocx);
-      expect(result).toBe('doc-id-123');
+      // Initially has hash
+      expect(converter.hasTemporaryId()).toBe(true);
+
+      // Promote to GUID
+      const guid = converter.promoteToGuid();
+      expect(guid).toBe('test-uuid-1234');
+      expect(converter.getDocumentGuid()).toBe('test-uuid-1234');
+      expect(converter.hasTemporaryId()).toBe(false);
+      expect(converter.documentModified).toBe(true);
     });
 
-    it('setStoredSuperdocId generates UUID when id is null', () => {
-      const docx = {
-        'docProps/custom.xml': {
-          elements: [
-            {
-              name: 'Properties',
-              elements: [],
-            },
-          ],
-        },
+    it('does not re-promote if already has GUID', () => {
+      // Override just the custom.xml with the GUID
+      const customDocx = [...mockDocx];
+      customDocx[0] = {
+        name: 'docProps/custom.xml',
+        content: `<?xml version="1.0" encoding="UTF-8"?>
+          <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
+            <property name="DocumentGuid" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2">
+              <vt:lpwstr xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">EXISTING-GUID</vt:lpwstr>
+            </property>
+          </Properties>`,
       };
 
-      const result = SuperConverter.setStoredSuperdocId(docx, null);
-      expect(result).toBe('test-uuid-1234');
-      expect(uuidv4).toHaveBeenCalled();
-    });
-
-    it('setStoredSuperdocId uses provided ID', () => {
-      const docx = {
-        'docProps/custom.xml': {
-          elements: [
-            {
-              name: 'Properties',
-              elements: [],
-            },
-          ],
-        },
-      };
-
-      const result = SuperConverter.setStoredSuperdocId(docx, 'custom-id');
-      expect(result).toBe('custom-id');
+      const converter = new SuperConverter({ docx: customDocx });
+      const guid = converter.promoteToGuid();
+      expect(guid).toBe('EXISTING-GUID');
       expect(uuidv4).not.toHaveBeenCalled();
     });
+  });
 
-    it('setStoredSuperdocId preserves existing ID', () => {
-      const docx = {
-        'docProps/custom.xml': {
-          elements: [
-            {
-              name: 'Properties',
-              elements: [
-                {
-                  type: 'element',
-                  name: 'property',
-                  attributes: { name: 'SuperDocId', pid: 2 },
-                  elements: [
-                    {
-                      name: 'vt:lpwstr',
-                      elements: [{ text: 'existing-id' }],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
+  describe('Static Methods', () => {
+    it('getDocumentGuid checks both sources', () => {
+      // Test Microsoft GUID
+      const docxWithMsGuid = [
+        {
+          name: 'word/settings.xml',
+          content:
+            '<w:settings xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"><w15:docId w15:val="{MS-GUID}"/></w:settings>',
         },
-      };
+      ];
+      expect(SuperConverter.getDocumentGuid(docxWithMsGuid)).toBe('MS-GUID');
 
-      const result = SuperConverter.setStoredSuperdocId(docx, 'new-id');
-      expect(result).toBe('existing-id');
+      // Test when no GUID exists
+      const guid = SuperConverter.getDocumentGuid(mockDocx);
+      expect(guid).toBeNull();
     });
   });
 
-  describe('SuperDoc Version methods', () => {
-    it('getStoredSuperdocVersion retrieves version', () => {
-      mockCustomXml.content = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
-          <property name="SuperdocVersion" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2">
-            <vt:lpwstr>1.2.3</vt:lpwstr>
-          </property>
-        </Properties>`;
-
-      const result = SuperConverter.getStoredSuperdocVersion(mockDocx);
-      expect(result).toBe('1.2.3');
-    });
-
-    it('setStoredSuperdocVersion always updates version', () => {
+  describe('Version Methods', () => {
+    it('stores and retrieves version', () => {
       const docx = {
         'docProps/custom.xml': {
           elements: [
             {
               name: 'Properties',
-              elements: [
-                {
-                  type: 'element',
-                  name: 'property',
-                  attributes: { name: 'SuperdocVersion', pid: 2 },
-                  elements: [
-                    {
-                      name: 'vt:lpwstr',
-                      elements: [{ text: '1.0.0' }],
-                    },
-                  ],
-                },
-              ],
+              elements: [],
             },
           ],
         },
       };
 
-      const result = SuperConverter.setStoredSuperdocVersion(docx, '2.0.0');
-      expect(result).toBe('2.0.0');
-
+      // Set version
+      SuperConverter.setStoredSuperdocVersion(docx, '1.2.3');
       const prop = docx['docProps/custom.xml'].elements[0].elements[0];
-      expect(prop.elements[0].elements[0].text).toBe('2.0.0');
+      expect(prop.elements[0].elements[0].text).toBe('1.2.3');
+
+      // Get version
+      const version = SuperConverter.getStoredSuperdocVersion([
+        {
+          name: 'docProps/custom.xml',
+          content: `<?xml version="1.0" encoding="UTF-8"?>
+          <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
+            <property name="SuperdocVersion" pid="2">
+              <vt:lpwstr>1.2.3</vt:lpwstr>
+            </property>
+          </Properties>`,
+        },
+      ]);
+      expect(version).toBe('1.2.3');
     });
   });
 
-  describe('SuperConverter instance methods', () => {
-    it('getSuperdocId returns stored ID', () => {
-      const converter = new SuperConverter();
-      converter.superdocId = 'test-id';
+  describe('Backward Compatibility', () => {
+    it('deprecated methods show warnings', () => {
+      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
-      expect(converter.getSuperdocId()).toBe('test-id');
-    });
+      SuperConverter.updateDocumentVersion(mockDocx, '1.0.0');
+      expect(consoleWarnSpy).toHaveBeenCalledWith(
+        'updateDocumentVersion is deprecated, use setStoredSuperdocVersion instead',
+      );
 
-    it('getSuperdocId returns null when not set', () => {
-      const converter = new SuperConverter();
-
-      expect(converter.getSuperdocId()).toBeNull();
-    });
-
-    it('getSuperdocVersion retrieves version from docx', () => {
-      const converter = new SuperConverter();
-      converter.docx = mockDocx;
-
-      mockCustomXml.content = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-        <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
-          <property name="SuperdocVersion" fmtid="{D5CDD505-2E9C-101B-9397-08002B2CF9AE}" pid="2">
-            <vt:lpwstr>3.0.0</vt:lpwstr>
-          </property>
-        </Properties>`;
-
-      expect(converter.getSuperdocVersion()).toBe('3.0.0');
-    });
-
-    it('getSuperdocVersion returns null when docx not available', () => {
-      const converter = new SuperConverter();
-
-      expect(converter.getSuperdocVersion()).toBeNull();
+      consoleWarnSpy.mockRestore();
     });
   });
 });

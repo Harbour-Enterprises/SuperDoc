@@ -3,11 +3,10 @@
  * @property {string} [licenseKey] - License key for telemetry service
  * @property {boolean} [enabled=true] - Whether telemetry is enabled
  * @property {string} endpoint - service endpoint
- * @property {string} superdocId - SuperDoc id
+ * @property {string} [documentGuid] - Document GUID (permanent identifier)
+ * @property {string} [documentIdentifier] - Document identifier (can be GUID or hash)
  * @property {string} superdocVersion - SuperDoc version
  */
-
-import crc32 from 'buffer-crc32';
 
 function randomBytes(length) {
   const array = new Uint8Array(length);
@@ -22,7 +21,10 @@ class Telemetry {
   enabled;
 
   /** @type {string} */
-  superdocId;
+  documentGuid;
+
+  /** @type {string} */
+  documentIdentifier;
 
   /** @type {string} */
   superdocVersion;
@@ -76,8 +78,10 @@ class Telemetry {
 
     this.licenseKey = config.licenseKey ?? Telemetry.COMMUNITY_LICENSE_KEY;
     this.endpoint = config.endpoint ?? Telemetry.DEFAULT_ENDPOINT;
-    this.superdocId = config.superdocId;
 
+    // Update naming to match new system
+    this.documentGuid = config.documentGuid; // Changed from superdocId
+    this.documentIdentifier = config.documentIdentifier; // New: can be GUID or hash
     this.superdocVersion = config.superdocVersion;
     this.sessionId = this.generateId();
   }
@@ -112,7 +116,8 @@ class Telemetry {
       type: 'usage',
       timestamp: new Date().toISOString(),
       sessionId: this.sessionId,
-      superdocId: this.superdocId,
+      documentGuid: this.documentGuid, // Updated field name
+      documentIdentifier: this.documentIdentifier, // Include both
       superdocVersion: this.superdocVersion,
       file: this.documentInfo,
       browser: this.getBrowserInfo(),
@@ -185,13 +190,15 @@ class Telemetry {
    * Track file structure
    * @param {Object} structure - File structure information
    * @param {File} fileSource - original file
-   * @param {String} documentId - document ID
-   * @param {string} internalId - document ID form settings.xml
+   * @param {String} documentId - document GUID
+   * @param {string} documentIdentifier - document identifier (GUID or hash)
+   * @param {string} internalId - document ID from settings.xml
    */
-  async trackFileStructure(structure, fileSource, documentId, internalId) {
+  async trackFileStructure(structure, fileSource, documentId, documentIdentifier, internalId) {
     this.fileStructure = structure;
     this.documentInfo = await this.processDocument(fileSource, {
-      id: documentId,
+      guid: documentId, // Updated parameter name
+      identifier: documentIdentifier, // New parameter
       internalId: internalId,
     });
   }
@@ -208,35 +215,15 @@ class Telemetry {
       return {};
     }
 
-    let hash = '';
-    try {
-      hash = await this.generateCrc32Hash(file);
-    } catch (error) {
-      console.error('Failed to generate file hash:', error);
-    }
-
     return {
-      id: options.id,
+      guid: options.guid, // Updated from 'id'
+      identifier: options.identifier, // New field
       name: file.name,
       size: file.size,
-      crc32: hash,
       lastModified: file.lastModified ? new Date(file.lastModified).toISOString() : null,
       type: file.type || 'docx',
-      internalId: options.internalId,
+      internalId: options.internalId, // Microsoft's GUID if present
     };
-  }
-
-  /**
-   * Generate CRC32 hash for a file
-   * @param {File} file - File to hash
-   * @returns {Promise<string>} CRC32 hash
-   * @private
-   */
-  async generateCrc32Hash(file) {
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    const hashBuffer = crc32(buffer);
-    return hashBuffer.toString('hex');
   }
 
   isTelemetryDataChanged() {
