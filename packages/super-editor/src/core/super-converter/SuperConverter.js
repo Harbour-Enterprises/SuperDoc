@@ -326,7 +326,8 @@ class SuperConverter {
       // Get next available pid
       const existingPids = properties.elements
         .filter((el) => el.attributes?.pid)
-        .map((el) => parseInt(el.attributes.pid));
+        .map((el) => parseInt(el.attributes.pid, 10)) // Add radix for clarity
+        .filter(Number.isInteger); // Use isInteger instead of isFinite since PIDs should be integers
       const pid = existingPids.length > 0 ? Math.max(...existingPids) + 1 : 2;
 
       property = {
