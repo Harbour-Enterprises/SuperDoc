@@ -63,6 +63,11 @@ export const TrackDelete = Mark.create({
           };
         },
       },
+
+      importedAuthor: {
+        default: '',
+        rendered: false,
+      },
     };
   },
 

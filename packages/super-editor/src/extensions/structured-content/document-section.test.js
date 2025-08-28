@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Schema, DOMSerializer } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
-import { SectionHelpers } from '@helpers/index.js';
+import { SectionHelpers } from './document-section/helpers.js';
 import { DocumentSection } from './document-section.js';
 
-vi.mock('@helpers/index.js', async () => {
+vi.mock('./document-section/helpers.js', async () => {
   return {
     SectionHelpers: {
       getAllSections: vi.fn(),
@@ -14,7 +14,7 @@ vi.mock('@helpers/index.js', async () => {
 });
 
 // NodeView referenced by addNodeView, but not executed in these tests
-vi.mock('../src/document-section/DocumentSectionView.js', async () => {
+vi.mock('./document-section/DocumentSectionView.js', async () => {
   return { DocumentSectionView: class {} };
 });
 

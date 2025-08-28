@@ -98,6 +98,11 @@ export const TrackFormat = Mark.create({
           };
         },
       },
+
+      importedAuthor: {
+        default: '',
+        rendered: false,
+      },
     };
   },
 

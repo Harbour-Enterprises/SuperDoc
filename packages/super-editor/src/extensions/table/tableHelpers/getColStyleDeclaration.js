@@ -1,3 +1,4 @@
+// @ts-check
 export const getColStyleDeclaration = (minWidth, width) => {
   if (width) {
     // Apply the stored width unless it is below the configured minimum cell width.

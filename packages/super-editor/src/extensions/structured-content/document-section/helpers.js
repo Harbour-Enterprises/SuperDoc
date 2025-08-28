@@ -6,7 +6,7 @@ import { DOMSerializer } from 'prosemirror-model';
  * @param {Editor} editor - The editor instance to search within.
  * @returns {Array} An array of objects containing the node and its position in the document
  */
-const getAllSections = (editor) => {
+export const getAllSections = (editor) => {
   if (!editor) return [];
   const type = editor.schema.nodes.documentSection;
   if (!type) return [];
@@ -55,7 +55,7 @@ export const exportSectionsToHTML = (editor) => {
  * @param {Editor} editor - The editor instance used for serialization.
  * @returns {String} The HTML representation of the node's content.
  */
-const getHTMLFromNode = (node, editor) => {
+export const getHTMLFromNode = (node, editor) => {
   const tempDocument = document.implementation.createHTMLDocument();
   const container = tempDocument.createElement('div');
   const fragment = DOMSerializer.fromSchema(editor.schema).serializeFragment(node.content);

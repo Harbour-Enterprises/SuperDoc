@@ -585,7 +585,7 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   const { type, attrs } = trackedMark;
 
   const { name: trackedChangeType } = type;
-  const { author, authorEmail, date } = attrs;
+  const { author, authorEmail, date, importedAuthor } = attrs;
   const id = attrs.id;
 
   const node = nodes[0];
@@ -626,6 +626,11 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
     author,
     authorEmail,
     date,
+    ...(importedAuthor && {
+      importedAuthor: {
+        name: importedAuthor,
+      },
+    }),
   };
 
   if (event === 'add') params.event = comments_module_events.ADD;

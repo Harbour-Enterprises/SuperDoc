@@ -308,6 +308,7 @@ describe('insertNewRelationship', () => {
         Id: 'rId43',
         Type: RELATIONSHIP_TYPES.hyperlink,
         Target: 'bar',
+        TargetMode: 'External',
       },
     });
   });

@@ -1,9 +1,9 @@
-import { Extensions } from '@harbour-enterprises/superdoc/super-editor';
+import { Extensions } from '@harbour-enterprises/superdoc';
 
 // Extensions includes the necessary classes for creating custom nodes
-const { Attribute } = Extensions;
+const { Attribute, Node } = Extensions;
 
-export const myCustomNode = Extensions.Node.create({
+export const myCustomNode = Node.create({
     name: 'customNode',
       
     group: 'inline',

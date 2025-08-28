@@ -12,5 +12,6 @@
     "moduleResolution": "NodeNext",
     "typeRoots": ["./node_modules/@types/*"],
     "target": "ES2019"
-  }
+  },
+  "exclude": ["node_modules", "dist", "**/*.test.js"]
 }

@@ -1,4 +1,10 @@
-import { SuperConverter, Editor, getRichTextExtensions, createZip } from '@harbour-enterprises/super-editor';
+import {
+  SuperConverter,
+  Editor,
+  getRichTextExtensions,
+  createZip,
+  Extensions,
+} from '@harbour-enterprises/super-editor';
 import {
   helpers as superEditorHelpers,
   fieldAnnotationHelpers,
@@ -32,4 +38,7 @@ export {
   // Super Editor
   SuperConverter,
   createZip,
+
+  // Custom extensions
+  Extensions,
 };

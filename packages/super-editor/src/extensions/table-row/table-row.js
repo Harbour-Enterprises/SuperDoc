@@ -1,5 +1,11 @@
+// @ts-check
 import { Node, Attribute } from '@core/index.js';
 
+/**
+ * @module TableRow
+ * @sidebarTitle Table Row
+ * @snippetPath /snippets/extensions/table-row.mdx
+ */
 export const TableRow = Node.create({
   name: 'tableRow',
 
@@ -17,6 +23,10 @@ export const TableRow = Node.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {number} [rowHeight] - Fixed row height in pixels
+       */
       rowHeight: {
         renderDOM({ rowHeight }) {
           if (!rowHeight) return {};

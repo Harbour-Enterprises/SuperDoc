@@ -1,7 +1,8 @@
 // @ts-check
 /**
- * Underline style types
- * @typedef {'single'|'double'|'thick'|'dotted'|'dashed'|'wavy'} UnderlineType
+ * Underline style configuration
+ * @typedef {Object} UnderlineConfig
+ * @property {'single'|'double'|'thick'|'dotted'|'dashed'|'wavy'} value - Style variant
  */
 
 import { Mark, Attribute } from '@core/index.js';
@@ -10,6 +11,8 @@ import { Mark, Attribute } from '@core/index.js';
  * @module Underline
  * @sidebarTitle Underline
  * @snippetPath /snippets/extensions/underline.mdx
+ * @shortcut Mod-u | toggleUnderline | Toggle underline formatting
+ * @shortcut Mod-U | toggleUnderline | Toggle underline formatting (uppercase)
  */
 export const Underline = Mark.create({
   name: 'underline',
@@ -34,6 +37,10 @@ export const Underline = Mark.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {UnderlineConfig} [underlineType='single'] - Style of underline
+       */
       underlineType: {
         default: 'single',
       },

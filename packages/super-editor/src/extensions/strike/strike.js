@@ -5,6 +5,7 @@ import { Mark, Attribute } from '@core/index.js';
  * @module Strike
  * @sidebarTitle Strike
  * @snippetPath /snippets/extensions/strike.mdx
+ * @shortcut Mod-Shift-s | toggleStrike | Toggle strikethrough formatting
  */
 export const Strike = Mark.create({
   name: 'strike',

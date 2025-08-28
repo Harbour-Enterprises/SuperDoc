@@ -32,6 +32,7 @@ describe('TrackChangesImporter', () => {
       id: '1',
       date: '2023-10-01',
       author: 'Author',
+      importedAuthor: 'Author (imported)',
     });
   });
 
@@ -51,6 +52,7 @@ describe('TrackChangesImporter', () => {
       id: '1',
       date: '2023-10-01',
       author: 'Author',
+      importedAuthor: 'Author (imported)',
     });
   });
 });
@@ -98,6 +100,7 @@ describe('trackChanges live xml test', () => {
       id: '0',
       date: '2024-09-02T15:56:00Z',
       author: 'torcsi@harbourcollaborators.com',
+      importedAuthor: 'torcsi@harbourcollaborators.com (imported)',
     });
     expect(result.nodes[0].text).toBe('short ');
   });
@@ -111,6 +114,7 @@ describe('trackChanges live xml test', () => {
       id: '1',
       date: '2024-09-02T15:56:00Z',
       author: 'torcsi@harbourcollaborators.com',
+      importedAuthor: 'torcsi@harbourcollaborators.com (imported)',
     });
     expect(result.nodes[0].text).toBe('long ');
   });

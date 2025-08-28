@@ -24,7 +24,7 @@ import * as trackChangesHelpers from './extensions/track-changes/trackChangesHel
 import { TrackChangesBasePluginKey } from './extensions/track-changes/plugins/index.js';
 import { CommentsPluginKey } from './extensions/comment/comments-plugin.js';
 import { AnnotatorHelpers } from '@helpers/annotator.js';
-import { SectionHelpers } from '@helpers/index.js';
+import { SectionHelpers } from '@extensions/structured-content/document-section/index.js';
 
 const Extensions = {
   Node,

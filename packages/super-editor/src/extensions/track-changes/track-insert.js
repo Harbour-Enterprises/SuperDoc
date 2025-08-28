@@ -63,6 +63,11 @@ export const TrackInsert = Mark.create({
           };
         },
       },
+
+      importedAuthor: {
+        default: '',
+        rendered: false,
+      },
     };
   },
 

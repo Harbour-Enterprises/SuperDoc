@@ -36,7 +36,8 @@ import { DocumentSectionView } from './document-section/DocumentSectionView.js';
 import { htmlHandler } from '@core/InputRule.js';
 import { Selection } from 'prosemirror-state';
 import { DOMParser as PMDOMParser } from 'prosemirror-model';
-import { findParentNode, SectionHelpers } from '@helpers/index.js';
+import { findParentNode } from '@helpers/index.js';
+import { SectionHelpers } from './document-section/helpers.js';
 
 /**
  * @module DocumentSection
@@ -74,7 +75,16 @@ export const DocumentSection = Node.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {number} [id] - Unique section identifier
+       */
       id: {},
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [sdBlockId] - Internal block tracking
+       */
       sdBlockId: {
         default: null,
         keepOnSplit: false,
@@ -83,9 +93,25 @@ export const DocumentSection = Node.create({
           return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
+      /**
+       * @category Attribute
+       * @param {string} [title] - Section display label
+       */
       title: {},
+      /**
+       * @category Attribute
+       * @param {string} [description] - Section metadata
+       */
       description: {},
+      /**
+       * @category Attribute
+       * @param {string} [sectionType] - Business classification (e.g., 'legal', 'pricing')
+       */
       sectionType: {},
+      /**
+       * @category Attribute
+       * @param {boolean} [isLocked=false] - Lock state preventing edits
+       */
       isLocked: { default: false },
     };
   },
@@ -376,6 +402,12 @@ export const DocumentSection = Node.create({
 
           return true;
         },
+    };
+  },
+
+  addHelpers() {
+    return {
+      ...SectionHelpers,
     };
   },
 });

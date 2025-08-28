@@ -5,6 +5,8 @@ import { Mark, Attribute } from '@core/index.js';
  * @module Bold
  * @sidebarTitle Bold
  * @snippetPath /snippets/extensions/bold.mdx
+ * @shortcut Mod-b | toggleBold | Toggle bold formatting
+ * @shortcut Mod-B | toggleBold | Toggle bold formatting (uppercase)
  */
 export const Bold = Mark.create({
   name: 'bold',
@@ -17,11 +19,14 @@ export const Bold = Mark.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [value] - Bold weight value ('0' renders as normal)
+       */
       value: {
         default: null,
         renderDOM: (attrs) => {
           if (!attrs.value) return {};
-
           if (attrs.value === '0') {
             return { style: 'font-weight: normal' };
           }

@@ -1,3 +1,65 @@
+// @ts-check
+
+/**
+ * Table configuration options
+ * @typedef {Object} TableConfig
+ * @property {number} [rows=3] - Number of rows to create
+ * @property {number} [cols=3] - Number of columns to create
+ * @property {boolean} [withHeaderRow=false] - Create first row as header row
+ */
+
+/**
+ * Table indentation configuration
+ * @typedef {Object} TableIndent
+ * @property {number} width - Indent width in pixels
+ * @property {string} [type='dxa'] - Indent type
+ */
+
+/**
+ * Table attributes
+ * @typedef {Object} TableAttributes
+ * @property {TableIndent} [tableIndent] - Table indentation
+ * @property {import("./tableHelpers/createTableBorders.js").TableBorders} [borders] - Table border configuration
+ * @property {string} [borderCollapse='collapse'] - CSS border-collapse value
+ * @property {string} [tableStyleId] - Reference to table style ID
+ * @property {string} [tableLayout] - Table layout algorithm
+ * @property {number} [tableCellSpacing] - Cell spacing in pixels
+ */
+
+/**
+ * Cell selection position
+ * @typedef {Object} CellSelectionPosition
+ * @property {number} anchorCell - Starting cell position
+ * @property {number} headCell - Ending cell position
+ */
+
+/**
+ * Column group information
+ * @typedef {Object} ColGroupInfo
+ * @property {Array} [colgroup] - Column group DOM structure
+ * @property {string} [tableWidth] - Fixed table width or empty string
+ * @property {string} [tableMinWidth] - Minimum table width or empty string
+ * @property {number[]} [colgroupValues] - Array of column width values
+ */
+
+/**
+ * Position resolution result
+ * @private
+ * @typedef {Object} CellPosition
+ * @property {Object} $pos - Resolved position
+ * @property {number} pos - Absolute position
+ * @property {number} depth - Depth in document tree
+ */
+
+/**
+ * Current cell information
+ * @private
+ * @typedef {Object} CurrentCellInfo
+ * @property {Object} rect - Selected rectangle from ProseMirror
+ * @property {Object} cell - Current cell node
+ * @property {Object} attrs - Cell attributes without span properties
+ */
+
 import { Node, Attribute } from '@core/index.js';
 import { callOrGet } from '@core/utilities/callOrGet.js';
 import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.js';
@@ -23,7 +85,7 @@ import {
   deleteTable,
   fixTables,
   goToNextCell,
-  mergeCells,
+  mergeCells as originalMergeCells,
   setCellAttr,
   splitCell as originalSplitCell,
   tableEditing,
@@ -37,6 +99,15 @@ import {
 import { cellAround } from './tableHelpers/cellAround.js';
 import { cellWrapping } from './tableHelpers/cellWrapping.js';
 
+/**
+ * @module Table
+ * @sidebarTitle Table
+ * @snippetPath /snippets/extensions/table.mdx
+ * @shortcut Tab | goToNextCell/addRowAfter | Navigate to next cell or add row
+ * @shortcut Shift-Tab | goToPreviousCell | Navigate to previous cell
+ * @shortcut Backspace | deleteTableWhenSelected | Delete table when all cells selected
+ * @shortcut Delete | deleteTableWhenSelected | Delete table when all cells selected
+ */
 export const Table = Node.create({
   name: 'table',
 
@@ -48,6 +119,17 @@ export const Table = Node.create({
 
   tableRole: 'table',
 
+  /**
+   * Table extension options
+   * @category Options
+   * @typedef {Object} TableOptions
+   * @property {Object} [htmlAttributes={'aria-label': 'Table node'}] - Default HTML attributes for all tables
+   * @property {boolean} [resizable=true] - Enable column resizing functionality
+   * @property {number} [handleWidth=5] - Width of resize handles in pixels
+   * @property {number} [cellMinWidth=10] - Minimum cell width constraint in pixels
+   * @property {boolean} [lastColumnResizable=true] - Allow resizing of the last column
+   * @property {boolean} [allowTableNodeSelection=false] - Enable selecting the entire table node
+   */
   addOptions() {
     return {
       htmlAttributes: {
@@ -72,6 +154,12 @@ export const Table = Node.create({
           };
         },
       }, */
+
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [sdBlockId] - Internal block tracking ID (not user-configurable)
+       */
       sdBlockId: {
         default: null,
         keepOnSplit: false,
@@ -81,6 +169,10 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {TableIndent} [tableIndent] - Table indentation configuration
+       */
       tableIndent: {
         renderDOM: ({ tableIndent }) => {
           if (!tableIndent) return {};
@@ -93,6 +185,10 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {import("./tableHelpers/createTableBorders.js").TableBorders} [borders] - Border styling for this table
+       */
       borders: {
         default: {},
         renderDOM({ borders }) {
@@ -107,6 +203,10 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [borderCollapse='collapse'] - CSS border-collapse property
+       */
       borderCollapse: {
         default: null,
         renderDOM({ borderCollapse }) {
@@ -116,6 +216,10 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [justification] - Table alignment ('left', 'center', 'right')
+       */
       justification: {
         default: null,
         renderDOM: (attrs) => {
@@ -132,14 +236,28 @@ export const Table = Node.create({
         },
       },
 
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [tableStyleId] - Internal reference to table style (not user-configurable)
+       */
       tableStyleId: {
         rendered: false,
       },
 
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [tableLayout] - CSS table-layout property (advanced usage)
+       */
       tableLayout: {
         rendered: false,
       },
 
+      /**
+       * @category Attribute
+       * @param {number} [tableCellSpacing] - Cell spacing in pixels for this table
+       */
       tableCellSpacing: {
         default: null,
         rendered: false,
@@ -165,6 +283,19 @@ export const Table = Node.create({
 
   addCommands() {
     return {
+      /**
+       * Insert a new table into the document
+       * @category Command
+       * @param {TableConfig} [config] - Table configuration options
+       * @returns {Function} Command
+       * @example
+       * // Using default values
+       * insertTable() // Creates 3x3 table without header
+       *
+       * // Using custom values
+       * insertTable({ rows: 3, cols: 3, withHeaderRow: true })
+       *
+       */
       insertTable:
         ({ rows = 3, cols = 3, withHeaderRow = false } = {}) =>
         ({ tr, dispatch, editor }) => {
@@ -180,12 +311,27 @@ export const Table = Node.create({
           return true;
         },
 
+      /**
+       * Delete the entire table containing the cursor
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * deleteTable()
+       */
       deleteTable:
         () =>
         ({ state, dispatch }) => {
           return deleteTable(state, dispatch);
         },
 
+      /**
+       * Add a column before the current column
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * addColumnBefore()
+       * @note Preserves cell attributes from current column
+       */
       addColumnBefore:
         () =>
         ({ state, dispatch, chain }) => {
@@ -226,6 +372,14 @@ export const Table = Node.create({
             .run();
         },
 
+      /**
+       * Add a column after the current column
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * addColumnAfter()
+       * @note Preserves cell attributes from current column
+       */
       addColumnAfter:
         () =>
         ({ state, dispatch, chain }) => {
@@ -266,12 +420,27 @@ export const Table = Node.create({
             .run();
         },
 
+      /**
+       * Delete the column containing the cursor
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * deleteColumn()
+       */
       deleteColumn:
         () =>
         ({ state, dispatch }) => {
           return deleteColumn(state, dispatch);
         },
 
+      /**
+       * Add a row before the current row
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * addRowBefore()
+       * @note Preserves cell attributes from current row
+       */
       addRowBefore:
         () =>
         ({ state, dispatch, chain }) => {
@@ -312,6 +481,14 @@ export const Table = Node.create({
             .run();
         },
 
+      /**
+       * Add a row after the current row
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * addRowAfter()
+       * @note Preserves cell attributes from current row
+       */
       addRowAfter:
         () =>
         ({ state, dispatch, chain }) => {
@@ -350,18 +527,40 @@ export const Table = Node.create({
             .run();
         },
 
+      /**
+       * Delete the row containing the cursor
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * deleteRow()
+       */
       deleteRow:
         () =>
         ({ state, dispatch }) => {
           return deleteRow(state, dispatch);
         },
 
+      /**
+       * Merge selected cells into one
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * mergeCells()
+       * @note Content from all cells is preserved
+       */
       mergeCells:
         () =>
         ({ state, dispatch }) => {
-          return mergeCells(state, dispatch);
+          return originalMergeCells(state, dispatch);
         },
 
+      /**
+       * Split a merged cell back into individual cells
+       * @category Command
+       * @returns {Function} Command - true if split, false if position invalid
+       * @example
+       * splitCell()
+       */
       splitCell:
         () =>
         ({ state, dispatch, commands }) => {
@@ -372,6 +571,19 @@ export const Table = Node.create({
           return commands.splitSingleCell();
         },
 
+      /**
+       * Split a single unmerged cell into two cells horizontally
+       * @category Command
+       * @returns {Function} Command - true if split, false if position invalid
+       * @example
+       * splitSingleCell()
+       * @note This command splits a single cell (not merged) into two cells by:
+       * - Dividing the cell width in half
+       * - Inserting a new cell to the right
+       * - Adjusting colspan for cells in other rows that span this column
+       * - Only works on cells with colspan=1 and rowspan=1
+       * @note Different from splitCell which splits merged cells back to original cells
+       */
       splitSingleCell:
         () =>
         ({ state, dispatch, tr }) => {
@@ -461,52 +673,113 @@ export const Table = Node.create({
           return true;
         },
 
+      /**
+       * Toggle between merge and split cells based on selection
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * mergeOrSplit()
+       * @note Merges if multiple cells selected, splits if merged cell selected
+       */
       mergeOrSplit:
         () =>
-        ({ state, dispatch }) => {
-          if (mergeCells(state, dispatch)) {
+        ({ state, dispatch, commands }) => {
+          if (originalMergeCells(state, dispatch)) {
             return true;
           }
 
-          return splitCell(state, dispatch);
+          return commands.splitCell();
         },
 
+      /**
+       * Toggle the first column as header column
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * toggleHeaderColumn()
+       */
       toggleHeaderColumn:
         () =>
         ({ state, dispatch }) => {
           return toggleHeader('column')(state, dispatch);
         },
 
+      /**
+       * Toggle the first row as header row
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * toggleHeaderRow()
+       */
       toggleHeaderRow:
         () =>
         ({ state, dispatch }) => {
           return toggleHeader('row')(state, dispatch);
         },
 
+      /**
+       * Toggle current cell as header cell
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * toggleHeaderCell()
+       */
       toggleHeaderCell:
         () =>
         ({ state, dispatch }) => {
           return toggleHeaderCell(state, dispatch);
         },
 
+      /**
+       * Set an attribute on selected cells
+       * @category Command
+       * @param {string} name - Attribute name
+       * @param {*} value - Attribute value
+       * @returns {Function} Command
+       * @example
+       * setCellAttr('background', { color: 'ff0000' })
+       * setCellAttr('verticalAlign', 'middle')
+       */
       setCellAttr:
         (name, value) =>
         ({ state, dispatch }) => {
           return setCellAttr(name, value)(state, dispatch);
         },
 
+      /**
+       * Navigate to the next cell (Tab behavior)
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * goToNextCell()
+       */
       goToNextCell:
         () =>
         ({ state, dispatch }) => {
           return goToNextCell(1)(state, dispatch);
         },
 
+      /**
+       * Navigate to the previous cell (Shift+Tab behavior)
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * goToPreviousCell()
+       */
       goToPreviousCell:
         () =>
         ({ state, dispatch }) => {
           return goToNextCell(-1)(state, dispatch);
         },
 
+      /**
+       * Fix table structure inconsistencies
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * fixTables()
+       * @note Repairs malformed tables and normalizes structure
+       */
       fixTables:
         () =>
         ({ state, dispatch }) => {
@@ -517,6 +790,14 @@ export const Table = Node.create({
           return true;
         },
 
+      /**
+       * Set cell selection programmatically
+       * @category Command
+       * @param {CellSelectionPosition} pos - Cell selection coordinates
+       * @returns {Function} Command
+       * @example
+       * setCellSelection({ anchorCell: 10, headCell: 15 })
+       */
       setCellSelection:
         (pos) =>
         ({ tr, dispatch }) => {
@@ -527,6 +808,15 @@ export const Table = Node.create({
           return true;
         },
 
+      /**
+       * Set background color for selected cells
+       * @category Command
+       * @param {string} value - Color value (hex with or without #)
+       * @returns {Function} Command
+       * @example
+       * setCellBackground('#ff0000')
+       * setCellBackground('ff0000')
+       */
       setCellBackground:
         (value) =>
         ({ editor, commands, dispatch }) => {
@@ -545,6 +835,14 @@ export const Table = Node.create({
           return true;
         },
 
+      /**
+       * Remove all borders from table and its cells
+       * @category Command
+       * @returns {Function} Command
+       * @example
+       * deleteCellAndTableBorders()
+       * @note Sets all border sizes to 0
+       */
       deleteCellAndTableBorders:
         () =>
         ({ state, tr }) => {
@@ -638,11 +936,26 @@ export const Table = Node.create({
   },
 });
 
+/**
+ * Get the cell type based on table role
+ * @private
+ * @param {Object} params - Parameters
+ * @param {Object} params.node - Cell node
+ * @param {Object} params.state - Editor state
+ * @returns {Object} Cell node type
+ */
 function getCellType({ node, state }) {
   const nodeTypes = tableNodeTypes(state.schema);
   return nodeTypes[node.type.spec.tableRole];
 }
 
+/**
+ * Copy cell attributes excluding span properties
+ * @private
+ * @param {Object} node - Cell node
+ * @returns {Object} Filtered attributes without colspan, rowspan, colwidth
+ * @note Used when creating new cells to preserve styling but not structure
+ */
 function copyCellAttrs(node) {
   // Exclude colspan, rowspan and colwidth attrs.
   // eslint-disable-next-line no-unused-vars
@@ -650,6 +963,12 @@ function copyCellAttrs(node) {
   return attrs;
 }
 
+/**
+ * Get current cell attributes from selection
+ * @private
+ * @param {Object} state - Editor state
+ * @returns {CurrentCellInfo} Current cell information
+ */
 function getCurrentCellAttrs(state) {
   let rect = selectedRect(state);
   let index = rect.top * rect.map.width + rect.left;
