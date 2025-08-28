@@ -467,11 +467,7 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const createCommentForTrackChanges = (editor) => {
     let trackedChanges = trackChangesHelpers.getTrackChanges(editor.state);
-    let isLargeDoc = editor.state.doc.nodeSize >= 100_000;
-
-    if (isLargeDoc && trackedChanges.length) {
-      trackedChanges = trackedChanges.slice(0, 100);
-    }
+    trackedChanges = trackedChanges.slice(0, 100);
 
     const groupedChanges = groupChanges(trackedChanges);
 

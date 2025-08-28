@@ -1,29 +1,27 @@
 import { Node, Attribute } from '@core/index.js';
 
-export const StructuredContent = Node.create({
-  name: 'structuredContent',
+export const StructuredContentBlock = Node.create({
+  name: 'structuredContentBlock',
 
-  group: 'inline',
+  group: 'block',
 
-  inline: true,
-
-  content: 'inline*',
+  content: 'block*',
 
   addOptions() {
     return {
       structuredContentClass: 'sd-structured-content-tag',
       htmlAttributes: {
-        'aria-label': 'Structured content node',
+        'aria-label': 'Structured content block node',
       },
     };
   },
 
   parseDOM() {
-    return [{ tag: `span.${this.options.structuredContentClass}` }];
+    return [{ tag: `div.${this.options.structuredContentClass}` }];
   },
 
   renderDOM({ htmlAttributes }) {
-    return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+    return ['div', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
   addAttributes() {
