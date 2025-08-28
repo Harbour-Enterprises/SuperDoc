@@ -1509,14 +1509,6 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Get the document ID from the converter
-   * @returns {string|null} The unique SuperDoc ID for this document
-   */
-  getDocumentId() {
-    return this.converter?.getSuperdocId() || null;
-  }
-
-  /**
    * Get the document version from the converter
    * @returns {string|null} The SuperDoc version stored in the document
    */
