@@ -376,14 +376,21 @@ class SuperConverter {
    * @returns {string|null} The document GUID
    */
   static getDocumentGuid(docx) {
-    // Check Microsoft's GUID first (read-only)
     try {
       const settingsXml = docx.find((doc) => doc.name === 'word/settings.xml');
-      if (settingsXml) {
-        const match = settingsXml.content.match(/w15:docId[^>]*w15:val="([^"]+)"/);
-        if (match && match[1]) {
-          return match[1].replace(/[{}]/g, '');
-        }
+      if (!settingsXml) return null;
+
+      // Parse XML properly instead of regex
+      const converter = new SuperConverter();
+      const settingsJson = converter.parseXmlToJson(settingsXml.content);
+
+      // Navigate the parsed structure to find w15:docId
+      const settings = settingsJson.elements?.[0];
+      if (!settings) return null;
+
+      const docIdElement = settings.elements?.find((el) => el.name === 'w15:docId');
+      if (docIdElement?.attributes?.['w15:val']) {
+        return docIdElement.attributes['w15:val'].replace(/[{}]/g, '');
       }
     } catch {
       // Continue to check custom property
