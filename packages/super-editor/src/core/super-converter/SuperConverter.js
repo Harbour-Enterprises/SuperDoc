@@ -307,7 +307,8 @@ class SuperConverter {
     if (!docx[customLocation]) docx[customLocation] = generateCustomXml();
 
     const customXml = docx[customLocation];
-    const properties = customXml.elements.find((el) => el.name === 'Properties');
+    const properties = customXml.elements?.find((el) => el.name === 'Properties');
+    if (!properties) return null;
     if (!properties.elements) properties.elements = [];
 
     // Check if property already exists
