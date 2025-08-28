@@ -917,7 +917,7 @@ export class Editor extends EventEmitter {
     return SuperConverter.getDocumentGuid(doc);
   }
 
-  // Deprecated method for backward compatibility
+  // Deprecated
   /**
    * @deprecated use setDocumentVersion instead
    */
@@ -1361,8 +1361,14 @@ export class Editor extends EventEmitter {
       return;
     }
 
-    // Document modified - promote to GUID if needed
-    this.#ensureDocumentGuid();
+    // Track document modifications and promote to GUID if needed
+    if (transaction.docChanged && this.converter) {
+      if (!this.converter.documentGuid) {
+        this.converter.promoteToGuid();
+        console.debug('Document modified - assigned GUID:', this.converter.documentGuid);
+      }
+      this.converter.documentModified = true;
+    }
 
     this.emit('update', {
       editor: this,
@@ -1371,34 +1377,19 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Ensure document has a permanent GUID if it's been modified
-   * @private
-   * @returns {void}
+   * Get document identifier for telemetry (async - may generate hash)
+   * @returns {Promise<string>} GUID for modified docs, hash for unmodified
    */
-  #ensureDocumentGuid() {
-    if (!this.converter) return;
-
-    // If we only have a hash, promote to GUID
-    if (this.converter.hasTemporaryId()) {
-      this.converter.promoteToGuid();
-      console.debug('Document modified - assigned permanent GUID');
-    }
+  async getDocumentIdentifier() {
+    return (await this.converter?.getDocumentIdentifier()) || null;
   }
 
   /**
-   * Get the document GUID
-   * @returns {string|null} The unique document GUID
+   * Get permanent document GUID (sync - only for modified documents)
+   * @returns {string|null} GUID or null if document hasn't been modified
    */
   getDocumentGuid() {
-    return this.converter?.getDocumentGuid() || null;
-  }
-
-  /**
-   * Get document identifier for telemetry (works for both modified and unmodified)
-   * @returns {string|null} GUID for modified docs, hash for unmodified
-   */
-  getDocumentIdentifier() {
-    return this.converter?.getDocumentIdentifier() || null;
+    return this.converter?.documentGuid || null;
   }
 
   /**
@@ -1410,16 +1401,21 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Get telemetry data including document identifier
-   * @returns {Object} Telemetry data object
+   * Get telemetry data (async because of lazy hash generation)
    */
-  getTelemetryData() {
+  async getTelemetryData() {
     return {
-      documentId: this.getDocumentIdentifier(), // Hash or GUID
+      documentId: await this.getDocumentIdentifier(),
       isModified: this.isDocumentModified(),
-      isPermanentId: !this.converter?.hasTemporaryId(),
+      isPermanentId: !!this.converter?.documentGuid,
       version: this.converter?.getSuperdocVersion(),
     };
+  }
+
+  // Deprecated for backward compatibility
+  getDocumentId() {
+    console.warn('getDocumentId is deprecated, use getDocumentGuid instead');
+    return this.getDocumentGuid();
   }
 
   /**
@@ -1457,8 +1453,7 @@ export class Editor extends EventEmitter {
     return {
       ...json,
       metadata: {
-        documentId: this.getDocumentIdentifier(),
-        documentGuid: this.converter?.documentGuid || null, // Only if modified
+        documentGuid: this.converter?.documentGuid || null,
         isModified: this.isDocumentModified(),
         version: this.converter?.getSuperdocVersion() || null,
       },
@@ -1618,6 +1613,7 @@ export class Editor extends EventEmitter {
     const json = this.#prepareDocumentForExport(comments);
 
     // Export the document to DOCX
+    // GUID will be handled automatically in converter.exportToDocx if document was modified
     const documentXml = await this.converter.exportToDocx(
       json,
       this.schema,
