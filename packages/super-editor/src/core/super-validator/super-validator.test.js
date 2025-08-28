@@ -20,7 +20,7 @@ vi.mock('./validators/state/index.js', () => ({
 }));
 
 vi.mock('./validators/xml/index.js', () => {
-  // Provide safe default factories that return a no-op validator function for tests
+  // Provide safe default factories for tests
   // that doesn't have export and doesn't need mock xml validators
   return {
     XmlValidators: {
