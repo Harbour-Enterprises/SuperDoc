@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SuperValidator } from './super-validator.js';
 import { StateValidators } from './validators/state/index.js';
 import { XmlValidators } from './validators/xml/index.js';
@@ -19,12 +19,16 @@ vi.mock('./validators/state/index.js', () => ({
   },
 }));
 
-vi.mock('./validators/xml/index.js', () => ({
-  XmlValidators: {
-    xmlA: vi.fn(),
-    xmlB: vi.fn(),
-  },
-}));
+vi.mock('./validators/xml/index.js', () => {
+  // Provide safe default factories that return a no-op validator function for tests
+  // that doesn't have export and doesn't need mock xml validators
+  return {
+    XmlValidators: {
+      xmlA: vi.fn(() => ({ modified: false, results: [] })),
+      xmlB: vi.fn(() => ({ modified: false, results: [] })),
+    },
+  };
+});
 
 describe('SuperValidator', () => {
   let mockEditor, mockDoc, mockView, mockTr;
