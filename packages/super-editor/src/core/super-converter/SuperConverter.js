@@ -510,6 +510,8 @@ class SuperConverter {
     this.documentModified = true;
     this.documentHash = null; // Clear temporary hash
 
+    // Note: GUID is stored to custom properties during export to avoid
+    // unnecessary XML modifications if the document is never saved
     return this.documentGuid;
   }
 
