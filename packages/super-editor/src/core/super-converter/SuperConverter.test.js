@@ -72,14 +72,15 @@ describe('SuperConverter Document GUID', () => {
       expect(converter.hasTemporaryId()).toBe(false);
     });
 
-    it('generates hash for unmodified document without GUID', () => {
+    it('generates hash for unmodified document without GUID', async () => {
       const fileSource = Buffer.from('test file content');
       const converter = new SuperConverter({
         docx: mockDocx,
         fileSource,
       });
 
-      const identifier = converter.getDocumentIdentifier();
+      // getDocumentIdentifier is now async
+      const identifier = await converter.getDocumentIdentifier();
       expect(identifier).toMatch(/^HASH-/);
       expect(converter.hasTemporaryId()).toBe(true);
       expect(converter.getDocumentGuid()).toBeNull();
@@ -87,14 +88,17 @@ describe('SuperConverter Document GUID', () => {
   });
 
   describe('GUID Promotion', () => {
-    it('promotes hash to GUID when document is modified', () => {
+    it('promotes hash to GUID when document is modified', async () => {
       const fileSource = Buffer.from('test file content');
       const converter = new SuperConverter({
         docx: mockDocx,
         fileSource,
       });
 
-      // Initially has hash
+      // Generate hash first (async)
+      await converter.getDocumentIdentifier();
+
+      // Now check if has temporary ID
       expect(converter.hasTemporaryId()).toBe(true);
 
       // Promote to GUID

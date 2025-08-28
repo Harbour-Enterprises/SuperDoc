@@ -221,10 +221,10 @@ class SuperConverter {
     this.fileSource = params?.fileSource || null;
     this.documentId = params?.documentId || null;
 
-    // Two-tier identification system
+    // Document identification
     this.documentGuid = null; // Permanent GUID for modified documents
     this.documentHash = null; // Temporary hash for unmodified documents
-    this.documentModified = false; // Track if document has been modified
+    this.documentModified = false; // Track if document has been edited
 
     // Parse the initial XML, if provided
     if (this.docx.length || this.xml) this.parseFromXml();
@@ -255,8 +255,8 @@ class SuperConverter {
     if (!this.initialJSON) this.initialJSON = this.parseXmlToJson(this.xml);
     this.declaration = this.initialJSON?.declaration;
 
-    // Resolve document identifier (GUID or hash)
-    this.resolveDocumentIdentifier();
+    // Only resolve existing GUIDs synchronously (no hash generation yet)
+    this.resolveDocumentGuid();
   }
 
   parseXmlToJson(xml) {
@@ -411,90 +411,96 @@ class SuperConverter {
   }
 
   /**
-   * Resolve document identifier - check for existing GUID or generate hash
+   * Resolve existing document GUID (synchronous)
    */
-  resolveDocumentIdentifier() {
-    // Only run this once during initialization
-    if (this.documentGuid || this.documentHash) return;
-
-    // 1. Check for Microsoft's docId (READ ONLY - never modify settings.xml)
-    try {
-      this.getDocumentInternalId(); // This sets this.documentInternalId
-      if (this.documentInternalId) {
-        this.documentGuid = this.documentInternalId.replace(/[{}]/g, '');
-        return;
-      }
-    } catch {
-      // Continue to next check
+  resolveDocumentGuid() {
+    // 1. Check Microsoft's docId (READ ONLY)
+    const microsoftGuid = this.getMicrosoftDocId();
+    if (microsoftGuid) {
+      this.documentGuid = microsoftGuid;
+      return;
     }
 
     // 2. Check our custom property
     const customGuid = SuperConverter.getStoredCustomProperty(this.docx, 'DocumentGuid');
     if (customGuid) {
       this.documentGuid = customGuid;
-      return;
     }
-
-    // 3. Generate hash for unmodified document (telemetry only)
-    this.documentHash = this.generateDocumentHash();
+    // Don't generate hash here - do it lazily when needed
   }
 
   /**
-   * Generate hash for unmodified documents
-   * @returns {string|null} Hash-based temporary identifier
+   * Get Microsoft's docId from settings.xml (READ ONLY)
    */
-  generateDocumentHash() {
-    if (!this.fileSource) return null;
+  getMicrosoftDocId() {
+    this.getDocumentInternalId(); // Existing method
+    if (this.documentInternalId) {
+      return this.documentInternalId.replace(/[{}]/g, '');
+    }
+    return null;
+  }
+
+  /**
+   * Generate document hash for telemetry (async, lazy)
+   */
+  async generateDocumentHash() {
+    if (!this.fileSource) return `HASH-${Date.now()}`;
 
     try {
       let buffer;
+
       if (Buffer.isBuffer(this.fileSource)) {
         buffer = this.fileSource;
       } else if (this.fileSource instanceof ArrayBuffer) {
         buffer = Buffer.from(this.fileSource);
+      } else if (this.fileSource instanceof Blob || this.fileSource instanceof File) {
+        const arrayBuffer = await this.fileSource.arrayBuffer();
+        buffer = Buffer.from(arrayBuffer);
       } else {
-        // For File or Blob objects
-        buffer = Buffer.from(this.fileSource);
+        return `HASH-${Date.now()}`;
       }
 
       const hash = crc32(buffer);
       return `HASH-${hash.toString('hex').toUpperCase()}`;
     } catch (e) {
       console.warn('Could not generate document hash:', e);
-      return `HASH-${Date.now()}`; // Fallback
+      return `HASH-${Date.now()}`;
     }
   }
 
   /**
-   * Get document identifier (GUID or hash)
-   * @returns {string|null} Either permanent GUID or temporary hash
+   * Get document identifier (GUID or hash) - async for lazy hash generation
    */
-  getDocumentIdentifier() {
-    return this.documentGuid || this.documentHash || null;
+  async getDocumentIdentifier() {
+    if (this.documentGuid) {
+      return this.documentGuid;
+    }
+
+    if (!this.documentHash && this.fileSource) {
+      this.documentHash = await this.generateDocumentHash();
+    }
+
+    return this.documentHash;
   }
 
   /**
-   * Check if this is a temporary identifier
-   * @returns {boolean}
+   * Check if using temporary ID
    */
   hasTemporaryId() {
-    const id = this.getDocumentIdentifier();
-    return id && id.startsWith('HASH-');
+    // Has temporary ID if no GUID but has hash (or could generate one)
+    return !this.documentGuid && !!(this.documentHash || this.fileSource);
   }
 
   /**
-   * Convert temporary hash to permanent GUID
-   * @returns {string} The new or existing GUID
+   * Promote from hash to GUID on first edit
    */
   promoteToGuid() {
     if (this.documentGuid) return this.documentGuid;
 
-    // Generate new GUID
-    this.documentGuid = uuidv4();
+    this.documentGuid = this.getMicrosoftDocId() || uuidv4();
     this.documentModified = true;
     this.documentHash = null; // Clear temporary hash
 
-    console.debug('Document promoted from hash to GUID:', this.documentGuid);
     return this.documentGuid;
   }
 
@@ -744,18 +750,17 @@ class SuperConverter {
     // Update the rels table
     this.#exportProcessNewRelationships([...params.relationships, ...commentsRels, ...headFootRels]);
 
-    // Only store GUID in custom.xml if document was modified
-    if (this.documentModified && this.documentGuid) {
-      // Store SuperDoc version (indicates document was edited)
-      SuperConverter.setStoredSuperdocVersion(this.convertedXml);
+    // Store SuperDoc version
+    SuperConverter.setStoredSuperdocVersion(this.convertedXml);
 
-      // Store document GUID in custom.xml (never modify settings.xml)
-      this.documentGuid = SuperConverter.setStoredCustomProperty(
-        this.convertedXml,
-        'DocumentGuid',
-        this.documentGuid,
-        true, // preserve existing
-      );
+    // Store document GUID if document was modified
+    if (this.documentModified || this.documentGuid) {
+      if (!this.documentGuid) {
+        this.documentGuid = this.getMicrosoftDocId() || uuidv4();
+      }
+
+      // Always store in custom.xml (never modify settings.xml)
+      SuperConverter.setStoredCustomProperty(this.convertedXml, 'DocumentGuid', this.documentGuid, true);
     }
 
     // Update the numbering.xml
@@ -1012,6 +1017,12 @@ class SuperConverter {
     };
     this.media = this.convertedXml.media;
     this.addedMedia = processedData;
+  }
+
+  // Deprecated methods for backward compatibility
+  static getStoredSuperdocId(docx) {
+    console.warn('getStoredSuperdocId is deprecated, use getDocumentGuid instead');
+    return SuperConverter.getDocumentGuid(docx);
   }
 
   static updateDocumentVersion(docx, version) {
