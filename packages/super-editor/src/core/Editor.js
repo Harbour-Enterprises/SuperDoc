@@ -893,25 +893,42 @@ export class Editor extends EventEmitter {
    * @returns {string} Document version
    */
   static getDocumentVersion(doc) {
-    const version = SuperConverter.getStoredSuperdocVersion(doc);
-    return version;
+    return SuperConverter.getStoredSuperdocVersion(doc);
   }
 
   /**
-   * Update the document version
+   * Set the document version
    * @static
    * @param {Object} doc - Document object
    * @param {string} version - New version
-   * @returns {Object}
+   * @returns {string} The set version
+   */
+  static setDocumentVersion(doc, version) {
+    return SuperConverter.setStoredSuperdocVersion(doc, version);
+  }
+
+  /**
+   * Get the document GUID
+   * @static
+   * @param {Object} doc - Document object
+   * @returns {string|null} Document GUID
+   */
+  static getDocumentGuid(doc) {
+    return SuperConverter.getDocumentGuid(doc);
+  }
+
+  // Deprecated
+  /**
+   * @deprecated use setDocumentVersion instead
    */
   static updateDocumentVersion(doc, version) {
-    const updatedContent = SuperConverter.updateDocumentVersion(doc, version);
-    return updatedContent;
+    console.warn('updateDocumentVersion is deprecated, use setDocumentVersion instead');
+    return Editor.setDocumentVersion(doc, version);
   }
 
   /**
    * Creates document PM schema.
-   * @returns {void
+   * @returns {void}
    */
   #createSchema() {
     this.schema = this.extensionService.schema;
@@ -1344,10 +1361,61 @@ export class Editor extends EventEmitter {
       return;
     }
 
+    // Track document modifications and promote to GUID if needed
+    if (transaction.docChanged && this.converter) {
+      if (!this.converter.documentGuid) {
+        this.converter.promoteToGuid();
+        console.debug('Document modified - assigned GUID:', this.converter.documentGuid);
+      }
+      this.converter.documentModified = true;
+    }
+
     this.emit('update', {
       editor: this,
       transaction,
     });
+  }
+
+  /**
+   * Get document identifier for telemetry (async - may generate hash)
+   * @returns {Promise<string>} GUID for modified docs, hash for unmodified
+   */
+  async getDocumentIdentifier() {
+    return (await this.converter?.getDocumentIdentifier()) || null;
+  }
+
+  /**
+   * Get permanent document GUID (sync - only for modified documents)
+   * @returns {string|null} GUID or null if document hasn't been modified
+   */
+  getDocumentGuid() {
+    return this.converter?.documentGuid || null;
+  }
+
+  /**
+   * Check if document has been modified
+   * @returns {boolean}
+   */
+  isDocumentModified() {
+    return this.converter?.documentModified || false;
+  }
+
+  /**
+   * Get telemetry data (async because of lazy hash generation)
+   */
+  async getTelemetryData() {
+    return {
+      documentId: await this.getDocumentIdentifier(),
+      isModified: this.isDocumentModified(),
+      isPermanentId: !!this.converter?.documentGuid,
+      version: this.converter?.getSuperdocVersion(),
+    };
+  }
+
+  // Deprecated for backward compatibility
+  getDocumentId() {
+    console.warn('getDocumentId is deprecated, use getDocumentGuid instead');
+    return this.getDocumentGuid();
   }
 
   /**
@@ -1381,7 +1449,15 @@ export class Editor extends EventEmitter {
    * @returns {Object} Editor content as JSON
    */
   getJSON() {
-    return this.state.doc.toJSON();
+    const json = this.state.doc.toJSON();
+    return {
+      ...json,
+      metadata: {
+        documentGuid: this.converter?.documentGuid || null,
+        isModified: this.isDocumentModified(),
+        version: this.converter?.getSuperdocVersion() || null,
+      },
+    };
   }
 
   /**
@@ -1398,6 +1474,14 @@ export class Editor extends EventEmitter {
       html = unflattenListsInHtml(html);
     }
     return html;
+  }
+
+  /**
+   * Get the document version from the converter
+   * @returns {string|null} The SuperDoc version stored in the document
+   */
+  getDocumentVersion() {
+    return this.converter?.getSuperdocVersion() || null;
   }
 
   /**
@@ -1529,6 +1613,7 @@ export class Editor extends EventEmitter {
     const json = this.#prepareDocumentForExport(comments);
 
     // Export the document to DOCX
+    // GUID will be handled automatically in converter.exportToDocx if document was modified
     const documentXml = await this.converter.exportToDocx(
       json,
       this.schema,
