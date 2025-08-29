@@ -928,7 +928,7 @@ export class Editor extends EventEmitter {
       const { mode, fragment, content, loadFromSchema } = this.options;
 
       if (mode === 'docx') {
-        if (loadFromSchema) {
+        if (loadFromSchema && !this.options.jsonOverride) {
           doc = this.schema.nodeFromJSON(content);
           doc = this.#prepareDocumentForImport(doc);
         } else {
