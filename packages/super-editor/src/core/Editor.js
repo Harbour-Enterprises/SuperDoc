@@ -130,7 +130,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
  * @property {Function} [handleImageUpload] - Handler for image uploads
  * @property {Object} [telemetry] - Telemetry configuration
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
- * @property {boolean} [jsonOverride] - Whether to override content with provided json
+ * @property {Object} [jsonOverride] - Provided JSON to override content with
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
  */
@@ -213,7 +213,7 @@ export class Editor extends EventEmitter {
     isHeaderOrFooter: false,
     lastSelection: null,
     suppressDefaultDocxStyles: false,
-    jsonOverride: false,
+    jsonOverride: null,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
