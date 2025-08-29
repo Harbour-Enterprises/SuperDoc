@@ -1,0 +1,9 @@
+{
+    "dirname": "replace-content-example",
+    "tags": [
+        "editing",
+        "viewing",
+        "react"
+    ],
+    "title": "Replacing content with HTML/JSON"
+}
