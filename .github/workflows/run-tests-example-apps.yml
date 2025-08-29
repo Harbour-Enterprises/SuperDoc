@@ -2,6 +2,10 @@ name: Run tests for example apps
 
 on:
   workflow_call:
+  # TODO: Enable this when we test this workflow manually
+  # pull_request:
+  #   branches:
+  #     - develop
 
 jobs:
   run-tests-example-apps:
