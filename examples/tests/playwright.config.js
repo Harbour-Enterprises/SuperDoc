@@ -42,6 +42,7 @@ export default defineConfig({
         command: `${command} -- --port ${5173 + i}`,
         url: `http://localhost:${5173 + i}`,
         reuseExistingServer: !process.env.CI,
+        timeout: 120 * 1000, // 2 minutes timeout for server startup
     }
   })
 });
