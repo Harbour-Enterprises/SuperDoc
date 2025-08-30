@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "test": "vitest ./packages/superdoc/ ./packages/super-editor/",
+    "test:cov": "vitest --root ./packages/super-editor --coverage",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "npm --workspace=@harbour-enterprises/superdoc run dev",
     "dev:superdoc": "npm run dev --workspace=packages/superdoc",
