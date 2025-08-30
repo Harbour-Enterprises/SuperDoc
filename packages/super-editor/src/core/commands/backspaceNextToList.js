@@ -62,6 +62,7 @@ export const handleBackspaceNextToList =
       const newPos = posBeforeList + 1; // into first block node
       tr.setSelection(TextSelection.near(tr.doc.resolve(newPos), 1)).scrollIntoView();
 
+      tr.setMeta('updateListSync', true);
       dispatch(tr);
       return true;
     }
