@@ -5,11 +5,11 @@ import { isList } from './is-list.js';
 const schema = new Schema({
   nodes: {
     doc: { content: 'block+' },
-    paragraph: { group: 'block', content: 'text*', renderDOM: () => ['p', 0], parseDOM: [{ tag: 'p' }] },
+    paragraph: { group: 'block', content: 'text*', renderDOM: () => ['p', 0], parseDOM: () => [{ tag: 'p' }] },
     text: { group: 'inline' },
-    orderedList: { content: 'listItem+', group: 'block', renderDOM: () => ['ol', 0], parseDOM: [{ tag: 'ol' }] },
-    bulletList: { content: 'listItem+', group: 'block', renderDOM: () => ['ul', 0], parseDOM: [{ tag: 'ul' }] },
-    listItem: { content: 'paragraph+', renderDOM: () => ['li', 0], parseDOM: [{ tag: 'li' }] },
+    orderedList: { content: 'listItem+', group: 'block', renderDOM: () => ['ol', 0], parseDOM: () => [{ tag: 'ol' }] },
+    bulletList: { content: 'listItem+', group: 'block', renderDOM: () => ['ul', 0], parseDOM: () => [{ tag: 'ul' }] },
+    listItem: { content: 'paragraph+', renderDOM: () => ['li', 0], parseDOM: () => [{ tag: 'li' }] },
   },
 });
 

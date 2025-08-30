@@ -101,7 +101,7 @@ const listItemSpec = {
   renderDOM() {
     return ['li', 0];
   },
-  parseDOM: [{ tag: 'li' }],
+  parseDOM: () => [{ tag: 'li' }],
 };
 
 const orderedListSpec = {
@@ -115,7 +115,7 @@ const orderedListSpec = {
   renderDOM() {
     return ['ol', 0];
   },
-  parseDOM: [{ tag: 'ol' }],
+  parseDOM: () => [{ tag: 'ol' }],
 };
 
 const bulletListSpec = {
@@ -128,7 +128,7 @@ const bulletListSpec = {
   renderDOM() {
     return ['ul', 0];
   },
-  parseDOM: [{ tag: 'ul' }],
+  parseDOM: () => [{ tag: 'ul' }],
 };
 
 const nodes = basic.spec.nodes

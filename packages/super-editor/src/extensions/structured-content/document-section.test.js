@@ -42,7 +42,7 @@ function makeSchema() {
     paragraph: {
       content: 'inline*',
       group: 'block',
-      parseDOM: [{ tag: 'p' }],
+      parseDOM: () => [{ tag: 'p' }],
       toDOM() {
         return ['p', 0];
       },
@@ -59,7 +59,7 @@ function makeSchema() {
         sectionType: { default: '' },
         isLocked: { default: false },
       },
-      parseDOM: [{ tag: 'div.sd-document-section-block' }],
+      parseDOM: () => [{ tag: 'div.sd-document-section-block' }],
       toDOM(node) {
         return ['div', { class: 'sd-document-section-block', 'data-id': node.attrs.id }, 0];
       },

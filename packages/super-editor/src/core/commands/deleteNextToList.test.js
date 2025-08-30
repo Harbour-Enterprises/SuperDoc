@@ -10,33 +10,33 @@ const schema = new Schema({
       group: 'block',
       content: '(run|text)*',
       renderDOM: () => ['p', 0],
-      parseDOM: [{ tag: 'p' }],
+      parseDOM: () => [{ tag: 'p' }],
     },
     run: {
       inline: true,
       group: 'inline',
       content: 'text*',
       renderDOM: () => ['span', { 'data-w-run': 'true' }, 0],
-      parseDOM: [{ tag: 'span[data-w-run]' }],
+      parseDOM: () => [{ tag: 'span[data-w-run]' }],
     },
     text: { group: 'inline' },
 
     listItem: {
       content: 'paragraph+',
       renderDOM: () => ['li', 0],
-      parseDOM: [{ tag: 'li' }],
+      parseDOM: () => [{ tag: 'li' }],
     },
     orderedList: {
       group: 'block',
       content: 'listItem+',
       renderDOM: () => ['ol', 0],
-      parseDOM: [{ tag: 'ol' }],
+      parseDOM: () => [{ tag: 'ol' }],
     },
     bulletList: {
       group: 'block',
       content: 'listItem+',
       renderDOM: () => ['ul', 0],
-      parseDOM: [{ tag: 'ul' }],
+      parseDOM: () => [{ tag: 'ul' }],
     },
   },
 });
