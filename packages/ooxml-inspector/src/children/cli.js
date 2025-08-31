@@ -101,6 +101,6 @@ Options:
 }
 
 function notFound(q) {
-  console.error(`Unknown element: ${q}`);
+  console.error(`Unknown element: \${q}\\`);
   process.exit(2);
 }
