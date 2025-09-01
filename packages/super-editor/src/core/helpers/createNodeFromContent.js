@@ -76,7 +76,7 @@ export function createNodeFromContent(content, schema, options) {
           __supereditor__private__unknown__catch__all__node: {
             content: 'inline*',
             group: 'block',
-            parseDOM: [
+            parseDOM: () => [
               {
                 tag: '*',
                 getAttrs: (e) => {

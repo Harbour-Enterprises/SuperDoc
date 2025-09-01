@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SuperValidator } from './super-validator.js';
 import { StateValidators } from './validators/state/index.js';
+import { XmlValidators } from './validators/xml/index.js';
 
 vi.mock('./logger/logger.js', () => ({
   createLogger: vi.fn(() => ({
@@ -17,6 +18,17 @@ vi.mock('./validators/state/index.js', () => ({
     validatorB: vi.fn(),
   },
 }));
+
+vi.mock('./validators/xml/index.js', () => {
+  // Provide safe default factories for tests
+  // that doesn't have export and doesn't need mock xml validators
+  return {
+    XmlValidators: {
+      xmlA: vi.fn(() => ({ modified: false, results: [] })),
+      xmlB: vi.fn(() => ({ modified: false, results: [] })),
+    },
+  };
+});
 
 describe('SuperValidator', () => {
   let mockEditor, mockDoc, mockView, mockTr;
@@ -113,5 +125,55 @@ describe('SuperValidator', () => {
     const result = instance.validateActiveDocument();
 
     expect(result.results).toHaveLength(2);
+  });
+
+  describe('validateDocumentExport', () => {
+    it('calls all XML validators and aggregates results; dispatches when modified', () => {
+      const xmlValidatorA = vi.fn(() => ({ modified: true, results: ['fixed numbering'] }));
+      const xmlValidatorB = vi.fn(() => ({ modified: false, results: [] }));
+
+      XmlValidators.xmlA.mockReturnValue(xmlValidatorA);
+      XmlValidators.xmlB.mockReturnValue(xmlValidatorB);
+
+      const instance = new SuperValidator({ editor: mockEditor });
+
+      const result = instance.validateDocumentExport();
+
+      expect(result.modified).toBe(true);
+      expect(result.results).toEqual([
+        { key: 'xmlA', results: ['fixed numbering'] },
+        { key: 'xmlB', results: [] },
+      ]);
+
+      expect(mockView.dispatch).toHaveBeenCalled();
+    });
+
+    it('does not dispatch if no XML validator modified the document', () => {
+      const xmlValidatorA = vi.fn(() => ({ modified: false, results: [] }));
+      const xmlValidatorB = vi.fn(() => ({ modified: false, results: [] }));
+
+      XmlValidators.xmlA.mockReturnValue(xmlValidatorA);
+      XmlValidators.xmlB.mockReturnValue(xmlValidatorB);
+
+      const instance = new SuperValidator({ editor: mockEditor });
+      const result = instance.validateDocumentExport();
+
+      expect(result.modified).toBe(false);
+      expect(mockView.dispatch).not.toHaveBeenCalled();
+    });
+
+    it('does not dispatch if dryRun is true even when modified', () => {
+      const xmlValidatorA = vi.fn(() => ({ modified: true, results: ['something'] }));
+      const xmlValidatorB = vi.fn(() => ({ modified: false, results: [] }));
+
+      XmlValidators.xmlA.mockReturnValue(xmlValidatorA);
+      XmlValidators.xmlB.mockReturnValue(xmlValidatorB);
+
+      const instance = new SuperValidator({ editor: mockEditor, dryRun: true });
+      const result = instance.validateDocumentExport();
+
+      expect(result.modified).toBe(true);
+      expect(mockView.dispatch).not.toHaveBeenCalled();
+    });
   });
 });

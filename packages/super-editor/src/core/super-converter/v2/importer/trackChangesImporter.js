@@ -36,6 +36,7 @@ export const handleTrackChangeNode = (params) => {
     date: attributes['w:date'],
     author: attributes['w:author'],
     authorEmail: attributes['w:authorEmail'],
+    importedAuthor: `${attributes['w:author']} (imported)`,
   };
 
   subs.forEach((subElement) => {

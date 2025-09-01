@@ -105,7 +105,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {User} [lockedBy] The user who locked the SuperDoc
  * @property {boolean} [rulers] Whether to show the ruler in the editor
  * @property {boolean} [suppressDefaultDocxStyles] Whether to suppress default styles in docx mode
- * @property {boolean} [jsonOverride] Whether to override content with provided JSON
+ * @property {Object} [jsonOverride] Provided JSON to override content with
  * @property {boolean} [disableContextMenu] Whether to disable slash / right-click custom context menu
  * @property {string} [html] HTML content to initialize the editor with
  * @property {string} [markdown] Markdown content to initialize the editor with

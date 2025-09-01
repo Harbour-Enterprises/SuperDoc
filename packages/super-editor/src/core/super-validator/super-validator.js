@@ -1,6 +1,7 @@
 // @ts-check
 import { createLogger } from './logger/logger.js';
 import { StateValidators } from './validators/state/index.js';
+import { XmlValidators } from './validators/xml/index.js';
 
 /**
  * @typedef {import('./types.js').ElementInfo} ElementInfo
@@ -25,6 +26,9 @@ export class SuperValidator {
   /** @type {any} */
   #stateValidators;
 
+  /** @type {any} */
+  #xmlValidators;
+
   /** @type {Set<string>} */
   #requiredNodeTypes;
 
@@ -42,35 +46,42 @@ export class SuperValidator {
     this.logger = createLogger(this.debug);
 
     // Initialize validators and collect their requirements
-    const { validators, nodeTypes, markTypes } = this.#initializeValidators();
-    this.#stateValidators = validators;
+    const { stateValidators, xmlValidators, nodeTypes, markTypes } = this.#initializeValidators();
+    this.#stateValidators = stateValidators;
+    this.#xmlValidators = xmlValidators;
     this.#requiredNodeTypes = nodeTypes;
     this.#requiredMarkTypes = markTypes;
   }
 
   /**
    * Initialize all validators and collect their element requirements
-   * @returns {{ validators: Record<string, ValidatorFunction>, nodeTypes: Set<string>, markTypes: Set<string> }}
+   * @returns {{ stateValidators: Record<string, ValidatorFunction>, xmlValidators: Record<string, ValidatorFunction>, nodeTypes: Set<string>, markTypes: Set<string> }}
    */
   #initializeValidators() {
     const requiredNodes = new Set();
     const requiredMarks = new Set();
 
-    const validators = Object.fromEntries(
-      Object.entries(StateValidators).map(([key, factory]) => {
-        const validatorLogger = this.logger.withPrefix(key);
-        /** @type {ValidatorFunction} */
-        const validator = factory({ editor: this.#editor, logger: validatorLogger });
+    const initializeValidatorSet = (validatorFactories) => {
+      return Object.fromEntries(
+        Object.entries(validatorFactories).map(([key, factory]) => {
+          const validatorLogger = this.logger.withPrefix(key);
+          /** @type {ValidatorFunction} */
+          const validator = factory({ editor: this.#editor, logger: validatorLogger });
 
-        // Collect requirements from this validator
-        this.#collectValidatorRequirements(validator, requiredNodes, requiredMarks);
+          // Collect requirements from this validator
+          this.#collectValidatorRequirements(validator, requiredNodes, requiredMarks);
 
-        return [key, validator];
-      }),
-    );
+          return [key, validator];
+        }),
+      );
+    };
+
+    const stateValidators = initializeValidatorSet(StateValidators);
+    const xmlValidators = initializeValidatorSet(XmlValidators);
 
     return {
-      validators,
+      stateValidators: stateValidators,
+      xmlValidators: xmlValidators,
       nodeTypes: requiredNodes,
       markTypes: requiredMarks,
     };
@@ -172,6 +183,34 @@ export class SuperValidator {
     else this.logger.debug('DRY RUN: No changes applied to the document.');
 
     this.logger.debug('Results:', validationResults);
+    return { modified: hasModifiedDocument, results: validationResults };
+  }
+
+  /**
+   * Validate the exported document in the editor. Triggered automatically on editor export.
+   * @returns {{ modified: boolean, results: Array<{ key: string, results: string[] }> }}
+   */
+  validateDocumentExport() {
+    const { tr } = this.#editor.state;
+    const { dispatch } = this.#editor.view;
+
+    let hasModifiedDocument = false;
+    const validationResults = [];
+
+    // Run XML validators
+    Object.entries(this.#xmlValidators).forEach(([key, validator]) => {
+      this.logger.debug(`🕵 Validating export with ${key}...`);
+
+      const { results, modified } = validator();
+      validationResults.push({ key, results });
+
+      hasModifiedDocument = hasModifiedDocument || modified;
+    });
+
+    if (!this.dryRun && hasModifiedDocument) dispatch(tr);
+    else this.logger.debug('DRY RUN: No export changes applied to the document.');
+
+    this.logger.debug('Export validation results:', validationResults);
     return { modified: hasModifiedDocument, results: validationResults };
   }
 }

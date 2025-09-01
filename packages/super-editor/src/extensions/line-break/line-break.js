@@ -1,5 +1,11 @@
+// @ts-check
 import { Node, Attribute } from '@core/index.js';
 
+/**
+ * @module LineBreak
+ * @sidebarTitle Line Break
+ * @snippetPath /snippets/extensions/line-break.mdx
+ */
 export const LineBreak = Node.create({
   name: 'lineBreak',
   group: 'inline',
@@ -17,8 +23,31 @@ export const LineBreak = Node.create({
   renderDOM() {
     return ['br', {}];
   },
+
+  addCommands() {
+    return {
+      /**
+       * Insert a line break
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * insertLineBreak()
+       * @note Creates a soft break within the same paragraph
+       */
+      insertLineBreak:
+        () =>
+        ({ commands }) => {
+          return commands.insertContent({ type: 'lineBreak' });
+        },
+    };
+  },
 });
 
+/**
+ * @module HardBreak
+ * @sidebarTitle Hard Break
+ * @snippetPath /snippets/extensions/hard-break.mdx
+ */
 export const HardBreak = Node.create({
   name: 'hardBreak',
   group: 'inline',
@@ -28,6 +57,11 @@ export const HardBreak = Node.create({
 
   addOptions() {
     return {
+      /**
+       * @typedef {Object} HardBreakOptions
+       * @category Options
+       * @property {Object} [htmlAttributes] - HTML attributes for the break element
+       */
       htmlAttributes: {
         contentEditable: 'false',
         lineBreakType: 'page',
@@ -39,10 +73,21 @@ export const HardBreak = Node.create({
 
   addAttributes() {
     return {
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [pageBreakSource] - Source of the page break
+       */
       pageBreakSource: {
         rendered: false,
         default: null,
       },
+
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [pageBreakType] - Type of page break
+       */
       pageBreakType: {
         default: null,
         rendered: false,
@@ -67,5 +112,26 @@ export const HardBreak = Node.create({
 
   renderDOM({ htmlAttributes }) {
     return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
+  },
+
+  addCommands() {
+    return {
+      /**
+       * Insert a page break
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * insertPageBreak()
+       * @note Forces content to start on a new page when printed
+       */
+      insertPageBreak:
+        () =>
+        ({ commands }) => {
+          return commands.insertContent({
+            type: 'hardBreak',
+            attrs: { pageBreakType: 'page' },
+          });
+        },
+    };
   },
 });

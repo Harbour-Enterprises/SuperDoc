@@ -943,6 +943,7 @@ export const makeDefaultItems = ({
     type: 'dropdown',
     name: 'linkedStyles',
     command: 'setLinkedStyle',
+    tooltip: toolbarTexts.linkedStyles,
     icon: toolbarIcons.paintbrush,
     defaultLabel: toolbarTexts.formatText,
     label: toolbarTexts.formatText,

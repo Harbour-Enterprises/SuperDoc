@@ -1,3 +1,4 @@
+// @ts-check
 import { getColStyleDeclaration } from './getColStyleDeclaration.js';
 
 export const createColGroup = (node, cellMinWidth, overrideCol, overrideValue) => {

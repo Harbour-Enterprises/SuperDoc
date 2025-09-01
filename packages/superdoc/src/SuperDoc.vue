@@ -14,6 +14,7 @@ import {
   reactive,
   watch,
 } from 'vue';
+import { NMessageProvider } from 'naive-ui';
 import { storeToRefs } from 'pinia';
 
 import PdfViewer from './components/PdfViewer/PdfViewer.vue';
@@ -627,14 +628,16 @@ watch(getFloatingComments, () => {
             @bypass-selection="handlePdfClick"
           />
 
-          <SuperEditor
-            v-if="doc.type === DOCX"
-            :file-source="doc.data"
-            :state="doc.state"
-            :document-id="doc.id"
-            :options="editorOptions(doc)"
-            @pageMarginsChange="handleSuperEditorPageMarginsChange(doc, $event)"
-          />
+          <n-message-provider>
+            <SuperEditor
+              v-if="doc.type === DOCX"
+              :file-source="doc.data"
+              :state="doc.state"
+              :document-id="doc.id"
+              :options="editorOptions(doc)"
+              @pageMarginsChange="handleSuperEditorPageMarginsChange(doc, $event)"
+            />
+          </n-message-provider>
 
           <!-- omitting field props -->
           <HtmlViewer

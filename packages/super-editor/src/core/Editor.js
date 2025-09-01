@@ -130,7 +130,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
  * @property {Function} [handleImageUpload] - Handler for image uploads
  * @property {Object} [telemetry] - Telemetry configuration
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
- * @property {boolean} [jsonOverride] - Whether to override content with provided json
+ * @property {Object} [jsonOverride] - Provided JSON to override content with
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
  */
@@ -177,6 +177,12 @@ export class Editor extends EventEmitter {
    */
   isFocused = false;
 
+  /**
+   * Track the number of transactions that actually changed the document
+   * @type {number}
+   */
+  #transactionCount = 0;
+
   options = {
     element: null,
     selector: null,
@@ -213,7 +219,7 @@ export class Editor extends EventEmitter {
     isHeaderOrFooter: false,
     lastSelection: null,
     suppressDefaultDocxStyles: false,
-    jsonOverride: false,
+    jsonOverride: null,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -1344,10 +1350,20 @@ export class Editor extends EventEmitter {
       return;
     }
 
+    // Increment transaction count when document actually changes
+    this.#transactionCount++;
+
     this.emit('update', {
       editor: this,
       transaction,
     });
+  }
+
+  /**
+   * Reset the change tracking when loading a new document
+   */
+  #resetChangeTracking() {
+    this.#transactionCount = 0;
   }
 
   /**
@@ -1514,6 +1530,7 @@ export class Editor extends EventEmitter {
    * @param {string} [options.commentsType] - The type of comments to include
    * @param {Array} [options.comments=[]] - Array of comments to include in the document
    * @param {boolean} [options.getUpdatedDocs=false] - When set to true return only updated docx files
+   * @param {boolean} [options.preserveOriginalIfUnchanged=true] - Whether to return original file if no changes detected
    * @returns {Promise<Blob|ArrayBuffer|Object>} The exported DOCX file or updated docx files
    */
   async exportDocx({
@@ -1524,7 +1541,14 @@ export class Editor extends EventEmitter {
     comments = [],
     getUpdatedDocs = false,
     fieldsHighlightColor = null,
+    preserveOriginalIfUnchanged = true,
   } = {}) {
+    // Check if document has been changed and we have the original file
+    if (preserveOriginalIfUnchanged && this.#transactionCount === 0 && this.options.fileSource && !getUpdatedDocs) {
+      // Return the original file if no changes detected
+      return this.options.fileSource;
+    }
+
     // Pre-process the document state to prepare for export
     const json = this.#prepareDocumentForExport(comments);
 
@@ -1540,6 +1564,8 @@ export class Editor extends EventEmitter {
       exportJsonOnly,
       fieldsHighlightColor,
     );
+
+    this.#validateDocumentExport();
 
     if (exportXmlOnly || exportJsonOnly) return documentXml;
 
@@ -1725,6 +1751,9 @@ export class Editor extends EventEmitter {
       replacedFile: true,
     });
 
+    // Reset change tracking when loading a new file
+    this.#resetChangeTracking();
+
     this.#createConverter();
     this.#initMedia();
     this.initDefaultStyles();
@@ -1887,5 +1916,17 @@ export class Editor extends EventEmitter {
     /** @type {import('./super-validator/index.js').SuperValidator} */
     const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
     validator.validateActiveDocument();
+  }
+
+  /**
+   * Run the SuperValidator's on document upon export to check and fix potential known issues.
+   * @returns {void}
+   */
+  #validateDocumentExport() {
+    if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
+
+    /** @type {import('./super-validator/index.js').SuperValidator} */
+    const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
+    validator.validateDocumentExport();
   }
 }

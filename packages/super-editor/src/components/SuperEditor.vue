@@ -1,6 +1,6 @@
 <script setup>
 import 'tippy.js/dist/tippy.css';
-import { NSkeleton } from 'naive-ui';
+import { NSkeleton, useMessage } from 'naive-ui';
 import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw } from 'vue';
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
@@ -43,6 +43,7 @@ const props = defineProps({
 
 const editorReady = ref(false);
 const editor = shallowRef(null);
+const message = useMessage();
 
 const editorWrapper = ref(null);
 const editorElem = ref(null);
@@ -99,10 +100,16 @@ const pollForMetaMapData = (ydoc, retries = 10, interval = 500) => {
   checkData();
 };
 
+const setDefaultBlankFile = async () => {
+  fileSource.value = await getFileObject(BlankDOCX, 'blank.docx', DOCX);
+};
+
 const loadNewFileData = async () => {
-  fileSource.value = props.fileSource;
+  if (!fileSource.value) {
+    fileSource.value = props.fileSource;
+  }
   if (!fileSource.value || fileSource.value.type !== DOCX) {
-    fileSource.value = await getFileObject(BlankDOCX, 'blank.docx', DOCX);
+    await setDefaultBlankFile();
   }
 
   try {
@@ -116,7 +123,12 @@ const loadNewFileData = async () => {
 const initializeData = async () => {
   // If we have the file, initialize immediately from file
   if (props.fileSource) {
-    const fileData = await loadNewFileData();
+    let fileData = await loadNewFileData();
+    if (!fileData) {
+      message.error('Unable to load the file. Please verify the .docx is valid and not password protected.');
+      await setDefaultBlankFile();
+      fileData = await loadNewFileData();
+    }
     return initEditor(fileData);
   }
 
