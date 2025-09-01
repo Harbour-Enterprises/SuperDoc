@@ -28,12 +28,19 @@ export const handleSdtNode = (params) => {
   } catch {}
 
   const sdtContent = node.elements.find((el) => el.name === 'w:sdtContent');
+  const par = sdtContent?.elements?.find((el) => el.name === 'w:p');
   const { marks } = parseAnnotationMarks(sdtContent);
 
   const translatedContent = nodeListHandler.handler({ ...params, nodes: sdtContent?.elements });
 
+  let structuredContentType = 'structuredContent';
+  if (par) {
+    // If a paragraph or potentially another block node is found.
+    structuredContentType = 'structuredContentBlock';
+  }
+
   let result = {
-    type: 'structuredContent',
+    type: structuredContentType,
     content: translatedContent,
     marks,
     attrs: {

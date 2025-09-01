@@ -7,7 +7,8 @@
     "shared/*"
   ],
   "scripts": {
-    "test": "vitest --root ./packages/super-editor",
+    "test": "vitest --root ./packages/super-editor/",
+    "test:cov": "vitest --root ./packages/super-editor --coverage",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "npm --workspace=@harbour-enterprises/superdoc run dev",
     "dev:superdoc": "npm run dev --workspace=packages/superdoc",
@@ -32,7 +33,8 @@
     "pack": "npm run build:super-editor && npm --prefix ./packages/superdoc run pack",
     "prepare": "husky",
     "lint:staged": "lint-staged",
-    "watch": "npm run watch:es --workspace=packages/superdoc"
+    "watch": "npm run watch:es --workspace=packages/superdoc",
+    "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build"
   },
   "lint-staged": {
     "*.{js,jsx}": [
@@ -50,6 +52,8 @@
     "@commitlint/cli": "^19.8.1",
     "@commitlint/config-conventional": "^19.8.1",
     "@eslint/js": "^9.31.0",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
     "@types/node": "^22.13.1",
     "@vuepress/bundler-vite": "^2.0.0-rc.18",
     "@vuepress/plugin-redirect": "^2.0.0-rc.60",
@@ -63,6 +67,7 @@
     "rollup": "^4.46.2",
     "rollup-plugin-visualizer": "^5.12.0",
     "sass-embedded": "^1.80.7",
+    "semantic-release": "^24.2.7",
     "vitest": "^3.0.8",
     "vuepress": "^2.0.0-rc.18",
     "xml-js": "^1.6.11"

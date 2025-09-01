@@ -5,6 +5,7 @@ import { Mark, Attribute } from '@core/index.js';
  * @module Highlight
  * @sidebarTitle Highlight
  * @snippetPath /snippets/extensions/highlight.mdx
+ * @shortcut Mod-Shift-h | toggleHighlight | Toggle highlighted formatting
  */
 export const Highlight = Mark.create({
   name: 'highlight',
@@ -17,6 +18,10 @@ export const Highlight = Mark.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [color] - Background color (CSS color value)
+       */
       color: {
         default: null,
         parseDOM: (element) => element.getAttribute('data-color') || element.style.backgroundColor,

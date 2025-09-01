@@ -1,10 +1,19 @@
+// @ts-check
 import { Node, Attribute } from '@core/index.js';
 import { InputRule } from '@core/InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { toggleList } from '@core/commands/index.js';
 
 /**
- * Matches a bullet list to a dash or asterisk.
+ * @module BulletList
+ * @sidebarTitle Bullet List
+ * @snippetPath /snippets/extensions/bullet-list.mdx
+ * @shortcut Mod-Shift-8 | toggleBulletList | Toggle bullet list
+ */
+
+/**
+ * Input rule regex that matches a bullet list marker (-, +, or *)
+ * @private
  */
 const inputRegex = /^\s*([-+*])\s$/;
 
@@ -21,6 +30,14 @@ export const BulletList = Node.create({
 
   addOptions() {
     return {
+      /**
+       * @typedef {Object} BulletListOptions
+       * @category Options
+       * @property {string} [itemTypeName='listItem'] - Name of the list item node type
+       * @property {Object} [htmlAttributes] - HTML attributes for the ul element
+       * @property {boolean} [keepMarks=true] - Whether to preserve marks when splitting
+       * @property {boolean} [keepAttributes=false] - Whether to preserve attributes when splitting
+       */
       itemTypeName: 'listItem',
       htmlAttributes: {
         'aria-label': 'Bullet list node',
@@ -41,15 +58,29 @@ export const BulletList = Node.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [list-style-type='bullet'] - List style type for this list
+       */
       'list-style-type': {
         default: 'bullet',
         rendered: false,
       },
 
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [listId] - Internal list identifier for numbering
+       */
       listId: {
         rendered: false,
       },
 
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [sdBlockId] - Internal block tracking ID
+       */
       sdBlockId: {
         default: null,
         keepOnSplit: false,
@@ -59,6 +90,11 @@ export const BulletList = Node.create({
         },
       },
 
+      /**
+       * @private
+       * @category Attribute
+       * @param {Object} [attributes] - Additional attributes for the list
+       */
       attributes: {
         rendered: false,
         keepOnSplit: true,
@@ -68,6 +104,15 @@ export const BulletList = Node.create({
 
   addCommands() {
     return {
+      /**
+       * Toggle a bullet list at the current selection
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * // Toggle bullet list on selected text
+       * toggleBulletList()
+       * @note Converts selected paragraphs to list items or removes list formatting
+       */
       toggleBulletList: () => (params) => {
         return toggleList(this.type)(params);
       },

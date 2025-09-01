@@ -1,3 +1,4 @@
+// @ts-check
 import { TextSelection } from 'prosemirror-state';
 import {
   getStyleTagFromStyleId,
@@ -14,7 +15,11 @@ import { findParentNode } from '@helpers/index.js';
  * @param {Object} param0
  * @param {number} param0.numId - The numId to be used for the new list definition.
  * @param {Object} param0.listType - The type of the list (ordered or bullet).
- * @param {Editor} param0.editor - The editor instance where the list definition will be added.
+ * @param {number} [param0.level] - The level of the list definition (0-based). Required when generating new definitions with specific level properties.
+ * @param {number} [param0.start] - The starting number for the list (1-based). Required for ordered lists.
+ * @param {string} [param0.text] - The text to display for the list level. Required for ordered lists.
+ * @param {string} [param0.fmt] - The numbering format for the list level. Required for ordered lists.
+ * @param {import('../Editor').Editor} param0.editor - The editor instance where the list definition will be added.
  * @returns {Object} The new abstract and num definitions.
  */
 export const generateNewListDefinition = ({ numId, listType, level, start, text, fmt, editor }) => {
@@ -100,8 +105,8 @@ export const generateNewListDefinition = ({ numId, listType, level, start, text,
  * Change the numId of a list definition and clone the abstract definition.
  * @param {number} numId - The current numId of the list definition.
  * @param {number} level - The level of the list definition.
- * @param {string} listType - The type of the list (e.g., 'orderedList', 'bulletList').
- * @param {Editor} editor - The editor instance where the list definition is stored.
+ * @param {import("prosemirror-model").NodeType} listType - The type of the list (e.g., 'orderedList', 'bulletList').
+ * @param {import('../Editor').Editor} editor - The editor instance where the list definition is stored.
  * @returns {number} The new numId for the list definition.
  */
 export const changeNumIdSameAbstract = (numId, level, listType, editor) => {
@@ -126,6 +131,12 @@ export const changeNumIdSameAbstract = (numId, level, listType, editor) => {
   return newId;
 };
 
+/**
+ * Get the basic numbering ID tag for a list definition.
+ * @param {number} numId - The numId of the list definition.
+ * @param {number} abstractId - The abstractId of the list definition.
+ * @returns {Object} The basic numbering ID tag.
+ */
 export const getBasicNumIdTag = (numId, abstractId) => {
   return {
     type: 'element',
@@ -141,7 +152,7 @@ export const getBasicNumIdTag = (numId, abstractId) => {
  * Get a new list ID for the editor without creating a conflict.
  * This function calculates the next available list ID by finding the maximum existing ID
  * and adding 1 to it.
- * @param {Editor} editor The editor instance where the list ID will be generated.
+ * @param {import('../Editor').Editor} editor The editor instance where the list ID will be generated.
  * @returns {number} The new list ID.
  */
 export const getNewListId = (editor, grouping = 'definitions') => {
@@ -161,18 +172,10 @@ export const getNewListId = (editor, grouping = 'definitions') => {
  * @param {Object} params - The parameters object
  * @param {number} params.numId - The numId of the list definition
  * @param {number} params.level - The level of the list definition (0-based)
- * @param {string} [params.listType] - The type of the list (e.g., 'orderedList', 'bulletList'). Required when generating new definitions
+ * @param {import("prosemirror-model").NodeType} [params.listType] - The type of the list (e.g., 'orderedList', 'bulletList'). Required when generating new definitions
  * @param {Object} params.editor - The editor instance containing converter and numbering data
  * @param {number} [params.tries=0] - The number of recursion attempts to avoid infinite loops (max 1)
- *
  * @returns {Object} The list definition details
- * @returns {string|null} returns.start - The starting number/value for the list level
- * @returns {string|null} returns.numFmt - The numbering format (e.g., 'decimal', 'lowerRoman', 'bullet')
- * @returns {string|null} returns.lvlText - The text template for the list level (e.g., '%1.', '•')
- * @returns {string|null} returns.listNumberingType - The numbering type (same as numFmt for compatibility)
- * @returns {string|undefined} returns.customFormat - The custom format string when numFmt is 'custom'
- * @returns {Object|null} returns.abstract - The abstract numbering definition object
- * @returns {string|undefined} returns.abstractId - The ID of the abstract numbering definition
  */
 export const getListDefinitionDetails = ({ numId, level, listType, editor, tries = 0 }) => {
   const { definitions, abstracts } = editor.converter.numbering;
@@ -273,7 +276,7 @@ export const getListDefinitionDetails = ({ numId, level, listType, editor, tries
  * This function deletes the definitions and abstracts for a given list ID from the editor's numbering.
  * It is used to clean up list definitions when they are no longer needed.
  * @param {string} listId The ID of the list to be removed.
- * @param {Editor} editor The editor instance from which the list definitions will be removed.
+ * @param {import('../Editor').Editor} editor The editor instance from which the list definitions will be removed.
  * @returns {void}
  */
 export const removeListDefinitions = (listId, editor) => {
@@ -300,7 +303,6 @@ export const removeListDefinitions = (listId, editor) => {
  * @param {string} param0.lvlText - The text format for the list level.
  * @param {number} param0.numId - The ID of the numbering definition for the list item.
  * @param {string} param0.numFmt - The numbering format (e.g., decimal, lowerRoman).
- * @param {number} param0.start - The starting number for the list item.
  * @param {Array} param0.listLevel - The list level array for the item.
  * @param {Object} param0.contentNode - The content node to be included in the list item.
  * @returns {Object} A JSON object representing the list item node.
@@ -339,15 +341,17 @@ export const createListItemNodeJSON = ({ level, lvlText, numId, numFmt, listLeve
  * @param {Object} param0
  * @param {number} param0.level - The level of the ordered list.
  * @param {number} param0.numId - The ID of the numbering definition for the ordered list.
- * @param {Editor} param0.editor - The editor instance where the list node will be created.
+ * @param {import('prosemirror-model').NodeType} param0.listType - The type of the list (e.g., 'orderedList', 'bulletList').
+ * @param {import('../Editor').Editor} param0.editor - The editor instance where the list node will be created.
+ * @param {Array} param0.listLevel - The list level array for the ordered list.
  * @param {Object} param0.contentNode - The content node to be included in the ordered list.
  * @returns {Object} A ProseMirror node representing the ordered list.
  */
 export const createSchemaOrderedListNode = ({ level, numId, listType, editor, listLevel, contentNode }) => {
   level = Number(level);
   numId = Number(numId);
-  const { start, lvlText, numFmt } = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
-  const listNodeJSON = createListItemNodeJSON({ level, lvlText, numFmt, numId, start, listLevel, contentNode });
+  const { lvlText, numFmt } = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
+  const listNodeJSON = createListItemNodeJSON({ level, lvlText, numFmt, numId, listLevel, contentNode });
   const node = {
     type: 'orderedList',
     attrs: {
@@ -364,10 +368,9 @@ export const createSchemaOrderedListNode = ({ level, numId, listType, editor, li
  * Create a new list in the editor.
  * @param {Object} param0
  * @param {string|Object} param0.listType - The type of the list to be created (e.g., 'orderedList', 'bulletList').
- * @param {Editor} param0.editor - The editor instance where the new list will be created.
- * @param {Object} param0.node - The node to be inserted, if applicable.
- * @param {Object} param0.content - The content to be included in the new list.
- * @returns {Function} A command function that inserts the new list into the editor.
+ * @param {import('../Editor').Editor} param0.editor - The editor instance where the new list will be created.
+ * @param {import("prosemirror-state").Transaction} param0.tr - The ProseMirror transaction object.
+ * @returns {Boolean} The result of the insertion operation.
  */
 export const createNewList = ({ listType, tr, editor }) => {
   const numId = ListHelpers.getNewListId(editor);
@@ -398,7 +401,7 @@ export const createNewList = ({ listType, tr, editor }) => {
 /**
  * Get the current list item from the editor state.
  * @param {Object} state - The ProseMirror editor state.
- * @returns {Node|null} The current list item node, or null if not found.
+ * @returns {import('./findParentNode').ParentNodeInfo|null} The current list item node, or null if not found.
  */
 export const getCurrentListItem = (state) => {
   return findParentNode((node) => node.type.name === 'listItem')(state.selection);
@@ -407,7 +410,7 @@ export const getCurrentListItem = (state) => {
 /**
  * Get the parent ordered list of the current selection.
  * @param {Object} state - The ProseMirror editor state.
- * @returns {Node|null} The parent ordered list node, or null if not found.
+ * @returns {import('./findParentNode').ParentNodeInfo|null} The parent ordered list node, or null if not found.
  */
 export const getParentOrderedList = (state) => {
   return findParentNode((node) => node.type.name === 'orderedList')(state.selection);
@@ -446,8 +449,8 @@ export const replaceListWithNode = ({ tr, from, to, newNode }) => {
  * Convert a list item to a paragraph.
  * @param {Object} param0 - The parameters for the conversion.
  * @param {Object} param0.state - The ProseMirror editor state.
- * @param {Object} param0.tr - The ProseMirror transaction object.
- * @param {Node} param0.currentNode - The current list item node to be converted.
+ * @param {import("prosemirror-state").Transaction} param0.tr - The ProseMirror transaction object.
+ * @param {{node: import("prosemirror-model").Node, pos: Number}} param0.currentNode - The current list item node to be converted.
  * @param {number} param0.replaceFrom - The starting position of the list item to be replaced.
  * @param {number} param0.replaceTo - The ending position of the list item to be replaced.
  * @returns {boolean} True if the conversion was successful, false otherwise.
@@ -477,9 +480,8 @@ export const convertListItemToParagraph = ({ state, tr, currentNode, replaceFrom
  * @param {number} replaceTo - The ending position where the list will be inserted.
  * @param {Node} listNode - The new list node to be inserted.
  * @param {Array} [marks=[]] - Optional array of marks to be applied to the new list item.
- * @returns {Function} A command function that performs the insertion and sets the selection.
+ * @returns {Boolean} True if the insertion was successful, false otherwise.
  */
-
 export const insertNewList = (tr, replaceFrom, replaceTo, listNode, marks = []) => {
   tr.replaceWith(replaceFrom, replaceTo, listNode);
   tr.ensureMarks(marks);
@@ -502,7 +504,8 @@ export const insertNewList = (tr, replaceFrom, replaceTo, listNode, marks = []) 
  * @param {string} param0.styleId - The style ID of the list item.
  * @param {number} param0.numId - The numbering ID of the list item.
  * @param {number} param0.level - The level of the list item.
- * @param {Editor} param0.editor - The editor instance containing the converted XML and numbering definitions.
+ * @param {import('../Editor').Editor} param0.editor - The editor instance containing the converted XML and numbering definitions.
+ * @param {number} [param0.tries] - The number of attempts made to retrieve the style definitions.
  * @returns {Object} An object containing the style properties and numbering definitions.
  */
 export const getListItemStyleDefinitions = ({ styleId, numId, level, editor, tries }) => {

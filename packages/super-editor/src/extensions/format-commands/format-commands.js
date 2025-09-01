@@ -1,6 +1,20 @@
+// @ts-check
 import { Extension } from '@core/index.js';
-import { getMarksFromSelection } from '@/core/helpers/getMarksFromSelection.js';
+import { getMarksFromSelection } from '@core/helpers/getMarksFromSelection.js';
 
+/**
+ * Stored format style
+ * @typedef {Object} StoredStyle
+ * @property {string} name - Mark name
+ * @property {Object} attrs - Mark attributes
+ */
+
+/**
+ * @module FormatCommands
+ * @sidebarTitle Format Commands
+ * @snippetPath /snippets/extensions/format-commands.mdx
+ * @shortcut Mod-Alt-c | clearFormat | Clear all formatting
+ */
 export const FormatCommands = Extension.create({
   name: 'formatCommands',
 
@@ -10,30 +24,70 @@ export const FormatCommands = Extension.create({
 
   addStorage() {
     return {
+      /**
+       * @private
+       * @type {StoredStyle[]|null}
+       */
       storedStyle: null,
     };
   },
 
   addCommands() {
     return {
+      /**
+       * Clear all formatting (nodes and marks)
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * clearFormat()
+       * @note Removes all marks and resets nodes to default paragraph
+       */
       clearFormat:
         () =>
         ({ chain }) => {
           return chain().clearNodes().unsetAllMarks().run();
         },
 
+      /**
+       * Clear only mark formatting
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * clearMarksFormat()
+       * @note Removes bold, italic, underline, colors, etc. but preserves block structure
+       */
       clearMarksFormat:
         () =>
         ({ chain }) => {
           return chain().unsetAllMarks().run();
         },
 
+      /**
+       * Clear only node formatting
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * clearNodesFormat()
+       * @note Converts headings, lists, etc. to paragraphs but preserves text marks
+       */
       clearNodesFormat:
         () =>
         ({ chain }) => {
           return chain().clearNodes().run();
         },
 
+      /**
+       * Copy format from selection or apply copied format
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * // First call: copy format from selection
+       * copyFormat()
+       *
+       * // Second call: apply copied format to new selection
+       * copyFormat()
+       * @note Works like format painter - first click copies, second click applies
+       */
       copyFormat:
         () =>
         ({ chain }) => {

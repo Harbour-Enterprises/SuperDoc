@@ -55,6 +55,10 @@ export const Link = Mark.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [href] - URL or anchor reference
+       */
       href: {
         default: null,
         renderDOM: ({ href, name }) => {
@@ -63,10 +67,31 @@ export const Link = Mark.create({
           return {};
         },
       },
+      /**
+       * @category Attribute
+       * @param {string} [target='_blank'] - Link target window
+       */
       target: { default: this.options.htmlAttributes.target },
+      /**
+       * @category Attribute
+       * @param {string} [rel='noopener noreferrer nofollow'] - Relationship attributes
+       */
       rel: { default: this.options.htmlAttributes.rel },
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [rId] - Word relationship ID for internal links
+       */
       rId: { default: this.options.htmlAttributes.rId || null },
+      /**
+       * @category Attribute
+       * @param {string} [text] - Display text for the link
+       */
       text: { default: null },
+      /**
+       * @category Attribute
+       * @param {string} [name] - Anchor name for internal references
+       */
       name: { default: null },
     };
   },

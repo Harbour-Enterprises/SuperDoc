@@ -35,7 +35,7 @@ export const getAliases = (isDev) => {
 
   if (isDev) {
     aliases['@harbour-enterprises/super-editor'] = path.resolve(__dirname, '../super-editor/src');
-  };
+  }
 
   return aliases;
 };
@@ -69,6 +69,13 @@ export default defineConfig(({ mode, command}) => {
       __IS_DEBUG__: true,
     },
     plugins,
+    test: {
+      globals: true,
+      environment: 'jsdom',
+      exclude: [
+        '**/*.spec.js',
+      ],
+    },
     build: {
       target: 'es2022',
       cssCodeSplit: false,

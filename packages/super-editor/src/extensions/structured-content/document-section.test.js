@@ -83,7 +83,7 @@ function docHTML(schema, doc) {
   return wrap.innerHTML;
 }
 
-describe('DocumentSection.updateSectionById (JS only)', () => {
+describe('DocumentSection.updateSectionById', () => {
   let schema;
 
   beforeEach(() => {

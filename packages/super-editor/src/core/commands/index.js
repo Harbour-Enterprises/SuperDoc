@@ -43,6 +43,8 @@ export * from './liftListItem.js';
 export * from './deleteListItem.js';
 export * from './increaseListIndent.js';
 export * from './decreaseListIndent.js';
+export * from './backspaceNextToList.js';
+export * from './deleteNextToList.js';
 
 // Selection
 export * from './restoreSelection.js';
