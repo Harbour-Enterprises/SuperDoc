@@ -2,7 +2,10 @@ import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpe
 import { TextSelection } from 'prosemirror-state';
 import { expect } from 'vitest';
 import { getDocumentRelationshipElements } from '@core/super-converter/docx-helpers/document-rels.js';
-import { uploadImageIntoSelection } from '@extensions/image/imageHelpers/startImageUpload.js';
+import {
+  uploadAndInsertImage,
+  replaceSelectionWithImagePlaceholder,
+} from '@extensions/image/imageHelpers/startImageUpload.js';
 import { imageBase64 } from './data/imageBase64.js';
 
 describe('Relationships tests', () => {
@@ -38,11 +41,20 @@ describe('Relationships tests', () => {
     const blob = await fetch(imageBase64).then((res) => res.blob());
     const file = new File([blob], 'image.png', { type: 'image/png' });
 
-    await uploadImageIntoSelection({
+    const id = {};
+
+    replaceSelectionWithImagePlaceholder({
+      view: editor.view,
+      editorOptions: editor.options,
+      id,
+    });
+
+    await uploadAndInsertImage({
       editor,
       view: editor.view,
       file,
       size: { width: 100, height: 100 },
+      id,
     });
 
     const imageNode = editor.state.doc.firstChild.firstChild;
