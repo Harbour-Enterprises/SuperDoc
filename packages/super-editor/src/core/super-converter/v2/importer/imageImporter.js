@@ -116,8 +116,12 @@ export function handleImageImport(node, currentFileName, params) {
   if (!rel) return null;
 
   const { attributes: relAttributes } = rel;
+  const targetPath = relAttributes['Target'].startsWith('/')
+    ? relAttributes['Target'].slice(1)
+    : relAttributes['target'];
 
-  const path = `word/${relAttributes['Target']}`;
+  // Some images may appear out of the word folder
+  const path = targetPath.startsWith('word') || params.converter.media[targetPath] ? targetPath : `word/${targetPath}`;
 
   return {
     type: 'image',

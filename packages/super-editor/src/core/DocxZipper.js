@@ -48,7 +48,10 @@ class DocxZipper {
           name: zipEntry.name,
           content,
         });
-      } else if (zipEntry.name.startsWith('word/media') && zipEntry.name !== 'word/media/') {
+      } else if (
+        (zipEntry.name.startsWith('word/media') && zipEntry.name !== 'word/media/') ||
+        (zipEntry.name.startsWith('media') && zipEntry.name !== 'media/')
+      ) {
         // If we are in node, we need to convert the buffer to base64
         if (isNode) {
           const buffer = await zipEntry.async('nodebuffer');
