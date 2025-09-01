@@ -1546,6 +1546,7 @@ function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
 }
 
 function translateImageNode(params, imageSize) {
+  console.log('translateImageNode', { params, imageSize });
   const {
     node: { attrs = {} },
     tableCell,

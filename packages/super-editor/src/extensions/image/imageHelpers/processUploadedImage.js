@@ -3,13 +3,17 @@
  * @param {string | File} fileData Base 64 string or File object.
  * @returns {Promise<string | File>} Resolves with a base 64 string or File object.
  */
-export const processUploadedImage = (fileData, editor) => {
+export const processUploadedImage = (fileData, getMaxContentSize) => {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
 
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const { width: logicalWidth, height: logicalHeight } = getAllowedImageDimensions(img.width, img.height, editor);
+      const { width: logicalWidth, height: logicalHeight } = getAllowedImageDimensions(
+        img.width,
+        img.height,
+        getMaxContentSize,
+      );
 
       // Set canvas to original image size first
       canvas.width = img.width;
@@ -64,8 +68,8 @@ export const processUploadedImage = (fileData, editor) => {
   });
 };
 
-export const getAllowedImageDimensions = (width, height, editor) => {
-  const { width: maxWidth, height: maxHeight } = editor.getMaxContentSize();
+export const getAllowedImageDimensions = (width, height, getMaxContentSize) => {
+  const { width: maxWidth, height: maxHeight } = getMaxContentSize();
   if (!maxWidth || !maxHeight) return { width, height };
 
   let adjustedWidth = width;
