@@ -1,44 +1,44 @@
 name: CI
 
 on:
-  pull_request:
-    branches: [main, develop]
   push:
-    branches: [main, develop]
-  workflow_dispatch: # Allow manual triggers
+    branches: [main, 'release/**']
+  pull_request:
+    branches: [main, 'release/**']
+  workflow_dispatch:
 
 jobs:
-  lint-and-format:
-    name: Lint & Format Check
+  validate:
     runs-on: ubuntu-latest
+    
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Full history for commitlint
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          fetch-depth: 0
+      
+      - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
+      
       - name: Install dependencies
         run: npm ci
-
-      - name: Check formatting
-        run: npm run format:check
-
-      - name: Run ESLint
-        run: npm run lint
-
-      - name: Check commit messages
+      
+      - name: Run checks in parallel
+        run: |
+          npm run format:check &
+          npm run lint &
+          wait
+      
+      - name: Build
+        run: npm run build
+      
+      - name: Test
+        run: npm test
+      
+      - name: Check commits (PR only)
         if: github.event_name == 'pull_request'
         run: |
           npx commitlint \
             --from ${{ github.event.pull_request.base.sha }} \
-            --to ${{ github.event.pull_request.head.sha }} \
-            --verbose
-
-  unit-tests:
-    name: Unit Tests
-    uses: ./.github/workflows/run-unit-tests.yml
+            --to ${{ github.event.pull_request.head.sha }}
