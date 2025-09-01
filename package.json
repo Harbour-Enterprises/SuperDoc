@@ -55,7 +55,7 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^22.13.1",
-    "@vuepress/bundler-vite": "^2.0.0-rc.18",
+    "@vuepress/bundler-vite": "^2.0.0-rc.25",
     "@vuepress/plugin-redirect": "^2.0.0-rc.60",
     "@vuepress/theme-default": "^2.0.0-rc.60",
     "eslint": "^9.34.0",
