@@ -130,7 +130,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
  * @property {Function} [handleImageUpload] - Handler for image uploads
  * @property {Object} [telemetry] - Telemetry configuration
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
- * @property {boolean} [jsonOverride] - Whether to override content with provided json
+ * @property {Object} [jsonOverride] - Provided JSON to override content with
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
  */
@@ -213,7 +213,7 @@ export class Editor extends EventEmitter {
     isHeaderOrFooter: false,
     lastSelection: null,
     suppressDefaultDocxStyles: false,
-    jsonOverride: false,
+    jsonOverride: null,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -1541,6 +1541,8 @@ export class Editor extends EventEmitter {
       fieldsHighlightColor,
     );
 
+    this.#validateDocumentExport();
+
     if (exportXmlOnly || exportJsonOnly) return documentXml;
 
     const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
@@ -1887,5 +1889,17 @@ export class Editor extends EventEmitter {
     /** @type {import('./super-validator/index.js').SuperValidator} */
     const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
     validator.validateActiveDocument();
+  }
+
+  /**
+   * Run the SuperValidator's on document upon export to check and fix potential known issues.
+   * @returns {void}
+   */
+  #validateDocumentExport() {
+    if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
+
+    /** @type {import('./super-validator/index.js').SuperValidator} */
+    const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
+    validator.validateDocumentExport();
   }
 }

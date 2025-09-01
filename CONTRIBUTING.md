@@ -8,6 +8,7 @@ Thank you for your interest in contributing to SuperDoc! We're excited to have y
 - [How Can I Contribute?](#how-can-i-contribute)
 - [Development Setup](#development-setup)
 - [Pull Request Process](#pull-request-process)
+- [Release Process](#release-process)
 - [Style Guidelines](#style-guidelines)
 - [Community](#community)
 
@@ -124,6 +125,56 @@ Documentation is crucial for our project. You can help by:
    - Include screenshots for UI changes
    - List any breaking changes
    - Mention dependencies added/removed
+
+## Release Process
+
+SuperDoc uses automated semantic-release. No manual version bumps needed.
+
+### How It Works
+
+**Branches:**
+
+- `main` → Preview releases (`@next` tag)
+- `release/vX.Y` → Stable releases (`@latest` tag)
+
+**Your commits control versions:**
+
+| Commit            | Version Change | Example                   |
+| ----------------- | -------------- | ------------------------- |
+| `fix:`            | Patch (0.0.X)  | `fix: resolve cursor bug` |
+| `feat:`           | Minor (0.X.0)  | `feat: add PDF export`    |
+| `feat!:`          | Major (X.0.0)  | `feat!: new API format`   |
+| `docs:`, `chore:` | No change      | `docs: update README`     |
+
+### Commit Format
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```bash
+feat(editor): add table support
+fix: resolve memory leak
+feat!: change document format
+
+BREAKING CHANGE: New format required
+```
+
+### Creating Releases
+
+**Preview (automatic):** Every merge to `main` → `0.17.0-next.1, next.2...`
+
+**Stable (manual trigger):**
+
+```bash
+git checkout -b release/v0.17
+git push origin release/v0.17
+# Automatically publishes 0.17.0
+```
+
+**Hotfix:** Fix directly on release branch → auto publishes patch
+
+### Testing
+
+Run dry-run to preview: `npx semantic-release --dry-run --no-ci`
 
 ## Style Guidelines
 

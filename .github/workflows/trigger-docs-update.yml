@@ -1,15 +1,19 @@
-name: Trigger Documentation Update
+name: Trigger Docs Update [auto]
 
 on:
   push:
     branches:
-      - main
+      - release/**
     paths:
       # Trigger when extensions change
       - 'packages/super-editor/src/extensions/**/*.js'
       # - 'packages/super-editor/src/core/**/*.js'
       # - 'packages/super-editor/src/components/**/*.js'
   workflow_dispatch:  # Manual trigger
+
+concurrency:
+  group: docs-update
+  cancel-in-progress: true
 
 jobs:
   trigger-docs:

@@ -91,7 +91,7 @@ export default [
       }
     },
     rules: {
-      'no-unused-vars': 'warn', // See warnings but don't block
+      'no-unused-vars': ['warn', { "varsIgnorePattern": "^_" }], // See warnings but don't block
 
       // Relax these rules - they're more style than bugs
       'no-empty': ['warn', { allowEmptyCatch: true }], // Allow empty catch blocks

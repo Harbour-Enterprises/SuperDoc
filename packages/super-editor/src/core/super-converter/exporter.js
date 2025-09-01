@@ -95,6 +95,7 @@ export function exportSchemaToJson(params) {
     shapeTextbox: translateShapeTextbox,
     contentBlock: translateContentBlock,
     structuredContent: translateStructuredContent,
+    structuredContentBlock: translateStructuredContent,
     documentSection: translateDocumentSection,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,

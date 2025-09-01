@@ -2,13 +2,16 @@ import { Node, Attribute } from '@core/index.js';
 
 export const StructuredContent = Node.create({
   name: 'structuredContent',
+
   group: 'inline',
+
   inline: true,
+
   content: 'inline*',
 
   addOptions() {
     return {
-      annotationClass: 'sd-structured-content-tag',
+      structuredContentClass: 'sd-structured-content-tag',
       htmlAttributes: {
         'aria-label': 'Structured content node',
       },
@@ -16,12 +19,7 @@ export const StructuredContent = Node.create({
   },
 
   parseDOM() {
-    return [
-      {
-        tag: `span.${this.options.annotationClass}`,
-        priority: 60,
-      },
-    ];
+    return [{ tag: `span.${this.options.structuredContentClass}` }];
   },
 
   renderDOM({ htmlAttributes }) {

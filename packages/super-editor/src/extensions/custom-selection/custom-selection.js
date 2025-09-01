@@ -1,9 +1,29 @@
+// @ts-check
+/* global Element */
 import { Extension } from '@core/Extension.js';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 
+/**
+ * Selection state
+ * @typedef {Object} SelectionState
+ * @property {boolean} focused - Whether editor is focused
+ * @property {Object|null} preservedSelection - Stored selection
+ * @property {boolean} showVisualSelection - Whether to show selection decoration
+ */
+
+/**
+ * Plugin key for custom selection management
+ * @private
+ */
 export const CustomSelectionPluginKey = new PluginKey('CustomSelection');
 
+/**
+ * Handle clicks outside the editor
+ * @private
+ * @param {MouseEvent} event - Mouse event
+ * @param {Object} editor - Editor instance
+ */
 const handleClickOutside = (event, editor) => {
   const editorElem = editor?.options?.element;
   if (!editorElem) return;
@@ -21,28 +41,65 @@ const handleClickOutside = (event, editor) => {
   }
 };
 
+/**
+ * Get focus metadata from transaction
+ * @private
+ * @param {Object} tr - Transaction
+ * @returns {Object|undefined} Focus metadata
+ */
 function getFocusMeta(tr) {
   return tr.getMeta(CustomSelectionPluginKey);
 }
 
+/**
+ * Set focus metadata on transaction
+ * @private
+ * @param {Object} tr - Transaction
+ * @param {SelectionState} value - State to set
+ * @returns {Object} Transaction with metadata
+ */
 function setFocusMeta(tr, value) {
   return tr.setMeta(CustomSelectionPluginKey, value);
 }
 
+/**
+ * Get focus state from editor state
+ * @private
+ * @param {Object} state - Editor state
+ * @returns {SelectionState} Current focus state
+ */
 function getFocusState(state) {
   return CustomSelectionPluginKey.getState(state);
 }
 
+/**
+ * Check if target is a toolbar input
+ * @private
+ * @param {Element} target - DOM element
+ * @returns {boolean} True if toolbar input
+ */
 const isToolbarInput = (target) => {
-  return target?.closest('.button-text-input') || target?.classList?.contains('button-text-input');
+  return !!target?.closest('.button-text-input') || target?.classList?.contains('button-text-input');
 };
 
+/**
+ * Check if target is a toolbar button
+ * @private
+ * @param {Element} target - DOM element
+ * @returns {boolean} True if toolbar button
+ */
 const isToolbarButton = (target) => {
-  return target?.closest('.toolbar-button') || target?.classList?.contains('toolbar-button');
+  return !!target?.closest('.toolbar-button') || target?.classList?.contains('toolbar-button');
 };
 
+/**
+ * @module CustomSelection
+ * @sidebarTitle Custom Selection
+ * @snippetPath /snippets/extensions/custom-selection.mdx
+ */
 export const CustomSelection = Extension.create({
   name: 'customSelection',
+
   addPmPlugins() {
     const editor = this.editor;
     const customSelectionPlugin = new Plugin({
@@ -62,11 +119,12 @@ export const CustomSelection = Extension.create({
         },
       },
       view: () => {
-        document?.addEventListener('mousedown', (event) => handleClickOutside(event, editor));
+        const clickHandler = (event) => handleClickOutside(event, editor);
+        document?.addEventListener('mousedown', clickHandler);
 
         return {
           destroy: () => {
-            document?.removeEventListener('mousedown', handleClickOutside);
+            document?.removeEventListener('mousedown', clickHandler);
           },
         };
       },
@@ -120,8 +178,9 @@ export const CustomSelection = Extension.create({
 
             const { selection } = view.state;
             const target = event.target;
-            const isToolbarBtn = isToolbarButton(target);
-            const isToolbarInp = isToolbarInput(target);
+            const isElement = target instanceof Element;
+            const isToolbarBtn = isElement && isToolbarButton(target);
+            const isToolbarInp = isElement && isToolbarInput(target);
 
             // Store focus target for other components
             this.editor.setOptions({
@@ -189,8 +248,9 @@ export const CustomSelection = Extension.create({
 
           focus: (view) => {
             const target = this.editor.options.focusTarget;
-            const isToolbarBtn = isToolbarButton(target);
-            const isToolbarInp = isToolbarInput(target);
+            const isElement = target instanceof Element;
+            const isToolbarBtn = isElement && isToolbarButton(target);
+            const isToolbarInp = isElement && isToolbarInput(target);
 
             // Don't change state if toolbar element caused the focus
             if (!isToolbarBtn && !isToolbarInp) {
@@ -206,8 +266,9 @@ export const CustomSelection = Extension.create({
 
           blur: (view) => {
             const target = this.editor.options.focusTarget;
-            const isToolbarBtn = isToolbarButton(target);
-            const isToolbarInp = isToolbarInput(target);
+            const isElement = target instanceof Element;
+            const isToolbarBtn = isElement && isToolbarButton(target);
+            const isToolbarInp = isElement && isToolbarInput(target);
             const state = getFocusState(view.state);
 
             if (isToolbarBtn || isToolbarInp) {
@@ -265,6 +326,15 @@ export const CustomSelection = Extension.create({
 
   addCommands() {
     return {
+      /**
+       * Restore the preserved selection
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * // Restore selection after toolbar interaction
+       * restorePreservedSelection()
+       * @note Used internally to maintain selection when interacting with toolbar
+       */
       restorePreservedSelection:
         () =>
         ({ tr, state }) => {

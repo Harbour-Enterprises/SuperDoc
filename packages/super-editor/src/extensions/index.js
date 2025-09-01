@@ -38,7 +38,7 @@ import { PageNumber, TotalPageCount } from './page-number/index.js';
 import { ShapeContainer } from './shape-container/index.js';
 import { ShapeTextbox } from './shape-textbox/index.js';
 import { ContentBlock } from './content-block/index.js';
-import { StructuredContent, DocumentSection } from './structured-content/index.js';
+import { StructuredContent, StructuredContentBlock, DocumentSection } from './structured-content/index.js';
 import { BlockNode } from './block-node/index.js';
 
 // Marks extensions
@@ -174,6 +174,7 @@ const getStarterExtensions = () => {
     ContentBlock,
     Search,
     StructuredContent,
+    StructuredContentBlock,
     DocumentSection,
     NodeResizer,
     CustomSelection,
@@ -241,6 +242,7 @@ export {
   AiPlugin,
   Search,
   StructuredContent,
+  StructuredContentBlock,
   DocumentSection,
   NodeResizer,
   CustomSelection,

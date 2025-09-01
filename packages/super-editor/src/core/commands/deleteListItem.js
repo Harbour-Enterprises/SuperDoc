@@ -41,7 +41,7 @@ export const deleteListItem = () => (props) => {
       return true;
     }
 
-    // no full blocks found → let other commands handle it
+    // no full blocks found: let other commands handle it
     return false;
   }
 
@@ -65,13 +65,13 @@ export const deleteListItem = () => (props) => {
   const listFrom = parentList.pos;
   const listTo = listFrom + parentList.node.nodeSize;
 
-  // Case 1: empty list item → remove whole list
+  // Case 1: empty list item: remove whole list
   if (currentListItem.node.content.size === 0) {
     tr.delete(listFrom, listTo);
     return true;
   }
 
-  // Case 2: non‐empty list item → replace list with all content from the list item
+  // Case 2: non‐empty list item: replace list with all content from the list item
   const listItemContent = currentListItem.node.content;
 
   // Create nodes from the list item content

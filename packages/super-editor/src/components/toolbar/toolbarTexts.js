@@ -48,4 +48,5 @@ export const toolbarTexts = {
   documentEditingModeDescription: 'Edit document directly',
   documentSuggestingModeDescription: 'Edits become suggestions',
   documentViewingModeDescription: 'View clean version of document only',
+  linkedStyles: 'Linked styles',
 };
