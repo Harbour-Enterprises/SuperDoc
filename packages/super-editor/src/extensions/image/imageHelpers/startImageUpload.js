@@ -13,13 +13,11 @@ const fileTooLarge = (file) => {
   return false;
 };
 
-export const checkAndProcessImage = async ({ getMaxContentSize, view, file }) => {
+export const checkAndProcessImage = async ({ getMaxContentSize, file }) => {
   if (fileTooLarge(file)) {
     return { file: null, size: { width: 0, height: 0 } };
   }
 
-  let width;
-  let height;
   try {
     // Will process the image file in place
     const processedImageResult = await processUploadedImage(file, getMaxContentSize);

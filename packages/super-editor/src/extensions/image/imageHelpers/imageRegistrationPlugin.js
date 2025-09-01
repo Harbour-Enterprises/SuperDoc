@@ -1,6 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { ReplaceStep, ReplaceAroundStep, StepMap } from 'prosemirror-transform';
+import { ReplaceStep, ReplaceAroundStep } from 'prosemirror-transform';
 import { base64ToFile } from './handleBase64';
 import { urlToFile, validateUrlAccessibility } from './handleUrl';
 import { checkAndProcessImage, uploadAndInsertImage } from './startImageUpload';
@@ -87,7 +87,7 @@ export const ImageRegistrationPlugin = ({ editor }) => {
       // Add decorations for the images first at their current positions
       foundImages
         .toSorted((a, b) => a.pos - b.pos)
-        .forEach(({ node, pos, id }) => {
+        .forEach(({ pos, id }) => {
           let deco = Decoration.widget(pos, () => document.createElement('placeholder'), {
             side: -1,
             id,
@@ -187,7 +187,6 @@ const registerImages = async (foundImages, editor, view) => {
     try {
       const process = await checkAndProcessImage({
         getMaxContentSize: () => editor.getMaxContentSize(),
-        view,
         file,
       });
 

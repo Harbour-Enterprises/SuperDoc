@@ -100,7 +100,7 @@ export const validateUrlAccessibility = async (url) => {
       credentials: 'omit',
     });
     return response.ok;
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 };

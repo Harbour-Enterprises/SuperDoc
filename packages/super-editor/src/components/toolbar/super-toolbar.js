@@ -372,7 +372,6 @@ export class SuperToolbar extends EventEmitter {
       }
 
       const { size, file } = await checkAndProcessImage({
-        view: this.activeEditor.view,
         file: result.file,
         getMaxContentSize: () => this.activeEditor.getMaxContentSize(),
       });

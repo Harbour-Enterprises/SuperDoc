@@ -148,8 +148,8 @@ img.ProseMirror-separator {
   margin-bottom: 1.5px;
 }
 
-/*
-Tables
+/* 
+Tables 
 https://github.com/ProseMirror/prosemirror-tables/blob/master/style/tables.css
 https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 */
@@ -166,8 +166,8 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   scrollbar-width: thin;
   overflow: hidden;
 
-  /*
-  The border width does not need to be multiplied by two,
+  /* 
+  The border width does not need to be multiplied by two, 
   for tables it works differently. */
   width: calc(100% + (var(--table-border-width) + var(--offset)));
 }
@@ -292,23 +292,17 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 /* Collaboration cursors - end */
 
 /* Image placeholder */
-.ProseMirror placeholder,
-.ProseMirror img.placeholder {
+.ProseMirror placeholder {
   display: inline;
   border: 1px solid #ccc;
   color: #ccc;
 }
 
-.ProseMirror placeholder:after,
-.ProseMirror img.placeholder:after {
+.ProseMirror placeholder:after {
   content: '☁';
   font-size: 200%;
   line-height: 0.1;
   font-weight: bold;
-}
-
-.ProseMirror placeholder img {
-  display: none !important;
 }
 
 /* Gapcursor */
