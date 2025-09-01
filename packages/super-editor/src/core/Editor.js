@@ -177,6 +177,12 @@ export class Editor extends EventEmitter {
    */
   isFocused = false;
 
+  /**
+   * Track the number of transactions that actually changed the document
+   * @type {number}
+   */
+  #transactionCount = 0;
+
   options = {
     element: null,
     selector: null,
@@ -1344,10 +1350,20 @@ export class Editor extends EventEmitter {
       return;
     }
 
+    // Increment transaction count when document actually changes
+    this.#transactionCount++;
+
     this.emit('update', {
       editor: this,
       transaction,
     });
+  }
+
+  /**
+   * Reset the change tracking when loading a new document
+   */
+  #resetChangeTracking() {
+    this.#transactionCount = 0;
   }
 
   /**
@@ -1514,6 +1530,7 @@ export class Editor extends EventEmitter {
    * @param {string} [options.commentsType] - The type of comments to include
    * @param {Array} [options.comments=[]] - Array of comments to include in the document
    * @param {boolean} [options.getUpdatedDocs=false] - When set to true return only updated docx files
+   * @param {boolean} [options.preserveOriginalIfUnchanged=true] - Whether to return original file if no changes detected
    * @returns {Promise<Blob|ArrayBuffer|Object>} The exported DOCX file or updated docx files
    */
   async exportDocx({
@@ -1524,7 +1541,14 @@ export class Editor extends EventEmitter {
     comments = [],
     getUpdatedDocs = false,
     fieldsHighlightColor = null,
+    preserveOriginalIfUnchanged = true,
   } = {}) {
+    // Check if document has been changed and we have the original file
+    if (preserveOriginalIfUnchanged && this.#transactionCount === 0 && this.options.fileSource && !getUpdatedDocs) {
+      // Return the original file if no changes detected
+      return this.options.fileSource;
+    }
+
     // Pre-process the document state to prepare for export
     const json = this.#prepareDocumentForExport(comments);
 
@@ -1726,6 +1750,9 @@ export class Editor extends EventEmitter {
       shouldLoadComments: true,
       replacedFile: true,
     });
+
+    // Reset change tracking when loading a new file
+    this.#resetChangeTracking();
 
     this.#createConverter();
     this.#initMedia();
