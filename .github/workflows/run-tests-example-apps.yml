@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   run-tests-example-apps:
@@ -52,16 +53,19 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
           # Create a branch and open a PR (unique branch name based on run id)
           BRANCH="update-screenshots-${{ github.run_id }}"
           git checkout -b "$BRANCH"
+          git add .
+          git commit -m 'ci: update screenshots' --allow-empty
+          
+          # Push changes
+          git push origin "$BRANCH"
+          
           # Open PR
           gh pr create \
             --base main \
             --head "$BRANCH" \
             --title "ci: update screenshots" \
-            --body "Update screenshots"
-
-          git add .
-          git commit -m 'ci: update screenshots' --allow-empty
-          git push origin "$BRANCH"
+            --body "Automated update of visual test screenshots from GitHub Actions workflow."
