@@ -312,7 +312,6 @@ export const toggleList =
         spanToBefore = Math.max(spanToBefore, pos + node.nodeSize);
       }
 
-      const switchingToOrdered = targetKind === 'ordered';
       let sharedNumId = ListHelpers.getNewListId(editor);
       ListHelpers.generateNewListDefinition?.({ numId: sharedNumId, listType: TargetType, editor });
 

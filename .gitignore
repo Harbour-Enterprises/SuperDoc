@@ -40,3 +40,4 @@ test-results
 *.tgz
 
 !examples/chrome-extension/dist
+dev/

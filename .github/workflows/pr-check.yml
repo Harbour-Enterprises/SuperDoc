@@ -1,17 +1,14 @@
-name: Pull-request to main
+name: PR check [auto]
 
 on:
   pull_request:
-    branches: ["develop", "main"]
+    branches: ["main", "release/**"]
 
 jobs:
-  pre-commit:
-    uses: ./.github/workflows/pre-commit.yml
-
-  trigger-superdoc-tests:
+  run-e2e-tests:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger workflow dispatch
+      - name: Run E2E tests
         run: |
           curl -L \
             -X POST \
@@ -20,5 +17,3 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -d '{"ref": "main", "inputs": {"superdoc-branch": "${{ github.head_ref }}", "pull-request-url": "${{ github.event.pull_request.html_url }}"}}' \
             ${{ secrets.SD_TESTS_URL }}
-
-

@@ -1,0 +1,72 @@
+name: Test for example apps [auto]
+
+on:
+  push:
+    branches: [main, 'release/**']
+  pull_request:
+    branches: [main, 'release/**']
+  workflow_dispatch:
+    inputs:
+      update-screenshots:
+        description: "Update screenshots"
+        type: boolean
+        default: false
+        required: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  test-example-apps:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: cd examples/tests && npm ci
+
+      - name: Install Playwright browsers
+        run: cd examples/tests && npx playwright install --with-deps
+
+      - name: Install http-server globally
+        run: npm install -g http-server
+
+      - name: Run tests
+        if: inputs.update-screenshots == false
+        run: cd examples/tests && npm test
+
+      - name: Run tests with updated screenshots
+        if: inputs.update-screenshots == true
+        run: cd examples/tests && npm test -- --update-snapshots
+      
+      - name: Upload screenshots
+        if: inputs.update-screenshots == true
+        env:
+          GH_TOKEN: ${{ secrets.SUPERDOC_PAT }}
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create a branch and open a PR (unique branch name based on run id)
+          BRANCH="update-screenshots-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+          git add .
+          git commit -m 'ci: update screenshots' --allow-empty
+          
+          # Push changes
+          git push origin "$BRANCH"
+          
+          # Open PR
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "ci: update screenshots" \
+            --body "Automated update of visual test screenshots from GitHub Actions workflow."
