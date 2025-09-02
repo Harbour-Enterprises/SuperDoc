@@ -1556,7 +1556,7 @@ function translateImageNode(params, imageSize) {
 
   const src = attrs.src || attrs.imageSrc;
   const { originalWidth, originalHeight } = getPngDimensions(src);
-  const imageName = params.node.type === 'image' ? src?.match(/([^/]+)$/)?.[1] : attrs.fieldId?.replace('-', '_');
+  const imageName = params.node.type === 'image' ? src.split('/').pop() : attrs.fieldId?.replace('-', '_');
 
   let size = attrs.size
     ? {
