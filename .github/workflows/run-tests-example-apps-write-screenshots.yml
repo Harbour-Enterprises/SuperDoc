@@ -27,3 +27,9 @@ jobs:
 
       - name: Run tests
         run: cd examples/tests && npm test -- --update-snapshots
+
+      - name: Upload screenshots
+        run: |
+          git add .
+          git commit -m 'ci: update screenshots' --allow-empty
+          git push
