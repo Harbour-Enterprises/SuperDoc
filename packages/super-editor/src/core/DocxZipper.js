@@ -56,7 +56,7 @@ class DocxZipper {
         if (isNode) {
           const buffer = await zipEntry.async('nodebuffer');
           const fileBase64 = buffer.toString('base64');
-          mediaObjects[zipEntry.name] = fileBase64;
+          this.mediaFiles[zipEntry.name] = fileBase64;
         }
 
         // If we are in the browser, we can use the base64 directly
@@ -218,9 +218,9 @@ class DocxZipper {
       zip.file(key, content);
     });
 
-    Object.keys(media).forEach((name) => {
-      const binaryData = Buffer.from(media[name], 'base64');
-      zip.file(`word/media/${name}`, binaryData);
+    Object.keys(media).forEach((path) => {
+      const binaryData = Buffer.from(media[path], 'base64');
+      zip.file(path, binaryData);
     });
 
     // Export font files
@@ -255,8 +255,8 @@ class DocxZipper {
       unzippedOriginalDocx.file(key, updatedDocs[key]);
     });
 
-    Object.keys(media).forEach((name) => {
-      unzippedOriginalDocx.file(`word/media/${name}`, media[name]);
+    Object.keys(media).forEach((path) => {
+      unzippedOriginalDocx.file(path, media[path]);
     });
 
     await this.updateContentTypes(unzippedOriginalDocx, media);
