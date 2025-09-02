@@ -52,6 +52,16 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          # Create a branch and open a PR (unique branch name based on run id)
+          BRANCH="update-screenshots-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+          # Open PR
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "ci: update screenshots" \
+            --body "Update screenshots"
+
           git add .
           git commit -m 'ci: update screenshots' --allow-empty
-          git push
+          git push origin "$BRANCH"
