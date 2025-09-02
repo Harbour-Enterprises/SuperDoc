@@ -1,7 +1,7 @@
 name: Run tests for example apps
 
 on:
-  workflow_call:
+  workflow_dispatch:
   # TODO: Enable this when we test this workflow manually
   # pull_request:
   #   branches:
