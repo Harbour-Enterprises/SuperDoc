@@ -76,12 +76,11 @@ const closeDropdowns = () => {
   currentItem.value = null;
 };
 
-const selectedOption = ref(null);
 const handleSelect = (item, option) => {
   closeDropdowns();
   const value = item.dropdownValueKey.value ? option[item.dropdownValueKey.value] : option.label;
   emit('command', { item, argument: value, option });
-  selectedOption.value = option.key;
+  item.selectedValue.value = option.key;
 };
 
 const dropdownOptions = (item) => {
@@ -91,7 +90,7 @@ const dropdownOptions = (item) => {
       ...option,
       props: {
         ...option.props,
-        class: selectedOption.value === option.key ? 'selected' : '',
+        class: item.selectedValue.value === option.key ? 'selected' : '',
       },
     };
   });
@@ -306,6 +305,14 @@ const handleFocus = (e) => {
         }
       }
 
+      &.selected[data-item='btn-fontFamily-option'],
+      &.selected[data-item='btn-fontSize-option'] {
+        &::before,
+        &::after {
+          background-color: #000 !important;
+        }
+      }
+
       &__label {
         &:hover {
           color: #fff !important;
@@ -316,6 +323,14 @@ const handleFocus = (e) => {
 
   .n-dropdown-option-body {
     &:hover {
+      &::before,
+      &::after {
+        background-color: #d8dee5 !important;
+      }
+    }
+
+    &.selected[data-item='btn-fontFamily-option'],
+    &.selected[data-item='btn-fontSize-option'] {
       &::before,
       &::after {
         background-color: #d8dee5 !important;
