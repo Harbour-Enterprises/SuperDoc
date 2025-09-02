@@ -44,7 +44,7 @@ export const handleBackspaceNextToList =
     // --- Case A: caret INSIDE a list item (our MS-Word model: list -> listItem -> paragraph)
     const ctx = getListContext(state);
     if (ctx) {
-      const { listDepth, listPos, listNode, liNode } = ctx;
+      const { listPos, listNode, liNode } = ctx;
 
       // Only trigger at the start of the item's current paragraph OR if the item is empty
       const atStartOfParagraph = $from.parentOffset === 0;
