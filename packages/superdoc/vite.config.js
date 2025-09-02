@@ -93,7 +93,7 @@ export default defineConfig(({ mode, command}) => {
         },
         external: [
           'yjs',
-          '@hocuspocus/provider',,
+          '@hocuspocus/provider',
           'vite-plugin-node-polyfills',
           'pdfjs-dist',
           'pdfjs-dist/build/pdf.mjs',
