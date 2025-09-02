@@ -4,6 +4,7 @@ import { EditorState } from 'prosemirror-state';
 import { SuperConverter } from './SuperConverter.js';
 import {
   emuToPixels,
+  getTextIndentExportValue,
   inchesToTwips,
   linesToTwips,
   pixelsToEightPoints,
@@ -73,6 +74,7 @@ export function exportSchemaToJson(params) {
   const router = {
     doc: translateDocumentNode,
     body: translateBodyNode,
+    heading: translateHeadingNode,
     paragraph: translateParagraphNode,
     text: translateTextNode,
     bulletList: translateList,
@@ -168,6 +170,30 @@ const generateDefaultHeaderFooter = (type, id) => {
     },
   };
 };
+
+/**
+ * Translate a heading node to a paragraph with Word heading style
+ *
+ * @param {ExportParams} params The parameters object containing the heading node
+ * @returns {XmlReadyNode} JSON of the XML-ready paragraph node with heading style
+ */
+function translateHeadingNode(params) {
+  const { node } = params;
+  const { level = 1, ...otherAttrs } = node.attrs;
+
+  // Convert heading to paragraph with appropriate Word heading style
+  const paragraphNode = {
+    type: 'paragraph',
+    content: node.content,
+    attrs: {
+      ...otherAttrs,
+      styleId: `Heading${level}`, // Maps to Heading1, Heading2, etc. in Word
+    },
+  };
+
+  // Use existing paragraph translator with the modified node
+  return translateParagraphNode({ ...params, node: paragraphNode });
+}
 
 /**
  * Translate a paragraph node
@@ -281,7 +307,7 @@ function generateParagraphProperties(node) {
     if (hanging || hanging === 0) attributes['w:hanging'] = pixelsToTwips(hanging);
 
     if (textIndent && !attributes['w:left']) {
-      attributes['w:left'] = inchesToTwips(textIndent);
+      attributes['w:left'] = getTextIndentExportValue(textIndent);
     }
 
     const indentElement = {
@@ -293,7 +319,7 @@ function generateParagraphProperties(node) {
     const indentElement = {
       name: 'w:ind',
       attributes: {
-        'w:left': inchesToTwips(textIndent),
+        'w:left': getTextIndentExportValue(textIndent),
       },
     };
     pPrElements.push(indentElement);
@@ -945,7 +971,13 @@ function translateLineBreak(params) {
   }
 
   return {
-    name: 'w:br',
+    name: 'w:r',
+    elements: [
+      {
+        name: 'w:br',
+        attributes,
+      },
+    ],
     attributes,
   };
 }
@@ -1966,7 +1998,12 @@ function prepareUrlAnnotation(params) {
  * @param {String} annotationType
  * @returns {Function} handler for provided annotation type
  */
-function getTranslationByAnnotationType(annotationType) {
+function getTranslationByAnnotationType(annotationType, annotationFieldType) {
+  // invalid annotation
+  if (annotationType === 'text' && annotationFieldType === 'FILEUPLOADER') {
+    return null;
+  }
+
   const imageEmuSize = {
     w: 4286250,
     h: 4286250,
@@ -2012,7 +2049,7 @@ const translateFieldAttrsToMarks = (attrs = {}) => {
 function translateFieldAnnotation(params) {
   const { node, isFinalDoc, fieldsHighlightColor } = params;
   const { attrs = {} } = node;
-  const annotationHandler = getTranslationByAnnotationType(attrs.type);
+  const annotationHandler = getTranslationByAnnotationType(attrs.type, attrs.fieldType);
   if (!annotationHandler) return {};
 
   let processedNode;
@@ -2284,8 +2321,14 @@ export class DocxExporter {
       if (name === 'w:instrText') {
         tags.push(elements[0].text);
       } else if (name === 'w:t' || name === 'w:delText' || name === 'wp:posOffset') {
-        const text = this.#replaceSpecialCharacters(elements[0].text);
-        tags.push(text);
+        try {
+          // test for valid string
+          let text = String(elements[0].text);
+          text = this.#replaceSpecialCharacters(text);
+          tags.push(text);
+        } catch (error) {
+          console.error('Text element does not contain valid string:', error);
+        }
       } else {
         if (elements) {
           for (let child of elements) {
