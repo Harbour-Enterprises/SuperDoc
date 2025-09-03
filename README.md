@@ -53,6 +53,8 @@ Or install with CDN
 <script type="module" src="https://unpkg.com/@harbour-enterprises/superdoc/dist/superdoc.umd.js"></script>
 ```
 
+test
+
 ### Basic usage
 
 ```javascript
