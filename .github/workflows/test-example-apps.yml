@@ -32,6 +32,7 @@ jobs:
         run: |
           cd examples/tests
           npm ci
+          npm install -g http-server
           npx playwright install --with-deps
       
       - name: Run visual tests

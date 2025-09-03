@@ -16,6 +16,14 @@ jobs:
         with:
           fetch-depth: 0
       
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      
+      - name: Install dependencies
+        run: npm ci
+      
       - name: Validate commits
         run: |
           npx commitlint \
@@ -26,4 +34,4 @@ jobs:
     uses: ./.github/workflows/test-suite.yml
     with:
       run-visual: true
-      run-e2e: ${{ github.base_ref == 'main' }}  # E2E only for main PRs
+      run-e2e: ${{ github.base_ref == 'main' }}
