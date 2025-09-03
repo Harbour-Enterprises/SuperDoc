@@ -239,7 +239,6 @@ export class Editor extends EventEmitter {
     // async (file) => url;
     handleImageUpload: null,
 
-    // telemetry
     telemetry: null,
 
     // Docx xml updated by User
