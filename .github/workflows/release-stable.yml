@@ -53,4 +53,5 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.SUPERDOC_PAT }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npx semantic-release --debug
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npx semantic-release
