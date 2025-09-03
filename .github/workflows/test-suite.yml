@@ -9,6 +9,9 @@ on:
       run-e2e:
         type: boolean
         default: false
+      update-screenshots:
+        type: boolean
+        default: false
 
 jobs:
   validate:
@@ -49,12 +52,37 @@ jobs:
           node-version: 22
           cache: npm
       
-      - name: Run visual tests
+      - name: Setup visual tests
         run: |
           cd examples/tests
           npm ci
+          npm install -g http-server
           npx playwright install --with-deps
-          npm test
+      
+      - name: Run visual tests
+        run: |
+          cd examples/tests
+          npm test ${{ inputs.update-screenshots && '-- --update-snapshots' || '' }}
+      
+      - name: Create PR with updates
+        if: inputs.update-screenshots == true
+        env:
+          GH_TOKEN: ${{ secrets.SUPERDOC_PAT }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          BRANCH="visual-updates-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: update visual snapshots" || exit 0
+          git push origin "$BRANCH"
+          
+          gh pr create \
+            --base ${{ github.ref_name }} \
+            --title "chore: update visual snapshots" \
+            --body "Automated visual test updates" \
+            --label "visual-update"
 
   e2e-tests:
     if: inputs.run-e2e
