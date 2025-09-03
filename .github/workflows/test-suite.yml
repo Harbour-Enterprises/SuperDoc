@@ -1,0 +1,100 @@
+name: Test Suite
+
+on:
+  workflow_call:
+    inputs:
+      run-visual:
+        type: boolean
+        default: true
+      run-e2e:
+        type: boolean
+        default: false
+      update-screenshots:
+        type: boolean
+        default: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Quality checks
+        run: |
+          npm run format:check
+          npm run lint
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: npm test
+
+  visual-tests:
+    if: inputs.run-visual
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      
+      - name: Setup visual tests
+        run: |
+          cd examples/tests
+          npm ci
+          npm install -g http-server
+          npx playwright install --with-deps
+      
+      - name: Run visual tests
+        run: |
+          cd examples/tests
+          npm test ${{ inputs.update-screenshots && '-- --update-snapshots' || '' }}
+      
+      - name: Create PR with updates
+        if: inputs.update-screenshots == true
+        env:
+          GH_TOKEN: ${{ secrets.SUPERDOC_PAT }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          BRANCH="visual-updates-${{ github.run_id }}"
+          git checkout -b "$BRANCH"
+          git add -A
+          git commit -m "chore: update visual snapshots" || exit 0
+          git push origin "$BRANCH"
+          
+          gh pr create \
+            --base ${{ github.ref_name }} \
+            --title "chore: update visual snapshots" \
+            --body "Automated visual test updates" \
+            --label "visual-update"
+
+  e2e-tests:
+    if: inputs.run-e2e
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - name: Trigger E2E tests
+        run: |
+          curl -L \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${{ secrets.SUPERDOC_PAT }}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d '{"ref": "main", "inputs": {"superdoc-branch": "${{ github.head_ref }}", "pull-request-url": "${{ github.event.pull_request.html_url }}"}}' \
+            ${{ secrets.SD_TESTS_URL }}

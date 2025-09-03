@@ -1,0 +1,34 @@
+name: 🎯 Create Release Branch [manual]
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.21, 1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.SUPERDOC_PAT }}
+      
+      - name: Create release branch
+        run: |
+          BRANCH="release/v${{ inputs.version }}"
+          
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+          
+          echo "✅ Created $BRANCH from main"
+          echo ""
+          echo "Next steps:"
+          echo "1. Semantic release will automatically publish v${{ inputs.version }}.0"
+          echo "2. This version will be tagged as @latest on npm"
+          echo "3. Main branch continues with @next releases"

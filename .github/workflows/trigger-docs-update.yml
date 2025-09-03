@@ -1,39 +1,19 @@
-name: Trigger Docs Update [auto]
+name: 📚 Trigger Docs Update [auto]
 
 on:
-  push:
-    branches:
-      - release/**
-    paths:
-      # Trigger when extensions change
-      - 'packages/super-editor/src/extensions/**/*.js'
-      # - 'packages/super-editor/src/core/**/*.js'
-      # - 'packages/super-editor/src/components/**/*.js'
-  workflow_dispatch:  # Manual trigger
-
-concurrency:
-  group: docs-update
-  cancel-in-progress: true
+  release:
+    types: [published]
+  workflow_dispatch:
 
 jobs:
   trigger-docs:
     runs-on: ubuntu-latest    
     steps:
-      - name: Trigger Documentation Repository Update
+      - name: Trigger documentation update
         run: |
-          # Set the required variables
-          repo_owner="Harbour-Enterprises" 
-          repo_name="SuperDoc-Docs"  
-          event_type="docs-update"
-
           curl -L \
             -X POST \
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.SUPERDOC_PAT }}" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            https://api.github.com/repos/$repo_owner/$repo_name/dispatches \
-            -d "{\"event_type\": \"$event_type\"}"
-      
-      - name: Notify Success
-        if: success()
-        run: echo "✅ Documentation update triggered successfully"
+            https://api.github.com/repos/Harbour-Enterprises/SuperDoc-Docs/dispatches \
+            -d '{"event_type": "docs-update", "client_payload": {"version": "${{ github.event.release.tag_name }}"}}'
