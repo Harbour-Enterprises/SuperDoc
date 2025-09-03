@@ -6,9 +6,8 @@
       "channel": "next"
     },
     {
-      "name": "release/v+([0-9]).+([0-9])",
-      "channel": "latest",
-      "range": "${name.replace(/^release\\/v/, '')}.x"
+      "name": "release/v*",
+      "channel": "latest"
     }
   ],
   "plugins": [
