@@ -1,6 +1,7 @@
 import xmljs from 'xml-js';
 import JSZip from 'jszip';
 import { getContentTypesFromXml } from './super-converter/helpers.js';
+import { ensureXmlString, isXmlLike } from './encoding-helpers.js';
 
 /**
  * Class to handle unzipping and zipping of docx files
@@ -37,42 +38,37 @@ class DocxZipper {
     const extractedFiles = await this.unzip(file);
     const files = Object.entries(extractedFiles.files);
 
-    const mediaObjects = {};
-    const validTypes = ['xml', 'rels'];
-    for (const file of files) {
-      const [, zipEntry] = file;
+    for (const [, zipEntry] of files) {
+      const name = zipEntry.name;
 
-      if (validTypes.some((validType) => zipEntry.name.endsWith(validType))) {
-        const content = await zipEntry.async('string');
-        this.files.push({
-          name: zipEntry.name,
-          content,
-        });
+      if (isXmlLike(name)) {
+        // Read raw bytes and decode (handles UTF-8 & UTF-16)
+        const u8 = await zipEntry.async('uint8array');
+        const content = ensureXmlString(u8);
+        this.files.push({ name, content });
       } else if (
-        (zipEntry.name.startsWith('word/media') && zipEntry.name !== 'word/media/') ||
-        (zipEntry.name.startsWith('media') && zipEntry.name !== 'media/')
+        (name.startsWith('word/media') && name !== 'word/media/') ||
+        (name.startsWith('media') && name !== 'media/')
       ) {
-        // If we are in node, we need to convert the buffer to base64
+        // Media files
         if (isNode) {
           const buffer = await zipEntry.async('nodebuffer');
           const fileBase64 = buffer.toString('base64');
-          this.mediaFiles[zipEntry.name] = fileBase64;
-        }
-
-        // If we are in the browser, we can use the base64 directly
-        else {
+          this.mediaFiles[name] = fileBase64;
+        } else {
           const blob = await zipEntry.async('blob');
-          const extension = this.getFileExtension(zipEntry.name);
+          const extension = this.getFileExtension(name);
           const fileBase64 = await zipEntry.async('base64');
-          this.mediaFiles[zipEntry.name] = `data:image/${extension};base64,${fileBase64}`;
+          this.mediaFiles[name] = `data:image/${extension};base64,${fileBase64}`;
 
-          const file = new File([blob], zipEntry.name, { type: blob.type });
-          const imageUrl = URL.createObjectURL(file);
-          this.media[zipEntry.name] = imageUrl;
+          const fileObj = new File([blob], name, { type: blob.type });
+          const imageUrl = URL.createObjectURL(fileObj);
+          this.media[name] = imageUrl;
         }
-      } else if (zipEntry.name.startsWith('word/fonts') && zipEntry.name !== 'word/fonts/') {
+      } else if (name.startsWith('word/fonts') && name !== 'word/fonts/') {
+        // Font files
         const uint8array = await zipEntry.async('uint8array');
-        this.fonts[zipEntry.name] = uint8array;
+        this.fonts[name] = uint8array;
       }
     }
 
