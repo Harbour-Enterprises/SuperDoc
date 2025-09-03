@@ -420,7 +420,7 @@ function generateParagraphBorders(borders) {
     if (!b) return;
 
     let attributes;
-    if (!b.size && b.size !== 0) {
+    if (!b.size) {
       attributes = { 'w:val': 'nil' };
     } else {
       attributes = {
