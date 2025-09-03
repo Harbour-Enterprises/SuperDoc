@@ -1,6 +1,17 @@
 name: Test Suite
 
 on:
+  workflow_dispatch:
+    inputs:
+      run-visual:
+        type: boolean
+        default: true
+      run-e2e:
+        type: boolean
+        default: false
+      update-screenshots:
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       run-visual:
@@ -43,8 +54,6 @@ jobs:
   visual-tests:
     if: inputs.run-visual
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright:v1.41.0-jammy
     needs: validate
     steps:
       - uses: actions/checkout@v4
@@ -54,11 +63,36 @@ jobs:
           node-version: 22
           cache: npm
       
+      - name: Get Playwright version
+        id: playwright-version
+        run: |
+          cd examples/tests
+          echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >> $GITHUB_OUTPUT
+      
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      
       - name: Setup visual tests
         run: |
           cd examples/tests
           npm ci
           npm install -g http-server
+      
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: |
+          cd examples/tests
+          npx playwright install --with-deps chromium
+      
+      - name: Install only system deps if cache hit
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: |
+          cd examples/tests
+          npx playwright install-deps chromium
       
       - name: Run visual tests
         run: |
