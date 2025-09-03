@@ -90,7 +90,7 @@ export async function getEditorContext(editor, event) {
     node = state.doc.nodeAt(pos);
   }
 
-  // We need to check if we have anything in the clipboard
+  // We need to check if we have anything in the clipboard and request permission if needed
   const clipboardContent = await readFromClipboard(state);
 
   return {

@@ -1,6 +1,50 @@
+// @ts-nocheck
 // clipboardUtils.js
 
 import { DOMSerializer, DOMParser } from 'prosemirror-model';
+
+/**
+ * Checks if clipboard read permission is granted and handles permission prompts.
+ * Returns true if clipboard-read permission is granted. If state is "prompt" it will
+ * proactively trigger a readText() call which will surface the browser permission
+ * dialog to the user. Falls back gracefully in older browsers that lack the
+ * Permissions API.
+ * @returns {Promise<boolean>} Whether clipboard read permission is granted
+ */
+export async function ensureClipboardPermission() {
+  if (typeof navigator === 'undefined' || !navigator.clipboard) {
+    return false;
+  }
+
+  // Some older browsers do not expose navigator.permissions – assume granted
+  if (!navigator.permissions || typeof navigator.permissions.query !== 'function') {
+    return true;
+  }
+
+  try {
+    // @ts-ignore – string literal is valid at runtime; TS lib DOM typing not available in .js file
+    const status = await navigator.permissions.query({ name: 'clipboard-read' });
+
+    if (status.state === 'granted') {
+      return true;
+    }
+
+    if (status.state === 'prompt') {
+      // Trigger a readText() to make the browser show its permission prompt.
+      try {
+        await navigator.clipboard.readText();
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    // If we hit this area this is state === 'denied'
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Serializes the current selection in the editor state to HTML and plain text for clipboard use.
@@ -48,7 +92,9 @@ export async function writeToClipboard({ htmlString, text }) {
 export async function readFromClipboard(state) {
   let html = '';
   let text = '';
-  if (navigator.clipboard && navigator.clipboard.read) {
+  const hasPermission = await ensureClipboardPermission();
+
+  if (hasPermission && navigator.clipboard && navigator.clipboard.read) {
     try {
       const items = await navigator.clipboard.read();
       for (const item of items) {
@@ -60,10 +106,13 @@ export async function readFromClipboard(state) {
         }
       }
     } catch {
-      text = await navigator.clipboard.readText();
+      // Fallback to plain text read; may still fail if permission denied
+      try {
+        text = await navigator.clipboard.readText();
+      } catch {}
     }
   } else {
-    text = await navigator.clipboard.readText();
+    // permissions denied or API unavailable; leave content empty
   }
   let content = null;
   if (html) {
