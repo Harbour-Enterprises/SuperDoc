@@ -163,7 +163,6 @@ export class SuperDoc extends EventEmitter {
 
     isDev: false,
 
-    // telemetry config
     telemetry: null,
 
     // Events
