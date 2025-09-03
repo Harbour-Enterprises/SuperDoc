@@ -20,6 +20,7 @@ jobs:
     with:
       run-visual: true
       run-e2e: true
+    secrets: inherit
 
   release:
     needs: test
