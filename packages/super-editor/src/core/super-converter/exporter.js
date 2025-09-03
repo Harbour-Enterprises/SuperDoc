@@ -260,7 +260,8 @@ function generateParagraphProperties(node) {
   const { styleId } = attrs;
   if (styleId) pPrElements.push({ name: 'w:pStyle', attributes: { 'w:val': styleId } });
 
-  const { spacing, indent, textAlign, textIndent, lineHeight, marksAttrs, keepLines, keepNext, dropcap } = attrs;
+  const { spacing, indent, textAlign, textIndent, lineHeight, marksAttrs, keepLines, keepNext, dropcap, borders } =
+    attrs;
   if (spacing) {
     const { lineSpaceBefore, lineSpaceAfter, lineRule } = spacing;
 
@@ -401,10 +402,39 @@ function generateParagraphProperties(node) {
   if (numPr && !hasNumPr) pPrElements.push(numPr);
   if (!pPrElements.length) return null;
 
+  if (borders && Object.keys(borders).length) {
+    pPrElements.push(generateParagraphBorders(borders));
+  }
+
   return {
     name: 'w:pPr',
     elements: pPrElements,
   };
+}
+
+function generateParagraphBorders(borders) {
+  const elements = [];
+  const sides = ['top', 'bottom', 'left', 'right'];
+  sides.forEach((side) => {
+    const b = borders[side];
+    if (!b) return;
+
+    let attributes;
+    if (!b.size && b.size !== 0) {
+      attributes = { 'w:val': 'nil' };
+    } else {
+      attributes = {
+        'w:val': b.val || 'single',
+        'w:sz': pixelsToEightPoints(b.size),
+        'w:space': b.space ? pixelsToEightPoints(b.space) : 0,
+        'w:color': (b.color || '#000000').replace('#', ''),
+      };
+    }
+
+    elements.push({ name: `w:${side}`, attributes });
+  });
+
+  return { name: 'w:pBdr', elements };
 }
 
 /**

@@ -1,4 +1,4 @@
-import { twipsToInches, twipsToLines, twipsToPixels, twipsToPt } from '../../helpers.js';
+import { twipsToInches, twipsToLines, twipsToPixels, twipsToPt, eigthPointsToPixels } from '../../helpers.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { mergeTextNodes } from './mergeTextNodes.js';
 import { parseMarks } from './markImporter.js';
@@ -42,6 +42,14 @@ export const handleParagraphNode = (params) => {
   }
 
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');
+  // Extract paragraph borders if present
+  const pBdr = pPr?.elements?.find((el) => el.name === 'w:pBdr');
+  if (pBdr) {
+    const borders = parseParagraphBorders(pBdr);
+    if (Object.keys(borders).length) {
+      schemaNode.attrs.borders = borders;
+    }
+  }
   const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
   const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
   const framePr = pPr?.elements?.find((el) => el.name === 'w:framePr');
@@ -180,6 +188,38 @@ export const handleParagraphNode = (params) => {
 
   return { nodes: schemaNode ? [schemaNode] : [], consumed: 1 };
 };
+
+function parseParagraphBorders(pBdr) {
+  if (!pBdr || !pBdr.elements) return {};
+  // These are the possible sides
+  const sides = ['top', 'bottom', 'left', 'right'];
+  const result = {};
+
+  sides.forEach((side) => {
+    const el = pBdr.elements.find((e) => e.name === `w:${side}`);
+    if (!el || !el.attributes) return;
+
+    const { attributes: a } = el;
+    if (a['w:val'] === 'nil' || a['w:val'] === undefined) return;
+
+    // Set size of border
+    let sizePx;
+    if (a['w:sz'] !== undefined) sizePx = eigthPointsToPixels(a['w:sz']);
+
+    // Track space of border
+    let spacePx;
+    if (a['w:space'] !== undefined) spacePx = eigthPointsToPixels(a['w:space']);
+
+    result[side] = {
+      val: a['w:val'],
+      size: sizePx,
+      space: spacePx,
+      color: a['w:color'] ? `#${a['w:color']}` : '#000000',
+    };
+  });
+
+  return result;
+}
 
 export const getParagraphIndent = (node, docx, styleId = '') => {
   const indent = {

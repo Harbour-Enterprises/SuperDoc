@@ -77,6 +77,39 @@ export const Paragraph = Node.create({
           return { style };
         },
       },
+      borders: {
+        default: null,
+        renderDOM: ({ borders }) => {
+          if (!borders) return {};
+
+          const sideOrder = ['top', 'right', 'bottom', 'left'];
+          const valToCss = {
+            single: 'solid',
+            dashed: 'dashed',
+            dotted: 'dotted',
+            double: 'double',
+          };
+
+          let style = '';
+          sideOrder.forEach((side) => {
+            const b = borders[side];
+            if (!b) return;
+
+            const width = b.size != null ? `${b.size}px` : '1px';
+            const cssStyle = valToCss[b.val] || 'solid';
+            const color = b.color || '#000000';
+
+            style += `border-${side}: ${width} ${cssStyle} ${color};`;
+
+            // Optionally handle space attribute (distance from text)
+            if (b.space != null && side === 'bottom') {
+              style += `padding-bottom: ${b.space}px;`;
+            }
+          });
+
+          return style ? { style } : {};
+        },
+      },
       class: {
         renderDOM: (attributes) => {
           if (attributes.dropcap) {
