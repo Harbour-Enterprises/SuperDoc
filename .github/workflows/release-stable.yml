@@ -43,8 +43,14 @@ jobs:
       - name: Build packages
         run: npm run build
       
+      - name: Debug branch detection
+        run: |
+          echo "Current branch: $(git branch --show-current)"
+          echo "Git ref: ${{ github.ref }}"
+          echo "Ref name: ${{ github.ref_name }}"
+
       - name: Release to latest channel
         env:
           GITHUB_TOKEN: ${{ secrets.SUPERDOC_PAT }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npx semantic-release
+        un: npx semantic-release --debug
