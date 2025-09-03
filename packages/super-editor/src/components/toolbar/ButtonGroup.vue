@@ -105,6 +105,14 @@ const getDropdownAttributes = (option, item) => {
 };
 
 const handleClickOutside = (e) => {
+  const target = e.target;
+  const itemCtn = target.closest('.toolbar-item-ctn');
+  const targetItemId = itemCtn?.dataset.itemId;
+
+  if (targetItemId === currentItem.value.id) {
+    return;
+  }
+
   closeDropdowns();
 };
 
@@ -166,7 +174,6 @@ const handleKeyDown = (e, item) => {
 
   switch (e.key) {
     case 'Enter':
-      console.log('Enter');
       handleToolbarButtonClick(item, null, false);
       break;
     case 'Escape':
@@ -215,6 +222,7 @@ const handleFocus = (e) => {
       class="toolbar-item-ctn"
       ref="toolbarItemRefs"
       :tabindex="index === 0 ? 0 : -1"
+      :data-item-id="item.id.value"
     >
       <!-- toolbar separator -->
       <ToolbarSeparator v-if="isSeparator(item)" style="width: 20px" />

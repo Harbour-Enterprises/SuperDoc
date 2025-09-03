@@ -3,6 +3,7 @@ import '@/style.css';
 import '@harbour-enterprises/common/styles/common-styles.css';
 
 import { ref, shallowRef, computed, onMounted } from 'vue';
+import { NMessageProvider } from 'naive-ui';
 import { SuperEditor } from '@/index.js';
 import { getFileObject } from '@harbour-enterprises/common/helpers/get-file-object';
 import { DOCX } from '@harbour-enterprises/common';
@@ -158,7 +159,9 @@ onMounted(async () => {
           </div>
 
           <div class="dev-app__content" v-if="currentFile">
-            <SuperEditor :file-source="currentFile" :options="editorOptions" />
+            <n-message-provider>
+              <SuperEditor :file-source="currentFile" :options="editorOptions" />
+            </n-message-provider>
           </div>
         </div>
       </div>

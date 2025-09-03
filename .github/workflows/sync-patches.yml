@@ -1,14 +1,11 @@
-name: Sync Patches to Main
+name: 🔄 Sync Patches [auto]
 
 on:
   push:
     branches: ['release/**']
+    paths:
+      - 'packages/**'
   workflow_dispatch:
-    inputs:
-      branch:
-        description: 'Release branch to sync'
-        required: true
-        type: string
 
 permissions:
   contents: write
@@ -18,7 +15,6 @@ jobs:
   create-sync-pr:
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'workflow_dispatch' ||
       contains(github.event.head_commit.message, 'fix:') ||
       contains(github.event.head_commit.message, 'chore(release)')
     
@@ -28,32 +24,23 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.SUPERDOC_PAT }}
       
-      - name: Ensure patch-sync label exists
-        env:
-          GH_TOKEN: ${{ secrets.SUPERDOC_PAT }}
-        run: |
-          gh label create patch-sync \
-            --color FFA500 \
-            --description "Patch sync from release branch" || true
-      
       - name: Create sync PR
         env:
           GH_TOKEN: ${{ secrets.SUPERDOC_PAT }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            BRANCH="${{ inputs.branch }}"
-          else
-            BRANCH=${GITHUB_REF#refs/heads/}
-          fi
+          BRANCH=${GITHUB_REF#refs/heads/}
           
+          # Create PR (or update existing)
           gh pr create \
             --base main \
             --head "$BRANCH" \
-            --title "🔄 Sync patches from $BRANCH to main" \
-            --body "Auto-sync patches from release branch back to main.
+            --title "🔄 Sync: $BRANCH → main" \
+            --body "Auto-sync patches from release branch.
             
-            Branch: $BRANCH
-            Trigger: ${{ github.event_name }}
+            **Branch:** $BRANCH
+            **Commits:** ${{ github.event.head_commit.message }}
             
-            Please review for conflicts before merging." \
-            --label "patch-sync" || echo "PR already exists or cannot be created"
+            This PR will auto-merge after tests pass." \
+            --label "patch-sync,automerge" \
+          || gh pr edit \
+            --add-label "patch-sync,automerge"

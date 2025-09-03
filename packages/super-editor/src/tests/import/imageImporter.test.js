@@ -54,4 +54,31 @@ describe('ImageNodeImporter', () => {
     expect(anchorData).toHaveProperty('alignH', 'left');
     expect(anchorData).toHaveProperty('alignV', 'top');
   });
+
+  it('imports image with absolute path in Target correctly', async () => {
+    const dataName = 'image-out-of-folder.docx';
+    const docx = await getTestDataByFileName(dataName);
+    const documentXml = docx['word/document.xml'];
+
+    const doc = documentXml.elements[0];
+    const body = doc.elements[0];
+    const content = body.elements;
+    console.log(content[6].elements[2]);
+
+    const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
+
+    let paragraphNode = nodes[0];
+    let drawingNode = paragraphNode.content[0];
+    const { attrs } = drawingNode;
+    expect(attrs.src).toBe('media/image.png');
+
+    const { nodes: nodes1 } = handleParagraphNode({
+      nodes: [content[5]],
+      docx,
+      nodeListHandler: defaultNodeListHandler(),
+    });
+    paragraphNode = nodes1[0];
+    drawingNode = paragraphNode.content[1];
+    expect(drawingNode.attrs.src).toBe('word/media/image1.jpeg');
+  });
 });

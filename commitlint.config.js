@@ -18,5 +18,6 @@ module.exports = {
       ],
     ],
     'body-max-line-length': [0, 'always'], // Disable body line length limit
+    'footer-max-line-length': [0, 'always'],
   },
 };

@@ -100,7 +100,6 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {string} [title] The title of the SuperDoc
  * @property {Object[]} [conversations] The conversations to load
  * @property {boolean} [isLocked] Whether the SuperDoc is locked
- * @property {Object} [pdfViewer] The PDF viewer configuration
  * @property {function(File): Promise<string>} [handleImageUpload] The function to handle image uploads
  * @property {User} [lockedBy] The user who locked the SuperDoc
  * @property {boolean} [rulers] Whether to show the ruler in the editor
@@ -166,8 +165,6 @@ export class SuperDoc extends EventEmitter {
 
     // telemetry config
     telemetry: null,
-
-    pdfViewer: {},
 
     // Events
     onEditorBeforeCreate: () => null,

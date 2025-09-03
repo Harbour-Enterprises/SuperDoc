@@ -13,11 +13,11 @@ import {
   computed,
   reactive,
   watch,
+  defineAsyncComponent,
 } from 'vue';
 import { NMessageProvider } from 'naive-ui';
 import { storeToRefs } from 'pinia';
 
-import PdfViewer from './components/PdfViewer/PdfViewer.vue';
 import CommentsLayer from './components/CommentsLayer/CommentsLayer.vue';
 import CommentDialog from '@superdoc/components/CommentsLayer/CommentDialog.vue';
 import FloatingComments from '@superdoc/components/CommentsLayer/FloatingComments.vue';
@@ -35,6 +35,9 @@ import AiLayer from './components/AiLayer/AiLayer.vue';
 import { useSelectedText } from './composables/use-selected-text';
 import { useAi } from './composables/use-ai';
 import { useHighContrastMode } from './composables/use-high-contrast-mode';
+
+const PdfViewer = defineAsyncComponent(() => import('./components/PdfViewer/PdfViewer.vue'));
+
 // Stores
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
@@ -103,6 +106,8 @@ const {
 
 // Hrbr Fields
 const hrbrFieldsLayer = ref(null);
+
+const pdfConfig = proxy.$superdoc.config.modules?.pdf || {};
 
 const handleDocumentReady = (documentId, container) => {
   const doc = getDocument(documentId);
@@ -622,6 +627,7 @@ watch(getFloatingComments, () => {
           <PdfViewer
             v-if="doc.type === PDF"
             :document-data="doc"
+            :config="pdfConfig"
             @selection-change="handleSelectionChange"
             @ready="handleDocumentReady"
             @page-loaded="handlePageReady"

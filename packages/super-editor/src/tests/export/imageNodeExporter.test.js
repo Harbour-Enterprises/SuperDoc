@@ -1,4 +1,4 @@
-import { getExportedResult } from './export-helpers/index';
+import { getExportedResult, getExportMediaFiles } from './export-helpers/index';
 
 describe('ImageNodeExporter', async () => {
   window.URL.createObjectURL = vi.fn().mockImplementation((file) => {
@@ -66,5 +66,19 @@ describe('ImageNodeExporter anchor image', async () => {
 
     expect(anchorNode.elements[5].name).toBe('wp:wrapSquare');
     expect(anchorNode.elements[5].attributes.wrapText).toBe('bothSides');
+  });
+});
+
+describe('ImageNodeExporter images with absolute path', async () => {
+  window.URL.createObjectURL = vi.fn().mockImplementation((file) => {
+    return file.name;
+  });
+
+  const fileName = 'image-out-of-folder.docx';
+  const result = await getExportMediaFiles(fileName);
+
+  it('exports image with absolute path correctly', async () => {
+    expect(result).toHaveProperty('word/media/image1.jpeg');
+    expect(result).toHaveProperty('media/image.png');
   });
 });

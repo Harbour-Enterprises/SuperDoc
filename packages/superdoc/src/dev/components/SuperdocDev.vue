@@ -8,6 +8,15 @@ import { BasicUpload, getFileObject } from '@harbour-enterprises/common';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
+import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
+import { getWorkerSrcFromCDN } from '../../components/PdfViewer/pdf/pdf-adapter.js';
+
+// Or set worker globally outside the component.
+// pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+//   'pdfjs-dist/build/pdf.worker.min.mjs',
+//   import.meta.url,
+// ).toString();
 
 /* For local dev */
 const superdoc = shallowRef(null);
@@ -158,6 +167,13 @@ const init = async () => {
         // apiKey: 'test',
         // Optional: Provide a custom endpoint for AI services
         // endpoint: 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights',
+      },
+      pdf: {
+        pdfLib: pdfjsLib,
+        pdfViewer: pdfjsViewer,
+        setWorker: true,
+        workerSrc: getWorkerSrcFromCDN(pdfjsLib.version),
+        textLayerMode: 1,
       },
     },
     onEditorCreate,

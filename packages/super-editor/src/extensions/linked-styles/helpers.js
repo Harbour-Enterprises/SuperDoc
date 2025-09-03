@@ -66,15 +66,20 @@ export const getMarksStyle = (attrs) => {
   return styles.trim();
 };
 
+/**
+ * Get a sorted list of paragraph quick-format styles from the editor.
+ * @param {import('../../core/Editor.js').Editor} editor - The editor instance.
+ * @returns {Array} Sorted list of styles.
+ */
 export const getQuickFormatList = (editor) => {
-  if (!editor?.converter) return [];
-  const styles = editor.converter.linkedStyles || [];
-  return styles
-    .filter((style) => {
-      return style.type === 'paragraph' && style.definition.attrs;
-    })
+  if (!editor?.converter?.linkedStyles) return [];
+
+  return editor.converter.linkedStyles
+    .filter((style) => style.type === 'paragraph' && style.definition?.attrs)
     .sort((a, b) => {
-      return a.definition.attrs?.name.localeCompare(b.definition.attrs?.name);
+      const nameA = a.definition.attrs?.name ?? '';
+      const nameB = b.definition.attrs?.name ?? '';
+      return nameA.localeCompare(nameB);
     });
 };
 
