@@ -1,7 +1,7 @@
 // @ts-nocheck
 // clipboardUtils.js
 
-import { DOMSerializer, DOMParser } from 'prosemirror-model';
+import { DOMParser } from 'prosemirror-model';
 
 /**
  * Checks if clipboard read permission is granted and handles permission prompts.
@@ -43,43 +43,6 @@ export async function ensureClipboardPermission() {
     return false;
   } catch {
     return false;
-  }
-}
-
-/**
- * Serializes the current selection in the editor state to HTML and plain text for clipboard use.
- * @param {EditorState} state - The ProseMirror editor state containing the current selection.
- * @returns {{ htmlString: string, text: string }} An object with the HTML string and plain text of the selection.
- */
-export function serializeSelectionToClipboard(state) {
-  const { from, to } = state.selection;
-  const slice = state.selection.content();
-  const htmlContainer = document.createElement('div');
-  htmlContainer.appendChild(DOMSerializer.fromSchema(state.schema).serializeFragment(slice.content));
-  const htmlString = htmlContainer.innerHTML;
-  const text = state.doc.textBetween(from, to);
-  return { htmlString, text };
-}
-
-/**
- * Writes HTML and plain text data to the system clipboard.
- * Uses the Clipboard API if available, otherwise falls back to plain text.
- * @param {{ htmlString: string, text: string }} param0 - The HTML and plain text to write to the clipboard.
- * @returns {Promise<void>} A promise that resolves when the clipboard write is complete.
- */
-export async function writeToClipboard({ htmlString, text }) {
-  try {
-    if (navigator.clipboard && window.ClipboardItem) {
-      const clipboardItem = new window.ClipboardItem({
-        'text/html': new Blob([htmlString], { type: 'text/html' }),
-        'text/plain': new Blob([text], { type: 'text/plain' }),
-      });
-      await navigator.clipboard.write([clipboardItem]);
-    } else {
-      await navigator.clipboard.writeText(text);
-    }
-  } catch (e) {
-    console.error('Error writing to clipboard', e);
   }
 }
 
