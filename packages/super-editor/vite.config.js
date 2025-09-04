@@ -85,7 +85,6 @@ export default defineConfig(({ mode }) => {
         '@packages': fileURLToPath(new URL('../', import.meta.url)),
         '@converter': fileURLToPath(new URL('./src/core/super-converter', import.meta.url)),
         '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
-        '@ooxml-inspector': fileURLToPath(new URL('../../../ooxml-inspector/dist/index.js', import.meta.url)),
       },
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
     },
