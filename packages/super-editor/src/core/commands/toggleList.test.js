@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { Schema, Node as PMNode } from 'prosemirror-model';
-import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { schema as basic } from 'prosemirror-schema-basic';
+import { Schema } from 'prosemirror-model';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { builders } from 'prosemirror-test-builder';
 import { toggleList } from './toggleList';
 import {
@@ -10,6 +10,24 @@ import {
   rebuildListNodeWithNewNum,
   setMappedSelectionSpan,
 } from './toggleList';
+import {
+  listItemSpec,
+  orderedListSpec,
+  bulletListSpec,
+  tableSpec,
+  tableRowSpec,
+  tableCellSpec,
+} from './list-helpers/test-helpers.js';
+import {
+  createEditor,
+  firstInlinePos,
+  inlineSpanOf,
+  applyCmd,
+  getSelectionRange,
+  lastInlinePos,
+  selectionInsideFirstAndLastTextblocks,
+  hasNestedListInsideParagraph,
+} from './list-helpers/test-helpers.js';
 
 vi.mock('../helpers/findParentNode.js', () => {
   function findParentNode(predicate) {
@@ -94,76 +112,7 @@ vi.mock('@helpers/list-numbering-helpers.js', () => {
   return { ListHelpers };
 });
 
-const listItemSpec = {
-  content: 'paragraph block*',
-  attrs: {
-    level: { default: 0 },
-    listLevel: { default: [1] },
-    numId: { default: null },
-    lvlText: { default: null },
-    numPrType: { default: null },
-    listNumberingType: { default: null },
-  },
-  renderDOM() {
-    return ['li', 0];
-  },
-  parseDOM: () => [{ tag: 'li' }],
-};
-
-const orderedListSpec = {
-  group: 'block',
-  content: 'listItem+',
-  attrs: {
-    listId: { default: null },
-    'list-style-type': { default: 'decimal' },
-    order: { default: 0 },
-  },
-  renderDOM() {
-    return ['ol', 0];
-  },
-  parseDOM: () => [{ tag: 'ol' }],
-};
-
-const bulletListSpec = {
-  group: 'block',
-  content: 'listItem+',
-  attrs: {
-    listId: { default: null },
-    'list-style-type': { default: 'bullet' },
-  },
-  renderDOM() {
-    return ['ul', 0];
-  },
-  parseDOM: () => [{ tag: 'ul' }],
-};
-
-const tableSpec = {
-  group: 'block',
-  content: 'tableRow+',
-  isolating: true,
-  toDOM() {
-    return ['table', ['tbody', 0]];
-  },
-  parseDOM: [{ tag: 'table' }],
-};
-
-const tableRowSpec = {
-  content: 'tableCell+',
-  toDOM() {
-    return ['tr', 0];
-  },
-  parseDOM: [{ tag: 'tr' }],
-};
-
-const tableCellSpec = {
-  content: 'block+',
-  toDOM() {
-    return ['td', 0];
-  },
-  parseDOM: [{ tag: 'td' }],
-};
-
-const nodes = basic.spec.nodes
+export const nodes = basic.spec.nodes
   .update('paragraph', basic.spec.nodes.get('paragraph'))
   .addToEnd('listItem', listItemSpec)
   .addToEnd('orderedList', orderedListSpec)
@@ -172,7 +121,7 @@ const nodes = basic.spec.nodes
   .addToEnd('tableRow', tableRowSpec)
   .addToEnd('tableCell', tableCellSpec);
 
-const schema = new Schema({ nodes, marks: basic.spec.marks });
+export const schema = new Schema({ nodes, marks: basic.spec.marks });
 
 const {
   doc,
@@ -194,84 +143,6 @@ const {
   td: { nodeType: 'tableCell' },
 });
 
-function firstInlinePos(root) {
-  let pos = null;
-  root.descendants((node, p) => {
-    if (node.isTextblock && node.content.size > 0 && pos == null) {
-      pos = p + 1; // first position inside inline content
-      return false;
-    }
-    return true;
-  });
-  return pos ?? 1;
-}
-
-function lastInlinePos(root) {
-  let pos = null;
-  root.descendants((node, p) => {
-    if (node.isTextblock && node.content.size > 0) {
-      pos = p + node.content.size; // last position inside inline content
-    }
-    return true;
-  });
-  return pos ?? Math.max(1, root.nodeSize - 2);
-}
-
-function inlineSpanOf(root) {
-  const from = firstInlinePos(root);
-  const to = lastInlinePos(root);
-  return [from, Math.max(from, to)];
-}
-
-function selectionInsideFirstAndLastTextblocks(root) {
-  // Convenience for “inside first item to inside last item”
-  return inlineSpanOf(root);
-}
-
-function createEditor(docNode) {
-  const editor = {
-    schema,
-    converter: { numbering: { definitions: {}, abstracts: {} } },
-    emit: () => {},
-  };
-  const [from, to] = inlineSpanOf(docNode);
-  const state = EditorState.create({
-    schema,
-    doc: docNode,
-    selection: TextSelection.create(docNode, from, to),
-  });
-  return { editor, state };
-}
-
-function applyCmd(state, editor, cmd) {
-  let newState = state;
-  cmd({
-    editor,
-    state,
-    tr: state.tr,
-    dispatch: (tr) => {
-      newState = state.apply(tr);
-    },
-  });
-  return newState;
-}
-
-function getSelectionRange(st) {
-  return [st.selection.from, st.selection.to];
-}
-
-function hasNestedListInsideParagraph(root) {
-  let nested = false;
-  root.descendants((node) => {
-    if (node.type.name === 'paragraph') {
-      node.descendants((child) => {
-        if (child.type.name === 'bulletList' || child.type.name === 'orderedList') nested = true;
-      });
-    }
-  });
-  return nested;
-}
-
 describe('toggleList', () => {
   beforeEach(() => {
     __id = 1;
@@ -280,7 +151,7 @@ describe('toggleList', () => {
 
   it('wraps multiple paragraphs into ordered list and preserves selection span', () => {
     const d = doc(p('A'), p('B'), p('C'));
-    const { editor, state } = createEditor(d);
+    const { editor, state } = createEditor(d, schema);
 
     // Select from inside first paragraph to inside last paragraph
     const [from0, to0] = inlineSpanOf(d);
@@ -299,7 +170,7 @@ describe('toggleList', () => {
 
   it('switches ordered: bullet in place (no nested lists)', () => {
     const d = doc(orderedList(listItem(p('One')), listItem(p('Two')), listItem(p('Three'))));
-    const { editor, state } = createEditor(d);
+    const { editor, state } = createEditor(d, schema);
     const [from0, to0] = selectionInsideFirstAndLastTextblocks(d);
     const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from0, to0)));
 
@@ -312,7 +183,7 @@ describe('toggleList', () => {
 
   it('switches bullet: ordered using one shared numId for all items', () => {
     const d = doc(bulletList(listItem(p('a')), listItem(p('b')), listItem(p('c'))));
-    const { editor, state } = createEditor(d);
+    const { editor, state } = createEditor(d, schema);
 
     const [from0, to0] = selectionInsideFirstAndLastTextblocks(d);
     const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from0, to0)));
@@ -333,7 +204,7 @@ describe('toggleList', () => {
 
   it('does not create a list inside another list when selection starts/ends inside items', () => {
     const base = doc(orderedList(listItem(p('x')), listItem(p('y')), listItem(p('z'))));
-    const { editor, state } = createEditor(base);
+    const { editor, state } = createEditor(base, schema);
     const [from0, to0] = selectionInsideFirstAndLastTextblocks(base);
     const s1 = state.apply(state.tr.setSelection(TextSelection.create(base, from0, to0)));
 
@@ -346,7 +217,7 @@ describe('toggleList', () => {
 
   it('toggle-off unwraps list to paragraphs and preserves selection over unwrapped span', () => {
     const d = doc(bulletList(listItem(p('alpha')), listItem(p('beta'))));
-    const { editor, state } = createEditor(d);
+    const { editor, state } = createEditor(d, schema);
     const [from0, to0] = selectionInsideFirstAndLastTextblocks(d);
     const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from0, to0)));
 
@@ -362,7 +233,7 @@ describe('toggleList', () => {
 
   it('wraps multiple paragraphs into multiple BULLET list containers (one item each, shared numId)', () => {
     const d = doc(p('A'), p('B'), p('C'));
-    const { editor, state } = createEditor(d);
+    const { editor, state } = createEditor(d, schema);
 
     const [from0, to0] = inlineSpanOf(d);
     const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from0, to0)));
@@ -402,7 +273,7 @@ describe('toggleList', () => {
 
   it('wraps multiple paragraphs into multiple ORDERED list containers (one item each, shared numId)', () => {
     const d = doc(p('One'), p('Two'));
-    const { editor, state } = createEditor(d);
+    const { editor, state } = createEditor(d, schema);
 
     const [from0, to0] = inlineSpanOf(d);
     const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from0, to0)));
@@ -462,7 +333,7 @@ describe('toggleList', () => {
       selection: NodeSelection.create(d, paraPos),
     });
 
-    const { editor } = createEditor(d);
+    const { editor } = createEditor(d, schema);
     const s2 = applyCmd(state0, editor, toggleList('bulletList'));
 
     expect(s2.doc.childCount).toBe(1);
@@ -491,7 +362,7 @@ describe('toggleList', () => {
       selection: NodeSelection.create(d, paraPos),
     });
 
-    const { editor } = createEditor(d);
+    const { editor } = createEditor(d, schema);
     const s2 = applyCmd(state0, editor, toggleList('orderedList'));
 
     // EXPECTED (but currently failing): paragraph becomes an orderedList with one listItem
@@ -523,7 +394,7 @@ describe('toggleList', () => {
       selection: NodeSelection.create(d, listPos),
     });
 
-    const { editor } = createEditor(d);
+    const { editor } = createEditor(d, schema);
     const s2 = applyCmd(state0, editor, toggleList('bulletList'));
 
     const top = s2.doc.child(0);
@@ -552,7 +423,7 @@ describe('toggleList', () => {
       selection: NodeSelection.create(d, listPos),
     });
 
-    const { editor } = createEditor(d);
+    const { editor } = createEditor(d, schema);
     const s2 = applyCmd(state0, editor, toggleList('orderedList'));
 
     const top = s2.doc.child(0);
@@ -576,7 +447,7 @@ describe('toggleList', () => {
     });
     if (aPos == null) throw new Error('could not locate paragraph A');
 
-    const { editor } = createEditor(d);
+    const { editor } = createEditor(d, schema);
     const state0 = EditorState.create({
       schema,
       doc: d,
@@ -638,7 +509,7 @@ describe('nearestListAt', () => {
       return true;
     });
 
-    const { state } = createEditor(d);
+    const { state } = createEditor(d, schema);
     const $pos = state.doc.resolve(foundPos);
 
     const res = nearestListAt($pos, schema.nodes.orderedList, schema.nodes.bulletList);
@@ -651,7 +522,7 @@ describe('nearestListAt', () => {
 
   it('returns null when outside any list', () => {
     const d = doc(p('hello'), p('world'));
-    const { state } = createEditor(d);
+    const { state } = createEditor(d, schema);
     const $pos = state.doc.resolve(firstInlinePos(d));
     const res = nearestListAt($pos, schema.nodes.orderedList, schema.nodes.bulletList);
     expect(res).toBeNull();
@@ -668,7 +539,7 @@ describe('nearestListAt', () => {
       }
       return true;
     });
-    const { state } = createEditor(d);
+    const { state } = createEditor(d, schema);
     const $pos = state.doc.resolve(inside);
     const res = nearestListAt($pos, schema.nodes.orderedList, schema.nodes.bulletList);
     expect(res).not.toBeNull();
@@ -763,7 +634,7 @@ describe('rebuildListNodeWithNewNum', () => {
       schema.node('listItem', { level: 1 }, [p('b')]),
     ]);
 
-    const { editor } = createEditor(doc(oldList));
+    const { editor } = createEditor(doc(oldList), schema);
     const newList = rebuildListNodeWithNewNum({
       oldList,
       toType: schema.nodes.orderedList,
@@ -787,7 +658,7 @@ describe('rebuildListNodeWithNewNum', () => {
       schema.node('listItem', {}, [p('y')]),
     ]);
 
-    const { editor } = createEditor(doc(oldList));
+    const { editor } = createEditor(doc(oldList), schema);
     const newList = rebuildListNodeWithNewNum({
       oldList,
       toType: schema.nodes.bulletList,

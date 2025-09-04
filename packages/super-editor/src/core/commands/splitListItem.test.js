@@ -1,141 +1,31 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { Schema } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
 import { schema as basic } from 'prosemirror-schema-basic';
 import { builders } from 'prosemirror-test-builder';
-import { toggleList } from './toggleList';
+import { TextSelection, NodeSelection } from 'prosemirror-state';
+import { lastInlinePos } from './list-helpers/test-helpers.js';
 
-vi.mock('../helpers/findParentNode.js', () => {
-  function findParentNode(predicate) {
-    return (sel) => {
-      const $pos = sel.$from;
-      for (let d = $pos.depth; d >= 0; d--) {
-        const node = $pos.node(d);
-        if (predicate(node)) {
-          const pos = $pos.before(d);
-          return { node, pos, depth: d };
-        }
-      }
-      return null;
-    };
-  }
-  return { findParentNode };
-});
+import {
+  listItemSpec,
+  orderedListSpec,
+  bulletListSpec,
+  tableSpec,
+  tableRowSpec,
+  tableCellSpec,
+  createEditor,
+  applyCmd,
+} from './list-helpers/test-helpers.js';
 
-let __id = 1;
-const calls = {};
-function track(name, payload) {
-  calls[name] ??= [];
-  calls[name].push(payload);
-}
-
-vi.mock('@helpers/list-numbering-helpers.js', () => {
-  const ListHelpers = {
-    getNewListId() {
-      return __id++;
-    },
-    generateNewListDefinition({ numId, listType }) {
-      track('generateNewListDefinition', { numId, listType: listType?.name || listType });
-    },
-    getListDefinitionDetails({ listType }) {
-      const isOrdered = (typeof listType === 'string' ? listType : listType?.name) === 'orderedList';
-      return {
-        start: 1,
-        numFmt: isOrdered ? 'decimal' : 'bullet',
-        lvlText: isOrdered ? '%1.' : '•',
-        listNumberingType: isOrdered ? 'decimal' : 'bullet',
-        abstract: {},
-        abstractId: '1',
-      };
-    },
-    createListItemNodeJSON({ level, lvlText, numId, numFmt, listLevel, contentNode }) {
-      const content = Array.isArray(contentNode) ? contentNode : [contentNode];
-      return {
-        type: 'listItem',
-        attrs: { level, listLevel, numId, lvlText, numPrType: 'inline', listNumberingType: numFmt },
-        content,
-      };
-    },
-    createSchemaOrderedListNode({ level, numId, listType, editor, listLevel, contentNode }) {
-      const isOrdered = (typeof listType === 'string' ? listType : listType?.name) === 'orderedList';
-      const type = isOrdered ? 'orderedList' : 'bulletList';
-      return editor.schema.nodeFromJSON({
-        type,
-        attrs: {
-          listId: numId,
-          ...(isOrdered ? { order: level, 'list-style-type': 'decimal' } : { 'list-style-type': 'bullet' }),
-        },
-        content: [
-          ListHelpers.createListItemNodeJSON({
-            level,
-            numId,
-            listLevel,
-            contentNode,
-            numFmt: isOrdered ? 'decimal' : 'bullet',
-            lvlText: isOrdered ? '%1.' : '•',
-          }),
-        ],
-      });
-    },
-    insertNewList: () => true,
-    changeNumIdSameAbstract: vi.fn(),
-    removeListDefinitions: vi.fn(),
-    getListItemStyleDefinitions: vi.fn(),
-    addInlineTextMarks: (_, marks) => marks || [],
-    baseOrderedListDef: {},
-    baseBulletList: {},
-  };
-  return { ListHelpers };
-});
-
-const listItemSpec = {
-  content: 'paragraph block*',
-  attrs: {
-    level: { default: 0 },
-    listLevel: { default: [1] },
-    numId: { default: null },
-    lvlText: { default: null },
-    numPrType: { default: null },
-    listNumberingType: { default: null },
-  },
-  renderDOM() {
-    return ['li', 0];
-  },
-  parseDOM: () => [{ tag: 'li' }],
-};
-
-const orderedListSpec = {
-  group: 'block',
-  content: 'listItem+',
-  attrs: {
-    listId: { default: null },
-    'list-style-type': { default: 'decimal' },
-    order: { default: 0 },
-  },
-  renderDOM() {
-    return ['ol', 0];
-  },
-  parseDOM: () => [{ tag: 'ol' }],
-};
-
-const bulletListSpec = {
-  group: 'block',
-  content: 'listItem+',
-  attrs: {
-    listId: { default: null },
-    'list-style-type': { default: 'bullet' },
-  },
-  renderDOM() {
-    return ['ul', 0];
-  },
-  parseDOM: () => [{ tag: 'ul' }],
-};
+import { splitListItem } from './splitListItem.js';
 
 const nodes = basic.spec.nodes
   .update('paragraph', basic.spec.nodes.get('paragraph'))
   .addToEnd('listItem', listItemSpec)
   .addToEnd('orderedList', orderedListSpec)
-  .addToEnd('bulletList', bulletListSpec);
+  .addToEnd('bulletList', bulletListSpec)
+  .addToEnd('table', tableSpec)
+  .addToEnd('tableRow', tableRowSpec)
+  .addToEnd('tableCell', tableCellSpec);
 
 const schema = new Schema({ nodes, marks: basic.spec.marks });
 
@@ -153,169 +43,290 @@ const {
   li: { nodeType: 'listItem' },
 });
 
-function firstInlinePos(root) {
-  let pos = null;
-  root.descendants((node, p) => {
-    if (node.isTextblock && node.content.size > 0 && pos == null) {
-      pos = p + 1; // first position inside inline content
+function firstTextPos(pmDoc) {
+  let pos = 0;
+  pmDoc.descendants((node, nodePos) => {
+    if (node.isText && node.text) {
+      pos = nodePos;
       return false;
     }
     return true;
   });
-  return pos ?? 1;
+  return pos;
 }
 
-function lastInlinePos(root) {
-  let pos = null;
-  root.descendants((node, p) => {
-    if (node.isTextblock && node.content.size > 0) {
-      pos = p + node.content.size; // last position inside inline content
+function findNodePos(pmDoc, predicate) {
+  let found = null;
+  pmDoc.descendants((node, pos) => {
+    if (predicate(node)) {
+      found = pos;
+      return false;
     }
     return true;
   });
-  return pos ?? Math.max(1, root.nodeSize - 2);
+  return found ?? 0;
 }
 
-function inlineSpanOf(root) {
-  const from = firstInlinePos(root);
-  const to = lastInlinePos(root);
-  return [from, Math.max(from, to)];
-}
+describe('splitListItem', () => {
+  describe('Basic splitting behavior', () => {
+    it('splits a single paragraph list item at caret position', () => {
+      const d = doc(orderedList(listItem(p('hello'))));
+      const { editor, state } = createEditor(d, schema);
 
-function selectionInsideFirstAndLastTextblocks(root) {
-  // Convenience for “inside first item to inside last item”
-  return inlineSpanOf(root);
-}
+      const textStart = firstTextPos(d);
+      const cursorPos = textStart + 2; // he|llo
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, cursorPos)));
 
-function createEditor(docNode) {
-  const editor = {
-    schema,
-    converter: { numbering: { definitions: {}, abstracts: {} } },
-    emit: () => {},
-  };
-  const [from, to] = inlineSpanOf(docNode);
-  const state = EditorState.create({
-    schema,
-    doc: docNode,
-    selection: TextSelection.create(docNode, from, to),
-  });
-  return { editor, state };
-}
+      const s2 = applyCmd(s1, editor, splitListItem());
 
-function applyCmd(state, editor, cmd) {
-  let newState = state;
-  cmd({
-    editor,
-    state,
-    tr: state.tr,
-    dispatch: (tr) => {
-      newState = state.apply(tr);
-    },
-  });
-  return newState;
-}
+      expect(s2.doc.childCount).toBe(2);
+      expect(s2.doc.child(0).type.name).toBe('orderedList');
+      expect(s2.doc.child(0).childCount).toBe(1);
+      expect(s2.doc.child(0).textContent).toBe('he');
 
-function getSelectionRange(st) {
-  return [st.selection.from, st.selection.to];
-}
-
-function hasNestedListInsideParagraph(root) {
-  let nested = false;
-  root.descendants((node) => {
-    if (node.type.name === 'paragraph') {
-      node.descendants((child) => {
-        if (child.type.name === 'bulletList' || child.type.name === 'orderedList') nested = true;
-      });
-    }
-  });
-  return nested;
-}
-
-describe('toggleList', () => {
-  beforeEach(() => {
-    __id = 1;
-    Object.keys(calls).forEach((k) => delete calls[k]);
-  });
-
-  it('wraps multiple paragraphs into ordered list and preserves selection span', () => {
-    const d = doc(p('A'), p('B'), p('C'));
-    const { editor, state } = createEditor(d);
-
-    // Select from inside first paragraph to inside last paragraph
-    const [from0, to0] = inlineSpanOf(d);
-    const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from0, to0)));
-
-    const s2 = applyCmd(s1, editor, toggleList('orderedList'));
-
-    const first = s2.doc.child(0);
-    expect(first.type.name).toBe('orderedList');
-
-    // Selection should still span the whole transformed region (rough heuristic)
-    const [from, to] = getSelectionRange(s2);
-    expect(from).toBeLessThanOrEqual(firstInlinePos(s2.doc));
-    expect(to).toBeGreaterThan(lastInlinePos(s2.doc) - 1);
-  });
-
-  it('switches ordered: bullet in place (no nested lists)', () => {
-    const d = doc(orderedList(listItem(p('One')), listItem(p('Two')), listItem(p('Three'))));
-    const { editor, state } = createEditor(d);
-    const [from0, to0] = selectionInsideFirstAndLastTextblocks(d);
-    const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from0, to0)));
-
-    const s2 = applyCmd(s1, editor, toggleList('bulletList'));
-
-    const top = s2.doc.child(0);
-    expect(top.type.name).toBe('bulletList');
-    expect(hasNestedListInsideParagraph(s2.doc)).toBe(false);
-  });
-
-  it('switches bullet: ordered using one shared numId for all items', () => {
-    const d = doc(bulletList(listItem(p('a')), listItem(p('b')), listItem(p('c'))));
-    const { editor, state } = createEditor(d);
-
-    const [from0, to0] = selectionInsideFirstAndLastTextblocks(d);
-    const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from0, to0)));
-
-    const s2 = applyCmd(s1, editor, toggleList('orderedList'));
-
-    const list = s2.doc.child(0);
-    expect(list.type.name).toBe('orderedList');
-
-    const containerNumId = list.attrs.listId;
-    const numIds = new Set();
-    list.forEach((li) => {
-      numIds.add(li.attrs.numId);
+      expect(s2.doc.child(1).type.name).toBe('orderedList');
+      expect(s2.doc.child(1).childCount).toBe(1);
+      expect(s2.doc.child(1).textContent).toBe('llo');
     });
-    expect(numIds.size).toBe(1);
-    expect(Array.from(numIds)[0]).toBe(containerNumId);
+
+    it('splits when selection spans text (deletes selection, then splits at caret)', () => {
+      const d = doc(orderedList(listItem(p('abc'))));
+      const { editor, state } = createEditor(d, schema);
+
+      const textStart = firstTextPos(d);
+      const from = textStart + 1; // "b"
+      const to = from + 1;
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from, to)));
+
+      const s2 = applyCmd(s1, editor, splitListItem());
+
+      expect(s2.doc.childCount).toBe(2);
+      expect(s2.doc.child(0).textContent).toBe('a');
+      expect(s2.doc.child(1).textContent).toBe('c');
+    });
+
+    it('splits at beginning creates empty first item', () => {
+      const d = doc(orderedList(listItem(p('hello'))));
+      const { editor, state } = createEditor(d, schema);
+
+      const textStart = firstTextPos(d);
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, textStart)));
+
+      const s2 = applyCmd(s1, editor, splitListItem());
+
+      expect(s2.doc.childCount).toBe(2);
+      expect(s2.doc.child(0).textContent).toBe('');
+      expect(s2.doc.child(1).textContent).toBe('hello');
+    });
+
+    it('splits at end creates empty second item', () => {
+      const d = doc(orderedList(listItem(p('hello'))));
+      const { editor, state } = createEditor(d, schema);
+
+      const textStart = firstTextPos(d);
+      const cursorPos = textStart + 'hello'.length;
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, cursorPos)));
+
+      const s2 = applyCmd(s1, editor, splitListItem());
+
+      expect(s2.doc.childCount).toBe(2);
+      expect(s2.doc.child(0).textContent).toBe('hello');
+      expect(s2.doc.child(1).textContent).toBe('');
+    });
   });
 
-  it('does not create a list inside another list when selection starts/ends inside items', () => {
-    const base = doc(orderedList(listItem(p('x')), listItem(p('y')), listItem(p('z'))));
-    const { editor, state } = createEditor(base);
-    const [from0, to0] = selectionInsideFirstAndLastTextblocks(base);
-    const s1 = state.apply(state.tr.setSelection(TextSelection.create(base, from0, to0)));
+  describe('Multi-paragraph list items', () => {
+    it('splits multi-paragraph list item preserving other paragraphs', () => {
+      const d = doc(orderedList(listItem(p('first paragraph'), p('second paragraph'), p('third paragraph'))));
+      const { editor, state } = createEditor(d, schema);
 
-    const s2 = applyCmd(s1, editor, toggleList('bulletList'));
+      // split inside second paragraph after "second "
+      let splitPos = 0;
+      d.descendants((node, pos) => {
+        if (node.isText && node.text === 'second paragraph') {
+          splitPos = pos + 'second '.length;
+          return false;
+        }
+        return true;
+      });
 
-    const top = s2.doc.child(0);
-    expect(top.type.name).toBe('bulletList');
-    expect(hasNestedListInsideParagraph(s2.doc)).toBe(false);
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, splitPos)));
+      const s2 = applyCmd(s1, editor, splitListItem());
+
+      expect(s2.doc.childCount).toBe(2);
+
+      const firstList = s2.doc.child(0);
+      expect(firstList.childCount).toBe(1);
+      expect(firstList.child(0).childCount).toBe(2);
+      expect(firstList.child(0).child(0).textContent).toBe('first paragraph');
+      expect(firstList.child(0).child(1).textContent).toBe('second ');
+
+      const secondList = s2.doc.child(1);
+      expect(secondList.childCount).toBe(1);
+      expect(secondList.child(0).childCount).toBe(2);
+      expect(secondList.child(0).child(0).textContent).toBe('paragraph');
+      expect(secondList.child(0).child(1).textContent).toBe('third paragraph');
+    });
   });
 
-  it('toggle-off unwraps list to paragraphs and preserves selection over unwrapped span', () => {
-    const d = doc(bulletList(listItem(p('alpha')), listItem(p('beta'))));
-    const { editor, state } = createEditor(d);
-    const [from0, to0] = selectionInsideFirstAndLastTextblocks(d);
-    const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, from0, to0)));
+  describe('Different list types', () => {
+    it('works with bullet lists', () => {
+      const d = doc(bulletList(listItem(p('bullet item'))));
+      const { editor, state } = createEditor(d, schema);
 
-    const s2 = applyCmd(s1, editor, toggleList('bulletList')); // same type: unwrap
+      const textStart = firstTextPos(d);
+      const cursorPos = textStart + 'bullet'.length;
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, cursorPos)));
 
-    expect(s2.doc.child(0).type.name).toBe('paragraph');
-    expect(s2.doc.child(1).type.name).toBe('paragraph');
+      const s2 = applyCmd(s1, editor, splitListItem());
 
-    const [from, to] = getSelectionRange(s2);
-    // Spans more than one paragraph's content
-    expect(to - from).toBeGreaterThan(s2.doc.child(0).nodeSize - 2);
+      expect(s2.doc.childCount).toBe(2);
+      expect(s2.doc.child(0).type.name).toBe('bulletList');
+      expect(s2.doc.child(1).type.name).toBe('bulletList');
+      expect(s2.doc.child(0).textContent).toBe('bullet');
+      expect(s2.doc.child(1).textContent).toBe(' item');
+    });
+  });
+
+  describe('Empty paragraph handling', () => {
+    it('handles empty paragraph at end (should use outdent/exit logic)', () => {
+      const d = doc(orderedList(listItem(p('content'), p(''))));
+      const { editor, state } = createEditor(d, schema);
+      // Minimal mock so handleSplitInEmptyBlock can read attributes
+      editor.extensionService = { attributes: {} };
+
+      const emptyParaPos = findNodePos(d, (n) => n.type.name === 'paragraph' && n.textContent === '') + 1;
+
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, emptyParaPos)));
+      const result = applyCmd(s1, editor, splitListItem());
+
+      expect(result.doc).toBeDefined();
+    });
+  });
+
+  describe('Edge cases and invalid selections', () => {
+    it('returns false/no-op for non-list context', () => {
+      const d = doc(p('regular paragraph'));
+      const { editor, state } = createEditor(d, schema);
+
+      const textStart = firstTextPos(d);
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, textStart)));
+
+      const s2 = applyCmd(s1, editor, splitListItem());
+      expect(s2.doc.eq(s1.doc)).toBe(true);
+    });
+
+    it('does not split on a block (node) selection', () => {
+      const d = doc(orderedList(listItem(p('content'))));
+      const { editor, state } = createEditor(d, schema);
+
+      const listItemPos = findNodePos(d, (n) => n.type.name === 'listItem');
+      const s1 = state.apply(state.tr.setSelection(NodeSelection.create(state.doc, listItemPos)));
+
+      const s2 = applyCmd(s1, editor, splitListItem());
+      expect(s2.doc.eq(s1.doc)).toBe(true);
+    });
+  });
+
+  describe('Cursor positioning after split', () => {
+    it('positions cursor in second list item after split', () => {
+      const d = doc(orderedList(listItem(p('hello'))));
+      const { editor, state } = createEditor(d, schema);
+
+      const textStart = firstTextPos(d);
+      const cursorPos = textStart + 2; // he|llo
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, cursorPos)));
+
+      const s2 = applyCmd(s1, editor, splitListItem());
+
+      const selection = s2.selection;
+      expect(selection).toBeInstanceOf(TextSelection);
+
+      const $pos = selection.$from;
+      expect($pos.parent.type.name).toBe('paragraph');
+      expect($pos.parent.textContent).toBe('llo');
+
+      // climb two levels safely
+      const listNode = $pos.node($pos.depth - 2);
+      expect(listNode.type.name).toBe('orderedList');
+      expect(listNode).toBe(s2.doc.child(1));
+    });
+  });
+
+  describe('Splitting with images in lists', () => {
+    it('splitListItem does not delete the list item when it contains an inline image', () => {
+      const imageNode = schema.nodes.image.create({ src: 'x.png', alt: null, title: null });
+      const d = doc(bulletList(listItem(p('before ', imageNode, ' after'))));
+      const { editor, state } = createEditor(d, schema);
+
+      // Put caret right after the image (more realistic than end of paragraph)
+      const posAfterImage = (() => {
+        let pos = null;
+        state.doc.descendants((n, p) => {
+          if (n.type.name === 'image') {
+            pos = p + 1; // first position *after* the image inline atom
+            return false;
+          }
+          return true;
+        });
+        return pos;
+      })();
+
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(state.doc, posAfterImage)));
+      const s2 = applyCmd(s1, editor, splitListItem());
+
+      // Expect TWO lists (this command creates firstList + secondList)
+      expect(s2.doc.childCount).toBe(2);
+
+      const firstList = s2.doc.child(0);
+      const secondList = s2.doc.child(1);
+      expect(firstList.type.name).toBe('bulletList');
+      expect(secondList.type.name).toBe('bulletList');
+
+      // First list has one item that still contains the image
+      expect(firstList.childCount).toBe(1);
+      let hasImage = false;
+      firstList.child(0).descendants((n) => {
+        if (n.type.name === 'image') hasImage = true;
+      });
+      expect(hasImage).toBe(true);
+
+      // Second list has the new (split) item
+      expect(secondList.childCount).toBe(1);
+      expect(secondList.child(0).firstChild.type.name).toBe('paragraph');
+    });
+  });
+
+  describe('Attributes preservation', () => {
+    it('preserves list and list item attributes', () => {
+      const d = doc(orderedList({ start: 5 }, listItem({ level: 1 }, p('item'))));
+      const { editor, state } = createEditor(d, schema);
+
+      const textStart = firstTextPos(d);
+      const cursorPos = textStart + 2;
+      const s1 = state.apply(state.tr.setSelection(TextSelection.create(d, cursorPos)));
+
+      const s2 = applyCmd(s1, editor, splitListItem());
+
+      const supportsStart = !!schema.nodes.orderedList?.spec?.attrs?.start;
+      const supportsLevel = !!schema.nodes.listItem?.spec?.attrs?.level;
+
+      if (supportsStart) {
+        expect(s2.doc.child(0).attrs.start).toBe(5);
+        expect(s2.doc.child(1).attrs.start).toBe(5);
+      } else {
+        // If schema doesn’t support it, ensure we didn’t accidentally add it
+        expect(s2.doc.child(0).attrs).not.toHaveProperty('start');
+        expect(s2.doc.child(1).attrs).not.toHaveProperty('start');
+      }
+
+      if (supportsLevel) {
+        expect(s2.doc.child(0).child(0).attrs.level).toBe(1);
+        expect(s2.doc.child(1).child(0).attrs.level).toBe(1);
+      } else {
+        expect(s2.doc.child(0).child(0).attrs).not.toHaveProperty('level');
+        expect(s2.doc.child(1).child(0).attrs).not.toHaveProperty('level');
+      }
+    });
   });
 });
