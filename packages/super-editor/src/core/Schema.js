@@ -72,15 +72,6 @@ export class Schema {
         ...additionalNodeFields,
       });
 
-      // Attach OOXML metadata if the extension supports it
-      if (typeof extension.validChildren === 'function' || Array.isArray(extension.validChildren)) {
-        Object.defineProperty(schema, 'validChildren', {
-          enumerable: false,
-          configurable: false,
-          get: () => extension.validChildren,
-        });
-      }
-
       const parseDOM = callOrGet(getExtensionConfigField(extension, 'parseDOM', context));
       if (parseDOM) {
         schema.parseDOM = parseDOM.map((parseRule) => {
