@@ -69,6 +69,32 @@ describe('insertContentAt', () => {
     expect(selectionToInsertionEnd).toHaveBeenCalledWith(tr, tr.steps.length - 1, -1);
   });
 
+  it('inserts a styled paragraph node when given an html heading string', () => {
+    const value = '<h1>Hello world</h1>';
+
+    debugger;
+    const tr = makeTr();
+    const editor = makeEditor();
+    const node = {
+      type: { name: 'paragraph' },
+      isText: false,
+      isBlock: true,
+      marks: [],
+      check: vi.fn(),
+    };
+
+    createNodeFromContent.mockImplementation(() => node);
+
+    const cmd = insertContentAt(5, value, { updateSelection: true });
+    const result = cmd({ tr, dispatch: true, editor });
+
+    expect(result).toBe(true);
+    expect(createNodeFromContent).toHaveBeenCalled();
+    expect(tr.replaceWith).toHaveBeenCalledWith(4, 6, node);
+    expect(tr.insertText).not.toHaveBeenCalled();
+    expect(selectionToInsertionEnd).toHaveBeenCalledWith(tr, tr.steps.length - 1, -1);
+  });
+
   it('applies input rules meta when applyInputRules=true (text case)', () => {
     const value = 'abc';
     createNodeFromContent.mockImplementation(() => ({
