@@ -1,0 +1,38 @@
+name: PR Validation [auto]
+
+on:
+  pull_request:
+    branches: [main, 'release/**']
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  validate-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Validate commits
+        run: |
+          npx commitlint \
+            --from ${{ github.event.pull_request.base.sha }} \
+            --to ${{ github.event.pull_request.head.sha }}
+
+  test:
+    uses: ./.github/workflows/test-suite.yml
+    with:
+      run-visual: true
+      run-e2e: ${{ github.base_ref == 'main' }}
+    secrets: inherit

@@ -1,26 +1,33 @@
-name: Release
+name: 🚀 Release Next [auto]
 
 on:
   push:
-    branches: [main, 'release/**']
+    branches: [main]
     paths:
       - 'packages/**'
       - '!**.md'
-      - '!examples/**'
-      - '!docs/**'
   workflow_dispatch:
 
 permissions:
   contents: write
   packages: write
-  issues: write
-  pull-requests: write
+
+concurrency:
+  group: release-next
+  cancel-in-progress: true
 
 jobs:
-  release:
+  test:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    uses: ./.github/workflows/test-suite.yml
+    with:
+      run-visual: true
+      run-e2e: true
+    secrets: inherit
+
+  release:
+    needs: test
     runs-on: ubuntu-latest
-    
     steps:
       - uses: actions/checkout@v4
         with:
@@ -39,7 +46,7 @@ jobs:
       - name: Build packages
         run: npm run build
       
-      - name: Release
+      - name: Release to next channel
         env:
           GITHUB_TOKEN: ${{ secrets.SUPERDOC_PAT }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}

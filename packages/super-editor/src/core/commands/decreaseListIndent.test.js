@@ -3,7 +3,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ListHelpers } from '../helpers/list-numbering-helpers.js';
 import { decreaseListIndent } from './decreaseListIndent.js';
 
-// Mock the helper modules used by the command
 vi.mock('../helpers/list-numbering-helpers.js', () => {
   const fns = {
     getCurrentListItem: vi.fn(),
@@ -85,7 +84,7 @@ describe('decreaseListIndent', () => {
     expect(ListHelpers.generateNewListDefinition).not.toHaveBeenCalled();
   });
 
-  it('decreases level by 1 and keeps existing numId; ensures list definition', () => {
+  it('decreases level by 1 and ADOPTS parent listId when parent has one; does NOT re-generate definition', () => {
     const currentItem = {
       node: { type: { name: 'listItem' }, attrs: { level: 2, numId: 123, foo: 'bar' } },
       pos: 42,
@@ -105,18 +104,14 @@ describe('decreaseListIndent', () => {
     expect(tr.setNodeMarkup).toHaveBeenCalledWith(42, null, {
       foo: 'bar',
       level: 1, // 2 -> 1
-      numId: 123, // keeps existing
+      numId: 777, // adopts parent's listId, not the stale 123
     });
 
-    expect(ListHelpers.generateNewListDefinition).toHaveBeenCalledTimes(1);
-    expect(ListHelpers.generateNewListDefinition).toHaveBeenCalledWith({
-      numId: 123,
-      listType: OrderedListType,
-      editor,
-    });
+    // No re-generation for an existing id
+    expect(ListHelpers.generateNewListDefinition).not.toHaveBeenCalled();
   });
 
-  it('uses parent list listId when current item has no numId', () => {
+  it('uses parent list listId when current item has no numId (no re-generation)', () => {
     const currentItem = {
       node: { type: { name: 'listItem' }, attrs: { level: 3 } },
       pos: 7,
@@ -137,14 +132,11 @@ describe('decreaseListIndent', () => {
       numId: 888, // inherited from parent
     });
 
-    expect(ListHelpers.generateNewListDefinition).toHaveBeenCalledWith({
-      numId: 888,
-      listType: BulletListType,
-      editor,
-    });
+    // Do not re-generate for an existing id
+    expect(ListHelpers.generateNewListDefinition).not.toHaveBeenCalled();
   });
 
-  it('falls back to ListHelpers.getNewListId when neither item nor parent have ids', () => {
+  it('falls back to ListHelpers.getNewListId when neither item nor parent have ids, and generates a definition', () => {
     const currentItem = {
       node: { type: { name: 'listItem' }, attrs: { level: 1 } },
       pos: 11,
@@ -169,7 +161,7 @@ describe('decreaseListIndent', () => {
     expect(ListHelpers.getNewListId).toHaveBeenCalledWith(editor);
     expect(tr.setNodeMarkup).toHaveBeenCalledWith(11, null, {
       level: 0, // 1 -> 0
-      numId: 9999, // fallback
+      numId: 9999, // minted
     });
 
     expect(ListHelpers.generateNewListDefinition).toHaveBeenCalledWith({
@@ -198,8 +190,34 @@ describe('decreaseListIndent', () => {
     expect(result).toBe(true);
     expect(tr.setNodeMarkup).toHaveBeenCalledWith(21, null, {
       level: 1,
-      numId: null, // explicit null is fine; command should still set it
+      numId: null, // command writes what it resolved
     });
+    expect(ListHelpers.generateNewListDefinition).not.toHaveBeenCalled();
+  });
+
+  it('bullet list: adopts parent listId and does NOT re-generate definition', () => {
+    const currentItem = {
+      node: { type: { name: 'listItem' }, attrs: { level: 2 /* no numId */ } },
+      pos: 13,
+    };
+    const parentList = {
+      node: { type: BulletListType, attrs: { listId: 888 } },
+    };
+
+    ListHelpers.getCurrentListItem.mockReturnValue(currentItem);
+    ListHelpers.getParentOrderedList.mockReturnValue(null);
+    ListHelpers.getParentBulletList.mockReturnValue(parentList);
+
+    const result = decreaseListIndent()({ editor, tr });
+
+    expect(result).toBe(true);
+    expect(tr.setNodeMarkup).toHaveBeenCalledTimes(1);
+    expect(tr.setNodeMarkup).toHaveBeenCalledWith(13, null, {
+      level: 1, // 2 -> 1
+      numId: 888, // bullets carry numId; adopt parent
+    });
+
+    // No re-generation for existing id
     expect(ListHelpers.generateNewListDefinition).not.toHaveBeenCalled();
   });
 });

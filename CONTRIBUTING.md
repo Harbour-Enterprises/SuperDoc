@@ -8,6 +8,7 @@ Thank you for your interest in contributing to SuperDoc! We're excited to have y
 - [How Can I Contribute?](#how-can-i-contribute)
 - [Development Setup](#development-setup)
 - [Pull Request Process](#pull-request-process)
+- [Release Process](#release-process)
 - [Style Guidelines](#style-guidelines)
 - [Community](#community)
 
@@ -96,9 +97,7 @@ Documentation is crucial for our project. You can help by:
 
 2. **Commit Messages**:
 
-   - Use present tense ("add feature" not "added feature")
-   - Be descriptive but concise
-   - Reference issues and pull requests
+   Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
    ```
    feat: add real-time cursor sharing
@@ -110,35 +109,142 @@ Documentation is crucial for our project. You can help by:
    Closes #123
    ```
 
-3. **Before Submitting**:
+3. **Automated Checks**:
+
+   When you open a PR, the following checks run automatically:
+
+   - Commit message validation
+   - Code formatting (Prettier)
+   - Linting (ESLint)
+   - Unit tests
+   - Visual regression tests (if UI changes)
+   - E2E tests (for PRs to main)
+
+4. **Before Submitting**:
 
    - Update documentation if needed
    - Add or update tests
-   - Run the test suite
-   - Update the changelog if applicable
-   - Ensure CI passes
+   - Run the test suite locally
+   - Ensure all CI checks pass
 
-4. **Pull Request Description**:
+5. **Pull Request Description**:
    - Describe the changes
    - Link to related issues
    - Include screenshots for UI changes
    - List any breaking changes
    - Mention dependencies added/removed
 
+## Release Process
+
+SuperDoc uses a fully automated CI/CD pipeline with semantic-release. **No manual version bumps are needed.**
+
+### How It Works
+
+#### Branch Strategy
+
+- **`main` branch** → Pre-release versions (`@next` tag on npm)
+- **`release/vX.Y` branches** → Stable versions (`@latest` tag on npm)
+
+#### Version Control Through Commits
+
+Your commit messages automatically determine version changes:
+
+| Commit Type                                       | Version Bump      | Example                               | Result        |
+| ------------------------------------------------- | ----------------- | ------------------------------------- | ------------- |
+| `fix:`                                            | Patch (0.0.X)     | `fix: resolve cursor positioning bug` | 1.2.3 → 1.2.4 |
+| `feat:`                                           | Minor (0.X.0)     | `feat: add PDF export functionality`  | 1.2.3 → 1.3.0 |
+| `feat!:` or `BREAKING CHANGE:`                    | Major (X.0.0)     | `feat!: redesign document API`        | 1.2.3 → 2.0.0 |
+| `chore:`, `docs:`, `style:`, `refactor:`, `test:` | No version change | `docs: update README`                 | 1.2.3 → 1.2.3 |
+
+### Commit Message Format
+
+```bash
+# Feature with scope
+feat(editor): add table support
+
+# Bug fix with detailed description
+fix: resolve memory leak in collaboration module
+
+- Clear event listeners on disconnect
+- Add cleanup in useEffect
+- Fix WebSocket connection disposal
+
+Fixes #456
+
+# Breaking change (two ways)
+feat!: change document format to support annotations
+
+# Or with footer
+feat: redesign plugin API
+
+BREAKING CHANGE: Plugins must now export a default function
+```
+
+### Release Workflow
+
+#### Automatic Releases
+
+1. **Pre-release from main**:
+
+   - Every merge to `main` triggers tests
+   - If tests pass, publishes `X.Y.Z-next.N` to npm
+   - Example: `1.0.0-next.1`, `1.0.0-next.2`
+
+2. **Stable release creation**:
+
+   ```bash
+   # Use GitHub Actions UI to trigger "Create Release Branch"
+   # Enter version: 1.0
+   # This creates release/v1.0 and publishes 1.0.0
+   ```
+
+3. **Hotfix to stable**:
+   - Push fix commits directly to `release/vX.Y`
+   - Automatically publishes patch version
+   - Auto-creates PR to sync fixes back to main
+
+#### Manual Testing
+
+Preview what will be released:
+
+```bash
+npx semantic-release --dry-run --no-ci
+```
+
+### CI/CD Pipeline Details
+
+For comprehensive information about our CI/CD workflows, automated testing, and release pipelines, see [cicd.md](cicd.md).
+
 ## Style Guidelines
 
 ### JavaScript
 
 - Use JavaScript for all new code
-- Follow the existing code style
+- Follow the existing code style (enforced by ESLint)
 - Use ES6+ features when appropriate
 - Document public APIs using JSDoc
 - Maximum line length of 100 characters
 - Use meaningful variable names
 
+### Code Quality
+
+```bash
+# Check formatting
+npm run format:check
+
+# Auto-fix formatting
+npm run format
+
+# Run linting
+npm run lint
+
+# Fix linting issues
+npm run lint:fix
+```
+
 ### Documentation
 
-- Use JSDoc
+- Use JSDoc for all public APIs
 - Include code examples when relevant
 - Keep explanations clear and concise
 - Use proper Markdown formatting
@@ -153,9 +259,9 @@ Documentation is crucial for our project. You can help by:
 
 ## Community
 
-- Join our [Discord server](https://discord.gg/HydwD7Kq) for discussions
+- Join our [Discord server](https://discord.gg/wjMccuygvy) for discussions
 - Participate in [GitHub Discussions](https://github.com/Harbour-Enterprises/SuperDoc/discussions)
-- Attend our community meetings (schedule TBA)
+- Follow development updates on our [roadmap](https://github.com/Harbour-Enterprises/SuperDoc/wiki/🎯️-SuperDoc-Roadmap)
 
 ### Recognition
 
@@ -163,6 +269,7 @@ We recognize contributions in several ways:
 
 - Featured in our [contributors page](https://github.com/Harbour-Enterprises/SuperDoc#contributors)
 - Mentioned in release notes
+- Community contributor badge in Discord
 - Opportunities to join the core team
 
 ## Questions?

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Schema, Node as PMNode } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import { schema as basic } from 'prosemirror-schema-basic';
 import { builders } from 'prosemirror-test-builder';
 import { toggleList } from './toggleList';
@@ -625,7 +625,7 @@ describe('setMappedSelectionSpan', () => {
       // container listId should match the item's numId
       expect(li.attrs.numId).toBe(node.attrs.listId);
 
-      // ordered lists should have decimal style and start at order 1 (per your impl)
+      // ordered lists should have decimal style and start at order 1
       expect(node.attrs['list-style-type']).toBe('decimal');
       expect(node.attrs.order).toBe(1);
       expect(li.attrs.listNumberingType).toBe('decimal');
@@ -634,5 +634,126 @@ describe('setMappedSelectionSpan', () => {
 
     expect(listIds.size).toBe(1);
     expect(numIds.size).toBe(1);
+  });
+
+  it('wraps a single paragraph when the paragraph itself is NodeSelection (BULLET)', () => {
+    const d = doc(p('Single line'));
+    // Find the paragraph's position (start of the node, not inside text)
+    let paraPos = null;
+    d.descendants((node, pos) => {
+      if (paraPos == null && node.type.name === 'paragraph') {
+        paraPos = pos;
+        return false;
+      }
+      return true;
+    });
+    if (paraPos == null) throw new Error('Paragraph not found');
+
+    // Create a NodeSelection on the paragraph node itself
+    const state0 = EditorState.create({
+      schema,
+      doc: d,
+      selection: NodeSelection.create(d, paraPos),
+    });
+
+    const { editor } = createEditor(d);
+    const s2 = applyCmd(state0, editor, toggleList('bulletList'));
+
+    // EXPECTED (but currently failing): paragraph becomes a bulletList with one listItem
+    expect(s2.doc.childCount).toBe(1);
+    const top = s2.doc.child(0);
+    expect(top.type.name).toBe('bulletList');
+    expect(top.childCount).toBe(1);
+    expect(top.child(0).type.name).toBe('listItem');
+  });
+
+  it('wraps a single paragraph when NodeSelection (ORDERED)', () => {
+    const d = doc(p('Only line'));
+    let paraPos = null;
+    d.descendants((node, pos) => {
+      if (paraPos == null && node.type.name === 'paragraph') {
+        paraPos = pos;
+        return false;
+      }
+      return true;
+    });
+
+    if (paraPos == null) throw new Error('Paragraph not found');
+
+    const state0 = EditorState.create({
+      schema,
+      doc: d,
+      selection: NodeSelection.create(d, paraPos),
+    });
+
+    const { editor } = createEditor(d);
+    const s2 = applyCmd(state0, editor, toggleList('orderedList'));
+
+    // EXPECTED (but currently failing): paragraph becomes an orderedList with one listItem
+    expect(s2.doc.childCount).toBe(1);
+    const top = s2.doc.child(0);
+    expect(top.type.name).toBe('orderedList');
+    expect(top.childCount).toBe(1);
+    expect(top.child(0).type.name).toBe('listItem');
+  });
+
+  it('switches ORDERED to BULLET when the entire list container is NodeSelection', () => {
+    const d = doc(orderedList(listItem(p('One')), listItem(p('Two')), listItem(p('Three'))));
+
+    // Find the top-level orderedList node position
+    let listPos = null;
+    d.descendants((node, pos, parent) => {
+      if (listPos == null && node.type.name === 'orderedList' && parent.type.name === 'doc') {
+        listPos = pos;
+        return false;
+      }
+      return true;
+    });
+    if (listPos == null) throw new Error('orderedList not found');
+
+    // NodeSelection on the list container itself
+    const state0 = EditorState.create({
+      schema,
+      doc: d,
+      selection: NodeSelection.create(d, listPos),
+    });
+
+    const { editor } = createEditor(d);
+    const s2 = applyCmd(state0, editor, toggleList('bulletList'));
+
+    const top = s2.doc.child(0);
+    expect(top.type.name).toBe('bulletList');
+    expect(top.childCount).toBe(3);
+    expect(hasNestedListInsideParagraph(s2.doc)).toBe(false);
+  });
+
+  it('switches BULLET to ORDERED when the entire list container is NodeSelection', () => {
+    const d = doc(bulletList(listItem(p('a')), listItem(p('b')), listItem(p('c')), listItem(p('d'))));
+
+    let listPos = null;
+    d.descendants((node, pos, parent) => {
+      if (listPos == null && node.type.name === 'bulletList' && parent.type.name === 'doc') {
+        listPos = pos;
+        return false;
+      }
+      return true;
+    });
+    if (listPos == null) throw new Error('bulletList not found');
+
+    // NodeSelection on the list container itself
+    const state0 = EditorState.create({
+      schema,
+      doc: d,
+      selection: NodeSelection.create(d, listPos),
+    });
+
+    const { editor } = createEditor(d);
+    const s2 = applyCmd(state0, editor, toggleList('orderedList'));
+
+    const top = s2.doc.child(0);
+    expect(top.type.name).toBe('orderedList');
+    expect(top.childCount).toBe(4);
+    expect(top.attrs['list-style-type']).toBe('decimal');
+    expect(hasNestedListInsideParagraph(s2.doc)).toBe(false);
   });
 });

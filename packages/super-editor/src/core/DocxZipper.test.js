@@ -2,6 +2,7 @@ import path from 'path';
 import fs from 'fs';
 import { describe, it, expect, beforeEach } from 'vitest';
 import DocxZipper from './DocxZipper';
+import JSZip from 'jszip';
 
 async function readFileAsBuffer(filePath) {
   const resolvedPath = path.resolve(__dirname, filePath);
@@ -46,5 +47,64 @@ describe('DocxZipper - file extraction', () => {
     // Make sure we have document.xml
     const documentXml = unzippedXml.find((file) => file.name === 'word/document.xml');
     expect(documentXml).toBeTruthy();
+  });
+});
+
+// Helper to build a UTF-16LE Buffer with BOM
+function utf16leWithBOM(str) {
+  const bom = Buffer.from([0xff, 0xfe]);
+  const body = Buffer.from(str, 'utf16le');
+  return Buffer.concat([bom, body]);
+}
+
+describe('DocxZipper - UTF-16 XML handling', () => {
+  let zipper;
+  beforeEach(() => {
+    zipper = new DocxZipper();
+  });
+
+  it('decodes a UTF-16LE customXml part correctly (was failing before fix)', async () => {
+    const zip = new JSZip();
+
+    // Minimal [Content_Types].xml to look like a docx
+    const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
+      <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+        <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+        <Default Extension="xml" ContentType="application/xml"/>
+        <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+      </Types>`;
+    zip.file('[Content_Types].xml', contentTypes);
+
+    // A basic UTF-8 document.xml so there's at least one normal XML entry
+    const documentXml = `<?xml version="1.0" encoding="UTF-8"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body>
+      </w:document>`;
+    zip.file('word/document.xml', documentXml);
+
+    // The problematic UTF-16LE customXml item
+    const customXmlUtf16 = `<?xml version="1.0" encoding="utf-16"?>
+<properties xmlns="http://www.imanage.com/work/xmlschema">
+  <documentid>TELEKOM!4176814.1</documentid>
+  <senderid>A675398</senderid>
+  <senderemail>GUDRUN.JORDAN@TELEKOM.DE</senderemail>
+  <lastmodified>2023-07-06T15:09:00.0000000+02:00</lastmodified>
+  <database>TELEKOM</database>
+</properties>`;
+    zip.file('customXml/item2.xml', utf16leWithBOM(customXmlUtf16));
+
+    // Generate the zip as a Node buffer and feed it to the zipper
+    const buf = await zip.generateAsync({ type: 'nodebuffer' });
+    const files = await zipper.getDocxData(buf /* isNode not needed for XML */);
+
+    // Find the customXml item
+    const item2 = files.find((f) => f.name === 'customXml/item2.xml');
+    expect(item2).toBeTruthy();
+
+    // ✅ With the fix, content is a clean JS string:
+    expect(item2.content).toContain('<?xml'); // prolog present
+    expect(item2.content).toContain('<properties'); // real tag (no NULs interleaved)
+    expect(item2.content).not.toMatch(/\u0000/); // no embedded NULs
+    expect(item2.content.toLowerCase()).toContain('encoding="utf-16"');
   });
 });

@@ -96,6 +96,37 @@ export const getExportedResult = async (name, comments = []) => {
   return result;
 };
 
+export const getExportMediaFiles = async (name, comments = []) => {
+  const buffer = await getTestDataAsBuffer(name);
+  const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
+
+  const editor = new Editor({
+    isHeadless: true,
+    extensions: getStarterExtensions(),
+    documentId: 'test-doc',
+    content: docx,
+    mode: 'docx',
+    media,
+    mediaFiles,
+    fonts,
+    annotations: true,
+  });
+
+  const json = editor.getUpdatedJson();
+  await editor.converter.exportToDocx(
+    json,
+    editor.schema,
+    editor.storage.image.media,
+    true,
+    'external',
+    comments,
+    editor,
+    false,
+    null,
+  );
+  return editor.converter.addedMedia;
+};
+
 export const getExportedResultForAnnotations = async (isFinalDoc) => {
   const buffer = await getTestDataAsBuffer('annotations_import.docx');
   const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);

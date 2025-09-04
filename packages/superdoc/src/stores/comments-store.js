@@ -472,12 +472,11 @@ export const useCommentsStore = defineStore('comments', () => {
 
     // Create comments for tracked changes
     // that do not have a corresponding comment (created in Word).
+    const { tr } = editor.view.state;
+    const { dispatch } = editor.view;
+
     groupedChanges.forEach(({ insertedMark, deletionMark, formatMark }, index) => {
       console.debug(`Create comment for track change: ${index}`);
-
-      const { dispatch } = editor.view;
-      const { tr } = editor.view.state;
-
       const foundComment = commentsList.value.find(
         (i) =>
           i.commentId === insertedMark?.mark.attrs.id ||
@@ -489,7 +488,6 @@ export const useCommentsStore = defineStore('comments', () => {
       if (foundComment) {
         if (isLastIteration) {
           tr.setMeta(CommentsPluginKey, { type: 'force' });
-          dispatch(tr);
         }
         return;
       }
@@ -504,9 +502,10 @@ export const useCommentsStore = defineStore('comments', () => {
         if (isLastIteration) tr.setMeta(CommentsPluginKey, { type: 'force' });
         tr.setMeta(CommentsPluginKey, { type: 'forceTrackChanges' });
         tr.setMeta(TrackChangesBasePluginKey, trackChangesPayload);
-        dispatch(tr);
       }
     });
+
+    dispatch(tr);
   };
 
   const translateCommentsForExport = () => {
