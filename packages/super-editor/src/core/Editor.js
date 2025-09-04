@@ -133,6 +133,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
  * @property {Object} [jsonOverride] - Provided JSON to override content with
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
+ * @property {boolean} [isDebug=false] - Whether to enable debug mode
  */
 
 /**
@@ -1905,7 +1906,7 @@ export class Editor extends EventEmitter {
   }
 
   #initDevTools() {
-    if (process.env.NODE_ENV === 'development') {
+    if (process.env.NODE_ENV === 'development' || this.options.isDebug) {
       window.superdocdev = {
         registry: this.converter.handlerRegistry,
         converter: this.converter,
