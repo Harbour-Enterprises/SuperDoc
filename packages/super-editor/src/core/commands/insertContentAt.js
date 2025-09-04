@@ -60,7 +60,7 @@ export const insertContentAt =
 
       // If the original input is plainly textual, prefer insertText regardless of how parsing represents it.
       const forceTextInsert =
-        typeof value === 'string' ||
+        (typeof value === 'string' && !/^<h[1-6]>[^<]+<\/h[1-6]>$/.test(value)) ||
         (Array.isArray(value) && value.every((v) => typeof v === 'string' || (v && typeof v.text === 'string'))) ||
         (value && typeof value === 'object' && typeof value.text === 'string');
 
