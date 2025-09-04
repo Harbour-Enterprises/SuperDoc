@@ -90,10 +90,8 @@ export const Heading = Node.create({
     }));
   },
 
-  renderDOM({ node, htmlAttributes }) {
-    const hasLevel = this.options.levels.includes(node.attrs.level);
-    const level = hasLevel ? node.attrs.level : this.options.levels[0];
-    return [`h${level}`, Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }) {
+    return [`p`, Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
   addCommands() {
