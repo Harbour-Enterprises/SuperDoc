@@ -254,7 +254,6 @@ export class Editor extends EventEmitter {
   /**
    * Create a new Editor instance
    * @param {EditorOptions} options - Editor configuration options
-   * @returns {void}
    */
   constructor(options) {
     super();
@@ -371,6 +370,8 @@ export class Editor extends EventEmitter {
         this.#validateDocumentInit();
       }
     }
+
+    this.#initDevTools();
   }
 
   /**
@@ -507,7 +508,7 @@ export class Editor extends EventEmitter {
    * @returns {boolean}
    */
   get isEditable() {
-    return this.options.editable && this.view && this.view.editable;
+    return Boolean(this.options.editable && this.view && this.view.editable);
   }
 
   /**
@@ -911,7 +912,7 @@ export class Editor extends EventEmitter {
 
   /**
    * Creates document PM schema.
-   * @returns {void
+   * @returns {void}
    */
   #createSchema() {
     this.schema = this.extensionService.schema;
@@ -1901,5 +1902,15 @@ export class Editor extends EventEmitter {
     /** @type {import('./super-validator/index.js').SuperValidator} */
     const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
     validator.validateDocumentExport();
+  }
+
+  #initDevTools() {
+    if (process.env.NODE_ENV === 'development') {
+      window.superdocdev = {
+        registry: this.converter.handlerRegistry,
+        converter: this.converter,
+        editor: this,
+      };
+    }
   }
 }
