@@ -17,6 +17,13 @@ export const Paragraph = Node.create({
 
   addOptions() {
     return {
+      /**
+       * @typedef {Object} HeadingOptions
+       * @category Options
+       * @property {number[]} [headingLevels=[1,2,3,4,5,6]] - Supported heading levels
+       * @property {Object} [htmlAttributes] - HTML attributes for heading elements
+       */
+      headingLevels: [1, 2, 3, 4, 5, 6],
       htmlAttributes: {},
     };
   },
@@ -167,6 +174,10 @@ export const Paragraph = Node.create({
           return { extraAttrs: extra };
         },
       },
+      ...this.options.headingLevels.map((level) => ({
+        tag: `h${level}`,
+        attrs: { level, styleId: `Heading${level}` },
+      })),
     ];
   },
 
