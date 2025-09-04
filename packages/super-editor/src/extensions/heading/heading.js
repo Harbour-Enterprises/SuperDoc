@@ -73,13 +73,20 @@ export const Heading = Node.create({
           return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
+
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [styleId] - Style ID assigned according to heading level
+       */
+      styleId: {},
     };
   },
 
   parseDOM() {
     return this.options.levels.map((level) => ({
       tag: `h${level}`,
-      attrs: { level },
+      attrs: { level, styleId: `Heading${level}` },
     }));
   },
 
