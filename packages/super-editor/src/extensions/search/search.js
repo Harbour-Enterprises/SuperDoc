@@ -1,12 +1,31 @@
+// @ts-check
 import { Extension } from '@core/Extension.js';
 import { search, SearchQuery, setSearchState, getMatchHighlights } from 'prosemirror-search';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { v4 as uuidv4 } from 'uuid';
 
+/**
+ * Search match Object
+ * @typedef {Object} SearchMatch
+ * @property {string} text - Found text
+ * @property {number} from - From position
+ * @property {number} to - To position
+ * @property {uuidv4} id - ID if the search match
+ */
+
+/**
+ * @module Search
+ * @sidebarTitle Search
+ * @snippetPath /snippets/extensions/search.mdx
+ */
 export const Search = Extension.create({
   addStorage() {
     return {
+      /**
+       * @private
+       * @type {SearchMatch[]|null}
+       */
       searchResults: [],
     };
   },
@@ -40,17 +59,35 @@ export const Search = Extension.create({
 
   addCommands() {
     return {
+      /**
+       * Navigates to the first search match
+       * @category Command
+       * @returns {Boolean} - True if the result was highlighted
+       * @example
+       * goToFirstMatch()
+       * @note Scrolls Editor to the first match of called search().
+       */
       goToFirstMatch:
         () =>
         ({ state, editor }) => {
           const highlights = getMatchHighlights(state);
-          if (!highlights || !highlights.children?.length) return;
+          if (!highlights || !highlights.children?.length) return false;
 
           const match = highlights.children.find((item) => item.local);
           const firstSearchItemPosition = highlights.children[0] + match.local[0].from + 1;
           editor.view.domAtPos(firstSearchItemPosition)?.node?.scrollIntoView(true);
+          return true;
         },
 
+      /**
+       * Searches for the string match in Editor content
+       * @category Command
+       * @param {String|RegExp} patternInput - Search string or pattern
+       * @returns {SearchMatch[]} Array of search matches
+       * @example
+       * search('test string')
+       * @note Searches for the test string in the Editor content and returns an array of matches
+       */
       search:
         (patternInput) =>
         ({ state, dispatch }) => {
@@ -98,6 +135,16 @@ export const Search = Extension.create({
           return resultMatches;
         },
 
+      /**
+       * Navigates to the selected match
+       * @category Command
+       * @param {Object} match Match at specific index
+       * @returns {Boolean} - True if the result was highlighted
+       * @example
+       * const searchResult = search('test string')
+       * goToSearchResult(searchResult[3])
+       * @note Scrolls Editor to the fourth match of called search() and sets selection on it.
+       */
       goToSearchResult:
         (match) =>
         ({ state, dispatch, editor }) => {
