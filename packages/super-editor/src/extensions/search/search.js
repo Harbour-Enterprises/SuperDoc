@@ -11,7 +11,7 @@ import { v4 as uuidv4 } from 'uuid';
  * @property {string} text - Found text
  * @property {number} from - From position
  * @property {number} to - To position
- * @property {uuidv4} id - ID if the search match
+ * @property {string} id - ID of the search match
  */
 
 /**
@@ -62,20 +62,25 @@ export const Search = Extension.create({
       /**
        * Navigates to the first search match
        * @category Command
-       * @returns {Boolean} - True if the result was highlighted
+       * @returns {Function} - Command function
        * @example
        * goToFirstMatch()
        * @note Scrolls Editor to the first match of called search().
        */
       goToFirstMatch:
         () =>
+        /** @returns {boolean} */
         ({ state, editor }) => {
           const highlights = getMatchHighlights(state);
-          if (!highlights || !highlights.children?.length) return false;
+          if (!highlights) return false;
 
-          const match = highlights.children.find((item) => item.local);
-          const firstSearchItemPosition = highlights.children[0] + match.local[0].from + 1;
-          editor.view.domAtPos(firstSearchItemPosition)?.node?.scrollIntoView(true);
+          // Fix: DecorationSet uses .find(), not .children
+          const decorations = highlights.find();
+          if (!decorations?.length) return false;
+
+          const firstMatch = decorations[0];
+          const domPos = editor.view.domAtPos(firstMatch.from);
+          domPos?.node?.scrollIntoView(true);
           return true;
         },
 
@@ -83,13 +88,14 @@ export const Search = Extension.create({
        * Searches for the string match in Editor content
        * @category Command
        * @param {String|RegExp} patternInput - Search string or pattern
-       * @returns {SearchMatch[]} Array of search matches
+       * @returns {Function} - Command function that returns matches
        * @example
        * search('test string')
        * @note Searches for the test string in the Editor content and returns an array of matches
        */
       search:
         (patternInput) =>
+        /** @returns {SearchMatch[]} */
         ({ state, dispatch }) => {
           let pattern;
           let caseSensitive = false;
@@ -138,8 +144,8 @@ export const Search = Extension.create({
       /**
        * Navigates to the selected match
        * @category Command
-       * @param {Object} match Match at specific index
-       * @returns {Boolean} - True if the result was highlighted
+       * @param {SearchMatch} match Match at specific index
+       * @returns {Function} - Command function
        * @example
        * const searchResult = search('test string')
        * goToSearchResult(searchResult[3])
@@ -147,6 +153,7 @@ export const Search = Extension.create({
        */
       goToSearchResult:
         (match) =>
+        /** @returns {boolean} */
         ({ state, dispatch, editor }) => {
           const { from, to } = match;
 
