@@ -3,6 +3,7 @@ import { Attribute } from './Attribute.js';
 import { getExtensionConfigField } from './helpers/getExtensionConfigField.js';
 import { cleanSchemaItem } from './helpers/cleanSchemaItem.js';
 import { callOrGet } from './utilities/callOrGet.js';
+import { childrenOf } from '@superdoc-dev/ooxml-inspector';
 
 /**
  * Schema class is used to create and work with schema.
