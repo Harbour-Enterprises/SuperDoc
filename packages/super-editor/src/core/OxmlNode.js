@@ -1,6 +1,6 @@
 // @ts-check
 
-import { Node } from '@core/index.js';
+import { Node } from './Node.js';
 import { childrenOf } from '@superdoc-dev/ooxml-inspector';
 
 /**
