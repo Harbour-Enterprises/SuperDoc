@@ -181,6 +181,7 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
  * @param {Transaction} tr The transaction to mutate
  * @param {Editor} editor The editor instance
  * @param {object} style The linked style to apply
+ * @param {string} style.id The style ID
  * @returns {boolean} Whether the transaction was modified
  */
 export const applyLinkedStyleToTransaction = (tr, editor, style) => {
