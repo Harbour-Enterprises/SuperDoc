@@ -6,6 +6,9 @@ const ImagePositionPluginKey = new PluginKey('ImagePosition');
 export const ImagePositionPlugin = ({ editor }) => {
   const { view } = editor;
   let shouldUpdate = false;
+  const headHeight =
+    editor.options.parentEditor?.storage?.pagination?.sectionData?.headers?.[editor.options.documentId]?.height || 0;
+
   return new Plugin({
     name: 'ImagePositionPlugin',
     key: ImagePositionPluginKey,
@@ -17,7 +20,7 @@ export const ImagePositionPlugin = ({ editor }) => {
 
       apply(tr, oldDecorationSet, oldState, newState) {
         if (!tr.docChanged) return oldDecorationSet;
-        const decorations = getImagePositionDecorations(newState, view);
+        const decorations = getImagePositionDecorations(newState, view, headHeight, editor.options.parentEditor?.view);
         return DecorationSet.create(newState.doc, decorations);
       },
     },
@@ -28,7 +31,12 @@ export const ImagePositionPlugin = ({ editor }) => {
           const pagination = PaginationPluginKey.getState(lastState);
           if (shouldUpdate) {
             shouldUpdate = false;
-            const decorations = getImagePositionDecorations(lastState, view);
+            const decorations = getImagePositionDecorations(
+              lastState,
+              view,
+              headHeight,
+              editor.options.parentEditor?.view,
+            );
             const updateTransaction = view.state.tr.setMeta(ImagePositionPluginKey, { decorations });
             view.dispatch(updateTransaction);
           }
@@ -47,13 +55,13 @@ export const ImagePositionPlugin = ({ editor }) => {
   });
 };
 
-const getImagePositionDecorations = (state, view) => {
+const getImagePositionDecorations = (state, view, headHeight, parentView) => {
   let decorations = [];
   state.doc.descendants((node, pos) => {
     if (node.attrs.anchorData) {
       let style = '';
       let className = '';
-      const { vRelativeFrom, alignH } = node.attrs.anchorData;
+      const { vRelativeFrom, alignH, parent } = node.attrs.anchorData;
       const { size, padding, marginOffset } = node.attrs;
       const pageBreak = findPreviousDomNodeWithClass(view, pos, 'pagination-break-wrapper');
       if (pageBreak) {
@@ -68,12 +76,27 @@ const getImagePositionDecorations = (state, view) => {
             style += 'display: block; margin-left: auto; margin-right: auto; ';
             break;
         }
-        const topPos =
-          marginOffset.top !== undefined ? marginOffset.top : pageBreak?.offsetTop + pageBreak?.offsetHeight;
-        style += vRelativeFrom === 'margin' ? `position: absolute; top: ${topPos}px; ` : '';
-        if (vRelativeFrom === 'margin') {
-          const nextPos = view.posAtDOM(pageBreak, 1);
 
+        if (vRelativeFrom === 'margin' || vRelativeFrom === 'margin') {
+          style += 'position: absolute; ';
+        }
+
+        let topPos = 0;
+        let leftPos = 0;
+        if (vRelativeFrom === 'margin') {
+          if (parent === 'w:tc') {
+            topPos = marginOffset.top !== undefined ? marginOffset.top : pageBreak?.offsetTop + pageBreak?.offsetHeight;
+          } else {
+            topPos =
+              marginOffset.top !== undefined
+                ? marginOffset.top + headHeight
+                : pageBreak?.offsetTop + pageBreak?.offsetHeight;
+            leftPos = marginOffset.left || 0;
+          }
+          style += `top: ${topPos}px; left: ${leftPos}px; margin-top: 0; `;
+
+          const nextPos =
+            parentView && parent !== 'w:tc' ? parentView.posAtDOM(pageBreak, 1) : view.posAtDOM(pageBreak, 1);
           if (nextPos < 0) {
             const $pos = view.state.doc.resolve(pos);
             // When no placeholder can be added apply height to the parent node to occupy absolute image size
@@ -86,8 +109,8 @@ const getImagePositionDecorations = (state, view) => {
 
           const imageBlock = document.createElement('div');
           imageBlock.className = 'anchor-image-placeholder';
-          imageBlock.style.float = alignH;
-          imageBlock.style.width = size.width + parseInt(padding[alignH]) + 'px';
+          imageBlock.style.float = alignH || 'left';
+          imageBlock.style.width = size.width + parseInt(padding[alignH || 'left']) + 'px';
           imageBlock.style.height = size.height + parseInt(padding.top) + parseInt(padding.bottom) + 'px';
           decorations.push(Decoration.widget(nextPos, imageBlock, { key: 'stable-key' }));
         }

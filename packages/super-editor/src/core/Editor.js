@@ -250,6 +250,8 @@ export class Editor extends EventEmitter {
     isCustomXmlChanged: false,
 
     focusTarget: null,
+
+    parentEditor: null,
   };
 
   /**
