@@ -27,7 +27,7 @@ export const TextTransform = Extension.create({
         attributes: {
           /**
            * @category Attribute
-           * @param {string} [textTransform] - Text transform value (uppercase, none). Note: Only 'uppercase' and 'none' are supported for Word export
+           * @param {string} [textTransform] - Text transform value (uppercase, lowercase, capitalize, none)
            */
           textTransform: {
             default: null,
