@@ -27,14 +27,14 @@ export const TextTransform = Extension.create({
         attributes: {
           /**
            * @category Attribute
-           * @param {string} [textTransform] - Text transform value (uppercase, lowercase, capitalize, none)
+           * @param {string} [textTransform] - Text transform value (uppercase, none). Note: Only 'uppercase' and 'none' are supported for Word export
            */
           textTransform: {
             default: null,
             renderDOM: (attrs) => {
-              if (!attrs.textCase) return {};
+              if (!attrs.textTransform) return {};
               return {
-                style: `text-transform: ${attrs.textCase}`,
+                style: `text-transform: ${attrs.textTransform}`,
               };
             },
           },
