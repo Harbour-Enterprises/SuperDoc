@@ -1,6 +1,7 @@
 import { Extension } from '@core/Extension.js';
 import { applyLinkedStyleToTransaction, generateLinkedStyleString } from './helpers.js';
 import { createLinkedStylesPlugin, LinkedStylesPluginKey } from './plugin.js';
+import { findParentNodeClosestToPos } from '@core/helpers';
 
 export const LinkedStyles = Extension.create({
   name: 'linkedStyles',
@@ -24,6 +25,40 @@ export const LinkedStyles = Extension.create({
         const { tr } = params;
         return applyLinkedStyleToTransaction(tr, this.editor, style);
       },
+
+      /**
+       * Toggle a linked style on the current selection.
+       *
+       * @param {object} style The linked style to apply
+       * @param {string} style.id The style ID (e.g., 'Heading1')
+       * @param {string|null} nodeType The node type to restrict the toggle to (e.g., 'paragraph'). If null,
+       * the style can be toggled on any node type.
+       * @returns {boolean} Whether the style was correctly applied/removed
+       */
+      toggleLinkedStyle:
+        (style, nodeType = null) =>
+        (params) => {
+          const { tr } = params;
+          if (tr.selection.empty) {
+            return false;
+          }
+          let node = tr.doc.nodeAt(tr.selection.$from.pos);
+
+          if (node && nodeType && node.type.name !== nodeType) {
+            node = findParentNodeClosestToPos(tr.selection.$from, (n) => {
+              return nodeType ? n.type.name === nodeType : true;
+            })?.node;
+          }
+          if (!node) {
+            return false;
+          }
+          const currentStyleId = node.attrs.styleId;
+
+          if (currentStyleId === style.id) {
+            return applyLinkedStyleToTransaction(tr, this.editor, { id: null });
+          }
+          return applyLinkedStyleToTransaction(tr, this.editor, style);
+        },
 
       /**
        * Apply a linked style by its ID.
