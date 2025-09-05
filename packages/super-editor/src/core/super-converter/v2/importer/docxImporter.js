@@ -1,6 +1,6 @@
 import { getInitialJSON } from '../docxHelper.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
-import { twipsToInches } from '../../helpers.js';
+import { twipsToInches, twipsToPixels } from '../../helpers.js';
 import { DEFAULT_LINKED_STYLES } from '../../exporter-docx-defs.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
 import { drawingNodeHandlerEntity } from './imageImporter.js';
@@ -189,6 +189,7 @@ const createNodeListHandler = (nodeHandlers) => {
     filename,
     parentStyleId,
     lists,
+    mainParent,
   }) => {
     if (!elements || !elements.length) return [];
 
@@ -216,6 +217,7 @@ const createNodeListHandler = (nodeHandlers) => {
                 filename,
                 parentStyleId,
                 lists,
+                mainParent,
               });
             },
             { nodes: [], consumed: 0 },
@@ -324,6 +326,8 @@ function getDocumentStyles(node, docx, converter, editor) {
           header: twipsToInches(attributes['w:header']),
           footer: twipsToInches(attributes['w:footer']),
           gutter: twipsToInches(attributes['w:gutter']),
+          topPx: twipsToPixels(attributes['w:top']),
+          leftPx: twipsToPixels(attributes['w:left']),
         };
         break;
       case 'w:cols':
