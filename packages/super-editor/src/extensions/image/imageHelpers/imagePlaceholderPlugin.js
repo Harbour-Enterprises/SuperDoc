@@ -1,8 +1,18 @@
+// @ts-check
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 
 export const ImagePlaceholderPluginKey = new PluginKey('ImagePlaceholder');
 
+/**
+ * Creates a ProseMirror plugin for managing image upload placeholders
+ * @category Helper
+ * @returns {Plugin} ProseMirror plugin for image placeholders
+ * @example
+ * const plugin = ImagePlaceholderPlugin();
+ * // Use in editor plugins array
+ * @note Shows placeholder widgets during image upload
+ */
 export const ImagePlaceholderPlugin = () => {
   return new Plugin({
     key: ImagePlaceholderPluginKey,
@@ -50,6 +60,18 @@ export const ImagePlaceholderPlugin = () => {
   });
 };
 
+/**
+ * Finds a placeholder decoration by ID
+ * @category Helper
+ * @param {Object} state - Editor state
+ * @param {string} id - Placeholder ID
+ * @returns {number|null} Position of placeholder or null if not found
+ * @example
+ * const pos = findPlaceholder(state, placeholderId);
+ * if (pos !== null) {
+ *   // Replace placeholder with actual image
+ * }
+ */
 export const findPlaceholder = (state, id) => {
   let decos = ImagePlaceholderPluginKey.getState(state);
   let found = decos?.find(null, null, (spec) => spec.id === id);

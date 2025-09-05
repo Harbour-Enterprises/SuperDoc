@@ -1,9 +1,26 @@
+// @ts-check
 import { Extension } from '@core/index.js';
 
+/**
+ * @module TextAlign
+ * @sidebarTitle Text Align
+ * @snippetPath /snippets/extensions/text-align.mdx
+ * @shortcut Mod-Shift-l | setTextAlign('left') | Align text left
+ * @shortcut Mod-Shift-e | setTextAlign('center') | Align text center
+ * @shortcut Mod-Shift-r | setTextAlign('right') | Align text right
+ * @shortcut Mod-Shift-j | setTextAlign('justify') | Justify text
+ */
 export const TextAlign = Extension.create({
   name: 'textAlign',
 
   addOptions() {
+    /**
+     * @typedef {Object} TextAlignOptions
+     * @category Options
+     * @property {string[]} [types=['heading', 'paragraph']] - Node types to apply alignment to
+     * @property {string[]} [alignments=['left', 'center', 'right', 'justify']] - Available alignment options
+     * @property {string} [defaultAlignment='left'] - Default text alignment
+     */
     return {
       types: ['heading', 'paragraph'],
       alignments: ['left', 'center', 'right', 'justify'],
@@ -15,6 +32,10 @@ export const TextAlign = Extension.create({
       {
         types: this.options.types,
         attributes: {
+          /**
+           * @category Attribute
+           * @param {string} [textAlign='left'] - Text alignment value (left, center, right, justify)
+           */
           textAlign: {
             default: this.options.defaultAlignment,
             parseDOM: (el) => {
@@ -36,6 +57,19 @@ export const TextAlign = Extension.create({
 
   addCommands() {
     return {
+      /**
+       * Set text alignment
+       * @category Command
+       * @param {string} alignment - Alignment value (left, center, right, justify)
+       * @returns {Function} Command function
+       * @example
+       * // Set to center
+       * setTextAlign('center')
+       *
+       * // Set to justify
+       * setTextAlign('justify')
+       * @note Applies to all configured node types (heading, paragraph by default)
+       */
       setTextAlign:
         (alignment) =>
         ({ commands }) => {
@@ -47,6 +81,14 @@ export const TextAlign = Extension.create({
             .every((result) => result);
         },
 
+      /**
+       * Remove text alignment (reset to default)
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * unsetTextAlign()
+       * @note Resets alignment to the default value
+       */
       unsetTextAlign:
         () =>
         ({ commands }) => {

@@ -1,3 +1,4 @@
+// @ts-check
 import { CustomSelectionPluginKey } from '../custom-selection/custom-selection.js';
 import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 import { findParentNode } from '@helpers/index.js';
@@ -5,10 +6,12 @@ import { kebabCase } from '@harbour-enterprises/common';
 
 /**
  * Get the (parsed) linked style from the styles.xml
- *
- * @param {String} styleId The styleId of the linked style
- * @param {Array[Object]} styles The styles array
- * @returns {Object} The linked style
+ * @category Helper
+ * @param {string} styleId - The styleId of the linked style
+ * @param {Array} styles - The styles array
+ * @returns {Object} The linked style and its parent
+ * @example
+ * const { linkedStyle, basedOnStyle } = getLinkedStyle('Heading1', styles);
  */
 export const getLinkedStyle = (styleId, styles = []) => {
   const linkedStyle = styles.find((style) => style.id === styleId);
@@ -17,20 +20,31 @@ export const getLinkedStyle = (styleId, styles = []) => {
   return { linkedStyle, basedOnStyle };
 };
 
+/**
+ * Convert spacing attributes to CSS style object
+ * @category Helper
+ * @param {Object} spacing - The spacing object
+ * @returns {Object} CSS style properties
+ * @private
+ */
 export const getSpacingStyle = (spacing) => {
   const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
+  const lineHeightResult = getLineHeightValueString(line, '', lineRule, true);
+  const lineHeightStyles = typeof lineHeightResult === 'object' && lineHeightResult !== null ? lineHeightResult : {};
+
   return {
     'margin-top': lineSpaceBefore + 'px',
     'margin-bottom': lineSpaceAfter + 'px',
-    ...getLineHeightValueString(line, '', lineRule, true),
+    ...lineHeightStyles,
   };
 };
 
 /**
- * Convert spacing object to a style string
- *
- * @param {Object} spacing The spacing object
- * @returns {String} The style string
+ * Convert spacing object to a CSS style string
+ * @category Helper
+ * @param {Object} spacing - The spacing object
+ * @returns {string} The CSS style string
+ * @private
  */
 export const getSpacingStyleString = (spacing) => {
   const { lineSpaceBefore, lineSpaceAfter, line } = spacing;
@@ -41,6 +55,13 @@ export const getSpacingStyleString = (spacing) => {
   `.trim();
 };
 
+/**
+ * Convert mark attributes to CSS styles
+ * @category Helper
+ * @param {Array} attrs - Array of mark attributes
+ * @returns {string} CSS style string
+ * @private
+ */
 export const getMarksStyle = (attrs) => {
   let styles = '';
   for (const attr of attrs) {
@@ -67,9 +88,13 @@ export const getMarksStyle = (attrs) => {
 };
 
 /**
- * Get a sorted list of paragraph quick-format styles from the editor.
- * @param {import('../../core/Editor.js').Editor} editor - The editor instance.
- * @returns {Array} Sorted list of styles.
+ * Get a sorted list of paragraph quick-format styles from the editor
+ * @category Helper
+ * @param {Object} editor - The editor instance
+ * @returns {Array} Sorted list of paragraph styles
+ * @example
+ * const quickStyles = getQuickFormatList(editor);
+ * // Returns paragraph styles sorted by name
  */
 export const getQuickFormatList = (editor) => {
   if (!editor?.converter?.linkedStyles) return [];
@@ -84,14 +109,16 @@ export const getQuickFormatList = (editor) => {
 };
 
 /**
- * Convert the linked styles and current node marks into a decoration string
- * If the node contains a given mark, we don't override it with the linked style per MS Word behavior
- *
- * @param {Object} linkedStyle The linked style object
- * @param {Object} basedOnStyle The basedOn style object
- * @param {Object} node The current node
- * @param {Object} parent The parent of current
- * @returns {String} The style string
+ * Convert linked styles and current node marks into a CSS decoration string
+ * @category Helper
+ * @param {Object} linkedStyle - The linked style object
+ * @param {Object} basedOnStyle - The basedOn style object
+ * @param {Object} node - The current node
+ * @param {Object} parent - The parent of current node
+ * @param {boolean} includeSpacing - Whether to include spacing styles
+ * @returns {string} The CSS style string for decorations
+ * @note Node marks take precedence over linked style properties per Word behavior
+ * @private
  */
 export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, parent, includeSpacing = true) => {
   if (!linkedStyle?.definition?.styles) return '';
@@ -176,12 +203,16 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
 };
 
 /**
- * Helper function to apply a linked style to a transaction
- *
- * @param {Transaction} tr The transaction to mutate
- * @param {Editor} editor The editor instance
- * @param {object} style The linked style to apply
+ * Apply a linked style to a transaction
+ * @category Helper
+ * @param {Object} tr - The transaction to mutate
+ * @param {Object} editor - The editor instance
+ * @param {Object} style - The linked style to apply
  * @returns {boolean} Whether the transaction was modified
+ * @example
+ * const success = applyLinkedStyleToTransaction(tr, editor, headingStyle);
+ * @note Clears existing formatting marks when applying styles
+ * @note Handles both cursor position and selection ranges
  */
 export const applyLinkedStyleToTransaction = (tr, editor, style) => {
   if (!style) return false;

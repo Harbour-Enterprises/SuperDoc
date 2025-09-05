@@ -1,8 +1,22 @@
+// @ts-check
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { PaginationPluginKey } from '../../pagination/pagination-helpers.js';
 
 const ImagePositionPluginKey = new PluginKey('ImagePosition');
+
+/**
+ * Creates a ProseMirror plugin for managing anchored image positioning
+ * @category Helper
+ * @param {Object} params - Plugin parameters
+ * @param {Object} params.editor - Editor instance
+ * @returns {Plugin} ProseMirror plugin for image positioning
+ * @example
+ * const plugin = ImagePositionPlugin({ editor });
+ * @note Handles anchored images with text wrapping
+ * @note Integrates with pagination for proper page positioning
+ * @note Creates placeholder decorations for absolute positioned images
+ */
 export const ImagePositionPlugin = ({ editor }) => {
   const { view } = editor;
   let shouldUpdate = false;
@@ -47,6 +61,16 @@ export const ImagePositionPlugin = ({ editor }) => {
   });
 };
 
+/**
+ * Generate decorations for anchored images based on their positioning attributes
+ * @private
+ * @param {Object} state - Editor state
+ * @param {Object} view - Editor view
+ * @returns {Array} Array of Decoration objects
+ * @note Creates inline decorations with positioning styles
+ * @note Adds placeholder widgets for absolute positioned images
+ * @note Handles float left/right and center alignment
+ */
 const getImagePositionDecorations = (state, view) => {
   let decorations = [];
   state.doc.descendants((node, pos) => {
@@ -99,6 +123,18 @@ const getImagePositionDecorations = (state, view) => {
   return decorations;
 };
 
+/**
+ * Find the previous DOM node with a specific class by walking up the DOM tree
+ * @private
+ * @param {Object} view - Editor view
+ * @param {number} pos - Position in document
+ * @param {string} className - Class name to search for
+ * @returns {HTMLElement|null} DOM element with the class or null
+ * @example
+ * const pageBreak = findPreviousDomNodeWithClass(view, pos, 'pagination-break-wrapper');
+ * @note Walks backward through siblings and ancestors
+ * @note Handles text nodes by starting from their parent
+ */
 const findPreviousDomNodeWithClass = (view, pos, className) => {
   let { node } = view.domAtPos(pos);
 

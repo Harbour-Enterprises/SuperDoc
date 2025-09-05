@@ -1,7 +1,15 @@
+// @ts-check
 /**
- * Process an uploaded image to ensure it fits within the editor's content area.
- * @param {string | File} fileData Base 64 string or File object.
- * @returns {Promise<string | File>} Resolves with a base 64 string or File object.
+ * Process an uploaded image to ensure it fits within the editor's content area
+ * @category Helper
+ * @param {string|File} fileData - Base64 string or File object
+ * @param {Object} editor - Editor instance
+ * @returns {Promise<string|Object>} Processed image data
+ * @example
+ * const processed = await processUploadedImage(file, editor);
+ * // Returns resized image maintaining aspect ratio
+ * @note Uses multi-step Hermite resize for high quality
+ * @note Respects device pixel ratio for crisp display
  */
 export const processUploadedImage = (fileData, editor) => {
   return new Promise((resolve, reject) => {
@@ -64,6 +72,17 @@ export const processUploadedImage = (fileData, editor) => {
   });
 };
 
+/**
+ * Calculate allowed image dimensions based on editor constraints
+ * @category Helper
+ * @param {number} width - Original image width
+ * @param {number} height - Original image height
+ * @param {Object} editor - Editor instance
+ * @returns {Object} Object with adjusted width and height
+ * @example
+ * const { width, height } = getAllowedImageDimensions(1920, 1080, editor);
+ * @note Maintains aspect ratio while fitting within max dimensions
+ */
 export const getAllowedImageDimensions = (width, height, editor) => {
   const { width: maxWidth, height: maxHeight } = editor.getMaxContentSize();
   if (!maxWidth || !maxHeight) return { width, height };
@@ -86,12 +105,13 @@ export const getAllowedImageDimensions = (width, height, editor) => {
 };
 
 /**
+ * @private
  * Hermite resize - fast image resize/resample using Hermite filter. 1 cpu version!
  * see: https://github.com/viliusle/Hermite-resize
- * @param {HtmlElement} canvas
- * @param {int} width
- * @param {int} height
- * @param {boolean} resize_canvas if true, canvas will be resized. Optional.
+ * @param {HTMLCanvasElement} canvas - Canvas to resize
+ * @param {number} width - Target width
+ * @param {number} height - Target height
+ * @param {boolean} resize_canvas - Whether to resize the canvas element
  */
 function resample_high_quality(canvas, width, height, resize_canvas) {
   var width_source = canvas.width;
@@ -169,10 +189,11 @@ function resample_high_quality(canvas, width, height, resize_canvas) {
 }
 
 /**
+ * @private
  * Multi-step resize function that scales images in multiple steps for better quality
- * @param {HTMLCanvasElement} canvas - The canvas to resize
- * @param {number} targetWidth - Target width
- * @param {number} targetHeight - Target height
+ * @param {HTMLCanvasElement} canvas - Canvas to resize
+ * @param {number} targetWidth - Final target width
+ * @param {number} targetHeight - Final target height
  */
 function multiStepResize(canvas, targetWidth, targetHeight) {
   const originalWidth = canvas.width;

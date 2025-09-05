@@ -247,7 +247,7 @@ function isAllowedUri(uri, protocols) {
 /**
  * Trim node boundaries from range
  * @private
- * @param {import("prosemirror-model").Node} doc - Document node
+ * @param {Object} doc - Document node
  * @param {number} from - Start position
  * @param {number} to - End position
  * @returns {{from: number, to: number}} Trimmed range

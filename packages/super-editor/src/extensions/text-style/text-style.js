@@ -11,6 +11,11 @@ export const TextStyle = Mark.create({
   name: 'textStyle',
 
   addOptions() {
+    /**
+     * @typedef {Object} TextStyleOptions
+     * @category Options
+     * @property {Object} [htmlAttributes={}] - Custom HTML attributes to apply to text style spans
+     */
     return {
       htmlAttributes: {},
     };
@@ -36,6 +41,10 @@ export const TextStyle = Mark.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [styleId] - Style identifier for referencing predefined styles
+       */
       styleId: {},
     };
   },
@@ -45,10 +54,11 @@ export const TextStyle = Mark.create({
       /**
        * Remove empty text style marks
        * @category Command
-       * @returns {Function} Command - Removes mark if no attributes present
+       * @returns {Function} Command function - Removes mark if no attributes present
        * @example
        * removeEmptyTextStyle()
        * @note Cleanup utility to prevent empty span elements
+       * @note Automatically checks if any style attributes exist before removal
        */
       removeEmptyTextStyle:
         () =>
