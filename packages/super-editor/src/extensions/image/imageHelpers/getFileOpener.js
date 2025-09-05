@@ -1,5 +1,16 @@
+// @ts-check
 const ACCEPT_IMAGE_TYPES = ['.jpg', '.jpeg', '.png', 'image/jpeg', 'image/png'];
 
+/**
+ * Creates a file input opener for image selection
+ * @category Helper
+ * @returns {Function} Function that opens file picker and returns selected file
+ * @example
+ * const openFile = getFileOpener();
+ * const result = await openFile();
+ * if (result) console.log(result.file);
+ * @note Only accepts JPEG and PNG images
+ */
 export const getFileOpener = () => {
   let fileInput = document.createElement('input');
   fileInput.type = 'file';
