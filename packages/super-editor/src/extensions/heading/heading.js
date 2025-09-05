@@ -1,5 +1,5 @@
 // @ts-check
-import { Node, Attribute } from '@core/index.js';
+import { Extension } from '@core/index.js';
 
 /**
  * Heading attributes
@@ -18,14 +18,8 @@ import { Node, Attribute } from '@core/index.js';
  * @shortcut Mod-Alt-5 | toggleHeading | Toggle heading level 5
  * @shortcut Mod-Alt-6 | toggleHeading | Toggle heading level 6
  */
-export const Heading = Node.create({
+export const Heading = Extension.create({
   name: 'heading',
-
-  group: 'block',
-
-  content: 'inline*',
-
-  defining: true,
 
   addOptions() {
     return {
@@ -33,65 +27,9 @@ export const Heading = Node.create({
        * @typedef {Object} HeadingOptions
        * @category Options
        * @property {number[]} [levels=[1,2,3,4,5,6]] - Supported heading levels
-       * @property {Object} [htmlAttributes] - HTML attributes for heading elements
        */
       levels: [1, 2, 3, 4, 5, 6],
-      htmlAttributes: {
-        'aria-label': 'Heading node',
-      },
     };
-  },
-
-  addAttributes() {
-    return {
-      /**
-       * @category Attribute
-       * @param {number} [level=1] - Heading level from 1 (largest) to 6 (smallest)
-       */
-      level: {
-        default: 1,
-        rendered: false,
-      },
-
-      /**
-       * @private
-       * @category Attribute
-       * @param {Object} [tabStops] - Internal tab stop configuration
-       */
-      tabStops: { rendered: false },
-
-      /**
-       * @private
-       * @category Attribute
-       * @param {string} [sdBlockId] - Internal block tracking ID
-       */
-      sdBlockId: {
-        default: null,
-        keepOnSplit: false,
-        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
-        renderDOM: (attrs) => {
-          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
-        },
-      },
-
-      /**
-       * @private
-       * @category Attribute
-       * @param {string} [styleId] - Style ID assigned according to heading level
-       */
-      styleId: {},
-    };
-  },
-
-  parseDOM() {
-    return this.options.levels.map((level) => ({
-      tag: `h${level}`,
-      attrs: { level, styleId: `Heading${level}` },
-    }));
-  },
-
-  renderDOM({ htmlAttributes }) {
-    return [`p`, Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
   addCommands() {
