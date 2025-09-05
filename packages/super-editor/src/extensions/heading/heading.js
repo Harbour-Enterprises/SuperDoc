@@ -53,7 +53,7 @@ export const Heading = Extension.create({
         ({ commands }) => {
           const containsLevel = this.options.levels.includes(attributes.level);
           if (!containsLevel) return false;
-          return commands.setNode(this.name, attributes);
+          return commands.setLinkedStyle({ id: `Heading${attributes.level}` });
         },
 
       /**
@@ -74,7 +74,7 @@ export const Heading = Extension.create({
         ({ commands }) => {
           const containsLevel = this.options.levels.includes(attributes.level);
           if (!containsLevel) return false;
-          return commands.toggleNode(this.name, 'paragraph', attributes);
+          return commands.toggleLinkedStyle({ id: `Heading${attributes.level}` }, 'paragraph');
         },
     };
   },
