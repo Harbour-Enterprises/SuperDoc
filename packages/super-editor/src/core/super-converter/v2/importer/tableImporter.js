@@ -78,6 +78,8 @@ export function handleTableNode(node, params) {
       type: tblCellSpacing.attributes['w:type'],
     };
     attrs['borderCollapse'] = 'separate';
+  } else {
+    attrs['borderCollapse'] = 'collapse';
   }
 
   const tblJustification = tblPr.elements.find((el) => el.name === 'w:jc');
@@ -166,22 +168,12 @@ export function handleTableCellNode(node, row, table, rowBorders, columnWidth = 
     const colspanNum = parseInt(colspan || 1, 10);
 
     if (colspanNum && colspanNum > 1 && hasDefaultColWidths) {
-      let colwidth = [];
-
+      const colwidth = [];
       for (let i = 0; i < colspanNum; i++) {
-        let colwidthValue = defaultColWidths[columnIndex + i];
-        let defaultColwidth = 100;
-
-        if (typeof colwidthValue !== 'undefined') {
-          colwidth.push(colwidthValue);
-        } else {
-          colwidth.push(defaultColwidth);
-        }
+        const w = defaultColWidths?.[columnIndex + i];
+        if (typeof w !== 'undefined') colwidth.push(w);
       }
-
-      if (colwidth.length) {
-        attributes['colwidth'] = [...colwidth];
-      }
+      if (colwidth.length) attributes['colwidth'] = [...colwidth];
     }
   }
 
@@ -191,42 +183,22 @@ export function handleTableCellNode(node, row, table, rowBorders, columnWidth = 
   if (verticalAlign) attributes['verticalAlign'] = verticalAlign;
   if (fontSize) attributes['fontSize'] = fontSize;
   if (fontFamily) attributes['fontFamily'] = fontFamily['ascii'];
-  if (rowBorders) attributes['borders'] = { ...rowBorders };
-  if (inlineBorders) attributes['borders'] = Object.assign(attributes['borders'] || {}, inlineBorders);
+  attributes['borders'] = mergeBorders({
+    table: referencedStyles?.borders,
+    row: rowBorders,
+    cell: inlineBorders,
+  });
 
-  // Tables can have vertically merged cells, indicated by the vMergeAttrs
-  // if (vMerge) attributes['vMerge'] = vMergeAttrs || 'merged';
-  if (vMergeAttrs && vMergeAttrs['w:val'] === 'restart') {
-    const rows = table.elements.filter((el) => el.name === 'w:tr');
-    const currentRowIndex = rows.findIndex((r) => r === row);
-    const remainingRows = rows.slice(currentRowIndex + 1);
+  if (vMerge) attributes['vMerge'] = vMergeAttrs || { 'w:val': 'continue' };
+  const isRestart = !!(vMergeAttrs && vMergeAttrs['w:val'] === 'restart');
+  const isContinue = !!(vMerge && (!vMergeAttrs || vMergeAttrs['w:val'] !== 'restart'));
 
-    const cellsInRow = row.elements.filter((el) => el.name === 'w:tc');
-    let cellIndex = cellsInRow.findIndex((el) => el === node);
-    let rowspan = 1;
+  if (isContinue) {
+    attributes['merged'] = 'continue'; // row handler will skip rendering this cell
+  }
 
-    // Iterate through all remaining rows after the current cell, and find all cells that need to be merged
-    for (let remainingRow of remainingRows) {
-      const firstCell = remainingRow.elements.findIndex((el) => el.name === 'w:tc');
-      const cellAtIndex = remainingRow.elements[firstCell + cellIndex];
-
-      if (!cellAtIndex) break;
-
-      const vMerge = getTableCellMergeTag(cellAtIndex);
-      const { attributes: currentCellMergeAttrs } = vMerge || {};
-      if (
-        (!vMerge && !currentCellMergeAttrs) ||
-        (currentCellMergeAttrs && currentCellMergeAttrs['w:val'] === 'restart')
-      ) {
-        // We have reached the end of the vertically merged cells
-        break;
-      }
-
-      // This cell is part of a merged cell, merge it (remove it from its row)
-      rowspan++;
-      remainingRow.elements.splice(firstCell + cellIndex, 1);
-    }
-    attributes['rowspan'] = rowspan;
+  if (isRestart) {
+    attributes['rowspan'] = computeRowspanByGrid(table, row, columnIndex);
   }
 
   return {
@@ -235,7 +207,6 @@ export function handleTableCellNode(node, row, table, rowBorders, columnWidth = 
     attrs: attributes,
   };
 }
-
 const getTableCellMergeTag = (node) => {
   const tcPr = node.elements.find((el) => el.name === 'w:tcPr');
   const vMerge = tcPr?.elements?.find((el) => el.name === 'w:vMerge');
@@ -261,6 +232,55 @@ const processBorder = (borders, direction, rowBorders = {}) => {
   }
   return null;
 };
+function findCellAtGridColumn(row, targetGridCol) {
+  const cells = row.elements.filter((el) => el.name === 'w:tc');
+  let col = 0;
+  for (const c of cells) {
+    const tcPr = c.elements?.find((el) => el.name === 'w:tcPr');
+    const spanTag = tcPr?.elements?.find((el) => el.name === 'w:gridSpan');
+    const span = parseInt(spanTag?.attributes?.['w:val'] || '1', 10);
+    if (col === targetGridCol) return { cell: c, span };
+    col += span;
+  }
+  return null;
+}
+
+function computeRowspanByGrid(table, currentRow, targetGridCol) {
+  const rows = table.elements.filter((el) => el.name === 'w:tr');
+  const startIndex = rows.findIndex((r) => r === currentRow);
+  let rowspan = 1;
+  for (let i = startIndex + 1; i < rows.length; i++) {
+    const match = findCellAtGridColumn(rows[i], targetGridCol);
+    if (!match) break;
+    const vMerge = getTableCellMergeTag(match.cell);
+    const attrs = vMerge?.attributes;
+    if (!vMerge) break; // no vMerge -> stop
+    if (attrs && attrs['w:val'] === 'restart') break; // new restart -> stop
+    // continuation -> extend
+    rowspan++;
+  }
+  return rowspan;
+}
+
+// Merge table/row/cell borders with precedence and respect 'nil'
+function mergeBorders(src = {}) {
+  const out = {};
+  const order = ['table', 'row', 'cell']; // low -> high precedence
+  for (const side of ['top', 'right', 'bottom', 'left', 'insideH', 'insideV']) {
+    for (const key of order) {
+      const b = src[key]?.[side];
+      if (!b) continue;
+      // treat 'nil' (Word) or 'none' as hard remove
+      const val = b.val || b.w_val || b['w:val'];
+      if (val === 'nil' || val === 'none') {
+        delete out[side];
+      } else {
+        out[side] = { ...out[side], ...b };
+      }
+    }
+  }
+  return out;
+}
 
 const processInlineCellBorders = (borders, rowBorders) => {
   if (!borders) return null;
@@ -403,6 +423,7 @@ export function handleTableRowNode(node, table, rowBorders, styleTag, params) {
   const tPr = node.elements.find((el) => el.name === 'w:trPr');
   const rowHeightTag = tPr?.elements?.find((el) => el.name === 'w:trHeight');
   const rowHeight = rowHeightTag?.attributes['w:val'];
+  const rowHeightRule = rowHeightTag?.attributes?.['w:hRule'] || 'atLeast';
 
   const borders = {};
   if (rowBorders?.insideH) borders['bottom'] = rowBorders.insideH;
@@ -417,19 +438,18 @@ export function handleTableRowNode(node, table, rowBorders, styleTag, params) {
   const cellNodes = node.elements.filter((el) => el.name === 'w:tc');
 
   let currentColumnIndex = 0;
-  const content =
-    cellNodes?.map((n) => {
-      let colWidth = gridColumnWidths?.[currentColumnIndex] || null;
-
-      const result = handleTableCellNode(n, node, table, borders, colWidth, styleTag, params, currentColumnIndex);
-
-      const tcPr = n.elements?.find((el) => el.name === 'w:tcPr');
-      const colspanTag = tcPr?.elements?.find((el) => el.name === 'w:gridSpan');
-      const colspan = parseInt(colspanTag?.attributes['w:val'] || 1, 10);
-      currentColumnIndex += colspan;
-
-      return result;
-    }) || [];
+  const content = [];
+  for (const n of cellNodes || []) {
+    const tcPr = n.elements?.find((el) => el.name === 'w:tcPr');
+    const colspanTag = tcPr?.elements?.find((el) => el.name === 'w:gridSpan');
+    const colspan = parseInt(colspanTag?.attributes?.['w:val'] || '1', 10);
+    const colWidth = gridColumnWidths?.[currentColumnIndex] || null;
+    const result = handleTableCellNode(n, node, table, borders, colWidth, styleTag, params, currentColumnIndex);
+    if (!result?.attrs?.merged || result.attrs.merged !== 'continue') {
+      content.push(result);
+    }
+    currentColumnIndex += colspan;
+  }
   const newNode = {
     type: 'tableRow',
     content,
