@@ -10,8 +10,9 @@ const SD_BLOCK_ID_ATTRIBUTE_NAME = 'sdBlockId';
 export const BlockNodePluginKey = new PluginKey('blockNodePlugin');
 
 /**
+ * Block node information object
  * @typedef {Object} BlockNodeInfo
- * @property {import("prosemirror-model").Node} node - The block node
+ * @property {Object} node - The block node
  * @property {number} pos - Position in the document
  */
 
@@ -29,7 +30,7 @@ export const BlockNode = Extension.create({
        * Replace a block node by its ID with new content
        * @category Command
        * @param {string} id - The sdBlockId of the node to replace
-       * @param {import("prosemirror-model").Node} contentNode - The replacement node
+       * @param {Object} contentNode - The replacement ProseMirror node
        * @returns {Function} Command function
        * @example
        * const newParagraph = editor.schema.nodes.paragraph.create({}, editor.schema.text('New content'))
@@ -130,7 +131,7 @@ export const BlockNode = Extension.create({
       /**
        * Get all block nodes in the document
        * @category Helper
-       * @returns {BlockNodeInfo[]} Array of block node info objects
+       * @returns {Array<BlockNodeInfo>} Array of block node info objects
        * @example
        * const blocks = editor.helpers.blockNode.getBlockNodes()
        * console.log(`Found ${blocks.length} block nodes`)
@@ -143,7 +144,7 @@ export const BlockNode = Extension.create({
        * Get a specific block node by its ID
        * @category Helper
        * @param {string} id - The sdBlockId to search for
-       * @returns {BlockNodeInfo[]} Array containing the matching node (or empty)
+       * @returns {Array<BlockNodeInfo>} Array containing the matching node (or empty)
        * @example
        * const block = editor.helpers.blockNode.getBlockNodeById('block-123')
        * if (block.length) console.log('Found:', block[0].node.type.name)
@@ -156,7 +157,7 @@ export const BlockNode = Extension.create({
        * Get all block nodes of a specific type
        * @category Helper
        * @param {string} type - The node type name (e.g., 'paragraph', 'heading')
-       * @returns {BlockNodeInfo[]} Array of matching block nodes
+       * @returns {Array<BlockNodeInfo>} Array of matching block nodes
        * @example
        * const paragraphs = editor.helpers.blockNode.getBlockNodesByType('paragraph')
        * const headings = editor.helpers.blockNode.getBlockNodesByType('heading')
@@ -170,7 +171,7 @@ export const BlockNode = Extension.create({
        * @category Helper
        * @param {number} from - Start position
        * @param {number} to - End position
-       * @returns {BlockNodeInfo[]} Array of block nodes in the range
+       * @returns {Array<BlockNodeInfo>} Array of block nodes in the range
        * @example
        * const selection = editor.state.selection
        * const blocksInSelection = editor.helpers.blockNode.getBlockNodesInRange(
@@ -242,7 +243,7 @@ export const BlockNode = Extension.create({
 
 /**
  * Check if a node allows sdBlockId attribute
- * @param {import("prosemirror-model").Node} node - The node to check
+ * @param {Object} node - The ProseMirror node to check
  * @returns {boolean} - True if the node type supports sdBlockId attribute
  */
 export const nodeAllowsSdBlockIdAttr = (node) => {
@@ -251,7 +252,7 @@ export const nodeAllowsSdBlockIdAttr = (node) => {
 
 /**
  * Check if a node needs an sdBlockId (doesn't have one or has null/empty value)
- * @param {import("prosemirror-model").Node} node - The node to check
+ * @param {Object} node - The ProseMirror node to check
  * @returns {boolean} - True if the node needs an sdBlockId assigned
  */
 export const nodeNeedsSdBlockId = (node) => {
@@ -262,12 +263,11 @@ export const nodeNeedsSdBlockId = (node) => {
 /**
  * Check for new block nodes in ProseMirror transactions.
  * Iterate through the list of transactions, and in each tr check if there are any new block nodes.
- * @readonly
- * @param {readonly import("prosemirror-state").Transaction[]} transactions - The ProseMirror transactions to check.
+ * @param {ArrayLike<Object>} transactions - The ProseMirror transactions to check.
  * @returns {boolean} - True if new block nodes are found, false otherwise.
  */
 export const checkForNewBlockNodesInTrs = (transactions) => {
-  return transactions.some((tr) => {
+  return Array.from(transactions).some((tr) => {
     return tr.steps.some((step) => {
       if (!(step instanceof ReplaceStep)) return false;
       const hasValidSdBlockNodes = step.slice?.content?.content?.some((node) => nodeAllowsSdBlockIdAttr(node));
