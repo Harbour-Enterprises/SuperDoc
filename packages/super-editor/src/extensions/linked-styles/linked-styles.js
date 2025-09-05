@@ -1,6 +1,7 @@
 import { Extension } from '@core/Extension.js';
 import { applyLinkedStyleToTransaction, generateLinkedStyleString } from './helpers.js';
 import { createLinkedStylesPlugin, LinkedStylesPluginKey } from './plugin.js';
+import { findParentNodeClosestToPos } from '@core/helpers';
 
 export const LinkedStyles = Extension.create({
   name: 'linkedStyles',
@@ -24,6 +25,48 @@ export const LinkedStyles = Extension.create({
         const { tr } = params;
         return applyLinkedStyleToTransaction(tr, this.editor, style);
       },
+
+      /**
+       * Toggle a linked style on the current selection.
+       *
+       * @param {object} style The linked style to apply
+       * @param {string} style.id The style ID (e.g., 'Heading1')
+       * @param {string|null} nodeType The node type to restrict the toggle to (e.g., 'paragraph'). If null,
+       * the style can be toggled on any node type.
+       * @returns {boolean} Whether the style was correctly applied/removed
+       */
+      toggleLinkedStyle:
+        (style, nodeType = null) =>
+        (params) => {
+          const { tr } = params;
+          if (tr.selection.empty) {
+            console.debug('[toggleLinkedStyle] empty selection, nothing to do...');
+            return false;
+          }
+          let node = tr.doc.nodeAt(tr.selection.$from.pos);
+
+          if (nodeType && node.type.name !== nodeType) {
+            console.debug(
+              `[toggleLinkedStyle] Current node has different type (${node.type.name}). Searching parents...`,
+            );
+            node = findParentNodeClosestToPos(tr.selection.$from, (n) => {
+              return nodeType ? n.type.name === nodeType : true;
+            })?.node;
+          }
+          console.debug('[toggleLinkedStyle] Current node:', node, node?.attrs);
+          if (!node) {
+            console.debug('[toggleLinkedStyle] Current node is not of type:', nodeType);
+            return false;
+          }
+          const currentStyleId = node.attrs.styleId;
+
+          if (currentStyleId === style.id) {
+            console.debug('[toggleLinkedStyle] Removing style:', style.id);
+            return applyLinkedStyleToTransaction(tr, this.editor, { id: null });
+          }
+          console.debug('[toggleLinkedStyle] Applying style:', style.id);
+          return applyLinkedStyleToTransaction(tr, this.editor, style);
+        },
 
       /**
        * Apply a linked style by its ID.
