@@ -5,7 +5,7 @@ vi.mock('../index.js', () => ({
   registeredHandlers: {},
 }));
 
-vi.mock('@superdoc-dev/ooxml-inspector', () => ({
+vi.mock('@superdoc-dev/ooxml-oracle', () => ({
   childrenOf: vi.fn(),
 }));
 
@@ -22,7 +22,7 @@ vi.mock('./logger.js', () => ({
 }));
 
 import { registeredHandlers } from '../index.js';
-import { childrenOf } from '@superdoc-dev/ooxml-inspector';
+import { childrenOf } from '@superdoc-dev/ooxml-oracle';
 import {
   createCoverageGroupTitle,
   startCoverageGroup,

@@ -63,14 +63,14 @@ describe('runChildrenCLI', () => {
     expect(errSpy).not.toHaveBeenCalled();
   });
 
-  it('tags: no args → JSON with count & tags, then "Total tags:" line', () => {
+  it('tags: no args → JSON with count & tags, then "Total tags (filtered):" line', () => {
     allTags.mockReturnValue(['w:p', 'w:r', 'a:blip']);
     runChildrenCLI(['tags']);
     expect(allTags).toHaveBeenCalledWith({ prefix: null, hasChildren: null });
     const calls = logSpy.mock.calls.map((c) => c[0]);
     expect(calls[0]).toMatch(/"count":\s*3/);
     expect(calls[0]).toMatch(/"tags":\s*\[/);
-    expect(calls[1]).toBe('Total tags: 3');
+    expect(calls[1]).toBe('Total tags (filtered): 3');
   });
 
   it('tags: with prefix and --parents → filters via hasChildren=true', () => {
@@ -79,7 +79,7 @@ describe('runChildrenCLI', () => {
     expect(allTags).toHaveBeenCalledWith({ prefix: 'w', hasChildren: true });
     const calls = logSpy.mock.calls.map((c) => c[0]);
     expect(calls[0]).toMatch(/"count":\s*2/);
-    expect(calls[1]).toBe('Total tags: 2');
+    expect(calls[1]).toBe('Total tags (filtered): 2');
   });
 
   it('tags: --plain outputs newline-joined list + Total tags', () => {
@@ -88,7 +88,7 @@ describe('runChildrenCLI', () => {
     // plain should not JSON.stringify the payload; just join with \n
     const calls = logSpy.mock.calls.map((c) => c[0]);
     expect(calls[0]).toBe('w:p\nw:r\nw:tbl');
-    expect(calls[1]).toBe('Total tags: 3');
+    expect(calls[1]).toBe('Total tags (filtered): 3');
   });
 
   it('tags: prefix + --plain + --parents parses flags after prefix', () => {
@@ -97,7 +97,7 @@ describe('runChildrenCLI', () => {
     expect(allTags).toHaveBeenCalledWith({ prefix: 'w', hasChildren: true });
     const calls = logSpy.mock.calls.map((c) => c[0]);
     expect(calls[0]).toBe('w:p');
-    expect(calls[1]).toBe('Total tags: 1');
+    expect(calls[1]).toBe('Total tags (filtered): 1');
   });
 
   it('namespaces: prints JSON of namespaces()', () => {

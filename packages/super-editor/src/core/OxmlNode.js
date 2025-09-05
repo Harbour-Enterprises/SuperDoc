@@ -1,7 +1,7 @@
 // @ts-check
 
 import { Node } from './Node.js';
-import { childrenOf } from '@superdoc-dev/ooxml-inspector';
+import { childrenOf } from '@superdoc-dev/ooxml-oracle';
 
 /**
  * @type {import('./types/index.js').OxmlNode}

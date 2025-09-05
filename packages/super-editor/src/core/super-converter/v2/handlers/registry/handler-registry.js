@@ -1,5 +1,5 @@
 import { registeredHandlers } from '../index.js';
-import { childrenOf } from '@superdoc-dev/ooxml-inspector';
+import { childrenOf } from '@superdoc-dev/ooxml-oracle';
 import {
   createCoverageGroupTitle,
   startCoverageGroup,
