@@ -95,7 +95,7 @@ export const LinkedStyles = Extension.create({
        * @returns {object|null} The linked style object or null if not found
        */
       getStyleById: (styleId) => {
-        const styles = this.getStyles();
+        const styles = this.editor.helpers[this.name].getStyles();
         return styles.find((s) => s.id === styleId);
       },
 
