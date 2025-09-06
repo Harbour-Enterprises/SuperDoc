@@ -9,7 +9,7 @@ import {
   broadcastEditorEvents,
 } from './pagination-helpers.js';
 import { CollaborationPluginKey } from '@extensions/collaboration/collaboration.js';
-import { ImagePlaceholderPluginKey } from '@extensions/image/imageHelpers/imagePlaceholderPlugin.js';
+import { getImageRegistrationMetaType } from '@extensions/image/imageHelpers/imageRegistrationPlugin.js';
 import { LinkedStylesPluginKey } from '@extensions/linked-styles/index.js';
 import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestToPos.js';
 import { generateDocxRandomId } from '../../core/helpers/index.js';
@@ -122,9 +122,9 @@ export const Pagination = Extension.create({
           }
 
           // We need special handling for images / the image placeholder plugin
-          const imagePluginTransaction = tr.getMeta(ImagePlaceholderPluginKey);
-          if (imagePluginTransaction) {
-            if (imagePluginTransaction.type === 'remove') {
+          const imageRegistrationMetaType = getImageRegistrationMetaType(tr);
+          if (imageRegistrationMetaType) {
+            if (imageRegistrationMetaType === 'remove') {
               onImageLoad(editor);
             }
             return { ...oldState };
