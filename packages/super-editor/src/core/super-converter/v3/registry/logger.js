@@ -1,3 +1,5 @@
+// @ts-check
+
 const CONSOLE_STYLES = {
   muted: 'color:#AAAAAA',
   primary: 'color:#AAFFAA;font-weight:700',

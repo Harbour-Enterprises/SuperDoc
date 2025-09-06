@@ -22,6 +22,7 @@ import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
 import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
+import { passthroughNodeHandlerEntity } from './passthrough-node-importer.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -88,6 +89,9 @@ export const createDocumentJson = (docx, converter, editor) => {
       converter,
       editor,
       lists,
+      ctx: {
+        parent: bodyNode,
+      },
     });
 
     const result = {
@@ -137,7 +141,8 @@ export const defaultNodeListHandler = () => {
     tabNodeEntityHandler,
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
-    standardNodeHandlerEntity, // This is the last one as it can handle everything
+    standardNodeHandlerEntity,
+    passthroughNodeHandlerEntity,
   ];
 
   const handler = createNodeListHandler(entities);
@@ -189,6 +194,7 @@ const createNodeListHandler = (nodeHandlers) => {
     filename,
     parentStyleId,
     lists,
+    ctx,
   }) => {
     if (!elements || !elements.length) return [];
 
@@ -216,6 +222,7 @@ const createNodeListHandler = (nodeHandlers) => {
                 filename,
                 parentStyleId,
                 lists,
+                ctx,
               });
             },
             { nodes: [], consumed: 0 },

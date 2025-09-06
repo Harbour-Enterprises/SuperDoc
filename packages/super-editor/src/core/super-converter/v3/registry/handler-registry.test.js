@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HandlerRegistry } from './handler-registry.js';
 
-vi.mock('../index.js', () => ({
+vi.mock('../handlers/index.js', () => ({
   registeredHandlers: {},
 }));
 
@@ -21,15 +21,13 @@ vi.mock('./logger.js', () => ({
   displayNotHandledMessage: vi.fn(),
 }));
 
-import { registeredHandlers } from '../index.js';
+import { registeredHandlers } from '../handlers/index.js';
 import { childrenOf } from '@superdoc-dev/ooxml-oracle';
 import {
   createCoverageGroupTitle,
   startCoverageGroup,
   showCoverageLegend,
   showProgressBar,
-  showItemList,
-  endCoverageGroup,
   computeCoverageSummary,
   displayCoverageReport,
   displayNotHandledMessage,

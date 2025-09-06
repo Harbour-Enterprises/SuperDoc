@@ -13,7 +13,7 @@ import {
 } from './v2/exporter/commentsExporter.js';
 import { FOOTER_RELATIONSHIP_TYPE, HEADER_RELATIONSHIP_TYPE, HYPERLINK_RELATIONSHIP_TYPE } from './constants.js';
 import { DocxHelpers } from './docx-helpers/index.js';
-import { HandlerRegistry } from './v2/handlers/registry/index.js';
+import { HandlerRegistry } from './v3/registry/index.js';
 
 class SuperConverter {
   #handlerRegistry = new HandlerRegistry();
