@@ -72,7 +72,7 @@ export const insertContentAt =
     // - Bare strings that LOOK like HTML: let parser handle (replaceWith)
     // - Bare strings with one or more newlines: force text insertion (insertText)
     const isBareString = typeof value === 'string';
-    const looksLikeHTML = isBareString && /<[^>]+>/.test(value);
+    const looksLikeHTML = isBareString && /^\s*<[a-zA-Z][^>]*>.*<\/[a-zA-Z][^>]*>\s*$/s.test(value);
     const hasNewline = isBareString && /[\r\n]/.test(value);
     const forceTextInsert =
       !!options.asText ||
@@ -115,7 +115,7 @@ export const insertContentAt =
       } else if (typeof value === 'object' && !!value && !!value.text) {
         newContent = value.text;
       } else {
-        newContent = /** @type {string} */ (value);
+        newContent = typeof value === 'string' ? value : '';
       }
 
       tr.insertText(newContent, from, to);
