@@ -17,118 +17,124 @@ const isFragment = (nodeOrFragment) => {
 
 /**
  * Inserts content at the specified position.
- * @param {import("prosemirror-model").ResolvedPos} position
- * @param {string|Array<string|ProseMirrorNode>} value
+ * - Bare strings with newlines → insertText (keeps literal \n)
+ * - HTML-looking strings → parse and replaceWith
+ * - Arrays of strings / {text} objects → insertText
+ *
+ * @param {import("prosemirror-model").ResolvedPos|number|{from:number,to:number}} position
+ * @param {string|Array<string|{text?:string}>|ProseMirrorNode|ProseMirrorFragment} value
  * @param {Object} options
- * @returns
+ * @returns {boolean}
  */
+// prettier-ignore
 export const insertContentAt =
   (position, value, options) =>
   ({ tr, dispatch, editor }) => {
-    if (dispatch) {
-      options = {
-        parseOptions: {},
-        updateSelection: true,
-        applyInputRules: false,
-        applyPasteRules: false,
-        ...options,
-      };
+    if (!dispatch) return true;
 
-      let content;
+    options = {
+      parseOptions: {},
+      updateSelection: true,
+      applyInputRules: false,
+      applyPasteRules: false,
+      // optional escape hatch to force literal text insertion
+      asText: false,
+      ...options,
+    };
 
-      try {
-        content = createNodeFromContent(value, editor.schema, {
-          parseOptions: {
-            preserveWhitespace: 'full',
-            ...options.parseOptions,
-          },
-          errorOnInvalidContent: options.errorOnInvalidContent ?? editor.options.enableContentCheck,
-        });
-      } catch (e) {
-        editor.emit('contentError', {
-          editor,
-          error: e,
-          disableCollaboration: () => {
-            console.error('[super-editor error]: Unable to disable collaboration at this point in time');
-          },
-        });
-        return false;
-      }
+    let content;
 
-      let { from, to } =
-        typeof position === 'number' ? { from: position, to: position } : { from: position.from, to: position.to };
-
-      // If the original input is plainly textual, prefer insertText regardless of how parsing represents it.
-      const forceTextInsert =
-        typeof value === 'string' ||
-        (Array.isArray(value) && value.every((v) => typeof v === 'string' || (v && typeof v.text === 'string'))) ||
-        (value && typeof value === 'object' && typeof value.text === 'string');
-
-      let isOnlyTextContent = forceTextInsert; // start true for plain text inputs
-      let isOnlyBlockContent = true;
-      const nodes = isFragment(content) ? content : [content];
-
-      nodes.forEach((node) => {
-        // check if added node is valid
-        node.check();
-
-        // only refine text heuristic if we are NOT forcing text insertion based on the original value
-        if (!forceTextInsert) {
-          isOnlyTextContent = isOnlyTextContent ? node.isText && node.marks.length === 0 : false;
-        }
-
-        isOnlyBlockContent = isOnlyBlockContent ? node.isBlock : false;
+    try {
+      content = createNodeFromContent(value, editor.schema, {
+        parseOptions: {
+          preserveWhitespace: 'full',
+          ...options.parseOptions,
+        },
+        errorOnInvalidContent: options.errorOnInvalidContent ?? editor.options.enableContentCheck,
       });
+    } catch (e) {
+      editor.emit('contentError', {
+        editor,
+        error: e,
+        disableCollaboration: () => {
+          console.error('[super-editor error]: Unable to disable collaboration at this point in time');
+        },
+      });
+      return false;
+    }
 
-      // check if we can replace the wrapping node by
-      // the newly inserted content
-      // example:
-      // replace an empty paragraph by an inserted image
-      // instead of inserting the image below the paragraph
-      if (from === to && isOnlyBlockContent) {
-        const { parent } = tr.doc.resolve(from);
-        const isEmptyTextBlock = parent.isTextblock && !parent.type.spec.code && !parent.childCount;
+    let { from, to } =
+      typeof position === 'number'
+        ? { from: position, to: position }
+        : { from: position.from, to: position.to };
 
-        if (isEmptyTextBlock) {
-          from -= 1;
-          to += 1;
-        }
+    // Heuristic:
+    // - Bare strings that LOOK like HTML: let parser handle (replaceWith)
+    // - Bare strings with one or more newlines: force text insertion (insertText)
+    const isBareString = typeof value === 'string';
+    const looksLikeHTML = isBareString && /<[^>]+>/.test(value);
+    const hasNewline = isBareString && /[\r\n]/.test(value);
+    const forceTextInsert =
+      !!options.asText ||
+      (hasNewline && !looksLikeHTML) ||
+      (Array.isArray(value) && value.every((v) => typeof v === 'string' || (v && typeof v.text === 'string'))) ||
+      (!!value && typeof value === 'object' && typeof value.text === 'string');
+
+    // Inspect parsed nodes to decide text vs block replacement
+    let isOnlyTextContent = true;
+    let isOnlyBlockContent = true;
+    const nodes = isFragment(content) ? content : [content];
+
+    nodes.forEach((node) => {
+      // validate node
+      node.check();
+
+      // only-plain-text if every node is an unmarked text node
+      isOnlyTextContent = isOnlyTextContent ? (node.isText && node.marks.length === 0) : false;
+
+      isOnlyBlockContent = isOnlyBlockContent ? node.isBlock : false;
+    });
+
+    // Replace empty textblock wrapper when inserting blocks at a cursor
+    if (from === to && isOnlyBlockContent) {
+      const { parent } = tr.doc.resolve(from);
+      const isEmptyTextBlock = parent.isTextblock && !parent.type.spec.code && !parent.childCount;
+
+      if (isEmptyTextBlock) {
+        from -= 1;
+        to += 1;
       }
+    }
 
-      let newContent;
+    let newContent;
 
-      // if there is only plain text we have to use `insertText`
-      // because this will keep the current marks
-      if (isOnlyTextContent) {
-        // if value is string, we can use it directly
-        // otherwise if it is an array, we have to join it
-        if (Array.isArray(value)) {
-          newContent = value.map((v) => (typeof v === 'string' ? v : (v && v.text) || '')).join('');
-        } else if (typeof value === 'object' && !!value && !!value.text) {
-          newContent = value.text;
-        } else {
-          newContent = value;
-        }
-
-        tr.insertText(newContent, from, to);
+    // Use insertText for pure text OR when explicitly/heuristically forced
+    if (isOnlyTextContent || forceTextInsert) {
+      if (Array.isArray(value)) {
+        newContent = value.map((v) => (typeof v === 'string' ? v : (v && v.text) || '')).join('');
+      } else if (typeof value === 'object' && !!value && !!value.text) {
+        newContent = value.text;
       } else {
-        newContent = content;
-
-        tr.replaceWith(from, to, newContent);
+        newContent = /** @type {string} */ (value);
       }
 
-      // set cursor at end of inserted content
-      if (options.updateSelection) {
-        selectionToInsertionEnd(tr, tr.steps.length - 1, -1);
-      }
+      tr.insertText(newContent, from, to);
+    } else {
+      newContent = content;
+      tr.replaceWith(from, to, newContent);
+    }
 
-      if (options.applyInputRules) {
-        tr.setMeta('applyInputRules', { from, text: newContent });
-      }
+    // set cursor at end of inserted content
+    if (options.updateSelection) {
+      selectionToInsertionEnd(tr, tr.steps.length - 1, -1);
+    }
 
-      if (options.applyPasteRules) {
-        tr.setMeta('applyPasteRules', { from, text: newContent });
-      }
+    if (options.applyInputRules) {
+      tr.setMeta('applyInputRules', { from, text: newContent });
+    }
+
+    if (options.applyPasteRules) {
+      tr.setMeta('applyPasteRules', { from, text: newContent });
     }
 
     return true;
