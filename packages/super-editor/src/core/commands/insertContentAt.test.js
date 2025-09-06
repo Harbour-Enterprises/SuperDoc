@@ -147,4 +147,79 @@ describe('insertContentAt', () => {
     expect(tr.insertText).toHaveBeenCalledWith('Line 1\nLine 2', 3, 3);
     expect(tr.replaceWith).not.toHaveBeenCalled();
   });
+
+  it('bare string with \\n\\n forces insertText (keeps literal newlines)', () => {
+    const value = 'Line 1\n\nLine 2';
+
+    // Parser would normally produce a Fragment with a hard break, but since we
+    // force text for newline strings, the parsed result is irrelevant.
+    createNodeFromContent.mockImplementation(() => [
+      // simulate what parser might return; won't be used due to forceTextInsert
+      { isText: true, isBlock: false, marks: [], check: vi.fn() },
+      { isText: false, isBlock: false, marks: [], check: vi.fn() }, // <hardBreak>
+      { isText: true, isBlock: false, marks: [], check: vi.fn() },
+    ]);
+
+    const tr = makeTr();
+    const editor = makeEditor();
+
+    const cmd = insertContentAt(7, value, { updateSelection: true });
+    const result = cmd({ tr, dispatch: true, editor });
+
+    expect(result).toBe(true);
+    // With newline heuristic, we insert text literally:
+    expect(tr.insertText).toHaveBeenCalledWith('Line 1\n\nLine 2', 7, 7);
+    expect(tr.replaceWith).not.toHaveBeenCalled();
+  });
+
+  it('bare string with single \\n also forces insertText', () => {
+    const value = 'A\nB';
+
+    createNodeFromContent.mockImplementation(() => [
+      { isText: true, isBlock: false, marks: [], check: vi.fn() },
+      { isText: false, isBlock: false, marks: [], check: vi.fn() },
+      { isText: true, isBlock: false, marks: [], check: vi.fn() },
+    ]);
+
+    const tr = makeTr();
+    const editor = makeEditor();
+
+    const cmd = insertContentAt(3, value, { updateSelection: true });
+    const result = cmd({ tr, dispatch: true, editor });
+
+    expect(result).toBe(true);
+    expect(tr.insertText).toHaveBeenCalledWith('A\nB', 3, 3);
+    expect(tr.replaceWith).not.toHaveBeenCalled();
+  });
+
+  // HTML still parses to nodes and uses replaceWith
+  it('HTML string parses and inserts via replaceWith (not insertText)', () => {
+    const value = '<p>Hello HTML</p>';
+
+    const blockNode = {
+      type: { name: 'paragraph' },
+      isText: false,
+      isBlock: true,
+      marks: [],
+      check: vi.fn(),
+    };
+    createNodeFromContent.mockImplementation(() => blockNode);
+
+    const tr = makeTr({
+      doc: {
+        resolve: vi.fn().mockReturnValue({
+          parent: { isTextblock: true, type: { spec: {} }, childCount: 0 },
+        }),
+      },
+    });
+    const editor = makeEditor();
+
+    const cmd = insertContentAt(10, value, { updateSelection: true });
+    const result = cmd({ tr, dispatch: true, editor });
+
+    expect(result).toBe(true);
+    expect(tr.insertText).not.toHaveBeenCalled();
+    // empty textblock wrapper replacement [from-1, to+1]
+    expect(tr.replaceWith).toHaveBeenCalledWith(9, 11, blockNode);
+  });
 });
