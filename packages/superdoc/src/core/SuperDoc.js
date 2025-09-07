@@ -108,6 +108,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {boolean} [disableContextMenu] Whether to disable slash / right-click custom context menu
  * @property {string} [html] HTML content to initialize the editor with
  * @property {string} [markdown] Markdown content to initialize the editor with
+ * @property {boolean} [isDebug=false] Whether to enable debug mode
  */
 
 /**

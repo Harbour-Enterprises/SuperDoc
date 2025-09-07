@@ -4,10 +4,16 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      version_tag:
+        description: 'Version tag name (e.g., v0.21, v1.0)'
+        required: true
+        type: string
 
 jobs:
   trigger-docs:
     runs-on: ubuntu-latest    
+    if: ${{ !github.event.release.prerelease }} # only trigger for stable releases
     steps:
       - name: Trigger documentation update
         run: |

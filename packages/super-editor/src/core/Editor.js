@@ -133,6 +133,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
  * @property {Object} [jsonOverride] - Provided JSON to override content with
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
+ * @property {boolean} [isDebug=false] - Whether to enable debug mode
  */
 
 /**
@@ -254,7 +255,6 @@ export class Editor extends EventEmitter {
   /**
    * Create a new Editor instance
    * @param {EditorOptions} options - Editor configuration options
-   * @returns {void}
    */
   constructor(options) {
     super();
@@ -371,6 +371,8 @@ export class Editor extends EventEmitter {
         this.#validateDocumentInit();
       }
     }
+
+    this.#initDevTools();
   }
 
   /**
@@ -507,7 +509,7 @@ export class Editor extends EventEmitter {
    * @returns {boolean}
    */
   get isEditable() {
-    return this.options.editable && this.view && this.view.editable;
+    return Boolean(this.options.editable && this.view && this.view.editable);
   }
 
   /**
@@ -911,7 +913,7 @@ export class Editor extends EventEmitter {
 
   /**
    * Creates document PM schema.
-   * @returns {void
+   * @returns {void}
    */
   #createSchema() {
     this.schema = this.extensionService.schema;
@@ -1901,5 +1903,16 @@ export class Editor extends EventEmitter {
     /** @type {import('./super-validator/index.js').SuperValidator} */
     const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
     validator.validateDocumentExport();
+  }
+
+  #initDevTools() {
+    if (this.options.isHeaderOrFooter) return;
+
+    if (process.env.NODE_ENV === 'development' || this.options.isDebug) {
+      window.superdocdev = {
+        converter: this.converter,
+        editor: this,
+      };
+    }
   }
 }

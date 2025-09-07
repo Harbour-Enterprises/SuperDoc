@@ -15,7 +15,7 @@ import { scrollToElement } from './scroll-helpers.js';
 
 import checkIconSvg from '@harbour-enterprises/common/icons/check.svg?raw';
 import SearchInput from './SearchInput.vue';
-import { TOOLBAR_FONTS } from './constants.js';
+import { TOOLBAR_FONTS, TOOLBAR_FONT_SIZES } from './constants.js';
 
 const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
@@ -44,6 +44,7 @@ export const makeDefaultItems = ({
   });
 
   // font
+  const fontOptions = [...(toolbarFonts ? toolbarFonts : TOOLBAR_FONTS)];
   const fontButton = useToolbarItem({
     type: 'dropdown',
     name: 'fontFamily',
@@ -60,12 +61,22 @@ export const makeDefaultItems = ({
     attributes: {
       ariaLabel: 'Font family',
     },
-    options: [...(toolbarFonts ? toolbarFonts : TOOLBAR_FONTS)],
+    options: fontOptions,
     onActivate: ({ fontFamily }) => {
       if (!fontFamily) return;
       fontButton.label.value = fontFamily;
+
+      const foundFont = fontOptions.find((i) => i.label === fontFamily);
+      if (foundFont) {
+        fontButton.selectedValue.value = foundFont.key;
+      } else {
+        fontButton.selectedValue.value = '';
+      }
     },
-    onDeactivate: () => (fontButton.label.value = fontButton.defaultLabel.value),
+    onDeactivate: () => {
+      fontButton.label.value = fontButton.defaultLabel.value;
+      fontButton.selectedValue.value = '';
+    },
   });
 
   // ai button
@@ -118,6 +129,7 @@ export const makeDefaultItems = ({
   });
 
   // font size
+  const fontSizeOptions = TOOLBAR_FONT_SIZES;
   const fontSize = useToolbarItem({
     type: 'dropdown',
     name: 'fontSize',
@@ -136,33 +148,35 @@ export const makeDefaultItems = ({
     attributes: {
       ariaLabel: 'Font size',
     },
-    options: [
-      { label: '8', key: '8pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '9', key: '9pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '10', key: '10pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '11', key: '11pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '12', key: '12pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '14', key: '14pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '18', key: '18pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '24', key: '24pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '30', key: '30pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '36', key: '36pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '48', key: '48pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '60', key: '60pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '72', key: '72pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '96', key: '96pt', props: { 'data-item': 'btn-fontSize-option' } },
-    ],
+    options: fontSizeOptions,
     onActivate: ({ fontSize: size }) => {
-      if (!size) return (fontSize.label.value = fontSize.defaultLabel.value);
+      if (!size) {
+        fontSize.label.value = fontSize.defaultLabel.value;
+        fontSize.selectedValue.value = '';
+        return;
+      }
 
       let sanitizedValue = sanitizeNumber(size, 12);
       if (sanitizedValue < 8) sanitizedValue = 8;
       if (sanitizedValue > 96) sanitizedValue = 96;
+      let sanitizedValueStr = String(sanitizedValue);
+
+      const foundSize = fontSizeOptions.find((i) => {
+        return i.label === sanitizedValueStr || i.key === sanitizedValueStr;
+      });
+      if (foundSize) {
+        fontSize.selectedValue.value = foundSize.key;
+      } else {
+        fontSize.selectedValue.value = '';
+      }
 
       // no units
-      fontSize.label.value = String(sanitizedValue);
+      fontSize.label.value = sanitizedValueStr;
     },
-    onDeactivate: () => (fontSize.label.value = fontSize.defaultLabel.value),
+    onDeactivate: () => {
+      fontSize.label.value = fontSize.defaultLabel.value;
+      fontSize.selectedValue.value = '';
+    },
   });
 
   // separator

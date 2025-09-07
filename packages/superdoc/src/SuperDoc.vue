@@ -266,6 +266,7 @@ const onEditorListdefinitionsChange = (params) => {
 
 const editorOptions = (doc) => {
   const options = {
+    isDebug: proxy.$superdoc.config.isDebug || false,
     pagination: proxy.$superdoc.config.pagination,
     documentId: doc.id,
     user: proxy.$superdoc.user,

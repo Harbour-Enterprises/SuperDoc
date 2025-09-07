@@ -15,7 +15,7 @@ import { decreaseListIndent } from './decreaseListIndent.js'; // adjust path if 
 function isVisuallyEmptyParagraph(node) {
   if (!node || node.type.name !== 'paragraph') return false;
 
-  // hardBreak means it's not empty
+  // hardBreak => not empty
   let hasHardBreak = false;
   node.descendants((n) => {
     if (n.type && n.type.name === 'hardBreak') {
@@ -26,9 +26,24 @@ function isVisuallyEmptyParagraph(node) {
   });
   if (hasHardBreak) return false;
 
-  // textContent collapses inline wrappers (e.g., run)
+  // Any visible text?
   const text = (node.textContent || '').replace(/\u200b/g, '').trim();
-  return text.length === 0;
+  if (text.length > 0) return false;
+
+  // Any inline leaf content (e.g., image, emoji, inline atom)?
+  // We ignore wrappers (non-leaf inline nodes) that may be empty.
+  let hasInlineLeaf = false;
+  node.descendants((n) => {
+    if (n.isInline && n.isLeaf && n.type?.name !== 'hardBreak') {
+      hasInlineLeaf = true;
+      return false; // stop
+    }
+    return true;
+  });
+  if (hasInlineLeaf) return false;
+
+  // No text, no inline leafs, no hard breaks => visually empty
+  return true;
 }
 
 /**
@@ -41,6 +56,10 @@ function tryOutdentOneLevel(props) {
   return decreaseListIndent()(props);
 }
 
+/**
+ * Split the current list item into two separate items.
+ * @returns {Function} A command function that performs the split operation.
+ */
 /**
  * Split the current list item into two separate items.
  * @returns {Function} A command function that performs the split operation.
@@ -59,6 +78,28 @@ export const splitListItem = () => (props) => {
   // Must be a single textblock selection
   if ((state.selection.node && state.selection.node.isBlock) || $from.depth < 2 || !$from.sameParent($to)) {
     return false;
+  }
+
+  // Get all information from original state before making changes
+  const paraPM = findParentNode((n) => n.type.name === 'paragraph')(state.selection);
+  if (!paraPM) return false;
+  const originalParagraphNode = paraPM.node;
+  const paraStart = paraPM.pos + 1;
+
+  // Parent list info
+  const listPM = findParentNode((n) => ['orderedList', 'bulletList'].includes(n.type.name))(state.selection);
+  if (!listPM) return false;
+  const { node: parentListNode, pos: listStart } = listPM;
+  const listEnd = listStart + parentListNode.nodeSize;
+
+  // Calculate split position
+  let offsetInParagraph;
+  if (empty) {
+    // Caret position
+    offsetInParagraph = state.selection.from - paraStart;
+  } else {
+    // Selection: split at the start of selection after deleting selected text
+    offsetInParagraph = $from.pos - paraStart;
   }
 
   // Empty-block special case with "visual emptiness" + Word-like outdent
@@ -81,27 +122,8 @@ export const splitListItem = () => (props) => {
     return handleSplitInEmptyBlock(props, listItemPM);
   }
 
-  // Parent list (MS-Word model: a root block with exactly one listItem)
-  const listPM = findParentNode((n) => ['orderedList', 'bulletList'].includes(n.type.name))(state.selection);
-  if (!listPM) return false;
-  const { node: parentListNode, pos: listStart } = listPM;
-  const listEnd = listStart + parentListNode.nodeSize;
-
-  // If text is selected, delete it first so we split at a caret
-  if (!empty) tr.delete($from.pos, $to.pos);
-
-  // Slice the *paragraph* at the cursor
-  const paraPM = findParentNode((n) => n.type.name === 'paragraph')(state.selection);
-  if (!paraPM) return false;
-  const paragraphNode = paraPM.node;
-  const paraStart = paraPM.pos + 1; // first position inside paragraph
-  const offsetInParagraph = state.selection.from - paraStart;
-
-  const beforeCursor = paragraphNode.content.cut(0, Math.max(0, offsetInParagraph));
-  const afterCursor = paragraphNode.content.cut(Math.max(0, offsetInParagraph));
-
   // If visually empty (e.g., only run wrappers), treat as empty-block path
-  if (isVisuallyEmptyParagraph(paragraphNode)) {
+  if (isVisuallyEmptyParagraph(originalParagraphNode)) {
     const currentLevel = typeof listItemNode?.attrs?.level === 'number' ? listItemNode.attrs.level : 0;
     if (currentLevel > 0) {
       const outdented = tryOutdentOneLevel(props);
@@ -113,6 +135,25 @@ export const splitListItem = () => (props) => {
     }
     return handleSplitInEmptyBlock(props, listItemPM);
   }
+
+  // Create the content for splitting
+  let paragraphContentToSplit = originalParagraphNode.content;
+
+  // If there's a selection, we need to remove that content first
+  if (!empty) {
+    const selectionStart = $from.pos - paraStart;
+    const selectionEnd = $to.pos - paraStart;
+    // Remove the selected content
+    paragraphContentToSplit = originalParagraphNode.content
+      .cut(0, selectionStart)
+      .append(originalParagraphNode.content.cut(selectionEnd));
+    // Adjust offset since we removed content before the split point
+    offsetInParagraph = selectionStart;
+  }
+
+  // Split the content
+  const beforeCursor = paragraphContentToSplit.cut(0, Math.max(0, offsetInParagraph));
+  const afterCursor = paragraphContentToSplit.cut(Math.max(0, offsetInParagraph));
 
   // Multi-paragraph vs single-paragraph listItem
   const paragraphIndex = $from.index(-1);
@@ -131,27 +172,33 @@ export const splitListItem = () => (props) => {
     // First listItem content
     const firstParas = [
       ...contentBefore,
-      paragraphNode.type.create(paragraphNode.attrs, beforeCursor.size ? beforeCursor : null),
+      originalParagraphNode.type.create(originalParagraphNode.attrs, beforeCursor.size ? beforeCursor : null),
     ].filter(Boolean);
     if (firstParas.length === 0) {
-      firstParas.push(state.schema.nodes.paragraph.create(paragraphNode.attrs));
+      firstParas.push(state.schema.nodes.paragraph.create(originalParagraphNode.attrs));
     }
 
     // Second listItem content
     const secondParas = [
-      paragraphNode.type.create(paragraphNode.attrs, afterCursor.size ? afterCursor : null),
+      originalParagraphNode.type.create(originalParagraphNode.attrs, afterCursor.size ? afterCursor : null),
       ...contentAfter,
     ].filter(Boolean);
     if (secondParas.length === 0) {
-      secondParas.push(state.schema.nodes.paragraph.create(paragraphNode.attrs));
+      secondParas.push(state.schema.nodes.paragraph.create(originalParagraphNode.attrs));
     }
 
     firstLI = state.schema.nodes.listItem.create({ ...listItemNode.attrs }, Fragment.from(firstParas));
     secondLI = state.schema.nodes.listItem.create({ ...listItemNode.attrs }, Fragment.from(secondParas));
   } else {
     // Single paragraph listItem: keep empty paragraphs empty (no " ")
-    const firstParagraph = paragraphNode.type.create(paragraphNode.attrs, beforeCursor.size ? beforeCursor : null);
-    const secondParagraph = paragraphNode.type.create(paragraphNode.attrs, afterCursor.size ? afterCursor : null);
+    const firstParagraph = originalParagraphNode.type.create(
+      originalParagraphNode.attrs,
+      beforeCursor.size ? beforeCursor : null,
+    );
+    const secondParagraph = originalParagraphNode.type.create(
+      originalParagraphNode.attrs,
+      afterCursor.size ? afterCursor : null,
+    );
 
     firstLI = state.schema.nodes.listItem.create({ ...listItemNode.attrs }, firstParagraph);
     secondLI = state.schema.nodes.listItem.create({ ...listItemNode.attrs }, secondParagraph);

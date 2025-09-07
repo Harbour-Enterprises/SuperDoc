@@ -18,17 +18,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.SUPERDOC_PAT }}
-      
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Create release branch
         run: |
           BRANCH="release/v${{ inputs.version }}"
-          
           git checkout -b "$BRANCH"
           git push origin "$BRANCH"
-          
           echo "✅ Created $BRANCH from main"
           echo ""
-          echo "Next steps:"
-          echo "1. Semantic release will automatically publish v${{ inputs.version }}.0"
-          echo "2. This version will be tagged as @latest on npm"
-          echo "3. Main branch continues with @next releases"
+          echo "The stable release will be triggered automatically when changes are pushed to this branch."
+          echo "After the stable release, the main branch will automatically bump to the next minor version."

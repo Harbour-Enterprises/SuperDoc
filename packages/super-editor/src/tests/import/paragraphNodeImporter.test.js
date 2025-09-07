@@ -265,6 +265,130 @@ describe('paragraph tests to check spacing', () => {
     // textIndent should be in inches (2880twips - 270twips(hanging))
     expect(node.attrs.textIndent).toBe('1.81in');
   });
+
+  it('correctly parses paragraph borders', () => {
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:pBdr',
+              elements: [
+                {
+                  name: 'w:bottom',
+                  attributes: {
+                    'w:val': 'single',
+                    'w:sz': '8',
+                    'w:space': '0',
+                    'w:color': 'DDDDDD',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          name: 'w:r',
+          elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Border text' }] }],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+    expect(node.attrs.borders).toBeDefined();
+    expect(node.attrs.borders.bottom).toEqual({
+      val: 'single',
+      size: expect.any(Number),
+      space: expect.any(Number),
+      color: '#DDDDDD',
+    });
+  });
+
+  it('ignores borders without w:val', () => {
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:pBdr',
+              elements: [
+                {
+                  name: 'w:top',
+                  attributes: {
+                    // no w:val attribute
+                    'w:sz': '4',
+                    'w:color': 'FF0000',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const p = nodes[0];
+    expect(p.type).toBe('paragraph');
+    expect(p.attrs.borders).toBeUndefined();
+  });
+
+  it('captures all four border sides', () => {
+    const sides = ['top', 'bottom', 'left', 'right'];
+    const borderElements = sides.map((side) => ({
+      name: `w:${side}`,
+      attributes: {
+        'w:val': 'single',
+        'w:sz': '8',
+        'w:color': '0000FF',
+      },
+    }));
+
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:pBdr',
+              elements: borderElements,
+            },
+          ],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const p = nodes[0];
+    expect(p.attrs.borders).toBeDefined();
+    sides.forEach((side) => {
+      expect(p.attrs.borders[side]).toBeDefined();
+      expect(p.attrs.borders[side].val).toBe('single');
+      expect(p.attrs.borders[side].color).toBe('#0000FF');
+    });
+  });
 });
 
 describe('paragraph tests to check indentation', () => {

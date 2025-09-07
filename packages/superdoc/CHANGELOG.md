@@ -35,7 +35,7 @@
 - chore(deps-dev): bump eslint from 9.31.0 to 9.34.0 (#807) ([59a0c25](https://github.com/Harbour-Enterprises/SuperDoc/commit/59a0c25)), closes [#807](https://github.com/Harbour-Enterprises/SuperDoc/issues/807)
 - chore(deps): bump vue from 3.5.17 to 3.5.20 (#806) ([6033c55](https://github.com/Harbour-Enterprises/SuperDoc/commit/6033c55)), closes [#806](https://github.com/Harbour-Enterprises/SuperDoc/issues/806)
 - HAR-10410 - fix: editor crash and structured content node (#820) ([b788d10](https://github.com/Harbour-Enterprises/SuperDoc/commit/b788d10)), closes [#820](https://github.com/Harbour-Enterprises/SuperDoc/issues/820)
-- feature: ooxml-inspector dev tool CLI and lib (#815) ([0de3986](https://github.com/Harbour-Enterprises/SuperDoc/commit/0de3986)), closes [#815](https://github.com/Harbour-Enterprises/SuperDoc/issues/815)
+- feature: ooxml-oracle dev tool CLI and lib (#815) ([0de3986](https://github.com/Harbour-Enterprises/SuperDoc/commit/0de3986)), closes [#815](https://github.com/Harbour-Enterprises/SuperDoc/issues/815)
 - docs: document other extensions (#819) ([5fca478](https://github.com/Harbour-Enterprises/SuperDoc/commit/5fca478)), closes [#819](https://github.com/Harbour-Enterprises/SuperDoc/issues/819)
 - feat: add table module documentation + keyboard shortcuts (#818) ([2130716](https://github.com/Harbour-Enterprises/SuperDoc/commit/2130716)), closes [#818](https://github.com/Harbour-Enterprises/SuperDoc/issues/818)
 - feat: enhance text formatting extensions with detailed command documentation (#811) ([80652eb](https://github.com/Harbour-Enterprises/SuperDoc/commit/80652eb)), closes [#811](https://github.com/Harbour-Enterprises/SuperDoc/issues/811)

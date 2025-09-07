@@ -3,6 +3,7 @@ import { helpers } from '@core/index.js';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { ReplaceStep } from 'prosemirror-transform';
 import { v4 as uuidv4 } from 'uuid';
+import { Transaction } from 'prosemirror-state';
 
 const { findChildren } = helpers;
 const SD_BLOCK_ID_ATTRIBUTE_NAME = 'sdBlockId';
@@ -122,13 +123,12 @@ export const BlockNode = Extension.create({
           // Check for new block nodes and if none found, we don't need to do anything
           if (hasInitialized && !checkForNewBlockNodesInTrs(transactions)) return null;
 
-          let tr = null;
+          const { tr } = newState;
           let changed = false;
           newState.doc.descendants((node, pos) => {
             // Only allow block nodes with a valid sdBlockId attribute
             if (!nodeAllowsSdBlockIdAttr(node) || !nodeNeedsSdBlockId(node)) return null;
 
-            tr = tr ?? newState.tr;
             tr.setNodeMarkup(
               pos,
               undefined,
@@ -141,7 +141,14 @@ export const BlockNode = Extension.create({
             changed = true;
           });
 
-          if (changed && !hasInitialized) hasInitialized = true;
+          if (changed && !hasInitialized) {
+            hasInitialized = true;
+          }
+
+          // Restore marks if they exist.
+          // `tr.setNodeMarkup` resets the stored marks.
+          tr.setStoredMarks(newState.tr.storedMarks);
+
           return changed ? tr : null;
         },
       }),
@@ -171,7 +178,8 @@ export const nodeNeedsSdBlockId = (node) => {
 /**
  * Check for new block nodes in ProseMirror transactions.
  * Iterate through the list of transactions, and in each tr check if there are any new block nodes.
- * @param {Array<Transaction>} transactions - The ProseMirror transactions to check.
+ * @readonly
+ * @param {readonly Transaction[]} transactions - The ProseMirror transactions to check.
  * @returns {boolean} - True if new block nodes are found, false otherwise.
  */
 export const checkForNewBlockNodesInTrs = (transactions) => {

@@ -26,7 +26,6 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
         'w:numPr',
         'w:outlineLvl',
         'w:bdr',
-        'w:pBdr',
         'w:noProof',
         'w:contextualSpacing',
         'w:keepNext',

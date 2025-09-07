@@ -365,6 +365,42 @@ export const createSchemaOrderedListNode = ({ level, numId, listType, editor, li
 };
 
 /**
+ * Set the caret position inside the first textblock of the inserted content.
+ * @param {import("prosemirror-state").Transaction} tr
+ * @param {number} startBefore
+ */
+export function setCaretInsideFirstTextblockOfInsertedAt(tr, startBefore) {
+  // Map the start of the replaced range into the new document inside the insertion
+  const containerStart = tr.mapping.map(startBefore, 1);
+  const $start = tr.doc.resolve(containerStart);
+  const container = $start.nodeAfter;
+
+  if (!container) {
+    // Fallback: place near the boundary
+    const nearPos = Math.max(1, Math.min(containerStart, tr.doc.content.size - 1));
+    tr.setSelection(TextSelection.near(tr.doc.resolve(nearPos), 1));
+    return;
+  }
+
+  // Walk the inserted container to the first textblock and compute absolute position:
+  // absolute = containerStart + 1 (into container content) + p (descendant rel pos) + 1 (into textblock)
+  let found = null;
+  container.descendants((n, p) => {
+    if (n.isTextblock) {
+      found = containerStart + 1 + p + 1;
+      return false;
+    }
+    return true;
+  });
+
+  if (found != null) {
+    tr.setSelection(TextSelection.create(tr.doc, found));
+  } else {
+    tr.setSelection(TextSelection.near(tr.doc.resolve(containerStart + 1), 1));
+  }
+}
+
+/**
  * Create a new list in the editor.
  * @param {Object} param0
  * @param {string|Object} param0.listType - The type of the list to be created (e.g., 'orderedList', 'bulletList').
@@ -378,24 +414,33 @@ export const createNewList = ({ listType, tr, editor }) => {
 
   ListHelpers.generateNewListDefinition({ numId, listType, editor });
 
-  const { selection } = tr;
-  const { $from } = selection;
-  const content = $from.parent;
-  const level = 0;
+  const { $from } = tr.selection;
+  const para = $from.parent;
 
+  // If we're not in a paragraph, bail (nothing to convert)
+  if (!para || para.type.name !== 'paragraph') return false;
+
+  const level = 0;
   const listNode = ListHelpers.createSchemaOrderedListNode({
     level,
     numId,
     listType,
     editor,
     listLevel: [1],
-    contentNode: content?.toJSON(),
+    contentNode: para.toJSON(), // preserve inline content/marks
   });
 
-  const replaceFrom = $from.before($from.depth);
-  const replaceTo = $from.after($from.depth);
+  // Replace the paragraph node itself
+  const depth = $from.depth;
+  const replaceFrom = $from.before(depth);
+  const replaceTo = $from.after(depth);
 
-  return insertNewList(tr, replaceFrom, replaceTo, listNode);
+  // Do the replacement and force the caret into the new list item (inside same cell/parent)
+  const startBefore = replaceFrom;
+  tr.replaceWith(replaceFrom, replaceTo, listNode);
+  setCaretInsideFirstTextblockOfInsertedAt(tr, startBefore);
+
+  return true;
 };
 
 /**
