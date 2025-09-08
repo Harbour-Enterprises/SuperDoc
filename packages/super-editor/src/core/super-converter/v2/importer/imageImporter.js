@@ -93,6 +93,7 @@ export function handleImageImport(node, currentFileName, params) {
       vRelativeFrom,
       alignH,
       alignV,
+      parent: params.mainParent?.name,
     };
   }
 
