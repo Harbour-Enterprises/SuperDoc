@@ -195,7 +195,7 @@ describe('relationships-validator', () => {
           'rId1',
           'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles',
           'styles.xml',
-        ), // duplicate type and target
+        ),
         createValidRelationship(
           'invalidId',
           'http://schemas.openxmlformats.org/officeDocument/2006/relationships/webSettings',
@@ -215,9 +215,7 @@ describe('relationships-validator', () => {
       const result = validator();
 
       expect(result.modified).toBe(true);
-      expect(result.results).toContain(
-        'Removed duplicate relationship to "styles.xml" of type "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"',
-      );
+      expect(result.results).toContain('Removed duplicate relationship with ID "rId1"');
 
       const root = editor.converter.convertedXml['word/_rels/document.xml.rels'].elements[0];
       const ids = root.elements.map((r) => r.attributes.Id);
@@ -301,6 +299,47 @@ describe('relationships-validator', () => {
       });
     });
 
+    it('preserves relationships with same target but different IDs', () => {
+      const relationships = [
+        createValidRelationship(
+          'rId1',
+          'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
+          'https://example.com',
+          'External',
+        ),
+        createValidRelationship(
+          'rId2',
+          'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
+          'https://example.com',
+          'External',
+        ),
+        createValidRelationship(
+          'rId3',
+          'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings',
+          'settings.xml',
+        ),
+      ];
+      const rels = createValidRelationshipsRoot(relationships);
+      const editor = makeEditorWithRelationships(rels, {
+        elements: [{ type: 'element', name: 'document', elements: [] }],
+      });
+      // Add the target files to convertedXml
+      editor.converter.convertedXml['word/settings.xml'] = { elements: [] };
+
+      const logger = makeLogger();
+      const validator = createRelationshipsValidator({ editor, logger });
+      const result = validator();
+      console.log(result);
+
+      expect(result.modified).toBe(false); // No changes should be made
+      expect(result.results).not.toContain('Removed duplicate relationship');
+
+      const root = editor.converter.convertedXml['word/_rels/document.xml.rels'].elements[0];
+      expect(root.elements).toHaveLength(3); // All relationships preserved
+      const ids = root.elements.map((r) => r.attributes.Id);
+      expect(ids).toEqual(['rId1', 'rId2', 'rId3']);
+    });
+
     it('removes duplicate relationships', () => {
       const relationships = [
         createValidRelationship(
@@ -309,10 +348,10 @@ describe('relationships-validator', () => {
           'styles.xml',
         ),
         createValidRelationship(
-          'rId2',
+          'rId1', // Same ID as above - this should be removed
           'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles',
           'styles.xml',
-        ), // duplicate
+        ),
         createValidRelationship(
           'rId3',
           'http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings',
@@ -332,14 +371,12 @@ describe('relationships-validator', () => {
       const result = validator();
 
       expect(result.modified).toBe(true);
-      expect(result.results).toContain(
-        'Removed duplicate relationship to "styles.xml" of type "http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"',
-      );
+      expect(result.results).toContain('Removed duplicate relationship with ID "rId1"');
 
       const root = editor.converter.convertedXml['word/_rels/document.xml.rels'].elements[0];
       expect(root.elements).toHaveLength(2);
-      const targets = root.elements.map((r) => r.attributes.Target);
-      expect(targets).toEqual(['styles.xml', 'settings.xml']);
+      const ids = root.elements.map((r) => r.attributes.Id);
+      expect(ids).toEqual(['rId1', 'rId3']);
     });
   });
 
@@ -451,7 +488,7 @@ describe('relationships-validator', () => {
                 type: 'element',
                 name: 'paragraph',
                 attributes: {
-                  'r:id': 'rId999', // invalid reference
+                  'r:id': 'rId999',
                 },
                 elements: [],
               },
@@ -461,10 +498,13 @@ describe('relationships-validator', () => {
       };
 
       const editor = makeEditorWithRelationships(rels, documentXml);
+      // Add the target file to convertedXml so the relationship is valid
+      editor.converter.convertedXml['word/styles.xml'] = { elements: [] };
+
       const logger = makeLogger();
       const validator = createRelationshipsValidator({ editor, logger });
       const result = validator();
-
+      console.log(result);
       expect(result.modified).toBe(true);
       expect(result.results).toContain('Fixed 1 missing relationship references');
 
