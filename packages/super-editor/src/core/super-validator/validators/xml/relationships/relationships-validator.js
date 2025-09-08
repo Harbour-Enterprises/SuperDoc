@@ -30,7 +30,7 @@ export function createRelationshipsValidator({ editor, logger }) {
     ];
 
     // Find the first existing relationships file
-    let relsKey = candidateKeys.find((k) => convertedXml?.[k]?.elements?.length);
+    let relsKey = candidateKeys.find((k) => convertedXml?.[k]?.elements);
     if (!relsKey) {
       return { results, modified };
     }
@@ -176,7 +176,7 @@ export function createRelationshipsValidator({ editor, logger }) {
         }
       }
 
-      // Assign missing IDs using the allocation system
+      // Assign missing IDs
       if (!id) {
         const newId = allocateId(null);
         attrs.Id = newId;
@@ -248,6 +248,8 @@ export function createRelationshipsValidator({ editor, logger }) {
 
     if (typeof contentTypesXml === 'string') {
       let updated = contentTypesXml;
+      // even if binMediaTargets is empty (no media files), the document still needs
+      // these basic content type defaults to function properly in Word.
       updated = ensureDefault(updated, 'rels', 'application/vnd.openxmlformats-package.relationships+xml');
       updated = ensureDefault(updated, 'xml', 'application/xml');
       for (const partName of binMediaTargets) {
@@ -279,6 +281,8 @@ export function createRelationshipsValidator({ editor, logger }) {
           attributes: { PartName: part, ContentType: ct },
         });
       };
+      // even if binMediaTargets is empty (no media files), the document still needs
+      // these basic content type defaults to function properly in Word.
       if (!hasDefault('rels')) addDefault('rels', 'application/vnd.openxmlformats-package.relationships+xml');
       if (!hasDefault('xml')) addDefault('xml', 'application/xml');
       let added = 0;
