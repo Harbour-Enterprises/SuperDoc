@@ -127,7 +127,7 @@ export function createRelationshipsValidator({ editor, logger }) {
     };
 
     const binMediaTargets = new Set();
-    const seenKey = new Set();
+    const seenIds = new Set();
     const filtered = [];
 
     // Validates relationship types and targets
@@ -135,7 +135,7 @@ export function createRelationshipsValidator({ editor, logger }) {
       rel.attributes = rel.attributes || {};
       const attrs = rel.attributes;
 
-      const id = typeof attrs.Id === 'string' ? attrs.Id.trim() : '';
+      let id = typeof attrs.Id === 'string' ? attrs.Id.trim() : '';
       const type = typeof attrs.Type === 'string' ? attrs.Type.trim() : '';
       let target = typeof attrs.Target === 'string' ? attrs.Target.trim() : '';
       let targetMode = typeof attrs.TargetMode === 'string' ? attrs.TargetMode.trim() : '';
@@ -182,23 +182,29 @@ export function createRelationshipsValidator({ editor, logger }) {
         attrs.Id = newId;
         results.push(`Assigned missing Id "${newId}"`);
         modified = true;
-      } else if (!usedIds.has(id)) {
-        usedIds.add(id);
+        id = newId;
       }
 
-      // Check for duplicate relationships based on type, target, and targetMode
-      const tupleKey = `${type}::${target}::${targetMode || ''}`;
-      if (seenKey.has(tupleKey)) {
+      // Check for duplicate relationship IDs (only within this processing loop)
+      if (seenIds.has(id)) {
         modified = true;
-        results.push(`Removed duplicate relationship to "${target}" of type "${type}"`);
+        results.push(`Removed duplicate relationship with ID "${id}"`);
         continue;
       }
-      seenKey.add(tupleKey);
+      seenIds.add(id);
       filtered.push(rel);
     }
 
     if (root.elements !== filtered) {
       root.elements = filtered;
+    }
+
+    const filteredIds = new Set();
+    for (const rel of root.elements) {
+      const id = rel.attributes?.Id;
+      if (typeof id === 'string' && id) {
+        filteredIds.add(id);
+      }
     }
 
     // Process document.xml to fix missing relationship references
@@ -209,7 +215,7 @@ export function createRelationshipsValidator({ editor, logger }) {
       const documentRoot = document.elements[0];
       if (documentRoot && documentRoot.type === 'element') {
         const missingRefs = [];
-        processDocumentForMissingRefs(documentRoot, usedIds, missingRefs);
+        processDocumentForMissingRefs(documentRoot, filteredIds, missingRefs);
 
         if (missingRefs.length) {
           modified = true;
