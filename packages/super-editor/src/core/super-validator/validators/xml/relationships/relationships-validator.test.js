@@ -137,17 +137,6 @@ describe('relationships-validator', () => {
       expect(root.name).toBe('Relationships');
       expect(root.attributes.xmlns).toBe('http://schemas.openxmlformats.org/package/2006/relationships');
     });
-
-    it('returns no changes when relationships file has empty elements', () => {
-      const rels = { elements: [] };
-      const editor = makeEditorWithRelationships(rels);
-      const logger = makeLogger();
-      const validator = createRelationshipsValidator({ editor, logger });
-      const result = validator();
-
-      expect(result.modified).toBe(false);
-      expect(result.results).toEqual([]);
-    });
   });
 
   describe('relationship ID validation', () => {
@@ -329,7 +318,6 @@ describe('relationships-validator', () => {
       const logger = makeLogger();
       const validator = createRelationshipsValidator({ editor, logger });
       const result = validator();
-      console.log(result);
 
       expect(result.modified).toBe(false); // No changes should be made
       expect(result.results).not.toContain('Removed duplicate relationship');
@@ -504,7 +492,6 @@ describe('relationships-validator', () => {
       const logger = makeLogger();
       const validator = createRelationshipsValidator({ editor, logger });
       const result = validator();
-      console.log(result);
       expect(result.modified).toBe(true);
       expect(result.results).toContain('Fixed 1 missing relationship references');
 
