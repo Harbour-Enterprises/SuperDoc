@@ -137,7 +137,7 @@ export const defaultNodeListHandler = () => {
     tabNodeEntityHandler,
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
-    standardNodeHandlerEntity, // This is the last one as it can handle everything
+    standardNodeHandlerEntity,
   ];
 
   const handler = createNodeListHandler(entities);
