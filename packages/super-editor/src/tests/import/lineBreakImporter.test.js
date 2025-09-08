@@ -7,7 +7,7 @@ import {
   wClearDecoder,
 } from '../../core/super-converter/v3/handlers/w/br/attributes/index.js';
 
-describe('LineBreak (w:br) translator - v2', () => {
+describe('LineBreak (w:br) translator - v3', () => {
   describe('encode (OOXML -> SuperDoc)', () => {
     it('encodes to type=lineBreak by default (no attrs)', () => {
       const res = config.encode({}, /* encodedAttrs */ undefined);

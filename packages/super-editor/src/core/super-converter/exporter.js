@@ -105,7 +105,7 @@ export function exportSchemaToJson(params) {
   let handler = router[type];
 
   // For import/export v3 we use the translator directly
-  if ('decode' in handler && typeof handler.decode === 'function') {
+  if (handler && 'decode' in handler && typeof handler.decode === 'function') {
     return handler.decode(params);
   }
 
