@@ -66,4 +66,48 @@ describe('Paragraph Node', () => {
       },
     ]);
   });
+
+  it('inserting plain text creates a simple paragraph', async () => {
+    editor.commands.insertContent('This is a test paragraph.');
+    expect(editor.state.doc.content.content[0].type.name).toBe('paragraph');
+    expect(editor.state.doc.content.content[0].attrs.styleId).toBe(null);
+    const result = await editor.exportDocx({
+      exportJsonOnly: true,
+    });
+
+    const body = result.elements[0];
+
+    expect(body.elements).toHaveLength(2);
+    expect(body.elements.map((el) => el.name)).toEqual(['w:p', 'w:sectPr']);
+    const paragraph = body.elements[0];
+    expect(paragraph.name).toBe('w:p');
+    expect(paragraph.elements).toEqual([
+      {
+        name: 'w:pPr',
+        elements: [
+          {
+            name: 'w:spacing',
+            attributes: {
+              'w:lineRule': 'auto',
+            },
+          },
+        ],
+      },
+      {
+        name: 'w:r',
+        elements: [
+          {
+            name: 'w:t',
+            elements: [
+              {
+                text: 'This is a test paragraph.',
+                type: 'text',
+              },
+            ],
+            attributes: null,
+          },
+        ],
+      },
+    ]);
+  });
 });
