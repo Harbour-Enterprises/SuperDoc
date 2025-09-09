@@ -38,6 +38,7 @@ import { createLinkedChildEditor } from '@core/child-editor/index.js';
 import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { SuperValidator } from '@core/super-validator/index.js';
 import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js';
+import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -373,6 +374,7 @@ export class Editor extends EventEmitter {
     }
 
     this.#initDevTools();
+    this.#registerCopyHandler();
   }
 
   /**
@@ -606,6 +608,27 @@ export class Editor extends EventEmitter {
       });
       if (pm) pm.classList.remove('view-mode');
     }
+  }
+
+  #registerCopyHandler() {
+    this.view.dom.addEventListener('copy', (event) => {
+      const clipboardData = event.clipboardData;
+      if (!clipboardData) return;
+
+      event.preventDefault();
+
+      const { from, to } = this.view.state.selection;
+      const slice = this.view.state.doc.slice(from, to);
+      const fragment = slice.content;
+
+      const div = document.createElement('div');
+      const serializer = DOMSerializer.fromSchema(this.view.state.schema);
+      div.appendChild(serializer.serializeFragment(fragment));
+
+      const html = transformListsInCopiedContent(div.innerHTML);
+
+      clipboardData.setData('text/html', html);
+    });
   }
 
   /**
