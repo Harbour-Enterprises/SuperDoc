@@ -8,38 +8,29 @@ const XML_NODE_NAME = 'w:tab';
 const SD_NODE_NAME = 'tab';
 
 /**
- * The attributes that can be mapped between OOXML and SuperDoc.
+ * The <w:tab/> element does not define any OOXML attributes that need to be
+ * translated. This empty array is kept for consistency with other
+ * translators and future extension.
  * @type {import('../../../node-translator/index.js').AttributesHandlerList[]}
  */
 const attributes = [];
-// const attributes = [
-//   { xmlName: 'w:type', sdName: 'lineBreakType', encode: lineBreakTypeEncoder, decode: lineBreakTypeDecoder },
-//   { xmlName: 'w:clear', sdName: 'clear', encode: wClearEncoder, decode: wClearDecoder },
-// ];
 
 /**
- * Encode an unhandled node as a passthrough node.
- * @param {import('../../../node-translator/index.js').SCEncoderConfig} params
+ * Encode a <w:tab/> element into a SuperDoc `tab` node.
+ * @param {import('../../../node-translator/index.js').SCEncoderConfig} _
  * @param {import('../../../node-translator/index.js').EncodedAttributes} [encodedAttrs] - The already encoded attributes
  * @returns {import('../../../node-translator/index.js').SCEncoderResult}
  */
-const encode = (params, encodedAttrs) => {
-  const { ctx } = params;
-
-  console.debug('--TAB', ctx?.parent?.name);
-  const translated = {
-    type: 'tab',
-  };
-
-  // if (encodedAttrs) {
-  //   translated.attrs = { ...encodedAttrs };
-  // }
-
+const encode = (_, encodedAttrs) => {
+  const translated = { type: 'tab' };
+  if (encodedAttrs && Object.keys(encodedAttrs).length > 0) {
+    translated.attrs = { ...encodedAttrs };
+  }
   return translated;
 };
 
 /**
- * Decode the lineBreak / hardBreak node back into OOXML <w:br>.
+ * Decode a SuperDoc `tab` node back into OOXML <w:tab/>.
  * @param {import('../../../node-translator/index.js').SCDecoderConfig} params
  * @param {import('../../../node-translator/index.js').DecodedAttributes} [decodedAttrs] - The already decoded attributes
  * @returns {import('../../../node-translator/index.js').SCDecoderResult}
@@ -48,19 +39,17 @@ const decode = (params, decodedAttrs) => {
   const { node } = params;
   if (!node) return;
 
-  const wBreak = { name: 'w:br' };
+  const wTab = { name: 'w:tab' };
 
-  if (decodedAttrs) {
-    wBreak.attributes = { ...decodedAttrs };
+  if (decodedAttrs && Object.keys(decodedAttrs).length > 0) {
+    wTab.attributes = { ...decodedAttrs };
   }
 
-  /** breaks are wrapped in runs for Google Docs compatibility */
-  const translated = {
+  /** tabs are wrapped in runs for Google Docs compatibility */
+  return {
     name: 'w:r',
-    elements: [wBreak],
+    elements: [wTab],
   };
-
-  return translated;
 };
 
 /** @type {import('../../../node-translator/index.js').NodeTranslatorConfig} */
