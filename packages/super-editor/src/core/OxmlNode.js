@@ -1,5 +1,4 @@
 import { Node } from './Node.js';
-import { childrenOf } from '@superdoc-dev/ooxml-inspector';
 
 /**
  * @type {import('./types/index.js').OxmlNode}
@@ -24,13 +23,5 @@ export class OxmlNode extends Node {
    */
   static create(config) {
     return new OxmlNode(config);
-  }
-
-  /**
-   * Get the valid children of the OxmlNode.
-   * @returns {string[]} The valid children.
-   */
-  get validChildren() {
-    return childrenOf(this.oXmlName);
   }
 }

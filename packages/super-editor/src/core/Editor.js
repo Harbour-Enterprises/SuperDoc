@@ -1906,9 +1906,10 @@ export class Editor extends EventEmitter {
   }
 
   #initDevTools() {
+    if (this.options.isHeaderOrFooter) return;
+
     if (process.env.NODE_ENV === 'development' || this.options.isDebug) {
       window.superdocdev = {
-        registry: this.converter.handlerRegistry,
         converter: this.converter,
         editor: this,
       };

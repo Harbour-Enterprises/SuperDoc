@@ -2,46 +2,66 @@ name: 🔄 Sync Patches [auto]
 
 on:
   push:
-    branches: ['release/**']
+    branches: [stable, '*.x']
     paths:
       - 'packages/**'
   workflow_dispatch:
-    inputs:
-      version:
-        description: 'Release branch (e.g., release/v0.21, release/v1.0)'
-        required: true
-        type: string
 
 permissions:
   contents: write
   pull-requests: write
 
 jobs:
-  create-sync-pr:
-    runs-on: ubuntu-latest    
+  sync-to-main:
+    runs-on: ubuntu-latest
+    # Skip release commits
+    if: |
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.head_commit.message, 'chore(release)') &&
+      !contains(github.event.head_commit.message, 'chore: promote')
+    
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           token: ${{ secrets.SUPERDOC_PAT }}
-      
+
       - name: Create sync PR
         env:
           GH_TOKEN: ${{ secrets.SUPERDOC_PAT }}
         run: |
-          BRANCH=${{ inputs.version }}
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Create PR (or update existing)
-          gh pr create \
-            --base main \
-            --head "$BRANCH" \
-            --title "🔄 Sync: $BRANCH → main" \
-            --body "Auto-sync patches from release branch.
+          # Create patch branch
+          PATCH_BRANCH="sync-patch-${{ github.sha }}"
+          git checkout -b "$PATCH_BRANCH" origin/main
+          
+          # Cherry-pick the commit
+          if git cherry-pick "${{ github.sha }}"; then
+            git push origin "$PATCH_BRANCH"
             
-            **Branch:** $BRANCH
-            **Commits:** ${{ github.event.head_commit.message }}
-            
-            This PR will auto-merge after tests pass." \
-            --label "patch-sync" \
-          || gh pr edit \
-            --add-label "patch-sync"
+            # Create PR
+            gh pr create \
+              --base main \
+              --head "$PATCH_BRANCH" \
+              --title "🔄 Sync: ${{ github.event.head_commit.message }}" \
+              --body "Auto-sync patch from ${{ github.ref_name }}
+              
+              Commit: ${{ github.sha }}
+              
+              ---
+              _This PR was automatically created to sync a patch to main._" \
+              --label "patch-sync"
+          else
+            echo "⚠️ Cherry-pick failed - manual resolution needed"
+            gh issue create \
+              --title "🔄 Manual sync needed: ${{ github.event.head_commit.message }}" \
+              --body "Failed to auto-sync patch from ${{ github.ref_name }}
+              
+              **Commit**: ${{ github.sha }}
+              **Branch**: ${{ github.ref_name }}
+              
+              Please manually cherry-pick this commit to main." \
+              --label "patch-sync"
+          fi

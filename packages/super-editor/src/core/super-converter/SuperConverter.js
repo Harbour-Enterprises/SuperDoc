@@ -13,11 +13,8 @@ import {
 } from './v2/exporter/commentsExporter.js';
 import { FOOTER_RELATIONSHIP_TYPE, HEADER_RELATIONSHIP_TYPE, HYPERLINK_RELATIONSHIP_TYPE } from './constants.js';
 import { DocxHelpers } from './docx-helpers/index.js';
-import { HandlerRegistry } from './v2/handlers/registry/index.js';
 
 class SuperConverter {
-  #handlerRegistry = new HandlerRegistry();
-
   static allowedElements = Object.freeze({
     'w:document': 'doc',
     'w:body': 'body',
@@ -137,14 +134,6 @@ class SuperConverter {
 
     // Parse the initial XML, if provided
     if (this.docx.length || this.xml) this.parseFromXml();
-  }
-
-  /**
-   * Get the handler registry.
-   * @returns {HandlerRegistry} The handler registry.
-   */
-  get handlerRegistry() {
-    return this.#handlerRegistry;
   }
 
   /**

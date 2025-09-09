@@ -34,6 +34,22 @@ export const TableRow = Node.create({
           return { style };
         },
       },
+      /**
+       * Indicates that this row should not be split across pages when paginating/exporting.
+       * @category Attribute
+       * @param {boolean} [cantSplit]
+       */
+      cantSplit: {
+        default: false,
+        parseDOM() {
+          return {};
+        },
+        renderDOM({ cantSplit }) {
+          // Render as a data attribute so it can be inspected in the DOM, but it's optional.
+          if (!cantSplit) return {};
+          return { 'data-cant-split': 'true' };
+        },
+      },
     };
   },
 

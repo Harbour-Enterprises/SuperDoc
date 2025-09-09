@@ -2,6 +2,7 @@
 import { Extension } from '@core/Extension.js';
 import { applyLinkedStyleToTransaction, generateLinkedStyleString } from './helpers.js';
 import { createLinkedStylesPlugin, LinkedStylesPluginKey } from './plugin.js';
+import { findParentNodeClosestToPos } from '@core/helpers';
 
 /**
  * Style definition from Word document
@@ -93,7 +94,7 @@ export const LinkedStyles = Extension.create({
        * const headingStyle = editor.helpers.linkedStyles.getStyleById('Heading1');
        */
       getStyleById: (styleId) => {
-        const styles = this.getStyles();
+        const styles = this.editor.helpers[this.name].getStyles();
         return styles.find((s) => s.id === styleId);
       },
 
