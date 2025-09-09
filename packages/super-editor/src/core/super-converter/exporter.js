@@ -23,6 +23,7 @@ import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translateDocumentSection } from './v2/exporter/index.js';
+import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -79,7 +80,7 @@ export function exportSchemaToJson(params) {
     text: translateTextNode,
     bulletList: translateList,
     orderedList: translateList,
-    lineBreak: translateLineBreak,
+    lineBreak: wBrNodeTranslator,
     table: translateTable,
     tableRow: translateTableRow,
     tableCell: translateTableCell,
@@ -87,7 +88,7 @@ export function exportSchemaToJson(params) {
     fieldAnnotation: translateFieldAnnotation,
     tab: translateTab,
     image: translateImageNode,
-    hardBreak: translateHardBreak,
+    hardBreak: wBrNodeTranslator,
     commentRangeStart: () => translateCommentNode(params, 'Start'),
     commentRangeEnd: () => translateCommentNode(params, 'End'),
     commentReference: () => null,
@@ -101,13 +102,15 @@ export function exportSchemaToJson(params) {
     'total-page-number': translateTotalPageNumberNode,
   };
 
-  if (!router[type]) {
-    console.error('No translation function found for node type:', type);
-    return null;
+  let handler = router[type];
+
+  // For import/export v3 we use the translator directly
+  if (handler && 'decode' in handler && typeof handler.decode === 'function') {
+    return handler.decode(params);
   }
 
   // Call the handler for this node type
-  return router[type](params);
+  return handler(params);
 }
 
 /**
