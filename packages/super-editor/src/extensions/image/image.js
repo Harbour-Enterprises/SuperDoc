@@ -1,4 +1,3 @@
-// @ts-check
 import { Attribute, Node } from '@core/index.js';
 import { ImagePlaceholderPlugin } from './imageHelpers/imagePlaceholderPlugin.js';
 import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
@@ -48,10 +47,8 @@ export const Image = Node.create({
       src: {
         default: null,
         renderDOM: ({ src }) => {
-          // Storage access happens through the editor instance, not here
-          // The actual media URL resolution happens at runtime
           return {
-            src: src,
+            src: this.storage.media[src] ?? src,
           };
         },
       },
