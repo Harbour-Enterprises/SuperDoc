@@ -1,28 +1,29 @@
 // @ts-check
-import { NodeTranslator } from '../../../node-translator/index.js';
+import { NodeTranslator } from '@translator';
 import { lineBreakTypeDecoder, lineBreakTypeEncoder } from './attributes/index.js';
 import { wClearDecoder, wClearEncoder } from './attributes/index.js';
 
-/** @type {import('../../../node-translator/index.js').XmlNodeName} */
+/** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:br';
 
-/** @type {import('../../../node-translator/index.js').SuperDocNodeOrKeyName} */
+/** @type {import('@translator').SuperDocNodeOrKeyName} */
 const SD_NODE_NAME = 'lineBreak';
 
 /**
  * The attributes that can be mapped between OOXML and SuperDoc.
- * @type {import('../../../node-translator/index.js').AttributesHandlerList[]}
+ * Note: These are specifically OOXML valid attributes for a given node.
+ * @type {import('@translator').AttributesHandlerList[]}
  */
-const attributes = [
+const validXmlAttributes = [
   { xmlName: 'w:type', sdName: 'lineBreakType', encode: lineBreakTypeEncoder, decode: lineBreakTypeDecoder },
   { xmlName: 'w:clear', sdName: 'clear', encode: wClearEncoder, decode: wClearDecoder },
 ];
 
 /**
  * Encode an unhandled node as a passthrough node.
- * @param {import('../../../node-translator/index.js').SCEncoderConfig} _
- * @param {import('../../../node-translator/index.js').EncodedAttributes} [encodedAttrs] - The already encoded attributes
- * @returns {import('../../../node-translator/index.js').SCEncoderResult}
+ * @param {import('@translator').SCEncoderConfig} _
+ * @param {import('@translator').EncodedAttributes} [encodedAttrs] - The already encoded attributes
+ * @returns {import('@translator').SCEncoderResult}
  */
 const encode = (_, encodedAttrs) => {
   const isPageBreak = encodedAttrs?.lineBreakType === 'page';
@@ -39,25 +40,18 @@ const encode = (_, encodedAttrs) => {
 
 /**
  * Decode the lineBreak / hardBreak node back into OOXML <w:br>.
- * @param {import('../../../node-translator/index.js').SCDecoderConfig} params
- * @param {import('../../../node-translator/index.js').DecodedAttributes} [decodedAttrs] - The already decoded attributes
- * @returns {import('../../../node-translator/index.js').SCDecoderResult}
+ * @param {import('@translator').SCDecoderConfig} params
+ * @param {import('@translator').DecodedAttributes} [decodedAttrs] - The already decoded attributes
+ * @returns {import('@translator').SCDecoderResult}
  */
 const decode = (params, decodedAttrs) => {
   const { node } = params;
   if (!node) return;
 
-  const attrs = { ...(decodedAttrs || {}) };
-
-  // default to page break when exporting a hardBreak without an explicit lineBreakType
-  if (node.type === 'hardBreak' && !('w:type' in attrs)) {
-    attrs['w:type'] = 'page';
-  }
-
   const wBreak = { name: 'w:br' };
 
-  if (Object.keys(attrs).length > 0) {
-    wBreak.attributes = attrs;
+  if (decodedAttrs) {
+    wBreak.attributes = { ...decodedAttrs };
   }
 
   /** breaks are wrapped in runs for Google Docs compatibility */
@@ -69,18 +63,18 @@ const decode = (params, decodedAttrs) => {
   return translated;
 };
 
-/** @type {import('../../../node-translator/index.js').NodeTranslatorConfig} */
+/** @type {import('@translator').NodeTranslatorConfig} */
 export const config = {
   xmlName: XML_NODE_NAME,
   sdNodeOrKeyName: SD_NODE_NAME,
   type: NodeTranslator.translatorTypes.NODE,
   encode,
   decode,
-  attributes,
+  attributes: validXmlAttributes,
 };
 
 /**
  * The NodeTranslator instance for the passthrough element.
- * @type {import('../../../node-translator/index.js').NodeTranslator}
+ * @type {import('@translator').NodeTranslator}
  */
 export const translator = NodeTranslator.from(config);
