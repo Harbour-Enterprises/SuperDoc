@@ -152,10 +152,14 @@ export const handleParagraphNode = (params) => {
         } else if (val == 'right') {
           val = 'end';
         }
+        const rawPos = tab.attributes['w:pos'];
         const tabStop = {
           val,
-          pos: twipsToPixels(tab.attributes['w:pos']),
+          pos: twipsToPixels(rawPos),
         };
+        if (rawPos !== undefined) {
+          tabStop.originalPos = rawPos;
+        }
 
         // Add leader if present
         if (tab.attributes['w:leader']) {
