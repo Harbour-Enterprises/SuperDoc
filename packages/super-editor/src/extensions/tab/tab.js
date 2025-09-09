@@ -42,6 +42,8 @@ export const TabNode = Node.create({
           return { style };
         },
       },
+      tabPosition: { rendered: false },
+      tabLeader: { rendered: false },
     };
   },
 
