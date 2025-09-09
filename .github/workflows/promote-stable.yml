@@ -1,0 +1,44 @@
+name: 🚀 Promote to Stable [manual]
+
+on:
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Source to promote (branch/tag, default: main)'
+        required: false
+        default: 'main'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SUPERDOC_PAT }}
+
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Promote to stable
+        run: |
+          # Fetch all branches
+          git fetch --all
+          
+          # Checkout stable branch (create if doesn't exist)
+          git checkout stable 2>/dev/null || git checkout -b stable
+          
+          # Merge the source
+          git merge origin/${{ inputs.source }} --no-ff -m "chore: promote ${{ inputs.source }} to stable"
+          
+          # Push to trigger release
+          git push origin stable
+          
+          echo "✅ Promoted ${{ inputs.source }} to stable"
+          echo "The stable release will be triggered automatically."

@@ -1,11 +1,10 @@
-name: 🚀 Release Next [auto]
+name: 📦 Release [auto]
 
 on:
   push:
-    branches: [main]
+    branches: [main, stable, '*.x']
     paths:
-      - 'packages/super-editor'
-      - 'packages/superdoc'
+      - 'packages/**'
       - '!**.md'
   workflow_dispatch:
 
@@ -14,7 +13,7 @@ permissions:
   packages: write
 
 concurrency:
-  group: release-next
+  group: release-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -23,7 +22,7 @@ jobs:
     uses: ./.github/workflows/test-suite.yml
     with:
       run-visual: true
-      run-e2e: true
+      run-e2e: ${{ github.ref == 'refs/heads/stable' }}
     secrets: inherit
 
   release:
@@ -47,9 +46,29 @@ jobs:
       - name: Build packages
         run: npm run build
       
-      - name: Release to next channel
+      - name: Release
+        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.SUPERDOC_PAT }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npx semantic-release
+      
+      # Sync stable releases back to main
+      - name: Sync to main
+        if: github.ref == 'refs/heads/stable' && steps.semantic.outputs.new_release_published == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Fetch main branch
+          git fetch origin main
+          
+          # Checkout main
+          git checkout main
+          
+          # Merge stable
+          git merge origin/stable -m "chore: sync stable release ${{ steps.semantic.outputs.new_release_version }} to main [skip ci]"
+          
+          # Push to main
+          git push origin main
