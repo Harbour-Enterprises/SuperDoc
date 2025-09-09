@@ -5,16 +5,27 @@
 
 ## Overview
 
-SuperDoc implements a dual-track release strategy with fully automated versioning:
+SuperDoc implements a streamlined dual-track release strategy with fully automated versioning:
 
 - **@next channel**: Pre-release versions from `main` branch
-- **@latest channel**: Stable versions from `release/**` branches
+- **@latest channel**: Stable versions from `stable` branch
+- **@X.x channels**: Patch releases for maintenance branches
 
 All releases are automated through semantic-release based on conventional commits.
 
 ## Workflow Architecture
 
-<img width="1238" height="1180" alt="image" src="https://github.com/user-attachments/assets/4f5635ef-abbb-4db8-90be-833f39eae41d" />
+```
+main (next) → stable (latest) → X.x (maintenance)
+     ↓             ↓                ↓
+  pre-releases  stable releases  patch releases
+```
+
+## Branch Strategy
+
+- **`main`**: Development branch, releases to @next
+- **`stable`**: Production branch, releases to @latest
+- **`X.x`**: Maintenance branches for patching old versions
 
 ## GitHub Actions Workflows
 
@@ -22,7 +33,7 @@ All releases are automated through semantic-release based on conventional commit
 
 #### 1. PR Validation (`pr-validation.yml`)
 
-**Triggers**: All pull requests to `main` or `release/**`
+**Triggers**: All pull requests
 
 **Checks**:
 
@@ -35,55 +46,62 @@ All releases are automated through semantic-release based on conventional commit
 
 **Required to pass before merge**.
 
-#### 2. Release Next (`release-next.yml`)
+#### 2. Release (`release.yml`)
 
 **Triggers**:
 
-- Push to `main` (paths: `packages/**`, excluding markdown)
+- Push to `main`, `stable`, or `*.x` branches
 - Manual workflow dispatch
 
 **Process**:
 
-1. Run full test suite including E2E
+1. Run full test suite
 2. Build packages
-3. Semantic-release publishes to npm @next
-4. Version format: `X.Y.Z-next.N`
+3. Semantic-release publishes:
+   - From `main`: X.Y.Z-next.N to @next
+   - From `stable`: X.Y.Z to @latest
+   - From `X.x`: X.x.Y to @X.x
 
-#### 3. Release Stable (`release-stable.yml`)
+**Post-release**:
 
-**Triggers**:
+- Stable releases auto-sync to main
+- Version bump commit added to main
 
-- Push to `release/**` branches
-- Manual workflow dispatch
-
-**Process**:
-
-1. Run full test suite including E2E
-2. Build packages
-3. Semantic-release publishes to npm @latest
-4. Creates GitHub release with changelog
-
-#### 4. Create Release Branch (`create-release.yml`)
+#### 3. Promote to Stable (`promote-stable.yml`)
 
 **Trigger**: Manual workflow dispatch
 
-**Input**: Version number (e.g., `0.21`, `1.0`)
+**Input**: Optional tag to promote (defaults to latest from main)
 
 **Actions**:
 
-- Creates `release/vX.Y` branch from main
-- Triggers immediate stable release
-- Switches npm @latest tag to new version
+- Merges specified version to stable branch
+- Triggers automatic stable release
+- Updates npm @latest tag
 
-#### 5. Sync Patches (`sync-patches.yml`)
+#### 4. Create Patch Branch (`create-patch.yml`)
 
-**Triggers**: Fix commits or release commits to `release/**`
+**Trigger**: Manual workflow dispatch
+
+**Input**: Major.minor version (e.g., `1.2`)
 
 **Actions**:
 
-- Automatically creates PR from release branch to main
-- Labels with `patch-sync` and `automerge`
-- Ensures hotfixes flow back to development
+- Creates `X.x` branch from last stable tag
+- Enables patching of old versions
+
+#### 5. Forward Port (`forward-port.yml`)
+
+**Triggers**:
+
+- New version tags on maintenance branches
+- Manual workflow dispatch
+
+**Actions**:
+
+- Cherry-picks fixes from maintenance branches to main
+- Creates PR for review
+- Labels with `forward-port`
 
 ### Support Workflows
 
@@ -98,45 +116,23 @@ All releases are automated through semantic-release based on conventional commit
 - Visual regression tests (Playwright)
 - E2E tests (external service)
 
-**Configurable inputs**:
-
-- `run-visual`: Enable visual tests
-- `run-e2e`: Enable E2E tests
-- `update-screenshots`: Update visual baselines
-
 #### 7. Visual Tests (`test-example-apps.yml`)
 
 **Triggers**:
 
-- PR/Push with changes to `examples/**` or `packages/**/src/**`
+- Changes to `examples/**` or `packages/**/src/**`
 - Manual dispatch for screenshot updates
-
-**Features**:
-
-- Path filtering for efficiency
-- Screenshot comparison
-- Artifact upload on failures
-- Automated PR creation for updates
-
-#### 8. Trigger Docs Update (`trigger-docs-update.yml`)
-
-**Triggers**:
-
-- Release published event
-- Manual workflow dispatch
-
-**Action**: Notifies documentation repository to update
 
 ## Release Strategy
 
 ### Version Progression
 
 ```
-main (1.0.0-next.1) → create release/v1.0 → 1.0.0 (@latest)
-         ↓                                      ↓
-    1.1.0-next.0                          hotfix: 1.0.1
-         ↓                                      ↓
-    continues...                         auto-sync to main
+main (1.0.0-next.1) → merge to stable → 1.0.0 (@latest)
+         ↓                                    ↓
+    1.1.0-next.1                        (if needed)
+         ↓                               create 1.0.x
+    continues...                         → 1.0.1, 1.0.2...
 ```
 
 ### Semantic Versioning
@@ -152,70 +148,44 @@ Version bumps are automatic based on commit messages:
 
 ### NPM Distribution Tags
 
-- **@next**: Latest pre-release from main branch
+- **@next**: Latest pre-release from main
   - Install: `npm install @harbour-enterprises/superdoc@next`
   - Format: `X.Y.Z-next.N`
 - **@latest**: Current stable release
   - Install: `npm install @harbour-enterprises/superdoc`
   - Format: `X.Y.Z`
-
-## Configuration Files
-
-### `.releaserc.json`
-
-```json
-{
-  "branches": [
-    {
-      "name": "main",
-      "prerelease": "next",
-      "channel": "next"
-    },
-    {
-      "name": "release/v+([0-9]).+([0-9])",
-      "channel": "latest",
-      "range": "${name.replace(/^release\\/v/, '')}.x"
-    }
-  ]
-}
-```
-
-### `commitlint.config.mjs`
-
-```javascript
-export default {
-  extends: ['@commitlint/config-conventional'],
-};
-```
+- **@X.x**: Maintenance releases
+  - Install: `npm install @harbour-enterprises/superdoc@1.2.x`
+  - Format: `X.x.Y`
 
 ## Workflow Scenarios
 
 ### Scenario 1: Feature Development
 
-1. Developer creates feature branch from main
-2. Opens PR → triggers validation workflow
-3. All checks pass → merge to main
-4. Automatic @next release (e.g., `1.1.0-next.1`)
+1. Create feature branch from main
+2. Open PR → triggers validation
+3. Merge to main → releases `1.1.0-next.1`
 
 ### Scenario 2: Creating Stable Release
 
-1. Trigger "Create Release Branch" workflow
-2. Input version: `1.1`
-3. Creates `release/v1.1` branch
-4. Automatically publishes `1.1.0` as @latest
+1. Run "Promote to Stable" workflow
+2. Merges main to stable
+3. Automatically publishes `1.1.0` as @latest
+4. Syncs back to main with version bump
 
-### Scenario 3: Hotfix to Production
+### Scenario 3: Hotfix to Current Stable
 
-1. Checkout `release/v1.1` branch
-2. Commit fix: `fix: resolve critical bug`
-3. Push → automatically releases `1.1.1`
-4. Auto-creates PR to sync fix back to main
+1. Create fix branch from stable
+2. Commit: `fix: resolve critical bug`
+3. Merge PR → releases `1.1.1`
+4. Auto-syncs to main
 
-### Scenario 4: Breaking Change
+### Scenario 4: Patch Old Version
 
-1. Commit to main: `feat!: redesign plugin API`
-2. Merges → releases `2.0.0-next.0`
-3. Later create `release/v2.0` for stable
+1. Run "Create Patch Branch" for version `1.0`
+2. Creates `1.0.x` branch
+3. Apply fix → releases `1.0.1`
+4. Forward-port creates PR to main
 
 ## Branch Protection Rules
 
@@ -224,17 +194,18 @@ export default {
 - Require pull request before merging
 - Require status checks to pass
 - Require branches to be up to date
-- Require conversation resolution
 - No force pushes
-- No deletions
 
-### Release Branches (`release/**`)
+### Stable Branch
 
-- Require pull request (except for maintainers)
-- Allow maintainer direct commits for hotfixes
-- Require status checks
+- Same as main
+- Allow direct merge from main for promotion
+
+### Maintenance Branches (`*.x`)
+
+- Require pull request
+- Allow maintainer fixes
 - No force pushes
-- No deletions
 
 ## Monitoring & Debugging
 
@@ -253,31 +224,15 @@ npx semantic-release --dry-run --no-ci
 
 ### Common Issues
 
-**Release not triggering:**
+**Version not incrementing on main:**
 
-- Check commit message format
-- Verify branch configuration in `.releaserc.json`
-- Ensure GitHub Actions secrets are configured
+- After stable release, main needs a feat/fix commit to bump version
+- Automatic version bump commit handles this
 
-**Version not incrementing correctly:**
+**Maintenance branch conflicts:**
 
-- Review commit types since last release
-- Check for `[skip ci]` in commit messages
-- Verify semantic-release plugins are loaded
-
-**Tests failing on release:**
-
-- Visual tests may need screenshot updates
-- Check for flaky E2E tests
-- Verify all dependencies are installed
-
-## Performance Optimizations
-
-- **Path filtering**: Workflows only run when relevant files change
-- **Concurrency groups**: Prevent duplicate workflow runs
-- **Parallel jobs**: Tests run simultaneously where possible
-- **Caching**: Dependencies cached between runs
-- **Conditional E2E**: Only for main branch PRs
+- Only create X.x branches AFTER moving past that version on stable
+- Example: Create 1.0.x only after stable is at 1.1.0+
 
 ---
 

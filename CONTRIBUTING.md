@@ -143,7 +143,8 @@ SuperDoc uses a fully automated CI/CD pipeline with semantic-release. **No manua
 #### Branch Strategy
 
 - **`main` branch** → Pre-release versions (`@next` tag on npm)
-- **`release/vX.Y` branches** → Stable versions (`@latest` tag on npm)
+- **`stable` branch** → Stable versions (`@latest` tag on npm)
+- **`X.x` branches** → Maintenance versions (`@X.x` tags on npm)
 
 #### Version Control Through Commits
 
@@ -190,18 +191,25 @@ BREAKING CHANGE: Plugins must now export a default function
    - If tests pass, publishes `X.Y.Z-next.N` to npm
    - Example: `1.0.0-next.1`, `1.0.0-next.2`
 
-2. **Stable release creation**:
+2. **Stable release (promoting from main)**:
 
-   ```bash
-   # Use GitHub Actions UI to trigger "Create Release Branch"
-   # Enter version: 1.0
-   # This creates release/v1.0 and publishes 1.0.0
-   ```
+   - Use GitHub Actions "Promote to Stable" workflow
+   - Merges main to stable branch
+   - Publishes stable version (e.g., `1.0.0`)
+   - Automatically syncs back to main
 
-3. **Hotfix to stable**:
-   - Push fix commits directly to `release/vX.Y`
-   - Automatically publishes patch version
-   - Auto-creates PR to sync fixes back to main
+3. **Hotfix to current stable**:
+
+   - Create fix branch from `stable`
+   - Push fix commits
+   - Merge PR → publishes patch version
+   - Auto-syncs to main
+
+4. **Patch old versions**:
+   - Use "Create Patch Branch" workflow
+   - Input version (e.g., `1.0`)
+   - Creates `1.0.x` branch
+   - Apply fixes → publishes `1.0.1`, `1.0.2`, etc.
 
 #### Manual Testing
 
