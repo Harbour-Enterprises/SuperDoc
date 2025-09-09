@@ -1,0 +1,36 @@
+name: 🎯 Create Release Branch [manual]
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., 0.21, 1.0)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.SUPERDOC_PAT }}
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create release branch
+        run: |
+          BRANCH="release/v${{ inputs.version }}"
+          git checkout -b "$BRANCH"
+          git push origin "$BRANCH"
+          echo "✅ Created $BRANCH from main"
+          echo ""
+          echo "The stable release will be triggered automatically when changes are pushed to this branch."
+          echo "After the stable release, the main branch will automatically bump to the next minor version."

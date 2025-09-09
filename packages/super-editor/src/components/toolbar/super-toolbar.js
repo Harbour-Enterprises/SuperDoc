@@ -16,6 +16,14 @@ import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
 import { yUndoPluginKey } from 'y-prosemirror';
 
 /**
+ * @typedef {function(CommandItem): void} CommandCallback
+ * A callback function that's executed when a toolbar button is clicked
+ * @param {CommandItem} params - Command parameters
+ * @param {ToolbarItem} params.item - An instance of the useToolbarItem composable
+ * @param {*} [params.argument] - The argument passed to the command
+ */
+
+/**
  * @typedef {Object} ToolbarConfig
  * @property {string} [selector] - CSS selector for the toolbar container
  * @property {string[]} [toolbarGroups=['left', 'center', 'right']] - Groups to organize toolbar items
@@ -41,7 +49,7 @@ import { yUndoPluginKey } from 'y-prosemirror';
  * @property {string} type - The type of toolbar item (button, options, separator, dropdown, overflow)
  * @property {Object} group - The group the item belongs to
  * @property {string} group.value - The value of the group
- * @property {string} command - The command to execute
+ * @property {string|CommandCallback} command - The command to execute
  * @property {string} [noArgumentCommand] - The command to execute when no argument is provided
  * @property {Object} icon - The icon for the item
  * @property {*} icon.value - The value of the icon
