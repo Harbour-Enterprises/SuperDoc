@@ -10,6 +10,7 @@ const handleLowerAlpha = (path, lvlText) => handleAlpha(path, lvlText).toLowerCa
 const handleAlpha = (path, lvlText) => generateNumbering(path, lvlText, (p) => intToAlpha(p));
 const handleOrdinal = (path, lvlText) => generateNumbering(path, lvlText, ordinalFormatter);
 const handleCustom = (path, lvlText, customFormat) => generateFromCustom(path, lvlText, customFormat);
+const handleJapaneseCounting = (path, lvlText) => generateNumbering(path, lvlText, intToJapaneseCounting);
 
 const listIndexMap = {
   decimal: handleDecimal,
@@ -19,6 +20,8 @@ const listIndexMap = {
   upperLetter: handleAlpha,
   ordinal: handleOrdinal,
   custom: handleCustom,
+
+  japaneseCounting: handleJapaneseCounting,
 };
 
 const createNumbering = (values, lvlText) => {
@@ -54,8 +57,8 @@ const generateFromCustom = (path, lvlText, customFormat) => {
 
 /**
  * Convert a number to a roman numeral
- * @param {Integer} num
- * @returns {String}
+ * @param {number} num
+ * @returns {string}
  */
 const intToRoman = (num) => {
   const romanNumeralMap = [
@@ -86,8 +89,8 @@ const intToRoman = (num) => {
 
 /**
  * Convert a number to an alphabetic character
- * @param {Integer} num
- * @returns {String}
+ * @param {number} num
+ * @returns {string}
  */
 const intToAlpha = (num) => {
   let result = '';
@@ -97,5 +100,46 @@ const intToAlpha = (num) => {
     result = alphabet[index] + result;
     num = Math.floor((num - 1) / 26);
   }
+  return result;
+};
+
+/**
+ * @param {number} num
+ * @returns {string}
+ */
+export const intToJapaneseCounting = (num) => {
+  const digits = ['', '一', '二', '三', '四', '五', '六', '七', '八', '九'];
+  const units = ['', '十', '百', '千'];
+
+  if (num === 0) return '零';
+  if (num < 10) return digits[num];
+
+  let result = '';
+  let tempNum = num;
+  let unitIndex = 0;
+
+  while (tempNum > 0) {
+    const digit = tempNum % 10;
+    if (digit !== 0) {
+      const digitStr = digit === 1 && unitIndex > 0 ? '' : digits[digit];
+      result = digitStr + (unitIndex > 0 ? units[unitIndex] : '') + result;
+    } else if (result && tempNum > 0) {
+      // Add zero only if there are more significant digits and we already have a result
+      if (!result.startsWith('零') && tempNum % 100 !== 0) {
+        result = '零' + result;
+      }
+    }
+
+    tempNum = Math.floor(tempNum / 10);
+    unitIndex++;
+
+    if (unitIndex > 3) break; // Support up to thousands
+  }
+
+  // Handle special cases for 10-19
+  if (num >= 10 && num < 20) {
+    result = result.replace(/^一十/, '十');
+  }
+
   return result;
 };

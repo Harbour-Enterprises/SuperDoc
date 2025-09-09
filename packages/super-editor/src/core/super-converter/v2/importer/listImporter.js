@@ -298,6 +298,7 @@ const orderedListTypes = [
   'hex', // eg: 0, 1, 2, ..., 9, A, B, C, ..., F, 10, 11, ...
   'chicago', // eg: (0, 1, 2, ..., 9, 10, 11, 12, ..., 19, 1A, 1B, 1C, ..., 1Z, 20, 21, ..., 2Z)
   'none', // No bullet
+  'japaneseCounting', // japanese
 ];
 
 const unorderedListTypes = [
