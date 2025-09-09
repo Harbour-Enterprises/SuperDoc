@@ -3,14 +3,9 @@ name: 🚀 Promote to Stable [manual]
 on:
   workflow_dispatch:
     inputs:
-      source:
-        description: 'Source to promote (branch/tag, default: main)'
+      source_tag:
+        description: 'Tag to promote (optional - uses latest next if empty)'
         required: false
-        default: 'main'
-        type: string
-
-permissions:
-  contents: write
 
 jobs:
   promote:
@@ -21,24 +16,23 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.SUPERDOC_PAT }}
 
-      - name: Setup Git
+      - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Promote to stable
+      - name: Merge to stable
         run: |
-          # Fetch all branches
-          git fetch --all
-          
-          # Checkout stable branch (create if doesn't exist)
-          git checkout stable 2>/dev/null || git checkout -b stable
-          
-          # Merge the source
-          git merge origin/${{ inputs.source }} --no-ff -m "chore: promote ${{ inputs.source }} to stable"
-          
-          # Push to trigger release
+          # Determine what to merge
+          if [ -n "${{ inputs.source_tag }}" ]; then
+            MERGE_REF="${{ inputs.source_tag }}"
+          else
+            MERGE_REF="main"  # or get latest next tag
+          fi
+
+          # Checkout stable (create if doesn't exist)
+          git checkout stable || git checkout -b stable
+
+          # Simply merge - semantic-release handles the rest
+          git merge $MERGE_REF --no-ff -m "chore: promote $MERGE_REF to stable"
           git push origin stable
-          
-          echo "✅ Promoted ${{ inputs.source }} to stable"
-          echo "The stable release will be triggered automatically."
