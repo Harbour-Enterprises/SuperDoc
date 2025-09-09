@@ -24,6 +24,7 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translateDocumentSection } from './v2/exporter/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
+import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -1086,11 +1087,13 @@ function translateTab(params) {
   const { marks = [] } = params.node;
 
   const outputMarks = processOutputMarks(marks);
-  const tabNode = {
-    name: 'w:tab',
-  };
+  const tabRun = wTabNodeTranslator.decode(params);
 
-  return wrapTextInRun(tabNode, outputMarks);
+  if (outputMarks.length) {
+    tabRun.elements.unshift(generateRunProps(outputMarks));
+  }
+
+  return tabRun;
 }
 
 /**

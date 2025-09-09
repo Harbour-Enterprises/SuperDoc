@@ -16,12 +16,12 @@ import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
 import { bookmarkNodeHandlerEntity } from './bookmarkNodeImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
-import { tabNodeEntityHandler } from './tabImporter.js';
 import { listHandlerEntity } from './listImporter.js';
 import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
 import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
+import { tabNodeEntityHandler } from './tabImporter.js';
 
 /**
  * @typedef {import()} XmlNode
