@@ -40,6 +40,7 @@ import { ShapeTextbox } from './shape-textbox/index.js';
 import { ContentBlock } from './content-block/index.js';
 import { StructuredContent, StructuredContentBlock, DocumentSection } from './structured-content/index.js';
 import { BlockNode } from './block-node/index.js';
+import { DocxPassthroughBlock, DocxPassthroughInline } from './passthrough/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -107,6 +108,8 @@ const getRichTextExtensions = () => {
     Image,
     NodeResizer,
     CustomSelection,
+    DocxPassthroughBlock,
+    DocxPassthroughInline,
   ];
 };
 
@@ -179,6 +182,8 @@ const getStarterExtensions = () => {
     NodeResizer,
     CustomSelection,
     TextTransform,
+    DocxPassthroughBlock,
+    DocxPassthroughInline,
   ];
 };
 
@@ -247,4 +252,6 @@ export {
   NodeResizer,
   CustomSelection,
   TextTransform,
+  DocxPassthroughBlock,
+  DocxPassthroughInline,
 };

@@ -1,5 +1,19 @@
 import { getExportedResult, getExportMediaFiles } from './export-helpers/index';
 
+const findShape = (body, name) => {
+  const paragraphs = body.elements.filter((el) => el.name === 'w:p');
+  for (const p of paragraphs) {
+    for (const r of p.elements || []) {
+      if (r.name !== 'w:r') continue;
+      const drawing = r.elements?.find((el) => el.name === 'w:drawing');
+      if (!drawing) continue;
+      const shape = drawing.elements.find((el) => el.name === name);
+      if (shape) return shape;
+    }
+  }
+  return null;
+};
+
 describe('ImageNodeExporter', async () => {
   window.URL.createObjectURL = vi.fn().mockImplementation((file) => {
     return file.name;
@@ -17,18 +31,16 @@ describe('ImageNodeExporter', async () => {
   });
 
   it('export image node correctly', () => {
-    const imageNode = body.elements[0].elements[1].elements[0];
-    expect(imageNode.elements[0].attributes.distT).toBe('0');
-    expect(imageNode.elements[0].attributes.distB).toBe('0');
-    expect(imageNode.elements[0].attributes.distL).toBe('0');
-    expect(imageNode.elements[0].attributes.distR).toBe('0');
+    const imageNode = findShape(body, 'wp:inline');
+    expect(imageNode.attributes.distT).toBe('0');
+    expect(imageNode.attributes.distB).toBe('0');
+    expect(imageNode.attributes.distL).toBe('0');
+    expect(imageNode.attributes.distR).toBe('0');
 
-    expect(imageNode.elements[0].elements[0].attributes.cx).toBe(5734050);
-    expect(imageNode.elements[0].elements[0].attributes.cy).toBe(8601075);
+    expect(imageNode.elements[0].attributes.cx).toBe(5734050);
+    expect(imageNode.elements[0].attributes.cy).toBe(8601075);
 
-    expect(
-      imageNode.elements[0].elements[4].elements[0].elements[0].elements[1].elements[0].attributes['r:embed'],
-    ).toBe('rId4');
+    expect(imageNode.elements[4].elements[0].elements[0].elements[1].elements[0].attributes['r:embed']).toBe('rId4');
   });
 
   it('exports anchor image node correctly', async () => {});
@@ -51,8 +63,7 @@ describe('ImageNodeExporter anchor image', async () => {
   });
 
   it('exports anchor image node correctly', async () => {
-    const imageNode = body.elements[1].elements[4].elements[0];
-    const anchorNode = imageNode.elements[0];
+    const anchorNode = findShape(body, 'wp:anchor');
 
     expect(anchorNode.attributes).toHaveProperty('simplePos', '0');
     expect(anchorNode.elements[0].name).toBe('wp:simplePos');

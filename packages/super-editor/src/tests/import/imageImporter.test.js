@@ -1,4 +1,4 @@
-import { getTestDataByFileName } from '../helpers/helpers.js';
+import { getTestDataByFileName, loadTestDataForEditorTests, initTestEditor } from '../helpers/helpers.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { handleDrawingNode } from '../../core/super-converter/v2/importer/imageImporter.js';
 import { handleParagraphNode } from '../../core/super-converter/v2/importer/paragraphNodeImporter.js';
@@ -15,7 +15,7 @@ describe('ImageNodeImporter', () => {
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 
     const paragraphNode = nodes[0];
-    const drawingNode = paragraphNode.content[0];
+    const drawingNode = paragraphNode.content.find((n) => n.type === 'image');
     const { attrs } = drawingNode;
     const { padding, size } = attrs;
 
@@ -36,19 +36,15 @@ describe('ImageNodeImporter', () => {
 
   it('imports anchor image node correctly', async () => {
     const dataName = 'anchor_images.docx';
-    const docx = await getTestDataByFileName(dataName);
-    const documentXml = docx['word/document.xml'];
+    const { docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(dataName);
+    const { editor } = initTestEditor({ content: docx, media, mediaFiles, fonts });
+    const doc = editor.getJSON();
+    const drawingNode = doc.content
+      .flatMap((n) => n.content || [])
+      .find((n) => n.type === 'image' && n.attrs.anchorData);
 
-    const doc = documentXml.elements[0];
-    const body = doc.elements[0];
-    const content = body.elements;
-    const { nodes } = handleParagraphNode({ nodes: [content[1]], docx, nodeListHandler: defaultNodeListHandler() });
-
-    const paragraphNode = nodes[0];
-    const drawingNode = paragraphNode.content[3];
-    const { attrs } = drawingNode;
-    const { anchorData } = attrs;
-
+    expect(drawingNode).toBeDefined();
+    const { anchorData } = drawingNode.attrs;
     expect(anchorData).toHaveProperty('hRelativeFrom', 'margin');
     expect(anchorData).toHaveProperty('vRelativeFrom', 'margin');
     expect(anchorData).toHaveProperty('alignH', 'left');
@@ -68,7 +64,7 @@ describe('ImageNodeImporter', () => {
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 
     let paragraphNode = nodes[0];
-    let drawingNode = paragraphNode.content[0];
+    let drawingNode = paragraphNode.content.find((n) => n.type === 'image');
     const { attrs } = drawingNode;
     expect(attrs.src).toBe('media/image.png');
 
@@ -78,7 +74,7 @@ describe('ImageNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     paragraphNode = nodes1[0];
-    drawingNode = paragraphNode.content[1];
+    drawingNode = paragraphNode.content.find((n) => n.type === 'image');
     expect(drawingNode.attrs.src).toBe('word/media/image1.jpeg');
   });
 });

@@ -22,6 +22,7 @@ import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
 import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
+import { passthroughNodeHandlerEntity } from './passthroughNodeImporter.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -88,6 +89,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       converter,
       editor,
       lists,
+      isBlock: true,
     });
 
     const result = {
@@ -138,6 +140,7 @@ export const defaultNodeListHandler = () => {
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
     standardNodeHandlerEntity,
+    passthroughNodeHandlerEntity,
   ];
 
   const handler = createNodeListHandler(entities);
@@ -189,6 +192,7 @@ const createNodeListHandler = (nodeHandlers) => {
     filename,
     parentStyleId,
     lists,
+    isBlock = true,
   }) => {
     if (!elements || !elements.length) return [];
 
@@ -202,7 +206,7 @@ const createNodeListHandler = (nodeHandlers) => {
             continue;
           }
 
-          const { nodes, consumed, unhandled } = nodeHandlers.reduce(
+          const { nodes, consumed } = nodeHandlers.reduce(
             (res, handler) => {
               if (res.consumed > 0) return res;
 
@@ -216,18 +220,18 @@ const createNodeListHandler = (nodeHandlers) => {
                 filename,
                 parentStyleId,
                 lists,
+                isBlock,
               });
             },
             { nodes: [], consumed: 0 },
           );
-
-          // Only track unhandled nodes that should have been handled
           const context = getSafeElementContext(elements, index, nodes[0], `/word/${filename || 'document.xml'}`);
-          if (unhandled) {
-            if (!context.elementName) continue;
+          if (!context.elementName) continue;
 
+          const isPassthrough = nodes[0]?.type === 'docxPassthroughBlock' || nodes[0]?.type === 'docxPassthroughInline';
+
+          if (isPassthrough) {
             converter?.telemetry?.trackStatistic('unknown', context);
-            continue;
           } else {
             converter?.telemetry?.trackStatistic('node', context);
 
@@ -458,6 +462,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       converter,
       editor,
       filename: currentFileName,
+      isBlock: true,
     });
 
     if (!converter.headerIds.ids) converter.headerIds.ids = [];
@@ -484,6 +489,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       converter,
       editor,
       filename: currentFileName,
+      isBlock: true,
     });
 
     if (!converter.footerIds.ids) converter.footerIds.ids = [];

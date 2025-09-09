@@ -69,7 +69,8 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
     // The node break
     const nodeBreak = currentState.content[19];
     expect(nodeBreak.type).toBe('paragraph');
-    expect(nodeBreak.content.length).toBe(1);
+    const nodeBreakContent = nodeBreak.content.filter((n) => !n.type.startsWith('docxPassthrough'));
+    expect(nodeBreakContent.length).toBe(1);
 
     // Ensure the nodes after the break have the correct listLevel index
     const listAfterBreak = currentState.content[21];
@@ -93,9 +94,10 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
 
     const contents = listItem.content[0];
     expect(contents.type).toBe('paragraph');
-    expect(contents.content.length).toBe(1);
+    const filtered = contents.content.filter((n) => !n.type.startsWith('docxPassthrough'));
+    expect(filtered.length).toBe(1);
 
-    const textNode = contents.content[0];
+    const textNode = filtered[0];
     expect(textNode.type).toBe('text');
     expect(textNode.text).toBe('FOUR');
   });

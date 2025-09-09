@@ -93,9 +93,9 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     const pNode = item.content[0];
     expect(pNode.type).toBe('paragraph');
 
-    const textNode = pNode.content[0];
-    expect(textNode.type).toBe('text');
-    expect(textNode.text).toBe('ONE');
+    const textNode = pNode.content.find((n) => n.type === 'text');
+    expect(textNode?.type).toBe('text');
+    expect(textNode?.text).toBe('ONE');
   });
 
   it('can import the first sub item (a) with indent', () => {
@@ -112,9 +112,9 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     const pNode = item.content[0];
     expect(pNode.type).toBe('paragraph');
 
-    const textNode = pNode.content[0];
-    expect(textNode.type).toBe('text');
-    expect(textNode.text).toBe('a');
+    const textNode = pNode.content.find((n) => n.type === 'text');
+    expect(textNode?.type).toBe('text');
+    expect(textNode?.text).toBe('a');
 
     const { attrs: pNodeAttrs } = pNode;
     expect(pNodeAttrs).toBeDefined();
@@ -184,8 +184,9 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
 
     const pNode = item.content[0];
     expect(pNode.type).toBe('paragraph');
-    expect(pNode.content[0].type).toBe('text');
-    expect(pNode.content[0].text).toBe('c');
+    const text = pNode.content.find((n) => n.type === 'text');
+    expect(text?.type).toBe('text');
+    expect(text?.text).toBe('c');
   });
 });
 

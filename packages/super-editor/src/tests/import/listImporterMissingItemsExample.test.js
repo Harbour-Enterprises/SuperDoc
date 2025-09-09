@@ -21,8 +21,9 @@ describe('it correctly imports list with recursive style def', async () => {
     const item2 = content[2];
     const nodes = handleListNode({ nodes: [item2], docx, nodeListHandler: defaultNodeListHandler(), lists: {} })?.nodes;
 
-    const node = nodes[0].content[0].content[0];
-    const text = node.content[0].text;
-    expect(text).toBe('Item 2');
+    const listItem = nodes[0].content[0];
+    const paragraph = listItem.content.find((n) => n.type === 'paragraph');
+    const textNode = paragraph.content.find((n) => n.type === 'text');
+    expect(textNode?.text).toBe('Item 2');
   });
 });

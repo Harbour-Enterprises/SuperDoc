@@ -447,26 +447,31 @@ describe('table live xml test', () => {
       },
     });
 
-    expect(result.nodes[0].content[0].type).toBe('tableRow');
-    expect(result.nodes[0].content[0].content.length).toBe(2);
-    expect(result.nodes[0].content[0].content[0].content[0].type).toBe('paragraph');
+    const firstRow = result.nodes[0].content[0];
+    expect(firstRow.type).toBe('tableRow');
+    expect(firstRow.content.length).toBe(2);
+    const firstCell = firstRow.content[0];
+    const firstParagraph = firstCell.content.find((n) => n.type === 'paragraph');
+    const firstText = firstParagraph.content.find((n) => n.type === 'text');
+    expect(firstText.text).toBe('COL 1 ROW 1');
+    const secondCell = firstRow.content[1];
+    const secondParagraph = secondCell.content.find((n) => n.type === 'paragraph');
+    const secondText = secondParagraph.content.find((n) => n.type === 'text');
+    expect(secondText.text).toBe('COL 2 ROW 1');
+    expect(firstRow.attrs.borders).toBeDefined();
 
-    expect(result.nodes[0].content[0].content[0].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[0].content[0].content[0].content[0].text).toBe('COL 1 ROW 1');
-    expect(result.nodes[0].content[0].content[1].content[0].type).toBe('paragraph');
-    expect(result.nodes[0].content[0].content[1].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[0].content[1].content[0].content[0].text).toBe('COL 2 ROW 1');
-    expect(result.nodes[0].content[0].attrs.borders).toBeDefined();
-
-    expect(result.nodes[0].content[1].type).toBe('tableRow');
-    expect(result.nodes[0].content[1].content.length).toBe(2);
-    expect(result.nodes[0].content[1].content[0].content[0].type).toBe('paragraph');
-    expect(result.nodes[0].content[1].content[0].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[1].content[0].content[0].content[0].text).toBe('COL 1 ROW 2');
-    expect(result.nodes[0].content[1].content[1].content[0].type).toBe('paragraph');
-    expect(result.nodes[0].content[1].content[1].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[1].content[1].content[0].content[0].text).toBe('COL 2 ROW 2');
-    expect(result.nodes[0].content[1].attrs.borders).toBeDefined();
+    const secondRow = result.nodes[0].content[1];
+    expect(secondRow.type).toBe('tableRow');
+    expect(secondRow.content.length).toBe(2);
+    const thirdCell = secondRow.content[0];
+    const thirdParagraph = thirdCell.content.find((n) => n.type === 'paragraph');
+    const thirdText = thirdParagraph.content.find((n) => n.type === 'text');
+    expect(thirdText.text).toBe('COL 1 ROW 2');
+    const fourthCell = secondRow.content[1];
+    const fourthParagraph = fourthCell.content.find((n) => n.type === 'paragraph');
+    const fourthText = fourthParagraph.content.find((n) => n.type === 'text');
+    expect(fourthText.text).toBe('COL 2 ROW 2');
+    expect(secondRow.attrs.borders).toBeDefined();
   });
 
   it('gets styles from base tab and parse internal borders', () => {

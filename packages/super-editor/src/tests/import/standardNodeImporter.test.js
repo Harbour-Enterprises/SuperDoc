@@ -13,10 +13,11 @@ describe('StandardNodeImporter', () => {
     const content = body.elements;
     const { nodes } = handleStandardNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
     expect(nodes.length).toBe(1);
-    expect(nodes[0].content[0].type).toBe('text');
-    expect(nodes[0].content[0].text).toBe('First paragraph');
+    const textNode = nodes[0].content.find((n) => n.type === 'text');
+    expect(textNode?.type).toBe('text');
+    expect(textNode?.text).toBe('First paragraph');
 
-    const { marks } = nodes[0].content[0];
+    const { marks } = textNode;
     expect(marks[0].type).toBe('textStyle');
     expect(marks[0].attrs).toHaveProperty('fontFamily', 'Arial');
     expect(marks[0].attrs).toHaveProperty('lineHeight', '1.15');

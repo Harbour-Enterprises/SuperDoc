@@ -33,7 +33,7 @@ describe('basic comment import [basic-comment.docx]', () => {
     const commentText = comment.textJson;
     expect(commentText.type).toBe('paragraph');
 
-    const commentContent = commentText.content;
+    const commentContent = commentText.content.filter((n) => n.type !== 'docxPassthroughInline');
     expect(commentContent).toHaveLength(1);
     expect(commentContent[0].text).toBe('abcabc');
     expect(commentContent[0].type).toBe('text');

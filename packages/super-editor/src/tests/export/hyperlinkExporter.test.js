@@ -14,7 +14,10 @@ describe('HyperlinkNodeExporter', async () => {
   });
 
   it('parses w:hyperlink with styles', () => {
-    const hyperLinkNode = body.elements[1].elements[2];
+    const hyperLinkNode = body.elements
+      .filter((el) => el.name === 'w:p')
+      .flatMap((p) => p.elements || [])
+      .find((el) => el.name === 'w:hyperlink');
     expect(hyperLinkNode.attributes['r:id']).toBe('rId4');
     expect(hyperLinkNode.elements[0].elements[1].elements[0].text).toBe(
       'https://stackoverflow.com/questions/66669593/how-to-attach-image-at-first-page-in-docx-file-nodejs',

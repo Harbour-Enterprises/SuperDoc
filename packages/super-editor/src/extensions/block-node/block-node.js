@@ -129,14 +129,17 @@ export const BlockNode = Extension.create({
             // Only allow block nodes with a valid sdBlockId attribute
             if (!nodeAllowsSdBlockIdAttr(node) || !nodeNeedsSdBlockId(node)) return null;
 
+            const currentNode = tr.doc.nodeAt(pos);
+            if (!currentNode || !currentNode.type.validContent(currentNode.content)) return null;
+
             tr.setNodeMarkup(
               pos,
               undefined,
               {
-                ...node.attrs,
+                ...currentNode.attrs,
                 sdBlockId: uuidv4(),
               },
-              node.marks,
+              currentNode.marks,
             );
             changed = true;
           });

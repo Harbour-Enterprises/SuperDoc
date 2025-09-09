@@ -448,9 +448,9 @@ describe('Check that we can import list item with invalid list def with fallback
   it('imports expected list item with fallback', async () => {
     const item = content.content[3];
     expect(item.type).toBe('paragraph');
-    const textNode = item.content[0];
-    expect(textNode.type).toBe('text');
-    expect(textNode.text).toBe('NO VALID DEF');
+    const textNode = item.content.find((n) => n.type === 'text');
+    expect(textNode?.type).toBe('text');
+    expect(textNode?.text).toBe('NO VALID DEF');
   });
 
   it('exports first list item correctly', async () => {

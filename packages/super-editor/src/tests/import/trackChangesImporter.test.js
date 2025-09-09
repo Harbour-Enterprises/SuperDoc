@@ -93,8 +93,9 @@ describe('trackChanges live xml test', () => {
   it('parses insert xml', () => {
     const nodes = parseXmlToJson(inserXml).elements;
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
-    expect(result.nodes.length).toBe(1);
-    const insertionMark = result.nodes[0].marks.find((mark) => mark.type === TrackInsertMarkName);
+    const filteredNodes = result.nodes.filter((n) => !n.type?.startsWith('docxPassthrough'));
+    expect(filteredNodes.length).toBe(1);
+    const insertionMark = filteredNodes[0].marks.find((mark) => mark.type === TrackInsertMarkName);
     expect(insertionMark).toBeDefined();
     expect(insertionMark.attrs).toEqual({
       id: '0',
@@ -102,13 +103,14 @@ describe('trackChanges live xml test', () => {
       author: 'torcsi@harbourcollaborators.com',
       importedAuthor: 'torcsi@harbourcollaborators.com (imported)',
     });
-    expect(result.nodes[0].text).toBe('short ');
+    expect(filteredNodes[0].text).toBe('short ');
   });
   it('parses delete xml', () => {
     const nodes = parseXmlToJson(deleteXml).elements;
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
-    expect(result.nodes.length).toBe(1);
-    const deletionMark = result.nodes[0].marks.find((mark) => mark.type === TrackDeleteMarkName);
+    const filtered = result.nodes.filter((n) => !n.type?.startsWith('docxPassthrough'));
+    expect(filtered.length).toBe(1);
+    const deletionMark = filtered[0].marks.find((mark) => mark.type === TrackDeleteMarkName);
     expect(deletionMark).toBeDefined();
     expect(deletionMark.attrs).toEqual({
       id: '1',
@@ -116,7 +118,7 @@ describe('trackChanges live xml test', () => {
       author: 'torcsi@harbourcollaborators.com',
       importedAuthor: 'torcsi@harbourcollaborators.com (imported)',
     });
-    expect(result.nodes[0].text).toBe('long ');
+    expect(filtered[0].text).toBe('long ');
   });
   it('parses mark change xml', () => {
     const nodes = parseXmlToJson(markChangeXml).elements;
@@ -124,8 +126,9 @@ describe('trackChanges live xml test', () => {
     const result = handler.handler({ nodes });
     expect(result.length).toBe(1);
     expect(result[0].type).toBe('paragraph');
-    expect(result[0].content.length).toBe(1);
-    const changeMark = result[0].content[0].marks.find((mark) => mark.type === TrackFormatMarkName);
+    const filteredContent = result[0].content.filter((n) => !n.type?.startsWith('docxPassthrough'));
+    expect(filteredContent.length).toBe(1);
+    const changeMark = filteredContent[0].marks.find((mark) => mark.type === TrackFormatMarkName);
     expect(changeMark).toBeDefined();
     expect(changeMark.attrs).toEqual({
       id: '2',

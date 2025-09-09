@@ -22,10 +22,10 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     expect(item.attrs.indent.hanging).toBeUndefined();
 
     const content = item.content[0];
-    const text = content.content[0];
+    const text = content.content.find((n) => n.type === 'text');
     expect(content.type).toBe('paragraph');
-    expect(text.type).toBe('text');
-    expect(text.text).toBe('APPOINTMENT');
+    expect(text?.type).toBe('text');
+    expect(text?.text).toBe('APPOINTMENT');
 
     const textStyleMarks = text.marks;
     expect(textStyleMarks.length).toBe(2);
