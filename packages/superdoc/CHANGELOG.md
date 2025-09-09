@@ -1,3 +1,15 @@
+# [0.17.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.16.5...v0.17.0) (2025-09-09)
+
+### Bug Fixes
+
+- test release ([3c6d130](https://github.com/Harbour-Enterprises/SuperDoc/commit/3c6d1304120ebfaff4e62fa4310c9c619decf909))
+
+### Features
+
+- begin next development cycle [skip ci] ([714819e](https://github.com/Harbour-Enterprises/SuperDoc/commit/714819e7cd0ef56449e7e65555bf851ebe424636))
+- prepare v0.17 release cycle ([ec75bc1](https://github.com/Harbour-Enterprises/SuperDoc/commit/ec75bc1f4bad0ad30d9e12aec10d69563f3f8760))
+- remove the heading node from superdoc ([#901](https://github.com/Harbour-Enterprises/SuperDoc/issues/901)) ([02966f4](https://github.com/Harbour-Enterprises/SuperDoc/commit/02966f4555e0c1c949ed0386745d7d041bc5c1e5))
+
 # [0.16.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.15.18...v0.16.0) (2025-09-09)
 
 ### Bug Fixes
