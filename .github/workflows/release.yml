@@ -24,7 +24,7 @@ jobs:
     if: "!contains(github.event.head_commit.message, '[skip ci]')"
     uses: ./.github/workflows/test-suite.yml
     with:
-      run-visual: true
+      run-visual: ${{ github.ref == 'refs/heads/stable' }}
       run-e2e: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/stable' }}
     secrets: inherit
 
