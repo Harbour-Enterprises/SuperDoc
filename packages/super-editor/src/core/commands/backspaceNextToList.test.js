@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Schema } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 
 vi.mock('./list-helpers', () => ({
   isList: (node) => {
@@ -223,13 +223,13 @@ describe('handleBackspaceNextToList', () => {
     expect(selParent).toBe(lastPara);
   });
 
-  it('returns false when parent is not a paragraph', () => {
+  it('returns false when selection is not a text cursor', () => {
     const liPara = schema.node('paragraph', null, schema.text('x'));
     const list = schema.node('orderedList', null, [schema.node('listItem', { level: 0 }, [liPara])]);
     const doc = schema.node('doc', null, [list]);
 
     const listPos = findNodePos(doc, (n) => n === list);
-    const sel = TextSelection.create(doc, listPos + 1, listPos + 1); // inside list container, not paragraph
+    const sel = NodeSelection.create(doc, listPos); // NodeSelection on the list
     const state = EditorState.create({ schema, doc, selection: sel });
 
     const cmd = handleBackspaceNextToList();

@@ -24,6 +24,10 @@ export function orderedListSync(editor) {
 
       const tr = newState.tr;
       tr.setMeta('orderedListSync', true);
+      // Exclude plugin-driven list synchronization from history tracking so
+      // collaborative undo/redo (yjs) doesn't create extra steps for these
+      // automatic updates.
+      tr.setMeta('addToHistory', false);
 
       const listMap = new Map(); // numId -> [counts per level]
       const listInitialized = new Map(); // Track if we've initialized each numId

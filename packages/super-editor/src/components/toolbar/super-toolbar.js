@@ -287,6 +287,24 @@ export class SuperToolbar extends EventEmitter {
     },
 
     /**
+     * Perform undo via a focused command chain
+     * @returns {void}
+     */
+    undo: () => {
+      if (!this.activeEditor) return;
+      this.activeEditor.chain().focus().undo().run();
+    },
+
+    /**
+     * Perform redo via a focused command chain
+     * @returns {void}
+     */
+    redo: () => {
+      if (!this.activeEditor) return;
+      this.activeEditor.chain().focus().redo().run();
+    },
+
+    /**
      * Sets the document mode
      * @param {Object} params - Command parameters
      * @param {CommandItem} params.item - The command item

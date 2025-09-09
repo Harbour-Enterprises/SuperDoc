@@ -36,6 +36,18 @@ function makeSchema() {
   return new Schema({ nodes });
 }
 
+function findNodePos(doc, predicate) {
+  let found = null;
+  doc.descendants((node, pos) => {
+    if (predicate(node)) {
+      found = pos;
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
 describe('deleteSelection', () => {
   let schema;
 
@@ -70,9 +82,11 @@ describe('deleteSelection', () => {
       schema.node('paragraph', null, schema.text('after')),
     ]);
 
-    // select from inside "one" into "after"
-    const from = 8;
-    const to = doc.content.size - 2;
+    // select from inside "one" into the "after" paragraph
+    const oneParaPos = findNodePos(doc, (n) => n.type.name === 'paragraph' && n.textContent === 'one');
+    const afterParaPos = findNodePos(doc, (n) => n.type.name === 'paragraph' && n.textContent === 'after');
+    const from = oneParaPos + 1; // start of "one"
+    const to = afterParaPos + 3; // inside "aft"
     const sel = TextSelection.create(doc, from, to);
     const state = EditorState.create({ schema, doc, selection: sel });
 
@@ -106,12 +120,10 @@ describe('deleteSelection', () => {
   });
 
   it('returns true when dispatch is omitted (list content case)', () => {
-    const doc = schema.node('doc', null, [
-      schema.node('bulletList', null, [
-        schema.node('listItem', null, [schema.node('paragraph', null, schema.text('foo bar'))]),
-      ]),
-    ]);
-    const sel = TextSelection.create(doc, 2, 5);
+    const para = schema.node('paragraph', null, schema.text('foo bar'));
+    const doc = schema.node('doc', null, [schema.node('bulletList', null, [schema.node('listItem', null, [para])])]);
+    const paraPos = findNodePos(doc, (n) => n === para);
+    const sel = TextSelection.create(doc, paraPos + 1, paraPos + 4);
     const state = EditorState.create({ schema, doc, selection: sel });
 
     const cmd = deleteSelection();
