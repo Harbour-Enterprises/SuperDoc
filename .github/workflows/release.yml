@@ -2,11 +2,13 @@ name: 📦 Release [auto]
 
 on:
   push:
-    branches: [main, stable, '*.x']
+    branches:
+      - main
+      - stable
+      - '*.x' # Maintenance branches
     paths:
       - 'packages/**'
       - '!**.md'
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -22,7 +24,7 @@ jobs:
     uses: ./.github/workflows/test-suite.yml
     with:
       run-visual: true
-      run-e2e: ${{ github.ref == 'refs/heads/stable' }}
+      run-e2e: true
     secrets: inherit
 
   release:
@@ -39,36 +41,40 @@ jobs:
           node-version: 22
           cache: npm
           registry-url: 'https://registry.npmjs.org'
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Build packages
         run: npm run build
-      
+
+      - name: Get branch info
+        run: |
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Event: ${{ github.event_name }}"
+          git branch -r
+          git tag -l
+
       - name: Release
-        id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.SUPERDOC_PAT }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npx semantic-release
-      
-      # Sync stable releases back to main
-      - name: Sync to main
-        if: github.ref == 'refs/heads/stable' && steps.semantic.outputs.new_release_published == 'true'
+        run: npx semantic-release --debug
+
+      # Sync stable back to main after stable release
+      - name: Sync stable to main
+        if: github.ref == 'refs/heads/stable' && steps.release.outputs.released == '0'
         run: |
+          # Configure git
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
-          # Fetch main branch
+
+          # Fetch and merge
           git fetch origin main
-          
-          # Checkout main
           git checkout main
-          
-          # Merge stable
-          git merge origin/stable -m "chore: sync stable release ${{ steps.semantic.outputs.new_release_version }} to main [skip ci]"
-          
-          # Push to main
+          git merge stable -m "chore: sync stable release to main [skip ci]"
+
+          # Add version bump commit
+          git commit --allow-empty -m "feat: begin next development cycle [skip ci]"
           git push origin main
