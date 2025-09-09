@@ -1,6 +1,13 @@
 // @ts-check
 import { NodeTranslator } from '../../../node-translator/index.js';
-import { tabSizeEncoder, tabSizeDecoder } from './attributes/index.js';
+import {
+  tabSizeEncoder,
+  tabSizeDecoder,
+  tabPositionEncoder,
+  tabPositionDecoder,
+  tabLeaderEncoder,
+  tabLeaderDecoder,
+} from './attributes/index.js';
 
 /** @type {import('../../../node-translator/index.js').XmlNodeName} */
 const XML_NODE_NAME = 'w:tab';
@@ -12,7 +19,11 @@ const SD_NODE_NAME = 'tab';
  * The attributes that can be mapped between OOXML and SuperDoc.
  * @type {import('../../../node-translator/index.js').AttributesHandlerList[]}
  */
-const attributes = [{ xmlName: 'w:val', sdName: 'tabSize', encode: tabSizeEncoder, decode: tabSizeDecoder }];
+const attributes = [
+  { xmlName: 'w:val', sdName: 'tabSize', encode: tabSizeEncoder, decode: tabSizeDecoder },
+  { xmlName: 'w:pos', sdName: 'tabPosition', encode: tabPositionEncoder, decode: tabPositionDecoder },
+  { xmlName: 'w:leader', sdName: 'tabLeader', encode: tabLeaderEncoder, decode: tabLeaderDecoder },
+];
 
 /**
  * Encode a <w:tab> node as a SuperDoc tab node while preserving unknown attributes.
@@ -30,9 +41,11 @@ const encode = (params, encodedAttrs = {}) => {
 
   if (encodedAttrs && Object.keys(encodedAttrs).length) {
     Object.assign(mergedAttrs, encodedAttrs);
-    if (encodedAttrs.tabSize !== undefined) {
-      delete mergedAttrs['w:val'];
-    }
+    attributes.forEach(({ xmlName, sdName }) => {
+      if (encodedAttrs[sdName] !== undefined) {
+        delete mergedAttrs[xmlName];
+      }
+    });
   }
 
   if (Object.keys(mergedAttrs).length) {
@@ -57,9 +70,11 @@ const decode = (params, decodedAttrs = {}) => {
   const mergedAttrs = { ...superDocAttrs };
   if (decodedAttrs && Object.keys(decodedAttrs).length) {
     Object.assign(mergedAttrs, decodedAttrs);
-    if (decodedAttrs['w:val'] !== undefined) {
-      delete mergedAttrs.tabSize;
-    }
+    attributes.forEach(({ xmlName, sdName }) => {
+      if (decodedAttrs[xmlName] !== undefined) {
+        delete mergedAttrs[sdName];
+      }
+    });
   }
 
   const wTab = { name: 'w:tab' };

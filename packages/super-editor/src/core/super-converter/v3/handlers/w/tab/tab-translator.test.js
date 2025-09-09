@@ -14,14 +14,25 @@ describe('w:tab translator config', () => {
           {
             attributes: {
               'w:val': '96',
+              'w:pos': '720',
+              'w:leader': 'dot',
               'w:custom': 'foo',
             },
           },
         ],
       };
-      const res = config.encode(params, { tabSize: '96' });
+      const res = config.encode(params, {
+        tabSize: '96',
+        tabPosition: '720',
+        tabLeader: 'dot',
+      });
       expect(res.type).toBe('tab');
-      expect(res.attrs).toEqual({ tabSize: '96', 'w:custom': 'foo' });
+      expect(res.attrs).toEqual({
+        tabSize: '96',
+        tabPosition: '720',
+        tabLeader: 'dot',
+        'w:custom': 'foo',
+      });
     });
   });
 
@@ -35,12 +46,31 @@ describe('w:tab translator config', () => {
     });
 
     it('copies decoded attributes and preserves unknown ones', () => {
-      const params = { node: { type: 'tab', attrs: { tabSize: '96', 'w:custom': 'foo' } } };
-      const res = config.decode(params, { 'w:val': '96' });
+      const params = {
+        node: {
+          type: 'tab',
+          attrs: {
+            tabSize: '96',
+            tabPosition: '720',
+            tabLeader: 'dot',
+            'w:custom': 'foo',
+          },
+        },
+      };
+      const res = config.decode(params, {
+        'w:val': '96',
+        'w:pos': '720',
+        'w:leader': 'dot',
+      });
       expect(res.name).toBe('w:r');
       expect(res.elements[0]).toEqual({
         name: 'w:tab',
-        attributes: { 'w:val': '96', 'w:custom': 'foo' },
+        attributes: {
+          'w:val': '96',
+          'w:pos': '720',
+          'w:leader': 'dot',
+          'w:custom': 'foo',
+        },
       });
     });
 
@@ -51,14 +81,20 @@ describe('w:tab translator config', () => {
   });
 
   describe('attributes mapping metadata', () => {
-    it('exposes expected attribute handler (w:val -> tabSize)', () => {
+    it('exposes expected attribute handlers', () => {
       const attrMap = config.attributes;
       const names = attrMap.map((a) => [a.xmlName, a.sdName]);
       expect(names).toContainEqual(['w:val', 'tabSize']);
+      expect(names).toContainEqual(['w:pos', 'tabPosition']);
+      expect(names).toContainEqual(['w:leader', 'tabLeader']);
 
       const byXml = Object.fromEntries(attrMap.map((a) => [a.xmlName, a]));
       expect(typeof byXml['w:val'].encode).toBe('function');
       expect(typeof byXml['w:val'].decode).toBe('function');
+      expect(typeof byXml['w:pos'].encode).toBe('function');
+      expect(typeof byXml['w:pos'].decode).toBe('function');
+      expect(typeof byXml['w:leader'].encode).toBe('function');
+      expect(typeof byXml['w:leader'].decode).toBe('function');
     });
   });
 });
