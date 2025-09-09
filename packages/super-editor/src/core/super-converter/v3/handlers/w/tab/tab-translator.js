@@ -1,6 +1,13 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import { tabSizeEncoder, tabSizeDecoder } from './attributes/index.js';
+import {
+  tabSizeEncoder,
+  tabSizeDecoder,
+  tabLeaderEncoder,
+  tabLeaderDecoder,
+  tabPositionEncoder,
+  tabPositionDecoder,
+} from './attributes/index.js';
 import { generateRunProps, processOutputMarks } from '../../../../exporter.js';
 
 /** @type {import('@translator').XmlNodeName} */
@@ -14,33 +21,22 @@ const SD_NODE_NAME = 'tab';
  * Note: These are specifically OOXML valid attributes for a given node.
  * @type {import('@translator').AttributesHandlerList[]}
  */
-const validXmlAttributes = [{ xmlName: 'w:val', sdName: 'tabSize', encode: tabSizeEncoder, decode: tabSizeDecoder }];
+const validXmlAttributes = [
+  { xmlName: 'w:val', sdName: 'tabSize', encode: tabSizeEncoder, decode: tabSizeDecoder },
+  { xmlName: 'w:pos', sdName: 'pos', encode: tabPositionEncoder, decode: tabPositionDecoder },
+  { xmlName: 'w:leader', sdName: 'leader', encode: tabLeaderEncoder, decode: tabLeaderDecoder },
+];
 
 /**
  * Encode a <w:tab> node as a SuperDoc tab node while preserving unknown attributes.
- * @param {import('@translator').SCEncoderConfig} params
+ * @param {import('@translator').SCEncoderConfig} _
  * @param {import('@translator').EncodedAttributes} [encodedAttrs] - The already encoded attributes
  * @returns {import('@translator').SCEncoderResult}
  */
-const encode = (params, encodedAttrs = {}) => {
-  const node = params?.nodes?.[0];
-  const originalAttrs = { ...(node?.attributes || {}) };
-
+const encode = (_, encodedAttrs = {}) => {
   const translated = { type: 'tab' };
 
-  const mergedAttrs = { ...originalAttrs };
-
-  if (encodedAttrs && Object.keys(encodedAttrs).length) {
-    Object.assign(mergedAttrs, encodedAttrs);
-    if (encodedAttrs.tabSize !== undefined) {
-      delete mergedAttrs['w:val'];
-    }
-  }
-
-  if (Object.keys(mergedAttrs).length) {
-    translated.attrs = mergedAttrs;
-  }
-
+  if (encodedAttrs) translated.attrs = { ...encodedAttrs };
   return translated;
 };
 
@@ -54,20 +50,8 @@ const decode = (params, decodedAttrs = {}) => {
   const { node } = params || {};
   if (!node) return;
 
-  const superDocAttrs = { ...(node.attrs || {}) };
-
-  const mergedAttrs = { ...superDocAttrs };
-  if (decodedAttrs && Object.keys(decodedAttrs).length) {
-    Object.assign(mergedAttrs, decodedAttrs);
-    if (decodedAttrs['w:val'] !== undefined) {
-      delete mergedAttrs.tabSize;
-    }
-  }
-
   const wTab = { name: 'w:tab' };
-  if (Object.keys(mergedAttrs).length) {
-    wTab.attributes = mergedAttrs;
-  }
+  if (decodedAttrs) wTab.attributes = { ...decodedAttrs };
 
   const translated = {
     name: 'w:r',
