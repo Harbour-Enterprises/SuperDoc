@@ -24,7 +24,7 @@ jobs:
     uses: ./.github/workflows/test-suite.yml
     with:
       run-visual: true
-      run-e2e: ${{ github.ref == 'refs/heads/stable' }}
+      run-e2e: true
     secrets: inherit
 
   release:
