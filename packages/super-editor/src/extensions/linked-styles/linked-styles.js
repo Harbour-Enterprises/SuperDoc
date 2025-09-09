@@ -45,6 +45,47 @@ export const LinkedStyles = Extension.create({
       },
 
       /**
+       * Toggle a linked style on the current selection
+       * @category Command
+       * @param {Object} style - The linked style to apply (with id property)
+       * @param {string|null} [nodeType=null] - Node type to restrict toggle to (e.g., 'paragraph')
+       * @returns {Function} Command function
+       * @example
+       * // Toggle a heading style
+       * const style = editor.helpers.linkedStyles.getStyleById('Heading1');
+       * toggleLinkedStyle(style)
+       *
+       * // Toggle only on paragraph nodes
+       * toggleLinkedStyle(style, 'paragraph')
+       * @note If selection is empty, returns false
+       * @note Removes style if already applied, applies it if not
+       */
+      toggleLinkedStyle:
+        (style, nodeType = null) =>
+        (params) => {
+          const { tr } = params;
+          if (tr.selection.empty) {
+            return false;
+          }
+          let node = tr.doc.nodeAt(tr.selection.$from.pos);
+
+          if (node && nodeType && node.type.name !== nodeType) {
+            node = findParentNodeClosestToPos(tr.selection.$from, (n) => {
+              return nodeType ? n.type.name === nodeType : true;
+            })?.node;
+          }
+          if (!node) {
+            return false;
+          }
+          const currentStyleId = node.attrs.styleId;
+
+          if (currentStyleId === style.id) {
+            return applyLinkedStyleToTransaction(tr, this.editor, { id: null });
+          }
+          return applyLinkedStyleToTransaction(tr, this.editor, style);
+        },
+
+      /**
        * Apply a linked style by its ID
        * @category Command
        * @param {string} styleId - The style ID to apply (e.g., 'Heading1')
