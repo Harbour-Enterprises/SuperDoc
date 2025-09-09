@@ -109,6 +109,11 @@ export function exportSchemaToJson(params) {
     return handler.decode(params);
   }
 
+  if (!handler) {
+    console.error('No translation function found for node type:', type);
+    return null;
+  }
+
   // Call the handler for this node type
   return handler(params);
 }
