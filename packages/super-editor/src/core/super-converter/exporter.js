@@ -1252,7 +1252,7 @@ function generateTableGrid(node, params) {
  * @param {ExportParams} params
  * @returns {XmlReadyNode} The translated table row node
  */
-function translateTableRow(params) {
+export function translateTableRow(params) {
   const elements = translateChildNodes(params);
   const tableRowProperties = generateTableRowProperties(params.node);
   if (tableRowProperties.elements.length) elements.unshift(tableRowProperties);
@@ -1277,6 +1277,10 @@ function generateTableRowProperties(node) {
       attributes,
     };
     elements.push(rowHeightElement);
+  }
+
+  if (attrs?.cantSplit) {
+    elements.push({ name: 'w:cantSplit' });
   }
 
   return {
