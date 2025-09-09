@@ -2,31 +2,23 @@ name: 🔄 Sync Patches [auto]
 
 on:
   push:
-    branches: ['release/**']
+    branches: [stable, '*.x']
     paths:
       - 'packages/**'
   workflow_dispatch:
-    inputs:
-      commit:
-        description: 'Commit SHA to cherry-pick (optional, defaults to latest)'
-        required: false
-        type: string
 
 permissions:
   contents: write
   pull-requests: write
-  issues: write
 
 jobs:
-  sync-patch:
+  sync-to-main:
     runs-on: ubuntu-latest
-    # Skip if release commit (auto mode only)
+    # Skip release commits
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      (!contains(github.event.head_commit.message, '[skip ci]') &&
-       !contains(github.event.head_commit.message, 'chore(release)') &&
-       (contains(github.event.head_commit.message, 'fix:') || 
-        contains(github.event.head_commit.message, 'fix(')))
+      !contains(github.event.head_commit.message, '[skip ci]') &&
+      !contains(github.event.head_commit.message, 'chore(release)') &&
+      !contains(github.event.head_commit.message, 'chore: promote')
     
     steps:
       - uses: actions/checkout@v4
@@ -34,63 +26,42 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.SUPERDOC_PAT }}
 
-      - name: Cherry-pick to main
+      - name: Create sync PR
         env:
           GH_TOKEN: ${{ secrets.SUPERDOC_PAT }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
-          # Determine commit to cherry-pick
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.commit }}" ]; then
-            COMMIT="${{ inputs.commit }}"
-          else
-            COMMIT="${{ github.sha }}"
-          fi
-          
-          # Create patch branch from main
-          git fetch origin main
-          PATCH_BRANCH="patch-${COMMIT:0:7}"
+          # Create patch branch
+          PATCH_BRANCH="sync-patch-${{ github.sha }}"
           git checkout -b "$PATCH_BRANCH" origin/main
           
-          # Try cherry-pick
-          if git cherry-pick "$COMMIT"; then
-            # Success - push and create PR
+          # Cherry-pick the commit
+          if git cherry-pick "${{ github.sha }}"; then
             git push origin "$PATCH_BRANCH"
             
-            # Get commit message
-            COMMIT_MSG=$(git log -1 --pretty=format:"%s" "$COMMIT")
-            
+            # Create PR
             gh pr create \
               --base main \
               --head "$PATCH_BRANCH" \
-              --title "🔄 $COMMIT_MSG" \
-              --body "Cherry-pick fix from ${{ github.ref_name }}
+              --title "🔄 Sync: ${{ github.event.head_commit.message }}" \
+              --body "Auto-sync patch from ${{ github.ref_name }}
               
-              Original commit: $COMMIT
+              Commit: ${{ github.sha }}
               
-              This PR cherry-picks a fix from the release branch to main." \
-              --label "patch-sync" \
-              --label "automerge"
+              ---
+              _This PR was automatically created to sync a patch to main._" \
+              --label "patch-sync"
           else
-            # Conflict - create issue for manual resolution
-            COMMIT_MSG=$(git log -1 --pretty=format:"%s" "$COMMIT" || echo "Unknown commit")
-            
+            echo "⚠️ Cherry-pick failed - manual resolution needed"
             gh issue create \
-              --title "🔄 Manual sync needed: $COMMIT_MSG" \
-              --body "Failed to auto-sync patch from ${{ github.ref_name }} due to conflicts.
+              --title "🔄 Manual sync needed: ${{ github.event.head_commit.message }}" \
+              --body "Failed to auto-sync patch from ${{ github.ref_name }}
               
-              **Commit**: $COMMIT
+              **Commit**: ${{ github.sha }}
               **Branch**: ${{ github.ref_name }}
               
-              Please manually cherry-pick this fix to main:
-              \`\`\`bash
-              git checkout main
-              git pull
-              git cherry-pick $COMMIT
-              # Resolve conflicts, then:
-              git push
-              \`\`\`" \
-              --label "patch-sync" \
-              --label "needs-manual-sync"
+              Please manually cherry-pick this commit to main." \
+              --label "patch-sync"
           fi
