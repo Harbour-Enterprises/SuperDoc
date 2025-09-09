@@ -22,6 +22,7 @@ import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
 import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
+import { IGNORED_NODE_NAMES } from './ignoredNodes.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -75,7 +76,7 @@ export const createDocumentJson = (docx, converter, editor) => {
 
   if (bodyNode) {
     const node = bodyNode;
-    const ignoreNodes = ['w:sectPr'];
+    const ignoreNodes = ['w:sectPr', ...IGNORED_NODE_NAMES];
     const content = node.elements?.filter((n) => !ignoreNodes.includes(n.name)) ?? [];
     const comments = importCommentData({ docx, nodeListHandler, converter, editor });
 
@@ -191,13 +192,15 @@ const createNodeListHandler = (nodeHandlers) => {
     lists,
   }) => {
     if (!elements || !elements.length) return [];
+    const filteredElements = elements.filter((el) => !IGNORED_NODE_NAMES.includes(el.name));
+    if (!filteredElements.length) return [];
 
     const processedElements = [];
 
     try {
-      for (let index = 0; index < elements.length; index++) {
+      for (let index = 0; index < filteredElements.length; index++) {
         try {
-          const nodesToHandle = elements.slice(index);
+          const nodesToHandle = filteredElements.slice(index);
           if (!nodesToHandle || nodesToHandle.length === 0) {
             continue;
           }
@@ -222,7 +225,12 @@ const createNodeListHandler = (nodeHandlers) => {
           );
 
           // Only track unhandled nodes that should have been handled
-          const context = getSafeElementContext(elements, index, nodes[0], `/word/${filename || 'document.xml'}`);
+          const context = getSafeElementContext(
+            filteredElements,
+            index,
+            nodes[0],
+            `/word/${filename || 'document.xml'}`,
+          );
           if (unhandled) {
             if (!context.elementName) continue;
 
