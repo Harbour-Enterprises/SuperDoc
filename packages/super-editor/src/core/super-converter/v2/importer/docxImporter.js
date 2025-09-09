@@ -22,6 +22,7 @@ import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
 import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
+import { passthroughNodeHandlerEntity } from './passthroughNodeImporter.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -139,6 +140,7 @@ export const defaultNodeListHandler = () => {
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
     standardNodeHandlerEntity,
+    passthroughNodeHandlerEntity,
   ];
 
   const handler = createNodeListHandler(entities);
@@ -204,7 +206,7 @@ const createNodeListHandler = (nodeHandlers) => {
             continue;
           }
 
-          const { nodes, consumed, unhandled } = nodeHandlers.reduce(
+          const { nodes, consumed } = nodeHandlers.reduce(
             (res, handler) => {
               if (res.consumed > 0) return res;
 
@@ -223,20 +225,13 @@ const createNodeListHandler = (nodeHandlers) => {
             },
             { nodes: [], consumed: 0 },
           );
-
-          // Only track unhandled nodes that should have been handled
           const context = getSafeElementContext(elements, index, nodes[0], `/word/${filename || 'document.xml'}`);
-          if (unhandled) {
-            if (!context.elementName) continue;
+          if (!context.elementName) continue;
 
+          const isPassthrough = nodes[0]?.type === 'docxPassthroughBlock' || nodes[0]?.type === 'docxPassthroughInline';
+
+          if (isPassthrough) {
             converter?.telemetry?.trackStatistic('unknown', context);
-
-            const originalNode = nodesToHandle[0];
-            processedElements.push({
-              type: isBlock ? 'docxPassthroughBlock' : 'docxPassthroughInline',
-              attrs: { originalXml: originalNode },
-            });
-            continue;
           } else {
             converter?.telemetry?.trackStatistic('node', context);
 

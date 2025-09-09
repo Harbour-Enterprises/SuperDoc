@@ -24,6 +24,7 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translateDocumentSection } from './v2/exporter/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
+import { translator as docxPassthroughTranslator } from './v3/handlers/passthrough/index.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -100,8 +101,8 @@ export function exportSchemaToJson(params) {
     documentSection: translateDocumentSection,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
-    docxPassthroughBlock: translateDocxPassthrough,
-    docxPassthroughInline: translateDocxPassthrough,
+    docxPassthroughBlock: docxPassthroughTranslator,
+    docxPassthroughInline: docxPassthroughTranslator,
   };
 
   let handler = router[type];
@@ -114,10 +115,6 @@ export function exportSchemaToJson(params) {
   // Call the handler for this node type
   return handler(params);
 }
-
-const translateDocxPassthrough = (params) => {
-  return params.node.attrs?.originalXml || null;
-};
 
 /**
  * There is no body node in the prose mirror schema, so it is stored separately
