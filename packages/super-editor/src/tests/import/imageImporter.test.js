@@ -15,7 +15,7 @@ describe('ImageNodeImporter', () => {
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 
     const paragraphNode = nodes[0];
-    const drawingNode = paragraphNode.content[0];
+    const drawingNode = paragraphNode.content.find((n) => n.type === 'image');
     const { attrs } = drawingNode;
     const { padding, size } = attrs;
 
@@ -68,7 +68,7 @@ describe('ImageNodeImporter', () => {
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 
     let paragraphNode = nodes[0];
-    let drawingNode = paragraphNode.content[0];
+    let drawingNode = paragraphNode.content.find((n) => n.type === 'image');
     const { attrs } = drawingNode;
     expect(attrs.src).toBe('media/image.png');
 
@@ -78,7 +78,7 @@ describe('ImageNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     paragraphNode = nodes1[0];
-    drawingNode = paragraphNode.content[1];
+    drawingNode = paragraphNode.content.find((n) => n.type === 'image');
     expect(drawingNode.attrs.src).toBe('word/media/image1.jpeg');
   });
 });

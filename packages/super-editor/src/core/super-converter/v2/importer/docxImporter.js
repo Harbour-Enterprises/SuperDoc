@@ -88,6 +88,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       converter,
       editor,
       lists,
+      isBlock: true,
     });
 
     const result = {
@@ -189,6 +190,7 @@ const createNodeListHandler = (nodeHandlers) => {
     filename,
     parentStyleId,
     lists,
+    isBlock = true,
   }) => {
     if (!elements || !elements.length) return [];
 
@@ -216,6 +218,7 @@ const createNodeListHandler = (nodeHandlers) => {
                 filename,
                 parentStyleId,
                 lists,
+                isBlock,
               });
             },
             { nodes: [], consumed: 0 },
@@ -227,6 +230,12 @@ const createNodeListHandler = (nodeHandlers) => {
             if (!context.elementName) continue;
 
             converter?.telemetry?.trackStatistic('unknown', context);
+
+            const originalNode = nodesToHandle[0];
+            processedElements.push({
+              type: isBlock ? 'docxPassthroughBlock' : 'docxPassthroughInline',
+              attrs: { originalXml: originalNode },
+            });
             continue;
           } else {
             converter?.telemetry?.trackStatistic('node', context);
@@ -458,6 +467,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       converter,
       editor,
       filename: currentFileName,
+      isBlock: true,
     });
 
     if (!converter.headerIds.ids) converter.headerIds.ids = [];
@@ -484,6 +494,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       converter,
       editor,
       filename: currentFileName,
+      isBlock: true,
     });
 
     if (!converter.footerIds.ids) converter.footerIds.ids = [];

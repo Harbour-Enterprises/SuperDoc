@@ -100,6 +100,8 @@ export function exportSchemaToJson(params) {
     documentSection: translateDocumentSection,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
+    docxPassthroughBlock: translateDocxPassthrough,
+    docxPassthroughInline: translateDocxPassthrough,
   };
 
   let handler = router[type];
@@ -112,6 +114,10 @@ export function exportSchemaToJson(params) {
   // Call the handler for this node type
   return handler(params);
 }
+
+const translateDocxPassthrough = (params) => {
+  return params.node.attrs?.originalXml || null;
+};
 
 /**
  * There is no body node in the prose mirror schema, so it is stored separately
