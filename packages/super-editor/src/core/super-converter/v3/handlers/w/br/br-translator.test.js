@@ -76,6 +76,15 @@ describe('w:br translator config', () => {
         attributes: { 'w:type': 'page' },
       });
     });
+
+    it('defaults w:type="page" for hardBreak nodes without lineBreakType', () => {
+      const res = config.decode({ node: { type: 'hardBreak' } }, undefined);
+      expect(res.name).toBe('w:r');
+      expect(res.elements[0]).toEqual({
+        name: 'w:br',
+        attributes: { 'w:type': 'page' },
+      });
+    });
   });
 
   describe('attributes mapping metadata', () => {

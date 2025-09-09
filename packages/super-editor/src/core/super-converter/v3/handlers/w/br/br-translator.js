@@ -47,10 +47,17 @@ const decode = (params, decodedAttrs) => {
   const { node } = params;
   if (!node) return;
 
+  const attrs = { ...(decodedAttrs || {}) };
+
+  // default to page break when exporting a hardBreak without an explicit lineBreakType
+  if (node.type === 'hardBreak' && !('w:type' in attrs)) {
+    attrs['w:type'] = 'page';
+  }
+
   const wBreak = { name: 'w:br' };
 
-  if (decodedAttrs) {
-    wBreak.attributes = { ...decodedAttrs };
+  if (Object.keys(attrs).length > 0) {
+    wBreak.attributes = attrs;
   }
 
   /** breaks are wrapped in runs for Google Docs compatibility */
