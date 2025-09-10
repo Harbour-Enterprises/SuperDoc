@@ -10,6 +10,7 @@
  * @property {string} [parentStyleId] - The ID of the parent style.
  * @property {Object} [lists] - The imported lists object
  * @property {Array} [path] - The path of nodes leading to the current node.
+ * @property {Record<string, any>} [extraParams] - The extra params.
  */
 
 /**

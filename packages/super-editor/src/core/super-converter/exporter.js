@@ -25,6 +25,7 @@ import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translateDocumentSection } from './v2/exporter/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
+import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 
 /**
  * @typedef {Object} ExportParams
@@ -44,7 +45,7 @@ import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-transl
  * @typedef {Object} XmlReadyNode
  * @property {string} name The XML tag name
  * @property {Array<XmlReadyNode>} elements The child nodes
- * @property {Object} attributes The node attributes
+ * @property {Object} [attributes] The node attributes
  */
 
 /**
@@ -84,7 +85,7 @@ export function exportSchemaToJson(params) {
     lineBreak: wBrNodeTranslator,
     table: translateTable,
     tableRow: translateTableRow,
-    tableCell: translateTableCell,
+    tableCell: wTcNodeTranslator,
     bookmarkStart: translateBookmarkStart,
     fieldAnnotation: translateFieldAnnotation,
     tab: wTabNodeTranslator,
@@ -1257,145 +1258,6 @@ function generateTableRowProperties(node) {
     name: 'w:trPr',
     elements,
   };
-}
-
-/**
- * Main translation function for a table cell
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated table cell node
- */
-function translateTableCell(params) {
-  const elements = translateChildNodes({
-    ...params,
-    tableCell: params.node,
-  });
-
-  const cellProps = generateTableCellProperties(params.node);
-
-  elements.unshift(cellProps);
-  return {
-    name: 'w:tc',
-    elements,
-  };
-}
-
-/**
- * Generate w:tcPr properties node for a table cell
- *
- * @param {SchemaNode} node
- * @returns {XmlReadyNode} The table cell properties node
- */
-function generateTableCellProperties(node) {
-  const elements = [];
-
-  const { attrs } = node;
-  const { colwidth = [], cellWidthType = 'dxa', background = {}, colspan, rowspan, widthUnit } = attrs;
-  const colwidthSum = colwidth.reduce((acc, curr) => acc + curr, 0);
-
-  const cellWidthElement = {
-    name: 'w:tcW',
-    attributes: {
-      'w:w': widthUnit === 'px' ? pixelsToTwips(colwidthSum) : inchesToTwips(colwidthSum),
-      'w:type': cellWidthType,
-    },
-  };
-  elements.push(cellWidthElement);
-
-  if (colspan) {
-    const gridSpanElement = {
-      name: 'w:gridSpan',
-      attributes: { 'w:val': `${colspan}` },
-    };
-    elements.push(gridSpanElement);
-  }
-
-  const { color } = background || {};
-  if (color) {
-    const cellBgElement = {
-      name: 'w:shd',
-      attributes: { 'w:fill': color },
-    };
-    elements.push(cellBgElement);
-  }
-
-  const { cellMargins } = attrs;
-  if (cellMargins) {
-    const cellMarginsElement = {
-      name: 'w:tcMar',
-      elements: generateCellMargins(cellMargins),
-    };
-    elements.push(cellMarginsElement);
-  }
-
-  const { verticalAlign } = attrs;
-  if (verticalAlign) {
-    const vertAlignElement = {
-      name: 'w:vAlign',
-      attributes: { 'w:val': verticalAlign },
-    };
-    elements.push(vertAlignElement);
-  }
-
-  // const { vMerge } = attrs;
-  // if (vMerge) {}
-  if (rowspan && rowspan > 1) {
-    const vMergeElement = {
-      name: 'w:vMerge',
-      type: 'element',
-      attributes: { 'w:val': 'restart' },
-    };
-    elements.push(vMergeElement);
-  } else if (attrs.continueMerge) {
-    const vMergeElement = {
-      name: 'w:vMerge',
-      type: 'element',
-    };
-    elements.push(vMergeElement);
-  }
-
-  const { borders = {} } = attrs;
-  if (!!borders && Object.keys(borders).length) {
-    const cellBordersElement = {
-      name: 'w:tcBorders',
-      elements: Object.entries(borders).map(([key, value]) => {
-        if (!value.size || value.val === 'none') {
-          return {
-            name: `w:${key}`,
-            attributes: {
-              'w:val': 'nil',
-            },
-          };
-        }
-        return {
-          name: `w:${key}`,
-          attributes: {
-            'w:val': 'single',
-            'w:color': value.color ? value.color.substring(1) : 'auto',
-            'w:sz': pixelsToEightPoints(value.size),
-            'w:space': value.space || 0,
-          },
-        };
-      }),
-    };
-
-    elements.push(cellBordersElement);
-  }
-
-  return {
-    name: 'w:tcPr',
-    elements,
-  };
-}
-
-function generateCellMargins(cellMargins) {
-  const elements = [];
-  const { top, right, bottom, left } = cellMargins;
-  if (top != null) elements.push({ name: 'w:top', attributes: { 'w:w': pixelsToTwips(top) } });
-  if (right != null) elements.push({ name: 'w:right', attributes: { 'w:w': pixelsToTwips(right) } });
-  if (bottom != null) elements.push({ name: 'w:bottom', attributes: { 'w:w': pixelsToTwips(bottom) } });
-  if (left != null) elements.push({ name: 'w:left', attributes: { 'w:w': pixelsToTwips(left) } });
-  return elements;
 }
 
 /**
