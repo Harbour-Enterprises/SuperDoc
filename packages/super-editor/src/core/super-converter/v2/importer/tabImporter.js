@@ -2,7 +2,7 @@
 import { translator as wTabNodeTranslator } from '../../v3/handlers/w/tab/tab-translator.js';
 
 /**
- * Line break node handler
+ * Tab node handler
  * @param {import('../../v3/node-translator').SCEncoderConfig} params
  * @returns {Object} Handler result
  */
@@ -16,7 +16,7 @@ const handleTabNode = (params) => {
 };
 
 /**
- * Line break node handler entity
+ * Tab node handler entity
  * @type {Object} Handler entity
  */
 export const tabNodeEntityHandler = {
