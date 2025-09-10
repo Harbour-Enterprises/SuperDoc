@@ -1,23 +1,102 @@
-import { SuperConverter } from '@converter/SuperConverter.js';
-import { handleLineBreakNode } from '@converter/v2/importer/lineBreakImporter.js';
-import { createNodeListHandlerMock } from './testUtils.test.js';
+import { describe, it, expect } from 'vitest';
+import { config } from '../../core/super-converter/v3/handlers/w/br/br-translator.js';
+import {
+  lineBreakTypeEncoder,
+  lineBreakTypeDecoder,
+  wClearEncoder,
+  wClearDecoder,
+} from '../../core/super-converter/v3/handlers/w/br/attributes/index.js';
 
-describe('LineBreakNodeImporter', () => {
-  it('parses only line break nodes', () => {
-    const names = Object.keys(SuperConverter.allowedElements).filter((name) => name !== 'w:br');
-    const nodesOfNodes = names.map((name) => [{ name }]);
-    for (const nodes of nodesOfNodes) {
-      const result = handleLineBreakNode({ nodes });
-      expect(result.nodes.length).toBe(0);
-      expect(result.consumed).toBe(0);
-    }
+describe('LineBreak (w:br) translator - v3', () => {
+  describe('encode (OOXML -> SuperDoc)', () => {
+    it('encodes to type=lineBreak by default (no attrs)', () => {
+      const res = config.encode({}, /* encodedAttrs */ undefined);
+      expect(res).toEqual({ type: 'lineBreak' });
+    });
+
+    it('encodes page breaks to type=hardBreak', () => {
+      // simulate attribute encoding phase
+      const encodedAttrs = {
+        lineBreakType: lineBreakTypeEncoder({ 'w:type': 'page' }),
+      };
+      const res = config.encode({}, encodedAttrs);
+      expect(res.type).toBe('hardBreak');
+      expect(res.attrs).toEqual({ lineBreakType: 'page' });
+    });
+
+    it('keeps type=lineBreak for textWrapping (or other non-page types)', () => {
+      const encodedAttrs1 = {
+        lineBreakType: lineBreakTypeEncoder({ 'w:type': 'textWrapping' }),
+      };
+      const res1 = config.encode({}, encodedAttrs1);
+      expect(res1.type).toBe('lineBreak');
+      expect(res1.attrs).toEqual({ lineBreakType: 'textWrapping' });
+
+      const encodedAttrs2 = {
+        lineBreakType: lineBreakTypeEncoder({ 'w:type': 'column' }),
+      };
+      const res2 = config.encode({}, encodedAttrs2);
+      expect(res2.type).toBe('lineBreak');
+      expect(res2.attrs).toEqual({ lineBreakType: 'column' });
+    });
+
+    it('passes through supported attributes (lineBreakType, clear)', () => {
+      const encodedAttrs = {
+        lineBreakType: lineBreakTypeEncoder({ 'w:type': 'textWrapping' }),
+        clear: wClearEncoder({ 'w:clear': 'left' }),
+      };
+      const res = config.encode({}, encodedAttrs);
+      expect(res).toEqual({
+        type: 'lineBreak',
+        attrs: { lineBreakType: 'textWrapping', clear: 'left' },
+      });
+    });
   });
 
-  it('parses line break nodes and w:br attributes', () => {
-    const nodes = [{ name: 'w:br' }];
-    const result = handleLineBreakNode({ nodes, nodeListHandler: createNodeListHandlerMock() });
-    expect(result.nodes.length).toBe(1);
-    expect(result.consumed).toBe(1);
-    expect(result.nodes[0].type).toBe('lineBreak');
+  describe('decode (SuperDoc -> OOXML)', () => {
+    it('wraps <w:br> in a <w:r>', () => {
+      const res = config.decode({ node: { type: 'lineBreak' } }, /* decodedAttrs */ undefined);
+      expect(res).toBeTruthy();
+      expect(res.name).toBe('w:r');
+      expect(Array.isArray(res.elements)).toBe(true);
+      expect(res.elements[0]).toEqual({ name: 'w:br' });
+    });
+
+    it('copies decoded attributes onto <w:br>', () => {
+      // simulate attribute decoding phase
+      const decodedAttrs = {
+        'w:type': lineBreakTypeDecoder({ lineBreakType: 'textWrapping' }),
+        'w:clear': wClearDecoder({ clear: 'all' }),
+      };
+      const res = config.decode({ node: { type: 'lineBreak' } }, decodedAttrs);
+      expect(res.name).toBe('w:r');
+      expect(res.elements[0]).toEqual({
+        name: 'w:br',
+        attributes: { 'w:type': 'textWrapping', 'w:clear': 'all' },
+      });
+    });
+
+    it('works for hardBreak nodes too (type guard is not enforced)', () => {
+      const decodedAttrs = { 'w:type': 'page' };
+      const res = config.decode({ node: { type: 'hardBreak' } }, decodedAttrs);
+      expect(res.name).toBe('w:r');
+      expect(res.elements[0]).toEqual({
+        name: 'w:br',
+        attributes: { 'w:type': 'page' },
+      });
+    });
+
+    it('returns undefined when params.node is missing', () => {
+      const res = config.decode({}, {});
+      expect(res).toBeUndefined();
+    });
+  });
+
+  describe('attributes metadata', () => {
+    it('exposes correct attribute handler mappings', () => {
+      const map = config.attributes.map((a) => [a.xmlName, a.sdName]);
+      expect(map).toContainEqual(['w:type', 'lineBreakType']);
+      expect(map).toContainEqual(['w:clear', 'clear']);
+    });
   });
 });
