@@ -30,6 +30,13 @@ export const Paragraph = Node.create({
 
   addAttributes() {
     return {
+      'w14:paraId': { rendered: false },
+      'w14:textId': { rendered: false },
+      'w:rsidR': { rendered: false },
+      'w:rsidRDefault': { rendered: false },
+      'w:rsidP': { rendered: false },
+      'w:rsidRPr': { rendered: false },
+      'w:rsidDel': { rendered: false },
       spacing: {
         default: getDefaultSpacing(),
         renderDOM: (attrs) => {
