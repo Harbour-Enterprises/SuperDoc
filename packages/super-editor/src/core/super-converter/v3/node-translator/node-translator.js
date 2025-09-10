@@ -129,7 +129,7 @@ export class NodeTranslator {
     const { attributes = {} } = node || {};
 
     const encodedAttrs = {};
-    Object.values(this.attributes).forEach(({ sdName, encode }) => {
+    this.attributes.forEach(({ sdName, encode }) => {
       if (!encode) return;
 
       const encodedAttr = encode(attributes);
