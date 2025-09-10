@@ -231,7 +231,11 @@ export function handleTableCellNode(node, row, table, rowBorders, columnWidth = 
 
   return {
     type: 'tableCell',
-    content: nodeListHandler.handler({ ...params, nodes: node.elements }),
+    content: nodeListHandler.handler({
+      ...params,
+      nodes: node.elements,
+      path: [...(params.path || []), node],
+    }),
     attrs: attributes,
   };
 }

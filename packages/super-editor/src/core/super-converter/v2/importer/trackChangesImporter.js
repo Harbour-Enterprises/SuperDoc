@@ -28,7 +28,12 @@ export const handleTrackChangeNode = (params) => {
   const { name } = node;
   const { attributes, elements } = parseProperties(node);
 
-  const subs = nodeListHandler.handler({ ...params, insideTrackChange: true, nodes: elements });
+  const subs = nodeListHandler.handler({
+    ...params,
+    insideTrackChange: true,
+    nodes: elements,
+    path: [...(params.path || []), node],
+  });
   const changeType = name === 'w:del' ? TrackDeleteMarkName : TrackInsertMarkName;
 
   const mappedAttributes = {

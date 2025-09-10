@@ -9,12 +9,7 @@
  * @property {string} [filename] - The name of the file being processed.
  * @property {string} [parentStyleId] - The ID of the parent style.
  * @property {Object} [lists] - The imported lists object
- * @property {NodeHandlerContext} [ctx] - The context object.
- */
-
-/**
- * @typedef {Object} NodeHandlerContext
- * @property {XmlNode} [parent] - The name of the parent node.
+ * @property {Array} [path] - The path of nodes leading to the current node.
  */
 
 /**

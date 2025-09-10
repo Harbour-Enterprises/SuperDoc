@@ -31,7 +31,11 @@ export const handleSdtNode = (params) => {
   const par = sdtContent?.elements?.find((el) => el.name === 'w:p');
   const { marks } = parseAnnotationMarks(sdtContent);
 
-  const translatedContent = nodeListHandler.handler({ ...params, nodes: sdtContent?.elements });
+  const translatedContent = nodeListHandler.handler({
+    ...params,
+    nodes: sdtContent?.elements,
+    path: [...(params.path || []), node],
+  });
 
   let structuredContentType = 'structuredContent';
   if (par) {
@@ -75,7 +79,11 @@ const handleDocumentSectionNode = (params, tagValue) => {
   const { description } = tagValue;
 
   const sdtContent = node.elements.find((el) => el.name === 'w:sdtContent');
-  const translatedContent = nodeListHandler.handler({ ...params, nodes: sdtContent?.elements });
+  const translatedContent = nodeListHandler.handler({
+    ...params,
+    nodes: sdtContent?.elements,
+    path: [...(params.path || []), node],
+  });
   const result = {
     type: 'documentSection',
     content: translatedContent,
