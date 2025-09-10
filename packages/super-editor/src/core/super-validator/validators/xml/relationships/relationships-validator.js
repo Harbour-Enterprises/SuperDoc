@@ -309,22 +309,17 @@ export function createRelationshipsValidator({ editor, logger }) {
  * @param {string[]} fixed - Array to collect descriptions of fixes made
  */
 function processDocumentForMissingRefs(node, usedIds, fixed) {
-  if (!node || !Array.isArray(node.elements)) return;
+  if (!node?.elements?.length) return;
 
   for (const element of node.elements) {
-    if (element?.type === 'element') {
-      if (element.attributes) {
-        for (const [attrName, attrValue] of Object.entries(element.attributes)) {
-          if (attrName === 'r:id' && typeof attrValue === 'string') {
-            if (!usedIds.has(attrValue)) {
-              // Remove the invalid relationship reference
-              delete element.attributes[attrName];
-              fixed.push(`Removed invalid r:id="${attrValue}"`);
-            }
-          }
-        }
-      }
-      processDocumentForMissingRefs(element, usedIds, fixed);
+    if (element?.type !== 'element') continue;
+
+    const rIdValue = element.attributes?.['r:id'];
+    if (typeof rIdValue === 'string' && !usedIds.has(rIdValue)) {
+      delete element.attributes['r:id'];
+      fixed.push(`Removed invalid r:id="${rIdValue}"`);
     }
+
+    processDocumentForMissingRefs(element, usedIds, fixed);
   }
 }
