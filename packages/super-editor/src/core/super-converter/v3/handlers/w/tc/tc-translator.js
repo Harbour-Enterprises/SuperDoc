@@ -8,9 +8,7 @@ const XML_NODE_NAME = 'w:tc';
 /** @type {import('@translator').SuperDocNodeOrKeyName} */
 const SD_NODE_NAME = 'tableCell';
 
-/**
- * @type {import('@translator').AttributesHandlerList[]}
- */
+/** @type {import('@translator').AttrConfig[]} */
 const validXmlAttributes = [];
 
 /**

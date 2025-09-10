@@ -91,7 +91,7 @@ export class NodeTranslator {
   /** @type {typeof TranslatorTypes} */
   static translatorTypes = TranslatorTypes;
 
-  /** @type {AttributesHandlerList[]} */
+  /** @type {AttrConfig[]} */
   attributes;
 
   /**
@@ -102,7 +102,7 @@ export class NodeTranslator {
    * @param {number} [priority]
    * @param {MatchesEncodeFn} [matchesEncode]
    * @param {MatchesDecodeFn} [matchesDecode]
-   * @param {AttributesHandlerList[]} [attributes]
+   * @param {AttrConfig[]} [attributes]
    */
   constructor(xmlName, sdNodeOrKeyName, encode, decode, priority, matchesEncode, matchesDecode, attributes) {
     this.xmlName = xmlName;
