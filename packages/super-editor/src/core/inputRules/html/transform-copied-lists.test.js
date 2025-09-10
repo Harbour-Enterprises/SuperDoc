@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { transformListsInCopiedContent } from '../../core/inputRules/html/transform-copied-lists.js';
+import { transformListsInCopiedContent, getListStyleType, getLevel } from './transform-copied-lists.js';
 
 const getCleanedHtml = (html) =>
   html
@@ -104,5 +104,28 @@ describe('Transform lists in copied content', () => {
         '<li data-level="1" data-num-fmt="decimal" data-lvl-text="%1." aria-level="2" style="list-style-type: decimal;">Child 2</li></ol>' +
         '</ul>',
     );
+  });
+});
+
+describe('getListStyleType function', () => {
+  it('should return correct value for bullet list', () => {
+    const res = getListStyleType('bullet', '▪');
+    expect(res).toEqual('square');
+  });
+
+  it('should return correct value for ordered list', () => {
+    const res = getListStyleType('lowerLetter', '%1.');
+    expect(res).toEqual('lower-alpha');
+  });
+});
+
+describe('getLevel function', () => {
+  it('should return correct value for level', () => {
+    const html = `<li data-level="1"></li>`;
+    const div = document.createElement('div');
+    div.innerHTML = html.trim();
+
+    const result = getLevel(div.firstChild);
+    expect(result).toEqual(1);
   });
 });
