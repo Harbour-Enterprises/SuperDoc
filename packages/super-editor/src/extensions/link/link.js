@@ -10,6 +10,11 @@
  * @property {string} [name] - Anchor name for internal references
  */
 
+/**
+ * Target frame options
+ * @typedef {'_top' | '_self' | '_parent' | '_blank' | string} TargetFrameOptions
+ */
+
 import { Mark, Attribute } from '@core/index.js';
 import { getMarkRange } from '@core/helpers/getMarkRange.js';
 import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
@@ -38,6 +43,7 @@ export const Link = Mark.create({
         target: '_blank',
         rel: 'noopener noreferrer nofollow',
         class: null,
+        title: null,
       },
     };
   },
@@ -69,7 +75,7 @@ export const Link = Mark.create({
       },
       /**
        * @category Attribute
-       * @param {string} [target='_blank'] - Link target window
+       * @param {TargetFrameOptions} [target='_blank'] - Link target window
        */
       target: { default: this.options.htmlAttributes.target },
       /**
@@ -93,6 +99,32 @@ export const Link = Mark.create({
        * @param {string} [name] - Anchor name for internal references
        */
       name: { default: null },
+      /**
+       * @category Attribute
+       * @param {boolean} [history] - Specifies whether the target of the hyperlink  shall be added to a list of viewed hyperlinks when it is invoked.
+       */
+      history: { default: true, rendered: false },
+      /**
+       * @category Attribute
+       * @param {string|null} [anchor] - Specifies the name of a bookmark that is the target of this link. If the rId and href attributes are specified, then this attribute is ignored.
+       */
+      anchor: { rendered: false },
+      /**
+       * @category Attribute
+       * @param {string|null} [docLocation] - Specifies a location in the target of the hyperlink.
+       */
+      docLocation: { rendered: false },
+      /**
+       * @category Attribute
+       * @param {string|null} [tooltip] - A tooltip for the link
+       */
+      tooltip: {
+        default: null,
+        renderDOM: ({ tooltip }) => {
+          if (tooltip) return { title: tooltip };
+          return {};
+        },
+      },
     };
   },
 
