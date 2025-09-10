@@ -20,7 +20,7 @@
       "@packages/*": ["../*"],
       "@converter/*": ["./src/core/super-converter/*"],
       "@tests/*": ["./src/tests/*"],
-      "@translator": ["./src/core/super-converter/v3/node-translator/index.js"]
+      "@translator": ["./src/core/super-converter/v3/node-translator/"]
     }
   },
   "exclude": ["node_modules", "dist", "**/*.test.js"]
