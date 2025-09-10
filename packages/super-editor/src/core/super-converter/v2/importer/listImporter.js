@@ -367,27 +367,18 @@ export const getAbstractDefinition = (numId, docx) => {
     (style) => style.attributes['w:abstractNumId'] === abstractNumId,
   );
 
-  /**
-   * Only fall back to a template-based abstractNum if the direct definition
-   * is missing or has no level definitions (w:lvl). This avoids incorrectly
-   * picking the first matching template (e.g., abstractNumId=0) and
-   * preserves the concrete mapping from w:num -> w:abstractNumId.
-   */
-  const hasLevels = listDefinitionForThisNumId?.elements?.some((el) => el.name === 'w:lvl');
-  if (!listDefinitionForThisNumId || !hasLevels) {
-    const templateIdTag = listDefinitionForThisNumId?.elements?.find((el) => el.name === 'w:tmpl');
-    const templateId = templateIdTag?.attributes?.['w:val'];
-    if (templateId) {
-      const byTemplate = numberingElements?.find((el) => {
-        if (el.name !== 'w:abstractNum') return false;
-        const tmpl = el.elements?.find((el) => el.name === 'w:tmpl');
-        if (!tmpl) return false;
-        const tmplId = tmpl.attributes?.['w:val'];
-        const hasLvl = el.elements?.some((e) => e.name === 'w:lvl');
-        return tmplId && hasLvl && tmplId === templateId;
-      });
-      if (byTemplate) listDefinitionForThisNumId = byTemplate;
-    }
+  const templateIdTag = listDefinitionForThisNumId?.elements?.find((el) => el.name === 'w:tmpl');
+  const templateId = templateIdTag?.attributes?.['w:val'];
+  if (templateId) {
+    listDefinitionForThisNumId = numberingElements?.find((el) => {
+      if (el.name !== 'w:abstractNum') return false;
+      const tmpl = el.elements?.find((el) => el.name === 'w:tmpl');
+      if (!tmpl) return false;
+
+      const hasLevels = el.elements?.some((el) => el.name === 'w:lvl');
+      const tmplId = tmpl.attributes?.['w:val'];
+      return tmplId && hasLevels && tmplId === templateId;
+    });
   }
 
   return listDefinitionForThisNumId;
