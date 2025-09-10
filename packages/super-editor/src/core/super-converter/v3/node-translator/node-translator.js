@@ -17,7 +17,7 @@ export const TranslatorTypes = Object.freeze({
 
 /** @typedef {import('../../v2/importer/types').NodeHandlerParams} SCEncoderConfig */
 /** @typedef {import('../../v2/types').SuperDocNode} SCEncoderResult */
-/** @typedef {{ node: { attrs?: any, type: string, marks: any[] }, children?: any[] }} SCDecoderConfig */
+/** @typedef {{ node: { attrs?: any, marks?: any[] }, children?: any[] }} SCDecoderConfig */
 /** @typedef {{ name: string, elements: any[] }} SCDecoderResult */
 
 /**
@@ -112,6 +112,8 @@ export class NodeTranslator {
     this.decodeFn = decode;
     this.attributes = attributes || [];
 
+    this.priority = typeof priority === 'number' ? priority : 0;
+
     this.matchesEncode = typeof matchesEncode === 'function' ? matchesEncode : () => true;
     this.matchesDecode = typeof matchesDecode === 'function' ? matchesDecode : () => true;
   }
@@ -122,7 +124,7 @@ export class NodeTranslator {
    * @returns {Object} Encoded attributes object.
    */
   encodeAttributes(params) {
-    const { nodes } = params || {};
+    const { nodes = [] } = params || {};
     const node = nodes[0];
     const { attributes = {} } = node || {};
 
@@ -131,7 +133,7 @@ export class NodeTranslator {
       if (!encode) return;
 
       const encodedAttr = encode(attributes);
-      if (encodedAttr) {
+      if (encodedAttr !== undefined && encodedAttr !== null) {
         encodedAttrs[sdName] = encodedAttr;
       }
     });
@@ -153,7 +155,7 @@ export class NodeTranslator {
       if (!decode) return;
 
       const decodedAttr = decode(attrs);
-      if (decodedAttr) {
+      if (decodedAttr !== undefined && decodedAttr !== null) {
         decodedAttrs[xmlName] = decodedAttr;
       }
     });

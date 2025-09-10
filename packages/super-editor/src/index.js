@@ -78,4 +78,3 @@ export {
   TrackChangesBasePluginKey,
   CommentsPluginKey,
 };
-//*

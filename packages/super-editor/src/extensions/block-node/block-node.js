@@ -3,7 +3,6 @@ import { helpers } from '@core/index.js';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { ReplaceStep } from 'prosemirror-transform';
 import { v4 as uuidv4 } from 'uuid';
-import { Transaction } from 'prosemirror-state';
 
 const { findChildren } = helpers;
 const SD_BLOCK_ID_ATTRIBUTE_NAME = 'sdBlockId';
