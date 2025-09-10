@@ -1,3 +1,9 @@
+## [0.17.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.0...v0.17.1) (2025-09-10)
+
+### Bug Fixes
+
+- import issue falling back to wrong abstratId ([#930](https://github.com/Harbour-Enterprises/SuperDoc/issues/930)) ([94b0679](https://github.com/Harbour-Enterprises/SuperDoc/commit/94b067924d0311b8433e24e2c98cdd9da61d39ae))
+
 # [0.17.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.16.5...v0.17.0) (2025-09-09)
 
 ### Bug Fixes
