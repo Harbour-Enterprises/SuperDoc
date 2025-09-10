@@ -25,6 +25,7 @@ import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translateDocumentSection } from './v2/exporter/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
+import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 
 /**
@@ -78,7 +79,7 @@ export function exportSchemaToJson(params) {
     doc: translateDocumentNode,
     body: translateBodyNode,
     heading: translateHeadingNode,
-    paragraph: translateParagraphNode,
+    paragraph: wPNodeTranslator,
     text: translateTextNode,
     bulletList: translateList,
     orderedList: translateList,
