@@ -105,9 +105,11 @@ function flattenFoundList(listElem, editor) {
     const newList = createSingleItemList({ li, tag, rootNumId, level, listLevel, editor, NodeInterface });
     newLists.push(newList);
 
-    nestedLists.forEach((list) => {
-      newLists.push(list.cloneNode(true));
-    });
+    if (nestedLists.length > 0) {
+      // deeper nested list are processed with child lists
+      newLists.push(nestedLists[0].cloneNode(true));
+    }
+
     if (nestedLists.length && ['OL', 'UL'].includes(li.nextSibling.tagName)) {
       li.nextSibling?.remove();
     }
