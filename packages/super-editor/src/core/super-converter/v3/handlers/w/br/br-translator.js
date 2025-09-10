@@ -54,6 +54,12 @@ const decode = (params, decodedAttrs) => {
     wBreak.attributes = { ...decodedAttrs };
   }
 
+  /** Special case: Ensure page breaks have w:type="page" */
+  const isPageBreak = node.type === 'hardBreak';
+  if (isPageBreak && (!wBreak.attributes || !wBreak.attributes['w:type'])) {
+    wBreak.attributes = { ...wBreak.attributes, 'w:type': 'page' };
+  }
+
   /** breaks are wrapped in runs for Google Docs compatibility */
   const translated = {
     name: 'w:r',
