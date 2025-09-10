@@ -155,3 +155,49 @@ export const getExportedResultForAnnotations = async (isFinalDoc) => {
 
   return { result, params };
 };
+
+/**
+ * Export a result using a base docx (for namespaces/body) but custom document content.
+ * Useful for round-trip tests where we craft specific nodes/attrs.
+ * @param {Array<Object>} content Array of SuperDoc nodes (e.g., paragraphs)
+ * @param {string} [baseName='blank-doc.docx'] Optional base test file name
+ * @returns {Promise<Object>} The exported OOXML result JSON
+ */
+export const getExportedResultWithDocContent = async (content, baseName = 'blank-doc.docx') => {
+  const buffer = await getTestDataAsBuffer(baseName);
+  const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
+
+  const editor = new Editor({
+    isHeadless: true,
+    extensions: getStarterExtensions(),
+    documentId: 'test-doc',
+    content: docx,
+    mode: 'docx',
+    media,
+    mediaFiles,
+    fonts,
+  });
+
+  // Use the editor's schema root to preserve required root attrs/namespaces.
+  const baseSchema = editor.converter.getSchema(editor);
+  const bodyNode = editor.converter.savedTagsToRestore.find((el) => el.name === 'w:body');
+  const docNode = { ...baseSchema, content };
+
+  const [result] = exportSchemaToJson({
+    editorSchema: editor.schema,
+    node: docNode,
+    bodyNode,
+    relationships: [],
+    documentMedia: {},
+    media: {},
+    isFinalDoc: false,
+    pageStyles: editor.converter.pageStyles,
+    comments: [],
+    exportedComments: [],
+    exportedCommentDefs: [],
+    editor,
+    lists: {},
+  });
+
+  return result;
+};

@@ -1,22 +1,28 @@
 // @ts-check
 
 /**
- * Encoder for the 'w:val' attribute on the <w:tab> element.
- * Maps to the 'tabSize' attribute in SuperDoc.
- * @param {Object} attributes - The attributes from the OOXML element.
- * @returns {string|undefined} The corresponding tab size in SuperDoc, or undefined if not applicable.
+ * Maps `w:val` on <w:tab> to `tabSize` in SuperDoc.
+ * @param {Object} attributes
+ * @returns {string|undefined}
  */
-export const tabSizeEncoder = (attributes) => {
+export const encode = (attributes) => {
   return attributes['w:val'];
 };
 
 /**
- * Decoder for the 'tabSize' attribute in SuperDoc.
- * Maps to the 'w:val' attribute in OOXML.
- * @param {Object} attrs - The attributes from the SuperDoc element.
- * @returns {string|undefined} The corresponding tab size in OOXML, or undefined if not applicable.
+ * Maps `tabSize` in SuperDoc back to `w:val`.
+ * @param {Object} attrs
+ * @returns {string|undefined}
  */
-export const tabSizeDecoder = (attrs) => {
-  const { tabSize } = attrs;
+export const decode = (attrs) => {
+  const { tabSize } = attrs || {};
   return tabSize;
 };
+
+/** @type {import('@translator').AttrConfig} */
+export const attrConfig = Object.freeze({
+  xmlName: 'w:val',
+  sdName: 'tabSize',
+  encode,
+  decode,
+});

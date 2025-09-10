@@ -15,6 +15,14 @@ export const TranslatorTypes = Object.freeze({
  * @typedef {string} SuperDocNodeOrKeyName
  */
 
+/**
+ * @typedef {Object} AttrConfig
+ * @property {string} xmlName - The name of the attribute in OOXML
+ * @property {string} sdName - The name of the attribute in SuperDoc
+ * @property {Function} [encode] - Function to encode the attribute from OOXML to SuperDoc
+ * @property {Function} [decode] - Function to decode the attribute from SuperDoc to OOXML
+ */
+
 /** @typedef {import('../../v2/importer/types').NodeHandlerParams} SCEncoderConfig */
 /** @typedef {import('../../v2/types').SuperDocNode} SCEncoderResult */
 /** @typedef {{ node: { attrs?: any, marks?: any[], type: string }, children?: any[] }} SCDecoderConfig */
@@ -38,14 +46,6 @@ export const TranslatorTypes = Object.freeze({
 /** @callback MatchesDecodeFn @param {any} node @param {any} [ctx] @returns {boolean} */
 
 /**
- * @typedef {Object} AttributesHandlerList
- * @property {string} xmlName - The name of the attribute in OOXML
- * @property {string} sdName - The name of the attribute in SuperDoc
- * @property {Function} [encode] - Function to encode the attribute from OOXML to SuperDoc
- * @property {Function} [decode] - Function to decode the attribute from SuperDoc to OOXML
- */
-
-/**
  * @typedef {Object} EncodedAttributes
  */
 
@@ -61,7 +61,7 @@ export const TranslatorTypes = Object.freeze({
  * @property {NodeTranslatorEncodeFn} encode - The function to encode the data.
  * @property {NodeTranslatorDecodeFn} [decode] - The function to decode the data.
  * @property {number} [priority] - The priority of the handler.
- * @property {AttributesHandlerList[]} [attributes] - Attribute handlers list.
+ * @property {AttrConfig[]} [attributes] - Attribute handlers list.
  * @property {MatchesEncodeFn} [matchesEncode] - The function to check if the handler can encode the data.
  * @property {MatchesDecodeFn} [matchesDecode] - The function to check if the handler can decode the data.
  */
@@ -91,7 +91,7 @@ export class NodeTranslator {
   /** @type {typeof TranslatorTypes} */
   static translatorTypes = TranslatorTypes;
 
-  /** @type {AttributesHandlerList[]} */
+  /** @type {AttrConfig[]} */
   attributes;
 
   /**
@@ -102,7 +102,7 @@ export class NodeTranslator {
    * @param {number} [priority]
    * @param {MatchesEncodeFn} [matchesEncode]
    * @param {MatchesDecodeFn} [matchesDecode]
-   * @param {AttributesHandlerList[]} [attributes]
+   * @param {AttrConfig[]} [attributes]
    */
   constructor(xmlName, sdNodeOrKeyName, encode, decode, priority, matchesEncode, matchesDecode, attributes) {
     this.xmlName = xmlName;

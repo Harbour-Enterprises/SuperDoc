@@ -1,5 +1,5 @@
 // @ts-check
-import { translator as wTabNodeTranslator } from '../../v3/handlers/w/tab/tab-translator.js';
+import { translator as wTabNodeTranslator } from '../../v3/handlers/w/tab/index.js';
 
 /**
  * Tab node handler

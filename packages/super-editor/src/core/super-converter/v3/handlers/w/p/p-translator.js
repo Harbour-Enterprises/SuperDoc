@@ -1,54 +1,45 @@
-import { NodeTranslator } from '../../../node-translator/node-translator';
-import { handleTableCellNode } from './helpers/legacy-handle-table-cell-node';
-import { translateTableCell } from './helpers/translate-table-cell';
+// @ts-check
+import { NodeTranslator } from '@translator';
+import { handleParagraphNode as legacyHandleParagraphNode } from './helpers/legacy-handle-paragraph-node.js';
+import { translateParagraphNode } from '../../../../exporter.js';
+import validXmlAttributes from './attributes/index.js';
 
 /** @type {import('@translator').XmlNodeName} */
-const XML_NODE_NAME = 'w:tc';
+const XML_NODE_NAME = 'w:p';
 
 /** @type {import('@translator').SuperDocNodeOrKeyName} */
-const SD_NODE_NAME = 'tableCell';
-
-/** @type {import('@translator').AttrConfig[]} */
-const validXmlAttributes = [];
+const SD_NODE_NAME = 'paragraph';
 
 /**
+ * Encode a <w:p> node as a SuperDoc paragraph node.
  * @param {import('@translator').SCEncoderConfig} params
  * @param {import('@translator').EncodedAttributes} [encodedAttrs]
  * @returns {import('@translator').SCEncoderResult}
  */
-function encode(params, encodedAttrs) {
-  const { node, table, row, rowBorders, styleTag, columnIndex, columnWidth } = params.extraParams;
-
-  const schemaNode = handleTableCellNode({
-    params,
-    node,
-    table,
-    row,
-    rowBorders,
-    styleTag,
-    columnIndex,
-    columnWidth,
-  });
-
+const encode = (params, encodedAttrs = {}) => {
+  // Use the legacy paragraph handler to avoid circular calls to this translator
+  const node = legacyHandleParagraphNode(params);
+  if (!node) return undefined;
   if (encodedAttrs && Object.keys(encodedAttrs).length) {
-    schemaNode.attrs = { ...schemaNode.attrs, ...encodedAttrs };
+    node.attrs = { ...node.attrs, ...encodedAttrs };
   }
-
-  return schemaNode;
-}
+  return node;
+};
 
 /**
+ * Decode a SuperDoc paragraph node back into OOXML <w:p>.
  * @param {import('@translator').SCDecoderConfig} params
  * @param {import('@translator').DecodedAttributes} [decodedAttrs]
  * @returns {import('@translator').SCDecoderResult}
  */
-function decode(params, decodedAttrs) {
-  const translated = translateTableCell(params);
+const decode = (params, decodedAttrs = {}) => {
+  const translated = translateParagraphNode(params);
+  if (!translated) return undefined;
   if (decodedAttrs && Object.keys(decodedAttrs).length) {
     translated.attributes = { ...(translated.attributes || {}), ...decodedAttrs };
   }
   return translated;
-}
+};
 
 /** @type {import('@translator').NodeTranslatorConfig} */
 export const config = {
@@ -61,6 +52,7 @@ export const config = {
 };
 
 /**
+ * The NodeTranslator instance for the <w:p> element.
  * @type {import('@translator').NodeTranslator}
  */
 export const translator = NodeTranslator.from(config);
