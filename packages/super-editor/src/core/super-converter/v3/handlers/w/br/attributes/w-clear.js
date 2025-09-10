@@ -6,7 +6,7 @@
  * @param {Object} attributes - The attributes from the OOXML element.
  * @returns {string|undefined} The corresponding clear value in SuperDoc, or undefined if not applicable.
  */
-export const wClearEncoder = (attributes) => {
+export const encode = (attributes) => {
   const xmlAttrValue = attributes['w:clear'];
   return xmlAttrValue;
 };
@@ -17,7 +17,15 @@ export const wClearEncoder = (attributes) => {
  * @param {Object} attrs - The attributes from the SuperDoc element.
  * @returns {string|undefined} The corresponding clear value in OOXML, or undefined if not applicable.
  */
-export const wClearDecoder = (attrs) => {
+export const decode = (attrs) => {
   const { clear } = attrs;
   return clear;
 };
+
+/** @type {import('@translator').AttrConfig} */
+export const attrConfig = Object.freeze({
+  xmlName: 'w:clear',
+  sdName: 'clear',
+  encode,
+  decode,
+});

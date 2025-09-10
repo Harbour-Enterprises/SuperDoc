@@ -6,7 +6,7 @@
  * @param {Object} attributes - The attributes from the OOXML element.
  * @returns {string|undefined} The corresponding rsidRDefault value in SuperDoc, or undefined if not applicable.
  */
-export const wRsidRDefaultEncoder = (attributes) => {
+export const encode = (attributes) => {
   return attributes['w:rsidRDefault'];
 };
 
@@ -16,6 +16,14 @@ export const wRsidRDefaultEncoder = (attributes) => {
  * @param {Object} attrs - The attributes from the SuperDoc element.
  * @returns {string|undefined} The corresponding rsidRDefault value in OOXML, or undefined if not applicable.
  */
-export const wRsidRDefaultDecoder = (attrs) => {
+export const decode = (attrs) => {
   return attrs.rsidRDefault;
 };
+
+/** @type {import('@translator').AttrConfig} */
+export const attrConfig = Object.freeze({
+  xmlName: 'w:rsidRDefault',
+  sdName: 'rsidRDefault',
+  encode,
+  decode,
+});

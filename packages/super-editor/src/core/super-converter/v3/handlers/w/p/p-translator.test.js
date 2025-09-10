@@ -1,21 +1,47 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-// Mock attribute handlers before importing the SUT so the config captures them
+// Mock attribute handlers before importing the SUT so the config captures them.
+// Define everything inside the factory to avoid hoisting issues.
 vi.mock('./attributes/index.js', () => ({
-  w14ParaIdEncoder: vi.fn(() => 'ENC_PARAID'),
-  w14ParaIdDecoder: vi.fn(() => 'DEC_PARAID'),
-  w14TextIdEncoder: vi.fn(() => 'ENC_TEXTID'),
-  w14TextIdDecoder: vi.fn(() => 'DEC_TEXTID'),
-  wRsidREncoder: vi.fn(() => 'ENC_RSIDR'),
-  wRsidRDecoder: vi.fn(() => 'DEC_RSIDR'),
-  wRsidRDefaultEncoder: vi.fn(() => 'ENC_RSIDRDEF'),
-  wRsidRDefaultDecoder: vi.fn(() => 'DEC_RSIDRDEF'),
-  wRsidPEncoder: vi.fn(() => 'ENC_RSIDP'),
-  wRsidPDecoder: vi.fn(() => 'DEC_RSIDP'),
-  wRsidRPrEncoder: vi.fn(() => 'ENC_RSIDRPR'),
-  wRsidRPrDecoder: vi.fn(() => 'DEC_RSIDRPR'),
-  wRsidDelEncoder: vi.fn(() => 'ENC_RSIDDEL'),
-  wRsidDelDecoder: vi.fn(() => 'DEC_RSIDDEL'),
+  default: [
+    {
+      xmlName: 'w14:paraId',
+      xmlns: undefined,
+      sdName: 'paraId',
+      encode: () => 'ENC_PARAID',
+      decode: () => 'DEC_PARAID',
+    },
+    {
+      xmlName: 'w14:textId',
+      xmlns: undefined,
+      sdName: 'textId',
+      encode: () => 'ENC_TEXTID',
+      decode: () => 'DEC_TEXTID',
+    },
+    { xmlName: 'w:rsidR', xmlns: undefined, sdName: 'rsidR', encode: () => 'ENC_RSIDR', decode: () => 'DEC_RSIDR' },
+    {
+      xmlName: 'w:rsidRDefault',
+      xmlns: undefined,
+      sdName: 'rsidRDefault',
+      encode: () => 'ENC_RSIDRDEF',
+      decode: () => 'DEC_RSIDRDEF',
+    },
+    { xmlName: 'w:rsidP', xmlns: undefined, sdName: 'rsidP', encode: () => 'ENC_RSIDP', decode: () => 'DEC_RSIDP' },
+    {
+      xmlName: 'w:rsidRPr',
+      xmlns: undefined,
+      sdName: 'rsidRPr',
+      encode: () => 'ENC_RSIDRPR',
+      decode: () => 'DEC_RSIDRPR',
+    },
+    {
+      xmlName: 'w:rsidDel',
+      xmlns: undefined,
+      sdName: 'rsidDel',
+      encode: () => 'ENC_RSIDDEL',
+      decode: () => 'DEC_RSIDDEL',
+    },
+  ],
 }));
 
 // Mock legacy paragraph handler used by encode
@@ -41,7 +67,6 @@ import { translator, config } from './p-translator.js';
 import { NodeTranslator } from '@translator';
 import { handleParagraphNode } from './helpers/legacy-handle-paragraph-node.js';
 import { translateParagraphNode } from '../../../../exporter.js';
-import * as attrFns from './attributes/index.js';
 
 describe('w/p p-translator', () => {
   afterEach(() => {
@@ -66,7 +91,7 @@ describe('w/p p-translator', () => {
     expect(handleParagraphNode).toHaveBeenCalled();
     expect(result.type).toBe('paragraph');
     expect(result.attrs.fromLegacy).toBe(true);
-    // Encoded attrs from mocked attribute encoders
+    // Encoded attrs from mocked attrConfig encoders
     expect(result.attrs).toMatchObject({
       paraId: 'ENC_PARAID',
       textId: 'ENC_TEXTID',
@@ -100,25 +125,7 @@ describe('w/p p-translator', () => {
     });
   });
 
-  it('attribute encoders/decoders are wired in the translator', () => {
-    // Trigger encode/decode to ensure functions are invoked
-    translator.encode({ nodes: [{ name: 'w:p', attributes: {} }] });
-    translator.decode({ node: { type: 'paragraph', attrs: {} }, children: [] });
-    // All functions should have been called at least once
-    expect(attrFns.w14ParaIdEncoder).toHaveBeenCalled();
-    expect(attrFns.w14TextIdEncoder).toHaveBeenCalled();
-    expect(attrFns.wRsidREncoder).toHaveBeenCalled();
-    expect(attrFns.wRsidRDefaultEncoder).toHaveBeenCalled();
-    expect(attrFns.wRsidPEncoder).toHaveBeenCalled();
-    expect(attrFns.wRsidRPrEncoder).toHaveBeenCalled();
-    expect(attrFns.wRsidDelEncoder).toHaveBeenCalled();
-
-    expect(attrFns.w14ParaIdDecoder).toHaveBeenCalled();
-    expect(attrFns.w14TextIdDecoder).toHaveBeenCalled();
-    expect(attrFns.wRsidRDecoder).toHaveBeenCalled();
-    expect(attrFns.wRsidRDefaultDecoder).toHaveBeenCalled();
-    expect(attrFns.wRsidPDecoder).toHaveBeenCalled();
-    expect(attrFns.wRsidRPrDecoder).toHaveBeenCalled();
-    expect(attrFns.wRsidDelDecoder).toHaveBeenCalled();
-  });
+  // The previous test that checked invocation of all attr handlers
+  // was fragile if the NodeTranslator clones handler objects. The
+  // two tests above already verify merge of encoded/decoded attrs.
 });

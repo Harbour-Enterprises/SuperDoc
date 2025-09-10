@@ -1,22 +1,28 @@
 // @ts-check
 
 /**
- * Encoder for the 'w:leader' attribute on the <w:tab> element.
- * Maps to the 'leader' attribute in SuperDoc.
- * @param {Object} attributes - The attributes from the OOXML element.
- * @returns {string|undefined} The corresponding leader value in SuperDoc, or undefined if not applicable.
+ * Maps `w:leader` on <w:tab> to `leader` in SuperDoc.
+ * @param {Object} attributes
+ * @returns {string|undefined}
  */
-export const tabLeaderEncoder = (attributes) => {
+export const encode = (attributes) => {
   return attributes['w:leader'];
 };
 
 /**
- * Decoder for the 'leader' attribute in SuperDoc.
- * Maps to the 'w:leader' attribute in OOXML.
- * @param {Object} attrs - The attributes from the SuperDoc element.
- * @returns {string|undefined} The corresponding leader value in OOXML, or undefined if not applicable.
+ * Maps `leader` in SuperDoc back to `w:leader`.
+ * @param {Object} attrs
+ * @returns {string|undefined}
  */
-export const tabLeaderDecoder = (attrs) => {
-  const { leader } = attrs;
+export const decode = (attrs) => {
+  const { leader } = attrs || {};
   return leader;
 };
+
+/** @type {import('@translator').AttrConfig} */
+export const attrConfig = Object.freeze({
+  xmlName: 'w:leader',
+  sdName: 'leader',
+  encode,
+  decode,
+});

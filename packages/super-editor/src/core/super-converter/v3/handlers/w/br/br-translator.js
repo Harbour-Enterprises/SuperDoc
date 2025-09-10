@@ -1,23 +1,12 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import { lineBreakTypeDecoder, lineBreakTypeEncoder } from './attributes/index.js';
-import { wClearDecoder, wClearEncoder } from './attributes/index.js';
+import validXmlAttributes from './attributes/index.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:br';
 
 /** @type {import('@translator').SuperDocNodeOrKeyName} */
 const SD_NODE_NAME = 'lineBreak';
-
-/**
- * The attributes that can be mapped between OOXML and SuperDoc.
- * Note: These are specifically OOXML valid attributes for a given node.
- * @type {import('@translator').AttributesHandlerList[]}
- */
-const validXmlAttributes = [
-  { xmlName: 'w:type', sdName: 'lineBreakType', encode: lineBreakTypeEncoder, decode: lineBreakTypeDecoder },
-  { xmlName: 'w:clear', sdName: 'clear', encode: wClearEncoder, decode: wClearDecoder },
-];
 
 /**
  * Encode an unhandled node as a passthrough node.

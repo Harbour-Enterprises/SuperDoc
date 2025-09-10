@@ -6,7 +6,7 @@
  * @param {Object} attributes - The attributes from the OOXML element.
  * @returns {string|undefined} The corresponding textId value in SuperDoc, or undefined if not applicable.
  */
-export const w14TextIdEncoder = (attributes) => {
+export const encode = (attributes) => {
   return attributes['w14:textId'];
 };
 
@@ -16,6 +16,14 @@ export const w14TextIdEncoder = (attributes) => {
  * @param {Object} attrs - The attributes from the SuperDoc element.
  * @returns {string|undefined} The corresponding textId value in OOXML, or undefined if not applicable.
  */
-export const w14TextIdDecoder = (attrs) => {
+export const decode = (attrs) => {
   return attrs.textId;
 };
+
+/** @type {import('@translator').AttrConfig} */
+export const attrConfig = Object.freeze({
+  xmlName: 'w14:textId',
+  sdName: 'textId',
+  encode,
+  decode,
+});

@@ -1,11 +1,13 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { Node, Attribute } from '@core/index.js';
+import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 
-export const Paragraph = Node.create({
+export const Paragraph = OxmlNode.create({
   name: 'paragraph',
+
+  oXmlName: 'w:p',
 
   priority: 1000,
 
@@ -30,13 +32,14 @@ export const Paragraph = Node.create({
 
   addAttributes() {
     return {
-      'w14:paraId': { rendered: false },
-      'w14:textId': { rendered: false },
-      'w:rsidR': { rendered: false },
-      'w:rsidRDefault': { rendered: false },
-      'w:rsidP': { rendered: false },
-      'w:rsidRPr': { rendered: false },
-      'w:rsidDel': { rendered: false },
+      paraId: { rendered: false },
+      textId: { rendered: false },
+      rsidR: { rendered: false },
+      rsidRDefault: { rendered: false },
+      rsidP: { rendered: false },
+      rsidRPr: { rendered: false },
+      rsidDel: { rendered: false },
+
       spacing: {
         default: getDefaultSpacing(),
         renderDOM: (attrs) => {
@@ -145,7 +148,6 @@ export const Paragraph = Node.create({
         rendered: false,
       },
       filename: { rendered: false },
-      rsidRDefault: { rendered: false },
       keepLines: { rendered: false },
       keepNext: { rendered: false },
       paragraphProperties: { rendered: false },

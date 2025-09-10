@@ -1,13 +1,6 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import {
-  tabSizeEncoder,
-  tabSizeDecoder,
-  tabLeaderEncoder,
-  tabLeaderDecoder,
-  tabPositionEncoder,
-  tabPositionDecoder,
-} from './attributes/index.js';
+import validXmlAttributes from './attributes/index.js';
 import { generateRunProps, processOutputMarks } from '../../../../exporter.js';
 
 /** @type {import('@translator').XmlNodeName} */
@@ -16,16 +9,7 @@ const XML_NODE_NAME = 'w:tab';
 /** @type {import('@translator').SuperDocNodeOrKeyName} */
 const SD_NODE_NAME = 'tab';
 
-/**
- * The attributes that can be mapped between OOXML and SuperDoc.
- * Note: These are specifically OOXML valid attributes for a given node.
- * @type {import('@translator').AttributesHandlerList[]}
- */
-const validXmlAttributes = [
-  { xmlName: 'w:val', sdName: 'tabSize', encode: tabSizeEncoder, decode: tabSizeDecoder },
-  { xmlName: 'w:pos', sdName: 'pos', encode: tabPositionEncoder, decode: tabPositionDecoder },
-  { xmlName: 'w:leader', sdName: 'leader', encode: tabLeaderEncoder, decode: tabLeaderDecoder },
-];
+// Attributes are provided via attrConfig list from ./attributes
 
 /**
  * Encode a <w:tab> node as a SuperDoc tab node while preserving unknown attributes.

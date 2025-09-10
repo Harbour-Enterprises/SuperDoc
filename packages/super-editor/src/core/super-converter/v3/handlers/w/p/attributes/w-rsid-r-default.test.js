@@ -1,25 +1,30 @@
 // @ts-check
 import { describe, it, expect } from 'vitest';
-import { wRsidRDefaultEncoder, wRsidRDefaultDecoder } from './w-rsid-r-default.js';
+import { encode, decode, attrConfig } from './w-rsid-r-default.js';
 
 describe('w:rsidRDefault attribute handlers', () => {
   it('encodes w:rsidRDefault from OOXML attributes', () => {
     const attrs = { 'w:rsidRDefault': 'DEADBEEF' };
-    expect(wRsidRDefaultEncoder(attrs)).toBe('DEADBEEF');
+    expect(encode(attrs)).toBe('DEADBEEF');
   });
 
   it('returns undefined when encoding without w:rsidRDefault', () => {
     const attrs = {};
-    expect(wRsidRDefaultEncoder(attrs)).toBeUndefined();
+    expect(encode(attrs)).toBeUndefined();
   });
 
   it('decodes rsidRDefault to OOXML attribute value', () => {
     const superDocAttrs = { rsidRDefault: 'DEADBEEF' };
-    expect(wRsidRDefaultDecoder(superDocAttrs)).toBe('DEADBEEF');
+    expect(decode(superDocAttrs)).toBe('DEADBEEF');
   });
 
   it('returns undefined when decoding without rsidRDefault', () => {
     const superDocAttrs = {};
-    expect(wRsidRDefaultDecoder(superDocAttrs)).toBeUndefined();
+    expect(decode(superDocAttrs)).toBeUndefined();
+  });
+
+  it('exposes correct attrConfig metadata', () => {
+    expect(attrConfig.xmlName).toBe('w:rsidRDefault');
+    expect(attrConfig.sdName).toBe('rsidRDefault');
   });
 });

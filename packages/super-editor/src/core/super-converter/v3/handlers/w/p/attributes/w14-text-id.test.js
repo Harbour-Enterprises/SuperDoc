@@ -1,25 +1,30 @@
 // @ts-check
 import { describe, it, expect } from 'vitest';
-import { w14TextIdEncoder, w14TextIdDecoder } from './w14-text-id.js';
+import { encode, decode, attrConfig } from './w14-text-id.js';
 
 describe('w14:textId attribute handlers', () => {
   it('encodes w14:textId from OOXML attributes', () => {
     const attrs = { 'w14:textId': 'FACE' };
-    expect(w14TextIdEncoder(attrs)).toBe('FACE');
+    expect(encode(attrs)).toBe('FACE');
   });
 
   it('returns undefined when encoding without w14:textId', () => {
     const attrs = {};
-    expect(w14TextIdEncoder(attrs)).toBeUndefined();
+    expect(encode(attrs)).toBeUndefined();
   });
 
   it('decodes textId to OOXML attribute value', () => {
     const superDocAttrs = { textId: 'FACE' };
-    expect(w14TextIdDecoder(superDocAttrs)).toBe('FACE');
+    expect(decode(superDocAttrs)).toBe('FACE');
   });
 
   it('returns undefined when decoding without textId', () => {
     const superDocAttrs = {};
-    expect(w14TextIdDecoder(superDocAttrs)).toBeUndefined();
+    expect(decode(superDocAttrs)).toBeUndefined();
+  });
+
+  it('exposes correct attrConfig metadata', () => {
+    expect(attrConfig.xmlName).toBe('w14:textId');
+    expect(attrConfig.sdName).toBe('textId');
   });
 });

@@ -1,37 +1,37 @@
 import { describe, it, expect } from 'vitest';
-import { wClearEncoder, wClearDecoder } from './w-clear.js';
+import { encode, decode, attrConfig } from './w-clear.js';
 
-describe('wClearEncoder', () => {
+describe('w:clear (clear) encoder', () => {
   it('returns the clear value when present', () => {
-    expect(wClearEncoder({ 'w:clear': 'none' })).toBe('none');
-    expect(wClearEncoder({ 'w:clear': 'left' })).toBe('left');
-    expect(wClearEncoder({ 'w:clear': 'right' })).toBe('right');
-    expect(wClearEncoder({ 'w:clear': 'all' })).toBe('all');
+    expect(encode({ 'w:clear': 'none' })).toBe('none');
+    expect(encode({ 'w:clear': 'left' })).toBe('left');
+    expect(encode({ 'w:clear': 'right' })).toBe('right');
+    expect(encode({ 'w:clear': 'all' })).toBe('all');
   });
 
   it('returns undefined when attribute is missing', () => {
-    expect(wClearEncoder({})).toBeUndefined();
+    expect(encode({})).toBeUndefined();
   });
 
   it('ignores unrelated attributes', () => {
-    expect(wClearEncoder({ 'w:type': 'page' })).toBeUndefined();
+    expect(encode({ 'w:type': 'page' })).toBeUndefined();
   });
 });
 
-describe('wClearDecoder', () => {
+describe('clear decoder', () => {
   it('returns the clear value when present', () => {
-    expect(wClearDecoder({ clear: 'none' })).toBe('none');
-    expect(wClearDecoder({ clear: 'left' })).toBe('left');
-    expect(wClearDecoder({ clear: 'right' })).toBe('right');
-    expect(wClearDecoder({ clear: 'all' })).toBe('all');
+    expect(decode({ clear: 'none' })).toBe('none');
+    expect(decode({ clear: 'left' })).toBe('left');
+    expect(decode({ clear: 'right' })).toBe('right');
+    expect(decode({ clear: 'all' })).toBe('all');
   });
 
   it('returns undefined when clear is missing', () => {
-    expect(wClearDecoder({})).toBeUndefined();
+    expect(decode({})).toBeUndefined();
   });
 
   it('ignores unrelated attributes', () => {
-    expect(wClearDecoder({ type: 'page' })).toBeUndefined();
+    expect(decode({ type: 'page' })).toBeUndefined();
   });
 });
 
@@ -40,11 +40,18 @@ describe('round-trip consistency', () => {
 
   for (const val of values) {
     it(`encodes and decodes '${val}' consistently`, () => {
-      const encoded = wClearEncoder({ 'w:clear': val });
+      const encoded = encode({ 'w:clear': val });
       expect(encoded).toBe(val);
 
-      const decoded = wClearDecoder({ clear: encoded });
+      const decoded = decode({ clear: encoded });
       expect(decoded).toBe(val);
     });
   }
+});
+
+describe('attrConfig metadata', () => {
+  it('exposes correct xmlName and sdName', () => {
+    expect(attrConfig.xmlName).toBe('w:clear');
+    expect(attrConfig.sdName).toBe('clear');
+  });
 });

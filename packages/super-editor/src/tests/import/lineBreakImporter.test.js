@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { config } from '../../core/super-converter/v3/handlers/w/br/br-translator.js';
 import {
-  lineBreakTypeEncoder,
-  lineBreakTypeDecoder,
-  wClearEncoder,
-  wClearDecoder,
-} from '../../core/super-converter/v3/handlers/w/br/attributes/index.js';
+  encode as lineBreakTypeEncode,
+  decode as lineBreakTypeDecode,
+} from '../../core/super-converter/v3/handlers/w/br/attributes/w-line-break-type.js';
+import {
+  encode as wClearEncode,
+  decode as wClearDecode,
+} from '../../core/super-converter/v3/handlers/w/br/attributes/w-clear.js';
 
 describe('LineBreak (w:br) translator - v3', () => {
   describe('encode (OOXML -> SuperDoc)', () => {
@@ -17,7 +19,7 @@ describe('LineBreak (w:br) translator - v3', () => {
     it('encodes page breaks to type=hardBreak', () => {
       // simulate attribute encoding phase
       const encodedAttrs = {
-        lineBreakType: lineBreakTypeEncoder({ 'w:type': 'page' }),
+        lineBreakType: lineBreakTypeEncode({ 'w:type': 'page' }),
       };
       const res = config.encode({}, encodedAttrs);
       expect(res.type).toBe('hardBreak');
@@ -26,14 +28,14 @@ describe('LineBreak (w:br) translator - v3', () => {
 
     it('keeps type=lineBreak for textWrapping (or other non-page types)', () => {
       const encodedAttrs1 = {
-        lineBreakType: lineBreakTypeEncoder({ 'w:type': 'textWrapping' }),
+        lineBreakType: lineBreakTypeEncode({ 'w:type': 'textWrapping' }),
       };
       const res1 = config.encode({}, encodedAttrs1);
       expect(res1.type).toBe('lineBreak');
       expect(res1.attrs).toEqual({ lineBreakType: 'textWrapping' });
 
       const encodedAttrs2 = {
-        lineBreakType: lineBreakTypeEncoder({ 'w:type': 'column' }),
+        lineBreakType: lineBreakTypeEncode({ 'w:type': 'column' }),
       };
       const res2 = config.encode({}, encodedAttrs2);
       expect(res2.type).toBe('lineBreak');
@@ -42,8 +44,8 @@ describe('LineBreak (w:br) translator - v3', () => {
 
     it('passes through supported attributes (lineBreakType, clear)', () => {
       const encodedAttrs = {
-        lineBreakType: lineBreakTypeEncoder({ 'w:type': 'textWrapping' }),
-        clear: wClearEncoder({ 'w:clear': 'left' }),
+        lineBreakType: lineBreakTypeEncode({ 'w:type': 'textWrapping' }),
+        clear: wClearEncode({ 'w:clear': 'left' }),
       };
       const res = config.encode({}, encodedAttrs);
       expect(res).toEqual({
@@ -65,8 +67,8 @@ describe('LineBreak (w:br) translator - v3', () => {
     it('copies decoded attributes onto <w:br>', () => {
       // simulate attribute decoding phase
       const decodedAttrs = {
-        'w:type': lineBreakTypeDecoder({ lineBreakType: 'textWrapping' }),
-        'w:clear': wClearDecoder({ clear: 'all' }),
+        'w:type': lineBreakTypeDecode({ lineBreakType: 'textWrapping' }),
+        'w:clear': wClearDecode({ clear: 'all' }),
       };
       const res = config.decode({ node: { type: 'lineBreak' } }, decodedAttrs);
       expect(res.name).toBe('w:r');
