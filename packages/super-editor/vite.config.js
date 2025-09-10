@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
       exclude: [
         '**/*.spec.js',
       ],
+      coverage: {
+        provider: 'v8',
+        exclude: ['**/v3/**/index.js'],
+        reporter: ['text'],
+      }
     },
     define: {
       __APP_VERSION__: JSON.stringify(superdocVersion),
