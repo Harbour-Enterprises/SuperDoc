@@ -1,5 +1,4 @@
 import { getExportedResult } from './export-helpers/index';
-import { baseOrderedListDef as r } from '../../core/helpers/baseListDefinitions.js';
 
 describe('HyperlinkNodeExporter', async () => {
   const fileName = 'hyperlink_node.docx';
