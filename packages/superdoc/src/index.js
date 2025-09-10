@@ -4,6 +4,7 @@ import {
   getRichTextExtensions,
   createZip,
   Extensions,
+  registeredHandlers,
 } from '@harbour-enterprises/super-editor';
 import {
   helpers as superEditorHelpers,
@@ -41,4 +42,5 @@ export {
 
   // Custom extensions
   Extensions,
+  registeredHandlers,
 };

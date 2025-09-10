@@ -1,0 +1,38 @@
+name: 🚀 Promote to Stable [manual]
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: 'Tag to promote (optional - uses latest next if empty)'
+        required: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SUPERDOC_PAT }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Merge to stable
+        run: |
+          # Determine what to merge
+          if [ -n "${{ inputs.source_tag }}" ]; then
+            MERGE_REF="${{ inputs.source_tag }}"
+          else
+            MERGE_REF="main"  # or get latest next tag
+          fi
+
+          # Checkout stable (create if doesn't exist)
+          git checkout stable || git checkout -b stable
+
+          # Simply merge - semantic-release handles the rest
+          git merge $MERGE_REF --no-ff -m "chore: promote $MERGE_REF to stable"
+          git push origin stable

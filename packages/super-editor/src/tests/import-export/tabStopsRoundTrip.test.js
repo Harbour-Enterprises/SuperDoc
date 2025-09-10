@@ -222,6 +222,51 @@ describe('Tab Stops Round Trip Tests', () => {
     expect(exportedTab.attributes['w:leader']).toBeUndefined();
   });
 
+  it('preserves original w:pos values for clearing tab stops', () => {
+    const mockDocxParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:tabs',
+              elements: [
+                {
+                  name: 'w:tab',
+                  attributes: {
+                    'w:val': 'clear',
+                    'w:pos': '1234',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockDocxParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const importedNode = nodes[0];
+    expect(importedNode.attrs.tabStops[0].originalPos).toBe('1234');
+
+    const mockEditor = createMockEditor();
+    const exportedResult = translateParagraphNode({
+      editor: mockEditor,
+      node: importedNode,
+    });
+
+    const pPr = exportedResult.elements.find((el) => el.name === 'w:pPr');
+    const tabs = pPr.elements.find((el) => el.name === 'w:tabs');
+    const exportedTab = tabs.elements[0];
+    expect(exportedTab.attributes['w:pos']).toBe('1234');
+  });
+
   it('preserves tab stop order in round trip', () => {
     // Create a mock DOCX paragraph with multiple tab stops in specific order
     const mockDocxParagraph = {

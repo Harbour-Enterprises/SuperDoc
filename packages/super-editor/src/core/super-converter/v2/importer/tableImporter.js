@@ -404,6 +404,12 @@ export function handleTableRowNode(node, table, rowBorders, styleTag, params) {
   const rowHeightTag = tPr?.elements?.find((el) => el.name === 'w:trHeight');
   const rowHeight = rowHeightTag?.attributes['w:val'];
 
+  // Detect cantSplit flag
+  const cantSplitTag = tPr?.elements?.find((el) => el.name === 'w:cantSplit');
+  if (cantSplitTag) {
+    attrs['cantSplit'] = true;
+  }
+
   const borders = {};
   if (rowBorders?.insideH) borders['bottom'] = rowBorders.insideH;
   if (rowBorders?.insideV) borders['right'] = rowBorders.insideV;

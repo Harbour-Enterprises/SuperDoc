@@ -440,6 +440,17 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
         ? endCoords && endCoords.bottom > pageHeightThreshold
         : coords.bottom > pageHeightThreshold;
 
+    // handle the w:cantSplit attribute for table rows
+    if (currentNode.type.name === 'tableRow' && currentNode.attrs?.cantSplit) {
+      const rowTop = coords.top;
+      const rowBottom = view.coordsAtPos(currentPos + currentNode.nodeSize).bottom;
+      const remaining = pageHeightThreshold - rowTop;
+
+      if (rowBottom - rowTop > remaining) {
+        shouldAddPageBreak = true;
+      }
+    }
+
     const paragraphSectPrBreak = currentNode.attrs?.pageBreakSource;
     if (paragraphSectPrBreak === 'sectPr') {
       const nextNode = doc.nodeAt(currentPos + currentNode.nodeSize);

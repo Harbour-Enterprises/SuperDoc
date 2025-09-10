@@ -68,14 +68,18 @@ export const Image = Node.create({
       isAnchor: { rendered: false },
       simplePos: { rendered: false },
       wrapText: { rendered: false },
+      extension: { rendered: false },
 
       size: {
         default: {},
-        renderDOM: ({ size }) => {
+        renderDOM: ({ size, extension }) => {
           let style = '';
+
           const { width, height } = size ?? {};
           if (width) style += `width: ${width}px;`;
-          if (height) style += 'height: auto;';
+          if (height && ['emf', 'wmf'].includes(extension))
+            style += `height: ${height}px; border: 1px solid black; position: absolute;`;
+          else if (height) style += 'height: auto;';
           return { style };
         },
       },

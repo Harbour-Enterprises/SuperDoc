@@ -1,0 +1,50 @@
+name: 🔧 Create Maintenance Branch [manual]
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Major.minor version (e.g., 1.2)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  create-maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.SUPERDOC_PAT }}
+
+      - name: Setup Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Create maintenance branch
+        run: |
+          VERSION="${{ inputs.version }}"
+          BRANCH="${VERSION}.x"
+
+          # Find the last stable tag for this version
+          LAST_TAG=$(git tag -l "v${VERSION}.*" --sort=-v:refname | grep -v "next" | head -1)
+
+          if [ -z "$LAST_TAG" ]; then
+            echo "❌ No stable release found for v${VERSION}"
+            exit 1
+          fi
+
+          # Create branch from the tag
+          git checkout -b "$BRANCH" "$LAST_TAG"
+          git push origin "$BRANCH"
+
+          echo "✅ Created maintenance branch $BRANCH from $LAST_TAG"
+          echo ""
+          echo "You can now:"
+          echo "1. Cherry-pick fixes to this branch"
+          echo "2. Push changes to trigger patch releases"
+          echo "3. Patches will auto-sync to main via PR"

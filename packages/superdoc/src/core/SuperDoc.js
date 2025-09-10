@@ -403,6 +403,7 @@ export class SuperDoc extends EventEmitter {
   /**
    * Initialize telemetry service.
    */
+  // eslint-disable-next-line no-unused-private-class-members
   #initTelemetry() {
     this.telemetry = new Telemetry({
       enabled: this.config.telemetry?.enabled ?? true,

@@ -497,6 +497,21 @@ describe('table live xml test', () => {
     expect(result.nodes[0].content[1].content[1].attrs.colwidth).toEqual([256]);
     expect(result.nodes[0].content[2].content[0].attrs.colwidth).toEqual([390, 26, 256]);
   });
+
+  it('imports cantSplit attribute on table row', () => {
+    const xml = `<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders></w:tblPr><w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="254"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
+
+    const nodes = parseXmlToJson(xml).elements;
+    const styles = parseXmlToJson(simpleTableStyleXml);
+    const docx = { 'word/styles.xml': styles };
+
+    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+
+    const table = result.nodes[0];
+    const row = table.content[0];
+
+    expect(row.attrs.cantSplit).toBe(true);
+  });
 });
 
 describe('table tests to check colwidth', () => {
