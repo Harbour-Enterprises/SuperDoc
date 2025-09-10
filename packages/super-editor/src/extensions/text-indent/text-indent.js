@@ -1,10 +1,30 @@
+// @ts-check
 import { Extension } from '@core/index.js';
 import { parseSizeUnit } from '@core/utilities/index.js';
 
+/**
+ * Text indent configuration
+ * @typedef {Object} IndentConfig
+ * @property {string} indent - Indent value with unit (e.g., '0.5in', '1cm')
+ */
+
+/**
+ * @module TextIndent
+ * @sidebarTitle Text Indent
+ * @snippetPath /snippets/extensions/text-indent.mdx
+ */
 export const TextIndent = Extension.create({
   name: 'textIndent',
 
   addOptions() {
+    /**
+     * @typedef {Object} TextIndentOptions
+     * @category Options
+     * @property {string[]} [types=['heading', 'paragraph']] - Node types to apply indentation to
+     * @property {Object} [defaults] - Default indentation settings
+     * @property {string} [defaults.unit='in'] - Default unit for indentation (in, cm, px, etc.)
+     * @property {number} [defaults.increment=0.125] - Default increment/decrement value
+     */
     return {
       types: ['heading', 'paragraph'],
       defaults: {
@@ -19,6 +39,10 @@ export const TextIndent = Extension.create({
       {
         types: this.options.types,
         attributes: {
+          /**
+           * @category Attribute
+           * @param {string} [textIndent] - Text indentation value with unit (e.g., '0.5in')
+           */
           textIndent: {
             default: null,
             parseDOM: (el) => el.style.textIndent,
@@ -37,6 +61,19 @@ export const TextIndent = Extension.create({
 
   addCommands() {
     return {
+      /**
+       * Set text indentation
+       * @category Command
+       * @param {string} indent - Indentation value with unit (e.g., '0.5in', '2cm')
+       * @returns {Function} Command function
+       * @example
+       * // Set to 0.5 inches
+       * setTextIndent('0.5in')
+       *
+       * // Set to 2 centimeters
+       * setTextIndent('2cm')
+       * @note Accepts any valid CSS unit (in, cm, px, em, etc.)
+       */
       setTextIndent:
         (indent) =>
         ({ commands }) => {
@@ -47,6 +84,14 @@ export const TextIndent = Extension.create({
             .every((result) => result);
         },
 
+      /**
+       * Remove text indentation
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * unsetTextIndent()
+       * @note Removes all indentation from the selected nodes
+       */
       unsetTextIndent:
         () =>
         ({ commands }) => {
@@ -55,6 +100,15 @@ export const TextIndent = Extension.create({
             .every((result) => result);
         },
 
+      /**
+       * Increase text indentation
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * increaseTextIndent()
+       * @note Increments by the default value (0.125in by default)
+       * @note Creates initial indent if none exists
+       */
       increaseTextIndent:
         () =>
         ({ commands }) => {
@@ -70,7 +124,7 @@ export const TextIndent = Extension.create({
               }
 
               let [value, unit] = parseSizeUnit(textIndent);
-              value = value + this.options.defaults.increment;
+              value = Number(value) + this.options.defaults.increment;
               unit = unit ? unit : this.options.defaults.unit;
 
               if (Number.isNaN(value)) return false;
@@ -82,6 +136,15 @@ export const TextIndent = Extension.create({
             .every((result) => result);
         },
 
+      /**
+       * Decrease text indentation
+       * @category Command
+       * @returns {Function} Command function
+       * @example
+       * decreaseTextIndent()
+       * @note Decrements by the default value (0.125in by default)
+       * @note Removes indentation completely if it reaches 0 or below
+       */
       decreaseTextIndent:
         () =>
         ({ commands }) => {
@@ -92,7 +155,7 @@ export const TextIndent = Extension.create({
               if (!textIndent) return false;
 
               let [value, unit] = parseSizeUnit(textIndent);
-              value = value - this.options.defaults.increment;
+              value = Number(value) - this.options.defaults.increment;
               unit = unit ? unit : this.options.defaults.unit;
 
               if (Number.isNaN(value)) return false;

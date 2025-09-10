@@ -1,5 +1,4 @@
-// @ts-check
-
+//@ts-check
 import { Node } from './Node.js';
 
 /**

@@ -9,7 +9,7 @@ import { Extension } from '@core/index.js';
 
 /**
  * @module Color
- * @sidebarTitle Text Color
+ * @sidebarTitle Color
  * @snippetPath /snippets/extensions/color.mdx
  */
 export const Color = Extension.create({

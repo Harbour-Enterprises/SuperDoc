@@ -3,6 +3,19 @@ import { handleImageUpload as handleImageUploadDefault } from './handleImageUplo
 import { processUploadedImage } from './processUploadedImage.js';
 import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
 
+/**
+ * Initiates the image upload process
+ * @category Helper
+ * @param {Object} params - Upload parameters
+ * @param {Object} params.editor - Editor instance
+ * @param {Object} params.view - Editor view
+ * @param {File} params.file - Image file to upload
+ * @returns {Promise<void>}
+ * @example
+ * await startImageUpload({ editor, view, file });
+ * @note Maximum file size is 5MB
+ * @note Processes image to fit editor constraints
+ */
 export const startImageUpload = async ({ editor, view, file }) => {
   const imageUploadHandler =
     typeof editor.options.handleImageUpload === 'function'
@@ -38,8 +51,24 @@ export const startImageUpload = async ({ editor, view, file }) => {
   });
 };
 
+/**
+ * Uploads an image and inserts it into the document
+ * @category Helper
+ * @param {Object} params - Upload parameters
+ * @param {Object} params.editor - Editor instance
+ * @param {Object} params.view - Editor view
+ * @param {File} params.file - Processed image file
+ * @param {Object} params.size - Image dimensions
+ * @param {Function} params.uploadHandler - Function to handle the upload
+ * @returns {Promise<void>}
+ * @example
+ * await uploadImage({ editor, view, file, size, uploadHandler });
+ * @note Shows placeholder during upload
+ * @note Handles collaboration mode image sharing
+ */
 export async function uploadImage({ editor, view, file, size, uploadHandler }) {
   // A fresh object to act as the ID for this upload
+  /** @type {Object} */
   let id = {};
 
   // Replace the selection with a placeholder
@@ -66,6 +95,7 @@ export async function uploadImage({ editor, view, file, size, uploadHandler }) {
     let url = await uploadHandler(file);
 
     let fileName = file.name.replace(' ', '_');
+    // @ts-ignore - id is actually an object, not a string
     let placeholderPos = findPlaceholder(view.state, id);
 
     // If the content around the placeholder has been deleted,
@@ -83,8 +113,8 @@ export async function uploadImage({ editor, view, file, size, uploadHandler }) {
     let rId = null;
     if (editor.options.mode === 'docx') {
       const [, path] = mediaPath.split('word/'); // Path without 'word/' part.
-      const id = addImageRelationship({ editor, path });
-      if (id) rId = id;
+      const imageid = addImageRelationship({ editor, path });
+      if (imageid) rId = imageid;
     }
 
     let imageNode = schema.nodes.image.create({
@@ -112,12 +142,20 @@ export async function uploadImage({ editor, view, file, size, uploadHandler }) {
   }
 }
 
+/**
+ * @private
+ * Adds image relationship for Word export
+ * @param {Object} params - Parameters
+ * @param {Object} params.editor - Editor instance
+ * @param {string} params.path - Image path
+ * @returns {string|null} Relationship ID or null
+ */
 function addImageRelationship({ editor, path }) {
   const target = path;
   const type = 'image';
   try {
-    const id = insertNewRelationship(target, type, editor);
-    return id;
+    const relationshipId = insertNewRelationship(target, type, editor);
+    return relationshipId;
   } catch {
     return null;
   }
