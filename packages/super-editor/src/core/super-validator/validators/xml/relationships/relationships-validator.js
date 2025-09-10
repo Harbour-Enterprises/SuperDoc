@@ -16,289 +16,393 @@ export function createRelationshipsValidator({ editor, logger }) {
     const results = [];
     let modified = false;
 
-    // Get the converted XML structure from the editor's converter
-    // Normalizes relationships file location to canonical path
     const convertedXml = editor?.converter?.convertedXml;
     if (!convertedXml || typeof convertedXml !== 'object') {
       return { results, modified };
     }
-    const candidateKeys = [
-      'word/_rels/document.xml.rels',
-      'word/document.xml.rels',
-      '_rels/document.xml.rels',
-      'document.xml.rels',
-    ];
 
-    // Find the first existing relationships file
-    let relsKey = candidateKeys.find((k) => convertedXml?.[k]?.elements);
+    // Find and normalize relationships file location
+    const { relsKey, wasNormalized } = findAndNormalizeRelationshipsFile(convertedXml, results);
     if (!relsKey) {
       return { results, modified };
     }
+    if (wasNormalized) modified = true;
 
-    // Normalize the relationships file to the canonical location
-    const canonicalKey = 'word/_rels/document.xml.rels';
-    if (relsKey !== canonicalKey) {
-      convertedXml[canonicalKey] = convertedXml[relsKey];
-      delete convertedXml[relsKey];
-      results.push(`Normalized relationships location to ${canonicalKey} (was ${relsKey})`);
-      relsKey = canonicalKey;
-      modified = true;
-    }
-
-    const relsTree = convertedXml[relsKey];
-    let root = relsTree?.elements?.[0];
-
-    // Validates XML structure and namespace
-    if (!root || root.type !== 'element') {
-      results.push(`${relsKey} is not a valid xml`);
+    // Validate and fix relationships root element
+    const { root, wasFixed } = validateRelationshipsRoot(convertedXml[relsKey], relsKey, results);
+    if (!root) {
       return { results, modified };
     }
+    if (wasFixed) modified = true;
 
-    const RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
-    if (root.name !== 'Relationships') {
-      root.name = 'Relationships';
-      results.push(`Fixed relationships root element name to "Relationships"`);
-      modified = true;
-    }
-    root.attributes = root.attributes || {};
-    if (root.attributes.xmlns !== RELS_NS) {
-      root.attributes.xmlns = RELS_NS;
-      results.push(`Set relationships xmlns to ${RELS_NS}`);
-      modified = true;
-    }
+    // Clean up root element children
+    const wasCleaned = cleanupRootChildren(root, results);
+    if (wasCleaned) modified = true;
 
-    // Clean up the root element's children to ensure only valid Relationship elements
-    const nextChildren = [];
-    for (const child of Array.isArray(root.elements) ? root.elements : []) {
-      if (!child || child.type !== 'element') {
-        modified = true;
-        continue;
-      }
-      if (child.name !== 'Relationship') {
-        modified = true;
-        continue;
-      }
-      nextChildren.push(child);
-    }
-    if (root.elements !== nextChildren) {
-      root.elements = nextChildren;
-    }
+    // Process relationships and collect media targets
+    const { filteredIds, binMediaTargets, wasProcessed } = processRelationships(root, convertedXml, results);
+    if (wasProcessed) modified = true;
 
-    // extract numeric ID from relationship ID (e.g., "rId5" -> 5)
-    const ridNum = (id) => {
-      const m = /^rId(\d+)$/.exec(String(id || ''));
-      return m ? parseInt(m[1], 10) : null;
-    };
+    // Fix missing relationship references in document.xml
+    const wasDocumentFixed = fixMissingDocumentRefs(convertedXml, filteredIds, results, logger);
+    if (wasDocumentFixed) modified = true;
 
-    // identify relationship types
-    const isType = (type, tail) => typeof type === 'string' && new RegExp(`/relationships/${tail}$`, 'i').test(type);
-    const isHyperlinkType = (type) => isType(type, 'hyperlink');
-    const isImageType = (type) => isType(type, 'image');
-
-    // determine if a target URL is external (HTTP/HTTPS or mailto)
-    const looksExternal = (target) => /^https?:\/\//i.test(target || '') || /^mailto:/i.test(target || '');
-
-    //  Ensures relationship IDs are unique and properly formatted
-    const usedIds = new Set();
-    let maxRid = 0;
-    for (const el of root.elements) {
-      el.attributes = el.attributes || {};
-      const id = el.attributes.Id;
-      const n = ridNum(id);
-      if (Number.isInteger(n)) maxRid = Math.max(maxRid, n);
-      if (typeof id === 'string' && id) {
-        usedIds.add(id);
-      }
-    }
-
-    let ridCounter = maxRid;
-    const allocateId = (preferred) => {
-      if (preferred && !usedIds.has(preferred)) {
-        usedIds.add(preferred);
-        return preferred;
-      }
-      let newId;
-      do {
-        ridCounter += 1;
-        newId = `rId${ridCounter}`;
-      } while (usedIds.has(newId));
-      usedIds.add(newId);
-      return newId;
-    };
-
-    const binMediaTargets = new Set();
-    const seenIds = new Set();
-    const filtered = [];
-
-    // Validates relationship types and targets
-    for (const rel of root.elements) {
-      rel.attributes = rel.attributes || {};
-      const attrs = rel.attributes;
-
-      let id = typeof attrs.Id === 'string' ? attrs.Id.trim() : '';
-      const type = typeof attrs.Type === 'string' ? attrs.Type.trim() : '';
-      let target = typeof attrs.Target === 'string' ? attrs.Target.trim() : '';
-      let targetMode = typeof attrs.TargetMode === 'string' ? attrs.TargetMode.trim() : '';
-
-      if (!target) {
-        modified = true;
-        results.push(`Removed relationship "${id}" without Target`);
-        continue;
-      }
-
-      // Fix hyperlink TargetMode for external URLs
-      if (isHyperlinkType(type) && looksExternal(target) && targetMode.toLowerCase() !== 'external') {
-        attrs.TargetMode = 'External';
-        targetMode = 'External';
-        results.push(`Set TargetMode="External" for hyperlink ${id}`);
-        modified = true;
-      }
-
-      // Handle image relationships - collect .bin media files for Content_Types.xml
-      if (isImageType(type)) {
-        const relPath = `word/${target.replace(/^\.?\//, '')}`;
-        if (/^media\/.+\.bin$/i.test(target) && relPath in convertedXml) {
-          binMediaTargets.add(`/${relPath}`);
-        }
-      }
-
-      // Validate internal target files exist
-      if (targetMode.toLowerCase() !== 'external' && !looksExternal(target)) {
-        const likelyPath = `word/${target.replace(/^\.?\//, '')}`;
-        if (!(likelyPath in convertedXml)) {
-          if (!isImageType(type)) {
-            modified = true;
-            results.push(`Removed relationship ${id} with missing target: ${target}`);
-            continue;
-          } else {
-            results.push(`Warning: image relationship ${id} target not found: ${target}.`);
-          }
-        }
-      }
-
-      // Assign missing IDs
-      if (!id) {
-        const newId = allocateId(null);
-        attrs.Id = newId;
-        results.push(`Assigned missing Id "${newId}"`);
-        modified = true;
-        id = newId;
-      }
-
-      // Check for duplicate relationship IDs (only within this processing loop)
-      if (seenIds.has(id)) {
-        modified = true;
-        results.push(`Removed duplicate relationship with ID "${id}"`);
-        continue;
-      }
-      seenIds.add(id);
-      filtered.push(rel);
-    }
-
-    if (root.elements !== filtered) {
-      root.elements = filtered;
-    }
-
-    const filteredIds = new Set();
-    for (const rel of root.elements) {
-      const id = rel.attributes?.Id;
-      if (typeof id === 'string' && id) {
-        filteredIds.add(id);
-      }
-    }
-
-    // Process document.xml to fix missing relationship references
-    const documentPath = 'word/document.xml';
-    const document = convertedXml[documentPath];
-
-    if (document && document.elements?.length) {
-      const documentRoot = document.elements[0];
-      if (documentRoot && documentRoot.type === 'element') {
-        const missingRefs = [];
-        processDocumentForMissingRefs(documentRoot, filteredIds, missingRefs);
-
-        if (missingRefs.length) {
-          modified = true;
-          results.push(`Fixed ${missingRefs.length} missing relationship references`);
-          logger?.debug?.(`Fixed ${missingRefs.length} missing relationship references in document`);
-        }
-      }
-    }
-
-    // fix [Content_Types].xml for media .bin entries so Word recognizes them as images.
+    // Update Content_Types.xml
     const contentTypesKey = '[Content_Types].xml';
     const contentTypesXml = convertedXml[contentTypesKey];
-
-    // ensure a Default entry exists for a file extension
-    const ensureDefault = (xmlString, ext, contentType) => {
-      const defRe = new RegExp(`<Default\\s+Extension="${ext}"\\b`, 'i');
-      if (defRe.test(xmlString)) return xmlString;
-      const opening = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
-      return xmlString.replace(opening, `${opening}<Default Extension="${ext}" ContentType="${contentType}"/>`);
-    };
-
-    // ensure an Override entry exists for a specific file
-    const ensureOverride = (xmlString, partName, contentType) => {
-      const esc = partName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const ovRe = new RegExp(`<Override\\s+PartName="${esc}"\\b`, 'i');
-      if (ovRe.test(xmlString)) return xmlString;
-      const opening = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
-      return xmlString.replace(opening, `${opening}<Override PartName="${partName}" ContentType="${contentType}" />`);
-    };
-
-    if (typeof contentTypesXml === 'string') {
-      let updated = contentTypesXml;
-      // even if binMediaTargets is empty (no media files), the document still needs
-      // these basic content type defaults to function properly in Word.
-      updated = ensureDefault(updated, 'rels', 'application/vnd.openxmlformats-package.relationships+xml');
-      updated = ensureDefault(updated, 'xml', 'application/xml');
-      for (const partName of binMediaTargets) {
-        updated = ensureOverride(updated, partName, 'image/png');
-        results.push(`Added Content Types Override for "${partName}" as image/png`);
-        modified = true;
-      }
-      if (updated !== contentTypesXml) {
-        convertedXml[contentTypesKey] = updated;
-      }
-    } else if (contentTypesXml?.elements?.length) {
-      const typesRoot = contentTypesXml.elements.find((el) => el.name === 'Types') || contentTypesXml.elements[0];
-      typesRoot.elements = typesRoot.elements || [];
-      const hasDefault = (ext) =>
-        typesRoot.elements.some((el) => el.name === 'Default' && el.attributes?.Extension === ext);
-      const addDefault = (ext, ct) => {
-        typesRoot.elements.unshift({
-          type: 'element',
-          name: 'Default',
-          attributes: { Extension: ext, ContentType: ct },
-        });
-      };
-      const hasOverride = (part) =>
-        typesRoot.elements.some((el) => el.name === 'Override' && el.attributes?.PartName === part);
-      const addOverride = (part, ct) => {
-        typesRoot.elements.unshift({
-          type: 'element',
-          name: 'Override',
-          attributes: { PartName: part, ContentType: ct },
-        });
-      };
-      // even if binMediaTargets is empty (no media files), the document still needs
-      // these basic content type defaults to function properly in Word.
-      if (!hasDefault('rels')) addDefault('rels', 'application/vnd.openxmlformats-package.relationships+xml');
-      if (!hasDefault('xml')) addDefault('xml', 'application/xml');
-      let added = 0;
-      for (const partName of binMediaTargets) {
-        if (!hasOverride(partName)) {
-          addOverride(partName, 'image/png');
-          results.push(`Added Content Types Override for "${partName}" as image/png`);
-          added += 1;
-        }
-      }
-      if (added > 0) modified = true;
+    if (binMediaTargets.size > 0 || contentTypesXml) {
+      const wasContentTypesUpdated = updateContentTypes(convertedXml, binMediaTargets, results);
+      if (wasContentTypesUpdated) modified = true;
     } else {
+      // Add informational message when Content_Types.xml is missing and no media targets
       results.push('[Content_Types].xml not found or not parseable. Skipped content types patch.');
     }
+
     return { results, modified };
   };
+}
+
+/**
+ * Finds the relationships file and normalizes its location to canonical path
+ */
+function findAndNormalizeRelationshipsFile(convertedXml, results) {
+  const candidateKeys = [
+    'word/_rels/document.xml.rels',
+    'word/document.xml.rels',
+    '_rels/document.xml.rels',
+    'document.xml.rels',
+  ];
+
+  const relsKey = candidateKeys.find((k) => convertedXml?.[k]?.elements);
+  if (!relsKey) return { relsKey: null, wasNormalized: false };
+
+  const canonicalKey = 'word/_rels/document.xml.rels';
+  if (relsKey !== canonicalKey) {
+    convertedXml[canonicalKey] = convertedXml[relsKey];
+    delete convertedXml[relsKey];
+    results.push(`Normalized relationships location to ${canonicalKey} (was ${relsKey})`);
+    return { relsKey: canonicalKey, wasNormalized: true };
+  }
+
+  return { relsKey, wasNormalized: false };
+}
+
+/**
+ * Validates and fixes the relationships root element structure
+ */
+function validateRelationshipsRoot(relsTree, relsKey, results) {
+  const root = relsTree?.elements?.[0];
+
+  if (!root || root.type !== 'element') {
+    results.push(`${relsKey} is not a valid xml`);
+    return { root: null, wasFixed: false };
+  }
+
+  const RELS_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+  let wasFixed = false;
+
+  if (root.name !== 'Relationships') {
+    root.name = 'Relationships';
+    results.push(`Fixed relationships root element name to "Relationships"`);
+    wasFixed = true;
+  }
+
+  root.attributes = root.attributes || {};
+  if (root.attributes.xmlns !== RELS_NS) {
+    root.attributes.xmlns = RELS_NS;
+    results.push(`Set relationships xmlns to ${RELS_NS}`);
+    wasFixed = true;
+  }
+
+  return { root, wasFixed };
+}
+
+/**
+ * Cleans up root element children to ensure only valid Relationship elements
+ */
+function cleanupRootChildren(root, results) {
+  const validChildren =
+    root.elements?.filter((child) => child?.type === 'element' && child.name === 'Relationship') || [];
+
+  if (root.elements?.length !== validChildren.length) {
+    root.elements = validChildren;
+    return true; // was cleaned
+  }
+  return false; // no cleaning needed
+}
+
+/**
+ * Processes relationships and returns filtered IDs and media targets
+ */
+function processRelationships(root, convertedXml, results) {
+  const binMediaTargets = new Set();
+  const filteredIds = new Set();
+  let wasProcessed = false;
+
+  const ridNum = (id) => {
+    const m = /^rId(\d+)$/.exec(String(id || ''));
+    return m ? parseInt(m[1], 10) : null;
+  };
+
+  const isType = (type, tail) => typeof type === 'string' && new RegExp(`/relationships/${tail}$`, 'i').test(type);
+
+  const isHyperlinkType = (type) => isType(type, 'hyperlink');
+  const isImageType = (type) => isType(type, 'image');
+  const looksExternal = (target) => /^https?:\/\//i.test(target || '') || /^mailto:/i.test(target || '');
+
+  const usedIds = new Set();
+  let maxRid = 0;
+
+  for (const el of root.elements) {
+    el.attributes = el.attributes || {};
+    const id = el.attributes.Id;
+    const n = ridNum(id);
+    if (Number.isInteger(n)) maxRid = Math.max(maxRid, n);
+    if (typeof id === 'string' && id) {
+      usedIds.add(id);
+    }
+  }
+
+  let ridCounter = maxRid;
+  const allocateId = (preferred) => {
+    if (preferred && !usedIds.has(preferred)) {
+      usedIds.add(preferred);
+      return preferred;
+    }
+    let newId;
+    do {
+      ridCounter += 1;
+      newId = `rId${ridCounter}`;
+    } while (usedIds.has(newId));
+    usedIds.add(newId);
+    return newId;
+  };
+
+  const seenIds = new Set();
+  const filtered = [];
+
+  for (const rel of root.elements) {
+    rel.attributes = rel.attributes || {};
+    const attrs = rel.attributes;
+
+    let id = typeof attrs.Id === 'string' ? attrs.Id.trim() : '';
+    const type = typeof attrs.Type === 'string' ? attrs.Type.trim() : '';
+    let target = typeof attrs.Target === 'string' ? attrs.Target.trim() : '';
+    let targetMode = typeof attrs.TargetMode === 'string' ? attrs.TargetMode.trim() : '';
+
+    // Skip relationships without target
+    if (!target) {
+      results.push(`Removed relationship "${id}" without Target`);
+      wasProcessed = true;
+      continue;
+    }
+
+    // Fix hyperlink TargetMode for external URLs
+    if (isHyperlinkType(type) && looksExternal(target) && targetMode.toLowerCase() !== 'external') {
+      attrs.TargetMode = 'External';
+      targetMode = 'External';
+      results.push(`Set TargetMode="External" for hyperlink ${id}`);
+      wasProcessed = true;
+    }
+
+    // Handle image relationships
+    if (isImageType(type)) {
+      const relPath = `word/${target.replace(/^\.?\//, '')}`;
+      if (/^media\/.+\.bin$/i.test(target) && relPath in convertedXml) {
+        binMediaTargets.add(`/${relPath}`);
+      }
+    }
+
+    // Validate internal target files exist
+    if (targetMode.toLowerCase() !== 'external' && !looksExternal(target)) {
+      const likelyPath = `word/${target.replace(/^\.?\//, '')}`;
+      if (!(likelyPath in convertedXml)) {
+        if (!isImageType(type)) {
+          results.push(`Removed relationship ${id} with missing target: ${target}`);
+          wasProcessed = true;
+          continue;
+        } else {
+          results.push(`Warning: image relationship ${id} target not found: ${target}.`);
+          // Note: Warning doesn't mark as modified
+        }
+      }
+    }
+
+    // Assign missing IDs
+    if (!id) {
+      const newId = allocateId(null);
+      attrs.Id = newId;
+      results.push(`Assigned missing Id "${newId}"`);
+      wasProcessed = true;
+      id = newId;
+    }
+
+    // Check for duplicate IDs
+    if (seenIds.has(id)) {
+      results.push(`Removed duplicate relationship with ID "${id}"`);
+      wasProcessed = true;
+      continue;
+    }
+
+    seenIds.add(id);
+    filtered.push(rel);
+  }
+
+  // Update root elements only if content actually changed
+  if (root.elements.length !== filtered.length) {
+    root.elements = filtered;
+    wasProcessed = true;
+  } else {
+    // Even if same length, check if any elements were actually removed
+    let contentChanged = false;
+    for (let i = 0; i < root.elements.length; i++) {
+      if (root.elements[i] !== filtered[i]) {
+        contentChanged = true;
+        break;
+      }
+    }
+    if (contentChanged) {
+      root.elements = filtered;
+      wasProcessed = true;
+    }
+  }
+
+  // Collect final filtered IDs
+  for (const rel of root.elements) {
+    const id = rel.attributes?.Id;
+    if (typeof id === 'string' && id) {
+      filteredIds.add(id);
+    }
+  }
+
+  return { filteredIds, binMediaTargets, wasProcessed };
+}
+
+/**
+ * Fixes missing relationship references in document.xml
+ */
+function fixMissingDocumentRefs(convertedXml, filteredIds, results, logger) {
+  const documentPath = 'word/document.xml';
+  const document = convertedXml[documentPath];
+
+  if (document?.elements?.length) {
+    const documentRoot = document.elements[0];
+    if (documentRoot?.type === 'element') {
+      const missingRefs = [];
+      processDocumentForMissingRefs(documentRoot, filteredIds, missingRefs);
+
+      if (missingRefs.length) {
+        results.push(`Fixed ${missingRefs.length} missing relationship references`);
+        logger?.debug?.(`Fixed ${missingRefs.length} missing relationship references in document`);
+        return true; // was fixed
+      }
+    }
+  }
+  return false; // no fixes needed
+}
+
+/**
+ * Updates Content_Types.xml for media .bin entries
+ */
+function updateContentTypes(convertedXml, binMediaTargets, results) {
+  const contentTypesKey = '[Content_Types].xml';
+  const contentTypesXml = convertedXml[contentTypesKey];
+
+  if (typeof contentTypesXml === 'string') {
+    return updateContentTypesString(contentTypesXml, binMediaTargets, results, convertedXml, contentTypesKey);
+  } else if (contentTypesXml?.elements?.length) {
+    return updateContentTypesElements(contentTypesXml, binMediaTargets, results);
+  } else {
+    return false; // no changes made
+  }
+}
+
+/**
+ * Updates Content_Types.xml when it's a string
+ */
+function updateContentTypesString(contentTypesXml, binMediaTargets, results, convertedXml, contentTypesKey) {
+  const ensureDefault = (xmlString, ext, contentType) => {
+    const defRe = new RegExp(`<Default\\s+Extension="${ext}"\\b`, 'i');
+    if (defRe.test(xmlString)) return xmlString;
+    const opening = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
+    return xmlString.replace(opening, `${opening}<Default Extension="${ext}" ContentType="${contentType}"/>`);
+  };
+
+  const ensureOverride = (xmlString, partName, contentType) => {
+    const esc = partName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const ovRe = new RegExp(`<Override\\s+PartName="${esc}"\\b`, 'i');
+    if (ovRe.test(xmlString)) return xmlString;
+    const opening = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
+    return xmlString.replace(opening, `${opening}<Override PartName="${partName}" ContentType="${contentType}" />`);
+  };
+
+  let updated = contentTypesXml;
+  updated = ensureDefault(updated, 'rels', 'application/vnd.openxmlformats-package.relationships+xml');
+  updated = ensureDefault(updated, 'xml', 'application/xml');
+
+  for (const partName of binMediaTargets) {
+    updated = ensureOverride(updated, partName, 'image/png');
+    results.push(`Added Content Types Override for "${partName}" as image/png`);
+  }
+
+  if (updated !== contentTypesXml) {
+    convertedXml[contentTypesKey] = updated;
+    return true; // was updated
+  }
+  return false; // no changes made
+}
+
+/**
+ * Updates Content_Types.xml when it's parsed elements
+ */
+function updateContentTypesElements(contentTypesXml, binMediaTargets, results) {
+  const typesRoot = contentTypesXml.elements.find((el) => el.name === 'Types') || contentTypesXml.elements[0];
+  typesRoot.elements = typesRoot.elements || [];
+
+  const hasDefault = (ext) =>
+    typesRoot.elements.some((el) => el.name === 'Default' && el.attributes?.Extension === ext);
+
+  const addDefault = (ext, ct) => {
+    typesRoot.elements.unshift({
+      type: 'element',
+      name: 'Default',
+      attributes: { Extension: ext, ContentType: ct },
+    });
+  };
+
+  const hasOverride = (part) =>
+    typesRoot.elements.some((el) => el.name === 'Override' && el.attributes?.PartName === part);
+
+  const addOverride = (part, ct) => {
+    typesRoot.elements.unshift({
+      type: 'element',
+      name: 'Override',
+      attributes: { PartName: part, ContentType: ct },
+    });
+  };
+
+  let wasUpdated = false;
+
+  // Add required defaults
+  if (!hasDefault('rels')) {
+    addDefault('rels', 'application/vnd.openxmlformats-package.relationships+xml');
+    wasUpdated = true;
+  }
+  if (!hasDefault('xml')) {
+    addDefault('xml', 'application/xml');
+    wasUpdated = true;
+  }
+
+  // Add media overrides
+  for (const partName of binMediaTargets) {
+    if (!hasOverride(partName)) {
+      addOverride(partName, 'image/png');
+      results.push(`Added Content Types Override for "${partName}" as image/png`);
+      wasUpdated = true;
+    }
+  }
+
+  return wasUpdated;
 }
 
 /**
