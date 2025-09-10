@@ -25,6 +25,7 @@ import { TrackChangesBasePluginKey } from './extensions/track-changes/plugins/in
 import { CommentsPluginKey } from './extensions/comment/comments-plugin.js';
 import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { SectionHelpers } from '@extensions/structured-content/document-section/index.js';
+import { registeredHandlers } from './core/super-converter/v3/handlers/index.js';
 
 const Extensions = {
   Node,
@@ -70,10 +71,10 @@ export {
   getRichTextExtensions,
   createZip,
   getAllowedImageDimensions,
+  registeredHandlers,
 
   // External extensions classes
   Extensions,
   TrackChangesBasePluginKey,
   CommentsPluginKey,
 };
-//*

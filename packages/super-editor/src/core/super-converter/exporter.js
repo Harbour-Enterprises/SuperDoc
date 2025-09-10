@@ -23,6 +23,8 @@ import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translateDocumentSection } from './v2/exporter/index.js';
+import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
+import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -79,15 +81,15 @@ export function exportSchemaToJson(params) {
     text: translateTextNode,
     bulletList: translateList,
     orderedList: translateList,
-    lineBreak: translateLineBreak,
+    lineBreak: wBrNodeTranslator,
     table: translateTable,
     tableRow: translateTableRow,
     tableCell: translateTableCell,
     bookmarkStart: translateBookmarkStart,
     fieldAnnotation: translateFieldAnnotation,
-    tab: translateTab,
+    tab: wTabNodeTranslator,
     image: translateImageNode,
-    hardBreak: translateHardBreak,
+    hardBreak: wBrNodeTranslator,
     commentRangeStart: () => translateCommentNode(params, 'Start'),
     commentRangeEnd: () => translateCommentNode(params, 'End'),
     commentReference: () => null,
@@ -101,13 +103,20 @@ export function exportSchemaToJson(params) {
     'total-page-number': translateTotalPageNumberNode,
   };
 
-  if (!router[type]) {
+  let handler = router[type];
+
+  // For import/export v3 we use the translator directly
+  if (handler && 'decode' in handler && typeof handler.decode === 'function') {
+    return handler.decode(params);
+  }
+
+  if (!handler) {
     console.error('No translation function found for node type:', type);
     return null;
   }
 
   // Call the handler for this node type
-  return router[type](params);
+  return handler(params);
 }
 
 /**
@@ -380,9 +389,10 @@ function generateParagraphProperties(node) {
   const { tabStops } = attrs;
   if (tabStops && tabStops.length > 0) {
     const tabElements = tabStops.map((tab) => {
+      const posValue = tab.originalPos !== undefined ? tab.originalPos : pixelsToTwips(tab.pos).toString();
       const tabAttributes = {
         'w:val': tab.val || 'start',
-        'w:pos': pixelsToTwips(tab.pos).toString(),
+        'w:pos': posValue,
       };
 
       if (tab.leader) {
@@ -636,7 +646,7 @@ function wrapTextInRun(nodeOrNodes, marks) {
  * @param {Object[]} marks The marks to add to the run properties
  * @returns
  */
-function generateRunProps(marks = []) {
+export function generateRunProps(marks = []) {
   return {
     name: 'w:rPr',
     elements: marks.filter((mark) => !!Object.keys(mark).length),
@@ -649,7 +659,7 @@ function generateRunProps(marks = []) {
  * @param {MarkType[]} marks
  * @returns
  */
-function processOutputMarks(marks = []) {
+export function processOutputMarks(marks = []) {
   return marks.flatMap((mark) => {
     if (mark.type === 'textStyle') {
       return Object.entries(mark.attrs)
@@ -991,32 +1001,6 @@ const generateNumPrTag = (numId, level) => {
 };
 
 /**
- * Translate a line break node
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode}
- */
-function translateLineBreak(params) {
-  const attributes = {};
-
-  const { lineBreakType } = params.node?.attrs || {};
-  if (lineBreakType) {
-    attributes['w:type'] = lineBreakType;
-  }
-
-  return {
-    name: 'w:r',
-    elements: [
-      {
-        name: 'w:br',
-        attributes,
-      },
-    ],
-    attributes,
-  };
-}
-
-/**
  * Translate a table node
  *
  * @param {ExportParams} params The table node to translate
@@ -1077,17 +1061,6 @@ function preProcessVerticalMergeCells(table, { editorSchema }) {
     }
   }
   return table;
-}
-
-function translateTab(params) {
-  const { marks = [] } = params.node;
-
-  const outputMarks = processOutputMarks(marks);
-  const tabNode = {
-    name: 'w:tab',
-  };
-
-  return wrapTextInRun(tabNode, outputMarks);
 }
 
 /**

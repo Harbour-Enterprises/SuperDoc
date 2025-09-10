@@ -140,6 +140,7 @@ export const Image = Node.create({
        * @private
        */
       wrapText: { rendered: false },
+      extension: { rendered: false },
 
       /**
        * @category Attribute
@@ -149,11 +150,14 @@ export const Image = Node.create({
        */
       size: {
         default: {},
-        renderDOM: ({ size }) => {
+        renderDOM: ({ size, extension }) => {
           let style = '';
+
           const { width, height } = size ?? {};
           if (width) style += `width: ${width}px;`;
-          if (height) style += 'height: auto;';
+          if (height && ['emf', 'wmf'].includes(extension))
+            style += `height: ${height}px; border: 1px solid black; position: absolute;`;
+          else if (height) style += 'height: auto;';
           return { style };
         },
       },

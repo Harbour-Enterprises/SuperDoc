@@ -24,6 +24,24 @@ export const LineBreak = Node.create({
     return ['br', {}];
   },
 
+  addAttributes() {
+    return {
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [lineBreakType] - Type of line break - passthrough in this node
+       */
+      lineBreakType: { rendered: false },
+
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [clear] - Clear attribute - passthrough in this node
+       */
+      clear: { rendered: false },
+    };
+  },
+
   addCommands() {
     return {
       /**
@@ -92,6 +110,20 @@ export const HardBreak = Node.create({
         default: null,
         rendered: false,
       },
+
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [lineBreakType] - Type of line break - passthrough in this node
+       */
+      lineBreakType: { rendered: false },
+
+      /**
+       * @private
+       * @category Attribute
+       * @param {string} [clear] - Clear attribute - passthrough in this node
+       */
+      clear: { rendered: false },
     };
   },
 

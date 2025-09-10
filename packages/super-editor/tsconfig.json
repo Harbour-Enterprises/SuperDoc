@@ -19,7 +19,8 @@
       "@helpers/*": ["./src/core/helpers/*"],
       "@packages/*": ["../*"],
       "@converter/*": ["./src/core/super-converter/*"],
-      "@tests/*": ["./src/tests/*"]
+      "@tests/*": ["./src/tests/*"],
+      "@translator": ["./src/core/super-converter/v3/node-translator/"]
     }
   },
   "exclude": ["node_modules", "dist", "**/*.test.js"]
