@@ -88,7 +88,13 @@ function handleListNodes(params, node) {
     const styleIdIndex = pPr?.elements?.findIndex((el) => el.name === 'w:pStyle');
     if (styleIdIndex >= 0) pPr?.elements?.splice(styleIdIndex, 1);
 
-    const fallBack = nodeListHandler.handler({ ...params, nodes: [node] })?.filter((n) => n);
+    const fallBack = nodeListHandler
+      .handler({
+        ...params,
+        nodes: [node],
+        path: [...(params.path || []), node],
+      })
+      ?.filter((n) => n);
     return fallBack[0];
   }
 
@@ -127,7 +133,11 @@ function handleListNodes(params, node) {
   const numPrIndex = node.attrs?.paragraphProperties?.elements?.findIndex((el) => el.name === 'w:numPr');
   nodePpr?.elements?.splice(numPrIndex, 1);
 
-  const listContents = nodeListHandler.handler({ ...params, nodes: [node] });
+  const listContents = nodeListHandler.handler({
+    ...params,
+    nodes: [node],
+    path: [...(params.path || []), node],
+  });
   const innerParagraph = listContents.find((el) => el.type === 'paragraph');
   const firstElement = innerParagraph.content[0];
 

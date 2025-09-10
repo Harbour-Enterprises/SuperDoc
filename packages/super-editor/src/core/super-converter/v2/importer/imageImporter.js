@@ -183,6 +183,7 @@ const handleShapeDrawing = (params, node, graphicData) => {
     ...params,
     node: textBoxContent.elements[0],
     nodes: textBoxContent.elements,
+    path: [...(params.path || []), textBoxContent],
   });
 
   return translatedElement[0];

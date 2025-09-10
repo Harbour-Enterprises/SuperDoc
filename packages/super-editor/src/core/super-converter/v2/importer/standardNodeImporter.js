@@ -59,7 +59,12 @@ export const handleStandardNode = (params) => {
       return el;
     });
 
-    const childParams = { ...params, nodes: updatedElements, parentStyleId };
+    const childParams = {
+      ...params,
+      nodes: updatedElements,
+      parentStyleId,
+      path: [...(params.path || []), node],
+    };
     const childContent = nodeListHandler.handler(childParams);
     content.push(...childContent);
   }

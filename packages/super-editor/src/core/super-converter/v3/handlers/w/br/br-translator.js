@@ -30,7 +30,6 @@ const encode = (_, encodedAttrs) => {
   const translated = {
     type: isPageBreak ? 'hardBreak' : 'lineBreak',
   };
-
   if (encodedAttrs) {
     translated.attrs = { ...encodedAttrs };
   }
@@ -46,6 +45,7 @@ const encode = (_, encodedAttrs) => {
  */
 const decode = (params, decodedAttrs) => {
   const { node } = params;
+
   if (!node) return;
 
   const wBreak = { name: 'w:br' };

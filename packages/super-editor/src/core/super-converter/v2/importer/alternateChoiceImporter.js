@@ -35,6 +35,7 @@ const handleAlternateChoice = (params) => {
   const result = nodeListHandler.handler({
     ...params,
     nodes: contents,
+    path: [...(params.path || []), wpsNode],
   });
 
   return { nodes: result, consumed: 1 };

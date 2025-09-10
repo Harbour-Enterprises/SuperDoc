@@ -89,6 +89,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       converter,
       editor,
       lists,
+      path: [],
     });
 
     const result = {
@@ -190,6 +191,7 @@ const createNodeListHandler = (nodeHandlers) => {
     filename,
     parentStyleId,
     lists,
+    path = [],
   }) => {
     if (!elements || !elements.length) return [];
     const filteredElements = pruneIgnoredNodes(elements);
@@ -219,6 +221,7 @@ const createNodeListHandler = (nodeHandlers) => {
                 filename,
                 parentStyleId,
                 lists,
+                path,
               });
             },
             { nodes: [], consumed: 0 },
@@ -466,6 +469,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       converter,
       editor,
       filename: currentFileName,
+      path: [],
     });
 
     if (!converter.headerIds.ids) converter.headerIds.ids = [];
@@ -492,6 +496,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       converter,
       editor,
       filename: currentFileName,
+      path: [],
     });
 
     if (!converter.footerIds.ids) converter.footerIds.ids = [];
