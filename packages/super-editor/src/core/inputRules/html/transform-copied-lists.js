@@ -46,15 +46,6 @@ export const transformListsInCopiedContent = (html) => {
         stack.push({ tag, level, el: newList });
       } else if (stack[stack.length - 1].level > level) {
         flushStackUntil(level + 1);
-
-        if (!stack.length || stack[stack.length - 1].tag !== tag) {
-          const newList = document.createElement(tag);
-          if (stack.length) {
-            const parentLi = stack[stack.length - 1].el.lastElementChild;
-            if (parentLi) parentLi.appendChild(newList);
-          }
-          stack.push({ tag, level, el: newList });
-        }
       } else if (stack[stack.length - 1].tag !== tag) {
         flushStackUntil(level);
         const newList = document.createElement(tag);
@@ -97,7 +88,7 @@ export const getListStyleType = (numFmt, lvlText) => {
 };
 
 /**
- * Get fist child of Element type
+ * Get first child of Element type
  */
 function getFirstElementChild(node) {
   return Array.from(node.childNodes).find((n) => n.nodeType === Node.ELEMENT_NODE) || null;
