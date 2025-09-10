@@ -13,7 +13,7 @@ const SD_NODE_NAME = 'link';
  * Helper to create one-to-one attribute handlers.
  * @param {string} xmlName - The XML attribute name.
  * @param {string} sdName - The SuperDoc attribute name.
- * @returns {import('@translator').AttributesHandlerList} The attribute handler object.
+ * @returns {import('@translator').AttrConfig} The attribute handler object.
  */
 const _createAttributeHandler = (xmlName, sdName) => ({
   xmlName,
@@ -25,7 +25,7 @@ const _createAttributeHandler = (xmlName, sdName) => ({
 /**
  * The attributes that can be mapped between OOXML and SuperDoc.
  * Note: These are specifically OOXML valid attributes for a given node.
- * @type {import('@translator').AttributesHandlerList[]}
+ * @type {import('@translator').AttrConfig[]}
  * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 1276
  */
 const validXmlAttributes = [
@@ -91,3 +91,90 @@ const _resolveHref = (docx, encodedAttrs) => {
   }
   return href;
 };
+
+/**
+ * Decode the hyperlink mark back into OOXML <w:hyperlink>.
+ * @param {import('@translator').SCDecoderConfig} params
+ * @param {import('@translator').DecodedAttributes} [_] - The already decoded attributes
+ * @returns {import('@translator').SCDecoderResult}
+ */
+function decode(params, _) {
+  const { node } = params;
+
+  const linkMark = node.marks.find((m) => m.type === 'link');
+  const linkAttrs = this.decodeAttributes({ ...params, node: linkMark });
+  let { anchor, href: link } = linkMark.attrs;
+
+  const isExternalLink = !anchor;
+  if (isExternalLink) {
+    linkAttrs['r:id'] = _addNewLinkRelationship(params, link, linkAttrs['r:id']);
+  }
+
+  node.marks = node.marks.filter((m) => m.type !== 'link');
+
+  // @ts-ignore
+  const outputNode = exportSchemaToJson({ ...params, node });
+
+  const newNode = {
+    name: 'w:hyperlink',
+    type: 'element',
+    attributes: {
+      ...linkAttrs,
+    },
+    elements: [outputNode],
+  };
+
+  return newNode;
+}
+
+/**
+ * If needed, create a new link relationship and add it to the relationships array
+ *
+ * @param {import('@translator').SCDecoderConfig} params
+ * @param {string} [link] The URL of this link
+ * @param {string|null} [rId] The existing relationship ID, if any
+ * @returns {string} The new relationship ID
+ */
+function _addNewLinkRelationship(params, link, rId) {
+  if (!rId) rId = generateDocxRandomId();
+
+  if (!params.relationships || !Array.isArray(params.relationships)) {
+    params.relationships = [];
+  }
+
+  // Check if the relationship already exists
+  const existingRel = params.relationships.find(
+    (rel) => rel.attributes && rel.attributes.Id === rId && rel.attributes.Target === link,
+  );
+  if (existingRel) {
+    return rId;
+  }
+
+  params.relationships.push({
+    type: 'element',
+    name: 'Relationship',
+    attributes: {
+      Id: rId,
+      Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
+      Target: link,
+      TargetMode: 'External',
+    },
+  });
+  return rId;
+}
+
+/** @type {import('@translator').NodeTranslatorConfig} */
+export const config = {
+  xmlName: XML_NODE_NAME,
+  sdNodeOrKeyName: SD_NODE_NAME,
+  type: NodeTranslator.translatorTypes.NODE,
+  encode,
+  decode,
+  attributes: validXmlAttributes,
+};
+
+/**
+ * The NodeTranslator instance for the passthrough element.
+ * @type {import('@translator').NodeTranslator}
+ */
+export const translator = NodeTranslator.from(config);
