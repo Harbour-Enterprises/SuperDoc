@@ -10,6 +10,11 @@ import fs from 'fs';
 const repoRoot = process.cwd();
 const superEditorRoot = path.resolve(repoRoot, 'packages/super-editor');
 
+// Normalize backslashes to forward slashes for globs/posix joins
+function normalizePath(p) {
+  return p.replaceAll('\\', '/');
+}
+
 // Normalize path args to be relative to super-editor root when applicable
 function normalizeArg(arg) {
   if (!arg || arg.startsWith('-')) return arg; // flags
@@ -38,8 +43,21 @@ function normalizeArg(arg) {
 const rawArgs = process.argv.slice(2);
 const userArgs = rawArgs.map(normalizeArg);
 
+// Detects if the user has provided a coverage include argument.
+// Matches any of the following forms:
+// - --coverage.include=foo,bar
+// - --coverage= ... (user supplies a full coverage config, so don't inject includes)
+// - --coverage.<anything-with-include>= ... (e.g., --coverage.reporter.include=...)
+function isCoverageIncludeArg(arg) {
+  return (
+    arg.startsWith('--coverage.include=') ||
+    arg.startsWith('--coverage=') ||
+    (arg.startsWith('--coverage.') && arg.includes('include') && arg.includes('='))
+  );
+}
+
 // Derive coverage include globs from path-like args unless user already set one
-const hasUserCoverageInclude = rawArgs.some((a) => /^(--coverage\.include|--coverage=|--coverage\.[^=]*include)/.test(a));
+const hasUserCoverageInclude = rawArgs.some(isCoverageIncludeArg);
 const pathLike = userArgs.filter((a) => a && !a.startsWith('-'));
 let coverageIncludeArg = [];
 if (!hasUserCoverageInclude && pathLike.length > 0) {
@@ -50,16 +68,16 @@ if (!hasUserCoverageInclude && pathLike.length > 0) {
       try {
         const stat = fs.statSync(abs);
         if (stat.isDirectory()) {
-          patterns.push(path.posix.join(p.replaceAll('\\', '/'), '**', '*'));
+          patterns.push(path.posix.join(normalizePath(p), '**', '*'));
         } else {
-          patterns.push(p.replaceAll('\\', '/'));
+          patterns.push(normalizePath(p));
         }
       } catch (_) {
-        patterns.push(p.replaceAll('\\', '/'));
+        patterns.push(normalizePath(p));
       }
     } else {
       // treat as glob relative to root
-      patterns.push(p.replaceAll('\\', '/'));
+      patterns.push(normalizePath(p));
     }
   }
   if (patterns.length) {
@@ -95,4 +113,3 @@ const child = spawn(vitestBin, vitestArgs, {
 child.on('close', (code) => {
   process.exit(code);
 });
-
