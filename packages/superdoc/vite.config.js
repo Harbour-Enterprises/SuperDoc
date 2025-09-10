@@ -31,6 +31,7 @@ export const getAliases = (isDev) => {
     '@helpers': fileURLToPath(new URL('../super-editor/src/core/helpers', import.meta.url)),
     '@converter': fileURLToPath(new URL('../super-editor/src/core/super-converter', import.meta.url)),
     '@tests': fileURLToPath(new URL('../super-editor/src/tests', import.meta.url)),
+    '@translator': fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
   };
 
   if (isDev) {
