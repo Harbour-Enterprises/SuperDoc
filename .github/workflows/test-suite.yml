@@ -131,5 +131,5 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "Authorization: Bearer ${{ secrets.SUPERDOC_PAT }}" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
-            -d '{"ref": "test-gabriel", "inputs": {"superdoc-branch": "${{ github.head_ref }}", "pull-request-url": "${{ github.event.pull_request.html_url }}"}}' \
+            -d '{"ref": "main", "inputs": {"superdoc-branch": "${{ github.head_ref }}", "pull-request-url": "${{ github.event.pull_request.html_url }}"}}' \
             ${{ secrets.SD_TESTS_URL }}
