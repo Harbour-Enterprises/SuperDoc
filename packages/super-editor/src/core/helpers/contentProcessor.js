@@ -83,7 +83,7 @@ function processListNodes(node, editor, depth = 0) {
     // Process list items
     if (node.content) {
       node.content = node.content.map((item, index) =>
-        processListItem(item, node.attrs.listId, 'bullet', index, depth),
+        processListItem(item, node.attrs.listId, 'bullet', index, depth, editor),
       );
     }
   }
@@ -125,9 +125,10 @@ function processListNodes(node, editor, depth = 0) {
  * @param {string} listType - 'bullet' or 'decimal'
  * @param {number} index - Item index in list
  * @param {number} depth - Nesting depth
+ * @param {Object} editor - Editor instance
  * @returns {Object} Processed list item
  */
-function processListItem(item, listId, listType, index, depth) {
+function processListItem(item, listId, listType, index, depth, editor) {
   if (item.type !== 'listItem') return item;
 
   if (!item.attrs) item.attrs = {};
@@ -149,7 +150,7 @@ function processListItem(item, listId, listType, index, depth) {
 
   // Process nested content
   if (item.content) {
-    item.content = item.content.map((child) => processListNodes(child, { converter: { numbering: {} } }, depth + 1));
+    item.content = item.content.map((child) => processListNodes(child, editor, depth + 1));
   }
 
   return item;
