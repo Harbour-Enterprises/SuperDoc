@@ -1,9 +1,8 @@
-import { tableOfContentsHandler } from './docPartGalleryImporter.js';
-
-export const handleDocPartObj = (params) => {
+export function handleDocPartObj(params) {
   const { nodes } = params;
+
   if (nodes.length === 0 || nodes[0].name !== 'w:sdt') {
-    return { nodes: [], consumed: 0 };
+    return undefined;
   }
 
   const node = nodes[0];
@@ -13,22 +12,31 @@ export const handleDocPartObj = (params) => {
   const docPartGalleryType = docPartGallery?.attributes['w:val'];
 
   if (!docPartGalleryType) {
-    return { nodes: [], consumed: 0 };
+    return undefined;
   }
 
   if (!validGalleryTypeMap[docPartGalleryType]) {
     // TODO: Handle catching unkown gallery types
-    return { nodes: [], consumed: 0 };
+    return undefined;
   }
 
   const content = node?.elements.find((el) => el.name === 'w:sdtContent');
   const handler = validGalleryTypeMap[docPartGalleryType];
   const result = handler({ ...params, nodes: [content] });
 
-  return {
-    nodes: result,
-    consumed: 1,
-  };
+  return result;
+}
+
+// /**
+//  * Handler for docPartObject: docPartGallery node type of 'Table of contents'
+//  * @param {*} node
+//  * @param {*} docx
+//  * @param {*} nodeListHandler
+//  * @param {*} insideTrackChange
+//  * @returns {Array} The processed nodes
+//  */
+export const tableOfContentsHandler = (params) => {
+  return nodeListHandler.handler({ ...params, nodes: node.elements }); // TODO: check this function.
 };
 
 const validGalleryTypeMap = {

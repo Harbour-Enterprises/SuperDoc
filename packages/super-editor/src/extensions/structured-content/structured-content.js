@@ -18,19 +18,25 @@ export const StructuredContent = Node.create({
     };
   },
 
-  parseDOM() {
-    return [{ tag: `span.${this.options.structuredContentClass}` }];
-  },
-
-  renderDOM({ htmlAttributes }) {
-    return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
-  },
-
   addAttributes() {
     return {
       sdtPr: {
         rendered: false,
       },
     };
+  },
+
+  parseDOM() {
+    return [{ tag: `span.${this.options.structuredContentClass}` }];
+  },
+
+  renderDOM({ htmlAttributes }) {
+    return [
+      'span',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, {
+        class: this.options.structuredContentClass,
+      }),
+      0,
+    ];
   },
 });

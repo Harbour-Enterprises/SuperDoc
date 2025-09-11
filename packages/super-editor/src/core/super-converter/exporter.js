@@ -22,11 +22,11 @@ import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js
 import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
-import { translateDocumentSection } from './v2/exporter/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
+import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
 
 /**
  * @typedef {Object} ExportParams
@@ -98,9 +98,9 @@ export function exportSchemaToJson(params) {
     shapeContainer: translateShapeContainer,
     shapeTextbox: translateShapeTextbox,
     contentBlock: translateContentBlock,
-    structuredContent: translateStructuredContent,
-    structuredContentBlock: translateStructuredContent,
-    documentSection: translateDocumentSection,
+    structuredContent: wSdtNodeTranslator,
+    structuredContentBlock: wSdtNodeTranslator,
+    documentSection: wSdtNodeTranslator,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
   };
@@ -2302,27 +2302,6 @@ function applyMarksToHtmlAnnotation(state, marks) {
   });
 
   return state.apply(tr);
-}
-
-function translateStructuredContent(params) {
-  const { node } = params;
-  const { attrs = {} } = node;
-
-  const childContent = translateChildNodes({ ...params, nodes: node.content });
-
-  // We build the sdt node elements here, and re-add passthrough sdtPr node
-  const nodeElements = [
-    {
-      name: 'w:sdtContent',
-      elements: childContent,
-    },
-  ];
-  nodeElements.unshift(attrs.sdtPr);
-
-  return {
-    name: 'w:sdt',
-    elements: nodeElements,
-  };
 }
 
 const translatePageNumberNode = (params) => {
