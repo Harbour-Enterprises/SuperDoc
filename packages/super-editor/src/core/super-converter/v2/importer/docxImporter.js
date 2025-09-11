@@ -82,7 +82,7 @@ export const createDocumentJson = (docx, converter, editor) => {
 
     // Track imported lists
     const lists = {};
-    const parsedContent = nodeListHandler.handler({
+    let parsedContent = nodeListHandler.handler({
       nodes: content,
       nodeListHandler,
       docx,
@@ -91,6 +91,9 @@ export const createDocumentJson = (docx, converter, editor) => {
       lists,
       path: [],
     });
+
+    // Safety: drop any inline-only nodes that accidentally landed at the doc root
+    parsedContent = filterOutRootInlineNodes(parsedContent);
 
     const result = {
       type: 'doc',
@@ -462,7 +465,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     let sectionType = sectPrHeader?.attributes['w:type'];
     if (converter.headerIds[sectionType]) sectionType = null;
     const nodeListHandler = defaultNodeListHandler();
-    const schema = nodeListHandler.handler({
+    let schema = nodeListHandler.handler({
       nodes: referenceFile.elements[0].elements,
       nodeListHandler,
       docx,
@@ -471,6 +474,9 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       filename: currentFileName,
       path: [],
     });
+
+    // Safety: drop inline-only nodes at the root of header docs
+    schema = filterOutRootInlineNodes(schema);
 
     if (!converter.headerIds.ids) converter.headerIds.ids = [];
     converter.headerIds.ids.push(rId);
@@ -489,7 +495,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     const sectionType = sectPrFooter?.attributes['w:type'];
 
     const nodeListHandler = defaultNodeListHandler();
-    const schema = nodeListHandler.handler({
+    let schema = nodeListHandler.handler({
       nodes: referenceFile.elements[0].elements,
       nodeListHandler,
       docx,
@@ -498,6 +504,9 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       filename: currentFileName,
       path: [],
     });
+
+    // Safety: drop inline-only nodes at the root of footer docs
+    schema = filterOutRootInlineNodes(schema);
 
     if (!converter.footerIds.ids) converter.footerIds.ids = [];
     converter.footerIds.ids.push(rId);
@@ -535,6 +544,41 @@ const getHeaderFooterSectionData = (sectionData, docx) => {
     currentFileName,
   };
 };
+
+/**
+ * Remove any nodes that belong to the inline group when they appear at the root.
+ * ProseMirror's doc node only accepts block-level content; inline nodes here cause
+ * Invalid content for node doc errors. This is a conservative filter that only
+ * drops clearly inline node types if they somehow escape their paragraph.
+ *
+ * @param {Array<{type: string, content?: any, attrs?: any, marks?: any[]}>} content
+ * @returns {Array}
+ */
+function filterOutRootInlineNodes(content = []) {
+  if (!Array.isArray(content) || content.length === 0) return content;
+
+  const INLINE_TYPES = new Set([
+    'text',
+    'bookmarkStart',
+    'lineBreak',
+    'hardBreak',
+    'pageNumber',
+    'totalPageCount',
+    'runItem',
+    'image',
+    'tab',
+    'fieldAnnotation',
+    'mention',
+    'contentBlock',
+    'aiLoaderNode',
+    'commentRangeStart',
+    'commentRangeEnd',
+    'commentReference',
+    'structuredContent',
+  ]);
+
+  return content.filter((node) => node && typeof node.type === 'string' && !INLINE_TYPES.has(node.type));
+}
 
 /**
  * Import this document's numbering.xml definitions
