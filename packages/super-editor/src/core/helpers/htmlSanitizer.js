@@ -1,3 +1,4 @@
+//@ts-check
 /**
  * Strip all inline styles and non-semantic attributes from HTML
  * Preserves structure while removing presentation

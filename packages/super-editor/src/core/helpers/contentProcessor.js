@@ -1,3 +1,4 @@
+//@ts-check
 import { createDocFromHTML } from './importHtml.js';
 import { createDocFromMarkdown } from './importMarkdown.js';
 import { ListHelpers } from './list-numbering-helpers.js';
