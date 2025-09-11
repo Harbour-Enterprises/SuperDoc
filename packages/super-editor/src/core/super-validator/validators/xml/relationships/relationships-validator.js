@@ -181,14 +181,16 @@ function processRelationships(root, convertedXml, results) {
   const seenIds = new Set();
   const filtered = [];
 
+  function extractStringAttr(attrs, key) {
+    return typeof attrs[key] === 'string' ? attrs[key].trim() : '';
+  }
   for (const rel of root.elements) {
     rel.attributes = rel.attributes || {};
     const attrs = rel.attributes;
-
-    let id = typeof attrs.Id === 'string' ? attrs.Id.trim() : '';
-    const type = typeof attrs.Type === 'string' ? attrs.Type.trim() : '';
-    let target = typeof attrs.Target === 'string' ? attrs.Target.trim() : '';
-    let targetMode = typeof attrs.TargetMode === 'string' ? attrs.TargetMode.trim() : '';
+    let id = extractStringAttr(attrs, 'Id');
+    const type = extractStringAttr(attrs, 'Type');
+    let target = extractStringAttr(attrs, 'Target');
+    let targetMode = extractStringAttr(attrs, 'TargetMode');
 
     // Skip relationships without target
     if (!target) {
@@ -254,13 +256,7 @@ function processRelationships(root, convertedXml, results) {
     wasProcessed = true;
   } else {
     // Even if same length, check if any elements were actually removed
-    let contentChanged = false;
-    for (let i = 0; i < root.elements.length; i++) {
-      if (root.elements[i] !== filtered[i]) {
-        contentChanged = true;
-        break;
-      }
-    }
+    const contentChanged = root.elements.some((el, i) => el !== filtered[i]);
     if (contentChanged) {
       root.elements = filtered;
       wasProcessed = true;
@@ -321,19 +317,24 @@ function updateContentTypes(convertedXml, binMediaTargets, results) {
  * Updates Content_Types.xml when it's a string
  */
 function updateContentTypesString(contentTypesXml, binMediaTargets, results, convertedXml, contentTypesKey) {
+  const CONTENT_TYPES_NS = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
   const ensureDefault = (xmlString, ext, contentType) => {
     const defRe = new RegExp(`<Default\\s+Extension="${ext}"\\b`, 'i');
     if (defRe.test(xmlString)) return xmlString;
-    const opening = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
-    return xmlString.replace(opening, `${opening}<Default Extension="${ext}" ContentType="${contentType}"/>`);
+    return xmlString.replace(
+      CONTENT_TYPES_NS,
+      `${CONTENT_TYPES_NS}<Default Extension="${ext}" ContentType="${contentType}"/>`,
+    );
   };
 
   const ensureOverride = (xmlString, partName, contentType) => {
     const esc = partName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const ovRe = new RegExp(`<Override\\s+PartName="${esc}"\\b`, 'i');
     if (ovRe.test(xmlString)) return xmlString;
-    const opening = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
-    return xmlString.replace(opening, `${opening}<Override PartName="${partName}" ContentType="${contentType}" />`);
+    return xmlString.replace(
+      CONTENT_TYPES_NS,
+      `${CONTENT_TYPES_NS}<Override PartName="${partName}" ContentType="${contentType}" />`,
+    );
   };
 
   let updated = contentTypesXml;
