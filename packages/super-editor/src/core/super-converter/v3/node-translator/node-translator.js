@@ -25,7 +25,7 @@ export const TranslatorTypes = Object.freeze({
 
 /** @typedef {import('../../v2/importer/types').NodeHandlerParams} SCEncoderConfig */
 /** @typedef {import('../../v2/types').SuperDocNode} SCEncoderResult */
-/** @typedef {{ node: { attrs?: any, marks?: any[], type: string }, children?: any[] }} SCDecoderConfig */
+/** @typedef {{ node: { attrs?: any, marks?: any[], type: string }, children?: any[], relationships?: any[] }} SCDecoderConfig */
 /** @typedef {{ name: string, elements: any[] }} SCDecoderResult */
 
 /**
