@@ -1,3 +1,9 @@
+## [0.17.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.2...v0.17.3) (2025-09-11)
+
+### Bug Fixes
+
+- unable to generate list definition ([#943](https://github.com/Harbour-Enterprises/SuperDoc/issues/943)) ([a2ccc84](https://github.com/Harbour-Enterprises/SuperDoc/commit/a2ccc847ece06595e38531337093abb1e60f5394))
+
 ## [0.17.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.1...v0.17.2) (2025-09-11)
 
 ### Bug Fixes
