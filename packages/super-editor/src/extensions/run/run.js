@@ -12,8 +12,9 @@ export const RunNode = OxmlNode.create({
 
   atom: false,
 
-  // Allow explicit line and hard breaks inside runs, like Word
-  content: '(text | lineBreak | hardBreak)*',
+  // Allow any inline content inside runs (text, images, tabs, annotations, breaks, etc.)
+  // This matches how Word wraps many inline constructs inside <w:r>.
+  content: 'inline*',
 
   inline: true,
 
