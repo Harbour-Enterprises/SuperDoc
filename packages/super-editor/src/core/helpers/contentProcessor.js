@@ -1,6 +1,7 @@
 import { createDocFromHTML } from './importHtml.js';
 import { createDocFromMarkdown } from './importMarkdown.js';
 import { ListHelpers } from './list-numbering-helpers.js';
+import { stripHtmlStyles } from './htmlSanitizer.js';
 
 /**
  * Unified content processor that handles all content types
@@ -41,48 +42,6 @@ export function processContent({ content, type, schema, editor }) {
   }
 
   return doc;
-}
-
-/**
- * Strip all inline styles and non-semantic attributes from HTML
- * @param {string} html - Raw HTML string
- * @returns {string} Clean HTML
- */
-export function stripHtmlStyles(html) {
-  if (!html) return '';
-
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-
-  const SEMANTIC_ATTRS = [
-    'href',
-    'src',
-    'alt',
-    'title',
-    'colspan',
-    'rowspan',
-    'headers',
-    'scope',
-    'lang',
-    'dir',
-    'cite',
-    'start',
-  ];
-
-  const cleanNode = (node) => {
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
-
-    [...node.attributes].forEach((attr) => {
-      if (!SEMANTIC_ATTRS.includes(attr.name.toLowerCase())) {
-        node.removeAttribute(attr.name);
-      }
-    });
-
-    [...node.children].forEach(cleanNode);
-  };
-
-  cleanNode(doc.body);
-  return doc.body.innerHTML;
 }
 
 /**
