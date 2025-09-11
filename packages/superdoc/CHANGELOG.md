@@ -1,3 +1,9 @@
+## [0.17.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.1...v0.17.2) (2025-09-11)
+
+### Bug Fixes
+
+- filter out invalid inline nodes in root level ([#938](https://github.com/Harbour-Enterprises/SuperDoc/issues/938)) ([4d77b35](https://github.com/Harbour-Enterprises/SuperDoc/commit/4d77b3512542e4548156fcee1d2cd7334e9f1a0f))
+
 ## [0.17.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.0...v0.17.1) (2025-09-10)
 
 ### Bug Fixes
