@@ -1,4 +1,4 @@
-import { parseAnnotationMarks } from './annotationImporter.js';
+import { translator as wSdtContentTranslator } from '../../v3/handlers/w/sdtContent/sdtcontent-translator';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -28,35 +28,37 @@ export const handleSdtNode = (params) => {
   } catch {}
 
   const sdtContent = node.elements.find((el) => el.name === 'w:sdtContent');
-  const par = sdtContent?.elements?.find((el) => el.name === 'w:p');
-  const { marks } = parseAnnotationMarks(sdtContent);
-
-  const translatedContent = nodeListHandler.handler({
-    ...params,
-    nodes: sdtContent?.elements,
-    path: [...(params.path || []), node],
-  });
-
-  let structuredContentType = 'structuredContent';
-  if (par) {
-    // If a paragraph or potentially another block node is found.
-    structuredContentType = 'structuredContentBlock';
+  if (!sdtContent) {
+    return { nodes: [], consumed: 0 };
   }
 
-  let result = {
-    type: structuredContentType,
-    content: translatedContent,
-    marks,
-    attrs: {
-      sdtPr,
-    },
-  };
+  const structuredContentNode = handleSdtContentNode({
+    params,
+    node: sdtContent,
+    sdtNode: node,
+  });
 
   return {
-    nodes: [result],
+    nodes: [structuredContentNode],
     consumed: 1,
   };
 };
+
+/**
+ * @param {Object} options
+ * @returns {{type: string, content: (*|*[]), attrs: {}}}
+ */
+export function handleSdtContentNode({ params, node, sdtNode }) {
+  const translatorParams = {
+    ...params,
+    extraParams: {
+      node,
+      sdtNode,
+    },
+  };
+  const schemaNode = wSdtContentTranslator.encode(translatorParams);
+  return schemaNode;
+}
 
 /**
  * Handle document section node. Special case of w:sdt nodes
