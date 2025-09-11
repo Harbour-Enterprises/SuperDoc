@@ -17,7 +17,7 @@ export function processContent({ content, type, schema, editor }) {
 
   switch (type) {
     case 'html':
-      doc = createDocFromHTML(stripHtmlStyles(content), schema);
+      doc = createDocFromHTML(content, schema);
       break;
 
     case 'markdown':

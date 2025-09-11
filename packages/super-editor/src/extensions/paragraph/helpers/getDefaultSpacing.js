@@ -1,6 +1,6 @@
 export const getDefaultSpacing = () => ({
-  lineSpaceAfter: 11,
+  lineSpaceAfter: 0,
   lineSpaceBefore: 0,
-  line: 1.15,
-  lineRule: 'auto',
+  line: 0,
+  lineRule: null,
 });
