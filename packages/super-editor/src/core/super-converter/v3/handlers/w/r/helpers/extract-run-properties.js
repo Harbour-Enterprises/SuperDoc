@@ -26,8 +26,7 @@ export function extractRunProperties(rPrNode, params, nodeListHandler) {
       const currentMarks = parseMarks(rPrNode) || [];
       marks = handleStyleChangeMarks(rPrNode, currentMarks) || [];
     }
-  } catch (_) {
-    // Be resilient; if anything goes wrong, skip marks extraction
+  } catch {
     marks = [];
   }
 

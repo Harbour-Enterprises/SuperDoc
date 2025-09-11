@@ -33,7 +33,7 @@ function normalizeArg(arg) {
     if (absReal.startsWith(superEditorRoot + path.sep)) {
       return path.relative(superEditorRoot, absReal) || '.';
     }
-  } catch (_) {
+  } catch {
     // fall through and return as-is
   }
 
@@ -72,7 +72,7 @@ if (!hasUserCoverageInclude && pathLike.length > 0) {
         } else {
           patterns.push(normalizePath(p));
         }
-      } catch (_) {
+      } catch {
         patterns.push(normalizePath(p));
       }
     } else {

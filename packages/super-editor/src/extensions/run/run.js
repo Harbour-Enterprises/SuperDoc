@@ -27,19 +27,7 @@ export const RunNode = OxmlNode.create({
 
   renderDOM({ htmlAttributes }) {
     const baseAttrs = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
-
-    // Optional visual boundary for debugging run nodes
-    const showBoundaries =
-      this.options.showBoundaries === true || (typeof window !== 'undefined' && window.SUPERDOC_SHOW_RUNS === true);
-
-    const boundaryAttrs = showBoundaries
-      ? {
-          'data-run-boundary': 'true',
-          style: this.options.boundaryStyle || 'outline: 1px dashed rgba(255,0,0,.85); outline-offset: -1px',
-        }
-      : undefined;
-
-    return ['span', Attribute.mergeAttributes(baseAttrs, boundaryAttrs), 0];
+    return ['span', baseAttrs, 0];
   },
 
   addOptions() {
@@ -47,10 +35,6 @@ export const RunNode = OxmlNode.create({
       htmlAttributes: {
         'data-w-run': 'true',
       },
-      // Set to true to show visual run boundaries. Can also toggle via window.SUPERDOC_SHOW_RUNS = true
-      showBoundaries: false,
-      // Customize the style used for the boundary visualization
-      boundaryStyle: 'outline: 1px dashed rgba(255,0,0,.85); outline-offset: -1px',
     };
   },
 
