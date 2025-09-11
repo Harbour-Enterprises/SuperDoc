@@ -941,10 +941,10 @@ export class Editor extends EventEmitter {
 
           // Check for markdown BEFORE html (since markdown gets converted to HTML)
           if (this.options.markdown) {
-            doc = createDocFromMarkdown(this.options.markdown, this.schema);
+            doc = createDocFromMarkdown(this.options.markdown, this.schema, { isImport: true });
           }
           // If we have a new doc, and have html data, we initialize from html
-          else if (this.options.html) doc = createDocFromHTML(this.options.html, this.schema);
+          else if (this.options.html) doc = createDocFromHTML(this.options.html, this.schema, { isImport: true });
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
           if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);

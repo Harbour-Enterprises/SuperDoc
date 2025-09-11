@@ -1,4 +1,5 @@
 //@ts-check
+import { DOMParser } from 'prosemirror-model';
 import { createDocFromHTML } from './importHtml.js';
 import { createDocFromMarkdown } from './importMarkdown.js';
 import { ListHelpers } from './list-numbering-helpers.js';
@@ -18,15 +19,20 @@ export function processContent({ content, type, schema, editor }) {
 
   switch (type) {
     case 'html':
-      doc = createDocFromHTML(content, schema);
+      doc = createDocFromHTML(content, schema, { isImport: true });
       break;
 
     case 'markdown':
-      doc = createDocFromMarkdown(content, schema);
+      doc = createDocFromMarkdown(content, schema, { isImport: true });
       break;
 
     case 'text':
-      doc = schema.text(content);
+      const wrapper = document.createElement('div');
+      wrapper.dataset.superdocImport = 'true';
+      const para = document.createElement('p');
+      para.textContent = content;
+      wrapper.appendChild(para);
+      doc = DOMParser.fromSchema(schema).parse(wrapper);
       break;
 
     case 'schema':

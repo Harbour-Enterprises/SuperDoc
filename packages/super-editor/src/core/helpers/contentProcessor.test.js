@@ -3,10 +3,16 @@ import { processContent } from './contentProcessor.js';
 import * as importHtml from './importHtml.js';
 import * as importMarkdown from './importMarkdown.js';
 import * as listHelpers from './list-numbering-helpers.js';
+import { DOMParser } from 'prosemirror-model';
 
 vi.mock('./importHtml.js');
 vi.mock('./importMarkdown.js');
 vi.mock('./list-numbering-helpers.js');
+vi.mock('prosemirror-model', () => ({
+  DOMParser: {
+    fromSchema: vi.fn(),
+  },
+}));
 
 describe('contentProcessor', () => {
   let mockSchema, mockEditor, mockDoc;
@@ -32,6 +38,11 @@ describe('contentProcessor', () => {
       getNewListId: vi.fn(() => 123),
       generateNewListDefinition: vi.fn(),
     };
+
+    // Mock DOMParser for text processing
+    DOMParser.fromSchema.mockReturnValue({
+      parse: vi.fn(() => mockDoc),
+    });
   });
 
   describe('HTML processing', () => {
@@ -45,7 +56,9 @@ describe('contentProcessor', () => {
         editor: mockEditor,
       });
 
-      expect(importHtml.createDocFromHTML).toHaveBeenCalled();
+      expect(importHtml.createDocFromHTML).toHaveBeenCalledWith('<p style="color: red;">Test</p>', mockSchema, {
+        isImport: true,
+      });
       expect(result).toBeDefined();
     });
 
@@ -92,7 +105,9 @@ describe('contentProcessor', () => {
         editor: mockEditor,
       });
 
-      expect(importMarkdown.createDocFromMarkdown).toHaveBeenCalled();
+      expect(importMarkdown.createDocFromMarkdown).toHaveBeenCalledWith('# Heading\n\nParagraph', mockSchema, {
+        isImport: true,
+      });
       expect(result).toBeDefined();
     });
   });
@@ -106,8 +121,16 @@ describe('contentProcessor', () => {
         editor: mockEditor,
       });
 
-      expect(mockSchema.text).toHaveBeenCalledWith('Plain text');
-      expect(result).toEqual({ type: 'text', text: 'Plain text' });
+      // Now it creates a proper paragraph element with import marker
+      expect(DOMParser.fromSchema).toHaveBeenCalledWith(mockSchema);
+      expect(result).toBe(mockDoc);
+
+      // Verify that parse was called with a wrapper element
+      const parser = DOMParser.fromSchema();
+      expect(parser.parse).toHaveBeenCalled();
+      const callArg = parser.parse.mock.calls[0][0];
+      expect(callArg.dataset.superdocImport).toBe('true');
+      expect(callArg.querySelector('p').textContent).toBe('Plain text');
     });
   });
 
