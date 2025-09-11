@@ -111,11 +111,18 @@ export const changeNumIdSameAbstract = (numId, level, listType, editor) => {
   const numbering = editor.converter.numbering;
   const newNumbering = { ...numbering };
 
+  // If we don't have an abstract to clone (e.g. legacy/missing numbering),
+  // fall back to generating a fresh definition for the target list type.
+  if (!abstract) {
+    ListHelpers.generateNewListDefinition({ numId: newId, listType, editor });
+    return newId;
+  }
+
   const newAbstractId = getNewListId(editor, 'abstracts');
   const newAbstractDef = {
     ...abstract,
     attributes: {
-      ...abstract.attributes,
+      ...(abstract.attributes || {}),
       'w:abstractNumId': String(newAbstractId),
     },
   };
@@ -123,6 +130,8 @@ export const changeNumIdSameAbstract = (numId, level, listType, editor) => {
 
   const newNumDef = getBasicNumIdTag(newId, newAbstractId);
   newNumbering.definitions[newId] = newNumDef;
+  // Persist updated numbering so downstream exporters can resolve the ID
+  editor.converter.numbering = newNumbering;
   return newId;
 };
 
