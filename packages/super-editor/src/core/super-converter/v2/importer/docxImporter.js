@@ -541,7 +541,7 @@ const getHeaderFooterSectionData = (sectionData, docx) => {
  * @param {Array<{type: string, content?: any, attrs?: any, marks?: any[]}>} content
  * @returns {Array}
  */
-function filterOutRootInlineNodes(content = []) {
+export function filterOutRootInlineNodes(content = []) {
   if (!Array.isArray(content) || content.length === 0) return content;
 
   const INLINE_TYPES = new Set([
