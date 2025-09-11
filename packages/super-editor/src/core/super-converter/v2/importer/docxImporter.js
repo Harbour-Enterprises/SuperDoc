@@ -6,7 +6,7 @@ import { tableNodeHandlerEntity } from './tableImporter.js';
 import { drawingNodeHandlerEntity } from './imageImporter.js';
 import { trackChangeNodeHandlerEntity } from './trackChangesImporter.js';
 import { hyperlinkNodeHandlerEntity } from './hyperlinkImporter.js';
-import { runNodeHandlerEntity } from './runNodeImporter.js';
+import { runNodeHandlerEntity } from './w_r-importer.js';
 import { textNodeHandlerEntity } from './textNodeImporter.js';
 import { paragraphNodeHandlerEntity } from './paragraphNodeImporter.js';
 import { annotationNodeHandlerEntity } from './annotationImporter.js';
@@ -23,21 +23,29 @@ import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
+import { wrprHandlerEntitiy } from './w_rpr-importer.js';
+import { wrFontsHandlerEntity } from './w_rfonts-importer.js';
+import { wbHandlerEntity } from './w_b-importer.js';
+import { wbdrHandlerEntity } from './w_bdr-importer.js';
+import { wiHandlerEntity } from './w_i-importer.js';
+import { wColorHandlerEntity } from './w_color-importer.js';
+import { wuHandlerEntity } from './w_u-importer.js';
+import { wStrikeHandlerEntity } from './w_strike-importer.js';
 
 /**
- * @typedef {import()} XmlNode
- * @typedef {{type: string, content: *, attrs: {}}} PmNodeJson
- * @typedef {{type: string, attrs: {}}} PmMarkJson
- *
- * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackCahange: boolean) => PmNodeJson[]} NodeListHandlerFn
- * @typedef {{handler: NodeListHandlerFn, handlerEntities: NodeHandlerEntry[]}} NodeListHandler
- *
- * @typedef {(nodes: XmlNode[], docx: ParsedDocx, nodeListHandler: NodeListHandler, insideTrackCahange: boolean) => {nodes: PmNodeJson[], consumed: number}} NodeHandler
- * @typedef {{handlerName: string, handler: NodeHandler}} NodeHandlerEntry
+ * @typedef {import('./types/index.js').XmlNode} XmlNode
+ * @typedef {import('./types/index.js').PmNodeJson} PmNodeJson
+ * @typedef {import('./types/index.js').PmMarkJson} PmMarkJson
+ * @typedef {import('./types/index.js').NodeListHandlerFn} NodeListHandlerFn
+ * @typedef {import('./types/index.js').NodeListHandler} NodeListHandler
+ * @typedef {import('./types/index.js').NodeHandler} NodeHandler
+ * @typedef {import('./types/index.js').NodeHandlerEntry} NodeHandlerEntry
+ * @typedef {import('./types/index.js').ParsedDocx} ParsedDocx
+ * @typedef {import('./types/index.js').SuperConverter} SuperConverter
+ * @typedef {import('./types/index.js').Editor} Editor
  */
 
 /**
- *
  * @param {ParsedDocx} docx
  * @param {SuperConverter} converter instance.
  * @param {Editor} editor instance.
@@ -122,6 +130,14 @@ export const createDocumentJson = (docx, converter, editor) => {
 
 export const defaultNodeListHandler = () => {
   const entities = [
+    wrFontsHandlerEntity,
+    wbHandlerEntity,
+    wbdrHandlerEntity,
+    wiHandlerEntity,
+    wColorHandlerEntity,
+    wuHandlerEntity,
+    wStrikeHandlerEntity,
+    wrprHandlerEntitiy,
     alternateChoiceHandler,
     runNodeHandlerEntity,
     pictNodeHandlerEntity,
@@ -263,7 +279,7 @@ const createNodeListHandler = (nodeHandlers) => {
           // Process and store nodes (no tracking needed for success)
           if (nodes) {
             nodes.forEach((node) => {
-              if (node?.type && !['runProperties'].includes(node.type)) {
+              if (node?.type) {
                 if (node.type === 'text' && Array.isArray(node.content) && !node.content.length) {
                   return;
                 }

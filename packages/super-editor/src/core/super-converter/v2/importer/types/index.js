@@ -15,7 +15,7 @@
 
 /**
  * @typedef {Object} XmlNode
- * @typedef {{type: string, content: *, attrs: {}, sdNodeOrKeyName: string}} PmNodeJson
+ * @typedef {{type: string, content: *, attrs: [], sdNodeOrKeyName: string, marks: [] }} PmNodeJson
  * @typedef {{type: string, attrs: {}}} PmMarkJson
  *
  * @typedef {Object} ParsedDocx

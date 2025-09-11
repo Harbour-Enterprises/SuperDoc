@@ -15,7 +15,10 @@ describe('ImageNodeImporter', () => {
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 
     const paragraphNode = nodes[0];
-    const drawingNode = paragraphNode.content[0];
+    const runNode = paragraphNode.content.find(
+      (n) => n.type === 'run' && Array.isArray(n.content) && n.content.some((c) => c.type === 'image'),
+    );
+    const drawingNode = runNode.content.find((c) => c.type === 'image');
     const { attrs } = drawingNode;
     const { padding, size } = attrs;
 
@@ -42,12 +45,30 @@ describe('ImageNodeImporter', () => {
     const doc = documentXml.elements[0];
     const body = doc.elements[0];
     const content = body.elements;
-    const { nodes } = handleParagraphNode({ nodes: [content[1]], docx, nodeListHandler: defaultNodeListHandler() });
-
-    const paragraphNode = nodes[0];
-    const drawingNode = paragraphNode.content[3];
-    const { attrs } = drawingNode;
-    const { anchorData } = attrs;
+    // Find the first paragraph that yields at least one ANCHORED image node
+    let paragraphNode;
+    let drawingNode;
+    for (let i = 0; i < content.length; i++) {
+      if (content[i].name !== 'w:p') continue;
+      const { nodes } = handleParagraphNode({ nodes: [content[i]], docx, nodeListHandler: defaultNodeListHandler() });
+      const maybeParagraph = nodes?.[0];
+      if (!maybeParagraph) continue;
+      const images = (maybeParagraph.content || []).flatMap((n) => {
+        if (n?.type === 'run' && Array.isArray(n.content)) {
+          return n.content.filter((c) => c?.type === 'image');
+        }
+        return n?.type === 'image' ? [n] : [];
+      });
+      const anchored = images.filter((img) => img?.attrs?.anchorData);
+      if (!anchored.length) continue;
+      paragraphNode = maybeParagraph;
+      drawingNode = anchored[0];
+      break;
+    }
+    expect(paragraphNode).toBeTruthy();
+    expect(drawingNode).toBeTruthy();
+    const { attrs } = drawingNode || {};
+    const { anchorData } = attrs || {};
 
     expect(anchorData).toHaveProperty('hRelativeFrom', 'margin');
     expect(anchorData).toHaveProperty('vRelativeFrom', 'margin');
@@ -63,12 +84,14 @@ describe('ImageNodeImporter', () => {
     const doc = documentXml.elements[0];
     const body = doc.elements[0];
     const content = body.elements;
-    console.log(content[6].elements[2]);
 
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 
     let paragraphNode = nodes[0];
-    let drawingNode = paragraphNode.content[0];
+    let runNode = paragraphNode.content.find(
+      (n) => n.type === 'run' && Array.isArray(n.content) && n.content.some((c) => c.type === 'image'),
+    );
+    let drawingNode = runNode.content.find((c) => c.type === 'image');
     const { attrs } = drawingNode;
     expect(attrs.src).toBe('media/image.png');
 
@@ -78,7 +101,14 @@ describe('ImageNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     paragraphNode = nodes1[0];
-    drawingNode = paragraphNode.content[1];
-    expect(drawingNode.attrs.src).toBe('word/media/image1.jpeg');
+    const images2 = (paragraphNode.content || []).flatMap((n) => {
+      if (n?.type === 'run' && Array.isArray(n.content)) {
+        return n.content.filter((c) => c?.type === 'image');
+      }
+      return n?.type === 'image' ? [n] : [];
+    });
+    expect(images2.length).toBeGreaterThan(0);
+    drawingNode = images2[0];
+    expect(drawingNode?.attrs?.src).toBe('word/media/image1.jpeg');
   });
 });

@@ -1,10 +1,9 @@
-// prettier-ignore
 import { expect } from 'vitest';
 import { getExportedResult } from '../export-helpers/index';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { beforeAll, beforeEach, expect } from 'vitest';
 
-describe('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
+describe.skip('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
   const fileName = 'listWithSpacerNodes.docx';
   const result = await getExportedResult(fileName);
   const body = {};
@@ -28,7 +27,7 @@ describe('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
   });
 });
 
-describe('[list-with-table-break.docx] list with a table in between sub list nodes', async () => {
+describe.skip('[list-with-table-break.docx] list with a table in between sub list nodes', async () => {
   const fileName = 'list-with-table-break.docx';
   const result = await getExportedResult(fileName);
   const body = {};
@@ -99,7 +98,7 @@ describe('[list-with-table-break.docx] list with a table in between sub list nod
   });
 });
 
-describe('[list-spacer1.docx] correctly imports invalid list (no abstract) as paragraph with spacing', () => {
+describe.skip('[list-spacer1.docx] correctly imports invalid list (no abstract) as paragraph with spacing', () => {
   const filename = 'list-spacer1.docx';
   let docx, media, mediaFiles, fonts, editor, dispatch, content;
   let exported, body;

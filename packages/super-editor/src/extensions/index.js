@@ -17,7 +17,7 @@ import { SlashMenu } from './slash-menu';
 // Nodes extensions
 import { Document } from './document/index.js';
 import { Text } from './text/index.js';
-import { RunItem } from './run-item/index.js';
+import { RunNode } from './run/index.js';
 import { BulletList } from './bullet-list/index.js';
 import { OrderedList } from './ordered-list/index.js';
 import { ListItem } from './list-item/index.js';
@@ -132,7 +132,7 @@ const getStarterExtensions = () => {
     Paragraph,
     LineBreak,
     HardBreak,
-    RunItem,
+    RunNode,
     SlashMenu,
     Strike,
     TabNode,
@@ -187,7 +187,7 @@ export {
   Heading,
   Document,
   Text,
-  RunItem,
+  RunNode,
   BulletList,
   OrderedList,
   ListItem,

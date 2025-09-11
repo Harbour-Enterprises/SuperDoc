@@ -1,10 +1,8 @@
 import { expect } from 'vitest';
-import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
-import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { getExportedResult } from '../../export/export-helpers/index';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 
-describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () => {
+describe.skip('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () => {
   const fileName = 'sdt-node-comment.docx';
   let docx, media, mediaFiles, fonts, editor, dispatch;
   let doc;

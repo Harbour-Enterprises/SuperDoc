@@ -93,8 +93,11 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     const paragraph = list.content[0];
     expect(paragraph.type).toBe('paragraph');
     expect(paragraph.content.length).toBe(1);
-    expect(paragraph.content[0].type).toBe('text');
-    expect(paragraph.content[0].text).toBe('One');
+
+    const runNode = paragraph.content.find((n) => n.type === 'run');
+    const textNode = runNode.content.find((n) => n.type === 'text');
+    expect(textNode).toBeDefined();
+    expect(textNode.text).toBe('One');
 
     const { attrs: paragraphAttrs } = paragraph;
     expect(paragraphAttrs).toBeDefined();
@@ -160,8 +163,13 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     const paragraph = list.content[0];
     expect(paragraph.type).toBe('paragraph');
     expect(paragraph.content.length).toBe(1);
-    expect(paragraph.content[0].type).toBe('text');
-    expect(paragraph.content[0].text).toBe('One');
+
+    const runNode = paragraph.content.find((n) => n.type === 'run');
+    expect(runNode).toBeDefined();
+
+    const textNode = runNode.content.find((n) => n.type === 'text');
+    expect(textNode).toBeDefined();
+    expect(textNode.text).toBe('One');
 
     const { attrs: paragraphAttrs } = paragraph;
     expect(paragraphAttrs).toBeDefined();

@@ -19,7 +19,7 @@ const encode = (_, encodedAttrs) => {
   const translated = {
     type: isPageBreak ? 'hardBreak' : 'lineBreak',
   };
-  if (encodedAttrs) {
+  if (encodedAttrs && Object.keys(encodedAttrs).length) {
     translated.attrs = { ...encodedAttrs };
   }
 

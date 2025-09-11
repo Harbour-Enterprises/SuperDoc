@@ -4,6 +4,7 @@ import { isMacOS } from '../utilities/isMacOS.js';
 
 export const handleEnter = (editor) => {
   return editor.commands.first(({ commands }) => [
+    () => commands.splitRun(),
     () => commands.newlineInCode(),
     () => commands.createParagraphNear(),
     () => commands.liftEmptyBlock(),
@@ -45,6 +46,7 @@ export const Keymap = Extension.create({
   addShortcuts() {
     const baseKeymap = {
       Enter: () => handleEnter(this.editor),
+      'Shift-Enter': () => this.editor.commands.insertLineBreak(),
       'Mod-Enter': () => this.editor.commands.exitCode(),
       Backspace: () => handleBackspace(this.editor),
       'Mod-Backspace': () => handleBackspace(this.editor),

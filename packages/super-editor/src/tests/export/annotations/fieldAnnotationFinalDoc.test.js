@@ -54,8 +54,12 @@ describe('AnnotationNodeExporter for final doc', async () => {
   it('export url annotation correctly', async () => {
     const hyperLinkNode = body.elements[10].elements[1];
 
-    const run = hyperLinkNode.elements.find((el) => el.name === 'w:r');
-    const text = run?.elements[1].elements[0].text;
+    // Find a run with a w:t child
+    const run = hyperLinkNode.elements.find(
+      (el) => el.name === 'w:r' && Array.isArray(el.elements) && el.elements.some((e) => e.name === 'w:t'),
+    );
+    const tNode = run?.elements.find((e) => e.name === 'w:t');
+    const text = tNode?.elements?.[0]?.text;
 
     expect(text).toBe('https://vitest.dev/guide/coverage');
     expect(hyperLinkNode.attributes['r:id']).toBe(params.relationships[2].attributes.Id);

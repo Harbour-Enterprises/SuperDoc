@@ -448,7 +448,9 @@ describe('Check that we can import list item with invalid list def with fallback
   it('imports expected list item with fallback', async () => {
     const item = content.content[3];
     expect(item.type).toBe('paragraph');
-    const textNode = item.content[0];
+
+    const runNode = item.content[0];
+    const textNode = runNode.content[0];
     expect(textNode.type).toBe('text');
     expect(textNode.text).toBe('NO VALID DEF');
   });
@@ -474,7 +476,8 @@ describe('Check that paragraph-level sectPr is retained', () => {
     expect(sectPr).toBeDefined();
     expect(p2.attrs.pageBreakSource).toBe('sectPr');
 
-    const textNode = p2.content.find((el) => el.type === 'text');
+    const runNode = p2.content.find((el) => el.type === 'run');
+    const textNode = runNode.content[0];
     expect(textNode.text).toBe('TITLE');
   });
 
