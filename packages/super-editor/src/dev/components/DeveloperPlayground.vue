@@ -12,7 +12,6 @@ import { PaginationPluginKey } from '@extensions/pagination/pagination-helpers.j
 import BasicUpload from './BasicUpload.vue';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
-import { processContent } from '@core/helpers/contentProcessor.js';
 
 // Import the component the same you would in your app
 let activeEditor;
@@ -135,17 +134,9 @@ const injectContent = () => {
   try {
     isInjectingContent.value = true;
 
-    // Use the unified content processor
-    const processedDoc = processContent({
-      content: contentInput.value,
-      type: contentType.value, // 'html', 'markdown', or 'text'
-      schema: activeEditor.schema,
-      editor: activeEditor
-    });
-
-    // Insert the processed content as JSON
-    activeEditor.commands.insertContent(processedDoc.toJSON(), {
-      contentType: 'schema' // Already processed, so insert as schema
+    // Delegate processing to the insertContent command
+    activeEditor.commands.insertContent(contentInput.value, {
+      contentType: contentType.value, // 'html', 'markdown', or 'text'
     });
 
     console.debug(`[Dev] ${contentType.value} content injected successfully`);
@@ -189,13 +180,20 @@ onMounted(async () => {
                 <option value="markdown">Markdown</option>
                 <option value="text">Text</option>
               </select>
-              <button class="dev-app__inject-btn" @click="injectContent"
-                :disabled="isInjectingContent || !contentInput.trim()">
+              <button
+                class="dev-app__inject-btn"
+                @click="injectContent"
+                :disabled="isInjectingContent || !contentInput.trim()"
+              >
                 {{ isInjectingContent ? 'Injecting...' : 'Inject Content' }}
               </button>
             </div>
-            <textarea v-model="contentInput" class="dev-app__content-input" placeholder="Enter content to inject..."
-              rows="3"></textarea>
+            <textarea
+              v-model="contentInput"
+              class="dev-app__content-input"
+              placeholder="Enter content to inject..."
+              rows="3"
+            ></textarea>
           </div>
           <button class="dev-app__header-export-btn" @click="exportDocx">Export</button>
         </div>

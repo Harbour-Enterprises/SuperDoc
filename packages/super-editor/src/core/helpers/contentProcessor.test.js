@@ -2,12 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { processContent } from './contentProcessor.js';
 import * as importHtml from './importHtml.js';
 import * as importMarkdown from './importMarkdown.js';
-import * as listHelpers from './list-numbering-helpers.js';
 import { DOMParser } from 'prosemirror-model';
 
 vi.mock('./importHtml.js');
 vi.mock('./importMarkdown.js');
-vi.mock('./list-numbering-helpers.js');
 vi.mock('prosemirror-model', () => ({
   DOMParser: {
     fromSchema: vi.fn(),
@@ -34,11 +32,6 @@ describe('contentProcessor', () => {
       converter: { numbering: {} },
     };
 
-    listHelpers.ListHelpers = {
-      getNewListId: vi.fn(() => 123),
-      generateNewListDefinition: vi.fn(),
-    };
-
     // Mock DOMParser for text processing
     DOMParser.fromSchema.mockReturnValue({
       parse: vi.fn(() => mockDoc),
@@ -60,37 +53,6 @@ describe('contentProcessor', () => {
         isImport: true,
       });
       expect(result).toBeDefined();
-    });
-
-    it('adds list attributes for HTML with lists', () => {
-      const listDoc = {
-        toJSON: () => ({
-          type: 'doc',
-          content: [
-            {
-              type: 'bulletList',
-              content: [
-                {
-                  type: 'listItem',
-                  content: [{ type: 'paragraph', content: [] }],
-                },
-              ],
-            },
-          ],
-        }),
-      };
-
-      importHtml.createDocFromHTML.mockReturnValue(listDoc);
-
-      processContent({
-        content: '<ul><li>Item</li></ul>',
-        type: 'html',
-        schema: mockSchema,
-        editor: mockEditor,
-      });
-
-      expect(listHelpers.ListHelpers.getNewListId).toHaveBeenCalled();
-      expect(listHelpers.ListHelpers.generateNewListDefinition).toHaveBeenCalled();
     });
   });
 
@@ -163,104 +125,6 @@ describe('contentProcessor', () => {
     });
   });
 
-  describe('List processing', () => {
-    it('adds bullet list attributes correctly', () => {
-      const bulletListDoc = {
-        toJSON: () => ({
-          type: 'doc',
-          content: [
-            {
-              type: 'bulletList',
-              content: [
-                { type: 'listItem', content: [] },
-                { type: 'listItem', content: [] },
-              ],
-            },
-          ],
-        }),
-      };
-
-      importHtml.createDocFromHTML.mockReturnValue(bulletListDoc);
-      mockSchema.nodeFromJSON.mockImplementation((json) => {
-        // Verify list attributes were added
-        expect(json.content[0].attrs.listId).toBe(123);
-        expect(json.content[0].attrs['list-style-type']).toBe('bullet');
-        expect(json.content[0].content[0].attrs.lvlText).toBe('•');
-        expect(json.content[0].content[0].attrs.listNumberingType).toBe('bullet');
-        return mockDoc;
-      });
-
-      processContent({
-        content: '<ul><li>A</li><li>B</li></ul>',
-        type: 'html',
-        schema: mockSchema,
-        editor: mockEditor,
-      });
-    });
-
-    it('adds ordered list attributes correctly', () => {
-      const orderedListDoc = {
-        toJSON: () => ({
-          type: 'doc',
-          content: [
-            {
-              type: 'orderedList',
-              content: [{ type: 'listItem', content: [] }],
-            },
-          ],
-        }),
-      };
-
-      importHtml.createDocFromHTML.mockReturnValue(orderedListDoc);
-      mockSchema.nodeFromJSON.mockImplementation((json) => {
-        expect(json.content[0].attrs['list-style-type']).toBe('decimal');
-        expect(json.content[0].attrs.order).toBe(1);
-        expect(json.content[0].content[0].attrs.lvlText).toBe('%1.');
-        return mockDoc;
-      });
-
-      processContent({
-        content: '<ol><li>First</li></ol>',
-        type: 'html',
-        schema: mockSchema,
-        editor: mockEditor,
-      });
-    });
-
-    it('handles nested lists correctly', () => {
-      const nestedListDoc = {
-        toJSON: () => ({
-          type: 'doc',
-          content: [
-            {
-              type: 'bulletList',
-              content: [
-                {
-                  type: 'listItem',
-                  content: [
-                    {
-                      type: 'bulletList',
-                      content: [{ type: 'listItem', content: [] }],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        }),
-      };
-
-      importHtml.createDocFromHTML.mockReturnValue(nestedListDoc);
-
-      processContent({
-        content: '<ul><li>Parent<ul><li>Nested</li></ul></li></ul>',
-        type: 'html',
-        schema: mockSchema,
-        editor: mockEditor,
-      });
-
-      // Should generate IDs for both parent and nested lists
-      expect(listHelpers.ListHelpers.getNewListId).toHaveBeenCalledTimes(2);
-    });
-  });
+  // Note: list attribute generation/migration is now handled outside of processContent
+  // (e.g., by editor.migrateListsToV2 after insertion). Tests for that behavior live elsewhere.
 });
