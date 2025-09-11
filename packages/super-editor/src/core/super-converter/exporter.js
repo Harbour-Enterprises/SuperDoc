@@ -1,6 +1,3 @@
-import he from 'he';
-import { DOMParser as PMDOMParser } from 'prosemirror-model';
-import { EditorState } from 'prosemirror-state';
 import { SuperConverter } from './SuperConverter.js';
 import {
   emuToPixels,
@@ -19,16 +16,16 @@ import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@
 import { carbonCopy } from '../utilities/carbonCopy.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
-import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
-import { translateDocumentSection } from './v2/exporter/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
+import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
+import { prepareTextAnnotation } from './v3/handlers/w/sdt/helpers/translate-field-annotation';
 
 /**
  * @typedef {Object} ExportParams
@@ -90,7 +87,7 @@ export function exportSchemaToJson(params) {
     tableRow: wTrNodeTranslator,
     tableCell: wTcNodeTranslator,
     bookmarkStart: translateBookmarkStart,
-    fieldAnnotation: translateFieldAnnotation,
+    fieldAnnotation: wSdtNodeTranslator,
     tab: wTabNodeTranslator,
     image: translateImageNode,
     hardBreak: wBrNodeTranslator,
@@ -100,9 +97,9 @@ export function exportSchemaToJson(params) {
     shapeContainer: translateShapeContainer,
     shapeTextbox: translateShapeTextbox,
     contentBlock: translateContentBlock,
-    structuredContent: translateStructuredContent,
-    structuredContentBlock: translateStructuredContent,
-    documentSection: translateDocumentSection,
+    structuredContent: wSdtNodeTranslator,
+    structuredContentBlock: wSdtNodeTranslator,
+    documentSection: wSdtNodeTranslator,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
   };
@@ -486,7 +483,7 @@ function translateDocumentNode(params) {
  * @returns {XmlReadyNode} The translated text node
  */
 
-function getTextNodeForExport(text, marks, params) {
+export function getTextNodeForExport(text, marks, params) {
   const hasLeadingOrTrailingSpace = /^\s|\s$/.test(text);
   const space = hasLeadingOrTrailingSpace ? 'preserve' : null;
   const nodeAttrs = space ? { 'xml:space': space } : null;
@@ -678,7 +675,7 @@ export function processOutputMarks(marks = []) {
   });
 }
 
-function processLinkContentNode(node) {
+export function processLinkContentNode(node) {
   if (!node) return node;
 
   const contentNode = carbonCopy(node);
@@ -730,7 +727,7 @@ function processLinkContentNode(node) {
  * @param {string} link The URL of this link
  * @returns {string} The new relationship ID
  */
-function addNewLinkRelationship(params, link) {
+export function addNewLinkRelationship(params, link) {
   const newId = 'rId' + generateDocxRandomId();
 
   if (!params.relationships || !Array.isArray(params.relationships)) {
@@ -1345,7 +1342,7 @@ function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
   return { scaledWidth, scaledHeight };
 }
 
-function translateImageNode(params, imageSize) {
+export function translateImageNode(params, imageSize) {
   const {
     node: { attrs = {} },
     tableCell,
@@ -1670,249 +1667,6 @@ function translateImageNode(params, imageSize) {
   return textNode;
 }
 
-/**
- * Translates text annotations
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated text node
- */
-function prepareTextAnnotation(params) {
-  const {
-    node: { attrs = {}, marks = [] },
-  } = params;
-
-  const marksFromAttrs = translateFieldAttrsToMarks(attrs);
-  return getTextNodeForExport(attrs.displayLabel, [...marks, ...marksFromAttrs], params);
-}
-
-/**
- * Translates checkbox annotations
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated checkbox node
- */
-function prepareCheckboxAnnotation(params) {
-  const {
-    node: { attrs = {}, marks = [] },
-  } = params;
-  const content = he.decode(attrs.displayLabel);
-  return getTextNodeForExport(content, marks, params);
-}
-
-/**
- * Translates html annotations
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated html node
- */
-function prepareHtmlAnnotation(params) {
-  const {
-    node: { attrs = {}, marks = [] },
-    editorSchema,
-  } = params;
-
-  let html = attrs.rawHtml || attrs.displayLabel;
-  const paragraphHtmlContainer = sanitizeHtml(html);
-  const marksFromAttrs = translateFieldAttrsToMarks(attrs);
-  const allMarks = [...marks, ...marksFromAttrs];
-
-  let state = EditorState.create({
-    doc: PMDOMParser.fromSchema(editorSchema).parse(paragraphHtmlContainer),
-  });
-
-  if (allMarks.length) {
-    state = applyMarksToHtmlAnnotation(state, allMarks);
-  }
-
-  const htmlAnnotationNode = state.doc.toJSON();
-  const listTypes = ['bulletList', 'orderedList'];
-  const { editor } = params;
-  const seenLists = new Map();
-  state.doc.descendants((node) => {
-    if (listTypes.includes(node.type.name)) {
-      const listItem = node.firstChild;
-      const { attrs } = listItem;
-      const { level, numId } = attrs;
-      if (!seenLists.has(numId)) {
-        const newNumId = ListHelpers.changeNumIdSameAbstract(numId, level, node.type.name, editor);
-        listItem.attrs.numId = newNumId;
-        seenLists.set(numId, newNumId);
-      } else {
-        const newNumId = seenLists.get(numId);
-        listItem.attrs.numId = newNumId;
-      }
-    }
-  });
-
-  const elements = translateChildNodes({
-    ...params,
-    node: htmlAnnotationNode,
-  });
-
-  return {
-    name: 'htmlAnnotation',
-    elements,
-  };
-}
-
-/**
- * Translates image annotations
- * @param {ExportParams} params
- * @param {Object} imageSize Object contains width and height for image in EMU
- * @returns {XmlReadyNode} The translated image node
- */
-function prepareImageAnnotation(params, imageSize) {
-  return translateImageNode(params, imageSize);
-}
-
-/**
- * Translates URL annotations
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated URL node
- */
-function prepareUrlAnnotation(params) {
-  const {
-    node: { attrs = {}, marks = [] },
-  } = params;
-  const newId = addNewLinkRelationship(params, attrs.linkUrl);
-
-  const linkTextNode = getTextNodeForExport(attrs.linkUrl, marks, params);
-  const contentNode = processLinkContentNode(linkTextNode);
-
-  return {
-    name: 'w:hyperlink',
-    type: 'element',
-    attributes: {
-      'r:id': newId,
-      'w:history': 1,
-    },
-    elements: [contentNode],
-  };
-}
-
-/**
- * Returns node handler based on annotation type
- *
- * @param {String} annotationType
- * @returns {Function} handler for provided annotation type
- */
-function getTranslationByAnnotationType(annotationType, annotationFieldType) {
-  // invalid annotation
-  if (annotationType === 'text' && annotationFieldType === 'FILEUPLOADER') {
-    return null;
-  }
-
-  const imageEmuSize = {
-    w: 4286250,
-    h: 4286250,
-  };
-
-  const signatureEmuSize = {
-    w: 990000,
-    h: 495000,
-  };
-
-  const dictionary = {
-    text: prepareTextAnnotation,
-    image: (params) => prepareImageAnnotation(params, imageEmuSize),
-    signature: (params) => prepareImageAnnotation(params, signatureEmuSize),
-    checkbox: prepareCheckboxAnnotation,
-    html: prepareHtmlAnnotation,
-    link: prepareUrlAnnotation,
-  };
-
-  return dictionary[annotationType];
-}
-
-const translateFieldAttrsToMarks = (attrs = {}) => {
-  const { fontFamily, fontSize, bold, underline, italic, textColor, textHighlight } = attrs;
-
-  const marks = [];
-  if (fontFamily) marks.push({ type: 'fontFamily', attrs: { fontFamily } });
-  if (fontSize) marks.push({ type: 'fontSize', attrs: { fontSize } });
-  if (bold) marks.push({ type: 'bold', attrs: {} });
-  if (underline) marks.push({ type: 'underline', attrs: {} });
-  if (italic) marks.push({ type: 'italic', attrs: {} });
-  if (textColor) marks.push({ type: 'color', attrs: { color: textColor } });
-  if (textHighlight) marks.push({ type: 'highlight', attrs: { color: textHighlight } });
-  return marks;
-};
-
-/**
- * Translate a field annotation node
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated field annotation node
- */
-function translateFieldAnnotation(params) {
-  const { node, isFinalDoc, fieldsHighlightColor } = params;
-  const { attrs = {} } = node;
-  const annotationHandler = getTranslationByAnnotationType(attrs.type, attrs.fieldType);
-  if (!annotationHandler) return {};
-
-  let processedNode;
-  let sdtContentElements;
-
-  if ((attrs.type === 'image' || attrs.type === 'signature') && !attrs.hash) {
-    attrs.hash = generateDocxRandomId(4);
-  }
-
-  if (isFinalDoc) {
-    return annotationHandler(params);
-  } else {
-    processedNode = annotationHandler(params);
-    sdtContentElements = [processedNode];
-
-    if (attrs.type === 'html') {
-      sdtContentElements = [...processedNode.elements];
-    }
-  }
-
-  sdtContentElements = [...sdtContentElements];
-
-  // Set field background color only if param is provided, default to transparent
-  const fieldBackgroundTag = getFieldHighlightJson(fieldsHighlightColor);
-  if (fieldBackgroundTag) {
-    sdtContentElements.unshift(fieldBackgroundTag);
-  }
-
-  // Contains only the main attributes.
-  const annotationAttrs = {
-    displayLabel: attrs.displayLabel,
-    defaultDisplayLabel: attrs.defaultDisplayLabel,
-    fieldId: attrs.fieldId,
-    fieldType: attrs.fieldType,
-    fieldTypeShort: attrs.type,
-    fieldColor: attrs.fieldColor,
-    fieldMultipleImage: attrs.multipleImage,
-    fieldFontFamily: attrs.fontFamily,
-    fieldFontSize: attrs.fontSize,
-    fieldTextColor: attrs.textColor,
-    fieldTextHighlight: attrs.textHighlight,
-    hash: attrs.hash,
-  };
-  const annotationAttrsJson = JSON.stringify(annotationAttrs);
-
-  const result = {
-    name: 'w:sdt',
-    elements: [
-      {
-        name: 'w:sdtPr',
-        elements: [
-          { name: 'w:tag', attributes: { 'w:val': annotationAttrsJson } },
-          { name: 'w:alias', attributes: { 'w:val': attrs.displayLabel } },
-        ],
-      },
-      {
-        name: 'w:sdtContent',
-        elements: sdtContentElements,
-      },
-    ],
-  };
-  return result;
-}
-
 export function translateHardBreak(params) {
   const { node = {} } = params;
   const { attrs = {} } = node;
@@ -2163,93 +1917,6 @@ function resizeKeepAspectRatio(width, height, maxWidth) {
   return { width, height };
 }
 
-function applyMarksToHtmlAnnotation(state, marks) {
-  const { tr, doc, schema } = state;
-  const allowedMarks = ['fontFamily', 'fontSize', 'highlight'];
-
-  if (!marks.some((m) => allowedMarks.includes(m.type))) {
-    return state;
-  }
-
-  const fontFamily = marks.find((m) => m.type === 'fontFamily');
-  const fontSize = marks.find((m) => m.type === 'fontSize');
-  const highlight = marks.find((m) => m.type === 'highlight');
-
-  const textStyleType = schema.marks.textStyle;
-  const highlightType = schema.marks.highlight;
-
-  doc.descendants((node, pos) => {
-    if (!node.isText) return;
-
-    const foundTextStyle = node.marks.find((m) => m.type.name === 'textStyle');
-    const foundHighlight = node.marks.find((m) => m.type.name === 'highlight');
-
-    // text style (fontFamily, fontSize)
-    if (!foundTextStyle) {
-      tr.addMark(
-        pos,
-        pos + node.nodeSize,
-        textStyleType.create({
-          ...fontFamily?.attrs,
-          ...fontSize?.attrs,
-        }),
-      );
-    } else if (!foundTextStyle?.attrs.fontFamily && fontFamily) {
-      tr.addMark(
-        pos,
-        pos + node.nodeSize,
-        textStyleType.create({
-          ...foundTextStyle?.attrs,
-          ...fontFamily.attrs,
-        }),
-      );
-    } else if (!foundTextStyle?.attrs.fontSize && fontSize) {
-      tr.addMark(
-        pos,
-        pos + node.nodeSize,
-        textStyleType.create({
-          ...foundTextStyle?.attrs,
-          ...fontSize.attrs,
-        }),
-      );
-    }
-
-    // highlight
-    if (!foundHighlight) {
-      tr.addMark(
-        pos,
-        pos + node.nodeSize,
-        highlightType.create({
-          ...highlight?.attrs,
-        }),
-      );
-    }
-  });
-
-  return state.apply(tr);
-}
-
-function translateStructuredContent(params) {
-  const { node } = params;
-  const { attrs = {} } = node;
-
-  const childContent = translateChildNodes({ ...params, nodes: node.content });
-
-  // We build the sdt node elements here, and re-add passthrough sdtPr node
-  const nodeElements = [
-    {
-      name: 'w:sdtContent',
-      elements: childContent,
-    },
-  ];
-  nodeElements.unshift(attrs.sdtPr);
-
-  return {
-    name: 'w:sdt',
-    elements: nodeElements,
-  };
-}
-
 const translatePageNumberNode = (params) => {
   const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
   return getAutoPageJson('PAGE', outputMarks);
@@ -2326,43 +1993,4 @@ const getAutoPageJson = (type, outputMarks = []) => {
       ],
     },
   ];
-};
-
-/**
- * Get the JSON representation of the field highlight
- * @param {string} fieldsHighlightColor - The highlight color for the field. Must be valid HEX.
- * @returns {Object} The JSON representation of the field highlight
- */
-export const getFieldHighlightJson = (fieldsHighlightColor) => {
-  if (!fieldsHighlightColor) return null;
-
-  // Normalize input
-  let parsedColor = fieldsHighlightColor.trim();
-
-  // Regex: optional '#' + 3/4/6/8 hex digits
-  const hexRegex = /^#?([A-Fa-f0-9]{3}|[A-Fa-f0-9]{4}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$/;
-
-  if (!hexRegex.test(parsedColor)) {
-    console.warn(`Invalid HEX color provided to fieldsHighlightColor export param: ${fieldsHighlightColor}`);
-    return null;
-  }
-
-  // Remove '#' if present
-  if (parsedColor.startsWith('#')) {
-    parsedColor = parsedColor.slice(1);
-  }
-
-  return {
-    name: 'w:rPr',
-    elements: [
-      {
-        name: 'w:shd',
-        attributes: {
-          'w:fill': `#${parsedColor}`,
-          'w:color': 'auto',
-          'w:val': 'clear',
-        },
-      },
-    ],
-  };
 };

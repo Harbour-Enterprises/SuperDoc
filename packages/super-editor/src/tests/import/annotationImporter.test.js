@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest';
 
-import { handleAnnotationNode, parseAnnotationMarks } from '@converter/v2/importer/annotationImporter.js';
+import {
+  handleAnnotationNode,
+  parseAnnotationMarks,
+} from '@converter/v3/handlers/w/sdt/helpers/handle-annotation-node';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
@@ -20,7 +23,7 @@ describe('annotationImporter', () => {
           nodeListHandler: defaultNodeListHandler(),
           editor: mockEditor,
         });
-        expect(result).toEqual({ nodes: [], consumed: 0 });
+        expect(result).toEqual(null);
       });
 
       it('should return empty result for non sdt node', () => {
@@ -30,7 +33,7 @@ describe('annotationImporter', () => {
           nodeListHandler: defaultNodeListHandler(),
           editor: mockEditor,
         });
-        expect(result).toEqual({ nodes: [], consumed: 0 });
+        expect(result).toEqual(null);
       });
 
       it('should return fieldAnnotation type when annotations is true', async () => {
@@ -54,12 +57,12 @@ describe('annotationImporter', () => {
           editor: mockEditorWithAnnotations,
         });
 
-        expect(result.nodes[0].type).toBe('fieldAnnotation');
-        expect(result.nodes[0].attrs.fieldId).toBe('agreementinput-1741026604177-450029465509');
-        expect(result.nodes[0].attrs.displayLabel).toBe('Enter your full name');
-        expect(result.nodes[0].attrs.type).toBe('text');
-        expect(result.nodes[0].attrs.fieldType).toBe('NAMETEXTINPUT');
-        expect(result.nodes[0].attrs.fieldColor).toBe('#6943d0');
+        expect(result.type).toBe('fieldAnnotation');
+        expect(result.attrs.fieldId).toBe('agreementinput-1741026604177-450029465509');
+        expect(result.attrs.displayLabel).toBe('Enter your full name');
+        expect(result.attrs.type).toBe('text');
+        expect(result.attrs.fieldType).toBe('NAMETEXTINPUT');
+        expect(result.attrs.fieldColor).toBe('#6943d0');
       });
 
       it('should return text type when annotations is false', async () => {
@@ -84,13 +87,13 @@ describe('annotationImporter', () => {
           editor: mockEditorWithoutAnnotations,
         });
 
-        expect(result.nodes[0].type).toBe('text');
-        expect(result.nodes[0].text).toBe('{{Enter company name}}');
-        expect(result.nodes[0].attrs.fieldId).toBe('agreementinput-1741026607449-98007837804');
-        expect(result.nodes[0].attrs.displayLabel).toBe('Enter company name');
-        expect(result.nodes[0].attrs.type).toBe('text');
-        expect(result.nodes[0].attrs.fieldType).toBe('COMPANYNAMETEXTINPUT');
-        expect(result.nodes[0].attrs.fieldColor).toBe('#6943d0');
+        expect(result.type).toBe('text');
+        expect(result.text).toBe('{{Enter company name}}');
+        expect(result.attrs.fieldId).toBe('agreementinput-1741026607449-98007837804');
+        expect(result.attrs.displayLabel).toBe('Enter company name');
+        expect(result.attrs.type).toBe('text');
+        expect(result.attrs.fieldType).toBe('COMPANYNAMETEXTINPUT');
+        expect(result.attrs.fieldColor).toBe('#6943d0');
       });
     });
 
@@ -103,14 +106,14 @@ describe('annotationImporter', () => {
         const body = doc.elements[0];
         const content = body.elements;
         const paragraphWithField = content[0].elements[2];
-        const { nodes } = handleAnnotationNode({
+        const result = handleAnnotationNode({
           nodes: [paragraphWithField],
           docx,
           nodeListHandler: defaultNodeListHandler(),
           editor: mockEditor,
         });
 
-        const node = nodes[0];
+        const node = result;
         expect(node.type).toBe('text');
 
         const { attrs } = node;
@@ -131,14 +134,14 @@ describe('annotationImporter', () => {
         const body = doc.elements[0];
         const content = body.elements;
         const paragraphWithField = content[0].elements[3];
-        const { nodes } = handleAnnotationNode({
+        const result = handleAnnotationNode({
           nodes: [paragraphWithField],
           docx,
           nodeListHandler: defaultNodeListHandler(),
           editor: mockEditor,
         });
 
-        const node = nodes[0];
+        const node = result;
         expect(node.type).toBe('text');
 
         const { attrs } = node;

@@ -1,11 +1,11 @@
-import { translateChildNodes } from './helpers/translateChildNodes.js';
+import { translateChildNodes } from '@converter/v2/exporter/helpers/translateChildNodes';
 
 /**
  * Translate a structured content block node to its XML representation.
  * @param {Object} params - The parameters for translation.
  * @returns {Object} The XML representation of the structured content block.
  */
-export const translateDocumentSection = (params) => {
+export function translateDocumentSection(params) {
   const { node } = params;
   const { attrs = {} } = node;
 
@@ -39,11 +39,13 @@ export const translateDocumentSection = (params) => {
 
   nodeElements.unshift(sdtPr);
 
-  return {
+  const result = {
     name: 'w:sdt',
     elements: nodeElements,
   };
-};
+
+  return result;
+}
 
 /**
  * Generate the sdtPr tag for a document section.
@@ -52,7 +54,7 @@ export const translateDocumentSection = (params) => {
  * @param {string} tag - The tag containing section metadata.
  * @returns {Object} The sdtPr tag object.
  */
-const generateSdtPrTagForDocumentSection = (id, title, tag) => {
+export const generateSdtPrTagForDocumentSection = (id, title, tag) => {
   return {
     name: 'w:sdtPr',
     elements: [

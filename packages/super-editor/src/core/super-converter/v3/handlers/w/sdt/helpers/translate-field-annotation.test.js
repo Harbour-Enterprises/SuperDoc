@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { getFieldHighlightJson } from './exporter.js';
+import { getFieldHighlightJson } from './translate-field-annotation';
 
 const extractFill = (result) => result?.elements?.[0]?.attributes?.['w:fill'];
 
