@@ -817,6 +817,60 @@ describe('getListDefinitionDetails', () => {
       expect(level2.lvlText).toBe('%3)');
     });
   });
+
+  describe('changeNumIdSameAbstract', () => {
+    it('should generate a fresh definition when abstract is missing and return new numId', () => {
+      // Ensure generateNewListDefinition calls through to real implementation so numbering updates
+      const original = ListHelpers.generateNewListDefinition;
+      generateNewListDefinitionSpy.mockRestore();
+      const callThroughSpy = vi
+        .spyOn(ListHelpers, 'generateNewListDefinition')
+        .mockImplementation((args) => original(args));
+
+      // Existing definition references a non-existent abstract
+      mockEditor.converter.numbering.definitions[1] = {
+        elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': 'abstract1' } }],
+      };
+      // abstracts does not include 'abstract1'
+
+      const newNumId = ListHelpers.changeNumIdSameAbstract(1, 0, 'orderedList', mockEditor);
+
+      expect(typeof newNumId).toBe('number');
+      expect(newNumId).not.toBe(1);
+      // New definition should exist for the returned id
+      expect(mockEditor.converter.numbering.definitions[newNumId]).toBeTruthy();
+      // And emit should be called by generateNewListDefinition
+      expect(mockEditor.emit).toHaveBeenCalledWith(
+        'list-definitions-change',
+        expect.objectContaining({ numbering: mockEditor.converter.numbering, editor: mockEditor }),
+      );
+
+      callThroughSpy.mockRestore();
+    });
+
+    it('should clone existing abstract and persist numbering', () => {
+      // Set a definition and a valid abstract
+      mockEditor.converter.numbering.definitions[1] = {
+        elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '10' } }],
+      };
+      mockEditor.converter.numbering.abstracts['10'] = {
+        attributes: { 'w:abstractNumId': '10' },
+        elements: [],
+      };
+
+      const newNumId = ListHelpers.changeNumIdSameAbstract(1, 0, 'orderedList', mockEditor);
+
+      expect(typeof newNumId).toBe('number');
+      expect(newNumId).not.toBe(1);
+      const def = mockEditor.converter.numbering.definitions[newNumId];
+      expect(def).toBeTruthy();
+      const abstractRef = def.elements.find((e) => e.name === 'w:abstractNumId');
+      expect(abstractRef).toBeTruthy();
+      const newAbstractId = abstractRef.attributes['w:val'];
+      // Persisted new abstract exists
+      expect(mockEditor.converter.numbering.abstracts[newAbstractId]).toBeTruthy();
+    });
+  });
 });
 
 vi.mock('@core/super-converter/v2/importer/listImporter.js', () => ({
