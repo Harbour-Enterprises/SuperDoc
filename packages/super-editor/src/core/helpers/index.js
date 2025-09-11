@@ -26,3 +26,4 @@ export * from './findMark.js';
 export * from './isInTable.js';
 export * from './importHtml.js';
 export * from './importMarkdown.js';
+export * from './contentProcessor.js';
