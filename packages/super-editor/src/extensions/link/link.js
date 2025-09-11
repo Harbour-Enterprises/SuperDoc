@@ -40,7 +40,7 @@ export const Link = Mark.create({
        */
       protocols: ['http', 'https'],
       htmlAttributes: {
-        target: '_blank',
+        target: null,
         rel: 'noopener noreferrer nofollow',
         class: null,
         title: null,
@@ -77,7 +77,14 @@ export const Link = Mark.create({
        * @category Attribute
        * @param {TargetFrameOptions} [target='_blank'] - Link target window
        */
-      target: { default: this.options.htmlAttributes.target },
+      target: {
+        default: this.options.htmlAttributes.target,
+        renderDOM: ({ target, href }) => {
+          if (target) return { target };
+          else if (href && !href.startsWith('#')) return { target: '_blank' };
+          return {};
+        },
+      },
       /**
        * @category Attribute
        * @param {string} [rel='noopener noreferrer nofollow'] - Relationship attributes
