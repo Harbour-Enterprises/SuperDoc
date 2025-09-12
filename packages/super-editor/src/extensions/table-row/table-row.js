@@ -1,4 +1,5 @@
 // @ts-check
+import { twipsToPixels } from '@core/super-converter/helpers.js';
 import { Node, Attribute } from '@core/index.js';
 
 /**
@@ -29,17 +30,17 @@ import { Node, Attribute } from '@core/index.js';
  * @property {boolean} [hidden] - Specifies that the glyph representing the end character of current table row shall not be displayed in the current document.
  * @property {"center" | "end" | "left" | "right" | "start"} [jc] - Specifies the overall justification of the contents of this row.
  * @property {Object} [tblCellSpacing] - Specifies the amount of spacing that shall be applied between the cells in this row.
- * @property {number} [tblCellSpacing.value] - The size of the spacing in pixels.
+ * @property {number} [tblCellSpacing.value] - The size of the spacing in twenieths of a point (1/1440 of an inch).
  * @property {"auto" | "dxa" | "nil" | "pct"} [tblCellSpacing.type] - The type of spacing.
  * @property {boolean} [repeatHeader] - Specifies that this row is to be repeated as a header row at the top of each page on which the table is displayed.
  * @property {Object} [rowHeight] - Specifies properties of the height of this row.
- * @property {number} [rowHeight.value] - The height of the row in pixels.
+ * @property {number} [rowHeight.value] - The height of the row in twenieths of a point (1/1440 of an inch).
  * @property {"atLeast" | "exact" | "auto"} [rowHeight.rule] - The rule for the row height.
  * @property {Object} [wAfter] - Specifies the preferred width for the total number of grid columns after this table row.
- * @property {number} [wAfter.value] - The width in pixels.
+ * @property {number} [wAfter.value] - The width in twenieths of a point (1/1440 of an inch).
  * @property {"auto" | "dxa" | "nil" | "pct"} [wAfter.type] - The type of width.
  * @property {Object} [wBefore] - Specifies the preferred width for the total number of grid columns before this table row.
- * @property {number} [wBefore.value] - The width in pixels.
+ * @property {number} [wBefore.value] - The width in twenieths of a point (1/1440 of an inch).
  * @property {"auto" | "dxa" | "nil" | "pct"} [wBefore.type] - The type of width.
  */
 
@@ -75,7 +76,8 @@ export const TableRow = Node.create({
           let result = {};
           const { rowHeight, cantSplit } = tableRowProperties || {};
           if (rowHeight) {
-            const style = `height: ${rowHeight.value}px`;
+            const heightPixels = twipsToPixels(rowHeight.value);
+            const style = `height: ${heightPixels}px`;
             result = { ...result, style };
           }
           if (cantSplit) {
