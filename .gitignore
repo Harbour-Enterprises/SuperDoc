@@ -41,3 +41,8 @@ test-results
 
 !examples/chrome-extension/dist
 
+# Coverage reports
+coverage
+coverage/
+**/coverage
+**/coverage/
