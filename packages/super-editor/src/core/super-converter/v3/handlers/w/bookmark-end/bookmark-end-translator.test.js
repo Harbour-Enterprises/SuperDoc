@@ -70,7 +70,7 @@ describe('w:bookmarkEnd translator', () => {
 
     expect(result).toEqual({
       name: 'w:bookmarkEnd',
-      elements: [], // Add this
+      elements: [],
       attributes: {
         'w:id': '456',
       },
@@ -80,7 +80,7 @@ describe('w:bookmarkEnd translator', () => {
   it('round-trips correctly', () => {
     const original = {
       name: 'w:bookmarkEnd',
-      elements: [], // Add this
+      elements: [],
       attributes: {
         'w:id': '789',
       },
