@@ -1,5 +1,5 @@
 import { eigthPointsToPixels, halfPointToPoints, twipsToPixels } from '../../helpers.js';
-import { translator as tcTranslator } from '../../v3/handlers/w/tc/tc-translator.js';
+import { translator as trTranslator } from '../../v3/handlers/w/tr/tr-translator.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -101,7 +101,16 @@ export function handleTableNode(node, params) {
 
   const content = [];
   rows.forEach((row) => {
-    const result = handleTableRowNode(row, node, borderRowData, tblStyleTag, params);
+    const result = trTranslator.encode({
+      ...params,
+      nodes: [row],
+      extraParams: {
+        row,
+        table: node,
+        rowBorders: borderRowData,
+        styleTag: tblStyleTag,
+      },
+    });
     if (result.content?.length) content.push(result);
   });
 
@@ -110,36 +119,6 @@ export function handleTableNode(node, params) {
     content,
     attrs,
   };
-}
-
-/**
- * @param {Object} options
- * @returns {{type: string, content: (*|*[]), attrs: {}}}
- */
-export function handleTableCellNode({
-  params,
-  node,
-  table,
-  row,
-  rowBorders,
-  styleTag,
-  columnIndex,
-  columnWidth = null,
-}) {
-  const translatorParams = {
-    ...params,
-    extraParams: {
-      node,
-      table,
-      row,
-      rowBorders,
-      styleTag,
-      columnIndex,
-      columnWidth,
-    },
-  };
-  const schemaNode = tcTranslator.encode(translatorParams);
-  return schemaNode;
 }
 
 /**
@@ -250,71 +229,6 @@ function processTableBorders(borderElements) {
     borders,
     rowBorders,
   };
-}
-
-/**
- * Process a table row node
- * @param node
- * @param {undefined | null | {insideH?: *, insideV?: *}} rowBorders
- * @param {ParsedDocx} docx
- * @param {NodeListHandler} nodeListHandler
- * @param {boolean} insideTrackChange
- * @returns {*}
- */
-export function handleTableRowNode(node, table, rowBorders, styleTag, params) {
-  const attrs = {};
-
-  const tPr = node.elements.find((el) => el.name === 'w:trPr');
-  const rowHeightTag = tPr?.elements?.find((el) => el.name === 'w:trHeight');
-  const rowHeight = rowHeightTag?.attributes['w:val'];
-
-  // Detect cantSplit flag
-  const cantSplitTag = tPr?.elements?.find((el) => el.name === 'w:cantSplit');
-  if (cantSplitTag) {
-    attrs['cantSplit'] = true;
-  }
-
-  const borders = {};
-  if (rowBorders?.insideH) borders['bottom'] = rowBorders.insideH;
-  if (rowBorders?.insideV) borders['right'] = rowBorders.insideV;
-  attrs['borders'] = borders;
-
-  if (rowHeight) {
-    attrs['rowHeight'] = twipsToPixels(rowHeight);
-  }
-
-  const gridColumnWidths = getGridColumnWidths(table);
-  const cellNodes = node.elements.filter((el) => el.name === 'w:tc');
-
-  let currentColumnIndex = 0;
-  const content =
-    cellNodes?.map((n) => {
-      let colWidth = gridColumnWidths?.[currentColumnIndex] || null;
-
-      const result = handleTableCellNode({
-        params,
-        node: n,
-        table,
-        row: node,
-        rowBorders: borders,
-        styleTag,
-        columnIndex: currentColumnIndex,
-        columnWidth: colWidth,
-      });
-
-      const tcPr = n.elements?.find((el) => el.name === 'w:tcPr');
-      const colspanTag = tcPr?.elements?.find((el) => el.name === 'w:gridSpan');
-      const colspan = parseInt(colspanTag?.attributes['w:val'] || 1, 10);
-      currentColumnIndex += colspan;
-
-      return result;
-    }) || [];
-  const newNode = {
-    type: 'tableRow',
-    content,
-    attrs,
-  };
-  return newNode;
 }
 
 export const getGridColumnWidths = (tableNode) => {
