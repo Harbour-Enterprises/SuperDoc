@@ -18,6 +18,15 @@ export function handleTableCellNode({
   const { docx, nodeListHandler } = params;
   const tcPr = node.elements.find((el) => el.name === 'w:tcPr');
   const borders = tcPr?.elements?.find((el) => el.name === 'w:tcBorders');
+
+  if (rowBorders?.insideH) {
+    rowBorders['bottom'] = rowBorders.insideH;
+    delete rowBorders.insideH;
+  }
+  if (rowBorders?.insideV) {
+    rowBorders['right'] = rowBorders.insideV;
+    delete rowBorders?.insideV;
+  }
   const inlineBorders = processInlineCellBorders(borders, rowBorders);
 
   const gridColumnWidths = getGridColumnWidths(table);
