@@ -441,7 +441,7 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
         : coords.bottom > pageHeightThreshold;
 
     // handle the w:cantSplit attribute for table rows
-    if (currentNode.type.name === 'tableRow' && currentNode.attrs?.cantSplit) {
+    if (currentNode.type.name === 'tableRow' && currentNode.attrs?.tableRowProperties?.cantSplit) {
       const rowTop = coords.top;
       const rowBottom = view.coordsAtPos(currentPos + currentNode.nodeSize).bottom;
       const remaining = pageHeightThreshold - rowTop;
