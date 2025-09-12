@@ -88,7 +88,7 @@
     "prosemirror-test-builder": "^1.1.1",
     "tippy.js": "^6.3.7",
     "typescript": "^5.7.3",
-    "vite": "^6.3.5",
+    "vite": "^6.3.6",
     "vite-plugin-node-polyfills": "^0.24.0",
     "vitest": "^3.2.4",
     "vue-draggable-next": "^2.2.1",
