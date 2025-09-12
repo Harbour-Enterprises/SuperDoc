@@ -29,10 +29,10 @@ import { tabNodeEntityHandler } from './tabImporter.js';
  * @typedef {{type: string, content: *, attrs: {}}} PmNodeJson
  * @typedef {{type: string, attrs: {}}} PmMarkJson
  *
- * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackCahange: boolean) => PmNodeJson[]} NodeListHandlerFn
+ * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackChange: boolean) => PmNodeJson[]} NodeListHandlerFn
  * @typedef {{handler: NodeListHandlerFn, handlerEntities: NodeHandlerEntry[]}} NodeListHandler
  *
- * @typedef {(nodes: XmlNode[], docx: ParsedDocx, nodeListHandler: NodeListHandler, insideTrackCahange: boolean) => {nodes: PmNodeJson[], consumed: number}} NodeHandler
+ * @typedef {(nodes: XmlNode[], docx: ParsedDocx, nodeListHandler: NodeListHandler, insideTrackChange: boolean) => {nodes: PmNodeJson[], consumed: number}} NodeHandler
  * @typedef {{handlerName: string, handler: NodeHandler}} NodeHandlerEntry
  */
 
