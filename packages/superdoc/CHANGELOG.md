@@ -1,3 +1,19 @@
+# [0.18.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.3...v0.18.0) (2025-09-12)
+
+### Bug Fixes
+
+- allow test:cov on some specific folder only ([#935](https://github.com/Harbour-Enterprises/SuperDoc/issues/935)) ([42d42fb](https://github.com/Harbour-Enterprises/SuperDoc/commit/42d42fb09d52f36518904ea8c5b400e20778ceee))
+- fallback to text for floating objects and show placeholder for emf image ([#916](https://github.com/Harbour-Enterprises/SuperDoc/issues/916)) ([d121cd9](https://github.com/Harbour-Enterprises/SuperDoc/commit/d121cd92608bb41e84d09997792e5512a9ca6faa))
+- filter out invalid inline nodes in root level ([#938](https://github.com/Harbour-Enterprises/SuperDoc/issues/938)) ([#939](https://github.com/Harbour-Enterprises/SuperDoc/issues/939)) ([9e1b911](https://github.com/Harbour-Enterprises/SuperDoc/commit/9e1b911809cd2e713b9ba8a38b88c9558f552ee0))
+- import issue falling back to wrong abstratId ([#930](https://github.com/Harbour-Enterprises/SuperDoc/issues/930)) ([a5b43d0](https://github.com/Harbour-Enterprises/SuperDoc/commit/a5b43d036133217d6f15661f3b1666d621fee049))
+- test ([58ed997](https://github.com/Harbour-Enterprises/SuperDoc/commit/58ed99713d07d6a796a3b5c3b2ee010a0fe29702))
+- unable to generate list definition ([#943](https://github.com/Harbour-Enterprises/SuperDoc/issues/943)) ([#945](https://github.com/Harbour-Enterprises/SuperDoc/issues/945)) ([dea20e6](https://github.com/Harbour-Enterprises/SuperDoc/commit/dea20e697e034f508e0aa67720e3ee50b3148c24))
+
+### Features
+
+- implement unified content processing for insertContent command ([#944](https://github.com/Harbour-Enterprises/SuperDoc/issues/944)) ([a6d0e67](https://github.com/Harbour-Enterprises/SuperDoc/commit/a6d0e6770eaf849d126374ac8433c1165c5cbf68))
+- translator v3 for w:tab node ([#921](https://github.com/Harbour-Enterprises/SuperDoc/issues/921)) ([ae1ba2d](https://github.com/Harbour-Enterprises/SuperDoc/commit/ae1ba2d69392f73fdc370c6bc4cfe39e7f385cad))
+
 ## [0.17.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.2...v0.17.3) (2025-09-11)
 
 ### Bug Fixes
