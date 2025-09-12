@@ -8,7 +8,7 @@
   ],
   "scripts": {
     "test": "vitest --root ./packages/super-editor/",
-    "test:cov": "vitest --root ./packages/super-editor --coverage",
+    "test:cov": "node scripts/test-cov.mjs",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "npm --workspace=@harbour-enterprises/superdoc run dev",
     "dev:superdoc": "npm run dev --workspace=packages/superdoc",
@@ -55,6 +55,7 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^22.13.1",
+    "@vitest/coverage-v8": "^3.2.4",
     "@vuepress/bundler-vite": "^2.0.0-rc.18",
     "@vuepress/plugin-redirect": "^2.0.0-rc.60",
     "@vuepress/theme-default": "^2.0.0-rc.60",

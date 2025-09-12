@@ -54,7 +54,11 @@ export const handleHyperlinkNode = (params) => {
     }
   }
 
-  const updatedNode = nodeListHandler.handler({ ...params, nodes: runNodes });
+  const updatedNode = nodeListHandler.handler({
+    ...params,
+    nodes: runNodes,
+    path: [...(params.path || []), node],
+  });
   return { nodes: updatedNode, consumed: 1 };
 };
 

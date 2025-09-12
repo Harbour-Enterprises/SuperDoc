@@ -16,13 +16,13 @@ import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
 import { bookmarkNodeHandlerEntity } from './bookmarkNodeImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
-import { tabNodeEntityHandler } from './tabImporter.js';
 import { listHandlerEntity } from './listImporter.js';
 import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
-import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
+import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
+import { tabNodeEntityHandler } from './tabImporter.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -89,6 +89,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       converter,
       editor,
       lists,
+      path: [],
     });
 
     // Safety: drop any inline-only nodes that accidentally landed at the doc root
@@ -141,7 +142,7 @@ export const defaultNodeListHandler = () => {
     tabNodeEntityHandler,
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
-    standardNodeHandlerEntity, // This is the last one as it can handle everything
+    standardNodeHandlerEntity,
   ];
 
   const handler = createNodeListHandler(entities);
@@ -193,6 +194,7 @@ const createNodeListHandler = (nodeHandlers) => {
     filename,
     parentStyleId,
     lists,
+    path = [],
   }) => {
     if (!elements || !elements.length) return [];
     const filteredElements = pruneIgnoredNodes(elements);
@@ -222,6 +224,7 @@ const createNodeListHandler = (nodeHandlers) => {
                 filename,
                 parentStyleId,
                 lists,
+                path,
               });
             },
             { nodes: [], consumed: 0 },
@@ -469,6 +472,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       converter,
       editor,
       filename: currentFileName,
+      path: [],
     });
 
     // Safety: drop inline-only nodes at the root of header docs
@@ -498,6 +502,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       converter,
       editor,
       filename: currentFileName,
+      path: [],
     });
 
     // Safety: drop inline-only nodes at the root of footer docs

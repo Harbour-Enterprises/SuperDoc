@@ -19,6 +19,11 @@ export default defineConfig(({ mode }) => {
       exclude: [
         '**/*.spec.js',
       ],
+      coverage: {
+        provider: 'v8',
+        exclude: ['**/v3/**/index.js'],
+        reporter: ['text'],
+      }
     },
     define: {
       __APP_VERSION__: JSON.stringify(superdocVersion),
@@ -85,6 +90,7 @@ export default defineConfig(({ mode }) => {
         '@packages': fileURLToPath(new URL('../', import.meta.url)),
         '@converter': fileURLToPath(new URL('./src/core/super-converter', import.meta.url)),
         '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
+        '@translator': fileURLToPath(new URL('./src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
       },
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
     },

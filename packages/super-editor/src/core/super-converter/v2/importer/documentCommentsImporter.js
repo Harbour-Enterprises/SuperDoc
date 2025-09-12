@@ -45,6 +45,7 @@ export function importCommentData({ docx, editor, converter }) {
       docx,
       editor,
       converter,
+      path: [el],
     });
 
     const { attrs } = parsedComment[0];

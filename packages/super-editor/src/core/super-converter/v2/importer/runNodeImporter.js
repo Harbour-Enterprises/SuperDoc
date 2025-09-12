@@ -11,7 +11,7 @@ export const handleRunNode = (params) => {
   }
   const node = nodes[0];
 
-  const childParams = { ...params, nodes: node.elements };
+  const childParams = { ...params, nodes: node.elements, path: [...(params.path || []), node] };
   let processedRun = nodeListHandler.handler(childParams)?.filter((n) => n) || [];
   const hasRunProperties = node.elements?.some((el) => el.name === 'w:rPr');
   const defaultNodeStyles = getMarksFromStyles(docx, parentStyleId);

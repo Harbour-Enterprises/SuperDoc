@@ -122,12 +122,14 @@ export function handleImageImport(node, currentFileName, params) {
 
   // Some images may appear out of the word folder
   if (targetPath.startsWith('/word') || targetPath.startsWith('/media')) path = targetPath.substring(1);
+  const extension = targetPath.substring(targetPath.lastIndexOf('.') + 1);
 
   return {
     type: 'image',
     attrs: {
       src: path,
-      alt: docPr?.attributes.name || 'Image',
+      alt: ['emf', 'wmf'].includes(extension) ? 'Unable to render EMF/WMF image' : docPr?.attributes.name || 'Image',
+      extension,
       id: docPr?.attributes.id || '',
       title: docPr?.attributes.descr || 'Image',
       inline: true,
@@ -168,7 +170,7 @@ const handleShapeDrawing = (params, node, graphicData) => {
   const spPr = wsp.elements.find((el) => el.name === 'wps:spPr');
   const prstGeom = spPr?.elements.find((el) => el.name === 'a:prstGeom');
 
-  if (!!prstGeom && prstGeom.attributes['prst'] === 'rect') {
+  if (!!prstGeom && prstGeom.attributes['prst'] === 'rect' && !textBoxContent) {
     return getRectangleShape(params, spPr);
   }
 
@@ -181,6 +183,7 @@ const handleShapeDrawing = (params, node, graphicData) => {
     ...params,
     node: textBoxContent.elements[0],
     nodes: textBoxContent.elements,
+    path: [...(params.path || []), textBoxContent],
   });
 
   return translatedElement[0];

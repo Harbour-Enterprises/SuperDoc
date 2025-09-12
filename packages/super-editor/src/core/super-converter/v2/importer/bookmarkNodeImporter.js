@@ -34,7 +34,11 @@ export const handleBookmarkNode = (params) => {
       }
     });
 
-    const translatedText = nodeListHandler.handler({ ...params, nodes: textNodes });
+    const translatedText = nodeListHandler.handler({
+      ...params,
+      nodes: textNodes,
+      path: [...(params.path || []), node],
+    });
     translatedText.forEach((n) => {
       n.marks.push({
         type: customMark.name,

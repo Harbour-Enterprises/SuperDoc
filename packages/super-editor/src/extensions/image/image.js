@@ -2,6 +2,11 @@ import { Attribute, Node } from '@core/index.js';
 import { ImagePlaceholderPlugin } from './imageHelpers/imagePlaceholderPlugin.js';
 import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
 
+/**
+ * @module Image
+ * @sidebarTitle Image
+ * @snippetPath /snippets/extensions/image.mdx
+ */
 export const Image = Node.create({
   name: 'image',
 
@@ -12,6 +17,12 @@ export const Image = Node.create({
   draggable: true,
 
   addOptions() {
+    /**
+     * @typedef {Object} ImageOptions
+     * @category Options
+     * @property {boolean} [allowBase64=true] - Allow base64 encoded images
+     * @property {Object} [htmlAttributes] - Default HTML attributes for image elements
+     */
     return {
       allowBase64: true,
       htmlAttributes: {
@@ -29,6 +40,10 @@ export const Image = Node.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [src] - Image source URL or path
+       */
       src: {
         default: null,
         renderDOM: ({ src }) => {
@@ -38,48 +53,123 @@ export const Image = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [alt='Uploaded picture'] - Alternative text for accessibility
+       */
       alt: {
         default: 'Uploaded picture',
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [id] - Image element ID
+       * @private
+       */
       id: { rendered: false },
 
+      /**
+       * @category Attribute
+       * @param {string} [title] - Image title/tooltip text
+       */
       title: {
         default: null,
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [rId] - Relationship ID for Word export
+       * @private
+       */
       rId: {
         default: null,
         rendered: false,
       },
 
+      /**
+       * @category Attribute
+       * @param {Object} [originalPadding] - Original padding values from Word import
+       * @private
+       */
       originalPadding: {
         default: null,
         rendered: false,
       },
+
+      /**
+       * @category Attribute
+       * @param {Object} [originalAttributes] - Original attributes from Word import
+       * @private
+       */
       originalAttributes: { rendered: false },
+
+      /**
+       * @category Attribute
+       * @param {boolean} [wrapTopAndBottom] - Wrap text above and below image
+       * @private
+       */
       wrapTopAndBottom: { rendered: false },
 
+      /**
+       * @category Attribute
+       * @param {Object} [anchorData] - Anchor positioning data for Word
+       * @private
+       */
       anchorData: {
         default: null,
         rendered: false,
       },
 
+      /**
+       * @category Attribute
+       * @param {boolean} [isAnchor] - Whether image is anchored
+       * @private
+       */
       isAnchor: { rendered: false },
-      simplePos: { rendered: false },
-      wrapText: { rendered: false },
 
+      /**
+       * @category Attribute
+       * @param {boolean} [simplePos] - Simple positioning flag
+       * @private
+       */
+      simplePos: { rendered: false },
+
+      /**
+       * @category Attribute
+       * @param {string} [wrapText] - Text wrapping style
+       * @private
+       */
+      wrapText: { rendered: false },
+      extension: { rendered: false },
+
+      /**
+       * @category Attribute
+       * @param {Object} [size] - Image dimensions
+       * @param {number} [size.width] - Width in pixels
+       * @param {number} [size.height] - Height in pixels
+       */
       size: {
         default: {},
-        renderDOM: ({ size }) => {
+        renderDOM: ({ size, extension }) => {
           let style = '';
+
           const { width, height } = size ?? {};
           if (width) style += `width: ${width}px;`;
-          if (height) style += 'height: auto;';
+          if (height && ['emf', 'wmf'].includes(extension))
+            style += `height: ${height}px; border: 1px solid black; position: absolute;`;
+          else if (height) style += 'height: auto;';
           return { style };
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {Object} [padding] - Image padding/margins
+       * @param {number} [padding.left] - Left padding in pixels
+       * @param {number} [padding.top] - Top padding in pixels
+       * @param {number} [padding.bottom] - Bottom padding in pixels
+       * @param {number} [padding.right] - Right padding in pixels
+       */
       padding: {
         default: {},
         renderDOM: ({ padding, marginOffset }) => {
@@ -93,6 +183,12 @@ export const Image = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {Object} [marginOffset] - Margin offset for anchored images
+       * @param {number} [marginOffset.left] - Left margin offset
+       * @param {number} [marginOffset.top] - Top margin offset
+       */
       marginOffset: {
         default: {},
         renderDOM: ({ marginOffset, anchorData }) => {
@@ -110,6 +206,10 @@ export const Image = Node.create({
         },
       },
 
+      /**
+       * @category Attribute
+       * @param {string} [style] - Custom inline CSS styles
+       */
       style: {
         default: null,
         rendered: true,
@@ -135,6 +235,27 @@ export const Image = Node.create({
 
   addCommands() {
     return {
+      /**
+       * Insert an image at the current position
+       * @category Command
+       * @param {Object} options - Image attributes
+       * @param {string} options.src - Image source URL or data URI
+       * @param {string} [options.alt] - Alternative text
+       * @param {string} [options.title] - Image title
+       * @param {Object} [options.size] - Image dimensions
+       * @returns {Function} Command function
+       * @example
+       * // Insert an image from a URL
+       * setImage({ src: 'https://example.com/image.jpg' })
+       *
+       * // Insert a base64 encoded image
+       * setImage({
+       *   src: 'data:image/png;base64,...',
+       *   alt: 'Company logo',
+       *   size: { width: 200 }
+       * })
+       * @note Supports URLs, relative paths, and base64 data URIs
+       */
       setImage:
         (options) =>
         ({ commands }) => {

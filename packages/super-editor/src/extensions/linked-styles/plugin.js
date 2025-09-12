@@ -1,13 +1,32 @@
+// @ts-check
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { generateLinkedStyleString, getLinkedStyle } from './helpers.js';
 
+/**
+ * Plugin key for accessing linked styles state
+ */
 export const LinkedStylesPluginKey = new PluginKey('linkedStyles');
 
+/**
+ * Create the linked styles ProseMirror plugin
+ * @category Helper
+ * @param {Object} editor - The editor instance
+ * @returns {Object} The linked styles plugin
+ * @example
+ * const plugin = createLinkedStylesPlugin(editor);
+ * @note Only activates in docx mode with converter available
+ * @note Generates decorations for visual style application
+ */
 export const createLinkedStylesPlugin = (editor) => {
   return new Plugin({
     key: LinkedStylesPluginKey,
     state: {
+      /**
+       * Initialize plugin state with styles and decorations
+       * @returns {Object} Initial state with styles and decorations
+       * @private
+       */
       init() {
         if (!editor.converter || editor.options.mode !== 'docx') return {};
         const styles = editor.converter?.linkedStyles || [];
@@ -16,6 +35,15 @@ export const createLinkedStylesPlugin = (editor) => {
           decorations: generateDecorations(editor.state, styles),
         };
       },
+      /**
+       * Update decorations when document changes
+       * @param {Object} tr - The transaction
+       * @param {Object} prev - Previous plugin state
+       * @param {Object} oldEditorState - Old editor state
+       * @param {Object} newEditorState - New editor state
+       * @returns {Object} Updated state with styles and decorations
+       * @private
+       */
       apply(tr, prev, oldEditorState, newEditorState) {
         if (!editor.converter || editor.options.mode !== 'docx') return { ...prev };
         let decorations = prev.decorations || DecorationSet.empty;
@@ -28,6 +56,12 @@ export const createLinkedStylesPlugin = (editor) => {
       },
     },
     props: {
+      /**
+       * Provide decorations to the editor view
+       * @param {Object} state - Current editor state
+       * @returns {Object} The decoration set
+       * @private
+       */
       decorations(state) {
         return LinkedStylesPluginKey.getState(state)?.decorations;
       },
@@ -37,10 +71,15 @@ export const createLinkedStylesPlugin = (editor) => {
 
 /**
  * Generate style decorations for linked styles
- *
- * @param {Object} state Editor state
- * @param {Array[Object]} styles The linked styles
- * @returns {DecorationSet} The decorations
+ * @category Helper
+ * @param {Object} state - Editor state
+ * @param {Array} styles - The linked styles array
+ * @returns {Object} The decoration set for visual styling
+ * @example
+ * const decorations = generateDecorations(editorState, linkedStyles);
+ * @note Creates inline decorations with CSS styles
+ * @note Respects style inheritance and mark precedence
+ * @private
  */
 const generateDecorations = (state, styles) => {
   const decorations = [];

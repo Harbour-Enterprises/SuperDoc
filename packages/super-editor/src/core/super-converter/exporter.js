@@ -23,6 +23,10 @@ import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translateDocumentSection } from './v2/exporter/index.js';
+import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
+import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
+import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
+import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 
 /**
  * @typedef {Object} ExportParams
@@ -42,7 +46,7 @@ import { translateDocumentSection } from './v2/exporter/index.js';
  * @typedef {Object} XmlReadyNode
  * @property {string} name The XML tag name
  * @property {Array<XmlReadyNode>} elements The child nodes
- * @property {Object} attributes The node attributes
+ * @property {Object} [attributes] The node attributes
  */
 
 /**
@@ -75,19 +79,19 @@ export function exportSchemaToJson(params) {
     doc: translateDocumentNode,
     body: translateBodyNode,
     heading: translateHeadingNode,
-    paragraph: translateParagraphNode,
+    paragraph: wPNodeTranslator,
     text: translateTextNode,
     bulletList: translateList,
     orderedList: translateList,
-    lineBreak: translateLineBreak,
+    lineBreak: wBrNodeTranslator,
     table: translateTable,
     tableRow: translateTableRow,
-    tableCell: translateTableCell,
+    tableCell: wTcNodeTranslator,
     bookmarkStart: translateBookmarkStart,
     fieldAnnotation: translateFieldAnnotation,
-    tab: translateTab,
+    tab: wTabNodeTranslator,
     image: translateImageNode,
-    hardBreak: translateHardBreak,
+    hardBreak: wBrNodeTranslator,
     commentRangeStart: () => translateCommentNode(params, 'Start'),
     commentRangeEnd: () => translateCommentNode(params, 'End'),
     commentReference: () => null,
@@ -101,13 +105,20 @@ export function exportSchemaToJson(params) {
     'total-page-number': translateTotalPageNumberNode,
   };
 
-  if (!router[type]) {
+  let handler = router[type];
+
+  // For import/export v3 we use the translator directly
+  if (handler && 'decode' in handler && typeof handler.decode === 'function') {
+    return handler.decode(params);
+  }
+
+  if (!handler) {
     console.error('No translation function found for node type:', type);
     return null;
   }
 
   // Call the handler for this node type
-  return router[type](params);
+  return handler(params);
 }
 
 /**
@@ -380,9 +391,10 @@ function generateParagraphProperties(node) {
   const { tabStops } = attrs;
   if (tabStops && tabStops.length > 0) {
     const tabElements = tabStops.map((tab) => {
+      const posValue = tab.originalPos !== undefined ? tab.originalPos : pixelsToTwips(tab.pos).toString();
       const tabAttributes = {
         'w:val': tab.val || 'start',
-        'w:pos': pixelsToTwips(tab.pos).toString(),
+        'w:pos': posValue,
       };
 
       if (tab.leader) {
@@ -636,7 +648,7 @@ function wrapTextInRun(nodeOrNodes, marks) {
  * @param {Object[]} marks The marks to add to the run properties
  * @returns
  */
-function generateRunProps(marks = []) {
+export function generateRunProps(marks = []) {
   return {
     name: 'w:rPr',
     elements: marks.filter((mark) => !!Object.keys(mark).length),
@@ -649,7 +661,7 @@ function generateRunProps(marks = []) {
  * @param {MarkType[]} marks
  * @returns
  */
-function processOutputMarks(marks = []) {
+export function processOutputMarks(marks = []) {
   return marks.flatMap((mark) => {
     if (mark.type === 'textStyle') {
       return Object.entries(mark.attrs)
@@ -991,32 +1003,6 @@ const generateNumPrTag = (numId, level) => {
 };
 
 /**
- * Translate a line break node
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode}
- */
-function translateLineBreak(params) {
-  const attributes = {};
-
-  const { lineBreakType } = params.node?.attrs || {};
-  if (lineBreakType) {
-    attributes['w:type'] = lineBreakType;
-  }
-
-  return {
-    name: 'w:r',
-    elements: [
-      {
-        name: 'w:br',
-        attributes,
-      },
-    ],
-    attributes,
-  };
-}
-
-/**
  * Translate a table node
  *
  * @param {ExportParams} params The table node to translate
@@ -1077,17 +1063,6 @@ function preProcessVerticalMergeCells(table, { editorSchema }) {
     }
   }
   return table;
-}
-
-function translateTab(params) {
-  const { marks = [] } = params.node;
-
-  const outputMarks = processOutputMarks(marks);
-  const tabNode = {
-    name: 'w:tab',
-  };
-
-  return wrapTextInRun(tabNode, outputMarks);
 }
 
 /**
@@ -1284,145 +1259,6 @@ function generateTableRowProperties(node) {
     name: 'w:trPr',
     elements,
   };
-}
-
-/**
- * Main translation function for a table cell
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated table cell node
- */
-function translateTableCell(params) {
-  const elements = translateChildNodes({
-    ...params,
-    tableCell: params.node,
-  });
-
-  const cellProps = generateTableCellProperties(params.node);
-
-  elements.unshift(cellProps);
-  return {
-    name: 'w:tc',
-    elements,
-  };
-}
-
-/**
- * Generate w:tcPr properties node for a table cell
- *
- * @param {SchemaNode} node
- * @returns {XmlReadyNode} The table cell properties node
- */
-function generateTableCellProperties(node) {
-  const elements = [];
-
-  const { attrs } = node;
-  const { colwidth = [], cellWidthType = 'dxa', background = {}, colspan, rowspan, widthUnit } = attrs;
-  const colwidthSum = colwidth.reduce((acc, curr) => acc + curr, 0);
-
-  const cellWidthElement = {
-    name: 'w:tcW',
-    attributes: {
-      'w:w': widthUnit === 'px' ? pixelsToTwips(colwidthSum) : inchesToTwips(colwidthSum),
-      'w:type': cellWidthType,
-    },
-  };
-  elements.push(cellWidthElement);
-
-  if (colspan) {
-    const gridSpanElement = {
-      name: 'w:gridSpan',
-      attributes: { 'w:val': `${colspan}` },
-    };
-    elements.push(gridSpanElement);
-  }
-
-  const { color } = background || {};
-  if (color) {
-    const cellBgElement = {
-      name: 'w:shd',
-      attributes: { 'w:fill': color },
-    };
-    elements.push(cellBgElement);
-  }
-
-  const { cellMargins } = attrs;
-  if (cellMargins) {
-    const cellMarginsElement = {
-      name: 'w:tcMar',
-      elements: generateCellMargins(cellMargins),
-    };
-    elements.push(cellMarginsElement);
-  }
-
-  const { verticalAlign } = attrs;
-  if (verticalAlign) {
-    const vertAlignElement = {
-      name: 'w:vAlign',
-      attributes: { 'w:val': verticalAlign },
-    };
-    elements.push(vertAlignElement);
-  }
-
-  // const { vMerge } = attrs;
-  // if (vMerge) {}
-  if (rowspan && rowspan > 1) {
-    const vMergeElement = {
-      name: 'w:vMerge',
-      type: 'element',
-      attributes: { 'w:val': 'restart' },
-    };
-    elements.push(vMergeElement);
-  } else if (attrs.continueMerge) {
-    const vMergeElement = {
-      name: 'w:vMerge',
-      type: 'element',
-    };
-    elements.push(vMergeElement);
-  }
-
-  const { borders = {} } = attrs;
-  if (!!borders && Object.keys(borders).length) {
-    const cellBordersElement = {
-      name: 'w:tcBorders',
-      elements: Object.entries(borders).map(([key, value]) => {
-        if (!value.size || value.val === 'none') {
-          return {
-            name: `w:${key}`,
-            attributes: {
-              'w:val': 'nil',
-            },
-          };
-        }
-        return {
-          name: `w:${key}`,
-          attributes: {
-            'w:val': 'single',
-            'w:color': value.color ? value.color.substring(1) : 'auto',
-            'w:sz': pixelsToEightPoints(value.size),
-            'w:space': value.space || 0,
-          },
-        };
-      }),
-    };
-
-    elements.push(cellBordersElement);
-  }
-
-  return {
-    name: 'w:tcPr',
-    elements,
-  };
-}
-
-function generateCellMargins(cellMargins) {
-  const elements = [];
-  const { top, right, bottom, left } = cellMargins;
-  if (top != null) elements.push({ name: 'w:top', attributes: { 'w:w': pixelsToTwips(top) } });
-  if (right != null) elements.push({ name: 'w:right', attributes: { 'w:w': pixelsToTwips(right) } });
-  if (bottom != null) elements.push({ name: 'w:bottom', attributes: { 'w:w': pixelsToTwips(bottom) } });
-  if (left != null) elements.push({ name: 'w:left', attributes: { 'w:w': pixelsToTwips(left) } });
-  return elements;
 }
 
 /**

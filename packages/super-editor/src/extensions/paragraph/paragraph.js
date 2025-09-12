@@ -1,11 +1,13 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { Node, Attribute } from '@core/index.js';
+import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 
-export const Paragraph = Node.create({
+export const Paragraph = OxmlNode.create({
   name: 'paragraph',
+
+  oXmlName: 'w:p',
 
   priority: 1000,
 
@@ -30,8 +32,29 @@ export const Paragraph = Node.create({
 
   addAttributes() {
     return {
+      paraId: { rendered: false },
+      textId: { rendered: false },
+      rsidR: { rendered: false },
+      rsidRDefault: { rendered: false },
+      rsidP: { rendered: false },
+      rsidRPr: { rendered: false },
+      rsidDel: { rendered: false },
+
       spacing: {
         default: getDefaultSpacing(),
+        parseDOM: (element) => {
+          // Check if this element is within imported content, if so we can assign some different
+          // default spacing which is needed to make the docx look correct
+          if (element && element.closest('[data-superdoc-import]')) {
+            return {
+              lineSpaceAfter: 11,
+              lineSpaceBefore: 0,
+              line: 1.15,
+              lineRule: 'auto',
+            };
+          }
+          return undefined;
+        },
         renderDOM: (attrs) => {
           const { spacing } = attrs;
           if (!spacing) return {};
@@ -138,7 +161,6 @@ export const Paragraph = Node.create({
         rendered: false,
       },
       filename: { rendered: false },
-      rsidRDefault: { rendered: false },
       keepLines: { rendered: false },
       keepNext: { rendered: false },
       paragraphProperties: { rendered: false },
