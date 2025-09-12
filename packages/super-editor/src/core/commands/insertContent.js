@@ -1,4 +1,52 @@
-//prettier-ignore
-export const insertContent = (value, options) => ({ tr, commands }) => {
-  return commands.insertContentAt({ from: tr.selection.from, to: tr.selection.to }, value, options);
-};
+//@ts-check
+import { processContent } from '../helpers/contentProcessor.js';
+
+/**
+ * Command to insert content at the current selection or replace the current selection.
+ * If contentType is specified in options, it will use the unified content processor to handle
+ * 'html', 'markdown', 'text', or 'schema' content types. Otherwise, it will use the original
+ * behavior for backward compatibility.
+ *
+ * @param {string|Object} value - The content to insert. Can be a string (for text/html/markdown)
+ *                                or a ProseMirror JSON object (for schema).
+ * @param {Object} [options={}] - Options for insertion.
+ * @param {string} [options.contentType] - The type of content being inserted: 'html', 'markdown', 'text', or 'schema'.
+ * @param {boolean} [options.parseOptions] - Additional options for parsing (if applicable).
+ * @returns {function} A command function that can be executed by the editor.
+ */
+export const insertContent =
+  (value, options = {}) =>
+  ({ tr, state, commands, editor }) => {
+    // If contentType is specified, use the new processor
+    if (options.contentType) {
+      const validTypes = ['html', 'markdown', 'text', 'schema'];
+      if (!validTypes.includes(options.contentType)) {
+        console.error(`[insertContent] Invalid contentType: "${options.contentType}". Use: ${validTypes.join(', ')}`);
+        return false;
+      }
+
+      try {
+        const processedDoc = processContent({
+          content: value,
+          type: options.contentType,
+          schema: state.schema,
+        });
+
+        const jsonContent = processedDoc.toJSON();
+        const ok = commands.insertContentAt({ from: tr.selection.from, to: tr.selection.to }, jsonContent, options);
+
+        // Schedule list migration right after the insert transaction dispatches
+        if (ok && (options.contentType === 'html' || options.contentType === 'markdown')) {
+          Promise.resolve().then(() => editor.migrateListsToV2?.());
+        }
+
+        return ok;
+      } catch (error) {
+        console.error(`[insertContent] Failed to process ${options.contentType}:`, error);
+        return false;
+      }
+    }
+
+    // Otherwise use the original behavior for backward compatibility
+    return commands.insertContentAt({ from: tr.selection.from, to: tr.selection.to }, value, options);
+  };

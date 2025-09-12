@@ -42,6 +42,19 @@ export const Paragraph = OxmlNode.create({
 
       spacing: {
         default: getDefaultSpacing(),
+        parseDOM: (element) => {
+          // Check if this element is within imported content, if so we can assign some different
+          // default spacing which is needed to make the docx look correct
+          if (element && element.closest('[data-superdoc-import]')) {
+            return {
+              lineSpaceAfter: 11,
+              lineSpaceBefore: 0,
+              line: 1.15,
+              lineRule: 'auto',
+            };
+          }
+          return undefined;
+        },
         renderDOM: (attrs) => {
           const { spacing } = attrs;
           if (!spacing) return {};
