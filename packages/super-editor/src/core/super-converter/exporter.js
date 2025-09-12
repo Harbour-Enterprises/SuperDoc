@@ -28,6 +28,7 @@ import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-transl
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
+import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -86,7 +87,7 @@ export function exportSchemaToJson(params) {
     orderedList: translateList,
     lineBreak: wBrNodeTranslator,
     table: translateTable,
-    tableRow: translateTableRow,
+    tableRow: wTrNodeTranslator,
     tableCell: wTcNodeTranslator,
     bookmarkStart: translateBookmarkStart,
     fieldAnnotation: translateFieldAnnotation,
@@ -1181,49 +1182,6 @@ function generateTableGrid(node, params) {
 
   return {
     name: 'w:tblGrid',
-    elements,
-  };
-}
-
-/**
- * Main translation function for a table row
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated table row node
- */
-export function translateTableRow(params) {
-  const elements = translateChildNodes(params);
-  const tableRowProperties = generateTableRowProperties(params.node);
-  if (tableRowProperties.elements.length) elements.unshift(tableRowProperties);
-
-  return {
-    name: 'w:tr',
-    elements,
-  };
-}
-
-function generateTableRowProperties(node) {
-  const { attrs } = node;
-  const elements = [];
-
-  const { rowHeight, rowHeightType } = attrs;
-  if (rowHeight) {
-    const attributes = { 'w:val': pixelsToTwips(rowHeight) };
-    if (rowHeightType) attributes['w:hRule'] = rowHeightType;
-
-    const rowHeightElement = {
-      name: 'w:trHeight',
-      attributes,
-    };
-    elements.push(rowHeightElement);
-  }
-
-  if (attrs?.cantSplit) {
-    elements.push({ name: 'w:cantSplit' });
-  }
-
-  return {
-    name: 'w:trPr',
     elements,
   };
 }
