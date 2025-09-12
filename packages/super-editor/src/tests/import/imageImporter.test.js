@@ -78,7 +78,9 @@ describe('ImageNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     paragraphNode = nodes1[0];
-    drawingNode = paragraphNode.content[1];
+
+    // Find the image node dynamically instead of using a fixed index
+    drawingNode = paragraphNode.content.find((node) => node.type === 'image');
     expect(drawingNode.attrs.src).toBe('word/media/image1.jpeg');
   });
 });
