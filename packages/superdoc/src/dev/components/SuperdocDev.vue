@@ -27,6 +27,117 @@ const currentFile = ref(null);
 const commentsPanel = ref(null);
 const showCommentsPanel = ref(true);
 
+// Style override testing controls
+const useStyleOverrides = ref(true);
+const stylePreset = ref('corporate');
+
+// Style preset configurations for testing
+const stylePresets = {
+  corporate: {
+    defaultFont: 'Arial',
+    defaultFontSize: 11,
+    styles: {
+      'Normal': {
+        font: 'Arial',
+        fontSize: 11,
+        color: '#333333'
+      },
+      'Heading1': {
+        font: 'Arial Black',
+        fontSize: 18,
+        color: '#003366'
+      },
+      'Heading2': {
+        font: 'Arial',
+        fontSize: 16,
+        color: '#003366'
+      }
+    }
+  },
+  modern: {
+    defaultFont: 'Segoe UI',
+    defaultFontSize: 10,
+    styles: {
+      'Normal': {
+        font: 'Segoe UI',
+        fontSize: 10
+      },
+      'Heading1': {
+        font: 'Segoe UI',
+        fontSize: 24,
+        color: '#2563eb'
+      },
+      'Heading2': {
+        font: 'Segoe UI',
+        fontSize: 20,
+        color: '#2563eb'
+      }
+    }
+  },
+  classic: {
+    defaultFont: 'Times New Roman',
+    defaultFontSize: 12,
+    styles: {
+      'Normal': {
+        font: 'Times New Roman',
+        fontSize: 12
+      },
+      'Heading1': {
+        font: 'Georgia',
+        fontSize: 18,
+        color: '#8b5a3c'
+      },
+      'Heading2': {
+        font: 'Georgia',
+        fontSize: 16,
+        color: '#8b5a3c'
+      }
+    }
+  },
+  accessibility: {
+    defaultFont: 'Verdana',
+    defaultFontSize: 14,
+    styles: {
+      'Normal': {
+        fontSize: 14
+      },
+      'Heading1': {
+        fontSize: 20,
+        color: '#000000'
+      },
+      'Heading2': {
+        fontSize: 18,
+        color: '#000000'
+      }
+    }
+  },
+  google: {
+    defaultFont: 'Arial',
+    defaultFontSize: 11,
+    styles: {
+      'Normal': {
+        font: 'Arial',
+        fontSize: 11
+      },
+      'Heading1': {
+        font: 'Georgia',
+        fontSize: 18,
+        color: '#1a73e8'  // Google blue
+      },
+      'Heading2': {
+        font: 'Georgia',
+        fontSize: 16,
+        color: '#1a73e8'
+      },
+      'Heading3': {
+        font: 'Georgia',
+        fontSize: 14,
+        color: '#1a73e8'
+      }
+    }
+  }
+};
+
 const urlParams = new URLSearchParams(window.location.search);
 const isInternal = urlParams.has('internal');
 const testUserEmail = urlParams.get('email') || 'user@superdoc.com';
@@ -133,6 +244,9 @@ const init = async () => {
     //   },
     // ],
     // cspNonce: 'testnonce123',
+
+    // Style overrides for testing
+    styleOverrides: useStyleOverrides.value ? stylePresets[stylePreset.value] : undefined,
     modules: {
       comments: {
         // comments: sampleComments,
@@ -270,6 +384,19 @@ onMounted(async () => {
             Upload docx, pdf, html or markdown
             <BasicUpload @file-change="handleNewFile" />
           </div>
+          <div class="dev-app__style-controls">
+            <label>
+              <input type="checkbox" v-model="useStyleOverrides" @change="init">
+              Use Style Overrides
+            </label>
+            <select v-model="stylePreset" @change="init" v-if="useStyleOverrides">
+              <option value="corporate">Corporate</option>
+              <option value="modern">Modern</option>
+              <option value="classic">Classic</option>
+              <option value="accessibility">Accessibility</option>
+              <option value="google">Google</option>
+            </select>
+          </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">
           <button class="dev-app__header-export-btn" @click="exportDocx()">Export Docx</button>
@@ -363,6 +490,27 @@ onMounted(async () => {
 
 .dev-app__header-side--right {
   align-items: flex-end;
+}
+
+.dev-app__style-controls {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dev-app__style-controls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+}
+
+.dev-app__style-controls select {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
 }
 
 .dev-app__main {

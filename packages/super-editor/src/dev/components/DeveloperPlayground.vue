@@ -20,6 +20,72 @@ const pageStyles = ref(null);
 const isDebuggingPagination = ref(false);
 const telemetry = shallowRef(null);
 
+// Style override testing controls
+const useStyleOverrides = ref(true);
+const stylePreset = ref('corporate');
+
+// Style preset configurations for testing
+const stylePresets = {
+  corporate: {
+    defaultFont: 'Arial',
+    defaultFontSize: 11,
+    styles: {
+      'Normal': {
+        font: 'Arial',
+        fontSize: 11
+      },
+      'Heading1': {
+        font: 'Arial Black',
+        fontSize: 18,
+        color: '#003366'
+      },
+      'Heading2': {
+        font: 'Arial',
+        fontSize: 16,
+        color: '#003366'
+      }
+    }
+  },
+  modern: {
+    defaultFont: 'Segoe UI',
+    defaultFontSize: 10,
+    styles: {
+      'Normal': {
+        font: 'Segoe UI',
+        fontSize: 10
+      },
+      'Heading1': {
+        font: 'Segoe UI',
+        fontSize: 24,
+        color: '#2563eb'
+      }
+    }
+  },
+  classic: {
+    defaultFont: 'Times New Roman',
+    defaultFontSize: 12,
+    styles: {
+      'Heading1': {
+        font: 'Georgia',
+        fontSize: 18,
+        color: '#8b5a3c'
+      }
+    }
+  },
+  accessibility: {
+    defaultFont: 'Verdana',
+    defaultFontSize: 14,
+    styles: {
+      'Normal': {
+        fontSize: 14
+      },
+      'Heading1': {
+        fontSize: 20
+      }
+    }
+  }
+};
+
 const handleNewFile = async (file) => {
   currentFile.value = null;
   const fileUrl = URL.createObjectURL(file);
@@ -30,6 +96,19 @@ const onCreate = ({ editor }) => {
   console.debug('[Dev] Editor created', editor);
   console.debug('[Dev] Page styles (pixels)', editor.getPageStyles());
   console.debug('[Dev] document styles', editor.converter?.getDocumentDefaultStyles());
+
+  // Debug logging for style overrides
+  console.log('=== Style Debug ===');
+  console.log('Style overrides passed:', editor.options.styleOverrides);
+  console.log('Converter styles:', editor.converter?.getDocumentDefaultStyles());
+
+  // Check actual DOM styles
+  setTimeout(() => {
+    const editorEl = editor.element;
+    const computedStyle = window.getComputedStyle(editorEl);
+    console.log('Applied font-family:', computedStyle.fontFamily);
+    console.log('Applied font-size:', computedStyle.fontSize);
+  }, 100);
 
   pageStyles.value = editor.converter?.pageStyles;
   activeEditor = editor;
@@ -78,6 +157,9 @@ const editorOptions = computed(() => {
     pagination: true,
     telemetry: telemetry.value,
     annotations: true,
+
+    // Style overrides for testing
+    styleOverrides: useStyleOverrides.value ? stylePresets[stylePreset.value] : undefined,
   };
 });
 
@@ -143,6 +225,18 @@ onMounted(async () => {
             Upload docx
             <BasicUpload @file-change="handleNewFile" />
           </div>
+          <div class="dev-app__style-controls">
+            <label>
+              <input type="checkbox" v-model="useStyleOverrides">
+              Use Style Overrides
+            </label>
+            <select v-model="stylePreset" v-if="useStyleOverrides">
+              <option value="corporate">Corporate</option>
+              <option value="modern">Modern</option>
+              <option value="classic">Classic</option>
+              <option value="accessibility">Accessibility</option>
+            </select>
+          </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">
           <button class="dev-app__header-export-btn" @click="exportDocx">Export</button>
@@ -192,9 +286,11 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
 }
+
 .page-spacer:nth-child(odd) {
   background-color: #aa000055;
 }
+
 .dev-app {
   --header-height: 154px;
   --toolbar-height: 39px;
@@ -221,11 +317,34 @@ onMounted(async () => {
 .dev-app__header-side {
   display: flex;
 }
+
 .dev-app__header-side--left {
   flex-direction: column;
 }
+
 .dev-app__header-side--right {
   align-items: flex-end;
+}
+
+.dev-app__style-controls {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dev-app__style-controls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+}
+
+.dev-app__style-controls select {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 14px;
 }
 
 .dev-app__main {

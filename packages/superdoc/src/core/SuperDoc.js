@@ -109,6 +109,10 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {string} [html] HTML content to initialize the editor with
  * @property {string} [markdown] Markdown content to initialize the editor with
  * @property {boolean} [isDebug=false] Whether to enable debug mode
+ * @property {Object} [styleOverrides] Style overrides configuration for documents
+ * @property {string} [styleOverrides.defaultFont] Default font family for the document
+ * @property {number} [styleOverrides.defaultFontSize] Default font size in points
+ * @property {Object} [styleOverrides.styles] Named styles to override (e.g., 'Normal', 'Heading1')
  */
 
 /**
@@ -190,6 +194,9 @@ export class SuperDoc extends EventEmitter {
 
     // Disable context menus (slash and right-click) globally
     disableContextMenu: false,
+
+    // Style overrides configuration
+    styleOverrides: null,
   };
 
   /**
