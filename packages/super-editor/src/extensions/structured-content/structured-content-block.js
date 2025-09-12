@@ -9,9 +9,17 @@ export const StructuredContentBlock = Node.create({
 
   addOptions() {
     return {
-      structuredContentClass: 'sd-structured-content-tag',
+      structuredContentClass: 'sd-structured-content-block-tag',
       htmlAttributes: {
         'aria-label': 'Structured content block node',
+      },
+    };
+  },
+
+  addAttributes() {
+    return {
+      sdtPr: {
+        rendered: false,
       },
     };
   },
@@ -21,14 +29,12 @@ export const StructuredContentBlock = Node.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    return ['div', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
-  },
-
-  addAttributes() {
-    return {
-      sdtPr: {
-        rendered: false,
-      },
-    };
+    return [
+      'div',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, {
+        class: this.options.structuredContentClass,
+      }),
+      0,
+    ];
   },
 });
