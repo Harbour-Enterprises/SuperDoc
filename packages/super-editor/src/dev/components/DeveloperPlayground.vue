@@ -20,6 +20,11 @@ const pageStyles = ref(null);
 const isDebuggingPagination = ref(false);
 const telemetry = shallowRef(null);
 
+// Content injection variables
+const contentInput = ref('');
+const contentType = ref('html');
+const isInjectingContent = ref(false);
+
 // Style override testing controls
 const useStyleOverrides = ref(true);
 const stylePreset = ref('corporate');
@@ -30,60 +35,60 @@ const stylePresets = {
     defaultFont: 'Arial',
     defaultFontSize: 11,
     styles: {
-      'Normal': {
+      Normal: {
         font: 'Arial',
-        fontSize: 11
+        fontSize: 11,
       },
-      'Heading1': {
+      Heading1: {
         font: 'Arial Black',
         fontSize: 18,
-        color: '#003366'
+        color: '#003366',
       },
-      'Heading2': {
+      Heading2: {
         font: 'Arial',
         fontSize: 16,
-        color: '#003366'
-      }
-    }
+        color: '#003366',
+      },
+    },
   },
   modern: {
     defaultFont: 'Segoe UI',
     defaultFontSize: 10,
     styles: {
-      'Normal': {
+      Normal: {
         font: 'Segoe UI',
-        fontSize: 10
+        fontSize: 10,
       },
-      'Heading1': {
+      Heading1: {
         font: 'Segoe UI',
         fontSize: 24,
-        color: '#2563eb'
-      }
-    }
+        color: '#2563eb',
+      },
+    },
   },
   classic: {
     defaultFont: 'Times New Roman',
     defaultFontSize: 12,
     styles: {
-      'Heading1': {
+      Heading1: {
         font: 'Georgia',
         fontSize: 18,
-        color: '#8b5a3c'
-      }
-    }
+        color: '#8b5a3c',
+      },
+    },
   },
   accessibility: {
     defaultFont: 'Verdana',
     defaultFontSize: 14,
     styles: {
-      'Normal': {
-        fontSize: 14
+      Normal: {
+        fontSize: 14,
       },
-      'Heading1': {
-        fontSize: 20
-      }
-    }
-  }
+      Heading1: {
+        fontSize: 20,
+      },
+    },
+  },
 };
 
 const handleNewFile = async (file) => {
@@ -202,6 +207,29 @@ const debugPageStyle = computed(() => {
   };
 });
 
+const injectContent = () => {
+  if (!activeEditor || !contentInput.value.trim()) {
+    console.warn('[Dev] No editor instance or empty content');
+    return;
+  }
+
+  try {
+    isInjectingContent.value = true;
+
+    // Delegate processing to the insertContent command
+    activeEditor.commands.insertContent(contentInput.value, {
+      contentType: contentType.value, // 'html', 'markdown', or 'text'
+    });
+
+    console.debug(`[Dev] ${contentType.value} content injected successfully`);
+    contentInput.value = '';
+  } catch (error) {
+    console.error('[Dev] Failed to inject content:', error);
+  } finally {
+    isInjectingContent.value = false;
+  }
+};
+
 onMounted(async () => {
   // set document to blank
   currentFile.value = await getFileObject(BlankDOCX, 'blank_document.docx', DOCX);
@@ -227,7 +255,7 @@ onMounted(async () => {
           </div>
           <div class="dev-app__style-controls">
             <label>
-              <input type="checkbox" v-model="useStyleOverrides">
+              <input type="checkbox" v-model="useStyleOverrides" />
               Use Style Overrides
             </label>
             <select v-model="stylePreset" v-if="useStyleOverrides">
@@ -239,6 +267,28 @@ onMounted(async () => {
           </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">
+          <div class="dev-app__content-injection">
+            <div class="dev-app__content-controls">
+              <select v-model="contentType" class="dev-app__content-type">
+                <option value="html">HTML</option>
+                <option value="markdown">Markdown</option>
+                <option value="text">Text</option>
+              </select>
+              <button
+                class="dev-app__inject-btn"
+                @click="injectContent"
+                :disabled="isInjectingContent || !contentInput.trim()"
+              >
+                {{ isInjectingContent ? 'Injecting...' : 'Inject Content' }}
+              </button>
+            </div>
+            <textarea
+              v-model="contentInput"
+              class="dev-app__content-input"
+              placeholder="Enter content to inject..."
+              rows="3"
+            ></textarea>
+          </div>
           <button class="dev-app__header-export-btn" @click="exportDocx">Export</button>
         </div>
       </div>
@@ -383,5 +433,61 @@ onMounted(async () => {
   display: grid;
   overflow-y: auto;
   scrollbar-width: none;
+}
+
+.dev-app__content-injection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-right: 20px;
+  min-width: 300px;
+}
+
+.dev-app__content-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dev-app__content-type {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+}
+
+.dev-app__inject-btn {
+  padding: 6px 12px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dev-app__inject-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.dev-app__inject-btn:not(:disabled):hover {
+  background-color: #0056b3;
+}
+
+.dev-app__content-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  resize: vertical;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.dev-app__content-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 </style>
