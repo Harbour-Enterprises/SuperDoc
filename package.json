@@ -7,7 +7,10 @@
     "shared/*"
   ],
   "scripts": {
-    "test": "vitest --config ./packages/super-editor/vite.config.js",
+    "test": "vitest run",
+    "test:all": "vitest run",
+    "test:editor": "vitest run --root ./packages/super-editor",
+    "test:superdoc": "vitest run --root ./packages/superdoc",
     "test:cov": "node scripts/test-cov.mjs",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "npm --workspace=@harbour-enterprises/superdoc run dev",
