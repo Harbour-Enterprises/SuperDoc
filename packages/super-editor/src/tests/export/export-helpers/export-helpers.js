@@ -13,10 +13,18 @@ import { getCommentDefinition } from '@converter/v2/exporter/commentsExporter.js
  * @returns {string} The text from the node
  */
 export const getTextFromNode = (node) => {
-  const listTextNode = node.elements.find((el) => el.name === 'w:r');
-  const textNode = listTextNode?.elements?.find((el) => el.name === 'w:t');
-  const text = textNode?.elements?.find((el) => el.type === 'text')?.text;
-  return text;
+  if (!node?.elements) return undefined;
+  // Depth-first search for the first w:t element and return its text
+  const stack = [...node.elements];
+  while (stack.length) {
+    const el = stack.shift();
+    if (el?.name === 'w:t' && Array.isArray(el.elements)) {
+      const textNode = el.elements.find((n) => n.type === 'text');
+      if (textNode?.text != null) return textNode.text;
+    }
+    if (Array.isArray(el?.elements)) stack.push(...el.elements);
+  }
+  return undefined;
 };
 
 /**

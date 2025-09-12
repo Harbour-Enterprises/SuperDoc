@@ -451,21 +451,32 @@ describe('table live xml test', () => {
     expect(result.nodes[0].content[0].content.length).toBe(2);
     expect(result.nodes[0].content[0].content[0].content[0].type).toBe('paragraph');
 
-    expect(result.nodes[0].content[0].content[0].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[0].content[0].content[0].content[0].text).toBe('COL 1 ROW 1');
+    const runNode = result.nodes[0].content[0].content[0].content[0].content.find((el) => el.type === 'run');
+    const textNode = runNode.content.find((el) => el.type === 'text');
+    expect(textNode.type).toBe('text');
+    expect(textNode.text).toBe('COL 1 ROW 1');
     expect(result.nodes[0].content[0].content[1].content[0].type).toBe('paragraph');
-    expect(result.nodes[0].content[0].content[1].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[0].content[1].content[0].content[0].text).toBe('COL 2 ROW 1');
+
+    const runNode1 = result.nodes[0].content[0].content[1].content[0].content.find((el) => el.type === 'run');
+    const textNode1 = runNode1.content.find((el) => el.type === 'text');
+    expect(textNode1.type).toBe('text');
+    expect(textNode1.text).toBe('COL 2 ROW 1');
     expect(result.nodes[0].content[0].attrs.borders).toBeDefined();
 
     expect(result.nodes[0].content[1].type).toBe('tableRow');
     expect(result.nodes[0].content[1].content.length).toBe(2);
     expect(result.nodes[0].content[1].content[0].content[0].type).toBe('paragraph');
-    expect(result.nodes[0].content[1].content[0].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[1].content[0].content[0].content[0].text).toBe('COL 1 ROW 2');
+
+    const runNode2 = result.nodes[0].content[1].content[0].content[0].content.find((el) => el.type === 'run');
+    const textNode2 = runNode2.content.find((el) => el.type === 'text');
+    expect(textNode2.type).toBe('text');
+    expect(textNode2.text).toBe('COL 1 ROW 2');
     expect(result.nodes[0].content[1].content[1].content[0].type).toBe('paragraph');
-    expect(result.nodes[0].content[1].content[1].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[1].content[1].content[0].content[0].text).toBe('COL 2 ROW 2');
+
+    const runNode3 = result.nodes[0].content[1].content[1].content[0].content[0];
+    const textNode3 = runNode3.content.find((el) => el.type === 'text');
+    expect(textNode3.type).toBe('text');
+    expect(textNode3.text).toBe('COL 2 ROW 2');
     expect(result.nodes[0].content[1].attrs.borders).toBeDefined();
   });
 

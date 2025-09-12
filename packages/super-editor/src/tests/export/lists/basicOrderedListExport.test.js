@@ -1,9 +1,6 @@
 // prettier-ignore
-import {
-  getTextFromNode,
-  getExportedResult,
-  testListNodes,
-} from '../export-helpers/index';
+import { expect } from 'vitest';
+import { getTextFromNode, getExportedResult, testListNodes, getListAttrFromNumPr } from '../export-helpers/index';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 
 describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
@@ -39,27 +36,52 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
   });
 
   it('can export the second list (with sublists)', () => {
-    const titleIndex = 6;
-    const titleNode = body.elements[titleIndex];
-    const titleText = getTextFromNode(titleNode);
-    expect(titleText).toBe('Simple ordered list with sub lists:');
+    const paragraphs = body.elements.filter((el) => el.name === 'w:p');
 
-    const item1 = body.elements[titleIndex + 2];
+    const titleNode = paragraphs.find((p) => getTextFromNode(p) === 'Simple ordered list with sub lists:');
+    expect(getTextFromNode(titleNode)).toBe('Simple ordered list with sub lists:');
+
+    // Top-level items
+    const item1 = paragraphs.find((p) => getTextFromNode(p) === 'Item 1');
+    expect(item1).toBeTruthy();
     testListNodes({ node: item1, expectedLevel: 0, expectedNumPr: 0, text: 'Item 1' });
 
-    const item3 = body.elements[titleIndex + 4];
+    const item3 = paragraphs.find((p) => getTextFromNode(p) === 'Item 3');
+    expect(item3).toBeTruthy();
     testListNodes({ node: item3, expectedLevel: 0, expectedNumPr: 0, text: 'Item 3' });
 
-    const firstNestedItem = body.elements[titleIndex + 5];
-    testListNodes({ node: firstNestedItem, expectedLevel: 1, expectedNumPr: 1, text: 'Lvl 1 – a' });
+    // Nested items labeled with 'Lvl' in their first run's text
+    const lvlParas = paragraphs.filter((p) => (getTextFromNode(p) || '').startsWith('Lvl'));
+    expect(lvlParas.length).toBeGreaterThanOrEqual(3);
 
-    const doubleNestedItem = body.elements[titleIndex + 7];
-    testListNodes({ node: doubleNestedItem, expectedLevel: 2, expectedNumPr: 2, text: 'Lvl 2 – i' });
+    const getIlvl = (p) => {
+      const val = getListAttrFromNumPr('w:ilvl', p);
+      return typeof val === 'number' ? val : Number(val);
+    };
 
-    const nestedItemAfterDoubleNested = body.elements[titleIndex + 8];
-    testListNodes({ node: nestedItemAfterDoubleNested, expectedLevel: 1, expectedNumPr: 1, text: 'Lvl 1 – c' });
+    const firstNestedItem = lvlParas.find((p) => getIlvl(p) === 1) || lvlParas[0];
+    const runsInFirstItem = firstNestedItem.elements.filter((el) => el.name === 'w:r');
+    expect(runsInFirstItem.length).toBe(2);
+    testListNodes({ node: firstNestedItem, expectedLevel: 1, expectedNumPr: 1, text: 'Lvl' });
 
-    const finalItem = body.elements[titleIndex + 9];
+    const doubleNestedItem = lvlParas.find((p) => getIlvl(p) === 2);
+    expect(doubleNestedItem).toBeTruthy();
+    const runsInDoubleNestedItem = doubleNestedItem.elements.filter((el) => el.name === 'w:r');
+    expect(runsInDoubleNestedItem.length).toBe(3);
+    testListNodes({ node: doubleNestedItem, expectedLevel: 2, expectedNumPr: 2, text: 'Lvl' });
+
+    const nestedItemAfterDoubleNested = lvlParas.find((p) => getIlvl(p) === 1 && p !== firstNestedItem);
+    expect(nestedItemAfterDoubleNested).toBeTruthy();
+    const runsInNestedItemAfterDoubleNested = nestedItemAfterDoubleNested.elements.filter((el) => el.name === 'w:r');
+    expect(runsInNestedItemAfterDoubleNested.length).toBe(2);
+    testListNodes({ node: nestedItemAfterDoubleNested, expectedLevel: 1, expectedNumPr: 1, text: 'Lvl' });
+
+    const secondRunT = runsInNestedItemAfterDoubleNested[1].elements.find((el) => el.name === 'w:t');
+    const secondRunText = secondRunT?.elements?.[0]?.text;
+    expect(secondRunText?.startsWith(' 1 – ')).toBe(true);
+
+    const finalItem = paragraphs.find((p) => getTextFromNode(p) === 'Item 4');
+    expect(finalItem).toBeTruthy();
     testListNodes({ node: finalItem, expectedLevel: 0, expectedNumPr: 0, text: 'Item 4' });
   });
 });
@@ -144,7 +166,8 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const paragraphNode = item1.content[0];
     expect(paragraphNode.type).toBe('paragraph');
 
-    const textNode = paragraphNode.content.find((n) => n.type === 'text');
+    const runNode = paragraphNode.content.find((n) => n.type === 'run');
+    const textNode = runNode.content.find((n) => n.type === 'text');
     expect(textNode).toBeDefined();
     expect(textNode.text).toBe('A custom');
 
@@ -197,7 +220,8 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const paragraphNode = item1.content[0];
     expect(paragraphNode.type).toBe('paragraph');
 
-    const textNode = paragraphNode.content.find((n) => n.type === 'text');
+    const runNode = paragraphNode.content.find((n) => n.type === 'run');
+    const textNode = runNode.content.find((n) => n.type === 'text');
     expect(textNode).toBeDefined();
     expect(textNode.text).toBe('2.1');
 

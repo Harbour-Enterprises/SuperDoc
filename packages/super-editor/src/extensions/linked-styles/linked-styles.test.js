@@ -44,21 +44,63 @@ describe('LinkedStyles Extension', () => {
       });
 
       it('should remove style when the same style is already applied', () => {
-        editor.view.dispatch(tr.setNodeMarkup(17, null, { styleId: styleToToggle.id })); // Apply existing style to second paragraph
+        // Locate the second paragraph and its start position
+        let secondPara = null;
+        let count = 0;
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name === 'paragraph') {
+            count += 1;
+            if (count === 2) {
+              secondPara = { node, pos };
+              return false;
+            }
+          }
+          return true;
+        });
 
+        expect(secondPara).toBeTruthy();
+
+        // Pre-apply the style to paragraph 2
+        editor.view.dispatch(editor.state.tr.setNodeMarkup(secondPara.pos, null, { styleId: styleToToggle.id }));
         expect(editor.state.doc.content.content[1].attrs.styleId).toBe(styleToToggle.id);
 
-        editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(tr.doc, 18, 34))); // Select "Second paragraph"
+        // Select the content of paragraph 2 and toggle the same style off
+        const from = secondPara.pos + 1;
+        const to = secondPara.pos + secondPara.node.nodeSize - 1;
+        const trSel = editor.state.tr.setSelection(TextSelection.create(editor.state.doc, from, to));
+        editor.view.dispatch(trSel);
+
         editor.commands.toggleLinkedStyle(styleToToggle, 'paragraph');
         expect(editor.state.doc.content.content[1].attrs.styleId).toBe(null);
       });
 
       it('should apply new style when a different style is already applied', () => {
-        editor.view.dispatch(tr.setNodeMarkup(17, null, { styleId: 'Heading2' })); // Apply existing style to second paragraph
+        // Locate the second paragraph and its start position
+        let secondPara = null;
+        let count = 0;
+        editor.state.doc.descendants((node, pos) => {
+          if (node.type.name === 'paragraph') {
+            count += 1;
+            if (count === 2) {
+              secondPara = { node, pos };
+              return false;
+            }
+          }
+          return true;
+        });
 
+        expect(secondPara).toBeTruthy();
+
+        // Pre-apply a different style to paragraph 2
+        editor.view.dispatch(editor.state.tr.setNodeMarkup(secondPara.pos, null, { styleId: 'Heading2' }));
         expect(editor.state.doc.content.content[1].attrs.styleId).toBe('Heading2');
 
-        editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(tr.doc, 18, 34))); // Select "Second paragraph"
+        // Select the content of paragraph 2 and toggle to Heading1
+        const from = secondPara.pos + 1;
+        const to = secondPara.pos + secondPara.node.nodeSize - 1;
+        const trSel = editor.state.tr.setSelection(TextSelection.create(editor.state.doc, from, to));
+        editor.view.dispatch(trSel);
+
         editor.commands.toggleLinkedStyle(styleToToggle, 'paragraph');
         expect(editor.state.doc.content.content[1].attrs.styleId).toBe('Heading1');
       });

@@ -1,6 +1,6 @@
 // @ts-check
 import { Extension } from '@core/Extension.js';
-import { applyLinkedStyleToTransaction, generateLinkedStyleString } from './helpers.js';
+import { applyLinkedStyleToTransaction, generateLinkedStyleString } from './helpers/helpers.js';
 import { createLinkedStylesPlugin, LinkedStylesPluginKey } from './plugin.js';
 import { findParentNodeClosestToPos } from '@core/helpers';
 

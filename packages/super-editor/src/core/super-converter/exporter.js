@@ -27,6 +27,7 @@ import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translato
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
+import { translator as wRNodeTranslator } from './v3/handlers/w/r/r-translator.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -103,6 +104,7 @@ export function exportSchemaToJson(params) {
     documentSection: translateDocumentSection,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
+    run: wRNodeTranslator,
   };
 
   let handler = router[type];
@@ -1314,6 +1316,11 @@ function translateMark(mark) {
       break;
 
     case 'italic':
+      delete markElement.attributes;
+      markElement.type = 'element';
+      break;
+
+    case 'strike':
       delete markElement.attributes;
       markElement.type = 'element';
       break;

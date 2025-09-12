@@ -36,7 +36,10 @@ describe('AnnotationNodeExporter', async () => {
     expect(attrs.fieldTypeShort).toBe('image');
 
     const node = body.elements[2].elements[1].elements[1].elements;
-    const run = node.find((el) => el.name === 'w:r');
+    // Find a run that actually contains drawing content
+    const run = node.find(
+      (el) => el.name === 'w:r' && Array.isArray(el.elements) && el.elements.some((e) => e.name === 'w:drawing'),
+    );
     const drawing = run.elements.find((el) => el.name === 'w:drawing');
     const inline = drawing.elements.find((el) => el.name === 'wp:inline');
     const extent = inline.elements.find((el) => el.name === 'wp:extent');
@@ -89,11 +92,14 @@ describe('AnnotationNodeExporter', async () => {
     const par = node.elements.find((el) => el.name === 'w:p');
     expect(par).toBeDefined();
 
-    const run = par.elements.find((el) => el.name === 'w:r');
+    // Find a run that contains text
+    const run = par.elements.find(
+      (el) => el.name === 'w:r' && Array.isArray(el.elements) && el.elements.some((e) => e.name === 'w:t'),
+    );
     expect(run).toBeDefined();
 
     const textNode = run.elements.find((el) => el.name === 'w:t');
-    const text = textNode.elements[0].text;
+    const text = textNode?.elements?.[0]?.text;
     expect(text).toEqual('test paragraph data');
   });
 
@@ -106,9 +112,12 @@ describe('AnnotationNodeExporter', async () => {
 
     const node = body.elements[10].elements[1].elements[1];
     const hyperlink = node.elements.find((el) => el.name === 'w:hyperlink');
-    const run = hyperlink.elements.find((el) => el.name === 'w:r');
+    // Find a run within the hyperlink that contains text
+    const run = hyperlink.elements.find(
+      (el) => el.name === 'w:r' && Array.isArray(el.elements) && el.elements.some((e) => e.name === 'w:t'),
+    );
     const textNode = run?.elements.find((el) => el.name === 'w:t');
-    const text = textNode.elements[0].text;
+    const text = textNode?.elements?.[0]?.text;
 
     expect(text).toEqual('https://vitest.dev/guide/coverage');
     expect(params.relationships[2].attributes.Target).toBe('https://vitest.dev/guide/coverage');

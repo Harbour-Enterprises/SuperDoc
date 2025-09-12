@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getQuickFormatList } from './helpers.js';
+import { getQuickFormatList } from './helpers/helpers.js';
 
 describe('getQuickFormatList', () => {
   it('returns [] when editor is missing', () => {

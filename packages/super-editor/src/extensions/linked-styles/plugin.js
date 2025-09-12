@@ -1,7 +1,7 @@
 // @ts-check
 import { Plugin, PluginKey } from 'prosemirror-state';
-import { Decoration, DecorationSet } from 'prosemirror-view';
-import { generateLinkedStyleString, getLinkedStyle } from './helpers.js';
+import { DecorationSet } from 'prosemirror-view';
+import { checkNodeHasStyleId, generateStyleDecoration } from './helpers';
 
 /**
  * Plugin key for accessing linked styles state
@@ -89,6 +89,16 @@ const generateDecorations = (state, styles) => {
   doc.descendants((node, pos) => {
     const { name } = node.type;
 
+    // Special handling for run nodes
+    const styleId = checkNodeHasStyleId(node);
+    if (styleId) {
+      if (node.type.name === 'run') {
+        const decoration = generateStyleDecoration(styleId, styles, state, node, pos);
+        if (decoration) decorations.push(decoration);
+        return;
+      }
+    }
+
     if (node?.attrs?.styleId) lastStyleId = node.attrs.styleId;
     if (name === 'paragraph' && !node.attrs?.styleId) lastStyleId = null;
     if (name !== 'text' && name !== 'listItem' && name !== 'orderedList') return;
@@ -100,17 +110,9 @@ const generateDecorations = (state, styles) => {
         lastStyleId = mark.attrs.styleId;
       }
     }
-    const { linkedStyle, basedOnStyle } = getLinkedStyle(lastStyleId, styles);
-    if (!linkedStyle) return;
 
-    const $pos = state.doc.resolve(pos);
-    const parent = $pos.parent;
-
-    const styleString = generateLinkedStyleString(linkedStyle, basedOnStyle, node, parent);
-    if (!styleString) return;
-
-    const decoration = Decoration.inline(pos, pos + node.nodeSize, { style: styleString });
-    decorations.push(decoration);
+    const decoration = generateStyleDecoration(lastStyleId, styles, state, node, pos);
+    if (decoration) decorations.push(decoration);
   });
   return DecorationSet.create(doc, decorations);
 };
