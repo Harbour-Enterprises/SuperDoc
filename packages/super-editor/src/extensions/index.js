@@ -32,7 +32,7 @@ import { TableRow } from './table-row/index.js';
 import { TableCell } from './table-cell/index.js';
 import { FieldAnnotation, fieldAnnotationHelpers } from './field-annotation/index.js';
 import { Image } from './image/index.js';
-import { BookmarkStart } from './bookmarks/index.js';
+import { BookmarkStart, BookmarkEnd } from './bookmarks/index.js';
 import { Mention } from './mention/index.js';
 import { PageNumber, TotalPageCount } from './page-number/index.js';
 import { ShapeContainer } from './shape-container/index.js';
@@ -152,6 +152,7 @@ const getStarterExtensions = () => {
     DropCursor,
     Image,
     BookmarkStart,
+    BookmarkEnd,
     Mention,
     Collaboration,
     CollaborationCursor,
@@ -224,6 +225,7 @@ export {
   fieldAnnotationHelpers,
   Image,
   BookmarkStart,
+  BookmarkEnd,
   PopoverPlugin,
   Mention,
   Collaboration,
