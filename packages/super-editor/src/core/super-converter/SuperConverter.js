@@ -132,8 +132,18 @@ class SuperConverter {
     this.fileSource = params?.fileSource || null;
     this.documentId = params?.documentId || null;
 
+    // Style overrides
+    this.styleOverrides = params?.styleOverrides || {};
+
     // Parse the initial XML, if provided
-    if (this.docx.length || this.xml) this.parseFromXml();
+    if (this.docx.length || this.xml) {
+      this.parseFromXml();
+
+      // Apply style overrides after loading docx
+      if (this.styleOverrides && Object.keys(this.styleOverrides).length > 0) {
+        this.#applyStyleOverrides();
+      }
+    }
   }
 
   /**
@@ -166,6 +176,107 @@ class SuperConverter {
     // We need to preserve nodes with xml:space="preserve" and only have empty spaces
     const newXml = xml.replace(/(<w:t xml:space="preserve">)(\s+)(<\/w:t>)/g, '$1[[sdspace]]$2[[sdspace]]$3');
     return JSON.parse(xmljs.xml2json(newXml, null, 2));
+  }
+
+  /**
+   * Apply style overrides to the document
+   */
+  #applyStyleOverrides() {
+    const { defaultFont, defaultFontSize, styles } = this.styleOverrides;
+
+    // Override document defaults
+    if (defaultFont || defaultFontSize) {
+      const docDefaults = this.convertedXml['word/styles.xml']?.elements[0]?.elements?.find(
+        (el) => el.name === 'w:docDefaults',
+      );
+
+      if (docDefaults) {
+        const rPrDefault = docDefaults.elements
+          ?.find((el) => el.name === 'w:rPrDefault')
+          ?.elements?.find((el) => el.name === 'w:rPr');
+
+        if (rPrDefault) {
+          if (defaultFont) {
+            let fontEl = rPrDefault.elements?.find((el) => el.name === 'w:rFonts');
+            if (!fontEl) {
+              fontEl = { name: 'w:rFonts', attributes: {}, elements: [] };
+              if (!rPrDefault.elements) rPrDefault.elements = [];
+              rPrDefault.elements.push(fontEl);
+            }
+            fontEl.attributes['w:ascii'] = defaultFont;
+            fontEl.attributes['w:hAnsi'] = defaultFont;
+          }
+
+          if (defaultFontSize) {
+            let sizeEl = rPrDefault.elements?.find((el) => el.name === 'w:sz');
+            if (!sizeEl) {
+              sizeEl = { name: 'w:sz', attributes: {} };
+              if (!rPrDefault.elements) rPrDefault.elements = [];
+              rPrDefault.elements.push(sizeEl);
+            }
+            sizeEl.attributes['w:val'] = defaultFontSize * 2; // Half-points
+          }
+        }
+      }
+    }
+
+    // Override named styles
+    if (styles) {
+      const stylesXml = this.convertedXml['word/styles.xml']?.elements[0]?.elements;
+
+      Object.entries(styles).forEach(([styleId, overrides]) => {
+        const style = stylesXml?.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId);
+
+        if (style) {
+          this.#applyStyleProperties(style, overrides);
+        }
+      });
+    }
+  }
+
+  /**
+   * Apply style properties to a style element
+   * @param {Object} styleElement - The style element to modify
+   * @param {Object} overrides - The style overrides to apply
+   */
+  #applyStyleProperties(styleElement, overrides) {
+    let rPr = styleElement.elements?.find((el) => el.name === 'w:rPr');
+
+    if (!rPr) {
+      rPr = { name: 'w:rPr', elements: [] };
+      if (!styleElement.elements) styleElement.elements = [];
+      styleElement.elements.push(rPr);
+    }
+
+    if (!rPr.elements) rPr.elements = [];
+
+    if (overrides.font) {
+      let fontEl = rPr.elements.find((el) => el.name === 'w:rFonts');
+      if (!fontEl) {
+        fontEl = { name: 'w:rFonts', attributes: {} };
+        rPr.elements.push(fontEl);
+      }
+      fontEl.attributes['w:ascii'] = overrides.font;
+      fontEl.attributes['w:hAnsi'] = overrides.font;
+    }
+
+    if (overrides.fontSize) {
+      let sizeEl = rPr.elements.find((el) => el.name === 'w:sz');
+      if (!sizeEl) {
+        sizeEl = { name: 'w:sz', attributes: {} };
+        rPr.elements.push(sizeEl);
+      }
+      sizeEl.attributes['w:val'] = overrides.fontSize * 2;
+    }
+
+    if (overrides.color) {
+      let colorEl = rPr.elements.find((el) => el.name === 'w:color');
+      if (!colorEl) {
+        colorEl = { name: 'w:color', attributes: {} };
+        rPr.elements.push(colorEl);
+      }
+      colorEl.attributes['w:val'] = overrides.color.replace('#', '');
+    }
   }
 
   static getStoredSuperdocVersion(docx) {
@@ -266,7 +377,23 @@ class SuperConverter {
       const fontSizePt =
         fontSizeNormal || Number(rElements.find((el) => el.name === 'w:sz')?.attributes['w:val']) / 2 || 10;
       const kern = rElements.find((el) => el.name === 'w:kern')?.attributes['w:val'];
-      return { fontSizePt, kern, typeface, panose };
+
+      // Apply style overrides if they exist
+      if (this.styleOverrides) {
+        if (this.styleOverrides.defaultFont) {
+          typeface = this.styleOverrides.defaultFont;
+        }
+        if (this.styleOverrides.defaultFontSize) {
+          fontSizeNormal = this.styleOverrides.defaultFontSize;
+        }
+      }
+
+      return {
+        fontSizePt: fontSizeNormal || fontSizePt,
+        kern,
+        typeface: typeface ?? 'Times New Roman',
+        panose,
+      };
     }
   }
 

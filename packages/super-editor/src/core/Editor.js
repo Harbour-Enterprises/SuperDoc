@@ -134,6 +134,10 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
  * @property {boolean} [isDebug=false] - Whether to enable debug mode
+ * @property {Object} [styleOverrides] - Style overrides configuration
+ * @property {string} [styleOverrides.defaultFont] - Default font family for the document
+ * @property {number} [styleOverrides.defaultFontSize] - Default font size in points
+ * @property {Object} [styleOverrides.styles] - Named styles to override (e.g., 'Normal', 'Heading1')
  */
 
 /**
@@ -215,6 +219,7 @@ export class Editor extends EventEmitter {
     lastSelection: null,
     suppressDefaultDocxStyles: false,
     jsonOverride: null,
+    styleOverrides: null,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -377,7 +382,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize the editor in rich text mode
-   * @param {EditorOptions} options - Editor options
    * @returns {void}
    */
   #initRichText() {
@@ -821,6 +825,7 @@ export class Editor extends EventEmitter {
         telemetry: this.options.telemetry,
         fileSource: this.options.fileSource,
         documentId: this.options.documentId,
+        styleOverrides: this.options.styleOverrides,
       });
     }
   }
@@ -1142,6 +1147,11 @@ export class Editor extends EventEmitter {
     if (this.options.isHeadless || this.options.suppressDefaultDocxStyles) return;
 
     const proseMirror = element?.querySelector('.ProseMirror');
+
+    // Debug logging
+    const styles = this.converter.getDocumentDefaultStyles();
+    console.log('[initDefaultStyles] Document styles:', styles);
+    console.log('[initDefaultStyles] Style overrides:', this.options.styleOverrides);
 
     this.updateEditorStyles(element, proseMirror, isPaginationEnabled);
 
