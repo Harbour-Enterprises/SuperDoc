@@ -440,8 +440,8 @@ export function addDefaultStylesIfMissing(styles) {
  */
 const importHeadersFooters = (docx, converter, mainEditor) => {
   const rels = docx['word/_rels/document.xml.rels'];
-  const relationships = rels.elements.find((el) => el.name === 'Relationships');
-  const { elements } = relationships;
+  const relationships = rels?.elements.find((el) => el.name === 'Relationships');
+  const { elements } = relationships || { elements: [] };
 
   const headerType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
   const footerType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
