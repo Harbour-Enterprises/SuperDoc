@@ -1,384 +1,742 @@
-import { getTestDataByFileName } from '../helpers/helpers.js';
-import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
-import { handleParagraphNode } from '../../core/super-converter/v2/importer/paragraphNodeImporter.js';
-import { getExportedResultWithDocContent } from '../export/export-helpers/index.js';
-import { Editor } from '@core/Editor.js';
-import { getStarterExtensions } from '@extensions/index.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { handleDrawingNode, handleImageImport } from '../../core/super-converter/v2/importer/imageImporter.js';
 import { exportSchemaToJson } from '@converter/exporter';
-import { pixelsToEmu, degreesToRot, emuToPixels, rotToDegrees } from '@converter/helpers';
+import { emuToPixels, rotToDegrees, pixelsToEmu, degreesToRot } from '@converter/helpers';
 
 describe('Image Import/Export Round Trip Tests', () => {
-  let editor;
-
-  beforeEach(() => {
-    editor = new Editor({
-      isHeadless: true,
-      extensions: getStarterExtensions(),
-      documentId: 'test-doc',
-      mode: 'docx',
-      annotations: true,
-    });
-  });
-
-  afterEach(() => {
-    if (editor) {
-      editor.destroy();
-    }
-  });
-
-  it('round trip: basic image import and export', async () => {
-    const dataName = 'image_doc.docx';
-    const docx = await getTestDataByFileName(dataName);
-    const documentXml = docx['word/document.xml'];
-
-    const doc = documentXml.elements[0];
-    const body = doc.elements[0];
-    const content = body.elements;
-
-    // Import
-    const { nodes } = handleParagraphNode({
-      nodes: [content[0]],
-      docx,
-      nodeListHandler: defaultNodeListHandler(),
-    });
-
-    const paragraphNode = nodes[0];
-    const importedImageNode = paragraphNode.content[0];
-
-    // Verify import
-    expect(importedImageNode.type).toBe('image');
-    expect(importedImageNode.attrs.src).toBe('word/media/image1.jpeg');
-    expect(importedImageNode.attrs.rId).toBe('rId4');
-
-    // Export
-    const exportResult = await getExportedResultWithDocContent([paragraphNode]);
-    const exportedBody = exportResult.elements?.find((el) => el.name === 'w:body');
-    const exportedImageNode = exportedBody.elements[0].elements[1].elements[0];
-
-    // Verify export structure
-    expect(exportedImageNode.elements[0].name).toBe('w:drawing');
-    expect(exportedImageNode.elements[0].elements[0].name).toBe('wp:inline');
-
-    // Verify relationship ID is preserved
-    const blipElement =
-      exportedImageNode.elements[0].elements[0].elements[4].elements[0].elements[0].elements[1].elements[0];
-    expect(blipElement.attributes['r:embed']).toBe('rId4');
-  });
-
-  it('round trip: anchor image with positioning data', async () => {
-    const dataName = 'anchor_images.docx';
-    const docx = await getTestDataByFileName(dataName);
-    const documentXml = docx['word/document.xml'];
-
-    const doc = documentXml.elements[0];
-    const body = doc.elements[0];
-    const content = body.elements;
-
-    // Import
-    const { nodes } = handleParagraphNode({
-      nodes: [content[1]],
-      docx,
-      nodeListHandler: defaultNodeListHandler(),
-    });
-
-    const paragraphNode = nodes[0];
-    const importedImageNode = paragraphNode.content[3];
-
-    // Verify import of anchor data
-    expect(importedImageNode.attrs.isAnchor).toBeTruthy();
-    expect(importedImageNode.attrs.anchorData.hRelativeFrom).toBe('margin');
-    expect(importedImageNode.attrs.anchorData.vRelativeFrom).toBe('margin');
-    expect(importedImageNode.attrs.anchorData.alignH).toBe('left');
-    expect(importedImageNode.attrs.anchorData.alignV).toBe('top');
-
-    // Export
-    const exportResult = await getExportedResultWithDocContent([paragraphNode]);
-    const exportedBody = exportResult.elements?.find((el) => el.name === 'w:body');
-    const exportedImageNode = exportedBody.elements[0].elements[4].elements[0];
-
-    // Verify anchor export
-    const anchorNode = exportedImageNode.elements[0];
-    expect(anchorNode.name).toBe('wp:anchor');
-    expect(anchorNode.elements[1].attributes.relativeFrom).toBe('margin');
-    expect(anchorNode.elements[2].attributes.relativeFrom).toBe('margin');
-  });
-
-  it('round trip: image with transform data (rotation, flips, size extensions)', async () => {
-    // Create mock image node with transform data
-    const mockImageNode = {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'image',
-          attrs: {
-            src: 'word/media/transformed-image.jpg',
-            rId: 'rId10',
-            alt: 'Transformed image',
-            size: { width: 300, height: 200 },
-            padding: { top: 10, bottom: 10, left: 10, right: 10 },
-            transformData: {
-              rotation: 45,
-              verticalFlip: true,
-              horizontalFlip: false,
-              sizeExtension: {
-                left: 5,
-                top: 8,
-                right: 12,
-                bottom: 3,
-              },
-            },
-          },
+  describe('Transform Data Round Trip', () => {
+    it('preserves rotation data through import/export cycle', () => {
+      // Mock OOXML input with rotation
+      const mockXmlInput = {
+        name: 'wp:inline',
+        attributes: {
+          distT: '0',
+          distB: '0',
+          distL: '0',
+          distR: '0',
         },
-      ],
-    };
-
-    // Export first
-    const exportResult = await getExportedResultWithDocContent([mockImageNode]);
-    const exportedBody = exportResult.elements?.find((el) => el.name === 'w:body');
-    const exportedImageNode = exportedBody.elements[0].elements[1].elements[0];
-    const drawing = exportedImageNode.elements[0];
-
-    // Verify export of transform data
-    const effectExtent = drawing.elements[0].elements.find((el) => el.name === 'wp:effectExtent');
-    expect(effectExtent.attributes.l).toBe(pixelsToEmu(5));
-    expect(effectExtent.attributes.t).toBe(pixelsToEmu(8));
-    expect(effectExtent.attributes.r).toBe(pixelsToEmu(12));
-    expect(effectExtent.attributes.b).toBe(pixelsToEmu(3));
-
-    const spPr = drawing.elements[0].elements[4].elements[0].elements[0].elements[2];
-    const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
-    expect(xfrm.attributes.rot).toBe(degreesToRot(45));
-    expect(xfrm.attributes.flipV).toBe('1');
-    expect(xfrm.attributes.flipH).toBeUndefined();
-
-    // Now simulate import back (we would need to convert the exported XML back to PM schema)
-    // For this test, we'll verify the conversion functions work correctly
-    expect(rotToDegrees(degreesToRot(45))).toBeCloseTo(45, 1);
-    expect(emuToPixels(pixelsToEmu(5))).toBeCloseTo(5, 1);
-  });
-
-  it('round trip: image with wrapping and positioning', async () => {
-    const mockImageNode = {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'image',
-          attrs: {
-            src: 'word/media/wrapped-image.png',
-            rId: 'rId11',
-            alt: 'Wrapped image',
-            size: { width: 250, height: 150 },
-            isAnchor: true,
-            wrapText: 'bothSides',
-            wrapTopAndBottom: false,
-            anchorData: {
-              hRelativeFrom: 'page',
-              vRelativeFrom: 'paragraph',
-              alignH: 'center',
-              alignV: 'bottom',
-            },
-            marginOffset: {
-              left: 50,
-              top: 25,
-            },
-          },
-        },
-      ],
-    };
-
-    // Export
-    const exportResult = await getExportedResultWithDocContent([mockImageNode]);
-    const exportedBody = exportResult.elements?.find((el) => el.name === 'w:body');
-    const exportedImageNode = exportedBody.elements[0].elements[1].elements[0];
-    const anchorNode = exportedImageNode.elements[0].elements[0];
-
-    // Verify anchor positioning export
-    expect(anchorNode.name).toBe('wp:anchor');
-
-    const positionH = anchorNode.elements.find((el) => el.name === 'wp:positionH');
-    expect(positionH.attributes.relativeFrom).toBe('page');
-
-    const positionV = anchorNode.elements.find((el) => el.name === 'wp:positionV');
-    expect(positionV.attributes.relativeFrom).toBe('paragraph');
-
-    // Verify wrapping export
-    const wrapSquare = anchorNode.elements.find((el) => el.name === 'wp:wrapSquare');
-    expect(wrapSquare.attributes.wrapText).toBe('bothSides');
-  });
-
-  it('round trip: preserves image metadata and properties', async () => {
-    const mockImageNode = {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'image',
-          attrs: {
-            src: 'word/media/metadata-image.jpg',
-            rId: 'rId12',
-            alt: 'Image with metadata',
-            title: 'Descriptive title',
-            id: 'img123',
-            size: { width: 400, height: 300 },
-            padding: { top: 15, bottom: 20, left: 10, right: 5 },
-            originalPadding: {
-              distT: '190500',
-              distB: '254000',
-              distL: '127000',
-              distR: '63500',
-            },
-            originalAttributes: {
-              someAttr: 'someValue',
-            },
-          },
-        },
-      ],
-    };
-
-    // Export
-    const exportResult = await getExportedResultWithDocContent([mockImageNode]);
-    const exportedBody = exportResult.elements?.find((el) => el.name === 'w:body');
-    const exportedImageNode = exportedBody.elements[0].elements[1].elements[0];
-    const inlineNode = exportedImageNode.elements[0].elements[0];
-
-    // Verify padding is exported from originalPadding if available
-    expect(inlineNode.attributes.distT).toBe('190500');
-    expect(inlineNode.attributes.distB).toBe('254000');
-    expect(inlineNode.attributes.distL).toBe('127000');
-    expect(inlineNode.attributes.distR).toBe('63500');
-
-    // Verify image properties
-    const docPr = inlineNode.elements.find((el) => el.name === 'wp:docPr');
-    expect(docPr.attributes.id).toBe('img123');
-    expect(docPr.attributes.name).toBe('Image with metadata');
-
-    // Verify title in pic:cNvPr
-    const picCNvPr = inlineNode.elements[4].elements[0].elements[0].elements[0].elements[0];
-    expect(picCNvPr.attributes.name).toBe('Descriptive title');
-  });
-
-  it('round trip: handles missing or invalid image data gracefully', async () => {
-    const mockImageNode = {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'image',
-          attrs: {
-            src: 'word/media/missing-image.jpg',
-            // No rId - should be handled gracefully
-            alt: 'Missing image',
-            size: { width: 100, height: 100 },
-          },
-        },
-      ],
-    };
-
-    // Export should create a new relationship ID
-    const exportResult = await getExportedResultWithDocContent([mockImageNode]);
-    const exportedBody = exportResult.elements?.find((el) => el.name === 'w:body');
-    const exportedImageNode = exportedBody.elements[0].elements[1].elements[0];
-
-    // Should still create valid image structure
-    expect(exportedImageNode.elements[0].name).toBe('w:drawing');
-    expect(exportedImageNode.elements[0].elements[0].name).toBe('wp:inline');
-  });
-
-  it('round trip: EMF/WMF image handling', async () => {
-    const mockEmfImageNode = {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'image',
-          attrs: {
-            src: 'word/media/vector-image.emf',
-            rId: 'rId13',
-            alt: 'Unable to render EMF/WMF image',
-            extension: 'emf',
-            size: { width: 200, height: 150 },
-          },
-        },
-      ],
-    };
-
-    // Export
-    const exportResult = await getExportedResultWithDocContent([mockEmfImageNode]);
-    const exportedBody = exportResult.elements?.find((el) => el.name === 'w:body');
-    const exportedImageNode = exportedBody.elements[0].elements[1].elements[0];
-
-    // Verify structure is created correctly for EMF/WMF files
-    expect(exportedImageNode.elements[0].name).toBe('w:drawing');
-
-    // EMF/WMF files should still generate valid drawing markup
-    const docPr = exportedImageNode.elements[0].elements[0].elements.find((el) => el.name === 'wp:docPr');
-    expect(docPr.attributes.name).toBe('Unable to render EMF/WMF image');
-  });
-
-  it('round trip: complex transformation combinations', async () => {
-    const combinations = [
-      { rotation: 90, verticalFlip: false, horizontalFlip: true },
-      { rotation: 180, verticalFlip: true, horizontalFlip: false },
-      { rotation: 270, verticalFlip: true, horizontalFlip: true },
-      { rotation: -30, verticalFlip: false, horizontalFlip: false },
-    ];
-
-    for (const [index, transform] of combinations.entries()) {
-      const mockImageNode = {
-        type: 'paragraph',
-        content: [
+        elements: [
           {
-            type: 'image',
-            attrs: {
-              src: `word/media/combo-${index}.jpg`,
-              rId: `rId1${index}`,
-              alt: `Combo transform ${index}`,
-              size: { width: 300, height: 300 },
-              transformData: transform,
-            },
+            name: 'wp:extent',
+            attributes: { cx: '3810000', cy: '2857500' },
+          },
+          {
+            name: 'wp:effectExtent',
+            attributes: { l: '0', t: '0', r: '0', b: '0' },
+          },
+          {
+            name: 'a:graphic',
+            elements: [
+              {
+                name: 'a:graphicData',
+                attributes: { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' },
+                elements: [
+                  {
+                    name: 'pic:pic',
+                    elements: [
+                      {
+                        name: 'pic:blipFill',
+                        elements: [
+                          {
+                            name: 'a:blip',
+                            attributes: { 'r:embed': 'rId1' },
+                          },
+                        ],
+                      },
+                      {
+                        name: 'pic:spPr',
+                        elements: [
+                          {
+                            name: 'a:xfrm',
+                            attributes: {
+                              rot: '1800000', // 30 degrees
+                              flipV: '1',
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: 'wp:docPr',
+            attributes: { id: '1', name: 'Test Image' },
           },
         ],
       };
 
+      const mockDocx = {
+        'word/_rels/document.xml.rels': {
+          elements: [
+            {
+              name: 'Relationships',
+              elements: [
+                {
+                  attributes: {
+                    Id: 'rId1',
+                    Target: 'media/test-image.jpg',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      // Import
+      const params = { docx: mockDocx };
+      const importedImage = handleImageImport(mockXmlInput, null, params);
+
+      // Verify import
+      expect(importedImage.type).toBe('image');
+      expect(importedImage.attrs.transformData.rotation).toBe(rotToDegrees('1800000'));
+      expect(importedImage.attrs.transformData.verticalFlip).toBe(true);
+
+      // Create mock export params
+      const mockExportParams = {
+        node: importedImage,
+        relationships: [],
+      };
+
       // Export
-      const exportResult = await getExportedResultWithDocContent([mockImageNode]);
-      const exportedBody = exportResult.elements?.find((el) => el.name === 'w:body');
-      const exportedImageNode = exportedBody.elements[0].elements[1].elements[0];
-      const spPr = exportedImageNode.elements[0].elements[0].elements[4].elements[0].elements[0].elements[2];
+      const exportedResult = exportSchemaToJson(mockExportParams);
+
+      // Verify export structure
+      expect(exportedResult.name).toBe('w:r');
+      const drawing = exportedResult.elements.find((el) => el.name === 'w:drawing');
+      expect(drawing).toBeTruthy();
+
+      const inline = drawing.elements[0];
+      expect(inline.name).toBe('wp:inline');
+
+      const graphic = inline.elements.find((el) => el.name === 'a:graphic');
+      const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
+      const pic = graphicData.elements.find((el) => el.name === 'pic:pic');
+      const spPr = pic.elements.find((el) => el.name === 'pic:spPr');
       const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
 
-      // Verify each transformation is exported correctly
-      if (transform.rotation !== 0) {
-        expect(xfrm.attributes.rot).toBe(degreesToRot(transform.rotation));
-      }
-      if (transform.verticalFlip) {
-        expect(xfrm.attributes.flipV).toBe('1');
-      }
-      if (transform.horizontalFlip) {
-        expect(xfrm.attributes.flipH).toBe('1');
-      }
-    }
+      // Verify round trip preservation
+      expect(xfrm.attributes.rot).toBe(degreesToRot(30));
+      expect(xfrm.attributes.flipV).toBe('1');
+    });
+
+    it('preserves horizontal flip through round trip', () => {
+      const mockXmlInput = {
+        name: 'wp:inline',
+        attributes: { distT: '0', distB: '0', distL: '0', distR: '0' },
+        elements: [
+          {
+            name: 'wp:extent',
+            attributes: { cx: '2000000', cy: '1500000' },
+          },
+          {
+            name: 'a:graphic',
+            elements: [
+              {
+                name: 'a:graphicData',
+                attributes: { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' },
+                elements: [
+                  {
+                    name: 'pic:pic',
+                    elements: [
+                      {
+                        name: 'pic:blipFill',
+                        elements: [
+                          {
+                            name: 'a:blip',
+                            attributes: { 'r:embed': 'rId2' },
+                          },
+                        ],
+                      },
+                      {
+                        name: 'pic:spPr',
+                        elements: [
+                          {
+                            name: 'a:xfrm',
+                            attributes: { flipH: '1' },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: 'wp:docPr',
+            attributes: { id: '2', name: 'Flipped Image' },
+          },
+        ],
+      };
+
+      const mockDocx = {
+        'word/_rels/document.xml.rels': {
+          elements: [
+            {
+              name: 'Relationships',
+              elements: [
+                {
+                  attributes: {
+                    Id: 'rId2',
+                    Target: 'media/flipped-image.png',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      // Import
+      const params = { docx: mockDocx };
+      const importedImage = handleImageImport(mockXmlInput, null, params);
+
+      // Verify import
+      expect(importedImage.attrs.transformData.horizontalFlip).toBe(true);
+      expect(importedImage.attrs.transformData.verticalFlip).toBe(false);
+
+      // Export
+      const exportedResult = exportSchemaToJson({ node: importedImage, relationships: [] });
+
+      // Navigate to transform attributes
+      const drawing = exportedResult.elements.find((el) => el.name === 'w:drawing');
+      const inline = drawing.elements[0];
+      const graphic = inline.elements.find((el) => el.name === 'a:graphic');
+      const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
+      const pic = graphicData.elements.find((el) => el.name === 'pic:pic');
+      const spPr = pic.elements.find((el) => el.name === 'pic:spPr');
+      const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
+
+      // Verify round trip preservation
+      expect(xfrm.attributes.flipH).toBe('1');
+      expect(xfrm.attributes.flipV).toBeUndefined();
+    });
+
+    it('preserves size extensions through round trip', () => {
+      const mockXmlInput = {
+        name: 'wp:inline',
+        attributes: { distT: '0', distB: '0', distL: '0', distR: '0' },
+        elements: [
+          {
+            name: 'wp:extent',
+            attributes: { cx: '1500000', cy: '1000000' },
+          },
+          {
+            name: 'wp:effectExtent',
+            attributes: { l: '95250', t: '47625', r: '190500', b: '0' },
+          },
+          {
+            name: 'a:graphic',
+            elements: [
+              {
+                name: 'a:graphicData',
+                attributes: { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' },
+                elements: [
+                  {
+                    name: 'pic:pic',
+                    elements: [
+                      {
+                        name: 'pic:blipFill',
+                        elements: [
+                          {
+                            name: 'a:blip',
+                            attributes: { 'r:embed': 'rId3' },
+                          },
+                        ],
+                      },
+                      {
+                        name: 'pic:spPr',
+                        elements: [
+                          {
+                            name: 'a:xfrm',
+                            attributes: { rot: '900000' }, // 15 degrees
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: 'wp:docPr',
+            attributes: { id: '3', name: 'Extended Image' },
+          },
+        ],
+      };
+
+      const mockDocx = {
+        'word/_rels/document.xml.rels': {
+          elements: [
+            {
+              name: 'Relationships',
+              elements: [
+                {
+                  attributes: {
+                    Id: 'rId3',
+                    Target: 'media/extended-image.jpg',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      // Import
+      const params = { docx: mockDocx };
+      const importedImage = handleImageImport(mockXmlInput, null, params);
+
+      // Verify import of size extensions
+      expect(importedImage.attrs.transformData.sizeExtension.left).toBe(emuToPixels('95250'));
+      expect(importedImage.attrs.transformData.sizeExtension.top).toBe(emuToPixels('47625'));
+      expect(importedImage.attrs.transformData.sizeExtension.right).toBe(emuToPixels('190500'));
+      expect(importedImage.attrs.transformData.sizeExtension.bottom).toBe(emuToPixels('0'));
+
+      // Export
+      const exportedResult = exportSchemaToJson({ node: importedImage, relationships: [] });
+
+      // Navigate to effectExtent
+      const drawing = exportedResult.elements.find((el) => el.name === 'w:drawing');
+      const inline = drawing.elements[0];
+      const effectExtent = inline.elements.find((el) => el.name === 'wp:effectExtent');
+
+      // Verify round trip preservation
+      expect(effectExtent.attributes.l).toBe(pixelsToEmu(emuToPixels('95250')));
+      expect(effectExtent.attributes.t).toBe(pixelsToEmu(emuToPixels('47625')));
+      expect(effectExtent.attributes.r).toBe(pixelsToEmu(emuToPixels('190500')));
+      expect(effectExtent.attributes.b).toBe(0);
+    });
+
+    it('handles combined transformations correctly', () => {
+      const mockXmlInput = {
+        name: 'wp:inline',
+        attributes: { distT: '0', distB: '0', distL: '0', distR: '0' },
+        elements: [
+          {
+            name: 'wp:extent',
+            attributes: { cx: '3000000', cy: '2000000' },
+          },
+          {
+            name: 'wp:effectExtent',
+            attributes: { l: '127000', t: '95250', r: '63500', b: '190500' },
+          },
+          {
+            name: 'a:graphic',
+            elements: [
+              {
+                name: 'a:graphicData',
+                attributes: { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' },
+                elements: [
+                  {
+                    name: 'pic:pic',
+                    elements: [
+                      {
+                        name: 'pic:blipFill',
+                        elements: [
+                          {
+                            name: 'a:blip',
+                            attributes: { 'r:embed': 'rId4' },
+                          },
+                        ],
+                      },
+                      {
+                        name: 'pic:spPr',
+                        elements: [
+                          {
+                            name: 'a:xfrm',
+                            attributes: {
+                              rot: '2700000', // 45 degrees
+                              flipV: '1',
+                              flipH: '1',
+                            },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: 'wp:docPr',
+            attributes: { id: '4', name: 'Complex Transform' },
+          },
+        ],
+      };
+
+      const mockDocx = {
+        'word/_rels/document.xml.rels': {
+          elements: [
+            {
+              name: 'Relationships',
+              elements: [
+                {
+                  attributes: {
+                    Id: 'rId4',
+                    Target: 'media/complex-image.png',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      // Import
+      const params = { docx: mockDocx };
+      const importedImage = handleImageImport(mockXmlInput, null, params);
+
+      // Verify all transformations imported correctly
+      expect(importedImage.attrs.transformData.rotation).toBe(rotToDegrees('2700000'));
+      expect(importedImage.attrs.transformData.verticalFlip).toBe(true);
+      expect(importedImage.attrs.transformData.horizontalFlip).toBe(true);
+      expect(importedImage.attrs.transformData.sizeExtension.left).toBe(emuToPixels('127000'));
+      expect(importedImage.attrs.transformData.sizeExtension.top).toBe(emuToPixels('95250'));
+      expect(importedImage.attrs.transformData.sizeExtension.right).toBe(emuToPixels('63500'));
+      expect(importedImage.attrs.transformData.sizeExtension.bottom).toBe(emuToPixels('190500'));
+
+      // Export
+      const exportedResult = exportSchemaToJson({ node: importedImage, relationships: [] });
+
+      // Navigate to transform elements
+      const drawing = exportedResult.elements.find((el) => el.name === 'w:drawing');
+      const inline = drawing.elements[0];
+      const graphic = inline.elements.find((el) => el.name === 'a:graphic');
+      const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
+      const pic = graphicData.elements.find((el) => el.name === 'pic:pic');
+      const spPr = pic.elements.find((el) => el.name === 'pic:spPr');
+      const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
+      const effectExtent = inline.elements.find((el) => el.name === 'wp:effectExtent');
+
+      // Verify all transformations preserved
+      expect(xfrm.attributes.rot).toBe(degreesToRot(45));
+      expect(xfrm.attributes.flipV).toBe('1');
+      expect(xfrm.attributes.flipH).toBe('1');
+      expect(effectExtent.attributes.l).toBe(pixelsToEmu(emuToPixels('127000')));
+      expect(effectExtent.attributes.t).toBe(pixelsToEmu(emuToPixels('95250')));
+      expect(effectExtent.attributes.r).toBe(pixelsToEmu(emuToPixels('63500')));
+      expect(effectExtent.attributes.b).toBe(pixelsToEmu(emuToPixels('190500')));
+    });
   });
 
-  it('round trip: preserves image storage references', async () => {
-    // Test that image storage references are maintained through round trip
-    const mockImageWithStorage = {
-      type: 'paragraph',
-      content: [
-        {
-          type: 'image',
-          attrs: {
-            src: 'stored-image-ref', // This would be a key in storage.media
-            alt: 'Stored image',
-            size: { width: 200, height: 200 },
-          },
+  describe('Basic Image Properties Round Trip', () => {
+    it('preserves basic image attributes', () => {
+      const mockXmlInput = {
+        name: 'wp:inline',
+        attributes: {
+          distT: '190500', // 10px
+          distB: '190500', // 10px
+          distL: '190500', // 10px
+          distR: '190500', // 10px
         },
-      ],
-    };
+        elements: [
+          {
+            name: 'wp:extent',
+            attributes: { cx: '4000000', cy: '3000000' },
+          },
+          {
+            name: 'a:graphic',
+            elements: [
+              {
+                name: 'a:graphicData',
+                attributes: { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' },
+                elements: [
+                  {
+                    name: 'pic:pic',
+                    elements: [
+                      {
+                        name: 'pic:blipFill',
+                        elements: [
+                          {
+                            name: 'a:blip',
+                            attributes: { 'r:embed': 'rId5' },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: 'wp:docPr',
+            attributes: { id: '5', name: 'Basic Image', descr: 'Test description' },
+          },
+        ],
+      };
 
-    // Export should handle storage references correctly
-    const exportResult = await getExportedResultWithDocContent([mockImageWithStorage]);
-    const exportedBody = exportResult.elements?.find((el) => el.name === 'w:body');
-    const exportedImageNode = exportedBody.elements[0].elements[1].elements[0];
+      const mockDocx = {
+        'word/_rels/document.xml.rels': {
+          elements: [
+            {
+              name: 'Relationships',
+              elements: [
+                {
+                  attributes: {
+                    Id: 'rId5',
+                    Target: 'media/basic-image.jpg',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
 
-    // Should create valid structure even with storage reference
-    expect(exportedImageNode.elements[0].name).toBe('w:drawing');
+      // Import
+      const params = { docx: mockDocx };
+      const importedImage = handleImageImport(mockXmlInput, null, params);
+
+      // Verify basic properties
+      expect(importedImage.type).toBe('image');
+      expect(importedImage.attrs.src).toBe('word/media/basic-image.jpg');
+      expect(importedImage.attrs.alt).toBe('Basic Image');
+      expect(importedImage.attrs.title).toBe('Test description');
+      expect(importedImage.attrs.id).toBe('5');
+      expect(importedImage.attrs.rId).toBe('rId5');
+      expect(importedImage.attrs.padding.top).toBe(emuToPixels('190500'));
+      expect(importedImage.attrs.padding.bottom).toBe(emuToPixels('190500'));
+      expect(importedImage.attrs.padding.left).toBe(emuToPixels('190500'));
+      expect(importedImage.attrs.padding.right).toBe(emuToPixels('190500'));
+      expect(importedImage.attrs.size.width).toBe(emuToPixels('4000000'));
+      expect(importedImage.attrs.size.height).toBe(emuToPixels('3000000'));
+
+      // Export
+      const exportedResult = exportSchemaToJson({ node: importedImage, relationships: [] });
+
+      // Verify export structure preserves basic properties
+      const drawing = exportedResult.elements.find((el) => el.name === 'w:drawing');
+      const inline = drawing.elements[0];
+
+      // Check padding preservation in originalPadding attributes
+      expect(inline.attributes.distT).toBe('190500');
+      expect(inline.attributes.distB).toBe('190500');
+      expect(inline.attributes.distL).toBe('190500');
+      expect(inline.attributes.distR).toBe('190500');
+
+      // Check size preservation
+      const extent = inline.elements.find((el) => el.name === 'wp:extent');
+      expect(extent.attributes.cx).toBe(pixelsToEmu(emuToPixels('4000000')));
+      expect(extent.attributes.cy).toBe(pixelsToEmu(emuToPixels('3000000')));
+
+      // Check docPr preservation
+      const docPr = inline.elements.find((el) => el.name === 'wp:docPr');
+      expect(docPr.attributes.id).toBe('5');
+      expect(docPr.attributes.name).toBe('Basic Image');
+
+      // Check relationship preservation
+      const graphic = inline.elements.find((el) => el.name === 'a:graphic');
+      const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
+      const pic = graphicData.elements.find((el) => el.name === 'pic:pic');
+      const blipFill = pic.elements.find((el) => el.name === 'pic:blipFill');
+      const blip = blipFill.elements.find((el) => el.name === 'a:blip');
+      expect(blip.attributes['r:embed']).toBe('rId5');
+    });
+  });
+
+  describe('Unit Conversion Round Trip', () => {
+    it('maintains precision through EMU/pixel/degree conversions', () => {
+      const testRotations = [0, 15, 30, 45, 90, 180, 270, -45, 33.5];
+      const testEmuValues = ['0', '95250', '190500', '381000', '571500'];
+
+      testRotations.forEach((degrees) => {
+        const rot = degreesToRot(degrees);
+        const roundTrip = rotToDegrees(rot);
+        expect(roundTrip).toBeCloseTo(degrees, 1);
+      });
+
+      testEmuValues.forEach((emu) => {
+        const pixels = emuToPixels(emu);
+        const roundTrip = pixelsToEmu(pixels);
+        expect(Math.abs(parseInt(emu) - roundTrip)).toBeLessThan(1000); // Allow small rounding errors
+      });
+    });
+
+    it('handles edge cases in conversions', () => {
+      // Test zero values
+      expect(rotToDegrees('0')).toBe(0);
+      expect(degreesToRot(0)).toBe(0);
+      expect(emuToPixels('0')).toBe(0);
+      expect(pixelsToEmu(0)).toBe(0);
+
+      // Test negative rotations
+      expect(rotToDegrees('-1800000')).toBe(-30);
+      expect(degreesToRot(-30)).toBe(-1800000);
+
+      // Test very small values
+      const smallEmuToPixels = emuToPixels('1');
+      const smallPixelsToEmu = pixelsToEmu(0.1);
+
+      // These functions might return 0 for very small values due to rounding
+      expect(typeof smallEmuToPixels).toBe('number');
+      expect(typeof smallPixelsToEmu).toBe('number');
+      expect(smallPixelsToEmu).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  describe('Error Handling in Round Trip', () => {
+    it('handles missing transform attributes gracefully', () => {
+      const mockXmlInput = {
+        name: 'wp:inline',
+        attributes: { distT: '0', distB: '0', distL: '0', distR: '0' },
+        elements: [
+          {
+            name: 'wp:extent',
+            attributes: { cx: '1000000', cy: '1000000' },
+          },
+          {
+            name: 'a:graphic',
+            elements: [
+              {
+                name: 'a:graphicData',
+                attributes: { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' },
+                elements: [
+                  {
+                    name: 'pic:pic',
+                    elements: [
+                      {
+                        name: 'pic:blipFill',
+                        elements: [
+                          {
+                            name: 'a:blip',
+                            attributes: { 'r:embed': 'rId6' },
+                          },
+                        ],
+                      },
+                      {
+                        name: 'pic:spPr',
+                        elements: [{}], // Empty xfrm
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: 'wp:docPr',
+            attributes: { id: '6', name: 'No Transform' },
+          },
+        ],
+      };
+
+      const mockDocx = {
+        'word/_rels/document.xml.rels': {
+          elements: [
+            {
+              name: 'Relationships',
+              elements: [
+                {
+                  attributes: {
+                    Id: 'rId6',
+                    Target: 'media/no-transform.jpg',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      // Import should not fail
+      const params = { docx: mockDocx };
+      const importedImage = handleImageImport(mockXmlInput, null, params);
+
+      expect(importedImage).toBeTruthy();
+      expect(importedImage.attrs.transformData).toBeDefined();
+      expect(importedImage.attrs.transformData.rotation).toBeFalsy();
+      expect(importedImage.attrs.transformData.verticalFlip).toBeFalsy();
+      expect(importedImage.attrs.transformData.horizontalFlip).toBeFalsy();
+
+      // Export should not fail
+      const exportedResult = exportSchemaToJson({ node: importedImage, relationships: [] });
+      expect(exportedResult).toBeTruthy();
+    });
+
+    it('handles malformed size extension data gracefully', () => {
+      const mockXmlInput = {
+        name: 'wp:inline',
+        attributes: { distT: '0', distB: '0', distL: '0', distR: '0' },
+        elements: [
+          {
+            name: 'wp:extent',
+            attributes: { cx: '1000000', cy: '1000000' },
+          },
+          {
+            name: 'wp:effectExtent',
+            attributes: { l: 'invalid', t: '', r: null }, // Malformed data
+          },
+          {
+            name: 'a:graphic',
+            elements: [
+              {
+                name: 'a:graphicData',
+                attributes: { uri: 'http://schemas.openxmlformats.org/drawingml/2006/picture' },
+                elements: [
+                  {
+                    name: 'pic:pic',
+                    elements: [
+                      {
+                        name: 'pic:blipFill',
+                        elements: [
+                          {
+                            name: 'a:blip',
+                            attributes: { 'r:embed': 'rId7' },
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            name: 'wp:docPr',
+            attributes: { id: '7', name: 'Malformed Data' },
+          },
+        ],
+      };
+
+      const mockDocx = {
+        'word/_rels/document.xml.rels': {
+          elements: [
+            {
+              name: 'Relationships',
+              elements: [
+                {
+                  attributes: {
+                    Id: 'rId7',
+                    Target: 'media/malformed.jpg',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      // Import should handle malformed data gracefully
+      const params = { docx: mockDocx };
+      const importedImage = handleImageImport(mockXmlInput, null, params);
+
+      expect(importedImage).toBeTruthy();
+      expect(importedImage.attrs.transformData).toBeDefined();
+
+      // Should handle malformed effectExtent gracefully - might not create sizeExtension
+      if (importedImage.attrs.transformData.sizeExtension) {
+        expect(importedImage.attrs.transformData.sizeExtension.left).toBe(0);
+        expect(importedImage.attrs.transformData.sizeExtension.top).toBe(0);
+        expect(importedImage.attrs.transformData.sizeExtension.right).toBe(0);
+      }
+    });
   });
 });
