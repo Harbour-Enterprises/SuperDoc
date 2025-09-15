@@ -1,4 +1,4 @@
-import { emuToPixels } from '../../helpers.js';
+import { emuToPixels, rotToDegrees } from '../../helpers.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -67,6 +67,28 @@ export function handleImageImport(node, currentFileName, params) {
 
   const blipFill = picture.elements.find((el) => el.name === 'pic:blipFill');
   const blip = blipFill.elements.find((el) => el.name === 'a:blip');
+
+  const spPr = picture.elements.find((el) => el.name === 'pic:spPr');
+  let transformData = {};
+  if (spPr) {
+    const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
+    if (xfrm?.attributes) {
+      transformData = {
+        rotation: rotToDegrees(xfrm.attributes['rot']),
+        verticalFlip: xfrm.attributes['flipV'] === '1',
+        horizontalFlip: xfrm.attributes['flipH'] === '1',
+      };
+      const effectExtent = node.elements.find((el) => el.name === 'wp:effectExtent');
+      if (effectExtent) {
+        transformData.sizeExtension = {
+          left: emuToPixels(effectExtent.attributes['l'] || 0),
+          top: emuToPixels(effectExtent.attributes['t'] || 0),
+          right: emuToPixels(effectExtent.attributes['r'] || 0),
+          bottom: emuToPixels(effectExtent.attributes['b'] || 0),
+        };
+      }
+    }
+  }
 
   const positionHTag = node.elements.find((el) => el.name === 'wp:positionH');
   const positionH = positionHTag?.elements.find((el) => el.name === 'wp:posOffset');
@@ -137,6 +159,7 @@ export function handleImageImport(node, currentFileName, params) {
       marginOffset,
       size,
       anchorData,
+      transformData,
       ...(simplePos && {
         simplePos: {
           x: simplePos.attributes.x,
