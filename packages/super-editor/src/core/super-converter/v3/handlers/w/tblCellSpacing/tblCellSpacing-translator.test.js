@@ -1,0 +1,52 @@
+import { describe, it, expect } from 'vitest';
+import { translator } from './tblCellSpacing-translator.js';
+
+describe('w:tblCellSpacing translator', () => {
+  describe('encode', () => {
+    it('extracts w:w and w:type attributes into an object', () => {
+      const result = translator.encode({ nodes: [{ attributes: { 'w:w': '120', 'w:type': 'dxa' } }] });
+      expect(result).toEqual({ value: 120, type: 'dxa' });
+    });
+
+    it('handles missing w:type', () => {
+      const result = translator.encode({ nodes: [{ attributes: { 'w:w': '120' } }] });
+      expect(result).toEqual({ value: 120 });
+    });
+
+    it('parses w:w as integer', () => {
+      const result = translator.encode({ nodes: [{ attributes: { 'w:w': '150' } }] });
+      expect(result.value).toBe(150);
+    });
+
+    it('returns undefined if w:w is missing', () => {
+      const result = translator.encode({ nodes: [{ attributes: { 'w:type': 'dxa' } }] });
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('decode', () => {
+    it('creates a w:tblCellSpacing element with w:w and w:type attributes', () => {
+      const result = translator.decode({ node: { attrs: { cellSpacing: { value: 140, type: 'pct' } } } });
+      expect(result).toEqual({ 'w:w': '140', 'w:type': 'pct' });
+    });
+
+    it('handles missing type property', () => {
+      const result = translator.decode({ node: { attrs: { cellSpacing: { value: 140 } } } });
+      expect(result).toEqual({ 'w:w': '140' });
+    });
+
+    it('returns undefined if cellSpacing property is missing', () => {
+      expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
+    });
+
+    it('returns undefined if cellSpacing.value is missing or not a number', () => {
+      expect(translator.decode({ node: { attrs: { cellSpacing: { type: 'dxa' } } } })).toBeUndefined();
+      expect(translator.decode({ node: { attrs: { cellSpacing: { value: null } } } })).toBeUndefined();
+    });
+  });
+
+  it('has correct metadata', () => {
+    expect(translator.xmlName).toBe('w:tblCellSpacing');
+    expect(translator.sdNodeOrKeyName).toBe('cellSpacing');
+  });
+});
