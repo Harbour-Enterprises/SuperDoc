@@ -1,5 +1,6 @@
 // @ts-check
 import { history, redo as originalRedo, undo as originalUndo } from 'prosemirror-history';
+import { undo as yUndo, redo as yRedo, yUndoPlugin } from 'y-prosemirror';
 import { Extension } from '@core/Extension.js';
 
 /**
@@ -35,6 +36,10 @@ export const History = Extension.create({
   },
 
   addPmPlugins() {
+    if (this.editor.options.collaborationProvider && this.editor.options.ydoc) {
+      const undoPlugin = createUndoPlugin();
+      return [undoPlugin];
+    }
     const historyPlugin = history(this.options);
     return [historyPlugin];
   },
@@ -51,6 +56,10 @@ export const History = Extension.create({
        * @note Groups changes within the newGroupDelay window
        */
       undo: () => ({ state, dispatch, tr }) => {
+        if (this.editor.options.collaborationProvider && this.editor.options.ydoc) {
+          tr.setMeta('preventDispatch', true);
+          return yUndo(state);
+        }
         tr.setMeta('inputType', 'historyUndo');
         return originalUndo(state, dispatch);
       },
@@ -64,6 +73,10 @@ export const History = Extension.create({
        * @note Only available after an undo action
        */
       redo: () => ({ state, dispatch, tr }) => {
+        if (this.editor.options.collaborationProvider && this.editor.options.ydoc) {
+          tr.setMeta('preventDispatch', true);
+          return yRedo(state);
+        }
         tr.setMeta('inputType', 'historyRedo');
         return originalRedo(state, dispatch);
       },
@@ -78,3 +91,8 @@ export const History = Extension.create({
     };
   },
 });
+
+const createUndoPlugin = () => {
+  const yUndoPluginInstance = yUndoPlugin();
+  return yUndoPluginInstance;
+};

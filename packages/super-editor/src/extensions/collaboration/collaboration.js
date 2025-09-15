@@ -1,7 +1,7 @@
 import { Extension } from '@core/index.js';
 import { PluginKey } from 'prosemirror-state';
 import { encodeStateAsUpdate } from 'yjs';
-import { ySyncPlugin, yUndoPlugin, yUndoPluginKey, undo, redo, prosemirrorToYDoc } from 'y-prosemirror';
+import { ySyncPlugin, prosemirrorToYDoc } from 'y-prosemirror';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 
 export const CollaborationPluginKey = new PluginKey('collaboration');
@@ -23,7 +23,6 @@ export const Collaboration = Extension.create({
   addPmPlugins() {
     if (!this.editor.options.ydoc) return [];
     this.options.ydoc = this.editor.options.ydoc;
-    const undoPlugin = createUndoPlugin();
 
     initSyncListener(this.options.ydoc, this.editor, this);
     initDocumentListener({ ydoc: this.options.ydoc, editor: this.editor });
@@ -41,47 +40,7 @@ export const Collaboration = Extension.create({
       });
     });
 
-    return [syncPlugin, undoPlugin];
-  },
-
-  addCommands() {
-    return {
-      undo:
-        () =>
-        ({ tr, state, dispatch }) => {
-          tr.setMeta('preventDispatch', true);
-          tr.setMeta('inputType', 'historyUndo');
-          const undoManager = yUndoPluginKey.getState(state).undoManager;
-          if (undoManager.undoStack.length === 0) return false;
-          if (!dispatch) return true;
-          return undo(state);
-        },
-      redo:
-        () =>
-        ({ tr, state, dispatch }) => {
-          tr.setMeta('preventDispatch', true);
-          tr.setMeta('inputType', 'historyRedo');
-          const undoManager = yUndoPluginKey.getState(state).undoManager;
-          if (undoManager.redoStack.length === 0) return false;
-          if (!dispatch) return true;
-          return redo(state);
-        },
-      addImageToCollaboration:
-        ({ mediaPath, fileData }) =>
-        () => {
-          if (!this.options.ydoc) return;
-          const mediaMap = this.options.ydoc.getMap('media');
-          mediaMap.set(mediaPath, fileData);
-        },
-    };
-  },
-
-  addShortcuts() {
-    return {
-      'Mod-z': () => this.editor.commands.undo(),
-      'Mod-Shift-z': () => this.editor.commands.redo(),
-      'Mod-y': () => this.editor.commands.redo(),
-    };
+    return [syncPlugin];
   },
 });
 
@@ -104,11 +63,6 @@ export const initializeMetaMap = (ydoc, editor) => {
   Object.entries(editor.options.mediaFiles).forEach(([key, value]) => {
     mediaMap.set(key, value);
   });
-};
-
-const createUndoPlugin = () => {
-  const yUndoPluginInstance = yUndoPlugin();
-  return yUndoPluginInstance;
 };
 
 const checkDocxChanged = (transaction) => {
