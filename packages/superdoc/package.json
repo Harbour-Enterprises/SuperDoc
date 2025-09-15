@@ -54,7 +54,7 @@
   "dependencies": {
     "buffer-crc32": "^1.0.0",
     "eventemitter3": "^5.0.1",
-    "jsdom": "^25.0.1",
+    "jsdom": "^27.0.0",
     "naive-ui": "^2.39.0",
     "pinia": "^2.1.7",
     "rollup-plugin-copy": "^3.5.0",
