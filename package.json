@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:debug": "npm run test:debug --workspace=packages/super-editor",
     "test:all": "vitest run",
     "test:editor": "vitest run --root ./packages/super-editor",
     "test:superdoc": "vitest run --root ./packages/superdoc",
