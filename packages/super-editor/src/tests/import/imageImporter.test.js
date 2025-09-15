@@ -63,7 +63,6 @@ describe('ImageNodeImporter', () => {
     const doc = documentXml.elements[0];
     const body = doc.elements[0];
     const content = body.elements;
-    console.log(content[6].elements[2]);
 
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 
@@ -78,7 +77,9 @@ describe('ImageNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     paragraphNode = nodes1[0];
-    drawingNode = paragraphNode.content[1];
+
+    // Find the image node dynamically instead of using a fixed index
+    drawingNode = paragraphNode.content.find((node) => node.type === 'image');
     expect(drawingNode.attrs.src).toBe('word/media/image1.jpeg');
   });
 });

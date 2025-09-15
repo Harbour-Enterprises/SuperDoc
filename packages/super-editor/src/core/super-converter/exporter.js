@@ -27,6 +27,8 @@ import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translato
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
+import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark-start/index.js';
+import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -87,7 +89,8 @@ export function exportSchemaToJson(params) {
     table: translateTable,
     tableRow: translateTableRow,
     tableCell: wTcNodeTranslator,
-    bookmarkStart: translateBookmarkStart,
+    bookmarkStart: wBookmarkStartTranslator,
+    bookmarkEnd: wBookmarkEndTranslator,
     fieldAnnotation: translateFieldAnnotation,
     tab: wTabNodeTranslator,
     image: translateImageNode,

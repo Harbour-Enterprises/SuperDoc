@@ -13,7 +13,8 @@ import { annotationNodeHandlerEntity } from './annotationImporter.js';
 import { sdtNodeHandlerEntity } from './structuredDocumentNodeImporter.js';
 import { standardNodeHandlerEntity } from './standardNodeImporter.js';
 import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
-import { bookmarkNodeHandlerEntity } from './bookmarkNodeImporter.js';
+import { bookmarkStartNodeHandlerEntity } from './bookmarkStartImporter.js';
+import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
 import { listHandlerEntity } from './listImporter.js';
@@ -134,7 +135,8 @@ export const defaultNodeListHandler = () => {
     lineBreakNodeHandlerEntity,
     annotationNodeHandlerEntity,
     sdtNodeHandlerEntity,
-    bookmarkNodeHandlerEntity,
+    bookmarkStartNodeHandlerEntity,
+    bookmarkEndNodeHandlerEntity,
     hyperlinkNodeHandlerEntity,
     drawingNodeHandlerEntity,
     trackChangeNodeHandlerEntity,
