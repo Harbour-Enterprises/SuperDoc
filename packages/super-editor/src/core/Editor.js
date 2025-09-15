@@ -705,18 +705,11 @@ export class Editor extends EventEmitter {
       ...options,
     };
 
-    if (this.options.collaborationProvider && this.options.ydoc) {
-      const nonCollabHistoryIndex = this.options.extensions.findIndex((e) => e.name === 'history');
-      if (nonCollabHistoryIndex !== -1) {
-        this.options.extensions.splice(nonCollabHistoryIndex, 1);
-      }
-    }
-
     if ((this.options.isNewFile || !this.options.ydoc) && this.options.isCommentsEnabled) {
       this.options.shouldLoadComments = true;
     }
 
-    if (!this.view || !this.state || this.ifsDestroyed) {
+    if (!this.view || !this.state || this.isDestroyed) {
       return;
     }
 

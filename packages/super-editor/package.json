@@ -76,8 +76,8 @@
     "naive-ui": "^2.38.2",
     "tippy.js": "^6.3.7",
     "vite-plugin-node-polyfills": "^0.23.0",
-    "y-prosemirror": "^1.2.12",
-    "yjs": "13.6.19"
+    "y-prosemirror": "latest",
+    "yjs": "13.6.27"
   },
   "devDependencies": {
     "@floating-ui/dom": "^1.7.0",
