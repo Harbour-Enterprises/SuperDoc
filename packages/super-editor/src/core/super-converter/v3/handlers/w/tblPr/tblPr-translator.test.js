@@ -33,7 +33,7 @@ describe('w:tblPr translator', () => {
               },
               {
                 name: 'w:tblCellMar',
-                elements: [{ name: 'w:top', attributes: { 'w:val': 'single', 'w:sz': '4' } }],
+                elements: [{ name: 'w:top', attributes: { 'w:w': '360', 'w:type': 'dxa' } }],
               },
               { name: 'w:bidiVisual' },
             ],
@@ -58,7 +58,7 @@ describe('w:tblPr translator', () => {
           left: { val: 'double', size: 8 },
         },
         cellMargins: {
-          top: { val: 'single', size: 4, frame: false, shadow: false },
+          marginTop: { value: 360, type: 'dxa' },
         },
         rightToLeft: true,
       });
@@ -102,7 +102,7 @@ describe('w:tblPr translator', () => {
                 left: { val: 'double', size: 8 },
               },
               cellMargins: {
-                top: { val: 'single', size: 4 },
+                marginTop: { value: 360, type: 'dxa' },
               },
               rightToLeft: true,
             },
@@ -145,12 +145,7 @@ describe('w:tblPr translator', () => {
             name: 'w:tblCellMar',
             type: 'element',
             attributes: {},
-            elements: [
-              {
-                name: 'w:top',
-                attributes: { 'w:val': 'single', 'w:sz': '4', 'w:frame': '0', 'w:shadow': '0' },
-              },
-            ],
+            elements: [{ name: 'w:top', attributes: { 'w:w': '360', 'w:type': 'dxa' } }],
           },
           { name: 'w:bidiVisual', attributes: {} },
         ]),
