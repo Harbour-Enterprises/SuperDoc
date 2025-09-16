@@ -34,10 +34,15 @@ import AiLayer from './components/AiLayer/AiLayer.vue';
 import { useSelectedText } from './composables/use-selected-text';
 import { useAi } from './composables/use-ai';
 import { useHighContrastMode } from './composables/use-high-contrast-mode';
+
 // Stores
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 const emit = defineEmits(['selection-update']);
+
+// Canvas variables
+let canvasEventListeners = null;
+let canvas = null;
 
 //prettier-ignore
 const {
@@ -70,6 +75,8 @@ const {
 const { showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
 const { proxy } = getCurrentInstance();
 commentsStore.proxy = proxy;
+
+const showCanvas = ref(false);
 
 const { isHighContrastMode } = useHighContrastMode();
 
@@ -371,16 +378,6 @@ const scrollToComment = (commentId) => {
   }
 };
 
-onMounted(() => {
-  if (isCommentsEnabled.value && !modules.comments.readOnly) {
-    document.addEventListener('mousedown', handleDocumentMouseDown);
-  }
-});
-
-onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', handleDocumentMouseDown);
-});
-
 const selectionLayer = ref(null);
 const isDragging = ref(false);
 
@@ -536,6 +533,530 @@ const handlePdfClick = (e) => {
   handleSelectionStart(e);
 };
 
+const initCanvas = () => {
+  // Wait a bit for the DOM to fully settle
+  setTimeout(() => {
+    // 1. Create canvas
+    canvas = document.createElement('canvas');
+    canvas.style.position = 'absolute';
+    canvas.style.top = '0';
+    canvas.style.left = '0';
+    canvas.style.width = '100%';
+    canvas.style.height = '100%';
+    canvas.style.zIndex = '9999';
+    canvas.id = 'overlay-canvas';
+
+    const container = document.getElementById('canvas-container');
+    if (!container) {
+      console.error('Canvas container not found!');
+      return;
+    }
+
+    // Clear any existing canvas
+    const existingCanvas = container.querySelector('#overlay-canvas');
+    if (existingCanvas) {
+      existingCanvas.remove();
+    }
+
+    container.appendChild(canvas);
+
+    // Set proper canvas resolution
+    const containerStyle = window.getComputedStyle(container);
+    const containerWidth = parseInt(containerStyle.width);
+    const containerHeight = parseInt(containerStyle.height);
+
+    canvas.width = containerWidth;
+    canvas.height = containerHeight;
+
+    const ctx = canvas.getContext('2d');
+    ctx.strokeStyle = 'blue';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+
+    // Create event handlers object to store references
+    canvasEventListeners = createCanvasEventHandlers(canvas, ctx, container);
+
+    // Apply event listeners based on showCanvas state
+    updateCanvasInteractivity();
+  }, 500);
+};
+
+// Separate function to create all event handlers
+const createCanvasEventHandlers = (canvas, ctx, container) => {
+  const getCanvasCoordinates = (e) => {
+    const canvasRect = canvas.getBoundingClientRect();
+    const x = e.clientX - canvasRect.left;
+    const y = e.clientY - canvasRect.top;
+
+    const scaleX = canvas.width / canvasRect.width;
+    const scaleY = canvas.height / canvasRect.height;
+
+    return {
+      x: x * scaleX,
+      y: y * scaleY,
+      displayX: x,
+      displayY: y,
+    };
+  };
+
+  const drawCommentOnCanvas = (ctx, commentText, x, y) => {
+    ctx.save();
+
+    // Set up text properties
+    const fontSize = 12;
+    const padding = 10;
+    const lineHeight = fontSize * 1.4;
+    const maxWidth = 180;
+
+    ctx.font = `${fontSize}px Arial, sans-serif`;
+
+    // Word wrap the comment text
+    const words = commentText.split(' ');
+    const lines = [];
+    let currentLine = '';
+
+    for (let word of words) {
+      const testLine = currentLine + (currentLine ? ' ' : '') + word;
+      const metrics = ctx.measureText(testLine);
+
+      if (metrics.width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = word;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+
+    // Calculate bubble dimensions
+    const lineWidths = lines.map((line) => ctx.measureText(line).width);
+    const actualMaxWidth = Math.max(...lineWidths);
+    const bubbleWidth = actualMaxWidth + padding * 2;
+    const bubbleHeight = lines.length * lineHeight + padding * 2;
+
+    // Position bubble
+    const bubbleX = x - bubbleWidth / 2;
+    const bubbleY = y - bubbleHeight - 13;
+    const cornerRadius = 6;
+
+    // Draw comment bubble
+    ctx.fillStyle = '#FEF3C7';
+    ctx.strokeStyle = '#F59E0B';
+    ctx.lineWidth = 1.15;
+
+    // Rounded rectangle
+    ctx.beginPath();
+    ctx.moveTo(bubbleX + cornerRadius, bubbleY);
+    ctx.lineTo(bubbleX + bubbleWidth - cornerRadius, bubbleY);
+    ctx.quadraticCurveTo(bubbleX + bubbleWidth, bubbleY, bubbleX + bubbleWidth, bubbleY + cornerRadius);
+    ctx.lineTo(bubbleX + bubbleWidth, bubbleY + bubbleHeight - cornerRadius);
+    ctx.quadraticCurveTo(
+      bubbleX + bubbleWidth,
+      bubbleY + bubbleHeight,
+      bubbleX + bubbleWidth - cornerRadius,
+      bubbleY + bubbleHeight,
+    );
+    ctx.lineTo(bubbleX + cornerRadius, bubbleY + bubbleHeight);
+    ctx.quadraticCurveTo(bubbleX, bubbleY + bubbleHeight, bubbleX, bubbleY + bubbleHeight - cornerRadius);
+    ctx.lineTo(bubbleX, bubbleY + cornerRadius);
+    ctx.quadraticCurveTo(bubbleX, bubbleY, bubbleX + cornerRadius, bubbleY);
+    ctx.closePath();
+
+    ctx.fill();
+    ctx.stroke();
+
+    // Draw tail
+    const tailSize = 8;
+    const tailX = Math.min(Math.max(x, bubbleX + 10), bubbleX + bubbleWidth - 10);
+    const tailY = bubbleY + bubbleHeight;
+
+    ctx.fillStyle = '#FEF3C7';
+    ctx.strokeStyle = '#F59E0B';
+    ctx.beginPath();
+    ctx.moveTo(tailX, tailY + tailSize);
+    ctx.lineTo(tailX - tailSize / 2, tailY);
+    ctx.lineTo(tailX + tailSize / 2, tailY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Draw text
+    ctx.fillStyle = '#92400E';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+
+    lines.forEach((line, index) => {
+      const textX = bubbleX + padding;
+      const textY = bubbleY + padding + index * lineHeight;
+      ctx.fillText(line, textX, textY);
+    });
+
+    ctx.restore();
+  };
+
+  const drawStickerOnCanvas = (ctx, stickerType, x, y) => {
+    const size = 40;
+    const radius = size / 2;
+
+    ctx.save();
+
+    switch (stickerType) {
+      case 'check-mark':
+        // Green circle with checkmark
+        ctx.fillStyle = '#22C55E';
+        ctx.strokeStyle = '#16A34A';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+
+        // White checkmark
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y);
+        ctx.lineTo(x - 2, y + 6);
+        ctx.lineTo(x + 8, y - 6);
+        ctx.stroke();
+        break;
+
+      case 'nice':
+        // Blue circle with smiley
+        ctx.fillStyle = '#3B82F6';
+        ctx.strokeStyle = '#2563EB';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+
+        // White smiley face
+        ctx.fillStyle = 'white';
+        // Eyes
+        ctx.beginPath();
+        ctx.arc(x - 6, y - 4, 2, 0, 2 * Math.PI);
+        ctx.arc(x + 6, y - 4, 2, 0, 2 * Math.PI);
+        ctx.fill();
+
+        // Smile
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.arc(x, y + 2, 8, 0.2 * Math.PI, 0.8 * Math.PI);
+        ctx.stroke();
+        break;
+
+      case 'needs-improvement':
+        // Orange circle with exclamation
+        ctx.fillStyle = '#F59E0B';
+        ctx.strokeStyle = '#D97706';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+
+        // White exclamation mark
+        ctx.fillStyle = 'white';
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+
+        // Exclamation line
+        ctx.beginPath();
+        ctx.moveTo(x, y - 10);
+        ctx.lineTo(x, y + 2);
+        ctx.stroke();
+
+        // Exclamation dot
+        ctx.beginPath();
+        ctx.arc(x, y + 8, 2, 0, 2 * Math.PI);
+        ctx.fill();
+        break;
+
+      default:
+        // Fallback gray circle
+        ctx.fillStyle = '#9CA3AF';
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 2, 0, 2 * Math.PI);
+        ctx.fill();
+        break;
+    }
+
+    ctx.restore();
+  };
+
+  const createTextInput = (displayX, displayY, canvasX, canvasY) => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.style.position = 'absolute';
+    input.style.left = displayX + 'px';
+    input.style.top = displayY + 'px';
+    input.style.zIndex = '10000';
+    input.style.background = 'transparent';
+    input.style.outline = 'none';
+    input.style.fontSize = '16px';
+    input.style.fontFamily = 'Arial, sans-serif';
+    input.style.color = '#000';
+    input.style.minWidth = '100px';
+    input.style.padding = '2px 4px';
+    input.style.border = '1px solid #DBDBDB';
+    input.style.borderRadius = '4px';
+
+    container.appendChild(input);
+    input.focus();
+
+    const finishTextInput = () => {
+      const text = input.value.trim();
+      if (text) {
+        drawCommentOnCanvas(ctx, text, canvasX + 10, canvasY + 30);
+      }
+      container.removeChild(input);
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        finishTextInput();
+      }
+    });
+
+    input.addEventListener('blur', finishTextInput);
+  };
+
+  // Drawing state
+  let isMouseDown = false;
+  let hasDragged = false;
+  let startX = 0;
+  let startY = 0;
+  let lastX = 0;
+  let lastY = 0;
+  const dragThreshold = 3;
+
+  // Event handlers
+  const onMouseDown = (e) => {
+    console.log('Mouse down detected');
+    e.preventDefault();
+    e.stopPropagation();
+
+    const coords = getCanvasCoordinates(e);
+
+    isMouseDown = true;
+    hasDragged = false;
+    startX = coords.x;
+    startY = coords.y;
+    lastX = coords.x;
+    lastY = coords.y;
+  };
+
+  const onMouseMove = (e) => {
+    if (!isMouseDown) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const coords = getCanvasCoordinates(e);
+
+    const deltaX = Math.abs(coords.x - startX);
+    const deltaY = Math.abs(coords.y - startY);
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    if (distance > dragThreshold && !hasDragged) {
+      hasDragged = true;
+      ctx.beginPath();
+      ctx.moveTo(startX, startY);
+    }
+
+    if (hasDragged) {
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(coords.x, coords.y);
+      ctx.stroke();
+
+      lastX = coords.x;
+      lastY = coords.y;
+    }
+  };
+
+  const onMouseUp = (e) => {
+    if (!isMouseDown) return;
+
+    if (!hasDragged) {
+      const coords = getCanvasCoordinates(e);
+      createTextInput(coords.displayX, coords.displayY, coords.x, coords.y);
+    } else {
+      ctx.closePath();
+    }
+
+    isMouseDown = false;
+    hasDragged = false;
+  };
+
+  const onMouseLeave = (e) => {
+    if (isMouseDown && hasDragged) {
+      ctx.closePath();
+    }
+    isMouseDown = false;
+    hasDragged = false;
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    canvas.style.border = '2px solid #22C55E';
+  };
+
+  const handleDragLeave = (e) => {
+    if (!canvas.contains(e.relatedTarget)) {
+      canvas.style.border = 'none';
+    }
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    canvas.style.border = 'none';
+
+    const coords = getCanvasCoordinates(e);
+
+    // Handle sticker drops
+    const stickerData = e.dataTransfer.getData('application/sticker');
+    if (stickerData) {
+      try {
+        const sticker = JSON.parse(stickerData);
+        drawStickerOnCanvas(ctx, sticker.type, coords.x, coords.y);
+        return;
+      } catch (error) {
+        console.error('Error handling sticker drop:', error);
+      }
+    }
+
+    // Handle comment drops
+    const commentData = e.dataTransfer.getData('application/comment');
+    if (commentData) {
+      try {
+        const comment = JSON.parse(commentData);
+        drawCommentOnCanvas(ctx, comment.text, coords.x, coords.y + 40);
+        return;
+      } catch (error) {
+        console.error('Error handling comment drop:', error);
+      }
+    }
+
+    // Fallback for plain text
+    const plainText = e.dataTransfer.getData('text/plain');
+    if (plainText) {
+      if (['check-mark', 'nice', 'needs-improvement'].includes(plainText)) {
+        drawStickerOnCanvas(ctx, plainText, coords.x, coords.y);
+      } else {
+        drawCommentOnCanvas(ctx, plainText, coords.x, coords.y - 20);
+      }
+    }
+  };
+
+  const handleContextMenu = (e) => {
+    e.preventDefault();
+  };
+
+  const handleClick = (e) => {
+    console.log('Canvas clicked!', e);
+    e.stopPropagation();
+  };
+
+  // Return event handlers
+  return {
+    mouse: {
+      mousedown: { handler: onMouseDown, options: true },
+      mousemove: { handler: onMouseMove, options: true },
+      mouseup: { handler: onMouseUp, options: true },
+      mouseleave: { handler: onMouseLeave, options: true },
+      click: { handler: handleClick, options: true },
+    },
+    dragDrop: {
+      dragover: { handler: handleDragOver, options: false },
+      dragenter: { handler: handleDragEnter, options: false },
+      dragleave: { handler: handleDragLeave, options: false },
+      drop: { handler: handleDrop, options: false },
+    },
+    other: {
+      contextmenu: { handler: handleContextMenu, options: false },
+    },
+  };
+};
+
+// Function to add or remove event listeners based on showCanvas state
+const updateCanvasInteractivity = () => {
+  if (!canvas || !canvasEventListeners) return;
+
+  if (showCanvas.value) {
+    // Enable canvas interactivity
+    canvas.style.pointerEvents = 'auto';
+    canvas.style.cursor = 'crosshair';
+
+    // Add all event listeners
+    Object.values(canvasEventListeners).forEach((category) => {
+      Object.entries(category).forEach(([eventName, { handler, options }]) => {
+        canvas.addEventListener(eventName, handler, options);
+      });
+    });
+
+    console.log('Canvas interactivity enabled');
+  } else {
+    // Disable canvas interactivity
+    canvas.style.pointerEvents = 'none';
+    canvas.style.cursor = 'default';
+
+    // Remove all event listeners
+    Object.values(canvasEventListeners).forEach((category) => {
+      Object.entries(category).forEach(([eventName, { handler, options }]) => {
+        canvas.removeEventListener(eventName, handler, options);
+      });
+    });
+
+    console.log('Canvas interactivity disabled');
+  }
+};
+
+// Watch for showCanvas changes and update interactivity
+watch(showCanvas, (newValue) => {
+  console.log('showCanvas changed to:', newValue);
+  updateCanvasInteractivity();
+});
+
+onMounted(() => {
+  if (isCommentsEnabled.value && !modules.comments.readOnly) {
+    document.addEventListener('mousedown', handleDocumentMouseDown);
+  }
+
+  // Always create the canvas on mount, but start disabled
+  initCanvas();
+
+  proxy.$superdoc.on('canvas', (canvasEnabled) => {
+    showCanvas.value = canvasEnabled;
+    console.debug('--SHOW CANVAS', canvasEnabled);
+  });
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleDocumentMouseDown);
+
+  // Clean up canvas event listeners
+  if (canvas && canvasEventListeners) {
+    Object.values(canvasEventListeners).forEach((category) => {
+      Object.entries(category).forEach(([eventName, { handler, options }]) => {
+        canvas.removeEventListener(eventName, handler, options);
+      });
+    });
+  }
+});
+
 watch(getFloatingComments, () => {
   hasInitializedLocations.value = false;
   nextTick(() => {
@@ -607,9 +1128,12 @@ watch(getFloatingComments, () => {
           :editor="proxy.$superdoc.activeEditor"
         />
 
+        <div class="free-annotations comments-layer" :class="{ 'free-annotations--hidden': !showCanvas }">
+          <div id="canvas-container"></div>
+        </div>
+
         <div class="superdoc__sub-document sub-document" v-for="doc in documents" :key="doc.id">
           <!-- PDF renderer -->
-
           <PdfViewer
             v-if="doc.type === PDF"
             :document-data="doc"
@@ -695,6 +1219,24 @@ watch(getFloatingComments, () => {
 </style>
 
 <style scoped>
+.free-annotations--hidden {
+  pointer-events: none !important;
+  opacity: 0.3;
+}
+
+.free-annotations--hidden canvas {
+  pointer-events: none !important;
+  cursor: default !important;
+}
+
+.free-annotations {
+  position: absolute;
+  width: 100%;
+  min-height: 11in;
+  z-index: 10;
+  transition: opacity 0.2s ease;
+}
+
 .superdoc {
   display: flex;
 }
@@ -737,7 +1279,6 @@ watch(getFloatingComments, () => {
 }
 
 .superdoc__comments-layer {
-  /* position: absolute; */
   top: 0;
   height: 100%;
   position: relative;
@@ -758,87 +1299,6 @@ watch(getFloatingComments, () => {
   z-index: 3;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-
-.tools .tool-icon {
-  font-size: 20px;
-  border-radius: 12px;
-  border: none;
-  outline: none;
-  background-color: #dbdbdb;
-  cursor: pointer;
-}
-
-.tools-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 50px;
-  height: 50px;
-  background-color: rgba(219, 219, 219, 0.6);
-  border-radius: 12px;
-  cursor: pointer;
-}
-
-.tools-item i {
-  cursor: pointer;
-}
-
-.superdoc__tools-icon {
-  width: 20px;
-  height: 20px;
-  flex-shrink: 0;
-}
-/* Tools styles - end */
-
-/* .docx {
-  border: 1px solid #dfdfdf;
-  pointer-events: auto;
-} */
-
-/* 834px is iPad screen size in portrait orientation */
-@media (max-width: 834px) {
-  .superdoc .superdoc__layers {
-    margin: 0;
-    border: 0 !important;
-    box-shadow: none;
-  }
-
-  .superdoc__sub-document {
-    max-width: 100%;
-  }
-
-  .superdoc__right-sidebar {
-    padding: 10px;
-    width: 55px;
-    position: relative;
-  }
-}
-
-/* AI Writer styles */
-.ai-writer-container {
-  position: fixed;
-  z-index: 1000;
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-}
-
-/* Remove the AI Sidebar styles */
-/* .ai-sidebar-container {
-  position: absolute;
-  right: 20px;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 50;
-} */
-
-/* Tools styles */
-.tools {
-  position: absolute;
-  z-index: 3;
-  display: flex;
   gap: 6px;
 }
 
@@ -882,7 +1342,6 @@ watch(getFloatingComments, () => {
   position: absolute;
   width: 20px;
   height: 20px;
-
   z-index: 1;
   background: linear-gradient(
     270deg,
@@ -902,5 +1361,46 @@ watch(getFloatingComments, () => {
 .ai-tool:hover::before {
   filter: brightness(1.3);
 }
-/* Tools styles - end */
+
+/* 834px is iPad screen size in portrait orientation */
+@media (max-width: 834px) {
+  .superdoc .superdoc__layers {
+    margin: 0;
+    border: 0 !important;
+    box-shadow: none;
+  }
+
+  .superdoc__sub-document {
+    max-width: 100%;
+  }
+
+  .superdoc__right-sidebar {
+    padding: 10px;
+    width: 55px;
+    position: relative;
+  }
+}
+
+/* AI Writer styles */
+.ai-writer-container {
+  position: fixed;
+  z-index: 1000;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+}
+
+#canvas-container {
+  position: absolute;
+  z-index: 1000;
+  top: 0;
+  width: 8.5in;
+  height: 11in;
+  pointer-events: none;
+}
+
+#canvas-container canvas {
+  cursor: crosshair;
+  pointer-events: auto;
+}
 </style>

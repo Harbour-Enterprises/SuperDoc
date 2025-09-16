@@ -343,6 +343,12 @@ export class SuperDoc extends EventEmitter {
     this.on('list-definitions-change', this.config.onListDefinitionsChange);
   }
 
+  toggleAnnotationMode(state) {
+    this.config.canvas = state !== undefined && state !== null ? state : !this.config.canvas;
+    console.debug('--CANVAS?', this.config.canvas);
+    this.emit('canvas', this.config.canvas);
+  }
+
   /**
    * Initialize collaboration if configured
    * @param {Object} config
