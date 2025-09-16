@@ -257,14 +257,20 @@ class SuperConverter {
       if (rPrDefaults) {
         const rPr = rPrDefaults.elements?.find((el) => el.name === 'w:rPr');
         const fonts = rPr?.elements?.find((el) => el.name === 'w:rFonts');
-        typeface = fonts?.attributes['w:ascii'];
+        // Prefer the explicit ascii font from rPrDefault if present
+        if (fonts?.attributes?.['w:ascii']) {
+          typeface = fonts.attributes['w:ascii'];
+        }
 
-        const fontSize = typeface ?? rPr?.elements?.find((el) => el.name === 'w:sz')?.attributes['w:val'];
-        fontSizeNormal = !fontSizeNormal && fontSize ? Number(fontSize) / 2 : null;
+        // If we didn't already pick up a Normal style font size, fall back to rPrDefault sz
+        const fontSizeRaw = rPr?.elements?.find((el) => el.name === 'w:sz')?.attributes?.['w:val'];
+        if (!fontSizeNormal && fontSizeRaw) {
+          fontSizeNormal = Number(fontSizeRaw) / 2;
+        }
       }
 
-      const fontSizePt =
-        fontSizeNormal || Number(rElements.find((el) => el.name === 'w:sz')?.attributes['w:val']) / 2 || 10;
+      const fallbackSz = Number(rElements.find((el) => el.name === 'w:sz')?.attributes?.['w:val']);
+      const fontSizePt = fontSizeNormal ?? (Number.isFinite(fallbackSz) ? fallbackSz / 2 : undefined) ?? 10;
       const kern = rElements.find((el) => el.name === 'w:kern')?.attributes['w:val'];
       return { fontSizePt, kern, typeface, panose };
     }

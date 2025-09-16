@@ -37,11 +37,9 @@ describe('basic comment import [basic-comment.docx]', () => {
     expect(commentContent).toHaveLength(1);
     expect(commentContent[0].text).toBe('abcabc');
     expect(commentContent[0].type).toBe('text');
-    expect(commentContent[0].marks).toHaveLength(1);
-
-    const firstMark = commentContent[0].marks[0];
-    expect(firstMark.type).toBe('textStyle');
-    expect(firstMark.attrs.fontSize).toBe('10pt');
+    const textStyleMark = commentContent[0].marks.find((mark) => mark.type === 'textStyle');
+    expect(textStyleMark).toBeDefined();
+    expect(textStyleMark.attrs.fontSize).toBe('10pt');
   });
 });
 

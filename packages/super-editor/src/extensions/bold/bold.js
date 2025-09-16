@@ -1,5 +1,6 @@
 // @ts-check
 import { Mark, Attribute } from '@core/index.js';
+import { getMarksFromSelection } from '@core/helpers/getMarksFromSelection.js';
 
 /**
  * @module Bold
@@ -86,7 +87,7 @@ export const Bold = Mark.create({
       toggleBold:
         () =>
         ({ commands }) =>
-          commands.toggleMark(this.name),
+          commands.toggleMarkCascade(this.name, { negationAttrs: { value: '0' } }),
     };
   },
 

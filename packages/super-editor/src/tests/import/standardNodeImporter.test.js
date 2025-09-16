@@ -17,8 +17,9 @@ describe('StandardNodeImporter', () => {
     expect(nodes[0].content[0].text).toBe('First paragraph');
 
     const { marks } = nodes[0].content[0];
-    expect(marks[0].type).toBe('textStyle');
-    expect(marks[0].attrs).toHaveProperty('fontFamily', 'Arial');
-    expect(marks[0].attrs).toHaveProperty('lineHeight', '1.15');
+    const textStyle = marks.find((m) => m.type === 'textStyle');
+    expect(textStyle).toBeDefined();
+    expect(textStyle.attrs).toHaveProperty('fontFamily', 'Arial');
+    expect(textStyle.attrs).toHaveProperty('lineHeight', '1.15');
   });
 });

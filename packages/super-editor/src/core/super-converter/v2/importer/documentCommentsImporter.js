@@ -20,7 +20,10 @@ export function importCommentData({ docx, editor, converter }) {
   const { elements } = comments;
   if (!elements || !elements.length) return;
 
-  const { elements: allComments = [] } = elements[0];
+  // Only process actual comment nodes
+  const allChildren = elements[0]?.elements || [];
+  const allComments = allChildren.filter((el) => el.name === 'w:comment');
+
   const extractedComments = allComments.map((el) => {
     const { attributes } = el;
     const importedId = attributes['w:id'];

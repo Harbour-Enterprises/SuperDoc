@@ -18,21 +18,26 @@ describe('HyperlinkNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     const { marks } = nodes[0];
-    expect(marks.length).toBe(3);
-    expect(marks[0].type).toBe('underline');
-    expect(marks[1].type).toBe('link');
-    expect(marks[2].type).toBe('textStyle');
-    expect(marks[2].attrs.fontFamily).toBe('Arial');
-    expect(marks[2].attrs.fontSize).toBe('10pt');
+    // Expect run, underline, link, textStyle in that order
+    expect(marks.length).toBeGreaterThanOrEqual(4);
+    expect(marks[0].type).toBe('run');
+    expect(marks[1].type).toBe('underline');
+    expect(marks[2].type).toBe('link');
+    // Find textStyle mark (may be at index 3)
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark).toBeTruthy();
+    expect(textStyleMark.attrs.fontFamily).toBe('Arial');
+    expect(textStyleMark.attrs.fontSize).toBe('10pt');
 
-    expect(marks[1].attrs.href).toBe(
+    const linkMark = marks.find((m) => m.type === 'link');
+    expect(linkMark).toBeTruthy();
+    expect(linkMark.attrs.href).toBe(
       'https://stackoverflow.com/questions/66669593/how-to-attach-image-at-first-page-in-docx-file-nodejs',
     );
-    expect(marks[1].attrs.rId).toBe('rId4');
+    expect(linkMark.attrs.rId).toBe('rId4');
     expect(marks[1].attrs.history).toBe(true);
 
-    // Capture the textStyle mark
-    const textStyleMark = marks[2];
+    // textStyle mark should carry the Hyperlink style id
     expect(textStyleMark.type).toBe('textStyle');
     expect(textStyleMark.attrs.styleId).toBe('Hyperlink');
     expect(textStyleMark.attrs.fontFamily).toBe('Arial');

@@ -1110,7 +1110,8 @@ export class Editor extends EventEmitter {
     element.style.webkitOverflowScrolling = 'touch';
 
     // Calculate line height
-    const defaultLineHeight = 1.2;
+    // Align closer to Word's default for Normal paragraphs
+    const defaultLineHeight = 1.15;
     proseMirror.style.lineHeight = defaultLineHeight;
 
     // If we are not using pagination, we still need to add some padding for header/footer

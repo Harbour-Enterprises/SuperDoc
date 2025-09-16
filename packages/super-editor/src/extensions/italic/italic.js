@@ -17,6 +17,23 @@ export const Italic = Mark.create({
     };
   },
 
+  addAttributes() {
+    return {
+      /**
+       * @category Attribute
+       * @param {string} [value] - Italic toggle value ('0' renders as normal)
+       */
+      value: {
+        default: null,
+        renderDOM: (attrs) => {
+          if (!attrs.value) return {};
+          if (attrs.value === '0') return { style: 'font-style: normal' };
+          return {};
+        },
+      },
+    };
+  },
+
   parseDOM() {
     return [
       { tag: 'i' },
@@ -66,7 +83,7 @@ export const Italic = Mark.create({
       toggleItalic:
         () =>
         ({ commands }) =>
-          commands.toggleMark(this.name),
+          commands.toggleMarkCascade(this.name, { negationAttrs: { value: '0' } }),
     };
   },
 

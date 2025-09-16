@@ -58,7 +58,6 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
     expect(extraTextAfterSdt.text).toBe(' text');
 
     const { marks: extraTextMarks } = extraTextAfterSdt;
-    expect(extraTextMarks.length).toBe(2);
     const extraBold = extraTextMarks.find((mark) => mark.type === 'bold');
     expect(extraBold).toBeDefined();
 

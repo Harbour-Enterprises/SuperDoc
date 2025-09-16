@@ -191,7 +191,7 @@ export const getDefaultParagraphStyle = (docx, styleId = '') => {
   const { attributes: pPrNormalIndentAttr } = pPrNormalIndentTag;
   const { attributes: pPrByIdIndentAttr } = pPrStyleIdIndentTag;
 
-  const spacingRest = isNormalAsDefault
+  let spacingRest = isNormalAsDefault
     ? pPrNormalSpacingAttr || pPrDefaultSpacingAttr
     : pPrDefaultSpacingAttr || pPrNormalSpacingAttr;
 
@@ -199,8 +199,37 @@ export const getDefaultParagraphStyle = (docx, styleId = '') => {
     ? pPrNormalIndentAttr || pPrDefaultIndentAttr
     : pPrDefaultIndentAttr || pPrNormalIndentAttr;
 
+  // If no spacing found anywhere, fall back to Word's modern defaults:
+  // line = 1.15 (w:line=240, auto), after = 8pt (w:after=160)
+  if (!pPrByIdSpacingAttr && !spacingRest) {
+    spacingRest = { 'w:line': '276', 'w:lineRule': 'auto', 'w:after': '160' };
+  }
+
+  // If a style-by-id is requested but missing in styles.xml, approximate Word's
+  // built-in heading/title spacings so we don't under-space compared to Word.
+  let styleIdSpacing = pPrByIdSpacingAttr;
+  if (!styleIdSpacing && styleId) {
+    const fallbackByStyle = (sid) => {
+      const map = {
+        Heading1: { 'w:before': '240', 'w:after': '0', 'w:line': '276', 'w:lineRule': 'auto' }, // 12pt before
+        Heading2: { 'w:before': '200', 'w:after': '0', 'w:line': '276', 'w:lineRule': 'auto' }, // 10pt before
+        Heading3: { 'w:before': '160', 'w:after': '0', 'w:line': '276', 'w:lineRule': 'auto' }, // 8pt before
+        Title: { 'w:before': '240', 'w:after': '200', 'w:line': '276', 'w:lineRule': 'auto' }, // generous spacing
+      };
+      if (map[sid]) return map[sid];
+      const matchHeaeding = /^Heading([1-9])$/i.exec(sid);
+      if (matchHeaeding) {
+        const lvl = Number(matchHeaeding[1]);
+        const before = Math.max(80, 280 - lvl * 40); // degrade 2pt per level starting from ~14pt
+        return { 'w:before': String(before), 'w:after': '0', 'w:line': '276', 'w:lineRule': 'auto' };
+      }
+      return null;
+    };
+    styleIdSpacing = fallbackByStyle(styleId);
+  }
+
   return {
-    spacing: pPrByIdSpacingAttr || spacingRest,
+    spacing: styleIdSpacing || spacingRest,
     indent: pPrByIdIndentAttr || indentRest,
     justify: pPrByIdJcAttr,
   };

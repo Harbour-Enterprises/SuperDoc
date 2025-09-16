@@ -67,7 +67,8 @@ describe('paragraph tests to check spacing', () => {
     const { spacing } = attrs;
 
     expect(spacing.line).toBe(1.15);
-    expect(spacing.lineSpaceAfter).toBeUndefined();
+    // With updated importer, after-spacing is computed inside table cells in this sample
+    expect(spacing.lineSpaceAfter).toBe(11);
     expect(spacing.lineSpaceBefore).toBeUndefined();
   });
 

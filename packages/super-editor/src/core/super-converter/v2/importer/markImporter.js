@@ -153,8 +153,13 @@ export function createImportMarks(marks) {
     });
   }
 
-  const result = [...remainingMarks, { type: 'textStyle', attrs: combinedTextAttrs }];
-  return result;
+  // Only include a textStyle mark when it actually carries attributes.
+  // Emitting an empty textStyle here causes duplicate textStyle marks later
+  // when run-level translators merge inline styles (the empty one ends up first).
+  if (Object.keys(combinedTextAttrs).length > 0) {
+    return [...remainingMarks, { type: 'textStyle', attrs: combinedTextAttrs }];
+  }
+  return remainingMarks;
 }
 
 /**
@@ -231,13 +236,22 @@ function getLineHeightValue(attributes) {
   return `${twipsToLines(value)}`;
 }
 
-function getHighLightValue(attributes) {
+export function getHighLightValue(attributes) {
   const fill = attributes['w:fill'];
   if (fill && fill !== 'auto') return `#${fill}`;
   if (isValidHexColor(attributes?.['w:val'])) return `#${attributes['w:val']}`;
   return getHexColorFromDocxSystem(attributes?.['w:val']) || null;
 }
 
-function getStrikeValue(attributes) {
-  return attributes?.['w:val'] === '1' ? attributes['w:val'] : null;
+/**
+ * Get the highlight value from the attributes.
+ * @param {Object} attributes
+ * @returns {string|null} hex color or null
+ */
+export function getStrikeValue(attributes) {
+  const raw = attributes?.['w:val'];
+  if (raw === undefined || raw === null) return '1'; // presence implies on
+  const value = String(raw).trim().toLowerCase();
+  if (value === '1' || value === 'true' || value === 'on') return '1';
+  return null;
 }

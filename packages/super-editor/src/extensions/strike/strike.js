@@ -1,5 +1,6 @@
 // @ts-check
 import { Mark, Attribute } from '@core/index.js';
+import { toggleMarkCascade } from '@core/commands/toggleMarkCascade.js';
 
 /**
  * @module Strike
@@ -65,9 +66,27 @@ export const Strike = Mark.create({
        */
       toggleStrike:
         () =>
-        ({ commands }) => {
-          return commands.toggleMark(this.name);
+        ({ commands }) =>
+          commands.toggleMarkCascade(this.name, { negationAttrs: { value: '0' } }),
+    };
+  },
+
+  addAttributes() {
+    return {
+      /**
+       * @category Attribute
+       * @param {string} [value] - Strike toggle value ('0' renders as normal)
+       */
+      value: {
+        default: null,
+        renderDOM: (attrs) => {
+          if (!attrs.value) return {};
+          if (attrs.value === '0') {
+            return { style: 'text-decoration: none' };
+          }
+          return {};
         },
+      },
     };
   },
 

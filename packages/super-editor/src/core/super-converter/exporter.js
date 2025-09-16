@@ -113,10 +113,7 @@ export function exportSchemaToJson(params) {
     return handler.decode(params);
   }
 
-  if (!handler) {
-    console.error('No translation function found for node type:', type);
-    return null;
-  }
+  if (!handler) return null;
 
   // Call the handler for this node type
   return handler(params);
@@ -492,6 +489,7 @@ function getTextNodeForExport(text, marks, params) {
   const textNodes = [];
 
   const outputMarks = processOutputMarks(marks);
+  
   textNodes.push({
     name: 'w:t',
     elements: [{ text, type: 'text' }],
@@ -502,9 +500,10 @@ function getTextNodeForExport(text, marks, params) {
   // And store attributes in the bookmark name
   if (params) {
     const { editor } = params;
-    const customMarks = editor.extensionService.extensions.filter((e) => e.isExternal === true);
+    const extensions = editor?.extensionService?.extensions;
+    const customMarks = Array.isArray(extensions) ? extensions.filter((e) => e.isExternal === true) : [];
 
-    marks.forEach((mark) => {
+    if (customMarks.length) marks.forEach((mark) => {
       const isCustomMark = customMarks.some((customMark) => {
         const customMarkName = customMark.name;
         return mark.type === customMarkName;
@@ -1272,15 +1271,15 @@ function translateMark(mark) {
 
   switch (mark.type) {
     case 'bold':
-      if (attrs?.value) {
-        markElement.attributes['w:val'] = attrs.value;
-      } else {
-        delete markElement.attributes;
-      }
+      // Do not emit when explicitly OFF; presence-with-0 confuses round-trip checks
+      if (attrs?.value === '0' || attrs?.value === 0 || attrs?.value === false) return {};
+      // Presence without value means ON
+      delete markElement.attributes;
       markElement.type = 'element';
       break;
 
     case 'italic':
+      if (attrs?.value === '0' || attrs?.value === 0 || attrs?.value === false) return {};
       delete markElement.attributes;
       markElement.type = 'element';
       break;
@@ -1288,6 +1287,15 @@ function translateMark(mark) {
     case 'underline':
       markElement.type = 'element';
       markElement.attributes['w:val'] = attrs.underlineType;
+      if (attrs.underlineColor) {
+        const hex = String(attrs.underlineColor).replace('#', '').toUpperCase();
+        if (hex && hex !== 'AUTO') markElement.attributes['w:color'] = hex;
+      }
+      break;
+    case 'strike':
+      if (attrs?.value === '0' || attrs?.value === 0 || attrs?.value === false) return {};
+      delete markElement.attributes;
+      markElement.type = 'element';
       break;
 
     // Text style cases
@@ -1310,13 +1318,27 @@ function translateMark(mark) {
       markElement.attributes['w:val'] = attrs.styleId;
       break;
 
-    case 'color':
-      let processedColor = attrs.color.replace(/^#/, '').replace(/;$/, ''); // Remove `#` and `;` if present
+    case 'color': {
+      const c = attrs.color;
+      if (!c || c === 'inherit') return {};
+      // Theme-based color support: color stored as 'theme:accent2'
+      if (typeof c === 'string' && c.startsWith('theme:')) {
+        markElement.name = 'w:color';
+        markElement.attributes['w:themeColor'] = c.slice('theme:'.length);
+        break;
+      }
+      if (c === 'auto') {
+        markElement.name = 'w:color';
+        markElement.attributes['w:val'] = 'auto';
+        break;
+      }
+      let processedColor = String(c).replace(/^#/, '').replace(/;$/, ''); // Remove `#` and `;` if present
       if (processedColor.startsWith('rgb')) {
         processedColor = rgbToHex(processedColor);
       }
       markElement.attributes['w:val'] = processedColor;
       break;
+    }
 
     case 'textAlign':
       markElement.attributes['w:val'] = attrs.textAlign;
@@ -1338,12 +1360,34 @@ function translateMark(mark) {
     case 'lineHeight':
       markElement.attributes['w:line'] = linesToTwips(attrs.lineHeight);
       break;
-    case 'highlight':
-      markElement.attributes['w:fill'] = attrs.color?.substring(1);
-      markElement.attributes['w:color'] = 'auto';
-      markElement.attributes['w:val'] = 'clear';
-      markElement.name = 'w:shd';
+
+    case 'highlight': {
+      
+      // Skip exporting highlight if negated via 'inherit' or 'transparent' or no color
+      let c = attrs.color;
+      if (!c || c === 'inherit') return {};
+      if (c === 'transparent') {
+        markElement.name = 'w:highlight';
+        markElement.attributes['w:val'] = 'none';
+        break;
+      }
+      // Normalize rgb() to hex
+      if (typeof c === 'string' && c.trim().toLowerCase().startsWith('rgb')) {
+        c = rgbToHex(c);
+      }
+      if (typeof c === 'string' && c.startsWith('#')) {
+        // Emit shading when we have hex color
+        markElement.attributes['w:fill'] = c.substring(1);
+        markElement.attributes['w:color'] = 'auto';
+        markElement.attributes['w:val'] = 'clear';
+        markElement.name = 'w:shd';
+      } else {
+        // Emit legacy w:highlight for named colors (e.g., 'yellow')
+        markElement.name = 'w:highlight';
+        markElement.attributes['w:val'] = c;
+      }
       break;
+    }
 
     case 'link':
       break;

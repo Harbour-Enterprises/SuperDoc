@@ -23,6 +23,15 @@ import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
+import { boldNodeEntityHandler } from './boldImporter.js';
+import { italicNodeEntityHandler } from './italicImporter.js';
+import { underlineNodeEntityHandler } from './underlineImporter.js';
+import { rFontsNodeEntityHandler } from './rFontsImporter.js';
+import { colorNodeEntityHandler } from './colorImporter.js';
+import { fontSizeNodeEntityHandler } from './fontSizeImporter.js';
+import { strikeNodeEntityHandler } from './strikeImporter.js';
+import { highlightNodeEntityHandler } from './highlightImporter.js';
+import { rStyleNodeEntityHandler } from './rStyleImporter.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -125,6 +134,15 @@ export const createDocumentJson = (docx, converter, editor) => {
 
 export const defaultNodeListHandler = () => {
   const entities = [
+    boldNodeEntityHandler,
+    italicNodeEntityHandler,
+    rFontsNodeEntityHandler,
+    fontSizeNodeEntityHandler,
+    colorNodeEntityHandler,
+    strikeNodeEntityHandler,
+    highlightNodeEntityHandler,
+    underlineNodeEntityHandler,
+    rStyleNodeEntityHandler,
     alternateChoiceHandler,
     runNodeHandlerEntity,
     pictNodeHandlerEntity,

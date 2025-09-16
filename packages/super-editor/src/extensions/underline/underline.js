@@ -6,6 +6,7 @@
  */
 
 import { Mark, Attribute } from '@core/index.js';
+import { getUnderlineCssString } from '@extensions/linked-styles/index.js';
 
 /**
  * @module Underline
@@ -32,7 +33,19 @@ export const Underline = Mark.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    return ['u', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+    const merged = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
+    const type = merged?.underlineType;
+    const color = merged?.underlineColor;
+    const css = getUnderlineCssString({ type, color });
+
+    // strip custom attribute and merge computed style
+    const { underlineType, underlineColor, style, ...rest } = merged || {};
+    const styleString = [style, css].filter(Boolean).join('; ');
+
+    if (type === 'none') {
+      return ['span', { ...rest, ...(styleString ? { style: styleString } : {}) }, 0];
+    }
+    return ['u', { ...rest, ...(styleString ? { style: styleString } : {}) }, 0];
   },
 
   addAttributes() {
@@ -43,6 +56,9 @@ export const Underline = Mark.create({
        */
       underlineType: {
         default: 'single',
+      },
+      underlineColor: {
+        default: null,
       },
     };
   },
@@ -83,7 +99,11 @@ export const Underline = Mark.create({
       toggleUnderline:
         () =>
         ({ commands }) =>
-          commands.toggleMark(this.name),
+          // Cascade-aware toggle with explicit negation detector for underline
+          commands.toggleMarkCascade(this.name, {
+            negationAttrs: { underlineType: 'none' },
+            isNegation: (attrs) => attrs?.underlineType === 'none',
+          }),
     };
   },
 
