@@ -58,7 +58,6 @@ describe('SuperDoc Store - Blob Support', () => {
 
       await store.init(config);
 
-      const doc = { data: file, name: 'test.docx', type: DOCX };
 
       // Access the private method through the store's internal methods
       // Since _initializeDocumentData is private, we test through the public init method
