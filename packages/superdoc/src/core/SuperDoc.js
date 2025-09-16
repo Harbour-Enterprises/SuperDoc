@@ -314,11 +314,19 @@ export class SuperDoc extends EventEmitter {
         },
       ];
     } else if (hasDocumentBlob) {
+      // Generate filename based on type
+      const docType = this.config.document.type || DOCX;
+      let extension = '.docx';
+      if (docType === PDF) {
+        extension = '.pdf';
+      } else if (docType === HTML) {
+        extension = '.html';
+      }
       this.config.documents = [
         {
-          type: this.config.document.type || DOCX,
+          type: docType,
           data: this.config.document,
-          name: 'document.docx', // Default name for Blob
+          name: `document${extension}`,
           isNewFile: true,
         },
       ];
