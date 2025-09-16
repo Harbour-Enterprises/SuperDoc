@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SuperDoc Blob Example</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: #f5f5f5;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 10px 15px;
+            background: #1355ff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #0044ff;
+        }
+        
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .info {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .editor-container {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        #superdoc-toolbar {
+            border-bottom: 1px solid #ddd;
+        }
+        
+        #superdoc {
+            height: 600px;
+            display: flex;
+            justify-content: center;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>SuperDoc Blob Support Example</h1>
+        <p>This example demonstrates how to use Blob objects with SuperDoc for document initialization.</p>
+    </div>
+
+    <div class="info">
+        <h3>What this example shows:</h3>
+        <ul>
+            <li><strong>File to Blob conversion:</strong> Load a file and convert it to a Blob</li>
+            <li><strong>Fetch to Blob:</strong> Fetch a document from a URL and create a Blob</li>
+            <li><strong>Generated Blob:</strong> Create a Blob with programmatically generated content</li>
+            <li><strong>SuperDoc initialization:</strong> Use Blobs directly with SuperDoc</li>
+        </ul>
+    </div>
+
+    <div class="controls">
+        <input type="file" id="fileInput" accept=".docx" class="hidden">
+        <button onclick="loadFromFile()">Load from File → Blob</button>
+        <button onclick="loadFromUrl()">Fetch from URL → Blob</button>
+        <button onclick="generateBlob()">Generate Content → Blob</button>
+        <button onclick="clearEditor()">Clear Editor</button>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="editor-container">
+        <div id="superdoc-toolbar"></div>
+        <div id="superdoc"></div>
+    </div>
+
+    <script type="module">
+        import { SuperDoc } from 'https://unpkg.com/@harbour-enterprises/superdoc@latest/dist/superdoc.es.js';
+        
+        let currentSuperdoc = null;
+        
+        // Utility function to show status
+        function showStatus(message, type = 'success') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.textContent = '';
+                    statusDiv.className = '';
+                }, 3000);
+            }
+        }
+        
+        // Utility function to destroy current editor
+        function destroyCurrentEditor() {
+            if (currentSuperdoc) {
+                currentSuperdoc.destroy();
+                currentSuperdoc = null;
+            }
+        }
+        
+        // Initialize SuperDoc with a Blob
+        async function initializeWithBlob(blob, name = 'document.docx') {
+            try {
+                destroyCurrentEditor();
+                
+                currentSuperdoc = new SuperDoc({
+                    selector: '#superdoc',
+                    toolbar: '#superdoc-toolbar',
+                    document: blob, // Pass Blob directly!
+                    documentMode: 'editing',
+                    pagination: true,
+                    rulers: true,
+                    onReady: () => {
+                        showStatus(`✅ SuperDoc initialized successfully with Blob: ${name}`);
+                    },
+                    onException: (error) => {
+                        console.error('SuperDoc error:', error);
+                        showStatus(`❌ Error: ${error.message}`, 'error');
+                    }
+                });
+                
+            } catch (error) {
+                console.error('Initialization error:', error);
+                showStatus(`❌ Failed to initialize: ${error.message}`, 'error');
+            }
+        }
+        
+        // Load from file and convert to Blob
+        window.loadFromFile = function() {
+            const input = document.getElementById('fileInput');
+            input.onchange = async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                
+                try {
+                    // Convert File to Blob (demonstrates the process)
+                    const arrayBuffer = await file.arrayBuffer();
+                    const blob = new Blob([arrayBuffer], { 
+                        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' 
+                    });
+                    
+                    console.log('File converted to Blob:', {
+                        originalFile: { name: file.name, size: file.size, type: file.type },
+                        blob: { size: blob.size, type: blob.type }
+                    });
+                    
+                    await initializeWithBlob(blob, file.name);
+                    
+                } catch (error) {
+                    console.error('File processing error:', error);
+                    showStatus(`❌ Error processing file: ${error.message}`, 'error');
+                }
+            };
+            input.click();
+        };
+        
+        // Fetch document from URL and create Blob
+        window.loadFromUrl = async function() {
+            try {
+                showStatus('Fetching document from URL...');
+                
+                // Fetch a sample document (you can change this URL)
+                const url = './sample.docx'; // You'll need to provide a sample file
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch: ${response.statusText}`);
+                }
+                
+                // Create Blob from response
+                const blob = await response.blob();
+                
+                console.log('URL fetched as Blob:', {
+                    url,
+                    blob: { size: blob.size, type: blob.type }
+                });
+                
+                await initializeWithBlob(blob, 'fetched-document.docx');
+                
+            } catch (error) {
+                console.error('URL fetch error:', error);
+                showStatus(`❌ Error fetching from URL: ${error.message}`, 'error');
+            }
+        };
+        
+        // Generate content and create Blob
+        window.generateBlob = async function() {
+            try {
+                // For this example, we'll create a simple text blob
+                // In a real scenario, you might generate DOCX content programmatically
+                const content = `
+                    Generated Document Content
+                    
+                    This document was created from a programmatically generated Blob.
+                    
+                    Timestamp: ${new Date().toISOString()}
+                    
+                    Features demonstrated:
+                    - Blob creation from generated content
+                    - Direct Blob usage with SuperDoc
+                    - Dynamic document initialization
+                `;
+                
+                const blob = new Blob([content], { 
+                    type: 'text/plain' // For demo purposes
+                });
+                
+                console.log('Generated Blob:', {
+                    size: blob.size,
+                    type: blob.type,
+                    content: content.substring(0, 100) + '...'
+                });
+                
+                await initializeWithBlob(blob, 'generated-document.txt');
+                
+            } catch (error) {
+                console.error('Generation error:', error);
+                showStatus(`❌ Error generating content: ${error.message}`, 'error');
+            }
+        };
+        
+        // Clear the editor
+        window.clearEditor = function() {
+            destroyCurrentEditor();
+            showStatus('Editor cleared');
+        };
+        
+        // Initialize with a welcome message
+        window.addEventListener('DOMContentLoaded', () => {
+            showStatus('Ready! Click any button above to test Blob support.');
+        });
+        
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            destroyCurrentEditor();
+        });
+    </script>
+</body>
+</html>
