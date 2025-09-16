@@ -105,6 +105,17 @@ export const useSuperdocStore = defineStore('superdoc', () => {
   };
 
   /**
+   * Convert a Blob to a File object when a filename is required
+   * @param {Blob} blob The blob to convert
+   * @param {string} name The filename to assign
+   * @param {string} type The mime type
+   * @returns {File} The file object
+   */
+  const _blobToFile = (blob, name, type) => {
+    return new File([blob], name, { type });
+  };
+
+  /**
    * Initialize the document data by fetching the file if necessary
    * @param {Object} doc The document config
    * @returns {Promise<Object>} The document object with data
@@ -123,7 +134,20 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     }
 
     // If we already have data (File/Blob), return it
-    if (doc.data) return doc;
+    if (doc.data instanceof File) return doc;
+    // If we have a Blob object, convert it to a File with appropriate name
+    else if (doc.data instanceof Blob) {
+      // Use provided name or generate a default name based on type
+      let fileName = doc.name;
+      if (!fileName) {
+        const extension = doc.type === DOCX ? '.docx' : doc.type === PDF ? '.pdf' : '.bin';
+        fileName = `document${extension}`;
+      }
+      const fileObject = _blobToFile(doc.data, fileName, doc.data.type || doc.type);
+      return { ...doc, data: fileObject };
+    }
+    // If we have any other data object, return it as is (for backward compatibility)
+    else if (doc.data) return doc;
     // If we have a URL, fetch the file and return it
     else if (doc.url && doc.type) {
       if (doc.type.toLowerCase() === 'docx') doc.type = DOCX;
