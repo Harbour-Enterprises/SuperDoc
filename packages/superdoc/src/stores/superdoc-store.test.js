@@ -3,39 +3,56 @@ import { createPinia, setActivePinia } from 'pinia';
 import { useSuperdocStore } from './superdoc-store.js';
 import { DOCX, PDF } from '@harbour-enterprises/common';
 
-// Mock getFileObject
-vi.mock('@harbour-enterprises/common', () => ({
-  getFileObject: vi.fn(),
-  DOCX: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  PDF: 'application/pdf',
-}));
+// Mock getFileObject while keeping the rest of the module's exports intact
+vi.mock('@harbour-enterprises/common', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    getFileObject: vi.fn(),
+  };
+});
 
-// Mock File constructor for Node.js environment
-global.File = class File extends Blob {
-  constructor(fileBits, fileName, options = {}) {
-    super(fileBits, options);
-    this.name = fileName;
-    this.lastModified = Date.now();
-  }
-};
-
-global.Blob = class Blob {
+// Mock Blob/File constructors for the Node.js environment
+class BlobMock {
   constructor(blobParts = [], options = {}) {
-    this.size = 0;
-    this.type = options.type || '';
     this.parts = blobParts;
+    this.type = options.type || '';
+    this.size = 0;
 
-    // Calculate size
     for (const part of blobParts) {
       if (typeof part === 'string') {
         this.size += new TextEncoder().encode(part).length;
       } else if (part instanceof ArrayBuffer) {
         this.size += part.byteLength;
-      } else if (part && part.buffer) {
-        this.size += part.buffer.byteLength;
+      } else if (ArrayBuffer.isView(part)) {
+        this.size += part.byteLength;
+      } else if (part?.size) {
+        this.size += part.size;
       }
     }
   }
+}
+
+globalThis.Blob = BlobMock;
+
+globalThis.File = class FileMock extends BlobMock {
+  constructor(fileBits, fileName, options = {}) {
+    super(fileBits, options);
+    this.name = fileName;
+    this.lastModified = options.lastModified ?? Date.now();
+  }
+};
+
+const createTestConfig = (documents = [], overrides = {}) => {
+  const { modules = {}, user = {}, users = [], ...rest } = overrides;
+
+  return {
+    documents,
+    modules: { collaboration: false, ...modules },
+    user,
+    users,
+    ...rest,
+  };
 };
 
 describe('SuperDoc Store - Blob Support', () => {
@@ -52,12 +69,9 @@ describe('SuperDoc Store - Blob Support', () => {
         type: DOCX,
       });
 
-      const config = {
-        documents: [{ data: file, name: 'test.docx', type: DOCX }],
-      };
+      const config = createTestConfig([{ data: file, name: 'test.docx', type: DOCX }]);
 
       await store.init(config);
-
 
       // Access the private method through the store's internal methods
       // Since _initializeDocumentData is private, we test through the public init method
@@ -67,9 +81,7 @@ describe('SuperDoc Store - Blob Support', () => {
     it('should handle Blob objects with name', async () => {
       const blob = new Blob(['test content'], { type: DOCX });
 
-      const config = {
-        documents: [{ data: blob, name: 'test.docx', type: DOCX }],
-      };
+      const config = createTestConfig([{ data: blob, name: 'test.docx', type: DOCX }]);
 
       await store.init(config);
 
@@ -83,9 +95,7 @@ describe('SuperDoc Store - Blob Support', () => {
     it('should handle Blob objects without name', async () => {
       const blob = new Blob(['test content'], { type: DOCX });
 
-      const config = {
-        documents: [{ data: blob, type: DOCX }],
-      };
+      const config = createTestConfig([{ data: blob, type: DOCX }]);
 
       await store.init(config);
 
@@ -106,9 +116,7 @@ describe('SuperDoc Store - Blob Support', () => {
       for (const testCase of testCases) {
         const blob = new Blob(['test content'], { type: testCase.type });
 
-        const config = {
-          documents: [{ data: blob, type: testCase.type }],
-        };
+        const config = createTestConfig([{ data: blob, type: testCase.type }]);
 
         await store.init(config);
 
@@ -124,9 +132,7 @@ describe('SuperDoc Store - Blob Support', () => {
       const blobType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
       const blob = new Blob(['test content'], { type: blobType });
 
-      const config = {
-        documents: [{ data: blob, name: 'test.docx', type: DOCX }],
-      };
+      const config = createTestConfig([{ data: blob, name: 'test.docx', type: DOCX }]);
 
       await store.init(config);
 
@@ -137,9 +143,7 @@ describe('SuperDoc Store - Blob Support', () => {
     it('should use document type if blob type is not available', async () => {
       const blob = new Blob(['test content']); // No type specified
 
-      const config = {
-        documents: [{ data: blob, name: 'test.docx', type: DOCX }],
-      };
+      const config = createTestConfig([{ data: blob, name: 'test.docx', type: DOCX }]);
 
       await store.init(config);
 
@@ -151,12 +155,10 @@ describe('SuperDoc Store - Blob Support', () => {
       const file = new File(['file content'], 'file.docx', { type: DOCX });
       const blob = new Blob(['blob content'], { type: DOCX });
 
-      const config = {
-        documents: [
-          { data: file, name: 'file.docx', type: DOCX },
-          { data: blob, name: 'blob.docx', type: DOCX },
-        ],
-      };
+      const config = createTestConfig([
+        { data: file, name: 'file.docx', type: DOCX },
+        { data: blob, name: 'blob.docx', type: DOCX },
+      ]);
 
       await store.init(config);
 
@@ -189,13 +191,11 @@ describe('SuperDoc Store - Blob Support', () => {
 
   describe('error handling', () => {
     it('should handle invalid document configuration gracefully', async () => {
-      const config = {
-        documents: [
-          {
-            /* no data, url, or other valid config */
-          },
-        ],
-      };
+      const config = createTestConfig([
+        {
+          /* no data, url, or other valid config */
+        },
+      ]);
 
       await store.init(config);
 

@@ -133,8 +133,25 @@ export const useSuperdocStore = defineStore('superdoc', () => {
       return { ...doc, data: null, url: null };
     }
 
-    // If we already have data (File/Blob), return it
-    if (doc.data instanceof File) return doc;
+    // If we already have data (File/Blob), ensure it has the expected metadata
+    if (doc.data instanceof File) {
+      let fileName = doc.name;
+      const extension = doc.type === DOCX ? '.docx' : doc.type === PDF ? '.pdf' : '.bin';
+      if (!fileName) {
+        fileName = `document${extension}`;
+      } else if (!fileName.includes('.')) {
+        fileName = `${fileName}${extension}`;
+      }
+
+      if (doc.data.name !== fileName) {
+        const fileObject = _blobToFile(doc.data, fileName, doc.data.type || doc.type);
+        return { ...doc, name: fileName, data: fileObject };
+      }
+
+      if (!doc.name) return { ...doc, name: fileName };
+
+      return doc;
+    }
     // If we have a Blob object, convert it to a File with appropriate name
     else if (doc.data instanceof Blob) {
       // Use provided name or generate a default name based on type
