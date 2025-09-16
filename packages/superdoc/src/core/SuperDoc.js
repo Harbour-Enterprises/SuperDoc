@@ -32,7 +32,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @typedef {Object} Document
  * @property {string} [id] The ID of the document
  * @property {string} type The type of the document
- * @property {File | null} [data] The initial data of the document
+ * @property {File | Blob | null} [data] The initial data of the document (File, Blob, or null)
  * @property {string} [name] The name of the document
  * @property {string} [url] The URL of the document
  * @property {boolean} [isNewFile] Whether the document is a new file
@@ -65,7 +65,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {string} selector The selector to mount the SuperDoc into
  * @property {DocumentMode} documentMode The mode of the document
  * @property {'editor' | 'viewer' | 'suggester'} [role] The role of the user in this SuperDoc
- * @property {Object | string} [document] The document to load. If a string, it will be treated as a URL
+ * @property {Object | string | File | Blob} [document] The document to load. If a string, it will be treated as a URL. If a File or Blob, it will be used directly.
  * @property {Array<Document>} documents The documents to load
  * @property {User} [user] The current user of this SuperDoc
  * @property {Array<User>} [users] All users of this SuperDoc (can be used for "@"-mentions)
@@ -284,6 +284,7 @@ export class SuperDoc extends EventEmitter {
     const hasDocumentConfig = !!doc && typeof doc === 'object' && Object.keys(this.config.document)?.length;
     const hasDocumentUrl = !!doc && typeof doc === 'string' && doc.length > 0;
     const hasDocumentFile = !!doc && doc instanceof File;
+    const hasDocumentBlob = !!doc && doc instanceof Blob && !(doc instanceof File);
     const hasListOfDocuments = this.config.documents && this.config.documents?.length;
     if (hasDocumentConfig && hasListOfDocuments) {
       console.warn('🦋 [superdoc] You can only provide one of document or documents');
@@ -306,6 +307,15 @@ export class SuperDoc extends EventEmitter {
           type: this.config.document.type,
           data: this.config.document,
           name: this.config.document.name,
+          isNewFile: true,
+        },
+      ];
+    } else if (hasDocumentBlob) {
+      this.config.documents = [
+        {
+          type: this.config.document.type || DOCX,
+          data: this.config.document,
+          name: 'document.docx', // Default name for Blob
           isNewFile: true,
         },
       ];
