@@ -12,6 +12,7 @@ import { shuffleArray } from '@harbour-enterprises/common/collaboration/awarenes
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
 import { createDownload, cleanName } from './helpers/export.js';
 import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative } from './collaboration/helpers.js';
+import { normalizeDocumentEntry } from './helpers/file.js';
 
 /**
  * @typedef {Object} User The current user of this superdoc
@@ -283,14 +284,16 @@ export class SuperDoc extends EventEmitter {
     const doc = this.config.document;
     const hasDocumentConfig = !!doc && typeof doc === 'object' && Object.keys(this.config.document)?.length;
     const hasDocumentUrl = !!doc && typeof doc === 'string' && doc.length > 0;
-    const hasDocumentFile = !!doc && doc instanceof File;
+    const hasDocumentFile = !!doc && typeof File === 'function' && doc instanceof File;
     const hasListOfDocuments = this.config.documents && this.config.documents?.length;
     if (hasDocumentConfig && hasListOfDocuments) {
       console.warn('🦋 [superdoc] You can only provide one of document or documents');
     }
 
     if (hasDocumentConfig) {
-      this.config.documents = [this.config.document];
+      // If an uploader-specific wrapper was passed, normalize it.
+      const normalized = normalizeDocumentEntry(this.config.document);
+      this.config.documents = [normalized];
     } else if (hasDocumentUrl) {
       this.config.documents = [
         {
@@ -309,6 +312,11 @@ export class SuperDoc extends EventEmitter {
           isNewFile: true,
         },
       ];
+    }
+
+    // Also normalize any provided documents array entries (e.g., when consumer passes uploader wrappers directly)
+    if (Array.isArray(this.config.documents) && this.config.documents.length > 0) {
+      this.config.documents = this.config.documents.map((d) => normalizeDocumentEntry(d));
     }
   }
 

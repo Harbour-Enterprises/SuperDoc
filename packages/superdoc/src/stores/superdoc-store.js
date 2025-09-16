@@ -3,6 +3,7 @@ import { ref, reactive, computed } from 'vue';
 import { useCommentsStore } from './comments-store';
 import { getFileObject } from '@harbour-enterprises/common';
 import { DOCX, PDF } from '@harbour-enterprises/common';
+import { normalizeDocumentEntry } from '@superdoc/core/helpers/file.js';
 import useDocument from '@superdoc/composables/use-document';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 
@@ -109,6 +110,8 @@ export const useSuperdocStore = defineStore('superdoc', () => {
    * @returns {Promise<Object>} The document object with data
    */
   const _initializeDocumentData = async (doc) => {
+    // Normalize any uploader-specific wrapper to a native File/Blob upfront
+    doc = normalizeDocumentEntry(doc);
     if (currentConfig.value?.html) doc.html = currentConfig.value.html;
 
     // Use docx as default if no type provided
@@ -119,7 +122,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
       return { ...doc, data: null, url: null };
     }
 
-    // If we already have a File object, return it
+    // If we already have data (File/Blob), return it
     if (doc.data) return doc;
     // If we have a URL, fetch the file and return it
     else if (doc.url && doc.type) {
