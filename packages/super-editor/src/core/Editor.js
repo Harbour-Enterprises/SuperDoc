@@ -90,7 +90,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
  * @property {string} [role='editor'] - User role ('editor', 'viewer', 'suggester')
  * @property {Array} [colors=[]] - Available colors
  * @property {Object} [converter] - Document converter
- * @property {Object} [fileSource] - Source of the file
+ * @property {File|Blob|Buffer} [fileSource] - Source of the file (File/Blob in browser, Buffer in Node.js)
  * @property {Object} [initialState] - Initial editor state
  * @property {string} [documentId] - Unique document identifier
  * @property {Array} [extensions=[]] - Editor extensions
