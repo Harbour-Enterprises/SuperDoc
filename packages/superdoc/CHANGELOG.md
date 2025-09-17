@@ -1,3 +1,18 @@
+# [0.19.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.18.1...v0.19.0) (2025-09-17)
+
+### Bug Fixes
+
+- content-block node ext wrong schema and rendering rules ([#965](https://github.com/Harbour-Enterprises/SuperDoc/issues/965)) ([#966](https://github.com/Harbour-Enterprises/SuperDoc/issues/966)) ([f037f44](https://github.com/Harbour-Enterprises/SuperDoc/commit/f037f44eddfa3fd31cd36f4f8b4dbfb6300437ee))
+- full repo test on npm test or npm run test ([3ede3e0](https://github.com/Harbour-Enterprises/SuperDoc/commit/3ede3e0c079465b94d84367d75d0992b97066a53))
+- move undo/redo from collaboration to history ([#956](https://github.com/Harbour-Enterprises/SuperDoc/issues/956)) ([21299f8](https://github.com/Harbour-Enterprises/SuperDoc/commit/21299f85f6eda142cdf0dccac75867228662a1e2))
+
+### Features
+
+- add document.xml.rels validator ([#881](https://github.com/Harbour-Enterprises/SuperDoc/issues/881)) ([ac7f2a9](https://github.com/Harbour-Enterprises/SuperDoc/commit/ac7f2a9e3d8900a65fb29a848261099e86881315))
+- add v3 translator for w:tr and w:trPr elements (HAR-10480) ([#953](https://github.com/Harbour-Enterprises/SuperDoc/issues/953)) ([ce4eb8d](https://github.com/Harbour-Enterprises/SuperDoc/commit/ce4eb8db7541abe6805941d31493712d7e1bde21))
+- support Blob type in fileSource and document properties ([#967](https://github.com/Harbour-Enterprises/SuperDoc/issues/967)) ([4260c51](https://github.com/Harbour-Enterprises/SuperDoc/commit/4260c510efca8e0fe8791a1ece713c0a0661916a))
+- upgrade w:hyperlink import/export to v3 (HAR-10497) ([#942](https://github.com/Harbour-Enterprises/SuperDoc/issues/942)) ([0f98a8e](https://github.com/Harbour-Enterprises/SuperDoc/commit/0f98a8ead96ebd0ebe4258b5bf900385428b2fd3))
+
 ## [0.18.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.18.0...v0.18.1) (2025-09-16)
 
 ### Bug Fixes
