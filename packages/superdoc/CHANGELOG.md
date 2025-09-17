@@ -1,3 +1,15 @@
+# [0.20.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.19.0...v0.20.0) (2025-09-17)
+
+### Bug Fixes
+
+- emit editor exception on import/export errors ([#963](https://github.com/Harbour-Enterprises/SuperDoc/issues/963)) ([700dec6](https://github.com/Harbour-Enterprises/SuperDoc/commit/700dec60a36937dc7f9975c5d4bf5e3a0540133e))
+- html import parse styleId attr for round-trip fidelity ([#974](https://github.com/Harbour-Enterprises/SuperDoc/issues/974)) ([929fffa](https://github.com/Harbour-Enterprises/SuperDoc/commit/929fffa511faeff18ddedb63eb039971c430949c))
+- tests ([#975](https://github.com/Harbour-Enterprises/SuperDoc/issues/975)) ([ee25e12](https://github.com/Harbour-Enterprises/SuperDoc/commit/ee25e12276a029ceebc160314983f4a824ab2b5d))
+
+### Features
+
+- transform lists in copied content to match GoogleDocs/Word standard ([#913](https://github.com/Harbour-Enterprises/SuperDoc/issues/913)) ([1c8f971](https://github.com/Harbour-Enterprises/SuperDoc/commit/1c8f971efb68f74f1fe641dc71dab6a2c4f968e8))
+
 # [0.19.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.18.1...v0.19.0) (2025-09-17)
 
 ### Bug Fixes
