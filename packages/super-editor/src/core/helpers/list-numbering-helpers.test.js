@@ -879,6 +879,151 @@ vi.mock('@core/super-converter/v2/importer/listImporter.js', () => ({
   getDefinitionForLevel: vi.fn(),
 }));
 
+describe('createSchemaOrderedListNode', () => {
+  /** @type {import('prosemirror-model').Schema} */
+  let schema;
+  let editor;
+
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+
+    schema = new Schema({
+      nodes: {
+        doc: { content: 'block+' },
+        text: { group: 'inline' },
+        paragraph: {
+          group: 'block',
+          content: 'inline*',
+          toDOM: () => ['p', 0],
+          parseDOM: [{ tag: 'p' }],
+        },
+        listItem: {
+          content: 'paragraph',
+          toDOM: () => ['li', 0],
+          parseDOM: [{ tag: 'li' }],
+        },
+        orderedList: {
+          group: 'block',
+          content: 'listItem+',
+          attrs: {
+            'list-style-type': { default: 'decimal' },
+            listId: { default: 0 },
+            order: { default: 0 },
+          },
+          toDOM: () => ['ol', 0],
+          parseDOM: [{ tag: 'ol' }],
+        },
+        bulletList: {
+          group: 'block',
+          content: 'listItem+',
+          attrs: {
+            'list-style-type': { default: 'bullet' },
+            listId: { default: 0 },
+          },
+          toDOM: () => ['ul', 0],
+          parseDOM: [{ tag: 'ul' }],
+        },
+      },
+      marks: {},
+    });
+
+    editor = {
+      schema,
+      converter: {
+        numbering: {
+          definitions: {
+            10: {
+              elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '100' } }],
+            },
+            11: {
+              elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '200' } }],
+            },
+          },
+          abstracts: {
+            100: {
+              elements: [
+                {
+                  name: 'w:lvl',
+                  attributes: { 'w:ilvl': '0' },
+                  elements: [
+                    { name: 'w:start', attributes: { 'w:val': '1' } },
+                    { name: 'w:numFmt', attributes: { 'w:val': 'decimal' } },
+                    { name: 'w:lvlText', attributes: { 'w:val': '%1.' } },
+                  ],
+                },
+              ],
+            },
+            200: {
+              elements: [
+                {
+                  name: 'w:lvl',
+                  attributes: { 'w:ilvl': '0' },
+                  elements: [
+                    { name: 'w:start', attributes: { 'w:val': '1' } },
+                    { name: 'w:numFmt', attributes: { 'w:val': 'bullet' } },
+                    { name: 'w:lvlText', attributes: { 'w:val': '•' } },
+                  ],
+                },
+              ],
+            },
+          },
+        },
+        convertedXml: '<mock/>',
+      },
+    };
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const makeContentJSON = (text) => schema.node('paragraph', null, [schema.text(text)]).toJSON();
+
+  it('returns an ordered list node when listType is orderedList', () => {
+    const orderedNode = ListHelpers.createSchemaOrderedListNode({
+      level: 0,
+      numId: 10,
+      listType: 'orderedList',
+      editor,
+      listLevel: [1],
+      contentNode: makeContentJSON('item'),
+    });
+
+    expect(orderedNode.type.name).toBe('orderedList');
+    expect(orderedNode.attrs['list-style-type']).toBe('decimal');
+    expect(orderedNode.attrs.order).toBe(0);
+  });
+
+  it('returns a bullet list node when listType is bulletList', () => {
+    const bulletNode = ListHelpers.createSchemaOrderedListNode({
+      level: 0,
+      numId: 11,
+      listType: 'bulletList',
+      editor,
+      listLevel: [1],
+      contentNode: makeContentJSON('bullet item'),
+    });
+
+    expect(bulletNode.type.name).toBe('bulletList');
+    expect(bulletNode.attrs['list-style-type']).toBe('bullet');
+    expect(bulletNode.attrs.order).toBeUndefined();
+  });
+
+  it('supports passing listType as a NodeType', () => {
+    const bulletNode = ListHelpers.createSchemaOrderedListNode({
+      level: 0,
+      numId: 11,
+      listType: schema.nodes.bulletList,
+      editor,
+      listLevel: [1],
+      contentNode: makeContentJSON('node type bullet'),
+    });
+
+    expect(bulletNode.type.name).toBe('bulletList');
+  });
+});
+
 describe('createNewList', () => {
   /** @type {import('prosemirror-model').Schema} */
   let schema;

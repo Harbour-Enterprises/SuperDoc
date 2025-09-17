@@ -33,14 +33,15 @@ export function stripHtmlStyles(html) {
   const cleanNode = (node) => {
     if (node.nodeType !== Node.ELEMENT_NODE) return;
 
-    // Remove all non-supported attributes
     [...node.attributes].forEach((attr) => {
-      if (!SUPPORTED_ATTRS.includes(attr.name.toLowerCase())) {
+      const name = attr.name.toLowerCase();
+
+      const shouldKeep = SUPPORTED_ATTRS.includes(name) || name.startsWith('data-'); // Keep all data-* attributes
+
+      if (!shouldKeep) {
         node.removeAttribute(attr.name);
       }
     });
-
-    // Recursively clean children
     [...node.children].forEach(cleanNode);
   };
 
