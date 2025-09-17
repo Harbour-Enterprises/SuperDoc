@@ -53,7 +53,7 @@ export function createSingleAttrPropertyHandler(
 }
 
 /**
- * Helper to create property handlers for measurement attributes (w:w and w:type)
+ * Helper to create property handlers for measurement attributes (CT_TblWidth => w:w and w:type)
  * @param {string} xmlName The XML attribute name (with namespace).
  * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
  * @returns {import('@translator').NodeTranslatorConfig} The attribute handler config with xmlName, sdName, encode, and decode functions.
