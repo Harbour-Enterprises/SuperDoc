@@ -47,7 +47,7 @@ export function createSingleAttrPropertyHandler(
     },
     decode: ({ node }) => {
       const value = node.attrs?.[sdName] != null ? transformDecode(node.attrs[sdName]) : undefined;
-      return value != null ? { [attrName]: value } : undefined;
+      return value != null ? { name: xmlName, attributes: { [attrName]: value } } : undefined;
     },
   };
 }
@@ -72,7 +72,7 @@ export function createMeasurementPropertyHandler(xmlName, sdName = null) {
     },
     decode: function ({ node }) {
       const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs[sdName] || {} } });
-      return decodedAttrs['w:w'] != null ? decodedAttrs : undefined;
+      return decodedAttrs['w:w'] != null ? { attributes: decodedAttrs } : undefined;
     },
   };
 }
@@ -104,7 +104,7 @@ export function createBorderPropertyHandler(xmlName, sdName = null) {
     },
     decode: function ({ node }, _) {
       const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs[sdName] || {} } });
-      return Object.keys(decodedAttrs).length > 0 ? {attributes: decodedAttrs} : undefined;
+      return Object.keys(decodedAttrs).length > 0 ? { attributes: decodedAttrs } : undefined;
     },
   };
 }
