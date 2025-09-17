@@ -12,8 +12,8 @@ export function stripHtmlStyles(html) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
-  // Semantic attributes to preserve
-  const SEMANTIC_ATTRS = [
+  // Supported attributes to preserve
+  const SUPPORTED_ATTRS = [
     'href',
     'src',
     'alt',
@@ -26,15 +26,16 @@ export function stripHtmlStyles(html) {
     'dir',
     'cite',
     'start',
-    'type', // for lists
+    'type',
+    'styleid',
   ];
 
   const cleanNode = (node) => {
     if (node.nodeType !== Node.ELEMENT_NODE) return;
 
-    // Remove all non-semantic attributes
+    // Remove all non-supported attributes
     [...node.attributes].forEach((attr) => {
-      if (!SEMANTIC_ATTRS.includes(attr.name.toLowerCase())) {
+      if (!SUPPORTED_ATTRS.includes(attr.name.toLowerCase())) {
         node.removeAttribute(attr.name);
       }
     });
