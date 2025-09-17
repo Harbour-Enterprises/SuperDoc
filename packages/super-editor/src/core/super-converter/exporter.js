@@ -15,7 +15,6 @@ import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
-import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
@@ -26,6 +25,7 @@ import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hy
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
 import { prepareTextAnnotation } from './v3/handlers/w/sdt/helpers/translate-field-annotation';
+import { translator as wTblNodeTranslator } from './v3/handlers/w/tbl/tbl-translator.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -83,7 +83,7 @@ export function exportSchemaToJson(params) {
     bulletList: translateList,
     orderedList: translateList,
     lineBreak: wBrNodeTranslator,
-    table: translateTable,
+    table: wTblNodeTranslator,
     tableRow: wTrNodeTranslator,
     tableCell: wTcNodeTranslator,
     bookmarkStart: translateBookmarkStart,
@@ -966,222 +966,6 @@ const generateNumPrTag = (numId, level) => {
     ],
   };
 };
-
-/**
- * Translate a table node
- *
- * @param {ExportParams} params The table node to translate
- * @returns {XmlReadyNode} The translated table node
- */
-function translateTable(params) {
-  params.node = preProcessVerticalMergeCells(params.node, params);
-  const elements = translateChildNodes(params);
-  const tableProperties = generateTableProperties(params.node);
-  const gridProperties = generateTableGrid(params.node, params);
-
-  elements.unshift(tableProperties);
-  elements.unshift(gridProperties);
-  return {
-    name: 'w:tbl',
-    elements,
-  };
-}
-
-/**
- * Restore vertically merged cells from a table
- * @param {ExportParams.node} table The table node
- * @returns {ExportParams.node} The table node with merged cells restored
- */
-function preProcessVerticalMergeCells(table, { editorSchema }) {
-  const { content } = table;
-  for (let rowIndex = 0; rowIndex < content.length; rowIndex++) {
-    const row = content[rowIndex];
-    if (!row.content) continue;
-    for (let cellIndex = 0; cellIndex < row.content?.length; cellIndex++) {
-      const cell = row.content[cellIndex];
-      if (!cell) continue;
-
-      const { attrs } = cell;
-      if (attrs.rowspan > 1) {
-        // const { mergedCells } = attrs;
-        const rowsToChange = content.slice(rowIndex + 1, rowIndex + attrs.rowspan);
-        const mergedCell = {
-          type: cell.type,
-          content: [
-            // cells must end with a paragraph
-            editorSchema.nodes.paragraph.createAndFill().toJSON(),
-          ],
-          attrs: {
-            ...cell.attrs,
-            // reset colspan and rowspan
-            colspan: null,
-            rowspan: null,
-            // to add vMerge
-            continueMerge: true,
-          },
-        };
-
-        rowsToChange.forEach((rowToChange) => {
-          rowToChange.content.splice(cellIndex, 0, mergedCell);
-        });
-      }
-    }
-  }
-  return table;
-}
-
-/**
- * Generate w:tblPr properties node for a table
- *
- * @param {SchemaNode} node
- * @returns {XmlReadyNode} The table properties node
- */
-function generateTableProperties(node) {
-  const elements = [];
-
-  const { attrs } = node;
-  const { tableWidth, tableStyleId, borders, tableIndent, tableLayout, tableCellSpacing, justification } = attrs;
-
-  if (tableStyleId) {
-    const tableStyleElement = {
-      name: 'w:tblStyle',
-      attributes: { 'w:val': tableStyleId },
-    };
-    elements.push(tableStyleElement);
-  }
-
-  if (borders) {
-    const borderElement = generateTableBorders(node);
-    elements.push(borderElement);
-  }
-
-  if (tableIndent) {
-    const { width, type } = tableIndent;
-    const tableIndentElement = {
-      name: 'w:tblInd',
-      attributes: { 'w:w': pixelsToTwips(width), 'w:type': type },
-    };
-    elements.push(tableIndentElement);
-  }
-
-  if (tableLayout) {
-    const tableLayoutElement = {
-      name: 'w:tblLayout',
-      attributes: { 'w:type': tableLayout },
-    };
-    elements.push(tableLayoutElement);
-  }
-
-  if (tableWidth && tableWidth.width) {
-    const tableWidthElement = {
-      name: 'w:tblW',
-      attributes: { 'w:w': pixelsToTwips(tableWidth.width), 'w:type': tableWidth.type },
-    };
-    elements.push(tableWidthElement);
-  }
-
-  if (tableCellSpacing) {
-    elements.push({
-      name: 'w:tblCellSpacing',
-      attributes: {
-        'w:w': tableCellSpacing.w,
-        'w:type': tableCellSpacing.type,
-      },
-    });
-  }
-
-  if (justification) {
-    const justificationElement = {
-      name: 'w:jc',
-      attributes: { 'w:val': justification },
-    };
-    elements.push(justificationElement);
-  }
-
-  return {
-    name: 'w:tblPr',
-    elements,
-  };
-}
-
-/**
- * Generate w:tblBorders properties node for a table
- *
- * @param {SchemaNode} node
- * @returns {XmlReadyNode} The table borders properties node
- */
-function generateTableBorders(node) {
-  const { borders } = node.attrs;
-  const elements = [];
-
-  if (!borders) return;
-
-  const borderTypes = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'];
-  borderTypes.forEach((type) => {
-    const border = borders[type];
-    if (!border) return;
-
-    let attributes = {};
-    if (!Object.keys(border).length || !border.size) {
-      attributes = {
-        'w:val': 'nil',
-      };
-    } else {
-      attributes = {
-        'w:val': 'single',
-        'w:sz': pixelsToEightPoints(border.size),
-        'w:space': border.space || 0,
-        'w:color': border?.color?.substring(1) || '000000',
-      };
-    }
-
-    const borderElement = {
-      name: `w:${type}`,
-      attributes,
-    };
-    elements.push(borderElement);
-  });
-
-  return {
-    name: 'w:tblBorders',
-    elements,
-  };
-}
-
-/**
- * Generate w:tblGrid properties node for a table
- *
- * @param {SchemaNode} node
- * @returns {XmlReadyNode} The table grid properties node
- */
-function generateTableGrid(node, params) {
-  const { editorSchema } = params;
-
-  let colgroup = [];
-
-  try {
-    const pmNode = editorSchema.nodeFromJSON(node);
-    const cellMinWidth = 10;
-    const { colgroupValues } = createColGroup(pmNode, cellMinWidth);
-
-    colgroup = colgroupValues;
-  } catch {
-    colgroup = [];
-  }
-
-  const elements = [];
-  colgroup?.forEach((width) => {
-    elements.push({
-      name: 'w:gridCol',
-      attributes: { 'w:w': pixelsToTwips(width) },
-    });
-  });
-
-  return {
-    name: 'w:tblGrid',
-    elements,
-  };
-}
 
 /**
  * Translate bookmark start node. We don't maintain an internal 'end' node since its normal
