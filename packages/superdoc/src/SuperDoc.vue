@@ -600,6 +600,8 @@ const createCanvasEventHandlers = (canvas, ctx, container) => {
   };
 
   const drawCommentOnCanvas = (ctx, commentText, x, y) => {
+    // not using this
+    return;
     ctx.save();
 
     // Set up text properties
@@ -921,6 +923,7 @@ const createCanvasEventHandlers = (canvas, ctx, container) => {
   };
 
   const handleDrop = (e) => {
+    console.log('Drop event detected');
     e.preventDefault();
     canvas.style.border = 'none';
 
@@ -940,9 +943,38 @@ const createCanvasEventHandlers = (canvas, ctx, container) => {
 
     // Handle comment drops
     const commentData = e.dataTransfer.getData('application/comment');
+    console.log('Comment data:', commentData);
     if (commentData) {
       try {
         const comment = JSON.parse(commentData);
+        console.log('Parsed comment data:', comment);
+
+        // Insert actual comment into SuperDoc instance
+        const docType = documents.value[0].type;
+        const selection = useSelection({
+          documentId: documents.value[0].id,
+          selectionBounds: {
+            top: coords.y - 20,
+            left: coords.x - 90,
+            right: coords.x + 90,
+            bottom: coords.y + 20,
+          },
+          source: docType === PDF ? 'pdf' : 'super-editor',
+        });
+        console.log('Document type:', docType, 'Selection source:', docType === PDF ? 'pdf' : 'super-editor');
+
+        const newComment = commentsStore.getPendingComment({
+          selection,
+          documentId: documents.value[0].id,
+          commentText: comment.text,
+          creatorEmail: user.email,
+          creatorName: user.name,
+        });
+        console.log('Creating new comment:', newComment);
+
+        commentsStore.addComment({ superdoc: proxy.$superdoc, comment: newComment });
+
+        // Also draw on canvas for visual feedback
         drawCommentOnCanvas(ctx, comment.text, coords.x, coords.y + 40);
         return;
       } catch (error) {
@@ -956,6 +988,41 @@ const createCanvasEventHandlers = (canvas, ctx, container) => {
       if (['check-mark', 'nice', 'needs-improvement'].includes(plainText)) {
         drawStickerOnCanvas(ctx, plainText, coords.x, coords.y);
       } else {
+        // Insert actual comment into SuperDoc instance for plain text
+        const docType = documents.value[0].type;
+        const selection = useSelection({
+          documentId: documents.value[0].id,
+          selectionBounds: {
+            top: coords.y - 20,
+            left: coords.x - 90,
+            right: coords.x + 90,
+            bottom: coords.y + 20,
+          },
+          source: docType === PDF ? 'pdf' : 'super-editor',
+        });
+        console.log(
+          'Plain text - Document type:',
+          docType,
+          'Selection source:',
+          docType === PDF ? 'pdf' : 'super-editor',
+        );
+
+        const newComment = commentsStore.getPendingComment({
+          selection,
+          documentId: documents.value[0].id,
+          commentText: plainText,
+          creatorEmail: user.email,
+          creatorName: user.name,
+        });
+        console.log('Plain text - Parsed comment data:', plainText);
+        console.log('Plain text - Creating new comment:', newComment);
+        console.log('Plain text - Selection:', selection);
+        console.log('Plain text - User:', user);
+        console.log('Plain text - Documents:', documents.value);
+
+        commentsStore.addComment({ superdoc: proxy.$superdoc, comment: newComment });
+
+        // Also draw on canvas for visual feedback
         drawCommentOnCanvas(ctx, plainText, coords.x, coords.y - 20);
       }
     }

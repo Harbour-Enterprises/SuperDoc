@@ -4,7 +4,9 @@ import { ref, shallowRef, onMounted } from 'vue';
 import Header from './components/Header.vue';
 import AssignmentHeader from './components/AssignmentHeader.vue';
 import Drawer from './components/Drawer.vue';
-import { SuperDoc } from '@harbour-enterprises/superdoc';
+// import { SuperDoc } from '@harbour-enterprises/superdoc';
+// import SuperDoc from '../superdoc-dist/superdoc.umd.js';
+import { SuperDoc } from '../build/superdoc.es.js';
 import AlexEssay from '/essay.docx?url';
 import NickPDF from '/nick.pdf?url';
 
