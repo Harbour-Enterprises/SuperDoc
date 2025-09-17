@@ -3,11 +3,19 @@
  * @returns {Object}
  */
 export function parseTagValueJSON(json) {
+  if (typeof json !== 'string') {
+    return {};
+  }
+
+  const trimmed = json.trim();
+
+  if (!trimmed) {
+    return {};
+  }
+
   try {
-    const attrs = JSON.parse(json);
-    return attrs;
+    return JSON.parse(trimmed);
   } catch (err) {
-    console.error(err);
     return {};
   }
 }
