@@ -78,6 +78,37 @@ export function createMeasurementPropertyHandler(xmlName, sdName = null) {
 }
 
 /**
+ * Helper to create property handlers for border attributes (CT_Border xml type)
+ * @param {string} [xmlName] The XML element name (with namespace).
+ * @param {string|null} [sdName] The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
+ * @returns {import('@translator').NodeTranslatorConfig} The border property handler config with xmlName, sdName, encode, and decode functions.
+ */
+export function createBorderPropertyHandler(xmlName, sdName = null) {
+  if (!sdName) sdName = xmlName.split(':')[1];
+  return {
+    xmlName,
+    sdNodeOrKeyName: sdName,
+    attributes: [
+      createAttributeHandler('w:val'),
+      createAttributeHandler('w:color'),
+      createAttributeHandler('w:themeColor'),
+      createAttributeHandler('w:themeTint'),
+      createAttributeHandler('w:themeShade'),
+      createAttributeHandler('w:sz', 'size', parseInteger, integerToString),
+      createAttributeHandler('w:space', null, parseInteger, integerToString),
+      createAttributeHandler('w:shadow', null, parseBoolean, booleanToString),
+      createAttributeHandler('w:frame', null, parseBoolean, booleanToString),
+    ],
+    encode: (_, encodedAttrs) => {
+      return Object.keys(encodedAttrs).length > 0 ? encodedAttrs : undefined;
+    },
+    decode: (_, decodedAttrs) => {
+      return Object.keys(decodedAttrs).length > 0 ? decodedAttrs : undefined;
+    },
+  };
+}
+
+/**
  * Helper to create simple attribute handlers with one-to-one mapping.
  * @param {string} [xmlName] The XML attribute name (with namespace).
  * @param {string|null} [sdName] The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
