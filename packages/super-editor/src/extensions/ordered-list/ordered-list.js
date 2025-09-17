@@ -90,6 +90,7 @@ export const OrderedList = Node.create({
   parseDOM() {
     return [{ tag: 'ol' }];
   },
+
   renderDOM({ htmlAttributes }) {
     const { start, ...restAttributes } = htmlAttributes;
 
