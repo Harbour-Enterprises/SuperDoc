@@ -189,19 +189,14 @@ export const Paragraph = OxmlNode.create({
       {
         tag: 'p',
         getAttrs: (node) => {
-          const styleId = node.getAttribute('styleid') || null;
-
-          const extra = {};
-          Array.from(node.attributes).forEach((attr) => {
-            // Don't include styleid in extraAttrs
-            if (attr.name !== 'styleid') {
-              extra[attr.name] = attr.value;
-            }
-          });
+          const { styleid, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
+            acc[attr.name] = attr.value;
+            return acc;
+          }, {});
 
           return {
-            styleId,
-            extraAttrs: extra,
+            styleId: styleid || null,
+            extraAttrs,
           };
         },
       },
