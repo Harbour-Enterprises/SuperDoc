@@ -23,12 +23,12 @@ describe('w:gridAfter translator', () => {
 
   describe('decode', () => {
     it('creates a w:gridAfter element with the value converted to a string in w:val', () => {
-      const result = translator.decode({ node: { attrs: { gridAfter: 5 } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { gridAfter: 5 } } });
       expect(result).toEqual({ 'w:val': '5' });
     });
 
     it('handles value 0', () => {
-      const result = translator.decode({ node: { attrs: { gridAfter: 0 } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { gridAfter: 0 } } });
       expect(result).toEqual({ 'w:val': '0' });
     });
 

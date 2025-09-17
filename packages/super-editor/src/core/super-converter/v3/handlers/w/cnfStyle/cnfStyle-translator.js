@@ -38,6 +38,6 @@ export const translator = NodeTranslator.from({
     Object.entries(node.attrs.cnfStyle).forEach(([key, value]) => {
       cnfStyleAttrs[`w:${key}`] = value ? '1' : '0';
     });
-    return Object.keys(cnfStyleAttrs).length > 0 ? cnfStyleAttrs : undefined;
+    return Object.keys(cnfStyleAttrs).length > 0 ? { attributes: cnfStyleAttrs } : undefined;
   },
 });

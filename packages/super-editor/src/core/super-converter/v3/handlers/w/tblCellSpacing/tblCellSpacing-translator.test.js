@@ -26,12 +26,14 @@ describe('w:tblCellSpacing translator', () => {
 
   describe('decode', () => {
     it('creates a w:tblCellSpacing element with w:w and w:type attributes', () => {
-      const result = translator.decode({ node: { attrs: { cellSpacing: { value: 140, type: 'pct' } } } });
+      const { attributes: result } = translator.decode({
+        node: { attrs: { tableCellSpacing: { value: 140, type: 'pct' } } },
+      });
       expect(result).toEqual({ 'w:w': '140', 'w:type': 'pct' });
     });
 
     it('handles missing type property', () => {
-      const result = translator.decode({ node: { attrs: { cellSpacing: { value: 140 } } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { tableCellSpacing: { value: 140 } } } });
       expect(result).toEqual({ 'w:w': '140' });
     });
 

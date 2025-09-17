@@ -102,8 +102,9 @@ export function createBorderPropertyHandler(xmlName, sdName = null) {
     encode: (_, encodedAttrs) => {
       return Object.keys(encodedAttrs).length > 0 ? encodedAttrs : undefined;
     },
-    decode: (_, decodedAttrs) => {
-      return Object.keys(decodedAttrs).length > 0 ? decodedAttrs : undefined;
+    decode: function ({ node }, _) {
+      const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs[sdName] || {} } });
+      return Object.keys(decodedAttrs).length > 0 ? {attributes: decodedAttrs} : undefined;
     },
   };
 }
@@ -168,9 +169,10 @@ export function decodeProperties(translatorsBySdName, properties) {
   Object.keys(properties).forEach((key) => {
     const translator = translatorsBySdName[key];
     if (translator) {
-      const attributes = translator.decode({ node: { attrs: { [key]: properties[key] } } });
-      if (attributes != null) {
-        elements.push({ name: translator.xmlName, attributes });
+      const result = translator.decode({ node: { attrs: { [key]: properties[key] } } });
+      if (result != null) {
+        result.name = translator.xmlName;
+        elements.push(result);
       }
     }
   });
