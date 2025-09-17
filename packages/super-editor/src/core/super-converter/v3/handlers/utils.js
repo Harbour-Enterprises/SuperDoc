@@ -183,17 +183,17 @@ export function decodeProperties(translatorsBySdName, properties) {
  * Parses a string value to determine its boolean representation.
  * Considers '1' and 'true' (case-sensitive) as true; all other values are false.
  * @param {string} value The string value to parse.
- * @returns {boolean} The boolean representation of the input string.
+ * @returns {boolean|undefined} The boolean representation of the input string, or undefined if the input is null or undefined.
  */
-export const parseBoolean = (value) => ['1', 'true'].includes(value);
+export const parseBoolean = (value) => (value != null ? ['1', 'true'].includes(value) : undefined);
 
 /**
  * Converts a boolean value to its string representation.
  * Returns '1' for true and '0' for false.
  * @param {boolean} value The boolean value to convert.
- * @returns {string} The string representation of the boolean value.
+ * @returns {string|undefined} The string representation of the boolean, or undefined if the input is null or undefined.
  */
-export const booleanToString = (value) => (value ? '1' : '0');
+export const booleanToString = (value) => (value != null ? (value ? '1' : '0') : undefined);
 
 /**
  * Parses a value to an integer.
