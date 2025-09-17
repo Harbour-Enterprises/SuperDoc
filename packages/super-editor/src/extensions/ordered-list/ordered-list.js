@@ -88,19 +88,7 @@ export const OrderedList = Node.create({
   },
 
   parseDOM() {
-    return [
-      {
-        tag: 'ol',
-        getAttrs(dom) {
-          const li = dom.querySelector('li');
-          if (li?.getAttribute('data-num-fmt') === 'bullet') {
-            return false;
-          }
-          return {};
-        },
-        priority: 50,
-      },
-    ];
+    return [{ tag: 'ol' }];
   },
   renderDOM({ htmlAttributes }) {
     const { start, ...restAttributes } = htmlAttributes;
