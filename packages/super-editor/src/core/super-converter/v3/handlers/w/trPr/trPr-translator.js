@@ -21,7 +21,7 @@ const XML_NODE_NAME = 'w:trPr';
 const SD_ATTR_KEY = 'tableRowProperties';
 
 /**
- * Encode the w:rPr element.
+ * Encode the w:trPr element.
  * @param {import('@translator').SCEncoderConfig} params
  * @returns {import('@translator').SCEncoderResult}
  */
