@@ -235,7 +235,9 @@ export class AutoPageNumberNodeView {
   }
 
   update(node) {
-    if (node.type !== this.node.type) return false;
+    const incomingType = node?.type?.name;
+    const currentType = this.node?.type?.name;
+    if (!incomingType || incomingType !== currentType) return false;
     this.node = node;
     return true;
   }
