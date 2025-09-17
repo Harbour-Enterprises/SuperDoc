@@ -1,9 +1,12 @@
-import { tableOfContentsHandler } from './docPartGalleryImporter.js';
-
-export const handleDocPartObj = (params) => {
+/**
+ * @param {Object} params
+ * @returns {Array|null}
+ */
+export function handleDocPartObj(params) {
   const { nodes } = params;
+
   if (nodes.length === 0 || nodes[0].name !== 'w:sdt') {
-    return { nodes: [], consumed: 0 };
+    return null;
   }
 
   const node = nodes[0];
@@ -12,23 +15,21 @@ export const handleDocPartObj = (params) => {
   const docPartGallery = docPartObj?.elements.find((el) => el.name === 'w:docPartGallery');
   const docPartGalleryType = docPartGallery?.attributes['w:val'];
 
-  if (!docPartGalleryType) {
-    return { nodes: [], consumed: 0 };
-  }
-
-  if (!validGalleryTypeMap[docPartGalleryType]) {
+  if (!docPartGalleryType || !validGalleryTypeMap[docPartGalleryType]) {
     // TODO: Handle catching unkown gallery types
-    return { nodes: [], consumed: 0 };
+    return null;
   }
 
   const content = node?.elements.find((el) => el.name === 'w:sdtContent');
   const handler = validGalleryTypeMap[docPartGalleryType];
   const result = handler({ ...params, nodes: [content] });
 
-  return {
-    nodes: result,
-    consumed: 1,
-  };
+  return result;
+}
+
+export const tableOfContentsHandler = (params) => {
+  const node = params.nodes[0];
+  return params.nodeListHandler.handler({ ...params, nodes: node.elements });
 };
 
 const validGalleryTypeMap = {

@@ -1,34 +1,31 @@
-import { handleDocPartObj } from './docPartObjImporter';
-import { parseMarks } from './markImporter.js';
-import { generateDocxRandomId } from '../../../helpers/index.js';
+import { parseTagValueJSON } from './parse-tag-value-json';
+import { parseMarks } from '@converter/v2/importer/markImporter';
+import { generateDocxRandomId } from '@core/helpers/generateDocxRandomId';
 
 /**
- * @type {import("docxImporter").NodeHandler}
+ * @param {Object} params
+ * @returns {Object|null}
  */
-export const handleAnnotationNode = (params) => {
-  const { nodes, docx, nodeListHandler, insideTrackChange } = params;
+export function handleAnnotationNode(params) {
+  const { nodes } = params;
+
   if (nodes.length === 0 || nodes[0].name !== 'w:sdt') {
-    return { nodes: [], consumed: 0 };
+    return null;
   }
 
   const node = nodes[0];
   const sdtPr = node.elements.find((el) => el.name === 'w:sdtPr');
   const sdtContent = node.elements.find((el) => el.name === 'w:sdtContent');
-  const docPartObj = sdtPr?.elements.find((el) => el.name === 'w:docPartObj');
-
-  if (docPartObj) {
-    return handleDocPartObj({ nodes, docx, nodeListHandler, insideTrackChange });
-  }
 
   const alias = sdtPr?.elements.find((el) => el.name === 'w:alias');
   const tag = sdtPr?.elements.find((el) => el.name === 'w:tag');
   const tagValue = tag?.attributes['w:val'];
-  const processAsJSON = tagValue?.startsWith('{') && tagValue?.endsWith('}');
+  const shouldProcessAsJson = tagValue?.startsWith('{') && tagValue?.endsWith('}');
 
   let attrs = {};
 
-  if (processAsJSON) {
-    const parsedAttrs = parseTagAttrsJSON(tagValue);
+  if (shouldProcessAsJson) {
+    const parsedAttrs = parseTagValueJSON(tagValue);
     const attrsFromJSON = {
       type: parsedAttrs.fieldTypeShort,
       fieldId: parsedAttrs.fieldId,
@@ -57,7 +54,7 @@ export const handleAnnotationNode = (params) => {
   // Some w:sdt nodes have attrs.fieldId (coming from GoogleDocs) so we need a secondary check
   // Expecting `type` if its a field annotation
   if (!attrs.fieldId || !attrs.type) {
-    return { nodes: [], consumed: 0 };
+    return null;
   }
 
   let result = {
@@ -74,11 +71,8 @@ export const handleAnnotationNode = (params) => {
     };
   }
 
-  return {
-    nodes: [result],
-    consumed: 1,
-  };
-};
+  return result;
+}
 
 /**
  * Marks for annotations need to be converted to attributes
@@ -130,7 +124,7 @@ export const parseAnnotationMarks = (content = {}) => {
   };
 };
 
-function getAttrsFromElements({ sdtPr, tag, alias }) {
+export function getAttrsFromElements({ sdtPr, tag, alias }) {
   const type = sdtPr?.elements.find((el) => el.name === 'w:fieldTypeShort')?.attributes['w:val'];
   const fieldType = sdtPr?.elements.find((el) => el.name === 'w:fieldType')?.attributes['w:val'];
   const fieldColor = sdtPr?.elements.find((el) => el.name === 'w:fieldColor')?.attributes['w:val'];
@@ -153,21 +147,3 @@ function getAttrsFromElements({ sdtPr, tag, alias }) {
   };
   return attrs;
 }
-
-function parseTagAttrsJSON(json) {
-  try {
-    const attrs = JSON.parse(json);
-    return attrs;
-  } catch (err) {
-    console.error(err);
-    return {};
-  }
-}
-
-/**
- * @type {import("docxImporter").NodeHandlerEntry}
- */
-export const annotationNodeHandlerEntity = {
-  handlerName: 'annotationNodeHandler',
-  handler: handleAnnotationNode,
-};

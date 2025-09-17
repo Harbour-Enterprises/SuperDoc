@@ -25,7 +25,7 @@ export default defineConfig(({ mode }) => {
       ],
       coverage: {
         provider: 'v8',
-        exclude: ['**/v3/**/index.js'],
+        exclude: ['**/v3/**/index.js', '**/examples/**'],
         reporter: ['text'],
       }
     },

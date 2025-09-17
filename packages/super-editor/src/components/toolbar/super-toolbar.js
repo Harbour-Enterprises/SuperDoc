@@ -868,7 +868,10 @@ export class SuperToolbar extends EventEmitter {
 
     // If we don't know what to do with this command, throw an error
     else {
-      throw new Error(`[super-toolbar 🎨] Command not found: ${command}`);
+      const error = new Error(`[super-toolbar 🎨] Command not found: ${command}`);
+      this.emit('exception', { error, editor: this.activeEditor });
+
+      throw error;
     }
 
     this.updateToolbarState();

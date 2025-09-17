@@ -6,7 +6,7 @@ export default defineConfig({
     projects: [
       './packages/super-editor',
       './packages/superdoc',
+      './shared/common',
     ],
   },
 });
-

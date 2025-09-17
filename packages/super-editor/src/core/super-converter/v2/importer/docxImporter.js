@@ -9,8 +9,7 @@ import { hyperlinkNodeHandlerEntity } from './hyperlinkImporter.js';
 import { runNodeHandlerEntity } from './runNodeImporter.js';
 import { textNodeHandlerEntity } from './textNodeImporter.js';
 import { paragraphNodeHandlerEntity } from './paragraphNodeImporter.js';
-import { annotationNodeHandlerEntity } from './annotationImporter.js';
-import { sdtNodeHandlerEntity } from './structuredDocumentNodeImporter.js';
+import { sdtNodeHandlerEntity } from './sdtNodeImporter.js';
 import { standardNodeHandlerEntity } from './standardNodeImporter.js';
 import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
 import { bookmarkNodeHandlerEntity } from './bookmarkNodeImporter.js';
@@ -132,7 +131,6 @@ export const defaultNodeListHandler = () => {
     paragraphNodeHandlerEntity,
     textNodeHandlerEntity,
     lineBreakNodeHandlerEntity,
-    annotationNodeHandlerEntity,
     sdtNodeHandlerEntity,
     bookmarkNodeHandlerEntity,
     hyperlinkNodeHandlerEntity,
@@ -276,7 +274,7 @@ const createNodeListHandler = (nodeHandlers) => {
           }
         } catch (error) {
           console.debug('Import error', error);
-          editor?.emit('exception', { error });
+          editor?.emit('exception', { error, editor });
 
           converter?.telemetry?.trackStatistic('error', {
             type: 'processing_error',
@@ -291,7 +289,7 @@ const createNodeListHandler = (nodeHandlers) => {
       return processedElements;
     } catch (error) {
       console.debug('Error during import', error);
-      editor?.emit('exception', { error });
+      editor?.emit('exception', { error, editor });
 
       // Track only catastrophic handler failures
       converter?.telemetry?.trackStatistic('error', {
