@@ -17,7 +17,16 @@ const validXmlAttributes = [];
  * @returns {import('@translator').SCEncoderResult}
  */
 function encode(params, encodedAttrs) {
-  const { node, table, row, rowBorders, styleTag, columnIndex, columnWidth } = params.extraParams;
+  const {
+    node,
+    table,
+    row,
+    rowBorders,
+    styleTag,
+    columnIndex,
+    columnWidth,
+    columnWidths: allColumnWidths,
+  } = params.extraParams;
 
   const schemaNode = handleTableCellNode({
     params,
@@ -28,6 +37,7 @@ function encode(params, encodedAttrs) {
     styleTag,
     columnIndex,
     columnWidth,
+    allColumnWidths,
   });
 
   if (encodedAttrs && Object.keys(encodedAttrs).length) {

@@ -73,6 +73,8 @@ const encode = (params, encodedAttrs) => {
 
   // Process each row
   const tblStyleTag = tblPr.elements.find((el) => el.name === 'w:tblStyle'); // used by the legacy table cell handler
+  const columnWidths = (encodedAttrs['grid'] ?? []).map((item) => twipsToPixels(item.col));
+
   const content = [];
   rows.forEach((row) => {
     const result = trTranslator.encode({
@@ -80,9 +82,9 @@ const encode = (params, encodedAttrs) => {
       nodes: [row],
       extraParams: {
         row,
-        table: node,
         rowBorders: borderRowData,
         styleTag: tblStyleTag,
+        columnWidths,
       },
     });
     if (result.content?.length) content.push(result);
@@ -216,8 +218,8 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
     if (baseTblPr && baseTblPr.elements) {
       tblPr.elements.push(...baseTblPr.elements);
     }
-    const tableProperties = tblPrTranslator.encode({...params, nodes: [tblPr] }).attributes;
-    const { borders, rowBorders } = processTableBorders(tableProperties.borders || {});
+    const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] }).attributes;
+    const { borders, rowBorders } = _processTableBorders(tableProperties.borders || {});
 
     if (borders) stylesToReturn.borders = borders;
     if (rowBorders) stylesToReturn.rowBorders = rowBorders;

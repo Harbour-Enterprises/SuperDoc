@@ -116,14 +116,3 @@ function processTableBorders(borderElements) {
     rowBorders,
   };
 }
-
-export const getGridColumnWidths = (tableNode) => {
-  const tblGrid = tableNode.elements.find((el) => el.name === 'w:tblGrid');
-  if (!tblGrid) return [];
-  const columnWidths =
-    tblGrid?.elements?.flatMap((el) => {
-      if (el.name !== 'w:gridCol') return [];
-      return twipsToPixels(el.attributes['w:w']);
-    }) || [];
-  return columnWidths;
-};
