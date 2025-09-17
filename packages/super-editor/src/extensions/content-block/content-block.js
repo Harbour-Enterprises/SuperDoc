@@ -122,11 +122,7 @@ export const ContentBlock = Node.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    return [
-      'div',
-      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }),
-      0,
-    ];
+    return ['div', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name })];
   },
 
   addCommands() {

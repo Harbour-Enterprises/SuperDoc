@@ -1,3 +1,9 @@
+## [0.18.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.18.0...v0.18.1) (2025-09-16)
+
+### Bug Fixes
+
+- content-block node ext wrong schema and rendering rules ([#965](https://github.com/Harbour-Enterprises/SuperDoc/issues/965)) ([64fa2fc](https://github.com/Harbour-Enterprises/SuperDoc/commit/64fa2fc2a1a52d2700c0e820b6384b87e8d3bf35))
+
 # [0.18.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.3...v0.18.0) (2025-09-12)
 
 ### Bug Fixes

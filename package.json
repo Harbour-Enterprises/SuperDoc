@@ -38,7 +38,7 @@
     "prepare": "husky",
     "lint:staged": "lint-staged",
     "watch": "npm run watch:es --workspace=packages/superdoc",
-    "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build"
+    "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build && npm run test"
   },
   "lint-staged": {
     "*.{js,jsx}": [
