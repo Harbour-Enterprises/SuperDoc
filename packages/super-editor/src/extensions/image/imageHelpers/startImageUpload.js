@@ -39,6 +39,7 @@ export const startImageUpload = async ({ editor, view, file }) => {
     file = processedImageResult.file;
   } catch (err) {
     console.warn('Error processing image:', err);
+    editor.emit('exception', { error: err, editor });
     return;
   }
 
@@ -135,10 +136,11 @@ export async function uploadImage({ editor, view, file, size, uploadHandler }) {
         .replaceWith(placeholderPos, placeholderPos, imageNode) // or .insert(placeholderPos, imageNode)
         .setMeta(ImagePlaceholderPluginKey, removeMeta),
     );
-  } catch {
+  } catch (error) {
     let removeMeta = { type: 'remove', id };
     // On failure, just clean up the placeholder
     view.dispatch(tr.setMeta(ImagePlaceholderPluginKey, removeMeta));
+    editor.emit('exception', { error, editor });
   }
 }
 

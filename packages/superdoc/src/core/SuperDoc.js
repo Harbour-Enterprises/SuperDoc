@@ -578,6 +578,7 @@ export class SuperDoc extends EventEmitter {
     this.toolbar = new SuperToolbar(config);
 
     this.toolbar.on('superdoc-command', this.onToolbarCommand.bind(this));
+    this.toolbar.on('exception', this.config.onException);
     this.once('editorCreate', () => this.toolbar.updateToolbarState());
   }
 

@@ -331,7 +331,6 @@ export class Editor extends EventEmitter {
     this.on('beforeCreate', this.options.onBeforeCreate);
     this.emit('beforeCreate', { editor: this });
     this.on('contentError', this.options.onContentError);
-    this.on('exception', this.options.onException);
 
     this.mount(this.options.element);
 
@@ -351,6 +350,7 @@ export class Editor extends EventEmitter {
     this.on('paginationUpdate', this.options.onPaginationUpdate);
     this.on('comment-positions', this.options.onCommentLocationsUpdate);
     this.on('list-definitions-change', this.options.onListDefinitionsChange);
+    this.on('exception', this.options.onException);
 
     if (!this.options.isHeadless) {
       this.initializeCollaborationData();
@@ -1520,101 +1520,105 @@ export class Editor extends EventEmitter {
     getUpdatedDocs = false,
     fieldsHighlightColor = null,
   } = {}) {
-    // Pre-process the document state to prepare for export
-    const json = this.#prepareDocumentForExport(comments);
+    try {
+      // Pre-process the document state to prepare for export
+      const json = this.#prepareDocumentForExport(comments);
 
-    // Export the document to DOCX
-    const documentXml = await this.converter.exportToDocx(
-      json,
-      this.schema,
-      this.storage.image.media,
-      isFinalDoc,
-      commentsType,
-      comments,
-      this,
-      exportJsonOnly,
-      fieldsHighlightColor,
-    );
+      // Export the document to DOCX
+      const documentXml = await this.converter.exportToDocx(
+        json,
+        this.schema,
+        this.storage.image.media,
+        isFinalDoc,
+        commentsType,
+        comments,
+        this,
+        exportJsonOnly,
+        fieldsHighlightColor,
+      );
 
-    this.#validateDocumentExport();
+      this.#validateDocumentExport();
 
-    if (exportXmlOnly || exportJsonOnly) return documentXml;
+      if (exportXmlOnly || exportJsonOnly) return documentXml;
 
-    const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
-    const styles = this.converter.schemaToXml(this.converter.convertedXml['word/styles.xml'].elements[0]);
-    const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
-    const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
-    const media = this.converter.addedMedia;
+      const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
+      const styles = this.converter.schemaToXml(this.converter.convertedXml['word/styles.xml'].elements[0]);
+      const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
+      const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
+      const media = this.converter.addedMedia;
 
-    const updatedHeadersFooters = {};
-    Object.entries(this.converter.convertedXml).forEach(([name, json]) => {
-      if (name.includes('header') || name.includes('footer')) {
-        const resultXml = this.converter.schemaToXml(json.elements[0]);
-        updatedHeadersFooters[name] = String(resultXml);
+      const updatedHeadersFooters = {};
+      Object.entries(this.converter.convertedXml).forEach(([name, json]) => {
+        if (name.includes('header') || name.includes('footer')) {
+          const resultXml = this.converter.schemaToXml(json.elements[0]);
+          updatedHeadersFooters[name] = String(resultXml);
+        }
+      });
+
+      const numberingData = this.converter.convertedXml['word/numbering.xml'];
+      const numbering = this.converter.schemaToXml(numberingData.elements[0]);
+      const updatedDocs = {
+        ...this.options.customUpdatedFiles,
+        'word/document.xml': String(documentXml),
+        'docProps/custom.xml': String(customXml),
+        'word/settings.xml': String(customSettings),
+        'word/_rels/document.xml.rels': String(rels),
+        'word/numbering.xml': String(numbering),
+
+        // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
+        'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
+        ...updatedHeadersFooters,
+      };
+
+      if (comments.length) {
+        const commentsXml = this.converter.schemaToXml(this.converter.convertedXml['word/comments.xml'].elements[0]);
+        const commentsExtendedXml = this.converter.schemaToXml(
+          this.converter.convertedXml['word/commentsExtended.xml'].elements[0],
+        );
+        const commentsExtensibleXml = this.converter.schemaToXml(
+          this.converter.convertedXml['word/commentsExtensible.xml'].elements[0],
+        );
+        const commentsIdsXml = this.converter.schemaToXml(
+          this.converter.convertedXml['word/commentsIds.xml'].elements[0],
+        );
+
+        updatedDocs['word/comments.xml'] = String(commentsXml);
+        updatedDocs['word/commentsExtended.xml'] = String(commentsExtendedXml);
+        updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
+        updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
       }
-    });
 
-    const numberingData = this.converter.convertedXml['word/numbering.xml'];
-    const numbering = this.converter.schemaToXml(numberingData.elements[0]);
-    const updatedDocs = {
-      ...this.options.customUpdatedFiles,
-      'word/document.xml': String(documentXml),
-      'docProps/custom.xml': String(customXml),
-      'word/settings.xml': String(customSettings),
-      'word/_rels/document.xml.rels': String(rels),
-      'word/numbering.xml': String(numbering),
+      const zipper = new DocxZipper();
 
-      // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
-      'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
-      ...updatedHeadersFooters,
-    };
+      if (getUpdatedDocs) {
+        updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes(
+          {
+            files: this.options.content,
+          },
+          media,
+          true,
+        );
+        return updatedDocs;
+      }
 
-    if (comments.length) {
-      const commentsXml = this.converter.schemaToXml(this.converter.convertedXml['word/comments.xml'].elements[0]);
-      const commentsExtendedXml = this.converter.schemaToXml(
-        this.converter.convertedXml['word/commentsExtended.xml'].elements[0],
-      );
-      const commentsExtensibleXml = this.converter.schemaToXml(
-        this.converter.convertedXml['word/commentsExtensible.xml'].elements[0],
-      );
-      const commentsIdsXml = this.converter.schemaToXml(
-        this.converter.convertedXml['word/commentsIds.xml'].elements[0],
-      );
-
-      updatedDocs['word/comments.xml'] = String(commentsXml);
-      updatedDocs['word/commentsExtended.xml'] = String(commentsExtendedXml);
-      updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
-      updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
-    }
-
-    const zipper = new DocxZipper();
-
-    if (getUpdatedDocs) {
-      updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes(
-        {
-          files: this.options.content,
-        },
+      const result = await zipper.updateZip({
+        docx: this.options.content,
+        updatedDocs: updatedDocs,
+        originalDocxFile: this.options.fileSource,
         media,
-        true,
-      );
-      return updatedDocs;
+        fonts: this.options.fonts,
+        isHeadless: this.options.isHeadless,
+      });
+
+      this.options.telemetry?.trackUsage('document_export', {
+        documentType: 'docx',
+        timestamp: new Date().toISOString(),
+      });
+
+      return result;
+    } catch (error) {
+      this.emit('exception', { error, editor: this });
     }
-
-    const result = await zipper.updateZip({
-      docx: this.options.content,
-      updatedDocs: updatedDocs,
-      originalDocxFile: this.options.fileSource,
-      media,
-      fonts: this.options.fonts,
-      isHeadless: this.options.isHeadless,
-    });
-
-    this.options.telemetry?.trackUsage('document_export', {
-      documentType: 'docx',
-      timestamp: new Date().toISOString(),
-    });
-
-    return result;
   }
 
   /**
@@ -1627,7 +1631,9 @@ export class Editor extends EventEmitter {
       console.debug('🔗 [super-editor] Ending collaboration');
       if (this.options.collaborationProvider) this.options.collaborationProvider.disconnect();
       if (this.options.ydoc) this.options.ydoc.destroy();
-    } catch {}
+    } catch (error) {
+      this.emit('exception', { error, editor: this });
+    }
   }
 
   /**
@@ -1652,7 +1658,9 @@ export class Editor extends EventEmitter {
       }
       this.converter.headerEditors.length = 0;
       this.converter.footerEditors.length = 0;
-    } catch {}
+    } catch (error) {
+      this.emit('exception', { error, editor: this });
+    }
   }
 
   /**
@@ -1728,7 +1736,7 @@ export class Editor extends EventEmitter {
 
     if (this.options.ydoc && this.options.collaborationProvider) {
       updateYdocDocxData(this);
-      this.initializeCollaborationData(true);
+      this.initializeCollaborationData();
     } else {
       this.#insertNewFileData();
     }
