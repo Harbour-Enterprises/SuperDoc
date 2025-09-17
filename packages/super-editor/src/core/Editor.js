@@ -358,7 +358,9 @@ export class Editor extends EventEmitter {
       this.initDefaultStyles();
     }
 
-    if (!this.options.ydoc) this.migrateListsToV2();
+    if (!this.options.ydoc || this.options.markdown || this.options.html) {
+      this.migrateListsToV2();
+    }
 
     this.setDocumentMode(this.options.documentMode);
 
