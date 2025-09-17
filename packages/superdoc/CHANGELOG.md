@@ -1,3 +1,9 @@
+## [0.20.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.20.0...v0.20.1) (2025-09-17)
+
+### Bug Fixes
+
+- ul lists importing as ol ([#978](https://github.com/Harbour-Enterprises/SuperDoc/issues/978)) ([4f725c9](https://github.com/Harbour-Enterprises/SuperDoc/commit/4f725c982bdc02b1730ff233a7eb17cc74a6782a)), closes [#977](https://github.com/Harbour-Enterprises/SuperDoc/issues/977)
+
 # [0.20.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.19.0...v0.20.0) (2025-09-17)
 
 ### Bug Fixes
