@@ -203,5 +203,22 @@ describe('SuperDoc Store - Blob Support', () => {
       // The exact behavior depends on error handling implementation
       expect(store.documents.length).toBe(0);
     });
+
+    it('should notify exception handler when document initialization fails', async () => {
+      const handler = vi.fn();
+      store.setExceptionHandler(handler);
+
+      const config = createTestConfig([
+        {
+          /* invalid entry */
+        },
+      ]);
+
+      await store.init(config);
+
+      expect(handler).toHaveBeenCalledTimes(1);
+      expect(handler.mock.calls[0][0]).toMatchObject({ stage: 'document-init' });
+      expect(handler.mock.calls[0][0].error).toBeInstanceOf(Error);
+    });
   });
 });

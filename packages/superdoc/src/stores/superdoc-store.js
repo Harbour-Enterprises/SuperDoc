@@ -9,6 +9,7 @@ import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 
 export const useSuperdocStore = defineStore('superdoc', () => {
   const currentConfig = ref(null);
+  let exceptionHandler = null;
   const commentsStore = useCommentsStore();
   const documents = ref([]);
   const documentBounds = ref([]);
@@ -48,6 +49,15 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     scrollTop: 0,
     scrollLeft: 0,
   });
+
+  const setExceptionHandler = (handler) => {
+    exceptionHandler = typeof handler === 'function' ? handler : null;
+  };
+
+  const emitException = (payload) => {
+    const handler = exceptionHandler || currentConfig.value?.onException;
+    if (typeof handler === 'function') handler(payload);
+  };
 
   const init = async (config) => {
     reset();
@@ -91,14 +101,35 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     if (!docsToProcess) return [];
 
     for (let doc of docsToProcess) {
+      if (!doc) {
+        emitException({
+          error: new Error('Received empty document entry during initialization.'),
+          stage: 'document-init',
+          document: doc,
+        });
+        console.warn('[superdoc] Skipping empty document entry.');
+        continue;
+      }
+
       try {
         // Ensure the document object has data (ie: if loading from URL)
         let docWithData = await _initializeDocumentData(doc);
+
+        if (!docWithData) {
+          emitException({
+            error: new Error('Document could not be initialized with the provided configuration.'),
+            stage: 'document-init',
+            document: doc,
+          });
+          console.warn('[superdoc] Skipping document due to invalid configuration:', doc);
+          continue;
+        }
 
         // Create composable and append to our documents
         const smartDoc = useDocument(docWithData, currentConfig.value);
         documents.value.push(smartDoc);
       } catch (e) {
+        emitException({ error: e, stage: 'document-init', document: doc });
         console.warn('[superdoc] Error initializing document:', doc, 'with error:', e, 'Skipping document.');
       }
     }
@@ -173,7 +204,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
       return { ...doc, data: fileObject };
     }
     // Invalid configuration
-    throw new Error('Document could not be initialized:', doc);
+    return null;
   };
 
   const areDocumentsReady = computed(() => {
@@ -235,6 +266,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
 
     // Actions
     init,
+    setExceptionHandler,
     reset,
     handlePageReady,
     getDocument,

@@ -349,6 +349,9 @@ export class SuperDoc extends EventEmitter {
     this.superdocStore = superdocStore;
     this.commentsStore = commentsStore;
     this.highContrastModeStore = highContrastModeStore;
+    if (typeof this.superdocStore.setExceptionHandler === 'function') {
+      this.superdocStore.setExceptionHandler((payload) => this.emit('exception', payload));
+    }
     this.superdocStore.init(this.config);
     this.commentsStore.init(this.config.modules.comments);
   }
