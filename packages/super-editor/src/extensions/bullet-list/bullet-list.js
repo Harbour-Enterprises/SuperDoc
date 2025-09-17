@@ -48,7 +48,20 @@ export const BulletList = Node.create({
   },
 
   parseDOM() {
-    return [{ tag: 'ul' }];
+    return [
+      { tag: 'ul' },
+      {
+        tag: 'ol',
+        getAttrs(dom) {
+          const li = dom.querySelector('li');
+          if (li?.getAttribute('data-num-fmt') === 'bullet') {
+            return {};
+          }
+          return false;
+        },
+        priority: 60,
+      },
+    ];
   },
 
   renderDOM({ htmlAttributes }) {
