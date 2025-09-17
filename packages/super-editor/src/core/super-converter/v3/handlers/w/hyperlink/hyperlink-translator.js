@@ -95,10 +95,9 @@ const _resolveHref = (docx, encodedAttrs) => {
 /**
  * Decode the hyperlink mark back into OOXML <w:hyperlink>.
  * @param {import('@translator').SCDecoderConfig} params
- * @param {import('@translator').DecodedAttributes} [_] - The already decoded attributes
  * @returns {import('@translator').SCDecoderResult}
  */
-function decode(params, _) {
+function decode(params) {
   const { node } = params;
 
   const linkMark = node.marks.find((m) => m.type === 'link');

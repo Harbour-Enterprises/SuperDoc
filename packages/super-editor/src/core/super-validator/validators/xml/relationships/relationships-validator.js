@@ -36,7 +36,7 @@ export function createRelationshipsValidator({ editor, logger }) {
     if (wasFixed) modified = true;
 
     // Clean up root element children
-    const wasCleaned = cleanupRootChildren(root, results);
+    const wasCleaned = cleanupRootChildren(root);
     if (wasCleaned) modified = true;
 
     // Process relationships and collect media targets
@@ -120,7 +120,7 @@ function validateRelationshipsRoot(relsTree, relsKey, results) {
 /**
  * Cleans up root element children to ensure only valid Relationship elements
  */
-function cleanupRootChildren(root, results) {
+function cleanupRootChildren(root) {
   const validChildren =
     root.elements?.filter((child) => child?.type === 'element' && child.name === 'Relationship') || [];
 

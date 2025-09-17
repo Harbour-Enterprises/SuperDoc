@@ -70,7 +70,7 @@ export function createMeasurementPropertyHandler(xmlName, sdName = null) {
     encode: (_, encodedAttrs) => {
       return encodedAttrs['value'] != null ? encodedAttrs : undefined;
     },
-    decode: function ({ node }, _) {
+    decode: function ({ node }) {
       const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs[sdName] || {} } });
       return decodedAttrs['w:w'] != null ? decodedAttrs : undefined;
     },
