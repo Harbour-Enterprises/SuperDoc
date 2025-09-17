@@ -1,5 +1,5 @@
 import { NodeTranslator } from '@translator';
-import { createAttributeHandler } from '@converter/v3/handlers/utils.js';
+import { booleanToString, createAttributeHandler, parseBoolean } from '@converter/v3/handlers/utils.js';
 
 /**
  * The NodeTranslator instance for the cnfStyle element.
@@ -23,21 +23,15 @@ export const translator = NodeTranslator.from({
     'w:lastRowLastColumn',
     'w:oddHBand',
     'w:oddVBand',
-    'w:val',
-  ].map((attr) => createAttributeHandler(attr)),
+  ]
+    .map((attr) => createAttributeHandler(attr, null, parseBoolean, booleanToString))
+    .concat([createAttributeHandler('w:val')]),
   encode: (_, encodedAttrs) => {
-    // Convert '1'/'0' and 'true'/'false' to boolean
-    Object.keys(encodedAttrs).forEach((key) => {
-      encodedAttrs[key] = ['1', 'true'].includes(encodedAttrs[key]);
-    });
     return Object.keys(encodedAttrs).length > 0 ? encodedAttrs : undefined;
   },
-  decode: ({ node }) => {
+  decode: function ({ node }) {
     if (!node.attrs?.cnfStyle) return;
-    const cnfStyleAttrs = {};
-    Object.entries(node.attrs.cnfStyle).forEach(([key, value]) => {
-      cnfStyleAttrs[`w:${key}`] = value ? '1' : '0';
-    });
-    return Object.keys(cnfStyleAttrs).length > 0 ? { attributes: cnfStyleAttrs } : undefined;
+    const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs.cnfStyle || {} } });
+    return Object.keys(decodedAttrs).length > 0 ? { attributes: decodedAttrs } : undefined;
   },
 });
