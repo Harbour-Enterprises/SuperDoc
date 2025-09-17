@@ -103,7 +103,10 @@ export const createAttributeHandler = (xmlName, sdName = null, transformEncode =
  * @returns {object|Array} The encoded attributes as an object or array based on the asArray flag.
  */
 export function encodeProperties(node, translatorsByXmlName, asArray = false) {
-  let attributes = asArray ? [] : {};
+  if (!node?.elements || node.elements.length === 0) {
+    return asArray ? [] : {};
+  }
+  const attributes = asArray ? [] : {};
   node.elements.forEach((el) => {
     const translator = translatorsByXmlName[el.name];
     if (translator) {
@@ -127,6 +130,9 @@ export function encodeProperties(node, translatorsByXmlName, asArray = false) {
  * @returns {Array} An array of decoded elements.
  */
 export function decodeProperties(translatorsBySdName, properties) {
+  if (!properties || typeof properties !== 'object') {
+    return [];
+  }
   const elements = [];
   Object.keys(properties).forEach((key) => {
     const translator = translatorsBySdName[key];
