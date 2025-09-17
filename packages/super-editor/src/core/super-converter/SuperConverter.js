@@ -381,8 +381,13 @@ class SuperConverter {
   }
 
   getSchema(editor) {
-    this.getDocumentInternalId();
-    const result = createDocumentJson({ ...this.convertedXml, media: this.media }, this, editor);
+    let result;
+    try {
+      this.getDocumentInternalId();
+      result = createDocumentJson({ ...this.convertedXml, media: this.media }, this, editor);
+    } catch (error) {
+      editor?.emit('exception', { error, editor });
+    }
 
     if (result) {
       this.savedTagsToRestore.push({ ...result.savedTagsToRestore });
