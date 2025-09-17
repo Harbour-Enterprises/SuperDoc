@@ -9,6 +9,7 @@ import {
   pixelsToTwips,
   ptToTwips,
   rgbToHex,
+  degreesToRot,
 } from './helpers.js';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
@@ -1361,6 +1362,32 @@ export function translateImageNode(params, imageSize) {
       }
     : imageSize;
 
+  const xfrmAttrs = {};
+  const effectExtentAttrs = {
+    l: 0,
+    t: 0,
+    r: 0,
+    b: 0,
+  };
+  const transformData = attrs.transformData;
+  if (transformData) {
+    if (transformData.rotation) {
+      xfrmAttrs.rot = degreesToRot(transformData.rotation);
+    }
+    if (transformData.verticalFlip) {
+      xfrmAttrs.flipV = '1';
+    }
+    if (transformData.horizontalFlip) {
+      xfrmAttrs.flipH = '1';
+    }
+    if (transformData.sizeExtension) {
+      effectExtentAttrs.l = pixelsToEmu(transformData.sizeExtension.left);
+      effectExtentAttrs.t = pixelsToEmu(transformData.sizeExtension.top);
+      effectExtentAttrs.r = pixelsToEmu(transformData.sizeExtension.right);
+      effectExtentAttrs.b = pixelsToEmu(transformData.sizeExtension.bottom);
+    }
+  }
+
   if (originalWidth && originalHeight) {
     const boxWidthPx = emuToPixels(size.w);
     const boxHeightPx = emuToPixels(size.h);
@@ -1538,12 +1565,7 @@ export function translateImageNode(params, imageSize) {
             },
             {
               name: 'wp:effectExtent',
-              attributes: {
-                l: 0,
-                t: 0,
-                r: 0,
-                b: 0,
-              },
+              attributes: effectExtentAttrs,
             },
             ...wrapProp,
             {
@@ -1624,6 +1646,7 @@ export function translateImageNode(params, imageSize) {
                           elements: [
                             {
                               name: 'a:xfrm',
+                              attributes: xfrmAttrs,
                               elements: [
                                 {
                                   name: 'a:ext',
