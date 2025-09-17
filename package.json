@@ -7,7 +7,11 @@
     "shared/*"
   ],
   "scripts": {
-    "test": "vitest --root ./packages/super-editor/",
+    "test": "vitest run",
+    "test:debug": "npm run test:debug --workspace=packages/super-editor",
+    "test:all": "vitest run",
+    "test:editor": "vitest run --root ./packages/super-editor",
+    "test:superdoc": "vitest run --root ./packages/superdoc",
     "test:cov": "node scripts/test-cov.mjs",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "npm --workspace=@harbour-enterprises/superdoc run dev",
@@ -34,7 +38,7 @@
     "prepare": "husky",
     "lint:staged": "lint-staged",
     "watch": "npm run watch:es --workspace=packages/superdoc",
-    "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build"
+    "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build && npm run test"
   },
   "lint-staged": {
     "*.{js,jsx}": [

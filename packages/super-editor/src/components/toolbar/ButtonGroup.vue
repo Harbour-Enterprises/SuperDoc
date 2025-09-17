@@ -6,7 +6,7 @@ import OverflowMenu from './OverflowMenu.vue';
 import { NDropdown, NTooltip, NSelect } from 'naive-ui';
 import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
 
-const emit = defineEmits(['command']);
+const emit = defineEmits(['command', 'item-clicked']);
 
 const toolbarItemRefs = ref([]);
 const props = defineProps({

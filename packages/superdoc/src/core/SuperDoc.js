@@ -12,6 +12,7 @@ import { shuffleArray } from '@harbour-enterprises/common/collaboration/awarenes
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
 import { createDownload, cleanName } from './helpers/export.js';
 import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative } from './collaboration/helpers.js';
+import { normalizeDocumentEntry } from './helpers/file.js';
 
 /**
  * @typedef {Object} User The current user of this superdoc
@@ -32,7 +33,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @typedef {Object} Document
  * @property {string} [id] The ID of the document
  * @property {string} type The type of the document
- * @property {File | null} [data] The initial data of the document
+ * @property {File | Blob | null} [data] The initial data of the document (File, Blob, or null)
  * @property {string} [name] The name of the document
  * @property {string} [url] The URL of the document
  * @property {boolean} [isNewFile] Whether the document is a new file
@@ -65,7 +66,7 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
  * @property {string} selector The selector to mount the SuperDoc into
  * @property {DocumentMode} documentMode The mode of the document
  * @property {'editor' | 'viewer' | 'suggester'} [role] The role of the user in this SuperDoc
- * @property {Object | string} [document] The document to load. If a string, it will be treated as a URL
+ * @property {Object | string | File | Blob} [document] The document to load. If a string, it will be treated as a URL. If a File or Blob, it will be used directly.
  * @property {Array<Document>} documents The documents to load
  * @property {User} [user] The current user of this SuperDoc
  * @property {Array<User>} [users] All users of this SuperDoc (can be used for "@"-mentions)
@@ -283,14 +284,17 @@ export class SuperDoc extends EventEmitter {
     const doc = this.config.document;
     const hasDocumentConfig = !!doc && typeof doc === 'object' && Object.keys(this.config.document)?.length;
     const hasDocumentUrl = !!doc && typeof doc === 'string' && doc.length > 0;
-    const hasDocumentFile = !!doc && doc instanceof File;
+    const hasDocumentFile = !!doc && typeof File === 'function' && doc instanceof File;
+    const hasDocumentBlob = !!doc && doc instanceof Blob && !(doc instanceof File);
     const hasListOfDocuments = this.config.documents && this.config.documents?.length;
     if (hasDocumentConfig && hasListOfDocuments) {
       console.warn('🦋 [superdoc] You can only provide one of document or documents');
     }
 
     if (hasDocumentConfig) {
-      this.config.documents = [this.config.document];
+      // If an uploader-specific wrapper was passed, normalize it.
+      const normalized = normalizeDocumentEntry(this.config.document);
+      this.config.documents = [normalized];
     } else if (hasDocumentUrl) {
       this.config.documents = [
         {
@@ -309,6 +313,28 @@ export class SuperDoc extends EventEmitter {
           isNewFile: true,
         },
       ];
+    } else if (hasDocumentBlob) {
+      // Generate filename based on type
+      const docType = this.config.document.type || DOCX;
+      let extension = '.docx';
+      if (docType === PDF) {
+        extension = '.pdf';
+      } else if (docType === HTML) {
+        extension = '.html';
+      }
+      this.config.documents = [
+        {
+          type: docType,
+          data: this.config.document,
+          name: `document${extension}`,
+          isNewFile: true,
+        },
+      ];
+    }
+
+    // Also normalize any provided documents array entries (e.g., when consumer passes uploader wrappers directly)
+    if (Array.isArray(this.config.documents) && this.config.documents.length > 0) {
+      this.config.documents = this.config.documents.map((d) => normalizeDocumentEntry(d));
     }
   }
 
@@ -323,6 +349,9 @@ export class SuperDoc extends EventEmitter {
     this.superdocStore = superdocStore;
     this.commentsStore = commentsStore;
     this.highContrastModeStore = highContrastModeStore;
+    if (typeof this.superdocStore.setExceptionHandler === 'function') {
+      this.superdocStore.setExceptionHandler((payload) => this.emit('exception', payload));
+    }
     this.superdocStore.init(this.config);
     this.commentsStore.init(this.config.modules.comments);
   }

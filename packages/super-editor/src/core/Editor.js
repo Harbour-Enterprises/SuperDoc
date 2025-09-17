@@ -90,7 +90,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
  * @property {string} [role='editor'] - User role ('editor', 'viewer', 'suggester')
  * @property {Array} [colors=[]] - Available colors
  * @property {Object} [converter] - Document converter
- * @property {Object} [fileSource] - Source of the file
+ * @property {File|Blob|Buffer} [fileSource] - Source of the file (File/Blob in browser, Buffer in Node.js)
  * @property {Object} [initialState] - Initial editor state
  * @property {string} [documentId] - Unique document identifier
  * @property {Array} [extensions=[]] - Editor extensions
@@ -705,18 +705,11 @@ export class Editor extends EventEmitter {
       ...options,
     };
 
-    if (this.options.collaborationProvider && this.options.ydoc) {
-      const nonCollabHistoryIndex = this.options.extensions.findIndex((e) => e.name === 'history');
-      if (nonCollabHistoryIndex !== -1) {
-        this.options.extensions.splice(nonCollabHistoryIndex, 1);
-      }
-    }
-
     if ((this.options.isNewFile || !this.options.ydoc) && this.options.isCommentsEnabled) {
       this.options.shouldLoadComments = true;
     }
 
-    if (!this.view || !this.state || this.ifsDestroyed) {
+    if (!this.view || !this.state || this.isDestroyed) {
       return;
     }
 

@@ -27,6 +27,8 @@ import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translato
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
+import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
+import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -85,7 +87,7 @@ export function exportSchemaToJson(params) {
     orderedList: translateList,
     lineBreak: wBrNodeTranslator,
     table: translateTable,
-    tableRow: translateTableRow,
+    tableRow: wTrNodeTranslator,
     tableCell: wTcNodeTranslator,
     bookmarkStart: translateBookmarkStart,
     fieldAnnotation: translateFieldAnnotation,
@@ -561,7 +563,7 @@ function translateTextNode(params) {
 
   // Separate links from regular text
   const isLinkNode = node.marks?.some((m) => m.type === 'link');
-  if (isLinkNode) return translateLinkNode(params);
+  if (isLinkNode) return wHyperlinkTranslator.decode(params);
 
   const { text, marks = [] } = node;
 
@@ -674,40 +676,6 @@ export function processOutputMarks(marks = []) {
       return translateMark(mark);
     }
   });
-}
-
-/**
- * Translate link node. This is a special case because it requires adding a new relationship.
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated link node
- */
-function translateLinkNode(params) {
-  const { node } = params;
-
-  const linkMark = node.marks.find((m) => m.type === 'link');
-  const link = linkMark.attrs.href;
-
-  let rId = linkMark.attrs.rId;
-  if (!rId) {
-    rId = addNewLinkRelationship(params, link);
-  }
-
-  node.marks = node.marks.filter((m) => m.type !== 'link');
-
-  const outputNode = exportSchemaToJson({ ...params, node });
-  const contentNode = processLinkContentNode(outputNode);
-
-  const newNode = {
-    name: 'w:hyperlink',
-    type: 'element',
-    attributes: {
-      'r:id': rId,
-    },
-    elements: [contentNode],
-  };
-
-  return newNode;
 }
 
 function processLinkContentNode(node) {
@@ -1214,49 +1182,6 @@ function generateTableGrid(node, params) {
 
   return {
     name: 'w:tblGrid',
-    elements,
-  };
-}
-
-/**
- * Main translation function for a table row
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated table row node
- */
-export function translateTableRow(params) {
-  const elements = translateChildNodes(params);
-  const tableRowProperties = generateTableRowProperties(params.node);
-  if (tableRowProperties.elements.length) elements.unshift(tableRowProperties);
-
-  return {
-    name: 'w:tr',
-    elements,
-  };
-}
-
-function generateTableRowProperties(node) {
-  const { attrs } = node;
-  const elements = [];
-
-  const { rowHeight, rowHeightType } = attrs;
-  if (rowHeight) {
-    const attributes = { 'w:val': pixelsToTwips(rowHeight) };
-    if (rowHeightType) attributes['w:hRule'] = rowHeightType;
-
-    const rowHeightElement = {
-      name: 'w:trHeight',
-      attributes,
-    };
-    elements.push(rowHeightElement);
-  }
-
-  if (attrs?.cantSplit) {
-    elements.push({ name: 'w:cantSplit' });
-  }
-
-  return {
-    name: 'w:trPr',
     elements,
   };
 }

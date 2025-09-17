@@ -37,5 +37,3 @@ export const createNodeListHandlerMock = () => {
     handler: () => [{ type: 'dummyNode', content: {}, attrs: {} }],
   };
 };
-
-test.skip('', () => {});

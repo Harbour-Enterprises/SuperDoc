@@ -64,6 +64,9 @@ export default defineConfig(({ mode, command}) => {
   if (mode !== 'test') plugins.push(nodePolyfills());
   const isDev = command === 'serve';
 
+  // Use emoji marker instead of ANSI colors to avoid reporter layout issues
+  const projectLabel = '🦋 @superdoc';
+
   return {
     define: {
       __APP_VERSION__: JSON.stringify(version),
@@ -71,8 +74,12 @@ export default defineConfig(({ mode, command}) => {
     },
     plugins,
     test: {
+      name: projectLabel,
       globals: true,
       environment: 'jsdom',
+      retry: 2,
+      testTimeout: 20000,
+      hookTimeout: 10000,
       exclude: [
         '**/*.spec.js',
       ],

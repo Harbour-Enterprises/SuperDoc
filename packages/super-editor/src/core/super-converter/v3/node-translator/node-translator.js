@@ -25,8 +25,8 @@ export const TranslatorTypes = Object.freeze({
 
 /** @typedef {import('../../v2/importer/types').NodeHandlerParams} SCEncoderConfig */
 /** @typedef {import('../../v2/types').SuperDocNode} SCEncoderResult */
-/** @typedef {{ node: { attrs?: any, marks?: any[], type: string }, children?: any[] }} SCDecoderConfig */
-/** @typedef {{ name: string, elements: any[] }} SCDecoderResult */
+/** @typedef {{ node: { attrs?: any, marks?: any[], type: string }, children?: any[], relationships?: any[] }} SCDecoderConfig */
+/** @typedef {{ name: string, attributes?: any, elements: any[] }} SCDecoderResult */
 
 /**
  * @callback NodeTranslatorEncodeFn
@@ -170,7 +170,7 @@ export class NodeTranslator {
    */
   decode(params) {
     const decodedAttrs = this.decodeAttributes(params);
-    return this.decodeFn ? this.decodeFn(params, decodedAttrs) : undefined;
+    return this.decodeFn ? this.decodeFn.call(this, params, decodedAttrs) : undefined;
   }
 
   /**
@@ -180,7 +180,7 @@ export class NodeTranslator {
    */
   encode(params) {
     const encodedAttrs = this.encodeAttributes(params);
-    return this.encodeFn ? this.encodeFn(params, encodedAttrs) : undefined;
+    return this.encodeFn ? this.encodeFn.call(this, params, encodedAttrs) : undefined;
   }
 
   /**

@@ -1,4 +1,3 @@
-import { undoDepth, redoDepth } from 'prosemirror-history';
 import { h, ref } from 'vue';
 
 import { sanitizeNumber } from './helpers';
@@ -1199,16 +1198,3 @@ export const makeDefaultItems = ({
     overflowItems: overflowItems.filter((item) => item.type !== 'separator'),
   };
 };
-
-export const setHistoryButtonStateOnUpdate =
-  (toolbarItemsRef) =>
-  ({ editor }) => {
-    // console.debug('[SuperEditor dev] Document updated', editor);
-    // activeEditor = editor;
-
-    const undo = toolbarItemsRef.value.find((item) => item.name === 'undo');
-    const redo = toolbarItemsRef.value.find((item) => item.name === 'redo');
-
-    undo.disabled = undoDepth(editor.state) <= 0;
-    redo.disabled = redoDepth(editor.state) <= 0;
-  };

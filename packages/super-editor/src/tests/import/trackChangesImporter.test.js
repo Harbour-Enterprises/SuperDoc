@@ -1,6 +1,5 @@
 import { SuperConverter } from '@converter/SuperConverter.js';
-import { handleTrackChangeNode, handleDelText } from '@converter/v2/importer/trackChangesImporter.js';
-import { createNodeListHandlerMock } from './testUtils.test.js';
+import { handleTrackChangeNode } from '@converter/v2/importer/trackChangesImporter.js';
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from '@extensions/track-changes/constants.js';
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
