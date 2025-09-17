@@ -1381,6 +1381,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the editor content as HTML
+   * @param {Object} options - Options for the HTML serializer
+   * @param {boolean} [options.unflattenLists] - Whether to unflatten lists in the HTML
    * @returns {string} Editor content as HTML
    */
   getHTML({ unflattenLists = false } = {}) {
