@@ -1,0 +1,1 @@
+export { attrConfig } from './spacing-translator.js';
