@@ -1,8 +1,6 @@
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
-import { handleTrackChangeNode } from '@converter/v2/importer/trackChangesImporter.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
-import { TrackInsertMarkName } from '@extensions/track-changes/constants.js';
-import { handleAllTableNodes } from '@converter/v2/importer/tableImporter.js';
+import { tableNodeHandlerEntity } from '@converter/v2/importer/tableImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 
 describe('table live xml test', () => {
@@ -425,8 +423,7 @@ describe('table live xml test', () => {
     const docx = {
       'word/styles.xml': styles,
     };
-
-    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
     expect(result.nodes.length).toBe(1);
 
     expect(result.nodes[0].type).toBe('table');
@@ -444,6 +441,30 @@ describe('table live xml test', () => {
         right: { size: 0.66665 },
         insideH: { size: 0.66665 },
         insideV: { size: 0.66665 },
+      },
+      grid: [
+        {
+          col: 4675,
+        },
+        {
+          col: 4675,
+        },
+      ],
+      tableProperties: {
+        tableStyleId: 'TableGrid',
+        tableWidth: {
+          type: 'auto',
+          value: 0,
+        },
+        tblLook: {
+          firstColumn: true,
+          firstRow: true,
+          lastColumn: false,
+          lastRow: false,
+          noHBand: false,
+          noVBand: true,
+          val: '04A0',
+        },
       },
     });
 
@@ -473,7 +494,7 @@ describe('table live xml test', () => {
     const docx = {
       'word/styles.xml': styles,
     };
-    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
     expect(result.nodes[0].content[0].content[0].attrs.borders).toBeDefined();
     expect(result.nodes[0].content[0].content[1].attrs.borders).toBeDefined();
     expect(result.nodes[0].content[0].content[0].attrs.borders.right.val).toBe('none');
@@ -487,7 +508,7 @@ describe('table live xml test', () => {
     const nodes = parseXmlToJson(tableCellsNoInlineWidth).elements;
     const styles = parseXmlToJson(simpleTableStyleXml);
     const docx = { 'word/styles.xml': styles };
-    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
 
     expect(result.nodes[0].content[0].content[0].attrs.colwidth).toEqual([390, 26]);
     expect(result.nodes[0].content[0].content[1].attrs.colwidth).toEqual([256]);
@@ -503,7 +524,7 @@ describe('table live xml test', () => {
     const styles = parseXmlToJson(simpleTableStyleXml);
     const docx = { 'word/styles.xml': styles };
 
-    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
 
     const table = result.nodes[0];
     const row = table.content[0];
@@ -521,8 +542,11 @@ describe('table tests to check colwidth', () => {
     const doc = documentXml.elements[0];
     const body = doc.elements[0];
     const content = body.elements;
-
-    const result = handleAllTableNodes({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({
+      nodes: [content[0]],
+      docx,
+      nodeListHandler: defaultNodeListHandler(),
+    });
     const node = result.nodes[0];
 
     expect(node.type).toBe('table');

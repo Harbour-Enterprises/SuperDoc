@@ -15,8 +15,7 @@ describe('test table export', async () => {
   });
 
   it('correctly gets w:tblGrid', () => {
-    const tableGrid = body.elements[0].elements[0].elements;
-
+    const tableGrid = body.elements[0].elements[1].elements;
     const gridCol1 = twipsToPixels(tableGrid[0].attributes['w:w']);
     const gridCol2 = twipsToPixels(tableGrid[1].attributes['w:w']);
     const gridCol3 = twipsToPixels(tableGrid[2].attributes['w:w']);

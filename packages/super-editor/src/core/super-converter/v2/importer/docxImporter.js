@@ -2,7 +2,6 @@ import { getInitialJSON } from '../docxHelper.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { twipsToInches } from '../../helpers.js';
 import { DEFAULT_LINKED_STYLES } from '../../exporter-docx-defs.js';
-import { tableNodeHandlerEntity } from './tableImporter.js';
 import { drawingNodeHandlerEntity } from './imageImporter.js';
 import { trackChangeNodeHandlerEntity } from './trackChangesImporter.js';
 import { hyperlinkNodeHandlerEntity } from './hyperlinkImporter.js';
@@ -22,6 +21,7 @@ import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
+import { tableNodeHandlerEntity } from './tableImporter.js';
 
 /**
  * @typedef {import()} XmlNode

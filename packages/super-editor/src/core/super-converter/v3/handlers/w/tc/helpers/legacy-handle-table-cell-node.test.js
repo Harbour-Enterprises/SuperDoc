@@ -94,6 +94,7 @@ describe('legacy-handle-table-cell-node', () => {
       styleTag: { name: 'w:tblStyle', attributes: { 'w:val': 'TblGrid' } },
       columnIndex: 1,
       columnWidth: null,
+      allColumnWidths: [90, 100, 110],
     });
 
     expect(out.type).toBe('tableCell');

@@ -16,7 +16,7 @@ describe('w:jc translator', () => {
 
   describe('decode', () => {
     it('creates a w:jc element with the value in w:val', () => {
-      const result = translator.decode({ node: { attrs: { jc: 'right' } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { justification: 'right' } } });
       expect(result).toEqual({ 'w:val': 'right' });
     });
 
@@ -28,6 +28,6 @@ describe('w:jc translator', () => {
 
   it('has correct metadata', () => {
     expect(translator.xmlName).toBe('w:jc');
-    expect(translator.sdNodeOrKeyName).toBe('jc');
+    expect(translator.sdNodeOrKeyName).toBe('justification');
   });
 });

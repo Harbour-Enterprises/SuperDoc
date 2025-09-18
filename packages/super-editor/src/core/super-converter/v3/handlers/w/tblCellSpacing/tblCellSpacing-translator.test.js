@@ -26,27 +26,29 @@ describe('w:tblCellSpacing translator', () => {
 
   describe('decode', () => {
     it('creates a w:tblCellSpacing element with w:w and w:type attributes', () => {
-      const result = translator.decode({ node: { attrs: { cellSpacing: { value: 140, type: 'pct' } } } });
+      const { attributes: result } = translator.decode({
+        node: { attrs: { tableCellSpacing: { value: 140, type: 'pct' } } },
+      });
       expect(result).toEqual({ 'w:w': '140', 'w:type': 'pct' });
     });
 
     it('handles missing type property', () => {
-      const result = translator.decode({ node: { attrs: { cellSpacing: { value: 140 } } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { tableCellSpacing: { value: 140 } } } });
       expect(result).toEqual({ 'w:w': '140' });
     });
 
-    it('returns undefined if cellSpacing property is missing', () => {
+    it('returns undefined if tableCellSpacing property is missing', () => {
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
 
-    it('returns undefined if cellSpacing.value is missing or not a number', () => {
-      expect(translator.decode({ node: { attrs: { cellSpacing: { type: 'dxa' } } } })).toBeUndefined();
-      expect(translator.decode({ node: { attrs: { cellSpacing: { value: null } } } })).toBeUndefined();
+    it('returns undefined if tableCellSpacing.value is missing or not a number', () => {
+      expect(translator.decode({ node: { attrs: { tableCellSpacing: { type: 'dxa' } } } })).toBeUndefined();
+      expect(translator.decode({ node: { attrs: { tableCellSpacing: { value: null } } } })).toBeUndefined();
     });
   });
 
   it('has correct metadata', () => {
     expect(translator.xmlName).toBe('w:tblCellSpacing');
-    expect(translator.sdNodeOrKeyName).toBe('cellSpacing');
+    expect(translator.sdNodeOrKeyName).toBe('tableCellSpacing');
   });
 });

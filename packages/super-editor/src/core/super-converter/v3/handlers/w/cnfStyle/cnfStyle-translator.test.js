@@ -44,7 +44,7 @@ describe('w:cnfStyle translator', () => {
           oddVBand: false,
         },
       };
-      const result = translator.decode({ node: { attrs } });
+      const { attributes: result } = translator.decode({ node: { attrs } });
       expect(result).toEqual({
         'w:evenHBand': '1',
         'w:firstColumn': '0',

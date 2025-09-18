@@ -9,5 +9,5 @@ export const translator = NodeTranslator.from({
   xmlName: 'w:cantSplit',
   sdNodeOrKeyName: 'cantSplit',
   encode: ({ nodes }) => ['1', 'true'].includes(nodes[0].attributes?.['w:val'] ?? '1'),
-  decode: ({ node }) => (node.attrs?.cantSplit ? {} : undefined),
+  decode: ({ node }) => (node.attrs?.cantSplit ? { attributes: {} } : undefined),
 });
