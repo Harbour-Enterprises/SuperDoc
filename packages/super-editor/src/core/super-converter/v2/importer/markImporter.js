@@ -163,7 +163,7 @@ export function createImportMarks(marks) {
  * @param attributes
  * @returns {*}
  */
-function getMarkValue(markType, attributes, docx) {
+export function getMarkValue(markType, attributes, docx) {
   if (markType === 'tabs') markType = 'textIndent';
 
   const markValueMapper = {
@@ -192,7 +192,7 @@ function getMarkValue(markType, attributes, docx) {
   }
 }
 
-function getFontFamilyValue(attributes, docx) {
+export function getFontFamilyValue(attributes, docx) {
   const ascii = attributes['w:ascii'];
   const themeAscii = attributes['w:asciiTheme'];
 
@@ -211,13 +211,13 @@ function getFontFamilyValue(attributes, docx) {
   return typeface;
 }
 
-function getIndentValue(attributes) {
+export function getIndentValue(attributes) {
   let value = attributes['w:left'];
   if (!value) return null;
   return `${twipsToInches(value)}in`;
 }
 
-function getLineHeightValue(attributes) {
+export function getLineHeightValue(attributes) {
   const value = attributes['w:line'];
   const lineRule = attributes['w:lineRule'];
 
@@ -231,13 +231,17 @@ function getLineHeightValue(attributes) {
   return `${twipsToLines(value)}`;
 }
 
-function getHighLightValue(attributes) {
+export function getHighLightValue(attributes) {
   const fill = attributes['w:fill'];
   if (fill && fill !== 'auto') return `#${fill}`;
   if (isValidHexColor(attributes?.['w:val'])) return `#${attributes['w:val']}`;
   return getHexColorFromDocxSystem(attributes?.['w:val']) || null;
 }
 
-function getStrikeValue(attributes) {
-  return attributes?.['w:val'] === '1' ? attributes['w:val'] : null;
+export function getStrikeValue(attributes) {
+  const raw = attributes?.['w:val'];
+  if (raw === undefined || raw === null) return '1'; // presence implies on
+  const value = String(raw).trim().toLowerCase();
+  if (value === '1' || value === 'true' || value === 'on') return '1';
+  return null;
 }
