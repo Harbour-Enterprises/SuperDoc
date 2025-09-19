@@ -1,9 +1,10 @@
 <script setup>
 import '@harbour-enterprises/superdoc/style.css';
-import { ref, shallowRef, onMounted } from 'vue';
+import { ref, shallowRef, onMounted, computed } from 'vue';
 import Header from './components/Header.vue';
 import AssignmentHeader from './components/AssignmentHeader.vue';
 import Drawer from './components/Drawer.vue';
+import Scoreboard from './components/Scoreboard.vue';
 // import { SuperDoc } from '@harbour-enterprises/superdoc';
 // import SuperDoc from '../superdoc-dist/superdoc.umd.js';
 import { SuperDoc } from '../build/superdoc.es.js';
@@ -14,6 +15,29 @@ const annotationText = ref('Annotation Mode');
 const isDrawerOpen = ref(false);
 const superdoc = shallowRef(null);
 const docFile = ref(null);
+
+// Scoring system
+const stickerPoints = {
+  'full-check': 2,
+  'half-check': 0.5,
+  'check-mark': 1,
+  'nice': 1,
+  'needs-improvement': -1
+};
+
+const scores = ref({
+  'full-check': 0,
+  'half-check': 0,
+  'check-mark': 0,
+  'nice': 0,
+  'needs-improvement': 0
+});
+
+const totalScore = computed(() => {
+  return Object.entries(scores.value).reduce((total, [stickerType, count]) => {
+    return total + (count * stickerPoints[stickerType]);
+  }, 0);
+});
 const openDrawer = () => {
   isDrawerOpen.value = true;
 };
@@ -45,11 +69,32 @@ const initSuperDoc = () => {
       email: 'sarah.smith@example.com'
     }
   });
+
+  // Enable annotation mode by default after a short delay
+  setTimeout(() => {
+    superdoc.value.toggleAnnotationMode(true);
+    annotationText.value = 'Exit Annotation Mode';
+  }, 100);
+
+  // Listen for sticker drop events
+  superdoc.value.on('sticker-drop', (event) => {
+    console.log('Sticker dropped:', event);
+    console.log(`Sticker type: ${event.stickerType}`);
+    console.log(`Coordinates: x=${event.coordinates.x}, y=${event.coordinates.y}`);
+    console.log(`Document ID: ${event.documentId}`);
+    
+    // Update score based on sticker type
+    if (scores.value.hasOwnProperty(event.stickerType)) {
+      scores.value[event.stickerType]++;
+      console.log(`Score updated: ${event.stickerType} = ${scores.value[event.stickerType]}`);
+      console.log(`Total score: ${totalScore.value}`);
+    }
+  });
 }
 
 const handleNewFile = async (fileName) => {
   let url, fileType, fileNameStr;
-  superdoc.value?.toggleAnnotationMode(false)
+  // superdoc.value?.toggleAnnotationMode(true)
 
   switch (fileName) {
     case 'alex':
@@ -94,12 +139,19 @@ onMounted(() => {
     <div class="app-container">
       <div class="container">
         <AssignmentHeader />
+        
+        <Scoreboard 
+          :scores="scores" 
+          :sticker-points="stickerPoints" 
+          :total-score="totalScore" 
+        />
 
         <div class="main-content">
           <div class="document-viewer">
-            <div class="free-annotation">
+            <!-- Annotation mode button hidden -->
+            <!-- <div class="free-annotation">
               <button class="toggle-annotation" @click="toggleAnnotation">{{ annotationText }}</button>
-            </div>
+            </div> -->
 
             <div class="viewer-header">
               <h3>Document Viewer</h3>
@@ -135,12 +187,12 @@ onMounted(() => {
   background-color: #667eea;
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 2px;
   cursor: pointer;
 }
 .superdoc-pdf-viewer-container {
   border: 1px solid #DBDBDB;
-  border-radius: 8px;
+  border-radius: 4px;
 }
 .document-viewer {
   position: relative;

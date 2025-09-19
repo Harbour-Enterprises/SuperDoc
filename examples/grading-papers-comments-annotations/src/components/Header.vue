@@ -13,8 +13,8 @@
           </svg>
         </div>
         <div>
-          <h1>Student Portal</h1>
-          <small>Document Management System</small>
+          <h1>Blackboard Administrator</h1>
+          <!-- <small>Learn</small> -->
         </div>
       </div>
       <div class="user-info user-switcher" id="userSwitcher">

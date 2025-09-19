@@ -725,6 +725,84 @@ const createCanvasEventHandlers = (canvas, ctx, container) => {
         ctx.stroke();
         break;
 
+      case 'full-check':
+        // Solid green circle with white checkmark (Great Work)
+        ctx.fillStyle = '#22C55E';
+        ctx.strokeStyle = '#16A34A';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.stroke();
+
+        // White checkmark
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 3;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y);
+        ctx.lineTo(x - 2, y + 6);
+        ctx.lineTo(x + 8, y - 6);
+        ctx.stroke();
+        break;
+
+      case 'half-check':
+        // Half-filled circle with green border (Good Work)
+        ctx.save();
+
+        // Create clipping path for left half
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 2, 0, 2 * Math.PI);
+        ctx.clip();
+
+        // Fill left half with green
+        ctx.fillStyle = '#22C55E';
+        ctx.fillRect(x - radius, y - radius, radius, radius * 2);
+
+        // Fill right half with white
+        ctx.fillStyle = 'white';
+        ctx.fillRect(x, y - radius, radius, radius * 2);
+
+        ctx.restore();
+
+        // Draw green border
+        ctx.strokeStyle = '#22C55E';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 2, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        // Draw thin white inner border
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(x, y, radius - 3.5, 0, 2 * Math.PI);
+        ctx.stroke();
+
+        // Draw white outline checkmark first (thicker)
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y);
+        ctx.lineTo(x - 2, y + 6);
+        ctx.lineTo(x + 8, y - 6);
+        ctx.stroke();
+
+        // Draw green checkmark on top (thinner)
+        ctx.strokeStyle = '#22C55E';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x - 8, y);
+        ctx.lineTo(x - 2, y + 6);
+        ctx.lineTo(x + 8, y - 6);
+        ctx.stroke();
+        break;
+
       case 'nice':
         // Blue circle with smiley
         ctx.fillStyle = '#3B82F6';
@@ -929,102 +1007,36 @@ const createCanvasEventHandlers = (canvas, ctx, container) => {
 
     const coords = getCanvasCoordinates(e);
 
-    // Handle sticker drops
+    // Handle sticker drops - draw and emit event
     const stickerData = e.dataTransfer.getData('application/sticker');
     if (stickerData) {
       try {
         const sticker = JSON.parse(stickerData);
+        // Draw the sticker visually
         drawStickerOnCanvas(ctx, sticker.type, coords.x, coords.y);
+        // Emit event with sticker data and coordinates
+        proxy.$superdoc.emit('sticker-drop', {
+          stickerType: sticker.type,
+          coordinates: coords,
+          documentId: documents.value[0].id,
+        });
         return;
       } catch (error) {
         console.error('Error handling sticker drop:', error);
       }
     }
 
-    // Handle comment drops
-    const commentData = e.dataTransfer.getData('application/comment');
-    console.log('Comment data:', commentData);
-    if (commentData) {
-      try {
-        const comment = JSON.parse(commentData);
-        console.log('Parsed comment data:', comment);
-
-        // Insert actual comment into SuperDoc instance
-        const docType = documents.value[0].type;
-        const selection = useSelection({
-          documentId: documents.value[0].id,
-          selectionBounds: {
-            top: coords.y - 20,
-            left: coords.x - 90,
-            right: coords.x + 90,
-            bottom: coords.y + 20,
-          },
-          source: docType === PDF ? 'pdf' : 'super-editor',
-        });
-        console.log('Document type:', docType, 'Selection source:', docType === PDF ? 'pdf' : 'super-editor');
-
-        const newComment = commentsStore.getPendingComment({
-          selection,
-          documentId: documents.value[0].id,
-          commentText: comment.text,
-          creatorEmail: user.email,
-          creatorName: user.name,
-        });
-        console.log('Creating new comment:', newComment);
-
-        commentsStore.addComment({ superdoc: proxy.$superdoc, comment: newComment });
-
-        // Also draw on canvas for visual feedback
-        drawCommentOnCanvas(ctx, comment.text, coords.x, coords.y + 40);
-        return;
-      } catch (error) {
-        console.error('Error handling comment drop:', error);
-      }
-    }
-
-    // Fallback for plain text
+    // Fallback for plain text stickers
     const plainText = e.dataTransfer.getData('text/plain');
-    if (plainText) {
-      if (['check-mark', 'nice', 'needs-improvement'].includes(plainText)) {
-        drawStickerOnCanvas(ctx, plainText, coords.x, coords.y);
-      } else {
-        // Insert actual comment into SuperDoc instance for plain text
-        const docType = documents.value[0].type;
-        const selection = useSelection({
-          documentId: documents.value[0].id,
-          selectionBounds: {
-            top: coords.y - 20,
-            left: coords.x - 90,
-            right: coords.x + 90,
-            bottom: coords.y + 20,
-          },
-          source: docType === PDF ? 'pdf' : 'super-editor',
-        });
-        console.log(
-          'Plain text - Document type:',
-          docType,
-          'Selection source:',
-          docType === PDF ? 'pdf' : 'super-editor',
-        );
-
-        const newComment = commentsStore.getPendingComment({
-          selection,
-          documentId: documents.value[0].id,
-          commentText: plainText,
-          creatorEmail: user.email,
-          creatorName: user.name,
-        });
-        console.log('Plain text - Parsed comment data:', plainText);
-        console.log('Plain text - Creating new comment:', newComment);
-        console.log('Plain text - Selection:', selection);
-        console.log('Plain text - User:', user);
-        console.log('Plain text - Documents:', documents.value);
-
-        commentsStore.addComment({ superdoc: proxy.$superdoc, comment: newComment });
-
-        // Also draw on canvas for visual feedback
-        drawCommentOnCanvas(ctx, plainText, coords.x, coords.y - 20);
-      }
+    if (plainText && ['check-mark', 'nice', 'needs-improvement', 'full-check', 'half-check'].includes(plainText)) {
+      // Draw the sticker visually
+      drawStickerOnCanvas(ctx, plainText, coords.x, coords.y);
+      // Emit event with sticker data and coordinates
+      proxy.$superdoc.emit('sticker-drop', {
+        stickerType: plainText,
+        coordinates: coords,
+        documentId: documents.value[0].id,
+      });
     }
   };
 

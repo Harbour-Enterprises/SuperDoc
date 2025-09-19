@@ -11,7 +11,7 @@ body {
 }
 
 .header {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #1a1a1a;
     color: white;
     padding: 1rem 2rem;
     box-shadow: 0 2px 10px rgba(0,0,0,0.1);
@@ -35,7 +35,7 @@ body {
     width: 40px;
     height: 40px;
     background: white;
-    border-radius: 8px;
+    border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -51,7 +51,7 @@ body {
     width: 36px;
     height: 36px;
     background: rgba(255,255,255,0.2);
-    border-radius: 50%;
+    border-radius: 4px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -68,7 +68,7 @@ body {
     top: 100%;
     right: 0;
     background: white;
-    border-radius: 8px;
+    border-radius: 4px;
     box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     min-width: 200px;
     display: none;
@@ -130,7 +130,7 @@ body {
 
 .assignment-header {
     background: white;
-    border-radius: 12px;
+    border-radius: 4px;
     padding: 2rem;
     margin-bottom: 2rem;
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
@@ -185,11 +185,12 @@ body {
 
 .document-viewer {
     background: white;
-    border-radius: 12px;
-    overflow: visible;
+    border-radius: 4px;
+    overflow-y: auto;
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
     width: 100%;
     position: relative;
+    height: 70vh;
 }
 
 .viewer-header {
@@ -201,16 +202,19 @@ body {
 }
 
 .sidebar {
+    position: fixed;
+    top: 0;
+    right: 0;
     height: 100vh;
+    width: 350px;
     background: #f5f7fa;
     display: flex;
     flex-direction: column;
     gap: 1.5rem;
     padding: 2rem 1.5rem;
     box-shadow: -4px 0 20px rgba(0,0,0,0.1);
-    transition: right 0.3s ease;
-    z-index: 1000;
     overflow-y: auto;
+    z-index: 1000;
 }
 
 .sidebar.open {
@@ -283,7 +287,7 @@ body {
     background: #48bb78;
     color: white;
     border: none;
-    border-radius: 6px;
+    border-radius: 4px;
     padding: 0.5rem 1rem;
     cursor: pointer;
     font-size: 0.875rem;
@@ -304,7 +308,7 @@ body {
 
 .card {
     background: white;
-    border-radius: 12px;
+    border-radius: 4px;
     padding: 1.5rem;
     box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
@@ -318,7 +322,7 @@ body {
 
 .upload-area {
     border: 2px dashed #cbd5e0;
-    border-radius: 8px;
+    border-radius: 4px;
     padding: 2rem;
     text-align: center;
     transition: all 0.3s ease;
@@ -353,7 +357,7 @@ body {
 .btn {
     padding: 0.75rem 1.5rem;
     border: none;
-    border-radius: 8px;
+    border-radius: 4px;
     font-weight: 500;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -404,7 +408,7 @@ body {
     align-items: center;
     padding: 0.75rem;
     background: #f7fafc;
-    border-radius: 6px;
+    border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s ease;
 }
@@ -514,7 +518,7 @@ body {
     gap: 0.5rem;
     margin-top: 1rem;
     padding: 1rem;
-    border-radius: 8px;
+    border-radius: 4px;
     font-weight: 500;
 }
 
@@ -581,4 +585,5 @@ body {
 
 .app-container {
   display: flex;
+  margin-right: 350px;
 }

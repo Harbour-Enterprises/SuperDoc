@@ -58,13 +58,31 @@ const onStickerDragStart = (stickerType, event) => {
       <h3 class="card-title">Stickers</h3>
       <div class="version-list">
         <div class="stickers-container">
-          <!-- Check Mark Sticker -->
-          <div class="sticker-item" draggable="true" @dragstart="onStickerDragStart('check-mark', $event)">
-            <svg class="sticker-svg check-mark" width="40" height="40" viewBox="0 0 40 40">
+          <!-- Full Check Sticker (Great Work) -->
+          <div class="sticker-item" draggable="true" @dragstart="onStickerDragStart('full-check', $event)">
+            <svg class="sticker-svg full-check" width="40" height="40" viewBox="0 0 40 40">
               <circle cx="20" cy="20" r="18" fill="#22C55E" stroke="#16A34A" stroke-width="2"/>
               <path d="M12 20l6 6L28 14" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-            <span class="sticker-label">Check Mark</span>
+            <span class="sticker-label">Great Work</span>
+          </div>
+
+          <!-- Half Check Sticker (Good Work) -->
+          <div class="sticker-item" draggable="true" @dragstart="onStickerDragStart('half-check', $event)">
+            <svg class="sticker-svg half-check" width="40" height="40" viewBox="0 0 40 40">
+              <defs>
+                <mask id="half-fill">
+                  <circle cx="20" cy="20" r="18" fill="white"/>
+                  <rect x="20" y="2" width="18" height="36" fill="black"/>
+                </mask>
+              </defs>
+              <circle cx="20" cy="20" r="18" fill="white" stroke="#22C55E" stroke-width="3"/>
+              <circle cx="20" cy="20" r="18" fill="#22C55E" mask="url(#half-fill)"/>
+              <circle cx="20" cy="20" r="16.5" fill="none" stroke="white" stroke-width="1"/>
+              <path d="M12 20l6 6L28 14" stroke="white" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M12 20l6 6L28 14" stroke="#22C55E" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            <span class="sticker-label">Good Work</span>
           </div>
 
           <!-- Nice! Sticker -->
@@ -76,7 +94,7 @@ const onStickerDragStart = (stickerType, event) => {
               <path d="M13 25c2 3 6 3 8 0" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
               <path d="M27 25c-2 3-6 3-8 0" stroke="white" stroke-width="2" fill="none" stroke-linecap="round"/>
             </svg>
-            <span class="sticker-label">Nice!</span>
+            <span class="sticker-label">Nice Job</span>
           </div>
 
           <!-- Needs Improvement Sticker -->
@@ -180,7 +198,7 @@ const onStickerDragStart = (stickerType, event) => {
   align-items: center;
   gap: 0.75rem;
   padding: 0.5rem;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: grab;
   transition: background-color 0.2s;
 }

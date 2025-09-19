@@ -47638,9 +47638,6 @@ const _sfc_main = {
           displayY: y
         };
       };
-      const drawCommentOnCanvas = (ctx3, commentText, x, y) => {
-        return;
-      };
       const drawStickerOnCanvas = (ctx3, stickerType, x, y) => {
         const size2 = 40;
         const radius = size2 / 2;
@@ -47656,6 +47653,63 @@ const _sfc_main = {
             ctx3.stroke();
             ctx3.strokeStyle = "white";
             ctx3.lineWidth = 3;
+            ctx3.lineCap = "round";
+            ctx3.lineJoin = "round";
+            ctx3.beginPath();
+            ctx3.moveTo(x - 8, y);
+            ctx3.lineTo(x - 2, y + 6);
+            ctx3.lineTo(x + 8, y - 6);
+            ctx3.stroke();
+            break;
+          case "full-check":
+            ctx3.fillStyle = "#22C55E";
+            ctx3.strokeStyle = "#16A34A";
+            ctx3.lineWidth = 2;
+            ctx3.beginPath();
+            ctx3.arc(x, y, radius - 2, 0, 2 * Math.PI);
+            ctx3.fill();
+            ctx3.stroke();
+            ctx3.strokeStyle = "white";
+            ctx3.lineWidth = 3;
+            ctx3.lineCap = "round";
+            ctx3.lineJoin = "round";
+            ctx3.beginPath();
+            ctx3.moveTo(x - 8, y);
+            ctx3.lineTo(x - 2, y + 6);
+            ctx3.lineTo(x + 8, y - 6);
+            ctx3.stroke();
+            break;
+          case "half-check":
+            ctx3.save();
+            ctx3.beginPath();
+            ctx3.arc(x, y, radius - 2, 0, 2 * Math.PI);
+            ctx3.clip();
+            ctx3.fillStyle = "#22C55E";
+            ctx3.fillRect(x - radius, y - radius, radius, radius * 2);
+            ctx3.fillStyle = "white";
+            ctx3.fillRect(x, y - radius, radius, radius * 2);
+            ctx3.restore();
+            ctx3.strokeStyle = "#22C55E";
+            ctx3.lineWidth = 3;
+            ctx3.beginPath();
+            ctx3.arc(x, y, radius - 2, 0, 2 * Math.PI);
+            ctx3.stroke();
+            ctx3.strokeStyle = "white";
+            ctx3.lineWidth = 1;
+            ctx3.beginPath();
+            ctx3.arc(x, y, radius - 3.5, 0, 2 * Math.PI);
+            ctx3.stroke();
+            ctx3.strokeStyle = "white";
+            ctx3.lineWidth = 4;
+            ctx3.lineCap = "round";
+            ctx3.lineJoin = "round";
+            ctx3.beginPath();
+            ctx3.moveTo(x - 8, y);
+            ctx3.lineTo(x - 2, y + 6);
+            ctx3.lineTo(x + 8, y - 6);
+            ctx3.stroke();
+            ctx3.strokeStyle = "#22C55E";
+            ctx3.lineWidth = 2;
             ctx3.lineCap = "round";
             ctx3.lineJoin = "round";
             ctx3.beginPath();
@@ -47787,7 +47841,7 @@ const _sfc_main = {
         if (!isMouseDown) return;
         if (!hasDragged) {
           const coords = getCanvasCoordinates(e);
-          createTextInput(coords.displayX, coords.displayY);
+          createTextInput(coords.displayX, coords.displayY, coords.x, coords.y);
         } else {
           ctx2.closePath();
         }
@@ -47824,80 +47878,24 @@ const _sfc_main = {
           try {
             const sticker = JSON.parse(stickerData);
             drawStickerOnCanvas(ctx2, sticker.type, coords.x, coords.y);
+            proxy.$superdoc.emit("sticker-drop", {
+              stickerType: sticker.type,
+              coordinates: coords,
+              documentId: documents.value[0].id
+            });
             return;
           } catch (error) {
             console.error("Error handling sticker drop:", error);
           }
         }
-        const commentData = e.dataTransfer.getData("application/comment");
-        console.log("Comment data:", commentData);
-        if (commentData) {
-          try {
-            const comment = JSON.parse(commentData);
-            console.log("Parsed comment data:", comment);
-            const docType = documents.value[0].type;
-            const selection = useSelection({
-              documentId: documents.value[0].id,
-              selectionBounds: {
-                top: coords.y - 20,
-                left: coords.x - 90,
-                right: coords.x + 90,
-                bottom: coords.y + 20
-              },
-              source: docType === PDF ? "pdf" : "super-editor"
-            });
-            console.log("Document type:", docType, "Selection source:", docType === PDF ? "pdf" : "super-editor");
-            const newComment = commentsStore.getPendingComment({
-              selection,
-              documentId: documents.value[0].id,
-              commentText: comment.text,
-              creatorEmail: user.email,
-              creatorName: user.name
-            });
-            console.log("Creating new comment:", newComment);
-            commentsStore.addComment({ superdoc: proxy.$superdoc, comment: newComment });
-            drawCommentOnCanvas(ctx2, comment.text, coords.x, coords.y + 40);
-            return;
-          } catch (error) {
-            console.error("Error handling comment drop:", error);
-          }
-        }
         const plainText = e.dataTransfer.getData("text/plain");
-        if (plainText) {
-          if (["check-mark", "nice", "needs-improvement"].includes(plainText)) {
-            drawStickerOnCanvas(ctx2, plainText, coords.x, coords.y);
-          } else {
-            const docType = documents.value[0].type;
-            const selection = useSelection({
-              documentId: documents.value[0].id,
-              selectionBounds: {
-                top: coords.y - 20,
-                left: coords.x - 90,
-                right: coords.x + 90,
-                bottom: coords.y + 20
-              },
-              source: docType === PDF ? "pdf" : "super-editor"
-            });
-            console.log(
-              "Plain text - Document type:",
-              docType,
-              "Selection source:",
-              docType === PDF ? "pdf" : "super-editor"
-            );
-            const newComment = commentsStore.getPendingComment({
-              selection,
-              documentId: documents.value[0].id,
-              commentText: plainText,
-              creatorEmail: user.email,
-              creatorName: user.name
-            });
-            console.log("Plain text - Parsed comment data:", plainText);
-            console.log("Plain text - Creating new comment:", newComment);
-            console.log("Plain text - Selection:", selection);
-            console.log("Plain text - User:", user);
-            console.log("Plain text - Documents:", documents.value);
-            commentsStore.addComment({ superdoc: proxy.$superdoc, comment: newComment });
-          }
+        if (plainText && ["check-mark", "nice", "needs-improvement", "full-check", "half-check"].includes(plainText)) {
+          drawStickerOnCanvas(ctx2, plainText, coords.x, coords.y);
+          proxy.$superdoc.emit("sticker-drop", {
+            stickerType: plainText,
+            coordinates: coords,
+            documentId: documents.value[0].id
+          });
         }
       };
       const handleContextMenu = (e) => {
@@ -48126,7 +48124,7 @@ const _sfc_main = {
     };
   }
 };
-const App = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-a4054983"]]);
+const App = /* @__PURE__ */ _export_sfc(_sfc_main, [["__scopeId", "data-v-2cf6bf94"]]);
 const createSuperdocVueApp = () => {
   const app = vue.createApp(App);
   const pinia = createPinia();
