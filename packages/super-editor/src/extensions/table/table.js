@@ -87,6 +87,14 @@ import { cellWrapping } from './tableHelpers/cellWrapping.js';
  */
 
 /**
+ * Current cell information
+ * @typedef {Object} CurrentCellInfo
+ * @property {Object} rect - Selected rectangle information
+ * @property {import('prosemirror-model').Node} cell - The cell node
+ * @property {Object} attrs - Cell attributes
+ */
+
+/**
  * @module Table
  * @sidebarTitle Table
  * @snippetPath /snippets/extensions/table.mdx

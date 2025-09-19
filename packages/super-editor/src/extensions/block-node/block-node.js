@@ -221,7 +221,7 @@ export const BlockNode = Extension.create({
           if (hasInitialized && !transactions.some((tr) => tr.docChanged)) return null;
 
           // Check for new block nodes and if none found, we don't need to do anything
-          if (hasInitialized && !checkForNewBlockNodesInTrs(transactions)) return null;
+          if (hasInitialized && !checkForNewBlockNodesInTrs([...transactions])) return null;
 
           const { tr } = newState;
           let changed = false;
