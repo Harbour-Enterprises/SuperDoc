@@ -2,6 +2,20 @@
 import { Mark, Attribute } from '@core/index.js';
 
 /**
+ * Configuration options for Bold
+ * @typedef {Object} BoldOptions
+ * @category Options
+ * @property {Object} [htmlAttributes] HTML attributes for the strong element
+ */
+
+/**
+ * Attributes for bold marks
+ * @typedef {Object} BoldAttributes
+ * @category Attributes
+ * @property {string} [value] Bold weight value ('0' renders as normal)
+ */
+
+/**
  * @module Bold
  * @sidebarTitle Bold
  * @snippetPath /snippets/extensions/bold.mdx
@@ -19,10 +33,6 @@ export const Bold = Mark.create({
 
   addAttributes() {
     return {
-      /**
-       * @category Attribute
-       * @param {string} [value] - Bold weight value ('0' renders as normal)
-       */
       value: {
         default: null,
         renderDOM: (attrs) => {
@@ -54,9 +64,8 @@ export const Bold = Mark.create({
       /**
        * Apply bold formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * setBold()
+       * editor.commands.setBold()
        * @note '0' renders as normal weight
        */
       setBold:
@@ -67,9 +76,8 @@ export const Bold = Mark.create({
       /**
        * Remove bold formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * unsetBold()
+       * editor.commands.unsetBold()
        */
       unsetBold:
         () =>
@@ -79,9 +87,8 @@ export const Bold = Mark.create({
       /**
        * Toggle bold formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * toggleBold()
+       * editor.commands.toggleBold()
        */
       toggleBold:
         () =>

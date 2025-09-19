@@ -10,10 +10,28 @@ const SD_BLOCK_ID_ATTRIBUTE_NAME = 'sdBlockId';
 export const BlockNodePluginKey = new PluginKey('blockNodePlugin');
 
 /**
+ * @typedef {import('prosemirror-model').Node} ProseMirrorNode
+ * @typedef {import('prosemirror-state').Transaction} Transaction
+ */
+
+/**
  * Block node information object
  * @typedef {Object} BlockNodeInfo
- * @property {Object} node - The block node
+ * @property {ProseMirrorNode} node - The block node
  * @property {number} pos - Position in the document
+ */
+
+/**
+ * Configuration options for BlockNode
+ * @typedef {Object} BlockNodeOptions
+ * @category Options
+ */
+
+/**
+ * Attributes for block nodes
+ * @typedef {Object} BlockNodeAttributes
+ * @category Attributes
+ * @property {string} [sdBlockId] @internal Unique identifier for the block
  */
 
 /**
@@ -30,11 +48,10 @@ export const BlockNode = Extension.create({
        * Replace a block node by its ID with new content
        * @category Command
        * @param {string} id - The sdBlockId of the node to replace
-       * @param {Object} contentNode - The replacement ProseMirror node
-       * @returns {Function} Command function
+       * @param {ProseMirrorNode} contentNode - The replacement ProseMirror node
        * @example
        * const newParagraph = editor.schema.nodes.paragraph.create({}, editor.schema.text('New content'))
-       * replaceBlockNodeById('block-123', newParagraph)
+       * editor.commands.replaceBlockNodeById('block-123', newParagraph)
        * @note The replacement node should have the same type as the original
        */
       replaceBlockNodeById:
@@ -63,9 +80,8 @@ export const BlockNode = Extension.create({
        * Delete a block node by its ID
        * @category Command
        * @param {string} id - The sdBlockId of the node to delete
-       * @returns {Function} Command function
        * @example
-       * deleteBlockNodeById('block-123')
+       * editor.commands.deleteBlockNodeById('block-123')
        * @note Completely removes the node from the document
        */
       deleteBlockNodeById:
@@ -95,11 +111,10 @@ export const BlockNode = Extension.create({
        * @category Command
        * @param {string} id - The sdBlockId of the node to update
        * @param {Object} attrs - Attributes to update
-       * @returns {Function} Command function
        * @example
-       * updateBlockNodeAttributes('block-123', { textAlign: 'center' })
+       * editor.commands.updateBlockNodeAttributes('block-123', { textAlign: 'center' })
        * @example
-       * updateBlockNodeAttributes('block-123', { indent: { left: 20 } })
+       * editor.commands.updateBlockNodeAttributes('block-123', { indent: { left: 20 } })
        * @note Merges new attributes with existing ones
        */
       updateBlockNodeAttributes:
@@ -243,8 +258,8 @@ export const BlockNode = Extension.create({
 
 /**
  * Check if a node allows sdBlockId attribute
- * @param {Object} node - The ProseMirror node to check
- * @returns {boolean} - True if the node type supports sdBlockId attribute
+ * @param {ProseMirrorNode} node - The ProseMirror node to check
+ * @returns {boolean} True if the node type supports sdBlockId attribute
  */
 export const nodeAllowsSdBlockIdAttr = (node) => {
   return !!(node?.isBlock && node?.type?.spec?.attrs?.[SD_BLOCK_ID_ATTRIBUTE_NAME]);
@@ -252,8 +267,8 @@ export const nodeAllowsSdBlockIdAttr = (node) => {
 
 /**
  * Check if a node needs an sdBlockId (doesn't have one or has null/empty value)
- * @param {Object} node - The ProseMirror node to check
- * @returns {boolean} - True if the node needs an sdBlockId assigned
+ * @param {ProseMirrorNode} node - The ProseMirror node to check
+ * @returns {boolean} True if the node needs an sdBlockId assigned
  */
 export const nodeNeedsSdBlockId = (node) => {
   const currentId = node?.attrs?.[SD_BLOCK_ID_ATTRIBUTE_NAME];
@@ -263,8 +278,8 @@ export const nodeNeedsSdBlockId = (node) => {
 /**
  * Check for new block nodes in ProseMirror transactions.
  * Iterate through the list of transactions, and in each tr check if there are any new block nodes.
- * @param {ArrayLike<Object>} transactions - The ProseMirror transactions to check.
- * @returns {boolean} - True if new block nodes are found, false otherwise.
+ * @param {Transaction[]} transactions - The ProseMirror transactions to check
+ * @returns {boolean} True if new block nodes are found, false otherwise
  */
 export const checkForNewBlockNodesInTrs = (transactions) => {
   return Array.from(transactions).some((tr) => {

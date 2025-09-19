@@ -5,9 +5,25 @@ import tippy from 'tippy.js';
 
 import Mentions from '@/components/popovers/Mentions.vue';
 
+/**
+ * Configuration options for PopoverPlugin
+ * @typedef {Object} PopoverPluginOptions
+ * @category Options
+ */
+
 const popoverPluginKey = new PluginKey('popoverPlugin');
+
+/**
+ * @module PopoverPlugin
+ * @sidebarTitle Popover Plugin
+ * @snippetPath /snippets/extensions/popover-plugin.mdx
+ */
 export const PopoverPlugin = Extension.create({
   name: 'popoverPlugin',
+
+  addOptions() {
+    return {};
+  },
 
   addPmPlugins() {
     const popover = new Plugin({

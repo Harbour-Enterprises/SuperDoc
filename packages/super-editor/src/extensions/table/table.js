@@ -1,65 +1,4 @@
 // @ts-check
-
-/**
- * Table configuration options
- * @typedef {Object} TableConfig
- * @property {number} [rows=3] - Number of rows to create
- * @property {number} [cols=3] - Number of columns to create
- * @property {boolean} [withHeaderRow=false] - Create first row as header row
- */
-
-/**
- * Table indentation configuration
- * @typedef {Object} TableIndent
- * @property {number} width - Indent width in pixels
- * @property {string} [type='dxa'] - Indent type
- */
-
-/**
- * Table attributes
- * @typedef {Object} TableAttributes
- * @property {TableIndent} [tableIndent] - Table indentation
- * @property {import("./tableHelpers/createTableBorders.js").TableBorders} [borders] - Table border configuration
- * @property {string} [borderCollapse='collapse'] - CSS border-collapse value
- * @property {string} [tableStyleId] - Reference to table style ID
- * @property {string} [tableLayout] - Table layout algorithm
- * @property {number} [tableCellSpacing] - Cell spacing in pixels
- */
-
-/**
- * Cell selection position
- * @typedef {Object} CellSelectionPosition
- * @property {number} anchorCell - Starting cell position
- * @property {number} headCell - Ending cell position
- */
-
-/**
- * Column group information
- * @typedef {Object} ColGroupInfo
- * @property {Array} [colgroup] - Column group DOM structure
- * @property {string} [tableWidth] - Fixed table width or empty string
- * @property {string} [tableMinWidth] - Minimum table width or empty string
- * @property {number[]} [colgroupValues] - Array of column width values
- */
-
-/**
- * Position resolution result
- * @private
- * @typedef {Object} CellPosition
- * @property {Object} $pos - Resolved position
- * @property {number} pos - Absolute position
- * @property {number} depth - Depth in document tree
- */
-
-/**
- * Current cell information
- * @private
- * @typedef {Object} CurrentCellInfo
- * @property {Object} rect - Selected rectangle from ProseMirror
- * @property {Object} cell - Current cell node
- * @property {Object} attrs - Cell attributes without span properties
- */
-
 import { Node, Attribute } from '@core/index.js';
 import { callOrGet } from '@core/utilities/callOrGet.js';
 import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.js';
@@ -100,6 +39,54 @@ import { cellAround } from './tableHelpers/cellAround.js';
 import { cellWrapping } from './tableHelpers/cellWrapping.js';
 
 /**
+ * Table configuration options
+ * @typedef {Object} TableConfig
+ * @property {number} [rows=3] - Number of rows to create
+ * @property {number} [cols=3] - Number of columns to create
+ * @property {boolean} [withHeaderRow=false] - Create first row as header row
+ */
+
+/**
+ * Table indentation configuration
+ * @typedef {Object} TableIndent
+ * @property {number} width - Indent width in pixels
+ * @property {string} [type='dxa'] - Indent type
+ */
+
+/**
+ * Cell selection position
+ * @typedef {Object} CellSelectionPosition
+ * @property {number} anchorCell - Starting cell position
+ * @property {number} headCell - Ending cell position
+ */
+
+/**
+ * Configuration options for Table
+ * @typedef {Object} TableOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={'aria-label': 'Table node'}] - Default HTML attributes for all tables
+ * @property {boolean} [resizable=true] - Enable column resizing functionality
+ * @property {number} [handleWidth=5] - Width of resize handles in pixels
+ * @property {number} [cellMinWidth=10] - Minimum cell width constraint in pixels
+ * @property {boolean} [lastColumnResizable=true] - Allow resizing of the last column
+ * @property {boolean} [allowTableNodeSelection=false] - Enable selecting the entire table node
+ */
+
+/**
+ * Attributes for table nodes
+ * @typedef {Object} TableAttributes
+ * @category Attributes
+ * @property {TableIndent} [tableIndent] - Table indentation configuration
+ * @property {import("./tableHelpers/createTableBorders.js").TableBorders} [borders] - Border styling for this table
+ * @property {string} [borderCollapse='collapse'] - CSS border-collapse property
+ * @property {string} [justification] - Table alignment ('left', 'center', 'right')
+ * @property {number} [tableCellSpacing] - Cell spacing in pixels for this table
+ * @property {string} [sdBlockId] @internal - Internal block tracking ID
+ * @property {string} [tableStyleId] @internal - Internal reference to table style
+ * @property {string} [tableLayout] @internal - CSS table-layout property (advanced usage)
+ */
+
+/**
  * @module Table
  * @sidebarTitle Table
  * @snippetPath /snippets/extensions/table.mdx
@@ -119,17 +106,6 @@ export const Table = Node.create({
 
   tableRole: 'table',
 
-  /**
-   * Table extension options
-   * @category Options
-   * @typedef {Object} TableOptions
-   * @property {Object} [htmlAttributes={'aria-label': 'Table node'}] - Default HTML attributes for all tables
-   * @property {boolean} [resizable=true] - Enable column resizing functionality
-   * @property {number} [handleWidth=5] - Width of resize handles in pixels
-   * @property {number} [cellMinWidth=10] - Minimum cell width constraint in pixels
-   * @property {boolean} [lastColumnResizable=true] - Allow resizing of the last column
-   * @property {boolean} [allowTableNodeSelection=false] - Enable selecting the entire table node
-   */
   addOptions() {
     return {
       htmlAttributes: {
@@ -287,14 +263,9 @@ export const Table = Node.create({
        * Insert a new table into the document
        * @category Command
        * @param {TableConfig} [config] - Table configuration options
-       * @returns {Function} Command
        * @example
-       * // Using default values
-       * insertTable() // Creates 3x3 table without header
-       *
-       * // Using custom values
-       * insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-       *
+       * editor.commands.insertTable()
+       * editor.commands.insertTable({ rows: 3, cols: 3, withHeaderRow: true })
        */
       insertTable:
         ({ rows = 3, cols = 3, withHeaderRow = false } = {}) =>
@@ -314,9 +285,8 @@ export const Table = Node.create({
       /**
        * Delete the entire table containing the cursor
        * @category Command
-       * @returns {Function} Command
        * @example
-       * deleteTable()
+       * editor.commands.deleteTable()
        */
       deleteTable:
         () =>
@@ -327,9 +297,8 @@ export const Table = Node.create({
       /**
        * Add a column before the current column
        * @category Command
-       * @returns {Function} Command
        * @example
-       * addColumnBefore()
+       * editor.commands.addColumnBefore()
        * @note Preserves cell attributes from current column
        */
       addColumnBefore:
@@ -812,10 +781,9 @@ export const Table = Node.create({
        * Set background color for selected cells
        * @category Command
        * @param {string} value - Color value (hex with or without #)
-       * @returns {Function} Command
        * @example
-       * setCellBackground('#ff0000')
-       * setCellBackground('ff0000')
+       * editor.commands.setCellBackground('#ff0000')
+       * editor.commands.setCellBackground('ff0000')
        */
       setCellBackground:
         (value) =>
