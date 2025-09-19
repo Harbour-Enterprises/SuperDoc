@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed, markRaw } from 'vue';
-import { SlashMenuPluginKey } from '@/extensions/slash-menu';
+import { SlashMenuPluginKey } from '../../extensions/slash-menu/slash-menu.js';
 import { getPropsByItemId } from './utils.js';
 import { moveCursorToMouseEvent } from '../cursor-helpers.js';
 import { getItems } from './menuItems.js';
@@ -28,6 +28,7 @@ const menuPosition = ref({ left: '0px', top: '0px' });
 const menuRef = ref(null);
 const sections = ref([]);
 const selectedId = ref(null);
+const currentContext = ref(null); // Store context for action execution
 
 // Helper to close menu if editor becomes read-only
 const handleEditorUpdate = () => {
@@ -86,6 +87,51 @@ watch(flattenedItems, (newItems) => {
     selectedId.value = newItems[0].id;
   }
 });
+
+// Handle custom item rendering
+const customItemRefs = new Map();
+
+const setCustomItemRef = (el, item) => {
+  if (el && item.render) {
+    customItemRefs.set(item.id, { element: el, item });
+    nextTick(() => {
+      renderCustomItem(item.id);
+    });
+  }
+};
+
+const renderCustomItem = async (itemId) => {
+  const refData = customItemRefs.get(itemId);
+  if (!refData || refData.element.hasCustomContent) return;
+
+  const { element, item } = refData;
+
+  try {
+    const context = await getEditorContext(props.editor);
+    const customElement = item.render(context);
+
+    if (customElement instanceof HTMLElement) {
+      element.innerHTML = '';
+      element.appendChild(customElement);
+      element.hasCustomContent = true;
+    }
+  } catch (error) {
+    console.warn(`[SlashMenu] Error rendering custom item ${itemId}:`, error);
+    // Fallback to default rendering
+    element.innerHTML = `<span>${item.label || 'Custom Item'}</span>`;
+    element.hasCustomContent = true;
+  }
+};
+
+// Clean up custom item refs when menu closes
+const cleanupCustomItems = () => {
+  customItemRefs.forEach((refData) => {
+    if (refData.element) {
+      refData.element.hasCustomContent = false;
+    }
+  });
+  customItemRefs.clear();
+};
 
 const handleGlobalKeyDown = (event) => {
   // ESCAPE: always close popover or menu
@@ -156,6 +202,7 @@ const handleRightClick = async (event) => {
   searchQuery.value = '';
   // Set sections and selectedId when menu opens
   const context = await getEditorContext(props.editor, event);
+  currentContext.value = context; // Store context for later use
   sections.value = getItems({ ...context, trigger: 'click' });
   selectedId.value = flattenedItems.value[0]?.id || null;
 };
@@ -163,7 +210,7 @@ const handleRightClick = async (event) => {
 const executeCommand = async (item) => {
   if (props.editor) {
     // First call the action if needed on the item
-    item.action ? await item.action(props.editor) : null;
+    item.action ? await item.action(props.editor, currentContext.value) : null;
 
     if (item.component) {
       const menuElement = menuRef.value;
@@ -203,6 +250,8 @@ const closeMenu = (options = { restoreCursor: true }) => {
       props.editor.view.focus();
     }
 
+    cleanupCustomItems();
+
     // Update local state
     isOpen.value = false;
     searchQuery.value = '';
@@ -233,6 +282,7 @@ onMounted(() => {
     searchQuery.value = '';
     // Set sections and selectedId when menu opens
     const context = await getEditorContext(props.editor);
+    currentContext.value = context; // Store context for later use
     sections.value = getItems({ ...context, trigger: 'slash' });
     selectedId.value = flattenedItems.value[0]?.id || null;
   });
@@ -240,8 +290,10 @@ onMounted(() => {
   props.editor.view.dom.addEventListener('contextmenu', handleRightClick);
 
   props.editor.on('slashMenu:close', () => {
+    cleanupCustomItems();
     isOpen.value = false;
     searchQuery.value = '';
+    currentContext.value = null;
   });
 });
 
@@ -249,6 +301,9 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleGlobalKeyDown);
   document.removeEventListener('mousedown', handleGlobalOutsideClick);
+
+  cleanupCustomItems();
+
   if (props.editor) {
     try {
       props.editor.off('slashMenu:open');
@@ -280,9 +335,13 @@ onBeforeUnmount(() => {
         <!-- Render section items -->
         <template v-for="item in section.items" :key="item.id">
           <div class="slash-menu-item" :class="{ 'is-selected': item.id === selectedId }" @click="executeCommand(item)">
-            <!-- Render the icon if it exists -->
-            <span v-if="item.icon" class="slash-menu-item-icon" v-html="item.icon"></span>
-            <span>{{ item.label }}</span>
+            <!-- Custom rendered content -->
+            <div v-if="item.render" :ref="(el) => setCustomItemRef(el, item)" class="slash-menu-custom-item"></div>
+            <!-- Default item rendering -->
+            <template v-else>
+              <span v-if="item.icon" class="slash-menu-item-icon" v-html="item.icon"></span>
+              <span>{{ item.label }}</span>
+            </template>
           </div>
         </template>
       </template>
@@ -370,6 +429,12 @@ onBeforeUnmount(() => {
 .slash-menu-item-icon svg {
   height: 12px;
   width: 12px;
+}
+
+.slash-menu-custom-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
 }
 
 .popover {

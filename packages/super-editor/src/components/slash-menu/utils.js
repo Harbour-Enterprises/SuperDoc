@@ -1,3 +1,4 @@
+import { selectionHasNodeOrMark } from '../cursor-helpers.js';
 import { readFromClipboard } from '../../core/utilities/clipboardUtils.js';
 import { tableActionsOptions } from './constants.js';
 import { markRaw } from 'vue';
@@ -69,7 +70,7 @@ export const getPropsByItemId = (itemId, props) => {
  *
  * @param {Object} editor - The editor instance
  * @param {MouseEvent} [event] - Optional mouse event (for context menu)
- * @returns {Object} context - { editor, selectedText, pos, node, event }
+ * @returns {Promise<Object>} context - Enhanced editor context with comprehensive state information
  */
 export async function getEditorContext(editor, event) {
   const { view } = editor;
@@ -93,12 +94,87 @@ export async function getEditorContext(editor, event) {
   // We need to check if we have anything in the clipboard and request permission if needed
   const clipboardContent = await readFromClipboard(state);
 
+  // Get document structure information
+  const isInTable = selectionHasNodeOrMark(state, 'table', { requireEnds: true });
+  const isInList =
+    selectionHasNodeOrMark(state, 'bulletList', { requireEnds: false }) ||
+    selectionHasNodeOrMark(state, 'orderedList', { requireEnds: false });
+  const isInSectionNode = selectionHasNodeOrMark(state, 'documentSection', { requireEnds: true });
+  const currentNodeType = node?.type?.name || null;
+
+  const activeMarks = [];
+
+  if (event && pos !== null) {
+    // For right-click events, get marks at the clicked position
+    const $pos = state.doc.resolve(pos);
+    $pos.marks().forEach((mark) => activeMarks.push(mark.type.name));
+
+    // Also check marks on the node at this position if it exists
+    if (node && node.marks) {
+      node.marks.forEach((mark) => activeMarks.push(mark.type.name));
+    }
+  } else {
+    // For slash trigger, use stored marks and selection head marks
+    state.storedMarks?.forEach((mark) => activeMarks.push(mark.type.name));
+    state.selection.$head.marks().forEach((mark) => activeMarks.push(mark.type.name));
+  }
+
+  const isTrackedChange = activeMarks.includes('trackInsert') || activeMarks.includes('trackDelete');
+
+  let trackedChangeId = null;
+  if (isTrackedChange && event && pos !== null) {
+    const $pos = state.doc.resolve(pos);
+    const marksAtPos = $pos.marks();
+    const trackedMark = marksAtPos.find((mark) => mark.type.name === 'trackInsert' || mark.type.name === 'trackDelete');
+    if (trackedMark) {
+      trackedChangeId = trackedMark.attrs.id;
+    }
+  }
+
+  const cursorCoords = pos ? view.coordsAtPos(pos) : null;
+  const cursorPosition = cursorCoords
+    ? {
+        x: cursorCoords.left,
+        y: cursorCoords.top,
+      }
+    : null;
+
   return {
-    editor,
+    // Selection info
     selectedText,
+    hasSelection: !empty,
+    selectionStart: from,
+    selectionEnd: to,
+
+    // Document structure
+    isInTable,
+    isInList,
+    isInSectionNode,
+    currentNodeType,
+    activeMarks,
+
+    // Document state
+    isTrackedChange,
+    trackedChangeId,
+    documentMode: editor.options?.documentMode || 'editing',
+    canUndo: state.history?.undoDepth > 0,
+    canRedo: state.history?.redoDepth > 0,
+    isEditable: editor.isEditable,
+
+    // Clipboard
+    clipboardContent: {
+      html: clipboardContent?.html || null,
+      text: clipboardContent?.text || null,
+      hasContent: !!(clipboardContent?.html || clipboardContent?.text),
+    },
+
+    // Position and trigger info
+    cursorPosition,
     pos,
     node,
     event,
-    clipboardContent,
+
+    // Editor reference for advanced use cases
+    editor,
   };
 }
