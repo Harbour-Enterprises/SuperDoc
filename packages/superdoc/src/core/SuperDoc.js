@@ -49,6 +49,10 @@ import { normalizeDocumentEntry } from './helpers/file.js';
  * @property {string} [ai.endpoint] Custom endpoint URL for AI services
  * @property {Object} [collaboration] Collaboration module configuration
  * @property {Object} [toolbar] Toolbar module configuration
+ * @property {Object} [slashMenu] Slash menu module configuration
+ * @property {Array} [slashMenu.customItems] Array of custom menu sections with items
+ * @property {Function} [slashMenu.menuProvider] Function to customize menu items
+ * @property {boolean} [slashMenu.includeDefaultItems] Whether to include default menu items
  */
 
 /** @typedef {import('@harbour-enterprises/super-editor').Editor} Editor */

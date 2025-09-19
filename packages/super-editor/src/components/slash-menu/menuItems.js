@@ -3,8 +3,7 @@ import AIWriter from '../toolbar/AIWriter.vue';
 import TableActions from '../toolbar/TableActions.vue';
 import LinkInput from '../toolbar/LinkInput.vue';
 import { selectionHasNodeOrMark } from '../cursor-helpers.js';
-// import { serializeSelectionToClipboard, writeToClipboard } from '@/core/utilities/clipboardUtils.js';
-import { handleClipboardPaste } from '@/core/InputRule.js';
+import { handleClipboardPaste } from '../../core/InputRule.js';
 import { TEXTS, ICONS, TRIGGERS } from './constants.js';
 
 /**
@@ -31,6 +30,72 @@ const isModuleEnabled = (editorOptions, moduleName) => {
 };
 
 /**
+ * Apply custom menu configuration based on editor options
+ * Can render default items, extend the default items, or if provider is a function, render a completely custom menu
+ * @param {Array} defaultSections - Default menu sections
+ * @param {Object} context - Editor context
+ * @returns {Array} Modified menu sections
+ */
+function applyCustomMenuConfiguration(defaultSections, context) {
+  const { editor } = context;
+  const slashMenuConfig = editor.options?.slashMenuConfig;
+
+  if (!slashMenuConfig) {
+    return defaultSections;
+  }
+
+  let sections = [];
+
+  if (slashMenuConfig.includeDefaultItems !== false) {
+    sections = [...defaultSections];
+  }
+
+  if (slashMenuConfig.customItems && Array.isArray(slashMenuConfig.customItems)) {
+    sections = [...sections, ...slashMenuConfig.customItems];
+  }
+
+  if (typeof slashMenuConfig.menuProvider === 'function') {
+    try {
+      sections = slashMenuConfig.menuProvider(context, sections) || sections;
+    } catch (error) {
+      console.warn('[SlashMenu] Error in custom menuProvider:', error);
+    }
+  }
+
+  return sections;
+}
+
+/**
+ * Filter and validate custom menu items - uses showWhen from the item configuration
+ * Also filters out empty sections
+ * @param {Array} sections - Menu sections
+ * @param {Object} context - Editor context
+ * @returns {Array} Filtered sections
+ */
+function filterCustomItems(sections, context) {
+  return sections
+    .map((section) => {
+      const filteredItems = section.items.filter((item) => {
+        if (typeof item.showWhen === 'function') {
+          try {
+            return item.showWhen(context);
+          } catch (error) {
+            console.warn(`[SlashMenu] Error in showWhen for item ${item.id}:`, error);
+            return false;
+          }
+        }
+        return true;
+      });
+
+      return {
+        ...section,
+        items: filteredItems,
+      };
+    })
+    .filter((section) => section.items.length > 0);
+}
+
+/**
  * Get menu sections based on context (trigger, selection, node, etc)
  * @param {Object} context - { editor, selectedText, pos, node, event, trigger }
  * @returns {Array<{
@@ -46,12 +111,17 @@ const isModuleEnabled = (editorOptions, moduleName) => {
  *     requiresClipboard?: boolean
  *     requiresTableParent?: boolean
  *     requiredSectionParent?: boolean,
- *     requiresModule?: string
+ *     requiresModule?: string,
+ *     render?: (context: Object) => HTMLElement,
+ *     showWhen?: (context: Object) => boolean
  *   }>
  * }>} Array of menu sections
  */
 export function getItems(context) {
   const { editor, selectedText, trigger, clipboardContent } = context;
+
+  // Handle legacy clipboardContent parameter for backward compatibility
+  const clipboardHasContent = clipboardContent?.hasContent || !!(clipboardContent?.html || clipboardContent?.text);
 
   const isInTable = selectionHasNodeOrMark(editor.view.state, 'table', { requireEnds: true });
   const isInSectionNode = selectionHasNodeOrMark(editor.view.state, 'documentSection', { requireEnds: true });
@@ -200,8 +270,10 @@ export function getItems(context) {
     },
   ];
 
-  // Filter sections and their items
-  const filteredSections = sections
+  let allSections = applyCustomMenuConfiguration(sections, context);
+
+  // Filter sections and their items (both default and custom)
+  const filteredSections = allSections
     .map((section) => {
       const filteredItems = section.items.filter((item) => {
         // If the item requires a specific module and that module is not enabled, return false
@@ -211,7 +283,7 @@ export function getItems(context) {
         // If the item is not allowed to be triggered with the current trigger, return false
         if (!item.allowedTriggers.includes(trigger)) return false;
         // If the item requires clipboard content and there is no clipboard content, return false
-        if (item.requiresClipboard && !clipboardContent) return false;
+        if (item.requiresClipboard && !clipboardHasContent) return false;
         // If the item requires a table parent and there is no table parent, return false
         // Or if we are in a table, do not show 'insert table'
         if ((item.requiresTableParent && !isInTable) || (item.id === 'insert-table' && isInTable)) return false;
@@ -227,5 +299,8 @@ export function getItems(context) {
     })
     .filter((section) => section.items.length > 0);
 
-  return filteredSections;
+  // Apply custom filtering for items with showWhen conditions
+  const finalSections = filterCustomItems(filteredSections, context);
+
+  return finalSections;
 }
