@@ -107,7 +107,9 @@ export async function getEditorContext(editor, event) {
   if (event && pos !== null) {
     // For right-click events, get marks at the clicked position
     const $pos = state.doc.resolve(pos);
-    $pos.marks().forEach((mark) => activeMarks.push(mark.type.name));
+    if ($pos.marks && typeof $pos.marks === 'function') {
+      $pos.marks().forEach((mark) => activeMarks.push(mark.type.name));
+    }
 
     // Also check marks on the node at this position if it exists
     if (node && node.marks) {

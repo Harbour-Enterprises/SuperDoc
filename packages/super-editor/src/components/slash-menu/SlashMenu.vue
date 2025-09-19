@@ -232,7 +232,7 @@ const closeMenu = (options = { restoreCursor: true }) => {
   if (props.editor?.view) {
     // Get plugin state to access anchorPos
     const pluginState = SlashMenuPluginKey.getState(props.editor.view.state);
-    const { anchorPos } = pluginState;
+    const anchorPos = pluginState?.anchorPos;
 
     // Update prosemirror state to close menu
     props.editor.view.dispatch(

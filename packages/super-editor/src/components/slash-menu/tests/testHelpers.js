@@ -49,7 +49,7 @@ export function createMockState(options = {}) {
     nodeType: 'paragraph',
     undoDepth: 2,
     redoDepth: 1,
-    marks: ['bold', 'italic', 'trackedInsert', 'trackedDelete'],
+    marks: ['bold', 'italic', 'trackInsert', 'trackDelete'],
     storedMarks: null,
   };
 

@@ -71,6 +71,7 @@ describe('utils.js', () => {
 
         // Document state
         isTrackedChange: false,
+        trackedChangeId: null,
         documentMode: 'editing',
         canUndo: true,
         canRedo: true,
@@ -113,7 +114,7 @@ describe('utils.js', () => {
     });
 
     it('should detect active marks and tracked changes', async () => {
-      const mockMark = { type: { name: 'trackedInsert' } };
+      const mockMark = { type: { name: 'trackInsert' } };
       mockEditor.view.state.storedMarks = [mockMark];
       mockEditor.view.state.selection.$head.marks.mockReturnValue([{ type: { name: 'bold' } }]);
 
@@ -122,7 +123,7 @@ describe('utils.js', () => {
 
       const context = await getEditorContext(mockEditor);
 
-      expect(context.activeMarks).toContain('trackedInsert');
+      expect(context.activeMarks).toContain('trackInsert');
       expect(context.activeMarks).toContain('bold');
       expect(context.isTrackedChange).toBe(true);
     });

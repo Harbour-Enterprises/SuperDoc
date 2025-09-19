@@ -319,7 +319,15 @@ describe('SlashMenu.vue', () => {
       const searchInput = wrapper.find('.slash-menu-hidden-input');
       await searchInput.trigger('keydown', { key: 'Enter' });
 
-      expect(mockAction).toHaveBeenCalledWith(mockEditor);
+      // editor and context
+      expect(mockAction).toHaveBeenCalledWith(
+        mockEditor,
+        expect.objectContaining({
+          hasSelection: expect.any(Boolean),
+          selectedText: expect.any(String),
+          trigger: expect.any(String),
+        }),
+      );
     });
 
     it('should close menu on Escape', async () => {
@@ -461,7 +469,14 @@ describe('SlashMenu.vue', () => {
 
       await wrapper.find('.slash-menu-item').trigger('click');
 
-      expect(mockAction).toHaveBeenCalledWith(mockEditor);
+      expect(mockAction).toHaveBeenCalledWith(
+        mockEditor,
+        expect.objectContaining({
+          hasSelection: expect.any(Boolean),
+          selectedText: expect.any(String),
+          trigger: expect.any(String),
+        }),
+      );
     });
 
     it('should open popover for component items', async () => {
