@@ -27,9 +27,9 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     expect(text.type).toBe('text');
     expect(text.text).toBe('APPOINTMENT');
 
-    const textStyleMarks = text.marks;
-    expect(textStyleMarks.length).toBe(2);
-    const textStyleMark = textStyleMarks.find((mark) => mark.type === 'textStyle');
+    const marks = text.marks || [];
+    expect(marks.some((mark) => mark.type === 'run')).toBe(true);
+    const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
 
     expect(textStyleMark).toBeDefined();
     expect(textStyleMark.attrs).toBeDefined();

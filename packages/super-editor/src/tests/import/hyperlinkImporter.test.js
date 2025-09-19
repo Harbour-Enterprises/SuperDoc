@@ -18,22 +18,29 @@ describe('HyperlinkNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     const { marks } = nodes[0];
-    expect(marks.length).toBe(3);
-    expect(marks[0].type).toBe('underline');
-    expect(marks[1].type).toBe('link');
-    expect(marks[2].type).toBe('textStyle');
-    expect(marks[2].attrs.fontFamily).toBe('Arial');
-    expect(marks[2].attrs.fontSize).toBe('10pt');
+    expect(marks.length).toBe(4);
 
-    expect(marks[1].attrs.href).toBe(
+    const runMark = marks.find((mark) => mark.type === 'run');
+    expect(runMark).toBeDefined();
+
+    const underlineMark = marks.find((mark) => mark.type === 'underline');
+    expect(underlineMark).toBeDefined();
+
+    const linkMark = marks.find((mark) => mark.type === 'link');
+    expect(linkMark).toBeDefined();
+
+    const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
+    expect(textStyleMark).toBeDefined();
+    expect(textStyleMark.attrs.fontFamily).toBe('Arial');
+    expect(textStyleMark.attrs.fontSize).toBe('10pt');
+
+    expect(linkMark.attrs.href).toBe(
       'https://stackoverflow.com/questions/66669593/how-to-attach-image-at-first-page-in-docx-file-nodejs',
     );
-    expect(marks[1].attrs.rId).toBe('rId4');
-    expect(marks[1].attrs.history).toBe(true);
+    expect(linkMark.attrs.rId).toBe('rId4');
+    expect(linkMark.attrs.history).toBe(true);
 
     // Capture the textStyle mark
-    const textStyleMark = marks[2];
-    expect(textStyleMark.type).toBe('textStyle');
     expect(textStyleMark.attrs.styleId).toBe('Hyperlink');
     expect(textStyleMark.attrs.fontFamily).toBe('Arial');
     expect(textStyleMark.attrs.fontSize).toBe('10pt');
@@ -54,18 +61,24 @@ describe('HyperlinkNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     const { marks } = nodes[0];
-    expect(marks.length).toBe(2);
-    expect(marks[0].type).toBe('link');
-    expect(marks[0].attrs.rId).toBeUndefined();
-    expect(marks[0].attrs.anchor).toBe('mybookmark');
-    expect(marks[0].attrs.href).toBe('#mybookmark');
-    expect(marks[0].attrs.history).toBe(true);
-    expect(marks[0].attrs.tooltip).toBe('Some tooltip');
+    expect(marks.length).toBe(3);
 
-    expect(marks[1].type).toBe('textStyle');
-    expect(marks[1].attrs.color).toBe('#595959');
-    expect(marks[1].attrs.letterSpacing).toBe('0.75pt');
-    expect(marks[1].attrs.fontSize).toBe('14pt');
-    expect(marks[1].attrs.styleId).toBe('SubtitleChar');
+    const runMark = marks.find((mark) => mark.type === 'run');
+    expect(runMark).toBeDefined();
+
+    const linkMark = marks.find((mark) => mark.type === 'link');
+    expect(linkMark).toBeDefined();
+    expect(linkMark.attrs.rId).toBeUndefined();
+    expect(linkMark.attrs.anchor).toBe('mybookmark');
+    expect(linkMark.attrs.href).toBe('#mybookmark');
+    expect(linkMark.attrs.history).toBe(true);
+    expect(linkMark.attrs.tooltip).toBe('Some tooltip');
+
+    const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
+    expect(textStyleMark).toBeDefined();
+    expect(textStyleMark.attrs.color).toBe('#595959');
+    expect(textStyleMark.attrs.letterSpacing).toBe('0.75pt');
+    expect(textStyleMark.attrs.fontSize).toBe('14pt');
+    expect(textStyleMark.attrs.styleId).toBe('SubtitleChar');
   });
 });

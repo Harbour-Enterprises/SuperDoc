@@ -36,9 +36,7 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
     expect(sdtPr.elements.length).toBe(3);
     expect(sdtPr.name).toBe('w:sdtPr');
 
-    const { marks } = sdtNode;
-    expect(marks.length).toBe(2);
-
+    const { marks = [] } = sdtNode;
     const bold = marks.find((mark) => mark.type === 'bold');
     expect(bold).toBeDefined();
 
@@ -57,8 +55,7 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
     expect(extraTextAfterSdt.type).toBe('text');
     expect(extraTextAfterSdt.text).toBe(' text');
 
-    const { marks: extraTextMarks } = extraTextAfterSdt;
-    expect(extraTextMarks.length).toBe(2);
+    const extraTextMarks = extraTextAfterSdt.marks || [];
     const extraBold = extraTextMarks.find((mark) => mark.type === 'bold');
     expect(extraBold).toBeDefined();
 

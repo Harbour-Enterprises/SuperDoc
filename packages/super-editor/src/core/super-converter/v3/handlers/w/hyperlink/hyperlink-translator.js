@@ -66,7 +66,25 @@ const encode = (params, encodedAttrs) => {
     nodes: runNodes,
     path: [...(params.path || []), node],
   });
-  return updatedNode;
+
+  const ensureLinkMark = (child) => {
+    if (!child || typeof child !== 'object') return child;
+    const existingMarks = Array.isArray(child.marks) ? child.marks : [];
+    const hasLink = existingMarks.some((mark) => mark?.type === 'link');
+    if (hasLink) return child;
+    const linkClone = { type: 'link', attrs: { ...linkMark.attrs } };
+    return { ...child, marks: [...existingMarks, linkClone] };
+  };
+
+  if (Array.isArray(updatedNode)) {
+    return updatedNode.map((child) => ensureLinkMark(child));
+  }
+
+  const processedNodes = Array.isArray(updatedNode?.nodes)
+    ? updatedNode.nodes.map((child) => ensureLinkMark(child))
+    : [];
+
+  return { ...updatedNode, nodes: processedNodes };
 };
 
 /**
