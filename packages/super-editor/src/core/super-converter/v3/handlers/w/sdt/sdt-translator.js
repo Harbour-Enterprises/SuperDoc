@@ -15,10 +15,9 @@ const validXmlAttributes = []; // No attrs for "w:sdt".
 
 /**
  * @param {import('@translator').SCEncoderConfig} params
- * @param {import('@translator').EncodedAttributes} [encodedAttrs]
  * @returns {import('@translator').SCEncoderResult}
  */
-function encode(params, encodedAttrs) {
+function encode(params) {
   const nodes = params.nodes;
   const node = nodes[0];
 
@@ -34,10 +33,9 @@ function encode(params, encodedAttrs) {
 
 /**
  * @param {import('@translator').SCDecoderConfig} params
- * @param {import('@translator').DecodedAttributes} [decodedAttrs]
  * @returns {import('@translator').SCDecoderResult}
  */
-function decode(params, decodedAttrs) {
+function decode(params) {
   const { node } = params;
 
   if (!node || !node.type) {

@@ -6,7 +6,7 @@ import { translator as strikeTranslator } from '../strike/strike-translator.js';
 import { translator as colorTranslator } from '../color/color-translator.js';
 import { translator as highlightTranslator } from '../highlight/highlight-translator.js';
 import { translator as fontFamilyTranslator } from '../rFonts/rFonts-translator.js';
-import { translator as runStyleTranslator } from '../rStyle/rStyle-translator.js';
+import { translator as runStyleTranslator } from '../rstyle/rstyle-translator.js';
 import { translator as fontSizeTranslator } from '../sz/sz-translator.js';
 import { translator as fontSizeCsTranslator } from '../szcs/szcs-translator.js';
 

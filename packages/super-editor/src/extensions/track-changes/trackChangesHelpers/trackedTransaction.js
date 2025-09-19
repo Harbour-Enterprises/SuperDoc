@@ -53,7 +53,6 @@ export const trackedTransaction = ({ tr, state, user }) => {
         originalStep,
         originalStepIndex,
       });
-      console.debug('[track-changes]: replaceStep');
     } else if (step instanceof AddMarkStep) {
       addMarkStep({
         state,
@@ -65,7 +64,6 @@ export const trackedTransaction = ({ tr, state, user }) => {
         user,
         date,
       });
-      console.debug('[track-changes]: addMarkStep');
     } else if (step instanceof RemoveMarkStep) {
       removeMarkStep({
         state,
@@ -77,10 +75,8 @@ export const trackedTransaction = ({ tr, state, user }) => {
         user,
         date,
       });
-      console.debug('[track-changes]: removeMarkStep');
     } else {
       newTr.step(step);
-      console.log('[track-changes]: otherStep');
     }
   });
 

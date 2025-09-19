@@ -40,7 +40,7 @@ export const Underline = Mark.create({
     const css = getUnderlineCssString({ type, color });
 
     // strip custom attribute and merge computed style
-    const { underlineType, underlineColor, style, ...rest } = merged || {};
+    const { style, ...rest } = merged || {};
     const styleString = [style, css].filter(Boolean).join('; ');
 
     if (type === 'none') {

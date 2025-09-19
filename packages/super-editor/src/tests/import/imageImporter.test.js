@@ -63,7 +63,6 @@ describe('ImageNodeImporter', () => {
     const doc = documentXml.elements[0];
     const body = doc.elements[0];
     const content = body.elements;
-    console.log(content[6].elements[2]);
 
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 

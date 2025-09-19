@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { config, translator } from './rStyle-translator.js';
+import { config, translator } from './rstyle-translator.js';
 import { NodeTranslator } from '../../../node-translator/node-translator.js';
 
 describe('w:rStyle translator (attribute)', () => {

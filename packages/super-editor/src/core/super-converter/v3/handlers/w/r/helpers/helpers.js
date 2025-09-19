@@ -25,8 +25,11 @@ export const collectRunProperties = (params, rPrNode, translator = rPrTranslator
 };
 
 export const buildRunAttrs = (encodedAttrs = {}, hadRPr, runProps) => {
-  const base = { ...encodedAttrs };
-  if (hadRPr) base.runProperties = runProps.length ? runProps : null;
+  /** @type {Record<string, any>} */
+  const base = { ...(encodedAttrs || {}) };
+  if (hadRPr) {
+    base.runProperties = runProps.length ? runProps : null;
+  }
   return base;
 };
 

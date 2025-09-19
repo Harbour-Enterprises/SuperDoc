@@ -332,7 +332,7 @@ export class SuperToolbar extends EventEmitter {
      * @param {string} params.argument - The color to set
      * @returns {void}
      */
-    setColor: ({ item, argument }) => {
+    setColor: ({ argument }) => {
       if (!argument || !this.activeEditor) return;
       const isNone = argument === 'none';
       const value = isNone ? 'inherit' : argument;
@@ -351,7 +351,7 @@ export class SuperToolbar extends EventEmitter {
      * @param {string} params.argument - The highlight color to set
      * @returns {void}
      */
-    setHighlight: ({ item, argument }) => {
+    setHighlight: ({ argument }) => {
       if (!argument || !this.activeEditor) return;
       // For cascade-aware negation, keep a highlight mark present using 'transparent'
       const inlineColor = argument !== 'none' ? argument : 'transparent';

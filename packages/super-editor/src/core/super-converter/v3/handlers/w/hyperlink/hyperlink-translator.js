@@ -76,15 +76,9 @@ const encode = (params, encodedAttrs) => {
     return { ...child, marks: [...existingMarks, linkClone] };
   };
 
-  if (Array.isArray(updatedNode)) {
-    return updatedNode.map((child) => ensureLinkMark(child));
-  }
+  if (!Array.isArray(updatedNode)) return updatedNode;
 
-  const processedNodes = Array.isArray(updatedNode?.nodes)
-    ? updatedNode.nodes.map((child) => ensureLinkMark(child))
-    : [];
-
-  return { ...updatedNode, nodes: processedNodes };
+  return updatedNode.map((child) => ensureLinkMark(child));
 };
 
 /**
