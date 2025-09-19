@@ -994,8 +994,9 @@ function translateTable(params) {
  */
 function preProcessVerticalMergeCells(table, { editorSchema }) {
   const { content } = table;
-  for (let rowIndex = 0; rowIndex < content.length; rowIndex++) {
-    const row = content[rowIndex];
+  const filteredContent = content.filter((row) => Array.isArray(row.content) && row.content.length > 0);
+  for (let rowIndex = 0; rowIndex < filteredContent.length; rowIndex++) {
+    const row = filteredContent[rowIndex];
     if (!row.content) continue;
     for (let cellIndex = 0; cellIndex < row.content?.length; cellIndex++) {
       const cell = row.content[cellIndex];
@@ -1003,8 +1004,10 @@ function preProcessVerticalMergeCells(table, { editorSchema }) {
 
       const { attrs } = cell;
       if (attrs.rowspan > 1) {
-        // const { mergedCells } = attrs;
-        const rowsToChange = content.slice(rowIndex + 1, rowIndex + attrs.rowspan);
+        // Ensure we don't exceed table bounds
+        const maxRowspan = Math.min(attrs.rowspan, filteredContent.length - rowIndex);
+        const rowsToChange = filteredContent.slice(rowIndex + 1, rowIndex + maxRowspan);
+
         const mergedCell = {
           type: cell.type,
           content: [
@@ -1027,6 +1030,7 @@ function preProcessVerticalMergeCells(table, { editorSchema }) {
       }
     }
   }
+  table.content = filteredContent;
   return table;
 }
 
