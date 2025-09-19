@@ -18,6 +18,7 @@ import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
+import { preProcessVerticalMergeCells } from './export-helpers/pre-process-vertical-merge-cells.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
@@ -992,48 +993,6 @@ function translateTable(params) {
  * @param {ExportParams.node} table The table node
  * @returns {ExportParams.node} The table node with merged cells restored
  */
-function preProcessVerticalMergeCells(table, { editorSchema }) {
-  const { content } = table;
-  const filteredContent = content.filter((row) => Array.isArray(row.content) && row.content.length > 0);
-  for (let rowIndex = 0; rowIndex < filteredContent.length; rowIndex++) {
-    const row = filteredContent[rowIndex];
-    if (!row.content) continue;
-    for (let cellIndex = 0; cellIndex < row.content?.length; cellIndex++) {
-      const cell = row.content[cellIndex];
-      if (!cell) continue;
-
-      const { attrs } = cell;
-      if (attrs.rowspan > 1) {
-        // Ensure we don't exceed table bounds
-        const maxRowspan = Math.min(attrs.rowspan, filteredContent.length - rowIndex);
-        const rowsToChange = filteredContent.slice(rowIndex + 1, rowIndex + maxRowspan);
-
-        const mergedCell = {
-          type: cell.type,
-          content: [
-            // cells must end with a paragraph
-            editorSchema.nodes.paragraph.createAndFill().toJSON(),
-          ],
-          attrs: {
-            ...cell.attrs,
-            // reset colspan and rowspan
-            colspan: null,
-            rowspan: null,
-            // to add vMerge
-            continueMerge: true,
-          },
-        };
-
-        rowsToChange.forEach((rowToChange) => {
-          rowToChange.content.splice(cellIndex, 0, mergedCell);
-        });
-      }
-    }
-  }
-  table.content = filteredContent;
-  return table;
-}
-
 /**
  * Generate w:tblPr properties node for a table
  *
