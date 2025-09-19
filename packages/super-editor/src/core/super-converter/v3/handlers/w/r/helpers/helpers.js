@@ -33,12 +33,8 @@ export const buildRunAttrs = (encodedAttrs = {}, hadRPr, runProps) => {
   return base;
 };
 
-export const applyRunMarks = (node, runAttrs, inlineMarks, textStyleAttrs) => {
-  if (!node || node.type !== 'text') return node;
-
-  const baseMarks = Array.isArray(node.marks) ? node.marks : [];
-  const marks = baseMarks.map((mark) => cloneMark(mark));
-
+const ensureRunMark = (marks, runAttrs) => {
+  if (!runAttrs) return;
   const runMark = createRunMark(runAttrs);
   const runMarkIndex = marks.findIndex((mark) => mark?.type === 'run');
   if (runMarkIndex >= 0) {
@@ -46,22 +42,41 @@ export const applyRunMarks = (node, runAttrs, inlineMarks, textStyleAttrs) => {
     if (runMark.attrs) {
       marks[runMarkIndex] = { ...existing, attrs: mergeRunAttrs(existing?.attrs, runMark.attrs) };
     }
-  } else {
-    marks.push(runMark);
+    return;
   }
+  marks.push(runMark);
+};
 
+const ensureInlineMarks = (marks, inlineMarks = []) => {
   inlineMarks.forEach(({ type, attrs }) => {
+    if (!type) return;
     if (marks.some((mark) => mark?.type === type)) return;
     marks.push(attrs ? { type, attrs: { ...attrs } } : { type });
   });
+};
 
-  if (textStyleAttrs) {
-    const existingTextStyle = marks.find((mark) => mark?.type === 'textStyle');
-    if (existingTextStyle) {
-      existingTextStyle.attrs = { ...(existingTextStyle.attrs || {}), ...textStyleAttrs };
-    } else {
-      marks.push({ type: 'textStyle', attrs: { ...textStyleAttrs } });
-    }
+const ensureTextStyleMark = (marks, textStyleAttrs) => {
+  if (!textStyleAttrs) return;
+  const existingTextStyle = marks.find((mark) => mark?.type === 'textStyle');
+  if (existingTextStyle) {
+    existingTextStyle.attrs = { ...(existingTextStyle.attrs || {}), ...textStyleAttrs };
+    return;
+  }
+  marks.push({ type: 'textStyle', attrs: { ...textStyleAttrs } });
+};
+
+export const applyRunMarks = (node, runAttrs, inlineMarks, textStyleAttrs) => {
+  if (!node || typeof node !== 'object') return node;
+
+  const baseMarks = Array.isArray(node.marks) ? node.marks : [];
+  const marks = baseMarks.map((mark) => cloneMark(mark));
+
+  ensureRunMark(marks, runAttrs);
+  ensureInlineMarks(marks, inlineMarks);
+
+  // Only apply textStyle attributes to text nodes; preserve existing textStyle marks on others.
+  if (node.type === 'text') {
+    ensureTextStyleMark(marks, textStyleAttrs);
   }
 
   return { ...node, marks };

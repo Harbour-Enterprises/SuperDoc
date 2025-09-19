@@ -89,4 +89,37 @@ describe('w:r r-translator (mark)', () => {
     expect(textStyleMark).toBeDefined();
     expect(textStyleMark.attrs).toMatchObject({ fontFamily: 'Arial', fontSize: '16pt' });
   });
+
+  it('returns all child nodes when the run contains multiple items such as tabs', () => {
+    const run = {
+      name: 'w:r',
+      elements: [
+        { name: 'w:t', elements: [{ text: 'Left', type: 'text' }] },
+        { name: 'w:tab' },
+        { name: 'w:t', elements: [{ text: 'Right', type: 'text' }] },
+      ],
+    };
+
+    const params = {
+      nodes: [run],
+      nodeListHandler: {
+        handler: vi.fn(() => [
+          { type: 'text', text: 'Left', marks: [] },
+          { type: 'tab', attrs: { val: 'start' } },
+          { type: 'text', text: 'Right', marks: [] },
+        ]),
+      },
+    };
+
+    const result = translator.encode(params);
+
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(3);
+    expect(result[0].type).toBe('text');
+    expect(result[1]).toMatchObject({ type: 'tab', attrs: { val: 'start' } });
+    const tabMarks = result[1].marks || [];
+    expect(tabMarks.some((mark) => mark.type === 'run')).toBe(true);
+    expect(tabMarks.some((mark) => mark.type === 'textStyle')).toBe(false);
+    expect(result[2].type).toBe('text');
+  });
 });

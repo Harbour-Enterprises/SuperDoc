@@ -71,12 +71,10 @@ const encode = (params, encodedAttrs = {}) => {
     applyRunMarks(child, runAttrs, mergedInlineMarks, mergedTextStyleAttrs),
   );
 
-  if (marked.length === 1) return marked[0];
-  if (marked.length > 1) {
-    const firstText = marked.find((n) => n?.type === 'text');
-    return firstText || marked[0];
-  }
-  return [];
+  const filtered = marked.filter(Boolean);
+  if (!filtered.length) return [];
+  if (filtered.length === 1) return filtered[0];
+  return filtered;
 };
 
 const decode = (params, decodedAttrs = {}) => {
