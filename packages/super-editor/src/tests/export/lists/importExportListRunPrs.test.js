@@ -34,7 +34,7 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     expect(textStyleMark).toBeDefined();
     expect(textStyleMark.attrs).toBeDefined();
     expect(textStyleMark.attrs.fontSize).toBe('8pt');
-    expect(textStyleMark.attrs.fontFamily).toBe('Times New Roman');
+    expect(textStyleMark.attrs.fontFamily).toBe('Times New Roman, serif');
   });
 
   it('exports list with inline run properties', () => {

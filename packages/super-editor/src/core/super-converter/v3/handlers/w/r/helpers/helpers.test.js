@@ -161,7 +161,7 @@ describe('w:r helper utilities', () => {
 
     it('deriveStyleMarks merges paragraph and run styles', () => {
       const result = deriveStyleMarks({ docx, paragraphStyleId: 'Base', runStyleId: 'Derived' });
-      expect(result.textStyleAttrs).toEqual({ fontFamily: 'Times', color: '#FF0000' });
+      expect(result.textStyleAttrs).toEqual({ fontFamily: 'Times, sans-serif', color: '#FF0000' });
       expect(result.inlineMarks).toEqual([]);
     });
 

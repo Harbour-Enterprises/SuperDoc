@@ -136,11 +136,11 @@ describe('tab stop import with run translator', () => {
     expect(firstTab.type).toBe('tab');
 
     const textStyle = node.content.at(-1).marks.find((mark) => mark.type === 'textStyle');
-    expect(textStyle?.attrs?.fontFamily).toBe('Arial');
+    expect(textStyle?.attrs?.fontFamily).toBe('Arial, sans-serif');
 
     const leftTextStyle = leftText.marks.find((mark) => mark.type === 'textStyle');
     expect(leftTextStyle).toBeDefined();
-    expect(leftTextStyle.attrs.fontFamily).toBe('Arial');
+    expect(leftTextStyle.attrs.fontFamily).toBe('Arial, sans-serif');
   });
 
   it('keeps consecutive tabs when they appear in a single run', () => {

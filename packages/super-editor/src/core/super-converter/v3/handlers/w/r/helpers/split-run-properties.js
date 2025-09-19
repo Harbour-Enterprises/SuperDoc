@@ -1,12 +1,13 @@
 // @ts-check
 import { normalizeBool } from './helpers.js';
 import { normalizeHexColor } from '@converter/helpers.js';
+import { SuperConverter } from '../../../../../SuperConverter.js';
 
 /**
  * @param {Array<{ xmlName?: string, attributes?: Record<string, any> }>} [entries]
  * @returns {{ remainingProps: any[], inlineMarks: any[], textStyleAttrs: Record<string, any>|null, runStyleId: string|null }}
  */
-export const splitRunProperties = (entries = []) => {
+export const splitRunProperties = (entries = [], docx = null) => {
   const remainingProps = [];
   const inlineMarks = [];
   const textStyleAttrs = {};
@@ -61,7 +62,7 @@ export const splitRunProperties = (entries = []) => {
           attributes['w:ascii'] || attributes['w:eastAsia'] || attributes['w:hAnsi'] || attributes['w:val'];
         if (family) {
           hasTextStyle = true;
-          textStyleAttrs.fontFamily = family;
+          textStyleAttrs.fontFamily = SuperConverter.toCssFontFamily(family, docx);
         }
         break;
       }

@@ -14,6 +14,18 @@ import {
 import { FOOTER_RELATIONSHIP_TYPE, HEADER_RELATIONSHIP_TYPE, HYPERLINK_RELATIONSHIP_TYPE } from './constants.js';
 import { DocxHelpers } from './docx-helpers/index.js';
 
+const FONT_FAMILY_FALLBACKS = Object.freeze({
+  swiss: 'Arial, sans-serif',
+  roman: 'Times New Roman, serif',
+  modern: 'Courier New, monospace',
+  script: 'cursive',
+  decorative: 'fantasy',
+  system: 'system-ui',
+  auto: 'sans-serif',
+});
+
+const DEFAULT_GENERIC_FALLBACK = 'sans-serif';
+
 class SuperConverter {
   static allowedElements = Object.freeze({
     'w:document': 'doc',
@@ -71,6 +83,41 @@ class SuperConverter {
   });
 
   static elements = new Set(['w:document', 'w:body', 'w:p', 'w:r', 'w:t', 'w:delText']);
+
+  static getFontTableEntry(docx, fontName) {
+    if (!docx || !fontName) return null;
+    const fontTable = docx['word/fontTable.xml'];
+    if (!fontTable?.elements?.length) return null;
+    const fontsNode = fontTable.elements.find((el) => el.name === 'w:fonts');
+    if (!fontsNode?.elements?.length) return null;
+    return fontsNode.elements.find((el) => el?.attributes?.['w:name'] === fontName) || null;
+  }
+
+  static getFallbackFromFontTable(docx, fontName) {
+    const fontEntry = SuperConverter.getFontTableEntry(docx, fontName);
+    const family = fontEntry?.elements?.find((child) => child.name === 'w:family')?.attributes?.['w:val'];
+    if (!family) return null;
+    const mapped = FONT_FAMILY_FALLBACKS[family.toLowerCase()];
+    return mapped || DEFAULT_GENERIC_FALLBACK;
+  }
+
+  static toCssFontFamily(fontName, docx) {
+    if (!fontName) return fontName;
+    if (fontName.includes(',')) return fontName;
+
+    const fallback = SuperConverter.getFallbackFromFontTable(docx, fontName) || DEFAULT_GENERIC_FALLBACK;
+
+    const normalizedFallbackParts = fallback
+      .split(',')
+      .map((part) => part.trim().toLowerCase())
+      .filter(Boolean);
+
+    if (normalizedFallbackParts.includes(fontName.trim().toLowerCase())) {
+      return fallback;
+    }
+
+    return `${fontName}, ${fallback}`;
+  }
 
   constructor(params = null) {
     // Suppress logging when true
@@ -272,7 +319,8 @@ class SuperConverter {
       const fallbackSz = Number(rElements.find((el) => el.name === 'w:sz')?.attributes?.['w:val']);
       const fontSizePt = fontSizeNormal ?? (Number.isFinite(fallbackSz) ? fallbackSz / 2 : undefined) ?? 10;
       const kern = rElements.find((el) => el.name === 'w:kern')?.attributes['w:val'];
-      return { fontSizePt, kern, typeface, panose };
+      const fontFamilyCss = SuperConverter.toCssFontFamily(typeface, this.convertedXml);
+      return { fontSizePt, kern, typeface, panose, fontFamilyCss };
     }
   }
 

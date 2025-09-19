@@ -124,7 +124,7 @@ describe('paragraph tests to check spacing', () => {
     expect(marksAttrs.length).toBe(2);
     expect(marksAttrs[0].type).toBe('bold');
     expect(marksAttrs[1].type).toBe('textStyle');
-    expect(marksAttrs[1].attrs.fontFamily).toBe('Arial');
+    expect(marksAttrs[1].attrs.fontFamily).toBe('Arial, sans-serif');
     expect(marksAttrs[1].attrs.fontSize).toBe('16pt');
   });
 

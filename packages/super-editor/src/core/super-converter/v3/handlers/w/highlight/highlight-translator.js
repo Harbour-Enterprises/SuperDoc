@@ -28,7 +28,7 @@ const encode = (params, encodedAttrs = {}) => {
   };
 };
 
-const decode = (params, decodedAttrs = {}) => {
+const decode = (params) => {
   const attrs = params?.node?.attrs || {};
   const highlightValue = attrs.highlight ?? attrs.color ?? null;
   if (!highlightValue) return undefined;

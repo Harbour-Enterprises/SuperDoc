@@ -23,6 +23,6 @@ describe('StandardNodeImporter', () => {
 
     const textStyleMark = paragraphText.marks.find((mark) => mark.type === 'textStyle');
     expect(textStyleMark).toBeDefined();
-    expect(textStyleMark.attrs).toHaveProperty('fontFamily', 'Arial');
+    expect(textStyleMark.attrs).toHaveProperty('fontFamily', 'Arial, sans-serif');
   });
 });

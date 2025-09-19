@@ -35,7 +35,7 @@ const encode = (params, encodedAttrs = {}) => {
   const contentElements = rPrNode ? elements.filter((el) => el !== rPrNode) : elements;
 
   const { entries: runPropEntries, hadRPr, styleChangeMarks } = collectRunProperties(params, rPrNode);
-  const { remainingProps, inlineMarks, textStyleAttrs, runStyleId } = splitRunProperties(runPropEntries);
+  const { remainingProps, inlineMarks, textStyleAttrs, runStyleId } = splitRunProperties(runPropEntries, params?.docx);
 
   const styleMarks = deriveStyleMarks({
     docx: params?.docx,

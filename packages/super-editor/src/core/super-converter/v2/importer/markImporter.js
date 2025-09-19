@@ -196,19 +196,24 @@ export function getFontFamilyValue(attributes, docx) {
   const ascii = attributes['w:ascii'];
   const themeAscii = attributes['w:asciiTheme'];
 
-  if (!docx || !themeAscii) return ascii;
-  const theme = docx['word/theme/theme1.xml'];
-  if (!theme) return ascii;
+  let resolved = ascii;
 
-  const { elements: topElements } = theme;
-  const { elements } = topElements[0];
-  const themeElements = elements.find((el) => el.name === 'a:themeElements');
-  const fontScheme = themeElements.elements.find((el) => el.name === 'a:fontScheme');
-  const majorFont = fontScheme.elements.find((el) => el.name === 'a:majorFont');
+  if (docx && themeAscii) {
+    const theme = docx['word/theme/theme1.xml'];
+    if (theme?.elements?.length) {
+      const { elements: topElements } = theme;
+      const { elements } = topElements[0] || {};
+      const themeElements = elements?.find((el) => el.name === 'a:themeElements');
+      const fontScheme = themeElements?.elements?.find((el) => el.name === 'a:fontScheme');
+      const majorFont = fontScheme?.elements?.find((el) => el.name === 'a:majorFont');
+      const latin = majorFont?.elements?.find((el) => el.name === 'a:latin');
+      resolved = latin?.attributes?.typeface || resolved;
+    }
+  }
 
-  const latin = majorFont.elements.find((el) => el.name === 'a:latin');
-  const typeface = latin.attributes['typeface'];
-  return typeface;
+  if (!resolved) return null;
+
+  return SuperConverter.toCssFontFamily(resolved, docx);
 }
 
 export function getIndentValue(attributes) {

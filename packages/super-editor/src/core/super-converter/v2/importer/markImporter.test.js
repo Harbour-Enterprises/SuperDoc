@@ -76,12 +76,12 @@ describe('parseMarks', () => {
 
     expect(boldMark?.attrs).toEqual({ value: '1' });
     expect(underlineMark?.attrs).toEqual({ underlineType: 'single' });
-    expect(highlightMark?.attrs).toEqual({ color: '#ffff00' });
+    expect(highlightMark?.attrs).toEqual({ color: '#FFFF00' });
     expect(strikeMark).toBeTruthy();
     expect(textStyleMark?.attrs).toMatchObject({
       color: '#FF0000',
       fontSize: '11pt',
-      fontFamily: 'ThemeTypeface',
+      fontFamily: 'ThemeTypeface, sans-serif',
       lineHeight: '1.5',
       letterSpacing: '6pt',
       textAlign: 'center',
@@ -181,14 +181,14 @@ describe('getMarkValue', () => {
     expect(getMarkValue('fontSize', { 'w:val': 28 })).toBe('14pt');
     expect(getMarkValue('tabs', { 'w:left': 1440 })).toBe('1in');
     expect(getMarkValue('fontFamily', { 'w:ascii': 'Arial', 'w:asciiTheme': 'majorAscii' }, docx)).toBe(
-      'ThemeTypeface',
+      'ThemeTypeface, sans-serif',
     );
     expect(getMarkValue('lineHeight', { 'w:line': 480, 'w:lineRule': 'auto' })).toBe('2');
     expect(getMarkValue('letterSpacing', { 'w:val': 120 })).toBe('6pt');
     expect(getMarkValue('textAlign', { 'w:val': 'right' })).toBe('right');
     expect(getMarkValue('link', { href: 'https://example.com' })).toBe('https://example.com');
     expect(getMarkValue('underline', { 'w:val': 'double' })).toBe('double');
-    expect(getMarkValue('highlight', { 'w:val': 'yellow' })).toBe('#ffff00');
+    expect(getMarkValue('highlight', { 'w:val': 'yellow' })).toBe('#FFFF00');
     expect(getMarkValue('strike', { 'w:val': 'true' })).toBe('1');
     expect(getMarkValue('bold', { 'w:val': '1' })).toBe('1');
     expect(getMarkValue('italic', { 'w:val': '1' })).toBe('1');
@@ -201,12 +201,14 @@ describe('getMarkValue', () => {
 
 describe('getFontFamilyValue', () => {
   it('returns theme font when available', () => {
-    expect(getFontFamilyValue({ 'w:ascii': 'Arial', 'w:asciiTheme': 'majorAscii' }, makeDocx())).toBe('ThemeTypeface');
+    expect(getFontFamilyValue({ 'w:ascii': 'Arial', 'w:asciiTheme': 'majorAscii' }, makeDocx())).toBe(
+      'ThemeTypeface, sans-serif',
+    );
   });
 
   it('falls back to ascii font when theme lookup fails', () => {
-    expect(getFontFamilyValue({ 'w:ascii': 'Arial' }, makeDocx())).toBe('Arial');
-    expect(getFontFamilyValue({ 'w:ascii': 'Arial', 'w:asciiTheme': 'majorAscii' }, {})).toBe('Arial');
+    expect(getFontFamilyValue({ 'w:ascii': 'Arial' }, makeDocx())).toBe('Arial, sans-serif');
+    expect(getFontFamilyValue({ 'w:ascii': 'Arial', 'w:asciiTheme': 'majorAscii' }, {})).toBe('Arial, sans-serif');
   });
 });
 
@@ -245,7 +247,7 @@ describe('getHighLightValue', () => {
   });
 
   it('maps docx system colors to hex', () => {
-    expect(getHighLightValue({ 'w:val': 'yellow' })).toBe('#ffff00');
+    expect(getHighLightValue({ 'w:val': 'yellow' })).toBe('#FFFF00');
   });
 });
 

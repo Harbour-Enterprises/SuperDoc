@@ -25,7 +25,7 @@ describe('splitRunProperties', () => {
     ];
 
     const result = splitRunProperties(entries);
-    expect(result.textStyleAttrs).toEqual({ color: '#00FF00', fontFamily: 'Arial', fontSize: '16pt' });
+    expect(result.textStyleAttrs).toEqual({ color: '#00FF00', fontFamily: 'Arial, sans-serif', fontSize: '16pt' });
     expect(result.inlineMarks).toEqual([{ type: 'highlight', attrs: { color: 'yellow' } }]);
   });
 

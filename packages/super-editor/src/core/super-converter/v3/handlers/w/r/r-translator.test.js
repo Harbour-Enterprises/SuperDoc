@@ -87,7 +87,7 @@ describe('w:r r-translator (mark)', () => {
     const node = translator.encode(params);
     const textStyleMark = node.marks?.find((mark) => mark.type === 'textStyle');
     expect(textStyleMark).toBeDefined();
-    expect(textStyleMark.attrs).toMatchObject({ fontFamily: 'Arial', fontSize: '16pt' });
+    expect(textStyleMark.attrs).toMatchObject({ fontFamily: 'Arial, sans-serif', fontSize: '16pt' });
   });
 
   it('returns all child nodes when the run contains multiple items such as tabs', () => {

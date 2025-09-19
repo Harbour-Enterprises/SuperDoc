@@ -31,7 +31,7 @@ describe('HyperlinkNodeImporter', () => {
 
     const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
     expect(textStyleMark).toBeDefined();
-    expect(textStyleMark.attrs.fontFamily).toBe('Arial');
+    expect(textStyleMark.attrs.fontFamily).toBe('Arial, sans-serif');
     expect(textStyleMark.attrs.fontSize).toBe('10pt');
 
     expect(linkMark.attrs.href).toBe(
@@ -42,7 +42,7 @@ describe('HyperlinkNodeImporter', () => {
 
     // Capture the textStyle mark
     expect(textStyleMark.attrs.styleId).toBe('Hyperlink');
-    expect(textStyleMark.attrs.fontFamily).toBe('Arial');
+    expect(textStyleMark.attrs.fontFamily).toBe('Arial, sans-serif');
     expect(textStyleMark.attrs.fontSize).toBe('10pt');
   });
 

@@ -2,15 +2,68 @@ import { expect, describe, it } from 'vitest';
 import { handleRunNode } from '@core/super-converter/v2/importer/runNodeImporter.js';
 
 // Helper functions to create common mocks
-const createMockDocx = (styles = []) => ({
-  'word/styles.xml': {
+const inferFamilyType = (fontName = '') => {
+  const lower = fontName.toLowerCase();
+  if (lower.includes('courier') || lower.includes('mono')) return 'modern';
+  if (lower.includes('script')) return 'script';
+  if (lower.includes('decor')) return 'decorative';
+  if (lower.includes('roman') || lower.includes('times') || lower.includes('serif')) return 'roman';
+  if (lower.includes('system')) return 'system';
+  return 'swiss';
+};
+
+const buildFontTable = (fontNames = []) => {
+  if (!fontNames.length) return undefined;
+  return {
     elements: [
       {
-        elements: styles,
+        name: 'w:fonts',
+        elements: fontNames.map((fontName) => ({
+          name: 'w:font',
+          attributes: { 'w:name': fontName },
+          elements: [
+            {
+              name: 'w:family',
+              attributes: { 'w:val': inferFamilyType(fontName) },
+            },
+          ],
+        })),
       },
     ],
-  },
-});
+  };
+};
+
+const createMockDocx = (styles = []) => {
+  const fonts = new Set();
+  styles.forEach((style) => {
+    style?.elements?.forEach((styleChild) => {
+      styleChild?.elements?.forEach((runProp) => {
+        if (runProp?.name === 'w:rFonts') {
+          const ascii = runProp?.attributes?.['w:ascii'];
+          if (ascii) fonts.add(ascii);
+        }
+      });
+    });
+  });
+
+  const fontTable = buildFontTable([...fonts]);
+
+  const docx = {
+    'word/styles.xml': {
+      elements: [
+        {
+          elements: styles,
+        },
+      ],
+    },
+  };
+
+  if (fontTable) {
+    docx['word/fontTable.xml'] = fontTable;
+  }
+
+  return docx;
+};
 
 const createMockStyle = (styleId, runProperties = []) => ({
   name: 'w:style',
@@ -93,7 +146,7 @@ describe('runImporter', () => {
       // Check that run style attributes override paragraph style attributes
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');
       expect(textStyleMark).toBeDefined();
-      expect(textStyleMark.attrs.fontFamily).toBe('Arial'); // Run style font
+      expect(textStyleMark.attrs.fontFamily).toBe('Arial, sans-serif'); // Run style font
       expect(textStyleMark.attrs.fontSize).toBe('16pt'); // Run style size
       expect(textStyleMark.attrs.styleId).toBe('RunStyle'); // Run style ID
     });
@@ -132,7 +185,7 @@ describe('runImporter', () => {
       expect(italicMark).toBeDefined();
 
       // Run style should override paragraph style for font properties
-      expect(textStyleMark.attrs.fontFamily).toBe('Arial'); // Run style overrides
+      expect(textStyleMark.attrs.fontFamily).toBe('Arial, sans-serif'); // Run style overrides
       expect(textStyleMark.attrs.fontSize).toBe('12pt'); // Paragraph style (no override)
     });
 
@@ -162,7 +215,7 @@ describe('runImporter', () => {
       const boldMark = textNode.marks.find((mark) => mark.type === 'bold');
 
       expect(textStyleMark).toBeDefined();
-      expect(textStyleMark.attrs.fontFamily).toBe('Times New Roman');
+      expect(textStyleMark.attrs.fontFamily).toBe('Times New Roman, serif');
       expect(textStyleMark.attrs.fontSize).toBe('12pt');
       expect(boldMark).toBeDefined();
 
@@ -193,7 +246,7 @@ describe('runImporter', () => {
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');
       expect(textStyleMark).toBeDefined();
       expect(textStyleMark.attrs.styleId).toBe('CustomRunStyle');
-      expect(textStyleMark.attrs.fontFamily).toBe('Calibri');
+      expect(textStyleMark.attrs.fontFamily).toBe('Calibri, Arial, sans-serif');
     });
 
     it('should not add styleId when no run style is present', () => {
@@ -242,7 +295,7 @@ describe('runImporter', () => {
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');
       expect(textStyleMark).toBeDefined();
       expect(textStyleMark.attrs.styleId).toBe('MultiStyle');
-      expect(textStyleMark.attrs.fontFamily).toBe('Verdana');
+      expect(textStyleMark.attrs.fontFamily).toBe('Verdana, Arial, sans-serif');
       expect(textStyleMark.attrs.fontSize).toBe('20pt');
       expect(textStyleMark.attrs.color).toBe('#FF0000');
     });
@@ -280,7 +333,7 @@ describe('runImporter', () => {
 
       expect(textStyleMark).toBeDefined();
       expect(textStyleMark.attrs.styleId).toBe('Emphasis'); // Run style ID
-      expect(textStyleMark.attrs.fontFamily).toBe('Georgia'); // From paragraph style
+      expect(textStyleMark.attrs.fontFamily).toBe('Georgia, Arial, sans-serif'); // From paragraph style
       expect(textStyleMark.attrs.fontSize).toBe('24pt'); // From paragraph style
       expect(textStyleMark.attrs.color).toBe('#0000FF'); // From run style
       expect(boldMark).toBeDefined(); // From paragraph style
