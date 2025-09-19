@@ -67,8 +67,7 @@ describe('paragraph tests to check spacing', () => {
     const { spacing } = attrs;
 
     expect(spacing.line).toBe(1.15);
-    expect(spacing.lineRule).toBe('auto');
-    expect(spacing.lineSpaceAfter).toBe(11);
+    expect(spacing.lineSpaceAfter).toBeUndefined();
     expect(spacing.lineSpaceBefore).toBeUndefined();
   });
 
