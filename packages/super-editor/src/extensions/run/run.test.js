@@ -12,12 +12,21 @@ describe('Run mark', () => {
         removeEventListener: vi.fn(),
       });
     }
-    const editor = new Editor({
-      extensions: getStarterExtensions(),
-    });
-    expect(editor.schema.marks.run).toBeDefined();
-    if (!originalMatchMedia) {
-      window.matchMedia = originalMatchMedia;
+
+    let editor;
+
+    try {
+      editor = new Editor({
+        extensions: getStarterExtensions(),
+      });
+      expect(editor.schema.marks.run).toBeDefined();
+    } finally {
+      editor?.destroy();
+      if (originalMatchMedia === undefined) {
+        delete window.matchMedia;
+      } else {
+        window.matchMedia = originalMatchMedia;
+      }
     }
   });
 });
