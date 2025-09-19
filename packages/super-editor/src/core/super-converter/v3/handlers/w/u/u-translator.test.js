@@ -58,4 +58,45 @@ describe('w:u translator (attribute)', () => {
       expect(fallback.attributes).toEqual({ 'w:val': null });
     });
   });
+
+  describe('decode', () => {
+    it('returns w:u with val and color', () => {
+      const result = translator.decode({
+        node: {
+          attrs: {
+            underlineType: 'single',
+            underlineColor: '#ff0000',
+          },
+        },
+      });
+      expect(result).toEqual({
+        name: 'w:u',
+        attributes: { 'w:val': 'single', 'w:color': 'FF0000' },
+      });
+    });
+
+    it('includes theme attributes when present', () => {
+      const result = translator.decode({
+        node: {
+          attrs: {
+            underlineType: 'wave',
+            underlineThemeColor: 'accent1',
+            underlineThemeTint: '99',
+          },
+        },
+      });
+      expect(result).toEqual({
+        name: 'w:u',
+        attributes: {
+          'w:val': 'wave',
+          'w:themeColor': 'accent1',
+          'w:themeTint': '99',
+        },
+      });
+    });
+
+    it('returns undefined when no underline data provided', () => {
+      expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
+    });
+  });
 });

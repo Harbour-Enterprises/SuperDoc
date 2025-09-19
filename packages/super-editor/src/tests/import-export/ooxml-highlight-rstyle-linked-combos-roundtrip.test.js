@@ -17,7 +17,19 @@ const collectExpectedFromSource = (doc) => {
       const textEl = find(child, 'w:t');
       const text = textEl?.elements?.find((e) => e.type === 'text')?.text;
       if (!text) return;
-      runs.push({ text, hasHighlight: !!(wHl || wShd) });
+      const hlVal = wHl?.attributes?.['w:val'];
+      const hasHighlight =
+        (wHl && typeof hlVal === 'string' && hlVal.toLowerCase() !== 'none') ||
+        (!!wShd && (!wShd.attributes || wShd.attributes['w:fill'] !== undefined));
+      let sourceTag = null;
+      if (hasHighlight) {
+        sourceTag = wHl && hlVal?.toLowerCase() !== 'none' ? 'w:highlight' : 'w:shd';
+      }
+      runs.push({
+        text,
+        hasHighlight,
+        sourceTag,
+      });
     });
   });
   return runs;
@@ -31,11 +43,24 @@ const collectFromExport = (doc) => {
     (p.elements || []).forEach((child) => {
       if (child.name !== 'w:r') return;
       const rPr = find(child, 'w:rPr');
-      const wHl = find(rPr, 'w:highlight') || find(rPr, 'w:shd');
+      const wHl = find(rPr, 'w:highlight');
+      const wShd = find(rPr, 'w:shd');
       const textEl = find(child, 'w:t');
       const text = textEl?.elements?.find((e) => e.type === 'text')?.text;
       if (!text) return;
-      runs.push({ text, hasHighlight: !!wHl });
+      const hlVal = wHl?.attributes?.['w:val'];
+      const hasHighlight =
+        (wHl && typeof hlVal === 'string' && hlVal.toLowerCase() !== 'none') ||
+        (!!wShd && (!wShd.attributes || wShd.attributes['w:fill'] !== undefined));
+      let highlightTag = null;
+      if (hasHighlight) {
+        highlightTag = wHl && hlVal?.toLowerCase() !== 'none' ? 'w:highlight' : 'w:shd';
+      }
+      runs.push({
+        text,
+        hasHighlight,
+        highlightTag,
+      });
     });
   });
   return runs;
@@ -58,6 +83,17 @@ describe('OOXML highlight + rStyle + linked combinations round-trip', async () =
       ["  - pStyle='SD_LinkedHighlightHeading' (lightGray) + inline 'red' on a run: |Linked Char style applied", true],
     ]);
 
+    const tagOverrides = new Map([
+      ["Styled yellow highlight|  - rStyle='SD_HighlightYellowChar': ", 'w:highlight'],
+      ["Styled green shading|  - rStyle='SD_ShadingGreenChar': ", 'w:shd'],
+      ["Styled lightGray highlight|  - rStyle='SD_HighlightLightGrayChar': ", 'w:highlight'],
+      ["Linked Char style applied|  - rStyle='SD_LinkedHighlightHeadingChar' => yellow: ", 'w:highlight'],
+      [
+        "  - pStyle='SD_LinkedHighlightHeading' (lightGray) + inline 'red' on a run: |Linked Char style applied",
+        'w:highlight',
+      ],
+    ]);
+
     const n = Math.min(sourceRuns.length, exportedRuns.length);
     for (let i = 0; i < n; i++) {
       expect(Boolean(exportedRuns[i].text)).toBe(true);
@@ -65,6 +101,8 @@ describe('OOXML highlight + rStyle + linked combinations round-trip', async () =
       const key = `${sourceRuns[i].text}|${prevText}`;
       const expected = overrideExpectations.has(key) ? overrideExpectations.get(key) : sourceRuns[i].hasHighlight;
       expect(exportedRuns[i].hasHighlight).toBe(expected);
+      const expectedTag = tagOverrides.has(key) ? tagOverrides.get(key) : sourceRuns[i].sourceTag;
+      expect(exportedRuns[i].highlightTag).toBe(expected ? expectedTag : null);
     }
   });
 });

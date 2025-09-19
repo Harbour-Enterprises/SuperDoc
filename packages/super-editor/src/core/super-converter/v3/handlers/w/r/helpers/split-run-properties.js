@@ -1,5 +1,6 @@
 // @ts-check
 import { normalizeBool } from './helpers.js';
+import { normalizeHexColor } from '@converter/helpers.js';
 
 /**
  * @param {Array<{ xmlName?: string, attributes?: Record<string, any> }>} [entries]
@@ -37,9 +38,13 @@ export const splitRunProperties = (entries = []) => {
           attrs.underlineType = underlineType;
           const colorRaw = attributes['w:color'];
           if (typeof colorRaw === 'string' && colorRaw.toLowerCase() !== 'auto') {
-            attrs.underlineColor = `#${colorRaw.replace('#', '').toUpperCase()}`;
+            const normalizedColor = normalizeHexColor(colorRaw);
+            if (normalizedColor) attrs.underlineColor = `#${normalizedColor}`;
           }
         }
+        if (attributes['w:themeColor']) attrs.underlineThemeColor = attributes['w:themeColor'];
+        if (attributes['w:themeTint']) attrs.underlineThemeTint = attributes['w:themeTint'];
+        if (attributes['w:themeShade']) attrs.underlineThemeShade = attributes['w:themeShade'];
         inlineMarks.push({ type: 'underline', attrs });
         break;
       }

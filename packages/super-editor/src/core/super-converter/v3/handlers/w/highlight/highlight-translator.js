@@ -1,5 +1,6 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
+import { getDocxHighlightKeywordFromHex, normalizeHexColor } from '@converter/helpers.js';
 import validXmlAttributes from './attributes/index.js';
 
 /** @type {import('@translator').XmlNodeName} */
@@ -27,12 +28,44 @@ const encode = (params, encodedAttrs = {}) => {
   };
 };
 
+const decode = (params, decodedAttrs = {}) => {
+  const attrs = params?.node?.attrs || {};
+  const highlightValue = attrs.highlight ?? attrs.color ?? null;
+  if (!highlightValue) return undefined;
+
+  const normalizedValue = String(highlightValue).trim().toLowerCase();
+  if (!normalizedValue || normalizedValue === 'transparent' || normalizedValue === 'none') {
+    return undefined;
+  }
+
+  const keyword = getDocxHighlightKeywordFromHex(highlightValue);
+  if (keyword) {
+    return {
+      name: XML_NODE_NAME,
+      attributes: { 'w:val': keyword },
+    };
+  }
+
+  const fill = normalizeHexColor(highlightValue);
+  if (!fill) return undefined;
+
+  return {
+    name: 'w:shd',
+    attributes: {
+      'w:color': 'auto',
+      'w:val': 'clear',
+      'w:fill': fill,
+    },
+  };
+};
+
 /** @type {import('@translator').NodeTranslatorConfig} */
 export const config = {
   xmlName: XML_NODE_NAME,
   sdNodeOrKeyName: SD_ATTR_KEY,
   type: NodeTranslator.translatorTypes.ATTRIBUTE,
   encode,
+  decode,
   attributes: validXmlAttributes,
 };
 

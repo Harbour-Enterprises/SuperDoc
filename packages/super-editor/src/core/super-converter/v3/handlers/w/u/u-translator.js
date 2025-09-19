@@ -1,5 +1,6 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
+import { normalizeHexColor } from '../../../../helpers.js';
 import validXmlAttributes from './attributes/index.js';
 
 /** @type {import('@translator').XmlNodeName} */
@@ -38,12 +39,39 @@ const encode = (params, encodedAttrs = {}) => {
   };
 };
 
+const decode = (params) => {
+  const attrs = params?.node?.attrs || {};
+  const underlineType = attrs.underlineType ?? attrs.underline ?? null;
+  const color = attrs.underlineColor ?? attrs.color ?? null;
+  const themeColor = attrs.underlineThemeColor ?? attrs.themeColor ?? null;
+  const themeTint = attrs.underlineThemeTint ?? attrs.themeTint ?? null;
+  const themeShade = attrs.underlineThemeShade ?? attrs.themeShade ?? null;
+
+  if (!underlineType && !color && !themeColor && !themeTint && !themeShade) return undefined;
+
+  const attributes = {};
+  if (underlineType) attributes['w:val'] = underlineType;
+  if (color) {
+    const normalized = normalizeHexColor(color);
+    if (normalized) attributes['w:color'] = normalized;
+  }
+  if (themeColor) attributes['w:themeColor'] = themeColor;
+  if (themeTint) attributes['w:themeTint'] = themeTint;
+  if (themeShade) attributes['w:themeShade'] = themeShade;
+
+  return {
+    name: XML_NODE_NAME,
+    attributes,
+  };
+};
+
 /** @type {import('@translator').NodeTranslatorConfig} */
 export const config = {
   xmlName: XML_NODE_NAME,
   sdNodeOrKeyName: SD_ATTR_KEY,
   type: NodeTranslator.translatorTypes.ATTRIBUTE,
   encode,
+  decode,
   attributes: validXmlAttributes,
 };
 

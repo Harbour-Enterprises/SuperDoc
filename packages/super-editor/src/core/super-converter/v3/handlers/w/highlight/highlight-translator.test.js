@@ -30,4 +30,25 @@ describe('w:highlight translator (attribute)', () => {
     const missing = config.encode({ nodes: [{}] });
     expect(missing.attributes).toEqual({ 'w:val': null });
   });
+
+  it('decodes keyword highlight values to w:highlight', () => {
+    const node = { attrs: { highlight: 'yellow' } };
+    const result = translator.decode({ node });
+    expect(result).toEqual({ name: 'w:highlight', attributes: { 'w:val': 'yellow' } });
+  });
+
+  it('decodes hex highlight values to w:shd when keyword missing', () => {
+    const node = { attrs: { highlight: '#ABCDEF' } };
+    const result = translator.decode({ node });
+    expect(result).toEqual({
+      name: 'w:shd',
+      attributes: { 'w:color': 'auto', 'w:val': 'clear', 'w:fill': 'ABCDEF' },
+    });
+  });
+
+  it('returns undefined for transparent/none highlight', () => {
+    expect(translator.decode({ node: { attrs: { highlight: 'transparent' } } })).toBeUndefined();
+    expect(translator.decode({ node: { attrs: { highlight: 'none' } } })).toBeUndefined();
+    expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
+  });
 });

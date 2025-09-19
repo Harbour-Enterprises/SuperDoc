@@ -19,12 +19,14 @@ import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
+import { translator as wHighlightTranslator } from './v3/handlers/w/highlight/highlight-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
+import { translator as wUnderlineTranslator } from './v3/handlers/w/u/u-translator.js';
 import { prepareTextAnnotation } from './v3/handlers/w/sdt/helpers/translate-field-annotation';
 
 /**
@@ -1240,10 +1242,20 @@ function translateMark(mark) {
       markElement.type = 'element';
       break;
 
-    case 'underline':
-      markElement.type = 'element';
-      markElement.attributes['w:val'] = attrs.underlineType;
-      break;
+    case 'underline': {
+      const translated = wUnderlineTranslator.decode({
+        node: {
+          attrs: {
+            underlineType: attrs.underlineType ?? attrs.underline ?? null,
+            underlineColor: attrs.underlineColor ?? attrs.color ?? null,
+            underlineThemeColor: attrs.underlineThemeColor ?? attrs.themeColor ?? null,
+            underlineThemeTint: attrs.underlineThemeTint ?? attrs.themeTint ?? null,
+            underlineThemeShade: attrs.underlineThemeShade ?? attrs.themeShade ?? null,
+          },
+        },
+      });
+      return translated || {};
+    }
 
     // Text style cases
     case 'fontSize':
@@ -1293,12 +1305,11 @@ function translateMark(mark) {
     case 'lineHeight':
       markElement.attributes['w:line'] = linesToTwips(attrs.lineHeight);
       break;
-    case 'highlight':
-      markElement.attributes['w:fill'] = attrs.color?.substring(1);
-      markElement.attributes['w:color'] = 'auto';
-      markElement.attributes['w:val'] = 'clear';
-      markElement.name = 'w:shd';
-      break;
+    case 'highlight': {
+      const highlightValue = attrs.color ?? attrs.highlight ?? null;
+      const translated = wHighlightTranslator.decode({ node: { attrs: { highlight: highlightValue } } });
+      return translated || {};
+    }
 
     case 'link':
       break;
