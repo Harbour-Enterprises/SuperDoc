@@ -97,7 +97,7 @@ describe('splitRun command', () => {
     updateSelection((start ?? 0) + 1, (start ?? 0) + 3);
 
     const dispatch = vi.fn();
-    const handled = splitRun()({ state: editor.view.state, dispatch });
+    const handled = splitRun()(editor.view.state, dispatch);
 
     expect(handled).toBe(false);
     expect(splitBlock).not.toHaveBeenCalled();
@@ -109,7 +109,7 @@ describe('splitRun command', () => {
     updateSelection(1);
 
     const dispatch = vi.fn();
-    const handled = splitRun()({ state: editor.view.state, dispatch });
+    const handled = splitRun()(editor.view.state, dispatch);
 
     expect(handled).toBe(false);
     expect(splitBlock).not.toHaveBeenCalled();
@@ -124,7 +124,7 @@ describe('splitRun command', () => {
 
     splitBlock.mockReturnValue('split-block-result');
     const dispatch = vi.fn();
-    const handled = splitRun()({ state: editor.view.state, dispatch });
+    const handled = splitRun()(editor.view.state, dispatch);
 
     expect(splitBlock).toHaveBeenCalledTimes(1);
     expect(splitBlock).toHaveBeenCalledWith(editor.view.state, dispatch);
