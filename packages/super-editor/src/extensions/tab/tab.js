@@ -126,110 +126,204 @@ const defaultTabDistance = 48;
 const defaultLineLength = 816;
 
 const getTabDecorations = (doc, invertMapping, view, domSerializer, from = 0, to = null) => {
-  // TODO: Render "bar".
   if (!to) {
     to = doc.content.size;
   }
-  const nodeWidthCache = {};
+  const paragraphCache = new Map();
   let decorations = [];
-  doc.nodesBetween(from, to, (node, pos, parent) => {
-    if (node.type.name === 'tab') {
-      let extraStyles = '';
-      const $pos = doc.resolve(pos);
-      const tabIndex = $pos.index($pos.depth);
-      const fistlineIndent = parent.attrs?.indent?.firstLine || 0;
-      const currentWidth =
-        calcChildNodesWidth(
-          parent,
-          pos - $pos.parentOffset,
-          0,
-          tabIndex,
-          domSerializer,
-          view,
-          invertMapping,
-          nodeWidthCache,
-        ) + fistlineIndent;
-      let tabWidth;
-      if ($pos.depth === 1 && parent.attrs.tabStops && parent.attrs.tabStops.length > 0) {
-        const tabStop = parent.attrs.tabStops.find((tabStop) => tabStop.pos > currentWidth && tabStop.val !== 'clear');
-        if (tabStop) {
-          tabWidth = tabStop.pos - currentWidth;
-          if (['end', 'center'].includes(tabStop.val)) {
-            let nextTabIndex = tabIndex + 1;
-            while (nextTabIndex < parent.childCount && parent.child(nextTabIndex).type.name !== 'tab') {
-              nextTabIndex++;
-            }
-            const tabSectionWidth = calcChildNodesWidth(
-              parent,
-              pos - $pos.parentOffset,
-              tabIndex,
-              nextTabIndex,
-              domSerializer,
-              view,
-              invertMapping,
-              nodeWidthCache,
-            );
-            tabWidth -= tabStop.val === 'end' ? tabSectionWidth : tabSectionWidth / 2;
-          } else if (['decimal', 'num'].includes(tabStop.val)) {
-            const breakChar = '.'; // TODO: The break character should likely be document language dependent.
-            let nodeIndex = tabIndex + 1;
-            let integralWidth = 0;
-            let nodePos = pos - $pos.parentOffset;
-            while (nodeIndex < parent.childCount) {
-              const node = parent.child(nodeIndex);
-              if (node.type.name === 'tab') {
-                break;
-              }
-              const oldPos = invertMapping.map(nodePos);
-              if (node.type.name === 'text' && node.text.includes(breakChar)) {
-                // Only include text before the break character
-                const modifiedNode = node.cut(0, node.text.indexOf(breakChar));
-                integralWidth += calcNodeWidth(domSerializer, modifiedNode, view, oldPos);
-                break;
-              }
-              integralWidth += calcNodeWidth(domSerializer, node, view, oldPos);
-              nodeWidthCache[nodePos] = integralWidth;
-              nodePos += node.nodeSize;
-              nodeIndex += 1;
-            }
-            tabWidth -= integralWidth;
-          }
-          if (tabStop.leader) {
-            // TODO: The following styles will likely not correspond 1:1 to the original. Adjust as needed.
-            if (tabStop.leader === 'dot') {
-              extraStyles += `border-bottom: 1px dotted black;`;
-            } else if (tabStop.leader === 'heavy') {
-              extraStyles += `border-bottom: 2px solid black;`;
-            } else if (tabStop.leader === 'hyphen') {
-              extraStyles += `border-bottom: 1px solid black;`;
-            } else if (tabStop.leader === 'middleDot') {
-              extraStyles += `border-bottom: 1px dotted black; margin-bottom: 2px;`;
-            } else if (tabStop.leader === 'underscore') {
-              extraStyles += `border-bottom: 1px solid black;`;
-            }
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type.name !== 'tab') return;
+
+    let extraStyles = '';
+    const $pos = doc.resolve(pos);
+    const paragraphContext = getParagraphContext($pos, paragraphCache);
+    if (!paragraphContext) return;
+
+    const { tabStops, flattened, startPos } = paragraphContext;
+    const entryIndex = flattened.findIndex((entry) => entry.pos === pos);
+    if (entryIndex === -1) return;
+
+    const indentWidth = getIndentWidth(view, startPos, paragraphContext.indent);
+    const currentWidth = indentWidth + measureRangeWidth(view, startPos + 1, pos);
+
+    let tabWidth;
+    if (tabStops.length) {
+      const tabStop = tabStops.find((stop) => stop.pos > currentWidth && stop.val !== 'clear');
+      if (tabStop) {
+        tabWidth = tabStop.pos - currentWidth;
+
+        if (tabStop.val === 'center' || tabStop.val === 'end' || tabStop.val === 'right') {
+          const nextTabIndex = findNextTabIndex(flattened, entryIndex + 1);
+          const segmentStartPos = pos + node.nodeSize;
+          const segmentEndPos =
+            nextTabIndex === -1 ? startPos + paragraphContext.paragraph.nodeSize - 1 : flattened[nextTabIndex].pos;
+          const segmentWidth = measureRangeWidth(view, segmentStartPos, segmentEndPos);
+          tabWidth -= tabStop.val === 'center' ? segmentWidth / 2 : segmentWidth;
+        } else if (tabStop.val === 'decimal' || tabStop.val === 'num') {
+          const breakChar = tabStop.decimalChar || '.';
+          const decimalPos = findDecimalBreakPos(flattened, entryIndex + 1, breakChar);
+          const integralWidth = decimalPos
+            ? measureRangeWidth(view, pos + node.nodeSize, decimalPos)
+            : measureRangeWidth(view, pos + node.nodeSize, startPos + paragraphContext.paragraph.nodeSize - 1);
+          tabWidth -= integralWidth;
+        }
+
+        if (tabStop.leader) {
+          if (tabStop.leader === 'dot') {
+            extraStyles += `border-bottom: 1px dotted black;`;
+          } else if (tabStop.leader === 'heavy') {
+            extraStyles += `border-bottom: 2px solid black;`;
+          } else if (tabStop.leader === 'hyphen') {
+            extraStyles += `border-bottom: 1px solid black;`;
+          } else if (tabStop.leader === 'middleDot') {
+            extraStyles += `border-bottom: 1px dotted black; margin-bottom: 2px;`;
+          } else if (tabStop.leader === 'underscore') {
+            extraStyles += `border-bottom: 1px solid black;`;
           }
         }
       }
-
-      if (!tabWidth || tabWidth < 1) {
-        tabWidth = defaultTabDistance - ((currentWidth % defaultLineLength) % defaultTabDistance);
-        if (tabWidth === 0) {
-          tabWidth = defaultTabDistance;
-        }
-      }
-
-      nodeWidthCache[pos] = tabWidth; // Update width with final tab width - important for subsequent tabs.
-
-      const tabHeight = calcTabHeight($pos);
-
-      decorations.push(
-        Decoration.node(pos, pos + node.nodeSize, {
-          style: `width: ${tabWidth}px; height: ${tabHeight};${extraStyles}`,
-        }),
-      );
     }
+
+    if (!tabWidth || tabWidth < 1) {
+      tabWidth = defaultTabDistance - ((currentWidth % defaultLineLength) % defaultTabDistance);
+      if (tabWidth === 0) tabWidth = defaultTabDistance;
+    }
+
+    const tabHeight = calcTabHeight($pos);
+
+    decorations.push(
+      Decoration.node(pos, pos + node.nodeSize, {
+        style: `width: ${tabWidth}px; height: ${tabHeight};${extraStyles}`,
+      }),
+    );
   });
   return decorations;
+};
+
+function getParagraphContext($pos, cache) {
+  for (let depth = $pos.depth; depth >= 0; depth--) {
+    const node = $pos.node(depth);
+    if (node?.type?.name === 'paragraph') {
+      const startPos = $pos.start(depth);
+      if (!cache.has(startPos)) {
+        cache.set(startPos, {
+          paragraph: node,
+          paragraphDepth: depth,
+          startPos,
+          indent: node.attrs?.indent || {},
+          tabStops: Array.isArray(node.attrs?.tabStops) ? node.attrs.tabStops : [],
+          flattened: flattenParagraph(node, startPos),
+        });
+      }
+      return cache.get(startPos);
+    }
+  }
+  return null;
+}
+
+function flattenParagraph(paragraph, paragraphStartPos) {
+  const entries = [];
+
+  const walk = (node, basePos) => {
+    if (!node) return;
+    if (node.type?.name === 'run') {
+      node.forEach((child, offset) => {
+        const childPos = basePos + offset + 1;
+        walk(child, childPos);
+      });
+      return;
+    }
+    entries.push({ node, pos: basePos });
+  };
+
+  paragraph.forEach((child, offset) => {
+    const childPos = paragraphStartPos + offset + 1;
+    walk(child, childPos);
+  });
+
+  return entries;
+}
+
+function findNextTabIndex(flattened, fromIndex) {
+  for (let i = fromIndex; i < flattened.length; i++) {
+    if (flattened[i]?.node?.type?.name === 'tab') {
+      return i;
+    }
+  }
+  return -1;
+}
+
+function findDecimalBreakPos(flattened, startIndex, breakChar) {
+  if (!breakChar) return null;
+  for (let i = startIndex; i < flattened.length; i++) {
+    const entry = flattened[i];
+    if (!entry) break;
+    if (entry.node.type?.name === 'tab') break;
+    if (entry.node.type?.name === 'text') {
+      const index = entry.node.text?.indexOf(breakChar);
+      if (index !== undefined && index !== -1) {
+        return entry.pos + index + 1;
+      }
+    }
+  }
+  return null;
+}
+
+function measureRangeWidth(view, from, to) {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0;
+  try {
+    const range = document.createRange();
+    const fromRef = view.domAtPos(from);
+    const toRef = view.domAtPos(to);
+    range.setStart(fromRef.node, fromRef.offset);
+    range.setEnd(toRef.node, toRef.offset);
+    const rect = range.getBoundingClientRect();
+    range.detach?.();
+    return rect.width || 0;
+  } catch (error) {
+    const startLeft = getLeftCoord(view, from);
+    const endLeft = getLeftCoord(view, to);
+    if (startLeft == null || endLeft == null) return 0;
+    return Math.max(0, endLeft - startLeft);
+  }
+}
+
+function getIndentWidth(view, paragraphStartPos, indentAttrs = {}) {
+  const marginLeft = getLeftCoord(view, paragraphStartPos);
+  const lineLeft = getLeftCoord(view, paragraphStartPos + 1);
+  if (marginLeft != null && lineLeft != null) {
+    const diff = lineLeft - marginLeft;
+    if (!Number.isNaN(diff)) return diff;
+  }
+  return indentAttrs.firstLine || 0;
+}
+
+function getLeftCoord(view, pos) {
+  if (!Number.isFinite(pos)) return null;
+  try {
+    return view.coordsAtPos(pos).left;
+  } catch (error) {
+    try {
+      const ref = view.domAtPos(pos);
+      const range = document.createRange();
+      range.setStart(ref.node, ref.offset);
+      range.setEnd(ref.node, ref.offset);
+      const rect = range.getBoundingClientRect();
+      range.detach?.();
+      return rect.left;
+    } catch {
+      return null;
+    }
+  }
+}
+
+export const __testing__ = {
+  flattenParagraph,
+  findNextTabIndex,
+  findDecimalBreakPos,
+  getParagraphContext,
+  measureRangeWidth,
+  getIndentWidth,
 };
 
 function calcNodeWidth(domSerializer, node, view, oldPos) {
@@ -262,33 +356,6 @@ function calcNodeWidth(domSerializer, node, view, oldPos) {
   const width = temp.offsetWidth;
   document.body.removeChild(temp);
 
-  return width;
-}
-
-function calcChildNodesWidth(
-  parent,
-  parentPos,
-  startIndex,
-  endIndex,
-  domSerializer,
-  view,
-  invertMapping,
-  nodeWidthCache,
-) {
-  let pos = parentPos;
-  let width = 0;
-  for (let i = 0; i < endIndex; i++) {
-    const node = parent.child(i);
-    if (i >= startIndex) {
-      if (!nodeWidthCache[pos]) {
-        nodeWidthCache[pos] = calcNodeWidth(domSerializer, node, view, invertMapping.map(pos));
-      }
-      width += nodeWidthCache[pos];
-    }
-    pos += node.nodeSize;
-
-    // TODO: This assumes no space between inline sibling nodes.
-  }
   return width;
 }
 

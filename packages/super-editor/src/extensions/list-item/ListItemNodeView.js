@@ -1,10 +1,8 @@
-import { LinkedStylesPluginKey } from '../linked-styles/index.js';
-import { getMarkType } from '@core/helpers/index.js';
-import { parseSizeUnit } from '@core/utilities/index.js';
 import { parseIndentElement, combineIndents } from '@core/super-converter/v2/importer/listImporter.js';
 import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 import { getListItemStyleDefinitions } from '@helpers/list-numbering-helpers.js';
 import { docxNumberigHelpers } from '@/core/super-converter/v2/importer/listImporter.js';
+import { resolveListItemTypography } from './helpers/listItemTypography.js';
 
 const MARKER_PADDING = 6;
 const MARKER_OFFSET_RIGHT = 4;
@@ -42,10 +40,10 @@ export class ListItemNodeView {
     this.view = editor.view;
     this.getPos = getPos;
 
-    // Register this node view
-    activeListItemNodeViews.add(this);
-
     this.#init();
+
+    // Register this node view after init so lookups can ignore the freshly constructed instance
+    activeListItemNodeViews.add(this);
   }
 
   #init() {
@@ -67,10 +65,12 @@ export class ListItemNodeView {
     }
 
     const pos = this.getPos();
-    const { fontSize, fontFamily, lineHeight } = getTextStyleMarksFromLinkedStyles({
+    const { fontSize, fontFamily, lineHeight } = resolveListItemTypography({
       node: this.node,
       pos,
       editor: this.editor,
+      nodeView: this,
+      activeNodeViews: activeListItemNodeViews,
     });
 
     // Container for the entire node view
@@ -156,10 +156,12 @@ export class ListItemNodeView {
     this.node = node;
     this.decorations = decorations;
 
-    const { fontSize, fontFamily, lineHeight } = getTextStyleMarksFromLinkedStyles({
+    const { fontSize, fontFamily, lineHeight } = resolveListItemTypography({
       node,
       pos: this.getPos(),
       editor: this.editor,
+      nodeView: this,
+      activeNodeViews: activeListItemNodeViews,
     });
     this.dom.style.fontSize = fontSize;
     this.dom.style.fontFamily = fontFamily || 'inherit';
@@ -192,131 +194,6 @@ export function refreshAllListItemNodeViews() {
  * @param {MarkType} markType - The mark type to look for
  * @returns {Object} An array of text style marks and attrs object
  */
-function getListItemTextStyleMarks(listItem, markType) {
-  let textStyleMarks = [];
-  let attrs = {};
-  listItem.forEach((childNode) => {
-    if (childNode.type.name !== 'paragraph') return;
-    attrs.lineHeight = childNode.attrs.lineHeight;
-    childNode.forEach((textNode) => {
-      let isTextNode = textNode.type.name === 'text';
-      let hasTextStyleMarks = markType.isInSet(textNode.marks);
-      if (isTextNode && hasTextStyleMarks) {
-        let marks = textNode.marks.filter((mark) => mark.type === markType);
-        textStyleMarks.push(...marks);
-      }
-    });
-  });
-  return {
-    marks: textStyleMarks,
-    attrs,
-  };
-}
-
-/**
- * Pull font and size defaults from linked styles,
- * then override them if there are any textStyle marks on this node.
- * @param {Object} params - The parameters
- * @param {Node} params.node - The node to get the styles from
- * @param {number} params.pos - The position of the node
- * @param {Editor} params.editor - The editor instance
- * @returns {Object} The font and size styles
- * @property {string} fontSize - The font size
- * @property {string} fontFamily - The font family
- */
-function getTextStyleMarksFromLinkedStyles({ node, pos, editor }) {
-  // 1. Get the “base” font + size from linked styles
-  const { font: defaultFont, size: defaultSize } = getStylesFromLinkedStyles({ node, pos, editor });
-
-  // 2. Find all textStyle marks on this node
-  const textStyleType = getMarkType('textStyle', editor.schema);
-  const { marks: allMarks, attrs: allAttrs } = getListItemTextStyleMarks(node, textStyleType);
-  const styleMarks = allMarks.filter((m) => m.type === textStyleType);
-
-  // 3. Helpers to find the first mark that has a fontSize / fontFamily attr
-  const sizeMark = styleMarks.find((m) => m.attrs.fontSize);
-  const familyMark = styleMarks.find((m) => m.attrs.fontFamily);
-  const lineHeight = allAttrs.lineHeight;
-
-  // 4. Compute final fontSize (parse it, fall back to default if invalid)
-  let fontSize = sizeMark
-    ? (() => {
-        const [value, unit = 'pt'] = parseSizeUnit(sizeMark.attrs.fontSize);
-        return Number.isNaN(value) ? defaultSize : `${value}${unit}`;
-      })()
-    : defaultSize;
-
-  // 5. Compute final fontFamily (or fall back)
-  let fontFamily = familyMark?.attrs.fontFamily ?? defaultFont;
-
-  const firstChild = node.firstChild;
-  const hasOnlyOnePar = node.childCount === 1 && firstChild?.type.name === 'paragraph';
-
-  // If a list item contains only one annotation,
-  // then we try to take the font from there.
-  if (hasOnlyOnePar) {
-    const par = firstChild;
-    const parFirstChild = par?.firstChild;
-    if (par?.childCount === 1 && parFirstChild?.type.name === 'fieldAnnotation') {
-      const aFontSize = parFirstChild.attrs.fontSize;
-      const aFontFamily = parFirstChild.attrs.fontFamily;
-      if (!sizeMark && aFontSize) fontSize = aFontSize;
-      if (!familyMark && aFontFamily) fontFamily = aFontFamily;
-    }
-  }
-
-  return { fontSize, fontFamily, lineHeight };
-}
-
-/**
- * Get the styles from linked styles
- * @param {Object} param0
- * @param {Node} param0.node - The node to get the styles from
- * @param {number} param0.pos - The position of the node
- * @param {Editor} param0.editor - The editor instance
- * @returns {Object} The styles
- * @property {string} font - The font family
- * @property {string} size - The font size
- */
-const getStylesFromLinkedStyles = ({ node, pos, editor }) => {
-  const { state } = editor.view;
-  const linkedStyles = LinkedStylesPluginKey.getState(state)?.decorations;
-  const decorationsInPlace = linkedStyles?.find(pos, pos + node.nodeSize);
-
-  // Predicates by priority.
-  const predicates = [
-    (style) => style.includes('font-size') && style.includes('font-family'),
-    (style) => style.includes('font-size'),
-    (style) => style.includes('font-family'),
-  ];
-
-  let styleDeco;
-  for (const predicateFn of predicates) {
-    styleDeco = decorationsInPlace?.find((dec) => {
-      const style = dec.type.attrs?.style || '';
-      return style && predicateFn(style);
-    });
-    if (styleDeco) break;
-  }
-
-  const style = styleDeco?.type.attrs?.style;
-
-  const stylesArray = style?.split(';') || [];
-  const fontSizeFromStyles = stylesArray
-    .find((s) => s.includes('font-size'))
-    ?.split(':')[1]
-    .trim();
-  const fontFamilyFromStyles = stylesArray
-    .find((s) => s.includes('font-family'))
-    ?.split(':')[1]
-    .trim();
-
-  return {
-    font: fontFamilyFromStyles,
-    size: fontSizeFromStyles,
-  };
-};
-
 /**
  * Calculate the visible indent for a list item.
  * This is the combination of the style and num definitions.

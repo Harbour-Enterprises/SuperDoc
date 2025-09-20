@@ -16,6 +16,7 @@ import {
   applyRunPropertiesTemplate,
 } from './helpers/helpers.js';
 import { splitRunProperties } from './helpers/split-run-properties.js';
+import { ensureTrackedWrapper, prepareRunTrackingContext } from './helpers/track-change-helpers.js';
 import validXmlAttributes from './attributes/index.js';
 
 /** @type {import('@translator').XmlNodeName} */
@@ -96,9 +97,11 @@ const decode = (params, decodedAttrs = {}) => {
   const { node } = params || {};
   if (!node) return undefined;
 
-  const runAttrs = node.attrs || {};
+  const { runNode: runNodeForExport, trackingMarksByType } = prepareRunTrackingContext(node);
+
+  const runAttrs = runNodeForExport.attrs || {};
   const runProperties = Array.isArray(runAttrs.runProperties) ? runAttrs.runProperties : [];
-  const exportParams = { ...params };
+  const exportParams = { ...params, node: runNodeForExport };
   if (!exportParams.editor) {
     exportParams.editor = { extensionService: { extensions: [] } };
   }
@@ -107,7 +110,7 @@ const decode = (params, decodedAttrs = {}) => {
 
   let runPropertiesElement = createRunPropertiesElement(runProperties);
 
-  const markElements = processOutputMarks(Array.isArray(node.marks) ? node.marks : []);
+  const markElements = processOutputMarks(Array.isArray(runNodeForExport.marks) ? runNodeForExport.marks : []);
   if (markElements.length) {
     if (!runPropertiesElement) {
       runPropertiesElement = generateRunProps(markElements);
@@ -147,6 +150,17 @@ const decode = (params, decodedAttrs = {}) => {
       return;
     }
 
+    if (child.name === 'w:ins' || child.name === 'w:del') {
+      const trackedClone = cloneXmlNode(child);
+      if (Array.isArray(trackedClone.elements)) {
+        trackedClone.elements.forEach((element) => {
+          if (element?.name === 'w:r') applyBaseRunProps(element);
+        });
+      }
+      runs.push(trackedClone);
+      return;
+    }
+
     const runWrapper = { name: XML_NODE_NAME, elements: [] };
     applyBaseRunProps(runWrapper);
     if (!Array.isArray(runWrapper.elements)) runWrapper.elements = [];
@@ -154,23 +168,25 @@ const decode = (params, decodedAttrs = {}) => {
     runs.push(runWrapper);
   });
 
-  if (!runs.length) {
+  const trackedRuns = ensureTrackedWrapper(runs, trackingMarksByType);
+
+  if (!trackedRuns.length) {
     const emptyRun = { name: XML_NODE_NAME, elements: [] };
     applyBaseRunProps(emptyRun);
-    runs.push(emptyRun);
+    trackedRuns.push(emptyRun);
   }
 
   if (decodedAttrs && Object.keys(decodedAttrs).length) {
-    runs.forEach((run) => {
+    trackedRuns.forEach((run) => {
       run.attributes = { ...(run.attributes || {}), ...decodedAttrs };
     });
   }
 
-  if (runs.length === 1) {
-    return runs[0];
+  if (trackedRuns.length === 1) {
+    return trackedRuns[0];
   }
 
-  return runs;
+  return trackedRuns;
 };
 
 /** @type {import('@translator').NodeTranslatorConfig} */
