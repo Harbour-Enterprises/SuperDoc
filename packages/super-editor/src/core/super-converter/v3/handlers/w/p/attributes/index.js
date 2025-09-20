@@ -5,6 +5,7 @@ import { attrConfig as rsidRPrConfig } from './w-rsid-r-pr.js';
 import { attrConfig as rsidRDefaultConfig } from './w-rsid-r-default.js';
 import { attrConfig as w14ParaIdConfig } from './w14-para-id.js';
 import { attrConfig as w14TextIdConfig } from './w14-text-id.js';
+import { attrConfig as spacingConfig } from '../../spacing/index.js';
 
 /** @type {import('@translator').AttrConfig[]} */
 export default [
@@ -15,4 +16,5 @@ export default [
   rsidPConfig,
   rsidRPrConfig,
   rsidDelConfig,
+  spacingConfig,
 ];
