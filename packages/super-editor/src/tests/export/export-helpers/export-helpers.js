@@ -13,10 +13,23 @@ import { getCommentDefinition } from '@converter/v2/exporter/commentsExporter.js
  * @returns {string} The text from the node
  */
 export const getTextFromNode = (node) => {
-  const listTextNode = node.elements.find((el) => el.name === 'w:r');
-  const textNode = listTextNode?.elements?.find((el) => el.name === 'w:t');
-  const text = textNode?.elements?.find((el) => el.type === 'text')?.text;
-  return text;
+  if (!node?.elements) return '';
+  const textParts = [];
+
+  node.elements.forEach((element) => {
+    if (element.name !== 'w:r') return;
+
+    const textNodes = element.elements?.filter((child) => child.name === 'w:t') || [];
+    textNodes.forEach((textNode) => {
+      const value = textNode.elements
+        ?.filter((child) => child.type === 'text' && typeof child.text === 'string')
+        .map((child) => child.text)
+        .join('');
+      if (value) textParts.push(value);
+    });
+  });
+
+  return textParts.join('');
 };
 
 /**

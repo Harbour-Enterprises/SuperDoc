@@ -83,34 +83,64 @@ export const createLinkedStylesPlugin = (editor) => {
  */
 const generateDecorations = (state, styles) => {
   const decorations = [];
-  let lastStyleId = null;
   const doc = state?.doc;
+
+  const getParagraphStyleId = (pos) => {
+    const $pos = state.doc.resolve(pos);
+    for (let d = $pos.depth; d >= 0; d--) {
+      const n = $pos.node(d);
+      if (n?.type?.name === 'paragraph') return n.attrs?.styleId || null;
+    }
+    return null;
+  };
 
   doc.descendants((node, pos) => {
     const { name } = node.type;
+    if (name !== 'text') return;
 
-    if (node?.attrs?.styleId) lastStyleId = node.attrs.styleId;
-    if (name === 'paragraph' && !node.attrs?.styleId) lastStyleId = null;
-    if (name !== 'text' && name !== 'listItem' && name !== 'orderedList') return;
-
-    // Get the last styleId from the node marks
-    // This allows run-level styles and styleIds to override paragraph-level styles
+    const paragraphStyleId = getParagraphStyleId(pos);
+    let runStyleId = null;
+    let inlineTextStyleId = null;
     for (const mark of node.marks) {
-      if (mark.type.name === 'textStyle' && mark.attrs.styleId) {
-        lastStyleId = mark.attrs.styleId;
+      if (mark.type.name === 'run') {
+        const rp = mark.attrs?.runProperties;
+        if (rp && typeof rp === 'object' && !Array.isArray(rp) && rp.styleId) runStyleId = rp.styleId;
+        else if (Array.isArray(rp)) {
+          const ent = rp.find((e) => e?.xmlName === 'w:rStyle');
+          const sid = ent?.attributes?.['w:val'];
+          if (sid) runStyleId = sid;
+        }
+      } else if (mark.type.name === 'textStyle' && mark.attrs?.styleId) {
+        inlineTextStyleId = mark.attrs.styleId;
       }
     }
-    const { linkedStyle, basedOnStyle } = getLinkedStyle(lastStyleId, styles);
-    if (!linkedStyle) return;
+
+    // Merge paragraph -> inlineText -> run styles
+    const buildStyleMap = (sid) => {
+      if (!sid) return {};
+      const { linkedStyle, basedOnStyle } = getLinkedStyle(sid, styles);
+      if (!linkedStyle) return {};
+      const base = { ...(basedOnStyle?.definition?.styles || {}) };
+      return { ...base, ...(linkedStyle.definition?.styles || {}) };
+    };
+
+    const pMap = buildStyleMap(paragraphStyleId);
+    const tMap = buildStyleMap(inlineTextStyleId);
+    const rMap = buildStyleMap(runStyleId);
+    const finalStyles = { ...pMap, ...tMap, ...rMap };
+    if (Object.keys(finalStyles).length === 0) return;
+
+    const mergedLinkedStyle = { definition: { styles: finalStyles, attrs: {} } };
+    const basedOnStyle = null;
 
     const $pos = state.doc.resolve(pos);
     const parent = $pos.parent;
-
-    const styleString = generateLinkedStyleString(linkedStyle, basedOnStyle, node, parent);
+    const styleString = generateLinkedStyleString(mergedLinkedStyle, basedOnStyle, node, parent);
     if (!styleString) return;
 
     const decoration = Decoration.inline(pos, pos + node.nodeSize, { style: styleString });
     decorations.push(decoration);
   });
+
   return DecorationSet.create(doc, decorations);
 };

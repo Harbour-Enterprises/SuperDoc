@@ -332,10 +332,16 @@ export class SuperToolbar extends EventEmitter {
      * @param {string} params.argument - The color to set
      * @returns {void}
      */
-    setColor: ({ item, argument }) => {
-      this.#runCommandWithArgumentOnly({ item, argument }, () => {
-        this.activeEditor?.commands.setFieldAnnotationsTextColor(argument, true);
-      });
+    setColor: ({ argument }) => {
+      if (!argument || !this.activeEditor) return;
+      const isNone = argument === 'none';
+      const value = isNone ? 'inherit' : argument;
+      // Apply inline color; 'inherit' acts as a cascade-aware negation of style color
+      if (this.activeEditor?.commands?.setColor) this.activeEditor.commands.setColor(value);
+      // Update annotations color, but use null for none
+      const argValue = isNone ? null : argument;
+      this.activeEditor?.commands.setFieldAnnotationsTextColor(argValue, true);
+      this.updateToolbarState();
     },
 
     /**
@@ -345,12 +351,16 @@ export class SuperToolbar extends EventEmitter {
      * @param {string} params.argument - The highlight color to set
      * @returns {void}
      */
-    setHighlight: ({ item, argument }) => {
-      this.#runCommandWithArgumentOnly({ item, argument, noArgumentCallback: true }, () => {
-        let arg = argument !== 'none' ? argument : null;
-        this.activeEditor?.commands.setFieldAnnotationsTextHighlight(arg, true);
-        this.activeEditor?.commands.setCellBackground(arg);
-      });
+    setHighlight: ({ argument }) => {
+      if (!argument || !this.activeEditor) return;
+      // For cascade-aware negation, keep a highlight mark present using 'transparent'
+      const inlineColor = argument !== 'none' ? argument : 'transparent';
+      if (this.activeEditor?.commands?.setHighlight) this.activeEditor.commands.setHighlight(inlineColor);
+      // Update annotations highlight; 'none' -> null
+      const argValue = argument !== 'none' ? argument : null;
+      this.activeEditor?.commands.setFieldAnnotationsTextHighlight(argValue, true);
+      this.activeEditor?.commands.setCellBackground(argValue);
+      this.updateToolbarState();
     },
 
     /**
@@ -849,8 +859,6 @@ export class SuperToolbar extends EventEmitter {
     if (!command) {
       return;
     }
-
-    this.log('(emmitCommand) Command:', command, '\n\titem:', item, '\n\targument:', argument, '\n\toption:', option);
 
     // Check if we have a custom or overloaded command defined
     if (command in this.#interceptedCommands) {

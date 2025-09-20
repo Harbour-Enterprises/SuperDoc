@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Schema } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
+import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 
 vi.mock('./list-helpers', () => ({
   isList: (node) => {
@@ -229,7 +229,7 @@ describe('handleBackspaceNextToList', () => {
     const doc = schema.node('doc', null, [list]);
 
     const listPos = findNodePos(doc, (n) => n === list);
-    const sel = TextSelection.create(doc, listPos + 1, listPos + 1); // inside list container, not paragraph
+    const sel = NodeSelection.create(doc, listPos); // select the list node itself
     const state = EditorState.create({ schema, doc, selection: sel });
 
     const cmd = handleBackspaceNextToList();

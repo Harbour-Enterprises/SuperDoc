@@ -1,5 +1,6 @@
 // @ts-check
 import { Mark, Attribute } from '@core/index.js';
+import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.js';
 
 /**
  * @module Bold
@@ -46,10 +47,20 @@ export const Bold = Mark.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    return ['strong', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+    const merged = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
+    const { value, ...rest } = merged || {};
+    if (value === '0') {
+      return ['span', rest, 0];
+    }
+    return ['strong', rest, 0];
   },
 
   addCommands() {
+    const { setBold, unsetBold, toggleBold } = createCascadeToggleCommands({
+      markName: this.name,
+      negationAttrs: { value: '0' },
+    });
+
     return {
       /**
        * Apply bold formatting
@@ -59,10 +70,7 @@ export const Bold = Mark.create({
        * setBold()
        * @note '0' renders as normal weight
        */
-      setBold:
-        () =>
-        ({ commands }) =>
-          commands.setMark(this.name),
+      setBold,
 
       /**
        * Remove bold formatting
@@ -71,10 +79,7 @@ export const Bold = Mark.create({
        * @example
        * unsetBold()
        */
-      unsetBold:
-        () =>
-        ({ commands }) =>
-          commands.unsetMark(this.name),
+      unsetBold,
 
       /**
        * Toggle bold formatting
@@ -83,10 +88,7 @@ export const Bold = Mark.create({
        * @example
        * toggleBold()
        */
-      toggleBold:
-        () =>
-        ({ commands }) =>
-          commands.toggleMark(this.name),
+      toggleBold,
     };
   },
 

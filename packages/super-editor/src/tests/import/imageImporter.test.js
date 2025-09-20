@@ -3,6 +3,14 @@ import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { handleDrawingNode } from '../../core/super-converter/v2/importer/imageImporter.js';
 import { handleParagraphNode } from '../../core/super-converter/v2/importer/paragraphNodeImporter.js';
 
+const collectImagesFromParagraph = (paragraphNode) =>
+  paragraphNode.content.flatMap((child) => {
+    if (child.type === 'run' && Array.isArray(child.content)) {
+      return child.content.filter((inner) => inner.type === 'image');
+    }
+    return child.type === 'image' ? [child] : [];
+  });
+
 describe('ImageNodeImporter', () => {
   it('imports image node correctly', async () => {
     const dataName = 'image_doc.docx';
@@ -15,7 +23,8 @@ describe('ImageNodeImporter', () => {
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 
     const paragraphNode = nodes[0];
-    const drawingNode = paragraphNode.content[0];
+    const [drawingNode] = collectImagesFromParagraph(paragraphNode);
+    expect(drawingNode).toBeDefined();
     const { attrs } = drawingNode;
     const { padding, size } = attrs;
 
@@ -45,7 +54,9 @@ describe('ImageNodeImporter', () => {
     const { nodes } = handleParagraphNode({ nodes: [content[1]], docx, nodeListHandler: defaultNodeListHandler() });
 
     const paragraphNode = nodes[0];
-    const drawingNode = paragraphNode.content[3];
+    const images = collectImagesFromParagraph(paragraphNode);
+    const drawingNode = images.find((img) => img.attrs?.anchorData);
+    expect(drawingNode).toBeDefined();
     const { attrs } = drawingNode;
     const { anchorData } = attrs;
 
@@ -63,12 +74,12 @@ describe('ImageNodeImporter', () => {
     const doc = documentXml.elements[0];
     const body = doc.elements[0];
     const content = body.elements;
-    console.log(content[6].elements[2]);
 
     const { nodes } = handleParagraphNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
 
     let paragraphNode = nodes[0];
-    let drawingNode = paragraphNode.content[0];
+    let [drawingNode] = collectImagesFromParagraph(paragraphNode);
+    expect(drawingNode).toBeDefined();
     const { attrs } = drawingNode;
     expect(attrs.src).toBe('media/image.png');
 
@@ -78,7 +89,7 @@ describe('ImageNodeImporter', () => {
       nodeListHandler: defaultNodeListHandler(),
     });
     paragraphNode = nodes1[0];
-    drawingNode = paragraphNode.content[1];
-    expect(drawingNode.attrs.src).toBe('word/media/image1.jpeg');
+    const imagesSecondParagraph = collectImagesFromParagraph(paragraphNode);
+    expect(imagesSecondParagraph[0].attrs.src).toBe('word/media/image1.jpeg');
   });
 });

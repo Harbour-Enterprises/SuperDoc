@@ -1120,10 +1120,11 @@ export class Editor extends EventEmitter {
     proseMirror.style.border = 'none';
 
     // Typeface and font size
-    const { typeface, fontSizePt } = this.converter.getDocumentDefaultStyles() ?? {};
+    const { typeface, fontSizePt, fontFamilyCss } = this.converter.getDocumentDefaultStyles() ?? {};
 
-    if (typeface) {
-      element.style.fontFamily = typeface;
+    const resolvedFontFamily = fontFamilyCss || typeface;
+    if (resolvedFontFamily) {
+      element.style.fontFamily = resolvedFontFamily;
     }
     if (fontSizePt) {
       element.style.fontSize = `${fontSizePt}pt`;

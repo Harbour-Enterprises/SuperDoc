@@ -6,6 +6,14 @@ import { getExportedResult } from '../export/export-helpers/index';
 import { handleListNode } from '@converter/v2/importer/listImporter.js';
 import { beforeAll, expect } from 'vitest';
 
+const collectTexts = (paragraphNode) =>
+  paragraphNode.content.flatMap((child) => {
+    if (child.type === 'run' && Array.isArray(child.content)) {
+      return child.content.filter((grand) => grand.type === 'text');
+    }
+    return child.type === 'text' ? [child] : [];
+  });
+
 describe('paragraph tests to check spacing', () => {
   let lists = {};
   beforeEach(() => {
@@ -124,7 +132,7 @@ describe('paragraph tests to check spacing', () => {
     expect(marksAttrs.length).toBe(2);
     expect(marksAttrs[0].type).toBe('bold');
     expect(marksAttrs[1].type).toBe('textStyle');
-    expect(marksAttrs[1].attrs.fontFamily).toBe('Arial');
+    expect(marksAttrs[1].attrs.fontFamily).toBe('Arial, sans-serif');
     expect(marksAttrs[1].attrs.fontSize).toBe('16pt');
   });
 
@@ -448,9 +456,9 @@ describe('Check that we can import list item with invalid list def with fallback
   it('imports expected list item with fallback', async () => {
     const item = content.content[3];
     expect(item.type).toBe('paragraph');
-    const textNode = item.content[0];
-    expect(textNode.type).toBe('text');
-    expect(textNode.text).toBe('NO VALID DEF');
+    const [textNode] = collectTexts(item);
+    expect(textNode?.type).toBe('text');
+    expect(textNode?.text).toBe('NO VALID DEF');
   });
 
   it('exports first list item correctly', async () => {
@@ -474,8 +482,8 @@ describe('Check that paragraph-level sectPr is retained', () => {
     expect(sectPr).toBeDefined();
     expect(p2.attrs.pageBreakSource).toBe('sectPr');
 
-    const textNode = p2.content.find((el) => el.type === 'text');
-    expect(textNode.text).toBe('TITLE');
+    const [textNode] = collectTexts(p2);
+    expect(textNode?.text).toBe('TITLE');
   });
 
   it('correctly imports the first node alignment', async () => {

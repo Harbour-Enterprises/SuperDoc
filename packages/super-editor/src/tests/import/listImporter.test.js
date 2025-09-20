@@ -1,6 +1,7 @@
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { handleListNode } from '@converter/v2/importer/listImporter.js';
+import { extractParagraphText } from '../helpers/getParagraphText.js';
 
 describe('table live xml test', () => {
   it('parses simple bullet xml', () => {
@@ -33,8 +34,11 @@ describe('table live xml test', () => {
     expect(result.nodes[0].content[0].content.length).toBe(1);
     expect(result.nodes[0].content[0].content[0].type).toBe('paragraph');
     expect(result.nodes[0].content[0].content[0].content.length).toBe(1);
-    expect(result.nodes[0].content[0].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[0].content[0].content[0].text).toBe('TEXTITEM');
+    const runNode = result.nodes[0].content[0].content[0].content[0];
+    expect(runNode.type).toBe('run');
+    const textNode = runNode.content.find((child) => child.type === 'text');
+    expect(textNode?.text).toBe('TEXTITEM');
+    expect(extractParagraphText(result.nodes[0].content[0].content[0])).toBe('TEXTITEM');
   });
 
   it('parses simple numbered xml', () => {
@@ -67,8 +71,11 @@ describe('table live xml test', () => {
     expect(result.nodes[0].content[0].content.length).toBe(1);
     expect(result.nodes[0].content[0].content[0].type).toBe('paragraph');
     expect(result.nodes[0].content[0].content[0].content.length).toBe(1);
-    expect(result.nodes[0].content[0].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[0].content[0].content[0].text).toBe('numbered');
+    const runNodeNumbered = result.nodes[0].content[0].content[0].content[0];
+    expect(runNodeNumbered.type).toBe('run');
+    const textNodeNumbered = runNodeNumbered.content.find((child) => child.type === 'text');
+    expect(textNodeNumbered?.text).toBe('numbered');
+    expect(extractParagraphText(result.nodes[0].content[0].content[0])).toBe('numbered');
   });
 
   it('parses multi nested list xml', () => {
@@ -173,8 +180,11 @@ describe('table live xml test', () => {
     expect(result.nodes[0].content[0].content.length).toBe(1);
     expect(result.nodes[0].content[0].content[0].type).toBe('paragraph');
     expect(result.nodes[0].content[0].content[0].content.length).toBe(1);
-    expect(result.nodes[0].content[0].content[0].content[0].type).toBe('text');
-    expect(result.nodes[0].content[0].content[0].content[0].text).toBe('L1: A');
+    const runNodeL1 = result.nodes[0].content[0].content[0].content[0];
+    expect(runNodeL1.type).toBe('run');
+    const textNodeL1 = runNodeL1.content.find((child) => child.type === 'text');
+    expect(textNodeL1?.text).toBe('L1: A');
+    expect(extractParagraphText(result.nodes[0].content[0].content[0])).toBe('L1: A');
 
     const result2 = handleListNode({ nodes: [nodes[1]], docx, nodeListHandler: defaultNodeListHandler(), lists: {} });
     expect(result2.nodes[0].type).toBe('bulletList');
@@ -183,7 +193,10 @@ describe('table live xml test', () => {
     expect(result2.nodes[0].content[0].content.length).toBe(1);
     expect(result2.nodes[0].content[0].content[0].type).toBe('paragraph');
     expect(result2.nodes[0].content[0].content[0].content.length).toBe(1);
-    expect(result2.nodes[0].content[0].content[0].content[0].type).toBe('text');
-    expect(result2.nodes[0].content[0].content[0].content[0].text).toBe('L2: B');
+    const runNode2 = result2.nodes[0].content[0].content[0].content[0];
+    expect(runNode2.type).toBe('run');
+    const textNode2 = runNode2.content.find((child) => child.type === 'text');
+    expect(textNode2?.text).toBe('L2: B');
+    expect(extractParagraphText(result2.nodes[0].content[0].content[0])).toBe('L2: B');
   });
 });

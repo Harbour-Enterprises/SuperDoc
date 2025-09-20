@@ -101,7 +101,7 @@ describe('trackChanges live xml test', () => {
       author: 'torcsi@harbourcollaborators.com',
       importedAuthor: 'torcsi@harbourcollaborators.com (imported)',
     });
-    expect(result.nodes[0].text).toBe('short ');
+    expect(result.nodes[0].content?.[0]?.text).toBe('short ');
   });
   it('parses delete xml', () => {
     const nodes = parseXmlToJson(deleteXml).elements;
@@ -115,7 +115,7 @@ describe('trackChanges live xml test', () => {
       author: 'torcsi@harbourcollaborators.com',
       importedAuthor: 'torcsi@harbourcollaborators.com (imported)',
     });
-    expect(result.nodes[0].text).toBe('long ');
+    expect(result.nodes[0].content?.[0]?.text).toBe('long ');
   });
   it('parses mark change xml', () => {
     const nodes = parseXmlToJson(markChangeXml).elements;

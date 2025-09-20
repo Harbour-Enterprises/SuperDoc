@@ -95,7 +95,11 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
     expect(contents.type).toBe('paragraph');
     expect(contents.content.length).toBe(1);
 
-    const textNode = contents.content[0];
+    const runNode = contents.content[0];
+    expect(runNode.type).toBe('run');
+    expect(runNode.content.length).toBe(1);
+
+    const textNode = runNode.content[0];
     expect(textNode.type).toBe('text');
     expect(textNode.text).toBe('FOUR');
   });
