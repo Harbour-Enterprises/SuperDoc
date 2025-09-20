@@ -273,10 +273,14 @@ export const applyRunPropertiesTemplate = (runNode, runPropertiesTemplate) => {
     };
   }
 
-  const existingNames = new Set(runProps.elements.map((el) => el?.name).filter((name) => typeof name === 'string'));
+  const isValidRunPropName = (name) => typeof name === 'string' && name.includes(':');
+
+  runProps.elements = runProps.elements.filter((entry) => isValidRunPropName(entry?.name));
+
+  const existingNames = new Set(runProps.elements.map((el) => el?.name));
 
   (runPropertiesTemplate.elements || []).forEach((entry) => {
-    if (!entry?.name || existingNames.has(entry.name)) return;
+    if (!isValidRunPropName(entry?.name) || existingNames.has(entry.name)) return;
     runProps.elements.push(cloneXmlNode(entry));
     existingNames.add(entry.name);
   });

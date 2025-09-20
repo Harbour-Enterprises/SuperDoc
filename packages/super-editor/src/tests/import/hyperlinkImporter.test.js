@@ -83,4 +83,37 @@ describe('HyperlinkNodeImporter', () => {
     expect(textStyleMark.attrs.fontSize).toBe('14pt');
     expect(textStyleMark.attrs.styleId).toBe('SubtitleChar');
   });
+
+  it('parses hyperlinks spanning multiple runs without losing formatting', async () => {
+    const dataName = 'hyperlink_multiple_runs.docx';
+    const docx = await getTestDataByFileName(dataName);
+    const documentXml = docx['word/document.xml'];
+
+    const doc = documentXml.elements[0];
+    const body = doc.elements[0];
+    const paragraph = body.elements[0];
+
+    const { nodes } = hyperlinkNodeHandlerEntity.handler({
+      nodes: [paragraph.elements[0]],
+      docx,
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const textSegments = nodes
+      .filter((node) => node.type === 'run')
+      .flatMap((run) => run.content)
+      .filter((child) => child?.type === 'text');
+
+    expect(textSegments.map((segment) => segment.text)).toEqual(['Click', 'here', 'now']);
+    textSegments.forEach((segment) => {
+      const linkMark = segment.marks?.find((mark) => mark.type === 'link');
+      expect(linkMark?.attrs.href).toBe('https://www.example.com');
+    });
+
+    const boldSegment = textSegments.find((segment) => segment.text === 'here');
+    expect(boldSegment?.marks?.some((mark) => mark.type === 'bold')).toBe(true);
+
+    const italicSegment = textSegments.find((segment) => segment.text === 'now');
+    expect(italicSegment?.marks?.some((mark) => mark.type === 'italic')).toBe(true);
+  });
 });

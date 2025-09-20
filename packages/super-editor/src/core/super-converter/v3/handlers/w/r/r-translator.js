@@ -138,6 +138,15 @@ const decode = (params, decodedAttrs = {}) => {
       return;
     }
 
+    if (child.name === 'w:hyperlink') {
+      const hyperlinkClone = cloneXmlNode(child);
+      if (Array.isArray(hyperlinkClone.elements)) {
+        hyperlinkClone.elements.forEach((run) => applyBaseRunProps(run));
+      }
+      runs.push(hyperlinkClone);
+      return;
+    }
+
     const runWrapper = { name: XML_NODE_NAME, elements: [] };
     applyBaseRunProps(runWrapper);
     if (!Array.isArray(runWrapper.elements)) runWrapper.elements = [];
