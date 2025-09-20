@@ -1,5 +1,25 @@
 import { Node, Attribute } from '@core/index.js';
 
+/**
+ * Configuration options for Mention
+ * @typedef {Object} MentionOptions
+ * @category Options
+ * @property {Object} [htmlAttributes] - HTML attributes for mention elements
+ */
+
+/**
+ * Attributes for mention nodes
+ * @typedef {Object} MentionAttributes
+ * @category Attributes
+ * @property {string} [name=null] - Display name of the mentioned person
+ * @property {string} [email=null] - Email address of the mentioned person
+ */
+
+/**
+ * @module Mention
+ * @sidebarTitle Mention
+ * @snippetPath /snippets/extensions/mention.mdx
+ */
 export const Mention = Node.create({
   name: 'mention',
 

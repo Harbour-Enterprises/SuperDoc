@@ -1,4 +1,7 @@
 // @ts-check
+import { Node, Attribute } from '@core/index.js';
+import { createCellBorders } from './helpers/createCellBorders.js';
+
 /**
  * Cell margins configuration
  * @typedef {Object} CellMargins
@@ -14,8 +17,27 @@
  * @property {string} color - Background color (hex without #)
  */
 
-import { Node, Attribute } from '@core/index.js';
-import { createCellBorders } from './helpers/createCellBorders.js';
+/**
+ * Configuration options for TableCell
+ * @typedef {Object} TableCellOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={'aria-label': 'Table cell node'}] - HTML attributes for table cells
+ */
+
+/**
+ * Attributes for table cell nodes
+ * @typedef {Object} TableCellAttributes
+ * @category Attributes
+ * @property {number} [colspan=1] - Number of columns this cell spans
+ * @property {number} [rowspan=1] - Number of rows this cell spans
+ * @property {number[]} [colwidth=[100]] - Column widths array in pixels
+ * @property {CellBackground} [background] - Cell background color configuration
+ * @property {string} [verticalAlign] - Vertical content alignment (top, middle, bottom)
+ * @property {CellMargins} [cellMargins] - Internal cell padding
+ * @property {import('./helpers/createCellBorders.js').CellBorders} [borders] - Cell border configuration
+ * @property {string} [widthType='auto'] @internal - Internal width type
+ * @property {string} [widthUnit='px'] @internal - Internal width unit
+ */
 
 /**
  * @module TableCell
@@ -41,26 +63,14 @@ export const TableCell = Node.create({
 
   addAttributes() {
     return {
-      /**
-       * @category Attribute
-       * @param {number} [colspan=1] - Number of columns this cell spans
-       */
       colspan: {
         default: 1,
       },
 
-      /**
-       * @category Attribute
-       * @param {number} [rowspan=1] - Number of rows this cell spans
-       */
       rowspan: {
         default: 1,
       },
 
-      /**
-       * @category Attribute
-       * @param {number[]} [colwidth=[100]] - Column widths array in pixels
-       */
       colwidth: {
         default: [100],
         parseDOM: (elem) => {
@@ -76,10 +86,6 @@ export const TableCell = Node.create({
         },
       },
 
-      /**
-       * @category Attribute
-       * @param {CellBackground} [background] - Cell background color configuration
-       */
       background: {
         renderDOM({ background }) {
           if (!background) return {};
@@ -89,10 +95,6 @@ export const TableCell = Node.create({
         },
       },
 
-      /**
-       * @category Attribute
-       * @param {string} [verticalAlign] - Vertical content alignment (top, middle, bottom)
-       */
       verticalAlign: {
         renderDOM({ verticalAlign }) {
           if (!verticalAlign) return {};
@@ -101,10 +103,6 @@ export const TableCell = Node.create({
         },
       },
 
-      /**
-       * @category Attribute
-       * @param {CellMargins} [cellMargins] - Internal cell padding
-       */
       cellMargins: {
         renderDOM({ cellMargins }) {
           if (!cellMargins) return {};
@@ -120,10 +118,6 @@ export const TableCell = Node.create({
         },
       },
 
-      /**
-       * @category Attribute
-       * @param {CellBorders} [borders] - Cell border configuration
-       */
       borders: {
         default: () => createCellBorders(),
         renderDOM({ borders }) {
@@ -141,21 +135,11 @@ export const TableCell = Node.create({
         },
       },
 
-      /**
-       * @private
-       * @category Attribute
-       * @param {string} [widthType='auto'] - Internal width type
-       */
       widthType: {
         default: 'auto',
         rendered: false,
       },
 
-      /**
-       * @private
-       * @category Attribute
-       * @param {string} [widthUnit='px'] - Internal width unit
-       */
       widthUnit: {
         default: 'px',
         rendered: false,

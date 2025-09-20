@@ -2,6 +2,22 @@
 import { Node, Attribute } from '@core/index.js';
 
 /**
+ * Configuration options for TableHeader
+ * @typedef {Object} TableHeaderOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={'aria-label': 'Table head node'}] - HTML attributes for table headers
+ */
+
+/**
+ * Attributes for table header nodes
+ * @typedef {Object} TableHeaderAttributes
+ * @category Attributes
+ * @property {number} [colspan=1] - Number of columns this header spans
+ * @property {number} [rowspan=1] - Number of rows this header spans
+ * @property {number[]} [colwidth] - Column widths array in pixels
+ */
+
+/**
  * @module TableHeader
  * @sidebarTitle Table Header
  * @snippetPath /snippets/extensions/table-header.mdx
@@ -25,26 +41,14 @@ export const TableHeader = Node.create({
 
   addAttributes() {
     return {
-      /**
-       * @category Attribute
-       * @param {number} [colspan=1] - Number of columns this header spans
-       */
       colspan: {
         default: 1,
       },
 
-      /**
-       * @category Attribute
-       * @param {number} [rowspan=1] - Number of rows this header spans
-       */
       rowspan: {
         default: 1,
       },
 
-      /**
-       * @category Attribute
-       * @param {number[]} [colwidth] - Column widths array in pixels
-       */
       colwidth: {
         default: null,
         parseDOM: (element) => {

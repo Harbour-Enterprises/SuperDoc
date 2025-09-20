@@ -5,6 +5,44 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { toggleList } from '@core/commands/index.js';
 
 /**
+ * Configuration options for BulletList
+ * @typedef {Object} BulletListOptions
+ * @category Options
+ * @property {string} [itemTypeName='listItem'] Name of the list item node type
+ * @property {Object} [htmlAttributes] HTML attributes for the ul element
+ * @property {boolean} [keepAttributes=false] Whether to preserve attributes when splitting
+ * @property {boolean} [keepMarks=true] Whether to preserve marks when splitting
+ * @example
+ * const ConfiguredBulletList = BulletList.configure({
+ *   itemTypeName: 'customItem',
+ *   keepMarks: false
+ * });
+ *
+ * new SuperDoc({
+ *   selector: '#editor',
+ *   document: 'document.docx',
+ *   editorExtensions: [ConfiguredBulletList]
+ * });
+ */
+
+/**
+ * Attributes for bullet list nodes
+ * @typedef {Object} BulletListAttributes
+ * @category Attributes
+ * @property {string} [list-style-type='bullet'] List style type for this list
+ * @property {string} [listId] @internal Internal list identifier for numbering
+ * @property {string} [sdBlockId] @internal Internal block tracking ID
+ * @property {Object} [attributes] @internal Additional attributes for the list
+ */
+
+/**
+ * Commands provided by BulletList extension
+ * @typedef {Object} BulletListCommands
+ * @category Commands
+ * @property {Function} toggleBulletList Toggle a bullet list at the current selection
+ */
+
+/**
  * @module BulletList
  * @sidebarTitle Bullet List
  * @snippetPath /snippets/extensions/bullet-list.mdx
@@ -30,14 +68,6 @@ export const BulletList = Node.create({
 
   addOptions() {
     return {
-      /**
-       * @typedef {Object} BulletListOptions
-       * @category Options
-       * @property {string} [itemTypeName='listItem'] - Name of the list item node type
-       * @property {Object} [htmlAttributes] - HTML attributes for the ul element
-       * @property {boolean} [keepMarks=true] - Whether to preserve marks when splitting
-       * @property {boolean} [keepAttributes=false] - Whether to preserve attributes when splitting
-       */
       itemTypeName: 'listItem',
       htmlAttributes: {
         'aria-label': 'Bullet list node',
@@ -58,29 +88,15 @@ export const BulletList = Node.create({
 
   addAttributes() {
     return {
-      /**
-       * @category Attribute
-       * @param {string} [list-style-type='bullet'] - List style type for this list
-       */
       'list-style-type': {
         default: 'bullet',
         rendered: false,
       },
 
-      /**
-       * @private
-       * @category Attribute
-       * @param {string} [listId] - Internal list identifier for numbering
-       */
       listId: {
         rendered: false,
       },
 
-      /**
-       * @private
-       * @category Attribute
-       * @param {string} [sdBlockId] - Internal block tracking ID
-       */
       sdBlockId: {
         default: null,
         keepOnSplit: false,
@@ -90,11 +106,6 @@ export const BulletList = Node.create({
         },
       },
 
-      /**
-       * @private
-       * @category Attribute
-       * @param {Object} [attributes] - Additional attributes for the list
-       */
       attributes: {
         rendered: false,
         keepOnSplit: true,
@@ -107,10 +118,9 @@ export const BulletList = Node.create({
       /**
        * Toggle a bullet list at the current selection
        * @category Command
-       * @returns {Function} Command function
        * @example
        * // Toggle bullet list on selected text
-       * toggleBulletList()
+       * editor.commands.toggleBulletList()
        * @note Converts selected paragraphs to list items or removes list formatting
        */
       toggleBulletList: () => (params) => {

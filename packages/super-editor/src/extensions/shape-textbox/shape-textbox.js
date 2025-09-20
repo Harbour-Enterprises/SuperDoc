@@ -1,5 +1,25 @@
 import { Node, Attribute } from '@core/index.js';
 
+/**
+ * Configuration options for ShapeTextbox
+ * @typedef {Object} ShapeTextboxOptions
+ * @category Options
+ * @property {Object} [htmlAttributes] - HTML attributes for shape textbox elements
+ */
+
+/**
+ * Attributes for shape textbox nodes
+ * @typedef {Object} ShapeTextboxAttributes
+ * @category Attributes
+ * @property {string} [sdBlockId] @internal - Internal block tracking ID
+ * @property {Object} [attributes] @internal - Internal attributes storage
+ */
+
+/**
+ * @module ShapeTextbox
+ * @sidebarTitle Shape Textbox
+ * @snippetPath /snippets/extensions/shape-textbox.mdx
+ */
 export const ShapeTextbox = Node.create({
   name: 'shapeTextbox',
 

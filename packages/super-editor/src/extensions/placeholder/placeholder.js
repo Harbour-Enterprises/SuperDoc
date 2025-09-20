@@ -2,6 +2,18 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
 
+/**
+ * Configuration options for Placeholder
+ * @typedef {Object} PlaceholderOptions
+ * @category Options
+ * @property {string} [placeholder='Type something...'] - Placeholder text to display when editor is empty
+ */
+
+/**
+ * @module Placeholder
+ * @sidebarTitle Placeholder
+ * @snippetPath /snippets/extensions/placeholder.mdx
+ */
 export const Placeholder = Extension.create({
   name: 'placeholder',
 

@@ -42,6 +42,28 @@ import { Node, Attribute } from '@core/index.js';
  */
 
 /**
+ * Configuration options for TableRow
+ * @typedef {Object} TableRowOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={'aria-label': 'Table row node'}] - HTML attributes for table rows
+ */
+
+/**
+ * Attributes for table row nodes
+ * @typedef {Object} TableRowAttributes
+ * @category Attributes
+ * @property {number} [rowHeight] - Fixed row height in pixels
+ * @property {boolean} [cantSplit=false] - Indicates row should not split across pages
+ * @property {TableRowProperties} [tableRowProperties] @internal - Internal row properties
+ * @property {string} [rsidDel] @internal - Editing session ID for deletion
+ * @property {string} [rsidR] @internal - Editing session ID for addition
+ * @property {string} [rsidRPr] @internal - Editing session ID for row mark modification
+ * @property {string} [rsidTr] @internal - Editing session ID for properties modification
+ * @property {string} [paraId] @internal - Unique identifier for the row
+ * @property {string} [textId] @internal - Unique identifier for row text
+ */
+
+/**
  * @module TableRow
  * @sidebarTitle Table Row
  * @snippetPath /snippets/extensions/table-row.mdx
@@ -63,10 +85,6 @@ export const TableRow = Node.create({
 
   addAttributes() {
     return {
-      /**
-       * @category Attribute
-       * @param {number} [rowHeight] - Fixed row height in pixels
-       */
       rowHeight: {
         renderDOM({ rowHeight }) {
           if (!rowHeight) return {};
@@ -74,11 +92,7 @@ export const TableRow = Node.create({
           return { style };
         },
       },
-      /**
-       * Indicates that this row should not be split across pages when paginating/exporting.
-       * @category Attribute
-       * @param {boolean} [cantSplit]
-       */
+
       cantSplit: {
         default: false,
         parseDOM() {
@@ -91,44 +105,30 @@ export const TableRow = Node.create({
         },
       },
       /**
-       * @category Attribute
-       * @param {TableRowProperties} [tableRowProperties] - Properties for the table row.
        * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 377-482
        */
       tableRowProperties: { rendered: false },
       /**
-       * @category Attribute
-       * @param {string} [rsidDel] - Unique identifier used to track the editing session when the row was deleted from the main document.
        * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 472
        */
       rsidDel: { rendered: false },
       /**
-       * @category Attribute
-       * @param {string} [rsidR] - Unique identifier used to track the editing session when the table row was added to the main document.
        * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 472
        */
       rsidR: { rendered: false },
       /**
-       * @category Attribute
-       * @param {string} [rsidRPr] - Unique identifier used to track the editing session when the glyph character representing the table row mark was last modified in the main document.
        * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 473
        */
       rsidRPr: { rendered: false },
       /**
-       * @category Attribute
-       * @param {string} [rsidTr] - Unique identifier used to track the editing session when the table row's properties were last modified in this document.
        * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 473
        */
       rsidTr: { rendered: false },
       /**
-       * @category Attribute
-       * @param {string} [paraId] - A randomly generated unique identifier for the table row.
        * @see {@link https://learn.microsoft.com/en-us/openspecs/office_standards/ms-docx/a0e7d2e2-2246-44c6-96e8-1cf009823615}
        */
       paraId: { rendered: false },
       /**
-       * @category Attribute
-       * @param {string} [textId] - A randomly generated unique identifier for the text of the table row.
        * @see {@link https://learn.microsoft.com/en-us/openspecs/office_standards/ms-docx/b7eeddec-7c50-47fb-88b6-1feec3ed832c}
        */
       textId: { rendered: false },

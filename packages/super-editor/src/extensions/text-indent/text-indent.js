@@ -3,9 +3,20 @@ import { Extension } from '@core/index.js';
 import { parseSizeUnit } from '@core/utilities/index.js';
 
 /**
- * Text indent configuration
- * @typedef {Object} IndentConfig
- * @property {string} indent - Indent value with unit (e.g., '0.5in', '1cm')
+ * Configuration options for TextIndent
+ * @typedef {Object} TextIndentOptions
+ * @category Options
+ * @property {string[]} [types=['heading', 'paragraph']] - Node types to apply indentation to
+ * @property {Object} [defaults] - Default indentation settings
+ * @property {string} [defaults.unit='in'] - Default unit for indentation (in, cm, px, etc.)
+ * @property {number} [defaults.increment=0.125] - Default increment/decrement value
+ */
+
+/**
+ * Attributes for text indentation
+ * @typedef {Object} TextIndentAttributes
+ * @category Attributes
+ * @property {string} [textIndent] - Text indentation value with unit (e.g., '0.5in')
  */
 
 /**
@@ -17,14 +28,6 @@ export const TextIndent = Extension.create({
   name: 'textIndent',
 
   addOptions() {
-    /**
-     * @typedef {Object} TextIndentOptions
-     * @category Options
-     * @property {string[]} [types=['heading', 'paragraph']] - Node types to apply indentation to
-     * @property {Object} [defaults] - Default indentation settings
-     * @property {string} [defaults.unit='in'] - Default unit for indentation (in, cm, px, etc.)
-     * @property {number} [defaults.increment=0.125] - Default increment/decrement value
-     */
     return {
       types: ['heading', 'paragraph'],
       defaults: {

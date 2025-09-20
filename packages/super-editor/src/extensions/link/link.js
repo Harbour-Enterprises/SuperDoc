@@ -1,23 +1,47 @@
 // @ts-check
-/**
- * Link attributes
- * @typedef {Object} LinkAttributes
- * @property {string} href - URL or anchor reference
- * @property {string} [target='_blank'] - Link target
- * @property {string} [rel='noopener noreferrer nofollow'] - Relationship attributes
- * @property {string} [rId] - Word relationship ID for internal links
- * @property {string} [text] - Display text for the link
- * @property {string} [name] - Anchor name for internal references
- */
+import { Mark, Attribute } from '@core/index.js';
+import { getMarkRange } from '@core/helpers/getMarkRange.js';
+import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
 
 /**
  * Target frame options
  * @typedef {'_top' | '_self' | '_parent' | '_blank' | string} TargetFrameOptions
  */
 
-import { Mark, Attribute } from '@core/index.js';
-import { getMarkRange } from '@core/helpers/getMarkRange.js';
-import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
+/**
+ * Configuration options for Link
+ * @typedef {Object} LinkOptions
+ * @category Options
+ * @property {string[]} [protocols=['http', 'https']] - Allowed URL protocols
+ * @property {Object} [htmlAttributes] - HTML attributes for link elements
+ * @property {string} [htmlAttributes.target=null] - Default link target
+ * @property {string} [htmlAttributes.rel='noopener noreferrer nofollow'] - Default rel attribute
+ * @property {string} [htmlAttributes.class=null] - CSS class
+ * @property {string} [htmlAttributes.title=null] - Title attribute
+ */
+
+/**
+ * Attributes for link marks
+ * @typedef {Object} LinkAttributes
+ * @category Attributes
+ * @property {string} [href] - URL or anchor reference
+ * @property {TargetFrameOptions} [target='_blank'] - Link target window
+ * @property {string} [rel='noopener noreferrer nofollow'] - Relationship attributes
+ * @property {string} [text] - Display text for the link
+ * @property {string} [name] - Anchor name for internal references
+ * @property {boolean} [history=true] - Whether to add to viewed hyperlinks list
+ * @property {string} [anchor] - Bookmark target name (ignored if rId and href specified)
+ * @property {string} [docLocation] - Location in target hyperlink
+ * @property {string} [tooltip] - Tooltip for the link
+ * @property {string} [rId] @internal Word relationship ID for internal links
+ */
+
+/**
+ * Link options for setLink command
+ * @typedef {Object} SetLinkOptions
+ * @property {string} [href] - URL for the link
+ * @property {string} [text] - Display text (uses selection if omitted)
+ */
 
 /**
  * @module Link
@@ -33,11 +57,6 @@ export const Link = Mark.create({
 
   addOptions() {
     return {
-      /**
-       * Allowed URL protocols
-       * @type {string[]}
-       * @default ['http', 'https']
-       */
       protocols: ['http', 'https'],
       htmlAttributes: {
         target: null,
@@ -140,16 +159,10 @@ export const Link = Mark.create({
       /**
        * Create or update a link
        * @category Command
-       * @param {Object} options - Link configuration
-       * @param {string} [options.href] - URL for the link
-       * @param {string} [options.text] - Display text (uses selection if omitted)
-       * @returns {Function} Command - Creates link with underline
+       * @param {SetLinkOptions} [options] - Link configuration
        * @example
-       * // Link selected text
-       * setLink({ href: 'https://example.com' })
-       *
-       * // Link with custom text
-       * setLink({
+       * editor.commands.setLink({ href: 'https://example.com' })
+       * editor.commands.setLink({
        *   href: 'https://example.com',
        *   text: 'Visit Example'
        * })
@@ -216,9 +229,8 @@ export const Link = Mark.create({
       /**
        * Remove link and associated formatting
        * @category Command
-       * @returns {Function} Command - Removes link, underline, and color
        * @example
-       * unsetLink()
+       * editor.commands.unsetLink()
        * @note Also removes underline and text color
        */
       unsetLink:
@@ -234,16 +246,10 @@ export const Link = Mark.create({
       /**
        * Toggle link on selection
        * @category Command
-       * @param {Object} [options] - Link configuration
-       * @param {string} [options.href] - URL for the link
-       * @param {string} [options.text] - Display text
-       * @returns {Function} Command - Creates link if href provided, removes otherwise
+       * @param {SetLinkOptions} [options] - Link configuration
        * @example
-       * // Add link
-       * toggleLink({ href: 'https://example.com' })
-       *
-       * // Remove link
-       * toggleLink()
+       * editor.commands.toggleLink({ href: 'https://example.com' })
+       * editor.commands.toggleLink()
        */
       toggleLink:
         ({ href, text } = {}) =>

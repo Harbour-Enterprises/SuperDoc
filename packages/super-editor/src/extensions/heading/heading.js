@@ -4,7 +4,15 @@ import { Extension } from '@core/index.js';
 /**
  * Heading attributes
  * @typedef {Object} HeadingAttributes
+ * @category Attributes
  * @property {number} level - Heading level (1-6)
+ */
+
+/**
+ * Configuration options for Heading
+ * @typedef {Object} HeadingOptions
+ * @category Options
+ * @property {number[]} [levels=[1,2,3,4,5,6]] - Supported heading levels
  */
 
 /**
@@ -23,11 +31,6 @@ export const Heading = Extension.create({
 
   addOptions() {
     return {
-      /**
-       * @typedef {Object} HeadingOptions
-       * @category Options
-       * @property {number[]} [levels=[1,2,3,4,5,6]] - Supported heading levels
-       */
       levels: [1, 2, 3, 4, 5, 6],
     };
   },
@@ -38,10 +41,8 @@ export const Heading = Extension.create({
        * Set a heading with specified level
        * @category Command
        * @param {HeadingAttributes} attributes - Heading attributes including level
-       * @returns {Function} Command function
        * @example
-       * // Set heading level 2
-       * setHeading({ level: 2 })
+       * editor.commands.setHeading({ level: 2 })
        * @note Converts current block to heading
        */
       setHeading:
@@ -56,13 +57,9 @@ export const Heading = Extension.create({
        * Toggle between heading and paragraph
        * @category Command
        * @param {HeadingAttributes} attributes - Heading attributes including level
-       * @returns {Function} Command function
        * @example
-       * // Toggle heading level 1
-       * toggleHeading({ level: 1 })
-       *
-       * // Toggle heading level 3
-       * toggleHeading({ level: 3 })
+       * editor.commands.toggleHeading({ level: 1 })
+       * editor.commands.toggleHeading({ level: 3 })
        * @note Switches between heading and paragraph for the same level
        */
       toggleHeading:
