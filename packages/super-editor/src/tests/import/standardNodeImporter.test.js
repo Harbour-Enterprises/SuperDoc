@@ -17,7 +17,10 @@ describe('StandardNodeImporter', () => {
     const paragraphNode = nodes[0];
     expect(paragraphNode.attrs).toHaveProperty('lineHeight', '1.15');
 
-    const paragraphText = paragraphNode.content[0];
+    const paragraphRun = paragraphNode.content[0];
+    expect(paragraphRun.type).toBe('run');
+
+    const paragraphText = paragraphRun.content[0];
     expect(paragraphText.type).toBe('text');
     expect(paragraphText.text).toBe('First paragraph');
 

@@ -1,11 +1,24 @@
 import { getExportedResult } from './export-helpers/index';
 
+const getHyperlinkNodeFromParagraph = (paragraph) => {
+  const hyperlinkRun = paragraph.elements.find(
+    (el) => el.name === 'w:r' && el.elements?.some((child) => child.name === 'w:hyperlink'),
+  );
+  expect(hyperlinkRun, 'Expected to find a run with a hyperlink').toBeTruthy();
+
+  const hyperlinkNode = hyperlinkRun.elements.find((el) => el.name === 'w:hyperlink');
+  expect(hyperlinkNode, 'Expected the run to contain a w:hyperlink element').toBeTruthy();
+
+  return hyperlinkNode;
+};
+
 describe('HyperlinkNodeExporter', async () => {
   it('exports w:hyperlink with styles', async () => {
     const fileName = 'hyperlink_node.docx';
     const result = await getExportedResult(fileName);
     const body = result.elements?.find((el) => el.name === 'w:body');
-    const hyperLinkNode = body.elements[1].elements[2];
+    const paragraph = body.elements[1];
+    const hyperLinkNode = getHyperlinkNodeFromParagraph(paragraph);
     expect(hyperLinkNode.attributes['r:id']).toBe('rId4');
     expect(hyperLinkNode.elements[0].elements[1].elements[0].text).toBe(
       'https://stackoverflow.com/questions/66669593/how-to-attach-image-at-first-page-in-docx-file-nodejs',
@@ -25,7 +38,8 @@ describe('HyperlinkNodeExporter', async () => {
     const fileName = 'hyperlink_node_internal.docx';
     const result = await getExportedResult(fileName);
     const body = result.elements?.find((el) => el.name === 'w:body');
-    const hyperLinkNode = body.elements[2].elements[2];
+    const paragraph = body.elements[2];
+    const hyperLinkNode = getHyperlinkNodeFromParagraph(paragraph);
     expect(hyperLinkNode.attributes['r:id']).toBeUndefined();
     expect(hyperLinkNode.attributes['w:anchor']).toBe('mybookmark');
     expect(hyperLinkNode.attributes['w:history']).toBe('1');

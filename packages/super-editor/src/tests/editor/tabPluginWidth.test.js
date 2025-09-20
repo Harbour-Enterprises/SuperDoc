@@ -2,19 +2,23 @@ import { describe, it, expect } from 'vitest';
 import { initTestEditor } from '../helpers/helpers.js';
 
 const makeText = (text) => ({
-  type: 'text',
-  text,
-  marks: [
-    { type: 'textStyle', attrs: { fontFamily: 'Arial', fontSize: '10pt' } },
-    { type: 'run', attrs: { runProperties: null } },
+  type: 'run',
+  content: [
+    {
+      type: 'text',
+      text,
+      marks: [{ type: 'textStyle', attrs: { fontFamily: 'Arial', fontSize: '10pt' } }],
+    },
   ],
 });
 
 const makeTab = () => ({
-  type: 'tab',
-  marks: [
-    { type: 'textStyle', attrs: {} },
-    { type: 'run', attrs: { runProperties: null } },
+  type: 'run',
+  content: [
+    {
+      type: 'tab',
+      marks: [{ type: 'textStyle', attrs: {} }],
+    },
   ],
 });
 

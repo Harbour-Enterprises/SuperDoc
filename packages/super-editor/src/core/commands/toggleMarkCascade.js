@@ -104,7 +104,7 @@ export function defaultStyleDetector({ state, selectionMarks, markName, editor }
  * @returns {string|null} The effective style ID, or null if none found
  */
 export function getEffectiveStyleId(state, selectionMarks) {
-  // 1) Run-level rStyle via run mark (from collected selection marks)
+  // 1) Run-level style resolved from the current mark set
   const sidFromMarks = getStyleIdFromMarks(selectionMarks);
   if (sidFromMarks) return sidFromMarks;
 
@@ -141,18 +141,11 @@ export function getEffectiveStyleId(state, selectionMarks) {
  * @returns {string|null}
  */
 export function getStyleIdFromMarks(marks) {
-  const run = marks.find((m) => m.type?.name === 'run');
-  const runProperties = run?.attrs?.runProperties;
-  if (!runProperties) return null;
-  if (runProperties && typeof runProperties === 'object' && !Array.isArray(runProperties) && runProperties.styleId) {
-    return runProperties.styleId;
-  }
+  if (!Array.isArray(marks)) return null;
 
-  if (Array.isArray(runProperties)) {
-    const rStyleEntry = runProperties.find((e) => e?.xmlName === 'w:rStyle');
-    const sid = rStyleEntry?.attributes?.['w:val'];
-    if (sid) return sid;
-  }
+  const textStyleMark = marks.find((m) => m.type?.name === 'textStyle' && m.attrs?.styleId);
+  if (textStyleMark) return textStyleMark.attrs.styleId;
+
   return null;
 }
 

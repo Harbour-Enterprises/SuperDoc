@@ -124,18 +124,25 @@ describe('tab stop import with run translator', () => {
     }
     expect(node.type).toBe('paragraph');
     expect(node.attrs.indent).toMatchObject({ left: 0, right: 0, firstLine: 0, hanging: 0 });
-    expect(node.content.map((child) => child.type)).toEqual(['text', 'tab', 'text', 'tab', 'text']);
+    const runTypes = node.content.map((child) => child.type);
+    expect(runTypes).toEqual(['run', 'run', 'run', 'run', 'run']);
+
+    const firstChildTypes = node.content.map((child) => child.content?.[0]?.type);
+    expect(firstChildTypes).toEqual(['text', 'tab', 'text', 'tab', 'text']);
     expect(node.attrs.tabStops).toEqual([
       { val: 'start', pos: 96, originalPos: '1440' },
       { val: 'center', pos: 192, originalPos: '2880' },
     ]);
 
-    const [leftText, firstTab, middleText] = node.content;
+    const [leftRun, firstTabRun, middleRun] = node.content;
+    const leftText = leftRun.content[0];
+    const middleText = middleRun.content[0];
+    const firstTab = firstTabRun.content[0];
     expect(leftText.text).toBe('Left');
     expect(middleText.text).toBe('Middle');
     expect(firstTab.type).toBe('tab');
 
-    const textStyle = node.content.at(-1).marks.find((mark) => mark.type === 'textStyle');
+    const textStyle = node.content.at(-1).content[0].marks.find((mark) => mark.type === 'textStyle');
     expect(textStyle?.attrs?.fontFamily).toBe('Arial, sans-serif');
 
     const leftTextStyle = leftText.marks.find((mark) => mark.type === 'textStyle');
@@ -205,8 +212,11 @@ describe('tab stop import with run translator', () => {
     });
 
     const paragraphNode = nodes[0];
-    const tabNodes = paragraphNode.content.filter((child) => child.type === 'tab');
+    const tabNodes = paragraphNode.content.flatMap((child) =>
+      Array.isArray(child.content) ? child.content.filter((inner) => inner.type === 'tab') : [],
+    );
     expect(tabNodes.length).toBe(2);
-    expect(paragraphNode.content.map((child) => child.type)).toEqual(['text', 'tab', 'tab', 'text']);
+    expect(paragraphNode.content).toHaveLength(1);
+    expect(paragraphNode.content[0].content.map((grand) => grand.type)).toEqual(['text', 'tab', 'tab', 'text']);
   });
 });

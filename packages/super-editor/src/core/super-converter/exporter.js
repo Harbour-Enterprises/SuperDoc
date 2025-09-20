@@ -22,6 +22,7 @@ import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translato
 import { translator as wHighlightTranslator } from './v3/handlers/w/highlight/highlight-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
+import { translator as wRNodeTranslator } from './v3/handlers/w/r/r-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
@@ -81,6 +82,7 @@ export function exportSchemaToJson(params) {
     body: translateBodyNode,
     heading: translateHeadingNode,
     paragraph: wPNodeTranslator,
+    run: wRNodeTranslator,
     text: translateTextNode,
     bulletList: translateList,
     orderedList: translateList,
@@ -1238,7 +1240,11 @@ function translateMark(mark) {
       break;
 
     case 'italic':
-      delete markElement.attributes;
+      if (attrs?.value && attrs.value !== '1' && attrs.value !== true) {
+        markElement.attributes['w:val'] = attrs.value;
+      } else {
+        delete markElement.attributes;
+      }
       markElement.type = 'element';
       break;
 

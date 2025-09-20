@@ -44,26 +44,24 @@ describe('r-translator integration with w:b (marks-only import, bold inline)', a
 
     runs.forEach(({ node, boldExpected }) => {
       const encoded = r_translator.encode({ nodes: [node], nodeListHandler: handler, docx: xmlMap });
-      expect(encoded).toBeTruthy();
-      // Encoded output is a text node with marks
-      const marks = encoded.marks || [];
-      const hasRun = marks.some((m) => m.type === 'run');
-      expect(hasRun).toBe(true);
+      expect(encoded?.type).toBe('run');
 
+      const textChild = encoded.content?.find((child) => child?.type === 'text');
+      expect(textChild).toBeTruthy();
+
+      const marks = textChild?.marks || [];
       const hasBold = marks.some((m) => m.type === 'bold');
       expect(hasBold).toBe(boldExpected);
 
       // runProperties should not contain w:b (we store only non-bold rPr entries)
-      const runMark = marks.find((m) => m.type === 'run');
-      const runProps = Array.isArray(runMark?.attrs?.runProperties) ? runMark.attrs.runProperties : [];
+      const runProps = Array.isArray(encoded.attrs?.runProperties) ? encoded.attrs.runProperties : [];
       const hasWBInRunProps = runProps.some((e) => e.xmlName === 'w:b');
       expect(hasWBInRunProps).toBe(false);
 
       // Now decode and ensure w:b appears only when expected
       const decoded = r_translator.decode({ node: encoded });
-      const runNode = decoded?.name === 'w:r' ? decoded : (decoded?.elements || []).find((el) => el.name === 'w:r');
-      expect(runNode).toBeTruthy();
-      const rPrOut = runNode.elements?.find((el) => el.name === 'w:rPr');
+      expect(decoded?.name).toBe('w:r');
+      const rPrOut = decoded.elements?.find((el) => el.name === 'w:rPr');
       const wBOut = rPrOut?.elements?.find((el) => el.name === 'w:b');
       if (boldExpected) expect(wBOut).toBeTruthy();
       else expect(wBOut).toBeUndefined();

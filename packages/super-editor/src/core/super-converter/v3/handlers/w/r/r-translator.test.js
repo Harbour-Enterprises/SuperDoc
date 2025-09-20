@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { translator, config } from './r-translator.js';
 
-describe('w:r r-translator (mark)', () => {
+describe('w:r r-translator (node)', () => {
   it('exposes correct metadata', () => {
     expect(config.xmlName).toBe('w:r');
     expect(config.sdNodeOrKeyName).toBe('run');
@@ -12,7 +12,7 @@ describe('w:r r-translator (mark)', () => {
     expect(xmlNames).toEqual(['w:rsidR', 'w:rsidRPr', 'w:rsidDel']);
   });
 
-  it('encode applies a run mark to child content', () => {
+  it('encodes a run node wrapping translated children', () => {
     const fakeChild = { type: 'text', text: 'Hello', marks: [] };
     const runNode = { name: 'w:r', elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Hello' }] }] };
 
@@ -21,11 +21,13 @@ describe('w:r r-translator (mark)', () => {
       nodeListHandler: { handler: vi.fn(() => [fakeChild]) },
     };
     const out = translator.encode(params);
-    const target = Array.isArray(out?.content) ? out.content[0] : out;
-    expect(target?.marks?.some((m) => m.type === 'run')).toBe(true);
+
+    expect(out?.type).toBe('run');
+    expect(Array.isArray(out.content)).toBe(true);
+    expect(out.content[0]).toMatchObject({ type: 'text', text: 'Hello' });
   });
 
-  it('converts w:b run property into a bold mark and drops it from runProperties', () => {
+  it('converts w:b run property into a bold mark and omits it from runProperties', () => {
     const boldRun = {
       name: 'w:r',
       elements: [
@@ -50,9 +52,10 @@ describe('w:r r-translator (mark)', () => {
     };
 
     const node = translator.encode(params);
-    expect(node.marks?.some((mark) => mark.type === 'bold')).toBe(true);
-    const runMark = node.marks?.find((mark) => mark.type === 'run');
-    expect(Array.isArray(runMark?.attrs?.runProperties)).toBe(false);
+    expect(node.type).toBe('run');
+    const child = node.content[0];
+    expect(child.marks?.some((mark) => mark.type === 'bold')).toBe(true);
+    expect(node.attrs?.runProperties).toBeUndefined();
   });
 
   it('collects font and size info into a textStyle mark', () => {
@@ -85,12 +88,13 @@ describe('w:r r-translator (mark)', () => {
     };
 
     const node = translator.encode(params);
-    const textStyleMark = node.marks?.find((mark) => mark.type === 'textStyle');
+    const textNode = node.content[0];
+    const textStyleMark = textNode.marks?.find((mark) => mark.type === 'textStyle');
     expect(textStyleMark).toBeDefined();
     expect(textStyleMark.attrs).toMatchObject({ fontFamily: 'Arial, sans-serif', fontSize: '16pt' });
   });
 
-  it('returns all child nodes when the run contains multiple items such as tabs', () => {
+  it('returns a run node containing multiple items such as tabs', () => {
     const run = {
       name: 'w:r',
       elements: [
@@ -113,13 +117,10 @@ describe('w:r r-translator (mark)', () => {
 
     const result = translator.encode(params);
 
-    expect(Array.isArray(result)).toBe(true);
-    expect(result).toHaveLength(3);
-    expect(result[0].type).toBe('text');
-    expect(result[1]).toMatchObject({ type: 'tab', attrs: { val: 'start' } });
-    const tabMarks = result[1].marks || [];
-    expect(tabMarks.some((mark) => mark.type === 'run')).toBe(true);
-    expect(tabMarks.some((mark) => mark.type === 'textStyle')).toBe(false);
-    expect(result[2].type).toBe('text');
+    expect(result.type).toBe('run');
+    expect(result.content).toHaveLength(3);
+    expect(result.content[0].type).toBe('text');
+    expect(result.content[1]).toMatchObject({ type: 'tab', attrs: { val: 'start' } });
+    expect(result.content[2].type).toBe('text');
   });
 });

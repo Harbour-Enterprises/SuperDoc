@@ -16,7 +16,7 @@ describe('[orderedlist_interrupted1.docx] interrupted ordered list tests', async
     const firstList = body.elements[0];
     const firstListText = getTextFromNode(firstList);
     expect(firstListText).toBe('a');
-    testListNodes({ node: firstList, expectedLevel: 0, expectedNumPr: 0 });
+    testListNodes({ node: firstList, expectedLevel: 0, expectedNumPr: 2 });
   });
 
   it('correctly exports non-list interruption text', () => {

@@ -1,18 +1,25 @@
 // @ts-check
-import { Mark, Attribute } from '@core/index.js';
+import { Attribute, OxmlNode } from '@core/index.js';
+import { splitRun } from './commands/index.js';
 
 /**
- * Run mark emulates OOXML w:r (run) boundaries.
- * It can carry opaque run-level metadata without affecting visual style.
+ * Run node emulates OOXML w:r (run) boundaries while remaining transparent to layout.
+ * It carries run-level metadata (runProperties, rsid attributes) without affecting visual style.
  */
-export const Run = Mark.create({
+export const Run = OxmlNode.create({
   name: 'run',
-
-  inclusive: false,
+  oXmlName: 'w:r',
+  group: 'inline',
+  inline: true,
+  content: 'inline*',
+  selectable: false,
+  childToAttributes: ['runProperties'],
 
   addOptions() {
     return {
-      htmlAttributes: {},
+      htmlAttributes: {
+        'data-run': '1',
+      },
     };
   },
 
@@ -21,20 +28,38 @@ export const Run = Mark.create({
       runProperties: {
         default: null,
         rendered: false,
+        keepOnSplit: true,
+      },
+      rsidR: {
+        default: null,
+        rendered: false,
+        keepOnSplit: true,
+      },
+      rsidRPr: {
+        default: null,
+        rendered: false,
+        keepOnSplit: true,
+      },
+      rsidDel: {
+        default: null,
+        rendered: false,
+        keepOnSplit: true,
       },
     };
   },
 
+  addCommands() {
+    return {
+      splitRun,
+    };
+  },
+
   parseDOM() {
-    return [
-      {
-        tag: 'span[data-run]',
-      },
-    ];
+    return [{ tag: 'span[data-run]' }];
   },
 
   renderDOM({ htmlAttributes }) {
-    const base = Attribute.mergeAttributes({ 'data-run': '1' }, this.options.htmlAttributes, htmlAttributes);
+    const base = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
     return ['span', base, 0];
   },
 });

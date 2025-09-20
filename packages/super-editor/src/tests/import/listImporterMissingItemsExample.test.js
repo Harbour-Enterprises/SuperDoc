@@ -4,6 +4,7 @@ import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { createDocumentJson } from '../../core/super-converter/v2/importer/docxImporter.js';
 import { handleParagraphNode } from '@converter/v2/importer/paragraphNodeImporter.js';
+import { extractParagraphText } from '../helpers/getParagraphText.js';
 
 describe('it correctly imports list with recursive style def', async () => {
   const fileName = 'broken-list-missing-items.docx';
@@ -21,8 +22,7 @@ describe('it correctly imports list with recursive style def', async () => {
     const item2 = content[2];
     const nodes = handleListNode({ nodes: [item2], docx, nodeListHandler: defaultNodeListHandler(), lists: {} })?.nodes;
 
-    const node = nodes[0].content[0].content[0];
-    const text = node.content[0].text;
-    expect(text).toBe('Item 2');
+    const paragraphNode = nodes[0].content[0].content[0];
+    expect(extractParagraphText(paragraphNode)).toBe('Item 2.  Text 2');
   });
 });

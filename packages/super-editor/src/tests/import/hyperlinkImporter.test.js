@@ -17,11 +17,12 @@ describe('HyperlinkNodeImporter', () => {
       docx,
       nodeListHandler: defaultNodeListHandler(),
     });
-    const { marks } = nodes[0];
-    expect(marks.length).toBe(4);
+    const runNode = nodes.find((node) => node.type === 'run') || nodes[0];
+    const textNode = runNode.content?.find((child) => child.type === 'text');
+    expect(textNode).toBeDefined();
 
-    const runMark = marks.find((mark) => mark.type === 'run');
-    expect(runMark).toBeDefined();
+    const marks = textNode?.marks || [];
+    expect(marks.length).toBe(3);
 
     const underlineMark = marks.find((mark) => mark.type === 'underline');
     expect(underlineMark).toBeDefined();
@@ -60,11 +61,12 @@ describe('HyperlinkNodeImporter', () => {
       docx,
       nodeListHandler: defaultNodeListHandler(),
     });
-    const { marks } = nodes[0];
-    expect(marks.length).toBe(3);
+    const runNode = nodes.find((node) => node.type === 'run') || nodes[0];
+    const textNode = runNode.content?.find((child) => child.type === 'text');
+    expect(textNode).toBeDefined();
 
-    const runMark = marks.find((mark) => mark.type === 'run');
-    expect(runMark).toBeDefined();
+    const marks = textNode?.marks || [];
+    expect(marks.length).toBe(2);
 
     const linkMark = marks.find((mark) => mark.type === 'link');
     expect(linkMark).toBeDefined();

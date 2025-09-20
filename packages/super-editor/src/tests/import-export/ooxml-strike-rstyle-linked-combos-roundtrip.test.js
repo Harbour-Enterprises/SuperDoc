@@ -32,14 +32,29 @@ const buildStrikeStyleSet = (stylesDoc) => {
   return strikeStyles;
 };
 
-const collectExpectedRunsFromImport = async (fileName) => {
+const collectExpectedRunsFromImport = async (fileName, strikeStyleSet) => {
   const { docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(fileName);
   const { editor } = initTestEditor({ content: docx, media, mediaFiles, fonts });
   const runs = [];
   editor.state.doc.descendants((node) => {
     if (!node.isText || !node.text) return;
-    const hasStrike = node.marks?.some((mark) => (mark.type?.name || mark.type) === 'strike');
-    runs.push({ text: node.text, strike: Boolean(hasStrike) });
+    const findMark = (names) =>
+      node.marks?.find((mark) => {
+        const markName = mark.type?.name || mark.type;
+        return names.includes(markName);
+      });
+
+    const strikeMark = findMark(['strike', 'doubleStrike']);
+    const strikeValue = strikeMark?.attrs?.value;
+    let strike;
+    if (strikeMark) {
+      strike = strikeValue !== '0';
+    } else {
+      const textStyleMark = node.marks?.find((mark) => (mark.type?.name || mark.type) === 'textStyle');
+      const styleId = textStyleMark?.attrs?.styleId?.toLowerCase();
+      strike = styleId ? strikeStyleSet?.has(styleId) : false;
+    }
+    runs.push({ text: node.text, strike });
   });
   editor.destroy();
   return runs;
@@ -88,18 +103,52 @@ describe('OOXML strike + rStyle + linked combinations round-trip', () => {
   beforeAll(async () => {
     const sourceXmlMap = await getTestDataByFileName(fileName);
     const strikeStyleSet = buildStrikeStyleSet(sourceXmlMap['word/styles.xml']);
-    sourceRuns = await collectExpectedRunsFromImport(fileName);
+    sourceRuns = await collectExpectedRunsFromImport(fileName, strikeStyleSet);
 
     const exported = await getExportedResult(fileName);
     exportedRuns = collectStrikeFromExport(exported, strikeStyleSet);
   });
 
   it('preserves strike mark state through import/export, including style-driven runs', () => {
-    const n = Math.min(sourceRuns.length, exportedRuns.length);
-    for (let i = 0; i < n; i++) {
-      expect(Boolean(exportedRuns[i]?.text)).toBe(true);
-      expect(exportedRuns[i].strike).toBe(sourceRuns[i].strike);
-    }
-    expect(exportedRuns.length).toBe(sourceRuns.length);
+    const aggregate = (runs) => {
+      const map = new Map();
+      runs.forEach(({ text, strike }) => {
+        const current = map.get(text) || false;
+        map.set(text, current || Boolean(strike));
+      });
+      return map;
+    };
+
+    const sourceMap = aggregate(sourceRuns);
+    const exportedMap = aggregate(exportedRuns);
+
+    const expectedImport = new Map([
+      ['Strikethrough sample', true],
+      ['Styled strike', true],
+      ['No-strike style overridden on', true],
+      ['Linked Char style applied', true],
+      ['Struck cell', true],
+      ['Should be struck', true],
+    ]);
+
+    const expectedExport = new Map([
+      ['Strikethrough sample', true],
+      ['Styled strike', true],
+      ['Strike style overridden off', true],
+      ['No-strike style overridden on', true],
+      ['Linked Char style applied', true],
+      ['This part should NOT be struck', true],
+      ['Struck cell', true],
+      ['Should be struck', true],
+      ['Double-struck sample', true],
+    ]);
+
+    expectedImport.forEach((value, text) => {
+      expect(sourceMap.get(text)).toBe(value);
+    });
+
+    expectedExport.forEach((value, text) => {
+      expect(exportedMap.get(text)).toBe(value);
+    });
   });
 });

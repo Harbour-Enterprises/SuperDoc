@@ -3,7 +3,6 @@ import {
   collectRunProperties,
   buildRunAttrs,
   applyRunMarks,
-  createRunMark,
   deriveStyleMarks,
   collectStyleMarks,
   collectStyleChain,
@@ -13,10 +12,10 @@ import {
   mergeTextStyleAttrs,
   cloneRunAttrs,
   cloneMark,
-  mergeRunAttrs,
+  createRunPropertiesElement,
   normalizeBool,
-  resolveRunElement,
-  ensureRunPropertiesContainer,
+  cloneXmlNode,
+  applyRunPropertiesTemplate,
 } from './helpers.js';
 
 const makeDocxWithStyles = (styles) => ({
@@ -77,56 +76,29 @@ describe('w:r helper utilities', () => {
   });
 
   describe('applyRunMarks', () => {
-    it('adds run and inline marks, merging textStyle attrs', () => {
+    it('adds inline marks and merges textStyle attrs', () => {
       const node = { type: 'text', text: 'Hello', marks: [] };
-      const runAttrs = { runProperties: [{ xmlName: 'w:rStyle', attributes: { 'w:val': 'RunStyle' } }] };
       const inlineMarks = [{ type: 'bold' }];
       const textStyleAttrs = { fontFamily: 'Arial' };
 
-      const result = applyRunMarks(node, runAttrs, inlineMarks, textStyleAttrs);
-      expect(result.marks).toEqual([
-        { type: 'run', attrs: runAttrs },
-        { type: 'bold' },
-        { type: 'textStyle', attrs: { fontFamily: 'Arial' } },
-      ]);
+      const result = applyRunMarks(node, inlineMarks, textStyleAttrs);
+      expect(result.marks).toEqual([{ type: 'bold' }, { type: 'textStyle', attrs: { fontFamily: 'Arial' } }]);
     });
 
     it('merges with existing marks without duplication', () => {
       const node = {
         type: 'text',
         text: 'Hello',
-        marks: [
-          { type: 'run', attrs: { runProperties: [{ xmlName: 'w:color', attributes: { 'w:val': '00FF00' } }] } },
-          { type: 'textStyle', attrs: { fontFamily: 'Times' } },
-        ],
+        marks: [{ type: 'textStyle', attrs: { fontFamily: 'Times' } }],
       };
 
-      const runAttrs = { runProperties: [{ xmlName: 'w:sz', attributes: { 'w:val': '48' } }] };
       const inlineMarks = [{ type: 'bold' }];
       const textStyleAttrs = { fontSize: '24pt' };
 
-      const result = applyRunMarks(node, runAttrs, inlineMarks, textStyleAttrs);
-      const runMark = result.marks.find((m) => m.type === 'run');
-      expect(runMark.attrs.runProperties).toEqual([
-        { xmlName: 'w:color', attributes: { 'w:val': '00FF00' } },
-        { xmlName: 'w:sz', attributes: { 'w:val': '48' } },
-      ]);
+      const result = applyRunMarks(node, inlineMarks, textStyleAttrs);
       expect(result.marks.filter((m) => m.type === 'bold')).toHaveLength(1);
       const textStyle = result.marks.find((m) => m.type === 'textStyle');
       expect(textStyle.attrs).toEqual({ fontFamily: 'Times', fontSize: '24pt' });
-    });
-  });
-
-  describe('createRunMark', () => {
-    it('creates bare run mark when attrs empty', () => {
-      expect(createRunMark()).toEqual({ type: 'run' });
-    });
-
-    it('clones provided attributes', () => {
-      const attrs = { runProperties: [{ xmlName: 'w:b', attributes: {} }] };
-      const mark = createRunMark(attrs);
-      expect(mark).toEqual({ type: 'run', attrs: { runProperties: [{ xmlName: 'w:b', attributes: {} }] } });
-      expect(mark.attrs.runProperties).not.toBe(attrs.runProperties);
     });
   });
 
@@ -227,20 +199,39 @@ describe('w:r helper utilities', () => {
       expect(clone.attrs.runProperties).not.toBe(mark.attrs.runProperties);
     });
 
-    it('mergeRunAttrs combines runProperties without duplication', () => {
-      const existing = { runProperties: [{ xmlName: 'w:b', attributes: {} }] };
-      const incoming = {
-        runProperties: [
-          { xmlName: 'w:b', attributes: {} },
-          { xmlName: 'w:color', attributes: { 'w:val': 'FF' } },
-        ],
+    it('cloneXmlNode deep clones nested elements', () => {
+      const node = {
+        name: 'w:r',
+        attributes: { id: '1' },
+        elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Hello' }] }],
       };
-      expect(mergeRunAttrs(existing, incoming)).toEqual({
-        runProperties: [
-          { xmlName: 'w:b', attributes: {} },
-          { xmlName: 'w:color', attributes: { 'w:val': 'FF' } },
-        ],
-      });
+      const clone = cloneXmlNode(node);
+      expect(clone).toEqual(node);
+      expect(clone).not.toBe(node);
+      expect(clone.elements[0]).not.toBe(node.elements[0]);
+      expect(clone.elements[0].elements[0]).not.toBe(node.elements[0].elements[0]);
+    });
+
+    it('applyRunPropertiesTemplate adds run props to nodes', () => {
+      const template = {
+        name: 'w:rPr',
+        attributes: { 'w:rsidR': '001' },
+        elements: [{ name: 'w:b' }, { name: 'w:color', attributes: { 'w:val': 'FF0000' } }],
+      };
+
+      const runNode = { name: 'w:r', elements: [{ name: 'w:t' }] };
+      applyRunPropertiesTemplate(runNode, template);
+
+      const rPr = runNode.elements[0];
+      expect(rPr.name).toBe('w:rPr');
+      expect(rPr.attributes).toEqual({ 'w:rsidR': '001' });
+      expect(rPr.elements).toHaveLength(2);
+      expect(rPr.elements[0]).toEqual({ name: 'w:b' });
+      expect(rPr.elements[0]).not.toBe(template.elements[0]);
+      expect(rPr.elements[1]).toEqual({ name: 'w:color', attributes: { 'w:val': 'FF0000' } });
+
+      applyRunPropertiesTemplate(runNode, template);
+      expect(rPr.elements).toHaveLength(2);
     });
   });
 
@@ -255,24 +246,24 @@ describe('w:r helper utilities', () => {
     });
   });
 
-  describe('resolveRunElement & ensureRunPropertiesContainer', () => {
-    it('resolves run element directly or nested', () => {
-      const direct = { name: 'w:r' };
-      expect(resolveRunElement(direct)).toBe(direct);
-
-      const nested = { name: 'w:hyperlink', elements: [{ name: 'w:r' }] };
-      expect(resolveRunElement(nested)).toBe(nested.elements[0]);
-      expect(resolveRunElement({ name: 'w:p' })).toBeNull();
+  describe('createRunPropertiesElement', () => {
+    it('returns null when entries are empty', () => {
+      expect(createRunPropertiesElement()).toBeNull();
+      expect(createRunPropertiesElement([])).toBeNull();
     });
 
-    it('ensures run properties container exists and is reusable', () => {
-      const run = { name: 'w:r', elements: [] };
-      const rPr = ensureRunPropertiesContainer(run);
-      expect(rPr).toEqual({ name: 'w:rPr', elements: [] });
-      expect(run.elements[0]).toBe(rPr);
-
-      const existing = ensureRunPropertiesContainer(run);
-      expect(existing).toBe(rPr);
+    it('builds a w:rPr node from run property entries', () => {
+      const element = createRunPropertiesElement([
+        { xmlName: 'w:color', attributes: { 'w:val': 'FF0000' } },
+        { xmlName: 'w:rStyle', attributes: { 'w:val': 'Heading1' } },
+      ]);
+      expect(element).toEqual({
+        name: 'w:rPr',
+        elements: [
+          { name: 'w:color', attributes: { 'w:val': 'FF0000' } },
+          { name: 'w:rStyle', attributes: { 'w:val': 'Heading1' } },
+        ],
+      });
     });
   });
 });

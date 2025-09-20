@@ -139,9 +139,10 @@ describe('runImporter', () => {
       expect(result.nodes).toHaveLength(1);
       expect(result.consumed).toBe(1);
 
-      const textNode = result.nodes[0];
-      expect(textNode.type).toBe('text');
-      expect(textNode.text).toBe('Test text');
+      const runNode = result.nodes[0];
+      expect(runNode.type).toBe('run');
+      const textNode = runNode.content.find((child) => child.type === 'text');
+      expect(textNode?.text).toBe('Test text');
 
       // Check that run style attributes override paragraph style attributes
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');
@@ -173,7 +174,9 @@ describe('runImporter', () => {
       });
 
       expect(result.nodes).toHaveLength(1);
-      const textNode = result.nodes[0];
+      const runNode = result.nodes[0];
+      expect(runNode.type).toBe('run');
+      const textNode = runNode.content.find((child) => child.type === 'text');
 
       // Check that all marks are present with correct precedence
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');
@@ -208,7 +211,9 @@ describe('runImporter', () => {
       });
 
       expect(result.nodes).toHaveLength(1);
-      const textNode = result.nodes[0];
+      const runNode = result.nodes[0];
+      expect(runNode.type).toBe('run');
+      const textNode = runNode.content.find((child) => child.type === 'text');
 
       // Should have paragraph style attributes
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');
@@ -240,7 +245,9 @@ describe('runImporter', () => {
       });
 
       expect(result.nodes).toHaveLength(1);
-      const textNode = result.nodes[0];
+      const runNode = result.nodes[0];
+      expect(runNode.type).toBe('run');
+      const textNode = runNode.content.find((child) => child.type === 'text');
 
       // Check that styleId is stored in textStyle mark
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');
@@ -262,7 +269,9 @@ describe('runImporter', () => {
       });
 
       expect(result.nodes).toHaveLength(1);
-      const textNode = result.nodes[0];
+      const runNode = result.nodes[0];
+      expect(runNode.type).toBe('run');
+      const textNode = runNode.content.find((child) => child.type === 'text');
 
       // Should not have textStyle mark with styleId
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');
@@ -289,7 +298,9 @@ describe('runImporter', () => {
       });
 
       expect(result.nodes).toHaveLength(1);
-      const textNode = result.nodes[0];
+      const runNode = result.nodes[0];
+      expect(runNode.type).toBe('run');
+      const textNode = runNode.content.find((child) => child.type === 'text');
 
       // Should have combined textStyle mark with all attributes
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');
@@ -324,7 +335,9 @@ describe('runImporter', () => {
       });
 
       expect(result.nodes).toHaveLength(1);
-      const textNode = result.nodes[0];
+      const runNode = result.nodes[0];
+      expect(runNode.type).toBe('run');
+      const textNode = runNode.content.find((child) => child.type === 'text');
 
       // Should have both paragraph and run styles with correct precedence
       const textStyleMark = textNode.marks.find((mark) => mark.type === 'textStyle');

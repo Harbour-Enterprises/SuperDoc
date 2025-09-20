@@ -9,7 +9,7 @@ describe('w:i translator (attribute)', () => {
     expect(config.sdNodeOrKeyName).toBe('italic');
     expect(config.type).toBe(NodeTranslator.translatorTypes.ATTRIBUTE);
     expect(typeof config.encode).toBe('function');
-    expect(config.attributes?.map((attr) => attr.xmlName)).toEqual(['w:val']);
+    expect(config.attributes).toBeUndefined();
   });
 
   it('builds NodeTranslator instance', () => {
@@ -19,16 +19,16 @@ describe('w:i translator (attribute)', () => {
   });
 
   describe('encode', () => {
-    it('normalizes boolean attributes', () => {
+    it('copies existing w:val', () => {
       const params = { nodes: [{ attributes: { 'w:val': '0' } }] };
-      const outFalse = config.encode(params, { italic: false });
-      expect(outFalse.attributes).toEqual({ 'w:val': '0' });
+      const out = config.encode(params);
+      expect(out.attributes).toEqual({ 'w:val': '0' });
+    });
 
-      const outTrue = config.encode({ nodes: [{ attributes: { 'w:val': '0' } }] }, { italic: true });
-      expect(outTrue.attributes).toEqual({});
-
-      const fallback = config.encode({ nodes: [{ attributes: {} }] });
-      expect(fallback.attributes).toEqual({ 'w:val': null });
+    it('defaults w:val to null when missing', () => {
+      const params = { nodes: [{ attributes: {} }] };
+      const out = config.encode(params);
+      expect(out.attributes).toEqual({ 'w:val': null });
     });
   });
 });

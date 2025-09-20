@@ -22,13 +22,16 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     expect(item.attrs.indent.hanging).toBeUndefined();
 
     const content = item.content[0];
-    const text = content.content[0];
     expect(content.type).toBe('paragraph');
-    expect(text.type).toBe('text');
+
+    const runNode = content.content.find((node) => node.type === 'run');
+    expect(runNode).toBeDefined();
+
+    const text = runNode.content?.find((child) => child.type === 'text');
+    expect(text).toBeDefined();
     expect(text.text).toBe('APPOINTMENT');
 
     const marks = text.marks || [];
-    expect(marks.some((mark) => mark.type === 'run')).toBe(true);
     const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
 
     expect(textStyleMark).toBeDefined();

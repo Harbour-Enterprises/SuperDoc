@@ -33,12 +33,13 @@ describe('basic comment import [basic-comment.docx]', () => {
     const commentText = comment.textJson;
     expect(commentText.type).toBe('paragraph');
 
-    const commentContent = commentText.content.filter((node) => node.type !== 'run');
-    expect(commentContent).toHaveLength(1);
-    expect(commentContent[0].text).toBe('abcabc');
-    expect(commentContent[0].type).toBe('text');
-    const marks = commentContent[0].marks || [];
-    expect(marks.some((mark) => mark.type === 'run')).toBe(true);
+    const textNode = commentText.content
+      .flatMap((node) => (node.type === 'run' ? node.content || [] : [node]))
+      .find((child) => child.type === 'text');
+    expect(textNode).toBeDefined();
+    expect(textNode.text).toBe('abcabc');
+
+    const marks = textNode.marks || [];
     const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
     expect(textStyleMark?.attrs.fontSize).toBe('10pt');
   });

@@ -103,7 +103,7 @@ describe('toggleMarkCascade', () => {
 describe('defaultStyleDetector', () => {
   const baseState = { selection: {} };
 
-  const runMark = (styleId) => ({ type: { name: 'run' }, attrs: { runProperties: { styleId } } });
+  const styleMark = (styleId) => ({ type: { name: 'textStyle' }, attrs: { styleId } });
 
   it('returns true when style explicitly enables the mark', () => {
     const editor = {
@@ -113,7 +113,7 @@ describe('defaultStyleDetector', () => {
     };
     const result = defaultStyleDetector({
       state: baseState,
-      selectionMarks: [runMark('heading1')],
+      selectionMarks: [styleMark('heading1')],
       markName: 'bold',
       editor,
     });
@@ -128,7 +128,7 @@ describe('defaultStyleDetector', () => {
     };
     const result = defaultStyleDetector({
       state: baseState,
-      selectionMarks: [runMark('heading1')],
+      selectionMarks: [styleMark('heading1')],
       markName: 'bold',
       editor,
     });
@@ -143,7 +143,7 @@ describe('defaultStyleDetector', () => {
     };
     const result = defaultStyleDetector({
       state: baseState,
-      selectionMarks: [runMark('heading1')],
+      selectionMarks: [styleMark('heading1')],
       markName: 'bold',
       editor,
     });
@@ -161,7 +161,7 @@ describe('defaultStyleDetector', () => {
     };
     const result = defaultStyleDetector({
       state: baseState,
-      selectionMarks: [runMark('child')],
+      selectionMarks: [styleMark('child')],
       markName: 'italic',
       editor,
     });
@@ -176,7 +176,7 @@ describe('defaultStyleDetector', () => {
     };
     const result = defaultStyleDetector({
       state: baseState,
-      selectionMarks: [runMark('styleColor')],
+      selectionMarks: [styleMark('styleColor')],
       markName: 'textStyle',
       editor,
     });
@@ -216,24 +216,12 @@ describe('defaultStyleDetector', () => {
 });
 
 describe('getStyleIdFromMarks', () => {
-  it('reads styleId from runProperties object', () => {
-    const marks = [{ type: { name: 'run' }, attrs: { runProperties: { styleId: 'Heading1' } } }];
+  it('reads styleId from textStyle mark', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { styleId: 'Heading1' } }];
     expect(getStyleIdFromMarks(marks)).toBe('Heading1');
   });
 
-  it('reads styleId from runProperties array', () => {
-    const marks = [
-      {
-        type: { name: 'run' },
-        attrs: {
-          runProperties: [{ xmlName: 'w:rStyle', attributes: { 'w:val': 'Heading2' } }],
-        },
-      },
-    ];
-    expect(getStyleIdFromMarks(marks)).toBe('Heading2');
-  });
-
-  it('returns null when run style is absent', () => {
+  it('returns null when style is absent', () => {
     const marks = [{ type: { name: 'em' }, attrs: {} }];
     expect(getStyleIdFromMarks(marks)).toBeNull();
   });

@@ -1,6 +1,7 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import { exportSchemaToJson } from '../../../../exporter.js';
+import { translateChildNodes } from '../../../../v2/exporter/helpers/index.js';
+import { generateRunProps, processOutputMarks } from '../../../../exporter.js';
 import {
   collectRunProperties,
   buildRunAttrs,
@@ -8,9 +9,11 @@ import {
   deriveStyleMarks,
   mergeInlineMarkSets,
   mergeTextStyleAttrs,
-  resolveRunElement,
-  ensureRunPropertiesContainer,
   cloneMark,
+  cloneRunAttrs,
+  createRunPropertiesElement,
+  cloneXmlNode,
+  applyRunPropertiesTemplate,
 } from './helpers/helpers.js';
 import { splitRunProperties } from './helpers/split-run-properties.js';
 import validXmlAttributes from './attributes/index.js';
@@ -19,8 +22,8 @@ import validXmlAttributes from './attributes/index.js';
 const XML_NODE_NAME = 'w:r';
 
 /**
- * Represent OOXML <w:r> as a SuperDoc mark named 'run'.
- * Content within the run is annotated; no separate node is introduced.
+ * Represent OOXML <w:r> as a SuperDoc inline node named 'run'.
+ * Content within the run is preserved as node children with applied marks.
  */
 /** @type {import('@translator').SuperDocNodeOrKeyName} */
 const SD_KEY_NAME = 'run';
@@ -67,51 +70,98 @@ const encode = (params, encodedAttrs = {}) => {
     return { ...child, marks: [...baseMarks, ...runLevelMarks.map((mark) => cloneMark(mark))] };
   });
 
-  const marked = contentWithRunMarks.map((child) =>
-    applyRunMarks(child, runAttrs, mergedInlineMarks, mergedTextStyleAttrs),
-  );
+  const marked = contentWithRunMarks.map((child) => applyRunMarks(child, mergedInlineMarks, mergedTextStyleAttrs));
 
   const filtered = marked.filter(Boolean);
-  if (!filtered.length) return [];
-  if (filtered.length === 1) return filtered[0];
-  return filtered;
+
+  const runNodeResult = {
+    type: SD_KEY_NAME,
+    content: filtered,
+  };
+
+  const attrs = cloneRunAttrs(runAttrs);
+  if (attrs && Object.keys(attrs).length) {
+    if (attrs.runProperties == null) delete attrs.runProperties;
+    if (Object.keys(attrs).length) runNodeResult.attrs = attrs;
+  }
+
+  if (runLevelMarks.length) {
+    runNodeResult.marks = runLevelMarks.map((mark) => cloneMark(mark));
+  }
+
+  return runNodeResult;
 };
 
 const decode = (params, decodedAttrs = {}) => {
   const { node } = params || {};
   if (!node) return undefined;
 
-  const marks = Array.isArray(node.marks) ? node.marks : [];
-  const runMarkIndex = marks.findIndex((mark) => mark?.type === SD_KEY_NAME);
-  const runMark = runMarkIndex >= 0 ? marks[runMarkIndex] : undefined;
-
-  const strippedMarks = marks.filter((_, idx) => idx !== runMarkIndex);
-  const exportNode = { ...node, marks: strippedMarks };
-  const exportParams = { ...params, node: exportNode };
+  const runAttrs = node.attrs || {};
+  const runProperties = Array.isArray(runAttrs.runProperties) ? runAttrs.runProperties : [];
+  const exportParams = { ...params };
   if (!exportParams.editor) {
     exportParams.editor = { extensionService: { extensions: [] } };
   }
-  const translated = exportSchemaToJson(exportParams);
-  if (!translated) return undefined;
 
-  const runElement = resolveRunElement(translated);
-  if (!runElement) return translated;
+  const childElements = translateChildNodes(exportParams) || [];
 
-  runElement.attributes = { ...(runElement.attributes || {}), ...decodedAttrs };
+  let runPropertiesElement = createRunPropertiesElement(runProperties);
 
-  const runProperties = Array.isArray(runMark?.attrs?.runProperties) ? runMark.attrs.runProperties : null;
-  if (runProperties && runProperties.length) {
-    const rPr = ensureRunPropertiesContainer(runElement);
-    const existingNames = new Set((rPr.elements || []).map((el) => el.name));
-    runProperties.forEach((entry) => {
-      if (!entry || !entry.xmlName || entry.xmlName === 'w:b') return;
-      if (existingNames.has(entry.xmlName)) return;
-      rPr.elements.push({ name: entry.xmlName, attributes: { ...(entry.attributes || {}) } });
-      existingNames.add(entry.xmlName);
+  const markElements = processOutputMarks(Array.isArray(node.marks) ? node.marks : []);
+  if (markElements.length) {
+    if (!runPropertiesElement) {
+      runPropertiesElement = generateRunProps(markElements);
+    } else {
+      if (!Array.isArray(runPropertiesElement.elements)) runPropertiesElement.elements = [];
+      const existingNames = new Set(
+        runPropertiesElement.elements.map((el) => el?.name).filter((name) => typeof name === 'string'),
+      );
+      markElements.forEach((element) => {
+        if (!element || !element.name || existingNames.has(element.name)) return;
+        runPropertiesElement.elements.push({ ...element, attributes: { ...(element.attributes || {}) } });
+        existingNames.add(element.name);
+      });
+    }
+  }
+
+  const runPropsTemplate = runPropertiesElement ? cloneXmlNode(runPropertiesElement) : null;
+  const applyBaseRunProps = (runNode) => applyRunPropertiesTemplate(runNode, runPropsTemplate);
+
+  const runs = [];
+
+  childElements.forEach((child) => {
+    if (!child) return;
+    if (child.name === 'w:r') {
+      const clonedRun = cloneXmlNode(child);
+      applyBaseRunProps(clonedRun);
+      runs.push(clonedRun);
+      return;
+    }
+
+    const runWrapper = { name: XML_NODE_NAME, elements: [] };
+    applyBaseRunProps(runWrapper);
+    if (!Array.isArray(runWrapper.elements)) runWrapper.elements = [];
+    runWrapper.elements.push(cloneXmlNode(child));
+    runs.push(runWrapper);
+  });
+
+  if (!runs.length) {
+    const emptyRun = { name: XML_NODE_NAME, elements: [] };
+    applyBaseRunProps(emptyRun);
+    runs.push(emptyRun);
+  }
+
+  if (decodedAttrs && Object.keys(decodedAttrs).length) {
+    runs.forEach((run) => {
+      run.attributes = { ...(run.attributes || {}), ...decodedAttrs };
     });
   }
 
-  return translated;
+  if (runs.length === 1) {
+    return runs[0];
+  }
+
+  return runs;
 };
 
 /** @type {import('@translator').NodeTranslatorConfig} */

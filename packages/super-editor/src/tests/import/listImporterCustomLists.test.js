@@ -1,6 +1,7 @@
 import { getExportedResult } from '../export/export-helpers/index';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { beforeAll, beforeEach, expect } from 'vitest';
+import { extractParagraphText } from '../helpers/getParagraphText.js';
 
 describe('[custom-list1.docx] test import custom lists', () => {
   const filename = 'custom-list1.docx';
@@ -92,10 +93,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
 
     const pNode = item.content[0];
     expect(pNode.type).toBe('paragraph');
-
-    const textNode = pNode.content[0];
-    expect(textNode.type).toBe('text');
-    expect(textNode.text).toBe('ONE');
+    expect(extractParagraphText(pNode)).toBe('ONE');
   });
 
   it('can import the first sub item (a) with indent', () => {
@@ -112,9 +110,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     const pNode = item.content[0];
     expect(pNode.type).toBe('paragraph');
 
-    const textNode = pNode.content[0];
-    expect(textNode.type).toBe('text');
-    expect(textNode.text).toBe('a');
+    expect(extractParagraphText(pNode)).toBe('a');
 
     const { attrs: pNodeAttrs } = pNode;
     expect(pNodeAttrs).toBeDefined();
@@ -184,8 +180,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
 
     const pNode = item.content[0];
     expect(pNode.type).toBe('paragraph');
-    expect(pNode.content[0].type).toBe('text');
-    expect(pNode.content[0].text).toBe('c');
+    expect(extractParagraphText(pNode)).toBe('c');
   });
 });
 

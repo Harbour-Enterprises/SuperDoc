@@ -33,20 +33,6 @@ export const buildRunAttrs = (encodedAttrs = {}, hadRPr, runProps) => {
   return base;
 };
 
-const ensureRunMark = (marks, runAttrs) => {
-  if (!runAttrs) return;
-  const runMark = createRunMark(runAttrs);
-  const runMarkIndex = marks.findIndex((mark) => mark?.type === 'run');
-  if (runMarkIndex >= 0) {
-    const existing = marks[runMarkIndex];
-    if (runMark.attrs) {
-      marks[runMarkIndex] = { ...existing, attrs: mergeRunAttrs(existing?.attrs, runMark.attrs) };
-    }
-    return;
-  }
-  marks.push(runMark);
-};
-
 const ensureInlineMarks = (marks, inlineMarks = []) => {
   inlineMarks.forEach(({ type, attrs }) => {
     if (!type) return;
@@ -65,13 +51,12 @@ const ensureTextStyleMark = (marks, textStyleAttrs) => {
   marks.push({ type: 'textStyle', attrs: { ...textStyleAttrs } });
 };
 
-export const applyRunMarks = (node, runAttrs, inlineMarks, textStyleAttrs) => {
+export const applyRunMarks = (node, inlineMarks, textStyleAttrs) => {
   if (!node || typeof node !== 'object') return node;
 
   const baseMarks = Array.isArray(node.marks) ? node.marks : [];
   const marks = baseMarks.map((mark) => cloneMark(mark));
 
-  ensureRunMark(marks, runAttrs);
   ensureInlineMarks(marks, inlineMarks);
 
   // Only apply textStyle attributes to text nodes; preserve existing textStyle marks on others.
@@ -80,11 +65,6 @@ export const applyRunMarks = (node, runAttrs, inlineMarks, textStyleAttrs) => {
   }
 
   return { ...node, marks };
-};
-
-export const createRunMark = (attrs = {}) => {
-  const hasAttrs = attrs && Object.keys(attrs).length > 0;
-  return hasAttrs ? { type: 'run', attrs: cloneRunAttrs(attrs) } : { type: 'run' };
 };
 
 export const deriveStyleMarks = ({ docx, paragraphStyleId, runStyleId }) => {
@@ -232,21 +212,6 @@ export const cloneMark = (mark) => {
   return cloned;
 };
 
-export const mergeRunAttrs = (existing = {}, incoming = {}) => {
-  const merged = { ...existing, ...cloneRunAttrs(incoming) };
-  if (Array.isArray(existing?.runProperties) && Array.isArray(incoming?.runProperties)) {
-    const seen = new Set();
-    const combined = [...existing.runProperties, ...incoming.runProperties];
-    merged.runProperties = combined.filter((entry) => {
-      const key = entry?.xmlName;
-      if (!key || seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }
-  return merged;
-};
-
 export const normalizeBool = (value) => {
   if (value === undefined || value === null) return true;
   if (typeof value === 'boolean') return value;
@@ -257,19 +222,62 @@ export const normalizeBool = (value) => {
   return true;
 };
 
-export const resolveRunElement = (node) => {
-  if (!node) return null;
-  if (node.name === 'w:r') return node;
-  return (node.elements || []).find((el) => el.name === 'w:r') || null;
+export const createRunPropertiesElement = (entries = []) => {
+  if (!Array.isArray(entries) || !entries.length) return null;
+
+  const elements = entries
+    .map((entry) => {
+      if (!entry || !entry.xmlName) return null;
+      return {
+        name: entry.xmlName,
+        attributes: { ...(entry.attributes || {}) },
+      };
+    })
+    .filter(Boolean);
+
+  if (!elements.length) return null;
+
+  return {
+    name: 'w:rPr',
+    elements,
+  };
 };
 
-export const ensureRunPropertiesContainer = (runElement) => {
-  if (!Array.isArray(runElement.elements)) runElement.elements = [];
-  let rPr = runElement.elements.find((el) => el.name === 'w:rPr');
-  if (!rPr) {
-    rPr = { name: 'w:rPr', elements: [] };
-    runElement.elements.unshift(rPr);
+export const cloneXmlNode = (nodeLike) => {
+  if (!nodeLike || typeof nodeLike !== 'object') return nodeLike;
+  return {
+    name: nodeLike.name,
+    type: nodeLike.type,
+    attributes: nodeLike.attributes ? { ...nodeLike.attributes } : undefined,
+    elements: Array.isArray(nodeLike.elements) ? nodeLike.elements.map((el) => cloneXmlNode(el)) : undefined,
+    text: nodeLike.text,
+  };
+};
+
+export const applyRunPropertiesTemplate = (runNode, runPropertiesTemplate) => {
+  if (!runNode || !runPropertiesTemplate) return;
+
+  if (!Array.isArray(runNode.elements)) runNode.elements = [];
+  let runProps = runNode.elements.find((el) => el?.name === 'w:rPr');
+  if (!runProps) {
+    runProps = { name: 'w:rPr', elements: [] };
+    runNode.elements.unshift(runProps);
   }
-  if (!Array.isArray(rPr.elements)) rPr.elements = [];
-  return rPr;
+
+  if (!Array.isArray(runProps.elements)) runProps.elements = [];
+
+  if (runPropertiesTemplate.attributes) {
+    runProps.attributes = {
+      ...(runProps.attributes || {}),
+      ...runPropertiesTemplate.attributes,
+    };
+  }
+
+  const existingNames = new Set(runProps.elements.map((el) => el?.name).filter((name) => typeof name === 'string'));
+
+  (runPropertiesTemplate.elements || []).forEach((entry) => {
+    if (!entry?.name || existingNames.has(entry.name)) return;
+    runProps.elements.push(cloneXmlNode(entry));
+    existingNames.add(entry.name);
+  });
 };

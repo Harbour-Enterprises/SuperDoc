@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { Editor } from '@core/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
 
-describe('Run mark', () => {
+describe('Run node', () => {
   it('is present in the starter schema', () => {
     const originalMatchMedia = window.matchMedia;
     if (!originalMatchMedia) {
@@ -19,7 +19,7 @@ describe('Run mark', () => {
       editor = new Editor({
         extensions: getStarterExtensions(),
       });
-      expect(editor.schema.marks.run).toBeDefined();
+      expect(editor.schema.nodes.run).toBeDefined();
     } finally {
       editor?.destroy();
       if (originalMatchMedia === undefined) {

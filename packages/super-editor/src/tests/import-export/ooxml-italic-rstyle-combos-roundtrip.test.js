@@ -37,7 +37,8 @@ const collectExpectedRunsFromImport = async (fileName) => {
   const runs = [];
   editor.state.doc.descendants((node) => {
     if (!node.isText || !node.text) return;
-    const italic = node.marks?.some((mark) => (mark.type?.name || mark.type) === 'italic') || false;
+    const italicMark = node.marks?.find((mark) => (mark.type?.name || mark.type) === 'italic');
+    const italic = italicMark ? italicMark.attrs?.value !== '0' : false;
     runs.push({ text: node.text, italic });
   });
   editor.destroy();

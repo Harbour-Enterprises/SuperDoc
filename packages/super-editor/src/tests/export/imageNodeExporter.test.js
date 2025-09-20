@@ -17,18 +17,30 @@ describe('ImageNodeExporter', async () => {
   });
 
   it('export image node correctly', () => {
-    const imageNode = body.elements[0].elements[1].elements[0];
-    expect(imageNode.elements[0].attributes.distT).toBe('0');
-    expect(imageNode.elements[0].attributes.distB).toBe('0');
-    expect(imageNode.elements[0].attributes.distL).toBe('0');
-    expect(imageNode.elements[0].attributes.distR).toBe('0');
+    const paragraph = body.elements[0];
+    const drawingRun = paragraph.elements.find(
+      (el) => el.name === 'w:r' && el.elements?.some((child) => child.name === 'w:drawing'),
+    );
+    const drawingNode = drawingRun.elements.find((child) => child.name === 'w:drawing');
+    const inlineNode = drawingNode.elements.find((child) => child.name === 'wp:inline');
 
-    expect(imageNode.elements[0].elements[0].attributes.cx).toBe(5734050);
-    expect(imageNode.elements[0].elements[0].attributes.cy).toBe(8601075);
+    expect(inlineNode.attributes.distT).toBe('0');
+    expect(inlineNode.attributes.distB).toBe('0');
+    expect(inlineNode.attributes.distL).toBe('0');
+    expect(inlineNode.attributes.distR).toBe('0');
 
-    expect(
-      imageNode.elements[0].elements[4].elements[0].elements[0].elements[1].elements[0].attributes['r:embed'],
-    ).toBe('rId4');
+    const extent = inlineNode.elements.find((el) => el.name === 'wp:extent');
+    expect(extent.attributes.cx).toBe(5734050);
+    expect(extent.attributes.cy).toBe(8601075);
+
+    const embed = inlineNode.elements
+      .find((el) => el.name === 'a:graphic')
+      .elements.find((el) => el.name === 'a:graphicData')
+      .elements.find((el) => el.name === 'pic:pic')
+      .elements.find((el) => el.name === 'pic:blipFill')
+      .elements.find((el) => el.name === 'a:blip').attributes['r:embed'];
+
+    expect(embed).toBe('rId4');
   });
 
   it('exports anchor image node correctly', async () => {});
@@ -51,8 +63,16 @@ describe('ImageNodeExporter anchor image', async () => {
   });
 
   it('exports anchor image node correctly', async () => {
-    const imageNode = body.elements[1].elements[4].elements[0];
-    const anchorNode = imageNode.elements[0];
+    const paragraph = body.elements[1];
+    const drawingRun = paragraph.elements.find(
+      (el) =>
+        el.name === 'w:r' &&
+        el.elements?.some(
+          (child) => child.name === 'w:drawing' && child.elements?.some((grand) => grand.name === 'wp:anchor'),
+        ),
+    );
+    const drawingNode = drawingRun.elements.find((child) => child.name === 'w:drawing');
+    const anchorNode = drawingNode.elements.find((child) => child.name === 'wp:anchor');
 
     expect(anchorNode.attributes).toHaveProperty('simplePos', '0');
     expect(anchorNode.elements[0].name).toBe('wp:simplePos');
