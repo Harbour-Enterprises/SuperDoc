@@ -86,7 +86,8 @@ export const ImageRegistrationPlugin = ({ editor }) => {
 
       // Add decorations for the images first at their current positions
       foundImages
-        .toSorted((a, b) => a.pos - b.pos)
+        .slice()
+        .sort((a, b) => a.pos - b.pos)
         .forEach(({ pos, id }) => {
           let deco = Decoration.widget(pos, () => document.createElement('placeholder'), {
             side: -1,
@@ -97,7 +98,8 @@ export const ImageRegistrationPlugin = ({ editor }) => {
 
       // Then delete the image nodes (highest position first to avoid position shifting issues)
       foundImages
-        .toSorted((a, b) => b.pos - a.pos)
+        .slice()
+        .sort((a, b) => b.pos - a.pos)
         .forEach(({ node, pos }) => {
           tr.delete(pos, pos + node.nodeSize);
         });

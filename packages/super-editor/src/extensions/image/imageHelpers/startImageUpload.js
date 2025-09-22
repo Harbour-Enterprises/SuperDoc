@@ -52,56 +52,55 @@ export async function uploadAndInsertImage({ editor, view, file, size, id }) {
       ? editor.options.handleImageUpload
       : handleImageUploadDefault;
 
-  // try {
-  let url = await imageUploadHandler(file);
+  try {
+    let url = await imageUploadHandler(file);
 
-  let fileName = file.name.replace(' ', '_');
-  let placeholderPos = findPlaceholder(view.state, id);
+    let fileName = file.name.replace(' ', '_');
+    let placeholderPos = findPlaceholder(view.state, id);
 
-  // If the content around the placeholder has been deleted,
-  // drop the image
-  if (placeholderPos == null) {
-    return;
+    // If the content around the placeholder has been deleted,
+    // drop the image
+    if (placeholderPos == null) {
+      return;
+    }
+
+    let mediaPath = `word/media/${fileName}`;
+
+    let rId = null;
+    if (editor.options.mode === 'docx') {
+      const [, path] = mediaPath.split('word/'); // Path without 'word/' part.
+      const id = addImageRelationship({ editor, path });
+      if (id) rId = id;
+    }
+
+    let imageNode = view.state.schema.nodes.image.create({
+      src: mediaPath,
+      size,
+      id,
+      rId,
+    });
+
+    editor.storage.image.media = Object.assign(editor.storage.image.media, { [mediaPath]: url });
+
+    // If we are in collaboration, we need to share the image with other clients
+    if (editor.options.ydoc) {
+      editor.commands.addImageToCollaboration({ mediaPath, fileData: url });
+    }
+
+    let tr = view.state.tr;
+
+    tr.replaceWith(placeholderPos, placeholderPos, imageNode);
+
+    tr = removeImagePlaceholder(view.state, tr, id);
+    // Otherwise, insert it at the placeholder's position, and remove
+    // the placeholder
+
+    view.dispatch(tr);
+  } catch {
+    const tr = removeImagePlaceholder(view.state, view.state.tr, id);
+    // On failure, just clean up the placeholder
+    view.dispatch(tr);
   }
-
-  let mediaPath = `word/media/${fileName}`;
-
-  let rId = null;
-  if (editor.options.mode === 'docx') {
-    const [, path] = mediaPath.split('word/'); // Path without 'word/' part.
-    const id = addImageRelationship({ editor, path });
-    if (id) rId = id;
-  }
-
-  let imageNode = view.state.schema.nodes.image.create({
-    src: mediaPath,
-    size,
-    id,
-    rId,
-  });
-
-  editor.storage.image.media = Object.assign(editor.storage.image.media, { [mediaPath]: url });
-
-  // If we are in collaboration, we need to share the image with other clients
-  if (editor.options.ydoc) {
-    editor.commands.addImageToCollaboration({ mediaPath, fileData: url });
-  }
-
-  let tr = view.state.tr;
-
-  tr.replaceWith(placeholderPos, placeholderPos, imageNode);
-
-  tr = removeImagePlaceholder(view.state, tr, id);
-  // Otherwise, insert it at the placeholder's position, and remove
-  // the placeholder
-
-  view.dispatch(tr);
-  // } catch {
-
-  //   const tr = removeImagePlaceholder(view.state.tr, id);
-  //   // On failure, just clean up the placeholder
-  //   view.dispatch(tr);
-  // }
 }
 
 function addImageRelationship({ editor, path }) {
