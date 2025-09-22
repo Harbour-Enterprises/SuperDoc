@@ -18,6 +18,7 @@ import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
+import { getFallbackImageNameFromDataUri, sanitizeDocxMediaName } from './helpers/mediaHelpers.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
@@ -1352,7 +1353,18 @@ export function translateImageNode(params, imageSize) {
 
   const src = attrs.src || attrs.imageSrc;
   const { originalWidth, originalHeight } = getPngDimensions(src);
-  const imageName = params.node.type === 'image' ? src.split('/').pop() : attrs.fieldId?.replace('-', '_');
+
+  let imageName;
+  if (params.node.type === 'image') {
+    if (src?.startsWith('data:')) {
+      imageName = getFallbackImageNameFromDataUri(src);
+    } else {
+      imageName = src?.split('/').pop();
+    }
+  } else {
+    imageName = attrs.fieldId;
+  }
+  imageName = sanitizeDocxMediaName(imageName);
 
   let size = attrs.size
     ? {
@@ -1390,9 +1402,13 @@ export function translateImageNode(params, imageSize) {
       return prepareTextAnnotation(params);
     }
 
-    const imageUrl = `media/${imageName}_${attrs.hash}.${type}`;
-    imageId = addNewImageRelationship(params, imageUrl);
-    params.media[`${imageName}_${attrs.hash}.${type}`] = src;
+    const sanitizedHash = sanitizeDocxMediaName(attrs.hash, generateDocxRandomId(4));
+    const fileName = `${imageName}_${sanitizedHash}.${type}`;
+    const relationshipTarget = `media/${fileName}`;
+    const packagePath = `word/${relationshipTarget}`;
+
+    imageId = addNewImageRelationship(params, relationshipTarget);
+    params.media[packagePath] = src;
   }
 
   let inlineAttrs = attrs.originalPadding || {
