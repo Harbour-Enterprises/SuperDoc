@@ -1,4 +1,5 @@
 import { emuToPixels, pixelsToEmu } from '@converter/helpers.js';
+import { getFallbackImageNameFromDataUri, sanitizeDocxMediaName } from '@converter/helpers/mediaHelpers.js';
 import { prepareTextAnnotation } from '@converter/v3/handlers/w/sdt/helpers/translate-field-annotation.js';
 import { generateDocxRandomId } from '@core/helpers/index.js';
 
@@ -22,7 +23,18 @@ export const translateImageNode = (params) => {
 
   const src = attrs.src || attrs.imageSrc;
   const { originalWidth, originalHeight } = getPngDimensions(src);
-  const imageName = params.node.type === 'image' ? src.split('/').pop() : attrs.fieldId?.replace('-', '_');
+
+  let imageName;
+  if (params.node.type === 'image') {
+    if (src?.startsWith('data:')) {
+      imageName = getFallbackImageNameFromDataUri(src);
+    } else {
+      imageName = src?.split('/').pop();
+    }
+  } else {
+    imageName = attrs.fieldId;
+  }
+  imageName = sanitizeDocxMediaName(imageName);
 
   let size = attrs.size
     ? {
@@ -60,9 +72,13 @@ export const translateImageNode = (params) => {
       return prepareTextAnnotation(params);
     }
 
-    const imageUrl = `media/${imageName}_${attrs.hash}.${type}`;
-    imageId = addNewImageRelationship(params, imageUrl);
-    params.media[`word/media/${imageName}_${attrs.hash}.${type}`] = src;
+    const sanitizedHash = sanitizeDocxMediaName(attrs.hash, generateDocxRandomId(4));
+    const fileName = `${imageName}_${sanitizedHash}.${type}`;
+    const relationshipTarget = `media/${fileName}`;
+    const packagePath = `word/${relationshipTarget}`;
+
+    imageId = addNewImageRelationship(params, relationshipTarget);
+    params.media[packagePath] = src;
   }
 
   const inlineAttrs = attrs.originalPadding || {
