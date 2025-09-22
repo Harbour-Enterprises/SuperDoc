@@ -51,6 +51,7 @@ describe('AnnotationNodeExporter', async () => {
 
     expect(extent.attributes.cx).toBe(4286250);
     expect(extent.attributes.cy).toBe(4286250);
+
     const mediaIds = Object.keys(params.media);
     const fieldMediaEntries = mediaIds.filter((id) => id.includes(attrs.hash));
     expect(fieldMediaEntries.length).toBeGreaterThanOrEqual(1);

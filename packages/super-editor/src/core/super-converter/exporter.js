@@ -18,7 +18,6 @@ import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
-import { getFallbackImageNameFromDataUri, sanitizeDocxMediaName } from './helpers/mediaHelpers.js';
 import { preProcessVerticalMergeCells } from './export-helpers/pre-process-vertical-merge-cells.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
@@ -27,7 +26,7 @@ import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translato
 import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
-import { prepareTextAnnotation } from './v3/handlers/w/sdt/helpers/translate-field-annotation';
+import { translator as wDrawingNodeTranslator } from './v3/handlers/w/drawing/drawing-translator';
 
 /**
  * @typedef {Object} ExportParams
@@ -91,7 +90,7 @@ export function exportSchemaToJson(params) {
     bookmarkStart: translateBookmarkStart,
     fieldAnnotation: wSdtNodeTranslator,
     tab: wTabNodeTranslator,
-    image: translateImageNode,
+    image: wDrawingNodeTranslator,
     hardBreak: wBrNodeTranslator,
     commentRangeStart: () => translateCommentNode(params, 'Start'),
     commentRangeEnd: () => translateCommentNode(params, 'End'),
@@ -631,7 +630,7 @@ function translateTrackedNode(params) {
  * @param {XmlReadyNode} node
  * @returns {XmlReadyNode} The wrapped run node
  */
-function wrapTextInRun(nodeOrNodes, marks) {
+export function wrapTextInRun(nodeOrNodes, marks) {
   let elements = [];
   if (Array.isArray(nodeOrNodes)) elements = nodeOrNodes;
   else elements = [nodeOrNodes];
@@ -747,28 +746,6 @@ export function addNewLinkRelationship(params, link) {
     },
   });
 
-  return newId;
-}
-
-/**
- * Create a new image relationship and add it to the relationships array
- *
- * @param {ExportParams} params
- * @param {string} imagePath The path to the image
- * @returns {string} The new relationship ID
- */
-function addNewImageRelationship(params, imagePath) {
-  const newId = 'rId' + generateDocxRandomId();
-  const newRel = {
-    type: 'element',
-    name: 'Relationship',
-    attributes: {
-      Id: newId,
-      Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
-      Target: imagePath,
-    },
-  };
-  params.relationships.push(newRel);
   return newId;
 }
 
@@ -1269,381 +1246,6 @@ function translateMark(mark) {
   }
 
   return markElement;
-}
-
-function getPngDimensions(base64) {
-  if (!base64) return {};
-
-  const type = base64.split(';')[0].split('/')[1];
-  if (!base64 || type !== 'png') {
-    return {
-      originalWidth: undefined,
-      originalHeight: undefined,
-    };
-  }
-
-  let header = base64.split(',')[1].slice(0, 50);
-  let uint8 = Uint8Array.from(atob(header), (c) => c.charCodeAt(0));
-  let dataView = new DataView(uint8.buffer, 0, 28);
-
-  return {
-    originalWidth: dataView.getInt32(16),
-    originalHeight: dataView.getInt32(20),
-  };
-}
-
-function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
-  let scaledWidth = originalWidth;
-  let scaledHeight = originalHeight;
-
-  // Calculate aspect ratio
-  let ratio = Math.min(maxWidth / originalWidth, maxHeight / originalHeight);
-
-  // Scale dimensions
-  scaledWidth = Math.round(scaledWidth * ratio);
-  scaledHeight = Math.round(scaledHeight * ratio);
-
-  return { scaledWidth, scaledHeight };
-}
-
-export function translateImageNode(params, imageSize) {
-  const {
-    node: { attrs = {} },
-    tableCell,
-  } = params;
-
-  let imageId = attrs.rId;
-
-  const src = attrs.src || attrs.imageSrc;
-  const { originalWidth, originalHeight } = getPngDimensions(src);
-
-  let imageName;
-  if (params.node.type === 'image') {
-    if (src?.startsWith('data:')) {
-      imageName = getFallbackImageNameFromDataUri(src);
-    } else {
-      imageName = src?.split('/').pop();
-    }
-  } else {
-    imageName = attrs.fieldId;
-  }
-  imageName = sanitizeDocxMediaName(imageName);
-
-  let size = attrs.size
-    ? {
-        w: pixelsToEmu(attrs.size.width),
-        h: pixelsToEmu(attrs.size.height),
-      }
-    : imageSize;
-
-  if (originalWidth && originalHeight) {
-    const boxWidthPx = emuToPixels(size.w);
-    const boxHeightPx = emuToPixels(size.h);
-    const { scaledWidth, scaledHeight } = getScaledSize(originalWidth, originalHeight, boxWidthPx, boxHeightPx);
-    size = {
-      w: pixelsToEmu(scaledWidth),
-      h: pixelsToEmu(scaledHeight),
-    };
-  }
-
-  if (tableCell) {
-    // Image inside tableCell
-    const colwidthSum = tableCell.attrs.colwidth.reduce((acc, curr) => acc + curr, 0);
-    const leftMargin = tableCell.attrs.cellMargins?.left || 8;
-    const rightMargin = tableCell.attrs.cellMargins?.right || 8;
-    const maxWidthEmu = pixelsToEmu(colwidthSum - (leftMargin + rightMargin));
-    const { width: w, height: h } = resizeKeepAspectRatio(size.w, size.h, maxWidthEmu);
-    if (w && h) size = { w, h };
-  }
-
-  if (params.node.type === 'image' && !imageId) {
-    const path = src?.split('word/')[1];
-    imageId = addNewImageRelationship(params, path);
-  } else if (params.node.type === 'fieldAnnotation' && !imageId) {
-    const type = src?.split(';')[0].split('/')[1];
-    if (!type) {
-      return prepareTextAnnotation(params);
-    }
-
-    const sanitizedHash = sanitizeDocxMediaName(attrs.hash, generateDocxRandomId(4));
-    const fileName = `${imageName}_${sanitizedHash}.${type}`;
-    const relationshipTarget = `media/${fileName}`;
-    const packagePath = `word/${relationshipTarget}`;
-
-    imageId = addNewImageRelationship(params, relationshipTarget);
-    params.media[packagePath] = src;
-  }
-
-  let inlineAttrs = attrs.originalPadding || {
-    distT: 0,
-    distB: 0,
-    distL: 0,
-    distR: 0,
-  };
-
-  const anchorElements = [];
-  let wrapProp = [];
-
-  // Handle anchor image export
-  if (attrs.isAnchor) {
-    inlineAttrs = {
-      ...inlineAttrs,
-      simplePos: attrs.originalAttributes?.simplePos,
-      relativeHeight: 1,
-      behindDoc: attrs.originalAttributes?.behindDoc,
-      locked: attrs.originalAttributes?.locked,
-      layoutInCell: attrs.originalAttributes?.layoutInCell,
-      allowOverlap: attrs.originalAttributes?.allowOverlap,
-    };
-    if (attrs.simplePos) {
-      anchorElements.push({
-        name: 'wp:simplePos',
-        attributes: {
-          x: 0,
-          y: 0,
-        },
-      });
-    }
-
-    if (attrs.anchorData) {
-      anchorElements.push({
-        name: 'wp:positionH',
-        attributes: {
-          relativeFrom: attrs.anchorData.hRelativeFrom,
-        },
-        ...(attrs.marginOffset.left !== undefined && {
-          elements: [
-            {
-              name: 'wp:posOffset',
-              elements: [
-                {
-                  type: 'text',
-                  text: pixelsToEmu(attrs.marginOffset.left).toString(),
-                },
-              ],
-            },
-          ],
-        }),
-        ...(attrs.anchorData.alignH && {
-          elements: [
-            {
-              name: 'wp:align',
-              elements: [
-                {
-                  type: 'text',
-                  text: attrs.anchorData.alignH,
-                },
-              ],
-            },
-          ],
-        }),
-      });
-
-      anchorElements.push({
-        name: 'wp:positionV',
-        attributes: {
-          relativeFrom: attrs.anchorData.vRelativeFrom,
-        },
-        ...(attrs.marginOffset.top !== undefined && {
-          elements: [
-            {
-              name: 'wp:posOffset',
-              elements: [
-                {
-                  type: 'text',
-                  text: pixelsToEmu(attrs.marginOffset.top).toString(),
-                },
-              ],
-            },
-          ],
-        }),
-        ...(attrs.anchorData.alignV && {
-          elements: [
-            {
-              name: 'wp:align',
-              elements: [
-                {
-                  type: 'text',
-                  text: attrs.anchorData.alignV,
-                },
-              ],
-            },
-          ],
-        }),
-      });
-    }
-
-    if (attrs.wrapText) {
-      wrapProp.push({
-        name: 'wp:wrapSquare',
-        attributes: {
-          wrapText: attrs.wrapText,
-        },
-      });
-    }
-
-    if (attrs.wrapTopAndBottom) {
-      wrapProp.push({
-        name: 'wp:wrapTopAndBottom',
-      });
-    }
-
-    // Important: wp:anchor will break if no wrapping is specified. We need to use wrapNone.
-    if (attrs.isAnchor && !wrapProp.length) {
-      wrapProp.push({
-        name: 'wp:wrapNone',
-      });
-    }
-  }
-
-  const drawingXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-  const pictureXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-
-  const textNode = wrapTextInRun(
-    {
-      name: 'w:drawing',
-      elements: [
-        {
-          name: attrs.isAnchor ? 'wp:anchor' : 'wp:inline',
-          attributes: inlineAttrs,
-          elements: [
-            ...anchorElements,
-            {
-              name: 'wp:extent',
-              attributes: {
-                cx: size.w,
-                cy: size.h,
-              },
-            },
-            {
-              name: 'wp:effectExtent',
-              attributes: {
-                l: 0,
-                t: 0,
-                r: 0,
-                b: 0,
-              },
-            },
-            ...wrapProp,
-            {
-              name: 'wp:docPr',
-              attributes: {
-                id: attrs.id || 0,
-                name: attrs.alt || `Picture ${imageName}`,
-              },
-            },
-            {
-              name: 'wp:cNvGraphicFramePr',
-              elements: [
-                {
-                  name: 'a:graphicFrameLocks',
-                  attributes: {
-                    'xmlns:a': drawingXmlns,
-                    noChangeAspect: 1,
-                  },
-                },
-              ],
-            },
-            {
-              name: 'a:graphic',
-              attributes: { 'xmlns:a': drawingXmlns },
-              elements: [
-                {
-                  name: 'a:graphicData',
-                  attributes: { uri: pictureXmlns },
-                  elements: [
-                    {
-                      name: 'pic:pic',
-                      attributes: { 'xmlns:pic': pictureXmlns },
-                      elements: [
-                        {
-                          name: 'pic:nvPicPr',
-                          elements: [
-                            {
-                              name: 'pic:cNvPr',
-                              attributes: {
-                                id: attrs.id || 0,
-                                name: attrs.title || `Picture ${imageName}`,
-                              },
-                            },
-                            {
-                              name: 'pic:cNvPicPr',
-                              elements: [
-                                {
-                                  name: 'a:picLocks',
-                                  attributes: {
-                                    noChangeAspect: 1,
-                                    noChangeArrowheads: 1,
-                                  },
-                                },
-                              ],
-                            },
-                          ],
-                        },
-                        {
-                          name: 'pic:blipFill',
-                          elements: [
-                            {
-                              name: 'a:blip',
-                              attributes: {
-                                'r:embed': imageId,
-                              },
-                            },
-                            {
-                              name: 'a:stretch',
-                              elements: [{ name: 'a:fillRect' }],
-                            },
-                          ],
-                        },
-                        {
-                          name: 'pic:spPr',
-                          attributes: {
-                            bwMode: 'auto',
-                          },
-                          elements: [
-                            {
-                              name: 'a:xfrm',
-                              elements: [
-                                {
-                                  name: 'a:ext',
-                                  attributes: {
-                                    cx: size.w,
-                                    cy: size.h,
-                                  },
-                                },
-                                {
-                                  name: 'a:off',
-                                  attributes: {
-                                    x: 0,
-                                    y: 0,
-                                  },
-                                },
-                              ],
-                            },
-                            {
-                              name: 'a:prstGeom',
-                              attributes: { prst: 'rect' },
-                              elements: [{ name: 'a:avLst' }],
-                            },
-                            {
-                              name: 'a:noFill',
-                            },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    [],
-  );
-
-  return textNode;
 }
 
 export function translateHardBreak(params) {
