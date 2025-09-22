@@ -179,6 +179,28 @@ describe('w:tblGrid translator', () => {
       expect(result.name).toBe('w:tblGrid');
       expect(result.elements).toEqual([]);
     });
+
+    it('preserves distinct grid column widths when reconstructing the grid', () => {
+      const params = {
+        node: {
+          attrs: {
+            grid: [{ col: 2000 }, { col: 4000 }],
+          },
+        },
+        extraParams: {
+          firstRow: {
+            content: [
+              { type: 'tableCell', attrs: { colspan: 1 } },
+              { type: 'tableCell', attrs: { colspan: 1 } },
+            ],
+          },
+        },
+      };
+
+      const result = translator.decode(params);
+      const widths = result.elements.map((el) => el.attributes['w:w']);
+      expect(widths).toEqual(['2000', '4000']);
+    });
   });
 
   describe('round-trip', () => {
