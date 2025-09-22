@@ -1,3 +1,9 @@
+## [0.20.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.20.1...v0.20.2) (2025-09-22)
+
+### Bug Fixes
+
+- image annotation export in tables ([#1004](https://github.com/Harbour-Enterprises/SuperDoc/issues/1004)) ([1e36934](https://github.com/Harbour-Enterprises/SuperDoc/commit/1e3693438031b7d315d4b94e246a355d3c378a65))
+
 ## [0.20.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.20.0...v0.20.1) (2025-09-17)
 
 ### Bug Fixes
