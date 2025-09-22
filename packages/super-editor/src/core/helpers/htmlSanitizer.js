@@ -9,7 +9,7 @@
 export function stripHtmlStyles(html) {
   if (!html) return '';
 
-  const parser = new DOMParser();
+  const parser = new window.DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
   // Supported attributes to preserve
@@ -31,7 +31,7 @@ export function stripHtmlStyles(html) {
   ];
 
   const cleanNode = (node) => {
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    if (node.nodeType !== window.Node.ELEMENT_NODE) return;
 
     [...node.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
