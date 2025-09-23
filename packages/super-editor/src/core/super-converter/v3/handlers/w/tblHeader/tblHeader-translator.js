@@ -10,5 +10,5 @@ export const translator = NodeTranslator.from({
   xmlName: 'w:tblHeader',
   sdNodeOrKeyName: 'repeatHeader',
   encode: ({ nodes }) => parseBoolean(nodes[0].attributes?.['w:val'] ?? '1'),
-  decode: ({ node }) => (node.attrs.repeatHeader ? {} : undefined),
+  decode: ({ node }) => (node.attrs.repeatHeader ? { attributes: {} } : undefined),
 });

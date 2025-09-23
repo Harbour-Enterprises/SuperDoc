@@ -30,17 +30,19 @@ describe('w:trHeight translator', () => {
 
   describe('decode', () => {
     it('decodes a rowHeight object into w:val and w:hRule attributes', () => {
-      const result = translator.decode({ node: { attrs: { rowHeight: { value: 280, rule: 'auto' } } } });
+      const { attributes: result } = translator.decode({
+        node: { attrs: { rowHeight: { value: 280, rule: 'auto' } } },
+      });
       expect(result).toEqual({ 'w:val': '280', 'w:hRule': 'auto' });
     });
 
     it('handles only value', () => {
-      const result = translator.decode({ node: { attrs: { rowHeight: { value: 280 } } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { rowHeight: { value: 280 } } } });
       expect(result).toEqual({ 'w:val': '280' });
     });
 
     it('handles only rule', () => {
-      const result = translator.decode({ node: { attrs: { rowHeight: { rule: 'auto' } } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { rowHeight: { rule: 'auto' } } } });
       expect(result).toEqual({ 'w:hRule': 'auto' });
     });
 
@@ -51,7 +53,7 @@ describe('w:trHeight translator', () => {
     it('ignores non-numeric or NaN values for value', () => {
       expect(translator.decode({ node: { attrs: { rowHeight: { value: 'abc' } } } })).toBeUndefined();
       expect(translator.decode({ node: { attrs: { rowHeight: { value: NaN } } } })).toBeUndefined();
-      expect(translator.decode({ node: { attrs: { rowHeight: { value: null, rule: 'auto' } } } })).toEqual({
+      expect(translator.decode({ node: { attrs: { rowHeight: { value: null, rule: 'auto' } } } }).attributes).toEqual({
         'w:hRule': 'auto',
       });
     });

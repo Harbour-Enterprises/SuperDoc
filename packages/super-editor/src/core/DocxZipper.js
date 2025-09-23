@@ -48,6 +48,7 @@ class DocxZipper {
         this.files.push({ name, content });
       } else if (
         (name.startsWith('word/media') && name !== 'word/media/') ||
+        (zipEntry.name.startsWith('media') && zipEntry.name !== 'media/') ||
         (name.startsWith('media') && name !== 'media/')
       ) {
         // Media files

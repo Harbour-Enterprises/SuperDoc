@@ -1,5 +1,5 @@
 import { Attribute, Node } from '@core/index.js';
-import { ImagePlaceholderPlugin } from './imageHelpers/imagePlaceholderPlugin.js';
+import { ImageRegistrationPlugin } from './imageHelpers/imageRegistrationPlugin.js';
 import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
 
 /**
@@ -222,6 +222,6 @@ export const Image = Node.create({
   },
 
   addPmPlugins() {
-    return [ImagePlaceholderPlugin(), ImagePositionPlugin({ editor: this.editor })];
+    return [ImageRegistrationPlugin({ editor: this.editor }), ImagePositionPlugin({ editor: this.editor })];
   },
 });

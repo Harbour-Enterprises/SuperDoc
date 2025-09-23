@@ -1,5 +1,5 @@
 import { eigthPointsToPixels, twipsToPixels } from '@converter/helpers';
-import { getGridColumnWidths, getReferencedTableStyles } from '@converter/v2/importer/tableImporter';
+import { getReferencedTableStyles } from '@converter/v2/importer/tableImporter';
 
 /**
  * @param {Object} options
@@ -14,6 +14,7 @@ export function handleTableCellNode({
   styleTag,
   columnIndex,
   columnWidth = null,
+  allColumnWidths = [],
 }) {
   const { docx, nodeListHandler } = params;
   const tcPr = node.elements.find((el) => el.name === 'w:tcPr');
@@ -29,7 +30,7 @@ export function handleTableCellNode({
   }
   const inlineBorders = processInlineCellBorders(borders, rowBorders);
 
-  const gridColumnWidths = getGridColumnWidths(table);
+  const gridColumnWidths = allColumnWidths;
 
   const tcWidth = tcPr?.elements?.find((el) => el.name === 'w:tcW');
   let width = tcWidth ? twipsToPixels(tcWidth.attributes['w:w']) : null;
@@ -211,11 +212,18 @@ const getTableCellMargins = (marginTag, referencedStyles) => {
     marginBottom: marginBottomStyle,
   } = cellMargins;
 
+  const resolveMargin = (inlineValue, styleValue) => {
+    if (inlineValue != null) return inlineValue;
+    if (styleValue == null) return undefined;
+    if (typeof styleValue === 'object') return styleValue.value;
+    return styleValue;
+  };
+
   const margins = {
-    left: twipsToPixels(inlineMarginLeftValue ?? marginLeftStyle),
-    right: twipsToPixels(inlineMarginRightValue ?? marginRightStyle),
-    top: twipsToPixels(inlineMarginTopValue ?? marginTopStyle),
-    bottom: twipsToPixels(inlineMarginBottomValue ?? marginBottomStyle),
+    left: twipsToPixels(resolveMargin(inlineMarginLeftValue, marginLeftStyle)),
+    right: twipsToPixels(resolveMargin(inlineMarginRightValue, marginRightStyle)),
+    top: twipsToPixels(resolveMargin(inlineMarginTopValue, marginTopStyle)),
+    bottom: twipsToPixels(resolveMargin(inlineMarginBottomValue, marginBottomStyle)),
   };
   return margins;
 };

@@ -1,125 +1,11 @@
-import { eigthPointsToPixels, halfPointToPoints, twipsToPixels } from '../../helpers.js';
-import { translator as trTranslator } from '../../v3/handlers/w/tr/tr-translator.js';
-
-/**
- * @type {import("docxImporter").NodeHandler}
- */
-export const handleAllTableNodes = (params) => {
-  const { nodes } = params;
-  if (nodes.length === 0) {
-    return { nodes: [], consumed: 0 };
-  }
-  const node = nodes[0];
-
-  switch (node.name) {
-    case 'w:tbl':
-      return { nodes: [handleTableNode(node, params)], consumed: 1 };
-  }
-
-  return { nodes: [], consumed: 0 };
-};
+import { eigthPointsToPixels, halfPointToPoints } from '../../helpers.js';
+import { generateV2HandlerEntity } from '@converter/v3/handlers/utils.js';
+import { translator as tableTranslator } from '@converter/v3/handlers/w/tbl/tbl-translator.js';
 
 /**
  * @type {import("docxImporter").NodeHandlerEntry}
  */
-export const tableNodeHandlerEntity = {
-  handlerName: 'tableNodeHandler',
-  handler: handleAllTableNodes,
-};
-
-/**
- *
- * @param {XmlNode} node
- * @param {ParsedDocx} docx
- * @param {NodeListHandler} nodeListHandler
- * @param {boolean} insideTrackChange
- * @returns {{type: string, content: *, attrs: {borders: *, tableWidth: *, tableWidthType: *}}}
- */
-export function handleTableNode(node, params) {
-  const { docx, nodeListHandler } = params;
-  // Table styles
-  const tblPr = node.elements.find((el) => el.name === 'w:tblPr');
-
-  // Table borders can be specified in tblPr or inside a referenced style tag
-  const tableBordersElement = tblPr.elements.find((el) => el.name === 'w:tblBorders');
-  const tableBorders = tableBordersElement?.elements || [];
-  const { borders, rowBorders } = processTableBorders(tableBorders);
-  const tblStyleTag = tblPr.elements.find((el) => el.name === 'w:tblStyle');
-  const tableStyleId = tblStyleTag?.attributes['w:val'];
-
-  const attrs = { tableStyleId };
-
-  // Other table properties
-  const tableIndent = tblPr?.elements.find((el) => el.name === 'w:tblInd');
-  if (tableIndent) {
-    const { 'w:w': width, 'w:type': type } = tableIndent.attributes;
-    attrs['tableIndent'] = { width: twipsToPixels(width), type };
-  }
-
-  const tableLayout = tblPr?.elements.find((el) => el.name === 'w:tblLayout');
-  if (tableLayout) {
-    const { 'w:type': type } = tableLayout.attributes;
-    attrs['tableLayout'] = type;
-  }
-
-  const referencedStyles = getReferencedTableStyles(tblStyleTag, docx, nodeListHandler);
-  const tblW = tblPr.elements.find((el) => el.name === 'w:tblW');
-
-  if (tblW) {
-    attrs['tableWidth'] = {
-      width: twipsToPixels(tblW.attributes['w:w']),
-      type: tblW.attributes['w:type'],
-    };
-  }
-
-  const tblCellSpacing = tblPr.elements.find((el) => el.name === 'w:tblCellSpacing');
-  if (tblCellSpacing) {
-    attrs['tableCellSpacing'] = {
-      w: tblCellSpacing.attributes['w:w'],
-      type: tblCellSpacing.attributes['w:type'],
-    };
-    attrs['borderCollapse'] = 'separate';
-  }
-
-  const tblJustification = tblPr.elements.find((el) => el.name === 'w:jc');
-  if (tblJustification?.attributes) {
-    attrs['justification'] = tblJustification.attributes['w:val'];
-  }
-
-  // TODO: What does this do?
-  // const tblLook = tblPr.elements.find((el) => el.name === 'w:tblLook');
-
-  const rows = node.elements.filter((el) => el.name === 'w:tr');
-  const refStylesBorders = referencedStyles?.borders || {};
-  const refStylesRowBorders = referencedStyles?.rowBorders || {};
-
-  const borderData = Object.keys(borders)?.length ? Object.assign(refStylesBorders, borders) : refStylesBorders;
-  const borderRowData = Object.keys(rowBorders)?.length
-    ? Object.assign(refStylesRowBorders, rowBorders)
-    : refStylesRowBorders;
-  attrs['borders'] = borderData;
-
-  const content = [];
-  rows.forEach((row) => {
-    const result = trTranslator.encode({
-      ...params,
-      nodes: [row],
-      extraParams: {
-        row,
-        table: node,
-        rowBorders: borderRowData,
-        styleTag: tblStyleTag,
-      },
-    });
-    if (result.content?.length) content.push(result);
-  });
-
-  return {
-    type: 'table',
-    content,
-    attrs,
-  };
-}
+export const tableNodeHandlerEntity = generateV2HandlerEntity('tableNodeHandler', tableTranslator);
 
 /**
  *
@@ -230,14 +116,3 @@ function processTableBorders(borderElements) {
     rowBorders,
   };
 }
-
-export const getGridColumnWidths = (tableNode) => {
-  const tblGrid = tableNode.elements.find((el) => el.name === 'w:tblGrid');
-  if (!tblGrid) return [];
-  const columnWidths =
-    tblGrid?.elements?.flatMap((el) => {
-      if (el.name !== 'w:gridCol') return [];
-      return twipsToPixels(el.attributes['w:w']);
-    }) || [];
-  return columnWidths;
-};

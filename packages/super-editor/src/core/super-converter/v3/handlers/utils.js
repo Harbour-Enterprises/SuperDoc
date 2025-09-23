@@ -47,13 +47,13 @@ export function createSingleAttrPropertyHandler(
     },
     decode: ({ node }) => {
       const value = node.attrs?.[sdName] != null ? transformDecode(node.attrs[sdName]) : undefined;
-      return value != null ? { [attrName]: value } : undefined;
+      return value != null ? { name: xmlName, attributes: { [attrName]: value } } : undefined;
     },
   };
 }
 
 /**
- * Helper to create property handlers for measurement attributes (w:w and w:type)
+ * Helper to create property handlers for measurement attributes (CT_TblWidth => w:w and w:type)
  * @param {string} xmlName The XML attribute name (with namespace).
  * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
  * @returns {import('@translator').NodeTranslatorConfig} The attribute handler config with xmlName, sdName, encode, and decode functions.
@@ -72,7 +72,41 @@ export function createMeasurementPropertyHandler(xmlName, sdName = null) {
     },
     decode: function ({ node }) {
       const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs[sdName] || {} } });
-      return decodedAttrs['w:w'] != null ? decodedAttrs : undefined;
+      return decodedAttrs['w:w'] != null ? { attributes: decodedAttrs } : undefined;
+    },
+  };
+}
+
+/**
+ * Helper to create property handlers for border attributes (CT_Border xml type)
+ * @param {string} [xmlName] The XML element name (with namespace).
+ * @param {string|null} [sdName] The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
+ * @returns {import('@translator').NodeTranslatorConfig} The border property handler config with xmlName, sdName, encode, and decode functions.
+ */
+export function createBorderPropertyHandler(xmlName, sdName = null) {
+  if (!sdName) sdName = xmlName.split(':')[1];
+  return {
+    xmlName,
+    sdNodeOrKeyName: sdName,
+    attributes: [
+      createAttributeHandler('w:val'),
+      createAttributeHandler('w:color'),
+      createAttributeHandler('w:themeColor'),
+      createAttributeHandler('w:themeTint'),
+      createAttributeHandler('w:themeShade'),
+      createAttributeHandler('w:sz', 'size', parseInteger, integerToString),
+      createAttributeHandler('w:space', null, parseInteger, integerToString),
+      createAttributeHandler('w:shadow', null, parseBoolean, booleanToString),
+      createAttributeHandler('w:frame', null, parseBoolean, booleanToString),
+    ],
+    encode: (params, encodedAttrs) => {
+      void params;
+      return Object.keys(encodedAttrs).length > 0 ? encodedAttrs : undefined;
+    },
+    decode: function ({ node }, context) {
+      void context;
+      const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs[sdName] || {} } });
+      return Object.keys(decodedAttrs).length > 0 ? { attributes: decodedAttrs } : undefined;
     },
   };
 }
@@ -137,9 +171,10 @@ export function decodeProperties(translatorsBySdName, properties) {
   Object.keys(properties).forEach((key) => {
     const translator = translatorsBySdName[key];
     if (translator) {
-      const attributes = translator.decode({ node: { attrs: { [key]: properties[key] } } });
-      if (attributes != null) {
-        elements.push({ name: translator.xmlName, attributes });
+      const result = translator.decode({ node: { attrs: { [key]: properties[key] } } });
+      if (result != null) {
+        result.name = translator.xmlName;
+        elements.push(result);
       }
     }
   });
@@ -150,17 +185,17 @@ export function decodeProperties(translatorsBySdName, properties) {
  * Parses a string value to determine its boolean representation.
  * Considers '1' and 'true' (case-sensitive) as true; all other values are false.
  * @param {string} value The string value to parse.
- * @returns {boolean} The boolean representation of the input string.
+ * @returns {boolean|undefined} The boolean representation of the input string, or undefined if the input is null or undefined.
  */
-export const parseBoolean = (value) => ['1', 'true'].includes(value);
+export const parseBoolean = (value) => (value != null ? ['1', 'true'].includes(value) : undefined);
 
 /**
  * Converts a boolean value to its string representation.
  * Returns '1' for true and '0' for false.
  * @param {boolean} value The boolean value to convert.
- * @returns {string} The string representation of the boolean value.
+ * @returns {string|undefined} The string representation of the boolean, or undefined if the input is null or undefined.
  */
-export const booleanToString = (value) => (value ? '1' : '0');
+export const booleanToString = (value) => (value != null ? (value ? '1' : '0') : undefined);
 
 /**
  * Parses a value to an integer.

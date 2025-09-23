@@ -55,8 +55,8 @@ describe('w:trPr translator', () => {
         gridAfter: 2,
         gridBefore: 1,
         hidden: true,
-        jc: 'center',
-        cellSpacing: { value: 10, type: 'dxa' },
+        justification: 'center',
+        tableCellSpacing: { value: 10, type: 'dxa' },
         repeatHeader: true,
         rowHeight: { value: 100, rule: 'auto' },
         wAfter: { value: 50, type: 'pct' },
@@ -92,7 +92,7 @@ describe('w:trPr translator', () => {
       expect(attributes.gridAfter).toBeUndefined();
       expect(attributes.gridBefore).toBeUndefined();
       expect(attributes.hidden).toBe(false);
-      expect(attributes.jc).toBeUndefined();
+      expect(attributes.justification).toBeUndefined();
       expect(attributes.tblCellSpacing).toBeUndefined();
       expect(attributes.repeatHeader).toBe(false);
       expect(attributes.rowHeight).toBeUndefined();
@@ -118,8 +118,8 @@ describe('w:trPr translator', () => {
               gridAfter: 2,
               gridBefore: 1,
               hidden: true,
-              jc: 'center',
-              cellSpacing: { value: 13, type: 'dxa' },
+              justification: 'center',
+              tableCellSpacing: { value: 13, type: 'dxa' },
               repeatHeader: true,
               rowHeight: { value: 100, rule: 'auto' },
               wAfter: { value: 50, type: 'pct' },
@@ -224,8 +224,8 @@ describe('w:trPr translator', () => {
         gridAfter: 1,
         gridBefore: 0,
         hidden: true,
-        jc: 'center',
-        cellSpacing: { value: 10, type: 'dxa' },
+        justification: 'center',
+        tableCellSpacing: { value: 10, type: 'dxa' },
         repeatHeader: true,
         rowHeight: { value: 100, rule: 'auto' },
         wAfter: { value: 5, type: 'pct' },
