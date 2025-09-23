@@ -2,15 +2,13 @@ import { getInitialJSON } from '../docxHelper.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { twipsToInches } from '../../helpers.js';
 import { DEFAULT_LINKED_STYLES } from '../../exporter-docx-defs.js';
-import { tableNodeHandlerEntity } from './tableImporter.js';
 import { drawingNodeHandlerEntity } from './imageImporter.js';
 import { trackChangeNodeHandlerEntity } from './trackChangesImporter.js';
 import { hyperlinkNodeHandlerEntity } from './hyperlinkImporter.js';
 import { runNodeHandlerEntity } from './runNodeImporter.js';
 import { textNodeHandlerEntity } from './textNodeImporter.js';
 import { paragraphNodeHandlerEntity } from './paragraphNodeImporter.js';
-import { annotationNodeHandlerEntity } from './annotationImporter.js';
-import { sdtNodeHandlerEntity } from './structuredDocumentNodeImporter.js';
+import { sdtNodeHandlerEntity } from './sdtNodeImporter.js';
 import { standardNodeHandlerEntity } from './standardNodeImporter.js';
 import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
 import { bookmarkNodeHandlerEntity } from './bookmarkNodeImporter.js';
@@ -23,16 +21,17 @@ import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
+import { tableNodeHandlerEntity } from './tableImporter.js';
 
 /**
  * @typedef {import()} XmlNode
  * @typedef {{type: string, content: *, attrs: {}}} PmNodeJson
  * @typedef {{type: string, attrs: {}}} PmMarkJson
  *
- * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackCahange: boolean) => PmNodeJson[]} NodeListHandlerFn
+ * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackChange: boolean) => PmNodeJson[]} NodeListHandlerFn
  * @typedef {{handler: NodeListHandlerFn, handlerEntities: NodeHandlerEntry[]}} NodeListHandler
  *
- * @typedef {(nodes: XmlNode[], docx: ParsedDocx, nodeListHandler: NodeListHandler, insideTrackCahange: boolean) => {nodes: PmNodeJson[], consumed: number}} NodeHandler
+ * @typedef {(nodes: XmlNode[], docx: ParsedDocx, nodeListHandler: NodeListHandler, insideTrackChange: boolean) => {nodes: PmNodeJson[], consumed: number}} NodeHandler
  * @typedef {{handlerName: string, handler: NodeHandler}} NodeHandlerEntry
  */
 
@@ -132,7 +131,6 @@ export const defaultNodeListHandler = () => {
     paragraphNodeHandlerEntity,
     textNodeHandlerEntity,
     lineBreakNodeHandlerEntity,
-    annotationNodeHandlerEntity,
     sdtNodeHandlerEntity,
     bookmarkNodeHandlerEntity,
     hyperlinkNodeHandlerEntity,
@@ -276,7 +274,7 @@ const createNodeListHandler = (nodeHandlers) => {
           }
         } catch (error) {
           console.debug('Import error', error);
-          editor?.emit('exception', { error });
+          editor?.emit('exception', { error, editor });
 
           converter?.telemetry?.trackStatistic('error', {
             type: 'processing_error',
@@ -291,7 +289,7 @@ const createNodeListHandler = (nodeHandlers) => {
       return processedElements;
     } catch (error) {
       console.debug('Error during import', error);
-      editor?.emit('exception', { error });
+      editor?.emit('exception', { error, editor });
 
       // Track only catastrophic handler failures
       converter?.telemetry?.trackStatistic('error', {

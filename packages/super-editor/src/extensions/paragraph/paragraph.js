@@ -189,12 +189,30 @@ export const Paragraph = OxmlNode.create({
       {
         tag: 'p',
         getAttrs: (node) => {
-          let extra = {};
+          const { styleid, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
+            acc[attr.name] = attr.value;
+            return acc;
+          }, {});
+
+          return {
+            styleId: styleid || null,
+            extraAttrs,
+          };
+        },
+      },
+      {
+        tag: 'div',
+        getAttrs: (node) => {
+          const extra = {};
           Array.from(node.attributes).forEach((attr) => {
             extra[attr.name] = attr.value;
           });
           return { extraAttrs: extra };
         },
+      },
+      {
+        tag: 'blockquote',
+        attrs: { styleId: 'BlockQuote' },
       },
       ...this.options.headingLevels.map((level) => ({
         tag: `h${level}`,

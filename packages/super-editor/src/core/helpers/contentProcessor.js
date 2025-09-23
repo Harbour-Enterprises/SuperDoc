@@ -2,7 +2,6 @@
 import { DOMParser } from 'prosemirror-model';
 import { createDocFromHTML } from './importHtml.js';
 import { createDocFromMarkdown } from './importMarkdown.js';
-import { ListHelpers } from './list-numbering-helpers.js';
 
 /**
  * Unified content processor that handles all content types

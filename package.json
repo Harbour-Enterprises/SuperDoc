@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "test": "vitest run",
+    "test:debug": "npm run test:debug --workspace=packages/super-editor",
     "test:all": "vitest run",
     "test:editor": "vitest run --root ./packages/super-editor",
     "test:superdoc": "vitest run --root ./packages/superdoc",
@@ -37,7 +38,8 @@
     "prepare": "husky",
     "lint:staged": "lint-staged",
     "watch": "npm run watch:es --workspace=packages/superdoc",
-    "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build"
+    "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build && npm run test",
+    "local:publish": "npm version prerelease --preid=local --workspace=@harbour-enterprises/superdoc && npm publish --workspace=@harbour-enterprises/superdoc --registry http://localhost:4873"
   },
   "lint-staged": {
     "*.{js,jsx}": [
@@ -66,12 +68,14 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-jsdoc": "^54.1.0",
     "husky": "^9.1.7",
+    "jsdom": "^25.0.1",
     "lint-staged": "^16.1.4",
     "prettier": "3.3.3",
     "rollup": "^4.46.2",
     "rollup-plugin-visualizer": "^5.12.0",
     "sass-embedded": "^1.80.7",
     "semantic-release": "^24.2.7",
+    "verdaccio": "^6.1.6",
     "vitest": "^3.0.8",
     "vuepress": "^2.0.0-rc.18",
     "xml-js": "^1.6.11"

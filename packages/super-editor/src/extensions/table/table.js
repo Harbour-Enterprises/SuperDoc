@@ -60,6 +60,139 @@
  * @property {Object} attrs - Cell attributes without span properties
  */
 
+/**
+ * Theme color options
+ * @typedef { "dark1" | "light1" | "dark2" | "light2" | "accent1" | "accent2" | "accent3" | "accent4" | "accent5" | "accent6" | "hyperlink" | "followedHyperlink" | "none" | "background1" | "text1" | "background2" | "text2" } ThemeColor
+ */
+
+/**
+ * Shading pattern options
+ * @typedef { "nil" | "clear" | "solid" | "horzStripe" | "vertStripe" | "reverseDiagStripe" | "diagStripe" | "horzCross" | "diagCross" | "thinHorzStripe" | "thinVertStripe" | "thinReverseDiagStripe" | "thinDiagStripe" | "thinHorzCross" | "thinDiagCross" } ShadingPattern
+ */
+
+/**
+ * Shading properties
+ * @typedef {Object} ShadingProperties
+ * @property {string|"auto"} [color] - Shading color (hex without # or "auto" for automatic)
+ * @property {string|"auto"} [fill] - Shading fill color (hex without # or "auto" for automatic)
+ * @property {ThemeColor} [themeColor] - Theme color name
+ * @property {ThemeColor} [themeFill] - Theme fill name
+ * @property {string} [themeFillShade] - Theme fill shade (0-255 in hex format without #)
+ * @property {string} [themeFillTint] - Theme fill tint (0-255 in hex format without #)
+ * @property {string} [themeShade] - Theme shade (0-255 in hex format without #)
+ * @property {string} [themeTint] - Theme tint (0-255 in hex format without #)
+ * @property {ShadingPattern} [val] - Shading pattern
+ * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 365
+ */
+
+/**
+ * Table width options
+ * @typedef {Object} TableMeasurement
+ * @property {number} value - Width value in twips
+ * @property {"dxa" | "pct" | "auto"} [type='auto'] - Table width type (dxa=twips, pct=percentage, auto=automatic)
+ */
+
+/**
+ * Table look options
+ * @typedef {Object} TableLook
+ * @property {boolean} [firstColumn] - Specifies that the first column conditional formatting should be applied
+ * @property {boolean} [firstRow] - Specifies that the first row conditional formatting should be applied
+ * @property {boolean} [lastColumn] - Specifies that the last column conditional formatting should be applied
+ * @property {boolean} [lastRow] - Specifies that the last row conditional formatting should be applied
+ * @property {boolean} [noHBand] - Specifies that no horizontal banding conditional formatting should be applied
+ * @property {boolean} [noVBand] - Specifies that no vertical banding conditional formatting should be applied
+ */
+
+/**
+ * Floating table properties
+ * @typedef {Object} FloatingTableProperties
+ * @property {number} [leftFromText] - Specifies the minimum distance in twips which shall be maintained between the current floating table and the edge of text in the paragraph which is to the left of this floating table.
+ * @property {number} [rightFromText] - Specifies the minimum distance in twips which shall be maintained between the current floating table and the edge of text in the paragraph which is to the right of this floating table.
+ * @property {number} [topFromText] - Specifies the minimum distance in twips which shall be maintained between the current floating table and the bottom edge of text in the paragraph which is above this floating table.
+ * @property {number} [bottomFromText] - Specifies the minimum distance in twips which shall be maintained between the current floating table and the top edge of text in the paragraph which is below this floating table.
+ * @property {number} [tblpX] - Specifies and absolute horizontal position for the floating table. The position is measured from the horizontal anchor point (horzAnchor) in twips.
+ * @property {number} [tblpY] - Specifies and absolute vertical position for the floating table. The position is measured from the vertical anchor point (vertAnchor) in twips.
+ * @property {"margin" | "page" | "text"} [horzAnchor] - Horizontal anchor point for tblpX
+ * @property {"margin" | "page" | "text"} [vertAnchor] - Vertical anchor point for tblpY
+ * @property {"left" | "center" | "right" | "inside" | "outside"} [tblpXSpec] - Specifies a relative horizontal position for the floating table. Supercedes tblpX if both are specified.
+ * @property {"inline" | "top" | "center" | "bottom" | "inside" | "outside"} [tblpYSpec] - Specifies a relative vertical position for the floating table. Supercedes tblpY if both are specified.
+ * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 450-451
+ */
+
+/**
+ * Table border specification
+ * @typedef {Object} TableBorderSpec
+ * @property {string} [val] - Border style (e.g., 'single', 'double', 'dashed', etc.)
+ * @property {string} [color] - Border color (hex without #, e.g., 'FF0000' for red)
+ * @property {ThemeColor} [themeColor] - Theme color name
+ * @property {string} [themeTint] - Theme tint (0-255 in hex format without #)
+ * @property {string} [themeShade] - Theme shade (0-255 in hex format without #)
+ * @property {number} [size] - Border size in eighths of a point (e.g., 8 = 1pt, 16 = 2pt)
+ * @property {number} [space] - Space in points between border and text
+ * @property {boolean} [shadow] - Whether the border has a shadow
+ * @property {boolean} [frame] - Whether the border is a frame
+ */
+
+/**
+ * Table borders properties
+ * @typedef {Object} TableBorders
+ * @property {TableBorderSpec} [bottom] - Bottom border specification
+ * @property {TableBorderSpec} [end] - End (right in LTR, left in RTL) border specification
+ * @property {TableBorderSpec} [insideH] - Inside horizontal border specification
+ * @property {TableBorderSpec} [insideV] - Inside vertical border specification
+ * @property {TableBorderSpec} [left] - Left border specification
+ * @property {TableBorderSpec} [right] - Right border specification
+ * @property {TableBorderSpec} [start] - Start (left in LTR, right in RTL) border specification
+ * @property {TableBorderSpec} [top] - Top border specification
+ */
+
+/**
+ * Table cell margin properties
+ * @typedef {Object} TableCellMargins
+ * @property {TableMeasurement} [top] - Top cell margin
+ * @property {TableMeasurement} [left] - Left cell margin
+ * @property {TableMeasurement} [bottom] - Bottom cell margin
+ * @property {TableMeasurement} [start] - Start cell margin (left in LTR, right in RTL)
+ * @property {TableMeasurement} [end] - End cell margin (right in LTR, left in RTL)
+ * @property {TableMeasurement} [right] - Right cell margin
+ * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 425
+ */
+
+/**
+ * Table properties
+ * @typedef {Object} TableProperties
+ * @property {boolean} [rightToLeft] - Specifies that the cells with this table shall be visually represented in a right to left direction
+ * @property {"center" | "end" | "left" | "right" | "start"} [justification] - The alignment of the set of rows which are part of the current table.
+ * @property {ShadingProperties} [shading] - Shading properties for the table
+ * @property {string} [caption] - Caption text for the table
+ * @property {string} [description] - Description text for the table
+ * @property {TableMeasurement} [tableCellSpacing] - Cell spacing
+ * @property {TableMeasurement} [tableIndent] - Table indentation
+ * @property {"fixed" | "autofit"} [tableLayout] - Table layout algorithm
+ * @property {TableLook} [tableLook] - Various boolean flags that affect the rendering of the table
+ * @property {"never" | "overlap"} [overlap] - Specifies whether the current table should allow other floating tables to overlap its extents when the tables are displayed in a document
+ * @property {string} [tableStyleId] - Reference to table style ID
+ * @property {number} [tableStyleColBandSize] - Number of columns for which the table style is applied
+ * @property {number} [tableStyleRowBandSize] - Number of rows for which the table style is applied
+ * @property {TableMeasurement} [tableWidth] - Table width
+ * @property {FloatingTableProperties} [floatingTableProperties] - Floating table properties
+ * @property {TableBorders} [borders] - Table border configuration
+ * @proerty {TableCellMargins} [cellMargins] - Cell margin configuration
+ * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
+ */
+
+/**
+ * Column width definition
+ * @typedef {Object} ColWidth
+ * @property {number} col - Column width in twips
+ */
+
+/**
+ * Table grid definition
+ * @typedef {Object} TableGrid
+ * @property {ColWidth[]} [colWidths] - Array of column widths in twips
+ */
+
 import { Node, Attribute } from '@core/index.js';
 import { callOrGet } from '@core/utilities/callOrGet.js';
 import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.js';
@@ -259,6 +392,26 @@ export const Table = Node.create({
        * @param {number} [tableCellSpacing] - Cell spacing in pixels for this table
        */
       tableCellSpacing: {
+        default: null,
+        rendered: false,
+      },
+
+      /**
+       * @category Attribute
+       * @param {TableProperties} [tableProperties] - Properties for the table.
+       * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
+       */
+      tableProperties: {
+        default: null,
+        rendered: false,
+      },
+
+      /**
+       * @category Attribute
+       * @param {TableGrid} [grid] - Grid definition for the table
+       * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 432
+       */
+      grid: {
         default: null,
         rendered: false,
       },

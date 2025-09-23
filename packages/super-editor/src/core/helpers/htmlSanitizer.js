@@ -9,11 +9,11 @@
 export function stripHtmlStyles(html) {
   if (!html) return '';
 
-  const parser = new DOMParser();
+  const parser = new window.DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
 
-  // Semantic attributes to preserve
-  const SEMANTIC_ATTRS = [
+  // Supported attributes to preserve
+  const SUPPORTED_ATTRS = [
     'href',
     'src',
     'alt',
@@ -26,20 +26,22 @@ export function stripHtmlStyles(html) {
     'dir',
     'cite',
     'start',
-    'type', // for lists
+    'type',
+    'styleid',
   ];
 
   const cleanNode = (node) => {
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
+    if (node.nodeType !== window.Node.ELEMENT_NODE) return;
 
-    // Remove all non-semantic attributes
     [...node.attributes].forEach((attr) => {
-      if (!SEMANTIC_ATTRS.includes(attr.name.toLowerCase())) {
+      const name = attr.name.toLowerCase();
+
+      const shouldKeep = SUPPORTED_ATTRS.includes(name) || name.startsWith('data-'); // Keep all data-* attributes
+
+      if (!shouldKeep) {
         node.removeAttribute(attr.name);
       }
     });
-
-    // Recursively clean children
     [...node.children].forEach(cleanNode);
   };
 

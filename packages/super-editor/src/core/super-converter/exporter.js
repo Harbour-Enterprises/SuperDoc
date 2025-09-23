@@ -1,33 +1,29 @@
-import he from 'he';
-import { DOMParser as PMDOMParser } from 'prosemirror-model';
-import { EditorState } from 'prosemirror-state';
 import { SuperConverter } from './SuperConverter.js';
 import {
-  emuToPixels,
   getTextIndentExportValue,
   inchesToTwips,
   linesToTwips,
   pixelsToEightPoints,
-  pixelsToEmu,
   pixelsToTwips,
   ptToTwips,
   rgbToHex,
-  degreesToRot,
 } from './helpers.js';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
-import { createColGroup } from '@extensions/table/tableHelpers/createColGroup.js';
-import { sanitizeHtml } from '../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
-import { translateDocumentSection } from './v2/exporter/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
+import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
+import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
+import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
+import { translator as wTblNodeTranslator } from './v3/handlers/w/tbl/tbl-translator.js';
+import { translator as wDrawingNodeTranslator } from './v3/handlers/w/drawing/drawing-translator.js';
 
 /**
  * @typedef {Object} ExportParams
@@ -85,13 +81,13 @@ export function exportSchemaToJson(params) {
     bulletList: translateList,
     orderedList: translateList,
     lineBreak: wBrNodeTranslator,
-    table: translateTable,
-    tableRow: translateTableRow,
+    table: wTblNodeTranslator,
+    tableRow: wTrNodeTranslator,
     tableCell: wTcNodeTranslator,
     bookmarkStart: translateBookmarkStart,
-    fieldAnnotation: translateFieldAnnotation,
+    fieldAnnotation: wSdtNodeTranslator,
     tab: wTabNodeTranslator,
-    image: translateImageNode,
+    image: wDrawingNodeTranslator,
     hardBreak: wBrNodeTranslator,
     commentRangeStart: () => translateCommentNode(params, 'Start'),
     commentRangeEnd: () => translateCommentNode(params, 'End'),
@@ -99,9 +95,9 @@ export function exportSchemaToJson(params) {
     shapeContainer: translateShapeContainer,
     shapeTextbox: translateShapeTextbox,
     contentBlock: translateContentBlock,
-    structuredContent: translateStructuredContent,
-    structuredContentBlock: translateStructuredContent,
-    documentSection: translateDocumentSection,
+    structuredContent: wSdtNodeTranslator,
+    structuredContentBlock: wSdtNodeTranslator,
+    documentSection: wSdtNodeTranslator,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
   };
@@ -485,7 +481,7 @@ function translateDocumentNode(params) {
  * @returns {XmlReadyNode} The translated text node
  */
 
-function getTextNodeForExport(text, marks, params) {
+export function getTextNodeForExport(text, marks, params) {
   const hasLeadingOrTrailingSpace = /^\s|\s$/.test(text);
   const space = hasLeadingOrTrailingSpace ? 'preserve' : null;
   const nodeAttrs = space ? { 'xml:space': space } : null;
@@ -562,7 +558,7 @@ function translateTextNode(params) {
 
   // Separate links from regular text
   const isLinkNode = node.marks?.some((m) => m.type === 'link');
-  if (isLinkNode) return translateLinkNode(params);
+  if (isLinkNode) return wHyperlinkTranslator.decode(params);
 
   const { text, marks = [] } = node;
 
@@ -631,7 +627,7 @@ function translateTrackedNode(params) {
  * @param {XmlReadyNode} node
  * @returns {XmlReadyNode} The wrapped run node
  */
-function wrapTextInRun(nodeOrNodes, marks) {
+export function wrapTextInRun(nodeOrNodes, marks) {
   let elements = [];
   if (Array.isArray(nodeOrNodes)) elements = nodeOrNodes;
   else elements = [nodeOrNodes];
@@ -677,41 +673,7 @@ export function processOutputMarks(marks = []) {
   });
 }
 
-/**
- * Translate link node. This is a special case because it requires adding a new relationship.
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated link node
- */
-function translateLinkNode(params) {
-  const { node } = params;
-
-  const linkMark = node.marks.find((m) => m.type === 'link');
-  const link = linkMark.attrs.href;
-
-  let rId = linkMark.attrs.rId;
-  if (!rId) {
-    rId = addNewLinkRelationship(params, link);
-  }
-
-  node.marks = node.marks.filter((m) => m.type !== 'link');
-
-  const outputNode = exportSchemaToJson({ ...params, node });
-  const contentNode = processLinkContentNode(outputNode);
-
-  const newNode = {
-    name: 'w:hyperlink',
-    type: 'element',
-    attributes: {
-      'r:id': rId,
-    },
-    elements: [contentNode],
-  };
-
-  return newNode;
-}
-
-function processLinkContentNode(node) {
+export function processLinkContentNode(node) {
   if (!node) return node;
 
   const contentNode = carbonCopy(node);
@@ -763,7 +725,7 @@ function processLinkContentNode(node) {
  * @param {string} link The URL of this link
  * @returns {string} The new relationship ID
  */
-function addNewLinkRelationship(params, link) {
+export function addNewLinkRelationship(params, link) {
   const newId = 'rId' + generateDocxRandomId();
 
   if (!params.relationships || !Array.isArray(params.relationships)) {
@@ -781,28 +743,6 @@ function addNewLinkRelationship(params, link) {
     },
   });
 
-  return newId;
-}
-
-/**
- * Create a new image relationship and add it to the relationships array
- *
- * @param {ExportParams} params
- * @param {string} imagePath The path to the image
- * @returns {string} The new relationship ID
- */
-function addNewImageRelationship(params, imagePath) {
-  const newId = 'rId' + generateDocxRandomId();
-  const newRel = {
-    type: 'element',
-    name: 'Relationship',
-    attributes: {
-      Id: newId,
-      Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
-      Target: imagePath,
-    },
-  };
-  params.relationships.push(newRel);
   return newId;
 }
 
@@ -1004,265 +944,6 @@ const generateNumPrTag = (numId, level) => {
 };
 
 /**
- * Translate a table node
- *
- * @param {ExportParams} params The table node to translate
- * @returns {XmlReadyNode} The translated table node
- */
-function translateTable(params) {
-  params.node = preProcessVerticalMergeCells(params.node, params);
-  const elements = translateChildNodes(params);
-  const tableProperties = generateTableProperties(params.node);
-  const gridProperties = generateTableGrid(params.node, params);
-
-  elements.unshift(tableProperties);
-  elements.unshift(gridProperties);
-  return {
-    name: 'w:tbl',
-    elements,
-  };
-}
-
-/**
- * Restore vertically merged cells from a table
- * @param {ExportParams.node} table The table node
- * @returns {ExportParams.node} The table node with merged cells restored
- */
-function preProcessVerticalMergeCells(table, { editorSchema }) {
-  const { content } = table;
-  for (let rowIndex = 0; rowIndex < content.length; rowIndex++) {
-    const row = content[rowIndex];
-    if (!row.content) continue;
-    for (let cellIndex = 0; cellIndex < row.content?.length; cellIndex++) {
-      const cell = row.content[cellIndex];
-      if (!cell) continue;
-
-      const { attrs } = cell;
-      if (attrs.rowspan > 1) {
-        // const { mergedCells } = attrs;
-        const rowsToChange = content.slice(rowIndex + 1, rowIndex + attrs.rowspan);
-        const mergedCell = {
-          type: cell.type,
-          content: [
-            // cells must end with a paragraph
-            editorSchema.nodes.paragraph.createAndFill().toJSON(),
-          ],
-          attrs: {
-            ...cell.attrs,
-            // reset colspan and rowspan
-            colspan: null,
-            rowspan: null,
-            // to add vMerge
-            continueMerge: true,
-          },
-        };
-
-        rowsToChange.forEach((rowToChange) => {
-          rowToChange.content.splice(cellIndex, 0, mergedCell);
-        });
-      }
-    }
-  }
-  return table;
-}
-
-/**
- * Generate w:tblPr properties node for a table
- *
- * @param {SchemaNode} node
- * @returns {XmlReadyNode} The table properties node
- */
-function generateTableProperties(node) {
-  const elements = [];
-
-  const { attrs } = node;
-  const { tableWidth, tableStyleId, borders, tableIndent, tableLayout, tableCellSpacing, justification } = attrs;
-
-  if (tableStyleId) {
-    const tableStyleElement = {
-      name: 'w:tblStyle',
-      attributes: { 'w:val': tableStyleId },
-    };
-    elements.push(tableStyleElement);
-  }
-
-  if (borders) {
-    const borderElement = generateTableBorders(node);
-    elements.push(borderElement);
-  }
-
-  if (tableIndent) {
-    const { width, type } = tableIndent;
-    const tableIndentElement = {
-      name: 'w:tblInd',
-      attributes: { 'w:w': pixelsToTwips(width), 'w:type': type },
-    };
-    elements.push(tableIndentElement);
-  }
-
-  if (tableLayout) {
-    const tableLayoutElement = {
-      name: 'w:tblLayout',
-      attributes: { 'w:type': tableLayout },
-    };
-    elements.push(tableLayoutElement);
-  }
-
-  if (tableWidth && tableWidth.width) {
-    const tableWidthElement = {
-      name: 'w:tblW',
-      attributes: { 'w:w': pixelsToTwips(tableWidth.width), 'w:type': tableWidth.type },
-    };
-    elements.push(tableWidthElement);
-  }
-
-  if (tableCellSpacing) {
-    elements.push({
-      name: 'w:tblCellSpacing',
-      attributes: {
-        'w:w': tableCellSpacing.w,
-        'w:type': tableCellSpacing.type,
-      },
-    });
-  }
-
-  if (justification) {
-    const justificationElement = {
-      name: 'w:jc',
-      attributes: { 'w:val': justification },
-    };
-    elements.push(justificationElement);
-  }
-
-  return {
-    name: 'w:tblPr',
-    elements,
-  };
-}
-
-/**
- * Generate w:tblBorders properties node for a table
- *
- * @param {SchemaNode} node
- * @returns {XmlReadyNode} The table borders properties node
- */
-function generateTableBorders(node) {
-  const { borders } = node.attrs;
-  const elements = [];
-
-  if (!borders) return;
-
-  const borderTypes = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'];
-  borderTypes.forEach((type) => {
-    const border = borders[type];
-    if (!border) return;
-
-    let attributes = {};
-    if (!Object.keys(border).length || !border.size) {
-      attributes = {
-        'w:val': 'nil',
-      };
-    } else {
-      attributes = {
-        'w:val': 'single',
-        'w:sz': pixelsToEightPoints(border.size),
-        'w:space': border.space || 0,
-        'w:color': border?.color?.substring(1) || '000000',
-      };
-    }
-
-    const borderElement = {
-      name: `w:${type}`,
-      attributes,
-    };
-    elements.push(borderElement);
-  });
-
-  return {
-    name: 'w:tblBorders',
-    elements,
-  };
-}
-
-/**
- * Generate w:tblGrid properties node for a table
- *
- * @param {SchemaNode} node
- * @returns {XmlReadyNode} The table grid properties node
- */
-function generateTableGrid(node, params) {
-  const { editorSchema } = params;
-
-  let colgroup = [];
-
-  try {
-    const pmNode = editorSchema.nodeFromJSON(node);
-    const cellMinWidth = 10;
-    const { colgroupValues } = createColGroup(pmNode, cellMinWidth);
-
-    colgroup = colgroupValues;
-  } catch {
-    colgroup = [];
-  }
-
-  const elements = [];
-  colgroup?.forEach((width) => {
-    elements.push({
-      name: 'w:gridCol',
-      attributes: { 'w:w': pixelsToTwips(width) },
-    });
-  });
-
-  return {
-    name: 'w:tblGrid',
-    elements,
-  };
-}
-
-/**
- * Main translation function for a table row
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated table row node
- */
-export function translateTableRow(params) {
-  const elements = translateChildNodes(params);
-  const tableRowProperties = generateTableRowProperties(params.node);
-  if (tableRowProperties.elements.length) elements.unshift(tableRowProperties);
-
-  return {
-    name: 'w:tr',
-    elements,
-  };
-}
-
-function generateTableRowProperties(node) {
-  const { attrs } = node;
-  const elements = [];
-
-  const { rowHeight, rowHeightType } = attrs;
-  if (rowHeight) {
-    const attributes = { 'w:val': pixelsToTwips(rowHeight) };
-    if (rowHeightType) attributes['w:hRule'] = rowHeightType;
-
-    const rowHeightElement = {
-      name: 'w:trHeight',
-      attributes,
-    };
-    elements.push(rowHeightElement);
-  }
-
-  if (attrs?.cantSplit) {
-    elements.push({ name: 'w:cantSplit' });
-  }
-
-  return {
-    name: 'w:trPr',
-    elements,
-  };
-}
-
-/**
  * Translate bookmark start node. We don't maintain an internal 'end' node since its normal
  * to place it right next to the start. We export both here.
  *
@@ -1384,631 +1065,6 @@ function translateMark(mark) {
   }
 
   return markElement;
-}
-
-function getPngDimensions(base64) {
-  if (!base64) return {};
-
-  const type = base64.split(';')[0].split('/')[1];
-  if (!base64 || type !== 'png') {
-    return {
-      originalWidth: undefined,
-      originalHeight: undefined,
-    };
-  }
-
-  let header = base64.split(',')[1].slice(0, 50);
-  let uint8 = Uint8Array.from(atob(header), (c) => c.charCodeAt(0));
-  let dataView = new DataView(uint8.buffer, 0, 28);
-
-  return {
-    originalWidth: dataView.getInt32(16),
-    originalHeight: dataView.getInt32(20),
-  };
-}
-
-function getScaledSize(originalWidth, originalHeight, maxWidth, maxHeight) {
-  let scaledWidth = originalWidth;
-  let scaledHeight = originalHeight;
-
-  // Calculate aspect ratio
-  let ratio = Math.min(maxWidth / originalWidth, maxHeight / originalHeight);
-
-  // Scale dimensions
-  scaledWidth = Math.round(scaledWidth * ratio);
-  scaledHeight = Math.round(scaledHeight * ratio);
-
-  return { scaledWidth, scaledHeight };
-}
-
-function translateImageNode(params, imageSize) {
-  const {
-    node: { attrs = {} },
-    tableCell,
-  } = params;
-
-  let imageId = attrs.rId;
-
-  const src = attrs.src || attrs.imageSrc;
-  const { originalWidth, originalHeight } = getPngDimensions(src);
-  const imageName = params.node.type === 'image' ? src.split('/').pop() : attrs.fieldId?.replace('-', '_');
-
-  let size = attrs.size
-    ? {
-        w: pixelsToEmu(attrs.size.width),
-        h: pixelsToEmu(attrs.size.height),
-      }
-    : imageSize;
-
-  const xfrmAttrs = {};
-  const effectExtentAttrs = {
-    l: 0,
-    t: 0,
-    r: 0,
-    b: 0,
-  };
-  const transformData = attrs.transformData;
-  if (transformData) {
-    if (transformData.rotation) {
-      xfrmAttrs.rot = degreesToRot(transformData.rotation);
-    }
-    if (transformData.verticalFlip) {
-      xfrmAttrs.flipV = '1';
-    }
-    if (transformData.horizontalFlip) {
-      xfrmAttrs.flipH = '1';
-    }
-    if (transformData.sizeExtension) {
-      effectExtentAttrs.l = pixelsToEmu(transformData.sizeExtension.left);
-      effectExtentAttrs.t = pixelsToEmu(transformData.sizeExtension.top);
-      effectExtentAttrs.r = pixelsToEmu(transformData.sizeExtension.right);
-      effectExtentAttrs.b = pixelsToEmu(transformData.sizeExtension.bottom);
-    }
-  }
-
-  if (originalWidth && originalHeight) {
-    const boxWidthPx = emuToPixels(size.w);
-    const boxHeightPx = emuToPixels(size.h);
-    const { scaledWidth, scaledHeight } = getScaledSize(originalWidth, originalHeight, boxWidthPx, boxHeightPx);
-    size = {
-      w: pixelsToEmu(scaledWidth),
-      h: pixelsToEmu(scaledHeight),
-    };
-  }
-
-  if (tableCell) {
-    // Image inside tableCell
-    const colwidthSum = tableCell.attrs.colwidth.reduce((acc, curr) => acc + curr, 0);
-    const leftMargin = tableCell.attrs.cellMargins?.left || 8;
-    const rightMargin = tableCell.attrs.cellMargins?.right || 8;
-    const maxWidthEmu = pixelsToEmu(colwidthSum - (leftMargin + rightMargin));
-    const { width: w, height: h } = resizeKeepAspectRatio(size.w, size.h, maxWidthEmu);
-    if (w && h) size = { w, h };
-  }
-
-  if (params.node.type === 'image' && !imageId) {
-    const path = src?.split('word/')[1];
-    imageId = addNewImageRelationship(params, path);
-  } else if (params.node.type === 'fieldAnnotation' && !imageId) {
-    const type = src?.split(';')[0].split('/')[1];
-    if (!type) {
-      return prepareTextAnnotation(params);
-    }
-
-    const imageUrl = `media/${imageName}_${attrs.hash}.${type}`;
-    imageId = addNewImageRelationship(params, imageUrl);
-    params.media[`${imageName}_${attrs.hash}.${type}`] = src;
-  }
-
-  let inlineAttrs = attrs.originalPadding || {
-    distT: 0,
-    distB: 0,
-    distL: 0,
-    distR: 0,
-  };
-
-  const anchorElements = [];
-  let wrapProp = [];
-
-  // Handle anchor image export
-  if (attrs.isAnchor) {
-    inlineAttrs = {
-      ...inlineAttrs,
-      simplePos: attrs.originalAttributes?.simplePos,
-      relativeHeight: 1,
-      behindDoc: attrs.originalAttributes?.behindDoc,
-      locked: attrs.originalAttributes?.locked,
-      layoutInCell: attrs.originalAttributes?.layoutInCell,
-      allowOverlap: attrs.originalAttributes?.allowOverlap,
-    };
-    if (attrs.simplePos) {
-      anchorElements.push({
-        name: 'wp:simplePos',
-        attributes: {
-          x: 0,
-          y: 0,
-        },
-      });
-    }
-
-    if (attrs.anchorData) {
-      anchorElements.push({
-        name: 'wp:positionH',
-        attributes: {
-          relativeFrom: attrs.anchorData.hRelativeFrom,
-        },
-        ...(attrs.marginOffset.left !== undefined && {
-          elements: [
-            {
-              name: 'wp:posOffset',
-              elements: [
-                {
-                  type: 'text',
-                  text: pixelsToEmu(attrs.marginOffset.left).toString(),
-                },
-              ],
-            },
-          ],
-        }),
-        ...(attrs.anchorData.alignH && {
-          elements: [
-            {
-              name: 'wp:align',
-              elements: [
-                {
-                  type: 'text',
-                  text: attrs.anchorData.alignH,
-                },
-              ],
-            },
-          ],
-        }),
-      });
-
-      anchorElements.push({
-        name: 'wp:positionV',
-        attributes: {
-          relativeFrom: attrs.anchorData.vRelativeFrom,
-        },
-        ...(attrs.marginOffset.top !== undefined && {
-          elements: [
-            {
-              name: 'wp:posOffset',
-              elements: [
-                {
-                  type: 'text',
-                  text: pixelsToEmu(attrs.marginOffset.top).toString(),
-                },
-              ],
-            },
-          ],
-        }),
-        ...(attrs.anchorData.alignV && {
-          elements: [
-            {
-              name: 'wp:align',
-              elements: [
-                {
-                  type: 'text',
-                  text: attrs.anchorData.alignV,
-                },
-              ],
-            },
-          ],
-        }),
-      });
-    }
-
-    if (attrs.wrapText) {
-      wrapProp.push({
-        name: 'wp:wrapSquare',
-        attributes: {
-          wrapText: attrs.wrapText,
-        },
-      });
-    }
-
-    if (attrs.wrapTopAndBottom) {
-      wrapProp.push({
-        name: 'wp:wrapTopAndBottom',
-      });
-    }
-
-    // Important: wp:anchor will break if no wrapping is specified. We need to use wrapNone.
-    if (attrs.isAnchor && !wrapProp.length) {
-      wrapProp.push({
-        name: 'wp:wrapNone',
-      });
-    }
-  }
-
-  const drawingXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
-  const pictureXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
-
-  const textNode = wrapTextInRun(
-    {
-      name: 'w:drawing',
-      elements: [
-        {
-          name: attrs.isAnchor ? 'wp:anchor' : 'wp:inline',
-          attributes: inlineAttrs,
-          elements: [
-            ...anchorElements,
-            {
-              name: 'wp:extent',
-              attributes: {
-                cx: size.w,
-                cy: size.h,
-              },
-            },
-            {
-              name: 'wp:effectExtent',
-              attributes: effectExtentAttrs,
-            },
-            ...wrapProp,
-            {
-              name: 'wp:docPr',
-              attributes: {
-                id: attrs.id || 0,
-                name: attrs.alt || `Picture ${imageName}`,
-              },
-            },
-            {
-              name: 'wp:cNvGraphicFramePr',
-              elements: [
-                {
-                  name: 'a:graphicFrameLocks',
-                  attributes: {
-                    'xmlns:a': drawingXmlns,
-                    noChangeAspect: 1,
-                  },
-                },
-              ],
-            },
-            {
-              name: 'a:graphic',
-              attributes: { 'xmlns:a': drawingXmlns },
-              elements: [
-                {
-                  name: 'a:graphicData',
-                  attributes: { uri: pictureXmlns },
-                  elements: [
-                    {
-                      name: 'pic:pic',
-                      attributes: { 'xmlns:pic': pictureXmlns },
-                      elements: [
-                        {
-                          name: 'pic:nvPicPr',
-                          elements: [
-                            {
-                              name: 'pic:cNvPr',
-                              attributes: {
-                                id: attrs.id || 0,
-                                name: attrs.title || `Picture ${imageName}`,
-                              },
-                            },
-                            {
-                              name: 'pic:cNvPicPr',
-                              elements: [
-                                {
-                                  name: 'a:picLocks',
-                                  attributes: {
-                                    noChangeAspect: 1,
-                                    noChangeArrowheads: 1,
-                                  },
-                                },
-                              ],
-                            },
-                          ],
-                        },
-                        {
-                          name: 'pic:blipFill',
-                          elements: [
-                            {
-                              name: 'a:blip',
-                              attributes: {
-                                'r:embed': imageId,
-                              },
-                            },
-                            {
-                              name: 'a:stretch',
-                              elements: [{ name: 'a:fillRect' }],
-                            },
-                          ],
-                        },
-                        {
-                          name: 'pic:spPr',
-                          attributes: {
-                            bwMode: 'auto',
-                          },
-                          elements: [
-                            {
-                              name: 'a:xfrm',
-                              attributes: xfrmAttrs,
-                              elements: [
-                                {
-                                  name: 'a:ext',
-                                  attributes: {
-                                    cx: size.w,
-                                    cy: size.h,
-                                  },
-                                },
-                                {
-                                  name: 'a:off',
-                                  attributes: {
-                                    x: 0,
-                                    y: 0,
-                                  },
-                                },
-                              ],
-                            },
-                            {
-                              name: 'a:prstGeom',
-                              attributes: { prst: 'rect' },
-                              elements: [{ name: 'a:avLst' }],
-                            },
-                            {
-                              name: 'a:noFill',
-                            },
-                          ],
-                        },
-                      ],
-                    },
-                  ],
-                },
-              ],
-            },
-          ],
-        },
-      ],
-    },
-    [],
-  );
-
-  return textNode;
-}
-
-/**
- * Translates text annotations
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated text node
- */
-function prepareTextAnnotation(params) {
-  const {
-    node: { attrs = {}, marks = [] },
-  } = params;
-
-  const marksFromAttrs = translateFieldAttrsToMarks(attrs);
-  return getTextNodeForExport(attrs.displayLabel, [...marks, ...marksFromAttrs], params);
-}
-
-/**
- * Translates checkbox annotations
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated checkbox node
- */
-function prepareCheckboxAnnotation(params) {
-  const {
-    node: { attrs = {}, marks = [] },
-  } = params;
-  const content = he.decode(attrs.displayLabel);
-  return getTextNodeForExport(content, marks, params);
-}
-
-/**
- * Translates html annotations
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated html node
- */
-function prepareHtmlAnnotation(params) {
-  const {
-    node: { attrs = {}, marks = [] },
-    editorSchema,
-  } = params;
-
-  let html = attrs.rawHtml || attrs.displayLabel;
-  const paragraphHtmlContainer = sanitizeHtml(html);
-  const marksFromAttrs = translateFieldAttrsToMarks(attrs);
-  const allMarks = [...marks, ...marksFromAttrs];
-
-  let state = EditorState.create({
-    doc: PMDOMParser.fromSchema(editorSchema).parse(paragraphHtmlContainer),
-  });
-
-  if (allMarks.length) {
-    state = applyMarksToHtmlAnnotation(state, allMarks);
-  }
-
-  const htmlAnnotationNode = state.doc.toJSON();
-  const listTypes = ['bulletList', 'orderedList'];
-  const { editor } = params;
-  const seenLists = new Map();
-  state.doc.descendants((node) => {
-    if (listTypes.includes(node.type.name)) {
-      const listItem = node.firstChild;
-      const { attrs } = listItem;
-      const { level, numId } = attrs;
-      if (!seenLists.has(numId)) {
-        const newNumId = ListHelpers.changeNumIdSameAbstract(numId, level, node.type.name, editor);
-        listItem.attrs.numId = newNumId;
-        seenLists.set(numId, newNumId);
-      } else {
-        const newNumId = seenLists.get(numId);
-        listItem.attrs.numId = newNumId;
-      }
-    }
-  });
-
-  const elements = translateChildNodes({
-    ...params,
-    node: htmlAnnotationNode,
-  });
-
-  return {
-    name: 'htmlAnnotation',
-    elements,
-  };
-}
-
-/**
- * Translates image annotations
- * @param {ExportParams} params
- * @param {Object} imageSize Object contains width and height for image in EMU
- * @returns {XmlReadyNode} The translated image node
- */
-function prepareImageAnnotation(params, imageSize) {
-  return translateImageNode(params, imageSize);
-}
-
-/**
- * Translates URL annotations
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated URL node
- */
-function prepareUrlAnnotation(params) {
-  const {
-    node: { attrs = {}, marks = [] },
-  } = params;
-  const newId = addNewLinkRelationship(params, attrs.linkUrl);
-
-  const linkTextNode = getTextNodeForExport(attrs.linkUrl, marks, params);
-  const contentNode = processLinkContentNode(linkTextNode);
-
-  return {
-    name: 'w:hyperlink',
-    type: 'element',
-    attributes: {
-      'r:id': newId,
-      'w:history': 1,
-    },
-    elements: [contentNode],
-  };
-}
-
-/**
- * Returns node handler based on annotation type
- *
- * @param {String} annotationType
- * @returns {Function} handler for provided annotation type
- */
-function getTranslationByAnnotationType(annotationType, annotationFieldType) {
-  // invalid annotation
-  if (annotationType === 'text' && annotationFieldType === 'FILEUPLOADER') {
-    return null;
-  }
-
-  const imageEmuSize = {
-    w: 4286250,
-    h: 4286250,
-  };
-
-  const signatureEmuSize = {
-    w: 990000,
-    h: 495000,
-  };
-
-  const dictionary = {
-    text: prepareTextAnnotation,
-    image: (params) => prepareImageAnnotation(params, imageEmuSize),
-    signature: (params) => prepareImageAnnotation(params, signatureEmuSize),
-    checkbox: prepareCheckboxAnnotation,
-    html: prepareHtmlAnnotation,
-    link: prepareUrlAnnotation,
-  };
-
-  return dictionary[annotationType];
-}
-
-const translateFieldAttrsToMarks = (attrs = {}) => {
-  const { fontFamily, fontSize, bold, underline, italic, textColor, textHighlight } = attrs;
-
-  const marks = [];
-  if (fontFamily) marks.push({ type: 'fontFamily', attrs: { fontFamily } });
-  if (fontSize) marks.push({ type: 'fontSize', attrs: { fontSize } });
-  if (bold) marks.push({ type: 'bold', attrs: {} });
-  if (underline) marks.push({ type: 'underline', attrs: {} });
-  if (italic) marks.push({ type: 'italic', attrs: {} });
-  if (textColor) marks.push({ type: 'color', attrs: { color: textColor } });
-  if (textHighlight) marks.push({ type: 'highlight', attrs: { color: textHighlight } });
-  return marks;
-};
-
-/**
- * Translate a field annotation node
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated field annotation node
- */
-function translateFieldAnnotation(params) {
-  const { node, isFinalDoc, fieldsHighlightColor } = params;
-  const { attrs = {} } = node;
-  const annotationHandler = getTranslationByAnnotationType(attrs.type, attrs.fieldType);
-  if (!annotationHandler) return {};
-
-  let processedNode;
-  let sdtContentElements;
-
-  if ((attrs.type === 'image' || attrs.type === 'signature') && !attrs.hash) {
-    attrs.hash = generateDocxRandomId(4);
-  }
-
-  if (isFinalDoc) {
-    return annotationHandler(params);
-  } else {
-    processedNode = annotationHandler(params);
-    sdtContentElements = [processedNode];
-
-    if (attrs.type === 'html') {
-      sdtContentElements = [...processedNode.elements];
-    }
-  }
-
-  sdtContentElements = [...sdtContentElements];
-
-  // Set field background color only if param is provided, default to transparent
-  const fieldBackgroundTag = getFieldHighlightJson(fieldsHighlightColor);
-  if (fieldBackgroundTag) {
-    sdtContentElements.unshift(fieldBackgroundTag);
-  }
-
-  // Contains only the main attributes.
-  const annotationAttrs = {
-    displayLabel: attrs.displayLabel,
-    defaultDisplayLabel: attrs.defaultDisplayLabel,
-    fieldId: attrs.fieldId,
-    fieldType: attrs.fieldType,
-    fieldTypeShort: attrs.type,
-    fieldColor: attrs.fieldColor,
-    fieldMultipleImage: attrs.multipleImage,
-    fieldFontFamily: attrs.fontFamily,
-    fieldFontSize: attrs.fontSize,
-    fieldTextColor: attrs.textColor,
-    fieldTextHighlight: attrs.textHighlight,
-    hash: attrs.hash,
-  };
-  const annotationAttrsJson = JSON.stringify(annotationAttrs);
-
-  const result = {
-    name: 'w:sdt',
-    elements: [
-      {
-        name: 'w:sdtPr',
-        elements: [
-          { name: 'w:tag', attributes: { 'w:val': annotationAttrsJson } },
-          { name: 'w:alias', attributes: { 'w:val': attrs.displayLabel } },
-        ],
-      },
-      {
-        name: 'w:sdtContent',
-        elements: sdtContentElements,
-      },
-    ],
-  };
-  return result;
 }
 
 export function translateHardBreak(params) {
@@ -2252,102 +1308,6 @@ export class DocxExporter {
   }
 }
 
-function resizeKeepAspectRatio(width, height, maxWidth) {
-  if (width > maxWidth) {
-    let scale = maxWidth / width;
-    let newHeight = Math.round(height * scale);
-    return { width: maxWidth, height: newHeight };
-  }
-  return { width, height };
-}
-
-function applyMarksToHtmlAnnotation(state, marks) {
-  const { tr, doc, schema } = state;
-  const allowedMarks = ['fontFamily', 'fontSize', 'highlight'];
-
-  if (!marks.some((m) => allowedMarks.includes(m.type))) {
-    return state;
-  }
-
-  const fontFamily = marks.find((m) => m.type === 'fontFamily');
-  const fontSize = marks.find((m) => m.type === 'fontSize');
-  const highlight = marks.find((m) => m.type === 'highlight');
-
-  const textStyleType = schema.marks.textStyle;
-  const highlightType = schema.marks.highlight;
-
-  doc.descendants((node, pos) => {
-    if (!node.isText) return;
-
-    const foundTextStyle = node.marks.find((m) => m.type.name === 'textStyle');
-    const foundHighlight = node.marks.find((m) => m.type.name === 'highlight');
-
-    // text style (fontFamily, fontSize)
-    if (!foundTextStyle) {
-      tr.addMark(
-        pos,
-        pos + node.nodeSize,
-        textStyleType.create({
-          ...fontFamily?.attrs,
-          ...fontSize?.attrs,
-        }),
-      );
-    } else if (!foundTextStyle?.attrs.fontFamily && fontFamily) {
-      tr.addMark(
-        pos,
-        pos + node.nodeSize,
-        textStyleType.create({
-          ...foundTextStyle?.attrs,
-          ...fontFamily.attrs,
-        }),
-      );
-    } else if (!foundTextStyle?.attrs.fontSize && fontSize) {
-      tr.addMark(
-        pos,
-        pos + node.nodeSize,
-        textStyleType.create({
-          ...foundTextStyle?.attrs,
-          ...fontSize.attrs,
-        }),
-      );
-    }
-
-    // highlight
-    if (!foundHighlight) {
-      tr.addMark(
-        pos,
-        pos + node.nodeSize,
-        highlightType.create({
-          ...highlight?.attrs,
-        }),
-      );
-    }
-  });
-
-  return state.apply(tr);
-}
-
-function translateStructuredContent(params) {
-  const { node } = params;
-  const { attrs = {} } = node;
-
-  const childContent = translateChildNodes({ ...params, nodes: node.content });
-
-  // We build the sdt node elements here, and re-add passthrough sdtPr node
-  const nodeElements = [
-    {
-      name: 'w:sdtContent',
-      elements: childContent,
-    },
-  ];
-  nodeElements.unshift(attrs.sdtPr);
-
-  return {
-    name: 'w:sdt',
-    elements: nodeElements,
-  };
-}
-
 const translatePageNumberNode = (params) => {
   const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
   return getAutoPageJson('PAGE', outputMarks);
@@ -2424,43 +1384,4 @@ const getAutoPageJson = (type, outputMarks = []) => {
       ],
     },
   ];
-};
-
-/**
- * Get the JSON representation of the field highlight
- * @param {string} fieldsHighlightColor - The highlight color for the field. Must be valid HEX.
- * @returns {Object} The JSON representation of the field highlight
- */
-export const getFieldHighlightJson = (fieldsHighlightColor) => {
-  if (!fieldsHighlightColor) return null;
-
-  // Normalize input
-  let parsedColor = fieldsHighlightColor.trim();
-
-  // Regex: optional '#' + 3/4/6/8 hex digits
-  const hexRegex = /^#?([A-Fa-f0-9]{3}|[A-Fa-f0-9]{4}|[A-Fa-f0-9]{6}|[A-Fa-f0-9]{8})$/;
-
-  if (!hexRegex.test(parsedColor)) {
-    console.warn(`Invalid HEX color provided to fieldsHighlightColor export param: ${fieldsHighlightColor}`);
-    return null;
-  }
-
-  // Remove '#' if present
-  if (parsedColor.startsWith('#')) {
-    parsedColor = parsedColor.slice(1);
-  }
-
-  return {
-    name: 'w:rPr',
-    elements: [
-      {
-        name: 'w:shd',
-        attributes: {
-          'w:fill': `#${parsedColor}`,
-          'w:color': 'auto',
-          'w:val': 'clear',
-        },
-      },
-    ],
-  };
 };

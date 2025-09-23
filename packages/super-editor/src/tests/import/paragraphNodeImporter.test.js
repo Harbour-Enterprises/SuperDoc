@@ -119,8 +119,8 @@ describe('paragraph tests to check spacing', () => {
     const { attrs } = node;
     const { spacing, marksAttrs } = attrs;
 
-    expect(spacing.lineSpaceAfter).toBe(18);
-    expect(spacing.lineSpaceBefore).toBe(18);
+    expect(spacing.lineSpaceAfter).toBeCloseTo(17.667, 3);
+    expect(spacing.lineSpaceBefore).toBeCloseTo(17.667, 3);
     expect(marksAttrs.length).toBe(2);
     expect(marksAttrs[0].type).toBe('bold');
     expect(marksAttrs[1].type).toBe('textStyle');
@@ -144,7 +144,7 @@ describe('paragraph tests to check spacing', () => {
 
     const { attrs } = node;
     const { spacing } = attrs;
-    expect(spacing.lineSpaceAfter).toBe(11);
+    expect(spacing.lineSpaceAfter).toBeCloseTo(10.667, 3);
     expect(spacing.lineSpaceBefore).toBeUndefined();
   });
 
@@ -164,8 +164,8 @@ describe('paragraph tests to check spacing', () => {
 
     const { attrs } = node;
     const { spacing } = attrs;
-    expect(spacing.lineSpaceAfter).toBe(6);
-    expect(spacing.lineSpaceBefore).toBe(21);
+    expect(spacing.lineSpaceAfter).toBeCloseTo(5.333, 3);
+    expect(spacing.lineSpaceBefore).toBeCloseTo(21.333, 3);
   });
 
   it('correctly gets spacing with lists [list-def-mix]', async () => {
@@ -263,7 +263,7 @@ describe('paragraph tests to check spacing', () => {
     expect(node.attrs.indent.firstLine).toBe(48);
     expect(node.attrs.indent.hanging).toBe(18);
     // textIndent should be in inches (2880twips - 270twips(hanging))
-    expect(node.attrs.textIndent).toBe('1.81in');
+    expect(node.attrs.textIndent).toBe('1.8125in');
   });
 
   it('correctly parses paragraph borders', () => {
@@ -409,7 +409,7 @@ describe('paragraph tests to check indentation', () => {
     const { attrs } = node;
     const { indent } = attrs;
 
-    expect(indent.firstLine).toBe(29);
+    expect(indent.firstLine).toBeCloseTo(28.8, 1);
   });
 });
 

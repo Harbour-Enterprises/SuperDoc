@@ -95,16 +95,18 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
  * @param {Array} marks - The text style marks.
  * @returns {Object} The paragraph spacing.
  */
-export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
+export const getParagraphSpacing = (node, docx, styleId = '', marks = [], options = {}) => {
+  const { insideTable = false } = options;
   // Check if we have default paragraph styles to override
   const spacing = {};
 
-  const { spacing: pDefaultSpacing = {} } = getDefaultParagraphStyle(docx, styleId);
+  const { spacing: pDefaultSpacing = {}, spacingSource } = getDefaultParagraphStyle(docx, styleId);
   let lineSpaceAfter, lineSpaceBefore, line, lineRuleStyle;
 
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');
   const inLineSpacingTag = pPr?.elements?.find((el) => el.name === 'w:spacing');
   const inLineSpacing = inLineSpacingTag?.attributes || {};
+  const hasInlineSpacing = !!Object.keys(inLineSpacing).length;
 
   const textStyleMark = marks.find((el) => el.type === 'textStyle');
   const fontSize = textStyleMark?.attrs?.fontSize;
@@ -137,6 +139,15 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
   const afterAutospacing = inLineSpacing?.['w:afterAutospacing'];
   if (afterAutospacing === '1' && fontSize) {
     spacing.lineSpaceAfter += Math.round((parseInt(fontSize) * 0.5 * 96) / 72);
+  }
+
+  if (insideTable && !hasInlineSpacing && spacingSource === 'docDefault') {
+    // Word ignores doc-default spacing inside table cells unless explicitly set,
+    // so drop the derived values when nothing is defined inline or via style.
+    const hasExplicitSpacing = Object.keys(inLineSpacing).length > 0;
+    if (!hasExplicitSpacing) {
+      return undefined;
+    }
   }
 
   return spacing;
@@ -199,9 +210,22 @@ export const getDefaultParagraphStyle = (docx, styleId = '') => {
     ? pPrNormalIndentAttr || pPrDefaultIndentAttr
     : pPrDefaultIndentAttr || pPrNormalIndentAttr;
 
+  let spacingToUse = pPrByIdSpacingAttr || spacingRest;
+  let spacingSource = 'docDefault';
+  if (pPrByIdSpacingAttr) {
+    spacingSource = 'style';
+  } else if (spacingRest === pPrNormalSpacingAttr && pPrNormalSpacingAttr) {
+    spacingSource = isNormalAsDefault ? 'docDefault' : 'normal';
+  } else if (spacingRest === pPrDefaultSpacingAttr && pPrDefaultSpacingAttr) {
+    spacingSource = 'docDefault';
+  }
+
+  let indentToUse = pPrByIdIndentAttr || indentRest;
+
   return {
-    spacing: pPrByIdSpacingAttr || spacingRest,
-    indent: pPrByIdIndentAttr || indentRest,
+    spacing: spacingToUse,
+    spacingSource,
+    indent: indentToUse,
     justify: pPrByIdJcAttr,
   };
 };
