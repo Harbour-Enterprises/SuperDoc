@@ -947,30 +947,6 @@ const generateNumPrTag = (numId, level) => {
 };
 
 /**
- * Translate bookmark start node. We don't maintain an internal 'end' node since its normal
- * to place it right next to the start. We export both here.
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated bookmark node
- */
-function translateBookmarkStart(params) {
-  const bookmarkStartNode = {
-    name: 'w:bookmarkStart',
-    attributes: {
-      'w:id': params.node.attrs.id,
-      'w:name': params.node.attrs.name,
-    },
-  };
-  const bookmarkEndNode = {
-    name: 'w:bookmarkEnd',
-    attributes: {
-      'w:id': params.node.attrs.id,
-    },
-  };
-  return [bookmarkStartNode, bookmarkEndNode];
-}
-
-/**
  * Translate a mark to an XML ready attribute
  *
  * @param {MarkType} mark
