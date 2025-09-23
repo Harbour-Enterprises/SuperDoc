@@ -12,10 +12,12 @@ export const translator = NodeTranslator.from({
   attributes: ['w:leftFromText', 'w:rightFromText', 'w:topFromText', 'w:bottomFromText', 'w:tblpX', 'w:tblpY']
     .map((attr) => createAttributeHandler(attr, null, parseInteger, integerToString))
     .concat(['w:horzAnchor', 'w:vertAnchor', 'w:tblpXSpec', 'w:tblpYSpec'].map((attr) => createAttributeHandler(attr))),
-  encode: (_, encodedAttrs) => {
+  encode: (params, encodedAttrs) => {
+    void params;
     return Object.keys(encodedAttrs).length > 0 ? encodedAttrs : undefined;
   },
-  decode: function ({ node }, _) {
+  decode: function ({ node }, context) {
+    void context;
     const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs.floatingTableProperties || {} } });
     return Object.keys(decodedAttrs).length > 0 ? { attributes: decodedAttrs } : undefined;
   },

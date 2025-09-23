@@ -35,7 +35,7 @@ export class StructuredContentViewBase {
     this.mount(props);
   }
 
-  mount(props) {
+  mount() {
     return;
   }
 

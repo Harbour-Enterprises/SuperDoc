@@ -12,10 +12,12 @@ export const translator = NodeTranslator.from({
   attributes: ['w:firstColumn', 'w:firstRow', 'w:lastColumn', 'w:lastRow', 'w:noHBand', 'w:noVBand']
     .map((attr) => createAttributeHandler(attr, null, parseBoolean, booleanToString))
     .concat([createAttributeHandler('w:val')]),
-  encode: (_, encodedAttrs) => {
+  encode: (params, encodedAttrs) => {
+    void params;
     return Object.keys(encodedAttrs).length > 0 ? encodedAttrs : undefined;
   },
-  decode: function ({ node }, _) {
+  decode: function ({ node }, context) {
+    void context;
     const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs.tblLook || {} } });
     return Object.keys(decodedAttrs).length > 0 ? { attributes: decodedAttrs } : undefined;
   },

@@ -20,7 +20,7 @@ const SD_ATTR_KEY = 'borders';
  * @param {import('@translator').SCEncoderConfig} params
  * @returns {import('@translator').SCEncoderResult}
  */
-const encode = (params, _) => {
+const encode = (params) => {
   const { nodes } = params;
   const node = nodes[0];
 
@@ -35,7 +35,7 @@ const encode = (params, _) => {
  * @param {import('@translator').SCDecoderConfig} params
  * @returns {import('@translator').SCDecoderResult}
  */
-const decode = (params, _) => {
+const decode = (params) => {
   const { borders = {} } = params.node.attrs || {};
 
   // Process property translators

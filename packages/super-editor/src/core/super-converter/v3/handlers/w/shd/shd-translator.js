@@ -20,10 +20,12 @@ export const translator = NodeTranslator.from({
     'w:themeTint',
     'w:val',
   ].map((attr) => createAttributeHandler(attr)),
-  encode: (_, encodedAttrs) => {
+  encode: (params, encodedAttrs) => {
+    void params;
     return Object.keys(encodedAttrs).length > 0 ? encodedAttrs : undefined;
   },
-  decode: function ({ node }, _) {
+  decode: function ({ node }, context) {
+    void context;
     const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs.shading || {} } });
     return Object.keys(decodedAttrs).length > 0 ? { attributes: decodedAttrs } : undefined;
   },
