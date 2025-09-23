@@ -312,13 +312,12 @@ export const processCombinedNodesForFldChar = (nodesToCombine = []) => {
     .join(' ')
     .trim();
 
-  let hasPageMarker = instrText?.trim().startsWith('PAGE');
-  let isNumPages = instrText?.trim().startsWith('NUMPAGES');
+  const instruction = instrText.split(' ')[0];
   const urlMatch = instrText?.match(/HYPERLINK\s+"([^"]+)"/);
   let processedNodes = [];
 
   // If we have a page marker, we need to replace the last node with a page number node.
-  if (hasPageMarker) {
+  if (instruction === 'PAGE') {
     const pageNumNode = {
       name: 'sd:autoPageNumber',
       type: 'element',
@@ -333,7 +332,7 @@ export const processCombinedNodesForFldChar = (nodesToCombine = []) => {
   }
 
   // If we have a NUMPAGES marker, we need to replace the last node with a total page number node.
-  else if (isNumPages) {
+  else if (instruction === 'NUMPAGES') {
     const totalPageNumNode = {
       name: 'sd:totalPageNumber',
       type: 'element',
@@ -344,6 +343,16 @@ export const processCombinedNodesForFldChar = (nodesToCombine = []) => {
       if (rPrNode) totalPageNumNode.elements = [rPrNode];
     });
     processedNodes.push(totalPageNumNode);
+  } else if (instruction === 'PAGEREF') {
+    const pageRefNode = {
+      name: 'sd:pageReference',
+      type: 'element',
+      attributes: {
+        instruction: instrText,
+      },
+      elements: [...(textNodes[0]?.elements || [])],
+    };
+    processedNodes.push(pageRefNode);
   }
 
   // If we have a hyperlink, we need to replace the last node with a link node.
