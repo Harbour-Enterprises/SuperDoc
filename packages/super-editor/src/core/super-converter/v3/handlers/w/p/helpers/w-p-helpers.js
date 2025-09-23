@@ -241,52 +241,109 @@ export const getDefaultParagraphStyle = (docx, styleId = '') => {
 };
 
 /**
- * Pre-processes nodes in a paragraph to combine nodes together where necessary (e.g., links).
+ * @typedef {object} FldCharProcessResult
+ * @property {Array} processedNodes - The list of nodes after processing.
+ * @property {{instrText: string} | null} unpairedBegin - If a field 'begin' was found without a matching 'end'. Contains the current field data.
+ * @property {boolean | null} unpairedEnd - If a field 'end' was found without a matching 'begin'.
+ */
+
+/**
+ * Pre-processes nodes to combine nodes together where necessary (e.g., links).
+ * This function recursively traverses the node tree to handle `w:fldChar` elements, which define fields like TOC, hyperlinks and page numbers.
  *
- * @param {Array} nodes - The nodes to process.
- * @returns {Array} The processed nodes.
+ * It operates as a state machine:
+ * - On `begin` fldChar: starts collecting nodes.
+ * - On `end` fldChar: processes the collected nodes.
+ *
+ * The function's recursive nature and state-passing through return values allow it to handle fields that span across multiple nodes or are nested.
+ *
+ * @param {Array} [nodes=[]] - The nodes to process.
+ * @returns {FldCharProcessResult} The processed nodes and whether there were unpaired begin or end fldChar nodes.
  */
 export const preProcessNodesForFldChar = (nodes = []) => {
   const processedNodes = [];
-  let stack = [];
+  let collectedNodesStack = [];
+  let currentFieldStack = [];
+  let unpairedEnd = null;
   let collecting = false;
+
+  /**
+   * Finalizes the current field. If collecting nodes, it processes them.
+   * Otherwise, it means an unpaired fldCharType='end' was found which needs to be handled by a parent node.
+   * @param {object} node - The node that triggers the finalization (e.g., with fldCharType='end').
+   */
+  const finalizeField = (node) => {
+    if (collecting) {
+      const collectedNodes = collectedNodesStack.pop();
+      const currentField = currentFieldStack.pop();
+      collectedNodes.push(node);
+      const combined = processCombinedNodesForFldChar(collectedNodes, currentField.instrText.trim());
+      if (collectedNodesStack.length === 0) {
+        // We have completed a top-level field, add the combined nodes to the output.
+        processedNodes.push(...combined);
+      } else {
+        // We are inside another field, so add the combined nodes to the parent collection.
+        collectedNodesStack[collectedNodesStack.length - 1].push(...combined);
+      }
+    } else {
+      // An unmatched 'end' indicates a field from a parent node is closing.
+      processedNodes.push(node);
+      unpairedEnd = true;
+    }
+  };
 
   for (const node of nodes) {
     const fldCharEl = node.elements?.find((el) => el.name === 'w:fldChar');
     const fldType = fldCharEl?.attributes?.['w:fldCharType'];
-    collecting = stack.length > 0;
+    const instrTextEl = node.elements?.find((el) => el.name === 'w:instrText');
+    collecting = collectedNodesStack.length > 0;
 
     if (fldType === 'begin') {
-      stack.push([node]);
+      collectedNodesStack.push([node]);
+      currentFieldStack.push({ instrText: '' });
       continue;
     }
 
-    if (fldType === 'end' && collecting) {
-      stack[stack.length - 1].push(node);
-      let buffer = stack.pop();
-      const combined = processCombinedNodesForFldChar(buffer);
-      if (stack.length > 0) {
-        stack[stack.length - 1].push(...combined);
-      } else {
-        processedNodes.push(...combined);
-      }
+    // If collecting, aggregate instruction text.
+    if (instrTextEl && collecting && currentFieldStack.length > 0) {
+      currentFieldStack[currentFieldStack.length - 1].instrText += (instrTextEl.elements?.[0]?.text || '') + ' ';
+    }
+
+    if (fldType === 'end') {
+      finalizeField(node);
       continue;
     }
 
-    node.elements = preProcessNodesForFldChar(node.elements);
-    if (collecting) {
-      stack[stack.length - 1].push(node);
+    // Recurse into child nodes for nodes that are not 'begin' or 'end' markers,
+    // as they may contain nested fields too.
+    const childResult = preProcessNodesForFldChar(node.elements);
+    node.elements = childResult.processedNodes;
+
+    if (childResult.unpairedBegin) {
+      // A field started in the children, so this node is part of that field.
+      currentFieldStack.push(childResult.unpairedBegin);
+      collectedNodesStack.push([node]);
+    } else if (childResult.unpairedEnd) {
+      // A field from this level or higher ended in the children.
+      finalizeField(node);
+    } else if (collecting) {
+      // This node is part of a field being collected at this level.
+      collectedNodesStack[collectedNodesStack.length - 1].push(node);
     } else {
+      // This node is not part of any field.
       processedNodes.push(node);
     }
   }
 
-  // In case of unclosed field
-  if (stack.length > 0) {
-    processedNodes.push(...stack.pop());
+  let unpairedBegin = null;
+  if (collectedNodesStack.length > 0) {
+    // An unclosed field at this level. Pass all buffered nodes and field info up to the caller
+    // and let them handle it.
+    processedNodes.push(...collectedNodesStack.pop());
+    unpairedBegin = currentFieldStack.pop();
   }
 
-  return processedNodes;
+  return { processedNodes, unpairedBegin, unpairedEnd };
 };
 
 /**
@@ -295,25 +352,8 @@ export const preProcessNodesForFldChar = (nodes = []) => {
  * @param {Array} nodesToCombine - The nodes to combine.
  * @returns {Array} The processed nodes.
  */
-export const processCombinedNodesForFldChar = (nodesToCombine = []) => {
-  // Need to extract all nodes between 'separate' and 'end' fldChar nodes
-  const textStart = nodesToCombine.findIndex((n) =>
-    n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'separate'),
-  );
-  const textEnd = nodesToCombine.findIndex((n) =>
-    n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'end'),
-  );
-
-  const textNodes = nodesToCombine.slice(textStart + 1, textEnd);
-  const instrTextContainer = nodesToCombine.find((n) => n.elements?.some((el) => el.name === 'w:instrText'));
-  const instrTextNodes = instrTextContainer?.elements?.filter((el) => el.name === 'w:instrText');
-  const instrText = instrTextNodes
-    ?.map((n) => n.elements?.[0]?.text || '')
-    .join(' ')
-    .trim();
-
+export const processCombinedNodesForFldChar = (nodesToCombine = [], instrText) => {
   const instruction = instrText.split(' ')[0];
-  const urlMatch = instrText?.match(/HYPERLINK\s+"([^"]+)"/);
   let processedNodes = [];
 
   // If we have a page marker, we need to replace the last node with a page number node.
@@ -344,6 +384,14 @@ export const processCombinedNodesForFldChar = (nodesToCombine = []) => {
     });
     processedNodes.push(totalPageNumNode);
   } else if (instruction === 'PAGEREF') {
+    const textStart = nodesToCombine.findIndex((n) =>
+      n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'separate'),
+    );
+    const textEnd = nodesToCombine.findIndex((n) =>
+      n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'end'),
+    );
+
+    const textNodes = nodesToCombine.slice(textStart + 1, textEnd);
     const pageRefNode = {
       name: 'sd:pageReference',
       type: 'element',
@@ -356,28 +404,46 @@ export const processCombinedNodesForFldChar = (nodesToCombine = []) => {
   }
 
   // If we have a hyperlink, we need to replace the last node with a link node.
-  else if (urlMatch && urlMatch?.length >= 2) {
-    const url = urlMatch[1];
+  else if (instruction === 'HYPERLINK') {
+    const urlMatch = instrText?.match(/HYPERLINK\s+"([^"]+)"/);
+    if (urlMatch && urlMatch.length >= 2) {
+      const textStart = nodesToCombine.findIndex((n) =>
+        n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'separate'),
+      );
+      const textEnd = nodesToCombine.findIndex((n) =>
+        n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'end'),
+      );
 
-    const textMarks = [];
-    textNodes.forEach((n) => {
-      const rPr = n.elements.find((el) => el.name === 'w:rPr');
-      if (!rPr) return;
+      const textNodes = nodesToCombine.slice(textStart + 1, textEnd);
+      const url = urlMatch[1];
 
-      const { elements } = rPr;
-      elements.forEach((el) => {
-        textMarks.push(el);
+      const textMarks = [];
+      textNodes.forEach((n) => {
+        const rPr = n.elements.find((el) => el.name === 'w:rPr');
+        if (!rPr) return;
+
+        const { elements } = rPr;
+        elements.forEach((el) => {
+          textMarks.push(el);
+        });
       });
-    });
 
-    // Create a rPr and replace all nodes with the updated node.
-    const linkMark = { name: 'link', attributes: { href: url } };
-    const rPr = { name: 'w:rPr', type: 'element', elements: [linkMark, ...textMarks] };
-    processedNodes.push({
-      name: 'w:r',
-      type: 'element',
-      elements: [rPr, ...textNodes],
-    });
+      // Create a rPr and replace all nodes with the updated node.
+      const linkMark = { name: 'link', attributes: { href: url } };
+      const rPr = { name: 'w:rPr', type: 'element', elements: [linkMark, ...textMarks] };
+      processedNodes.push({
+        name: 'w:r',
+        type: 'element',
+        elements: [rPr, ...textNodes],
+      });
+    } else {
+      console.log('Could not parse hyperlink URL from instruction:', instrText);
+      // If we couldn't parse the URL, just return all nodes as-is
+      processedNodes = nodesToCombine;
+    }
+  } else {
+    // Unknown field, just return all nodes as-is
+    processedNodes = nodesToCombine;
   }
 
   return processedNodes;
