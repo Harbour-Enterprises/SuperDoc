@@ -9,7 +9,7 @@ import { Node } from '@core/index.js';
  * // Document node is the root - always included
  * new SuperDoc({
  *   selector: '#editor',
- *   document: 'document.docx'
+ *   document: 'document.docx',
  *   // Document node wraps all content
  * });
  */
