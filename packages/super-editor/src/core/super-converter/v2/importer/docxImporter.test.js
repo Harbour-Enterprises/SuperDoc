@@ -8,6 +8,7 @@ describe('filterOutRootInlineNodes', () => {
     const input = [
       n('text'),
       n('bookmarkStart'),
+      n('bookmarkEnd'),
       n('paragraph'),
       n('lineBreak'),
       n('table'),
@@ -33,7 +34,7 @@ describe('filterOutRootInlineNodes', () => {
   });
 
   it('returns an empty array when only inline nodes are provided', () => {
-    const input = [n('text'), n('bookmarkStart'), n('lineBreak'), n('mention')];
+    const input = [n('text'), n('bookmarkStart'), n('bookmarkEnd'), n('lineBreak'), n('mention')];
     const result = filterOutRootInlineNodes(input);
     expect(result).toEqual([]);
   });

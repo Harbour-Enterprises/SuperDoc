@@ -560,6 +560,7 @@ export function filterOutRootInlineNodes(content = []) {
   const INLINE_TYPES = new Set([
     'text',
     'bookmarkStart',
+    'bookmarkEnd',
     'lineBreak',
     'hardBreak',
     'pageNumber',
