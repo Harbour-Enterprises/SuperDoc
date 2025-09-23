@@ -2,6 +2,13 @@
 import { Mark, Attribute } from '@core/index.js';
 
 /**
+ * Configuration options for Italic
+ * @typedef {Object} ItalicOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={}] - HTML attributes for italic elements
+ */
+
+/**
  * @module Italic
  * @sidebarTitle Italic
  * @snippetPath /snippets/extensions/italic.mdx
@@ -35,9 +42,8 @@ export const Italic = Mark.create({
       /**
        * Apply italic formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * setItalic()
+       * editor.commands.setItalic()
        */
       setItalic:
         () =>
@@ -47,9 +53,8 @@ export const Italic = Mark.create({
       /**
        * Remove italic formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * unsetItalic()
+       * editor.commands.unsetItalic()
        */
       unsetItalic:
         () =>
@@ -59,9 +64,8 @@ export const Italic = Mark.create({
       /**
        * Toggle italic formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * toggleItalic()
+       * editor.commands.toggleItalic()
        */
       toggleItalic:
         () =>

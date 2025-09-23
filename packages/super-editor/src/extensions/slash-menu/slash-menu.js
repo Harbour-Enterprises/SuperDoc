@@ -1,5 +1,12 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
+import { EditorView } from 'prosemirror-view';
+
+/**
+ * Configuration options for SlashMenu
+ * @typedef {Object} SlashMenuOptions
+ * @category Options
+ */
 
 /**
  * Calculates the cursor position relative to the editor container element
@@ -29,8 +36,17 @@ function getCursorPositionRelativeToContainer(view, eventLocation) {
 
 export const SlashMenuPluginKey = new PluginKey('slashMenu');
 
+/**
+ * @module SlashMenu
+ * @sidebarTitle Slash Menu
+ * @snippetPath /snippets/extensions/slash-menu.mdx
+ */
 export const SlashMenu = Extension.create({
   name: 'slashMenu',
+
+  addOptions() {
+    return {};
+  },
 
   addPmPlugins() {
     if (this.editor.options?.disableContextMenu) {

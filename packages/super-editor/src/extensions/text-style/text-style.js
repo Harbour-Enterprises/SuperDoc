@@ -3,6 +3,20 @@ import { Mark, Attribute } from '@core/index.js';
 import { annotationClass, annotationContentClass } from '../field-annotation/index.js';
 
 /**
+ * Configuration options for TextStyle
+ * @typedef {Object} TextStyleOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={}] - Custom HTML attributes to apply to text style spans
+ */
+
+/**
+ * Attributes for text style marks
+ * @typedef {Object} TextStyleAttributes
+ * @category Attributes
+ * @property {string} [styleId] - Style identifier for referencing predefined styles
+ */
+
+/**
  * @module TextStyle
  * @sidebarTitle Text Style
  * @snippetPath /snippets/extensions/text-style.mdx
@@ -11,11 +25,6 @@ export const TextStyle = Mark.create({
   name: 'textStyle',
 
   addOptions() {
-    /**
-     * @typedef {Object} TextStyleOptions
-     * @category Options
-     * @property {Object} [htmlAttributes={}] - Custom HTML attributes to apply to text style spans
-     */
     return {
       htmlAttributes: {},
     };
@@ -54,9 +63,8 @@ export const TextStyle = Mark.create({
       /**
        * Remove empty text style marks
        * @category Command
-       * @returns {Function} Command function - Removes mark if no attributes present
        * @example
-       * removeEmptyTextStyle()
+       * editor.commands.removeEmptyTextStyle()
        * @note Cleanup utility to prevent empty span elements
        * @note Automatically checks if any style attributes exist before removal
        */

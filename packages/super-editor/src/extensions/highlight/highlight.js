@@ -2,6 +2,20 @@
 import { Mark, Attribute } from '@core/index.js';
 
 /**
+ * Configuration options for Highlight
+ * @typedef {Object} HighlightOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={}] - HTML attributes for highlight elements
+ */
+
+/**
+ * Attributes for highlight marks
+ * @typedef {Object} HighlightAttributes
+ * @category Attributes
+ * @property {string} [color] - Background color (CSS color value)
+ */
+
+/**
  * @module Highlight
  * @sidebarTitle Highlight
  * @snippetPath /snippets/extensions/highlight.mdx
@@ -18,10 +32,6 @@ export const Highlight = Mark.create({
 
   addAttributes() {
     return {
-      /**
-       * @category Attribute
-       * @param {string} [color] - Background color (CSS color value)
-       */
       color: {
         default: null,
         parseDOM: (element) => element.getAttribute('data-color') || element.style.backgroundColor,
@@ -52,10 +62,9 @@ export const Highlight = Mark.create({
        * Apply highlight with specified color
        * @category Command
        * @param {string} color - CSS color value
-       * @returns {Function} Command
        * @example
-       * setHighlight('#FFEB3B')
-       * setHighlight('rgba(255, 235, 59, 0.5)')
+       * editor.commands.setHighlight('#FFEB3B')
+       * editor.commands.setHighlight('rgba(255, 235, 59, 0.5)')
        */
       setHighlight:
         (color) =>
@@ -65,9 +74,8 @@ export const Highlight = Mark.create({
       /**
        * Remove highlight formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * unsetHighlight()
+       * editor.commands.unsetHighlight()
        */
       unsetHighlight:
         () =>
@@ -77,9 +85,8 @@ export const Highlight = Mark.create({
       /**
        * Toggle highlight formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * toggleHighlight()
+       * editor.commands.toggleHighlight()
        */
       toggleHighlight:
         () =>

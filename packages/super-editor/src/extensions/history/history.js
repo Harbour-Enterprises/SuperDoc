@@ -4,10 +4,11 @@ import { undo as yUndo, redo as yRedo, yUndoPlugin } from 'y-prosemirror';
 import { Extension } from '@core/Extension.js';
 
 /**
- * History configuration
- * @typedef {Object} HistoryConfig
- * @property {number} [depth=100] - Maximum number of history events to store
- * @property {number} [newGroupDelay=500] - Time in ms to group changes together
+ * Configuration options for History
+ * @typedef {Object} HistoryOptions
+ * @category Options
+ * @property {number} [depth=100] - Maximum undo/redo steps to remember
+ * @property {number} [newGroupDelay=500] - Milliseconds to wait before starting a new history group
  */
 
 /**
@@ -24,12 +25,6 @@ export const History = Extension.create({
   addOptions() {
     // https://prosemirror.net/docs/ref/#history.history
     return {
-      /**
-       * @typedef {Object} HistoryOptions
-       * @category Options
-       * @property {number} [depth=100] - Maximum undo/redo steps to remember
-       * @property {number} [newGroupDelay=500] - Milliseconds to wait before starting a new history group
-       */
       depth: 100,
       newGroupDelay: 500,
     };
@@ -50,9 +45,8 @@ export const History = Extension.create({
       /**
        * Undo the last action
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * undo()
+       * editor.commands.undo()
        * @note Groups changes within the newGroupDelay window
        */
       undo: () => ({ state, dispatch, tr }) => {
@@ -67,9 +61,8 @@ export const History = Extension.create({
       /**
        * Redo the last undone action
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * redo()
+       * editor.commands.redo()
        * @note Only available after an undo action
        */
       redo: () => ({ state, dispatch, tr }) => {

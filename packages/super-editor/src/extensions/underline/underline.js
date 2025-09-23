@@ -1,11 +1,25 @@
 // @ts-check
+import { Mark, Attribute } from '@core/index.js';
+
 /**
  * Underline style configuration
  * @typedef {Object} UnderlineConfig
  * @property {'single'|'double'|'thick'|'dotted'|'dashed'|'wavy'} value - Style variant
  */
 
-import { Mark, Attribute } from '@core/index.js';
+/**
+ * Configuration options for Underline
+ * @typedef {Object} UnderlineOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={}] - HTML attributes for underline elements
+ */
+
+/**
+ * Attributes for underline marks
+ * @typedef {Object} UnderlineAttributes
+ * @category Attributes
+ * @property {UnderlineConfig} [underlineType='single'] - Style of underline
+ */
 
 /**
  * @module Underline

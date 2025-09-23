@@ -4,6 +4,26 @@ import { StructuredContentInlineView } from './StructuredContentInlineView';
 export const structuredContentClass = 'sd-structured-content';
 export const structuredContentInnerClass = 'sd-structured-content__content';
 
+/**
+ * Configuration options for StructuredContent
+ * @typedef {Object} StructuredContentOptions
+ * @category Options
+ * @property {string} [structuredContentClass='sd-structured-content-tag'] - CSS class for the inline element
+ * @property {Object} [htmlAttributes] - HTML attributes for structured content elements
+ */
+
+/**
+ * Attributes for structured content nodes
+ * @typedef {Object} StructuredContentAttributes
+ * @category Attributes
+ * @property {Object} [sdtPr] @internal - Internal structured document tag properties
+ */
+
+/**
+ * @module StructuredContent
+ * @sidebarTitle Structured Content
+ * @snippetPath /snippets/extensions/structured-content.mdx
+ */
 export const StructuredContent = Node.create({
   name: 'structuredContent',
 

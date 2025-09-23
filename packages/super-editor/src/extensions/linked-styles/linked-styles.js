@@ -13,6 +13,12 @@ import { findParentNodeClosestToPos } from '@core/helpers';
  */
 
 /**
+ * Configuration options for LinkedStyles
+ * @typedef {Object} LinkedStylesOptions
+ * @category Options
+ */
+
+/**
  * @module LinkedStyles
  * @sidebarTitle Linked Styles
  * @snippetPath /snippets/extensions/linked-styles.mdx
@@ -21,6 +27,10 @@ export const LinkedStyles = Extension.create({
   name: 'linkedStyles',
 
   priority: 1, // We need this plugin to run before the list plugins
+
+  addOptions() {
+    return {};
+  },
 
   addPmPlugins() {
     return [createLinkedStylesPlugin(this.editor)];
@@ -31,11 +41,10 @@ export const LinkedStyles = Extension.create({
       /**
        * Apply a linked style to the selected paragraphs
        * @category Command
-       * @param {Object} style - The style object to apply
-       * @returns {Function} Command function
+       * @param {LinkedStyle} style - The style object to apply
        * @example
        * const style = editor.helpers.linkedStyles.getStyleById('Heading1');
-       * setLinkedStyle(style);
+       * editor.commands.setLinkedStyle(style);
        * @note Clears existing formatting when applying a style
        * @note Works with custom selection preservation
        */
@@ -47,16 +56,12 @@ export const LinkedStyles = Extension.create({
       /**
        * Toggle a linked style on the current selection
        * @category Command
-       * @param {Object} style - The linked style to apply (with id property)
+       * @param {LinkedStyle} style - The linked style to apply (with id property)
        * @param {string|null} [nodeType=null] - Node type to restrict toggle to (e.g., 'paragraph')
-       * @returns {Function} Command function
        * @example
-       * // Toggle a heading style
        * const style = editor.helpers.linkedStyles.getStyleById('Heading1');
-       * toggleLinkedStyle(style)
-       *
-       * // Toggle only on paragraph nodes
-       * toggleLinkedStyle(style, 'paragraph')
+       * editor.commands.toggleLinkedStyle(style)
+       * editor.commands.toggleLinkedStyle(style, 'paragraph')
        * @note If selection is empty, returns false
        * @note Removes style if already applied, applies it if not
        */
@@ -89,13 +94,9 @@ export const LinkedStyles = Extension.create({
        * Apply a linked style by its ID
        * @category Command
        * @param {string} styleId - The style ID to apply (e.g., 'Heading1')
-       * @returns {Function} Command function
        * @example
-       * // Apply a heading style
-       * setStyleById('Heading1')
-       *
-       * // Apply a normal style
-       * setStyleById('Normal')
+       * editor.commands.setStyleById('Heading1')
+       * editor.commands.setStyleById('Normal')
        * @note Looks up the style from loaded Word styles
        */
       setStyleById: (styleId) => (params) => {
