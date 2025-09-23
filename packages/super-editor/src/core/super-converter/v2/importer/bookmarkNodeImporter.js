@@ -1,4 +1,10 @@
 /**
+ * @deprecated This handler is deprecated in favor of v3 bookmark translators.
+ * Kept for reference for custom mark logic that needs migration.
+ * TODO: Migrate custom mark logic to a proper system
+ */
+
+/**
  * @type {import("docxImporter").NodeHandler}
  */
 export const handleBookmarkNode = (params) => {
