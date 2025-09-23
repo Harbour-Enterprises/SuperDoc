@@ -87,6 +87,16 @@ function ptToTwips(pt) {
   return pt * 20;
 }
 
+function rotToDegrees(rot) {
+  if (rot == null) return;
+  return rot / 60000;
+}
+
+function degreesToRot(degrees) {
+  if (degrees == null) return;
+  return degrees * 60000;
+}
+
 /**
  * Get the export value for text indent
  * @param {string|number} indent - The text indent value to export
@@ -239,6 +249,8 @@ export {
   halfPointToPoints,
   eigthPointsToPixels,
   pixelsToEightPoints,
+  rotToDegrees,
+  degreesToRot,
   getArrayBufferFromUrl,
   getContentTypesFromXml,
   getHexColorFromDocxSystem,
