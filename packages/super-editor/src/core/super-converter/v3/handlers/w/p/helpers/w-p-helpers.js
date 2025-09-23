@@ -248,42 +248,42 @@ export const getDefaultParagraphStyle = (docx, styleId = '') => {
  */
 export const preProcessNodesForFldChar = (nodes = []) => {
   const processedNodes = [];
-  let buffer = [];
+  let stack = [];
   let collecting = false;
 
   for (const node of nodes) {
     const fldCharEl = node.elements?.find((el) => el.name === 'w:fldChar');
     const fldType = fldCharEl?.attributes?.['w:fldCharType'];
+    collecting = stack.length > 0;
 
     if (fldType === 'begin') {
-      buffer = [node];
-      collecting = true;
-      continue;
-    }
-
-    if (fldType === 'separate' && collecting) {
-      buffer.push(node);
+      stack.push([node]);
       continue;
     }
 
     if (fldType === 'end' && collecting) {
-      buffer.push(node);
-      processedNodes.push(...processCombinedNodesForFldChar(buffer));
-      buffer = [];
-      collecting = false;
+      stack[stack.length - 1].push(node);
+      let buffer = stack.pop();
+      const combined = processCombinedNodesForFldChar(buffer);
+      if (stack.length > 0) {
+        stack[stack.length - 1].push(...combined);
+      } else {
+        processedNodes.push(...combined);
+      }
       continue;
     }
 
+    node.elements = preProcessNodesForFldChar(node.elements);
     if (collecting) {
-      buffer.push(node);
+      stack[stack.length - 1].push(node);
     } else {
       processedNodes.push(node);
     }
   }
 
   // In case of unclosed field
-  if (buffer.length) {
-    processedNodes.push(...buffer);
+  if (stack.length > 0) {
+    processedNodes.push(...stack.pop());
   }
 
   return processedNodes;
@@ -296,10 +296,6 @@ export const preProcessNodesForFldChar = (nodes = []) => {
  * @returns {Array} The processed nodes.
  */
 export const processCombinedNodesForFldChar = (nodesToCombine = []) => {
-  let processedNodes = [];
-  let hasPageMarker = false;
-  let isNumPages = false;
-
   // Need to extract all nodes between 'separate' and 'end' fldChar nodes
   const textStart = nodesToCombine.findIndex((n) =>
     n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'separate'),
@@ -310,12 +306,16 @@ export const processCombinedNodesForFldChar = (nodesToCombine = []) => {
 
   const textNodes = nodesToCombine.slice(textStart + 1, textEnd);
   const instrTextContainer = nodesToCombine.find((n) => n.elements?.some((el) => el.name === 'w:instrText'));
-  const instrTextNode = instrTextContainer?.elements?.find((el) => el.name === 'w:instrText');
-  const instrText = instrTextNode?.elements[0].text;
+  const instrTextNodes = instrTextContainer?.elements?.filter((el) => el.name === 'w:instrText');
+  const instrText = instrTextNodes
+    ?.map((n) => n.elements?.[0]?.text || '')
+    .join(' ')
+    .trim();
 
-  if (!hasPageMarker) hasPageMarker = instrText?.trim().startsWith('PAGE');
-  if (!isNumPages) isNumPages = instrText?.trim().startsWith('NUMPAGES');
+  let hasPageMarker = instrText?.trim().startsWith('PAGE');
+  let isNumPages = instrText?.trim().startsWith('NUMPAGES');
   const urlMatch = instrText?.match(/HYPERLINK\s+"([^"]+)"/);
+  let processedNodes = [];
 
   // If we have a page marker, we need to replace the last node with a page number node.
   if (hasPageMarker) {
