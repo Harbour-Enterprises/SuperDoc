@@ -11,7 +11,8 @@ import { paragraphNodeHandlerEntity } from './paragraphNodeImporter.js';
 import { sdtNodeHandlerEntity } from './sdtNodeImporter.js';
 import { standardNodeHandlerEntity } from './standardNodeImporter.js';
 import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
-import { bookmarkNodeHandlerEntity } from './bookmarkNodeImporter.js';
+import { bookmarkStartNodeHandlerEntity } from './bookmarkStartImporter.js';
+import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
 import { listHandlerEntity } from './listImporter.js';
@@ -132,7 +133,8 @@ export const defaultNodeListHandler = () => {
     textNodeHandlerEntity,
     lineBreakNodeHandlerEntity,
     sdtNodeHandlerEntity,
-    bookmarkNodeHandlerEntity,
+    bookmarkStartNodeHandlerEntity,
+    bookmarkEndNodeHandlerEntity,
     hyperlinkNodeHandlerEntity,
     drawingNodeHandlerEntity,
     trackChangeNodeHandlerEntity,
