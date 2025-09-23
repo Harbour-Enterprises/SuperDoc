@@ -1,13 +1,7 @@
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { mergeTextNodes, parseMarks } from '@converter/v2/importer/index.js';
 import { twipsToPixels } from '@converter/helpers.js';
-import {
-  getParagraphIndent,
-  getParagraphSpacing,
-  getDefaultParagraphStyle,
-  preProcessNodesForFldChar,
-  parseParagraphBorders,
-} from './index.js';
+import { getParagraphIndent, getParagraphSpacing, getDefaultParagraphStyle, parseParagraphBorders } from './index.js';
 
 /**
  * Paragraph node handler
@@ -19,11 +13,6 @@ export const handleParagraphNode = (params) => {
 
   const node = carbonCopy(nodes[0]);
   let schemaNode;
-
-  // We need to pre-process paragraph nodes to combine various possible elements we will find ie: lists, links.
-  // Also older MS word versions store auto page numbers here
-  let processedElements = preProcessNodesForFldChar(node.elements);
-  node.elements = processedElements;
 
   // If it is a standard paragraph node, process normally
   const handleStandardNode = nodeListHandler.handlerEntities.find(

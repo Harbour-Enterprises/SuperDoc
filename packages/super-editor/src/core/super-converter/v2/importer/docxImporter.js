@@ -24,6 +24,7 @@ import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
+import { preProcessNodesForFldChar } from '../../v3/handlers/w/p/helpers';
 
 /**
  * @typedef {import()} XmlNode
@@ -78,6 +79,11 @@ export const createDocumentJson = (docx, converter, editor) => {
   if (bodyNode) {
     ensureSectionProperties(bodyNode, converter);
     const node = bodyNode;
+
+    // Pre-processing step for replacing fldChar sequences with SD-specific elements
+    const { processedNodes } = preProcessNodesForFldChar(node.elements ?? [], docx);
+    node.elements = processedNodes;
+
     const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
     const content = pruneIgnoredNodes(contentElements);
     const comments = importCommentData({ docx, nodeListHandler, converter, editor });
