@@ -1,4 +1,4 @@
-import { emuToPixels } from '@converter/helpers.js';
+import { emuToPixels, rotToDegrees } from '@converter/helpers.js';
 
 /**
  * Encodes image xml into Editor node
@@ -34,6 +34,35 @@ export function handleImageNode(node, params, isAnchor) {
 
   const blipFill = picture.elements.find((el) => el.name === 'pic:blipFill');
   const blip = blipFill.elements.find((el) => el.name === 'a:blip');
+
+  const spPr = picture.elements.find((el) => el.name === 'pic:spPr');
+  let transformData = {};
+  if (spPr) {
+    const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
+    if (xfrm?.attributes) {
+      transformData = {
+        rotation: rotToDegrees(xfrm.attributes['rot']),
+        verticalFlip: xfrm.attributes['flipV'] === '1',
+        horizontalFlip: xfrm.attributes['flipH'] === '1',
+      };
+    }
+  }
+
+  const effectExtent = node.elements.find((el) => el.name === 'wp:effectExtent');
+  if (effectExtent) {
+    const sanitizeEmuValue = (value) => {
+      if (value === null || value === undefined) return 0;
+      const numeric = Number(value);
+      return Number.isFinite(numeric) ? numeric : 0;
+    };
+
+    transformData.sizeExtension = {
+      left: emuToPixels(sanitizeEmuValue(effectExtent.attributes['l'])),
+      top: emuToPixels(sanitizeEmuValue(effectExtent.attributes['t'])),
+      right: emuToPixels(sanitizeEmuValue(effectExtent.attributes['r'])),
+      bottom: emuToPixels(sanitizeEmuValue(effectExtent.attributes['b'])),
+    };
+  }
 
   const positionHTag = node.elements.find((el) => el.name === 'wp:positionH');
   const positionH = positionHTag?.elements.find((el) => el.name === 'wp:posOffset');
@@ -105,6 +134,7 @@ export function handleImageNode(node, params, isAnchor) {
       size,
       anchorData,
       isAnchor,
+      transformData,
       ...(simplePos && {
         simplePos: {
           x: simplePos.attributes.x,

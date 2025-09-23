@@ -1,6 +1,7 @@
 import { Attribute, Node } from '@core/index.js';
 import { ImageRegistrationPlugin } from './imageHelpers/imageRegistrationPlugin.js';
 import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
+import { getRotationMargins } from './imageHelpers/rotation.js';
 
 /**
  * @module Image
@@ -129,6 +130,42 @@ export const Image = Node.create({
 
       /**
        * @category Attribute
+       * @param {Object} [transformData] - Transform data for image (turn and flip)
+       * @param {number} [transformData.rotation] - Turn angle in degrees
+       * @param {boolean} [transformData.verticalFlip] - Whether to flip vertically
+       * @param {boolean} [transformData.horizontalFlip] - Whether to flip horizontally
+       * @param {Object} [transformData.sizeExtension] - Size extension for image due to transformation
+       * @param {number} [transformData.sizeExtension.left] - Left size extension for image
+       * @param {number} [transformData.sizeExtension.top] - Top size extension for image
+       * @param {number} [transformData.sizeExtension.right] - Right size extension for image
+       * @param {number} [transformData.sizeExtension.bottom] - Bottom size extension for image
+       *
+       * @private
+       */
+
+      transformData: {
+        default: {},
+        renderDOM: ({ transformData }) => {
+          let style = '';
+          if (transformData?.rotation) {
+            style += `rotate(${Math.round(transformData.rotation)}deg) `;
+          }
+          if (transformData?.verticalFlip) {
+            style += 'scaleY(-1) ';
+          }
+          if (transformData?.horizontalFlip) {
+            style += 'scaleX(-1) ';
+          }
+          style = style.trim();
+          if (style.length > 0) {
+            return { style: `transform: ${style};` };
+          }
+          return;
+        },
+      },
+
+      /**
+       * @category Attribute
        * @param {boolean} [simplePos] - Simple positioning flag
        * @private
        */
@@ -152,8 +189,7 @@ export const Image = Node.create({
         default: {},
         renderDOM: ({ size, extension }) => {
           let style = '';
-
-          const { width, height } = size ?? {};
+          let { width, height } = size ?? {};
           if (width) style += `width: ${width}px;`;
           if (height && ['emf', 'wmf'].includes(extension))
             style += `height: ${height}px; border: 1px solid black; position: absolute;`;
@@ -172,8 +208,26 @@ export const Image = Node.create({
        */
       padding: {
         default: {},
-        renderDOM: ({ padding, marginOffset }) => {
-          const { left = 0, top = 0, bottom = 0, right = 0 } = padding ?? {};
+        renderDOM: ({ size, padding, marginOffset, transformData }) => {
+          let { left = 0, top = 0, bottom = 0, right = 0 } = padding ?? {};
+          // TODO: The wp:effectExtent (transformData.sizeExtension) sometimes
+          // gives the right data (as calculated by getRotationMargins)
+          // and sometimes it doesn't. We should investigate why there is a discrepancy.
+          // if (transformData?.sizeExtension) {
+          //   left += transformData.sizeExtension.left || 0;
+          //   right += transformData.sizeExtension.right || 0;
+          //   top += transformData.sizeExtension.top || 0;
+          //   bottom += transformData.sizeExtension.bottom || 0;
+          // }
+          const { rotation } = transformData;
+          const { height, width } = size;
+          if (rotation && height && width) {
+            const { horizontal, vertical } = getRotationMargins(width, height, rotation);
+            left += horizontal;
+            right += horizontal;
+            top += vertical;
+            bottom += vertical;
+          }
           let style = '';
           if (left && !marginOffset?.left) style += `margin-left: ${left}px;`;
           if (top && !marginOffset?.top) style += `margin-top: ${top}px;`;
