@@ -2,6 +2,13 @@
 import { Mark, Attribute } from '@core/index.js';
 
 /**
+ * Configuration options for Strike
+ * @typedef {Object} StrikeOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={}] - HTML attributes for strikethrough elements
+ */
+
+/**
  * @module Strike
  * @sidebarTitle Strike
  * @snippetPath /snippets/extensions/strike.mdx
@@ -33,9 +40,8 @@ export const Strike = Mark.create({
       /**
        * Apply strikethrough formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * setStrike()
+       * editor.commands.setStrike()
        */
       setStrike:
         () =>
@@ -46,9 +52,8 @@ export const Strike = Mark.create({
       /**
        * Remove strikethrough formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * unsetStrike()
+       * editor.commands.unsetStrike()
        */
       unsetStrike:
         () =>
@@ -59,9 +64,8 @@ export const Strike = Mark.create({
       /**
        * Toggle strikethrough formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * toggleStrike()
+       * editor.commands.toggleStrike()
        */
       toggleStrike:
         () =>

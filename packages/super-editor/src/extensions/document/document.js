@@ -2,6 +2,26 @@
 import { Node } from '@core/index.js';
 
 /**
+ * Configuration options for Document
+ * @typedef {Object} DocumentOptions
+ * @category Options
+ * @example
+ * // Document node is the root - always included
+ * new SuperDoc({
+ *   selector: '#editor',
+ *   document: 'document.docx',
+ *   // Document node wraps all content
+ * });
+ */
+
+/**
+ * Attributes for document nodes
+ * @typedef {Object} DocumentAttributes
+ * @category Attributes
+ * @property {Object} [attributes] @internal Internal document attributes
+ */
+
+/**
  * @module Document
  * @sidebarTitle Document
  * @snippetPath /snippets/extensions/document.mdx
@@ -23,11 +43,6 @@ export const Document = Node.create({
 
   addAttributes() {
     return {
-      /**
-       * @private
-       * @category Attribute
-       * @param {Object} [attributes] - Internal document attributes
-       */
       attributes: {
         rendered: false,
         'aria-label': 'Document node',
@@ -40,10 +55,10 @@ export const Document = Node.create({
       /**
        * Get document statistics
        * @category Command
-       * @returns {Function} Command function
        * @example
        * // Get word and character count
-       * getDocumentStats()
+       * const stats = editor.commands.getDocumentStats()
+       * console.log(`${stats.words} words, ${stats.characters} characters`)
        * @note Returns word count, character count, and paragraph count
        */
       getDocumentStats:
@@ -64,9 +79,8 @@ export const Document = Node.create({
       /**
        * Clear entire document
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * clearDocument()
+       * editor.commands.clearDocument()
        * @note Replaces all content with an empty paragraph
        */
       clearDocument:

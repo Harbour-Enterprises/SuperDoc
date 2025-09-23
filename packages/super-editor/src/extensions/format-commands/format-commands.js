@@ -10,6 +10,12 @@ import { getMarksFromSelection } from '@core/helpers/getMarksFromSelection.js';
  */
 
 /**
+ * Configuration options for FormatCommands
+ * @typedef {Object} FormatCommandsOptions
+ * @category Options
+ */
+
+/**
  * @module FormatCommands
  * @sidebarTitle Format Commands
  * @snippetPath /snippets/extensions/format-commands.mdx
@@ -37,9 +43,8 @@ export const FormatCommands = Extension.create({
       /**
        * Clear all formatting (nodes and marks)
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * clearFormat()
+       * editor.commands.clearFormat()
        * @note Removes all marks and resets nodes to default paragraph
        */
       clearFormat:
@@ -51,9 +56,8 @@ export const FormatCommands = Extension.create({
       /**
        * Clear only mark formatting
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * clearMarksFormat()
+       * editor.commands.clearMarksFormat()
        * @note Removes bold, italic, underline, colors, etc. but preserves block structure
        */
       clearMarksFormat:
@@ -65,9 +69,8 @@ export const FormatCommands = Extension.create({
       /**
        * Clear only node formatting
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * clearNodesFormat()
+       * editor.commands.clearNodesFormat()
        * @note Converts headings, lists, etc. to paragraphs but preserves text marks
        */
       clearNodesFormat:
@@ -79,13 +82,8 @@ export const FormatCommands = Extension.create({
       /**
        * Copy format from selection or apply copied format
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * // First call: copy format from selection
-       * copyFormat()
-       *
-       * // Second call: apply copied format to new selection
-       * copyFormat()
+       * editor.commands.copyFormat()
        * @note Works like format painter - first click copies, second click applies
        */
       copyFormat:

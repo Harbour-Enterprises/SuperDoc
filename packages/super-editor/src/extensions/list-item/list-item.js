@@ -3,6 +3,48 @@ import { ListItemNodeView } from './ListItemNodeView.js';
 import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 import { orderedListSync } from '../ordered-list/helpers/orderedListSyncPlugin.js';
 
+/**
+ * Configuration options for ListItem
+ * @typedef {Object} ListItemOptions
+ * @category Options
+ * @property {Object} [htmlAttributes] - HTML attributes for list item elements
+ * @property {string} [bulletListTypeName='bulletList'] - Name of bullet list node type
+ * @property {string} [orderedListTypeName='orderedList'] - Name of ordered list node type
+ */
+
+/**
+ * Attributes for list item nodes
+ * @typedef {Object} ListItemAttributes
+ * @category Attributes
+ * @property {string} [markerType] - Virtual attribute for marker display
+ * @property {string} [lvlText] - Level text template for numbering
+ * @property {string} [listNumberingType] - Numbering format type
+ * @property {Array} [listLevel] - List level hierarchy
+ * @property {string} [lvlJc] - Level justification (left, right, center)
+ * @property {Object} [listParagraphProperties] - Indentation and spacing info
+ * @property {Object} [listRunProperties] - Run properties for list item
+ * @property {string} [numId] - Numbering definition ID
+ * @property {string} [numPrType='inline'] - Numbering properties type
+ * @property {string} [level] - Current nesting level
+ * @property {Object} [attributes] - Additional attributes
+ * @property {Object} [spacing] - Spacing configuration
+ * @property {Object} [indent] - Indentation settings
+ * @property {Object} [markerStyle] - Marker styling
+ * @property {string} [styleId] - Linked style ID
+ * @property {string} [customFormat] - Custom numbering format
+ * @property {string} [importedFontFamily] - Font family from import
+ * @property {string} [importedFontSize] - Font size from import
+ */
+
+/**
+ * @module ListItem
+ * @sidebarTitle List Item
+ * @snippetPath /snippets/extensions/list-item.mdx
+ * @shortcut Enter | splitListItem | Split list item at cursor
+ * @shortcut Shift-Enter | createParagraphNear | Create paragraph in list
+ * @shortcut Tab | increaseListIndent | Increase list indentation
+ * @shortcut Shift-Tab | decreaseListIndent | Decrease list indentation
+ */
 export const ListItem = Node.create({
   name: 'listItem',
 

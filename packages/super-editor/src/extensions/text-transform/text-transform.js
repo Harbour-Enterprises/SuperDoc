@@ -2,6 +2,20 @@
 import { Extension } from '@core/index.js';
 
 /**
+ * Configuration options for TextTransform
+ * @typedef {Object} TextTransformOptions
+ * @category Options
+ * @property {string[]} [types=['textStyle']] - Mark types to apply text transform to
+ */
+
+/**
+ * Attributes for text transform
+ * @typedef {Object} TextTransformAttributes
+ * @category Attributes
+ * @property {string} [textTransform] - Text transform value (uppercase, lowercase, capitalize, none)
+ */
+
+/**
  * @module TextTransform
  * @sidebarTitle Text Transform
  * @snippetPath /snippets/extensions/text-transform.mdx
@@ -10,11 +24,6 @@ export const TextTransform = Extension.create({
   name: 'textTransform',
 
   addOptions() {
-    /**
-     * @typedef {Object} TextTransformOptions
-     * @category Options
-     * @property {string[]} [types=['textStyle']] - Mark types to apply text transform to
-     */
     return {
       types: ['textStyle'],
     };

@@ -5,12 +5,22 @@ import { callOrGet } from '@core/utilities/callOrGet.js';
 import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.js';
 
 /**
+ * Configuration options for Gapcursor
+ * @typedef {Object} GapcursorOptions
+ * @category Options
+ */
+
+/**
  * @module Gapcursor
  * @sidebarTitle Gap Cursor
  * @snippetPath /snippets/extensions/gapcursor.mdx
  */
 export const Gapcursor = Extension.create({
   name: 'gapCursor',
+
+  addOptions() {
+    return {};
+  },
 
   addPmPlugins() {
     return [gapCursor()];
