@@ -1,11 +1,11 @@
 import { NodeTranslator } from '@translator';
 import { encodeProperties, decodeProperties } from '../../utils.js';
-import { marginBottomTranslator } from '../bottom';
-import { marginEndTranslator } from '../end';
-import { marginLeftTranslator } from '../left';
-import { marginRightTranslator } from '../right';
-import { marginStartTranslator } from '../start';
-import { marginTopTranslator } from '../top';
+import { marginBottomTranslator } from '../bottom/index.js';
+import { marginEndTranslator } from '../end/index.js';
+import { marginLeftTranslator } from '../left/index.js';
+import { marginRightTranslator } from '../right/index.js';
+import { marginStartTranslator } from '../start/index.js';
+import { marginTopTranslator } from '../top/index.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:tblCellMar';

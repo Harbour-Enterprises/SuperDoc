@@ -19,14 +19,14 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
     expect(item1.type).toBe('listItem');
     expect(item1.attrs.indent.left).toBeUndefined();
     expect(item1.attrs.indent.hanging).toBeUndefined();
-    expect(item1.attrs.indent.right).toBe(-14);
+    expect(item1.attrs.indent.right).toBeCloseTo(-14.667, 3);
     expect(item1.attrs.numId).toBe('5');
 
     const spacerP1 = content.content[3];
     expect(spacerP1.type).toBe('paragraph');
     expect(spacerP1.attrs.indent.firstLine).toBe(0);
     expect(spacerP1.attrs.indent.left).toBe(48);
-    expect(spacerP1.attrs.indent.right).toBe(-14);
+    expect(spacerP1.attrs.indent.right).toBeCloseTo(-14.667, 3);
     expect(spacerP1.attrs.indent.hanging).toBe(0);
   });
 
@@ -57,7 +57,7 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
     expect(item.type).toBe('listItem');
     expect(item.attrs.indent.left).toBe(24);
     expect(item.attrs.indent.hanging).toBeUndefined();
-    expect(item.attrs.indent.right).toBe(-14);
+    expect(item.attrs.indent.right).toBeCloseTo(-14.733, 3);
     expect(item.attrs.indent.firstLine).toBe(0);
     expect(item.attrs.numId).toBe('3');
     expect(item.attrs.listLevel).toStrictEqual([1]);

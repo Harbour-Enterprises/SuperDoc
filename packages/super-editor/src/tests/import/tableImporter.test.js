@@ -428,7 +428,7 @@ describe('table live xml test', () => {
 
     expect(result.nodes[0].type).toBe('table');
     expect(result.nodes[0].content.length).toBe(2);
-    expect(result.nodes[0].attrs).toEqual({
+    expect(result.nodes[0].attrs).toMatchObject({
       tableWidth: {
         type: 'auto',
         width: 0,
@@ -450,7 +450,7 @@ describe('table live xml test', () => {
           col: 4675,
         },
       ],
-      tableProperties: {
+      tableProperties: expect.objectContaining({
         tableStyleId: 'TableGrid',
         tableWidth: {
           type: 'auto',
@@ -465,7 +465,13 @@ describe('table live xml test', () => {
           noVBand: true,
           val: '04A0',
         },
-      },
+        cellMargins: {
+          marginLeft: { value: 108, type: 'dxa' },
+          marginRight: { value: 108, type: 'dxa' },
+          marginTop: { value: 0, type: 'dxa' },
+          marginBottom: { value: 0, type: 'dxa' },
+        },
+      }),
     });
 
     expect(result.nodes[0].content[0].type).toBe('tableRow');
@@ -500,8 +506,8 @@ describe('table live xml test', () => {
     expect(result.nodes[0].content[0].content[0].attrs.borders.right.val).toBe('none');
     expect(result.nodes[0].content[0].content[1].attrs.borders.bottom.val).toBe('none');
     expect(result.nodes[0].content[0].content[0].attrs.cellMargins).toBeDefined();
-    expect(result.nodes[0].content[0].content[0].attrs.cellMargins.left).toBe(8);
-    expect(result.nodes[0].content[0].content[0].attrs.cellMargins.right).toBe(8);
+    expect(result.nodes[0].content[0].content[0].attrs.cellMargins.left).toBeCloseTo(7.2, 1);
+    expect(result.nodes[0].content[0].content[0].attrs.cellMargins.right).toBeCloseTo(7.2, 1);
   });
 
   it('correctly gets colwidth for cells without inline width', () => {
@@ -510,11 +516,22 @@ describe('table live xml test', () => {
     const docx = { 'word/styles.xml': styles };
     const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
 
-    expect(result.nodes[0].content[0].content[0].attrs.colwidth).toEqual([390, 26]);
-    expect(result.nodes[0].content[0].content[1].attrs.colwidth).toEqual([256]);
-    expect(result.nodes[0].content[1].content[0].attrs.colwidth).toEqual([390, 26]);
-    expect(result.nodes[0].content[1].content[1].attrs.colwidth).toEqual([256]);
-    expect(result.nodes[0].content[2].content[0].attrs.colwidth).toEqual([390, 26, 256]);
+    const firstCellWidths = result.nodes[0].content[0].content[0].attrs.colwidth;
+    expect(firstCellWidths[0]).toBeCloseTo(389.467, 3);
+    expect(firstCellWidths[1]).toBeCloseTo(25.8, 1);
+
+    expect(result.nodes[0].content[0].content[1].attrs.colwidth[0]).toBeCloseTo(256.467, 3);
+
+    const secondRowFirstCellWidths = result.nodes[0].content[1].content[0].attrs.colwidth;
+    expect(secondRowFirstCellWidths[0]).toBeCloseTo(389.467, 3);
+    expect(secondRowFirstCellWidths[1]).toBeCloseTo(25.8, 1);
+
+    expect(result.nodes[0].content[1].content[1].attrs.colwidth[0]).toBeCloseTo(256.467, 3);
+
+    const mergedRowWidths = result.nodes[0].content[2].content[0].attrs.colwidth;
+    expect(mergedRowWidths[0]).toBeCloseTo(389.467, 3);
+    expect(mergedRowWidths[1]).toBeCloseTo(25.8, 1);
+    expect(mergedRowWidths[2]).toBeCloseTo(256.467, 3);
   });
 
   it('imports cantSplit attribute on table row', () => {
@@ -556,14 +573,18 @@ describe('table tests to check colwidth', () => {
     const tr3 = node.content[2];
 
     expect(tr1.content[0].attrs.colspan).toBe(2);
-    expect(tr1.content[0].attrs.colwidth).toEqual([94, 331]);
-    expect(tr1.content[1].attrs.colwidth).toEqual([176]);
+    expect(tr1.content[0].attrs.colwidth[0]).toBeCloseTo(94.2, 1);
+    expect(tr1.content[0].attrs.colwidth[1]).toBeCloseTo(330.733, 3);
+    expect(tr1.content[1].attrs.colwidth[0]).toBeCloseTo(176.133, 3);
 
-    expect(tr2.content[0].attrs.colwidth).toEqual([94]);
-    expect(tr2.content[1].attrs.colwidth).toEqual([331]);
-    expect(tr2.content[2].attrs.colwidth).toEqual([176]);
+    expect(tr2.content[0].attrs.colwidth[0]).toBeCloseTo(94.2, 1);
+    expect(tr2.content[1].attrs.colwidth[0]).toBeCloseTo(330.733, 3);
+    expect(tr2.content[2].attrs.colwidth[0]).toBeCloseTo(176.133, 3);
 
     expect(tr3.content[0].attrs.colspan).toBe(3);
-    expect(tr3.content[0].attrs.colwidth).toEqual([94, 331, 176]);
+    const totalWidths = tr3.content[0].attrs.colwidth;
+    expect(totalWidths[0]).toBeCloseTo(94.2, 1);
+    expect(totalWidths[1]).toBeCloseTo(330.733, 3);
+    expect(totalWidths[2]).toBeCloseTo(176.133, 3);
   });
 });

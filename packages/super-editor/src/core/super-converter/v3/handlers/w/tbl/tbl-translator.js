@@ -68,6 +68,12 @@ const encode = (params, encodedAttrs) => {
   // Table borders can be specified in tblPr or inside a referenced style tag
   const { borders, rowBorders } = _processTableBorders(encodedAttrs.tableProperties?.borders || {});
   const referencedStyles = _getReferencedTableStyles(encodedAttrs.tableStyleId, params);
+  if (referencedStyles?.cellMargins && !encodedAttrs.tableProperties?.cellMargins) {
+    encodedAttrs.tableProperties = {
+      ...(encodedAttrs.tableProperties || {}),
+      cellMargins: referencedStyles.cellMargins,
+    };
+  }
   const rows = node.elements.filter((el) => el.name === 'w:tr');
   const borderData = Object.assign({}, referencedStyles?.borders || {}, borders || {});
   const borderRowData = Object.assign({}, referencedStyles?.rowBorders || {}, rowBorders || {});
@@ -229,7 +235,12 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
 
     const cellMargins = {};
     Object.entries(tableProperties.cellMargins || {}).forEach(([key, attrs]) => {
-      if (attrs?.value) cellMargins[key] = String(attrs.value);
+      if (attrs?.value != null) {
+        cellMargins[key] = {
+          value: attrs.value,
+          type: attrs.type || 'dxa',
+        };
+      }
     });
     if (Object.keys(cellMargins).length) stylesToReturn.cellMargins = cellMargins;
   }
