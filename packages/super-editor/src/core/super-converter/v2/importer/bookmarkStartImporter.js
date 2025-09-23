@@ -1,5 +1,6 @@
 // @ts-check
 import { translator as wBookmarkStartTranslator } from '../../v3/handlers/w/bookmark-start/index.js';
+import { handleBookmarkNode as handleLegacyBookmarkNode } from './bookmarkNodeImporter.js';
 
 /**
  * Bookmark start node handler
@@ -12,10 +13,28 @@ export const handleBookmarkStartNode = (params) => {
     return { nodes: [], consumed: 0 };
   }
 
+  if (isCustomMarkBookmark(nodes[0], params.editor)) {
+    return handleLegacyBookmarkNode(params);
+  }
+
   const node = wBookmarkStartTranslator.encode(params);
   if (!node) return { nodes: [], consumed: 0 };
 
   return { nodes: [node], consumed: 1 };
+};
+
+const isCustomMarkBookmark = (bookmarkStartNode, editor) => {
+  if (!bookmarkStartNode?.attributes || !editor?.extensionService?.extensions) {
+    return false;
+  }
+
+  const customMarks = editor.extensionService.extensions.filter((extension) => extension.isExternal === true);
+  if (!customMarks.length) return false;
+
+  const bookmarkName = bookmarkStartNode.attributes['w:name']?.split(';')[0];
+  if (!bookmarkName) return false;
+
+  return customMarks.some((mark) => mark.name === bookmarkName);
 };
 
 /**

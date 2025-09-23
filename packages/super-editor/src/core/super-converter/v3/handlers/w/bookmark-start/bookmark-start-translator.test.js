@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { translator, config } from './bookmark-start-translator.js';
 import { NodeTranslator } from '@translator';
 
