@@ -1645,6 +1645,7 @@ export class Editor extends EventEmitter {
       return result;
     } catch (error) {
       this.emit('exception', { error, editor: this });
+      console.error(error);
     }
   }
 
@@ -1660,6 +1661,7 @@ export class Editor extends EventEmitter {
       if (this.options.ydoc) this.options.ydoc.destroy();
     } catch (error) {
       this.emit('exception', { error, editor: this });
+      console.error(error);
     }
   }
 
@@ -1687,6 +1689,7 @@ export class Editor extends EventEmitter {
       this.converter.footerEditors.length = 0;
     } catch (error) {
       this.emit('exception', { error, editor: this });
+      console.error(error);
     }
   }
 

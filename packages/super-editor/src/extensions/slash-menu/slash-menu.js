@@ -1,6 +1,5 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
-import { EditorView } from 'prosemirror-view';
 
 /**
  * Configuration options for SlashMenu
@@ -10,7 +9,7 @@ import { EditorView } from 'prosemirror-view';
 
 /**
  * Calculates the cursor position relative to the editor container element
- * @param {EditorView} view - The ProseMirror editor view instance
+ * @param {import('prosemirror-view').EditorView} view - The ProseMirror editor view instance
  * @param {Object} eventLocation - Object containing clientX/clientY coordinates from an event
  * @param {number} [eventLocation.clientX] - The x coordinate relative to the viewport
  * @param {number} [eventLocation.clientY] - The y coordinate relative to the viewport
