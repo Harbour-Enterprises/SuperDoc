@@ -66,10 +66,7 @@ describe('image helper utilities', () => {
   });
 
   it('computes allowed image dimensions respecting constraints', () => {
-    const editor = {
-      getMaxContentSize: () => ({ width: 400, height: 300 }),
-    };
-    const { width, height } = getAllowedImageDimensions(1200, 400, editor);
+    const { width, height } = getAllowedImageDimensions(1200, 400, () => ({ width: 400, height: 300 }));
     expect(width).toBeLessThanOrEqual(400);
     expect(height).toBeLessThanOrEqual(300);
   });
@@ -108,11 +105,9 @@ describe('image helper utilities', () => {
     const originalCreateElement = document.createElement;
     document.createElement = vi.fn((tag) => (tag === 'canvas' ? canvas : originalCreateElement.call(document, tag)));
 
-    const editor = {
-      getMaxContentSize: () => ({ width: 500, height: 500 }),
-    };
+    const getMaxContentSize = () => ({ width: 500, height: 500 });
 
-    const dataUrl = await processUploadedImage('data:image/png;base64,original', editor);
+    const dataUrl = await processUploadedImage('data:image/png;base64,original', getMaxContentSize);
     expect(dataUrl).toBe('data:image/png;base64,MOCK');
 
     document.createElement = originalCreateElement;
