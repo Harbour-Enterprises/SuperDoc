@@ -217,6 +217,10 @@ export const Image = Node.create({
       marginOffset: {
         default: {},
         renderDOM: ({ marginOffset, anchorData, transformData, size }) => {
+          const hasAnchorData = Boolean(anchorData);
+          const hasMarginOffsets = marginOffset?.left != null || marginOffset?.top != null;
+          if (!hasAnchorData && !hasMarginOffsets) return {};
+
           const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
           const maxMarginV = 500;
           const baseLeft = marginOffset?.left ?? 0;
@@ -241,6 +245,7 @@ export const Image = Node.create({
             if (relativeFromPageV && top >= maxMarginV) style += `margin-top: ${maxMarginV}px;`;
             else style += `margin-top: ${top}px;`;
           }
+          if (!style) return {};
           return { style };
         },
       },

@@ -133,6 +133,19 @@ describe('Image Extension DOM rendering', () => {
       expect(styles['margin-bottom']).toBe('25px');
       expect(styles['margin-right']).toBe('29px');
     });
+
+    it('retains padding-based margins when rotated without explicit margin offsets', () => {
+      const { style } = renderImageAttributes({
+        size: { width: 100, height: 100 },
+        transformData: { rotation: 45 },
+        padding: { left: 10, top: 15, bottom: 3, right: 8 },
+      });
+      const styles = parseStyle(style);
+      expect(styles['margin-left']).toBe('31px');
+      expect(styles['margin-top']).toBe('36px');
+      expect(styles['margin-bottom']).toBe('24px');
+      expect(styles['margin-right']).toBe('29px');
+    });
   });
 
   describe('editor integration', () => {
