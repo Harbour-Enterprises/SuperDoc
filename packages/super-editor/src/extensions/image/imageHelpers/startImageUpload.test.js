@@ -216,6 +216,66 @@ describe('image upload helpers integration', () => {
 
     relSpy.mockRestore();
   });
+
+  it('sanitizes filenames with special whitespace and avoids collisions', async () => {
+    const weirdName = 'Screenshot_2025-09-22 at 3.45.41\u202fPM.png';
+    const uploadStub = vi.fn().mockResolvedValue('data:image/png;base64,DDD');
+    editor.options.handleImageUpload = uploadStub;
+
+    const firstId = {};
+    replaceSelectionWithImagePlaceholder({
+      view: editor.view,
+      editorOptions: editor.options,
+      id: firstId,
+    });
+
+    await uploadAndInsertImage({
+      editor,
+      view: editor.view,
+      file: createTestFile(weirdName),
+      size: { width: 40, height: 40 },
+      id: firstId,
+    });
+
+    const endPos = editor.state.doc.content.size;
+    editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, endPos))); // place cursor after first image
+
+    const secondId = {};
+    replaceSelectionWithImagePlaceholder({
+      view: editor.view,
+      editorOptions: editor.options,
+      id: secondId,
+    });
+
+    await uploadAndInsertImage({
+      editor,
+      view: editor.view,
+      file: createTestFile(weirdName),
+      size: { width: 50, height: 50 },
+      id: secondId,
+    });
+
+    const mediaKeys = Object.keys(editor.storage.image.media).sort();
+    expect(mediaKeys).toEqual([
+      'word/media/Screenshot_2025-09-22_at_3.45.41_PM-1.png',
+      'word/media/Screenshot_2025-09-22_at_3.45.41_PM.png',
+    ]);
+
+    const imageSources = [];
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'image') {
+        imageSources.push(node.attrs.src);
+      }
+    });
+
+    expect(imageSources.sort()).toEqual([
+      'word/media/Screenshot_2025-09-22_at_3.45.41_PM-1.png',
+      'word/media/Screenshot_2025-09-22_at_3.45.41_PM.png',
+    ]);
+
+    expect(uploadStub).toHaveBeenCalledTimes(2);
+    uploadStub.mockRestore();
+  });
 });
 
 describe('uploadAndInsertImage collaboration branch (isolated)', () => {
@@ -286,5 +346,200 @@ describe('uploadAndInsertImage collaboration branch (isolated)', () => {
       mediaPath: 'word/media/collab.png',
       fileData: 'http://example.com/image.png',
     });
+  });
+
+  it('falls back when media is unset and file lacks lastModified', async () => {
+    vi.resetModules();
+
+    const findPlaceholder = vi.fn(() => 0);
+    const removeImagePlaceholder = vi.fn((_, tr) => tr);
+
+    vi.doMock('./imageRegistrationPlugin.js', () => ({
+      findPlaceholder,
+      removeImagePlaceholder,
+      addImagePlaceholder: vi.fn(),
+    }));
+
+    vi.doMock('@core/super-converter/docx-helpers/document-rels.js', () => ({
+      insertNewRelationship: vi.fn(() => 'rId200'),
+    }));
+
+    const OriginalFile = globalThis.File;
+    const fileCtorSpy = vi.fn();
+
+    class MockFile {
+      constructor(parts, name, options = {}) {
+        fileCtorSpy({ parts, name, options });
+        this.name = name;
+        this.type = options.type;
+      }
+    }
+
+    globalThis.File = MockFile;
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(123456);
+
+    const { uploadAndInsertImage } = await import('./startImageUpload.js');
+
+    const editor = {
+      options: {
+        handleImageUpload: vi.fn().mockResolvedValue('data:image/png;base64,CCC'),
+        mode: 'docx',
+      },
+      commands: {
+        addImageToCollaboration: vi.fn(),
+      },
+      storage: {
+        image: {},
+      },
+      state: {
+        doc: {
+          descendants: () => {},
+        },
+      },
+    };
+
+    const backingMedia = {};
+    let firstAccess = true;
+    Object.defineProperty(editor.storage.image, 'media', {
+      configurable: true,
+      get() {
+        if (firstAccess) {
+          firstAccess = false;
+          return undefined;
+        }
+        return backingMedia;
+      },
+      set(value) {
+        Object.assign(backingMedia, value);
+      },
+    });
+
+    const tr = {
+      replaceWith: vi.fn(() => tr),
+    };
+
+    const view = {
+      state: {
+        tr,
+        schema: {
+          nodes: {
+            image: {
+              create: vi.fn(() => ({ attrs: {} })),
+            },
+          },
+        },
+      },
+      dispatch: vi.fn(),
+    };
+
+    const sourceFile = { name: 'Screenshot 2025.png', type: 'image/png', size: 10 };
+
+    try {
+      await uploadAndInsertImage({
+        editor,
+        view,
+        file: sourceFile,
+        size: { width: 10, height: 10 },
+        id: {},
+      });
+    } finally {
+      globalThis.File = OriginalFile;
+      nowSpy.mockRestore();
+      delete editor.storage.image.media;
+      editor.storage.image.media = backingMedia;
+    }
+
+    expect(fileCtorSpy).toHaveBeenCalledTimes(1);
+    const [[callArgs]] = fileCtorSpy.mock.calls;
+    expect(callArgs.name).toBe('Screenshot_2025.png');
+    expect(callArgs.options.lastModified).toBe(123456);
+
+    expect(editor.options.handleImageUpload).toHaveBeenCalledWith(expect.any(MockFile));
+    expect(backingMedia).toHaveProperty('word/media/Screenshot_2025.png');
+    expect(findPlaceholder).toHaveBeenCalled();
+    expect(removeImagePlaceholder).toHaveBeenCalled();
+  });
+
+  it('uses default upload handler and skips duplicate docPr ids', async () => {
+    vi.resetModules();
+
+    const defaultUpload = vi.fn().mockResolvedValue('data:image/png;base64,DDD');
+    vi.doMock('./handleImageUpload.js', () => ({
+      handleImageUpload: defaultUpload,
+    }));
+    vi.doMock('./imageRegistrationPlugin.js', () => ({
+      findPlaceholder: () => 0,
+      removeImagePlaceholder: (_state, tr) => tr,
+      addImagePlaceholder: vi.fn(),
+    }));
+    const relationshipSpy = vi.fn(() => 'rId500');
+    vi.doMock('@core/super-converter/docx-helpers/document-rels.js', () => ({
+      insertNewRelationship: relationshipSpy,
+    }));
+    const randomSpy = vi.fn().mockReturnValueOnce('0000007b').mockReturnValueOnce('0000007c');
+    vi.doMock('@core/helpers/index.js', () => ({
+      generateDocxRandomId: randomSpy,
+    }));
+
+    const { uploadAndInsertImage } = await import('./startImageUpload.js');
+
+    const imageCreateSpy = vi.fn(() => ({ attrs: {} }));
+
+    const editor = {
+      options: {
+        mode: 'docx',
+      },
+      commands: {
+        addImageToCollaboration: vi.fn(),
+      },
+      storage: {
+        image: { media: {} },
+      },
+      state: {
+        doc: {
+          descendants: (callback) => {
+            callback({
+              type: { name: 'image' },
+              attrs: { id: '123' },
+            });
+          },
+        },
+      },
+    };
+
+    const tr = {
+      replaceWith: vi.fn(() => tr),
+    };
+
+    const view = {
+      state: {
+        tr,
+        schema: {
+          nodes: {
+            image: {
+              create: imageCreateSpy,
+            },
+          },
+        },
+      },
+      dispatch: vi.fn(),
+    };
+
+    const basicFile = new File([new Uint8Array([1])], 'image.png', { type: 'image/png' });
+
+    await uploadAndInsertImage({
+      editor,
+      view,
+      file: basicFile,
+      size: { width: 20, height: 20 },
+      id: {},
+    });
+
+    expect(defaultUpload).toHaveBeenCalledTimes(1);
+    expect(relationshipSpy).toHaveBeenCalledWith('media/image.png', 'image', editor);
+    const createdNodeAttrs = imageCreateSpy.mock.calls[0][0];
+    expect(createdNodeAttrs.id).toBe('124');
+
+    expect(randomSpy).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,6 +1,8 @@
 import { findPlaceholder, removeImagePlaceholder, addImagePlaceholder } from './imageRegistrationPlugin.js';
 import { handleImageUpload as handleImageUploadDefault } from './handleImageUpload.js';
 import { processUploadedImage } from './processUploadedImage.js';
+import { buildMediaPath, ensureUniqueFileName } from './fileNameUtils.js';
+import { generateDocxRandomId } from '@core/helpers/index.js';
 import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
 
 const fileTooLarge = (file) => {
@@ -46,17 +48,46 @@ export function replaceSelectionWithImagePlaceholder({ editorOptions, view, id }
   view.dispatch(tr);
 }
 
+const generateUniqueDocPrId = (editor) => {
+  const existingIds = new Set();
+  editor?.state?.doc?.descendants((node) => {
+    if (node.type.name === 'image' && node.attrs.id !== undefined && node.attrs.id !== null) {
+      existingIds.add(String(node.attrs.id));
+    }
+  });
+
+  let candidate;
+  do {
+    const hex = generateDocxRandomId();
+    candidate = String(parseInt(hex, 16));
+  } while (!candidate || existingIds.has(candidate));
+
+  return candidate;
+};
+
 export async function uploadAndInsertImage({ editor, view, file, size, id }) {
   const imageUploadHandler =
     typeof editor.options.handleImageUpload === 'function'
       ? editor.options.handleImageUpload
       : handleImageUploadDefault;
 
-  try {
-    let url = await imageUploadHandler(file);
+  const placeholderId = id;
 
-    let fileName = file.name.replace(' ', '_');
-    let placeholderPos = findPlaceholder(view.state, id);
+  try {
+    const existingFileNames = new Set(Object.keys(editor.storage.image.media ?? {}).map((key) => key.split('/').pop()));
+
+    const uniqueFileName = ensureUniqueFileName(file.name, existingFileNames);
+    const normalizedFile =
+      uniqueFileName === file.name
+        ? file
+        : new File([file], uniqueFileName, {
+            type: file.type,
+            lastModified: file.lastModified ?? Date.now(),
+          });
+
+    let url = await imageUploadHandler(normalizedFile);
+
+    let placeholderPos = findPlaceholder(view.state, placeholderId);
 
     // If the content around the placeholder has been deleted,
     // drop the image
@@ -64,7 +95,8 @@ export async function uploadAndInsertImage({ editor, view, file, size, id }) {
       return;
     }
 
-    let mediaPath = `word/media/${fileName}`;
+    const mediaPath = buildMediaPath(uniqueFileName);
+    const docPrId = generateUniqueDocPrId(editor);
 
     let rId = null;
     if (editor.options.mode === 'docx') {
@@ -76,7 +108,7 @@ export async function uploadAndInsertImage({ editor, view, file, size, id }) {
     let imageNode = view.state.schema.nodes.image.create({
       src: mediaPath,
       size,
-      id,
+      id: docPrId,
       rId,
     });
 
@@ -91,13 +123,13 @@ export async function uploadAndInsertImage({ editor, view, file, size, id }) {
 
     tr.replaceWith(placeholderPos, placeholderPos, imageNode);
 
-    tr = removeImagePlaceholder(view.state, tr, id);
+    tr = removeImagePlaceholder(view.state, tr, placeholderId);
     // Otherwise, insert it at the placeholder's position, and remove
     // the placeholder
 
     view.dispatch(tr);
   } catch {
-    const tr = removeImagePlaceholder(view.state, view.state.tr, id);
+    const tr = removeImagePlaceholder(view.state, view.state.tr, placeholderId);
     // On failure, just clean up the placeholder
     view.dispatch(tr);
   }
