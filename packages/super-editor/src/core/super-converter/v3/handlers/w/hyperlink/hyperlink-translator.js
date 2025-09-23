@@ -56,7 +56,8 @@ const encode = (params, encodedAttrs) => {
 
   // Add marks to the run nodes and process them
   const linkMark = { type: 'link', attrs: { ...encodedAttrs, href } };
-  const contentNodes = node.elements.filter((el) => el.name === 'w:r'|| el.name === 'sd:autoPageNumber' || el.name === 'sd:totalPageNumber');
+  const referenceNodeTypes = ['sd:pageReference', 'sd:autoPageNumber', 'sd:totalPageNumber'];
+  const contentNodes = node.elements.filter((el) => el.name === 'w:r' || referenceNodeTypes.includes(el.name));
   contentNodes.forEach((contentNode) => {
     const existingMarks = Array.isArray(contentNode.marks) ? contentNode.marks : [];
     const marksWithoutLink = existingMarks.filter((mark) => mark?.type !== 'link');

@@ -153,6 +153,55 @@ describe('w:hyperlink translator', () => {
       expect(result[0].type).toBe('text');
       expect(result[0].marks).toEqual([linkMark]);
     });
+
+    it('should add link mark to child runs and page reference nodes', () => {
+      const params = {
+        nodes: [
+          {
+            name: 'w:hyperlink',
+            attributes: { 'r:id': 'rId1' },
+            elements: [
+              { name: 'w:r', elements: [] },
+              {
+                name: 'sd:pageReference',
+                type: 'element',
+                attributes: {
+                  instruction: 'PAGEREF _Toc123456789 h',
+                },
+                elements: [{ type: 'text', text: '1' }],
+              },
+            ],
+          },
+        ],
+        docx: {
+          'word/_rels/document.xml.rels': {
+            elements: [
+              {
+                name: 'Relationships',
+                elements: [{ name: 'Relationship', attributes: { Id: 'rId1', Target: 'https://example.com' } }],
+              },
+            ],
+          },
+        },
+        nodeListHandler: mockNodeListHandler,
+        path: [],
+      };
+      const encodedAttrs = { rId: 'rId1' };
+
+      const result = config.encode(params, encodedAttrs);
+
+      expect(result).toHaveLength(2);
+      const linkMark = { type: 'link', attrs: { rId: 'rId1', href: 'https://example.com' } };
+      expect(result[0].type).toBe('text');
+      expect(result[0].marks).toEqual([linkMark]);
+      expect(result[1].type).toBe('text');
+      expect(result[1].marks).toEqual([linkMark]);
+      expect(mockNodeListHandler.handler).toHaveBeenCalledWith({
+        ...params,
+        nodes: params.nodes[0].elements,
+        path: [...params.path, params.nodes[0]],
+      });
+    });
   });
 
   describe('config.decode', () => {
