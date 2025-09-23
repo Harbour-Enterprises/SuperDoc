@@ -1,4 +1,4 @@
-import { emuToPixels, pixelsToEmu } from '@converter/helpers.js';
+import { emuToPixels, pixelsToEmu, degreesToRot } from '@converter/helpers.js';
 import { getFallbackImageNameFromDataUri, sanitizeDocxMediaName } from '@converter/helpers/mediaHelpers.js';
 import { prepareTextAnnotation } from '@converter/v3/handlers/w/sdt/helpers/translate-field-annotation.js';
 import { generateDocxRandomId } from '@core/helpers/index.js';
@@ -88,6 +88,32 @@ export const translateImageNode = (params) => {
     distR: 0,
   };
 
+  const xfrmAttrs = {};
+  const effectExtentAttrs = {
+    l: 0,
+    t: 0,
+    r: 0,
+    b: 0,
+  };
+  const transformData = attrs.transformData;
+  if (transformData) {
+    if (transformData.rotation) {
+      xfrmAttrs.rot = degreesToRot(transformData.rotation);
+    }
+    if (transformData.verticalFlip) {
+      xfrmAttrs.flipV = '1';
+    }
+    if (transformData.horizontalFlip) {
+      xfrmAttrs.flipH = '1';
+    }
+    if (transformData.sizeExtension) {
+      effectExtentAttrs.l = pixelsToEmu(transformData.sizeExtension.left);
+      effectExtentAttrs.t = pixelsToEmu(transformData.sizeExtension.top);
+      effectExtentAttrs.r = pixelsToEmu(transformData.sizeExtension.right);
+      effectExtentAttrs.b = pixelsToEmu(transformData.sizeExtension.bottom);
+    }
+  }
+
   const drawingXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
   const pictureXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
@@ -103,12 +129,7 @@ export const translateImageNode = (params) => {
       },
       {
         name: 'wp:effectExtent',
-        attributes: {
-          l: 0,
-          t: 0,
-          r: 0,
-          b: 0,
-        },
+        attributes: effectExtentAttrs,
       },
       {
         name: 'wp:docPr',
@@ -188,6 +209,7 @@ export const translateImageNode = (params) => {
                     elements: [
                       {
                         name: 'a:xfrm',
+                        attributes: xfrmAttrs,
                         elements: [
                           {
                             name: 'a:ext',
