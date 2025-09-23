@@ -3,6 +3,7 @@ import { NodeTranslator } from '@translator';
 import { encodeProperties } from '../../utils.js';
 import { translator as gridColTranslator } from '../gridCol';
 import { twipsToPixels, pixelsToTwips } from '@converter/helpers.js';
+import { normalizeTwipWidth, resolveFallbackColumnWidthTwips } from './tblGrid-helpers.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:tblGrid';
@@ -38,10 +39,19 @@ const encode = (params) => {
  * @returns {import('@translator').SCDecoderResult}
  */
 const decode = (params) => {
-  const { grid = [] } = params.node.attrs || {};
+  const { grid: rawGrid } = params.node.attrs || {};
+  const grid = Array.isArray(rawGrid) ? rawGrid : [];
   const { firstRow = {} } = params.extraParams || {};
 
   const cellNodes = firstRow.content?.filter((n) => n.type === 'tableCell') ?? [];
+
+  const columnCountFromCells = cellNodes.reduce((count, cell) => {
+    const spanCount = Math.max(1, cell?.attrs?.colspan ?? 1);
+    return count + spanCount;
+  }, 0);
+
+  const totalColumns = Math.max(columnCountFromCells, grid.length);
+  const fallbackColumnWidthTwips = resolveFallbackColumnWidthTwips(params, totalColumns, cellMinWidth);
 
   // Build the <w:tblGrid> columns
   const elements = [];
@@ -49,8 +59,8 @@ const decode = (params) => {
 
   const pushColumn = (widthTwips) => {
     let numericWidth = typeof widthTwips === 'string' ? parseInt(widthTwips, 10) : widthTwips;
-    if (numericWidth == null || Number.isNaN(numericWidth)) {
-      numericWidth = cellMinWidth;
+    if (numericWidth == null || Number.isNaN(numericWidth) || numericWidth <= 0) {
+      numericWidth = fallbackColumnWidthTwips;
     }
     numericWidth = Math.max(numericWidth, cellMinWidth);
     const decoded = gridColTranslator.decode({
@@ -66,16 +76,20 @@ const decode = (params) => {
     for (let span = 0; span < spanCount; span++) {
       const cellWidthPixels = Array.isArray(colwidth) ? colwidth[span] : undefined;
       const colGridAttrs = grid?.[columnIndex] || {};
-      const gridWidthTwipsRaw = colGridAttrs.col;
-      const gridWidthTwips =
-        typeof gridWidthTwipsRaw === 'string' ? parseInt(gridWidthTwipsRaw, 10) : gridWidthTwipsRaw;
-      const gridWidthPixels = twipsToPixels(gridWidthTwips);
+      const gridWidthTwips = normalizeTwipWidth(colGridAttrs.col);
+      const gridWidthPixels = gridWidthTwips != null ? twipsToPixels(gridWidthTwips) : null;
 
       let cellWidthTwips;
       if (cellWidthPixels != null) {
-        cellWidthTwips = gridWidthPixels === cellWidthPixels ? gridWidthTwips : pixelsToTwips(cellWidthPixels);
-      } else {
+        if (gridWidthTwips != null && gridWidthPixels === cellWidthPixels) {
+          cellWidthTwips = gridWidthTwips;
+        } else {
+          cellWidthTwips = pixelsToTwips(cellWidthPixels);
+        }
+      } else if (gridWidthTwips != null) {
         cellWidthTwips = gridWidthTwips;
+      } else {
+        cellWidthTwips = fallbackColumnWidthTwips;
       }
 
       pushColumn(cellWidthTwips);
@@ -86,8 +100,7 @@ const decode = (params) => {
   // Some documents define more grid columns than there are cells in the first row (e.g. empty header rows
   // or grid templates). We still need to emit those trailing columns so the exported grid matches the original.
   while (columnIndex < grid.length) {
-    const gridWidth = grid[columnIndex]?.col;
-    const gridWidthTwips = typeof gridWidth === 'string' ? parseInt(gridWidth, 10) : gridWidth;
+    const gridWidthTwips = normalizeTwipWidth(grid[columnIndex]?.col);
     pushColumn(gridWidthTwips);
     columnIndex++;
   }
