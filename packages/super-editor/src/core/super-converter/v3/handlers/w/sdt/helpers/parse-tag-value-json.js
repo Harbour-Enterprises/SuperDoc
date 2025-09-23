@@ -15,7 +15,7 @@ export function parseTagValueJSON(json) {
 
   try {
     return JSON.parse(trimmed);
-  } catch (err) {
+  } catch {
     return {};
   }
 }

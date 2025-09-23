@@ -99,10 +99,12 @@ export function createBorderPropertyHandler(xmlName, sdName = null) {
       createAttributeHandler('w:shadow', null, parseBoolean, booleanToString),
       createAttributeHandler('w:frame', null, parseBoolean, booleanToString),
     ],
-    encode: (_, encodedAttrs) => {
+    encode: (params, encodedAttrs) => {
+      void params;
       return Object.keys(encodedAttrs).length > 0 ? encodedAttrs : undefined;
     },
-    decode: function ({ node }, _) {
+    decode: function ({ node }, context) {
+      void context;
       const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs[sdName] || {} } });
       return Object.keys(decodedAttrs).length > 0 ? { attributes: decodedAttrs } : undefined;
     },

@@ -352,7 +352,7 @@ describe('w:tbl translator', () => {
       expect(styles.fontSize).toBe('11pt');
       expect(styles.borders).toEqual({ top: { size: 1 } });
       expect(styles.cellMargins).toEqual({
-        marginLeft: '108',
+        marginLeft: { value: 108, type: 'dxa' },
         marginRight: undefined,
         marginTop: undefined,
         marginBottom: undefined,

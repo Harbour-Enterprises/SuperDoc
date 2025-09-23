@@ -252,6 +252,43 @@ describe('w-p-helpers', () => {
       expect(res.lineSpaceBefore).toBe(12);
       expect(res.lineSpaceAfter).toBe(24);
     });
+
+    it('suppresses default spacing when paragraph is inside a table cell', () => {
+      const docx = {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:pPrDefault',
+                      elements: [
+                        {
+                          name: 'w:pPr',
+                          elements: [
+                            {
+                              name: 'w:spacing',
+                              attributes: {
+                                'w:after': '240',
+                              },
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      };
+      const node = { elements: [{ name: 'w:pPr', elements: [] }] };
+      const res = getParagraphSpacing(node, docx, '', [], { insideTable: true });
+      expect(res).toBeUndefined();
+    });
   });
 
   describe('getDefaultParagraphStyle', () => {

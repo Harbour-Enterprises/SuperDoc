@@ -212,11 +212,18 @@ const getTableCellMargins = (marginTag, referencedStyles) => {
     marginBottom: marginBottomStyle,
   } = cellMargins;
 
+  const resolveMargin = (inlineValue, styleValue) => {
+    if (inlineValue != null) return inlineValue;
+    if (styleValue == null) return undefined;
+    if (typeof styleValue === 'object') return styleValue.value;
+    return styleValue;
+  };
+
   const margins = {
-    left: twipsToPixels(inlineMarginLeftValue ?? marginLeftStyle),
-    right: twipsToPixels(inlineMarginRightValue ?? marginRightStyle),
-    top: twipsToPixels(inlineMarginTopValue ?? marginTopStyle),
-    bottom: twipsToPixels(inlineMarginBottomValue ?? marginBottomStyle),
+    left: twipsToPixels(resolveMargin(inlineMarginLeftValue, marginLeftStyle)),
+    right: twipsToPixels(resolveMargin(inlineMarginRightValue, marginRightStyle)),
+    top: twipsToPixels(resolveMargin(inlineMarginTopValue, marginTopStyle)),
+    bottom: twipsToPixels(resolveMargin(inlineMarginBottomValue, marginBottomStyle)),
   };
   return margins;
 };

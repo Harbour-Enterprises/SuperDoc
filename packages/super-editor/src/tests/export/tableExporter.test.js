@@ -20,8 +20,8 @@ describe('test table export', async () => {
     const gridCol2 = twipsToPixels(tableGrid[1].attributes['w:w']);
     const gridCol3 = twipsToPixels(tableGrid[2].attributes['w:w']);
 
-    expect(gridCol1).toBe(94);
-    expect(gridCol2).toBe(331);
-    expect(gridCol3).toBe(176);
+    expect(gridCol1).toBeCloseTo(94.2, 1);
+    expect(gridCol2).toBeCloseTo(330.733, 3);
+    expect(gridCol3).toBeCloseTo(176.133, 3);
   });
 });

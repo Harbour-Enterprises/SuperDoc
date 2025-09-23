@@ -179,6 +179,122 @@ describe('w:tblGrid translator', () => {
       expect(result.name).toBe('w:tblGrid');
       expect(result.elements).toEqual([]);
     });
+
+    it('treats null grid attributes as empty arrays', () => {
+      const params = {
+        node: {
+          attrs: {
+            grid: null,
+          },
+        },
+        extraParams: {
+          firstRow: {
+            content: [{ type: 'tableCell', attrs: { colspan: 1 } }],
+          },
+        },
+      };
+
+      const result = translator.decode(params);
+      expect(result.name).toBe('w:tblGrid');
+      expect(result.elements).toHaveLength(1);
+    });
+
+    it('treats non-array grid attributes as empty arrays', () => {
+      const params = {
+        node: {
+          attrs: {
+            grid: {},
+          },
+        },
+        extraParams: {
+          firstRow: {
+            content: [{ type: 'tableCell', attrs: { colwidth: [150] } }],
+          },
+        },
+      };
+
+      const result = translator.decode(params);
+      expect(result.name).toBe('w:tblGrid');
+      expect(result.elements[0].attributes['w:w']).toBe('3000');
+    });
+
+    it('derives column widths from table width when sizing data is missing', () => {
+      const params = {
+        node: {
+          attrs: {
+            tableWidth: { width: 400 },
+          },
+        },
+        editor: {
+          schema: {
+            nodes: {
+              tableCell: { spec: { attrs: { colwidth: { default: [160] } } } },
+            },
+          },
+        },
+        extraParams: {
+          firstRow: {
+            content: [
+              { type: 'tableCell', attrs: {} },
+              { type: 'tableCell', attrs: {} },
+            ],
+          },
+        },
+      };
+
+      const result = translator.decode(params);
+      const widths = result.elements.map((el) => el.attributes['w:w']);
+      expect(widths).toEqual(['4000', '4000']);
+    });
+
+    it('falls back to schema defaults when no column sizing metadata exists', () => {
+      const params = {
+        node: {
+          attrs: {},
+        },
+        editor: {
+          schema: {
+            nodes: {
+              tableCell: { spec: { attrs: { colwidth: { default: [120] } } } },
+            },
+          },
+        },
+        extraParams: {
+          firstRow: {
+            content: [
+              { type: 'tableCell', attrs: {} },
+              { type: 'tableCell', attrs: {} },
+            ],
+          },
+        },
+      };
+
+      const result = translator.decode(params);
+      const widths = result.elements.map((el) => el.attributes['w:w']);
+      expect(widths).toEqual(['2400', '2400']);
+    });
+
+    it('preserves distinct grid column widths when reconstructing the grid', () => {
+      const params = {
+        node: {
+          attrs: {
+            grid: [{ col: 2000 }, { col: 4000 }],
+          },
+        },
+        extraParams: {
+          firstRow: {
+            content: [
+              { type: 'tableCell', attrs: { colspan: 1 } },
+              { type: 'tableCell', attrs: { colspan: 1 } },
+            ],
+          },
+        },
+      };
+
+      const result = translator.decode(params);
+      const widths = result.elements.map((el) => el.attributes['w:w']);
+      expect(widths).toEqual(['2000', '4000']);
+    });
   });
 
   describe('round-trip', () => {

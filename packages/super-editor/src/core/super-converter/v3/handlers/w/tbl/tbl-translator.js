@@ -26,7 +26,8 @@ const encode = (params, encodedAttrs) => {
   // Table properties
   const tblPr = node.elements.find((el) => el.name === 'w:tblPr');
   if (tblPr) {
-    encodedAttrs['tableProperties'] = tblPrTranslator.encode({ ...params, nodes: [tblPr] }).attributes;
+    const encodedProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
+    encodedAttrs['tableProperties'] = encodedProperties?.attributes || {};
   }
 
   // Table grid
@@ -56,7 +57,7 @@ const encode = (params, encodedAttrs) => {
       transform = (v) => v;
     }
 
-    if (encodedAttrs.tableProperties?.[key]) {
+    if (encodedAttrs.tableProperties && encodedAttrs.tableProperties[key]) {
       encodedAttrs[key] = transform(encodedAttrs.tableProperties[key]);
     }
   });
@@ -67,13 +68,19 @@ const encode = (params, encodedAttrs) => {
   // Table borders can be specified in tblPr or inside a referenced style tag
   const { borders, rowBorders } = _processTableBorders(encodedAttrs.tableProperties?.borders || {});
   const referencedStyles = _getReferencedTableStyles(encodedAttrs.tableStyleId, params);
+  if (referencedStyles?.cellMargins && !encodedAttrs.tableProperties?.cellMargins) {
+    encodedAttrs.tableProperties = {
+      ...(encodedAttrs.tableProperties || {}),
+      cellMargins: referencedStyles.cellMargins,
+    };
+  }
   const rows = node.elements.filter((el) => el.name === 'w:tr');
   const borderData = Object.assign({}, referencedStyles?.borders || {}, borders || {});
   const borderRowData = Object.assign({}, referencedStyles?.rowBorders || {}, rowBorders || {});
   encodedAttrs['borders'] = borderData;
 
   // Process each row
-  const tblStyleTag = tblPr.elements.find((el) => el.name === 'w:tblStyle'); // used by the legacy table cell handler
+  const tblStyleTag = tblPr?.elements?.find((el) => el.name === 'w:tblStyle'); // used by the legacy table cell handler
   const columnWidths = (encodedAttrs['grid'] ?? []).map((item) => twipsToPixels(item.col));
 
   const content = [];
@@ -83,6 +90,7 @@ const encode = (params, encodedAttrs) => {
       nodes: [row],
       extraParams: {
         row,
+        table: node,
         rowBorders: borderRowData,
         styleTag: tblStyleTag,
         columnWidths,
@@ -227,7 +235,12 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
 
     const cellMargins = {};
     Object.entries(tableProperties.cellMargins || {}).forEach(([key, attrs]) => {
-      if (attrs?.value) cellMargins[key] = String(attrs.value);
+      if (attrs?.value != null) {
+        cellMargins[key] = {
+          value: attrs.value,
+          type: attrs.type || 'dxa',
+        };
+      }
     });
     if (Object.keys(cellMargins).length) stylesToReturn.cellMargins = cellMargins;
   }

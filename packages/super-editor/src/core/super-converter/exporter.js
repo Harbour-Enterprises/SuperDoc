@@ -1,11 +1,9 @@
 import { SuperConverter } from './SuperConverter.js';
 import {
-  emuToPixels,
   getTextIndentExportValue,
   inchesToTwips,
   linesToTwips,
   pixelsToEightPoints,
-  pixelsToEmu,
   pixelsToTwips,
   ptToTwips,
   rgbToHex,
@@ -1308,15 +1306,6 @@ export class DocxExporter {
     if (!selfClosing) tags.push(`</${name}>`);
     return tags;
   }
-}
-
-function resizeKeepAspectRatio(width, height, maxWidth) {
-  if (width > maxWidth) {
-    let scale = maxWidth / width;
-    let newHeight = Math.round(height * scale);
-    return { width: maxWidth, height: newHeight };
-  }
-  return { width, height };
 }
 
 const translatePageNumberNode = (params) => {

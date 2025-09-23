@@ -13,10 +13,9 @@ const SD_NODE_NAME = ['image'];
 const validXmlAttributes = ['distT', 'distB', 'distL', 'distR'].map((xmlName) => createAttributeHandler(xmlName));
 /**
  * @param {import('@translator').SCEncoderConfig} params
- * @param {import('@translator').EncodedAttributes} [encodedAttrs]
  * @returns {import('@translator').SCEncoderResult}
  */
-function encode(params, encodedAttrs) {
+function encode(params) {
   const { node } = params.extraParams;
 
   if (!node || !node.type) {
@@ -28,10 +27,9 @@ function encode(params, encodedAttrs) {
 
 /**
  * @param {import('@translator').SCDecoderConfig} params
- * @param {import('@translator').DecodedAttributes} [decodedAttrs]
  * @returns {import('@translator').SCDecoderResult}
  */
-function decode(params, decodedAttrs) {
+function decode(params) {
   const { node } = params;
 
   if (!node || !node.type) {
