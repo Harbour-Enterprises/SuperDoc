@@ -56,16 +56,16 @@ const encode = (params, encodedAttrs) => {
 
   // Add marks to the run nodes and process them
   const linkMark = { type: 'link', attrs: { ...encodedAttrs, href } };
-  const runNodes = node.elements.filter((el) => el.name === 'w:r');
-  runNodes.forEach((runNode) => {
-    const existingRunMarks = Array.isArray(runNode.marks) ? runNode.marks : [];
-    const runMarksWithoutLink = existingRunMarks.filter((mark) => mark?.type !== 'link');
-    runNode.marks = runMarksWithoutLink;
+  const contentNodes = node.elements.filter((el) => el.name === 'w:r'|| el.name === 'sd:autoPageNumber' || el.name === 'sd:totalPageNumber');
+  contentNodes.forEach((contentNode) => {
+    const existingMarks = Array.isArray(contentNode.marks) ? contentNode.marks : [];
+    const marksWithoutLink = existingMarks.filter((mark) => mark?.type !== 'link');
+    contentNode.marks = marksWithoutLink;
   });
 
   const updatedNode = nodeListHandler.handler({
     ...params,
-    nodes: runNodes,
+    nodes: contentNodes,
     path: [...(params.path || []), node],
   });
 
@@ -141,7 +141,8 @@ const _resolveHref = (docx, encodedAttrs) => {
  * @returns {import('@translator').SCDecoderResult}
  */
 function decode(params) {
-  const { node } = params;
+  const { hyperlinkGroup = [params.node] } = params.extraParams || {};
+  const node = hyperlinkGroup[0];
 
   const linkMark = node.marks.find((m) => m.type === 'link');
   const linkAttrs = this.decodeAttributes({ ...params, node: linkMark });
@@ -152,10 +153,20 @@ function decode(params) {
     linkAttrs['r:id'] = _addNewLinkRelationship(params, link, linkAttrs['r:id']);
   }
 
-  node.marks = node.marks.filter((m) => m.type !== 'link');
-
-  // @ts-ignore
-  const outputNode = exportSchemaToJson({ ...params, node });
+  let contentNodes = [];
+  hyperlinkGroup.forEach((linkNode) => {
+    if ('marks' in linkNode) {
+      linkNode.marks = linkNode.marks.filter((m) => m.type !== 'link');
+    } else {
+      linkNode.attrs.marksAsAttrs = linkNode.attrs.marksAsAttrs.filter((m) => m.type !== 'link');
+    }
+    // @ts-ignore
+    const outputNode = exportSchemaToJson({ ...params, node: linkNode });
+    if (outputNode) {
+      if (outputNode instanceof Array) contentNodes.push(...outputNode);
+      else contentNodes.push(outputNode);
+    }
+  });
 
   const newNode = {
     name: 'w:hyperlink',
@@ -163,7 +174,7 @@ function decode(params) {
     attributes: {
       ...linkAttrs,
     },
-    elements: [outputNode],
+    elements: contentNodes,
   };
 
   return newNode;
