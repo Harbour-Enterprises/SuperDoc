@@ -1,6 +1,7 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
 import { twipsToPixels, eigthPointsToPixels, halfPointToPoints } from '@core/super-converter/helpers.js';
+import { preProcessVerticalMergeCells } from '@core/super-converter/export-helpers/pre-process-vertical-merge-cells.js';
 import { translateChildNodes } from '@core/super-converter/v2/exporter/helpers/index.js';
 import { translator as trTranslator } from '../tr';
 import { translator as tblPrTranslator } from '../tblPr';
@@ -104,8 +105,8 @@ const encode = (params, encodedAttrs) => {
  * @returns {import('@translator').SCDecoderResult}
  */
 const decode = (params, decodedAttrs) => {
-  // @ts-ignore
-  params.node = _preProcessVerticalMergeCells(params.node, params.editorSchema);
+  // @ts-ignore - helper expects ProseMirror table shape
+  params.node = preProcessVerticalMergeCells(params.node, params);
   const { node } = params;
   const elements = translateChildNodes(params);
 
@@ -240,43 +241,6 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
  * @param {Object} editorSchema The editor schema
  * @returns {Object} The table node with merged cells restored
  */
-function _preProcessVerticalMergeCells(table, editorSchema) {
-  const { content } = table;
-  for (let rowIndex = 0; rowIndex < content.length; rowIndex++) {
-    const row = content[rowIndex];
-    if (!row.content) continue;
-    for (let cellIndex = 0; cellIndex < row.content?.length; cellIndex++) {
-      const cell = row.content[cellIndex];
-      if (!cell) continue;
-
-      const { attrs } = cell;
-      if (attrs.rowspan > 1) {
-        const rowsToChange = content.slice(rowIndex + 1, rowIndex + attrs.rowspan);
-        const mergedCell = {
-          type: cell.type,
-          content: [
-            // cells must end with a paragraph
-            editorSchema.nodes.paragraph.createAndFill().toJSON(),
-          ],
-          attrs: {
-            ...cell.attrs,
-            // reset colspan and rowspan
-            colspan: null,
-            rowspan: null,
-            // to add vMerge
-            continueMerge: true,
-          },
-        };
-
-        rowsToChange.forEach((rowToChange) => {
-          rowToChange.content.splice(cellIndex, 0, mergedCell);
-        });
-      }
-    }
-  }
-  return table;
-}
-
 /** @type {import('@translator').NodeTranslatorConfig} */
 export const config = {
   xmlName: XML_NODE_NAME,

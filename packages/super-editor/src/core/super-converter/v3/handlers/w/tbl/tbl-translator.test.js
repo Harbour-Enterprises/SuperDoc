@@ -286,7 +286,7 @@ describe('w:tbl translator', () => {
         expect(addedCell.type).toBe('tableCell');
         expect(addedCell.attrs.continueMerge).toBe(true);
         expect(addedCell.attrs.rowspan).toBe(null); // reset
-        expect(addedCell.attrs.colspan).toBe(null); // reset
+        expect(addedCell.attrs.colspan).toBe(mockNode.content[0].content[0].attrs.colspan); // preserve original span for layout
         expect(addedCell.content).toEqual([{ type: 'paragraph', content: [] }]);
         expect(mockEditorSchema.nodes.paragraph.createAndFill).toHaveBeenCalled();
       });

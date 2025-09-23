@@ -1,15 +1,11 @@
 import { DOMParser as PMDOMParser } from 'prosemirror-model';
 import { EditorState } from 'prosemirror-state';
 import { translateChildNodes } from '@converter/v2/exporter/helpers/translateChildNodes';
+import { translator as wDrawingNodeTranslator } from '@converter/v3/handlers/w/drawing';
 import { ListHelpers } from '@helpers/list-numbering-helpers';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId';
 import { sanitizeHtml } from '@core/InputRule';
-import {
-  translateImageNode,
-  getTextNodeForExport,
-  processLinkContentNode,
-  addNewLinkRelationship,
-} from '@converter/exporter';
+import { getTextNodeForExport, processLinkContentNode, addNewLinkRelationship } from '@converter/exporter';
 import he from 'he';
 
 /**
@@ -140,7 +136,10 @@ export function prepareTextAnnotation(params) {
  * @returns {Object} The translated image node
  */
 export function prepareImageAnnotation(params, imageSize) {
-  return translateImageNode(params, imageSize);
+  return wDrawingNodeTranslator.decode({
+    ...params,
+    imageSize,
+  });
 }
 
 /**
