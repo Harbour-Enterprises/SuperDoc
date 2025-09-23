@@ -18,7 +18,7 @@ describe('w:hidden translator', () => {
 
   describe('decode', () => {
     it('creates a w:hidden element if hidden is true', () => {
-      const result = translator.decode({ node: { attrs: { hidden: true } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { hidden: true } } });
       expect(result).toEqual({});
     });
 

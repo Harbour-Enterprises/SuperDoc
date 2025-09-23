@@ -30,7 +30,7 @@ const validXmlAttributes = ['w:rsidDel', 'w:rsidR', 'w:rsidRPr', 'w:rsidTr', 'w1
  * @returns {import('@translator').SCEncoderResult}
  */
 const encode = (params, encodedAttrs) => {
-  const { row, table } = params.extraParams;
+  const { row } = params.extraParams;
 
   let tableRowProperties = {};
   const tPr = row.elements.find((el) => el.name === 'w:trPr');
@@ -47,7 +47,7 @@ const encode = (params, encodedAttrs) => {
   encodedAttrs['cantSplit'] = tableRowProperties['cantSplit'];
 
   // Handling cells
-  const gridColumnWidths = _getGridColumnWidths(table);
+  const { columnWidths: gridColumnWidths } = params.extraParams;
   const cellNodes = row.elements.filter((el) => el.name === 'w:tc');
   let currentColumnIndex = 0;
   const content =
@@ -78,22 +78,6 @@ const encode = (params, encodedAttrs) => {
     attrs: encodedAttrs,
   };
   return newNode;
-};
-
-/**
- * Get the column widths from the table grid (w:tblGrid).
- * @param {Object} [tableNode] The w:tbl node
- * @returns {number[]} Array of column widths in pixels
- */
-const _getGridColumnWidths = (tableNode) => {
-  const tblGrid = tableNode.elements.find((el) => el.name === 'w:tblGrid');
-  if (!tblGrid) return [];
-  const columnWidths =
-    tblGrid?.elements?.flatMap((el) => {
-      if (el.name !== 'w:gridCol') return [];
-      return twipsToPixels(el.attributes['w:w']);
-    }) || [];
-  return columnWidths;
 };
 
 /**

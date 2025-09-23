@@ -103,7 +103,7 @@ describe('w:tr translator', () => {
     it('should encode a <w:tr> element correctly', () => {
       const params = {
         nodes: [mockRow],
-        extraParams: { row: mockRow, table: mockTable },
+        extraParams: { row: mockRow, columnWidths: [2000 / 20, 3000 / 20, 4000 / 20] },
         // other params if needed
       };
       const encodedAttrs = { rsidR: '123' };
