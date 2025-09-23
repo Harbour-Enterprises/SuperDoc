@@ -12,11 +12,12 @@ marked.use({
  * Create a ProseMirror document from Markdown content
  * @param {string} markdown - Markdown content
  * @param {Object} schema - ProseMirror schema
+ * @param {Object} [options={}] - Import options
  * @returns {Object} Document node
  */
-export function createDocFromMarkdown(markdown, schema) {
+export function createDocFromMarkdown(markdown, schema, options = {}) {
   const html = convertMarkdownToHTML(markdown);
-  return createDocFromHTML(html, schema);
+  return createDocFromHTML(html, schema, options);
 }
 
 /**

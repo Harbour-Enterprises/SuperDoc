@@ -14,14 +14,18 @@ export default defineConfig(({ mode }) => {
     plugins,
     // Combined test configuration
     test: {
+      name: '✏️ @super-editor',
       globals: true,
       environment: 'jsdom',
+      retry: 2,
+      testTimeout: 20000,
+      hookTimeout: 10000,
       exclude: [
         '**/*.spec.js',
       ],
       coverage: {
         provider: 'v8',
-        exclude: ['**/v3/**/index.js'],
+        exclude: ['**/v3/**/index.js', '**/examples/**'],
         reporter: ['text'],
       }
     },

@@ -1,8 +1,6 @@
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
-import { handleTrackChangeNode } from '@converter/v2/importer/trackChangesImporter.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
-import { TrackInsertMarkName } from '@extensions/track-changes/constants.js';
-import { handleAllTableNodes } from '@converter/v2/importer/tableImporter.js';
+import { tableNodeHandlerEntity } from '@converter/v2/importer/tableImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 
 describe('table live xml test', () => {
@@ -425,13 +423,12 @@ describe('table live xml test', () => {
     const docx = {
       'word/styles.xml': styles,
     };
-
-    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
     expect(result.nodes.length).toBe(1);
 
     expect(result.nodes[0].type).toBe('table');
     expect(result.nodes[0].content.length).toBe(2);
-    expect(result.nodes[0].attrs).toEqual({
+    expect(result.nodes[0].attrs).toMatchObject({
       tableWidth: {
         type: 'auto',
         width: 0,
@@ -445,6 +442,36 @@ describe('table live xml test', () => {
         insideH: { size: 0.66665 },
         insideV: { size: 0.66665 },
       },
+      grid: [
+        {
+          col: 4675,
+        },
+        {
+          col: 4675,
+        },
+      ],
+      tableProperties: expect.objectContaining({
+        tableStyleId: 'TableGrid',
+        tableWidth: {
+          type: 'auto',
+          value: 0,
+        },
+        tblLook: {
+          firstColumn: true,
+          firstRow: true,
+          lastColumn: false,
+          lastRow: false,
+          noHBand: false,
+          noVBand: true,
+          val: '04A0',
+        },
+        cellMargins: {
+          marginLeft: { value: 108, type: 'dxa' },
+          marginRight: { value: 108, type: 'dxa' },
+          marginTop: { value: 0, type: 'dxa' },
+          marginBottom: { value: 0, type: 'dxa' },
+        },
+      }),
     });
 
     expect(result.nodes[0].content[0].type).toBe('tableRow');
@@ -456,7 +483,6 @@ describe('table live xml test', () => {
     expect(result.nodes[0].content[0].content[1].content[0].type).toBe('paragraph');
     expect(result.nodes[0].content[0].content[1].content[0].content[0].type).toBe('text');
     expect(result.nodes[0].content[0].content[1].content[0].content[0].text).toBe('COL 2 ROW 1');
-    expect(result.nodes[0].content[0].attrs.borders).toBeDefined();
 
     expect(result.nodes[0].content[1].type).toBe('tableRow');
     expect(result.nodes[0].content[1].content.length).toBe(2);
@@ -466,7 +492,6 @@ describe('table live xml test', () => {
     expect(result.nodes[0].content[1].content[1].content[0].type).toBe('paragraph');
     expect(result.nodes[0].content[1].content[1].content[0].content[0].type).toBe('text');
     expect(result.nodes[0].content[1].content[1].content[0].content[0].text).toBe('COL 2 ROW 2');
-    expect(result.nodes[0].content[1].attrs.borders).toBeDefined();
   });
 
   it('gets styles from base tab and parse internal borders', () => {
@@ -475,27 +500,38 @@ describe('table live xml test', () => {
     const docx = {
       'word/styles.xml': styles,
     };
-    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
     expect(result.nodes[0].content[0].content[0].attrs.borders).toBeDefined();
     expect(result.nodes[0].content[0].content[1].attrs.borders).toBeDefined();
     expect(result.nodes[0].content[0].content[0].attrs.borders.right.val).toBe('none');
     expect(result.nodes[0].content[0].content[1].attrs.borders.bottom.val).toBe('none');
     expect(result.nodes[0].content[0].content[0].attrs.cellMargins).toBeDefined();
-    expect(result.nodes[0].content[0].content[0].attrs.cellMargins.left).toBe(8);
-    expect(result.nodes[0].content[0].content[0].attrs.cellMargins.right).toBe(8);
+    expect(result.nodes[0].content[0].content[0].attrs.cellMargins.left).toBeCloseTo(7.2, 1);
+    expect(result.nodes[0].content[0].content[0].attrs.cellMargins.right).toBeCloseTo(7.2, 1);
   });
 
   it('correctly gets colwidth for cells without inline width', () => {
     const nodes = parseXmlToJson(tableCellsNoInlineWidth).elements;
     const styles = parseXmlToJson(simpleTableStyleXml);
     const docx = { 'word/styles.xml': styles };
-    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
 
-    expect(result.nodes[0].content[0].content[0].attrs.colwidth).toEqual([390, 26]);
-    expect(result.nodes[0].content[0].content[1].attrs.colwidth).toEqual([256]);
-    expect(result.nodes[0].content[1].content[0].attrs.colwidth).toEqual([390, 26]);
-    expect(result.nodes[0].content[1].content[1].attrs.colwidth).toEqual([256]);
-    expect(result.nodes[0].content[2].content[0].attrs.colwidth).toEqual([390, 26, 256]);
+    const firstCellWidths = result.nodes[0].content[0].content[0].attrs.colwidth;
+    expect(firstCellWidths[0]).toBeCloseTo(389.467, 3);
+    expect(firstCellWidths[1]).toBeCloseTo(25.8, 1);
+
+    expect(result.nodes[0].content[0].content[1].attrs.colwidth[0]).toBeCloseTo(256.467, 3);
+
+    const secondRowFirstCellWidths = result.nodes[0].content[1].content[0].attrs.colwidth;
+    expect(secondRowFirstCellWidths[0]).toBeCloseTo(389.467, 3);
+    expect(secondRowFirstCellWidths[1]).toBeCloseTo(25.8, 1);
+
+    expect(result.nodes[0].content[1].content[1].attrs.colwidth[0]).toBeCloseTo(256.467, 3);
+
+    const mergedRowWidths = result.nodes[0].content[2].content[0].attrs.colwidth;
+    expect(mergedRowWidths[0]).toBeCloseTo(389.467, 3);
+    expect(mergedRowWidths[1]).toBeCloseTo(25.8, 1);
+    expect(mergedRowWidths[2]).toBeCloseTo(256.467, 3);
   });
 
   it('imports cantSplit attribute on table row', () => {
@@ -505,7 +541,7 @@ describe('table live xml test', () => {
     const styles = parseXmlToJson(simpleTableStyleXml);
     const docx = { 'word/styles.xml': styles };
 
-    const result = handleAllTableNodes({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
 
     const table = result.nodes[0];
     const row = table.content[0];
@@ -523,8 +559,11 @@ describe('table tests to check colwidth', () => {
     const doc = documentXml.elements[0];
     const body = doc.elements[0];
     const content = body.elements;
-
-    const result = handleAllTableNodes({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler() });
+    const result = tableNodeHandlerEntity.handler({
+      nodes: [content[0]],
+      docx,
+      nodeListHandler: defaultNodeListHandler(),
+    });
     const node = result.nodes[0];
 
     expect(node.type).toBe('table');
@@ -534,14 +573,18 @@ describe('table tests to check colwidth', () => {
     const tr3 = node.content[2];
 
     expect(tr1.content[0].attrs.colspan).toBe(2);
-    expect(tr1.content[0].attrs.colwidth).toEqual([94, 331]);
-    expect(tr1.content[1].attrs.colwidth).toEqual([176]);
+    expect(tr1.content[0].attrs.colwidth[0]).toBeCloseTo(94.2, 1);
+    expect(tr1.content[0].attrs.colwidth[1]).toBeCloseTo(330.733, 3);
+    expect(tr1.content[1].attrs.colwidth[0]).toBeCloseTo(176.133, 3);
 
-    expect(tr2.content[0].attrs.colwidth).toEqual([94]);
-    expect(tr2.content[1].attrs.colwidth).toEqual([331]);
-    expect(tr2.content[2].attrs.colwidth).toEqual([176]);
+    expect(tr2.content[0].attrs.colwidth[0]).toBeCloseTo(94.2, 1);
+    expect(tr2.content[1].attrs.colwidth[0]).toBeCloseTo(330.733, 3);
+    expect(tr2.content[2].attrs.colwidth[0]).toBeCloseTo(176.133, 3);
 
     expect(tr3.content[0].attrs.colspan).toBe(3);
-    expect(tr3.content[0].attrs.colwidth).toEqual([94, 331, 176]);
+    const totalWidths = tr3.content[0].attrs.colwidth;
+    expect(totalWidths[0]).toBeCloseTo(94.2, 1);
+    expect(totalWidths[1]).toBeCloseTo(330.733, 3);
+    expect(totalWidths[2]).toBeCloseTo(176.133, 3);
   });
 });

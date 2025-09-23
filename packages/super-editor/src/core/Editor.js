@@ -38,6 +38,7 @@ import { createLinkedChildEditor } from '@core/child-editor/index.js';
 import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { SuperValidator } from '@core/super-validator/index.js';
 import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js';
+import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -90,7 +91,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
  * @property {string} [role='editor'] - User role ('editor', 'viewer', 'suggester')
  * @property {Array} [colors=[]] - Available colors
  * @property {Object} [converter] - Document converter
- * @property {Object} [fileSource] - Source of the file
+ * @property {File|Blob|Buffer} [fileSource] - Source of the file (File/Blob in browser, Buffer in Node.js)
  * @property {Object} [initialState] - Initial editor state
  * @property {string} [documentId] - Unique document identifier
  * @property {Array} [extensions=[]] - Editor extensions
@@ -331,7 +332,6 @@ export class Editor extends EventEmitter {
     this.on('beforeCreate', this.options.onBeforeCreate);
     this.emit('beforeCreate', { editor: this });
     this.on('contentError', this.options.onContentError);
-    this.on('exception', this.options.onException);
 
     this.mount(this.options.element);
 
@@ -351,13 +351,16 @@ export class Editor extends EventEmitter {
     this.on('paginationUpdate', this.options.onPaginationUpdate);
     this.on('comment-positions', this.options.onCommentLocationsUpdate);
     this.on('list-definitions-change', this.options.onListDefinitionsChange);
+    this.on('exception', this.options.onException);
 
     if (!this.options.isHeadless) {
       this.initializeCollaborationData();
       this.initDefaultStyles();
     }
 
-    if (!this.options.ydoc) this.migrateListsToV2();
+    if (!this.options.ydoc || this.options.markdown || this.options.html) {
+      this.migrateListsToV2();
+    }
 
     this.setDocumentMode(this.options.documentMode);
 
@@ -373,6 +376,7 @@ export class Editor extends EventEmitter {
     }
 
     this.#initDevTools();
+    this.#registerCopyHandler();
   }
 
   /**
@@ -608,6 +612,27 @@ export class Editor extends EventEmitter {
     }
   }
 
+  #registerCopyHandler() {
+    this.view.dom.addEventListener('copy', (event) => {
+      const clipboardData = event.clipboardData;
+      if (!clipboardData) return;
+
+      event.preventDefault();
+
+      const { from, to } = this.view.state.selection;
+      const slice = this.view.state.doc.slice(from, to);
+      const fragment = slice.content;
+
+      const div = document.createElement('div');
+      const serializer = DOMSerializer.fromSchema(this.view.state.schema);
+      div.appendChild(serializer.serializeFragment(fragment));
+
+      const html = transformListsInCopiedContent(div.innerHTML);
+
+      clipboardData.setData('text/html', html);
+    });
+  }
+
   /**
    * Export the yjs binary from the current state.
    * @returns {Promise<Uint8Array>} The exported yjs binary
@@ -705,18 +730,11 @@ export class Editor extends EventEmitter {
       ...options,
     };
 
-    if (this.options.collaborationProvider && this.options.ydoc) {
-      const nonCollabHistoryIndex = this.options.extensions.findIndex((e) => e.name === 'history');
-      if (nonCollabHistoryIndex !== -1) {
-        this.options.extensions.splice(nonCollabHistoryIndex, 1);
-      }
-    }
-
     if ((this.options.isNewFile || !this.options.ydoc) && this.options.isCommentsEnabled) {
       this.options.shouldLoadComments = true;
     }
 
-    if (!this.view || !this.state || this.ifsDestroyed) {
+    if (!this.view || !this.state || this.isDestroyed) {
       return;
     }
 
@@ -941,10 +959,10 @@ export class Editor extends EventEmitter {
 
           // Check for markdown BEFORE html (since markdown gets converted to HTML)
           if (this.options.markdown) {
-            doc = createDocFromMarkdown(this.options.markdown, this.schema);
+            doc = createDocFromMarkdown(this.options.markdown, this.schema, { isImport: true });
           }
           // If we have a new doc, and have html data, we initialize from html
-          else if (this.options.html) doc = createDocFromHTML(this.options.html, this.schema);
+          else if (this.options.html) doc = createDocFromHTML(this.options.html, this.schema, { isImport: true });
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
           if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
@@ -1388,6 +1406,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the editor content as HTML
+   * @param {Object} options - Options for the HTML serializer
+   * @param {boolean} [options.unflattenLists] - Whether to unflatten lists in the HTML
    * @returns {string} Editor content as HTML
    */
   getHTML({ unflattenLists = false } = {}) {
@@ -1527,101 +1547,106 @@ export class Editor extends EventEmitter {
     getUpdatedDocs = false,
     fieldsHighlightColor = null,
   } = {}) {
-    // Pre-process the document state to prepare for export
-    const json = this.#prepareDocumentForExport(comments);
+    try {
+      // Pre-process the document state to prepare for export
+      const json = this.#prepareDocumentForExport(comments);
 
-    // Export the document to DOCX
-    const documentXml = await this.converter.exportToDocx(
-      json,
-      this.schema,
-      this.storage.image.media,
-      isFinalDoc,
-      commentsType,
-      comments,
-      this,
-      exportJsonOnly,
-      fieldsHighlightColor,
-    );
+      // Export the document to DOCX
+      const documentXml = await this.converter.exportToDocx(
+        json,
+        this.schema,
+        this.storage.image.media,
+        isFinalDoc,
+        commentsType,
+        comments,
+        this,
+        exportJsonOnly,
+        fieldsHighlightColor,
+      );
 
-    this.#validateDocumentExport();
+      this.#validateDocumentExport();
 
-    if (exportXmlOnly || exportJsonOnly) return documentXml;
+      if (exportXmlOnly || exportJsonOnly) return documentXml;
 
-    const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
-    const styles = this.converter.schemaToXml(this.converter.convertedXml['word/styles.xml'].elements[0]);
-    const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
-    const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
-    const media = this.converter.addedMedia;
+      const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
+      const styles = this.converter.schemaToXml(this.converter.convertedXml['word/styles.xml'].elements[0]);
+      const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
+      const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
+      const media = this.converter.addedMedia;
 
-    const updatedHeadersFooters = {};
-    Object.entries(this.converter.convertedXml).forEach(([name, json]) => {
-      if (name.includes('header') || name.includes('footer')) {
-        const resultXml = this.converter.schemaToXml(json.elements[0]);
-        updatedHeadersFooters[name] = String(resultXml);
+      const updatedHeadersFooters = {};
+      Object.entries(this.converter.convertedXml).forEach(([name, json]) => {
+        if (name.includes('header') || name.includes('footer')) {
+          const resultXml = this.converter.schemaToXml(json.elements[0]);
+          updatedHeadersFooters[name] = String(resultXml);
+        }
+      });
+
+      const numberingData = this.converter.convertedXml['word/numbering.xml'];
+      const numbering = this.converter.schemaToXml(numberingData.elements[0]);
+      const updatedDocs = {
+        ...this.options.customUpdatedFiles,
+        'word/document.xml': String(documentXml),
+        'docProps/custom.xml': String(customXml),
+        'word/settings.xml': String(customSettings),
+        'word/_rels/document.xml.rels': String(rels),
+        'word/numbering.xml': String(numbering),
+
+        // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
+        'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
+        ...updatedHeadersFooters,
+      };
+
+      if (comments.length) {
+        const commentsXml = this.converter.schemaToXml(this.converter.convertedXml['word/comments.xml'].elements[0]);
+        const commentsExtendedXml = this.converter.schemaToXml(
+          this.converter.convertedXml['word/commentsExtended.xml'].elements[0],
+        );
+        const commentsExtensibleXml = this.converter.schemaToXml(
+          this.converter.convertedXml['word/commentsExtensible.xml'].elements[0],
+        );
+        const commentsIdsXml = this.converter.schemaToXml(
+          this.converter.convertedXml['word/commentsIds.xml'].elements[0],
+        );
+
+        updatedDocs['word/comments.xml'] = String(commentsXml);
+        updatedDocs['word/commentsExtended.xml'] = String(commentsExtendedXml);
+        updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
+        updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
       }
-    });
 
-    const numberingData = this.converter.convertedXml['word/numbering.xml'];
-    const numbering = this.converter.schemaToXml(numberingData.elements[0]);
-    const updatedDocs = {
-      ...this.options.customUpdatedFiles,
-      'word/document.xml': String(documentXml),
-      'docProps/custom.xml': String(customXml),
-      'word/settings.xml': String(customSettings),
-      'word/_rels/document.xml.rels': String(rels),
-      'word/numbering.xml': String(numbering),
+      const zipper = new DocxZipper();
 
-      // Replace & with &amp; in styles.xml as DOCX viewers can't handle it
-      'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
-      ...updatedHeadersFooters,
-    };
+      if (getUpdatedDocs) {
+        updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes(
+          {
+            files: this.options.content,
+          },
+          media,
+          true,
+        );
+        return updatedDocs;
+      }
 
-    if (comments.length) {
-      const commentsXml = this.converter.schemaToXml(this.converter.convertedXml['word/comments.xml'].elements[0]);
-      const commentsExtendedXml = this.converter.schemaToXml(
-        this.converter.convertedXml['word/commentsExtended.xml'].elements[0],
-      );
-      const commentsExtensibleXml = this.converter.schemaToXml(
-        this.converter.convertedXml['word/commentsExtensible.xml'].elements[0],
-      );
-      const commentsIdsXml = this.converter.schemaToXml(
-        this.converter.convertedXml['word/commentsIds.xml'].elements[0],
-      );
-
-      updatedDocs['word/comments.xml'] = String(commentsXml);
-      updatedDocs['word/commentsExtended.xml'] = String(commentsExtendedXml);
-      updatedDocs['word/commentsExtensible.xml'] = String(commentsExtensibleXml);
-      updatedDocs['word/commentsIds.xml'] = String(commentsIdsXml);
-    }
-
-    const zipper = new DocxZipper();
-
-    if (getUpdatedDocs) {
-      updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes(
-        {
-          files: this.options.content,
-        },
+      const result = await zipper.updateZip({
+        docx: this.options.content,
+        updatedDocs: updatedDocs,
+        originalDocxFile: this.options.fileSource,
         media,
-        true,
-      );
-      return updatedDocs;
+        fonts: this.options.fonts,
+        isHeadless: this.options.isHeadless,
+      });
+
+      this.options.telemetry?.trackUsage('document_export', {
+        documentType: 'docx',
+        timestamp: new Date().toISOString(),
+      });
+
+      return result;
+    } catch (error) {
+      this.emit('exception', { error, editor: this });
+      console.error(error);
     }
-
-    const result = await zipper.updateZip({
-      docx: this.options.content,
-      updatedDocs: updatedDocs,
-      originalDocxFile: this.options.fileSource,
-      media,
-      fonts: this.options.fonts,
-      isHeadless: this.options.isHeadless,
-    });
-
-    this.options.telemetry?.trackUsage('document_export', {
-      documentType: 'docx',
-      timestamp: new Date().toISOString(),
-    });
-
-    return result;
   }
 
   /**
@@ -1634,7 +1659,10 @@ export class Editor extends EventEmitter {
       console.debug('🔗 [super-editor] Ending collaboration');
       if (this.options.collaborationProvider) this.options.collaborationProvider.disconnect();
       if (this.options.ydoc) this.options.ydoc.destroy();
-    } catch {}
+    } catch (error) {
+      this.emit('exception', { error, editor: this });
+      console.error(error);
+    }
   }
 
   /**
@@ -1659,7 +1687,10 @@ export class Editor extends EventEmitter {
       }
       this.converter.headerEditors.length = 0;
       this.converter.footerEditors.length = 0;
-    } catch {}
+    } catch (error) {
+      this.emit('exception', { error, editor: this });
+      console.error(error);
+    }
   }
 
   /**
@@ -1735,7 +1766,7 @@ export class Editor extends EventEmitter {
 
     if (this.options.ydoc && this.options.collaborationProvider) {
       updateYdocDocxData(this);
-      this.initializeCollaborationData(true);
+      this.initializeCollaborationData();
     } else {
       this.#insertNewFileData();
     }

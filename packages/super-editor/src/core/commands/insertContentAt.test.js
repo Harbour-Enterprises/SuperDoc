@@ -72,7 +72,6 @@ describe('insertContentAt', () => {
   it('inserts a styled paragraph node when given an html heading string', () => {
     const value = '<h1>Hello world</h1>';
 
-    debugger;
     const tr = makeTr();
     const editor = makeEditor();
     const node = {

@@ -1,5 +1,6 @@
-import { addDefaultStylesIfMissing } from '@core/super-converter/v2/importer/docxImporter';
+import { addDefaultStylesIfMissing, createDocumentJson } from '@core/super-converter/v2/importer/docxImporter';
 import { DEFAULT_LINKED_STYLES } from '../../core/super-converter/exporter-docx-defs';
+import { parseXmlToJson } from '@converter/v2/docxHelper.js';
 
 describe('addDefaultStylesIfMissing', () => {
   const styles = {
@@ -39,5 +40,31 @@ describe('addDefaultStylesIfMissing', () => {
     const result = addDefaultStylesIfMissing(styles);
     const foundStyle = result.elements[0].elements.find((element) => element.attributes?.['w:styleId'] === styleId);
     expect(foundStyle).toEqual(DEFAULT_LINKED_STYLES[styleId]);
+  });
+});
+
+describe('createDocumentJson', () => {
+  it('handles missing document relationships gracefully', () => {
+    const simpleDocXml =
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hello</w:t></w:r></w:p></w:body></w:document>';
+
+    const docx = {
+      'word/document.xml': parseXmlToJson(simpleDocXml),
+    };
+
+    const converter = {
+      headers: {},
+      footers: {},
+      headerIds: {},
+      footerIds: {},
+    };
+
+    const editor = { options: {} };
+
+    const result = createDocumentJson(docx, converter, editor);
+
+    expect(result).toBeTruthy();
+    expect(converter.headers).toEqual({});
+    expect(converter.footers).toEqual({});
   });
 });

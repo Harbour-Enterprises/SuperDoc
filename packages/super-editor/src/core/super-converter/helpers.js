@@ -3,25 +3,28 @@ import { parseSizeUnit } from '../utilities/index.js';
 function inchesToTwips(inches) {
   if (inches == null) return;
   if (typeof inches === 'string') inches = parseFloat(inches);
-  return Math.round(inches * 1440);
+  return Math.round(Number(inches) * 1440);
 }
 
 function twipsToInches(twips) {
   if (twips == null) return;
-  if (typeof twips === 'string') twips = parseInt(twips, 10);
-  return Math.round((twips / 1440) * 100) / 100;
+  const value = Number(twips);
+  if (Number.isNaN(value)) return;
+  return value / 1440;
 }
 
 function twipsToPixels(twips) {
   if (twips == null) return;
-  twips = twipsToInches(twips);
-  return Math.round(twips * 96);
+  const inches = twipsToInches(twips);
+  if (inches == null) return;
+  const pixels = inches * 96;
+  return Math.round(pixels * 1000) / 1000;
 }
 
 function pixelsToTwips(pixels) {
   if (pixels == null) return;
-  pixels = pixels / 96;
-  return inchesToTwips(pixels);
+  const inches = Number(pixels) / 96;
+  return inchesToTwips(inches);
 }
 
 function twipsToLines(twips) {
@@ -82,6 +85,16 @@ function twipsToPt(twips) {
 function ptToTwips(pt) {
   if (pt == null) return;
   return pt * 20;
+}
+
+function rotToDegrees(rot) {
+  if (rot == null) return;
+  return rot / 60000;
+}
+
+function degreesToRot(degrees) {
+  if (degrees == null) return;
+  return degrees * 60000;
 }
 
 /**
@@ -236,6 +249,8 @@ export {
   halfPointToPoints,
   eigthPointsToPixels,
   pixelsToEightPoints,
+  rotToDegrees,
+  degreesToRot,
   getArrayBufferFromUrl,
   getContentTypesFromXml,
   getHexColorFromDocxSystem,

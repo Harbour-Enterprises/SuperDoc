@@ -8,6 +8,26 @@ import { Extension } from '@core/index.js';
  */
 
 /**
+ * Configuration options for Color
+ * @typedef {Object} ColorOptions
+ * @category Options
+ * @property {string[]} [types=['textStyle']] Mark types to add color support to
+ */
+
+/**
+ * Attributes for color marks
+ * @typedef {Object} ColorAttributes
+ * @category Attributes
+ * @property {ColorValue} [color] Text color value
+ * @example
+ * // Apply color to selected text
+ * editor.commands.setColor('#ff0000')
+ *
+ * // Remove color
+ * editor.commands.unsetColor()
+ */
+
+/**
  * @module Color
  * @sidebarTitle Color
  * @snippetPath /snippets/extensions/color.mdx
@@ -17,11 +37,6 @@ export const Color = Extension.create({
 
   addOptions() {
     return {
-      /**
-       * @typedef {Object} ColorOptions
-       * @category Options
-       * @property {string[]} [types=['textStyle']] - Mark types to add color support to
-       */
       types: ['textStyle'],
     };
   },
@@ -31,10 +46,6 @@ export const Color = Extension.create({
       {
         types: this.options.types,
         attributes: {
-          /**
-           * @category Attribute
-           * @param {ColorValue} [color] - Text color value
-           */
           color: {
             default: null,
             parseDOM: (el) => el.style.color?.replace(/['"]+/g, ''),
@@ -54,16 +65,17 @@ export const Color = Extension.create({
        * Set text color
        * @category Command
        * @param {ColorValue} color - Color value to apply
-       * @returns {Function} Command function
        * @example
        * // Set to red using hex
-       * setColor('#ff0000')
+       * editor.commands.setColor('#ff0000')
        *
+       * @example
        * // Set using rgb
-       * setColor('rgb(255, 0, 0)')
+       * editor.commands.setColor('rgb(255, 0, 0)')
        *
+       * @example
        * // Set using named color
-       * setColor('blue')
+       * editor.commands.setColor('blue')
        * @note Preserves other text styling attributes
        */
       setColor:
@@ -75,9 +87,8 @@ export const Color = Extension.create({
       /**
        * Remove text color
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * unsetColor()
+       * editor.commands.unsetColor()
        * @note Removes color while preserving other text styles
        */
       unsetColor:

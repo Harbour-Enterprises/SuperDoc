@@ -1,3 +1,64 @@
+# [0.20.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.19.0...v0.20.0) (2025-09-17)
+
+### Bug Fixes
+
+- emit editor exception on import/export errors ([#963](https://github.com/Harbour-Enterprises/SuperDoc/issues/963)) ([700dec6](https://github.com/Harbour-Enterprises/SuperDoc/commit/700dec60a36937dc7f9975c5d4bf5e3a0540133e))
+- html import parse styleId attr for round-trip fidelity ([#974](https://github.com/Harbour-Enterprises/SuperDoc/issues/974)) ([929fffa](https://github.com/Harbour-Enterprises/SuperDoc/commit/929fffa511faeff18ddedb63eb039971c430949c))
+- tests ([#975](https://github.com/Harbour-Enterprises/SuperDoc/issues/975)) ([ee25e12](https://github.com/Harbour-Enterprises/SuperDoc/commit/ee25e12276a029ceebc160314983f4a824ab2b5d))
+
+### Features
+
+- transform lists in copied content to match GoogleDocs/Word standard ([#913](https://github.com/Harbour-Enterprises/SuperDoc/issues/913)) ([1c8f971](https://github.com/Harbour-Enterprises/SuperDoc/commit/1c8f971efb68f74f1fe641dc71dab6a2c4f968e8))
+
+# [0.19.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.18.1...v0.19.0) (2025-09-17)
+
+### Bug Fixes
+
+- content-block node ext wrong schema and rendering rules ([#965](https://github.com/Harbour-Enterprises/SuperDoc/issues/965)) ([#966](https://github.com/Harbour-Enterprises/SuperDoc/issues/966)) ([f037f44](https://github.com/Harbour-Enterprises/SuperDoc/commit/f037f44eddfa3fd31cd36f4f8b4dbfb6300437ee))
+- full repo test on npm test or npm run test ([3ede3e0](https://github.com/Harbour-Enterprises/SuperDoc/commit/3ede3e0c079465b94d84367d75d0992b97066a53))
+- move undo/redo from collaboration to history ([#956](https://github.com/Harbour-Enterprises/SuperDoc/issues/956)) ([21299f8](https://github.com/Harbour-Enterprises/SuperDoc/commit/21299f85f6eda142cdf0dccac75867228662a1e2))
+
+### Features
+
+- add document.xml.rels validator ([#881](https://github.com/Harbour-Enterprises/SuperDoc/issues/881)) ([ac7f2a9](https://github.com/Harbour-Enterprises/SuperDoc/commit/ac7f2a9e3d8900a65fb29a848261099e86881315))
+- add v3 translator for w:tr and w:trPr elements (HAR-10480) ([#953](https://github.com/Harbour-Enterprises/SuperDoc/issues/953)) ([ce4eb8d](https://github.com/Harbour-Enterprises/SuperDoc/commit/ce4eb8db7541abe6805941d31493712d7e1bde21))
+- support Blob type in fileSource and document properties ([#967](https://github.com/Harbour-Enterprises/SuperDoc/issues/967)) ([4260c51](https://github.com/Harbour-Enterprises/SuperDoc/commit/4260c510efca8e0fe8791a1ece713c0a0661916a))
+- upgrade w:hyperlink import/export to v3 (HAR-10497) ([#942](https://github.com/Harbour-Enterprises/SuperDoc/issues/942)) ([0f98a8e](https://github.com/Harbour-Enterprises/SuperDoc/commit/0f98a8ead96ebd0ebe4258b5bf900385428b2fd3))
+
+## [0.18.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.18.0...v0.18.1) (2025-09-16)
+
+### Bug Fixes
+
+- content-block node ext wrong schema and rendering rules ([#965](https://github.com/Harbour-Enterprises/SuperDoc/issues/965)) ([64fa2fc](https://github.com/Harbour-Enterprises/SuperDoc/commit/64fa2fc2a1a52d2700c0e820b6384b87e8d3bf35))
+
+# [0.18.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.3...v0.18.0) (2025-09-12)
+
+### Bug Fixes
+
+- allow test:cov on some specific folder only ([#935](https://github.com/Harbour-Enterprises/SuperDoc/issues/935)) ([42d42fb](https://github.com/Harbour-Enterprises/SuperDoc/commit/42d42fb09d52f36518904ea8c5b400e20778ceee))
+- fallback to text for floating objects and show placeholder for emf image ([#916](https://github.com/Harbour-Enterprises/SuperDoc/issues/916)) ([d121cd9](https://github.com/Harbour-Enterprises/SuperDoc/commit/d121cd92608bb41e84d09997792e5512a9ca6faa))
+- filter out invalid inline nodes in root level ([#938](https://github.com/Harbour-Enterprises/SuperDoc/issues/938)) ([#939](https://github.com/Harbour-Enterprises/SuperDoc/issues/939)) ([9e1b911](https://github.com/Harbour-Enterprises/SuperDoc/commit/9e1b911809cd2e713b9ba8a38b88c9558f552ee0))
+- import issue falling back to wrong abstratId ([#930](https://github.com/Harbour-Enterprises/SuperDoc/issues/930)) ([a5b43d0](https://github.com/Harbour-Enterprises/SuperDoc/commit/a5b43d036133217d6f15661f3b1666d621fee049))
+- test ([58ed997](https://github.com/Harbour-Enterprises/SuperDoc/commit/58ed99713d07d6a796a3b5c3b2ee010a0fe29702))
+- unable to generate list definition ([#943](https://github.com/Harbour-Enterprises/SuperDoc/issues/943)) ([#945](https://github.com/Harbour-Enterprises/SuperDoc/issues/945)) ([dea20e6](https://github.com/Harbour-Enterprises/SuperDoc/commit/dea20e697e034f508e0aa67720e3ee50b3148c24))
+
+### Features
+
+- implement unified content processing for insertContent command ([#944](https://github.com/Harbour-Enterprises/SuperDoc/issues/944)) ([a6d0e67](https://github.com/Harbour-Enterprises/SuperDoc/commit/a6d0e6770eaf849d126374ac8433c1165c5cbf68))
+- translator v3 for w:tab node ([#921](https://github.com/Harbour-Enterprises/SuperDoc/issues/921)) ([ae1ba2d](https://github.com/Harbour-Enterprises/SuperDoc/commit/ae1ba2d69392f73fdc370c6bc4cfe39e7f385cad))
+
+## [0.17.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.2...v0.17.3) (2025-09-11)
+
+### Bug Fixes
+
+- unable to generate list definition ([#943](https://github.com/Harbour-Enterprises/SuperDoc/issues/943)) ([a2ccc84](https://github.com/Harbour-Enterprises/SuperDoc/commit/a2ccc847ece06595e38531337093abb1e60f5394))
+
+## [0.17.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.1...v0.17.2) (2025-09-11)
+
+### Bug Fixes
+
+- filter out invalid inline nodes in root level ([#938](https://github.com/Harbour-Enterprises/SuperDoc/issues/938)) ([4d77b35](https://github.com/Harbour-Enterprises/SuperDoc/commit/4d77b3512542e4548156fcee1d2cd7334e9f1a0f))
+
 ## [0.17.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.17.0...v0.17.1) (2025-09-10)
 
 ### Bug Fixes

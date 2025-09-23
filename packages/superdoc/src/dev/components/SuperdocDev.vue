@@ -212,6 +212,33 @@ const onContentError = ({ editor, error, documentId, file }) => {
   console.debug('Content error on', documentId, error);
 };
 
+const exportHTML = async (commentsType) => {
+  console.debug('Exporting HTML', { commentsType });
+
+  // Get HTML content from SuperDoc
+  const htmlArray = superdoc.value.getHTML();
+  const html = htmlArray.join('');
+
+  // Create a Blob from the HTML
+  const blob = new Blob([html], { type: 'text/html' });
+
+  // Create a download link and trigger the download
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${title.value || 'document'}.html`;
+
+  // Trigger the download
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  // Clean up the URL
+  URL.revokeObjectURL(url);
+
+  console.debug('HTML exported successfully');
+};
+
 const exportDocx = async (commentsType) => {
   console.debug('Exporting docx', { commentsType });
   await superdoc.value.export({ commentsType });
@@ -272,6 +299,7 @@ onMounted(async () => {
           </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">
+          <button class="dev-app__header-export-btn" @click="exportHTML()">Export HTML</button>
           <button class="dev-app__header-export-btn" @click="exportDocx()">Export Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('clean')">Export clean Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('external')">Export external Docx</button>

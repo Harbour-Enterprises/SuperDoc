@@ -1,5 +1,6 @@
 // @ts-check
 import { createNumberingValidator } from './numbering/numbering-validator.js';
+import { createRelationshipsValidator } from './relationships/relationships-validator.js';
 
 /**
  * @typedef {Object} XmlValidator
@@ -7,4 +8,5 @@ import { createNumberingValidator } from './numbering/numbering-validator.js';
  */
 export const XmlValidators = {
   numberingValidator: createNumberingValidator,
+  relationshipsValidator: createRelationshipsValidator,
 };

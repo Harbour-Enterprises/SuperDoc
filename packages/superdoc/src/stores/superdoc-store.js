@@ -3,11 +3,13 @@ import { ref, reactive, computed } from 'vue';
 import { useCommentsStore } from './comments-store';
 import { getFileObject } from '@harbour-enterprises/common';
 import { DOCX, PDF } from '@harbour-enterprises/common';
+import { normalizeDocumentEntry } from '@superdoc/core/helpers/file.js';
 import useDocument from '@superdoc/composables/use-document';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 
 export const useSuperdocStore = defineStore('superdoc', () => {
   const currentConfig = ref(null);
+  let exceptionHandler = null;
   const commentsStore = useCommentsStore();
   const documents = ref([]);
   const documentBounds = ref([]);
@@ -47,6 +49,15 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     scrollTop: 0,
     scrollLeft: 0,
   });
+
+  const setExceptionHandler = (handler) => {
+    exceptionHandler = typeof handler === 'function' ? handler : null;
+  };
+
+  const emitException = (payload) => {
+    const handler = exceptionHandler || currentConfig.value?.onException;
+    if (typeof handler === 'function') handler(payload);
+  };
 
   const init = async (config) => {
     reset();
@@ -90,17 +101,49 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     if (!docsToProcess) return [];
 
     for (let doc of docsToProcess) {
+      if (!doc) {
+        emitException({
+          error: new Error('Received empty document entry during initialization.'),
+          stage: 'document-init',
+          document: doc,
+        });
+        console.warn('[superdoc] Skipping empty document entry.');
+        continue;
+      }
+
       try {
         // Ensure the document object has data (ie: if loading from URL)
         let docWithData = await _initializeDocumentData(doc);
+
+        if (!docWithData) {
+          emitException({
+            error: new Error('Document could not be initialized with the provided configuration.'),
+            stage: 'document-init',
+            document: doc,
+          });
+          console.warn('[superdoc] Skipping document due to invalid configuration:', doc);
+          continue;
+        }
 
         // Create composable and append to our documents
         const smartDoc = useDocument(docWithData, currentConfig.value);
         documents.value.push(smartDoc);
       } catch (e) {
+        emitException({ error: e, stage: 'document-init', document: doc });
         console.warn('[superdoc] Error initializing document:', doc, 'with error:', e, 'Skipping document.');
       }
     }
+  };
+
+  /**
+   * Convert a Blob to a File object when a filename is required
+   * @param {Blob} blob The blob to convert
+   * @param {string} name The filename to assign
+   * @param {string} type The mime type
+   * @returns {File} The file object
+   */
+  const _blobToFile = (blob, name, type) => {
+    return new File([blob], name, { type });
   };
 
   /**
@@ -109,6 +152,8 @@ export const useSuperdocStore = defineStore('superdoc', () => {
    * @returns {Promise<Object>} The document object with data
    */
   const _initializeDocumentData = async (doc) => {
+    // Normalize any uploader-specific wrapper to a native File/Blob upfront
+    doc = normalizeDocumentEntry(doc);
     if (currentConfig.value?.html) doc.html = currentConfig.value.html;
 
     // Use docx as default if no type provided
@@ -119,8 +164,38 @@ export const useSuperdocStore = defineStore('superdoc', () => {
       return { ...doc, data: null, url: null };
     }
 
-    // If we already have a File object, return it
-    if (doc.data) return doc;
+    // If we already have data (File/Blob), ensure it has the expected metadata
+    if (doc.data instanceof File) {
+      let fileName = doc.name;
+      const extension = doc.type === DOCX ? '.docx' : doc.type === PDF ? '.pdf' : '.bin';
+      if (!fileName) {
+        fileName = `document${extension}`;
+      } else if (!fileName.includes('.')) {
+        fileName = `${fileName}${extension}`;
+      }
+
+      if (doc.data.name !== fileName) {
+        const fileObject = _blobToFile(doc.data, fileName, doc.data.type || doc.type);
+        return { ...doc, name: fileName, data: fileObject };
+      }
+
+      if (!doc.name) return { ...doc, name: fileName };
+
+      return doc;
+    }
+    // If we have a Blob object, convert it to a File with appropriate name
+    else if (doc.data instanceof Blob) {
+      // Use provided name or generate a default name based on type
+      let fileName = doc.name;
+      if (!fileName) {
+        const extension = doc.type === DOCX ? '.docx' : doc.type === PDF ? '.pdf' : '.bin';
+        fileName = `document${extension}`;
+      }
+      const fileObject = _blobToFile(doc.data, fileName, doc.data.type || doc.type);
+      return { ...doc, data: fileObject };
+    }
+    // If we have any other data object, return it as is (for backward compatibility)
+    else if (doc.data) return doc;
     // If we have a URL, fetch the file and return it
     else if (doc.url && doc.type) {
       if (doc.type.toLowerCase() === 'docx') doc.type = DOCX;
@@ -129,7 +204,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
       return { ...doc, data: fileObject };
     }
     // Invalid configuration
-    throw new Error('Document could not be initialized:', doc);
+    return null;
   };
 
   const areDocumentsReady = computed(() => {
@@ -191,6 +266,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
 
     // Actions
     init,
+    setExceptionHandler,
     reset,
     handlePageReady,
     getDocument,

@@ -12,6 +12,8 @@ export function orderedListSync(editor) {
     key: orderedListSyncPluginKey,
 
     appendTransaction(transactions, oldState, newState) {
+      if (transactions.every((tr) => tr.getMeta('y-sync$'))) return null;
+
       const updateNodeViews = transactions.some((tr) => tr.getMeta('updatedListItemNodeViews'));
       if (updateNodeViews || !hasInitialized) refreshAllListItemNodeViews();
 

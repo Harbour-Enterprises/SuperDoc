@@ -14,7 +14,7 @@ import '@harbour-enterprises/superdoc/style.css';
 
 const props = defineProps({
   initialData: {
-    type: File,
+    type: [File, Blob],
     default: null
   },
   readOnly: {

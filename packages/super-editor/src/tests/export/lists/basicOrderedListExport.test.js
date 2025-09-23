@@ -192,7 +192,7 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     expect(attrs.level).toBe(expectedLevel);
     expect(attrs.indent.left).toBeUndefined();
     expect(attrs.indent.hanging).toBeUndefined();
-    expect(attrs.indent.right).toBe(1);
+    expect(attrs.indent.right).toBeCloseTo(1.2, 1);
 
     const paragraphNode = item1.content[0];
     expect(paragraphNode.type).toBe('paragraph');
@@ -223,6 +223,6 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const indentRight = indentTag?.attributes['w:right'];
     expect(indentLeft).toBeUndefined();
     expect(indentHanging).toBeUndefined();
-    expect(indentRight).toBe(15);
+    expect(indentRight).toBe(18);
   });
 });

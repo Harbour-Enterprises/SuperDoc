@@ -40,4 +40,9 @@ test-results
 *.tgz
 
 !examples/chrome-extension/dist
-dev/
+
+# Coverage reports
+coverage
+coverage/
+**/coverage
+**/coverage/

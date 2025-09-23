@@ -4,6 +4,49 @@ import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 
+/**
+ * Configuration options for Paragraph
+ * @typedef {Object} ParagraphOptions
+ * @category Options
+ * @property {number[]} [headingLevels=[1,2,3,4,5,6]] - Supported heading levels
+ * @property {Object} [htmlAttributes={}] - HTML attributes for paragraph elements
+ */
+
+/**
+ * Attributes for paragraph nodes
+ * @typedef {Object} ParagraphAttributes
+ * @category Attributes
+ * @property {Object} [spacing] - Paragraph spacing configuration
+ * @property {Object} [extraAttrs={}] - Additional HTML attributes
+ * @property {Array} [marksAttrs] - Text formatting marks
+ * @property {Object} [indent] - Indentation settings
+ * @property {Object} [borders] - Paragraph borders
+ * @property {string} [class] - CSS class name
+ * @property {string} [styleId] - Linked style identifier
+ * @property {Object} [justify] - Text justification
+ * @property {Array} [tabStops] - Tab stop positions
+ * @property {string} [sdBlockId] @internal - Internal block tracking ID
+ * @property {string} [paraId] @internal - Paragraph identifier
+ * @property {string} [textId] @internal - Text identifier
+ * @property {string} [rsidR] @internal - Revision save ID
+ * @property {string} [rsidRDefault] @internal - Default revision save ID
+ * @property {string} [rsidP] @internal - Paragraph revision save ID
+ * @property {string} [rsidRPr] @internal - Run properties revision save ID
+ * @property {string} [rsidDel] @internal - Deletion revision save ID
+ * @property {Object} [attributes] @internal - Internal attributes storage
+ * @property {string} [filename] @internal - Associated filename
+ * @property {boolean} [keepLines] @internal - Keep lines together
+ * @property {boolean} [keepNext] @internal - Keep with next paragraph
+ * @property {Object} [paragraphProperties] @internal - Internal paragraph properties
+ * @property {Object} [dropcap] @internal - Drop cap configuration
+ * @property {string} [pageBreakSource] @internal - Page break source
+ */
+
+/**
+ * @module Paragraph
+ * @sidebarTitle Paragraph
+ * @snippetPath /snippets/extensions/paragraph.mdx
+ */
 export const Paragraph = OxmlNode.create({
   name: 'paragraph',
 
@@ -19,12 +62,6 @@ export const Paragraph = OxmlNode.create({
 
   addOptions() {
     return {
-      /**
-       * @typedef {Object} HeadingOptions
-       * @category Options
-       * @property {number[]} [headingLevels=[1,2,3,4,5,6]] - Supported heading levels
-       * @property {Object} [htmlAttributes] - HTML attributes for paragraph elements
-       */
       headingLevels: [1, 2, 3, 4, 5, 6],
       htmlAttributes: {},
     };
@@ -42,6 +79,19 @@ export const Paragraph = OxmlNode.create({
 
       spacing: {
         default: getDefaultSpacing(),
+        parseDOM: (element) => {
+          // Check if this element is within imported content, if so we can assign some different
+          // default spacing which is needed to make the docx look correct
+          if (element && element.closest('[data-superdoc-import]')) {
+            return {
+              lineSpaceAfter: 11,
+              lineSpaceBefore: 0,
+              line: 1.15,
+              lineRule: 'auto',
+            };
+          }
+          return undefined;
+        },
         renderDOM: (attrs) => {
           const { spacing } = attrs;
           if (!spacing) return {};
@@ -52,6 +102,7 @@ export const Paragraph = OxmlNode.create({
           return {};
         },
       },
+
       extraAttrs: {
         default: {},
         parseDOM: (element) => {
@@ -176,12 +227,30 @@ export const Paragraph = OxmlNode.create({
       {
         tag: 'p',
         getAttrs: (node) => {
-          let extra = {};
+          const { styleid, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
+            acc[attr.name] = attr.value;
+            return acc;
+          }, {});
+
+          return {
+            styleId: styleid || null,
+            extraAttrs,
+          };
+        },
+      },
+      {
+        tag: 'div',
+        getAttrs: (node) => {
+          const extra = {};
           Array.from(node.attributes).forEach((attr) => {
             extra[attr.name] = attr.value;
           });
           return { extraAttrs: extra };
         },
+      },
+      {
+        tag: 'blockquote',
+        attrs: { styleId: 'BlockQuote' },
       },
       ...this.options.headingLevels.map((level) => ({
         tag: `h${level}`,

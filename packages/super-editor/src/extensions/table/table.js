@@ -1,63 +1,135 @@
 // @ts-check
-
 /**
- * Table configuration options
- * @typedef {Object} TableConfig
- * @property {number} [rows=3] - Number of rows to create
- * @property {number} [cols=3] - Number of columns to create
- * @property {boolean} [withHeaderRow=false] - Create first row as header row
+ * Theme color options
+ * @typedef { "dark1" | "light1" | "dark2" | "light2" | "accent1" | "accent2" | "accent3" | "accent4" | "accent5" | "accent6" | "hyperlink" | "followedHyperlink" | "none" | "background1" | "text1" | "background2" | "text2" } ThemeColor
  */
 
 /**
- * Table indentation configuration
- * @typedef {Object} TableIndent
- * @property {number} width - Indent width in pixels
- * @property {string} [type='dxa'] - Indent type
+ * Shading pattern options
+ * @typedef { "nil" | "clear" | "solid" | "horzStripe" | "vertStripe" | "reverseDiagStripe" | "diagStripe" | "horzCross" | "diagCross" | "thinHorzStripe" | "thinVertStripe" | "thinReverseDiagStripe" | "thinDiagStripe" | "thinHorzCross" | "thinDiagCross" } ShadingPattern
  */
 
 /**
- * Table attributes
- * @typedef {Object} TableAttributes
- * @property {TableIndent} [tableIndent] - Table indentation
- * @property {import("./tableHelpers/createTableBorders.js").TableBorders} [borders] - Table border configuration
- * @property {string} [borderCollapse='collapse'] - CSS border-collapse value
+ * Shading properties
+ * @typedef {Object} ShadingProperties
+ * @property {string|"auto"} [color] - Shading color (hex without # or "auto" for automatic)
+ * @property {string|"auto"} [fill] - Shading fill color (hex without # or "auto" for automatic)
+ * @property {ThemeColor} [themeColor] - Theme color name
+ * @property {ThemeColor} [themeFill] - Theme fill name
+ * @property {string} [themeFillShade] - Theme fill shade (0-255 in hex format without #)
+ * @property {string} [themeFillTint] - Theme fill tint (0-255 in hex format without #)
+ * @property {string} [themeShade] - Theme shade (0-255 in hex format without #)
+ * @property {string} [themeTint] - Theme tint (0-255 in hex format without #)
+ * @property {ShadingPattern} [val] - Shading pattern
+ * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 365
+ */
+
+/**
+ * Table width options
+ * @typedef {Object} TableMeasurement
+ * @property {number} value - Width value in twips
+ * @property {"dxa" | "pct" | "auto"} [type='auto'] - Table width type (dxa=twips, pct=percentage, auto=automatic)
+ */
+
+/**
+ * Table look options
+ * @typedef {Object} TableLook
+ * @property {boolean} [firstColumn] - Specifies that the first column conditional formatting should be applied
+ * @property {boolean} [firstRow] - Specifies that the first row conditional formatting should be applied
+ * @property {boolean} [lastColumn] - Specifies that the last column conditional formatting should be applied
+ * @property {boolean} [lastRow] - Specifies that the last row conditional formatting should be applied
+ * @property {boolean} [noHBand] - Specifies that no horizontal banding conditional formatting should be applied
+ * @property {boolean} [noVBand] - Specifies that no vertical banding conditional formatting should be applied
+ */
+
+/**
+ * Floating table properties
+ * @typedef {Object} FloatingTableProperties
+ * @property {number} [leftFromText] - Specifies the minimum distance in twips which shall be maintained between the current floating table and the edge of text in the paragraph which is to the left of this floating table.
+ * @property {number} [rightFromText] - Specifies the minimum distance in twips which shall be maintained between the current floating table and the edge of text in the paragraph which is to the right of this floating table.
+ * @property {number} [topFromText] - Specifies the minimum distance in twips which shall be maintained between the current floating table and the bottom edge of text in the paragraph which is above this floating table.
+ * @property {number} [bottomFromText] - Specifies the minimum distance in twips which shall be maintained between the current floating table and the top edge of text in the paragraph which is below this floating table.
+ * @property {number} [tblpX] - Specifies and absolute horizontal position for the floating table. The position is measured from the horizontal anchor point (horzAnchor) in twips.
+ * @property {number} [tblpY] - Specifies and absolute vertical position for the floating table. The position is measured from the vertical anchor point (vertAnchor) in twips.
+ * @property {"margin" | "page" | "text"} [horzAnchor] - Horizontal anchor point for tblpX
+ * @property {"margin" | "page" | "text"} [vertAnchor] - Vertical anchor point for tblpY
+ * @property {"left" | "center" | "right" | "inside" | "outside"} [tblpXSpec] - Specifies a relative horizontal position for the floating table. Supercedes tblpX if both are specified.
+ * @property {"inline" | "top" | "center" | "bottom" | "inside" | "outside"} [tblpYSpec] - Specifies a relative vertical position for the floating table. Supercedes tblpY if both are specified.
+ * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 450-451
+ */
+
+/**
+ * Table border specification
+ * @typedef {Object} TableBorderSpec
+ * @property {string} [val] - Border style (e.g., 'single', 'double', 'dashed', etc.)
+ * @property {string} [color] - Border color (hex without #, e.g., 'FF0000' for red)
+ * @property {ThemeColor} [themeColor] - Theme color name
+ * @property {string} [themeTint] - Theme tint (0-255 in hex format without #)
+ * @property {string} [themeShade] - Theme shade (0-255 in hex format without #)
+ * @property {number} [size] - Border size in eighths of a point (e.g., 8 = 1pt, 16 = 2pt)
+ * @property {number} [space] - Space in points between border and text
+ * @property {boolean} [shadow] - Whether the border has a shadow
+ * @property {boolean} [frame] - Whether the border is a frame
+ */
+
+/**
+ * Table borders properties
+ * @typedef {Object} TableBorders
+ * @property {TableBorderSpec} [bottom] - Bottom border specification
+ * @property {TableBorderSpec} [end] - End (right in LTR, left in RTL) border specification
+ * @property {TableBorderSpec} [insideH] - Inside horizontal border specification
+ * @property {TableBorderSpec} [insideV] - Inside vertical border specification
+ * @property {TableBorderSpec} [left] - Left border specification
+ * @property {TableBorderSpec} [right] - Right border specification
+ * @property {TableBorderSpec} [start] - Start (left in LTR, right in RTL) border specification
+ * @property {TableBorderSpec} [top] - Top border specification
+ */
+
+/**
+ * Table cell margin properties
+ * @typedef {Object} TableCellMargins
+ * @property {TableMeasurement} [top] - Top cell margin
+ * @property {TableMeasurement} [left] - Left cell margin
+ * @property {TableMeasurement} [bottom] - Bottom cell margin
+ * @property {TableMeasurement} [start] - Start cell margin (left in LTR, right in RTL)
+ * @property {TableMeasurement} [end] - End cell margin (right in LTR, left in RTL)
+ * @property {TableMeasurement} [right] - Right cell margin
+ * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 425
+ */
+
+/**
+ * Table properties
+ * @typedef {Object} TableProperties
+ * @property {boolean} [rightToLeft] - Specifies that the cells with this table shall be visually represented in a right to left direction
+ * @property {"center" | "end" | "left" | "right" | "start"} [justification] - The alignment of the set of rows which are part of the current table.
+ * @property {ShadingProperties} [shading] - Shading properties for the table
+ * @property {string} [caption] - Caption text for the table
+ * @property {string} [description] - Description text for the table
+ * @property {TableMeasurement} [tableCellSpacing] - Cell spacing
+ * @property {TableMeasurement} [tableIndent] - Table indentation
+ * @property {"fixed" | "autofit"} [tableLayout] - Table layout algorithm
+ * @property {TableLook} [tableLook] - Various boolean flags that affect the rendering of the table
+ * @property {"never" | "overlap"} [overlap] - Specifies whether the current table should allow other floating tables to overlap its extents when the tables are displayed in a document
  * @property {string} [tableStyleId] - Reference to table style ID
- * @property {string} [tableLayout] - Table layout algorithm
- * @property {number} [tableCellSpacing] - Cell spacing in pixels
+ * @property {number} [tableStyleColBandSize] - Number of columns for which the table style is applied
+ * @property {number} [tableStyleRowBandSize] - Number of rows for which the table style is applied
+ * @property {TableMeasurement} [tableWidth] - Table width
+ * @property {FloatingTableProperties} [floatingTableProperties] - Floating table properties
+ * @property {TableBorders} [borders] - Table border configuration
+ * @proerty {TableCellMargins} [cellMargins] - Cell margin configuration
+ * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
  */
 
 /**
- * Cell selection position
- * @typedef {Object} CellSelectionPosition
- * @property {number} anchorCell - Starting cell position
- * @property {number} headCell - Ending cell position
+ * Column width definition
+ * @typedef {Object} ColWidth
+ * @property {number} col - Column width in twips
  */
 
 /**
- * Column group information
- * @typedef {Object} ColGroupInfo
- * @property {Array} [colgroup] - Column group DOM structure
- * @property {string} [tableWidth] - Fixed table width or empty string
- * @property {string} [tableMinWidth] - Minimum table width or empty string
- * @property {number[]} [colgroupValues] - Array of column width values
- */
-
-/**
- * Position resolution result
- * @private
- * @typedef {Object} CellPosition
- * @property {Object} $pos - Resolved position
- * @property {number} pos - Absolute position
- * @property {number} depth - Depth in document tree
- */
-
-/**
- * Current cell information
- * @private
- * @typedef {Object} CurrentCellInfo
- * @property {Object} rect - Selected rectangle from ProseMirror
- * @property {Object} cell - Current cell node
- * @property {Object} attrs - Cell attributes without span properties
+ * Table grid definition
+ * @typedef {Object} TableGrid
+ * @property {ColWidth[]} [colWidths] - Array of column widths in twips
  */
 
 import { Node, Attribute } from '@core/index.js';
@@ -100,6 +172,62 @@ import { cellAround } from './tableHelpers/cellAround.js';
 import { cellWrapping } from './tableHelpers/cellWrapping.js';
 
 /**
+ * Table configuration options
+ * @typedef {Object} TableConfig
+ * @property {number} [rows=3] - Number of rows to create
+ * @property {number} [cols=3] - Number of columns to create
+ * @property {boolean} [withHeaderRow=false] - Create first row as header row
+ */
+
+/**
+ * Table indentation configuration
+ * @typedef {Object} TableIndent
+ * @property {number} width - Indent width in pixels
+ * @property {string} [type='dxa'] - Indent type
+ */
+
+/**
+ * Cell selection position
+ * @typedef {Object} CellSelectionPosition
+ * @property {number} anchorCell - Starting cell position
+ * @property {number} headCell - Ending cell position
+ */
+
+/**
+ * Configuration options for Table
+ * @typedef {Object} TableOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={'aria-label': 'Table node'}] - Default HTML attributes for all tables
+ * @property {boolean} [resizable=true] - Enable column resizing functionality
+ * @property {number} [handleWidth=5] - Width of resize handles in pixels
+ * @property {number} [cellMinWidth=10] - Minimum cell width constraint in pixels
+ * @property {boolean} [lastColumnResizable=true] - Allow resizing of the last column
+ * @property {boolean} [allowTableNodeSelection=false] - Enable selecting the entire table node
+ */
+
+/**
+ * Attributes for table nodes
+ * @typedef {Object} TableAttributes
+ * @category Attributes
+ * @property {TableIndent} [tableIndent] - Table indentation configuration
+ * @property {import("./tableHelpers/createTableBorders.js").TableBorders} [borders] - Border styling for this table
+ * @property {string} [borderCollapse='collapse'] - CSS border-collapse property
+ * @property {string} [justification] - Table alignment ('left', 'center', 'right')
+ * @property {number} [tableCellSpacing] - Cell spacing in pixels for this table
+ * @property {string} [sdBlockId] @internal - Internal block tracking ID
+ * @property {string} [tableStyleId] @internal - Internal reference to table style
+ * @property {string} [tableLayout] @internal - CSS table-layout property (advanced usage)
+ */
+
+/**
+ * Current cell information
+ * @typedef {Object} CurrentCellInfo
+ * @property {Object} rect - Selected rectangle information
+ * @property {import('prosemirror-model').Node} cell - The cell node
+ * @property {Object} attrs - Cell attributes
+ */
+
+/**
  * @module Table
  * @sidebarTitle Table
  * @snippetPath /snippets/extensions/table.mdx
@@ -119,17 +247,6 @@ export const Table = Node.create({
 
   tableRole: 'table',
 
-  /**
-   * Table extension options
-   * @category Options
-   * @typedef {Object} TableOptions
-   * @property {Object} [htmlAttributes={'aria-label': 'Table node'}] - Default HTML attributes for all tables
-   * @property {boolean} [resizable=true] - Enable column resizing functionality
-   * @property {number} [handleWidth=5] - Width of resize handles in pixels
-   * @property {number} [cellMinWidth=10] - Minimum cell width constraint in pixels
-   * @property {boolean} [lastColumnResizable=true] - Allow resizing of the last column
-   * @property {boolean} [allowTableNodeSelection=false] - Enable selecting the entire table node
-   */
   addOptions() {
     return {
       htmlAttributes: {
@@ -262,6 +379,26 @@ export const Table = Node.create({
         default: null,
         rendered: false,
       },
+
+      /**
+       * @category Attribute
+       * @param {TableProperties} [tableProperties] - Properties for the table.
+       * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
+       */
+      tableProperties: {
+        default: null,
+        rendered: false,
+      },
+
+      /**
+       * @category Attribute
+       * @param {TableGrid} [grid] - Grid definition for the table
+       * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 432
+       */
+      grid: {
+        default: null,
+        rendered: false,
+      },
     };
   },
 
@@ -287,14 +424,9 @@ export const Table = Node.create({
        * Insert a new table into the document
        * @category Command
        * @param {TableConfig} [config] - Table configuration options
-       * @returns {Function} Command
        * @example
-       * // Using default values
-       * insertTable() // Creates 3x3 table without header
-       *
-       * // Using custom values
-       * insertTable({ rows: 3, cols: 3, withHeaderRow: true })
-       *
+       * editor.commands.insertTable()
+       * editor.commands.insertTable({ rows: 3, cols: 3, withHeaderRow: true })
        */
       insertTable:
         ({ rows = 3, cols = 3, withHeaderRow = false } = {}) =>
@@ -314,9 +446,8 @@ export const Table = Node.create({
       /**
        * Delete the entire table containing the cursor
        * @category Command
-       * @returns {Function} Command
        * @example
-       * deleteTable()
+       * editor.commands.deleteTable()
        */
       deleteTable:
         () =>
@@ -327,9 +458,8 @@ export const Table = Node.create({
       /**
        * Add a column before the current column
        * @category Command
-       * @returns {Function} Command
        * @example
-       * addColumnBefore()
+       * editor.commands.addColumnBefore()
        * @note Preserves cell attributes from current column
        */
       addColumnBefore:
@@ -812,10 +942,9 @@ export const Table = Node.create({
        * Set background color for selected cells
        * @category Command
        * @param {string} value - Color value (hex with or without #)
-       * @returns {Function} Command
        * @example
-       * setCellBackground('#ff0000')
-       * setCellBackground('ff0000')
+       * editor.commands.setCellBackground('#ff0000')
+       * editor.commands.setCellBackground('ff0000')
        */
       setCellBackground:
         (value) =>

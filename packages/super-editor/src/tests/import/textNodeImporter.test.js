@@ -1,6 +1,6 @@
 import { SuperConverter } from '@converter/SuperConverter.js';
 import { handleTextNode } from '@converter/v2/importer/textNodeImporter.js';
-import { createNodeListHandlerMock } from './testUtils.test.js';
+import { createNodeListHandlerMock } from './testUtils.js';
 
 describe('TextNodeImporter', () => {
   it('parses only text nodes', () => {

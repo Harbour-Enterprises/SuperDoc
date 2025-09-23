@@ -1,5 +1,6 @@
 // @ts-check
 import { Node, Attribute } from '@core/index.js';
+
 /**
  * Size configuration for content blocks
  * @typedef {Object} ContentBlockSize
@@ -15,6 +16,30 @@ import { Node, Attribute } from '@core/index.js';
  * @property {boolean} [horizontalRule] - Whether this is a horizontal rule
  * @property {ContentBlockSize} [size] - Size and position configuration
  * @property {string} [background] - Background color (hex, rgb, or named color)
+ */
+
+/**
+ * Configuration options for ContentBlock
+ * @typedef {Object} ContentBlockOptions
+ * @category Options
+ * @property {Object} [htmlAttributes] HTML attributes for the block element
+ */
+
+/**
+ * Attributes for content blocks
+ * @typedef {Object} ContentBlockAttributes
+ * @category Attributes
+ * @property {boolean} [horizontalRule=false] Whether this block is a horizontal rule
+ * @property {ContentBlockSize} [size] Size and position of the content block
+ * @property {string} [background] Background color for the block
+ * @property {Object} [drawingContent] @internal Internal drawing data
+ * @property {Object} [attributes] @internal Additional internal attributes
+ * @example
+ * // Insert a custom content block
+ * editor.commands.insertContentBlock({
+ *   size: { width: '100%', height: 2 },
+ *   background: '#e5e7eb'
+ * })
  */
 
 /**
@@ -35,11 +60,6 @@ export const ContentBlock = Node.create({
 
   addOptions() {
     return {
-      /**
-       * @typedef {Object} ContentBlockOptions
-       * @category Options
-       * @property {Object} [htmlAttributes] - HTML attributes for the block element
-       */
       htmlAttributes: {
         contenteditable: false,
       },
@@ -48,10 +68,6 @@ export const ContentBlock = Node.create({
 
   addAttributes() {
     return {
-      /**
-       * @category Attribute
-       * @param {boolean} [horizontalRule=false] - Whether this block is a horizontal rule
-       */
       horizontalRule: {
         default: false,
         renderDOM: ({ horizontalRule }) => {
@@ -60,10 +76,6 @@ export const ContentBlock = Node.create({
         },
       },
 
-      /**
-       * @category Attribute
-       * @param {ContentBlockSize} [size] - Size and position of the content block
-       */
       size: {
         default: null,
         renderDOM: ({ size }) => {
@@ -79,10 +91,6 @@ export const ContentBlock = Node.create({
         },
       },
 
-      /**
-       * @category Attribute
-       * @param {string} [background] - Background color for the block
-       */
       background: {
         default: null,
         renderDOM: (attrs) => {
@@ -93,20 +101,10 @@ export const ContentBlock = Node.create({
         },
       },
 
-      /**
-       * @private
-       * @category Attribute
-       * @param {Object} [drawingContent] - Internal drawing data
-       */
       drawingContent: {
         rendered: false,
       },
 
-      /**
-       * @private
-       * @category Attribute
-       * @param {Object} [attributes] - Additional internal attributes
-       */
       attributes: {
         rendered: false,
       },
@@ -122,11 +120,7 @@ export const ContentBlock = Node.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    return [
-      'div',
-      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }),
-      0,
-    ];
+    return ['div', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name })];
   },
 
   addCommands() {
@@ -134,9 +128,8 @@ export const ContentBlock = Node.create({
       /**
        * Insert a horizontal rule
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * insertHorizontalRule()
+       * editor.commands.insertHorizontalRule()
        * @note Creates a visual separator between content sections
        */
       insertHorizontalRule:
@@ -156,13 +149,13 @@ export const ContentBlock = Node.create({
        * Insert a content block
        * @category Command
        * @param {ContentBlockConfig} config - Block configuration
-       * @returns {Function} Command function
        * @example
        * // Insert a spacer block
-       * insertContentBlock({ size: { height: 20 } })
+       * editor.commands.insertContentBlock({ size: { height: 20 } })
        *
+       * @example
        * // Insert a colored divider
-       * insertContentBlock({
+       * editor.commands.insertContentBlock({
        *   size: { width: '50%', height: 3 },
        *   background: '#3b82f6'
        * })

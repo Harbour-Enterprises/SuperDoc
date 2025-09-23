@@ -4,6 +4,25 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { ReplaceStep, ReplaceAroundStep, StepMap } from 'prosemirror-transform';
 import { DOMSerializer } from 'prosemirror-model';
 
+/**
+ * Configuration options for TabNode
+ * @typedef {Object} TabNodeOptions
+ * @category Options
+ * @property {Object} [htmlAttributes] - HTML attributes for tab elements
+ */
+
+/**
+ * Attributes for tab nodes
+ * @typedef {Object} TabNodeAttributes
+ * @category Attributes
+ * @property {number} [tabSize] - Width of the tab in pixels
+ */
+
+/**
+ * @module TabNode
+ * @sidebarTitle Tab
+ * @snippetPath /snippets/extensions/tab.mdx
+ */
 export const TabNode = Node.create({
   name: 'tab',
   group: 'inline',

@@ -1,93 +1,17 @@
 #!/usr/bin/env node
 /*
- * Runs Vitest coverage for super-editor, allowing repo-root paths.
+ * Runs Vitest coverage across the whole monorepo via Vitest workspace.
  * Usage: npm run test:cov -- [path/glob or flags]
+ *
+ * Notes:
+ * - Aggregates coverage for both packages: super-editor and superdoc.
+ * - Accepts any Vitest CLI flags and test path globs relative to repo root.
  */
 import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
 const repoRoot = process.cwd();
-const superEditorRoot = path.resolve(repoRoot, 'packages/super-editor');
-
-// Normalize backslashes to forward slashes for globs/posix joins
-function normalizePath(p) {
-  return p.replaceAll('\\', '/');
-}
-
-// Normalize path args to be relative to super-editor root when applicable
-function normalizeArg(arg) {
-  if (!arg || arg.startsWith('-')) return arg; // flags
-
-  // If the arg explicitly includes the super-editor workspace path, strip it
-  const marker = `packages${path.sep}super-editor${path.sep}`;
-  const idx = arg.indexOf(marker);
-  if (idx !== -1) {
-    return arg.slice(idx + marker.length);
-  }
-
-  // Try to resolve to an absolute path and see if it's inside super-editor
-  try {
-    const abs = path.isAbsolute(arg) ? arg : path.resolve(repoRoot, arg);
-    const absReal = fs.existsSync(abs) ? fs.realpathSync(abs) : abs;
-    if (absReal.startsWith(superEditorRoot + path.sep)) {
-      return path.relative(superEditorRoot, absReal) || '.';
-    }
-  } catch (_) {
-    // fall through and return as-is
-  }
-
-  return arg; // leave globs/other paths as-is
-}
-
-const rawArgs = process.argv.slice(2);
-const userArgs = rawArgs.map(normalizeArg);
-
-// Detects if the user has provided a coverage include argument.
-// Matches any of the following forms:
-// - --coverage.include=foo,bar
-// - --coverage= ... (user supplies a full coverage config, so don't inject includes)
-// - --coverage.<anything-with-include>= ... (e.g., --coverage.reporter.include=...)
-function isCoverageIncludeArg(arg) {
-  return (
-    arg.startsWith('--coverage.include=') ||
-    arg.startsWith('--coverage=') ||
-    (arg.startsWith('--coverage.') && arg.includes('include') && arg.includes('='))
-  );
-}
-
-// Derive coverage include globs from path-like args unless user already set one
-const hasUserCoverageInclude = rawArgs.some(isCoverageIncludeArg);
-const pathLike = userArgs.filter((a) => a && !a.startsWith('-'));
-let coverageIncludeArg = [];
-if (!hasUserCoverageInclude && pathLike.length > 0) {
-  const patterns = [];
-  for (const p of pathLike) {
-    const abs = path.resolve(superEditorRoot, p);
-    if (fs.existsSync(abs)) {
-      try {
-        const stat = fs.statSync(abs);
-        if (stat.isDirectory()) {
-          patterns.push(path.posix.join(normalizePath(p), '**', '*'));
-        } else {
-          patterns.push(normalizePath(p));
-        }
-      } catch (_) {
-        patterns.push(normalizePath(p));
-      }
-    } else {
-      // treat as glob relative to root
-      patterns.push(normalizePath(p));
-    }
-  }
-  if (patterns.length) {
-    coverageIncludeArg = [
-      `--coverage.include=${patterns.join(',')}`,
-      // Provide some sane defaults to avoid noisy reports
-      `--coverage.exclude=dist/**,**/*.d.ts,**/*.test.*,**/*.spec.*,vite.config.*`
-    ];
-  }
-}
 
 const vitestBin = path.resolve(
   repoRoot,
@@ -96,14 +20,31 @@ const vitestBin = path.resolve(
   process.platform === 'win32' ? 'vitest.cmd' : 'vitest'
 );
 
-const vitestArgs = [
-  'run',
-  '--coverage',
-  '--root',
-  path.relative(repoRoot, superEditorRoot),
-  ...coverageIncludeArg,
-  ...userArgs,
+// Pass through any user-provided arguments unchanged
+const userArgs = process.argv.slice(2);
+
+// Default coverage opts suitable for the whole monorepo
+const coverageExcludePatterns = [
+  '**/dist/**',
+  '**/examples/**',
+  '**/*.d.ts',
+  '**/*.test.*',
+  '**/*.spec.*',
+  '**/vite.config.*',
 ];
+
+const defaultCoverageArgs = [
+  '--coverage',
+  '--coverage.provider=v8',
+  '--coverage.reporter=text',
+  '--coverage.reporter=lcov',
+  '--coverage.reporter=html',
+  '--coverage.reporter=json-summary',
+  '--coverage.reportsDirectory=coverage',
+  ...coverageExcludePatterns.map((pattern) => `--coverage.exclude=${pattern}`),
+];
+
+const vitestArgs = ['run', ...defaultCoverageArgs, ...userArgs];
 
 const child = spawn(vitestBin, vitestArgs, {
   stdio: 'inherit',
@@ -111,5 +52,99 @@ const child = spawn(vitestBin, vitestArgs, {
 });
 
 child.on('close', (code) => {
+  try {
+    if (code === 0) {
+      const summaryPath = path.join(repoRoot, 'coverage', 'coverage-summary.json');
+      if (fs.existsSync(summaryPath)) {
+        const raw = fs.readFileSync(summaryPath, 'utf8');
+        const data = JSON.parse(raw);
+
+        const normalize = (p) => p.replaceAll('\\\\', '/');
+        const editorRootAbs = normalize(path.join(repoRoot, 'packages', 'super-editor')) + '/';
+        const superdocRootAbs = normalize(path.join(repoRoot, 'packages', 'superdoc')) + '/';
+
+        function getTotals(obj) {
+          const s = obj.statements || { total: 0, covered: 0 };
+          const f = obj.functions || { total: 0, covered: 0 };
+          const l = obj.lines || { total: 0, covered: 0 };
+          return {
+            statements: { total: s.total || 0, covered: s.covered || 0 },
+            functions: { total: f.total || 0, covered: f.covered || 0 },
+            lines: { total: l.total || 0, covered: l.covered || 0 },
+          };
+        }
+
+        function pct(covered, total) {
+          if (!total || total === 0) return 0;
+          return (covered / total) * 100;
+        }
+
+        function aggForPackage({ absPrefix, relSegment, relPrefix }) {
+          const preAbs = normalize(absPrefix);
+          const seg = normalize(relSegment);
+          const preRel = normalize(relPrefix);
+          let sTot = 0, sCov = 0;
+          let fTot = 0, fCov = 0;
+          let lTot = 0, lCov = 0;
+          for (const [file, obj] of Object.entries(data)) {
+            if (file === 'total') continue;
+            const fp = normalize(file);
+            const isMatch = (
+              fp.startsWith(preAbs) ||
+              fp.includes(seg) ||
+              fp.startsWith(preRel)
+            );
+            if (!isMatch) continue;
+            const t = getTotals(obj);
+            sTot += t.statements.total; sCov += t.statements.covered;
+            fTot += t.functions.total;  fCov += t.functions.covered;
+            lTot += t.lines.total;      lCov += t.lines.covered;
+          }
+          return {
+            statements: pct(sCov, sTot),
+            functions: pct(fCov, fTot),
+            lines: pct(lCov, lTot),
+          };
+        }
+
+        const globalTotals = (() => {
+          const t = getTotals(data.total || {});
+          return {
+            statements: pct(t.statements.covered, t.statements.total),
+            functions: pct(t.functions.covered, t.functions.total),
+            lines: pct(t.lines.covered, t.lines.total),
+          };
+        })();
+
+        const superEditor = aggForPackage({
+          absPrefix: editorRootAbs,
+          relSegment: '/packages/super-editor/',
+          relPrefix: 'packages/super-editor/',
+        });
+        const superDoc = aggForPackage({
+          absPrefix: superdocRootAbs,
+          relSegment: '/packages/superdoc/',
+          relPrefix: 'packages/superdoc/',
+        });
+
+        const fmt = (n) => `${n.toFixed(1)} %`;
+
+        console.log('\nGlobal repo test coverage:');
+        console.log(`📄 Statements: ${fmt(globalTotals.statements)}`);
+        console.log(`🔧 Functions: ${fmt(globalTotals.functions)}`);
+        console.log(`📏 Lines: ${fmt(globalTotals.lines)}`);
+
+        console.log('\nsuper-editor package:');
+        console.log(`▌📄 Statements: ${fmt(superEditor.statements)}`);
+        console.log(`▌🔧 Functions: ${fmt(superEditor.functions)}`);
+        console.log(`▌📏 Lines: ${fmt(superEditor.lines)}`);
+
+        console.log('\nsuperdoc package:');
+        console.log(`▌📄 Statements: ${fmt(superDoc.statements)}`);
+        console.log(`▌🔧 Functions: ${fmt(superDoc.functions)}`);
+        console.log(`▌📏 Lines: ${fmt(superDoc.lines)}`);
+      }
+    }
+  } catch {}
   process.exit(code);
 });
