@@ -28,13 +28,24 @@ const isCustomMarkBookmark = (bookmarkStartNode, editor) => {
     return false;
   }
 
+  const rawBookmarkName = bookmarkStartNode.attributes['w:name'];
+  if (!rawBookmarkName || typeof rawBookmarkName !== 'string') {
+    return false;
+  }
+
+  const [bookmarkName, ...bookmarkPayloadParts] = rawBookmarkName.split(';');
+  if (!bookmarkName) {
+    return false;
+  }
+
   const customMarks = editor.extensionService.extensions.filter((extension) => extension.isExternal === true);
-  if (!customMarks.length) return false;
+  const matchesCustomMarkName = customMarks.some((mark) => mark.name === bookmarkName);
+  if (!matchesCustomMarkName) {
+    return false;
+  }
 
-  const bookmarkName = bookmarkStartNode.attributes['w:name']?.split(';')[0];
-  if (!bookmarkName) return false;
-
-  return customMarks.some((mark) => mark.name === bookmarkName);
+  // Custom mark bookmarks encode mark attributes in the payload portion of the name (e.g. key=value).
+  return bookmarkPayloadParts.some((part) => part && part.includes('='));
 };
 
 /**

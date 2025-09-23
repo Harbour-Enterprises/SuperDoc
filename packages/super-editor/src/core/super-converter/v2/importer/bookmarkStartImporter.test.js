@@ -96,4 +96,33 @@ describe('handleBookmarkStartNode', () => {
       ],
     });
   });
+
+  it('treats bookmarks without custom mark payload as regular bookmarks even if name matches extension', () => {
+    const params = baseParams();
+    const customMark = { name: 'highlightRange', isExternal: true };
+    params.editor.extensionService.extensions = [customMark];
+
+    const node = {
+      name: 'w:bookmarkStart',
+      attributes: {
+        'w:id': '10',
+        'w:name': 'highlightRange',
+      },
+    };
+
+    const result = handleBookmarkStartNode({ ...params, nodes: [node] });
+
+    expect(result).toEqual({
+      nodes: [
+        {
+          type: 'bookmarkStart',
+          attrs: {
+            id: '10',
+            name: 'highlightRange',
+          },
+        },
+      ],
+      consumed: 1,
+    });
+  });
 });
