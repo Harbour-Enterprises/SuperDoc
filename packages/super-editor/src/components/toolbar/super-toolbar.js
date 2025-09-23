@@ -5,7 +5,12 @@ import { makeDefaultItems } from './defaultItems';
 import { getActiveFormatting } from '@core/helpers/getActiveFormatting.js';
 import { vClickOutside } from '@harbour-enterprises/common';
 import Toolbar from './Toolbar.vue';
-import { startImageUpload, getFileOpener } from '../../extensions/image/imageHelpers/index.js';
+import {
+  checkAndProcessImage,
+  replaceSelectionWithImagePlaceholder,
+  uploadAndInsertImage,
+  getFileOpener,
+} from '../../extensions/image/imageHelpers/index.js';
 import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { toolbarTexts } from './toolbarTexts.js';
@@ -374,10 +379,29 @@ export class SuperToolbar extends EventEmitter {
         return;
       }
 
-      startImageUpload({
+      const { size, file } = await checkAndProcessImage({
+        file: result.file,
+        getMaxContentSize: () => this.activeEditor.getMaxContentSize(),
+      });
+
+      if (!file) {
+        return;
+      }
+
+      const id = {};
+
+      replaceSelectionWithImagePlaceholder({
+        view: this.activeEditor.view,
+        editorOptions: this.activeEditor.options,
+        id,
+      });
+
+      await uploadAndInsertImage({
         editor: this.activeEditor,
         view: this.activeEditor.view,
-        file: result.file,
+        file,
+        size,
+        id,
       });
     },
 

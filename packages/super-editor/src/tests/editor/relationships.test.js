@@ -2,8 +2,11 @@ import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpe
 import { TextSelection } from 'prosemirror-state';
 import { expect } from 'vitest';
 import { getDocumentRelationshipElements } from '@core/super-converter/docx-helpers/document-rels.js';
-import { uploadImage } from '@extensions/image/imageHelpers/startImageUpload.js';
-import { handleImageUpload as handleImageUploadDefault } from '@extensions/image/imageHelpers/handleImageUpload.js';
+import {
+  uploadAndInsertImage,
+  replaceSelectionWithImagePlaceholder,
+} from '@extensions/image/imageHelpers/startImageUpload.js';
+import { findPlaceholder } from '@extensions/image/imageHelpers/imageRegistrationPlugin.js';
 import { imageBase64 } from './data/imageBase64.js';
 
 describe('Relationships tests', () => {
@@ -39,12 +42,20 @@ describe('Relationships tests', () => {
     const blob = await fetch(imageBase64).then((res) => res.blob());
     const file = new File([blob], 'image.png', { type: 'image/png' });
 
-    await uploadImage({
+    const id = {};
+
+    replaceSelectionWithImagePlaceholder({
+      view: editor.view,
+      editorOptions: editor.options,
+      id,
+    });
+
+    await uploadAndInsertImage({
       editor,
       view: editor.view,
       file,
       size: { width: 100, height: 100 },
-      uploadHandler: handleImageUploadDefault,
+      id,
     });
 
     const imageNode = editor.state.doc.firstChild.firstChild;
@@ -57,5 +68,45 @@ describe('Relationships tests', () => {
 
     expect(found).toBeTruthy();
     expect(found.attributes.Target).toBe('media/image.png');
+  });
+
+  it('removes the placeholder if image upload fails', async () => {
+    const blob = await fetch(imageBase64).then((res) => res.blob());
+    const file = new File([blob], 'failing.png', { type: 'image/png' });
+
+    const id = {};
+
+    replaceSelectionWithImagePlaceholder({
+      view: editor.view,
+      editorOptions: editor.options,
+      id,
+    });
+
+    const originalHandler = editor.options.handleImageUpload;
+    const failingUpload = vi.fn().mockRejectedValue(new Error('upload failed'));
+    editor.options.handleImageUpload = failingUpload;
+
+    await expect(
+      uploadAndInsertImage({
+        editor,
+        view: editor.view,
+        file,
+        size: { width: 100, height: 100 },
+        id,
+      }),
+    ).resolves.toBeUndefined();
+
+    editor.options.handleImageUpload = originalHandler;
+
+    expect(failingUpload).toHaveBeenCalledTimes(1);
+    expect(findPlaceholder(editor.view.state, id)).toBeNull();
+
+    let imageCount = 0;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'image') {
+        imageCount += 1;
+      }
+    });
+    expect(imageCount).toBe(0);
   });
 });
