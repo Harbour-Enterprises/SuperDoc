@@ -1,7 +1,9 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll } from 'vitest';
 import { handleDrawingNode, handleImageImport } from '../../core/super-converter/v2/importer/imageImporter.js';
 import { exportSchemaToJson } from '@converter/exporter';
 import { emuToPixels, rotToDegrees, pixelsToEmu, degreesToRot } from '@converter/helpers';
+import { createDocumentJson } from '@core/super-converter/v2/importer/docxImporter.js';
+import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 
 describe('Image Import/Export Round Trip Tests', () => {
   describe('Transform Data Round Trip', () => {
@@ -737,6 +739,106 @@ describe('Image Import/Export Round Trip Tests', () => {
         expect(importedImage.attrs.transformData.sizeExtension.top).toBe(0);
         expect(importedImage.attrs.transformData.sizeExtension.right).toBe(0);
       }
+    });
+  });
+
+  describe('doc-with-graphs-diagrams-rotated fixture', () => {
+    let docxFixture;
+    let importedDoc;
+    let imageNodes = [];
+
+    beforeAll(async () => {
+      docxFixture = await getTestDataByFileName('doc-with-graphs-diagrams-rotated.docx');
+      const converter = {
+        headers: {},
+        headerIds: {},
+        footers: {},
+        footerIds: {},
+        telemetry: null,
+      };
+      const editor = { options: {}, emit: () => {} };
+      const result = createDocumentJson(docxFixture, converter, editor);
+      importedDoc = result.pmDoc;
+      imageNodes = [];
+
+      const walk = (node) => {
+        if (!node) return;
+        if (node.type === 'image') imageNodes.push(node);
+        node.content?.forEach(walk);
+      };
+
+      walk(importedDoc);
+    });
+
+    it('imports rotation metadata for rotated images', () => {
+      expect(imageNodes.length).toBeGreaterThan(0);
+      const rotated = imageNodes.filter((img) => !!img.attrs?.transformData?.rotation);
+      expect(rotated.length).toBeGreaterThan(0);
+      rotated.forEach((img) => {
+        expect(img.attrs.transformData.rotation).not.toBe(0);
+      });
+    });
+
+    it('round-trips rotation data through export and reimport', () => {
+      const rotated = imageNodes.filter((img) => !!img.attrs?.transformData?.rotation);
+      expect(rotated.length).toBeGreaterThan(0);
+
+      rotated.forEach((imageNode) => {
+        const exported = exportSchemaToJson({ node: imageNode, relationships: [] });
+        const drawing = exported.elements.find((el) => el.name === 'w:drawing');
+        expect(drawing).toBeTruthy();
+
+        const container = drawing.elements.find((el) => el.name === 'wp:inline' || el.name === 'wp:anchor');
+        expect(container).toBeTruthy();
+
+        const effectExtent = container.elements.find((el) => el.name === 'wp:effectExtent');
+        expect(effectExtent).toBeTruthy();
+
+        const graphic = container.elements.find((el) => el.name === 'a:graphic');
+        const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
+        const pic = graphicData.elements.find((el) => el.name === 'pic:pic');
+        const spPr = pic.elements.find((el) => el.name === 'pic:spPr');
+        const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
+        expect(xfrm).toBeTruthy();
+
+        const { transformData = {} } = imageNode.attrs;
+        if (transformData.rotation) {
+          expect(xfrm.attributes.rot).toBe(degreesToRot(transformData.rotation));
+        }
+        if (transformData.verticalFlip) {
+          expect(xfrm.attributes.flipV).toBe('1');
+        } else {
+          expect(xfrm.attributes.flipV).toBeUndefined();
+        }
+        if (transformData.horizontalFlip) {
+          expect(xfrm.attributes.flipH).toBe('1');
+        } else {
+          expect(xfrm.attributes.flipH).toBeUndefined();
+        }
+
+        const expectedSizeExtension = transformData.sizeExtension ?? { left: 0, top: 0, right: 0, bottom: 0 };
+        expect(effectExtent.attributes.l).toBe(pixelsToEmu(expectedSizeExtension.left ?? 0));
+        expect(effectExtent.attributes.t).toBe(pixelsToEmu(expectedSizeExtension.top ?? 0));
+        expect(effectExtent.attributes.r).toBe(pixelsToEmu(expectedSizeExtension.right ?? 0));
+        expect(effectExtent.attributes.b).toBe(pixelsToEmu(expectedSizeExtension.bottom ?? 0));
+
+        const reimported = handleImageImport(container, 'document.xml', { docx: docxFixture });
+        expect(reimported).toBeTruthy();
+        expect(reimported.attrs.transformData.rotation).toBe(transformData.rotation);
+        expect(reimported.attrs.transformData.verticalFlip).toBe(!!transformData.verticalFlip);
+        expect(reimported.attrs.transformData.horizontalFlip).toBe(!!transformData.horizontalFlip);
+
+        if (transformData.sizeExtension) {
+          expect(reimported.attrs.transformData.sizeExtension).toEqual(
+            expect.objectContaining({
+              left: transformData.sizeExtension.left ?? 0,
+              top: transformData.sizeExtension.top ?? 0,
+              right: transformData.sizeExtension.right ?? 0,
+              bottom: transformData.sizeExtension.bottom ?? 0,
+            }),
+          );
+        }
+      });
     });
   });
 });

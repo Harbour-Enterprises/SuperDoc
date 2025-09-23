@@ -185,7 +185,7 @@ export const Image = Node.create({
 
       padding: {
         default: {},
-        renderDOM: ({ size, padding, marginOffset, transformData }) => {
+        renderDOM: ({ size = {}, padding, marginOffset, transformData }) => {
           let { left = 0, top = 0, bottom = 0, right = 0 } = padding ?? {};
           // TODO: The wp:effectExtent (transformData.sizeExtension) sometimes
           // gives the right data (as calculated by getRotationMargins)
@@ -196,8 +196,8 @@ export const Image = Node.create({
           //   top += transformData.sizeExtension.top || 0;
           //   bottom += transformData.sizeExtension.bottom || 0;
           // }
-          const { rotation } = transformData;
-          const { height, width } = size;
+          const { rotation } = transformData ?? {};
+          const { height, width } = size ?? {};
           if (rotation && height && width) {
             const { horizontal, vertical } = getRotationMargins(width, height, rotation);
             left += horizontal;
@@ -206,8 +206,8 @@ export const Image = Node.create({
             bottom += vertical;
           }
           let style = '';
-          if (left && !marginOffset?.left) style += `margin-left: ${left}px;`;
-          if (top && !marginOffset?.top) style += `margin-top: ${top}px;`;
+          if (left && marginOffset?.left == null) style += `margin-left: ${left}px;`;
+          if (top && marginOffset?.top == null) style += `margin-top: ${top}px;`;
           if (bottom) style += `margin-bottom: ${bottom}px;`;
           if (right) style += `margin-right: ${right}px;`;
           return { style };
@@ -216,10 +216,24 @@ export const Image = Node.create({
 
       marginOffset: {
         default: {},
-        renderDOM: ({ marginOffset, anchorData }) => {
+        renderDOM: ({ marginOffset, anchorData, transformData, size }) => {
           const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
           const maxMarginV = 500;
-          const { left = 0, top = 0 } = marginOffset ?? {};
+          const baseLeft = marginOffset?.left ?? 0;
+          const baseTop = marginOffset?.top ?? 0;
+
+          let rotationLeft = 0;
+          let rotationTop = 0;
+          const { rotation } = transformData ?? {};
+          const { height, width } = size ?? {};
+          if (rotation && height && width) {
+            const { horizontal, vertical } = getRotationMargins(width, height, rotation);
+            rotationLeft = horizontal;
+            rotationTop = vertical;
+          }
+
+          const left = baseLeft + rotationLeft;
+          const top = baseTop + rotationTop;
 
           let style = '';
           if (left) style += `margin-left: ${left}px;`;
