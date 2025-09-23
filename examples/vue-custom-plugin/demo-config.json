@@ -1,0 +1,10 @@
+{
+  "dirname": "vue-custom-plugin",
+  "tags": [
+    "editing",
+    "viewing",
+    "vue",
+    "plugins"
+  ],
+  "title": "Custom ProseMirror Plugin"
+}
