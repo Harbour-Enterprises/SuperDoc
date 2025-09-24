@@ -64,9 +64,11 @@ const publishScopedMirror = (packageJson, distTag, logger = console) => {
       '////////////////////////////////////////////////////////////////////////////////'
     ].join('\n');
 
+    const deprecationPayload = `\n${deprecationNotice}\n`;
+
     writeFileSync(
       path.join(tempDir, 'npm-deprecation-notice.cjs'),
-      `#!/usr/bin/env node\nconsole.warn('\n${deprecationNotice.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}\n');\n`
+      `#!/usr/bin/env node\nconsole.warn(${JSON.stringify(deprecationPayload)});\n`
     );
 
     const distSource = path.join(superdocDir, 'dist');
