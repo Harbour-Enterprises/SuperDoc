@@ -1,5 +1,6 @@
 // @ts-check
 import { Mark, Attribute } from '@core/index.js';
+import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.js';
 
 /**
  * Configuration options for Strike
@@ -32,10 +33,20 @@ export const Strike = Mark.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    return ['s', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+    const merged = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
+    const { value, ...rest } = merged || {};
+    if (value === '0') {
+      return ['span', rest, 0];
+    }
+    return ['s', rest, 0];
   },
 
   addCommands() {
+    const { setStrike, unsetStrike, toggleStrike } = createCascadeToggleCommands({
+      markName: this.name,
+      negationAttrs: { value: '0' },
+    });
+
     return {
       /**
        * Apply strikethrough formatting
@@ -43,11 +54,7 @@ export const Strike = Mark.create({
        * @example
        * editor.commands.setStrike()
        */
-      setStrike:
-        () =>
-        ({ commands }) => {
-          return commands.setMark(this.name);
-        },
+      setStrike,
 
       /**
        * Remove strikethrough formatting
@@ -55,11 +62,7 @@ export const Strike = Mark.create({
        * @example
        * editor.commands.unsetStrike()
        */
-      unsetStrike:
-        () =>
-        ({ commands }) => {
-          return commands.unsetMark(this.name);
-        },
+      unsetStrike,
 
       /**
        * Toggle strikethrough formatting
@@ -67,11 +70,26 @@ export const Strike = Mark.create({
        * @example
        * editor.commands.toggleStrike()
        */
-      toggleStrike:
-        () =>
-        ({ commands }) => {
-          return commands.toggleMark(this.name);
+      toggleStrike,
+    };
+  },
+
+  addAttributes() {
+    return {
+      /**
+       * @category Attribute
+       * @param {string} [value] - Strike toggle value ('0' renders as normal)
+       */
+      value: {
+        default: null,
+        renderDOM: (attrs) => {
+          if (!attrs.value) return {};
+          if (attrs.value === '0') {
+            return { style: 'text-decoration: none' };
+          }
+          return {};
         },
+      },
     };
   },
 

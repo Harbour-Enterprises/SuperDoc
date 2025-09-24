@@ -16,16 +16,28 @@ import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
+import { translator as wHighlightTranslator } from './v3/handlers/w/highlight/highlight-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
+import { translator as wRNodeTranslator } from './v3/handlers/w/r/r-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
 import { translator as wTblNodeTranslator } from './v3/handlers/w/tbl/tbl-translator.js';
+import { translator as wUnderlineTranslator } from './v3/handlers/w/u/u-translator.js';
 import { translator as wDrawingNodeTranslator } from './v3/handlers/w/drawing/drawing-translator.js';
 import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark-start/index.js';
 import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
+
+export const isLineBreakOnlyRun = (node) => {
+  if (!node) return false;
+  if (node.type === 'lineBreak' || node.type === 'hardBreak') return true;
+  if (node.type !== 'run') return false;
+  const runContent = Array.isArray(node.content) ? node.content : [];
+  if (!runContent.length) return false;
+  return runContent.every((child) => child?.type === 'lineBreak' || child?.type === 'hardBreak');
+};
 
 /**
  * @typedef {Object} ExportParams
@@ -79,6 +91,7 @@ export function exportSchemaToJson(params) {
     body: translateBodyNode,
     heading: translateHeadingNode,
     paragraph: wPNodeTranslator,
+    run: wRNodeTranslator,
     text: translateTextNode,
     bulletList: translateList,
     orderedList: translateList,
@@ -263,7 +276,7 @@ function normalizeLineHeight(value) {
  * @param {SchemaNode} node
  * @returns {XmlReadyNode} The paragraph properties node
  */
-function generateParagraphProperties(node) {
+export function generateParagraphProperties(node) {
   const { attrs = {} } = node;
 
   const pPrElements = [];
@@ -314,23 +327,36 @@ function generateParagraphProperties(node) {
     pPrElements.push(spacingElement);
   }
 
-  if (indent && Object.values(indent).some((v) => v !== 0)) {
-    const { left, right, firstLine, hanging } = indent;
-    const attributes = {};
-    if (left || left === 0) attributes['w:left'] = pixelsToTwips(left);
-    if (right || right === 0) attributes['w:right'] = pixelsToTwips(right);
-    if (firstLine || firstLine === 0) attributes['w:firstLine'] = pixelsToTwips(firstLine);
-    if (hanging || hanging === 0) attributes['w:hanging'] = pixelsToTwips(hanging);
+  const hasIndent = !!indent;
+  if (hasIndent) {
+    const { left, right, firstLine, hanging, explicitLeft, explicitRight, explicitFirstLine, explicitHanging } = indent;
 
-    if (textIndent && !attributes['w:left']) {
+    const attributes = {};
+
+    if (left !== undefined && (left !== 0 || explicitLeft || textIndent)) {
+      attributes['w:left'] = pixelsToTwips(left);
+    }
+    if (right !== undefined && (right !== 0 || explicitRight)) {
+      attributes['w:right'] = pixelsToTwips(right);
+    }
+    if (firstLine !== undefined && (firstLine !== 0 || explicitFirstLine)) {
+      attributes['w:firstLine'] = pixelsToTwips(firstLine);
+    }
+    if (hanging !== undefined && (hanging !== 0 || explicitHanging)) {
+      attributes['w:hanging'] = pixelsToTwips(hanging);
+    }
+
+    if (textIndent && attributes['w:left'] === undefined) {
       attributes['w:left'] = getTextIndentExportValue(textIndent);
     }
 
-    const indentElement = {
-      name: 'w:ind',
-      attributes,
-    };
-    pPrElements.push(indentElement);
+    if (Object.keys(attributes).length) {
+      const indentElement = {
+        name: 'w:ind',
+        attributes,
+      };
+      pPrElements.push(indentElement);
+    }
   } else if (textIndent && textIndent !== '0in') {
     const indentElement = {
       name: 'w:ind',
@@ -388,12 +414,18 @@ function generateParagraphProperties(node) {
   }
 
   // Add tab stops
+  const mapTabVal = (value) => {
+    if (!value || value === 'start') return 'left';
+    if (value === 'end') return 'right';
+    return value;
+  };
+
   const { tabStops } = attrs;
   if (tabStops && tabStops.length > 0) {
     const tabElements = tabStops.map((tab) => {
       const posValue = tab.originalPos !== undefined ? tab.originalPos : pixelsToTwips(tab.pos).toString();
       const tabAttributes = {
-        'w:val': tab.val || 'start',
+        'w:val': mapTabVal(tab.val),
         'w:pos': posValue,
       };
 
@@ -906,6 +938,14 @@ const convertMultipleListItemsIntoSingleNode = (listItem) => {
     }
   });
 
+  // Trim duplicate manual breaks while preserving the single break that Word expects
+  // between a list item paragraph and following block content (e.g. tables).
+  collapsedParagraph.content = collapsedParagraph.content.filter((node, index, nodes) => {
+    if (!isLineBreakOnlyRun(node)) return true;
+    const prevNode = nodes[index - 1];
+    return !(prevNode && isLineBreakOnlyRun(prevNode));
+  });
+
   return collapsedParagraph;
 };
 
@@ -975,14 +1015,28 @@ function translateMark(mark) {
       break;
 
     case 'italic':
-      delete markElement.attributes;
+      if (attrs?.value && attrs.value !== '1' && attrs.value !== true) {
+        markElement.attributes['w:val'] = attrs.value;
+      } else {
+        delete markElement.attributes;
+      }
       markElement.type = 'element';
       break;
 
-    case 'underline':
-      markElement.type = 'element';
-      markElement.attributes['w:val'] = attrs.underlineType;
-      break;
+    case 'underline': {
+      const translated = wUnderlineTranslator.decode({
+        node: {
+          attrs: {
+            underlineType: attrs.underlineType ?? attrs.underline ?? null,
+            underlineColor: attrs.underlineColor ?? attrs.color ?? null,
+            underlineThemeColor: attrs.underlineThemeColor ?? attrs.themeColor ?? null,
+            underlineThemeTint: attrs.underlineThemeTint ?? attrs.themeTint ?? null,
+            underlineThemeShade: attrs.underlineThemeShade ?? attrs.themeShade ?? null,
+          },
+        },
+      });
+      return translated || {};
+    }
 
     // Text style cases
     case 'fontSize':
@@ -1004,13 +1058,23 @@ function translateMark(mark) {
       markElement.attributes['w:val'] = attrs.styleId;
       break;
 
-    case 'color':
-      let processedColor = attrs.color.replace(/^#/, '').replace(/;$/, ''); // Remove `#` and `;` if present
+    case 'color': {
+      const rawColor = attrs.color;
+      if (!rawColor) break;
+
+      const normalized = String(rawColor).trim().toLowerCase();
+      if (normalized === 'inherit') {
+        markElement.attributes['w:val'] = 'auto';
+        break;
+      }
+
+      let processedColor = String(rawColor).replace(/^#/, '').replace(/;$/, ''); // Remove `#` and `;` if present
       if (processedColor.startsWith('rgb')) {
         processedColor = rgbToHex(processedColor);
       }
       markElement.attributes['w:val'] = processedColor;
       break;
+    }
 
     case 'textAlign':
       markElement.attributes['w:val'] = attrs.textAlign;
@@ -1032,12 +1096,11 @@ function translateMark(mark) {
     case 'lineHeight':
       markElement.attributes['w:line'] = linesToTwips(attrs.lineHeight);
       break;
-    case 'highlight':
-      markElement.attributes['w:fill'] = attrs.color?.substring(1);
-      markElement.attributes['w:color'] = 'auto';
-      markElement.attributes['w:val'] = 'clear';
-      markElement.name = 'w:shd';
-      break;
+    case 'highlight': {
+      const highlightValue = attrs.color ?? attrs.highlight ?? null;
+      const translated = wHighlightTranslator.decode({ node: { attrs: { highlight: highlightValue } } });
+      return translated || {};
+    }
 
     case 'link':
       break;
@@ -1223,8 +1286,13 @@ export class DocxExporter {
   }
 
   #replaceSpecialCharacters(text) {
-    if (!text) return;
-    return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    if (text === undefined || text === null) return text;
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&apos;');
   }
 
   #generateXml(node) {
@@ -1246,7 +1314,7 @@ export class DocxExporter {
     let tags = [tag];
 
     if (!name && node.type === 'text') {
-      return node.text;
+      return this.#replaceSpecialCharacters(node.text ?? '');
     }
 
     if (elements) {

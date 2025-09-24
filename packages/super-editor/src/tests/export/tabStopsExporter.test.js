@@ -58,7 +58,7 @@ describe('Tab Stops Export Tests', () => {
     // Check first tab stop
     const firstTab = tabs.elements[0];
     expect(firstTab.name).toBe('w:tab');
-    expect(firstTab.attributes['w:val']).toBe('start');
+    expect(firstTab.attributes['w:val']).toBe('left');
     expect(firstTab.attributes['w:pos']).toBe('2160');
     expect(firstTab.attributes['w:leader']).toBeUndefined();
 
@@ -162,7 +162,7 @@ describe('Tab Stops Export Tests', () => {
 
     const tab = tabs.elements[0];
     expect(tab.name).toBe('w:tab');
-    expect(tab.attributes['w:val']).toBe('start');
+    expect(tab.attributes['w:val']).toBe('left');
     expect(tab.attributes['w:pos']).toBe('1440');
     expect(tab.attributes['w:leader']).toBeUndefined();
   });
@@ -196,7 +196,8 @@ describe('Tab Stops Export Tests', () => {
 
     supportedTypes.forEach((type, index) => {
       const tab = tabs.elements[index];
-      expect(tab.attributes['w:val']).toBe(type);
+      const expectedVal = type === 'start' ? 'left' : type === 'end' ? 'right' : type;
+      expect(tab.attributes['w:val']).toBe(expectedVal);
       expect(tab.attributes['w:pos']).toBe(((index + 1) * 1440).toString());
     });
   });
@@ -231,7 +232,7 @@ describe('Tab Stops Export Tests', () => {
 
     supportedLeaders.forEach((leader, index) => {
       const tab = tabs.elements[index];
-      expect(tab.attributes['w:val']).toBe('start');
+      expect(tab.attributes['w:val']).toBe('left');
       expect(tab.attributes['w:pos']).toBe(((index + 1) * 1440).toString());
       expect(tab.attributes['w:leader']).toBe(leader);
     });

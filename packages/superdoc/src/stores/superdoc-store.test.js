@@ -190,6 +190,16 @@ describe('SuperDoc Store - Blob Support', () => {
   });
 
   describe('error handling', () => {
+    let consoleWarnSpy;
+
+    beforeEach(() => {
+      consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleWarnSpy.mockRestore();
+    });
+
     it('should handle invalid document configuration gracefully', async () => {
       const config = createTestConfig([
         {

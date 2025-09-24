@@ -13,6 +13,7 @@ export * from './setMark.js';
 export * from './unsetMark.js';
 export * from './unsetAllMarks.js';
 export * from './toggleMark.js';
+export * from './toggleMarkCascade.js';
 export * from './clearNodes.js';
 export * from './setNode.js';
 export * from './toggleNode.js';

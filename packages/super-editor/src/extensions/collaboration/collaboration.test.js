@@ -37,8 +37,10 @@ const createYMap = (initial = {}) => {
   };
 };
 
-const createYDocStub = () => {
-  const metas = createYMap({ docx: [] });
+const createYDocStub = ({ docxValue, hasDocx = true } = {}) => {
+  const initialMetaEntries = hasDocx ? { docx: docxValue ?? [] } : {};
+  const metas = createYMap(initialMetaEntries);
+  if (!hasDocx) metas.store.delete('docx');
   const media = createYMap();
   const listeners = {};
   return {
@@ -83,6 +85,103 @@ describe('collaboration helpers', () => {
       event: 'docx-update',
       user: editor.options.user,
     });
+  });
+
+  it('returns early when neither explicit ydoc nor editor.options.ydoc exist', async () => {
+    const editor = {
+      options: { ydoc: null, user: { id: 'user-1' }, content: [] },
+      exportDocx: vi.fn(),
+    };
+
+    await updateYdocDocxData(editor);
+
+    expect(editor.exportDocx).not.toHaveBeenCalled();
+  });
+
+  it('normalizes docx arrays via toArray when meta map stores a Y.Array-like structure', async () => {
+    const docxSource = {
+      toArray: vi.fn(() => [{ name: 'word/document.xml', content: '<old />' }]),
+    };
+    const ydoc = createYDocStub({ docxValue: docxSource });
+    const metas = ydoc._maps.metas;
+
+    const editor = {
+      options: { ydoc, user: { id: 'user-2' }, content: [] },
+      exportDocx: vi.fn().mockResolvedValue({
+        'word/document.xml': '<new />',
+        'word/styles.xml': '<styles />',
+      }),
+    };
+
+    await updateYdocDocxData(editor);
+
+    expect(docxSource.toArray).toHaveBeenCalled();
+    expect(metas.set).toHaveBeenCalledWith('docx', [
+      { name: 'word/document.xml', content: '<new />' },
+      { name: 'word/styles.xml', content: '<styles />' },
+    ]);
+  });
+
+  it('normalizes docx payloads when meta map stores an iterable collection', async () => {
+    const docxSet = new Set([
+      { name: 'word/document.xml', content: '<old />' },
+      { name: 'word/numbering.xml', content: '<numbers />' },
+    ]);
+    const ydoc = createYDocStub({ docxValue: docxSet });
+    const metas = ydoc._maps.metas;
+
+    const editor = {
+      options: { ydoc, user: { id: 'user-3' }, content: [] },
+      exportDocx: vi.fn().mockResolvedValue({ 'word/document.xml': '<new />' }),
+    };
+
+    await updateYdocDocxData(editor);
+
+    expect(metas.set).toHaveBeenCalledWith('docx', [
+      { name: 'word/numbering.xml', content: '<numbers />' },
+      { name: 'word/document.xml', content: '<new />' },
+    ]);
+  });
+
+  it('falls back to editor options content when no docx entry exists in the meta map', async () => {
+    const initialContent = [
+      { name: 'word/document.xml', content: '<initial />' },
+      { name: 'word/footnotes.xml', content: '<foot />' },
+    ];
+    const ydoc = createYDocStub({ hasDocx: false });
+    const metas = ydoc._maps.metas;
+
+    const editor = {
+      options: { ydoc, user: { id: 'user-4' }, content: initialContent },
+      exportDocx: vi.fn().mockResolvedValue({ 'word/document.xml': '<updated />' }),
+    };
+
+    await updateYdocDocxData(editor);
+
+    expect(metas.set).toHaveBeenCalledWith('docx', [
+      { name: 'word/footnotes.xml', content: '<foot />' },
+      { name: 'word/document.xml', content: '<updated />' },
+    ]);
+    const originalDocEntry = initialContent.find((entry) => entry.name === 'word/document.xml');
+    expect(originalDocEntry.content).toBe('<initial />');
+  });
+
+  it('prefers the explicit ydoc argument over editor options', async () => {
+    const optionsYdoc = createYDocStub();
+    const explicitYdoc = createYDocStub();
+    explicitYdoc._maps.metas.store.set('docx', [{ name: 'word/document.xml', content: '<old explicit />' }]);
+
+    const editor = {
+      options: { ydoc: optionsYdoc, user: { id: 'user-5' } },
+      exportDocx: vi.fn().mockResolvedValue({ 'word/document.xml': '<new explicit />' }),
+    };
+
+    await updateYdocDocxData(editor, explicitYdoc);
+
+    expect(explicitYdoc._maps.metas.set).toHaveBeenCalledWith('docx', [
+      { name: 'word/document.xml', content: '<new explicit />' },
+    ]);
+    expect(optionsYdoc._maps.metas.set).not.toHaveBeenCalled();
   });
 });
 

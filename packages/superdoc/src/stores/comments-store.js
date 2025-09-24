@@ -176,7 +176,6 @@ export const useCommentsStore = defineStore('comments', () => {
 
     debounceTimers[commentId] = setTimeout(() => {
       if (superdoc) {
-        if (__IS_DEBUG__) console.debug('[debounceEmit] tracked change update emitting...', event);
         superdoc.emit('comments-update', event);
       }
       delete debounceTimers[commentId];
@@ -185,7 +184,6 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const showAddComment = (superdoc) => {
     const event = { type: COMMENT_EVENTS.PENDING };
-    if (__IS_DEBUG__) console.debug('[showAddComment] emitting...', event);
     superdoc.emit('comments-update', event);
 
     const selection = { ...superdocStore.activeSelection };
@@ -367,7 +365,6 @@ export const useCommentsStore = defineStore('comments', () => {
     syncCommentsToClients(superdoc, event);
 
     // Emit event for end users
-    if (__IS_DEBUG__) console.debug('[addComment] emitting...', event);
     superdoc.emit('comments-update', event);
   };
 
@@ -394,7 +391,6 @@ export const useCommentsStore = defineStore('comments', () => {
       changes: [{ key: 'deleted', commentId, fileId }],
     };
 
-    if (__IS_DEBUG__) console.debug('[deleteComment] emitting...', event);
     superdoc.emit('comments-update', event);
     syncCommentsToClients(superdoc, event);
   };
@@ -421,8 +417,6 @@ export const useCommentsStore = defineStore('comments', () => {
    */
   const processLoadedDocxComments = async ({ superdoc, editor, comments, documentId }) => {
     const document = superdocStore.getDocument(documentId);
-
-    if (__IS_DEBUG__) console.debug('[processLoadedDocxComments] processing comments...', comments);
 
     comments.forEach((comment) => {
       const htmlContent = getHTmlFromComment(comment.textJson);
@@ -564,15 +558,56 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {Object} commentTextJson The comment text JSON
    * @returns {string} The HTML content
    */
+  const normalizeCommentForEditor = (node) => {
+    if (!node || typeof node !== 'object') return node;
+
+    const cloneMarks = (marks) =>
+      Array.isArray(marks)
+        ? marks.filter(Boolean).map((mark) => ({
+            ...mark,
+            attrs: mark?.attrs ? { ...mark.attrs } : undefined,
+          }))
+        : undefined;
+
+    const cloneAttrs = (attrs) => (attrs && typeof attrs === 'object' ? { ...attrs } : undefined);
+
+    if (!Array.isArray(node.content)) {
+      return {
+        type: node.type,
+        ...(node.text !== undefined ? { text: node.text } : {}),
+        ...(node.attrs ? { attrs: cloneAttrs(node.attrs) } : {}),
+        ...(node.marks ? { marks: cloneMarks(node.marks) } : {}),
+      };
+    }
+
+    const normalizedChildren = node.content
+      .map((child) => normalizeCommentForEditor(child))
+      .flat()
+      .filter(Boolean);
+
+    if (node.type === 'run') {
+      return normalizedChildren;
+    }
+
+    return {
+      type: node.type,
+      ...(node.attrs ? { attrs: cloneAttrs(node.attrs) } : {}),
+      ...(node.marks ? { marks: cloneMarks(node.marks) } : {}),
+      content: normalizedChildren,
+    };
+  };
+
   const getHTmlFromComment = (commentTextJson) => {
     // If no content, we can't convert and its not a valid comment
     if (!commentTextJson.content?.length) return;
 
     try {
+      const normalizedContent = normalizeCommentForEditor(commentTextJson);
+      const schemaContent = Array.isArray(normalizedContent) ? normalizedContent[0] : normalizedContent;
       const editor = new Editor({
         mode: 'text',
         isHeadless: true,
-        content: commentTextJson,
+        content: schemaContent,
         loadFromSchema: true,
         extensions: getRichTextExtensions(),
       });

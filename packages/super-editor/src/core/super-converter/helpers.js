@@ -151,26 +151,53 @@ const getContentTypesFromXml = (contentTypesXml) => {
   return Array.from(defaults).map((item) => item.getAttribute('Extension'));
 };
 
-const getHexColorFromDocxSystem = (docxColor) => {
-  const colorMap = new Map([
-    ['yellow', '#ffff00'],
-    ['green', '#00ff00'],
-    ['blue', '#0000FFFF'],
-    ['cyan', '#00ffff'],
-    ['magenta', '#ff00ff'],
-    ['red', '#ff0000'],
-    ['darkYellow', '#808000FF'],
-    ['darkGreen', '#008000FF'],
-    ['darkBlue', '#000080'],
-    ['darkCyan', '#008080FF'],
-    ['darkMagenta', '#800080FF'],
-    ['darkGray', '#808080FF'],
-    ['darkRed', '#800000FF'],
-    ['lightGray', '#C0C0C0FF'],
-    ['black', '#000'],
-  ]);
+const DOCX_HIGHLIGHT_KEYWORD_MAP = new Map([
+  ['yellow', 'FFFF00'],
+  ['green', '00FF00'],
+  ['blue', '0000FF'],
+  ['cyan', '00FFFF'],
+  ['magenta', 'FF00FF'],
+  ['red', 'FF0000'],
+  ['darkYellow', '808000'],
+  ['darkGreen', '008000'],
+  ['darkBlue', '000080'],
+  ['darkCyan', '008080'],
+  ['darkMagenta', '800080'],
+  ['darkGray', '808080'],
+  ['darkRed', '800000'],
+  ['lightGray', 'C0C0C0'],
+  ['black', '000000'],
+  ['white', 'FFFFFF'],
+]);
 
-  return colorMap.get(docxColor) || null;
+const normalizeHexColor = (hex) => {
+  if (!hex) return null;
+  let value = hex.replace('#', '').trim();
+  if (!value) return null;
+  value = value.toUpperCase();
+  if (value.length === 3)
+    value = value
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  if (value.length === 8) value = value.slice(0, 6);
+  return value;
+};
+
+const getHexColorFromDocxSystem = (docxColor) => {
+  const hex = DOCX_HIGHLIGHT_KEYWORD_MAP.get(docxColor);
+  return hex ? `#${hex}` : null;
+};
+
+const getDocxHighlightKeywordFromHex = (hexColor) => {
+  if (!hexColor) return null;
+  if (DOCX_HIGHLIGHT_KEYWORD_MAP.has(hexColor)) return hexColor;
+  const normalized = normalizeHexColor(hexColor);
+  if (!normalized) return null;
+  for (const [keyword, hex] of DOCX_HIGHLIGHT_KEYWORD_MAP.entries()) {
+    if (hex === normalized) return keyword;
+  }
+  return null;
 };
 
 function isValidHexColor(color) {
@@ -254,6 +281,8 @@ export {
   getArrayBufferFromUrl,
   getContentTypesFromXml,
   getHexColorFromDocxSystem,
+  getDocxHighlightKeywordFromHex,
+  normalizeHexColor,
   isValidHexColor,
   rgbToHex,
   ptToTwips,

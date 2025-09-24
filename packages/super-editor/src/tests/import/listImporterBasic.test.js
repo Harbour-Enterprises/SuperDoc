@@ -1,5 +1,6 @@
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { expect } from 'vitest';
+import { extractParagraphText } from '../helpers/getParagraphText.js';
 
 describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
   const filename = 'sublist-issue.docx';
@@ -39,7 +40,7 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
     expect(item.type).toBe('listItem');
     expect(item.attrs.indent.left).toBeUndefined();
     expect(item.attrs.indent.hanging).toBeUndefined();
-    expect(item.attrs.indent.right).toBeUndefined;
+    expect(item.attrs.indent.right).toBeUndefined();
     expect(item.attrs.numId).toBe('5');
 
     // Ensure we're importing the empty paragraprh
@@ -93,8 +94,11 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     const paragraph = list.content[0];
     expect(paragraph.type).toBe('paragraph');
     expect(paragraph.content.length).toBe(1);
-    expect(paragraph.content[0].type).toBe('text');
-    expect(paragraph.content[0].text).toBe('One');
+    const runNode = paragraph.content[0];
+    expect(runNode.type).toBe('run');
+    const textNode = runNode.content.find((child) => child.type === 'text');
+    expect(textNode?.text).toBe('One');
+    expect(extractParagraphText(paragraph)).toBe('One');
 
     const { attrs: paragraphAttrs } = paragraph;
     expect(paragraphAttrs).toBeDefined();
@@ -160,8 +164,11 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
     const paragraph = list.content[0];
     expect(paragraph.type).toBe('paragraph');
     expect(paragraph.content.length).toBe(1);
-    expect(paragraph.content[0].type).toBe('text');
-    expect(paragraph.content[0].text).toBe('One');
+    const runNode = paragraph.content[0];
+    expect(runNode.type).toBe('run');
+    const textNode = runNode.content.find((child) => child.type === 'text');
+    expect(textNode?.text).toBe('One');
+    expect(extractParagraphText(paragraph)).toBe('One');
 
     const { attrs: paragraphAttrs } = paragraph;
     expect(paragraphAttrs).toBeDefined();
