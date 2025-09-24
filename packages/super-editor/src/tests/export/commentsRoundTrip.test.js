@@ -3,6 +3,13 @@ import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpe
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { importCommentData } from '@converter/v2/importer/documentCommentsImporter.js';
 
+const extractNodeText = (node) => {
+  if (!node) return '';
+  if (typeof node.text === 'string') return node.text;
+  const content = Array.isArray(node.content) ? node.content : [];
+  return content.map((child) => extractNodeText(child)).join('');
+};
+
 describe('Google Docs comments import/export round trip', () => {
   const filename = 'gdocs-comments-export.docx';
   let docx;
@@ -67,8 +74,10 @@ describe('Google Docs comments import/export round trip', () => {
       const reimportedComments = importCommentData({ docx: exportedDocx }) ?? [];
 
       expect(reimportedComments).toHaveLength(2);
-      const roundTripTexts = reimportedComments.map((comment) => comment.textJson?.content?.[0]?.text?.trim());
-      expect(roundTripTexts.filter(Boolean)).toEqual(expect.arrayContaining(['comment on text', 'BLANK']));
+      const roundTripTexts = reimportedComments
+        .map((comment) => extractNodeText(comment.textJson).trim())
+        .filter((text) => text.length);
+      expect(roundTripTexts).toEqual(expect.arrayContaining(['comment on text', 'BLANK']));
       reimportedComments.forEach((comment) => {
         expect(comment.isDone).toBe(false);
       });

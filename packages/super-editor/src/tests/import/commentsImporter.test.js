@@ -2,6 +2,13 @@ import { getTestDataByFileName, loadTestDataForEditorTests, initTestEditor } fro
 import { importCommentData } from '@converter/v2/importer/documentCommentsImporter.js';
 import { CommentMarkName } from '@extensions/comment/comments-constants.js';
 
+const extractNodeText = (node) => {
+  if (!node) return '';
+  if (typeof node.text === 'string') return node.text;
+  const content = Array.isArray(node.content) ? node.content : [];
+  return content.map((child) => extractNodeText(child)).join('');
+};
+
 describe('basic comment import [basic-comment.docx]', () => {
   const dataName = 'basic-comment.docx';
   let content, docx;
@@ -119,7 +126,7 @@ describe('comment import without extended metadata [gdocs-comments-export.docx]'
     expect(firstComment.isDone).toBe(false);
 
     const secondComment = comments[1];
-    expect(secondComment.textJson?.content?.[0]?.text).toBe('comment on text');
+    expect(extractNodeText(secondComment.textJson)).toBe('comment on text');
   });
 });
 

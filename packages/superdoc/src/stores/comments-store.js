@@ -558,15 +558,56 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {Object} commentTextJson The comment text JSON
    * @returns {string} The HTML content
    */
+  const normalizeCommentForEditor = (node) => {
+    if (!node || typeof node !== 'object') return node;
+
+    const cloneMarks = (marks) =>
+      Array.isArray(marks)
+        ? marks.filter(Boolean).map((mark) => ({
+            ...mark,
+            attrs: mark?.attrs ? { ...mark.attrs } : undefined,
+          }))
+        : undefined;
+
+    const cloneAttrs = (attrs) => (attrs && typeof attrs === 'object' ? { ...attrs } : undefined);
+
+    if (!Array.isArray(node.content)) {
+      return {
+        type: node.type,
+        ...(node.text !== undefined ? { text: node.text } : {}),
+        ...(node.attrs ? { attrs: cloneAttrs(node.attrs) } : {}),
+        ...(node.marks ? { marks: cloneMarks(node.marks) } : {}),
+      };
+    }
+
+    const normalizedChildren = node.content
+      .map((child) => normalizeCommentForEditor(child))
+      .flat()
+      .filter(Boolean);
+
+    if (node.type === 'run') {
+      return normalizedChildren;
+    }
+
+    return {
+      type: node.type,
+      ...(node.attrs ? { attrs: cloneAttrs(node.attrs) } : {}),
+      ...(node.marks ? { marks: cloneMarks(node.marks) } : {}),
+      content: normalizedChildren,
+    };
+  };
+
   const getHTmlFromComment = (commentTextJson) => {
     // If no content, we can't convert and its not a valid comment
     if (!commentTextJson.content?.length) return;
 
     try {
+      const normalizedContent = normalizeCommentForEditor(commentTextJson);
+      const schemaContent = Array.isArray(normalizedContent) ? normalizedContent[0] : normalizedContent;
       const editor = new Editor({
         mode: 'text',
         isHeadless: true,
-        content: commentTextJson,
+        content: schemaContent,
         loadFromSchema: true,
         extensions: getRichTextExtensions(),
       });
