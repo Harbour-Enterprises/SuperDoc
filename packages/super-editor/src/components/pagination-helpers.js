@@ -6,13 +6,15 @@
  * @returns {void}
  */
 export function adjustPaginationBreaks(editorElem, editor) {
-  if (!editorElem.value || !editor?.value?.options?.scale) return;
+  const hostElement = editorElem.value;
+  if (!hostElement || !editor?.value?.options?.scale) return;
 
   const zoom = editor.value.options.scale;
-  const bounds = editorElem.value.getBoundingClientRect();
+  const bounds = hostElement.getBoundingClientRect();
+  const searchRoot = hostElement.shadowRoot || hostElement;
 
   // Find all `.pagination-break-wrapper` nodes and adjust them
-  const breakNodes = editorElem.value.querySelectorAll('.pagination-break-wrapper');
+  const breakNodes = searchRoot.querySelectorAll('.pagination-break-wrapper');
   let firstLeft;
 
   // We align all nodes to the first one, which is guaranteed to be in the right place
