@@ -36,5 +36,5 @@ jobs:
     with:
       run-visual: true
       run-e2e: ${{ github.base_ref == 'main' }}
-      coverage-on-changed: true
+      check-coverage: true
     secrets: inherit
