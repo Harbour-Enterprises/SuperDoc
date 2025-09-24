@@ -1,6 +1,6 @@
 "use client"
 
-import '@harbour-enterprises/superdoc/style.css'
+import 'superdoc/style.css'
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { ChevronLeft, Save, Send, Download, Printer, Menu, Bell, Search } from "lucide-react"
@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Slider } from "@/components/ui/slider"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { SuperDoc } from "@harbour-enterprises/superdoc"
+import { SuperDoc } from "superdoc"
 import { use } from 'react';
 import { docMap } from './_doc-links';
 
@@ -119,7 +119,7 @@ export default function GradingPage({ params }: { params: Promise<{ id: string }
   };
 
   const initSuperDoc = async (fileToLoad = null) => {
-    const { SuperDoc } = await import('@harbour-enterprises/superdoc');
+    const { SuperDoc } = await import('superdoc');
   
     superDocRef.current = new SuperDoc({
       selector: '#superdoc',

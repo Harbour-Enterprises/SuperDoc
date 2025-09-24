@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@harbour-enterprises/superdoc": "0.14.19",
+    "superdoc": "0.20.0-next.13",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.38.1",
     "uuid": "^11.1.0",

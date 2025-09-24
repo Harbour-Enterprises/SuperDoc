@@ -14,7 +14,7 @@
     "test:superdoc": "vitest run --root ./packages/superdoc",
     "test:cov": "node scripts/test-cov.mjs",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
-    "dev": "npm --workspace=@harbour-enterprises/superdoc run dev",
+    "dev": "npm --workspace=superdoc run dev",
     "dev:superdoc": "npm run dev --workspace=packages/superdoc",
     "dev:super-editor": "npm run dev --workspace=packages/super-editor",
     "watch:super-editor": "npm run build:watch --workspace=packages/super-editor",
@@ -25,7 +25,7 @@
     "release:next": "npm run release:next --workspace=packages/superdoc",
     "clean:packages": "rm -rf ./packages/*/dist",
     "reset": "npm run clean:packages && rm -rf ./node_modules && rm -rf ./packages/*/node_modules && rm -rf ./package-lock.json && npm install",
-    "publish": "node scripts/publish.mjs",
+    "publish": "node scripts/publish-superdoc.cjs",
     "format": "prettier --write \"**/*.{js,jsx,vue,css,scss,json,md}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,vue,css,scss,json,md}\"",
     "lint": "eslint",
@@ -39,7 +39,7 @@
     "lint:staged": "lint-staged",
     "watch": "npm run watch:es --workspace=packages/superdoc",
     "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build && npm run test",
-    "local:publish": "npm version prerelease --preid=local --workspace=@harbour-enterprises/superdoc && npm publish --workspace=@harbour-enterprises/superdoc --registry http://localhost:4873"
+    "local:publish": "npm version prerelease --preid=local --workspace=superdoc && npm publish --workspace=superdoc --registry http://localhost:4873"
   },
   "lint-staged": {
     "*.{js,jsx}": [

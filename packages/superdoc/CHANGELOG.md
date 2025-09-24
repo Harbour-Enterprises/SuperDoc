@@ -1844,7 +1844,7 @@
 
 - revert changeset config (#130) ([5c91231](https://github.com/Harbour-Enterprises/SuperDoc/commit/5c9123141ae7d28460f7e7dd69d7ffb0029c081f)), closes [#130](https://github.com/Harbour-Enterprises/SuperDoc/issues/130) [#128](https://github.com/Harbour-Enterprises/SuperDoc/issues/128) [#127](https://github.com/Harbour-Enterprises/SuperDoc/issues/127) [#126](https://github.com/Harbour-Enterprises/SuperDoc/issues/126) [#125](https://github.com/Harbour-Enterprises/SuperDoc/issues/125) [#124](https://github.com/Harbour-Enterprises/SuperDoc/issues/124)
 
-# @harbour-enterprises/superdoc
+# superdoc
 
 ## 0.0.3
 

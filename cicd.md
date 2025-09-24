@@ -149,14 +149,16 @@ Version bumps are automatic based on commit messages:
 ### NPM Distribution Tags
 
 - **@next**: Latest pre-release from main
-  - Install: `npm install @harbour-enterprises/superdoc@next`
+  - Install: `npm install superdoc@next`
   - Format: `X.Y.Z-next.N`
 - **@latest**: Current stable release
-  - Install: `npm install @harbour-enterprises/superdoc`
+  - Install: `npm install superdoc`
   - Format: `X.Y.Z`
 - **@X.x**: Maintenance releases
-  - Install: `npm install @harbour-enterprises/superdoc@1.2.x`
+  - Install: `npm install superdoc@1.2.x`
   - Format: `X.x.Y`
+
+> ℹ️ The legacy scoped package `@harbour-enterprises/superdoc` is mirrored with the same version and dist-tag for every release channel above.
 
 ## Workflow Scenarios
 
@@ -213,10 +215,10 @@ Version bumps are automatic based on commit messages:
 
 ```bash
 # View latest releases
-npm view @harbour-enterprises/superdoc versions --json
+npm view superdoc versions --json
 
 # Check current tags
-npm view @harbour-enterprises/superdoc dist-tags
+npm view superdoc dist-tags
 
 # Dry run to preview release
 npx semantic-release --dry-run --no-ci
