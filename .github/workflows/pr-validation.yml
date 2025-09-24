@@ -2,7 +2,7 @@ name: PR Validation [auto]
 
 on:
   pull_request:
-    branches: [main, 'release/**']
+    branches: [main, "release/**"]
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
@@ -15,21 +15,54 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Validate commits
         run: |
           BASE=$(git merge-base ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           npx commitlint \
             --from "$BASE" \
             --to ${{ github.event.pull_request.head.sha }}
+
+  coverage-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run build
+
+      - name: Check coverage on changed files
+        run: |
+          # Get changed files (JS/TS only)
+          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR \
+            origin/${{ github.event.pull_request.base.ref }}..HEAD \
+            | grep -E '\.(js|ts|jsx|tsx)$' \
+            | grep -v -E '\.(test|spec)\.' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No JS/TS files changed"
+            exit 0
+          fi
+
+          # Run coverage only on changed files
+          npx vitest run --coverage \
+            --coverage.include="$(echo $CHANGED_FILES | tr ' ' ',')" \
+            --coverage.thresholds.lines=80
 
   test:
     uses: ./.github/workflows/test-suite.yml
