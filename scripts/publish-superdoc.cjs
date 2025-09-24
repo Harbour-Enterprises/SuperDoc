@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-const { execSync } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
 const {
   cpSync,
   existsSync,
@@ -15,8 +15,8 @@ const rootDir = path.resolve(__dirname, '..');
 const superdocDir = path.join(rootDir, 'packages', 'superdoc');
 const packageJsonPath = path.join(superdocDir, 'package.json');
 
-const run = (command, cwd) => {
-  execSync(command, { stdio: 'inherit', cwd });
+const run = (command, args, cwd) => {
+  execFileSync(command, args, { stdio: 'inherit', cwd });
 };
 
 const ensurePackageJson = () => {
@@ -58,7 +58,7 @@ const publishScopedMirror = (packageJson, distTag, logger = console) => {
     }
 
     logger.log(`Publishing @harbour-enterprises/superdoc with dist-tag "${distTag}"...`);
-    run(`npm publish --access public --tag ${distTag}`, tempDir);
+    run('npm', ['publish', '--access', 'public', '--tag', distTag], tempDir);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -72,7 +72,7 @@ const publishPackages = ({
 } = {}) => {
   if (build) {
     logger.log('Building packages...');
-    run('npm run build', rootDir);
+    run('npm', ['run', 'build'], rootDir);
   }
 
   const packageJson = ensurePackageJson();
@@ -80,7 +80,7 @@ const publishPackages = ({
 
   if (publishUnscoped) {
     logger.log(`Publishing superdoc with dist-tag "${distTag}"...`);
-    run(`npm publish --access public --tag ${distTag}`, superdocDir);
+    run('npm', ['publish', '--access', 'public', '--tag', distTag], superdocDir);
   }
 
   publishScopedMirror(packageJson, distTag, logger);
