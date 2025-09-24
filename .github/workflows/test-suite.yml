@@ -55,7 +55,13 @@ jobs:
         run: npm run build
 
       - name: Unit tests with coverage
-        run: npm test -- --coverage --coverage.reporter=json --coverage.reporter=text
+        run: |
+          npm test -- \
+            --coverage \
+            --coverage.reporter=json \
+            --coverage.reporter=text \
+            --exclude="**/examples/**" \
+            --exclude="**/chrome-extension/**"
 
       - name: Check diff coverage
         if: ${{ inputs.check-coverage && github.event_name == 'pull_request' }}
