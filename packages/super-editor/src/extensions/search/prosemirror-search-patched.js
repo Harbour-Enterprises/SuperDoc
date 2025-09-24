@@ -265,17 +265,20 @@ function mapIndexToDocPos(node, start, index) {
   if (index >= fullText.length) return start + node.content.size;
   let target = start;
   let remaining = index;
+  let found = false;
   node.descendants((child, pos) => {
+    if (found) return false;
     if (!child.isText) return true;
     const len = child.text.length;
     if (remaining <= len) {
-      target = pos + remaining;
+      target = start + pos + remaining;
+      found = true;
       return false;
     }
     remaining -= len;
     return true;
   });
-  return target;
+  return found ? target : start + node.content.size;
 }
 const transparentInlineNodes = new Set(['run']);
 function scanTextblocks(node, from, to, f, nodeStart = 0) {

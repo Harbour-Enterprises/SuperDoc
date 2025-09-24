@@ -101,4 +101,34 @@ describe('Search command', () => {
       editor.destroy();
     }
   });
+
+  it('should include text from adjacent run nodes in string search matches', () => {
+    const editor = createDocxTestEditor({ isHeadless: true });
+
+    try {
+      const { doc, paragraph, run } = editor.schema.nodes;
+      const docWithRuns = doc.create(null, [
+        paragraph.create(null, [
+          run.create(null, [editor.schema.text('An')]),
+          run.create(null, [editor.schema.text('B')]),
+        ]),
+      ]);
+
+      const baseState = EditorState.create({
+        schema: editor.schema,
+        doc: docWithRuns,
+        plugins: editor.state.plugins,
+      });
+      editor.view.updateState(baseState);
+
+      const matches = editor.commands.search('An');
+
+      expect(matches).toHaveLength(1);
+      const match = matches[0];
+      expect(match?.text).toBe('An');
+      expect(editor.view.state.doc.textBetween(match.from, match.to)).toBe('An');
+    } finally {
+      editor.destroy();
+    }
+  });
 });
