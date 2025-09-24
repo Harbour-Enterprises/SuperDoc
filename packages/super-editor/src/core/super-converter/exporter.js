@@ -15,6 +15,7 @@ import { carbonCopy } from '../utilities/carbonCopy.js';
 import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
+import { getFallbackImageNameFromDataUri, sanitizeDocxMediaName } from './helpers/mediaHelpers.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wHighlightTranslator } from './v3/handlers/w/highlight/highlight-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
