@@ -60,8 +60,7 @@ jobs:
             --coverage \
             --coverage.reporter=json \
             --coverage.reporter=text \
-            --exclude="**/examples/**" \
-            --exclude="**/chrome-extension/**"
+            --exclude="**/examples/**"
 
       - name: Check diff coverage
         if: ${{ inputs.check-coverage && github.event_name == 'pull_request' }}
