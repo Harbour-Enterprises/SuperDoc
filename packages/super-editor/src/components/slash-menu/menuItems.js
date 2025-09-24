@@ -120,8 +120,17 @@ function filterCustomItems(sections, context) {
 export function getItems(context) {
   const { editor, selectedText, trigger, clipboardContent } = context;
 
-  // Handle legacy clipboardContent parameter for backward compatibility
-  const clipboardHasContent = clipboardContent?.hasContent || !!(clipboardContent?.html || clipboardContent?.text);
+  const clipboardHasContent = Boolean(
+    clipboardContent?.hasContent ||
+      clipboardContent?.html ||
+      clipboardContent?.text ||
+      (typeof clipboardContent?.size === 'number' && clipboardContent.size > 0) ||
+      (clipboardContent && typeof clipboardContent?.content?.size === 'number' && clipboardContent.content.size > 0) ||
+      (clipboardContent?.raw && typeof clipboardContent.raw.size === 'number' && clipboardContent.raw.size > 0) ||
+      (clipboardContent?.raw &&
+        typeof clipboardContent.raw?.content?.size === 'number' &&
+        clipboardContent.raw.content.size > 0),
+  );
 
   const isInTable = selectionHasNodeOrMark(editor.view.state, 'table', { requireEnds: true });
   const isInSectionNode = selectionHasNodeOrMark(editor.view.state, 'documentSection', { requireEnds: true });

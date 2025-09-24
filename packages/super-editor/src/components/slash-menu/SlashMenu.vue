@@ -107,7 +107,11 @@ const renderCustomItem = async (itemId) => {
   const { element, item } = refData;
 
   try {
-    const context = await getEditorContext(props.editor);
+    if (!currentContext.value) {
+      currentContext.value = await getEditorContext(props.editor);
+    }
+
+    const context = currentContext.value;
     const customElement = item.render(context);
 
     if (customElement instanceof HTMLElement) {
@@ -191,20 +195,20 @@ const handleRightClick = async (event) => {
   }
 
   event.preventDefault();
-  props.editor.view.dispatch(
-    props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-      type: 'open',
-      pos: props.editor.view.state.selection.from,
-      clientX: event.clientX,
-      clientY: event.clientY,
-    }),
-  );
-  searchQuery.value = '';
-  // Set sections and selectedId when menu opens
   const context = await getEditorContext(props.editor, event);
   currentContext.value = context; // Store context for later use
   sections.value = getItems({ ...context, trigger: 'click' });
   selectedId.value = flattenedItems.value[0]?.id || null;
+  searchQuery.value = '';
+
+  props.editor.view.dispatch(
+    props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
+      type: 'open',
+      pos: context?.pos ?? props.editor.view.state.selection.from,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    }),
+  );
 };
 
 const executeCommand = async (item) => {
@@ -251,6 +255,7 @@ const closeMenu = (options = { restoreCursor: true }) => {
     }
 
     cleanupCustomItems();
+    currentContext.value = null;
 
     // Update local state
     isOpen.value = false;
@@ -281,10 +286,16 @@ onMounted(() => {
     menuPosition.value = event.menuPosition;
     searchQuery.value = '';
     // Set sections and selectedId when menu opens
-    const context = await getEditorContext(props.editor);
-    currentContext.value = context; // Store context for later use
-    sections.value = getItems({ ...context, trigger: 'slash' });
-    selectedId.value = flattenedItems.value[0]?.id || null;
+    if (!currentContext.value) {
+      const context = await getEditorContext(props.editor);
+      currentContext.value = context; // Store context for later use
+      sections.value = getItems({ ...context, trigger: 'slash' });
+      selectedId.value = flattenedItems.value[0]?.id || null;
+    } else if (sections.value.length === 0) {
+      const trigger = currentContext.value.event?.type === 'contextmenu' ? 'click' : 'slash';
+      sections.value = getItems({ ...currentContext.value, trigger });
+      selectedId.value = flattenedItems.value[0]?.id || null;
+    }
   });
 
   props.editor.view.dom.addEventListener('contextmenu', handleRightClick);

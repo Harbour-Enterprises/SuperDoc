@@ -192,6 +192,102 @@ describe('SlashMenu.vue', () => {
       expect(wrapper.find('.slash-menu-custom-item').exists()).toBe(true);
     });
 
+    it('should pass right-click context (including event) to custom renderers', async () => {
+      const rightClickEvent = new MouseEvent('contextmenu', { clientX: 120, clientY: 160 });
+
+      const contextFromEvent = {
+        selectedText: '',
+        hasSelection: false,
+        event: rightClickEvent,
+        pos: 42,
+      };
+
+      mockGetEditorContext.mockReset();
+      mockGetEditorContext.mockResolvedValue(contextFromEvent);
+
+      const renderSpy = vi.fn(() => {
+        const el = document.createElement('div');
+        el.textContent = 'custom';
+        return el;
+      });
+
+      mockGetItems.mockReturnValue([
+        {
+          id: 'custom-section',
+          items: [
+            {
+              id: 'custom-item',
+              label: 'Custom Item',
+              render: renderSpy,
+              allowedTriggers: ['slash', 'click'],
+            },
+          ],
+        },
+      ]);
+
+      mount(SlashMenu, { props: mockProps });
+
+      const contextMenuHandler = mockEditor.view.dom.addEventListener.mock.calls.find(
+        (call) => call[0] === 'contextmenu',
+      )[1];
+
+      await contextMenuHandler(rightClickEvent);
+
+      const onSlashMenuOpen = mockEditor.on.mock.calls.find((call) => call[0] === 'slashMenu:open')[1];
+      await onSlashMenuOpen({ menuPosition: { left: '100px', top: '200px' } });
+      await nextTick();
+      await nextTick();
+
+      expect(renderSpy).toHaveBeenCalledWith(expect.objectContaining({ event: rightClickEvent }));
+    });
+
+    it('should reuse the computed context instead of re-reading clipboard for custom renders', async () => {
+      const rightClickEvent = new MouseEvent('contextmenu', { clientX: 200, clientY: 240 });
+
+      mockGetEditorContext.mockReset();
+      mockGetEditorContext.mockResolvedValue({
+        selectedText: '',
+        hasSelection: false,
+        event: rightClickEvent,
+        pos: 21,
+      });
+
+      const renderSpy = vi.fn(() => {
+        const el = document.createElement('div');
+        el.textContent = 'custom';
+        return el;
+      });
+
+      mockGetItems.mockReturnValue([
+        {
+          id: 'custom-section',
+          items: [
+            {
+              id: 'custom-item',
+              label: 'Custom Item',
+              render: renderSpy,
+              allowedTriggers: ['slash', 'click'],
+            },
+          ],
+        },
+      ]);
+
+      mount(SlashMenu, { props: mockProps });
+
+      const contextMenuHandler = mockEditor.view.dom.addEventListener.mock.calls.find(
+        (call) => call[0] === 'contextmenu',
+      )[1];
+
+      await contextMenuHandler(rightClickEvent);
+
+      const onSlashMenuOpen = mockEditor.on.mock.calls.find((call) => call[0] === 'slashMenu:open')[1];
+      await onSlashMenuOpen({ menuPosition: { left: '100px', top: '200px' } });
+      await nextTick();
+      await nextTick();
+
+      expect(mockGetEditorContext).toHaveBeenCalledTimes(1);
+    });
+
     it('should handle multiple sections with dividers', async () => {
       mockGetItems.mockReturnValue([
         {

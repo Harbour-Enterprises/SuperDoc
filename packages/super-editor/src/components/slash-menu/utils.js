@@ -66,6 +66,44 @@ export const getPropsByItemId = (itemId, props) => {
 };
 
 /**
+ * Normalize clipboard content returned from readFromClipboard into a consistent shape
+ * Supports modern clipboard API responses as well as legacy ProseMirror fragments
+ * @param {any} rawClipboardContent
+ * @returns {{ html: string|null, text: string|null, hasContent: boolean, raw: any }}
+ */
+function normalizeClipboardContent(rawClipboardContent) {
+  if (!rawClipboardContent) {
+    return {
+      html: null,
+      text: null,
+      hasContent: false,
+      raw: null,
+    };
+  }
+
+  const html = typeof rawClipboardContent.html === 'string' ? rawClipboardContent.html : null;
+  const text = typeof rawClipboardContent.text === 'string' ? rawClipboardContent.text : null;
+
+  const hasHtml = !!html && html.trim().length > 0;
+  const hasText = !!text && text.length > 0;
+  const isObject = typeof rawClipboardContent === 'object' && rawClipboardContent !== null;
+  const fragmentSize = typeof rawClipboardContent.size === 'number' ? rawClipboardContent.size : null;
+  const nestedSize =
+    isObject && rawClipboardContent.content && typeof rawClipboardContent.content.size === 'number'
+      ? rawClipboardContent.content.size
+      : null;
+
+  const hasFragmentContent = (fragmentSize ?? nestedSize ?? 0) > 0;
+
+  return {
+    html,
+    text,
+    hasContent: hasHtml || hasText || hasFragmentContent,
+    raw: rawClipboardContent,
+  };
+}
+
+/**
  * Get the current editor context for menu logic
  *
  * @param {Object} editor - The editor instance
@@ -92,7 +130,8 @@ export async function getEditorContext(editor, event) {
   }
 
   // We need to check if we have anything in the clipboard and request permission if needed
-  const clipboardContent = await readFromClipboard(state);
+  const rawClipboardContent = await readFromClipboard(state);
+  const clipboardContent = normalizeClipboardContent(rawClipboardContent);
 
   // Get document structure information
   const isInTable = selectionHasNodeOrMark(state, 'table', { requireEnds: true });
@@ -159,16 +198,12 @@ export async function getEditorContext(editor, event) {
     isTrackedChange,
     trackedChangeId,
     documentMode: editor.options?.documentMode || 'editing',
-    canUndo: state.history?.undoDepth > 0,
-    canRedo: state.history?.redoDepth > 0,
+    canUndo: computeCanUndo(editor, state),
+    canRedo: computeCanRedo(editor, state),
     isEditable: editor.isEditable,
 
     // Clipboard
-    clipboardContent: {
-      html: clipboardContent?.html || null,
-      text: clipboardContent?.text || null,
-      hasContent: !!(clipboardContent?.html || clipboardContent?.text),
-    },
+    clipboardContent,
 
     // Position and trigger info
     cursorPosition,
@@ -179,4 +214,36 @@ export async function getEditorContext(editor, event) {
     // Editor reference for advanced use cases
     editor,
   };
+}
+
+function computeCanUndo(editor, state) {
+  if (typeof editor?.can === 'function') {
+    try {
+      const can = editor.can();
+      if (can && typeof can.undo === 'function') {
+        return !!can.undo();
+      }
+    } catch (error) {
+      console.warn('[SlashMenu] Unable to determine undo availability via editor.can():', error);
+    }
+  }
+
+  const undoDepth = state?.history?.undoDepth;
+  return typeof undoDepth === 'number' ? undoDepth > 0 : false;
+}
+
+function computeCanRedo(editor, state) {
+  if (typeof editor?.can === 'function') {
+    try {
+      const can = editor.can();
+      if (can && typeof can.redo === 'function') {
+        return !!can.redo();
+      }
+    } catch (error) {
+      console.warn('[SlashMenu] Unable to determine redo availability via editor.can():', error);
+    }
+  }
+
+  const redoDepth = state?.history?.redoDepth;
+  return typeof redoDepth === 'number' ? redoDepth > 0 : false;
 }

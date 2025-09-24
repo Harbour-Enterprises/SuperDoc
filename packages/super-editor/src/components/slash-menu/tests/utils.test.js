@@ -82,6 +82,10 @@ describe('utils.js', () => {
           html: '<p>clipboard html</p>',
           text: 'clipboard text',
           hasContent: true,
+          raw: {
+            html: '<p>clipboard html</p>',
+            text: 'clipboard text',
+          },
         },
 
         // Position and trigger info
@@ -157,6 +161,24 @@ describe('utils.js', () => {
       expect(context.isEditable).toBe(false);
     });
 
+    it('should derive canUndo/canRedo from editor command availability', async () => {
+      delete mockEditor.view.state.history;
+
+      mockEditor.can = vi.fn(() => ({
+        undo: () => true,
+        redo: () => false,
+      }));
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+
+      const context = await getEditorContext(mockEditor);
+
+      expect(mockEditor.can).toHaveBeenCalled();
+      expect(context.canUndo).toBe(true);
+      expect(context.canRedo).toBe(false);
+    });
+
     it('should handle clipboard content variations', async () => {
       mockReadFromClipboard.mockResolvedValue({
         html: '<p>rich content</p>',
@@ -170,6 +192,40 @@ describe('utils.js', () => {
         html: '<p>rich content</p>',
         text: 'plain content',
         hasContent: true,
+        raw: {
+          html: '<p>rich content</p>',
+          text: 'plain content',
+        },
+      });
+    });
+
+    it('should detect clipboard content from ProseMirror slices', async () => {
+      const slice = { size: 3 };
+      mockReadFromClipboard.mockResolvedValue(slice);
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+
+      const context = await getEditorContext(mockEditor);
+
+      expect(context.clipboardContent).toEqual({
+        html: null,
+        text: null,
+        hasContent: true,
+        raw: slice,
+      });
+    });
+
+    it('should detect clipboard content from nested slice structure', async () => {
+      const slice = { content: { size: 2 } };
+      mockReadFromClipboard.mockResolvedValue(slice);
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+
+      const context = await getEditorContext(mockEditor);
+
+      expect(context.clipboardContent).toEqual({
+        html: null,
+        text: null,
+        hasContent: true,
+        raw: slice,
       });
     });
   });

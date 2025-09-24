@@ -155,6 +155,20 @@ describe('menuItems.js', () => {
 
       expect(pasteItem).toBeDefined();
     });
+
+    it('should keep paste item visible when clipboard is a ProseMirror slice', () => {
+      mockContext.clipboardContent = {
+        content: { size: 1 },
+        size: 1,
+      };
+
+      const sections = getItems(mockContext);
+
+      const clipboardSection = sections.find((s) => s.id === 'clipboard');
+      const pasteItem = clipboardSection?.items.find((item) => item.id === 'paste');
+
+      expect(pasteItem).toBeDefined();
+    });
   });
 
   describe('getItems - custom configuration', () => {
