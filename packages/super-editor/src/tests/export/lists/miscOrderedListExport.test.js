@@ -16,6 +16,8 @@ describe('[orderedlist_interrupted1.docx] interrupted ordered list tests', async
     const firstList = body.elements[0];
     const firstListText = getTextFromNode(firstList);
     expect(firstListText).toBe('a');
+    // The interrupted sequence now inherits the numbering definition that resumes later
+    // in the document, so the exported numPr id resolves to 2 instead of the old default 0.
     testListNodes({ node: firstList, expectedLevel: 0, expectedNumPr: 2 });
   });
 

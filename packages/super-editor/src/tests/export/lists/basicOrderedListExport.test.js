@@ -23,6 +23,8 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
     expect(titleText).toBe('Simple ordered list:');
 
     const item1 = body.elements[titleIndex + 2];
+    // Export now allocates a stable shared numbering definition for the list,
+    // so each paragraph references numPr 1 instead of the previous placeholder 0.
     testListNodes({ node: item1, expectedLevel: 0, expectedNumPr: 1, text: 'Item 1' });
 
     const item2 = body.elements[titleIndex + 3];
@@ -42,9 +44,11 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
     expect(titleText).toBe('Simple ordered list with sub lists:');
 
     const item1 = body.elements[titleIndex + 2];
+    // The second list shares a different numbering definition that restarts at id 2.
     testListNodes({ node: item1, expectedLevel: 0, expectedNumPr: 2, text: 'Item 1' });
 
     const item3 = body.elements[titleIndex + 4];
+    // Continuation items keep referencing the same numPr id to reflect the restart logic.
     testListNodes({ node: item3, expectedLevel: 0, expectedNumPr: 2, text: 'Item 3' });
 
     const firstNestedItem = body.elements[titleIndex + 5];

@@ -17,6 +17,8 @@ import { getTextFromNode } from './index';
  * @returns {void}
  */
 export const testListNodes = ({ node, expectedLevel, expectedNumPr, text }) => {
+  // Word stores numbering attributes as strings, while some fixtures pass numbers.
+  // Normalizing keeps the comparison focused on the logical value rather than the type.
   const normalize = (value) => (value === undefined ? value : (value?.toString?.() ?? value));
 
   const ilvl = getListAttrFromNumPr('w:ilvl', node);
