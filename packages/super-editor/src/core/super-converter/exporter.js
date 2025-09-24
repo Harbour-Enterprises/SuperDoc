@@ -29,6 +29,7 @@ import { translator as wUnderlineTranslator } from './v3/handlers/w/u/u-translat
 import { translator as wDrawingNodeTranslator } from './v3/handlers/w/drawing/drawing-translator.js';
 import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark-start/index.js';
 import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
+import { translator as alternateChoiceTranslator } from '@converter/v3/handlers/mc/altermateContent';
 
 export const isLineBreakOnlyRun = (node) => {
   if (!node) return false;
@@ -1188,30 +1189,14 @@ function translateShapeTextbox(params) {
 
 function translateContentBlock(params) {
   const { node } = params;
-  const { drawingContent, vmlAttributes, horizontalRule } = node.attrs;
+  const { vmlAttributes, horizontalRule } = node.attrs;
 
   // Handle VML v:rect elements (like horizontal rules)
   if (vmlAttributes || horizontalRule) {
     return translateVRectContentBlock(params);
   }
 
-  // Handle modern DrawingML content (existing logic)
-  const drawing = {
-    name: 'w:drawing',
-    elements: [...(drawingContent ? [...(drawingContent.elements || [])] : [])],
-  };
-
-  const choice = {
-    name: 'mc:Choice',
-    attributes: { Requires: 'wps' },
-    elements: [drawing],
-  };
-
-  const alternateContent = {
-    name: 'mc:AlternateContent',
-    elements: [choice],
-  };
-
+  const alternateContent = alternateChoiceTranslator.decode(params);
   return wrapTextInRun(alternateContent);
 }
 

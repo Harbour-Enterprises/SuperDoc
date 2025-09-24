@@ -1,6 +1,9 @@
+import { describe, expect, it, vi } from 'vitest';
 import { addDefaultStylesIfMissing, createDocumentJson } from '@core/super-converter/v2/importer/docxImporter';
 import { DEFAULT_LINKED_STYLES } from '../../core/super-converter/exporter-docx-defs';
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
+import { getTestDataByFileName } from '@tests/helpers/helpers.js';
+import { extractParagraphText } from '@tests/helpers/getParagraphText.js';
 
 describe('addDefaultStylesIfMissing', () => {
   const styles = {
@@ -66,5 +69,50 @@ describe('createDocumentJson', () => {
     expect(result).toBeTruthy();
     expect(converter.headers).toEqual({});
     expect(converter.footers).toEqual({});
+  });
+
+  it('imports alternatecontent_valid sample and preserves choice content', async () => {
+    const docx = await getTestDataByFileName('alternateContent_valid.docx');
+
+    const converter = {
+      telemetry: {
+        trackFileStructure: vi.fn(),
+        trackUsage: vi.fn(),
+        trackStatistic: vi.fn(),
+      },
+      docHiglightColors: new Set(),
+    };
+
+    const editor = {
+      options: {},
+      emit: vi.fn(),
+    };
+
+    const result = createDocumentJson(docx, converter, editor);
+    expect(result).toBeTruthy();
+
+    const paragraphTexts = (result.pmDoc.content || [])
+      .filter((node) => node?.type === 'paragraph')
+      .map((paragraph) => extractParagraphText(paragraph));
+
+    expect(paragraphTexts[0]).toBe('This document demonstrates valid uses of mc:AlternateContent for testing.');
+    expect(paragraphTexts.some((text) => text.includes('Choice run (bold red, Requires=w14)'))).toBe(true);
+    expect(paragraphTexts.some((text) => text.includes('Fallback run (plain)'))).toBe(false);
+    expect(paragraphTexts.some((text) => text.includes('Choice paragraph at body level (Requires=w14)'))).toBe(true);
+    expect(paragraphTexts.some((text) => text.includes('Fallback paragraph at body level'))).toBe(false);
+    expect(paragraphTexts.some((text) => text.includes('Choice A: Requires=w15'))).toBe(true);
+
+    const tableNode = result.pmDoc.content.find((node) => node?.type === 'table');
+    expect(tableNode).toBeDefined();
+
+    const tableParagraphTexts = (tableNode?.content || [])
+      .flatMap((row) => row?.content || [])
+      .flatMap((cell) => cell?.content || [])
+      .filter((node) => node?.type === 'paragraph')
+      .map((paragraph) => extractParagraphText(paragraph));
+
+    expect(tableParagraphTexts).toContain('Cell-level AlternateContent follows:');
+    expect(tableParagraphTexts).toContain('Choice paragraph inside table cell (Requires=w14)');
+    expect(tableParagraphTexts).not.toContain('Fallback paragraph inside table cell');
   });
 });
