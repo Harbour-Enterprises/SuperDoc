@@ -1118,6 +1118,8 @@ export class Editor extends EventEmitter {
 
     proseMirror.style.outline = 'none';
     proseMirror.style.border = 'none';
+    element.style.backgroundColor = '#fff';
+    proseMirror.style.backgroundColor = '#fff';
 
     // Typeface and font size
     const { typeface, fontSizePt, fontFamilyCss } = this.converter.getDocumentDefaultStyles() ?? {};
