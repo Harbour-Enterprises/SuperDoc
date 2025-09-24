@@ -406,41 +406,50 @@ export const processCombinedNodesForFldChar = (nodesToCombine = [], instrText) =
   // If we have a hyperlink, we need to replace the last node with a link node.
   else if (instruction === 'HYPERLINK') {
     const urlMatch = instrText?.match(/HYPERLINK\s+"([^"]+)"/);
+    let linkAttributes;
     if (urlMatch && urlMatch.length >= 2) {
-      const textStart = nodesToCombine.findIndex((n) =>
-        n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'separate'),
-      );
-      const textEnd = nodesToCombine.findIndex((n) =>
-        n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'end'),
-      );
-
-      const textNodes = nodesToCombine.slice(textStart + 1, textEnd);
       const url = urlMatch[1];
-
-      const textMarks = [];
-      textNodes.forEach((n) => {
-        const rPr = n.elements.find((el) => el.name === 'w:rPr');
-        if (!rPr) return;
-
-        const { elements } = rPr;
-        elements.forEach((el) => {
-          textMarks.push(el);
-        });
-      });
-
-      // Create a rPr and replace all nodes with the updated node.
-      const linkMark = { name: 'link', attributes: { href: url } };
-      const rPr = { name: 'w:rPr', type: 'element', elements: [linkMark, ...textMarks] };
-      processedNodes.push({
-        name: 'w:r',
-        type: 'element',
-        elements: [rPr, ...textNodes],
-      });
+      linkAttributes = { 'w:anchor': url };
     } else {
-      console.log('Could not parse hyperlink URL from instruction:', instrText);
-      // If we couldn't parse the URL, just return all nodes as-is
-      processedNodes = nodesToCombine;
+      const availableSwitches = {
+        'w:anchor': 'l "(?<value>.+)"',
+        new_window: '\n',
+        'w:tgtFrame': '\t "(?<value>.+)"',
+        'w:tooltip': 'o "(?<value>.+)"',
+      };
+
+      const parsedSwitches = {};
+
+      for (const [key, regex] of Object.entries(availableSwitches)) {
+        const match = instrText?.match(new RegExp(regex));
+        if (match) {
+          parsedSwitches[key] = match.groups?.value || true;
+        }
+      }
+
+      if (parsedSwitches.new_window) {
+        parsedSwitches['w:tgtFrame'] = '_blank';
+        delete parsedSwitches.new_window;
+      }
+
+      linkAttributes = { ...parsedSwitches };
     }
+
+    const textStart = nodesToCombine.findIndex((n) =>
+      n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'separate'),
+    );
+    const textEnd = nodesToCombine.findIndex((n) =>
+      n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'end'),
+    );
+
+    const textNodes = nodesToCombine.slice(textStart + 1, textEnd);
+
+    processedNodes.push({
+      name: 'w:hyperlink',
+      type: 'element',
+      attributes: linkAttributes,
+      elements: textNodes,
+    });
   } else {
     // Unknown field, just return all nodes as-is
     processedNodes = nodesToCombine;
