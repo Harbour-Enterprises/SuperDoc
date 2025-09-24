@@ -91,7 +91,7 @@ const encode = (params, encodedAttrs) => {
       if (filteredMarks.length !== existingMarks.length) {
         if (filteredMarks.length) child = { ...child, marks: filteredMarks };
         else {
-          const { marks, ...rest } = child;
+          const { marks: _removedMarks, ...rest } = child;
           child = rest;
         }
       }

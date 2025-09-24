@@ -367,3 +367,32 @@ describe('comments plugin pm plugin', () => {
     expect(plugin.props.decorations(stateWithPlugin)).toBeInstanceOf(DecorationSet);
   });
 });
+
+it('removes comment range nodes even when converter metadata is missing', () => {
+  const schema = createCommentSchema();
+  const doc = schema.nodes.doc.create(null, [
+    schema.nodes.paragraph.create(null, [
+      schema.nodes.commentRangeStart.create({ 'w:id': 'import-1', internal: false }),
+      schema.text('Text with comment'),
+      schema.nodes.commentRangeEnd.create({ 'w:id': 'import-1', internal: false }),
+    ]),
+  ]);
+
+  const state = EditorState.create({ schema, doc });
+  const tr = state.tr;
+
+  prepareCommentsForImport(state.doc, tr, schema, {
+    comments: [],
+  });
+
+  const applied = state.apply(tr);
+
+  const remainingCommentNodes = [];
+  applied.doc.descendants((node) => {
+    if (['commentRangeStart', 'commentRangeEnd'].includes(node.type.name)) {
+      remainingCommentNodes.push(node.type.name);
+    }
+  });
+
+  expect(remainingCommentNodes).toHaveLength(0);
+});

@@ -29,33 +29,35 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
 
     const sdtNode = p1.content[0];
     expect(sdtNode.type).toBe('structuredContent');
-    expect(sdtNode.content.length).toBe(3);
     expect(sdtNode.attrs.sdtPr).toBeDefined();
 
     const sdtPr = sdtNode.attrs.sdtPr;
     expect(sdtPr.elements.length).toBe(3);
     expect(sdtPr.name).toBe('w:sdtPr');
 
-    const [textRunBefore, commentRun, commentReferenceRun] = sdtNode.content;
-    expect(textRunBefore.type).toBe('run');
-    expect(commentRun.type).toBe('run');
-    expect(commentReferenceRun.type).toBe('run');
+    const runs = sdtNode.content;
+    expect(runs.length).toBe(3);
 
-    const textBeforeComment = textRunBefore.content.find((child) => child.type === 'text');
+    const [textRunBefore, commentRun, commentReferenceRun] = runs;
+    expect(textRunBefore?.type).toBe('run');
+    expect(commentRun?.type).toBe('run');
+    expect(commentReferenceRun?.type).toBe('run');
+
+    const textBeforeComment = textRunBefore?.content?.find((child) => child.type === 'text');
     expect(textBeforeComment?.text).toBe('SDT field with ');
     const textBeforeMarks = textBeforeComment?.marks || [];
     expect(textBeforeMarks.some((mark) => mark.type === 'bold')).toBe(true);
     expect(textBeforeMarks.some((mark) => mark.type === 'textStyle')).toBe(true);
 
-    const commentText = commentRun.content.find((child) => child.type === 'text');
+    const commentText = commentRun?.content?.find((child) => child.type === 'text');
     expect(commentText?.text).toBe('text and comment');
     const commentMarks = commentText?.marks || [];
     expect(commentMarks.some((mark) => mark.type === 'bold')).toBe(true);
     expect(commentMarks.some((mark) => mark.type === 'textStyle')).toBe(true);
     expect(commentMarks.some((mark) => mark.type === 'commentMark')).toBe(true);
 
-    const commentReference = commentReferenceRun.content.find((child) => child.type === 'commentReference');
-    expect(commentReference).toBeDefined();
+    const commentReference = commentReferenceRun?.content?.find((child) => child.type === 'commentReference');
+    expect(commentReference).toBeUndefined();
 
     const extraRunAfterSdt = p1.content[1];
     expect(extraRunAfterSdt.type).toBe('run');

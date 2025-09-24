@@ -1,9 +1,11 @@
 // @ts-check
 import { Extension } from '@core/Extension.js';
-import { search, SearchQuery, setSearchState, getMatchHighlights } from 'prosemirror-search';
+import { search, SearchQuery, setSearchState, getMatchHighlights } from './prosemirror-search-patched.js';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { v4 as uuidv4 } from 'uuid';
+
+const isRegExp = (value) => Object.prototype.toString.call(value) === '[object RegExp]';
 
 /**
  * Search match object
@@ -107,10 +109,11 @@ export const Search = Extension.create({
           let regexp = false;
           const wholeWord = false;
 
-          if (patternInput instanceof RegExp) {
+          if (isRegExp(patternInput)) {
+            const regexPattern = /** @type {RegExp} */ (patternInput);
             regexp = true;
-            pattern = patternInput.source;
-            caseSensitive = !patternInput.flags.includes('i');
+            pattern = regexPattern.source;
+            caseSensitive = !regexPattern.flags.includes('i');
           } else if (typeof patternInput === 'string' && /^\/(.+)\/([gimsuy]*)$/.test(patternInput)) {
             const [, body, flags] = patternInput.match(/^\/(.+)\/([gimsuy]*)$/);
             regexp = true;
