@@ -13,6 +13,7 @@ import LinkInput from './toolbar/LinkInput.vue';
 import { checkNodeSpecificClicks } from './cursor-helpers.js';
 import { getFileObject } from '@harbour-enterprises/common';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import { ensureEditorShadowRoot } from '@/utils/shadow-root.js';
 
 const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 
@@ -47,6 +48,7 @@ const message = useMessage();
 
 const editorWrapper = ref(null);
 const editorElem = ref(null);
+const editorMountPoint = shallowRef(null); // actual mount lives inside the shadow root
 
 const fileSource = ref(null);
 
@@ -159,9 +161,20 @@ const getExtensions = () => {
 };
 
 const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } = {}) => {
+  if (!editorElem.value) return;
+
+  // Mount the editing surface inside a shadow root so host-page CSS cannot bleed in
+  // `ensureEditorShadowRoot` returns (and caches) our shadow DOM + inner mount slot
+  const { mount } = ensureEditorShadowRoot(editorElem.value);
+  editorMountPoint.value = mount;
+
+  if (editorMountPoint.value) {
+    editorMountPoint.value.innerHTML = '';
+  }
+
   editor.value = new Editor({
     mode: 'docx',
-    element: editorElem.value,
+    element: editorMountPoint.value || editorElem.value,
     fileSource: fileSource.value,
     extensions: getExtensions(),
     externalExtensions: props.options.externalExtensions,
@@ -228,13 +241,15 @@ const handleSuperEditorKeydown = (event) => {
 
 const handleSuperEditorClick = (event) => {
   emit('editor-click', { editor: editor.value });
-  let pmElement = editorElem.value?.querySelector('.ProseMirror');
+  const pmElement = editor.value?.view?.dom;
 
   if (!pmElement || !editor.value) {
     return;
   }
 
-  let isInsideEditor = pmElement.contains(event.target);
+  // `composedPath` lets us inspect across the shadow boundary
+  const eventPath = event.composedPath?.() || [];
+  const isInsideEditor = eventPath.includes(pmElement);
 
   if (!isInsideEditor && editor.value.isEditable) {
     editor.value.view?.focus();
@@ -254,7 +269,9 @@ onMounted(() => {
 });
 
 const handleMarginClick = (event) => {
-  if (event.target.classList.contains('ProseMirror')) return;
+  const pmElement = editor.value?.view?.dom;
+  const eventPath = event.composedPath?.() || [];
+  if (pmElement && eventPath.includes(pmElement)) return;
 
   onMarginClickCursorChange(event, editor.value);
 };

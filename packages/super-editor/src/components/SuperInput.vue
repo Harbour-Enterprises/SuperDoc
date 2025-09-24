@@ -2,6 +2,7 @@
 import { ref, shallowRef, onMounted, onBeforeUnmount } from 'vue';
 import { Editor } from '@/index.js';
 import { getRichTextExtensions, Placeholder } from '@extensions/index.js';
+import { ensureEditorShadowRoot } from '@/utils/shadow-root.js';
 
 const emit = defineEmits(['update:modelValue', 'focus', 'blur']);
 const props = defineProps({
@@ -30,6 +31,7 @@ const props = defineProps({
 
 const editor = shallowRef();
 const editorElem = ref(null);
+const editorMountPoint = shallowRef(null);
 const isFocused = ref(false);
 
 const onTransaction = ({ editor, transaction }) => {
@@ -54,10 +56,17 @@ const initEditor = async () => {
   props.options.onTransaction = onTransaction;
   props.options.onFocus = onFocus;
   props.options.onBlur = onBlur;
+  const { mount } = ensureEditorShadowRoot(editorElem.value);
+  editorMountPoint.value = mount;
+
+  if (editorMountPoint.value) {
+    editorMountPoint.value.innerHTML = '';
+  }
+
   editor.value = new Editor({
     mode: 'text',
     content: document.getElementById('currentContent'),
-    element: editorElem.value,
+    element: editorMountPoint.value || editorElem.value,
     extensions: getRichTextExtensions(),
     users: props.users,
     ...props.options,
