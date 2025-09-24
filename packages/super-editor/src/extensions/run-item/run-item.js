@@ -27,18 +27,21 @@ export const RunItem = Node.create({
 
   inline: true,
 
+  //change
   addOptions() {
     return {};
   },
 
+  //change
   parseDOM() {
     return [{ tag: 'run' }];
   },
 
+  //change
   renderDOM() {
     return ['run', 0];
   },
-
+  //change
   addAttributes() {
     return {
       attributes: {
