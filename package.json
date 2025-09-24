@@ -25,7 +25,7 @@
     "release:next": "npm run release:next --workspace=packages/superdoc",
     "clean:packages": "rm -rf ./packages/*/dist",
     "reset": "npm run clean:packages && rm -rf ./node_modules && rm -rf ./packages/*/node_modules && rm -rf ./package-lock.json && npm install",
-    "publish": "npm run build && cd packages/superdoc && npm publish --access public",
+    "publish": "node scripts/publish.mjs",
     "format": "prettier --write \"**/*.{js,jsx,vue,css,scss,json,md}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,vue,css,scss,json,md}\"",
     "lint": "eslint",
