@@ -44,10 +44,30 @@ const publishScopedMirror = (packageJson, distTag, logger = console) => {
         ...(packageJson.publishConfig || {}),
         access: 'public'
       },
+      scripts: {
+        ...(packageJson.scripts || {}),
+        postinstall: 'node ./npm-deprecation-notice.cjs'
+      },
+      files: [...new Set([...(packageJson.files || []), 'npm-deprecation-notice.cjs'])],
       readme: 'README.md'
     };
 
     writeFileSync(path.join(tempDir, 'package.json'), `${JSON.stringify(scopedPackageJson, null, 2)}\n`);
+
+    const deprecationNotice = [
+      '////////////////////////////////////////////////////////////////////////////////',
+      'The package "@harbour-enterprises/superdoc" is now mirrored from "superdoc".',
+      'Please update your dependencies to use the unscoped package name:',
+      '  npm uninstall @harbour-enterprises/superdoc',
+      '  npm install superdoc',
+      'This scoped package will eventually stop receiving new features.',
+      '////////////////////////////////////////////////////////////////////////////////'
+    ].join('\n');
+
+    writeFileSync(
+      path.join(tempDir, 'npm-deprecation-notice.cjs'),
+      `#!/usr/bin/env node\nconsole.warn('\n${deprecationNotice.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}\n');\n`
+    );
 
     const distSource = path.join(superdocDir, 'dist');
     cpSync(distSource, path.join(tempDir, 'dist'), { recursive: true });
