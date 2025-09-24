@@ -1,6 +1,9 @@
+import { selectionHasNodeOrMark } from '../cursor-helpers.js';
 import { readFromClipboard } from '../../core/utilities/clipboardUtils.js';
 import { tableActionsOptions } from './constants.js';
 import { markRaw } from 'vue';
+import { undoDepth, redoDepth } from 'prosemirror-history';
+import { yUndoPluginKey } from 'y-prosemirror';
 /**
  * Get props by item id
  *
@@ -65,11 +68,49 @@ export const getPropsByItemId = (itemId, props) => {
 };
 
 /**
+ * Normalize clipboard content returned from readFromClipboard into a consistent shape
+ * Supports modern clipboard API responses as well as legacy ProseMirror fragments
+ * @param {any} rawClipboardContent
+ * @returns {{ html: string|null, text: string|null, hasContent: boolean, raw: any }}
+ */
+function normalizeClipboardContent(rawClipboardContent) {
+  if (!rawClipboardContent) {
+    return {
+      html: null,
+      text: null,
+      hasContent: false,
+      raw: null,
+    };
+  }
+
+  const html = typeof rawClipboardContent.html === 'string' ? rawClipboardContent.html : null;
+  const text = typeof rawClipboardContent.text === 'string' ? rawClipboardContent.text : null;
+
+  const hasHtml = !!html && html.trim().length > 0;
+  const hasText = !!text && text.length > 0;
+  const isObject = typeof rawClipboardContent === 'object' && rawClipboardContent !== null;
+  const fragmentSize = typeof rawClipboardContent.size === 'number' ? rawClipboardContent.size : null;
+  const nestedSize =
+    isObject && rawClipboardContent.content && typeof rawClipboardContent.content.size === 'number'
+      ? rawClipboardContent.content.size
+      : null;
+
+  const hasFragmentContent = (fragmentSize ?? nestedSize ?? 0) > 0;
+
+  return {
+    html,
+    text,
+    hasContent: hasHtml || hasText || hasFragmentContent,
+    raw: rawClipboardContent,
+  };
+}
+
+/**
  * Get the current editor context for menu logic
  *
  * @param {Object} editor - The editor instance
  * @param {MouseEvent} [event] - Optional mouse event (for context menu)
- * @returns {Object} context - { editor, selectedText, pos, node, event }
+ * @returns {Promise<Object>} context - Enhanced editor context with comprehensive state information
  */
 export async function getEditorContext(editor, event) {
   const { view } = editor;
@@ -91,14 +132,188 @@ export async function getEditorContext(editor, event) {
   }
 
   // We need to check if we have anything in the clipboard and request permission if needed
-  const clipboardContent = await readFromClipboard(state);
+  const rawClipboardContent = await readFromClipboard(state);
+  const clipboardContent = normalizeClipboardContent(rawClipboardContent);
+
+  // Get document structure information
+  const structureFromResolvedPos = pos !== null ? getStructureFromResolvedPos(state, pos) : null;
+  const isInTable =
+    structureFromResolvedPos?.isInTable ?? selectionHasNodeOrMark(state, 'table', { requireEnds: true });
+  const isInList =
+    structureFromResolvedPos?.isInList ??
+    (selectionHasNodeOrMark(state, 'bulletList', { requireEnds: false }) ||
+      selectionHasNodeOrMark(state, 'orderedList', { requireEnds: false }));
+  const isInSectionNode =
+    structureFromResolvedPos?.isInSectionNode ??
+    selectionHasNodeOrMark(state, 'documentSection', { requireEnds: true });
+  const currentNodeType = node?.type?.name || null;
+
+  const activeMarks = [];
+
+  if (event && pos !== null) {
+    // For right-click events, get marks at the clicked position
+    const $pos = state.doc.resolve(pos);
+    if ($pos.marks && typeof $pos.marks === 'function') {
+      $pos.marks().forEach((mark) => activeMarks.push(mark.type.name));
+    }
+
+    // Also check marks on the node at this position if it exists
+    if (node && node.marks) {
+      node.marks.forEach((mark) => activeMarks.push(mark.type.name));
+    }
+  } else {
+    // For slash trigger, use stored marks and selection head marks
+    state.storedMarks?.forEach((mark) => activeMarks.push(mark.type.name));
+    state.selection.$head.marks().forEach((mark) => activeMarks.push(mark.type.name));
+  }
+
+  const isTrackedChange = activeMarks.includes('trackInsert') || activeMarks.includes('trackDelete');
+
+  let trackedChangeId = null;
+  if (isTrackedChange && event && pos !== null) {
+    const $pos = state.doc.resolve(pos);
+    const marksAtPos = $pos.marks();
+    const trackedMark = marksAtPos.find((mark) => mark.type.name === 'trackInsert' || mark.type.name === 'trackDelete');
+    if (trackedMark) {
+      trackedChangeId = trackedMark.attrs.id;
+    }
+  }
+
+  const cursorCoords = pos ? view.coordsAtPos(pos) : null;
+  const cursorPosition = cursorCoords
+    ? {
+        x: cursorCoords.left,
+        y: cursorCoords.top,
+      }
+    : null;
 
   return {
-    editor,
+    // Selection info
     selectedText,
+    hasSelection: !empty,
+    selectionStart: from,
+    selectionEnd: to,
+
+    // Document structure
+    isInTable,
+    isInList,
+    isInSectionNode,
+    currentNodeType,
+    activeMarks,
+
+    // Document state
+    isTrackedChange,
+    trackedChangeId,
+    documentMode: editor.options?.documentMode || 'editing',
+    canUndo: computeCanUndo(editor, state),
+    canRedo: computeCanRedo(editor, state),
+    isEditable: editor.isEditable,
+
+    // Clipboard
+    clipboardContent,
+
+    // Position and trigger info
+    cursorPosition,
     pos,
     node,
     event,
-    clipboardContent,
+
+    // Editor reference for advanced use cases
+    editor,
   };
 }
+
+function computeCanUndo(editor, state) {
+  if (typeof editor?.can === 'function') {
+    try {
+      const can = editor.can();
+      if (can && typeof can.undo === 'function') {
+        return !!can.undo();
+      }
+    } catch (error) {
+      console.warn('[SlashMenu] Unable to determine undo availability via editor.can():', error);
+    }
+  }
+
+  if (isCollaborationEnabled(editor)) {
+    try {
+      const undoManager = yUndoPluginKey.getState(state)?.undoManager;
+      return !!undoManager && undoManager.undoStack.length > 0;
+    } catch (error) {
+      console.warn('[SlashMenu] Unable to determine undo availability via y-prosemirror:', error);
+    }
+  }
+
+  try {
+    return undoDepth(state) > 0;
+  } catch (error) {
+    console.warn('[SlashMenu] Unable to determine undo availability via history plugin:', error);
+    return false;
+  }
+}
+
+function computeCanRedo(editor, state) {
+  if (typeof editor?.can === 'function') {
+    try {
+      const can = editor.can();
+      if (can && typeof can.redo === 'function') {
+        return !!can.redo();
+      }
+    } catch (error) {
+      console.warn('[SlashMenu] Unable to determine redo availability via editor.can():', error);
+    }
+  }
+
+  if (isCollaborationEnabled(editor)) {
+    try {
+      const undoManager = yUndoPluginKey.getState(state)?.undoManager;
+      return !!undoManager && undoManager.redoStack.length > 0;
+    } catch (error) {
+      console.warn('[SlashMenu] Unable to determine redo availability via y-prosemirror:', error);
+    }
+  }
+
+  try {
+    return redoDepth(state) > 0;
+  } catch (error) {
+    console.warn('[SlashMenu] Unable to determine redo availability via history plugin:', error);
+    return false;
+  }
+}
+
+function isCollaborationEnabled(editor) {
+  return Boolean(editor?.options?.collaborationProvider && editor?.options?.ydoc);
+}
+
+function getStructureFromResolvedPos(state, pos) {
+  try {
+    const $pos = state.doc.resolve(pos);
+    const ancestors = new Set();
+
+    for (let depth = $pos.depth; depth > 0; depth--) {
+      ancestors.add($pos.node(depth).type.name);
+    }
+
+    const isInList = ancestors.has('bulletList') || ancestors.has('orderedList');
+
+    // ProseMirror table structure typically includes tableRow/tableCell, so check those too
+    const isInTable =
+      ancestors.has('table') || ancestors.has('tableRow') || ancestors.has('tableCell') || ancestors.has('tableHeader');
+
+    const isInSectionNode = ancestors.has('documentSection');
+
+    return {
+      isInTable,
+      isInList,
+      isInSectionNode,
+    };
+  } catch (error) {
+    console.warn('[SlashMenu] Unable to resolve position for structural context:', error);
+    return null;
+  }
+}
+
+export {
+  getStructureFromResolvedPos as __getStructureFromResolvedPosForTest,
+  isCollaborationEnabled as __isCollaborationEnabledForTest,
+};

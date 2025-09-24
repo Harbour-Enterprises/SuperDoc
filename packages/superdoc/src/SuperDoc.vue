@@ -281,6 +281,7 @@ const editorOptions = (doc) => {
     annotations: proxy.$superdoc.config.annotations,
     isCommentsEnabled: proxy.$superdoc.config.modules?.comments,
     isAiEnabled: proxy.$superdoc.config.modules?.ai,
+    slashMenuConfig: proxy.$superdoc.config.modules?.slashMenu,
     onBeforeCreate: onEditorBeforeCreate,
     onCreate: onEditorCreate,
     onDestroy: onEditorDestroy,

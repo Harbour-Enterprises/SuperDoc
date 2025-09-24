@@ -154,6 +154,136 @@ const init = async () => {
         excludeItems: [], // ['italic', 'bold'],
         // texts: {},
       },
+      // Test custom slash menu configuration
+      slashMenu: {
+        //   includeDefaultItems: true, // Include default items
+        //   customItems: [
+        //     {
+        //       id: 'custom-section',
+        //       items: [
+        //         {
+        //           id: 'show-context',
+        //           label: 'Show Context',
+        //           allowedTriggers: ['slash', 'click'],
+        //           render: (context) => {
+        //             const container = document.createElement('div');
+        //             container.style.display = 'flex';
+        //             container.style.alignItems = 'center';
+        //             container.innerHTML = `
+        //               <span style="margin-right: 8px;">🔍</span>
+        //               <span>Show Context</span>
+        //             `;
+        //             return container;
+        //           },
+        //           action: (editor, context) => {
+        //             console.log('context', context);
+        //           }
+        //         },
+        //         {
+        //           id:'delete table',
+        //           label: 'Delete Table',
+        //           allowedTriggers: ['slash', 'click'],
+        //           render: (context) => {
+        //             const container = document.createElement('div');
+        //             container.style.display = 'flex';
+        //             container.style.alignItems = 'center';
+        //             container.innerHTML = `
+        //               <span style="margin-right: 8px;">🗑️</span>
+        //               <span>Delete Table</span>
+        //             `;
+        //             return container;
+        //           },
+        //           action: (editor) => {
+        //             editor.commands.deleteTable();
+        //           },
+        //           showWhen: (context) => context.isInTable
+        //         },
+        //         {
+        //           id: 'highlight-text',
+        //           label: 'Highlight Selection',
+        //           allowedTriggers: ['slash', 'click'],
+        //           render: (context) => {
+        //             const container = document.createElement('div');
+        //             container.style.display = 'flex';
+        //             container.style.alignItems = 'center';
+        //             container.innerHTML = `
+        //               <span style="margin-right: 8px; color: #ffa500;">✨</span>
+        //               <span>Highlight "${context.selectedText || 'text'}"</span>
+        //             `;
+        //             return container;
+        //           },
+        //           action: (editor) => {
+        //             editor.commands.setHighlight('#ffff00');
+        //           },
+        //           showWhen: (context) => context.hasSelection
+        //         },
+        //         {
+        //           id: 'insert-emoji',
+        //           label: 'Insert Emoji',
+        //           allowedTriggers: ['slash', 'click'],
+        //           render: (context) => {
+        //             const container = document.createElement('div');
+        //             container.style.display = 'flex';
+        //             container.style.alignItems = 'center';
+        //             container.innerHTML = `
+        //               <span style="margin-right: 8px;">😀</span>
+        //               <span>Insert Emoji</span>
+        //             `;
+        //             return container;
+        //           },
+        //           action: (editor) => {
+        //             editor.commands.insertContent('¯\\_(ツ)_/¯');
+        //           }
+        //         },
+        //         {
+        //           id: 'accept-tracked-change',
+        //           label: 'Accept Change',
+        //           allowedTriggers: ['slash', 'click'],
+        //           render: (context) => {
+        //             const container = document.createElement('div');
+        //             container.style.display = 'flex';
+        //             container.style.alignItems = 'center';
+        //             container.innerHTML = `
+        //               <span style="margin-right: 8px;">✓</span>
+        //               <span>Accept Tracked Change</span>
+        //             `;
+        //             return container;
+        //           },
+        //           action: (editor, context) => {
+        //             // Use the more specific command with tracked change ID when available
+        //             if (context?.trackedChangeId) {
+        //               editor.commands.acceptTrackedChangeById(context.trackedChangeId);
+        //             } else {
+        //               editor.commands.acceptTrackedChangeBySelection();
+        //             }
+        //           },
+        //           showWhen: (context) => {
+        //             return context.isTrackedChange}
+        //         }
+        //       ]
+        //     }
+        //   ],
+        //   // Alternative: use menuProvider function
+        //   // @todo: decide if we want to expose this in the documentation or not for simplicity?
+        //   menuProvider: (context, defaultSections) => {
+        //     return [
+        //       ...defaultSections,
+        //       {
+        //         id: 'dynamic-section',
+        //         items: [
+        //           {
+        //             id: 'dynamic-item',
+        //             label: `Custom for ${context.documentMode}`,
+        //             allowedTriggers: ['slash', 'click'],
+        //             action: (editor) => {
+        //               editor.commands.insertContent(`Mode: ${context.documentMode} `);
+        //             }
+        //           }
+        //         ]
+        //       }
+        //     ];
+        //   }
+      },
       // 'hrbr-fields': {},
 
       // To test this dev env with collaboration you must run a local collaboration server here.
