@@ -1,5 +1,5 @@
 // @ts-check
-import { translator as wBookmarkEndTranslator } from '@converter/v3/handlers/mc/altermateContent';
+import { translator as wBookmarkEndTranslator } from '../../v3/handlers/w/bookmark-end/index.js';
 
 /**
  * Bookmark end node handler
