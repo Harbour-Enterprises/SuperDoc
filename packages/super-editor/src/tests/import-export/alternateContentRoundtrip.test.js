@@ -1,35 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'path';
-import { promises as fs } from 'fs';
-import JSZip from 'jszip';
 import { Editor } from '@core/Editor.js';
 import DocxZipper from '@core/DocxZipper.js';
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
-import { initTestEditor } from '../helpers/helpers.js';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const zipFolderToBuffer = async (folderPath) => {
-  const zip = new JSZip();
-
-  const addFolder = async (currentPath, targetFolder) => {
-    const entries = await fs.readdir(currentPath, { withFileTypes: true });
-    for (const entry of entries) {
-      const absolute = join(currentPath, entry.name);
-      if (entry.isDirectory()) {
-        const nestedFolder = targetFolder.folder(entry.name);
-        await addFolder(absolute, nestedFolder);
-      } else {
-        const content = await fs.readFile(absolute);
-        targetFolder.file(entry.name, content);
-      }
-    }
-  };
-
-  await addFolder(folderPath, zip);
-  return zip.generateAsync({ type: 'nodebuffer' });
-};
+import { initTestEditor, getTestDataAsFileBuffer } from '../helpers/helpers.js';
 
 const collectAllText = (node) => {
   const parts = [];
@@ -51,8 +24,7 @@ const getBodyNode = (documentJson) => {
 
 describe('alternateContent roundtrip', () => {
   it('retains choice content when exporting an alternatecontent document', async () => {
-    const folderPath = join(__dirname, '../data/alternatecontent_valid');
-    const buffer = await zipFolderToBuffer(folderPath);
+    const buffer = await getTestDataAsFileBuffer('alternateContent_valid.docx');
 
     const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
     const { editor } = initTestEditor({ content: docx, media, mediaFiles, fonts });

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { addDefaultStylesIfMissing, createDocumentJson } from '@core/super-converter/v2/importer/docxImporter';
 import { DEFAULT_LINKED_STYLES } from '../../core/super-converter/exporter-docx-defs';
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
-import { getExtractedDocxData } from '@tests/helpers/helpers.js';
+import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { extractParagraphText } from '@tests/helpers/getParagraphText.js';
 
 describe('addDefaultStylesIfMissing', () => {
@@ -72,7 +72,7 @@ describe('createDocumentJson', () => {
   });
 
   it('imports alternatecontent_valid sample and preserves choice content', async () => {
-    const docx = await getExtractedDocxData('alternatecontent_valid');
+    const docx = await getTestDataByFileName('alternateContent_valid.docx');
 
     const converter = {
       telemetry: {
