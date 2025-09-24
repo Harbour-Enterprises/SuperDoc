@@ -1,3 +1,21 @@
+let cachedShadowRootCtor;
+const getShadowRootCtor = () => {
+  if (cachedShadowRootCtor === undefined) {
+    const ctor = globalThis.ShadowRoot;
+    cachedShadowRootCtor = typeof ctor === 'function' ? ctor : null;
+  }
+  return cachedShadowRootCtor;
+};
+
+let cachedElementCtor;
+const getElementCtor = () => {
+  if (cachedElementCtor === undefined) {
+    const ctor = globalThis.Element;
+    cachedElementCtor = typeof ctor === 'function' ? ctor : null;
+  }
+  return cachedElementCtor;
+};
+
 export const queryWithinRoot = (domNode, selector) => {
   if (!selector) return null;
 
@@ -7,7 +25,7 @@ export const queryWithinRoot = (domNode, selector) => {
   }
 
   const rawRoot = domNode?.getRootNode?.();
-  const ShadowRootCtor = /** @type {typeof ShadowRoot | undefined} */ (globalThis.ShadowRoot);
+  const ShadowRootCtor = getShadowRootCtor();
   const isShadowRoot = !!ShadowRootCtor && rawRoot instanceof ShadowRootCtor;
   if (isShadowRoot && typeof rawRoot.querySelector === 'function') {
     return rawRoot.querySelector(selector);
@@ -25,6 +43,6 @@ export const findInEventPath = (event, selector) => {
   if (!event || !selector) return undefined;
 
   const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
-  const ElementCtor = /** @type {typeof Element | undefined} */ (globalThis.Element);
+  const ElementCtor = getElementCtor();
   return path.find((node) => ElementCtor && node instanceof ElementCtor && node.matches(selector));
 };
