@@ -3,6 +3,7 @@ import { CustomSelectionPluginKey } from '../custom-selection/custom-selection.j
 import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 import { findParentNode } from '@helpers/index.js';
 import { kebabCase } from '@harbour-enterprises/common';
+import { getUnderlineCssString } from './index.js';
 
 /**
  * Get the (parsed) linked style from the styles.xml
@@ -81,6 +82,7 @@ export const getMarksStyle = (attrs) => {
       case 'textStyle':
         const { fontFamily, fontSize } = attr.attrs;
         styles += `${fontFamily ? `font-family: ${fontFamily};` : ''} ${fontSize ? `font-size: ${fontSize};` : ''}`;
+        break;
     }
   }
 
@@ -128,12 +130,22 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
   const basedOnDefinitionStyles = { ...basedOnStyle?.definition?.styles };
   const resultStyles = { ...linkedDefinitionStyles };
 
-  if (!linkedDefinitionStyles['font-size'] && basedOnDefinitionStyles['font-size']) {
-    resultStyles['font-size'] = basedOnDefinitionStyles['font-size'];
-  }
-  if (!linkedDefinitionStyles['text-transform'] && basedOnDefinitionStyles['text-transform']) {
-    resultStyles['text-transform'] = basedOnDefinitionStyles['text-transform'];
-  }
+  const inheritKeys = [
+    'font-size',
+    'font-family',
+    'text-transform',
+    'bold',
+    'italic',
+    'underline',
+    'strike',
+    'color',
+    'highlight',
+  ];
+  inheritKeys.forEach((k) => {
+    if (!linkedDefinitionStyles[k] && basedOnDefinitionStyles[k]) {
+      resultStyles[k] = basedOnDefinitionStyles[k];
+    }
+  });
 
   Object.entries(resultStyles).forEach(([k, value]) => {
     const key = kebabCase(k);
@@ -152,6 +164,12 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
 
       flattenedMarks.push({ key: n.type.name, value: n.attrs[key] });
     });
+
+    // If inline underline explicitly sets 'none', force no underline regardless of style
+    const underlineNone = node?.marks?.some((m) => m.type?.name === 'underline' && m.attrs?.underlineType === 'none');
+    if (underlineNone) {
+      markValue['text-decoration'] = 'none';
+    }
 
     // Check if this node has the expected mark. If yes, we are not overriding it
     const mark = flattenedMarks.find((n) => n.key === key);
@@ -174,9 +192,45 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
         if (rightIndent) markValue['margin-right'] = rightIndent + 'px';
         if (firstLine) markValue['text-indent'] = firstLine + 'px';
       } else if (key === 'bold' && node) {
-        const val = value?.value;
-        if (!listTypes.includes(node.type.name) && val !== '0') {
+        const boldValue = typeof value === 'object' && value !== null ? value.value : value;
+        const hasInlineBoldOff = node.marks?.some((m) => m.type?.name === 'bold' && m.attrs?.value === '0');
+        const hasInlineBoldOn = node.marks?.some((m) => m.type?.name === 'bold' && m.attrs?.value !== '0');
+        if (
+          !listTypes.includes(node.type.name) &&
+          !hasInlineBoldOff &&
+          !hasInlineBoldOn &&
+          boldValue !== '0' &&
+          boldValue !== false
+        ) {
           markValue['font-weight'] = 'bold';
+        }
+      } else if (key === 'italic' && node) {
+        const italicValue = typeof value === 'object' && value !== null ? value.value : value;
+        const hasInlineItalicOff = node.marks?.some((m) => m.type?.name === 'italic' && m.attrs?.value === '0');
+        const hasInlineItalicOn = node.marks?.some((m) => m.type?.name === 'italic' && m.attrs?.value !== '0');
+        if (
+          !listTypes.includes(node.type.name) &&
+          !hasInlineItalicOff &&
+          !hasInlineItalicOn &&
+          italicValue !== '0' &&
+          italicValue !== false
+        ) {
+          markValue['font-style'] = 'italic';
+        }
+      } else if (key === 'strike' && node) {
+        const strikeValue = typeof value === 'object' && value !== null ? value.value : value;
+        const hasInlineStrikeOff = node.marks?.some((m) => m.type?.name === 'strike' && m.attrs?.value === '0');
+        const hasInlineStrikeOn = node.marks?.some(
+          (m) => m.type?.name === 'strike' && (m.attrs?.value === undefined || m.attrs?.value !== '0'),
+        );
+        if (
+          !listTypes.includes(node.type.name) &&
+          !hasInlineStrikeOff &&
+          !hasInlineStrikeOn &&
+          strikeValue !== '0' &&
+          strikeValue !== false
+        ) {
+          markValue['text-decoration'] = 'line-through';
         }
       } else if (key === 'text-transform' && node) {
         if (!listTypes.includes(node.type.name)) {
@@ -186,9 +240,44 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
         if (!listTypes.includes(node.type.name)) {
           markValue[key] = value;
         }
+      } else if (key === 'font-family' && node) {
+        if (!listTypes.includes(node.type.name)) {
+          markValue[key] = value;
+        }
       } else if (key === 'color' && node) {
         if (!listTypes.includes(node.type.name)) {
           markValue[key] = value;
+        }
+      } else if (key === 'highlight' && node) {
+        const hasInlineHighlight = node.marks?.some((m) => m.type?.name === 'highlight');
+        if (!listTypes.includes(node.type.name) && !hasInlineHighlight) {
+          const color = typeof value === 'string' ? value : value?.color;
+          if (color) markValue['background-color'] = color;
+        }
+      } else if (key === 'underline' && node) {
+        const styleValRaw = value?.value ?? value ?? '';
+        const styleVal = styleValRaw.toString().toLowerCase();
+        const hasInlineUnderlineOff = node.marks?.some(
+          (m) => m.type?.name === 'underline' && m.attrs?.underlineType === 'none',
+        );
+        const hasInlineUnderlineOn = node.marks?.some(
+          (m) => m.type?.name === 'underline' && m.attrs?.underlineType && m.attrs.underlineType !== 'none',
+        );
+        if (!listTypes.includes(node.type.name) && !hasInlineUnderlineOff && !hasInlineUnderlineOn) {
+          if (styleVal && styleVal !== 'none' && styleVal !== '0') {
+            const colorVal = value && typeof value === 'object' ? value.color || value.underlineColor || null : null;
+            const css = getUnderlineCssString({ type: styleVal, color: colorVal });
+            // apply css string into markValue map
+            css.split(';').forEach((decl) => {
+              const d = decl.trim();
+              if (!d) return;
+              const idx = d.indexOf(':');
+              if (idx === -1) return;
+              const k = d.slice(0, idx).trim();
+              const v = d.slice(idx + 1).trim();
+              markValue[k] = v;
+            });
+          }
         }
       } else if (typeof value === 'string') {
         markValue[key] = value;

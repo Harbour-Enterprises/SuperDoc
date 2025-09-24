@@ -52,6 +52,10 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
     firstLine: 0,
     hanging: 0,
     textIndent: 0,
+    explicitLeft: false,
+    explicitRight: false,
+    explicitFirstLine: false,
+    explicitHanging: false,
   };
 
   const { indent: pDefaultIndent = {} } = getDefaultParagraphStyle(docx, styleId);
@@ -60,22 +64,31 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
   const inLineIndentTag = pPr?.elements?.find((el) => el.name === 'w:ind');
   const inLineIndent = inLineIndentTag?.attributes || {};
 
-  const leftIndent = inLineIndent?.['w:left'] || pDefaultIndent?.['w:left'];
-  const rightIndent = inLineIndent?.['w:right'] || pDefaultIndent?.['w:right'];
-  const firstLine = inLineIndent?.['w:firstLine'] || pDefaultIndent?.['w:firstLine'];
-  const hanging = inLineIndent?.['w:hanging'] || pDefaultIndent?.['w:hanging'];
+  const inlineLeft = inLineIndent?.['w:left'];
+  const inlineRight = inLineIndent?.['w:right'];
+  const inlineFirstLine = inLineIndent?.['w:firstLine'];
+  const inlineHanging = inLineIndent?.['w:hanging'];
+
+  const leftIndent = inlineLeft ?? pDefaultIndent?.['w:left'];
+  const rightIndent = inlineRight ?? pDefaultIndent?.['w:right'];
+  const firstLine = inlineFirstLine ?? pDefaultIndent?.['w:firstLine'];
+  const hanging = inlineHanging ?? pDefaultIndent?.['w:hanging'];
 
   if (leftIndent) {
     indent.left = twipsToPixels(leftIndent);
+    indent.explicitLeft = inlineLeft !== undefined;
   }
   if (rightIndent) {
     indent.right = twipsToPixels(rightIndent);
+    indent.explicitRight = inlineRight !== undefined;
   }
   if (firstLine) {
     indent.firstLine = twipsToPixels(firstLine);
+    indent.explicitFirstLine = inlineFirstLine !== undefined;
   }
   if (hanging) {
     indent.hanging = twipsToPixels(hanging);
+    indent.explicitHanging = inlineHanging !== undefined;
   }
 
   const textIndentValue = leftIndent - parseInt(hanging || 0) || 0;

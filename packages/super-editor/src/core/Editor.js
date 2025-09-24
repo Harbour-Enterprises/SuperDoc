@@ -1120,10 +1120,11 @@ export class Editor extends EventEmitter {
     proseMirror.style.border = 'none';
 
     // Typeface and font size
-    const { typeface, fontSizePt } = this.converter.getDocumentDefaultStyles() ?? {};
+    const { typeface, fontSizePt, fontFamilyCss } = this.converter.getDocumentDefaultStyles() ?? {};
 
-    if (typeface) {
-      element.style.fontFamily = typeface;
+    const resolvedFontFamily = fontFamilyCss || typeface;
+    if (resolvedFontFamily) {
+      element.style.fontFamily = resolvedFontFamily;
     }
     if (fontSizePt) {
       element.style.fontSize = `${fontSizePt}pt`;
@@ -1681,12 +1682,16 @@ export class Editor extends EventEmitter {
 
   destroyHeaderFooterEditors() {
     try {
-      const editors = [...this.converter.headerEditors, ...this.converter.footerEditors];
+      const headerEditors = this.converter?.headerEditors ?? [];
+      const footerEditors = this.converter?.footerEditors ?? [];
+      if (!headerEditors.length && !footerEditors.length) return;
+
+      const editors = [...headerEditors, ...footerEditors].filter(Boolean);
       for (let editorData of editors) {
-        editorData.editor.destroy();
+        editorData?.editor?.destroy?.();
       }
-      this.converter.headerEditors.length = 0;
-      this.converter.footerEditors.length = 0;
+      if (headerEditors.length) headerEditors.length = 0;
+      if (footerEditors.length) footerEditors.length = 0;
     } catch (error) {
       this.emit('exception', { error, editor: this });
       console.error(error);

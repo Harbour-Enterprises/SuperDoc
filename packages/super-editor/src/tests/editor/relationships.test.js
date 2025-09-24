@@ -23,7 +23,10 @@ describe('Relationships tests', () => {
   it('tests that the inserted link has a rId and a relationship', () => {
     editor.commands.insertContentAt(0, 'link');
 
-    editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, 0, 5)));
+    const paragraphStart = 1; // position where paragraph content begins
+    editor.view.dispatch(
+      editor.state.tr.setSelection(TextSelection.create(editor.state.doc, paragraphStart, paragraphStart + 4)),
+    );
     editor.commands.setLink({ href: 'https://www.superdoc.dev' });
 
     const linkMark = editor.state.doc.firstChild.firstChild.marks[0];

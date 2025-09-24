@@ -22,19 +22,22 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     expect(item.attrs.indent.hanging).toBeUndefined();
 
     const content = item.content[0];
-    const text = content.content[0];
     expect(content.type).toBe('paragraph');
-    expect(text.type).toBe('text');
+
+    const runNode = content.content.find((node) => node.type === 'run');
+    expect(runNode).toBeDefined();
+
+    const text = runNode.content?.find((child) => child.type === 'text');
+    expect(text).toBeDefined();
     expect(text.text).toBe('APPOINTMENT');
 
-    const textStyleMarks = text.marks;
-    expect(textStyleMarks.length).toBe(2);
-    const textStyleMark = textStyleMarks.find((mark) => mark.type === 'textStyle');
+    const marks = text.marks || [];
+    const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
 
     expect(textStyleMark).toBeDefined();
     expect(textStyleMark.attrs).toBeDefined();
     expect(textStyleMark.attrs.fontSize).toBe('8pt');
-    expect(textStyleMark.attrs.fontFamily).toBe('Times New Roman');
+    expect(textStyleMark.attrs.fontFamily).toBe('Times New Roman, serif');
   });
 
   it('exports list with inline run properties', () => {

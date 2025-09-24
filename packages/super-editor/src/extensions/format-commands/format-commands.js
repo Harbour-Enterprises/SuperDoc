@@ -1,6 +1,7 @@
 // @ts-check
 import { Extension } from '@core/index.js';
 import { getMarksFromSelection } from '@core/helpers/getMarksFromSelection.js';
+import { toggleMarkCascade } from '@core/commands/toggleMarkCascade.js';
 
 /**
  * Stored format style
@@ -40,6 +41,7 @@ export const FormatCommands = Extension.create({
 
   addCommands() {
     return {
+      toggleMarkCascade,
       /**
        * Clear all formatting (nodes and marks)
        * @category Command

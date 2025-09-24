@@ -17,11 +17,13 @@ import { getTextFromNode } from './index';
  * @returns {void}
  */
 export const testListNodes = ({ node, expectedLevel, expectedNumPr, text }) => {
-  const numPr = getListAttrFromNumPr('w:ilvl', node);
-  expect(numPr).toBe(expectedLevel);
+  const normalize = (value) => (value === undefined ? value : (value?.toString?.() ?? value));
 
   const ilvl = getListAttrFromNumPr('w:ilvl', node);
-  expect(ilvl).toBe(expectedNumPr);
+  expect(normalize(ilvl)).toBe(normalize(expectedLevel));
+
+  const numId = getListAttrFromNumPr('w:numId', node);
+  expect(normalize(numId)).toBe(normalize(expectedNumPr));
 
   if (text) {
     const nodeText = getTextFromNode(node);

@@ -176,7 +176,6 @@ export const useCommentsStore = defineStore('comments', () => {
 
     debounceTimers[commentId] = setTimeout(() => {
       if (superdoc) {
-        if (__IS_DEBUG__) console.debug('[debounceEmit] tracked change update emitting...', event);
         superdoc.emit('comments-update', event);
       }
       delete debounceTimers[commentId];
@@ -185,7 +184,6 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const showAddComment = (superdoc) => {
     const event = { type: COMMENT_EVENTS.PENDING };
-    if (__IS_DEBUG__) console.debug('[showAddComment] emitting...', event);
     superdoc.emit('comments-update', event);
 
     const selection = { ...superdocStore.activeSelection };
@@ -367,7 +365,6 @@ export const useCommentsStore = defineStore('comments', () => {
     syncCommentsToClients(superdoc, event);
 
     // Emit event for end users
-    if (__IS_DEBUG__) console.debug('[addComment] emitting...', event);
     superdoc.emit('comments-update', event);
   };
 
@@ -394,7 +391,6 @@ export const useCommentsStore = defineStore('comments', () => {
       changes: [{ key: 'deleted', commentId, fileId }],
     };
 
-    if (__IS_DEBUG__) console.debug('[deleteComment] emitting...', event);
     superdoc.emit('comments-update', event);
     syncCommentsToClients(superdoc, event);
   };
@@ -421,8 +417,6 @@ export const useCommentsStore = defineStore('comments', () => {
    */
   const processLoadedDocxComments = async ({ superdoc, editor, comments, documentId }) => {
     const document = superdocStore.getDocument(documentId);
-
-    if (__IS_DEBUG__) console.debug('[processLoadedDocxComments] processing comments...', comments);
 
     comments.forEach((comment) => {
       const htmlContent = getHTmlFromComment(comment.textJson);

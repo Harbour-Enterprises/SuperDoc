@@ -307,9 +307,6 @@ export class FieldAnnotationView {
   }
 
   ignoreMutation() {
-    // https://github.com/ueberdosis/tiptap/blob/main/packages/core/src/NodeView.ts
-    // a leaf/atom node is like a black box for ProseMirror
-    // and should be fully handled by the node view
     return true;
   }
 

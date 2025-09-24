@@ -18,6 +18,10 @@ export const handleTextNode = (params) => {
   let text;
   if (elements.length === 1) {
     text = elements[0].text;
+    const xmlSpace = node.attributes?.['xml:space'] ?? elements[0]?.attributes?.['xml:space'];
+    if (xmlSpace !== 'preserve' && typeof text === 'string') {
+      text = text.replace(/^\s+/, '').replace(/\s+$/, '');
+    }
     // Handle the removal of a temporary wrapper that we added to preserve empty spaces
     text = text.replace(/\[\[sdspace\]\]/g, '');
   }

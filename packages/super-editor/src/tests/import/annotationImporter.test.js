@@ -146,7 +146,7 @@ describe('annotationImporter', () => {
 
         const { attrs } = node;
         const { fontFamily, fontSize, color, bold, italic, underline } = attrs;
-        expect(fontFamily).toBe('Courier New');
+        expect(fontFamily).toBe('Courier New, sans-serif');
         expect(fontSize).toBe('18pt');
         expect(color).toBe(undefined);
         expect(bold).toBe(undefined);

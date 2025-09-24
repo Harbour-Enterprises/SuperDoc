@@ -34,15 +34,15 @@ describe('basic comment import [basic-comment.docx]', () => {
     const commentText = comment.textJson;
     expect(commentText.type).toBe('paragraph');
 
-    const commentContent = commentText.content;
-    expect(commentContent).toHaveLength(1);
-    expect(commentContent[0].text).toBe('abcabc');
-    expect(commentContent[0].type).toBe('text');
-    expect(commentContent[0].marks).toHaveLength(1);
+    const textNode = commentText.content
+      .flatMap((node) => (node.type === 'run' ? node.content || [] : [node]))
+      .find((child) => child.type === 'text');
+    expect(textNode).toBeDefined();
+    expect(textNode.text).toBe('abcabc');
 
-    const firstMark = commentContent[0].marks[0];
-    expect(firstMark.type).toBe('textStyle');
-    expect(firstMark.attrs.fontSize).toBe('10pt');
+    const marks = textNode.marks || [];
+    const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
+    expect(textStyleMark?.attrs.fontSize).toBe('10pt');
   });
 });
 

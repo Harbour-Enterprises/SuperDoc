@@ -104,7 +104,7 @@ describe('Tab Stops Round Trip Tests', () => {
     // Verify exported tab stops match the original
     const exportedFirstTab = tabs.elements[0];
     expect(exportedFirstTab.name).toBe('w:tab');
-    expect(exportedFirstTab.attributes['w:val']).toBe('start');
+    expect(exportedFirstTab.attributes['w:val']).toBe('left');
     expect(exportedFirstTab.attributes['w:pos']).toBe('2160');
     expect(exportedFirstTab.attributes['w:leader']).toBeUndefined();
 
@@ -217,7 +217,7 @@ describe('Tab Stops Round Trip Tests', () => {
     expect(tabs.elements.length).toBe(1);
 
     const exportedTab = tabs.elements[0];
-    expect(exportedTab.attributes['w:val']).toBe('start');
+    expect(exportedTab.attributes['w:val']).toBe('left');
     expect(exportedTab.attributes['w:pos']).toBe('1440');
     expect(exportedTab.attributes['w:leader']).toBeUndefined();
   });
@@ -330,7 +330,7 @@ describe('Tab Stops Round Trip Tests', () => {
     expect(tabs.elements.length).toBe(3);
 
     // Verify the order is preserved
-    expect(tabs.elements[0].attributes['w:val']).toBe('end');
+    expect(tabs.elements[0].attributes['w:val']).toBe('right');
     expect(tabs.elements[0].attributes['w:pos']).toBe('8640');
     expect(tabs.elements[0].attributes['w:leader']).toBe('hyphen');
 

@@ -1,5 +1,6 @@
 import { NodeTranslator } from '../../../node-translator/node-translator';
-import { registeredHandlers } from '@converter/v3/handlers/index.js';
+import { translator as wpAnchorTranslator } from '@converter/v3/handlers/wp/anchor/anchor-translator.js';
+import { translator as wpInlineTranslator } from '@converter/v3/handlers/wp/inline/inline-translator.js';
 import { wrapTextInRun } from '@converter/exporter.js';
 
 /** @type {import('@translator').XmlNodeName} */
@@ -19,12 +20,15 @@ function encode(params) {
   const nodes = params.nodes;
   const node = nodes[0];
 
-  const validChildTranslators = ['wp:anchor', 'wp:inline'];
+  const translatorByChildName = {
+    'wp:anchor': wpAnchorTranslator,
+    'wp:inline': wpInlineTranslator,
+  };
 
   return node.elements.reduce((acc, child) => {
     if (acc) return acc;
-    if (!validChildTranslators.includes(child.name)) return acc;
-    const translator = registeredHandlers[child.name];
+    const translator = translatorByChildName[child.name];
+    if (!translator) return acc;
 
     return translator.encode({ ...params, extraParams: { node: child } }) || acc;
   }, null);
@@ -41,8 +45,8 @@ function decode(params) {
     return null;
   }
 
-  const handlerName = node.attrs.isAnchor ? 'wp:anchor' : 'wp:inline';
-  const resultNode = registeredHandlers[handlerName].decode(params);
+  const childTranslator = node.attrs.isAnchor ? wpAnchorTranslator : wpInlineTranslator;
+  const resultNode = childTranslator.decode(params);
 
   return wrapTextInRun(
     {

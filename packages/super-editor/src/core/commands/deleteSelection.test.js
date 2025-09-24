@@ -36,6 +36,18 @@ function makeSchema() {
   return new Schema({ nodes });
 }
 
+function findTextPos(doc, text) {
+  let result = null;
+  doc.descendants((node, pos) => {
+    if (node.isText && node.text === text) {
+      result = pos;
+      return false;
+    }
+    return true;
+  });
+  return result;
+}
+
 describe('deleteSelection', () => {
   let schema;
 
@@ -71,8 +83,11 @@ describe('deleteSelection', () => {
     ]);
 
     // select from inside "one" into "after"
-    const from = 8;
-    const to = doc.content.size - 2;
+    const from = findTextPos(doc, 'one');
+    const afterPos = findTextPos(doc, 'after');
+    expect(from).not.toBeNull();
+    expect(afterPos).not.toBeNull();
+    const to = afterPos + 'after'.length;
     const sel = TextSelection.create(doc, from, to);
     const state = EditorState.create({ schema, doc, selection: sel });
 
@@ -111,7 +126,10 @@ describe('deleteSelection', () => {
         schema.node('listItem', null, [schema.node('paragraph', null, schema.text('foo bar'))]),
       ]),
     ]);
-    const sel = TextSelection.create(doc, 2, 5);
+    const start = findTextPos(doc, 'foo bar');
+    expect(start).not.toBeNull();
+    const end = start + 'foo bar'.length;
+    const sel = TextSelection.create(doc, start, end);
     const state = EditorState.create({ schema, doc, selection: sel });
 
     const cmd = deleteSelection();

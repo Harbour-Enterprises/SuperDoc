@@ -1,20 +1,24 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { registeredHandlers } from '@converter/v3/handlers/index.js';
 import { config, translator } from './drawing-translator.js';
 import { NodeTranslator } from '../../../node-translator/index.js';
 import { wrapTextInRun } from '../../../../exporter.js';
 
-vi.mock('@converter/v3/handlers/index.js', () => ({
-  registeredHandlers: {
-    'wp:anchor': {
-      encode: vi.fn(),
-      decode: vi.fn(),
-    },
-    'wp:inline': {
-      encode: vi.fn(),
-      decode: vi.fn(),
-    },
-  },
+const anchorTranslatorMock = vi.hoisted(() => ({
+  encode: vi.fn(),
+  decode: vi.fn(),
+}));
+
+const inlineTranslatorMock = vi.hoisted(() => ({
+  encode: vi.fn(),
+  decode: vi.fn(),
+}));
+
+vi.mock('@converter/v3/handlers/wp/anchor/anchor-translator.js', () => ({
+  translator: anchorTranslatorMock,
+}));
+
+vi.mock('@converter/v3/handlers/wp/inline/inline-translator.js', () => ({
+  translator: inlineTranslatorMock,
 }));
 
 vi.mock('@converter/exporter.js', () => ({
@@ -24,6 +28,10 @@ vi.mock('@converter/exporter.js', () => ({
 describe('w:drawing translator', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    anchorTranslatorMock.encode.mockReset();
+    anchorTranslatorMock.decode.mockReset();
+    inlineTranslatorMock.encode.mockReset();
+    inlineTranslatorMock.decode.mockReset();
   });
 
   it('exposes correct config meta', () => {
@@ -45,11 +53,11 @@ describe('w:drawing translator', () => {
       const childNode = { name: 'wp:inline' };
       const params = { nodes: [{ elements: [childNode] }] };
 
-      registeredHandlers['wp:inline'].encode.mockReturnValue({ encoded: true });
+      inlineTranslatorMock.encode.mockReturnValue({ encoded: true });
 
       const result = translator.encode(params);
 
-      expect(registeredHandlers['wp:inline'].encode).toHaveBeenCalledWith(
+      expect(inlineTranslatorMock.encode).toHaveBeenCalledWith(
         expect.objectContaining({ extraParams: { node: childNode } }),
       );
       expect(result).toEqual({ encoded: true });
@@ -59,11 +67,11 @@ describe('w:drawing translator', () => {
       const childNode = { name: 'wp:anchor' };
       const params = { nodes: [{ elements: [childNode] }] };
 
-      registeredHandlers['wp:anchor'].encode.mockReturnValue({ encodedAnchor: true });
+      anchorTranslatorMock.encode.mockReturnValue({ encodedAnchor: true });
 
       const result = translator.encode(params);
 
-      expect(registeredHandlers['wp:anchor'].encode).toHaveBeenCalled();
+      expect(anchorTranslatorMock.encode).toHaveBeenCalled();
       expect(result).toEqual({ encodedAnchor: true });
     });
 
@@ -80,11 +88,11 @@ describe('w:drawing translator', () => {
   describe('decode', () => {
     it('delegates to wp:anchor when node.attrs.isAnchor is true', () => {
       const params = { node: { type: 'element', attrs: { isAnchor: true } } };
-      registeredHandlers['wp:anchor'].decode.mockReturnValue({ decoded: 'anchor' });
+      anchorTranslatorMock.decode.mockReturnValue({ decoded: 'anchor' });
 
       const result = translator.decode(params);
 
-      expect(registeredHandlers['wp:anchor'].decode).toHaveBeenCalledWith(params);
+      expect(anchorTranslatorMock.decode).toHaveBeenCalledWith(params);
       expect(wrapTextInRun).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'w:drawing',
@@ -97,11 +105,11 @@ describe('w:drawing translator', () => {
 
     it('delegates to wp:inline when node.attrs.isAnchor is false', () => {
       const params = { node: { type: 'element', attrs: { isAnchor: false } } };
-      registeredHandlers['wp:inline'].decode.mockReturnValue({ decoded: 'inline' });
+      inlineTranslatorMock.decode.mockReturnValue({ decoded: 'inline' });
 
       const result = translator.decode(params);
 
-      expect(registeredHandlers['wp:inline'].decode).toHaveBeenCalledWith(params);
+      expect(inlineTranslatorMock.decode).toHaveBeenCalledWith(params);
       expect(wrapTextInRun).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'w:drawing',

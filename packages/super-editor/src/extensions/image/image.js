@@ -185,7 +185,7 @@ export const Image = Node.create({
 
       padding: {
         default: {},
-        renderDOM: ({ size = {}, padding, marginOffset, transformData }) => {
+        renderDOM: ({ size = {}, padding, marginOffset, transformData = {} }) => {
           let { left = 0, top = 0, bottom = 0, right = 0 } = padding ?? {};
           // TODO: The wp:effectExtent (transformData.sizeExtension) sometimes
           // gives the right data (as calculated by getRotationMargins)
@@ -196,8 +196,8 @@ export const Image = Node.create({
           //   top += transformData.sizeExtension.top || 0;
           //   bottom += transformData.sizeExtension.bottom || 0;
           // }
-          const { rotation } = transformData ?? {};
-          const { height, width } = size ?? {};
+          const { rotation } = transformData;
+          const { height, width } = size;
           if (rotation && height && width) {
             const { horizontal, vertical } = getRotationMargins(width, height, rotation);
             left += horizontal;
