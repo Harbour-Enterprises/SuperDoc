@@ -2,6 +2,8 @@ import { selectionHasNodeOrMark } from '../cursor-helpers.js';
 import { readFromClipboard } from '../../core/utilities/clipboardUtils.js';
 import { tableActionsOptions } from './constants.js';
 import { markRaw } from 'vue';
+import { undoDepth, redoDepth } from 'prosemirror-history';
+import { yUndoPluginKey } from 'y-prosemirror';
 /**
  * Get props by item id
  *
@@ -134,11 +136,16 @@ export async function getEditorContext(editor, event) {
   const clipboardContent = normalizeClipboardContent(rawClipboardContent);
 
   // Get document structure information
-  const isInTable = selectionHasNodeOrMark(state, 'table', { requireEnds: true });
+  const structureFromResolvedPos = pos !== null ? getStructureFromResolvedPos(state, pos) : null;
+  const isInTable =
+    structureFromResolvedPos?.isInTable ?? selectionHasNodeOrMark(state, 'table', { requireEnds: true });
   const isInList =
-    selectionHasNodeOrMark(state, 'bulletList', { requireEnds: false }) ||
-    selectionHasNodeOrMark(state, 'orderedList', { requireEnds: false });
-  const isInSectionNode = selectionHasNodeOrMark(state, 'documentSection', { requireEnds: true });
+    structureFromResolvedPos?.isInList ??
+    (selectionHasNodeOrMark(state, 'bulletList', { requireEnds: false }) ||
+      selectionHasNodeOrMark(state, 'orderedList', { requireEnds: false }));
+  const isInSectionNode =
+    structureFromResolvedPos?.isInSectionNode ??
+    selectionHasNodeOrMark(state, 'documentSection', { requireEnds: true });
   const currentNodeType = node?.type?.name || null;
 
   const activeMarks = [];
@@ -228,8 +235,21 @@ function computeCanUndo(editor, state) {
     }
   }
 
-  const undoDepth = state?.history?.undoDepth;
-  return typeof undoDepth === 'number' ? undoDepth > 0 : false;
+  if (isCollaborationEnabled(editor)) {
+    try {
+      const undoManager = yUndoPluginKey.getState(state)?.undoManager;
+      return !!undoManager && undoManager.undoStack.length > 0;
+    } catch (error) {
+      console.warn('[SlashMenu] Unable to determine undo availability via y-prosemirror:', error);
+    }
+  }
+
+  try {
+    return undoDepth(state) > 0;
+  } catch (error) {
+    console.warn('[SlashMenu] Unable to determine undo availability via history plugin:', error);
+    return false;
+  }
 }
 
 function computeCanRedo(editor, state) {
@@ -244,6 +264,56 @@ function computeCanRedo(editor, state) {
     }
   }
 
-  const redoDepth = state?.history?.redoDepth;
-  return typeof redoDepth === 'number' ? redoDepth > 0 : false;
+  if (isCollaborationEnabled(editor)) {
+    try {
+      const undoManager = yUndoPluginKey.getState(state)?.undoManager;
+      return !!undoManager && undoManager.redoStack.length > 0;
+    } catch (error) {
+      console.warn('[SlashMenu] Unable to determine redo availability via y-prosemirror:', error);
+    }
+  }
+
+  try {
+    return redoDepth(state) > 0;
+  } catch (error) {
+    console.warn('[SlashMenu] Unable to determine redo availability via history plugin:', error);
+    return false;
+  }
 }
+
+function isCollaborationEnabled(editor) {
+  return Boolean(editor?.options?.collaborationProvider && editor?.options?.ydoc);
+}
+
+function getStructureFromResolvedPos(state, pos) {
+  try {
+    const $pos = state.doc.resolve(pos);
+    const ancestors = new Set();
+
+    for (let depth = $pos.depth; depth > 0; depth--) {
+      ancestors.add($pos.node(depth).type.name);
+    }
+
+    const isInList = ancestors.has('bulletList') || ancestors.has('orderedList');
+
+    // ProseMirror table structure typically includes tableRow/tableCell, so check those too
+    const isInTable =
+      ancestors.has('table') || ancestors.has('tableRow') || ancestors.has('tableCell') || ancestors.has('tableHeader');
+
+    const isInSectionNode = ancestors.has('documentSection');
+
+    return {
+      isInTable,
+      isInList,
+      isInSectionNode,
+    };
+  } catch (error) {
+    console.warn('[SlashMenu] Unable to resolve position for structural context:', error);
+    return null;
+  }
+}
+
+export {
+  getStructureFromResolvedPos as __getStructureFromResolvedPosForTest,
+  isCollaborationEnabled as __isCollaborationEnabledForTest,
+};

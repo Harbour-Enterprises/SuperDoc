@@ -482,6 +482,8 @@ describe('SlashMenu.vue', () => {
     });
 
     it('should handle render function errors gracefully', async () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
       const mockRender = vi.fn(() => {
         throw new Error('Render error');
       });
@@ -500,15 +502,19 @@ describe('SlashMenu.vue', () => {
         },
       ]);
 
-      const wrapper = mount(SlashMenu, { props: mockProps });
+      mount(SlashMenu, { props: mockProps });
 
       const onSlashMenuOpen = mockEditor.on.mock.calls.find((call) => call[0] === 'slashMenu:open')[1];
 
-      expect(async () => {
-        await onSlashMenuOpen({ menuPosition: { left: '100px', top: '200px' } });
-        await nextTick();
-        await nextTick();
-      }).not.toThrow();
+      await expect(
+        onSlashMenuOpen({ menuPosition: { left: '100px', top: '200px' } }).then(async () => {
+          await nextTick();
+          await nextTick();
+        }),
+      ).resolves.not.toThrow();
+
+      await nextTick();
+      warnSpy.mockRestore();
     });
 
     it('should clean up custom items on menu close', async () => {

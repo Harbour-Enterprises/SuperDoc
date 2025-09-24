@@ -236,6 +236,7 @@ describe('menuItems.js', () => {
     });
 
     it('should handle menuProvider errors gracefully', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       mockEditor.options.slashMenuConfig = {
         includeDefaultItems: true,
         menuProvider: () => {
@@ -246,6 +247,8 @@ describe('menuItems.js', () => {
       // Should not throw and should return default sections
       const sections = getItems(mockContext);
       expect(sections.length).toBeGreaterThan(0);
+
+      warnSpy.mockRestore();
     });
 
     it('should filter custom items with showWhen conditions', () => {
@@ -275,6 +278,7 @@ describe('menuItems.js', () => {
     });
 
     it('should handle showWhen errors gracefully', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       mockEditor.options.slashMenuConfig = {
         includeDefaultItems: false,
         customItems: [
@@ -300,6 +304,8 @@ describe('menuItems.js', () => {
 
       // Item should be excluded due to error
       expect(errorSection?.items || []).toHaveLength(0);
+
+      warnSpy.mockRestore();
     });
 
     it('should remove empty sections after filtering', () => {

@@ -7,14 +7,33 @@ vi.mock('../../cursor-helpers.js');
 vi.mock('../constants.js', () => ({
   tableActionsOptions: [{ label: 'Add Row', command: 'addRow', icon: '<svg>add-row</svg>' }],
 }));
+vi.mock('prosemirror-history', () => ({
+  undoDepth: vi.fn(() => 0),
+  redoDepth: vi.fn(() => 0),
+}));
+vi.mock('y-prosemirror', () => ({
+  yUndoPluginKey: {
+    getState: vi.fn(() => ({ undoManager: { undoStack: [], redoStack: [] } })),
+  },
+}));
 
-import { getEditorContext, getPropsByItemId } from '../utils.js';
+import {
+  getEditorContext,
+  getPropsByItemId,
+  __getStructureFromResolvedPosForTest,
+  __isCollaborationEnabledForTest,
+} from '../utils.js';
 import { readFromClipboard } from '../../../core/utilities/clipboardUtils.js';
 import { selectionHasNodeOrMark } from '../../cursor-helpers.js';
+import { undoDepth, redoDepth } from 'prosemirror-history';
+import { yUndoPluginKey } from 'y-prosemirror';
 
 // Get the mocked functions
 const mockReadFromClipboard = vi.mocked(readFromClipboard);
 const mockSelectionHasNodeOrMark = vi.mocked(selectionHasNodeOrMark);
+const mockUndoDepth = vi.mocked(undoDepth);
+const mockRedoDepth = vi.mocked(redoDepth);
+const mockYUndoPluginKeyGetState = vi.mocked(yUndoPluginKey.getState);
 
 describe('utils.js', () => {
   let mockEditor;
@@ -27,6 +46,10 @@ describe('utils.js', () => {
 
       // Reset selection mock to default
       mockSelectionHasNodeOrMark.mockReturnValue(false);
+
+      mockUndoDepth.mockReturnValue(1);
+      mockRedoDepth.mockReturnValue(1);
+      mockYUndoPluginKeyGetState.mockReturnValue({ undoManager: { undoStack: [1], redoStack: [1] } });
 
       // Create editor with default configuration
       mockEditor = createMockEditor({
@@ -139,6 +162,20 @@ describe('utils.js', () => {
       mockSelectionHasNodeOrMark.mockReturnValue(false);
       mockEditor.view.posAtCoords.mockReturnValue({ pos: 20 });
       mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'text' } });
+      mockEditor.view.state.doc.resolve.mockReturnValue({
+        depth: 5,
+        node: (depth) => {
+          const map = {
+            1: { type: { name: 'paragraph' } },
+            2: { type: { name: 'orderedList' } },
+            3: { type: { name: 'tableCell' } },
+            4: { type: { name: 'tableRow' } },
+            5: { type: { name: 'documentSection' } },
+          };
+          return map[depth] || { type: { name: 'doc' } };
+        },
+        marks: vi.fn(() => [{ type: { name: 'trackDelete' }, attrs: { id: 'track-1' } }]),
+      });
 
       const context = await getEditorContext(mockEditor, mockEvent);
 
@@ -146,6 +183,11 @@ describe('utils.js', () => {
       expect(context.node).toEqual({ type: { name: 'text' } });
       expect(context.event).toBe(mockEvent);
       expect(mockEditor.view.posAtCoords).toHaveBeenCalledWith({ left: 300, top: 400 });
+      expect(context.isInTable).toBe(true);
+      expect(context.isInList).toBe(true);
+      expect(context.isInSectionNode).toBe(true);
+      expect(context.activeMarks).toContain('trackDelete');
+      expect(context.trackedChangeId).toBe('track-1');
     });
 
     it('should handle document mode variations', async () => {
@@ -169,12 +211,62 @@ describe('utils.js', () => {
         redo: () => false,
       }));
 
+      mockUndoDepth.mockReturnValue(0);
+      mockRedoDepth.mockReturnValue(0);
+
       mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
       mockSelectionHasNodeOrMark.mockReturnValue(false);
 
       const context = await getEditorContext(mockEditor);
 
       expect(mockEditor.can).toHaveBeenCalled();
+      expect(context.canUndo).toBe(true);
+      expect(context.canRedo).toBe(false);
+    });
+
+    it('should fall back to history depth when editor.can is unavailable', async () => {
+      mockEditor.can = undefined;
+      mockUndoDepth.mockReturnValueOnce(2);
+      mockRedoDepth.mockReturnValueOnce(0);
+      mockYUndoPluginKeyGetState.mockReturnValueOnce({ undoManager: { undoStack: [], redoStack: [] } });
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+
+      const context = await getEditorContext(mockEditor);
+
+      expect(mockUndoDepth).toHaveBeenCalledWith(mockEditor.view.state);
+      expect(mockRedoDepth).toHaveBeenCalledWith(mockEditor.view.state);
+      expect(context.canUndo).toBe(true);
+      expect(context.canRedo).toBe(false);
+    });
+
+    it('should use y-prosemirror undo manager when collaboration is enabled', async () => {
+      mockEditor.options.collaborationProvider = {};
+      mockEditor.options.ydoc = {};
+      mockEditor.can = undefined;
+      mockYUndoPluginKeyGetState
+        .mockReturnValueOnce({
+          undoManager: {
+            undoStack: [{ id: 1 }],
+            redoStack: [],
+          },
+        })
+        .mockReturnValueOnce({
+          undoManager: {
+            undoStack: [{ id: 1 }],
+            redoStack: [],
+          },
+        });
+      mockUndoDepth.mockReturnValueOnce(0);
+      mockRedoDepth.mockReturnValueOnce(0);
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+
+      const context = await getEditorContext(mockEditor);
+
+      expect(mockYUndoPluginKeyGetState).toHaveBeenCalledWith(mockEditor.view.state);
       expect(context.canUndo).toBe(true);
       expect(context.canRedo).toBe(false);
     });
@@ -307,6 +399,57 @@ describe('utils.js', () => {
       // Should not throw
       expect(() => props.onSelect({ command: 'nonexistentCommand' })).not.toThrow();
       expect(mockProps.closePopover).toHaveBeenCalled();
+    });
+  });
+
+  describe('internal helpers', () => {
+    it('should detect structure from resolved position', () => {
+      const state = {
+        doc: {
+          resolve: vi.fn(() => ({
+            depth: 4,
+            node: (depth) => {
+              const map = {
+                1: { type: { name: 'paragraph' } },
+                2: { type: { name: 'tableCell' } },
+                3: { type: { name: 'tableRow' } },
+                4: { type: { name: 'table' } },
+              };
+              return map[depth] || { type: { name: 'doc' } };
+            },
+          })),
+        },
+      };
+
+      const result = __getStructureFromResolvedPosForTest(state, 42);
+
+      expect(state.doc.resolve).toHaveBeenCalledWith(42);
+      expect(result).toEqual({ isInTable: true, isInList: false, isInSectionNode: false });
+    });
+
+    it('should return null when position resolution fails', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const state = {
+        doc: {
+          resolve: vi.fn(() => {
+            throw new Error('boom');
+          }),
+        },
+      };
+
+      const result = __getStructureFromResolvedPosForTest(state, 0);
+
+      expect(result).toBeNull();
+      expect(warnSpy).toHaveBeenCalled();
+
+      warnSpy.mockRestore();
+    });
+
+    it('should reflect collaboration enablement', () => {
+      expect(__isCollaborationEnabledForTest({ options: { collaborationProvider: {}, ydoc: {} } })).toBe(true);
+      expect(__isCollaborationEnabledForTest({ options: { collaborationProvider: {} } })).toBe(false);
+      expect(__isCollaborationEnabledForTest({ options: { ydoc: {} } })).toBe(false);
+      expect(__isCollaborationEnabledForTest({ options: {} })).toBe(false);
     });
   });
 });
