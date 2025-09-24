@@ -136,8 +136,8 @@ const init = async () => {
     modules: {
       comments: {
         // comments: sampleComments,
-        overflow: true,
-        selector: 'comments-panel',
+        // overflow: true,
+        // selector: 'comments-panel',
         // useInternalExternalComments: true,
         // suppressInternalExternal: true,
       },
