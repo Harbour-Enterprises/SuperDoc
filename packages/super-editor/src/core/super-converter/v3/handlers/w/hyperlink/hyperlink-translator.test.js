@@ -81,7 +81,13 @@ describe('w:hyperlink translator', () => {
 
   describe('config.encode', () => {
     const mockNodeListHandler = {
-      handler: vi.fn((params) => params.nodes),
+      handler: vi.fn(({ nodes }) =>
+        nodes.map((node, index) => ({
+          type: 'text',
+          text: `link text ${index + 1}`,
+          marks: Array.isArray(node.marks) ? node.marks.map((mark) => ({ ...mark })) : [],
+        })),
+      ),
     };
 
     it('should resolve href from rId and add link mark to child runs', () => {
@@ -115,7 +121,9 @@ describe('w:hyperlink translator', () => {
 
       expect(result).toHaveLength(2);
       const linkMark = { type: 'link', attrs: { rId: 'rId1', href: 'https://example.com' } };
+      expect(result[0].type).toBe('text');
       expect(result[0].marks).toEqual([linkMark]);
+      expect(result[1].type).toBe('text');
       expect(result[1].marks).toEqual([linkMark]);
       expect(mockNodeListHandler.handler).toHaveBeenCalledWith({
         ...params,
@@ -142,7 +150,57 @@ describe('w:hyperlink translator', () => {
       const result = config.encode(params, encodedAttrs);
 
       const linkMark = { type: 'link', attrs: { anchor: 'my-anchor', href: '#my-anchor' } };
+      expect(result[0].type).toBe('text');
       expect(result[0].marks).toEqual([linkMark]);
+    });
+
+    it('does not leave link mark on run nodes', () => {
+      const mockRunHandler = vi.fn(({ nodes }) =>
+        nodes.map((run) => ({
+          type: 'run',
+          marks: Array.isArray(run.marks) ? run.marks.map((mark) => ({ ...mark })) : [],
+          content: [
+            {
+              type: 'text',
+              text: 'link text',
+              marks: Array.isArray(run.marks) ? run.marks.map((mark) => ({ ...mark })) : [],
+            },
+          ],
+        })),
+      );
+
+      const params = {
+        nodes: [
+          {
+            name: 'w:hyperlink',
+            attributes: { 'r:id': 'rId1' },
+            elements: [{ name: 'w:r', elements: [] }],
+          },
+        ],
+        docx: {
+          'word/_rels/document.xml.rels': {
+            elements: [
+              {
+                name: 'Relationships',
+                elements: [{ name: 'Relationship', attributes: { Id: 'rId1', Target: 'https://example.com' } }],
+              },
+            ],
+          },
+        },
+        nodeListHandler: { handler: mockRunHandler },
+        path: [],
+      };
+
+      const encodedAttrs = { rId: 'rId1' };
+
+      const result = config.encode(params, encodedAttrs);
+
+      const runNode = result[0];
+      const hasRunLevelLink = Array.isArray(runNode.marks) && runNode.marks.some((mark) => mark.type === 'link');
+      expect(hasRunLevelLink).toBe(false);
+
+      const textMarks = runNode.content?.[0]?.marks || [];
+      expect(textMarks.some((mark) => mark.type === 'link')).toBe(true);
     });
   });
 

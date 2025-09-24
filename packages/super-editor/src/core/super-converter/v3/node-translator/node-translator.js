@@ -12,7 +12,7 @@ export const TranslatorTypes = Object.freeze({
  * @typedef {keyof typeof TranslatorTypes} TranslatorTypeKey
  * @typedef {typeof TranslatorTypes[TranslatorTypeKey]} TranslatorType
  * @typedef {string} XmlNodeName
- * @typedef {string} SuperDocNodeOrKeyName
+ * @typedef {string|string[]} SuperDocNodeOrKeyName
  */
 
 /**
@@ -25,7 +25,14 @@ export const TranslatorTypes = Object.freeze({
 
 /** @typedef {import('../../v2/importer/types').NodeHandlerParams} SCEncoderConfig */
 /** @typedef {import('../../v2/types').SuperDocNode} SCEncoderResult */
-/** @typedef {{ node: { attrs?: any, marks?: any[], type: string }, children?: any[], relationships?: any[] }} SCDecoderConfig */
+/**
+ * @typedef {Object} SCDecoderConfig
+ * @property {{ attrs?: any, marks?: any[], type: string, content?: any[] }} node
+ * @property {any[]} [children]
+ * @property {any[]} [relationships]
+ * @property {Record<string, any>} [extraParams]
+ * @property {import('../../../Editor.js').Editor} [editor]
+ */
 /** @typedef {{ name: string, attributes?: any, elements: any[] }} SCDecoderResult */
 
 /**
@@ -56,7 +63,7 @@ export const TranslatorTypes = Object.freeze({
 /**
  * @typedef {Object} NodeTranslatorConfig
  * @property {string} xmlName - The name of the node in OOXML
- * @property {string} sdNodeOrKeyName - The name of the node in SuperDoc
+ * @property {SuperDocNodeOrKeyName} sdNodeOrKeyName - The name of the node in SuperDoc
  * @property {TranslatorType} [type="node"] - The type of the translator.
  * @property {NodeTranslatorEncodeFn} encode - The function to encode the data.
  * @property {NodeTranslatorDecodeFn} [decode] - The function to decode the data.
@@ -70,7 +77,7 @@ export class NodeTranslator {
   /** @type {string} */
   xmlName;
 
-  /** @type {string} */
+  /** @type {SuperDocNodeOrKeyName} */
   sdNodeOrKeyName;
 
   /** @type {number} */
@@ -96,7 +103,7 @@ export class NodeTranslator {
 
   /**
    * @param {string} xmlName
-   * @param {string} sdNodeOrKeyName
+   * @param {SuperDocNodeOrKeyName} sdNodeOrKeyName
    * @param {NodeTranslatorEncodeFn} encode
    * @param {NodeTranslatorDecodeFn} decode
    * @param {number} [priority]

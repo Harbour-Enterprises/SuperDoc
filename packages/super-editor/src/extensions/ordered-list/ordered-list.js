@@ -6,6 +6,35 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
 const inputRegex = /^(\d+)\.\s$/;
 
+/**
+ * Configuration options for OrderedList
+ * @typedef {Object} OrderedListOptions
+ * @category Options
+ * @property {string} [itemTypeName='listItem'] - Name of list item node type
+ * @property {Object} [htmlAttributes] - HTML attributes for ordered list elements
+ * @property {boolean} [keepMarks=true] - Whether to preserve marks when creating lists
+ * @property {boolean} [keepAttributes=false] - Whether to preserve attributes
+ * @property {Array<string>} [listStyleTypes=['decimal', 'lowerAlpha', 'lowerRoman']] - Available list style types
+ */
+
+/**
+ * Attributes for ordered list nodes
+ * @typedef {Object} OrderedListAttributes
+ * @category Attributes
+ * @property {number} [order=1] - Starting number for the list
+ * @property {string} [sdBlockId] - Block identifier for tracking
+ * @property {string} [syncId] - Synchronization identifier
+ * @property {string} [listId] - List identifier
+ * @property {string} [list-style-type='decimal'] - List style type (decimal, lowerAlpha, lowerRoman)
+ * @property {Object} [attributes] - Additional attributes
+ */
+
+/**
+ * @module OrderedList
+ * @sidebarTitle Ordered List
+ * @snippetPath /snippets/extensions/ordered-list.mdx
+ * @shortcut Mod-Shift-7 | toggleOrderedList | Toggle ordered list
+ */
 export const OrderedList = Node.create({
   name: 'orderedList',
 
@@ -101,10 +130,26 @@ export const OrderedList = Node.create({
 
   addCommands() {
     return {
+      /**
+       * Toggle ordered list formatting
+       * @category Command
+       * @example
+       * editor.commands.toggleOrderedList()
+       * @note Converts selection to ordered list or back to paragraphs
+       */
       toggleOrderedList: () => (params) => {
         return toggleList(this.type)(params);
       },
 
+      /**
+       * Restart list node numbering
+       * @category Command
+       * @param {Array} followingNodes - Nodes to restart
+       * @param {number} pos - Starting position
+       * @example
+       * editor.commands.restartListNodes(nodes, position)
+       * @note Resets list numbering for specified nodes
+       */
       restartListNodes:
         (followingNodes, pos) =>
         ({ tr }) => {
@@ -130,8 +175,11 @@ export const OrderedList = Node.create({
         },
 
       /**
-       * Updates ordered list style type when sink or lift `listItem`.
-       * @example 1,2,3 -> a,b,c -> i,ii,iii -> 1,2,3 -> etc
+       * Update ordered list style type based on nesting level
+       * @category Command
+       * @example
+       * editor.commands.updateOrderedListStyleType()
+       * @note Cycles through decimal -> lowerAlpha -> lowerRoman based on depth
        */
       updateOrderedListStyleType:
         () =>

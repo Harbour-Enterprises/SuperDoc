@@ -13,6 +13,19 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
  */
 
 /**
+ * Configuration options for CustomSelection
+ * @typedef {Object} CustomSelectionOptions
+ * @category Options
+ * @example
+ * // CustomSelection works automatically
+ * new SuperDoc({
+ *   selector: '#editor',
+ *   document: 'document.docx'
+ *   // Selection handling is built-in
+ * });
+ */
+
+/**
  * Plugin key for custom selection management
  * @private
  */
@@ -332,7 +345,7 @@ export const CustomSelection = Extension.create({
        * @returns {Function} Command function
        * @example
        * // Restore selection after toolbar interaction
-       * restorePreservedSelection()
+       * editor.commands.restorePreservedSelection()
        * @note Used internally to maintain selection when interacting with toolbar
        */
       restorePreservedSelection:

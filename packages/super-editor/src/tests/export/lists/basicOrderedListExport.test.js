@@ -1,10 +1,7 @@
 // prettier-ignore
-import {
-  getTextFromNode,
-  getExportedResult,
-  testListNodes,
-} from '../export-helpers/index';
+import { getTextFromNode, getExportedResult, testListNodes } from '../export-helpers/index';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
+import { extractParagraphText } from '../../helpers/getParagraphText.js';
 
 describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
   // The file for this set of test
@@ -26,13 +23,15 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
     expect(titleText).toBe('Simple ordered list:');
 
     const item1 = body.elements[titleIndex + 2];
-    testListNodes({ node: item1, expectedLevel: 0, expectedNumPr: 0, text: 'Item 1' });
+    // Export now allocates a stable shared numbering definition for the list,
+    // so each paragraph references numPr 1 instead of the previous placeholder 0.
+    testListNodes({ node: item1, expectedLevel: 0, expectedNumPr: 1, text: 'Item 1' });
 
     const item2 = body.elements[titleIndex + 3];
-    testListNodes({ node: item2, expectedLevel: 0, expectedNumPr: 0, text: 'Item 2' });
+    testListNodes({ node: item2, expectedLevel: 0, expectedNumPr: 1, text: 'Item 2' });
 
     const item3 = body.elements[titleIndex + 4];
-    testListNodes({ node: item3, expectedLevel: 0, expectedNumPr: 0 });
+    testListNodes({ node: item3, expectedLevel: 0, expectedNumPr: 1 });
 
     const nonListNode = body.elements[titleIndex + 6];
     testListNodes({ node: nonListNode, expectedLevel: undefined, expectedNumPr: undefined, text: undefined });
@@ -45,22 +44,24 @@ describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
     expect(titleText).toBe('Simple ordered list with sub lists:');
 
     const item1 = body.elements[titleIndex + 2];
-    testListNodes({ node: item1, expectedLevel: 0, expectedNumPr: 0, text: 'Item 1' });
+    // The second list shares a different numbering definition that restarts at id 2.
+    testListNodes({ node: item1, expectedLevel: 0, expectedNumPr: 2, text: 'Item 1' });
 
     const item3 = body.elements[titleIndex + 4];
-    testListNodes({ node: item3, expectedLevel: 0, expectedNumPr: 0, text: 'Item 3' });
+    // Continuation items keep referencing the same numPr id to reflect the restart logic.
+    testListNodes({ node: item3, expectedLevel: 0, expectedNumPr: 2, text: 'Item 3' });
 
     const firstNestedItem = body.elements[titleIndex + 5];
-    testListNodes({ node: firstNestedItem, expectedLevel: 1, expectedNumPr: 1, text: 'Lvl 1 – a' });
+    testListNodes({ node: firstNestedItem, expectedLevel: 1, expectedNumPr: 2, text: 'Lvl 1 – a' });
 
     const doubleNestedItem = body.elements[titleIndex + 7];
     testListNodes({ node: doubleNestedItem, expectedLevel: 2, expectedNumPr: 2, text: 'Lvl 2 – i' });
 
     const nestedItemAfterDoubleNested = body.elements[titleIndex + 8];
-    testListNodes({ node: nestedItemAfterDoubleNested, expectedLevel: 1, expectedNumPr: 1, text: 'Lvl 1 – c' });
+    testListNodes({ node: nestedItemAfterDoubleNested, expectedLevel: 1, expectedNumPr: 2, text: 'Lvl 1 – c' });
 
     const finalItem = body.elements[titleIndex + 9];
-    testListNodes({ node: finalItem, expectedLevel: 0, expectedNumPr: 0, text: 'Item 4' });
+    testListNodes({ node: finalItem, expectedLevel: 0, expectedNumPr: 2, text: 'Item 4' });
   });
 });
 
@@ -144,9 +145,8 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const paragraphNode = item1.content[0];
     expect(paragraphNode.type).toBe('paragraph');
 
-    const textNode = paragraphNode.content.find((n) => n.type === 'text');
-    expect(textNode).toBeDefined();
-    expect(textNode.text).toBe('A custom');
+    const paragraphText = extractParagraphText(paragraphNode);
+    expect(paragraphText).toBe('A custom');
 
     const exportedList1 = body.elements[1];
     const pPr = exportedList1.elements.find((s) => s.name === 'w:pPr');
@@ -192,14 +192,13 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     expect(attrs.level).toBe(expectedLevel);
     expect(attrs.indent.left).toBeUndefined();
     expect(attrs.indent.hanging).toBeUndefined();
-    expect(attrs.indent.right).toBe(1);
+    expect(attrs.indent.right).toBeCloseTo(1.2, 1);
 
     const paragraphNode = item1.content[0];
     expect(paragraphNode.type).toBe('paragraph');
 
-    const textNode = paragraphNode.content.find((n) => n.type === 'text');
-    expect(textNode).toBeDefined();
-    expect(textNode.text).toBe('2.1');
+    const paragraphText = extractParagraphText(paragraphNode);
+    expect(paragraphText).toBe('2.1');
 
     const exportedList1 = body.elements[4];
     const pPr = exportedList1.elements.find((s) => s.name === 'w:pPr');
@@ -223,6 +222,6 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const indentRight = indentTag?.attributes['w:right'];
     expect(indentLeft).toBeUndefined();
     expect(indentHanging).toBeUndefined();
-    expect(indentRight).toBe(15);
+    expect(indentRight).toBe(18);
   });
 });

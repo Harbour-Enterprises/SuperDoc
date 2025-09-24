@@ -3,25 +3,28 @@ import { parseSizeUnit } from '../utilities/index.js';
 function inchesToTwips(inches) {
   if (inches == null) return;
   if (typeof inches === 'string') inches = parseFloat(inches);
-  return Math.round(inches * 1440);
+  return Math.round(Number(inches) * 1440);
 }
 
 function twipsToInches(twips) {
   if (twips == null) return;
-  if (typeof twips === 'string') twips = parseInt(twips, 10);
-  return Math.round((twips / 1440) * 100) / 100;
+  const value = Number(twips);
+  if (Number.isNaN(value)) return;
+  return value / 1440;
 }
 
 function twipsToPixels(twips) {
   if (twips == null) return;
-  twips = twipsToInches(twips);
-  return Math.round(twips * 96);
+  const inches = twipsToInches(twips);
+  if (inches == null) return;
+  const pixels = inches * 96;
+  return Math.round(pixels * 1000) / 1000;
 }
 
 function pixelsToTwips(pixels) {
   if (pixels == null) return;
-  pixels = pixels / 96;
-  return inchesToTwips(pixels);
+  const inches = Number(pixels) / 96;
+  return inchesToTwips(inches);
 }
 
 function twipsToLines(twips) {
@@ -84,6 +87,16 @@ function ptToTwips(pt) {
   return pt * 20;
 }
 
+function rotToDegrees(rot) {
+  if (rot == null) return;
+  return rot / 60000;
+}
+
+function degreesToRot(degrees) {
+  if (degrees == null) return;
+  return degrees * 60000;
+}
+
 /**
  * Get the export value for text indent
  * @param {string|number} indent - The text indent value to export
@@ -138,26 +151,53 @@ const getContentTypesFromXml = (contentTypesXml) => {
   return Array.from(defaults).map((item) => item.getAttribute('Extension'));
 };
 
-const getHexColorFromDocxSystem = (docxColor) => {
-  const colorMap = new Map([
-    ['yellow', '#ffff00'],
-    ['green', '#00ff00'],
-    ['blue', '#0000FFFF'],
-    ['cyan', '#00ffff'],
-    ['magenta', '#ff00ff'],
-    ['red', '#ff0000'],
-    ['darkYellow', '#808000FF'],
-    ['darkGreen', '#008000FF'],
-    ['darkBlue', '#000080'],
-    ['darkCyan', '#008080FF'],
-    ['darkMagenta', '#800080FF'],
-    ['darkGray', '#808080FF'],
-    ['darkRed', '#800000FF'],
-    ['lightGray', '#C0C0C0FF'],
-    ['black', '#000'],
-  ]);
+const DOCX_HIGHLIGHT_KEYWORD_MAP = new Map([
+  ['yellow', 'FFFF00'],
+  ['green', '00FF00'],
+  ['blue', '0000FF'],
+  ['cyan', '00FFFF'],
+  ['magenta', 'FF00FF'],
+  ['red', 'FF0000'],
+  ['darkYellow', '808000'],
+  ['darkGreen', '008000'],
+  ['darkBlue', '000080'],
+  ['darkCyan', '008080'],
+  ['darkMagenta', '800080'],
+  ['darkGray', '808080'],
+  ['darkRed', '800000'],
+  ['lightGray', 'C0C0C0'],
+  ['black', '000000'],
+  ['white', 'FFFFFF'],
+]);
 
-  return colorMap.get(docxColor) || null;
+const normalizeHexColor = (hex) => {
+  if (!hex) return null;
+  let value = hex.replace('#', '').trim();
+  if (!value) return null;
+  value = value.toUpperCase();
+  if (value.length === 3)
+    value = value
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  if (value.length === 8) value = value.slice(0, 6);
+  return value;
+};
+
+const getHexColorFromDocxSystem = (docxColor) => {
+  const hex = DOCX_HIGHLIGHT_KEYWORD_MAP.get(docxColor);
+  return hex ? `#${hex}` : null;
+};
+
+const getDocxHighlightKeywordFromHex = (hexColor) => {
+  if (!hexColor) return null;
+  if (DOCX_HIGHLIGHT_KEYWORD_MAP.has(hexColor)) return hexColor;
+  const normalized = normalizeHexColor(hexColor);
+  if (!normalized) return null;
+  for (const [keyword, hex] of DOCX_HIGHLIGHT_KEYWORD_MAP.entries()) {
+    if (hex === normalized) return keyword;
+  }
+  return null;
 };
 
 function isValidHexColor(color) {
@@ -236,9 +276,13 @@ export {
   halfPointToPoints,
   eigthPointsToPixels,
   pixelsToEightPoints,
+  rotToDegrees,
+  degreesToRot,
   getArrayBufferFromUrl,
   getContentTypesFromXml,
   getHexColorFromDocxSystem,
+  getDocxHighlightKeywordFromHex,
+  normalizeHexColor,
   isValidHexColor,
   rgbToHex,
   ptToTwips,

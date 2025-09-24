@@ -14,7 +14,7 @@ describe('w:cantSplit translator', () => {
   });
 
   it('decodes cantSplit: true to w:cantSplit element', () => {
-    expect(translator.decode({ node: { attrs: { cantSplit: true } } })).toEqual({});
+    expect(translator.decode({ node: { attrs: { cantSplit: true } } })).toEqual({ attributes: {} });
   });
 
   it('decodes cantSplit: false to undefined', () => {

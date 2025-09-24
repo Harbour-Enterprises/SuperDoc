@@ -18,7 +18,7 @@ describe('w:tblHeader translator', () => {
 
   describe('decode', () => {
     it('creates a w:tblHeader element if repeatHeader is true', () => {
-      const result = translator.decode({ node: { attrs: { repeatHeader: true } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { repeatHeader: true } } });
       expect(result).toEqual({});
     });
 

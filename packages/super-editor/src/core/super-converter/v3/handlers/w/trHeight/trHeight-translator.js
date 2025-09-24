@@ -29,6 +29,6 @@ export const translator = NodeTranslator.from({
     if (node.attrs.rowHeight.rule) {
       heightAttrs['w:hRule'] = node.attrs.rowHeight.rule;
     }
-    return Object.keys(heightAttrs).length > 0 ? heightAttrs : undefined;
+    return Object.keys(heightAttrs).length > 0 ? { attributes: heightAttrs } : undefined;
   },
 });

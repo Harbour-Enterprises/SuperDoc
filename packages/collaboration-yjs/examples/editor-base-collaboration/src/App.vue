@@ -1,9 +1,9 @@
 <script setup>
-import '@harbour-enterprises/superdoc/style.css';
+import 'superdoc/style.css';
 import * as Y from 'yjs';
 import { WebsocketProvider } from 'y-websocket'
 import { onMounted, shallowRef } from 'vue';
-import { Editor, getStarterExtensions } from '@harbour-enterprises/superdoc/super-editor';
+import { Editor, getStarterExtensions } from 'superdoc/super-editor';
 
 // Default document
 import sampleDocument from '/sample-document.docx?url';

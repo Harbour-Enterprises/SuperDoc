@@ -2,6 +2,12 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
 
+/**
+ * Configuration options for NodeResizer
+ * @typedef {Object} NodeResizerOptions
+ * @category Options
+ */
+
 export const NodeResizerKey = new PluginKey('node-resizer');
 
 /**
@@ -330,8 +336,17 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
   }
 };
 
+/**
+ * @module NodeResizer
+ * @sidebarTitle Node Resizer
+ * @snippetPath /snippets/extensions/node-resizer.mdx
+ */
 export const NodeResizer = Extension.create({
   name: 'nodeResizer',
+
+  addOptions() {
+    return {};
+  },
 
   addPmPlugins() {
     const isHeadless = this.editor.options.isHeadless;

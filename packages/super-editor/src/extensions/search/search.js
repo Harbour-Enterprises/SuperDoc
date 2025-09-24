@@ -1,17 +1,25 @@
 // @ts-check
 import { Extension } from '@core/Extension.js';
-import { search, SearchQuery, setSearchState, getMatchHighlights } from 'prosemirror-search';
+import { search, SearchQuery, setSearchState, getMatchHighlights } from './prosemirror-search-patched.js';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { v4 as uuidv4 } from 'uuid';
 
+const isRegExp = (value) => Object.prototype.toString.call(value) === '[object RegExp]';
+
 /**
- * Search match Object
+ * Search match object
  * @typedef {Object} SearchMatch
  * @property {string} text - Found text
  * @property {number} from - From position
  * @property {number} to - To position
  * @property {string} id - ID of the search match
+ */
+
+/**
+ * Configuration options for Search
+ * @typedef {Object} SearchOptions
+ * @category Options
  */
 
 /**
@@ -60,12 +68,11 @@ export const Search = Extension.create({
   addCommands() {
     return {
       /**
-       * Navigates to the first search match
+       * Navigate to the first search match
        * @category Command
-       * @returns {Function} - Command function
        * @example
-       * goToFirstMatch()
-       * @note Scrolls Editor to the first match of called search().
+       * editor.commands.goToFirstMatch()
+       * @note Scrolls editor to the first match from previous search
        */
       goToFirstMatch:
         () =>
@@ -85,13 +92,13 @@ export const Search = Extension.create({
         },
 
       /**
-       * Searches for the string match in Editor content
+       * Search for string matches in editor content
        * @category Command
        * @param {String|RegExp} patternInput - Search string or pattern
-       * @returns {Function} - Command function that returns matches
        * @example
-       * search('test string')
-       * @note Searches for the test string in the Editor content and returns an array of matches
+       * const matches = editor.commands.search('test string')
+       * const regexMatches = editor.commands.search(/test/i)
+       * @note Returns array of SearchMatch objects with positions and IDs
        */
       search:
         (patternInput) =>
@@ -102,10 +109,11 @@ export const Search = Extension.create({
           let regexp = false;
           const wholeWord = false;
 
-          if (patternInput instanceof RegExp) {
+          if (isRegExp(patternInput)) {
+            const regexPattern = /** @type {RegExp} */ (patternInput);
             regexp = true;
-            pattern = patternInput.source;
-            caseSensitive = !patternInput.flags.includes('i');
+            pattern = regexPattern.source;
+            caseSensitive = !regexPattern.flags.includes('i');
           } else if (typeof patternInput === 'string' && /^\/(.+)\/([gimsuy]*)$/.test(patternInput)) {
             const [, body, flags] = patternInput.match(/^\/(.+)\/([gimsuy]*)$/);
             regexp = true;
@@ -142,14 +150,13 @@ export const Search = Extension.create({
         },
 
       /**
-       * Navigates to the selected match
+       * Navigate to a specific search match
        * @category Command
-       * @param {SearchMatch} match Match at specific index
-       * @returns {Function} - Command function
+       * @param {SearchMatch} match - Match object to navigate to
        * @example
-       * const searchResult = search('test string')
-       * goToSearchResult(searchResult[3])
-       * @note Scrolls Editor to the fourth match of called search() and sets selection on it.
+       * const searchResults = editor.commands.search('test string')
+       * editor.commands.goToSearchResult(searchResults[3])
+       * @note Scrolls to match and selects it
        */
       goToSearchResult:
         (match) =>

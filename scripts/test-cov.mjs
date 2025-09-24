@@ -24,6 +24,15 @@ const vitestBin = path.resolve(
 const userArgs = process.argv.slice(2);
 
 // Default coverage opts suitable for the whole monorepo
+const coverageExcludePatterns = [
+  '**/dist/**',
+  '**/examples/**',
+  '**/*.d.ts',
+  '**/*.test.*',
+  '**/*.spec.*',
+  '**/vite.config.*',
+];
+
 const defaultCoverageArgs = [
   '--coverage',
   '--coverage.provider=v8',
@@ -32,7 +41,7 @@ const defaultCoverageArgs = [
   '--coverage.reporter=html',
   '--coverage.reporter=json-summary',
   '--coverage.reportsDirectory=coverage',
-  '--coverage.exclude=**/dist/**,**/*.d.ts,**/*.test.*,**/*.spec.*,**/vite.config.*',
+  ...coverageExcludePatterns.map((pattern) => `--coverage.exclude=${pattern}`),
 ];
 
 const vitestArgs = ['run', ...defaultCoverageArgs, ...userArgs];

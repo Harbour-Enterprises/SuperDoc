@@ -113,7 +113,13 @@ export const handleParagraphNode = (params) => {
 
   if (docx) {
     const defaultStyleId = node.attributes?.['w:rsidRDefault'];
-    schemaNode.attrs['spacing'] = getParagraphSpacing(node, docx, styleId, schemaNode.attrs.marksAttrs);
+    const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
+    const spacing = getParagraphSpacing(node, docx, styleId, schemaNode.attrs.marksAttrs, {
+      insideTable,
+    });
+    if (spacing) {
+      schemaNode.attrs['spacing'] = spacing;
+    }
     schemaNode.attrs['rsidRDefault'] = defaultStyleId;
   }
 

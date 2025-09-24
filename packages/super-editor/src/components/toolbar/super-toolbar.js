@@ -5,7 +5,12 @@ import { makeDefaultItems } from './defaultItems';
 import { getActiveFormatting } from '@core/helpers/getActiveFormatting.js';
 import { vClickOutside } from '@harbour-enterprises/common';
 import Toolbar from './Toolbar.vue';
-import { startImageUpload, getFileOpener } from '../../extensions/image/imageHelpers/index.js';
+import {
+  checkAndProcessImage,
+  replaceSelectionWithImagePlaceholder,
+  uploadAndInsertImage,
+  getFileOpener,
+} from '../../extensions/image/imageHelpers/index.js';
 import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { toolbarTexts } from './toolbarTexts.js';
@@ -14,6 +19,7 @@ import { getAvailableColorOptions, makeColorOption, renderColorOptions } from '.
 import { isInTable } from '@helpers/isInTable.js';
 import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
 import { yUndoPluginKey } from 'y-prosemirror';
+import { isNegatedMark } from './format-negation.js';
 
 /**
  * @typedef {function(CommandItem): void} CommandCallback
@@ -332,10 +338,16 @@ export class SuperToolbar extends EventEmitter {
      * @param {string} params.argument - The color to set
      * @returns {void}
      */
-    setColor: ({ item, argument }) => {
-      this.#runCommandWithArgumentOnly({ item, argument }, () => {
-        this.activeEditor?.commands.setFieldAnnotationsTextColor(argument, true);
-      });
+    setColor: ({ argument }) => {
+      if (!argument || !this.activeEditor) return;
+      const isNone = argument === 'none';
+      const value = isNone ? 'inherit' : argument;
+      // Apply inline color; 'inherit' acts as a cascade-aware negation of style color
+      if (this.activeEditor?.commands?.setColor) this.activeEditor.commands.setColor(value);
+      // Update annotations color, but use null for none
+      const argValue = isNone ? null : argument;
+      this.activeEditor?.commands.setFieldAnnotationsTextColor(argValue, true);
+      this.updateToolbarState();
     },
 
     /**
@@ -345,12 +357,16 @@ export class SuperToolbar extends EventEmitter {
      * @param {string} params.argument - The highlight color to set
      * @returns {void}
      */
-    setHighlight: ({ item, argument }) => {
-      this.#runCommandWithArgumentOnly({ item, argument, noArgumentCallback: true }, () => {
-        let arg = argument !== 'none' ? argument : null;
-        this.activeEditor?.commands.setFieldAnnotationsTextHighlight(arg, true);
-        this.activeEditor?.commands.setCellBackground(arg);
-      });
+    setHighlight: ({ argument }) => {
+      if (!argument || !this.activeEditor) return;
+      // For cascade-aware negation, keep a highlight mark present using 'transparent'
+      const inlineColor = argument !== 'none' ? argument : 'transparent';
+      if (this.activeEditor?.commands?.setHighlight) this.activeEditor.commands.setHighlight(inlineColor);
+      // Update annotations highlight; 'none' -> null
+      const argValue = argument !== 'none' ? argument : null;
+      this.activeEditor?.commands.setFieldAnnotationsTextHighlight(argValue, true);
+      this.activeEditor?.commands.setCellBackground(argValue);
+      this.updateToolbarState();
     },
 
     /**
@@ -374,10 +390,29 @@ export class SuperToolbar extends EventEmitter {
         return;
       }
 
-      startImageUpload({
+      const { size, file } = await checkAndProcessImage({
+        file: result.file,
+        getMaxContentSize: () => this.activeEditor.getMaxContentSize(),
+      });
+
+      if (!file) {
+        return;
+      }
+
+      const id = {};
+
+      replaceSelectionWithImagePlaceholder({
+        view: this.activeEditor.view,
+        editorOptions: this.activeEditor.options,
+        id,
+      });
+
+      await uploadAndInsertImage({
         editor: this.activeEditor,
         view: this.activeEditor.view,
-        file: result.file,
+        file,
+        size,
+        id,
       });
     },
 
@@ -718,7 +753,10 @@ export class SuperToolbar extends EventEmitter {
         }
       }
 
-      const activeMark = marks.find((mark) => mark.name === item.name.value);
+      const rawActiveMark = marks.find((mark) => mark.name === item.name.value);
+      const markNegated = rawActiveMark ? isNegatedMark(rawActiveMark.name, rawActiveMark.attrs) : false;
+      const activeMark = markNegated ? null : rawActiveMark;
+
       if (activeMark) {
         item.activate(activeMark.attrs);
       } else {
@@ -727,7 +765,7 @@ export class SuperToolbar extends EventEmitter {
 
       // Activate toolbar items based on linked styles (if there's no active mark to avoid overriding  it)
       const styleIdMark = marks.find((mark) => mark.name === 'styleId');
-      if (!activeMark && styleIdMark?.attrs.styleId) {
+      if (!activeMark && !markNegated && styleIdMark?.attrs.styleId) {
         const markToStyleMap = {
           fontSize: 'font-size',
           fontFamily: 'font-family',
@@ -850,8 +888,6 @@ export class SuperToolbar extends EventEmitter {
       return;
     }
 
-    this.log('(emmitCommand) Command:', command, '\n\titem:', item, '\n\targument:', argument, '\n\toption:', option);
-
     // Check if we have a custom or overloaded command defined
     if (command in this.#interceptedCommands) {
       return this.#interceptedCommands[command]({ item, argument });
@@ -868,7 +904,10 @@ export class SuperToolbar extends EventEmitter {
 
     // If we don't know what to do with this command, throw an error
     else {
-      throw new Error(`[super-toolbar 🎨] Command not found: ${command}`);
+      const error = new Error(`[super-toolbar 🎨] Command not found: ${command}`);
+      this.emit('exception', { error, editor: this.activeEditor });
+
+      throw error;
     }
 
     this.updateToolbarState();

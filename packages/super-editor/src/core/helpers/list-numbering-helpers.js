@@ -361,15 +361,24 @@ export const createSchemaOrderedListNode = ({ level, numId, listType, editor, li
   numId = Number(numId);
   const { lvlText, numFmt } = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
   const listNodeJSON = createListItemNodeJSON({ level, lvlText, numFmt, numId, listLevel, contentNode });
+
+  const nodeTypeName = typeof listType === 'string' ? listType : listType?.name;
+  const type = nodeTypeName || 'orderedList';
+  const attrs = {
+    'list-style-type': numFmt,
+    listId: numId,
+  };
+
+  if (type === 'orderedList') {
+    attrs.order = level;
+  }
+
   const node = {
-    type: 'orderedList',
-    attrs: {
-      'list-style-type': numFmt,
-      listId: numId,
-      order: level,
-    },
+    type,
+    attrs,
     content: [listNodeJSON],
   };
+
   return editor.schema.nodeFromJSON(node);
 };
 

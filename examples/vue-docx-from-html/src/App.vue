@@ -1,7 +1,7 @@
 <script setup>
-import '@harbour-enterprises/superdoc/style.css';
+import 'superdoc/style.css';
 import { onMounted, ref } from 'vue';
-import { SuperDoc } from '@harbour-enterprises/superdoc';
+import { SuperDoc } from 'superdoc';
 
 const htmlString = ref('<p>I am <strong>a paragraph</strong> in <i>HTML</i></p>');
 

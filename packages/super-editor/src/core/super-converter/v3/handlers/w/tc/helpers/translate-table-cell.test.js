@@ -5,7 +5,7 @@ vi.mock('@converter/v2/exporter/helpers/index', () => ({
   translateChildNodes: vi.fn(() => [{ name: 'w:p', elements: [] }]),
 }));
 
-import { pixelsToTwips, pixelsToEightPoints } from '@converter/helpers.js';
+import { pixelsToTwips, pixelsToEightPoints, twipsToPixels } from '@converter/helpers.js';
 import { translateTableCell, generateTableCellProperties, generateCellMargins } from './translate-table-cell.js';
 
 describe('translate-table-cell helpers', () => {
@@ -90,6 +90,15 @@ describe('translate-table-cell helpers', () => {
     const vMerge = tcPr.elements.find((e) => e.name === 'w:vMerge');
     expect(vMerge).toBeTruthy();
     expect(vMerge.attributes).toBeUndefined();
+  });
+
+  it('generateCellMargins round-trips twips without inflating values', () => {
+    const twipsValue = 108;
+    const pixelValue = twipsToPixels(twipsValue);
+    const margins = { left: pixelValue };
+    const out = generateCellMargins(margins);
+    const left = out.find((e) => e.name === 'w:left');
+    expect(left?.attributes?.['w:w']).toBe(twipsValue);
   });
 
   it('translateTableCell wraps children with tcPr as the first element', async () => {

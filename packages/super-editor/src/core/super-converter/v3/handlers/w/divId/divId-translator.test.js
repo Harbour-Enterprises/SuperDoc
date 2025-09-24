@@ -16,7 +16,7 @@ describe('w:divId translator', () => {
 
   describe('decode', () => {
     it('creates a w:divId element with the value in w:val', () => {
-      const result = translator.decode({ node: { attrs: { divId: 'div123' } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { divId: 'div123' } } });
       expect(result).toEqual({ 'w:val': 'div123' });
     });
 

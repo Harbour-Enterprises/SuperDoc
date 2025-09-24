@@ -1,5 +1,13 @@
 // @ts-check
 import { Mark, Attribute } from '@core/index.js';
+import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.js';
+
+/**
+ * Configuration options for Italic
+ * @typedef {Object} ItalicOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={}] - HTML attributes for italic elements
+ */
 
 /**
  * @module Italic
@@ -17,6 +25,23 @@ export const Italic = Mark.create({
     };
   },
 
+  addAttributes() {
+    return {
+      /**
+       * @category Attribute
+       * @param {string} [value] - Italic toggle value ('0' renders as normal)
+       */
+      value: {
+        default: null,
+        renderDOM: (attrs) => {
+          if (!attrs.value) return {};
+          if (attrs.value === '0') return { style: 'font-style: normal' };
+          return {};
+        },
+      },
+    };
+  },
+
   parseDOM() {
     return [
       { tag: 'i' },
@@ -27,46 +52,44 @@ export const Italic = Mark.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    return ['em', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+    const merged = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
+    const { value, ...rest } = merged || {};
+    if (value === '0') {
+      return ['span', rest, 0];
+    }
+    return ['em', rest, 0];
   },
 
   addCommands() {
+    const { setItalic, unsetItalic, toggleItalic } = createCascadeToggleCommands({
+      markName: this.name,
+      negationAttrs: { value: '0' },
+    });
+
     return {
       /**
        * Apply italic formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * setItalic()
+       * editor.commands.setItalic()
        */
-      setItalic:
-        () =>
-        ({ commands }) =>
-          commands.setMark(this.name),
+      setItalic,
 
       /**
        * Remove italic formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * unsetItalic()
+       * editor.commands.unsetItalic()
        */
-      unsetItalic:
-        () =>
-        ({ commands }) =>
-          commands.unsetMark(this.name),
+      unsetItalic,
 
       /**
        * Toggle italic formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * toggleItalic()
+       * editor.commands.toggleItalic()
        */
-      toggleItalic:
-        () =>
-        ({ commands }) =>
-          commands.toggleMark(this.name),
+      toggleItalic,
     };
   },
 

@@ -117,6 +117,9 @@ const loadNewFileData = async () => {
     return { content: docx, media, mediaFiles, fonts };
   } catch (err) {
     console.debug('Error loading new file data:', err);
+    if (typeof props.options.onException === 'function') {
+      props.options.onException({ error: err, editor: null });
+    }
   }
 };
 

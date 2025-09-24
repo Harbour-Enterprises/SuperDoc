@@ -26,8 +26,9 @@ jobs:
       
       - name: Validate commits
         run: |
+          BASE=$(git merge-base ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
           npx commitlint \
-            --from ${{ github.event.pull_request.base.sha }} \
+            --from "$BASE" \
             --to ${{ github.event.pull_request.head.sha }}
 
   test:

@@ -7,7 +7,7 @@ import 'prismjs/components/prism-javascript';
 import 'vue-prism-editor/dist/prismeditor.min.css';
 import 'prismjs/themes/prism-tomorrow.css';
 
-import { SuperDoc, getFileObject } from '@harbour-enterprises/superdoc';
+import { SuperDoc, getFileObject } from 'superdoc';
 import templateFileUrl from './assets/template.docx?url';
 import { getProcessedTemplateFromCode } from './fileProcessing';
 import { sleep } from './utils';

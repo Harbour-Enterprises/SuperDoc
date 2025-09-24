@@ -6,6 +6,14 @@ import { getExportedResult } from '../export/export-helpers/index';
 import { handleListNode } from '@converter/v2/importer/listImporter.js';
 import { beforeAll, expect } from 'vitest';
 
+const collectTexts = (paragraphNode) =>
+  paragraphNode.content.flatMap((child) => {
+    if (child.type === 'run' && Array.isArray(child.content)) {
+      return child.content.filter((grand) => grand.type === 'text');
+    }
+    return child.type === 'text' ? [child] : [];
+  });
+
 describe('paragraph tests to check spacing', () => {
   let lists = {};
   beforeEach(() => {
@@ -119,12 +127,12 @@ describe('paragraph tests to check spacing', () => {
     const { attrs } = node;
     const { spacing, marksAttrs } = attrs;
 
-    expect(spacing.lineSpaceAfter).toBe(18);
-    expect(spacing.lineSpaceBefore).toBe(18);
+    expect(spacing.lineSpaceAfter).toBeCloseTo(17.667, 3);
+    expect(spacing.lineSpaceBefore).toBeCloseTo(17.667, 3);
     expect(marksAttrs.length).toBe(2);
     expect(marksAttrs[0].type).toBe('bold');
     expect(marksAttrs[1].type).toBe('textStyle');
-    expect(marksAttrs[1].attrs.fontFamily).toBe('Arial');
+    expect(marksAttrs[1].attrs.fontFamily).toBe('Arial, sans-serif');
     expect(marksAttrs[1].attrs.fontSize).toBe('16pt');
   });
 
@@ -144,7 +152,7 @@ describe('paragraph tests to check spacing', () => {
 
     const { attrs } = node;
     const { spacing } = attrs;
-    expect(spacing.lineSpaceAfter).toBe(11);
+    expect(spacing.lineSpaceAfter).toBeCloseTo(10.667, 3);
     expect(spacing.lineSpaceBefore).toBeUndefined();
   });
 
@@ -164,8 +172,8 @@ describe('paragraph tests to check spacing', () => {
 
     const { attrs } = node;
     const { spacing } = attrs;
-    expect(spacing.lineSpaceAfter).toBe(6);
-    expect(spacing.lineSpaceBefore).toBe(21);
+    expect(spacing.lineSpaceAfter).toBeCloseTo(5.333, 3);
+    expect(spacing.lineSpaceBefore).toBeCloseTo(21.333, 3);
   });
 
   it('correctly gets spacing with lists [list-def-mix]', async () => {
@@ -263,7 +271,7 @@ describe('paragraph tests to check spacing', () => {
     expect(node.attrs.indent.firstLine).toBe(48);
     expect(node.attrs.indent.hanging).toBe(18);
     // textIndent should be in inches (2880twips - 270twips(hanging))
-    expect(node.attrs.textIndent).toBe('1.81in');
+    expect(node.attrs.textIndent).toBe('1.8125in');
   });
 
   it('correctly parses paragraph borders', () => {
@@ -409,7 +417,7 @@ describe('paragraph tests to check indentation', () => {
     const { attrs } = node;
     const { indent } = attrs;
 
-    expect(indent.firstLine).toBe(29);
+    expect(indent.firstLine).toBeCloseTo(28.8, 1);
   });
 });
 
@@ -448,9 +456,9 @@ describe('Check that we can import list item with invalid list def with fallback
   it('imports expected list item with fallback', async () => {
     const item = content.content[3];
     expect(item.type).toBe('paragraph');
-    const textNode = item.content[0];
-    expect(textNode.type).toBe('text');
-    expect(textNode.text).toBe('NO VALID DEF');
+    const [textNode] = collectTexts(item);
+    expect(textNode?.type).toBe('text');
+    expect(textNode?.text).toBe('NO VALID DEF');
   });
 
   it('exports first list item correctly', async () => {
@@ -474,8 +482,8 @@ describe('Check that paragraph-level sectPr is retained', () => {
     expect(sectPr).toBeDefined();
     expect(p2.attrs.pageBreakSource).toBe('sectPr');
 
-    const textNode = p2.content.find((el) => el.type === 'text');
-    expect(textNode.text).toBe('TITLE');
+    const [textNode] = collectTexts(p2);
+    expect(textNode?.text).toBe('TITLE');
   });
 
   it('correctly imports the first node alignment', async () => {

@@ -51,8 +51,11 @@ describe('AnnotationNodeExporter', async () => {
 
     expect(extent.attributes.cx).toBe(4286250);
     expect(extent.attributes.cy).toBe(4286250);
+
     const mediaIds = Object.keys(params.media);
-    expect(mediaIds[0].replace('_', '-').startsWith(attrs.fieldId)).toBe(true);
+    const fieldMediaEntries = mediaIds.filter((id) => id.includes(attrs.hash));
+    expect(fieldMediaEntries.length).toBeGreaterThanOrEqual(1);
+    expect(fieldMediaEntries[0]).toContain(attrs.fieldId.replace(/[^a-zA-Z0-9_-]/g, '_'));
   });
 
   it('export signature annotation correctly', async () => {
@@ -64,7 +67,9 @@ describe('AnnotationNodeExporter', async () => {
     expect(attrs.fieldTypeShort).toBe('signature');
 
     const mediaIds = Object.keys(params.media);
-    expect(mediaIds[1].replace('_', '-').startsWith(attrs.fieldId)).toBe(true);
+    const fieldMediaEntries = mediaIds.filter((id) => id.includes(attrs.hash));
+    expect(fieldMediaEntries.length).toBeGreaterThanOrEqual(1);
+    expect(fieldMediaEntries[0]).toContain(attrs.fieldId.replace(/[^a-zA-Z0-9_-]/g, '_'));
   });
 
   it('export checkbox annotation correctly', async () => {

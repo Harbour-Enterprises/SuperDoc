@@ -26,12 +26,12 @@ describe('w:wAfter translator', () => {
 
   describe('decode', () => {
     it('creates a w:wAfter element with w:w and w:type attributes', () => {
-      const result = translator.decode({ node: { attrs: { wAfter: { value: 140, type: 'pct' } } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { wAfter: { value: 140, type: 'pct' } } } });
       expect(result).toEqual({ 'w:w': '140', 'w:type': 'pct' });
     });
 
     it('handles missing type property', () => {
-      const result = translator.decode({ node: { attrs: { wAfter: { value: 140 } } } });
+      const { attributes: result } = translator.decode({ node: { attrs: { wAfter: { value: 140 } } } });
       expect(result).toEqual({ 'w:w': '140' });
     });
 

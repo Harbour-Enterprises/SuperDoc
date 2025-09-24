@@ -1,5 +1,6 @@
 import { CommentMarkName } from './comments-constants.js';
 import { CommentsPluginKey } from './comments-plugin.js';
+import { ensureFallbackComment, resolveCommentMeta } from './comment-import-helpers.js';
 
 /**
  * Remove comment by id
@@ -159,17 +160,25 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
     const commentNodes = ['commentRangeStart', 'commentRangeEnd', 'commentReference'];
     if (!commentNodes.includes(type.name)) return;
 
-    const matchingImportedComment = converter.comments?.find((c) => c.importedId == node.attrs['w:id']) || {};
-    const { commentId } = matchingImportedComment;
-    if (!commentId) return;
+    const { resolvedCommentId, importedId, internal, matchingImportedComment } = resolveCommentMeta({
+      converter,
+      importedId: node.attrs['w:id'],
+    });
 
     // If the node is a commentRangeStart, record it so we can place a mark once we find the end.
     if (type.name === 'commentRangeStart') {
       toMark.push({
-        'w:id': commentId,
-        importedId: node.attrs['w:id'],
-        internal: false,
+        commentId: resolvedCommentId,
+        importedId,
+        internal,
         start: pos,
+      });
+
+      ensureFallbackComment({
+        converter,
+        matchingImportedComment,
+        commentId: resolvedCommentId,
+        importedId,
       });
 
       // We'll remove this node from the final doc
@@ -179,13 +188,13 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
     // When we reach the commentRangeEnd, add a mark spanning from start to current pos,
     // then mark it for deletion as well.
     else if (type.name === 'commentRangeEnd') {
-      const itemToMark = toMark.find((p) => p.importedId === node.attrs['w:id']);
+      const itemToMark = toMark.find((p) => p.importedId === importedId);
       if (!itemToMark) return; // No matching start? just skip
 
       const { start } = itemToMark;
       const markAttrs = {
-        commentId,
-        importedId: node.attrs['w:id'],
+        commentId: itemToMark.commentId,
+        importedId,
         internal: itemToMark.internal,
       };
 

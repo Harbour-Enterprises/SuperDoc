@@ -52,6 +52,10 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
     firstLine: 0,
     hanging: 0,
     textIndent: 0,
+    explicitLeft: false,
+    explicitRight: false,
+    explicitFirstLine: false,
+    explicitHanging: false,
   };
 
   const { indent: pDefaultIndent = {} } = getDefaultParagraphStyle(docx, styleId);
@@ -60,22 +64,31 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
   const inLineIndentTag = pPr?.elements?.find((el) => el.name === 'w:ind');
   const inLineIndent = inLineIndentTag?.attributes || {};
 
-  const leftIndent = inLineIndent?.['w:left'] || pDefaultIndent?.['w:left'];
-  const rightIndent = inLineIndent?.['w:right'] || pDefaultIndent?.['w:right'];
-  const firstLine = inLineIndent?.['w:firstLine'] || pDefaultIndent?.['w:firstLine'];
-  const hanging = inLineIndent?.['w:hanging'] || pDefaultIndent?.['w:hanging'];
+  const inlineLeft = inLineIndent?.['w:left'];
+  const inlineRight = inLineIndent?.['w:right'];
+  const inlineFirstLine = inLineIndent?.['w:firstLine'];
+  const inlineHanging = inLineIndent?.['w:hanging'];
+
+  const leftIndent = inlineLeft ?? pDefaultIndent?.['w:left'];
+  const rightIndent = inlineRight ?? pDefaultIndent?.['w:right'];
+  const firstLine = inlineFirstLine ?? pDefaultIndent?.['w:firstLine'];
+  const hanging = inlineHanging ?? pDefaultIndent?.['w:hanging'];
 
   if (leftIndent) {
     indent.left = twipsToPixels(leftIndent);
+    indent.explicitLeft = inlineLeft !== undefined;
   }
   if (rightIndent) {
     indent.right = twipsToPixels(rightIndent);
+    indent.explicitRight = inlineRight !== undefined;
   }
   if (firstLine) {
     indent.firstLine = twipsToPixels(firstLine);
+    indent.explicitFirstLine = inlineFirstLine !== undefined;
   }
   if (hanging) {
     indent.hanging = twipsToPixels(hanging);
+    indent.explicitHanging = inlineHanging !== undefined;
   }
 
   const textIndentValue = leftIndent - parseInt(hanging || 0) || 0;
@@ -95,16 +108,18 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
  * @param {Array} marks - The text style marks.
  * @returns {Object} The paragraph spacing.
  */
-export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
+export const getParagraphSpacing = (node, docx, styleId = '', marks = [], options = {}) => {
+  const { insideTable = false } = options;
   // Check if we have default paragraph styles to override
   const spacing = {};
 
-  const { spacing: pDefaultSpacing = {} } = getDefaultParagraphStyle(docx, styleId);
+  const { spacing: pDefaultSpacing = {}, spacingSource } = getDefaultParagraphStyle(docx, styleId);
   let lineSpaceAfter, lineSpaceBefore, line, lineRuleStyle;
 
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');
   const inLineSpacingTag = pPr?.elements?.find((el) => el.name === 'w:spacing');
   const inLineSpacing = inLineSpacingTag?.attributes || {};
+  const hasInlineSpacing = !!Object.keys(inLineSpacing).length;
 
   const textStyleMark = marks.find((el) => el.type === 'textStyle');
   const fontSize = textStyleMark?.attrs?.fontSize;
@@ -137,6 +152,15 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = []) => {
   const afterAutospacing = inLineSpacing?.['w:afterAutospacing'];
   if (afterAutospacing === '1' && fontSize) {
     spacing.lineSpaceAfter += Math.round((parseInt(fontSize) * 0.5 * 96) / 72);
+  }
+
+  if (insideTable && !hasInlineSpacing && spacingSource === 'docDefault') {
+    // Word ignores doc-default spacing inside table cells unless explicitly set,
+    // so drop the derived values when nothing is defined inline or via style.
+    const hasExplicitSpacing = Object.keys(inLineSpacing).length > 0;
+    if (!hasExplicitSpacing) {
+      return undefined;
+    }
   }
 
   return spacing;
@@ -199,9 +223,22 @@ export const getDefaultParagraphStyle = (docx, styleId = '') => {
     ? pPrNormalIndentAttr || pPrDefaultIndentAttr
     : pPrDefaultIndentAttr || pPrNormalIndentAttr;
 
+  let spacingToUse = pPrByIdSpacingAttr || spacingRest;
+  let spacingSource = 'docDefault';
+  if (pPrByIdSpacingAttr) {
+    spacingSource = 'style';
+  } else if (spacingRest === pPrNormalSpacingAttr && pPrNormalSpacingAttr) {
+    spacingSource = isNormalAsDefault ? 'docDefault' : 'normal';
+  } else if (spacingRest === pPrDefaultSpacingAttr && pPrDefaultSpacingAttr) {
+    spacingSource = 'docDefault';
+  }
+
+  let indentToUse = pPrByIdIndentAttr || indentRest;
+
   return {
-    spacing: pPrByIdSpacingAttr || spacingRest,
-    indent: pPrByIdIndentAttr || indentRest,
+    spacing: spacingToUse,
+    spacingSource,
+    indent: indentToUse,
     justify: pPrByIdJcAttr,
   };
 };

@@ -1,7 +1,7 @@
 <script setup>
-import '@harbour-enterprises/superdoc/style.css';
+import 'superdoc/style.css';
 import { onMounted, ref, shallowRef } from 'vue';
-import { SuperDoc, DOCX } from '@harbour-enterprises/superdoc';
+import { SuperDoc, DOCX } from 'superdoc';
 
 import { DocumentMapExtension } from '../plugins/document-map/index';
 import DocumentMap from './components/DocumentMap.vue';

@@ -9,8 +9,8 @@
 
 <script setup>
 import { onMounted, onUnmounted, ref, watch } from 'vue';
-import { SuperDoc } from '@harbour-enterprises/superdoc';
-import '@harbour-enterprises/superdoc/style.css';
+import { SuperDoc } from 'superdoc';
+import 'superdoc/style.css';
 
 const props = defineProps({
   initialData: {

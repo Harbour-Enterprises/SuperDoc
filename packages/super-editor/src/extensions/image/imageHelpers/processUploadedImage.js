@@ -3,21 +3,25 @@
  * Process an uploaded image to ensure it fits within the editor's content area
  * @category Helper
  * @param {string|File} fileData - Base64 string or File object
- * @param {Object} editor - Editor instance
+ * @param {Function} getMaxContentSize - Function returning max width/height constraints
  * @returns {Promise<string|Object>} Processed image data
  * @example
- * const processed = await processUploadedImage(file, editor);
+ * const processed = await processUploadedImage(file, () => editor.getMaxContentSize());
  * // Returns resized image maintaining aspect ratio
  * @note Uses multi-step Hermite resize for high quality
  * @note Respects device pixel ratio for crisp display
  */
-export const processUploadedImage = (fileData, editor) => {
+export const processUploadedImage = (fileData, getMaxContentSize) => {
   return new Promise((resolve, reject) => {
     const img = new window.Image();
 
     img.onload = () => {
       const canvas = document.createElement('canvas');
-      const { width: logicalWidth, height: logicalHeight } = getAllowedImageDimensions(img.width, img.height, editor);
+      const { width: logicalWidth, height: logicalHeight } = getAllowedImageDimensions(
+        img.width,
+        img.height,
+        getMaxContentSize,
+      );
 
       // Set canvas to original image size first
       canvas.width = img.width;
@@ -77,14 +81,14 @@ export const processUploadedImage = (fileData, editor) => {
  * @category Helper
  * @param {number} width - Original image width
  * @param {number} height - Original image height
- * @param {Object} editor - Editor instance
+ * @param {Function} getMaxContentSize - Function returning max width/height constraints
  * @returns {Object} Object with adjusted width and height
  * @example
- * const { width, height } = getAllowedImageDimensions(1920, 1080, editor);
+ * const { width, height } = getAllowedImageDimensions(1920, 1080, () => editor.getMaxContentSize());
  * @note Maintains aspect ratio while fitting within max dimensions
  */
-export const getAllowedImageDimensions = (width, height, editor) => {
-  const { width: maxWidth, height: maxHeight } = editor.getMaxContentSize();
+export const getAllowedImageDimensions = (width, height, getMaxContentSize) => {
+  const { width: maxWidth, height: maxHeight } = getMaxContentSize();
   if (!maxWidth || !maxHeight) return { width, height };
 
   let adjustedWidth = width;
@@ -189,44 +193,49 @@ function resample_high_quality(canvas, width, height, resize_canvas) {
 }
 
 /**
- * @private
- * Multi-step resize function that scales images in multiple steps for better quality
+ * Multi step image resize for better quality
  * @param {HTMLCanvasElement} canvas - Canvas to resize
- * @param {number} targetWidth - Final target width
- * @param {number} targetHeight - Final target height
+ * @param {number} width - Target width
+ * @param {number} height - Target height
  */
-function multiStepResize(canvas, targetWidth, targetHeight) {
-  const originalWidth = canvas.width;
-  const originalHeight = canvas.height;
+function multiStepResize(canvas, width, height) {
+  let oc = document.createElement('canvas');
+  let octx = oc.getContext('2d');
+  let ctx = canvas.getContext('2d');
 
-  // Calculate scale factors
-  const scaleX = targetWidth / originalWidth;
-  const scaleY = targetHeight / originalHeight;
-  const scaleFactor = Math.min(scaleX, scaleY);
+  let steps = Math.ceil(Math.log(canvas.width / width) / Math.log(2));
+  steps = Math.max(steps, 1);
 
-  // If scaling down to more than 50%, use multi-step approach
-  // Can change this based on performance needs
-  if (scaleFactor < 0.5) {
-    let currentWidth = originalWidth;
-    let currentHeight = originalHeight;
+  let stepWidth = width * Math.pow(2, steps - 1);
+  let stepHeight = height * Math.pow(2, steps - 1);
+  let currentWidth = canvas.width;
+  let currentHeight = canvas.height;
 
-    // Keep halving until we're close to or smaller than target
-    while (currentWidth > targetWidth * 2 || currentHeight > targetHeight * 2) {
-      const nextWidth = Math.round(currentWidth / 2);
-      const nextHeight = Math.round(currentHeight / 2);
+  oc.width = currentWidth;
+  oc.height = currentHeight;
+  octx.drawImage(canvas, 0, 0);
 
-      resample_high_quality(canvas, nextWidth, nextHeight, true);
+  while (steps > 0) {
+    stepWidth = Math.max(stepWidth, width);
+    stepHeight = Math.max(stepHeight, height);
 
-      currentWidth = nextWidth;
-      currentHeight = nextHeight;
-    }
+    canvas.width = stepWidth;
+    canvas.height = stepHeight;
 
-    // Final step to exact target size
-    if (currentWidth !== targetWidth || currentHeight !== targetHeight) {
-      resample_high_quality(canvas, targetWidth, targetHeight, true);
-    }
-  } else {
-    // for smaller scale factors, use single-step resize
-    resample_high_quality(canvas, targetWidth, targetHeight, true);
+    ctx.drawImage(oc, 0, 0, currentWidth, currentHeight, 0, 0, stepWidth, stepHeight);
+
+    currentWidth = stepWidth;
+    currentHeight = stepHeight;
+
+    oc.width = currentWidth;
+    oc.height = currentHeight;
+    octx.drawImage(canvas, 0, 0);
+
+    stepWidth = Math.round(stepWidth / 2);
+    stepHeight = Math.round(stepHeight / 2);
+    steps--;
   }
+
+  // Ensure final resize to exact dimensions
+  resample_high_quality(canvas, width, height, true);
 }

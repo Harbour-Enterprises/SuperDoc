@@ -2,18 +2,17 @@ import { getInitialJSON } from '../docxHelper.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { twipsToInches } from '../../helpers.js';
 import { DEFAULT_LINKED_STYLES } from '../../exporter-docx-defs.js';
-import { tableNodeHandlerEntity } from './tableImporter.js';
 import { drawingNodeHandlerEntity } from './imageImporter.js';
 import { trackChangeNodeHandlerEntity } from './trackChangesImporter.js';
 import { hyperlinkNodeHandlerEntity } from './hyperlinkImporter.js';
 import { runNodeHandlerEntity } from './runNodeImporter.js';
 import { textNodeHandlerEntity } from './textNodeImporter.js';
 import { paragraphNodeHandlerEntity } from './paragraphNodeImporter.js';
-import { annotationNodeHandlerEntity } from './annotationImporter.js';
-import { sdtNodeHandlerEntity } from './structuredDocumentNodeImporter.js';
+import { sdtNodeHandlerEntity } from './sdtNodeImporter.js';
 import { standardNodeHandlerEntity } from './standardNodeImporter.js';
 import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
-import { bookmarkNodeHandlerEntity } from './bookmarkNodeImporter.js';
+import { bookmarkStartNodeHandlerEntity } from './bookmarkStartImporter.js';
+import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
 import { listHandlerEntity } from './listImporter.js';
@@ -23,6 +22,7 @@ import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
 import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
+import { tableNodeHandlerEntity } from './tableImporter.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -132,9 +132,9 @@ export const defaultNodeListHandler = () => {
     paragraphNodeHandlerEntity,
     textNodeHandlerEntity,
     lineBreakNodeHandlerEntity,
-    annotationNodeHandlerEntity,
     sdtNodeHandlerEntity,
-    bookmarkNodeHandlerEntity,
+    bookmarkStartNodeHandlerEntity,
+    bookmarkEndNodeHandlerEntity,
     hyperlinkNodeHandlerEntity,
     drawingNodeHandlerEntity,
     trackChangeNodeHandlerEntity,
@@ -276,7 +276,7 @@ const createNodeListHandler = (nodeHandlers) => {
           }
         } catch (error) {
           console.debug('Import error', error);
-          editor?.emit('exception', { error });
+          editor?.emit('exception', { error, editor });
 
           converter?.telemetry?.trackStatistic('error', {
             type: 'processing_error',
@@ -291,7 +291,7 @@ const createNodeListHandler = (nodeHandlers) => {
       return processedElements;
     } catch (error) {
       console.debug('Error during import', error);
-      editor?.emit('exception', { error });
+      editor?.emit('exception', { error, editor });
 
       // Track only catastrophic handler failures
       converter?.telemetry?.trackStatistic('error', {
@@ -440,8 +440,8 @@ export function addDefaultStylesIfMissing(styles) {
  */
 const importHeadersFooters = (docx, converter, mainEditor) => {
   const rels = docx['word/_rels/document.xml.rels'];
-  const relationships = rels.elements.find((el) => el.name === 'Relationships');
-  const { elements } = relationships;
+  const relationships = rels?.elements.find((el) => el.name === 'Relationships');
+  const { elements } = relationships || { elements: [] };
 
   const headerType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
   const footerType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
@@ -560,6 +560,7 @@ export function filterOutRootInlineNodes(content = []) {
   const INLINE_TYPES = new Set([
     'text',
     'bookmarkStart',
+    'bookmarkEnd',
     'lineBreak',
     'hardBreak',
     'pageNumber',

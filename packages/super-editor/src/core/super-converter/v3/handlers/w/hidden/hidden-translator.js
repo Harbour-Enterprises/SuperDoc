@@ -10,5 +10,5 @@ export const translator = NodeTranslator.from({
   xmlName: 'w:hidden',
   sdNodeOrKeyName: 'hidden',
   encode: ({ nodes }) => parseBoolean(nodes[0].attributes?.['w:val'] ?? '1'),
-  decode: ({ node }) => (node.attrs.hidden ? {} : undefined),
+  decode: ({ node }) => (node.attrs.hidden ? { attributes: {} } : undefined),
 });

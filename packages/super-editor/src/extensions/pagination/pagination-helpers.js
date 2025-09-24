@@ -88,7 +88,7 @@ export const createHeaderFooterEditor = ({
   currentPageNumber,
 }) => {
   const parentStyles = editor.converter.getDocumentDefaultStyles();
-  const { fontSizePt, typeface } = parentStyles;
+  const { fontSizePt, typeface, fontFamilyCss } = parentStyles;
   const fontSizeInPixles = fontSizePt * 1.3333;
   const lineHeight = fontSizeInPixles * 1.2;
 
@@ -102,7 +102,7 @@ export const createHeaderFooterEditor = ({
     left: '0',
     width: 'auto',
     maxWidth: 'none',
-    fontFamily: typeface,
+    fontFamily: fontFamilyCss || typeface,
     fontSize: `${fontSizeInPixles}px`,
     lineHeight: `${lineHeight}px`,
   });

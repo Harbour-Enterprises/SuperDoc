@@ -83,6 +83,14 @@ describe('updateToolbarState', () => {
         allowWithoutEditor: { value: false },
       },
       {
+        name: { value: 'underline' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      },
+      {
         name: { value: 'linkedStyles' },
         resetDisabled: vi.fn(),
         activate: vi.fn(),
@@ -158,6 +166,43 @@ describe('updateToolbarState', () => {
     expect(toolbar.toolbarItems[1].activate).toHaveBeenCalledWith({}); // italic
 
     expect(mockGetActiveFormatting).toHaveBeenCalledWith(mockEditor);
+  });
+
+  it('should keep toggles inactive when negation marks are active', () => {
+    mockGetActiveFormatting.mockReturnValue([
+      { name: 'bold', attrs: { value: '0' } },
+      { name: 'underline', attrs: { underlineType: 'none' } },
+    ]);
+
+    toolbar.updateToolbarState();
+
+    const boldItem = toolbar.toolbarItems.find((item) => item.name.value === 'bold');
+    const underlineItem = toolbar.toolbarItems.find((item) => item.name.value === 'underline');
+
+    expect(boldItem.activate).not.toHaveBeenCalled();
+    expect(boldItem.deactivate).toHaveBeenCalled();
+    expect(underlineItem.activate).not.toHaveBeenCalled();
+    expect(underlineItem.deactivate).toHaveBeenCalled();
+  });
+
+  it('should not reactivate via linked styles when a negation mark is present', () => {
+    mockGetActiveFormatting.mockReturnValue([
+      { name: 'bold', attrs: { value: '0' } },
+      { name: 'styleId', attrs: { styleId: 'style-1' } },
+    ]);
+
+    mockEditor.converter.linkedStyles = [
+      {
+        id: 'style-1',
+        definition: { styles: { bold: { value: true } } },
+      },
+    ];
+
+    toolbar.updateToolbarState();
+
+    const boldItem = toolbar.toolbarItems.find((item) => item.name.value === 'bold');
+    expect(boldItem.activate).not.toHaveBeenCalled();
+    expect(boldItem.deactivate).toHaveBeenCalled();
   });
 
   it('should deactivate toolbar items when no active editor', () => {

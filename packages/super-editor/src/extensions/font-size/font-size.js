@@ -26,6 +26,21 @@ import { parseSizeUnit, minMax } from '@core/utilities/index.js';
  */
 
 /**
+ * Configuration options for FontSize
+ * @typedef {Object} FontSizeOptions
+ * @category Options
+ * @property {string[]} [types=['textStyle', 'tableCell']] - Node/mark types to add font size support to
+ * @property {FontSizeDefaults} [defaults] - Default size configuration
+ */
+
+/**
+ * Attributes for font size
+ * @typedef {Object} FontSizeAttributes
+ * @category Attributes
+ * @property {FontSizeValue} [fontSize] - Font size with unit
+ */
+
+/**
  * @module FontSize
  * @sidebarTitle Font Size
  * @snippetPath /snippets/extensions/font-size.mdx
@@ -35,12 +50,6 @@ export const FontSize = Extension.create({
 
   addOptions() {
     return {
-      /**
-       * @typedef {Object} FontSizeOptions
-       * @category Options
-       * @property {string[]} [types=['textStyle', 'tableCell']] - Node/mark types to add font size support to
-       * @property {FontSizeDefaults} [defaults] - Default size configuration
-       */
       types: ['textStyle', 'tableCell'],
       defaults: {
         value: 12,
@@ -56,10 +65,6 @@ export const FontSize = Extension.create({
       {
         types: this.options.types,
         attributes: {
-          /**
-           * @category Attribute
-           * @param {FontSizeValue} [fontSize] - Font size with unit
-           */
           fontSize: {
             default: null,
             parseDOM: (el) => el.style.fontSize,
@@ -82,16 +87,10 @@ export const FontSize = Extension.create({
        * Set font size
        * @category Command
        * @param {FontSizeValue} fontSize - Size to apply (with optional unit)
-       * @returns {Function} Command function
        * @example
-       * // Set to 14pt
-       * setFontSize('14pt')
-       *
-       * // Set to 18px
-       * setFontSize('18px')
-       *
-       * // Set without unit (uses default)
-       * setFontSize(16)
+       * editor.commands.setFontSize('14pt')
+       * editor.commands.setFontSize('18px')
+       * editor.commands.setFontSize(16)
        * @note Automatically clamps to min/max values
        */
       setFontSize:
@@ -122,9 +121,8 @@ export const FontSize = Extension.create({
       /**
        * Remove font size
        * @category Command
-       * @returns {Function} Command function
        * @example
-       * unsetFontSize()
+       * editor.commands.unsetFontSize()
        * @note Reverts to default document size
        */
       unsetFontSize:
