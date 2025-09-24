@@ -1,6 +1,6 @@
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
-import { getFileObject } from '@harbour-enterprises/superdoc';
+import { getFileObject } from 'superdoc';
 
 // extract js object from code editor string
 export const getTemplateValueObjectFromCode = (codeString) => {

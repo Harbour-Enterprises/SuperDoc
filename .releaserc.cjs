@@ -31,6 +31,7 @@ const config = {
         pkgRoot: 'packages/superdoc'
       }
     ],
+    './scripts/publish-superdoc.cjs'
   ],
 }
 

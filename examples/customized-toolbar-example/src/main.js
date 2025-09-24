@@ -1,5 +1,5 @@
-import { Extensions, SuperDoc } from '@harbour-enterprises/superdoc';
-import '@harbour-enterprises/superdoc/style.css';
+import { Extensions, SuperDoc } from 'superdoc';
+import 'superdoc/style.css';
 import './style.css';
 import catSvg from './icon_cat.svg?raw';
 

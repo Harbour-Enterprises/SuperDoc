@@ -1,4 +1,4 @@
-import { Extensions } from '@harbour-enterprises/superdoc/super-editor';
+import { Extensions } from 'superdoc/super-editor';
 import { Plugin, PluginKey } from 'prosemirror-state';
 
 const { Extension } = Extensions;

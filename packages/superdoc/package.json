@@ -1,7 +1,7 @@
 {
-  "name": "@harbour-enterprises/superdoc",
+  "name": "superdoc",
   "type": "module",
-  "version": "0.20.0",
+  "version": "0.20.0-next.13",
   "license": "AGPL-3.0",
   "readme": "../../README.md",
   "files": [
@@ -47,8 +47,8 @@
     "release": "release-it --ci --increment=patch",
     "release:next": "release-it --config .release-it.next.json",
     "clean": "rm -rf dist",
-    "pack:local": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz",
-    "pack": "npm run build:es && npm pack && mv $(ls harbour-enterprises-superdoc-*.tgz) ./superdoc.tgz",
+    "pack:local": "npm run build:es && npm pack && mv $(ls superdoc-*.tgz) ./superdoc.tgz",
+    "pack": "npm run build:es && npm pack && mv $(ls superdoc-*.tgz) ./superdoc.tgz",
     "test": "vitest"
   },
   "dependencies": {

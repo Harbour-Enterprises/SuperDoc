@@ -1,7 +1,7 @@
 <script setup>
-import '@harbour-enterprises/superdoc/style.css';
+import 'superdoc/style.css';
 import { onMounted, shallowRef } from 'vue';
-import { SuperDoc } from '@harbour-enterprises/superdoc';
+import { SuperDoc } from 'superdoc';
 import UploadFile from './UploadFile.vue';
 
 // Default document

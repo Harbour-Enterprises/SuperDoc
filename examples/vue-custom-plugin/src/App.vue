@@ -1,6 +1,6 @@
 <script setup>
-import '@harbour-enterprises/superdoc/style.css';
-import { SuperDoc } from '@harbour-enterprises/superdoc';
+import 'superdoc/style.css';
+import { SuperDoc } from 'superdoc';
 import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { customPluginExtension } from './custom-plugin-extension';
 
