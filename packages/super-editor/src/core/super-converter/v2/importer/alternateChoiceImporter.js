@@ -1,9 +1,10 @@
+import { translator as alternateChoiceTranslator } from '@converter/v3/handlers/mc/altermateContent';
 /**
  * @type {import("docxImporter").NodeHandler}
  */
 const handleAlternateChoice = (params) => {
   const skipHandlerResponse = { nodes: [], consumed: 0 };
-  const { nodes, nodeListHandler } = params;
+  const { nodes } = params;
 
   if (nodes.length === 0 || nodes[0].name !== 'w:p') {
     return skipHandlerResponse;
@@ -18,25 +19,16 @@ const handleAlternateChoice = (params) => {
   }
 
   const altChoiceNode = node.elements.find((el) => el.name === 'mc:AlternateContent');
+  const result = alternateChoiceTranslator.encode({
+    ...params,
+    extraParams: {
+      node: altChoiceNode,
+    },
+  });
 
-  // eslint-disable-next-line no-unused-vars
-  const altChoiceNodeIndex = node.elements.findIndex((el) => el.name === 'mc:AlternateContent');
-  const allowedNamespaces = ['wps', 'wp14', 'w14', 'w15'];
-
-  const wpsNode = altChoiceNode.elements.find(
-    (el) => el.name === 'mc:Choice' && allowedNamespaces.includes(el.attributes['Requires']),
-  );
-
-  if (!wpsNode) {
+  if (!result) {
     return skipHandlerResponse;
   }
-
-  const contents = wpsNode.elements;
-  const result = nodeListHandler.handler({
-    ...params,
-    nodes: contents,
-    path: [...(params.path || []), wpsNode],
-  });
 
   return { nodes: result, consumed: 1 };
 };
