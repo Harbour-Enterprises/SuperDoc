@@ -75,6 +75,7 @@ export const createDocumentJson = (docx, converter, editor) => {
   const bodyNode = json.elements[0].elements.find((el) => el.name === 'w:body');
 
   if (bodyNode) {
+    ensureSectionProperties(bodyNode, converter);
     const node = bodyNode;
     const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
     const content = pruneIgnoredNodes(contentElements);
@@ -362,6 +363,66 @@ function getDocumentStyles(node, docx, converter, editor) {
   importHeadersFooters(docx, converter, editor);
   styles.alternateHeaders = isAlternatingHeadersOddEven(docx);
   return styles;
+}
+
+const DEFAULT_SECTION_PROPS = Object.freeze({
+  pageSize: Object.freeze({ width: '12240', height: '15840' }),
+  pageMargins: Object.freeze({
+    top: '1440',
+    right: '1440',
+    bottom: '1440',
+    left: '1440',
+    header: '720',
+    footer: '720',
+    gutter: '0',
+  }),
+});
+
+function ensureSectionProperties(bodyNode, converter) {
+  if (!bodyNode.elements) bodyNode.elements = [];
+
+  let sectPr = bodyNode.elements.find((el) => el.name === 'w:sectPr');
+  if (!sectPr) {
+    sectPr = {
+      type: 'element',
+      name: 'w:sectPr',
+      elements: [],
+    };
+    bodyNode.elements.push(sectPr);
+  } else if (!sectPr.elements) {
+    sectPr.elements = [];
+  }
+
+  const ensureChild = (name, factory) => {
+    let child = sectPr.elements.find((el) => el.name === name);
+    if (!child) {
+      child = factory();
+      sectPr.elements.push(child);
+    } else if (!child.attributes) {
+      child.attributes = {};
+    }
+    return child;
+  };
+
+  const pgSz = ensureChild('w:pgSz', () => ({
+    type: 'element',
+    name: 'w:pgSz',
+    attributes: {},
+  }));
+  pgSz.attributes['w:w'] = pgSz.attributes['w:w'] ?? DEFAULT_SECTION_PROPS.pageSize.width;
+  pgSz.attributes['w:h'] = pgSz.attributes['w:h'] ?? DEFAULT_SECTION_PROPS.pageSize.height;
+
+  const pgMar = ensureChild('w:pgMar', () => ({
+    type: 'element',
+    name: 'w:pgMar',
+    attributes: {},
+  }));
+  Object.entries(DEFAULT_SECTION_PROPS.pageMargins).forEach(([key, value]) => {
+    const attrKey = `w:${key}`;
+    if (pgMar.attributes[attrKey] == null) pgMar.attributes[attrKey] = value;
+  });
+
+  return sectPr;
 }
 
 /**
