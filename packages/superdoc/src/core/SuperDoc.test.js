@@ -555,6 +555,23 @@ describe('SuperDoc core', () => {
         }
       });
 
+      it('leaves non-object entries untouched when normalizing arrays', async () => {
+        createAppHarness();
+
+        const instance = new SuperDoc({
+          selector: '#host',
+          documents: [null, { type: DOCX, data: new Blob(['test'], { type: DOCX }), name: 'doc.docx' }],
+        });
+        await flushMicrotasks();
+
+        expect(instance.config.documents[0]).toBeNull();
+        expect(instance.config.documents[1]).toMatchObject({
+          id: 'uuid-1234',
+          type: DOCX,
+          name: 'doc.docx',
+        });
+      });
+
       it('preserves existing IDs in documents array', async () => {
         createAppHarness();
 

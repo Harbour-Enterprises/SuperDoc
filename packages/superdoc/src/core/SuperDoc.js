@@ -255,10 +255,22 @@ export class SuperDoc extends EventEmitter {
 
     // Also normalize any provided documents array entries (e.g., when consumer passes uploader wrappers directly)
     if (Array.isArray(this.config.documents) && this.config.documents.length > 0) {
-      this.config.documents = this.config.documents.map((d) => ({
-        ...normalizeDocumentEntry(d),
-        id: d.id || uuidv4(),
-      }));
+      this.config.documents = this.config.documents.map((d) => {
+        const normalized = normalizeDocumentEntry(d);
+
+        if (!normalized || typeof normalized !== 'object') {
+          return normalized;
+        }
+
+        const existingId =
+          (typeof normalized === 'object' && 'id' in normalized && normalized.id) ||
+          (d && typeof d === 'object' && 'id' in d && d.id);
+
+        return {
+          ...normalized,
+          id: existingId || uuidv4(),
+        };
+      });
     }
   }
 
