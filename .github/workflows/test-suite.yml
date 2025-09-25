@@ -12,6 +12,9 @@ on:
       update-screenshots:
         type: boolean
         default: false
+      check-coverage:
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       run-visual:
@@ -23,9 +26,12 @@ on:
       update-screenshots:
         type: boolean
         default: false
+      check-coverage:
+        type: boolean
+        default: false
 
 jobs:
-  validate:
+  unit-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,13 +54,44 @@ jobs:
       - name: Build
         run: npm run build
 
-      - name: Unit tests
-        run: npm test
+      - name: Unit tests with coverage
+        run: |
+          npm test -- \
+            --coverage \
+            --coverage.reporter=json \
+            --coverage.reporter=text \
+            --exclude="**/examples/**"
+
+      - name: Check diff coverage
+        if: ${{ inputs.check-coverage && github.event_name == 'pull_request' }}
+        run: |
+          # Get changed source files
+          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR \
+            origin/${{ github.event.pull_request.base.ref }}...HEAD \
+            | grep -E '\.(js|ts|jsx|tsx)$' \
+            | grep -v -E '\.(test|spec|d\.ts)\.' || true)
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "✅ No source files changed"
+            exit 0
+          fi
+
+          echo "📊 Checking coverage for changed files:"
+          echo "$CHANGED_FILES" | sed 's/^/  - /'
+
+          # Check coverage thresholds for changed files
+          npx nyc report \
+            --temp-dir=coverage \
+            --include="$(echo $CHANGED_FILES | tr '\n' ' ')" \
+            --check-coverage \
+            --lines=80 \
+            --functions=80 \
+            --branches=80
 
   visual-tests:
     if: inputs.run-visual
     runs-on: ubuntu-latest
-    needs: validate
+    needs: unit-tests
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,43 +101,43 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      
+
       - name: Get Playwright version
         id: playwright-version
         run: |
           cd examples/tests
           echo "version=$(npm ls @playwright/test --json | jq -r '.dependencies["@playwright/test"].version')" >> $GITHUB_OUTPUT
-      
+
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
-      
+
       - name: Setup visual tests
         run: |
           cd examples/tests
           npm ci
           npm install -g http-server
-      
+
       - name: Install Playwright browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: |
           cd examples/tests
           npx playwright install --with-deps chromium
-      
+
       - name: Install only system deps if cache hit
         if: steps.playwright-cache.outputs.cache-hit == 'true'
         run: |
           cd examples/tests
           npx playwright install-deps chromium
-      
+
       - name: Run visual tests
         run: |
           cd examples/tests
           npm test ${{ inputs.update-screenshots && '-- --update-snapshots' || '' }}
-      
+
       - name: Create PR with updates
         if: inputs.update-screenshots == true
         env:
@@ -108,13 +145,13 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           BRANCH="visual-updates-${{ github.run_id }}"
           git checkout -b "$BRANCH"
           git add -A
           git commit -m "chore: update visual snapshots" || exit 0
           git push origin "$BRANCH"
-          
+
           gh pr create \
             --base ${{ github.ref_name }} \
             --title "chore: update visual snapshots" \
@@ -124,7 +161,7 @@ jobs:
   e2e-tests:
     if: inputs.run-e2e
     runs-on: ubuntu-latest
-    needs: validate
+    needs: unit-tests
     steps:
       - name: Trigger E2E tests
         run: |

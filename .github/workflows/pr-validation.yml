@@ -2,7 +2,7 @@ name: PR Validation [auto]
 
 on:
   pull_request:
-    branches: [main, 'release/**']
+    branches: [main, "release/**"]
 
 concurrency:
   group: pr-${{ github.event.pull_request.number }}
@@ -15,15 +15,15 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Validate commits
         run: |
           BASE=$(git merge-base ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
@@ -31,9 +31,10 @@ jobs:
             --from "$BASE" \
             --to ${{ github.event.pull_request.head.sha }}
 
-  test:
+  test-suite:
     uses: ./.github/workflows/test-suite.yml
     with:
       run-visual: true
       run-e2e: ${{ github.base_ref == 'main' }}
+      check-coverage: true
     secrets: inherit

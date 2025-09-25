@@ -72,7 +72,7 @@ export const BlockNode = Extension.create({
               tr.replaceWith(newPosFrom, newPosTo, contentNode);
             }
           }
-
+          //change
           return true;
         },
 
@@ -134,7 +134,7 @@ export const BlockNode = Extension.create({
                 ...attrs,
               });
             }
-
+            //change
             return true;
           }
         },
@@ -219,7 +219,7 @@ export const BlockNode = Extension.create({
         key: BlockNodePluginKey,
         appendTransaction: (transactions, _oldState, newState) => {
           if (hasInitialized && !transactions.some((tr) => tr.docChanged)) return null;
-
+          //change
           // Check for new block nodes and if none found, we don't need to do anything
           if (hasInitialized && !checkForNewBlockNodesInTrs([...transactions])) return null;
 
@@ -228,7 +228,7 @@ export const BlockNode = Extension.create({
           newState.doc.descendants((node, pos) => {
             // Only allow block nodes with a valid sdBlockId attribute
             if (!nodeAllowsSdBlockIdAttr(node) || !nodeNeedsSdBlockId(node)) return null;
-
+            //change
             tr.setNodeMarkup(
               pos,
               undefined,
@@ -248,7 +248,7 @@ export const BlockNode = Extension.create({
           // Restore marks if they exist.
           // `tr.setNodeMarkup` resets the stored marks.
           tr.setStoredMarks(newState.tr.storedMarks);
-
+          //change
           return changed ? tr : null;
         },
       }),
@@ -272,6 +272,7 @@ export const nodeAllowsSdBlockIdAttr = (node) => {
  */
 export const nodeNeedsSdBlockId = (node) => {
   const currentId = node?.attrs?.[SD_BLOCK_ID_ATTRIBUTE_NAME];
+  //change
   return !currentId;
 };
 
@@ -285,6 +286,7 @@ export const checkForNewBlockNodesInTrs = (transactions) => {
   return Array.from(transactions).some((tr) => {
     return tr.steps.some((step) => {
       if (!(step instanceof ReplaceStep)) return false;
+      //change
       const hasValidSdBlockNodes = step.slice?.content?.content?.some((node) => nodeAllowsSdBlockIdAttr(node));
       return hasValidSdBlockNodes;
     });
