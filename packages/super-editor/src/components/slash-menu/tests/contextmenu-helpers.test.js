@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { shouldBypassContextMenu } from '../contextmenu-helpers.js';
+import { shouldBypassContextMenu, shouldAllowNativeContextMenu } from '../../../utils/contextmenu-helpers.js';
 
-describe('shouldBypassContextMenu', () => {
+describe('context menu helpers', () => {
   it('returns false for standard right click', () => {
     const event = {
       type: 'contextmenu',
@@ -14,6 +14,7 @@ describe('shouldBypassContextMenu', () => {
     };
 
     expect(shouldBypassContextMenu(event)).toBe(false);
+    expect(shouldAllowNativeContextMenu(event)).toBe(false);
   });
 
   it('returns true when ctrl key is pressed', () => {
@@ -28,6 +29,7 @@ describe('shouldBypassContextMenu', () => {
     };
 
     expect(shouldBypassContextMenu(event)).toBe(true);
+    expect(shouldAllowNativeContextMenu(event)).toBe(true);
   });
 
   it('returns true for keyboard invocation', () => {
@@ -42,5 +44,6 @@ describe('shouldBypassContextMenu', () => {
     };
 
     expect(shouldBypassContextMenu(event)).toBe(true);
+    expect(shouldAllowNativeContextMenu(event)).toBe(true);
   });
 });
