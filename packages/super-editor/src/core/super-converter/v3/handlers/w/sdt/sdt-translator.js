@@ -2,6 +2,7 @@ import { NodeTranslator } from '../../../node-translator/node-translator';
 import { sdtNodeTypeStrategy } from './helpers/sdt-node-type-strategy';
 import { translateFieldAnnotation } from './helpers/translate-field-annotation';
 import { translateDocumentSection } from './helpers/translate-document-section';
+import { translateDocumentPartObj } from './helpers/translate-document-part-obj';
 import { translateStructuredContent } from './helpers/translate-structured-content';
 
 /** @type {import('@translator').XmlNodeName} */
@@ -47,6 +48,7 @@ function decode(params) {
     structuredContent: () => translateStructuredContent(params),
     structuredContentBlock: () => translateStructuredContent(params),
     documentSection: () => translateDocumentSection(params),
+    documentPartObject: () => translateDocumentPartObj(params), // Handled in doc-part-obj translator
     default: () => null,
   };
   const decoder = types[node.type] ?? types.default;

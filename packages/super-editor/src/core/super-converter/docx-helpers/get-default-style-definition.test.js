@@ -97,4 +97,76 @@ describe('getDefaultStyleDefinition', () => {
     expect(res.styles['background-color']).toBe('#fff');
     expect(res.styles.highlight).toEqual({ color: 'yellow' });
   });
+
+  it('parses tab stops from style definition', () => {
+    const docx = {
+      'word/styles.xml': {
+        elements: [
+          {
+            elements: [
+              {
+                name: 'w:style',
+                attributes: { 'w:styleId': 'TabbedStyle' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [
+                      {
+                        name: 'w:tabs',
+                        elements: [
+                          { name: 'w:tab', attributes: { 'w:val': 'left', 'w:pos': '720', 'w:leader': 'dot' } },
+                          { name: 'w:tab', attributes: { 'w:val': 'right', 'w:pos': '1440' } },
+                          { name: 'w:tab', attributes: { 'w:val': 'center', 'w:pos': '2160' } },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const res = getDefaultStyleDefinition('TabbedStyle', docx);
+
+    expect(res.styles.tabStops).toEqual([
+      { val: 'start', pos: 72, leader: 'dot' },
+      { val: 'end', pos: 144, leader: undefined },
+      { val: 'center', pos: 216, leader: undefined },
+    ]);
+  });
+
+  it('handles w:tabs element with no children gracefully', () => {
+    const docx = {
+      'word/styles.xml': {
+        elements: [
+          {
+            elements: [
+              {
+                name: 'w:style',
+                attributes: { 'w:styleId': 'NoTabsStyle' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [
+                      {
+                        name: 'w:tabs',
+                        elements: [],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    const res = getDefaultStyleDefinition('NoTabsStyle', docx);
+
+    expect(res.styles.tabStops).toBeNull();
+  });
 });

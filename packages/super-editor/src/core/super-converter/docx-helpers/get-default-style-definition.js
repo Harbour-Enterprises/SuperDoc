@@ -38,6 +38,7 @@ export const getDefaultStyleDefinition = (defaultStyleId, docx) => {
   const spacing = pPr?.elements?.find((el) => el.name === 'w:spacing');
   const justify = pPr?.elements?.find((el) => el.name === 'w:jc');
   const indent = pPr?.elements?.find((el) => el.name === 'w:ind');
+  const tabs = pPr?.elements?.find((el) => el.name === 'w:tabs');
 
   let lineSpaceBefore, lineSpaceAfter, line;
   if (spacing) {
@@ -52,6 +53,25 @@ export const getDefaultStyleDefinition = (defaultStyleId, docx) => {
     leftIndent = twipsToPixels(indent?.attributes['w:left']);
     rightIndent = twipsToPixels(indent?.attributes['w:right']);
     firstLine = twipsToPixels(indent?.attributes['w:firstLine']);
+  }
+
+  let tabStops = [];
+  if (tabs) {
+    tabStops = (tabs.elements || [])
+      .filter((el) => el.name === 'w:tab')
+      .map((tab) => {
+        let val = tab.attributes['w:val'];
+        if (val == 'left') {
+          val = 'start';
+        } else if (val == 'right') {
+          val = 'end';
+        }
+        return {
+          val,
+          pos: twipsToPixels(tab.attributes['w:pos']),
+          leader: tab.attributes['w:leader'],
+        };
+      });
   }
 
   const keepNext = pPr?.elements?.find((el) => el.name === 'w:keepNext');
@@ -95,6 +115,7 @@ export const getDefaultStyleDefinition = (defaultStyleId, docx) => {
     spacing: { lineSpaceAfter, lineSpaceBefore, line },
     textAlign,
     indent: { leftIndent, rightIndent, firstLine },
+    tabStops: tabStops.length > 0 ? tabStops : null,
   };
 
   parsedMarks.forEach((mark) => {
