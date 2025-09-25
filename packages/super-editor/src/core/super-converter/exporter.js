@@ -21,7 +21,6 @@ import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-transl
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wRNodeTranslator } from './v3/handlers/w/r/r-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
-import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
 import { translator as wTblNodeTranslator } from './v3/handlers/w/tbl/tbl-translator.js';
@@ -661,10 +660,6 @@ function translateTextNode(params) {
   const trackedMarks = [TrackInsertMarkName, TrackDeleteMarkName];
   const isTrackedNode = node.marks?.some((m) => trackedMarks.includes(m.type));
   if (isTrackedNode) return translateTrackedNode(params);
-
-  // Separate links from regular text
-  const isLinkNode = node.marks?.some((m) => m.type === 'link');
-  if (isLinkNode) return wHyperlinkTranslator.decode(params);
 
   const { text, marks = [] } = node;
 
