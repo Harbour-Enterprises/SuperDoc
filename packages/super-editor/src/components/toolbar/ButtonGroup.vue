@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, h, getCurrentInstance } from 'vue';
+import { computed, ref, h } from 'vue';
 import ToolbarButton from './ToolbarButton.vue';
 import ToolbarSeparator from './ToolbarSeparator.vue';
 import OverflowMenu from './OverflowMenu.vue';
@@ -29,7 +29,6 @@ const props = defineProps({
 });
 
 const currentItem = ref(null);
-const { proxy } = getCurrentInstance();
 const { isHighContrastMode } = useHighContrastMode();
 // Matches media query from SuperDoc.vue
 const isMobile = window.matchMedia('(max-width: 768px)').matches;
@@ -143,8 +142,10 @@ const moveToNextButtonGroup = (e) => {
     nextButtonGroup.focus();
   } else {
     // Move to the editor
-    const editorDom = proxy?.$toolbar?.activeEditor?.view?.dom;
-    editorDom?.focus();
+    const editor = document.querySelector('.ProseMirror');
+    if (editor) {
+      editor.focus();
+    }
   }
 };
 

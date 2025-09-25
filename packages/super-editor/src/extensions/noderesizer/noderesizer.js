@@ -1,7 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
-import { findInEventPath, queryWithinRoot } from './helpers.js';
 
 /**
  * Configuration options for NodeResizer
@@ -87,9 +86,10 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
 
       // Add global click handler
       globalClickHandler = (event) => {
-        const wrapperInPath = findInEventPath(event, '.sd-editor-resizable-wrapper');
-        const containerInPath = findInEventPath(event, '.sd-editor-resize-container');
-        if (!wrapperInPath && !containerInPath) {
+        if (
+          !event.target.closest('.sd-editor-resizable-wrapper') &&
+          !event.target.closest('.sd-editor-resize-container')
+        ) {
           hideResizeHandles();
         }
       };
@@ -98,11 +98,10 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
 
       // Add global mousedown handler
       globalMousedownHandler = (event) => {
-        const handle = findInEventPath(event, '.sd-editor-resize-handle');
-        if (handle) {
+        if (event.target.closest('.sd-editor-resize-handle')) {
           event.preventDefault();
           event.stopPropagation();
-          startResize(editorView, event, handle);
+          startResize(editorView, event, event.target);
           return true;
         }
       };
@@ -127,7 +126,7 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
 
           if (selection.from !== prevSelection.from || selection.to !== prevSelection.to) {
             setTimeout(() => {
-              const selectedResizableWrapper = queryWithinRoot(editorView?.dom, '.sd-editor-resizable-wrapper');
+              const selectedResizableWrapper = document.querySelector('.sd-editor-resizable-wrapper');
               if (selectedResizableWrapper) {
                 showResizeHandles(view, selectedResizableWrapper);
               } else {
