@@ -274,7 +274,8 @@ export class SuperToolbar extends EventEmitter {
       item.onActivate({ zoom: argument });
 
       this.emit('superdoc-command', { item, argument });
-      const layers = document.querySelector(this.superdoc.config.selector)?.querySelector('.layers');
+
+      const layers = this.superdoc.element?.querySelector('.layers');
       if (!layers) return;
 
       const isMobileDevice = typeof screen.orientation !== 'undefined';

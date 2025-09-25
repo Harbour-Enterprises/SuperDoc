@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DOCX, PDF } from '@harbour-enterprises/common';
+import { DOCX } from '@harbour-enterprises/common';
 
 const shuffleArrayMock = vi.fn((arr) => [...arr].reverse());
 
@@ -209,7 +209,7 @@ describe('SuperDoc core', () => {
     const config = {
       selector: '#host',
       document: { data: blob, name: 'doc1.docx' },
-      documents: [{ type: PDF, url: 'https://example.com/file.pdf' }],
+      documents: [{ type: DOCX, url: 'https://example.com/file.docx' }],
       modules: { comments: {}, toolbar: {} },
       colors: [],
       user: { name: 'Jane', email: 'jane@example.com' },
@@ -439,5 +439,204 @@ describe('SuperDoc core', () => {
 
     const styleElement = document.createElement('style');
     expect(styleElement.getAttribute('nonce')).toBe('nonce-123');
+  });
+
+  describe('SuperDoc document normalization', () => {
+    describe('real-world document handling', () => {
+      it('handles File from browser input', async () => {
+        createAppHarness();
+
+        // Real browser File object
+        const file = new File(['content'], 'contract.docx', {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        });
+
+        const instance = new SuperDoc({
+          selector: '#host',
+          document: file,
+        });
+        await flushMicrotasks();
+
+        expect(instance.config.documents).toHaveLength(1);
+        expect(instance.config.documents[0]).toMatchObject({
+          id: expect.any(String),
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          name: 'contract.docx',
+          isNewFile: true,
+        });
+        expect(instance.config.documents[0].data).toBe(file);
+      });
+
+      it('handles Blob from fetch response', async () => {
+        createAppHarness();
+
+        // Simulates fetch().then(res => res.blob())
+        const blob = new Blob(['content'], {
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        });
+
+        const instance = new SuperDoc({
+          selector: '#host',
+          document: blob,
+        });
+        await flushMicrotasks();
+
+        expect(instance.config.documents).toHaveLength(1);
+        expect(instance.config.documents[0]).toMatchObject({
+          id: expect.any(String),
+          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+          name: 'document', // Default name for Blobs
+          isNewFile: true,
+        });
+        // Blob should be wrapped as File
+        expect(instance.config.documents[0].data).toBeInstanceOf(File);
+      });
+
+      it('handles File with empty type (browser edge case)', async () => {
+        createAppHarness();
+
+        // Some browsers can't determine MIME type
+        const file = new File(['content'], 'report.docx', { type: '' });
+
+        const instance = new SuperDoc({
+          selector: '#host',
+          document: file,
+        });
+        await flushMicrotasks();
+
+        expect(instance.config.documents).toHaveLength(1);
+        // Should infer type from filename
+        expect(instance.config.documents[0].type).toBe(DOCX);
+      });
+
+      it('handles Blob without type', async () => {
+        createAppHarness();
+
+        // Untyped Blob (edge case)
+        const blob = new Blob(['content']);
+
+        const instance = new SuperDoc({
+          selector: '#host',
+          document: blob,
+        });
+        await flushMicrotasks();
+
+        expect(instance.config.documents).toHaveLength(1);
+        // Should default to DOCX
+        expect(instance.config.documents[0].type).toBe(DOCX);
+        expect(instance.config.documents[0].name).toBe('document');
+      });
+    });
+
+    describe('ID generation', () => {
+      it('generates IDs for all document types', async () => {
+        createAppHarness();
+
+        const testCases = [
+          // URL string
+          { document: 'https://example.com/doc.docx' },
+          // File
+          { document: new File(['test'], 'test.docx', { type: DOCX }) },
+          // Blob
+          { document: new Blob(['test'], { type: DOCX }) },
+          // Config object
+          { document: { data: new Blob(['test']), name: 'test.html', type: 'text/html' } },
+        ];
+
+        for (const config of testCases) {
+          const instance = new SuperDoc({
+            selector: '#host',
+            ...config,
+          });
+          await flushMicrotasks();
+
+          expect(instance.config.documents[0].id).toBeDefined();
+          expect(instance.config.documents[0].id).toMatch(/^(uuid-1234|doc-)/);
+        }
+      });
+
+      it('leaves non-object entries untouched when normalizing arrays', async () => {
+        createAppHarness();
+
+        const instance = new SuperDoc({
+          selector: '#host',
+          documents: [null, { type: DOCX, data: new Blob(['test'], { type: DOCX }), name: 'doc.docx' }],
+        });
+        await flushMicrotasks();
+
+        expect(instance.config.documents[0]).toBeNull();
+        expect(instance.config.documents[1]).toMatchObject({
+          id: 'uuid-1234',
+          type: DOCX,
+          name: 'doc.docx',
+        });
+      });
+
+      it('preserves existing IDs in documents array', async () => {
+        createAppHarness();
+
+        const instance = new SuperDoc({
+          selector: '#host',
+          documents: [
+            { id: 'custom-id-1', type: DOCX, data: new Blob(['test']) },
+            { type: DOCX, url: 'test.docx' }, // No ID
+          ],
+        });
+        await flushMicrotasks();
+
+        expect(instance.config.documents[0].id).toBe('custom-id-1');
+        expect(instance.config.documents[1].id).toBeDefined();
+        expect(instance.config.documents[1].id).not.toBe('custom-id-1');
+      });
+    });
+
+    describe('backward compatibility', () => {
+      it('still handles document config objects', async () => {
+        createAppHarness();
+
+        const blob = new Blob(['test'], { type: DOCX });
+        const instance = new SuperDoc({
+          selector: '#host',
+          document: {
+            data: blob,
+            name: 'custom.docx',
+            type: DOCX,
+          },
+        });
+        await flushMicrotasks();
+
+        expect(instance.config.documents).toHaveLength(1);
+        expect(instance.config.documents[0]).toMatchObject({
+          id: expect.any(String),
+          type: DOCX,
+          name: 'custom.docx',
+          // Note: isNewFile is not added when passing config objects
+          // only when passing File/Blob directly
+        });
+      });
+
+      it('handles document config with isNewFile flag', async () => {
+        createAppHarness();
+
+        const blob = new Blob(['test'], { type: DOCX });
+        const instance = new SuperDoc({
+          selector: '#host',
+          document: {
+            data: blob,
+            name: 'custom.docx',
+            type: DOCX,
+            isNewFile: true, // Explicitly set
+          },
+        });
+        await flushMicrotasks();
+
+        expect(instance.config.documents[0]).toMatchObject({
+          id: expect.any(String),
+          type: DOCX,
+          name: 'custom.docx',
+          isNewFile: true,
+        });
+      });
+    });
   });
 });
