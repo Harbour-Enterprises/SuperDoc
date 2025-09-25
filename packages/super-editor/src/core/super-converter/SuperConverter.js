@@ -25,7 +25,12 @@ const FONT_FAMILY_FALLBACKS = Object.freeze({
 });
 
 const DEFAULT_GENERIC_FALLBACK = 'sans-serif';
+const DEFAULT_FONT_SIZE_PT = 10;
 
+/**
+ * Pull default run formatting (font family, size, kern) out of a DOCX run properties node.
+ * Mutates the supplied state object with any discovered values.
+ */
 const collectRunDefaultProperties = (
   runProps,
   { allowOverrideTypeface = true, allowOverrideSize = true, themeResolver, state },
@@ -337,7 +342,7 @@ class SuperConverter {
 
     if (defaultsState.fontSizePt === undefined) {
       if (Number.isFinite(defaultsState.fallbackSzTwips)) defaultsState.fontSizePt = defaultsState.fallbackSzTwips / 2;
-      else defaultsState.fontSizePt = 10;
+      else defaultsState.fontSizePt = DEFAULT_FONT_SIZE_PT;
     }
 
     const fontFamilyCss = defaultsState.typeface
