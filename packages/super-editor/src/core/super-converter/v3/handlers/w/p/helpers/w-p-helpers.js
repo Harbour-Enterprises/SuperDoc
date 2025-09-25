@@ -450,6 +450,15 @@ export const processCombinedNodesForFldChar = (nodesToCombine = [], instrText) =
       attributes: linkAttributes,
       elements: textNodes,
     });
+  } else if (instruction === 'TOC') {
+    processedNodes.push({
+      name: 'sd:tableOfContents',
+      type: 'element',
+      attributes: {
+        instruction: instrText,
+      },
+      elements: nodesToCombine,
+    });
   } else {
     // Unknown field, just return all nodes as-is
     processedNodes = nodesToCombine;

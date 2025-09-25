@@ -24,6 +24,7 @@ import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
+import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
 import { preProcessNodesForFldChar } from '../../v3/handlers/w/p/helpers';
 
 /**
@@ -148,6 +149,7 @@ export const defaultNodeListHandler = () => {
     trackChangeNodeHandlerEntity,
     tableNodeHandlerEntity,
     tabNodeEntityHandler,
+    tableOfContentsHandlerEntity,
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
     pageReferenceEntity,
