@@ -30,6 +30,7 @@ import { translator as wDrawingNodeTranslator } from './v3/handlers/w/drawing/dr
 import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark-start/index.js';
 import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
 import { translator as alternateChoiceTranslator } from '@converter/v3/handlers/mc/altermateContent';
+import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -181,6 +182,7 @@ export function exportSchemaToJson(params) {
     documentSection: wSdtNodeTranslator,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
+    pageReference: sdPageReferenceTranslator,
   };
 
   let handler = router[type];
@@ -1442,6 +1444,7 @@ const getAutoPageJson = (type, outputMarks = []) => {
         },
         {
           name: 'w:instrText',
+          attributes: { 'xml:space': 'preserve' },
           elements: [
             {
               type: 'text',

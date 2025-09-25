@@ -15,6 +15,7 @@ import { bookmarkStartNodeHandlerEntity } from './bookmarkStartImporter.js';
 import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
+import { pageReferenceEntity } from './pageReferenceImporter.js';
 import { listHandlerEntity } from './listImporter.js';
 import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
@@ -143,6 +144,7 @@ export const defaultNodeListHandler = () => {
     tabNodeEntityHandler,
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
+    pageReferenceEntity,
     standardNodeHandlerEntity,
   ];
 
