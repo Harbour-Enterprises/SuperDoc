@@ -31,6 +31,8 @@ export const ICONS = {
   paste: pasteIconSvg,
   addDocumentSection: plusIconSvg,
   removeDocumentSection: trashIconSvg,
+  // Added for testing random changes
+  testIcon: magicWandIcon,
 };
 
 // Table actions constant
@@ -56,6 +58,8 @@ export const TEXTS = {
   paste: 'Paste',
   removeDocumentSection: 'Remove section',
   createDocumentSection: 'Create section',
+  // Added for testing random changes
+  testAction: 'Test action for random changes',
 };
 
 export const tableActionsOptions = [

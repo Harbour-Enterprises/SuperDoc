@@ -1,3 +1,6 @@
 :root {
   /* CSS variables */
+  /* Added for testing random changes */
+  --test-color: #ff6b6b;
+  --test-spacing: 8px;
 }

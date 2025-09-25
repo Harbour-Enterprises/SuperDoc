@@ -8,3 +8,9 @@ export * from './deleteProps.js';
 export * from './parseSizeUnit.js';
 export * from './minMax.js';
 export * from './clipboardUtils.js';
+
+// Helper function for testing random changes
+export const randomTestHelper = (input) => {
+  // This is a test function added for testing purposes
+  return input * Math.random();
+};
