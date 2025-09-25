@@ -150,6 +150,10 @@ export class SuperDoc extends EventEmitter {
     this.activeEditor = null;
     this.comments = [];
 
+    if (!this.config.selector) {
+      throw new Error('SuperDoc: selector is required');
+    }
+
     this.app.mount(this.config.selector);
 
     // Required editors
@@ -175,6 +179,17 @@ export class SuperDoc extends EventEmitter {
       documents: this.superdocStore.documents,
       users: this.users,
     };
+  }
+
+  /**
+   * Get the SuperDoc container element
+   * @returns {HTMLElement | null}
+   */
+  get element() {
+    if (typeof this.config.selector === 'string') {
+      return document.querySelector(this.config.selector);
+    }
+    return this.config.selector;
   }
 
   #patchNaiveUIStyles() {
@@ -204,10 +219,16 @@ export class SuperDoc extends EventEmitter {
     if (hasDocumentConfig) {
       // If an uploader-specific wrapper was passed, normalize it.
       const normalized = normalizeDocumentEntry(this.config.document);
-      this.config.documents = [normalized];
+      this.config.documents = [
+        {
+          id: uuidv4(),
+          ...normalized,
+        },
+      ];
     } else if (hasDocumentUrl) {
       this.config.documents = [
         {
+          id: uuidv4(),
           type: DOCX,
           url: this.config.document,
           name: 'document.docx',
@@ -215,36 +236,29 @@ export class SuperDoc extends EventEmitter {
         },
       ];
     } else if (hasDocumentFile) {
+      const normalized = normalizeDocumentEntry(this.config.document);
       this.config.documents = [
         {
-          type: this.config.document.type,
-          data: this.config.document,
-          name: this.config.document.name,
-          isNewFile: true,
+          id: uuidv4(),
+          ...normalized,
         },
       ];
     } else if (hasDocumentBlob) {
-      // Generate filename based on type
-      const docType = this.config.document.type || DOCX;
-      let extension = '.docx';
-      if (docType === PDF) {
-        extension = '.pdf';
-      } else if (docType === HTML) {
-        extension = '.html';
-      }
+      const normalized = normalizeDocumentEntry(this.config.document);
       this.config.documents = [
         {
-          type: docType,
-          data: this.config.document,
-          name: `document${extension}`,
-          isNewFile: true,
+          id: uuidv4(),
+          ...normalized,
         },
       ];
     }
 
     // Also normalize any provided documents array entries (e.g., when consumer passes uploader wrappers directly)
     if (Array.isArray(this.config.documents) && this.config.documents.length > 0) {
-      this.config.documents = this.config.documents.map((d) => normalizeDocumentEntry(d));
+      this.config.documents = this.config.documents.map((d) => ({
+        ...normalizeDocumentEntry(d),
+        id: d.id || uuidv4(),
+      }));
     }
   }
 
