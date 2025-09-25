@@ -4,7 +4,8 @@ import { EditorState, TextSelection } from 'prosemirror-state';
 import { DecorationSet } from 'prosemirror-view';
 
 import { Extension } from '@core/Extension.js';
-import { CustomSelection, CustomSelectionPluginKey, shouldAllowNativeContextMenu } from './custom-selection.js';
+import { CustomSelection, CustomSelectionPluginKey } from './custom-selection.js';
+import { shouldAllowNativeContextMenu } from '../../utils/contextmenu-helpers.js';
 
 describe('shouldAllowNativeContextMenu', () => {
   it('returns false for standard right click', () => {
