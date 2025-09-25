@@ -3,6 +3,7 @@
 import { Extension } from '@core/Extension.js';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { shouldAllowNativeContextMenu } from '../../utils/contextmenu-helpers.js';
 
 /**
  * Selection state
@@ -30,31 +31,6 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
  * @private
  */
 export const CustomSelectionPluginKey = new PluginKey('CustomSelection');
-
-/**
- * Determine if the native context menu should be allowed to appear.
- * We bypass the custom menu when the user explicitly requests the system menu
- * via modifier keys or when the event originated from a keyboard invocation.
- * @param {MouseEvent} event
- * @returns {boolean}
- */
-export const shouldAllowNativeContextMenu = (event) => {
-  if (!event) return false;
-
-  if (event.ctrlKey || event.metaKey) {
-    return true;
-  }
-
-  const isKeyboardInvocation =
-    event.type === 'contextmenu' &&
-    typeof event.detail === 'number' &&
-    event.detail === 0 &&
-    (event.button === 0 || event.button === undefined) &&
-    event.clientX === 0 &&
-    event.clientY === 0;
-
-  return Boolean(isKeyboardInvocation);
-};
 
 /**
  * Handle clicks outside the editor

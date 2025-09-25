@@ -2,7 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed, markRaw } from 'vue';
 import { SlashMenuPluginKey } from '../../extensions/slash-menu/slash-menu.js';
 import { getPropsByItemId } from './utils.js';
-import { shouldBypassContextMenu } from './contextmenu-helpers.js';
+import { shouldBypassContextMenu } from '../../utils/contextmenu-helpers.js';
 import { moveCursorToMouseEvent } from '../cursor-helpers.js';
 import { getItems } from './menuItems.js';
 import { getEditorContext } from './utils.js';
