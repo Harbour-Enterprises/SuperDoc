@@ -115,7 +115,7 @@ export const Image = Node.create({
 
       originalAttributes: { rendered: false },
 
-      wrapTopAndBottom: { rendered: false },
+      wrap: { rendered: false },
 
       anchorData: {
         default: null,
@@ -167,7 +167,6 @@ export const Image = Node.create({
        */
       simplePos: { rendered: false },
 
-      wrapText: { rendered: false },
       extension: { rendered: false },
 
       size: {
@@ -295,6 +294,94 @@ export const Image = Node.create({
             type: this.name,
             attrs: options,
           });
+        },
+
+      /**
+       * Set the wrapping mode and attributes for the selected image
+       * @category Command
+       * @param {Object} options - Wrapping options
+       * @param {string} options.type - Wrap type: "None", "Square", "Through", "Tight", "TopAndBottom"
+       * @param {Object} [options.attrs] - Wrap attributes (only allowed attributes for the given type will be accepted)
+       * @param {string} [options.attrs.wrapText] - Text wrapping mode for Square type: "bothSides", "largest", "left", "right"
+       * @param {number} [options.attrs.distTop] - Top distance in pixels
+       * @param {number} [options.attrs.distBottom] - Bottom distance in pixels
+       * @param {number} [options.attrs.distLeft] - Left distance in pixels
+       * @param {number} [options.attrs.distRight] - Right distance in pixels
+       * @param {Array} [options.attrs.polygon] - Polygon points for Through/Tight types: [[x1,y1], [x2,y2], ...]
+       * @param {boolean} [options.behindDoc] - Whether image should be behind document text (for wrapNone)
+       * @example
+       * // No wrapping, behind document
+       * editor.commands.setWrapping({ type: 'None', behindDoc: true })
+       *
+       * // Square wrapping on both sides with distances
+       * editor.commands.setWrapping({
+       *   type: 'Square',
+       *   attrs: {
+       *     wrapText: 'bothSides',
+       *     distTop: 10,
+       *     distBottom: 10,
+       *     distLeft: 10,
+       *     distRight: 10
+       *   }
+       * })
+       *
+       * // Tight wrapping with polygon
+       * editor.commands.setWrapping({
+       *   type: 'Tight',
+       *   attrs: {
+       *     polygon: [[0, 0], [100, 0], [100, 100], [0, 100]]
+       *   }
+       * })
+       *
+       * // Top and bottom wrapping
+       * editor.commands.setWrapping({
+       *   type: 'TopAndBottom',
+       *   attrs: {
+       *     distTop: 15,
+       *     distBottom: 15
+       *   }
+       * })
+       */
+      setWrapping:
+        (options) =>
+        ({ chain, state }) => {
+          const { selection } = state;
+          const { $from } = selection;
+          const node = $from.nodeAfter;
+
+          if (!node || node.type.name !== this.name) {
+            return false;
+          }
+
+          const { type, attrs = {} } = options;
+
+          // Filter attributes based on allowed ones for the wrap type
+          const allowedAttrs = {};
+          const allowedAttributes = {
+            None: ['behindDoc'],
+            Square: ['wrapText', 'distTop', 'distBottom', 'distLeft', 'distRight'],
+            Through: ['distTop', 'distBottom', 'distLeft', 'distRight', 'polygon'],
+            Tight: ['distTop', 'distBottom', 'distLeft', 'distRight', 'polygon'],
+            TopAndBottom: ['distTop', 'distBottom'],
+          };
+
+          const allowedForType = allowedAttributes[type] || [];
+          Object.keys(attrs).forEach((key) => {
+            if (allowedForType.includes(key)) {
+              allowedAttrs[key] = attrs[key];
+            }
+          });
+
+          // Update the wrap object
+          const updatedAttrs = {
+            ...node.attrs,
+            wrap: {
+              type,
+              attrs: allowedAttrs,
+            },
+          };
+
+          return chain().updateAttributes(this.name, updatedAttrs).run();
         },
     };
   },

@@ -98,6 +98,75 @@ function degreesToRot(degrees) {
 }
 
 /**
+ * Converts a DOCX polygon node to an array of pixel coordinates.
+ * Automatically removes duplicate closing points that are the same as the starting point,
+ * since polygons are assumed to be closed shapes.
+ *
+ * @param {Object} polygonNode - The polygon node from DOCX XML with wp:start and wp:lineTo elements
+ * @returns {Array<[number, number]>|null} Array of [x, y] pixel coordinate pairs, or null if invalid input
+ */
+function polygonToObj(polygonNode) {
+  if (!polygonNode) return null;
+  const points = [];
+  polygonNode.elements.forEach((element) => {
+    if (['wp:start', 'wp:lineTo'].includes(element.name)) {
+      const { x, y } = element.attributes;
+      points.push([emuToPixels(x), emuToPixels(y)]);
+    }
+  });
+
+  // Remove the last point if it's the same as the first point (closed polygon)
+  if (points.length > 1) {
+    const firstPoint = points[0];
+    const lastPoint = points[points.length - 1];
+    if (firstPoint[0] === lastPoint[0] && firstPoint[1] === lastPoint[1]) {
+      points.pop();
+    }
+  }
+
+  return points;
+}
+
+/**
+ * Converts an array of pixel coordinates to a DOCX polygon node.
+ * Automatically adds a closing wp:lineTo element that connects back to the starting point,
+ * ensuring the polygon is properly closed in the DOCX format.
+ *
+ * @param {Array<[number, number]>} points - Array of [x, y] pixel coordinate pairs
+ * @returns {Object|null} DOCX polygon node with wp:start and wp:lineTo elements, or null if invalid input
+ */
+function objToPolygon(points) {
+  if (!points || !Array.isArray(points)) return null;
+  const polygonNode = { type: 'wp:wrapPolygon', elements: [] };
+  points.forEach((point, index) => {
+    const [x, y] = point;
+    const pointNode = {
+      type: index === 0 ? 'wp:start' : 'wp:lineTo',
+      attributes: {
+        x: pixelsToEmu(x),
+        y: pixelsToEmu(y),
+      },
+    };
+    polygonNode.elements.push(pointNode);
+  });
+
+  // Add a lineTo back to the starting point to close the polygon
+  if (points.length > 0) {
+    const [startX, startY] = points[0];
+    const closePointNode = {
+      type: 'wp:lineTo',
+      attributes: {
+        x: pixelsToEmu(startX),
+        y: pixelsToEmu(startY),
+      },
+    };
+    polygonNode.elements.push(closePointNode);
+  }
+
+  return polygonNode;
+}
+
+/**
  * Get the export value for text indent
  * @param {string|number} indent - The text indent value to export
  * @returns {number} - The export value in twips
@@ -278,6 +347,8 @@ export {
   pixelsToEightPoints,
   rotToDegrees,
   degreesToRot,
+  objToPolygon,
+  polygonToObj,
   getArrayBufferFromUrl,
   getContentTypesFromXml,
   getHexColorFromDocxSystem,

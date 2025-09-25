@@ -191,5 +191,474 @@ describe('Image Extension DOM rendering', () => {
       expect(insertedImage.attrs.marginOffset.left).toBe(10);
       expect(insertedImage.attrs.marginOffset.top).toBe(20);
     });
+
+    it('sets wrap text mode using setWrapping command', async () => {
+      const {
+        schema: { nodes },
+        state,
+        view,
+      } = editor;
+
+      // Create and insert an image
+      const imageNode = nodes.image.create({
+        src: 'word/media/test-image.png',
+        size: { width: 200, height: 150 },
+      });
+      const paragraph = nodes.paragraph.create({}, imageNode);
+      const docNode = nodes.doc.create({}, paragraph);
+
+      const tr = state.tr.replaceWith(0, state.doc.content.size, docNode.content);
+      view.dispatch(tr);
+
+      // Helper function to select the image
+      const selectImage = async () => {
+        let imagePos;
+        editor.view.state.doc.descendants((node, pos) => {
+          if (node.type.name === 'image') {
+            imagePos = pos + 1; // +1 to get position after the image node
+            return false;
+          }
+          return true;
+        });
+
+        if (imagePos !== undefined) {
+          const { NodeSelection } = await import('prosemirror-state');
+          const selection = NodeSelection.create(editor.view.state.doc, imagePos - 1);
+          editor.view.dispatch(editor.view.state.tr.setSelection(selection));
+        }
+        return imagePos;
+      };
+
+      let imagePos = await selectImage();
+
+      // Test 1: Square wrapping with bothSides
+      // Test setting wrap text to Square with bothSides
+      editor.commands.setWrapping({
+        type: 'Square',
+        attrs: { wrapText: 'bothSides' },
+      });
+
+      let updatedImage;
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage).toBeTruthy();
+      expect(updatedImage.attrs.wrap.type).toBe('Square');
+      expect(updatedImage.attrs.wrap.attrs.wrapText).toBe('bothSides');
+
+      // Test 2: Square wrapping with distances
+      imagePos = await selectImage();
+      editor.commands.setWrapping({
+        type: 'Square',
+        attrs: {
+          wrapText: 'left',
+          distTop: 10,
+          distBottom: 20,
+          distLeft: 30,
+          distRight: 40,
+        },
+      });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('Square');
+      expect(updatedImage.attrs.wrap.attrs.wrapText).toBe('left');
+      expect(updatedImage.attrs.wrap.attrs.distTop).toBe(10);
+      expect(updatedImage.attrs.wrap.attrs.distBottom).toBe(20);
+      expect(updatedImage.attrs.wrap.attrs.distLeft).toBe(30);
+      expect(updatedImage.attrs.wrap.attrs.distRight).toBe(40);
+
+      // Test 3: Tight wrapping with polygon
+      imagePos = await selectImage();
+      editor.commands.setWrapping({
+        type: 'Tight',
+        attrs: {
+          distLeft: 5,
+          distRight: 10,
+          polygon: [
+            [0, 0],
+            [100, 0],
+            [100, 100],
+            [0, 100],
+          ],
+        },
+      });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('Tight');
+      expect(updatedImage.attrs.wrap.attrs.distLeft).toBe(5);
+      expect(updatedImage.attrs.wrap.attrs.distRight).toBe(10);
+      expect(updatedImage.attrs.wrap.attrs.polygon).toEqual([
+        [0, 0],
+        [100, 0],
+        [100, 100],
+        [0, 100],
+      ]);
+
+      // Test 4: Through wrapping with polygon
+      imagePos = await selectImage();
+      editor.commands.setWrapping({
+        type: 'Through',
+        attrs: {
+          distTop: 8,
+          distBottom: 12,
+          polygon: [
+            [10, 10],
+            [90, 10],
+            [90, 90],
+            [10, 90],
+          ],
+        },
+      });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('Through');
+      expect(updatedImage.attrs.wrap.attrs.distTop).toBe(8);
+      expect(updatedImage.attrs.wrap.attrs.distBottom).toBe(12);
+      expect(updatedImage.attrs.wrap.attrs.polygon).toEqual([
+        [10, 10],
+        [90, 10],
+        [90, 90],
+        [10, 90],
+      ]);
+
+      // Test 5: TopAndBottom wrapping
+      imagePos = await selectImage();
+      editor.commands.setWrapping({
+        type: 'TopAndBottom',
+        attrs: {
+          distTop: 15,
+          distBottom: 25,
+        },
+      });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('TopAndBottom');
+      expect(updatedImage.attrs.wrap.attrs.distTop).toBe(15);
+      expect(updatedImage.attrs.wrap.attrs.distBottom).toBe(25);
+
+      // Test 6: None wrapping with behindDoc
+      imagePos = await selectImage();
+      editor.commands.setWrapping({ type: 'None', attrs: { behindDoc: true } });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('None');
+      expect(updatedImage.attrs.wrap.attrs).toEqual({ behindDoc: true });
+
+      // Test 7: None wrapping without behindDoc (should not affect originalAttributes)
+      imagePos = await selectImage();
+      editor.commands.setWrapping({ type: 'None', attrs: { behindDoc: false } });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('None');
+      expect(updatedImage.attrs.wrap.attrs).toEqual({ behindDoc: false });
+    });
+
+    it('validates attributes for each wrap type', async () => {
+      const {
+        schema: { nodes },
+        state,
+        view,
+      } = editor;
+
+      // Create and insert an image
+      const imageNode = nodes.image.create({
+        src: 'word/media/test-image.png',
+        size: { width: 200, height: 150 },
+      });
+      const paragraph = nodes.paragraph.create({}, imageNode);
+      const docNode = nodes.doc.create({}, paragraph);
+
+      const tr = state.tr.replaceWith(0, state.doc.content.size, docNode.content);
+      view.dispatch(tr);
+
+      // Helper function to select the image
+      const selectImage = async () => {
+        let imagePos;
+        editor.view.state.doc.descendants((node, pos) => {
+          if (node.type.name === 'image') {
+            imagePos = pos + 1; // +1 to get position after the image node
+            return false;
+          }
+          return true;
+        });
+
+        if (imagePos !== undefined) {
+          const { NodeSelection } = await import('prosemirror-state');
+          const selection = NodeSelection.create(editor.view.state.doc, imagePos - 1);
+          editor.view.dispatch(editor.view.state.tr.setSelection(selection));
+        }
+        return imagePos;
+      };
+
+      let imagePos = await selectImage();
+
+      // Test 1: Square type should ignore polygon attribute
+      editor.commands.setWrapping({
+        type: 'Square',
+        attrs: {
+          wrapText: 'bothSides',
+          polygon: [
+            [0, 0],
+            [100, 0],
+            [100, 100],
+            [0, 100],
+          ], // Should be ignored
+        },
+      });
+
+      let updatedImage;
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('Square');
+      expect(updatedImage.attrs.wrap.attrs.wrapText).toBe('bothSides');
+      expect(updatedImage.attrs.wrap.attrs.polygon).toBeUndefined(); // Polygon should be filtered out
+
+      // Test 2: TopAndBottom type should ignore wrapText and polygon attributes
+      imagePos = await selectImage();
+      editor.commands.setWrapping({
+        type: 'TopAndBottom',
+        attrs: {
+          distTop: 15,
+          distBottom: 20,
+          wrapText: 'bothSides', // Should be ignored
+          polygon: [
+            [0, 0],
+            [100, 0],
+          ], // Should be ignored
+        },
+      });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('TopAndBottom');
+      expect(updatedImage.attrs.wrap.attrs.distTop).toBe(15);
+      expect(updatedImage.attrs.wrap.attrs.distBottom).toBe(20);
+      expect(updatedImage.attrs.wrap.attrs.wrapText).toBeUndefined(); // Should be filtered out
+      expect(updatedImage.attrs.wrap.attrs.polygon).toBeUndefined(); // Should be filtered out
+
+      // Test 3: None type should ignore all attributes except behindDoc
+      imagePos = await selectImage();
+      editor.commands.setWrapping({
+        type: 'None',
+        attrs: {
+          wrapText: 'bothSides', // Should be ignored
+          distTop: 10, // Should be ignored
+          polygon: [
+            [0, 0],
+            [100, 0],
+          ], // Should be
+          behindDoc: true,
+        },
+      });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('None');
+      expect(updatedImage.attrs.wrap.attrs).toEqual({ behindDoc: true }); // All attributes except behindDoc should be filtered out
+
+      // Test 4: Through type should accept polygon and distance attributes
+      imagePos = await selectImage();
+      editor.commands.setWrapping({
+        type: 'Through',
+        attrs: {
+          distLeft: 5,
+          distRight: 10,
+          distTop: 3,
+          distBottom: 7,
+          polygon: [
+            [10, 10],
+            [90, 10],
+            [90, 90],
+            [10, 90],
+          ],
+        },
+      });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('Through');
+      expect(updatedImage.attrs.wrap.attrs.distLeft).toBe(5);
+      expect(updatedImage.attrs.wrap.attrs.distRight).toBe(10);
+      expect(updatedImage.attrs.wrap.attrs.distTop).toBe(3);
+      expect(updatedImage.attrs.wrap.attrs.distBottom).toBe(7);
+      expect(updatedImage.attrs.wrap.attrs.polygon).toEqual([
+        [10, 10],
+        [90, 10],
+        [90, 90],
+        [10, 90],
+      ]);
+
+      // Test 5: Tight type should accept polygon and distance attributes
+      imagePos = await selectImage();
+      editor.commands.setWrapping({
+        type: 'Tight',
+        attrs: {
+          distLeft: 8,
+          polygon: [
+            [0, 0],
+            [50, 0],
+            [50, 50],
+            [0, 50],
+          ],
+        },
+      });
+
+      editor.view.state.doc.descendants((node) => {
+        if (node.type.name === 'image') {
+          updatedImage = node;
+          return false;
+        }
+        return true;
+      });
+
+      expect(updatedImage.attrs.wrap.type).toBe('Tight');
+      expect(updatedImage.attrs.wrap.attrs.distLeft).toBe(8);
+      expect(updatedImage.attrs.wrap.attrs.polygon).toEqual([
+        [0, 0],
+        [50, 0],
+        [50, 50],
+        [0, 50],
+      ]);
+    });
+
+    it('demonstrates setWrapping command usage', () => {
+      // Example usage of the setWrapping command:
+      //
+      // No wrapping, behind document:
+      // editor.commands.setWrapping({ type: 'None', behindDoc: true })
+      //
+      // Square wrapping on both sides with distances:
+      // editor.commands.setWrapping({
+      //   type: 'Square',
+      //   attrs: {
+      //     wrapText: 'bothSides',
+      //     distTop: 10,
+      //     distBottom: 10,
+      //     distLeft: 10,
+      //     distRight: 10
+      //   }
+      // })
+      //
+      // Square wrapping on left side only:
+      // editor.commands.setWrapping({
+      //   type: 'Square',
+      //   attrs: { wrapText: 'left' }
+      // })
+      //
+      // Square wrapping on right side only:
+      // editor.commands.setWrapping({
+      //   type: 'Square',
+      //   attrs: { wrapText: 'right' }
+      // })
+      //
+      // Square wrapping on largest side:
+      // editor.commands.setWrapping({
+      //   type: 'Square',
+      //   attrs: { wrapText: 'largest' }
+      // })
+      //
+      // Tight wrapping with polygon:
+      // editor.commands.setWrapping({
+      //   type: 'Tight',
+      //   attrs: {
+      //     polygon: [[0, 0], [100, 0], [100, 100], [0, 100]]
+      //   }
+      // })
+      //
+      // Through wrapping with polygon and distances:
+      // editor.commands.setWrapping({
+      //   type: 'Through',
+      //   attrs: {
+      //     distLeft: 5,
+      //     distRight: 5,
+      //     polygon: [[10, 10], [90, 10], [90, 90], [10, 90]]
+      //   }
+      // })
+      //
+      // Top and bottom wrapping:
+      // editor.commands.setWrapping({
+      //   type: 'TopAndBottom',
+      //   attrs: {
+      //     distTop: 15,
+      //     distBottom: 15
+      //   }
+      // })
+      //
+      // No text wrapping (in front of document):
+      // editor.commands.setWrapping({ type: 'None', behindDoc: false })
+
+      expect(true).toBe(true); // Placeholder assertion
+    });
   });
 });
