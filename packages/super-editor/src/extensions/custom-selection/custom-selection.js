@@ -33,13 +33,6 @@ import { shouldAllowNativeContextMenu } from '../../utils/contextmenu-helpers.js
 export const CustomSelectionPluginKey = new PluginKey('CustomSelection');
 
 /**
- * Determine if the native context menu should be allowed to appear.
- * We bypass the custom menu when the user explicitly requests the system menu
- * via modifier keys or when the event originated from a keyboard invocation.
- * @param {MouseEvent} event
- * @returns {boolean}
- */
-/**
  * Handle clicks outside the editor
  * @private
  * @param {MouseEvent} event - Mouse event

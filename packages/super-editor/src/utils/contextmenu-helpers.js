@@ -19,12 +19,20 @@ const prefersNativeMenu = (event) => {
   return isKeyboardInvocation(event);
 };
 
-export const shouldBypassContextMenu = (event) => {
+/**
+ * Determine if the native context menu should be allowed to appear.
+ * We bypass the custom menu when the user explicitly requests the system menu
+ * via modifier keys or when the event originated from a keyboard invocation.
+ * @param {MouseEvent} event
+ * @returns {boolean}
+ */
+const shouldAllowNativeContextMenu = (event) => {
   return prefersNativeMenu(event);
 };
 
-export const shouldAllowNativeContextMenu = (event) => {
-  return prefersNativeMenu(event);
-};
+export { shouldAllowNativeContextMenu };
 
-export const shouldUseNativeContextMenu = prefersNativeMenu;
+// Alias exports for existing call sites that expect equivalent semantics.
+export const shouldBypassContextMenu = shouldAllowNativeContextMenu;
+
+export const shouldUseNativeContextMenu = shouldAllowNativeContextMenu;
