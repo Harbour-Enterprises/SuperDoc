@@ -85,7 +85,7 @@ export const TableCell = Node.create({
           };
         },
       },
-
+      // change
       background: {
         renderDOM({ background }) {
           if (!background) return {};
@@ -134,7 +134,7 @@ export const TableCell = Node.create({
           return { style };
         },
       },
-
+      // change
       widthType: {
         default: 'auto',
         rendered: false,
@@ -146,6 +146,7 @@ export const TableCell = Node.create({
       },
     };
   },
+  // change
 
   parseDOM() {
     return [{ tag: 'td' }];
