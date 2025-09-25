@@ -126,7 +126,8 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
 
           if (selection.from !== prevSelection.from || selection.to !== prevSelection.to) {
             setTimeout(() => {
-              const selectedResizableWrapper = document.querySelector('.sd-editor-resizable-wrapper');
+              const searchRoot = editorView?.dom;
+              const selectedResizableWrapper = searchRoot?.querySelector('.sd-editor-resizable-wrapper');
               if (selectedResizableWrapper) {
                 showResizeHandles(view, selectedResizableWrapper);
               } else {
