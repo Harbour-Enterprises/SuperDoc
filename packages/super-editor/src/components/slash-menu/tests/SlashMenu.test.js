@@ -241,6 +241,55 @@ describe('SlashMenu.vue', () => {
       expect(renderSpy).toHaveBeenCalledWith(expect.objectContaining({ event: rightClickEvent }));
     });
 
+    it('should allow native context menu when modifier is pressed', async () => {
+      mount(SlashMenu, { props: mockProps });
+
+      mockGetEditorContext.mockClear();
+
+      const contextMenuHandler = mockEditor.view.dom.addEventListener.mock.calls.find(
+        (call) => call[0] === 'contextmenu',
+      )[1];
+
+      const event = {
+        ctrlKey: true,
+        preventDefault: vi.fn(),
+        clientX: 50,
+        clientY: 60,
+        type: 'contextmenu',
+        detail: 0,
+        button: 2,
+      };
+
+      await contextMenuHandler(event);
+
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(mockGetEditorContext).not.toHaveBeenCalled();
+    });
+
+    it('should allow native context menu for keyboard invocation', async () => {
+      mount(SlashMenu, { props: mockProps });
+
+      mockGetEditorContext.mockClear();
+
+      const contextMenuHandler = mockEditor.view.dom.addEventListener.mock.calls.find(
+        (call) => call[0] === 'contextmenu',
+      )[1];
+
+      const keyboardEvent = {
+        preventDefault: vi.fn(),
+        clientX: 0,
+        clientY: 0,
+        detail: 0,
+        button: 0,
+        type: 'contextmenu',
+      };
+
+      await contextMenuHandler(keyboardEvent);
+
+      expect(keyboardEvent.preventDefault).not.toHaveBeenCalled();
+      expect(mockGetEditorContext).not.toHaveBeenCalled();
+    });
+
     it('should reuse the computed context instead of re-reading clipboard for custom renders', async () => {
       const rightClickEvent = new MouseEvent('contextmenu', { clientX: 200, clientY: 240 });
 

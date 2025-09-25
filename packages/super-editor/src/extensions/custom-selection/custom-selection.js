@@ -32,6 +32,31 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 export const CustomSelectionPluginKey = new PluginKey('CustomSelection');
 
 /**
+ * Determine if the native context menu should be allowed to appear.
+ * We bypass the custom menu when the user explicitly requests the system menu
+ * via modifier keys or when the event originated from a keyboard invocation.
+ * @param {MouseEvent} event
+ * @returns {boolean}
+ */
+export const shouldAllowNativeContextMenu = (event) => {
+  if (!event) return false;
+
+  if (event.ctrlKey || event.metaKey) {
+    return true;
+  }
+
+  const isKeyboardInvocation =
+    event.type === 'contextmenu' &&
+    typeof event.detail === 'number' &&
+    event.detail === 0 &&
+    (event.button === 0 || event.button === undefined) &&
+    event.clientX === 0 &&
+    event.clientY === 0;
+
+  return Boolean(isKeyboardInvocation);
+};
+
+/**
  * Handle clicks outside the editor
  * @private
  * @param {MouseEvent} event - Mouse event
@@ -144,6 +169,10 @@ export const CustomSelection = Extension.create({
       props: {
         handleDOMEvents: {
           contextmenu: (view, event) => {
+            if (shouldAllowNativeContextMenu(event)) {
+              return false;
+            }
+
             // Prevent context menu from removing focus/selection
             event.preventDefault();
             const { selection } = view.state;
@@ -168,6 +197,10 @@ export const CustomSelection = Extension.create({
           mousedown: (view, event) => {
             // Handle right clicks - prevent focus loss
             if (event.button === 2) {
+              if (shouldAllowNativeContextMenu(event)) {
+                return false;
+              }
+
               event.preventDefault(); // Prevent default right-click behavior
               const { selection } = view.state;
               if (!selection.empty) {
