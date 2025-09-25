@@ -44,6 +44,57 @@ const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   }),
 });
 
+export const ensureSectionLayoutDefaults = (sectPr, converter) => {
+  if (!sectPr) {
+    return {
+      type: 'element',
+      name: 'w:sectPr',
+      elements: [],
+    };
+  }
+
+  if (!sectPr.elements) sectPr.elements = [];
+
+  const ensureChild = (name) => {
+    let child = sectPr.elements.find((n) => n.name === name);
+    if (!child) {
+      child = {
+        type: 'element',
+        name,
+        elements: [],
+        attributes: {},
+      };
+      sectPr.elements.push(child);
+    } else {
+      if (!child.elements) child.elements = [];
+      if (!child.attributes) child.attributes = {};
+    }
+    return child;
+  };
+
+  const pageSize = converter?.pageStyles?.pageSize;
+  const pgSz = ensureChild('w:pgSz');
+  if (pageSize?.width != null) pgSz.attributes['w:w'] = String(inchesToTwips(pageSize.width));
+  if (pageSize?.height != null) pgSz.attributes['w:h'] = String(inchesToTwips(pageSize.height));
+  if (pgSz.attributes['w:w'] == null) pgSz.attributes['w:w'] = DEFAULT_SECTION_PROPS_TWIPS.pageSize.width;
+  if (pgSz.attributes['w:h'] == null) pgSz.attributes['w:h'] = DEFAULT_SECTION_PROPS_TWIPS.pageSize.height;
+
+  const pageMargins = converter?.pageStyles?.pageMargins;
+  const pgMar = ensureChild('w:pgMar');
+  if (pageMargins) {
+    Object.entries(pageMargins).forEach(([key, value]) => {
+      const converted = inchesToTwips(value);
+      if (converted != null) pgMar.attributes[`w:${key}`] = String(converted);
+    });
+  }
+  Object.entries(DEFAULT_SECTION_PROPS_TWIPS.pageMargins).forEach(([key, value]) => {
+    const attrKey = `w:${key}`;
+    if (pgMar.attributes[attrKey] == null) pgMar.attributes[attrKey] = value;
+  });
+
+  return sectPr;
+};
+
 export const isLineBreakOnlyRun = (node) => {
   if (!node) return false;
   if (node.type === 'lineBreak' || node.type === 'hardBreak') return true;
@@ -167,6 +218,8 @@ function translateBodyNode(params) {
     sectPr = { ...sectPr, elements: [] };
   }
 
+  sectPr = ensureSectionLayoutDefaults(sectPr, params.converter);
+
   if (params.converter) {
     const hasHeader = sectPr.elements?.some((n) => n.name === 'w:headerReference');
     const hasDefaultHeader = params.converter.headerIds?.default;
@@ -181,48 +234,6 @@ function translateBodyNode(params) {
       const defaultFooter = generateDefaultHeaderFooter('footer', params.converter.footerIds?.default);
       sectPr.elements.push(defaultFooter);
     }
-
-    const newMargins = params.converter.pageStyles?.pageMargins;
-    if (newMargins) {
-      let sectPrMargins = sectPr.elements.find((n) => n.name === 'w:pgMar');
-      if (!sectPrMargins) {
-        sectPrMargins = {
-          type: 'element',
-          name: 'w:pgMar',
-          attributes: {},
-        };
-        sectPr.elements.push(sectPrMargins);
-      } else if (!sectPrMargins.attributes) {
-        sectPrMargins.attributes = {};
-      }
-
-      Object.entries(newMargins).forEach(([key, value]) => {
-        const convertedValue = inchesToTwips(value);
-        sectPrMargins.attributes[`w:${key}`] = convertedValue;
-      });
-    }
-
-    let sectPrPgSz = sectPr.elements.find((n) => n.name === 'w:pgSz');
-    if (!sectPrPgSz) {
-      sectPrPgSz = {
-        type: 'element',
-        name: 'w:pgSz',
-        attributes: {},
-      };
-      sectPr.elements.push(sectPrPgSz);
-    } else if (!sectPrPgSz.attributes) {
-      sectPrPgSz.attributes = {};
-    }
-
-    const pageSize = params.converter.pageStyles?.pageSize;
-    const widthInches = pageSize?.width;
-    const heightInches = pageSize?.height;
-    sectPrPgSz.attributes['w:w'] = widthInches
-      ? String(inchesToTwips(widthInches))
-      : (sectPrPgSz.attributes['w:w'] ?? DEFAULT_SECTION_PROPS_TWIPS.pageSize.width);
-    sectPrPgSz.attributes['w:h'] = heightInches
-      ? String(inchesToTwips(heightInches))
-      : (sectPrPgSz.attributes['w:h'] ?? DEFAULT_SECTION_PROPS_TWIPS.pageSize.height);
   }
 
   const elements = translateChildNodes(params);
