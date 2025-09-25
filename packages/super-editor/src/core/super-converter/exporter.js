@@ -179,6 +179,7 @@ export function exportSchemaToJson(params) {
     contentBlock: translateContentBlock,
     structuredContent: wSdtNodeTranslator,
     structuredContentBlock: wSdtNodeTranslator,
+    documentPartObject: wSdtNodeTranslator,
     documentSection: wSdtNodeTranslator,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
