@@ -1629,6 +1629,7 @@ export class Editor extends EventEmitter {
           },
           media,
           true,
+          updatedDocs,
         );
         return updatedDocs;
       }

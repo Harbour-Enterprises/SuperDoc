@@ -5,6 +5,18 @@ import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { shouldAllowNativeContextMenu } from '../../utils/contextmenu-helpers.js';
 
+const DEFAULT_SELECTION_STATE = Object.freeze({
+  focused: false,
+  preservedSelection: null,
+  showVisualSelection: false,
+  skipFocusReset: false,
+});
+
+const normalizeSelectionState = (state = {}) => ({
+  ...DEFAULT_SELECTION_STATE,
+  ...state,
+});
+
 /**
  * Selection state
  * @typedef {Object} SelectionState
@@ -120,12 +132,7 @@ export const CustomSelection = Extension.create({
     const customSelectionPlugin = new Plugin({
       key: CustomSelectionPluginKey,
       state: {
-        init: () => ({
-          focused: false,
-          preservedSelection: null,
-          showVisualSelection: false,
-          skipFocusReset: false,
-        }),
+        init: () => ({ ...DEFAULT_SELECTION_STATE }),
         apply: (tr, value) => {
           const meta = getFocusMeta(tr);
           if (meta !== undefined) {
@@ -284,9 +291,7 @@ export const CustomSelection = Extension.create({
 
             if (focusState?.skipFocusReset) {
               view.dispatch(
-                setFocusMeta(view.state.tr, {
-                  skipFocusReset: false,
-                }),
+                setFocusMeta(view.state.tr, normalizeSelectionState({ ...focusState, skipFocusReset: false })),
               );
               return false;
             }

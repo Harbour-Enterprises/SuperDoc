@@ -85,7 +85,8 @@ class DocxZipper {
   /**
    * Update [Content_Types].xml with extensions of new Image annotations
    */
-  async updateContentTypes(docx, media, fromJson) {
+  async updateContentTypes(docx, media, fromJson, updatedDocs = {}) {
+    const additionalPartNames = Object.keys(updatedDocs || {});
     const newMediaTypes = Object.keys(media)
       .map((name) => {
         return this.getFileExtension(name);
@@ -95,7 +96,11 @@ class DocxZipper {
     const contentTypesPath = '[Content_Types].xml';
     let contentTypesXml;
     if (fromJson) {
-      contentTypesXml = docx.files.find((file) => file.name === contentTypesPath)?.content || '';
+      if (Array.isArray(docx.files)) {
+        contentTypesXml = docx.files.find((file) => file.name === contentTypesPath)?.content || '';
+      } else {
+        contentTypesXml = docx.files?.[contentTypesPath] || '';
+      }
     } else contentTypesXml = await docx.file(contentTypesPath).async('string');
 
     let typesString = '';
@@ -132,30 +137,45 @@ class DocxZipper {
       (el) => el.name === 'Override' && el.attributes.PartName === '/word/commentsExtensible.xml',
     );
 
-    if (docx.files['word/comments.xml']) {
+    const hasFile = (filename) => {
+      if (!docx?.files) return false;
+      if (!fromJson) return Boolean(docx.files[filename]);
+      if (Array.isArray(docx.files)) return docx.files.some((file) => file.name === filename);
+      return Boolean(docx.files[filename]);
+    };
+
+    if (hasFile('word/comments.xml')) {
       const commentsDef = `<Override PartName="/word/comments.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml" />`;
       if (!hasComments) typesString += commentsDef;
     }
 
-    if (docx.files['word/commentsExtended.xml']) {
+    if (hasFile('word/commentsExtended.xml')) {
       const commentsExtendedDef = `<Override PartName="/word/commentsExtended.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml" />`;
       if (!hasCommentsExtended) typesString += commentsExtendedDef;
     }
 
-    if (docx.files['word/commentsIds.xml']) {
+    if (hasFile('word/commentsIds.xml')) {
       const commentsIdsDef = `<Override PartName="/word/commentsIds.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsIds+xml" />`;
       if (!hasCommentsIds) typesString += commentsIdsDef;
     }
 
-    if (docx.files['word/commentsExtensible.xml']) {
+    if (hasFile('word/commentsExtensible.xml')) {
       const commentsExtendedDef = `<Override PartName="/word/commentsExtensible.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtensible+xml" />`;
       if (!hasCommentsExtensible) typesString += commentsExtendedDef;
     }
 
-    Object.keys(docx.files).forEach((name) => {
-      // Important: We need to filter out .rels files - they should not be included in content types
-      // Otherwise this generates MS word validation error
-      if (name.includes('.rels') || (!name.includes('header') && !name.includes('footer'))) return;
+    const partNames = new Set(additionalPartNames);
+    if (docx?.files) {
+      if (fromJson && Array.isArray(docx.files)) {
+        docx.files.forEach((file) => partNames.add(file.name));
+      } else {
+        Object.keys(docx.files).forEach((key) => partNames.add(key));
+      }
+    }
+
+    partNames.forEach((name) => {
+      if (name.includes('.rels')) return;
+      if (!name.includes('header') && !name.includes('footer')) return;
       const hasExtensible = types.elements?.some(
         (el) => el.name === 'Override' && el.attributes.PartName === `/${name}`,
       );
@@ -167,7 +187,52 @@ class DocxZipper {
     });
 
     const beginningString = '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">';
-    const updatedContentTypesXml = contentTypesXml.replace(beginningString, `${beginningString}${typesString}`);
+    let updatedContentTypesXml = contentTypesXml.replace(beginningString, `${beginningString}${typesString}`);
+
+    // Include any header/footer targets referenced from document relationships
+    let relationshipsXml = updatedDocs['word/_rels/document.xml.rels'];
+    if (!relationshipsXml) {
+      if (fromJson) {
+        if (Array.isArray(docx.files)) {
+          relationshipsXml = docx.files.find((file) => file.name === 'word/_rels/document.xml.rels')?.content;
+        } else {
+          relationshipsXml = docx.files?.['word/_rels/document.xml.rels'];
+        }
+      } else {
+        relationshipsXml = await docx.file('word/_rels/document.xml.rels')?.async('string');
+      }
+    }
+
+    if (relationshipsXml) {
+      try {
+        const relJson = xmljs.xml2js(relationshipsXml, { compact: false });
+        const relationships = relJson.elements?.find((el) => el.name === 'Relationships');
+        relationships?.elements?.forEach((rel) => {
+          const type = rel.attributes?.Type;
+          const target = rel.attributes?.Target;
+          if (!type || !target) return;
+          const isHeader = type.includes('/header');
+          const isFooter = type.includes('/footer');
+          if (!isHeader && !isFooter) return;
+          let sanitizedTarget = target.replace(/^\.\//, '');
+          if (sanitizedTarget.startsWith('../')) sanitizedTarget = sanitizedTarget.slice(3);
+          if (sanitizedTarget.startsWith('/')) sanitizedTarget = sanitizedTarget.slice(1);
+          const partName = sanitizedTarget.startsWith('word/') ? sanitizedTarget : `word/${sanitizedTarget}`;
+          partNames.add(partName);
+        });
+      } catch (error) {
+        console.warn('Failed to parse document relationships while updating content types', error);
+      }
+    }
+
+    partNames.forEach((name) => {
+      if (name.includes('.rels')) return;
+      if (!name.includes('header') && !name.includes('footer')) return;
+      if (updatedContentTypesXml.includes(`PartName="/${name}"`)) return;
+      const type = name.includes('header') ? 'header' : 'footer';
+      const extendedDef = `<Override PartName="/${name}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${type}+xml"/>`;
+      updatedContentTypesXml = updatedContentTypesXml.replace('</Types>', `${extendedDef}</Types>`);
+    });
 
     if (fromJson) return updatedContentTypesXml;
 
@@ -225,7 +290,7 @@ class DocxZipper {
       zip.file(fontName, fontUintArray);
     }
 
-    await this.updateContentTypes(zip, media);
+    await this.updateContentTypes(zip, media, false, updatedDocs);
     return zip;
   }
 
@@ -256,7 +321,7 @@ class DocxZipper {
       unzippedOriginalDocx.file(path, media[path]);
     });
 
-    await this.updateContentTypes(unzippedOriginalDocx, media);
+    await this.updateContentTypes(unzippedOriginalDocx, media, false, updatedDocs);
 
     return unzippedOriginalDocx;
   }
