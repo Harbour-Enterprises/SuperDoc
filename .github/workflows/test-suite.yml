@@ -62,31 +62,11 @@ jobs:
             --coverage.reporter=text \
             --exclude="**/examples/**"
 
-      - name: Check diff coverage
+      - name: Check PR diff coverage
         if: ${{ inputs.check-coverage && github.event_name == 'pull_request' }}
-        run: |
-          # Get changed source files
-          CHANGED_FILES=$(git diff --name-only --diff-filter=ACMR \
-            origin/${{ github.event.pull_request.base.ref }}...HEAD \
-            | grep -E '\.(js|ts|jsx|tsx)$' \
-            | grep -v -E '\.(test|spec|d\.ts)\.' || true)
-
-          if [ -z "$CHANGED_FILES" ]; then
-            echo "✅ No source files changed"
-            exit 0
-          fi
-
-          echo "📊 Checking coverage for changed files:"
-          echo "$CHANGED_FILES" | sed 's/^/  - /'
-
-          # Check coverage thresholds for changed files
-          npx nyc report \
-            --temp-dir=coverage \
-            --include="$(echo $CHANGED_FILES | tr '\n' ' ')" \
-            --check-coverage \
-            --lines=80 \
-            --functions=80 \
-            --branches=80
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+        run: node scripts/check-pr-coverage.mjs
 
   visual-tests:
     if: inputs.run-visual
