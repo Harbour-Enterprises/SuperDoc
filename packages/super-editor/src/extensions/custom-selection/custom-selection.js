@@ -11,6 +11,7 @@ import { shouldAllowNativeContextMenu } from '../../utils/contextmenu-helpers.js
  * @property {boolean} focused - Whether editor is focused
  * @property {Object|null} preservedSelection - Stored selection
  * @property {boolean} showVisualSelection - Whether to show selection decoration
+ * @property {boolean} skipFocusReset - Whether to skip clearing selection on next focus
  */
 
 /**
@@ -123,6 +124,7 @@ export const CustomSelection = Extension.create({
           focused: false,
           preservedSelection: null,
           showVisualSelection: false,
+          skipFocusReset: false,
         }),
         apply: (tr, value) => {
           const meta = getFocusMeta(tr);
@@ -158,6 +160,7 @@ export const CustomSelection = Extension.create({
                   focused: true,
                   preservedSelection: selection,
                   showVisualSelection: true,
+                  skipFocusReset: true,
                 }),
               );
             }
@@ -186,6 +189,7 @@ export const CustomSelection = Extension.create({
                     focused: true,
                     preservedSelection: selection,
                     showVisualSelection: true,
+                    skipFocusReset: true,
                   }),
                 );
 
@@ -217,6 +221,7 @@ export const CustomSelection = Extension.create({
                   focused: true,
                   preservedSelection: selection,
                   showVisualSelection: true,
+                  skipFocusReset: false,
                 }),
               );
 
@@ -240,6 +245,7 @@ export const CustomSelection = Extension.create({
                     focused: true,
                     preservedSelection: selection,
                     showVisualSelection: true,
+                    skipFocusReset: false,
                   }),
                 );
               }
@@ -254,6 +260,7 @@ export const CustomSelection = Extension.create({
                   focused: false,
                   preservedSelection: null,
                   showVisualSelection: false,
+                  skipFocusReset: false,
                 }),
               );
 
@@ -273,6 +280,16 @@ export const CustomSelection = Extension.create({
             const isElement = target instanceof Element;
             const isToolbarBtn = isElement && isToolbarButton(target);
             const isToolbarInp = isElement && isToolbarInput(target);
+            const focusState = getFocusState(view.state);
+
+            if (focusState?.skipFocusReset) {
+              view.dispatch(
+                setFocusMeta(view.state.tr, {
+                  skipFocusReset: false,
+                }),
+              );
+              return false;
+            }
 
             // Don't change state if toolbar element caused the focus
             if (!isToolbarBtn && !isToolbarInp) {
@@ -281,6 +298,7 @@ export const CustomSelection = Extension.create({
                   focused: false,
                   preservedSelection: null,
                   showVisualSelection: false,
+                  skipFocusReset: false,
                 }),
               );
             }
@@ -293,6 +311,10 @@ export const CustomSelection = Extension.create({
             const isToolbarInp = isElement && isToolbarInput(target);
             const state = getFocusState(view.state);
 
+            if (state?.skipFocusReset) {
+              return false;
+            }
+
             if (isToolbarBtn || isToolbarInp) {
               // Maintain visual selection when toolbar elements are focused
               view.dispatch(
@@ -300,6 +322,7 @@ export const CustomSelection = Extension.create({
                   focused: true,
                   preservedSelection: state.preservedSelection || view.state.selection,
                   showVisualSelection: true,
+                  skipFocusReset: false,
                 }),
               );
             } else {
@@ -309,6 +332,7 @@ export const CustomSelection = Extension.create({
                   focused: false,
                   preservedSelection: null,
                   showVisualSelection: false,
+                  skipFocusReset: false,
                 }),
               );
             }
