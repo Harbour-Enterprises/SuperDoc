@@ -31,6 +31,7 @@ import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark
 import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
 import { translator as alternateChoiceTranslator } from '@converter/v3/handlers/mc/altermateContent';
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
+import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -183,6 +184,7 @@ export function exportSchemaToJson(params) {
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
     pageReference: sdPageReferenceTranslator,
+    tableOfContents: sdTableOfContentsTranslator,
   };
 
   let handler = router[type];
