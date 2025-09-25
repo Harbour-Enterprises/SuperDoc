@@ -66,11 +66,11 @@ export const Link = Mark.create({
       },
     };
   },
-
+  // change
   parseDOM() {
     return [{ tag: 'a' }];
   },
-
+  // change
   renderDOM({ htmlAttributes }) {
     if (!isAllowedUri(htmlAttributes.href, this.options.protocols)) {
       return ['a', Attribute.mergeAttributes(this.options.htmlAttributes, { ...htmlAttributes, href: '' }), 0];
