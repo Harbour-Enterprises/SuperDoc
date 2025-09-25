@@ -174,19 +174,18 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = [], option
  */
 export const getDefaultParagraphStyle = (docx, styleId = '') => {
   const styles = docx['word/styles.xml'];
-  if (!styles) {
+  const rootElements = styles?.elements?.[0]?.elements;
+  if (!rootElements?.length) {
     return {};
   }
-  const defaults = styles.elements[0].elements?.find((el) => el.name === 'w:docDefaults');
-  const pDefault = defaults.elements.find((el) => el.name === 'w:pPrDefault');
+  const defaults = rootElements.find((el) => el.name === 'w:docDefaults');
+  const pDefault = defaults?.elements?.find((el) => el.name === 'w:pPrDefault') || {};
   const pPrDefault = pDefault?.elements?.find((el) => el.name === 'w:pPr');
   const pPrDefaultSpacingTag = pPrDefault?.elements?.find((el) => el.name === 'w:spacing') || {};
   const pPrDefaultIndentTag = pPrDefault?.elements?.find((el) => el.name === 'w:ind') || {};
 
   // Paragraph 'Normal' styles
-  const stylesNormal = styles.elements[0].elements?.find(
-    (el) => el.name === 'w:style' && el.attributes['w:styleId'] === 'Normal',
-  );
+  const stylesNormal = rootElements.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === 'Normal');
   const pPrNormal = stylesNormal?.elements?.find((el) => el.name === 'w:pPr');
   const pPrNormalSpacingTag = pPrNormal?.elements?.find((el) => el.name === 'w:spacing') || {};
   const pPrNormalIndentTag = pPrNormal?.elements?.find((el) => el.name === 'w:ind') || {};
@@ -197,9 +196,7 @@ export const getDefaultParagraphStyle = (docx, styleId = '') => {
   let pPrStyleIdIndentTag = {};
   let pPrStyleJc = {};
   if (styleId) {
-    const stylesById = styles.elements[0].elements?.find(
-      (el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId,
-    );
+    const stylesById = rootElements.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId);
     const pPrById = stylesById?.elements?.find((el) => el.name === 'w:pPr');
     pPrStyleIdSpacingTag = pPrById?.elements?.find((el) => el.name === 'w:spacing') || {};
     pPrStyleIdIndentTag = pPrById?.elements?.find((el) => el.name === 'w:ind') || {};

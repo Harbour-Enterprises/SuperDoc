@@ -31,6 +31,19 @@ import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark
 import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
 import { translator as alternateChoiceTranslator } from '@converter/v3/handlers/mc/altermateContent';
 
+const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
+  pageSize: Object.freeze({ width: '12240', height: '15840' }),
+  pageMargins: Object.freeze({
+    top: '1440',
+    right: '1440',
+    bottom: '1440',
+    left: '1440',
+    header: '720',
+    footer: '720',
+    gutter: '0',
+  }),
+});
+
 export const isLineBreakOnlyRun = (node) => {
   if (!node) return false;
   if (node.type === 'lineBreak' || node.type === 'hardBreak') return true;
@@ -143,31 +156,73 @@ export function exportSchemaToJson(params) {
  * @returns {XmlReadyNode} JSON of the XML-ready body node
  */
 function translateBodyNode(params) {
-  let sectPr = params.bodyNode?.elements.find((n) => n.name === 'w:sectPr') || {};
+  let sectPr = params.bodyNode?.elements?.find((n) => n.name === 'w:sectPr');
+  if (!sectPr) {
+    sectPr = {
+      type: 'element',
+      name: 'w:sectPr',
+      elements: [],
+    };
+  } else if (!sectPr.elements) {
+    sectPr = { ...sectPr, elements: [] };
+  }
 
   if (params.converter) {
-    const hasHeader = sectPr?.elements?.some((n) => n.name === 'w:headerReference');
+    const hasHeader = sectPr.elements?.some((n) => n.name === 'w:headerReference');
     const hasDefaultHeader = params.converter.headerIds?.default;
     if (!hasHeader && hasDefaultHeader && !params.editor.options.isHeaderOrFooter) {
       const defaultHeader = generateDefaultHeaderFooter('header', params.converter.headerIds?.default);
       sectPr.elements.push(defaultHeader);
     }
 
-    const hasFooter = sectPr?.elements?.some((n) => n.name === 'w:footerReference');
+    const hasFooter = sectPr.elements?.some((n) => n.name === 'w:footerReference');
     const hasDefaultFooter = params.converter.footerIds?.default;
     if (!hasFooter && hasDefaultFooter && !params.editor.options.isHeaderOrFooter) {
       const defaultFooter = generateDefaultHeaderFooter('footer', params.converter.footerIds?.default);
       sectPr.elements.push(defaultFooter);
     }
 
-    const newMargins = params.converter.pageStyles.pageMargins;
-    const sectPrMargins = sectPr.elements.find((n) => n.name === 'w:pgMar');
-    const { attributes } = sectPrMargins;
-    Object.entries(newMargins).forEach(([key, value]) => {
-      const convertedValue = inchesToTwips(value);
-      attributes[`w:${key}`] = convertedValue;
-    });
-    sectPrMargins.attributes = attributes;
+    const newMargins = params.converter.pageStyles?.pageMargins;
+    if (newMargins) {
+      let sectPrMargins = sectPr.elements.find((n) => n.name === 'w:pgMar');
+      if (!sectPrMargins) {
+        sectPrMargins = {
+          type: 'element',
+          name: 'w:pgMar',
+          attributes: {},
+        };
+        sectPr.elements.push(sectPrMargins);
+      } else if (!sectPrMargins.attributes) {
+        sectPrMargins.attributes = {};
+      }
+
+      Object.entries(newMargins).forEach(([key, value]) => {
+        const convertedValue = inchesToTwips(value);
+        sectPrMargins.attributes[`w:${key}`] = convertedValue;
+      });
+    }
+
+    let sectPrPgSz = sectPr.elements.find((n) => n.name === 'w:pgSz');
+    if (!sectPrPgSz) {
+      sectPrPgSz = {
+        type: 'element',
+        name: 'w:pgSz',
+        attributes: {},
+      };
+      sectPr.elements.push(sectPrPgSz);
+    } else if (!sectPrPgSz.attributes) {
+      sectPrPgSz.attributes = {};
+    }
+
+    const pageSize = params.converter.pageStyles?.pageSize;
+    const widthInches = pageSize?.width;
+    const heightInches = pageSize?.height;
+    sectPrPgSz.attributes['w:w'] = widthInches
+      ? String(inchesToTwips(widthInches))
+      : (sectPrPgSz.attributes['w:w'] ?? DEFAULT_SECTION_PROPS_TWIPS.pageSize.width);
+    sectPrPgSz.attributes['w:h'] = heightInches
+      ? String(inchesToTwips(heightInches))
+      : (sectPrPgSz.attributes['w:h'] ?? DEFAULT_SECTION_PROPS_TWIPS.pageSize.height);
   }
 
   const elements = translateChildNodes(params);
