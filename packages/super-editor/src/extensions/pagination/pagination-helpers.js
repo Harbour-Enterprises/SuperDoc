@@ -186,9 +186,11 @@ export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEdi
   });
 
   if (isEditMode) {
-    const pm = document.querySelector('.ProseMirror');
-    pm.classList.add('header-footer-edit');
-    pm.setAttribute('aria-readonly', true);
+    const pm = editor.view?.dom;
+    if (pm) {
+      pm.classList.add('header-footer-edit');
+      pm.setAttribute('aria-readonly', true);
+    }
   }
 
   if (focusedSectionEditor) {
