@@ -61,7 +61,7 @@ const encode = (params, encodedAttrs) => {
   contentNodes.forEach((contentNode) => {
     const existingMarks = Array.isArray(contentNode.marks) ? contentNode.marks : [];
     const marksWithoutLink = existingMarks.filter((mark) => mark?.type !== 'link');
-    contentNode.marks = marksWithoutLink;
+    contentNode.marks = [...marksWithoutLink, linkMark];
   });
 
   const updatedNode = nodeListHandler.handler({
@@ -70,47 +70,7 @@ const encode = (params, encodedAttrs) => {
     path: [...(params.path || []), node],
   });
 
-  const cloneMark = (mark) => {
-    if (!mark || typeof mark !== 'object') return mark;
-    if (!mark.attrs) return { ...mark };
-    return { ...mark, attrs: { ...mark.attrs } };
-  };
-
-  const ensureLinkMark = (child) => {
-    if (!child || typeof child !== 'object') return child;
-
-    if (Array.isArray(child.content)) {
-      const updatedContent = child.content.map((item) => ensureLinkMark(item));
-      if (updatedContent !== child.content) {
-        child = { ...child, content: updatedContent };
-      }
-    }
-
-    if (child.type === 'run') {
-      const existingMarks = Array.isArray(child.marks) ? child.marks : [];
-      const filteredMarks = existingMarks.filter((mark) => mark?.type !== 'link').map((mark) => cloneMark(mark));
-      if (filteredMarks.length !== existingMarks.length) {
-        if (filteredMarks.length) child = { ...child, marks: filteredMarks };
-        else {
-          const { marks: _removedMarks, ...rest } = child;
-          child = rest;
-        }
-      }
-      return child;
-    }
-
-    if (child.type !== 'text') return child;
-
-    const existingMarks = Array.isArray(child.marks) ? child.marks.map((mark) => cloneMark(mark)) : [];
-    const hasLink = existingMarks.some((mark) => mark?.type === 'link');
-    if (hasLink) return child;
-    const linkClone = { type: 'link', attrs: { ...linkMark.attrs } };
-    return { ...child, marks: [...existingMarks, linkClone] };
-  };
-
-  if (!Array.isArray(updatedNode)) return updatedNode;
-
-  return updatedNode.map((child) => ensureLinkMark(child));
+  return updatedNode;
 };
 
 /**

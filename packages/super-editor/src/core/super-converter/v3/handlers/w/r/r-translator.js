@@ -17,6 +17,7 @@ import {
 } from './helpers/helpers.js';
 import { splitRunProperties } from './helpers/split-run-properties.js';
 import { ensureTrackedWrapper, prepareRunTrackingContext } from './helpers/track-change-helpers.js';
+import { translator as wHyperlinkTranslator } from '../hyperlink/hyperlink-translator.js';
 import validXmlAttributes from './attributes/index.js';
 
 /** @type {import('@translator').XmlNodeName} */
@@ -96,6 +97,10 @@ const encode = (params, encodedAttrs = {}) => {
 const decode = (params, decodedAttrs = {}) => {
   const { node } = params || {};
   if (!node) return undefined;
+
+  // Separate links from regular text
+  const isLinkNode = node.marks?.some((m) => m.type === 'link');
+  if (isLinkNode) return wHyperlinkTranslator.decode(params);
 
   const { runNode: runNodeForExport, trackingMarksByType } = prepareRunTrackingContext(node);
 
