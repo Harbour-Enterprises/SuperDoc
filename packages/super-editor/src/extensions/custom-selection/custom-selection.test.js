@@ -143,6 +143,59 @@ describe('CustomSelection plugin', () => {
     expect(view.focus).toHaveBeenCalled();
   });
 
+  it('retains preserved selection after focus triggered by context menu refocus', () => {
+    const { plugin, view } = createEnvironment();
+
+    const contextEvent = {
+      preventDefault: vi.fn(),
+      detail: 0,
+      button: 2,
+      clientX: 120,
+      clientY: 140,
+      type: 'contextmenu',
+    };
+
+    plugin.props.handleDOMEvents.contextmenu(view, contextEvent);
+    view.dispatch.mockClear();
+
+    plugin.props.handleDOMEvents.focus(view);
+
+    expect(view.dispatch).toHaveBeenCalledTimes(1);
+    const dispatchedTr = view.dispatch.mock.calls[0][0];
+    expect(dispatchedTr.getMeta(CustomSelectionPluginKey)).toMatchObject({
+      skipFocusReset: false,
+    });
+
+    const focusState = CustomSelectionPluginKey.getState(view.state);
+    expect(focusState.showVisualSelection).toBe(true);
+    expect(focusState.preservedSelection).not.toBeNull();
+  });
+
+  it('ignores blur clearing when selection preserved for context menu', () => {
+    const { plugin, view } = createEnvironment();
+
+    const contextEvent = {
+      preventDefault: vi.fn(),
+      detail: 0,
+      button: 2,
+      clientX: 120,
+      clientY: 140,
+      type: 'contextmenu',
+    };
+
+    plugin.props.handleDOMEvents.contextmenu(view, contextEvent);
+    view.dispatch.mockClear();
+
+    const handled = plugin.props.handleDOMEvents.blur(view);
+
+    expect(handled).toBe(false);
+    expect(view.dispatch).not.toHaveBeenCalled();
+
+    const focusState = CustomSelectionPluginKey.getState(view.state);
+    expect(focusState.showVisualSelection).toBe(true);
+    expect(focusState.preservedSelection).not.toBeNull();
+  });
+
   it('allows native context menu when modifier pressed', () => {
     const { plugin, view } = createEnvironment();
 
