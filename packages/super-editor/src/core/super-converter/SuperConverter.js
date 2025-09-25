@@ -26,6 +26,43 @@ const FONT_FAMILY_FALLBACKS = Object.freeze({
 
 const DEFAULT_GENERIC_FALLBACK = 'sans-serif';
 
+const collectRunDefaultProperties = (
+  runProps,
+  { allowOverrideTypeface = true, allowOverrideSize = true, themeResolver, state },
+) => {
+  if (!runProps?.elements?.length || !state) return;
+
+  const fontsNode = runProps.elements.find((el) => el.name === 'w:rFonts');
+  if (fontsNode?.attributes) {
+    const themeName = fontsNode.attributes['w:asciiTheme'];
+    if (themeName) {
+      const themeInfo = themeResolver?.(themeName) || {};
+      if ((allowOverrideTypeface || !state.typeface) && themeInfo.typeface) state.typeface = themeInfo.typeface;
+      if ((allowOverrideTypeface || !state.panose) && themeInfo.panose) state.panose = themeInfo.panose;
+    }
+
+    const ascii = fontsNode.attributes['w:ascii'];
+    if ((allowOverrideTypeface || !state.typeface) && ascii) {
+      state.typeface = ascii;
+    }
+  }
+
+  const sizeNode = runProps.elements.find((el) => el.name === 'w:sz');
+  if (sizeNode?.attributes?.['w:val']) {
+    const sizeTwips = Number(sizeNode.attributes['w:val']);
+    if (Number.isFinite(sizeTwips)) {
+      if (state.fallbackSzTwips === undefined) state.fallbackSzTwips = sizeTwips;
+      const sizePt = sizeTwips / 2;
+      if (allowOverrideSize || state.fontSizePt === undefined) state.fontSizePt = sizePt;
+    }
+  }
+
+  const kernNode = runProps.elements.find((el) => el.name === 'w:kern');
+  if (kernNode?.attributes?.['w:val']) {
+    if (allowOverrideSize || state.kern === undefined) state.kern = kernNode.attributes['w:val'];
+  }
+};
+
 class SuperConverter {
   static allowedElements = Object.freeze({
     'w:document': 'doc',
@@ -266,62 +303,55 @@ class SuperConverter {
 
   getDocumentDefaultStyles() {
     const styles = this.convertedXml['word/styles.xml'];
-    if (!styles) return {};
+    const styleRoot = styles?.elements?.[0];
+    const styleElements = styleRoot?.elements || [];
+    if (!styleElements.length) return {};
 
-    const defaults = styles.elements[0].elements.find((el) => el.name === 'w:docDefaults');
+    const defaults = styleElements.find((el) => el.name === 'w:docDefaults');
+    const normalStyle = styleElements.find((el) => el.name === 'w:style' && el.attributes?.['w:styleId'] === 'Normal');
 
-    // const pDefault = defaults.elements.find((el) => el.name === 'w:pPrDefault');
+    const defaultsState = {
+      typeface: undefined,
+      panose: undefined,
+      fontSizePt: undefined,
+      kern: undefined,
+      fallbackSzTwips: undefined,
+    };
 
-    // Get the run defaults for this document - this will include font, theme etc.
-    const rDefault = defaults.elements.find((el) => el.name === 'w:rPrDefault');
-    if (!rDefault.elements) return {};
+    const docDefaultRun = defaults?.elements?.find((el) => el.name === 'w:rPrDefault');
+    const docDefaultProps = docDefaultRun?.elements?.find((el) => el.name === 'w:rPr') ?? docDefaultRun;
+    collectRunDefaultProperties(docDefaultProps, {
+      allowOverrideTypeface: true,
+      allowOverrideSize: true,
+      themeResolver: (theme) => this.getThemeInfo(theme),
+      state: defaultsState,
+    });
 
-    const rElements = rDefault.elements[0].elements;
-    const rFonts = rElements?.find((el) => el.name === 'w:rFonts');
-    if ('elements' in rDefault) {
-      const fontThemeName = rElements.find((el) => el.name === 'w:rFonts')?.attributes['w:asciiTheme'];
-      let typeface, panose, fontSizeNormal;
-      if (fontThemeName) {
-        const fontInfo = this.getThemeInfo(fontThemeName);
-        typeface = fontInfo.typeface;
-        panose = fontInfo.panose;
-      } else if (rFonts) {
-        typeface = rFonts?.attributes['w:ascii'];
-      }
+    const normalRunProps = normalStyle?.elements?.find((el) => el.name === 'w:rPr') ?? null;
+    collectRunDefaultProperties(normalRunProps, {
+      allowOverrideTypeface: true,
+      allowOverrideSize: true,
+      themeResolver: (theme) => this.getThemeInfo(theme),
+      state: defaultsState,
+    });
 
-      const paragraphDefaults =
-        styles.elements[0].elements.filter((el) => {
-          return el.name === 'w:style' && el.attributes['w:styleId'] === 'Normal';
-        }) || [];
-      paragraphDefaults.forEach((el) => {
-        const rPr = el.elements.find((el) => el.name === 'w:rPr');
-        const fonts = rPr?.elements?.find((el) => el.name === 'w:rFonts');
-        typeface = fonts?.attributes['w:ascii'];
-        fontSizeNormal = Number(rPr?.elements?.find((el) => el.name === 'w:sz')?.attributes['w:val']) / 2;
-      });
-
-      const rPrDefaults = defaults?.elements?.find((el) => el.name === 'w:rPrDefault');
-      if (rPrDefaults) {
-        const rPr = rPrDefaults.elements?.find((el) => el.name === 'w:rPr');
-        const fonts = rPr?.elements?.find((el) => el.name === 'w:rFonts');
-        // Prefer the explicit ascii font from rPrDefault if present
-        if (fonts?.attributes?.['w:ascii']) {
-          typeface = fonts.attributes['w:ascii'];
-        }
-
-        // If we didn't already pick up a Normal style font size, fall back to rPrDefault sz
-        const fontSizeRaw = rPr?.elements?.find((el) => el.name === 'w:sz')?.attributes?.['w:val'];
-        if (!fontSizeNormal && fontSizeRaw) {
-          fontSizeNormal = Number(fontSizeRaw) / 2;
-        }
-      }
-
-      const fallbackSz = Number(rElements.find((el) => el.name === 'w:sz')?.attributes?.['w:val']);
-      const fontSizePt = fontSizeNormal ?? (Number.isFinite(fallbackSz) ? fallbackSz / 2 : undefined) ?? 10;
-      const kern = rElements.find((el) => el.name === 'w:kern')?.attributes['w:val'];
-      const fontFamilyCss = SuperConverter.toCssFontFamily(typeface, this.convertedXml);
-      return { fontSizePt, kern, typeface, panose, fontFamilyCss };
+    if (defaultsState.fontSizePt === undefined) {
+      if (Number.isFinite(defaultsState.fallbackSzTwips)) defaultsState.fontSizePt = defaultsState.fallbackSzTwips / 2;
+      else defaultsState.fontSizePt = 10;
     }
+
+    const fontFamilyCss = defaultsState.typeface
+      ? SuperConverter.toCssFontFamily(defaultsState.typeface, this.convertedXml)
+      : undefined;
+
+    const result = {};
+    if (defaultsState.fontSizePt !== undefined) result.fontSizePt = defaultsState.fontSizePt;
+    if (defaultsState.kern !== undefined) result.kern = defaultsState.kern;
+    if (defaultsState.typeface) result.typeface = defaultsState.typeface;
+    if (defaultsState.panose) result.panose = defaultsState.panose;
+    if (fontFamilyCss) result.fontFamilyCss = fontFamilyCss;
+
+    return result;
   }
 
   getDocumentFonts() {
