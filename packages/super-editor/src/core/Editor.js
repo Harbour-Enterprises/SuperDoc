@@ -564,7 +564,7 @@ export class Editor extends EventEmitter {
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
     if (!this.extensionService || !this.state) return;
 
-    const pm = document.querySelector('.ProseMirror');
+    const pm = this.view?.dom || this.options.element?.querySelector?.('.ProseMirror');
 
     if (this.options.role === 'viewer') cleanedMode = 'viewing';
     if (this.options.role === 'suggester' && cleanedMode === 'editing') cleanedMode = 'suggesting';
@@ -1033,9 +1033,11 @@ export class Editor extends EventEmitter {
             isEditMode: false,
             documentMode: this.options.documentMode,
           });
-          const pm = document.querySelector('.ProseMirror');
-          pm.classList.remove('header-footer-edit');
-          pm.setAttribute('aria-readonly', false);
+          const pm = this.view?.dom || this.options.element?.querySelector?.('.ProseMirror');
+          if (pm) {
+            pm.classList.remove('header-footer-edit');
+            pm.setAttribute('aria-readonly', false);
+          }
         }
 
         // Imitate default double click behavior - word selection

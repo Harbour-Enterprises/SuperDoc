@@ -52,11 +52,11 @@
 /**
  * @typedef {Object} Config
  * @property {string} [superdocId] The ID of the SuperDoc
- * @property {string} selector The selector to mount the SuperDoc into
+ * @property {string | HTMLElement} selector The selector or element to mount the SuperDoc into
  * @property {DocumentMode} documentMode The mode of the document
  * @property {'editor' | 'viewer' | 'suggester'} [role] The role of the user in this SuperDoc
  * @property {Object | string | File | Blob} [document] The document to load. If a string, it will be treated as a URL. If a File or Blob, it will be used directly.
- * @property {Array<Document>} documents The documents to load
+ * @property {Array<Document>} [documents] The documents to load -> Soon to be deprecated
  * @property {User} [user] The current user of this SuperDoc
  * @property {Array<User>} [users] All users of this SuperDoc (can be used for "@"-mentions)
  * @property {Array<string>} [colors] Colors to use for user awareness

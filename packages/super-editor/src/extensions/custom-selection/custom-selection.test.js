@@ -5,6 +5,51 @@ import { DecorationSet } from 'prosemirror-view';
 
 import { Extension } from '@core/Extension.js';
 import { CustomSelection, CustomSelectionPluginKey } from './custom-selection.js';
+import { shouldAllowNativeContextMenu } from '../../utils/contextmenu-helpers.js';
+
+describe('shouldAllowNativeContextMenu', () => {
+  it('returns false for standard right click', () => {
+    const event = {
+      type: 'contextmenu',
+      ctrlKey: false,
+      metaKey: false,
+      detail: 1,
+      button: 2,
+      clientX: 120,
+      clientY: 140,
+    };
+
+    expect(shouldAllowNativeContextMenu(event)).toBe(false);
+  });
+
+  it('returns true when modifier key is pressed', () => {
+    const event = {
+      type: 'contextmenu',
+      ctrlKey: true,
+      metaKey: false,
+      detail: 1,
+      button: 2,
+      clientX: 120,
+      clientY: 140,
+    };
+
+    expect(shouldAllowNativeContextMenu(event)).toBe(true);
+  });
+
+  it('returns true for keyboard invocation', () => {
+    const event = {
+      type: 'contextmenu',
+      ctrlKey: false,
+      metaKey: false,
+      detail: 0,
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    };
+
+    expect(shouldAllowNativeContextMenu(event)).toBe(true);
+  });
+});
 
 const createEnvironment = () => {
   const nodes = {
@@ -74,7 +119,14 @@ describe('CustomSelection plugin', () => {
   it('preserves selection on context menu interactions', () => {
     const { plugin, view } = createEnvironment();
 
-    const event = { preventDefault: vi.fn() };
+    const event = {
+      preventDefault: vi.fn(),
+      detail: 0,
+      button: 2,
+      clientX: 120,
+      clientY: 140,
+      type: 'contextmenu',
+    };
     const handled = plugin.props.handleDOMEvents.contextmenu(view, event);
 
     expect(handled).toBe(false);
@@ -89,6 +141,59 @@ describe('CustomSelection plugin', () => {
 
     vi.runAllTimers();
     expect(view.focus).toHaveBeenCalled();
+  });
+
+  it('allows native context menu when modifier pressed', () => {
+    const { plugin, view } = createEnvironment();
+
+    const contextEvent = {
+      preventDefault: vi.fn(),
+      ctrlKey: true,
+      detail: 0,
+      button: 2,
+      clientX: 160,
+      clientY: 180,
+      type: 'contextmenu',
+    };
+
+    const handled = plugin.props.handleDOMEvents.contextmenu(view, contextEvent);
+
+    expect(handled).toBe(false);
+    expect(contextEvent.preventDefault).not.toHaveBeenCalled();
+    expect(view.dispatch).not.toHaveBeenCalled();
+
+    const mouseDownEvent = {
+      button: 2,
+      ctrlKey: true,
+      preventDefault: vi.fn(),
+      clientX: 160,
+      clientY: 180,
+      type: 'mousedown',
+    };
+
+    const mouseHandled = plugin.props.handleDOMEvents.mousedown(view, mouseDownEvent);
+
+    expect(mouseHandled).toBe(false);
+    expect(mouseDownEvent.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('allows native context menu for keyboard invocation', () => {
+    const { plugin, view } = createEnvironment();
+
+    const keyboardEvent = {
+      preventDefault: vi.fn(),
+      detail: 0,
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      type: 'contextmenu',
+    };
+
+    const handled = plugin.props.handleDOMEvents.contextmenu(view, keyboardEvent);
+
+    expect(handled).toBe(false);
+    expect(keyboardEvent.preventDefault).not.toHaveBeenCalled();
+    expect(view.dispatch).not.toHaveBeenCalled();
   });
 
   it('returns decorations for preserved selections', () => {

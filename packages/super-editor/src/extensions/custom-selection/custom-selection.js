@@ -3,6 +3,7 @@
 import { Extension } from '@core/Extension.js';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { shouldAllowNativeContextMenu } from '../../utils/contextmenu-helpers.js';
 
 /**
  * Selection state
@@ -144,6 +145,10 @@ export const CustomSelection = Extension.create({
       props: {
         handleDOMEvents: {
           contextmenu: (view, event) => {
+            if (shouldAllowNativeContextMenu(event)) {
+              return false;
+            }
+
             // Prevent context menu from removing focus/selection
             event.preventDefault();
             const { selection } = view.state;
@@ -168,6 +173,10 @@ export const CustomSelection = Extension.create({
           mousedown: (view, event) => {
             // Handle right clicks - prevent focus loss
             if (event.button === 2) {
+              if (shouldAllowNativeContextMenu(event)) {
+                return false;
+              }
+
               event.preventDefault(); // Prevent default right-click behavior
               const { selection } = view.state;
               if (!selection.empty) {
