@@ -39,7 +39,12 @@ import { PageReference } from './page-reference/index.js';
 import { ShapeContainer } from './shape-container/index.js';
 import { ShapeTextbox } from './shape-textbox/index.js';
 import { ContentBlock } from './content-block/index.js';
-import { StructuredContent, StructuredContentBlock, DocumentSection } from './structured-content/index.js';
+import {
+  StructuredContent,
+  StructuredContentBlock,
+  DocumentSection,
+  DocumentPartObject,
+} from './structured-content/index.js';
 import { BlockNode } from './block-node/index.js';
 import { TableOfContents } from './table-of-contents/index.js';
 
@@ -181,6 +186,7 @@ const getStarterExtensions = () => {
     StructuredContent,
     StructuredContentBlock,
     DocumentSection,
+    DocumentPartObject,
     NodeResizer,
     CustomSelection,
     TextTransform,
