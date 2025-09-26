@@ -108,8 +108,8 @@ export const isLineBreakOnlyRun = (node) => {
 /**
  * @typedef {Object} ExportParams
  * @property {Object} node JSON node to translate (from PM schema)
- * @property {Object} bodyNode The stored body node to restore, if available
- * @property {Object[]} relationships The relationships to add to the document
+ * @property {Object} [bodyNode] The stored body node to restore, if available
+ * @property {Object[]} [relationships] The relationships to add to the document
  */
 
 /**
