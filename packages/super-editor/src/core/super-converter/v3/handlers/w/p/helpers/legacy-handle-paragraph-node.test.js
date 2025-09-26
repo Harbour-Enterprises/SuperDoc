@@ -22,19 +22,12 @@ vi.mock('./index.js', () => ({
   getParagraphIndent: vi.fn(() => ({})),
   getParagraphSpacing: vi.fn(() => undefined),
   getDefaultParagraphStyle: vi.fn(() => ({})),
-  preProcessNodesForFldChar: vi.fn((els) => els),
   parseParagraphBorders: vi.fn(() => ({})),
 }));
 
 import { handleParagraphNode } from './legacy-handle-paragraph-node.js';
 import { parseMarks, mergeTextNodes } from '@converter/v2/importer/index.js';
-import {
-  getParagraphIndent,
-  getParagraphSpacing,
-  getDefaultParagraphStyle,
-  preProcessNodesForFldChar,
-  parseParagraphBorders,
-} from './index.js';
+import { getParagraphIndent, getParagraphSpacing, getDefaultParagraphStyle, parseParagraphBorders } from './index.js';
 
 const makeParams = (overrides = {}) => ({
   filename: 'source.docx',
@@ -72,7 +65,6 @@ beforeEach(() => {
   getParagraphIndent.mockReset().mockReturnValue({});
   getParagraphSpacing.mockReset().mockReturnValue(undefined);
   getDefaultParagraphStyle.mockReset().mockReturnValue({});
-  preProcessNodesForFldChar.mockReset().mockImplementation((els) => els);
   parseParagraphBorders.mockReset().mockReturnValue({});
 });
 
@@ -97,7 +89,6 @@ describe('legacy-handle-paragraph-node', () => {
     const out = handleParagraphNode(params);
 
     // Assert
-    expect(preProcessNodesForFldChar).toHaveBeenCalled();
     expect(out.type).toBe('paragraph');
     expect(out.attrs.filename).toBe('source.docx');
     expect(out.attrs.textAlign).toBe('right');
