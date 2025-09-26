@@ -82,9 +82,10 @@ export const splitRunProperties = (entries = [], docx = null) => {
       case 'w:sz':
       case 'w:szCs': {
         const rawSize = Number(attributes['w:val']);
+        const attrName = entry.xmlName === 'w:sz' ? 'fontSize' : 'fontSizeCs';
         if (Number.isFinite(rawSize) && rawSize > 0) {
           hasTextStyle = true;
-          textStyleAttrs.fontSize = `${rawSize / 2}pt`;
+          textStyleAttrs[attrName] = `${rawSize / 2}pt`;
         }
         break;
       }
