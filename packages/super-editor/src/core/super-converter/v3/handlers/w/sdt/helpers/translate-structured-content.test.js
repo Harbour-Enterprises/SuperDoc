@@ -16,7 +16,8 @@ describe('translateStructuredContent', () => {
   it('returns correct XML structure with sdtPr and sdtContent', () => {
     const mockSdtPr = {
       name: 'w:sdtPr',
-      elements: [{ name: 'w:tag', attributes: { 'w:val': 'test' } }],
+      elements: [],
+      type: 'element',
     };
 
     const node = {
