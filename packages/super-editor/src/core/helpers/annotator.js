@@ -267,6 +267,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
     const rowEnd = mappedRowStart + rowNode.nodeSize;
 
     tr.replaceWith(mappedRowStart, rowEnd, Fragment.from(newRows));
+    tr.setMeta('tableGeneration', true);
   } catch (error) {
     console.error('Error during row generation:', error);
     throw error;
