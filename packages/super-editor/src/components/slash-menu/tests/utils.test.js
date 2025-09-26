@@ -162,6 +162,15 @@ describe('utils.js', () => {
       mockSelectionHasNodeOrMark.mockReturnValue(false);
       mockEditor.view.posAtCoords.mockReturnValue({ pos: 20 });
       mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'text' } });
+      mockEditor.view.state.doc.content = { size: 100 }; // Add missing content.size mock
+      mockEditor.view.state.doc.nodesBetween = vi.fn((from, to, callback) => {
+        // Mock nodesBetween to call the callback with a node that has the expected mark
+        const mockNode = {
+          marks: [{ type: { name: 'trackDelete' }, attrs: { id: 'track-1' } }],
+          nodeSize: 1,
+        };
+        callback(mockNode, 20); // Call callback with mock node at position 20
+      });
       mockEditor.view.state.doc.resolve.mockReturnValue({
         depth: 5,
         node: (depth) => {

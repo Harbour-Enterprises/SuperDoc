@@ -1,5 +1,6 @@
 import { expect, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
+import { TRIGGERS } from '../constants.js';
 
 /**
  * Test helper utilities for slash menu components
@@ -284,7 +285,17 @@ export function filterMenuItems(sections, criteria = {}) {
   let items = sections.flatMap((s) => s.items);
 
   if (trigger) {
-    items = items.filter((item) => item.allowedTriggers?.includes(trigger));
+    const mockContext = { trigger, selectedText: '', hasSelection: false };
+    items = items.filter((item) => {
+      if (item.showWhen && typeof item.showWhen === 'function') {
+        try {
+          return item.showWhen(mockContext);
+        } catch {
+          return false;
+        }
+      }
+      return item.allowedTriggers?.includes(trigger) ?? true;
+    });
   }
 
   if (requiresSelection !== null) {
@@ -311,7 +322,7 @@ export function createMockMenuItems(count = 3, customItems = []) {
     label: `Test Item ${i + 1}`,
     icon: `<svg>test-icon-${i + 1}</svg>`,
     action: vi.fn(),
-    allowedTriggers: ['slash', 'click'],
+    showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
   }));
 
   return [
@@ -337,7 +348,7 @@ export function createMockRenderItem(id = 'render-item', renderFn = null) {
     id,
     label: `Render ${id}`,
     render: renderFn || defaultRender,
-    allowedTriggers: ['slash', 'click'],
+    showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
   };
 }
 
@@ -365,8 +376,8 @@ export function assertMenuSectionsStructure(sections) {
     section.items.forEach((item) => {
       expect(item).toHaveProperty('id');
       expect(item).toHaveProperty('label');
-      expect(item).toHaveProperty('allowedTriggers');
-      expect(item.allowedTriggers).toBeInstanceOf(Array);
+      const hasShowWhen = typeof item.showWhen === 'function';
+      expect(hasShowWhen).toBe(true);
     });
   });
 }
@@ -433,7 +444,7 @@ export const SlashMenuConfigs = {
           {
             id: 'custom-item',
             label: 'Custom Item',
-            allowedTriggers: ['slash', 'click'],
+            showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
             action: vi.fn(),
           },
         ],
@@ -456,7 +467,7 @@ export const SlashMenuConfigs = {
             {
               id: 'provider-item',
               label: 'Provider Item',
-              allowedTriggers: ['slash', 'click'],
+              showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
               action: vi.fn(),
             },
           ],
@@ -476,15 +487,14 @@ export const SlashMenuConfigs = {
           {
             id: 'always-show',
             label: 'Always Show',
-            allowedTriggers: ['slash', 'click'],
+            showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
             action: vi.fn(),
           },
           {
             id: 'show-when-selection',
             label: 'Show When Selection',
-            allowedTriggers: ['slash', 'click'],
+            showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger) && context.hasSelection,
             action: vi.fn(),
-            showWhen: (context) => context.hasSelection,
           },
         ],
       },

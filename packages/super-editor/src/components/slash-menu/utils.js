@@ -149,35 +149,55 @@ export async function getEditorContext(editor, event) {
   const currentNodeType = node?.type?.name || null;
 
   const activeMarks = [];
+  let trackedChangeId = null;
 
   if (event && pos !== null) {
     // For right-click events, get marks at the clicked position
     const $pos = state.doc.resolve(pos);
+    // Check stored marks first (for typing position marks)
     if ($pos.marks && typeof $pos.marks === 'function') {
-      $pos.marks().forEach((mark) => activeMarks.push(mark.type.name));
+      $pos.marks().forEach((mark) => {
+        activeMarks.push(mark.type.name);
+      });
     }
 
-    // Also check marks on the node at this position if it exists
     if (node && node.marks) {
-      node.marks.forEach((mark) => activeMarks.push(mark.type.name));
+      node.marks.forEach((mark) => {
+        activeMarks.push(mark.type.name);
+      });
     }
+
+    // Additionally, check for marks in nodes around this position
+    state.doc.nodesBetween(Math.max(0, pos - 1), Math.min(state.doc.content.size, pos + 1), (nodeAtPos, nodePos) => {
+      if (nodeAtPos.marks && nodeAtPos.marks.length > 0) {
+        // Only include marks from nodes that actually contain our clicked position
+        const nodeStart = nodePos;
+        const nodeEnd = nodePos + nodeAtPos.nodeSize;
+        if (pos >= nodeStart && pos < nodeEnd) {
+          nodeAtPos.marks.forEach((mark) => {
+            if (!activeMarks.includes(mark.type.name)) {
+              activeMarks.push(mark.type.name);
+            }
+
+            // Also extract tracked change ID if this is a tracked change mark and we haven't found one yet
+            if (
+              !trackedChangeId &&
+              (mark.type.name === 'trackInsert' || mark.type.name === 'trackDelete' || mark.type.name === 'trackFormat')
+            ) {
+              trackedChangeId = mark.attrs.id;
+            }
+          });
+        }
+      }
+    });
   } else {
     // For slash trigger, use stored marks and selection head marks
     state.storedMarks?.forEach((mark) => activeMarks.push(mark.type.name));
     state.selection.$head.marks().forEach((mark) => activeMarks.push(mark.type.name));
   }
 
-  const isTrackedChange = activeMarks.includes('trackInsert') || activeMarks.includes('trackDelete');
-
-  let trackedChangeId = null;
-  if (isTrackedChange && event && pos !== null) {
-    const $pos = state.doc.resolve(pos);
-    const marksAtPos = $pos.marks();
-    const trackedMark = marksAtPos.find((mark) => mark.type.name === 'trackInsert' || mark.type.name === 'trackDelete');
-    if (trackedMark) {
-      trackedChangeId = trackedMark.attrs.id;
-    }
-  }
+  const isTrackedChange =
+    activeMarks.includes('trackInsert') || activeMarks.includes('trackDelete') || activeMarks.includes('trackFormat');
 
   const cursorCoords = pos ? view.coordsAtPos(pos) : null;
   const cursorPosition = cursorCoords
