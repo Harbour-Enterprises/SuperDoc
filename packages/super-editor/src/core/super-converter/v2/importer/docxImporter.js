@@ -25,7 +25,7 @@ import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
 import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
-import { preProcessNodesForFldChar } from '../../v3/handlers/w/p/helpers';
+import { preProcessNodesForFldChar } from '../../field-references';
 
 /**
  * @typedef {import()} XmlNode
