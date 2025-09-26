@@ -3,7 +3,7 @@ import { Decoration } from 'prosemirror-view';
 export const defaultTabDistance = 48;
 export const defaultLineLength = 816;
 
-export const getTabDecorations = (doc, view, from = 0, to = null) => {
+export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
   const decorations = [];
   const paragraphCache = new Map();
 
@@ -14,7 +14,7 @@ export const getTabDecorations = (doc, view, from = 0, to = null) => {
 
     let extraStyles = '';
     const $pos = doc.resolve(pos);
-    const paragraphContext = getParagraphContext($pos, paragraphCache);
+    const paragraphContext = getParagraphContext($pos, paragraphCache, helpers);
     if (!paragraphContext) return;
 
     try {
@@ -83,18 +83,27 @@ export const getTabDecorations = (doc, view, from = 0, to = null) => {
   return decorations;
 };
 
-export function getParagraphContext($pos, cache) {
+export function getParagraphContext($pos, cache, helpers) {
   for (let depth = $pos.depth; depth >= 0; depth--) {
     const node = $pos.node(depth);
     if (node?.type?.name === 'paragraph') {
       const startPos = $pos.start(depth);
       if (!cache.has(startPos)) {
+        let tabStops = [];
+        if (Array.isArray(node.attrs?.tabStops)) {
+          tabStops = node.attrs.tabStops;
+        } else {
+          const style = helpers.linkedStyles.getStyleById(node.attrs?.styleId);
+          if (Array.isArray(style?.definition?.styles?.tabStops)) {
+            tabStops = style.definition.styles.tabStops;
+          }
+        }
         cache.set(startPos, {
           paragraph: node,
           paragraphDepth: depth,
           startPos,
           indent: node.attrs?.indent || {},
-          tabStops: Array.isArray(node.attrs?.tabStops) ? node.attrs.tabStops : [],
+          tabStops: tabStops,
           flattened: flattenParagraph(node, startPos),
           accumulatedTabWidth: 0,
         });

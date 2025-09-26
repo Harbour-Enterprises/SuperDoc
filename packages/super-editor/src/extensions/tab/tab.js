@@ -65,7 +65,7 @@ export const TabNode = Node.create({
   },
 
   addPmPlugins() {
-    const { view } = this.editor;
+    const { view, helpers } = this.editor;
     const tabPlugin = new Plugin({
       name: 'tabPlugin',
       key: new PluginKey('tabPlugin'),
@@ -75,7 +75,7 @@ export const TabNode = Node.create({
         },
         apply(tr, { decorations }, _oldState, newState) {
           if (!decorations) {
-            decorations = DecorationSet.create(newState.doc, getTabDecorations(newState.doc, view));
+            decorations = DecorationSet.create(newState.doc, getTabDecorations(newState.doc, view, helpers));
           }
 
           if (!tr.docChanged) {
@@ -119,7 +119,7 @@ export const TabNode = Node.create({
           rangesToRecalculate.forEach(([start, end]) => {
             const oldDecorations = decorations.find(start, end);
             decorations = decorations.remove(oldDecorations);
-            const newDecorations = getTabDecorations(newState.doc, view, start, end);
+            const newDecorations = getTabDecorations(newState.doc, view, helpers, start, end);
             decorations = decorations.add(newState.doc, newDecorations);
           });
           return { decorations };
