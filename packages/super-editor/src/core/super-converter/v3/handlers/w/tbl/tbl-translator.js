@@ -6,6 +6,10 @@ import { translateChildNodes } from '@core/super-converter/v2/exporter/helpers/i
 import { translator as trTranslator } from '../tr';
 import { translator as tblPrTranslator } from '../tblPr';
 import { translator as tblGridTranslator } from '../tblGrid';
+import {
+  buildFallbackGridForTable,
+  resolveMeasurementWidthPx,
+} from '@core/super-converter/helpers/tableFallbackHelpers.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:tbl';
@@ -42,7 +46,6 @@ const encode = (params, encodedAttrs) => {
     'justification',
     'tableLayout',
     ['tableIndent', ({ value, type }) => ({ width: twipsToPixels(value), type })],
-    ['tableWidth', ({ value, type }) => ({ width: twipsToPixels(value), type })],
     ['tableCellSpacing', ({ value, type }) => ({ w: String(value), type })],
   ].forEach((prop) => {
     /** @type {string} */
@@ -65,6 +68,22 @@ const encode = (params, encodedAttrs) => {
   if (encodedAttrs.tableCellSpacing) {
     encodedAttrs['borderCollapse'] = 'separate';
   }
+
+  if (encodedAttrs.tableProperties?.tableWidth) {
+    const tableWidthMeasurement = encodedAttrs.tableProperties.tableWidth;
+    const widthPx = twipsToPixels(tableWidthMeasurement.value);
+    if (widthPx != null) {
+      encodedAttrs.tableWidth = {
+        width: widthPx,
+        type: tableWidthMeasurement.type,
+      };
+    } else if (tableWidthMeasurement.type === 'auto') {
+      encodedAttrs.tableWidth = {
+        width: 0,
+        type: tableWidthMeasurement.type,
+      };
+    }
+  }
   // Table borders can be specified in tblPr or inside a referenced style tag
   const { borders, rowBorders } = _processTableBorders(encodedAttrs.tableProperties?.borders || {});
   const referencedStyles = _getReferencedTableStyles(encodedAttrs.tableStyleId, params);
@@ -81,7 +100,22 @@ const encode = (params, encodedAttrs) => {
 
   // Process each row
   const tblStyleTag = tblPr?.elements?.find((el) => el.name === 'w:tblStyle'); // used by the legacy table cell handler
-  const columnWidths = (encodedAttrs['grid'] ?? []).map((item) => twipsToPixels(item.col));
+  let columnWidths = Array.isArray(encodedAttrs['grid'])
+    ? encodedAttrs['grid'].map((item) => twipsToPixels(item.col))
+    : [];
+
+  if (!columnWidths.length) {
+    const fallback = buildFallbackGridForTable({
+      params,
+      rows,
+      tableWidth: encodedAttrs.tableWidth,
+      tableWidthMeasurement: encodedAttrs.tableProperties?.tableWidth,
+    });
+    if (fallback) {
+      encodedAttrs.grid = fallback.grid;
+      columnWidths = fallback.columnWidths;
+    }
+  }
 
   const content = [];
   rows.forEach((row) => {

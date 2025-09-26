@@ -547,6 +547,47 @@ describe('table live xml test', () => {
     expect(mergedRowWidths[2]).toBeCloseTo(256.467, 3);
   });
 
+  it('applies fallback widths when tblGrid columns are missing', () => {
+    const xml = `
+      <w:tbl>
+        <w:tblPr>
+          <w:tblW w:w="5000" w:type="pct" />
+        </w:tblPr>
+        <w:tblGrid />
+        <w:tr>
+          <w:tc>
+            <w:p>
+              <w:r>
+                <w:t>Left</w:t>
+              </w:r>
+            </w:p>
+          </w:tc>
+          <w:tc>
+            <w:p>
+              <w:r>
+                <w:t>Right</w:t>
+              </w:r>
+            </w:p>
+          </w:tc>
+        </w:tr>
+      </w:tbl>`;
+
+    const nodes = parseXmlToJson(xml).elements;
+    const styles = parseXmlToJson(simpleTableStyleXml);
+    const docx = { 'word/styles.xml': styles };
+
+    const result = tableNodeHandlerEntity.handler({ nodes, docx, nodeListHandler: defaultNodeListHandler() });
+
+    const table = result.nodes[0];
+    expect(table.attrs.grid).toHaveLength(2);
+    expect(table.attrs.grid[0].col).toBeCloseTo(4680, 0);
+    expect(table.attrs.grid[1].col).toBeCloseTo(4680, 0);
+
+    const firstRow = table.content[0];
+    expect(firstRow.content[0].attrs.colwidth[0]).toBeCloseTo(312, 0);
+    expect(firstRow.content[1].attrs.colwidth[0]).toBeCloseTo(312, 0);
+  });
+
   it('imports cantSplit attribute on table row', () => {
     const xml = `<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders></w:tblPr><w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="254"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
 
