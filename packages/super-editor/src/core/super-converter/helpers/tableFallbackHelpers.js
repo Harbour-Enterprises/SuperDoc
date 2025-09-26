@@ -8,6 +8,7 @@ export const DEFAULT_CONTENT_WIDTH_TWIPS = DEFAULT_PAGE_WIDTH_TWIPS - 2 * DEFAUL
 
 export const MIN_COLUMN_WIDTH_TWIPS = pixelsToTwips(10);
 
+// Word stores percentages in fiftieths (e.g., 5000 => 100%). Convert to standard percent units.
 export const pctToPercent = (value) => {
   if (value == null) return null;
   return value / 50;
@@ -41,8 +42,10 @@ export const countColumnsInRow = (row) => {
   }, 0);
 };
 
+const clampColumnWidthTwips = (value) => Math.max(Math.round(value), MIN_COLUMN_WIDTH_TWIPS);
+
 const createFallbackGrid = (columnCount, columnWidthTwips) =>
-  Array.from({ length: columnCount }, () => ({ col: Math.max(Math.round(columnWidthTwips), MIN_COLUMN_WIDTH_TWIPS) }));
+  Array.from({ length: columnCount }, () => ({ col: clampColumnWidthTwips(columnWidthTwips) }));
 
 /**
  * Build fallback grid and column widths when grid columns are missing.
@@ -78,7 +81,7 @@ export const buildFallbackGridForTable = ({ params, rows, tableWidth, tableWidth
   }
 
   const rawColumnWidthPx = Math.max(totalWidthPx / columnCount, minimumColumnWidthPx);
-  const columnWidthTwips = Math.max(pixelsToTwips(rawColumnWidthPx), MIN_COLUMN_WIDTH_TWIPS);
+  const columnWidthTwips = clampColumnWidthTwips(pixelsToTwips(rawColumnWidthPx));
   const fallbackColumnWidthPx = twipsToPixels(columnWidthTwips);
 
   return {
