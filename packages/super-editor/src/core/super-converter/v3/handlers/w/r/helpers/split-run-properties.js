@@ -57,6 +57,13 @@ export const splitRunProperties = (entries = [], docx = null) => {
         }
         break;
       }
+      case 'w:caps': {
+        if (attributes['textTransform'] != null) {
+          hasTextStyle = true;
+          textStyleAttrs.textTransform = attributes['textTransform'];
+        }
+        break;
+      }
       case 'w:rFonts': {
         const asciiFamily =
           attributes['w:ascii'] ||
