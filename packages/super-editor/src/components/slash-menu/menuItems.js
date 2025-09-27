@@ -109,7 +109,6 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
             if (context?.trackedChangeId) {
               editor.commands.acceptTrackedChangeById(context.trackedChangeId);
             } else {
-              // Fallback to selection-based if no ID available
               editor.commands.acceptTrackedChangeBySelection();
             }
           },
@@ -127,7 +126,6 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
             if (context?.trackedChangeId) {
               editor.commands.rejectTrackedChangeById(context.trackedChangeId);
             } else {
-              // Fallback to selection-based if no ID available
               editor.commands.rejectTrackedChangeOnSelection();
             }
           },

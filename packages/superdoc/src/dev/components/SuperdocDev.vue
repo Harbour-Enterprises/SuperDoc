@@ -200,7 +200,7 @@ const init = async () => {
         //       {
         //         id: 'highlight-text',
         //         label: 'Highlight Selection',
-        //         allowedTriggers: ['slash', 'click'],
+        //         showWhen: (context) => ['slash', 'click'].includes(context.trigger),
         //         render: (context) => {
         //           const container = document.createElement('div');
         //           container.style.display = 'flex';
@@ -248,7 +248,7 @@ const init = async () => {
         //         {
         //           id: 'dynamic-item',
         //           label: `Custom for ${context.documentMode}`,
-        //           allowedTriggers: ['slash', 'click'],
+        //           showWhen: (context) => ['slash', 'click'].includes(context.trigger),
         //           action: (editor) => {
         //             editor.commands.insertContent(`Mode: ${context.documentMode} `);
         //           }
