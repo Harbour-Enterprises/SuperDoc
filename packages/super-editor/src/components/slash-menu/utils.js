@@ -152,44 +152,34 @@ export async function getEditorContext(editor, event) {
   let trackedChangeId = null;
 
   if (event && pos !== null) {
-    // For right-click events, get marks at the clicked position
     const $pos = state.doc.resolve(pos);
-    // Check stored marks first (for typing position marks)
-    if ($pos.marks && typeof $pos.marks === 'function') {
-      $pos.marks().forEach((mark) => {
+
+    // Process marks with a helper function to avoid duplication
+    const processMark = (mark) => {
+      if (!activeMarks.includes(mark.type.name)) {
         activeMarks.push(mark.type.name);
-      });
-    }
-
-    if (node && node.marks) {
-      node.marks.forEach((mark) => {
-        activeMarks.push(mark.type.name);
-      });
-    }
-
-    // Additionally, check for marks in nodes around this position
-    state.doc.nodesBetween(Math.max(0, pos - 1), Math.min(state.doc.content.size, pos + 1), (nodeAtPos, nodePos) => {
-      if (nodeAtPos.marks && nodeAtPos.marks.length > 0) {
-        // Only include marks from nodes that actually contain our clicked position
-        const nodeStart = nodePos;
-        const nodeEnd = nodePos + nodeAtPos.nodeSize;
-        if (pos >= nodeStart && pos < nodeEnd) {
-          nodeAtPos.marks.forEach((mark) => {
-            if (!activeMarks.includes(mark.type.name)) {
-              activeMarks.push(mark.type.name);
-            }
-
-            // Also extract tracked change ID if this is a tracked change mark and we haven't found one yet
-            if (
-              !trackedChangeId &&
-              (mark.type.name === 'trackInsert' || mark.type.name === 'trackDelete' || mark.type.name === 'trackFormat')
-            ) {
-              trackedChangeId = mark.attrs.id;
-            }
-          });
-        }
       }
-    });
+
+      // extract tracked change ID if this is a tracked change mark and we haven't found one yet
+      if (
+        !trackedChangeId &&
+        (mark.type.name === 'trackInsert' || mark.type.name === 'trackDelete' || mark.type.name === 'trackFormat')
+      ) {
+        trackedChangeId = mark.attrs.id;
+      }
+    };
+
+    // Check all parent nodes for marks
+    for (let depth = 0; depth <= $pos.depth; depth++) {
+      const nodeAtDepth = $pos.node(depth);
+      if (nodeAtDepth && nodeAtDepth.marks) {
+        nodeAtDepth.marks.forEach(processMark);
+      }
+    }
+
+    if (state.storedMarks) {
+      state.storedMarks.forEach(processMark);
+    }
   } else {
     // For slash trigger, use stored marks and selection head marks
     state.storedMarks?.forEach((mark) => activeMarks.push(mark.type.name));
@@ -207,7 +197,7 @@ export async function getEditorContext(editor, event) {
       }
     : null;
 
-  return {
+  const context = {
     // Selection info
     selectedText,
     hasSelection: !empty,
@@ -237,10 +227,13 @@ export async function getEditorContext(editor, event) {
     pos,
     node,
     event,
+    trigger: event ? 'click' : 'slash',
 
     // Editor reference for advanced use cases
     editor,
   };
+
+  return context;
 }
 
 function computeCanUndo(editor, state) {
