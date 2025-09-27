@@ -93,12 +93,32 @@ watch(flattenedItems, (newItems) => {
 const customItemRefs = new Map();
 
 const setCustomItemRef = (el, item) => {
-  if (el && item.render) {
+  if (el) {
     customItemRefs.set(item.id, { element: el, item });
     nextTick(() => {
       renderCustomItem(item.id);
     });
   }
+};
+
+const defaultRender = (context) => {
+  // Access item from the refData or context
+  const item = context.item || context.currentItem;
+  const container = document.createElement('div');
+  container.className = 'slash-menu-default-content';
+
+  if (item.icon) {
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'slash-menu-item-icon';
+    iconSpan.innerHTML = item.icon;
+    container.appendChild(iconSpan);
+  }
+
+  const labelSpan = document.createElement('span');
+  labelSpan.textContent = item.label;
+  container.appendChild(labelSpan);
+
+  return container;
 };
 
 const renderCustomItem = async (itemId) => {
@@ -112,8 +132,12 @@ const renderCustomItem = async (itemId) => {
       currentContext.value = await getEditorContext(props.editor);
     }
 
-    const context = currentContext.value;
-    const customElement = item.render(context);
+    // Create context with item info for render functions
+    const contextWithItem = { ...currentContext.value, currentItem: item };
+
+    // Use custom render function or fall back to default
+    const renderFunction = item.render || defaultRender;
+    const customElement = renderFunction(contextWithItem);
 
     if (customElement instanceof HTMLElement) {
       element.innerHTML = '';
@@ -123,7 +147,9 @@ const renderCustomItem = async (itemId) => {
   } catch (error) {
     console.warn(`[SlashMenu] Error rendering custom item ${itemId}:`, error);
     // Fallback to default rendering
-    element.innerHTML = `<span>${item.label || 'Custom Item'}</span>`;
+    const fallbackElement = defaultRender({ ...(currentContext.value || {}), currentItem: item });
+    element.innerHTML = '';
+    element.appendChild(fallbackElement);
     element.hasCustomContent = true;
   }
 };
@@ -344,13 +370,14 @@ onBeforeUnmount(() => {
         <!-- Render section items -->
         <template v-for="item in section.items" :key="item.id">
           <div class="slash-menu-item" :class="{ 'is-selected': item.id === selectedId }" @click="executeCommand(item)">
-            <!-- Custom rendered content -->
-            <div v-if="item.render" :ref="(el) => setCustomItemRef(el, item)" class="slash-menu-custom-item"></div>
-            <!-- Default item rendering -->
-            <template v-else>
-              <span v-if="item.icon" class="slash-menu-item-icon" v-html="item.icon"></span>
-              <span>{{ item.label }}</span>
-            </template>
+            <!-- Custom rendered content or default rendering -->
+            <div :ref="(el) => setCustomItemRef(el, item)" class="slash-menu-custom-item">
+              <!-- Fallback content for items without custom render (will be replaced by defaultRender) -->
+              <template v-if="!item.render">
+                <span v-if="item.icon" class="slash-menu-item-icon" v-html="item.icon"></span>
+                <span>{{ item.label }}</span>
+              </template>
+            </div>
           </div>
         </template>
       </template>
@@ -362,7 +389,7 @@ onBeforeUnmount(() => {
 .slash-menu {
   position: absolute;
   z-index: 50;
-  width: 175px;
+  width: 180px;
   color: #47484a;
   background: white;
   box-shadow:
@@ -441,6 +468,12 @@ onBeforeUnmount(() => {
 }
 
 .slash-menu-custom-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.slash-menu-default-content {
   display: flex;
   align-items: center;
   width: 100%;

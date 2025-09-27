@@ -84,6 +84,7 @@ describe('utils.js', () => {
         hasSelection: true,
         selectionStart: 10,
         selectionEnd: 15,
+        trigger: 'slash',
 
         // Document structure
         isInTable: false,
@@ -162,19 +163,32 @@ describe('utils.js', () => {
       mockSelectionHasNodeOrMark.mockReturnValue(false);
       mockEditor.view.posAtCoords.mockReturnValue({ pos: 20 });
       mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'text' } });
+      mockEditor.view.state.doc.content = { size: 100 }; // Add missing content.size mock
+      mockEditor.view.state.doc.nodesBetween = vi.fn((from, to, callback) => {
+        // Mock nodesBetween to call the callback with a node that has the expected mark
+        const mockNode = {
+          marks: [{ type: { name: 'trackDelete' }, attrs: { id: 'track-1' } }],
+          nodeSize: 1,
+        };
+        callback(mockNode, 20); // Call callback with mock node at position 20
+      });
       mockEditor.view.state.doc.resolve.mockReturnValue({
         depth: 5,
         node: (depth) => {
           const map = {
-            1: { type: { name: 'paragraph' } },
-            2: { type: { name: 'orderedList' } },
-            3: { type: { name: 'tableCell' } },
-            4: { type: { name: 'tableRow' } },
-            5: { type: { name: 'documentSection' } },
+            0: { type: { name: 'doc' }, marks: [] },
+            1: { type: { name: 'paragraph' }, marks: [] },
+            2: { type: { name: 'orderedList' }, marks: [] },
+            3: { type: { name: 'tableCell' }, marks: [] },
+            4: { type: { name: 'tableRow' }, marks: [] },
+            5: {
+              type: { name: 'documentSection' },
+              marks: [{ type: { name: 'trackDelete' }, attrs: { id: 'track-1' } }],
+            },
           };
-          return map[depth] || { type: { name: 'doc' } };
+          return map[depth] || { type: { name: 'doc' }, marks: [] };
         },
-        marks: vi.fn(() => [{ type: { name: 'trackDelete' }, attrs: { id: 'track-1' } }]),
+        marks: vi.fn(() => []),
       });
 
       const context = await getEditorContext(mockEditor, mockEvent);
@@ -182,12 +196,14 @@ describe('utils.js', () => {
       expect(context.pos).toBe(20);
       expect(context.node).toEqual({ type: { name: 'text' } });
       expect(context.event).toBe(mockEvent);
+      expect(context.trigger).toBe('click');
       expect(mockEditor.view.posAtCoords).toHaveBeenCalledWith({ left: 300, top: 400 });
       expect(context.isInTable).toBe(true);
       expect(context.isInList).toBe(true);
       expect(context.isInSectionNode).toBe(true);
-      expect(context.activeMarks).toContain('trackDelete');
       expect(context.trackedChangeId).toBe('track-1');
+      expect(context.activeMarks).toContain('trackDelete');
+      expect(context.isTrackedChange).toBe(true);
     });
 
     it('should handle document mode variations', async () => {
