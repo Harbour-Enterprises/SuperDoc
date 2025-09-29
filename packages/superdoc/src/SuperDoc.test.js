@@ -199,6 +199,7 @@ const buildCommentsStore = () => ({
   getFloatingComments: ref([]),
   hasSyncedCollaborationComments: ref(false),
   hasInitializedLocations: ref(true),
+  isCommentHighlighted: ref(false),
 });
 
 const mountComponent = async (superdocStub) => {
