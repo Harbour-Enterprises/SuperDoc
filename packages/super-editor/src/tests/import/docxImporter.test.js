@@ -184,4 +184,31 @@ describe('createDocumentJson', () => {
     expect(result.pageStyles.pageMargins.left).toBeCloseTo(200 / 1440);
     expect(result.pageStyles.pageMargins.top).toBeCloseTo(100 / 1440);
   });
+
+  it('imports horizontal rules represented as pict rectangles', async () => {
+    const docx = await getTestDataByFileName('missing-separator.docx');
+
+    const converter = {
+      telemetry: {
+        trackFileStructure: vi.fn(),
+        trackUsage: vi.fn(),
+        trackStatistic: vi.fn(),
+      },
+      docHiglightColors: new Set(),
+    };
+
+    const editor = {
+      options: {},
+      emit: vi.fn(),
+    };
+
+    const result = createDocumentJson(docx, converter, editor);
+
+    const horizontalRules = (result.pmDoc.content || [])
+      .filter((node) => node?.type === 'paragraph')
+      .flatMap((paragraph) => paragraph?.content || [])
+      .filter((child) => child?.type === 'contentBlock' && child.attrs?.horizontalRule);
+
+    expect(horizontalRules).toHaveLength(3);
+  });
 });
