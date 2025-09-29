@@ -70,6 +70,7 @@ const {
   hasSyncedCollaborationComments,
   editorCommentPositions,
   hasInitializedLocations,
+  isCommentHighlighted,
 } = storeToRefs(commentsStore);
 const { showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
 const { proxy } = getCurrentInstance();
@@ -333,6 +334,7 @@ const onEditorCommentsUpdate = (params = {}) => {
   nextTick(() => {
     if (pendingComment.value) return;
     commentsStore.setActiveComment(proxy.$superdoc, activeCommentId);
+    isCommentHighlighted.value = true;
   });
 
   // Bubble up the event to the user, if handled
