@@ -59,7 +59,7 @@
     "pinia": "^2.1.7",
     "rollup-plugin-copy": "^3.5.0",
     "tippy": "^0.0.0",
-    "vue": "^3.5.20",
+    "vue": "^3.5.22",
     "y-websocket": "^3.0.0"
   },
   "peerDependencies": {

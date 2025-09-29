@@ -69,7 +69,7 @@
     "prosemirror-view": "^1.33.8",
     "release-it": "19.0.3",
     "uuidv4": "^6.2.13",
-    "vue": "^3.5.20",
+    "vue": "^3.5.22",
     "xml-js": "^1.6.11"
   },
   "peerDependencies": {
