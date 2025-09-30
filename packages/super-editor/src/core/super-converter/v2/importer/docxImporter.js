@@ -75,7 +75,7 @@ export const createDocumentJson = (docx, converter, editor) => {
   const bodyNode = json.elements[0].elements.find((el) => el.name === 'w:body');
 
   if (bodyNode) {
-    ensureSectionProperties(bodyNode, converter);
+    ensureSectionProperties(bodyNode);
     const node = bodyNode;
     const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
     const content = pruneIgnoredNodes(contentElements);
@@ -378,7 +378,7 @@ const DEFAULT_SECTION_PROPS = Object.freeze({
   }),
 });
 
-function ensureSectionProperties(bodyNode, converter) {
+function ensureSectionProperties(bodyNode) {
   if (!bodyNode.elements) bodyNode.elements = [];
 
   let sectPr = bodyNode.elements.find((el) => el.name === 'w:sectPr');

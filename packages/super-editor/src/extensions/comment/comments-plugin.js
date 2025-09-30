@@ -545,7 +545,7 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
   return newTrackedChanges;
 };
 
-const getTrackedChangeText = ({ state, nodes, mark, marks, trackedChangeType, isDeletionInsertion }) => {
+const getTrackedChangeText = ({ nodes, mark, trackedChangeType, isDeletionInsertion }) => {
   let trackedChangeText = '';
   let deletionText = '';
 
@@ -633,15 +633,6 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
 
   return params;
 };
-
-function findNode(node, predicate) {
-  let found = null;
-  node.descendants((node, pos) => {
-    if (predicate(node)) found = { node, pos };
-    if (found) return false;
-  });
-  return found;
-}
 
 function findRangeById(doc, id) {
   let from = null,
