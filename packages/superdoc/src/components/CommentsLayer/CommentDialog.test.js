@@ -159,6 +159,7 @@ const mountDialog = async ({ baseCommentOverrides = {}, extraComments = [], prop
     isCommentsListVisible: ref(false),
     isFloatingCommentsReady: ref(false),
     hasInitializedLocations: ref(true),
+    isCommentHighlighted: ref(false),
   };
 
   const superdocStub = {
@@ -310,7 +311,7 @@ describe('CommentDialog.vue', () => {
     expect(baseComment.setIsInternal).toHaveBeenCalledWith({ isInternal: false, superdoc: superdocStub });
   });
 
-  it('emits dialog-exit when clicking outside active comment', async () => {
+  it('emits dialog-exit when clicking outside active comment and no track changes highlighted', async () => {
     const { wrapper, baseComment } = await mountDialog();
     commentsStoreStub.activeComment.value = baseComment.commentId;
 
@@ -320,5 +321,18 @@ describe('CommentDialog.vue', () => {
 
     expect(commentsStoreStub.setActiveComment).toHaveBeenCalledWith(expect.any(Object), null);
     expect(wrapper.emitted('dialog-exit')).toHaveLength(1);
+  });
+
+  it('does not emit dialog-exit when track changes highlighted', async () => {
+    const { wrapper, baseComment } = await mountDialog();
+    commentsStoreStub.activeComment.value = baseComment.commentId;
+    commentsStoreStub.isCommentHighlighted.value = true;
+
+    const eventTarget = document.createElement('div');
+    const handler = wrapper.element.__clickOutside;
+    handler({ target: eventTarget, classList: { contains: () => false } });
+
+    expect(commentsStoreStub.setActiveComment).not.toHaveBeenCalled();
+    expect(wrapper.emitted()).not.toHaveProperty('dialog-exit');
   });
 });
