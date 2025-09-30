@@ -57,6 +57,24 @@ export const StructuredContentBlock = Node.create({
         },
       },
 
+      tag: {
+        default: null,
+        parseDOM: (elem) => elem.getAttribute('data-tag'),
+        renderDOM: (attrs) => {
+          if (!attrs.tag) return {};
+          return { 'data-tag': attrs.tag };
+        },
+      },
+
+      alias: {
+        default: null,
+        parseDOM: (elem) => elem.getAttribute('data-alias'),
+        renderDOM: (attrs) => {
+          if (!attrs.alias) return {};
+          return { 'data-alias': attrs.alias };
+        },
+      },
+
       sdtPr: {
         rendered: false,
       },
