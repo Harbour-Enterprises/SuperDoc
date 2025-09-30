@@ -8,7 +8,7 @@ import {
   ptToTwips,
   rgbToHex,
 } from './helpers.js';
-import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
+import { generateDocxRandomId, generateRandomSigned32BitIntStrId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
@@ -29,6 +29,71 @@ import { translator as wUnderlineTranslator } from './v3/handlers/w/u/u-translat
 import { translator as wDrawingNodeTranslator } from './v3/handlers/w/drawing/drawing-translator.js';
 import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark-start/index.js';
 import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
+import { translator as alternateChoiceTranslator } from '@converter/v3/handlers/mc/altermateContent';
+
+const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
+  pageSize: Object.freeze({ width: '12240', height: '15840' }),
+  pageMargins: Object.freeze({
+    top: '1440',
+    right: '1440',
+    bottom: '1440',
+    left: '1440',
+    header: '720',
+    footer: '720',
+    gutter: '0',
+  }),
+});
+
+export const ensureSectionLayoutDefaults = (sectPr, converter) => {
+  if (!sectPr) {
+    return {
+      type: 'element',
+      name: 'w:sectPr',
+      elements: [],
+    };
+  }
+
+  if (!sectPr.elements) sectPr.elements = [];
+
+  const ensureChild = (name) => {
+    let child = sectPr.elements.find((n) => n.name === name);
+    if (!child) {
+      child = {
+        type: 'element',
+        name,
+        elements: [],
+        attributes: {},
+      };
+      sectPr.elements.push(child);
+    } else {
+      if (!child.elements) child.elements = [];
+      if (!child.attributes) child.attributes = {};
+    }
+    return child;
+  };
+
+  const pageSize = converter?.pageStyles?.pageSize;
+  const pgSz = ensureChild('w:pgSz');
+  if (pageSize?.width != null) pgSz.attributes['w:w'] = String(inchesToTwips(pageSize.width));
+  if (pageSize?.height != null) pgSz.attributes['w:h'] = String(inchesToTwips(pageSize.height));
+  if (pgSz.attributes['w:w'] == null) pgSz.attributes['w:w'] = DEFAULT_SECTION_PROPS_TWIPS.pageSize.width;
+  if (pgSz.attributes['w:h'] == null) pgSz.attributes['w:h'] = DEFAULT_SECTION_PROPS_TWIPS.pageSize.height;
+
+  const pageMargins = converter?.pageStyles?.pageMargins;
+  const pgMar = ensureChild('w:pgMar');
+  if (pageMargins) {
+    Object.entries(pageMargins).forEach(([key, value]) => {
+      const converted = inchesToTwips(value);
+      if (converted != null) pgMar.attributes[`w:${key}`] = String(converted);
+    });
+  }
+  Object.entries(DEFAULT_SECTION_PROPS_TWIPS.pageMargins).forEach(([key, value]) => {
+    const attrKey = `w:${key}`;
+    if (pgMar.attributes[attrKey] == null) pgMar.attributes[attrKey] = value;
+  });
+
+  return sectPr;
+};
 
 export const isLineBreakOnlyRun = (node) => {
   if (!node) return false;
@@ -142,31 +207,33 @@ export function exportSchemaToJson(params) {
  * @returns {XmlReadyNode} JSON of the XML-ready body node
  */
 function translateBodyNode(params) {
-  let sectPr = params.bodyNode?.elements.find((n) => n.name === 'w:sectPr') || {};
+  let sectPr = params.bodyNode?.elements?.find((n) => n.name === 'w:sectPr');
+  if (!sectPr) {
+    sectPr = {
+      type: 'element',
+      name: 'w:sectPr',
+      elements: [],
+    };
+  } else if (!sectPr.elements) {
+    sectPr = { ...sectPr, elements: [] };
+  }
+
+  sectPr = ensureSectionLayoutDefaults(sectPr, params.converter);
 
   if (params.converter) {
-    const hasHeader = sectPr?.elements?.some((n) => n.name === 'w:headerReference');
+    const hasHeader = sectPr.elements?.some((n) => n.name === 'w:headerReference');
     const hasDefaultHeader = params.converter.headerIds?.default;
     if (!hasHeader && hasDefaultHeader && !params.editor.options.isHeaderOrFooter) {
       const defaultHeader = generateDefaultHeaderFooter('header', params.converter.headerIds?.default);
       sectPr.elements.push(defaultHeader);
     }
 
-    const hasFooter = sectPr?.elements?.some((n) => n.name === 'w:footerReference');
+    const hasFooter = sectPr.elements?.some((n) => n.name === 'w:footerReference');
     const hasDefaultFooter = params.converter.footerIds?.default;
     if (!hasFooter && hasDefaultFooter && !params.editor.options.isHeaderOrFooter) {
       const defaultFooter = generateDefaultHeaderFooter('footer', params.converter.footerIds?.default);
       sectPr.elements.push(defaultFooter);
     }
-
-    const newMargins = params.converter.pageStyles.pageMargins;
-    const sectPrMargins = sectPr.elements.find((n) => n.name === 'w:pgMar');
-    const { attributes } = sectPrMargins;
-    Object.entries(newMargins).forEach(([key, value]) => {
-      const convertedValue = inchesToTwips(value);
-      attributes[`w:${key}`] = convertedValue;
-    });
-    sectPrMargins.attributes = attributes;
   }
 
   const elements = translateChildNodes(params);
@@ -1153,7 +1220,7 @@ function translateShapeContainer(params) {
   const pict = {
     name: 'w:pict',
     attributes: {
-      'w14:anchorId': Math.floor(Math.random() * 0xffffffff).toString(),
+      'w14:anchorId': generateRandomSigned32BitIntStrId(),
     },
     elements: [shape],
   };
@@ -1188,30 +1255,14 @@ function translateShapeTextbox(params) {
 
 function translateContentBlock(params) {
   const { node } = params;
-  const { drawingContent, vmlAttributes, horizontalRule } = node.attrs;
+  const { vmlAttributes, horizontalRule } = node.attrs;
 
   // Handle VML v:rect elements (like horizontal rules)
   if (vmlAttributes || horizontalRule) {
     return translateVRectContentBlock(params);
   }
 
-  // Handle modern DrawingML content (existing logic)
-  const drawing = {
-    name: 'w:drawing',
-    elements: [...(drawingContent ? [...(drawingContent.elements || [])] : [])],
-  };
-
-  const choice = {
-    name: 'mc:Choice',
-    attributes: { Requires: 'wps' },
-    elements: [drawing],
-  };
-
-  const alternateContent = {
-    name: 'mc:AlternateContent',
-    elements: [choice],
-  };
-
+  const alternateContent = alternateChoiceTranslator.decode(params);
   return wrapTextInRun(alternateContent);
 }
 
@@ -1256,7 +1307,7 @@ function translateVRectContentBlock(params) {
   const pict = {
     name: 'w:pict',
     attributes: {
-      'w14:anchorId': Math.floor(Math.random() * 0xffffffff).toString(),
+      'w14:anchorId': generateRandomSigned32BitIntStrId(),
     },
     elements: [rect],
   };

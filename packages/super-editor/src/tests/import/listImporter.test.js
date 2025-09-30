@@ -199,4 +199,71 @@ describe('table live xml test', () => {
     expect(textNode2?.text).toBe('L2: B');
     expect(extractParagraphText(result2.nodes[0].content[0].content[0])).toBe('L2: B');
   });
+
+  it('applies mc:AlternateContent choice within numbering definitions', () => {
+    const paragraphXml = `
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:pPr>
+          <w:numPr>
+            <w:ilvl w:val="0"/>
+            <w:numId w:val="1"/>
+          </w:numPr>
+        </w:pPr>
+        <w:r>
+          <w:t>Alternate choice number</w:t>
+        </w:r>
+      </w:p>
+    `;
+
+    const numberingXml = `
+      <w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
+        <w:abstractNum w:abstractNumId="1">
+          <w:lvl w:ilvl="0">
+            <w:start w:val="1"/>
+            <mc:AlternateContent>
+              <mc:Choice Requires="w14">
+                <w:numFmt w:val="decimal"/>
+                <w:lvlText w:val="%1."/>
+              </mc:Choice>
+              <mc:Fallback>
+                <w:numFmt w:val="bullet"/>
+                <w:lvlText w:val="•"/>
+              </mc:Fallback>
+            </mc:AlternateContent>
+            <w:lvlText w:val="•"/>
+            <w:lvlJc w:val="left"/>
+            <w:pPr>
+              <w:ind w:left="720" w:hanging="360"/>
+            </w:pPr>
+          </w:lvl>
+        </w:abstractNum>
+        <w:num w:numId="1">
+          <w:abstractNumId w:val="1"/>
+        </w:num>
+      </w:numbering>
+    `;
+
+    const paragraphNode = parseXmlToJson(paragraphXml).elements[0];
+    const numberingNode = parseXmlToJson(numberingXml);
+    const docx = {
+      'word/numbering.xml': numberingNode,
+    };
+
+    const { nodes: processedNodes } = handleListNode({
+      nodes: [paragraphNode],
+      docx,
+      nodeListHandler: defaultNodeListHandler(),
+      lists: {},
+    });
+
+    expect(processedNodes).toHaveLength(1);
+    const listNode = processedNodes[0];
+    expect(listNode.type).toBe('orderedList');
+    expect(listNode.attrs['list-style-type']).toBe('decimal');
+    expect(listNode.content[0].attrs.listNumberingType).toBe('decimal');
+
+    const listItemParagraph = listNode.content[0].content.find((child) => child.type === 'paragraph');
+    expect(listItemParagraph).toBeDefined();
+    expect(extractParagraphText(listItemParagraph)).toBe('Alternate choice number');
+  });
 });

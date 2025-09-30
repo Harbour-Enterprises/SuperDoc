@@ -19,7 +19,7 @@ export const groupChanges = (changes) => {
     const c2 = changes[i + 1];
     const c1Key = markMetaKeys[c1.mark.type.name];
 
-    if (c1 && c2 && c1.to === c2.from) {
+    if (c1 && c2 && c1.to === c2.from && c1.mark.attrs.id === c2.mark.attrs.id) {
       const c2Key = markMetaKeys[c2.mark.type.name];
       grouped.push({
         from: c1.from,

@@ -545,12 +545,16 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
   return newTrackedChanges;
 };
 
-const getTrackedChangeText = ({ state, node, mark, marks, trackedChangeType, isDeletionInsertion }) => {
+const getTrackedChangeText = ({ nodes, mark, trackedChangeType, isDeletionInsertion }) => {
   let trackedChangeText = '';
   let deletionText = '';
 
   if (trackedChangeType === TrackInsertMarkName) {
-    trackedChangeText = node?.text ?? '';
+    trackedChangeText = nodes.reduce((acc, node) => {
+      if (!node.marks.find((nodeMark) => nodeMark.type.name === mark.type.name)) return acc;
+      acc += node?.text || node?.textContent || '';
+      return acc;
+    }, '');
   }
 
   // If this is a format change, let's get the string of what changes were made
@@ -559,19 +563,11 @@ const getTrackedChangeText = ({ state, node, mark, marks, trackedChangeType, isD
   }
 
   if (trackedChangeType === TrackDeleteMarkName || isDeletionInsertion) {
-    deletionText = node?.text ?? '';
-
-    if (isDeletionInsertion) {
-      let { id } = marks.deletionMark.attrs;
-      let deletionNode = findNode(state.doc, (node) => {
-        const { marks = [] } = node;
-        const changeMarks = marks.filter((mark) => TRACK_CHANGE_MARKS.includes(mark.type.name));
-        if (!changeMarks.length) return false;
-        const hasMatchingId = changeMarks.find((mark) => mark.attrs.id === id);
-        if (hasMatchingId) return true;
-      });
-      deletionText = deletionNode?.node.text ?? '';
-    }
+    deletionText = nodes.reduce((acc, node) => {
+      if (!node.marks.find((nodeMark) => nodeMark.type.name === TrackDeleteMarkName)) return acc;
+      acc += node?.text || node?.textContent || '';
+      return acc;
+    }, '');
   }
 
   return {
@@ -591,19 +587,18 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   const node = nodes[0];
   const isDeletionInsertion = !!(marks.insertedMark && marks.deletionMark);
 
-  let existingNode;
+  let nodesWithMark = [];
   newEditorState.doc.descendants((node) => {
     const { marks = [] } = node;
     const changeMarks = marks.filter((mark) => TRACK_CHANGE_MARKS.includes(mark.type.name));
     if (!changeMarks.length) return;
     const hasMatchingId = changeMarks.find((mark) => mark.attrs.id === id);
-    if (hasMatchingId) existingNode = node;
-    if (existingNode) return false;
+    if (hasMatchingId) nodesWithMark.push(node);
   });
 
   const { deletionText, trackedChangeText } = getTrackedChangeText({
     state: newEditorState,
-    node: existingNode || node,
+    nodes: nodesWithMark.length ? nodesWithMark : [node],
     mark: trackedMark,
     marks,
     trackedChangeType,
@@ -638,15 +633,6 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
 
   return params;
 };
-
-function findNode(node, predicate) {
-  let found = null;
-  node.descendants((node, pos) => {
-    if (predicate(node)) found = { node, pos };
-    if (found) return false;
-  });
-  return found;
-}
 
 function findRangeById(doc, id) {
   let from = null,

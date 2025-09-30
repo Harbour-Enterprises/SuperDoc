@@ -1,5 +1,5 @@
-import { join } from 'path';
-import { readFile } from 'fs/promises';
+import { join, sep } from 'path';
+import { readFile, readdir } from 'fs/promises';
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import { Editor } from '@core/Editor.js';
@@ -18,6 +18,39 @@ export const getTestDataByFileName = async (name) => {
   const zipper = new DocxZipper();
   const xmlFiles = await zipper.getDocxData(fileBuffer, true);
   return readFilesRecursively(xmlFiles);
+};
+
+export const getExtractedDocxData = async (folderName) => {
+  const docx = {};
+  const basePath = join(__dirname, '../data', folderName);
+
+  const walk = async (relativePath = '') => {
+    const targetPath = relativePath ? join(basePath, relativePath) : basePath;
+    const entries = await readdir(targetPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const nextRelative = relativePath ? join(relativePath, entry.name) : entry.name;
+      if (entry.isDirectory()) {
+        await walk(nextRelative);
+        continue;
+      }
+
+      const absolutePath = join(basePath, nextRelative);
+      const normalizedKey = nextRelative.split(sep).join('/');
+      const extension = entry.name.slice(entry.name.lastIndexOf('.') + 1).toLowerCase();
+
+      if (extension === 'xml' || extension === 'rels') {
+        const text = await readFile(absolutePath, 'utf8');
+        docx[normalizedKey] = parseXmlToJson(text);
+      } else {
+        const buffer = await readFile(absolutePath);
+        docx[normalizedKey] = buffer;
+      }
+    }
+  };
+
+  await walk();
+  return docx;
 };
 
 export const getTestDataAsFileBuffer = async (name) => {

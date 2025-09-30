@@ -25,7 +25,14 @@ export default defineConfig(({ mode }) => {
       ],
       coverage: {
         provider: 'v8',
-        exclude: ['**/v3/**/index.js', '**/examples/**'],
+        exclude: [
+          '**/index.js',
+          '**/v3/**/index.js',
+          '**/examples/**',
+          '**/types.js',
+          '**/main.js',
+          '**/migration_after_0_4_14.js',
+        ],
         reporter: ['text'],
       }
     },

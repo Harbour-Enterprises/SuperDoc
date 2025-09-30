@@ -13,6 +13,7 @@ import { Collaboration } from './collaboration/index.js';
 import { CollaborationCursor } from './collaboration-cursor/index.js';
 import { AiPlugin, AiMark, AiAnimationMark, AiLoaderNode } from './ai/index.js';
 import { SlashMenu } from './slash-menu';
+import { StructuredContentCommands } from './structured-content/index.js';
 
 // Nodes extensions
 import { Document } from './document/index.js';
@@ -176,6 +177,7 @@ const getStarterExtensions = () => {
     Search,
     StructuredContent,
     StructuredContentBlock,
+    StructuredContentCommands,
     DocumentSection,
     NodeResizer,
     CustomSelection,
@@ -245,6 +247,7 @@ export {
   Search,
   StructuredContent,
   StructuredContentBlock,
+  StructuredContentCommands,
   DocumentSection,
   NodeResizer,
   CustomSelection,

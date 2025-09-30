@@ -41,6 +41,22 @@ describe('Group changes helper', () => {
             name: 'trackDelete',
           },
           attrs: {
+            id: '1',
+            author: 'Superdoc User',
+            authorEmail: 'undefined',
+            date: '2024-12-20T04:20:00Z',
+            importedAuthor: 'Superdoc User (imported)',
+          },
+        },
+        from: 71,
+        to: 90,
+      },
+      {
+        mark: {
+          type: {
+            name: 'trackDelete',
+          },
+          attrs: {
             id: '2',
             author: 'Superdoc User',
             authorEmail: 'undefined',
@@ -86,10 +102,12 @@ describe('Group changes helper', () => {
     ];
 
     const groupedChanges = groupChanges(changes);
-    expect(groupedChanges.length).toBe(4);
+    expect(groupedChanges.length).toBe(5);
     expect(groupedChanges[0]).toHaveProperty('deletionMark');
     expect(groupedChanges[0]).not.toHaveProperty('insertedMark');
-    expect(groupedChanges[2]).toHaveProperty('insertedMark');
+    expect(groupedChanges[1]).toHaveProperty('insertedMark');
+    expect(groupedChanges[1]).toHaveProperty('deletionMark');
     expect(groupedChanges[2]).toHaveProperty('deletionMark');
+    expect(groupedChanges[2]).not.toHaveProperty('insertedMark');
   });
 });

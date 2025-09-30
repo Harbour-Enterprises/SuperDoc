@@ -6,7 +6,17 @@ export default defineConfig({
     projects: [
       './packages/super-editor',
       './packages/superdoc',
+      './packages/collaboration-yjs',
       './shared/common',
     ],
+    coverage: {
+      exclude: [
+        '**/index.js',
+        '**/postcss.config.cjs',
+        '**/main.js',
+        '**/types.js',
+        '**/migration_after_0_4_14.js',
+      ],
+    },
   },
 });

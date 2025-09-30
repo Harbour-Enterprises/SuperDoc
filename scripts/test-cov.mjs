@@ -31,6 +31,10 @@ const coverageExcludePatterns = [
   '**/*.test.*',
   '**/*.spec.*',
   '**/vite.config.*',
+  '**/index.js',
+  '**/types.js',
+  '**/main.js',
+  '**/migration_after_0_4_14.js',
 ];
 
 const defaultCoverageArgs = [
