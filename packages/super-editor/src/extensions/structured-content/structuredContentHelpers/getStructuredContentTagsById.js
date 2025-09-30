@@ -1,10 +1,9 @@
 import { findChildren } from '@core/helpers/findChildren';
-import { EditorState } from 'prosemirror-state';
 
 /**
  * Gets structured content tags by ID in the state.
  * @param {string | string[]} idOrIds
- * @param {EditorState} state Editor state.
+ * @param {import('prosemirror-state').EditorState} state Editor state.
  * @returns {Array}
  */
 export function getStructuredContentTagsById(idOrIds, state) {

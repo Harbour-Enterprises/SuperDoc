@@ -2,9 +2,9 @@ import { DOMParser as PMDOMParser } from 'prosemirror-model';
 import { Extension } from '@core/index';
 import { htmlHandler } from '@core/InputRule';
 import { findParentNode } from '@helpers/findParentNode';
+import { generateRandomSigned32BitIntStrId } from '@core/helpers/generateDocxRandomId.js';
 import { getStructuredContentTagsById } from './structuredContentHelpers/getStructuredContentTagsById';
 import * as structuredContentHelpers from './structuredContentHelpers/index';
-import { Node } from 'prosemirror-model';
 
 const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock'];
 
@@ -69,7 +69,7 @@ export const StructuredContentCommands = Extension.create({
 
             const attrs = {
               ...options.attrs,
-              id: options.attrs?.id || randomId(),
+              id: options.attrs?.id || generateRandomSigned32BitIntStrId(),
               tag: 'inline_text_sdt',
               alias: options.attrs?.alias || 'Structured content',
             };
@@ -123,7 +123,7 @@ export const StructuredContentCommands = Extension.create({
 
             const attrs = {
               ...options.attrs,
-              id: options.attrs?.id || randomId(),
+              id: options.attrs?.id || generateRandomSigned32BitIntStrId(),
               tag: 'block_table_sdt',
               alias: options.attrs?.alias || 'Structured content',
             };
@@ -261,7 +261,7 @@ export const StructuredContentCommands = Extension.create({
        */
       deleteStructuredContentAtSelection:
         () =>
-        ({ editor, dispatch, state, tr }) => {
+        ({ dispatch, state, tr }) => {
           const predicate = (node) => STRUCTURED_CONTENT_NAMES.includes(node.type.name);
           const structuredContent = findParentNode(predicate)(state.selection);
 
@@ -288,7 +288,3 @@ export const StructuredContentCommands = Extension.create({
     };
   },
 });
-
-const randomId = () => {
-  return Math.floor(Math.random() * 0xffffffff).toString();
-};

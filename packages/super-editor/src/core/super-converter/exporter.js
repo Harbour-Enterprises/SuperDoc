@@ -8,7 +8,7 @@ import {
   ptToTwips,
   rgbToHex,
 } from './helpers.js';
-import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
+import { generateDocxRandomId, generateRandomSigned32BitIntStrId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
@@ -1220,7 +1220,7 @@ function translateShapeContainer(params) {
   const pict = {
     name: 'w:pict',
     attributes: {
-      'w14:anchorId': Math.floor(Math.random() * 0xffffffff).toString(),
+      'w14:anchorId': generateRandomSigned32BitIntStrId(),
     },
     elements: [shape],
   };
@@ -1307,7 +1307,7 @@ function translateVRectContentBlock(params) {
   const pict = {
     name: 'w:pict',
     attributes: {
-      'w14:anchorId': Math.floor(Math.random() * 0xffffffff).toString(),
+      'w14:anchorId': generateRandomSigned32BitIntStrId(),
     },
     elements: [rect],
   };

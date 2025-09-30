@@ -1,9 +1,8 @@
 import { findChildren } from '@core/helpers/findChildren';
-import { EditorState } from 'prosemirror-state';
 
 /**
  * Gets all structured content inline tags in the state.
- * @param {EditorState} state Editor state.
+ * @param {import('prosemirror-state').EditorState} state Editor state.
  * @returns {Array}
  */
 export function getStructuredContentInlineTags(state) {
