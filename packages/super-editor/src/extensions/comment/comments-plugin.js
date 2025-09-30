@@ -550,7 +550,11 @@ const getTrackedChangeText = ({ state, nodes, mark, marks, trackedChangeType, is
   let deletionText = '';
 
   if (trackedChangeType === TrackInsertMarkName) {
-    trackedChangeText = nodes.reduce((acc, node) => (acc += node?.text || node?.textContent || ''), '');
+    trackedChangeText = nodes.reduce((acc, node) => {
+      if (!node.marks.find((nodeMark) => nodeMark.type.name === mark.type.name)) return acc;
+      acc += node?.text || node?.textContent || '';
+      return acc;
+    }, '');
   }
 
   // If this is a format change, let's get the string of what changes were made
@@ -559,19 +563,11 @@ const getTrackedChangeText = ({ state, nodes, mark, marks, trackedChangeType, is
   }
 
   if (trackedChangeType === TrackDeleteMarkName || isDeletionInsertion) {
-    deletionText = nodes.reduce((acc, node) => (acc += node?.text || node?.textContent || ''), '');
-
-    if (isDeletionInsertion) {
-      let { id } = marks.deletionMark.attrs;
-      let deletionNode = findNode(state.doc, (node) => {
-        const { marks = [] } = node;
-        const changeMarks = marks.filter((mark) => TRACK_CHANGE_MARKS.includes(mark.type.name));
-        if (!changeMarks.length) return false;
-        const hasMatchingId = changeMarks.find((mark) => mark.attrs.id === id);
-        if (hasMatchingId) return true;
-      });
-      deletionText = deletionNode?.node.text || deletionNode?.node.textContent || '';
-    }
+    deletionText = nodes.reduce((acc, node) => {
+      if (!node.marks.find((nodeMark) => nodeMark.type.name === TrackDeleteMarkName)) return acc;
+      acc += node?.text || node?.textContent || '';
+      return acc;
+    }, '');
   }
 
   return {
