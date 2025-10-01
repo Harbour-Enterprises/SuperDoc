@@ -143,10 +143,11 @@ export const StructuredContentCommands = Extension.create({
         },
 
       /**
-       * Updates a structured content attributes or content.
+       * Updates a single structured content field by its unique ID.
+       * IDs are unique identifiers, so this will update at most one field.
        * If the updated node does not match the schema, it will not be updated.
        * @category Command
-       * @param {string} id
+       * @param {string} id - Unique identifier of the field
        * @param {StructuredContentUpdate} options
        */
       updateStructuredContentById:
@@ -201,10 +202,12 @@ export const StructuredContentCommands = Extension.create({
         },
 
       /**
-       * Updates a structured content attributes or content by alias.
-       * If the updated node does not match the schema, it will not be updated.
+       * Updates all structured content fields with the same alias.
+       * Unlike IDs (which are unique), aliases can be shared across multiple fields.
+       * This will update every field that matches the given alias.
+       * If any updated node does not match the schema, no updates will be applied.
        * @category Command
-       * @param {string} alias
+       * @param {string} alias - Shared identifier for fields (e.g., "customer_name")
        * @param {StructuredContentUpdate} options
        */
       updateStructuredContentByAlias:
@@ -218,12 +221,9 @@ export const StructuredContentCommands = Extension.create({
 
           const { schema } = editor;
 
-          if (dispatch) {
-            const structuredContent = structuredContentTags[0];
-            const { pos, node } = structuredContent;
-            const posFrom = pos;
-            const posTo = pos + node.nodeSize;
-
+          // Prepare and validate all updates first
+          const updates = [];
+          for (const { pos, node } of structuredContentTags) {
             let content = null;
 
             if (options.text) {
@@ -247,12 +247,18 @@ export const StructuredContentCommands = Extension.create({
             const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
             try {
               updatedNode.check();
+              updates.push({ pos, node: updatedNode, size: node.nodeSize });
             } catch {
               console.error('Updated node does not conform to the schema');
               return false;
             }
+          }
 
-            tr.replaceWith(posFrom, posTo, updatedNode);
+          // Apply all updates in reverse order to avoid position offset issues
+          if (dispatch) {
+            updates.reverse().forEach(({ pos, node, size }) => {
+              tr.replaceWith(pos, pos + size, node);
+            });
           }
 
           return true;
