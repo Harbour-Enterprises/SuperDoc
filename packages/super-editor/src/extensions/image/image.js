@@ -115,7 +115,89 @@ export const Image = Node.create({
 
       originalAttributes: { rendered: false },
 
-      wrap: { rendered: false },
+      /**
+       * @category Attribute
+       * @param {Object} wrap - Wrapping options
+       * @param {string} wrap.type - Wrap type: "None", "Square", "Through", "Tight", "TopAndBottom", "Inline"
+       * @param {Object} [wrap.attrs] - Wrap attributes (only allowed attributes for the given type will be accepted)
+       * @param {string} [wrap.attrs.wrapText] - Text wrapping mode for Square type: "bothSides", "largest", "left", "right"
+       * @param {number} [wrap.attrs.distTop] - Top distance in pixels
+       * @param {number} [wrap.attrs.distBottom] - Bottom distance in pixels
+       * @param {number} [wrap.attrs.distLeft] - Left distance in pixels
+       * @param {number} [wrap.attrs.distRight] - Right distance in pixels
+       * @param {Array} [wrap.attrs.polygon] - Polygon points for Through/Tight types: [[x1,y1], [x2,y2], ...]
+       * @param {boolean} [wrap.attrs.behindDoc] - Whether image should be behind document text (for wrapNone)
+       */
+      wrap: {
+        default: { type: 'Inline' },
+        renderDOM: ({ wrap }) => {
+          console.log('wrap', wrap);
+          if (!wrap || !wrap.type) return {};
+
+          const { type, attrs = {} } = wrap;
+          let style = '';
+          let extra = {};
+
+          switch (type) {
+            case 'None':
+              style += 'position: relative;';
+              if (attrs.behindDoc) {
+                style += 'z-index: 0;';
+              } else {
+                style += 'z-index: 1;';
+              }
+              break;
+
+            case 'Square':
+              // Default to float left, allow wrapText to override
+              if (attrs.wrapText === 'right') {
+                style += 'float: left;';
+              } else if (attrs.wrapText === 'left') {
+                style += 'float: right;';
+              } else if (attrs.wrapText === 'largest') {
+                // TODO
+              } else if (attrs.wrapText === 'bothSides') {
+                // TODO
+              }
+              if (attrs.distTop) style += `margin-top: ${attrs.distTop}px;`;
+              if (attrs.distBottom) style += `margin-bottom: ${attrs.distBottom}px;`;
+              if (attrs.distLeft) style += `margin-left: ${attrs.distLeft}px;`;
+              if (attrs.distRight) style += `margin-right: ${attrs.distRight}px;`;
+              break;
+
+            case 'Through':
+            case 'Tight':
+              // Use float and shape-outside if polygon is provided
+              style += 'float: left;';
+              if (attrs.distTop) style += `margin-top: ${attrs.distTop}px;`;
+              if (attrs.distBottom) style += `margin-bottom: ${attrs.distBottom}px;`;
+              if (attrs.distLeft) style += `margin-left: ${attrs.distLeft}px;`;
+              if (attrs.distRight) style += `margin-right: ${attrs.distRight}px;`;
+              if (attrs.polygon) {
+                // Convert polygon points to CSS polygon string
+                const points = attrs.polygon.map(([x, y]) => `${x}px ${y}px`).join(', ');
+                style += `shape-outside: polygon(${points});`;
+                style += 'clip-path: polygon(' + points + ');';
+              }
+              break;
+
+            case 'TopAndBottom':
+              style += 'display: block;';
+              if (attrs.distTop) style += `margin-top: ${attrs.distTop}px;`;
+              if (attrs.distBottom) style += `margin-bottom: ${attrs.distBottom}px;`;
+              style += 'margin-left: auto; margin-right: auto;';
+              break;
+
+            case 'Inline':
+            default:
+              // No extra styling needed
+              break;
+          }
+
+          if (style) extra.style = style;
+          return extra;
+        },
+      },
 
       anchorData: {
         default: null,
@@ -308,10 +390,10 @@ export const Image = Node.create({
        * @param {number} [options.attrs.distLeft] - Left distance in pixels
        * @param {number} [options.attrs.distRight] - Right distance in pixels
        * @param {Array} [options.attrs.polygon] - Polygon points for Through/Tight types: [[x1,y1], [x2,y2], ...]
-       * @param {boolean} [options.behindDoc] - Whether image should be behind document text (for wrapNone)
+       * @param {boolean} [options.attrs.behindDoc] - Whether image should be behind document text (for wrapNone)
        * @example
        * // No wrapping, behind document
-       * editor.commands.setWrapping({ type: 'None', behindDoc: true })
+       * editor.commands.setWrapping({ type: 'None', attrs: {behindDoc: true} })
        *
        * // Square wrapping on both sides with distances
        * editor.commands.setWrapping({
