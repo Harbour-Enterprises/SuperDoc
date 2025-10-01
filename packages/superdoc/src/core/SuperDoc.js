@@ -21,6 +21,7 @@ import { normalizeDocumentEntry } from './helpers/file.js';
 /** @typedef {import('./types').Editor} Editor */
 /** @typedef {import('./types').DocumentMode} DocumentMode */
 /** @typedef {import('./types').Config} Config */
+/** @typedef {import('./types').ExportParams} ExportParams */
 
 /**
  * SuperDoc class
@@ -692,15 +693,8 @@ export class SuperDoc extends EventEmitter {
 
   /**
    * Export the superdoc to a file
-   * @param {Object} params
-   * @param {string[]} [params.exportType]
-   * @param {string} [params.commentsType]
-   * @param {string} [params.exportedName]
-   * @param {Array} [params.additionalFiles]
-   * @param {Array} [params.additionalFileNames]
-   * @param {boolean} [params.isFinalDoc]
-   * @param {boolean} [params.triggerDownload] Whether to trigger the download of the exported file
-   * @returns {Promise<void | Blob>} Returns void if triggerDownload is false, otherwise returns the exported file
+   * @param {ExportParams} params - Export configuration
+   * @returns {Promise<void | Blob>}
    */
   async export({
     exportType = ['docx'],
