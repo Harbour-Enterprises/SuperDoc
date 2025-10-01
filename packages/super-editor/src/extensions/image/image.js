@@ -300,7 +300,7 @@ export const Image = Node.create({
        * Set the wrapping mode and attributes for the selected image
        * @category Command
        * @param {Object} options - Wrapping options
-       * @param {string} options.type - Wrap type: "None", "Square", "Through", "Tight", "TopAndBottom"
+       * @param {string} options.type - Wrap type: "None", "Square", "Through", "Tight", "TopAndBottom", "Inline"
        * @param {Object} [options.attrs] - Wrap attributes (only allowed attributes for the given type will be accepted)
        * @param {string} [options.attrs.wrapText] - Text wrapping mode for Square type: "bothSides", "largest", "left", "right"
        * @param {number} [options.attrs.distTop] - Top distance in pixels
@@ -363,6 +363,7 @@ export const Image = Node.create({
             Through: ['distTop', 'distBottom', 'distLeft', 'distRight', 'polygon'],
             Tight: ['distTop', 'distBottom', 'distLeft', 'distRight', 'polygon'],
             TopAndBottom: ['distTop', 'distBottom'],
+            Inline: [],
           };
 
           const allowedForType = allowedAttributes[type] || [];
@@ -379,6 +380,7 @@ export const Image = Node.create({
               type,
               attrs: allowedAttrs,
             },
+            isAnchor: type !== 'Inline',
           };
 
           return chain().updateAttributes(this.name, updatedAttrs).run();

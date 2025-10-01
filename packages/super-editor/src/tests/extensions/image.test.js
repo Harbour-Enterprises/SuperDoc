@@ -437,6 +437,171 @@ describe('Image Extension DOM rendering', () => {
         return imagePos;
       };
 
+      /**
+       * TEST 1: Switch from wrapping to inline
+       */
+      it('switches image from wrapping to inline using setWrapping', async () => {
+        const {
+          schema: { nodes },
+          state,
+          view,
+        } = editor;
+        // Create and insert a wrapped image
+        const imageNode = nodes.image.create({
+          src: 'word/media/test-image.png',
+          size: { width: 120, height: 80 },
+          wrap: { type: 'Square', attrs: { wrapText: 'bothSides' } },
+        });
+        const paragraph = nodes.paragraph.create({}, imageNode);
+        const docNode = nodes.doc.create({}, paragraph);
+        const tr = state.tr.replaceWith(0, state.doc.content.size, docNode.content);
+        view.dispatch(tr);
+
+        let imagePos = await selectImage();
+        // Switch to inline
+        editor.commands.setWrapping({ type: 'Inline' });
+
+        let updatedImage;
+        editor.view.state.doc.descendants((node) => {
+          if (node.type.name === 'image') {
+            updatedImage = node;
+            return false;
+          }
+          return true;
+        });
+
+        expect(updatedImage).toBeTruthy();
+        expect(updatedImage.attrs.wrap.type).toBe('Inline');
+        expect(updatedImage.attrs.isAnchor).toBe(false);
+      });
+
+      /**
+       * TEST 2: Switch from inline to wrapping
+       */
+      it('switches image from inline to wrapping using setWrapping', async () => {
+        const {
+          schema: { nodes },
+          state,
+          view,
+        } = editor;
+        // Create and insert an inline image
+        const imageNode = nodes.image.create({
+          src: 'word/media/test-image.png',
+          size: { width: 120, height: 80 },
+          wrap: { type: 'Inline', attrs: {} },
+        });
+        const paragraph = nodes.paragraph.create({}, imageNode);
+        const docNode = nodes.doc.create({}, paragraph);
+        const tr = state.tr.replaceWith(0, state.doc.content.size, docNode.content);
+        view.dispatch(tr);
+
+        let imagePos = await selectImage();
+        // Switch to Square wrapping
+        editor.commands.setWrapping({ type: 'Square', attrs: { wrapText: 'left' } });
+
+        let updatedImage;
+        editor.view.state.doc.descendants((node) => {
+          if (node.type.name === 'image') {
+            updatedImage = node;
+            return false;
+          }
+          return true;
+        });
+
+        expect(updatedImage).toBeTruthy();
+        expect(updatedImage.attrs.wrap.type).toBe('Square');
+        expect(updatedImage.attrs.wrap.attrs.wrapText).toBe('left');
+        expect(updatedImage.attrs.isAnchor).toBe(true);
+      });
+
+      /**
+       * TEST 3: Toggle wrapping → inline → wrapping
+       */
+      it('toggles image wrapping to inline and back to wrapping', async () => {
+        const {
+          schema: { nodes },
+          state,
+          view,
+        } = editor;
+        // Create and insert a wrapped image
+        const imageNode = nodes.image.create({
+          src: 'word/media/test-image.png',
+          size: { width: 120, height: 80 },
+          wrap: { type: 'Square', attrs: { wrapText: 'right' } },
+        });
+        const paragraph = nodes.paragraph.create({}, imageNode);
+        const docNode = nodes.doc.create({}, paragraph);
+        const tr = state.tr.replaceWith(0, state.doc.content.size, docNode.content);
+        view.dispatch(tr);
+
+        let imagePos = await selectImage();
+        // Switch to inline
+        editor.commands.setWrapping({ type: 'Inline' });
+
+        // Switch back to wrapping
+        editor.commands.setWrapping({ type: 'Square', attrs: { wrapText: 'bothSides' } });
+
+        let updatedImage;
+        editor.view.state.doc.descendants((node) => {
+          if (node.type.name === 'image') {
+            updatedImage = node;
+            return false;
+          }
+          return true;
+        });
+
+        expect(updatedImage).toBeTruthy();
+        expect(updatedImage.attrs.wrap.type).toBe('Square');
+        expect(updatedImage.attrs.wrap.attrs.wrapText).toBe('bothSides');
+        expect(updatedImage.attrs.isAnchor).toBe(true);
+      });
+
+      /**
+       * TEST 4: Attribute preservation when switching modes
+       */
+      it('preserves image attributes when switching between wrapping and inline', async () => {
+        const {
+          schema: { nodes },
+          state,
+          view,
+        } = editor;
+        // Create and insert a wrapped image with custom attributes
+        const imageNode = nodes.image.create({
+          src: 'word/media/test-image.png',
+          size: { width: 180, height: 100 },
+          marginOffset: { left: 12, top: 8 },
+          wrap: { type: 'Square', attrs: { wrapText: 'largest', distLeft: 5 } },
+        });
+        const paragraph = nodes.paragraph.create({}, imageNode);
+        const docNode = nodes.doc.create({}, paragraph);
+        const tr = state.tr.replaceWith(0, state.doc.content.size, docNode.content);
+        view.dispatch(tr);
+
+        let imagePos = await selectImage();
+        // Switch to inline
+        editor.commands.setWrapping({ type: 'Inline' });
+
+        // Switch back to wrapping
+        editor.commands.setWrapping({ type: 'Square', attrs: { wrapText: 'left', distLeft: 7 } });
+
+        let updatedImage;
+        editor.view.state.doc.descendants((node) => {
+          if (node.type.name === 'image') {
+            updatedImage = node;
+            return false;
+          }
+          return true;
+        });
+
+        expect(updatedImage).toBeTruthy();
+        expect(updatedImage.attrs.size).toEqual({ width: 180, height: 100 });
+        expect(updatedImage.attrs.marginOffset).toEqual({ left: 12, top: 8 });
+        expect(updatedImage.attrs.wrap.type).toBe('Square');
+        expect(updatedImage.attrs.wrap.attrs.wrapText).toBe('left');
+        expect(updatedImage.attrs.wrap.attrs.distLeft).toBe(7);
+        expect(updatedImage.attrs.isAnchor).toBe(true);
+      });
+
       let imagePos = await selectImage();
 
       // Test 1: Square type should ignore polygon attribute

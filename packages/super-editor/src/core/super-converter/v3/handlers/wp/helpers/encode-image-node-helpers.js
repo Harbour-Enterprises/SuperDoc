@@ -79,10 +79,12 @@ export function handleImageNode(node, params, isAnchor) {
   const simplePos = node.elements.find((el) => el.name === 'wp:simplePos');
 
   // Look for one of <wp:wrapNone>,<wp:wrapSquare>,<wp:wrapThrough>,<wp:wrapTight>,<wp:wrapTopAndBottom>
-  const wrapNode = node.elements.find((el) =>
-    ['wp:wrapNone', 'wp:wrapSquare', 'wp:wrapThrough', 'wp:wrapTight', 'wp:wrapTopAndBottom'].includes(el.name),
-  );
-  const wrap = { type: wrapNode?.name.slice(7) || 'None', attrs: {} };
+  const wrapNode = isAnchor
+    ? node.elements.find((el) =>
+        ['wp:wrapNone', 'wp:wrapSquare', 'wp:wrapThrough', 'wp:wrapTight', 'wp:wrapTopAndBottom'].includes(el.name),
+      )
+    : null;
+  const wrap = isAnchor ? { type: wrapNode?.name.slice(7) || 'None', attrs: {} } : { type: 'Inline' };
 
   switch (wrap.type) {
     case 'Square':
@@ -130,6 +132,8 @@ export function handleImageNode(node, params, isAnchor) {
       break;
     case 'None':
       wrap.attrs.behindDoc = node.attributes?.behindDoc === '1';
+      break;
+    case 'Inline':
       break;
     default:
       break;
