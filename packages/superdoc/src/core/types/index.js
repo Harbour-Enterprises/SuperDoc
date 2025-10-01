@@ -43,10 +43,26 @@
 /** @typedef {import('../SuperDoc.js').SuperDoc} SuperDoc */
 
 /**
- * @typedef {string} DocumentMode
- * @property {'editing'} editing The document is in editing mode
- * @property {'viewing'} viewing The document is in viewing mode
- * @property {'suggesting'} suggesting The document is in suggesting mode
+ * @typedef {'editing' | 'viewing' | 'suggesting'} DocumentMode
+ */
+
+/**
+ * @typedef {'docx' | 'pdf' | 'html'} ExportType
+ */
+
+/**
+ * @typedef {'external' | 'clean'} CommentsType
+ * - 'external': Include only external comments (default)
+ * - 'clean': Export without any comments
+ */
+
+/**
+ * @typedef {Object} ExportParams
+ * @property {ExportType[]} [exportType=['docx']] - File formats to export
+ * @property {CommentsType} [commentsType='external'] - How to handle comments
+ * @property {string} [exportedName] - Custom filename (without extension)
+ * @property {boolean} [triggerDownload=true] - Auto-download or return blob
+ * @property {string} [fieldsHighlightColor] - Color for field highlights
  */
 
 /**
