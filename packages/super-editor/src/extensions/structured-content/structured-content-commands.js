@@ -4,6 +4,7 @@ import { htmlHandler } from '@core/InputRule';
 import { findParentNode } from '@helpers/findParentNode';
 import { generateRandomSigned32BitIntStrId } from '@core/helpers/generateDocxRandomId.js';
 import { getStructuredContentTagsById } from './structuredContentHelpers/getStructuredContentTagsById';
+import { getStructuredContentTagsByAlias } from './structuredContentHelpers/getStructuredContentTagsByAlias';
 import * as structuredContentHelpers from './structuredContentHelpers/index';
 
 const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock'];
@@ -152,6 +153,64 @@ export const StructuredContentCommands = Extension.create({
         (id, options = {}) =>
         ({ editor, dispatch, state, tr }) => {
           const structuredContentTags = getStructuredContentTagsById(id, state);
+
+          if (!structuredContentTags.length) {
+            return true;
+          }
+
+          const { schema } = editor;
+
+          if (dispatch) {
+            const structuredContent = structuredContentTags[0];
+            const { pos, node } = structuredContent;
+            const posFrom = pos;
+            const posTo = pos + node.nodeSize;
+
+            let content = null;
+
+            if (options.text) {
+              content = schema.text(options.text);
+            }
+
+            if (options.html) {
+              const html = htmlHandler(options.html, editor);
+              const doc = PMDOMParser.fromSchema(schema).parse(html);
+              content = doc.content;
+            }
+
+            if (options.json) {
+              content = schema.nodeFromJSON(options.json);
+            }
+
+            if (!content) {
+              content = node.content;
+            }
+
+            const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
+            try {
+              updatedNode.check();
+            } catch {
+              console.error('Updated node does not conform to the schema');
+              return false;
+            }
+
+            tr.replaceWith(posFrom, posTo, updatedNode);
+          }
+
+          return true;
+        },
+
+      /**
+       * Updates a structured content attributes or content by alias.
+       * If the updated node does not match the schema, it will not be updated.
+       * @category Command
+       * @param {string} alias
+       * @param {StructuredContentUpdate} options
+       */
+      updateStructuredContentByAlias:
+        (alias, options = {}) =>
+        ({ editor, dispatch, state, tr }) => {
+          const structuredContentTags = getStructuredContentTagsByAlias(alias, state);
 
           if (!structuredContentTags.length) {
             return true;
