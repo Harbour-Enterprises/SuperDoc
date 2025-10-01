@@ -186,7 +186,7 @@ export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEdi
   });
 
   if (isEditMode) {
-    const pm = editor.view?.dom;
+    const pm = editor.view?.dom || editor.options.element?.querySelector?.('.ProseMirror');
     if (pm) {
       pm.classList.add('header-footer-edit');
       pm.setAttribute('aria-readonly', true);

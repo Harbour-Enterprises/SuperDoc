@@ -41,6 +41,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const isCommentsListVisible = ref(false);
   const editorCommentIds = ref([]);
   const editorCommentPositions = ref({});
+  const isCommentHighlighted = ref(false);
 
   // Floating comments
   const floatingCommentsOffset = ref(0);
@@ -497,9 +498,8 @@ export const useCommentsStore = defineStore('comments', () => {
         tr.setMeta(CommentsPluginKey, { type: 'forceTrackChanges' });
         tr.setMeta(TrackChangesBasePluginKey, trackChangesPayload);
       }
+      dispatch(tr);
     });
-
-    dispatch(tr);
   };
 
   const translateCommentsForExport = () => {
@@ -604,6 +604,7 @@ export const useCommentsStore = defineStore('comments', () => {
     try {
       const normalizedContent = normalizeCommentForEditor(commentTextJson);
       const schemaContent = Array.isArray(normalizedContent) ? normalizedContent[0] : normalizedContent;
+      if (!schemaContent.content.length) return null;
       const editor = new Editor({
         mode: 'text',
         isHeadless: true,
@@ -638,6 +639,7 @@ export const useCommentsStore = defineStore('comments', () => {
     commentsParentElement,
     editorCommentPositions,
     hasInitializedLocations,
+    isCommentHighlighted,
 
     // Floating comments
     floatingCommentsOffset,

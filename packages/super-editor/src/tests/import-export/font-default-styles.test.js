@@ -24,4 +24,9 @@ describe('getDocumentDefaultStyles', () => {
     expect(typeface).toBe('Ubuntu');
     expect(fontFamilyCss).toBe('Ubuntu, Arial, sans-serif');
   });
+
+  it('falls back gracefully when w:docDefaults is missing', async () => {
+    const editor = await createHeadlessEditorFromDocx('superdoc-hyperlink-cases.docx');
+    expect(editor.converter.getDocumentDefaultStyles()).toEqual({ fontSizePt: 10 });
+  });
 });

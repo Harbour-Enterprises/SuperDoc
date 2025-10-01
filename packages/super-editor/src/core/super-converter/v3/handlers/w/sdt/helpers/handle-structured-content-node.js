@@ -15,6 +15,10 @@ export function handleStructuredContentNode(params) {
   const sdtPr = node.elements.find((el) => el.name === 'w:sdtPr');
   const sdtContent = node.elements.find((el) => el.name === 'w:sdtContent');
 
+  const id = sdtPr?.elements?.find((el) => el.name === 'w:id');
+  const tag = sdtPr?.elements?.find((el) => el.name === 'w:tag');
+  const alias = sdtPr?.elements?.find((el) => el.name === 'w:alias');
+
   if (!sdtContent) {
     return null;
   }
@@ -28,17 +32,17 @@ export function handleStructuredContentNode(params) {
     path: [...(params.path || []), sdtContent],
   });
 
-  let sdtContentType = 'structuredContent';
-  if (paragraph || table) {
-    // If a paragraph or potentially another block node is found.
-    sdtContentType = 'structuredContentBlock';
-  }
+  const isBlockNode = paragraph || table;
+  const sdtContentType = isBlockNode ? 'structuredContentBlock' : 'structuredContent';
 
   let result = {
     type: sdtContentType,
     content: translatedContent,
     marks,
     attrs: {
+      id: id?.attributes?.['w:val'] || null,
+      tag: tag?.attributes?.['w:val'] || null,
+      alias: alias?.attributes?.['w:val'] || null,
       sdtPr,
     },
   };

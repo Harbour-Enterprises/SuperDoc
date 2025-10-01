@@ -2,6 +2,7 @@
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed, markRaw } from 'vue';
 import { SlashMenuPluginKey } from '../../extensions/slash-menu/slash-menu.js';
 import { getPropsByItemId } from './utils.js';
+import { shouldBypassContextMenu } from '../../utils/contextmenu-helpers.js';
 import { moveCursorToMouseEvent } from '../cursor-helpers.js';
 import { getItems } from './menuItems.js';
 import { getEditorContext } from './utils.js';
@@ -186,11 +187,8 @@ const handleGlobalOutsideClick = (event) => {
 };
 
 const handleRightClick = async (event) => {
-  // If the document is read-only, don't open the context menu
-  // If user is also holding control, don't open the menu
   const readOnly = !props.editor?.isEditable;
-  const isHoldingCtrl = event.ctrlKey;
-  if (readOnly || isHoldingCtrl) {
+  if (readOnly || shouldBypassContextMenu(event)) {
     return;
   }
 

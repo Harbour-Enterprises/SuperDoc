@@ -15,6 +15,7 @@ import { bookmarkStartNodeHandlerEntity } from './bookmarkStartImporter.js';
 import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
+import { pageReferenceEntity } from './pageReferenceImporter.js';
 import { listHandlerEntity } from './listImporter.js';
 import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
@@ -23,6 +24,8 @@ import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
+import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
+import { preProcessNodesForFldChar } from '../../field-references';
 
 /**
  * @typedef {import()} XmlNode
@@ -75,7 +78,13 @@ export const createDocumentJson = (docx, converter, editor) => {
   const bodyNode = json.elements[0].elements.find((el) => el.name === 'w:body');
 
   if (bodyNode) {
+    ensureSectionProperties(bodyNode);
     const node = bodyNode;
+
+    // Pre-processing step for replacing fldChar sequences with SD-specific elements
+    const { processedNodes } = preProcessNodesForFldChar(node.elements ?? [], docx);
+    node.elements = processedNodes;
+
     const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
     const content = pruneIgnoredNodes(contentElements);
     const comments = importCommentData({ docx, nodeListHandler, converter, editor });
@@ -140,8 +149,10 @@ export const defaultNodeListHandler = () => {
     trackChangeNodeHandlerEntity,
     tableNodeHandlerEntity,
     tabNodeEntityHandler,
+    tableOfContentsHandlerEntity,
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
+    pageReferenceEntity,
     standardNodeHandlerEntity,
   ];
 
@@ -362,6 +373,66 @@ function getDocumentStyles(node, docx, converter, editor) {
   importHeadersFooters(docx, converter, editor);
   styles.alternateHeaders = isAlternatingHeadersOddEven(docx);
   return styles;
+}
+
+const DEFAULT_SECTION_PROPS = Object.freeze({
+  pageSize: Object.freeze({ width: '12240', height: '15840' }),
+  pageMargins: Object.freeze({
+    top: '1440',
+    right: '1440',
+    bottom: '1440',
+    left: '1440',
+    header: '720',
+    footer: '720',
+    gutter: '0',
+  }),
+});
+
+function ensureSectionProperties(bodyNode) {
+  if (!bodyNode.elements) bodyNode.elements = [];
+
+  let sectPr = bodyNode.elements.find((el) => el.name === 'w:sectPr');
+  if (!sectPr) {
+    sectPr = {
+      type: 'element',
+      name: 'w:sectPr',
+      elements: [],
+    };
+    bodyNode.elements.push(sectPr);
+  } else if (!sectPr.elements) {
+    sectPr.elements = [];
+  }
+
+  const ensureChild = (name, factory) => {
+    let child = sectPr.elements.find((el) => el.name === name);
+    if (!child) {
+      child = factory();
+      sectPr.elements.push(child);
+    } else if (!child.attributes) {
+      child.attributes = {};
+    }
+    return child;
+  };
+
+  const pgSz = ensureChild('w:pgSz', () => ({
+    type: 'element',
+    name: 'w:pgSz',
+    attributes: {},
+  }));
+  pgSz.attributes['w:w'] = pgSz.attributes['w:w'] ?? DEFAULT_SECTION_PROPS.pageSize.width;
+  pgSz.attributes['w:h'] = pgSz.attributes['w:h'] ?? DEFAULT_SECTION_PROPS.pageSize.height;
+
+  const pgMar = ensureChild('w:pgMar', () => ({
+    type: 'element',
+    name: 'w:pgMar',
+    attributes: {},
+  }));
+  Object.entries(DEFAULT_SECTION_PROPS.pageMargins).forEach(([key, value]) => {
+    const attrKey = `w:${key}`;
+    if (pgMar.attributes[attrKey] == null) pgMar.attributes[attrKey] = value;
+  });
+
+  return sectPr;
 }
 
 /**

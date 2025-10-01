@@ -115,4 +115,100 @@ describe('createDocumentJson', () => {
     expect(tableParagraphTexts).toContain('Choice paragraph inside table cell (Requires=w14)');
     expect(tableParagraphTexts).not.toContain('Fallback paragraph inside table cell');
   });
+
+  it('synthesizes default section properties when missing', async () => {
+    const docx = await getTestDataByFileName('missing-sectpr.docx');
+
+    const converter = {
+      headers: {},
+      footers: {},
+      headerIds: {},
+      footerIds: {},
+    };
+
+    const editor = {
+      options: {},
+      emit: vi.fn(),
+    };
+
+    const result = createDocumentJson(docx, converter, editor);
+
+    expect(result).toBeTruthy();
+    expect(result.pageStyles.pageMargins.left).toBeCloseTo(1);
+    expect(result.pageStyles.pageMargins.top).toBeCloseTo(1);
+    expect(result.pageStyles.pageSize.width).toBeCloseTo(8.5);
+    expect(result.pageStyles.pageSize.height).toBeCloseTo(11);
+  });
+
+  it('preserves existing section properties and fills missing values', () => {
+    const simpleDocXml = `
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+          <w:p><w:r><w:t>Content</w:t></w:r></w:p>
+          <w:sectPr>
+            <w:pgSz w:w="8000" w:h="10000" />
+            <w:pgMar w:top="100" w:left="200" />
+          </w:sectPr>
+        </w:body>
+      </w:document>
+    `;
+
+    const docx = {
+      'word/document.xml': parseXmlToJson(simpleDocXml),
+    };
+
+    const converter = {
+      headers: {},
+      footers: {},
+      headerIds: {},
+      footerIds: {},
+    };
+
+    const editor = {
+      options: {},
+      emit: vi.fn(),
+    };
+
+    const result = createDocumentJson(docx, converter, editor);
+    const sectPr = result.savedTagsToRestore.elements.find((el) => el.name === 'w:sectPr');
+    const pgSz = sectPr.elements.find((el) => el.name === 'w:pgSz');
+    const pgMar = sectPr.elements.find((el) => el.name === 'w:pgMar');
+
+    expect(pgSz.attributes['w:w']).toBe('8000');
+    expect(pgSz.attributes['w:h']).toBe('10000');
+    expect(pgMar.attributes['w:top']).toBe('100');
+    expect(pgMar.attributes['w:left']).toBe('200');
+    expect(pgMar.attributes['w:right']).toBe('1440');
+    expect(pgMar.attributes['w:bottom']).toBe('1440');
+    expect(result.pageStyles.pageSize.width).toBeCloseTo(8000 / 1440);
+    expect(result.pageStyles.pageMargins.left).toBeCloseTo(200 / 1440);
+    expect(result.pageStyles.pageMargins.top).toBeCloseTo(100 / 1440);
+  });
+
+  it('imports horizontal rules represented as pict rectangles', async () => {
+    const docx = await getTestDataByFileName('missing-separator.docx');
+
+    const converter = {
+      telemetry: {
+        trackFileStructure: vi.fn(),
+        trackUsage: vi.fn(),
+        trackStatistic: vi.fn(),
+      },
+      docHiglightColors: new Set(),
+    };
+
+    const editor = {
+      options: {},
+      emit: vi.fn(),
+    };
+
+    const result = createDocumentJson(docx, converter, editor);
+
+    const horizontalRules = (result.pmDoc.content || [])
+      .filter((node) => node?.type === 'paragraph')
+      .flatMap((paragraph) => paragraph?.content || [])
+      .filter((child) => child?.type === 'contentBlock' && child.attrs?.horizontalRule);
+
+    expect(horizontalRules).toHaveLength(3);
+  });
 });

@@ -1,5 +1,7 @@
 // @ts-check
 import { translator as mc_AlternateContent_translator } from './mc/altermateContent/alternate-content-translator.js';
+import { translator as sd_pageReference_translator } from './sd/pageReference/pageReference-translator.js';
+import { translator as sd_tableOfContents_translator } from './sd/tableOfContents/tableOfContents-translator.js';
 import { translator as w_b_translator } from './w/b/b-translator.js';
 import { translator as w_bidiVisual_translator } from './w/bidiVisual/bidiVisual-translator.js';
 import { translator as w_bookmarkEnd_translator } from './w/bookmark-end/bookmark-end-translator.js';
@@ -73,6 +75,8 @@ import { runPropertyTranslators } from './w/rpr/run-property-translators.js';
 // Additional translator registrations keyed by OOXML element name.
 const additionalHandlers = Object.freeze({
   'mc:AlternateContent': mc_AlternateContent_translator,
+  'sd:pageReference': sd_pageReference_translator,
+  'sd:tableOfContents': sd_tableOfContents_translator,
   'w:b': w_b_translator,
   'w:bidiVisual': w_bidiVisual_translator,
   'w:bookmarkEnd': w_bookmarkEnd_translator,

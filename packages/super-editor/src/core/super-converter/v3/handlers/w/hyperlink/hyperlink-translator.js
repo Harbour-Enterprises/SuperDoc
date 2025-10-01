@@ -56,60 +56,21 @@ const encode = (params, encodedAttrs) => {
 
   // Add marks to the run nodes and process them
   const linkMark = { type: 'link', attrs: { ...encodedAttrs, href } };
-  const runNodes = node.elements.filter((el) => el.name === 'w:r');
-  runNodes.forEach((runNode) => {
-    const existingRunMarks = Array.isArray(runNode.marks) ? runNode.marks : [];
-    const runMarksWithoutLink = existingRunMarks.filter((mark) => mark?.type !== 'link');
-    runNode.marks = runMarksWithoutLink;
+  const referenceNodeTypes = ['sd:pageReference', 'sd:autoPageNumber', 'sd:totalPageNumber'];
+  const contentNodes = node.elements.filter((el) => el.name === 'w:r' || referenceNodeTypes.includes(el.name));
+  contentNodes.forEach((contentNode) => {
+    const existingMarks = Array.isArray(contentNode.marks) ? contentNode.marks : [];
+    const marksWithoutLink = existingMarks.filter((mark) => mark?.type !== 'link');
+    contentNode.marks = [...marksWithoutLink, linkMark];
   });
 
   const updatedNode = nodeListHandler.handler({
     ...params,
-    nodes: runNodes,
+    nodes: contentNodes,
     path: [...(params.path || []), node],
   });
 
-  const cloneMark = (mark) => {
-    if (!mark || typeof mark !== 'object') return mark;
-    if (!mark.attrs) return { ...mark };
-    return { ...mark, attrs: { ...mark.attrs } };
-  };
-
-  const ensureLinkMark = (child) => {
-    if (!child || typeof child !== 'object') return child;
-
-    if (Array.isArray(child.content)) {
-      const updatedContent = child.content.map((item) => ensureLinkMark(item));
-      if (updatedContent !== child.content) {
-        child = { ...child, content: updatedContent };
-      }
-    }
-
-    if (child.type === 'run') {
-      const existingMarks = Array.isArray(child.marks) ? child.marks : [];
-      const filteredMarks = existingMarks.filter((mark) => mark?.type !== 'link').map((mark) => cloneMark(mark));
-      if (filteredMarks.length !== existingMarks.length) {
-        if (filteredMarks.length) child = { ...child, marks: filteredMarks };
-        else {
-          const { marks: _removedMarks, ...rest } = child;
-          child = rest;
-        }
-      }
-      return child;
-    }
-
-    if (child.type !== 'text') return child;
-
-    const existingMarks = Array.isArray(child.marks) ? child.marks.map((mark) => cloneMark(mark)) : [];
-    const hasLink = existingMarks.some((mark) => mark?.type === 'link');
-    if (hasLink) return child;
-    const linkClone = { type: 'link', attrs: { ...linkMark.attrs } };
-    return { ...child, marks: [...existingMarks, linkClone] };
-  };
-
-  if (!Array.isArray(updatedNode)) return updatedNode;
-
-  return updatedNode.map((child) => ensureLinkMark(child));
+  return updatedNode;
 };
 
 /**
@@ -141,7 +102,8 @@ const _resolveHref = (docx, encodedAttrs) => {
  * @returns {import('@translator').SCDecoderResult}
  */
 function decode(params) {
-  const { node } = params;
+  const { hyperlinkGroup = [params.node] } = params.extraParams || {};
+  const node = hyperlinkGroup[0];
 
   const linkMark = node.marks.find((m) => m.type === 'link');
   const linkAttrs = this.decodeAttributes({ ...params, node: linkMark });
@@ -152,10 +114,20 @@ function decode(params) {
     linkAttrs['r:id'] = _addNewLinkRelationship(params, link, linkAttrs['r:id']);
   }
 
-  node.marks = node.marks.filter((m) => m.type !== 'link');
-
-  // @ts-ignore
-  const outputNode = exportSchemaToJson({ ...params, node });
+  let contentNodes = [];
+  hyperlinkGroup.forEach((linkNode) => {
+    if ('marks' in linkNode) {
+      linkNode.marks = linkNode.marks.filter((m) => m.type !== 'link');
+    } else {
+      linkNode.attrs.marksAsAttrs = linkNode.attrs.marksAsAttrs.filter((m) => m.type !== 'link');
+    }
+    // @ts-ignore
+    const outputNode = exportSchemaToJson({ ...params, node: linkNode });
+    if (outputNode) {
+      if (outputNode instanceof Array) contentNodes.push(...outputNode);
+      else contentNodes.push(outputNode);
+    }
+  });
 
   const newNode = {
     name: 'w:hyperlink',
@@ -163,7 +135,7 @@ function decode(params) {
     attributes: {
       ...linkAttrs,
     },
-    elements: [outputNode],
+    elements: contentNodes,
   };
 
   return newNode;

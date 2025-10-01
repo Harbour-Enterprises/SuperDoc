@@ -174,19 +174,18 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = [], option
  */
 export const getDefaultParagraphStyle = (docx, styleId = '') => {
   const styles = docx['word/styles.xml'];
-  if (!styles) {
+  const rootElements = styles?.elements?.[0]?.elements;
+  if (!rootElements?.length) {
     return {};
   }
-  const defaults = styles.elements[0].elements?.find((el) => el.name === 'w:docDefaults');
-  const pDefault = defaults.elements.find((el) => el.name === 'w:pPrDefault');
+  const defaults = rootElements.find((el) => el.name === 'w:docDefaults');
+  const pDefault = defaults?.elements?.find((el) => el.name === 'w:pPrDefault') || {};
   const pPrDefault = pDefault?.elements?.find((el) => el.name === 'w:pPr');
   const pPrDefaultSpacingTag = pPrDefault?.elements?.find((el) => el.name === 'w:spacing') || {};
   const pPrDefaultIndentTag = pPrDefault?.elements?.find((el) => el.name === 'w:ind') || {};
 
   // Paragraph 'Normal' styles
-  const stylesNormal = styles.elements[0].elements?.find(
-    (el) => el.name === 'w:style' && el.attributes['w:styleId'] === 'Normal',
-  );
+  const stylesNormal = rootElements.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === 'Normal');
   const pPrNormal = stylesNormal?.elements?.find((el) => el.name === 'w:pPr');
   const pPrNormalSpacingTag = pPrNormal?.elements?.find((el) => el.name === 'w:spacing') || {};
   const pPrNormalIndentTag = pPrNormal?.elements?.find((el) => el.name === 'w:ind') || {};
@@ -197,9 +196,7 @@ export const getDefaultParagraphStyle = (docx, styleId = '') => {
   let pPrStyleIdIndentTag = {};
   let pPrStyleJc = {};
   if (styleId) {
-    const stylesById = styles.elements[0].elements?.find(
-      (el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId,
-    );
+    const stylesById = rootElements.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId);
     const pPrById = stylesById?.elements?.find((el) => el.name === 'w:pPr');
     pPrStyleIdSpacingTag = pPrById?.elements?.find((el) => el.name === 'w:spacing') || {};
     pPrStyleIdIndentTag = pPrById?.elements?.find((el) => el.name === 'w:ind') || {};
@@ -241,138 +238,4 @@ export const getDefaultParagraphStyle = (docx, styleId = '') => {
     indent: indentToUse,
     justify: pPrByIdJcAttr,
   };
-};
-
-/**
- * Pre-processes nodes in a paragraph to combine nodes together where necessary (e.g., links).
- *
- * @param {Array} nodes - The nodes to process.
- * @returns {Array} The processed nodes.
- */
-export const preProcessNodesForFldChar = (nodes = []) => {
-  const processedNodes = [];
-  let buffer = [];
-  let collecting = false;
-
-  for (const node of nodes) {
-    const fldCharEl = node.elements?.find((el) => el.name === 'w:fldChar');
-    const fldType = fldCharEl?.attributes?.['w:fldCharType'];
-
-    if (fldType === 'begin') {
-      buffer = [node];
-      collecting = true;
-      continue;
-    }
-
-    if (fldType === 'separate' && collecting) {
-      buffer.push(node);
-      continue;
-    }
-
-    if (fldType === 'end' && collecting) {
-      buffer.push(node);
-      processedNodes.push(...processCombinedNodesForFldChar(buffer));
-      buffer = [];
-      collecting = false;
-      continue;
-    }
-
-    if (collecting) {
-      buffer.push(node);
-    } else {
-      processedNodes.push(node);
-    }
-  }
-
-  // In case of unclosed field
-  if (buffer.length) {
-    processedNodes.push(...buffer);
-  }
-
-  return processedNodes;
-};
-
-/**
- * Processes the combined nodes for fldChar.
- *
- * @param {Array} nodesToCombine - The nodes to combine.
- * @returns {Array} The processed nodes.
- */
-export const processCombinedNodesForFldChar = (nodesToCombine = []) => {
-  let processedNodes = [];
-  let hasPageMarker = false;
-  let isNumPages = false;
-
-  // Need to extract all nodes between 'separate' and 'end' fldChar nodes
-  const textStart = nodesToCombine.findIndex((n) =>
-    n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'separate'),
-  );
-  const textEnd = nodesToCombine.findIndex((n) =>
-    n.elements?.some((el) => el.name === 'w:fldChar' && el.attributes['w:fldCharType'] === 'end'),
-  );
-
-  const textNodes = nodesToCombine.slice(textStart + 1, textEnd);
-  const instrTextContainer = nodesToCombine.find((n) => n.elements?.some((el) => el.name === 'w:instrText'));
-  const instrTextNode = instrTextContainer?.elements?.find((el) => el.name === 'w:instrText');
-  const instrText = instrTextNode?.elements[0].text;
-
-  if (!hasPageMarker) hasPageMarker = instrText?.trim().startsWith('PAGE');
-  if (!isNumPages) isNumPages = instrText?.trim().startsWith('NUMPAGES');
-  const urlMatch = instrText?.match(/HYPERLINK\s+"([^"]+)"/);
-
-  // If we have a page marker, we need to replace the last node with a page number node.
-  if (hasPageMarker) {
-    const pageNumNode = {
-      name: 'sd:autoPageNumber',
-      type: 'element',
-    };
-
-    nodesToCombine.forEach((n) => {
-      const rPrNode = n.elements.find((el) => el.name === 'w:rPr');
-      if (rPrNode) pageNumNode.elements = [rPrNode];
-    });
-
-    processedNodes.push(pageNumNode);
-  }
-
-  // If we have a NUMPAGES marker, we need to replace the last node with a total page number node.
-  else if (isNumPages) {
-    const totalPageNumNode = {
-      name: 'sd:totalPageNumber',
-      type: 'element',
-    };
-
-    nodesToCombine.forEach((n) => {
-      const rPrNode = n.elements.find((el) => el.name === 'w:rPr');
-      if (rPrNode) totalPageNumNode.elements = [rPrNode];
-    });
-    processedNodes.push(totalPageNumNode);
-  }
-
-  // If we have a hyperlink, we need to replace the last node with a link node.
-  else if (urlMatch && urlMatch?.length >= 2) {
-    const url = urlMatch[1];
-
-    const textMarks = [];
-    textNodes.forEach((n) => {
-      const rPr = n.elements.find((el) => el.name === 'w:rPr');
-      if (!rPr) return;
-
-      const { elements } = rPr;
-      elements.forEach((el) => {
-        textMarks.push(el);
-      });
-    });
-
-    // Create a rPr and replace all nodes with the updated node.
-    const linkMark = { name: 'link', attributes: { href: url } };
-    const rPr = { name: 'w:rPr', type: 'element', elements: [linkMark, ...textMarks] };
-    processedNodes.push({
-      name: 'w:r',
-      type: 'element',
-      elements: [rPr, ...textNodes],
-    });
-  }
-
-  return processedNodes;
 };

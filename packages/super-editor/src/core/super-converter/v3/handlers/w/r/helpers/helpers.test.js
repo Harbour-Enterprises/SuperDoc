@@ -189,6 +189,34 @@ describe('w:r helper utilities', () => {
       expect(result.inlineMarks).toEqual([]);
     });
 
+    it('deriveStyleMarks ignores run styles for TOC paragraphs', () => {
+      const tocDocx = makeDocxWithStyles([
+        {
+          name: 'w:style',
+          attributes: { 'w:styleId': 'TOC1' },
+          elements: [
+            {
+              name: 'w:rPr',
+              elements: [{ name: 'w:b' }],
+            },
+          ],
+        },
+        {
+          name: 'w:style',
+          attributes: { 'w:styleId': 'RunStyle' },
+          elements: [
+            {
+              name: 'w:rPr',
+              elements: [{ name: 'w:i' }],
+            },
+          ],
+        },
+      ]);
+      const result = deriveStyleMarks({ docx: tocDocx, paragraphStyleId: 'TOC1', runStyleId: 'RunStyle' });
+      expect(result.inlineMarks).toEqual([{ type: 'bold' }]);
+      expect(result.textStyleAttrs).toBeNull();
+    });
+
     it('collectStyleMarks prevents infinite recursion via seen set', () => {
       const seen = new Set();
       seen.add('Derived');

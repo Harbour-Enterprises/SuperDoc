@@ -10,8 +10,16 @@ export const handlePictNode = (params) => {
   }
 
   const [pNode] = nodes;
-  const run = pNode.elements?.find((el) => el.name === 'w:r');
-  const pict = run?.elements?.find((el) => el.name === 'w:pict');
+  const runs = pNode.elements?.filter((el) => el.name === 'w:r') || [];
+
+  let pict = null;
+  for (const run of runs) {
+    const foundPict = run.elements?.find((el) => el.name === 'w:pict');
+    if (foundPict) {
+      pict = foundPict;
+      break;
+    }
+  }
 
   // if there is no pict, then process as a paragraph or list.
   if (!pict) {

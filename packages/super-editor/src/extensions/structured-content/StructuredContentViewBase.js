@@ -184,7 +184,7 @@ export class StructuredContentViewBase {
     dragHandle.contentEditable = 'false';
     dragHandle.dataset.dragHandle = '';
     const textElement = document.createElement('span');
-    textElement.textContent = 'Structured content';
+    textElement.textContent = this.node.attrs.alias || 'Structured content';
     dragHandle.append(textElement);
     return dragHandle;
   }

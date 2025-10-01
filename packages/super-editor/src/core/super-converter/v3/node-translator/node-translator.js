@@ -46,7 +46,7 @@ export const TranslatorTypes = Object.freeze({
  * @callback NodeTranslatorDecodeFn
  * @param {SCDecoderConfig} params
  * @param {DecodedAttributes} [decodedAttrs]
- * @returns {import('../../v2/types').OpenXmlNode}
+ * @returns {import('../../v2/types').OpenXmlNode | import('../../v2/types').OpenXmlNode[]}
  */
 
 /** @callback MatchesEncodeFn @param {any[]} nodes @param {any} [ctx] @returns {boolean} */

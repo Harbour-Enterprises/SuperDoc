@@ -3,6 +3,19 @@
 import { Extension } from '@core/Extension.js';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { shouldAllowNativeContextMenu } from '../../utils/contextmenu-helpers.js';
+
+const DEFAULT_SELECTION_STATE = Object.freeze({
+  focused: false,
+  preservedSelection: null,
+  showVisualSelection: false,
+  skipFocusReset: false,
+});
+
+const normalizeSelectionState = (state = {}) => ({
+  ...DEFAULT_SELECTION_STATE,
+  ...state,
+});
 
 /**
  * Selection state
@@ -10,6 +23,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
  * @property {boolean} focused - Whether editor is focused
  * @property {Object|null} preservedSelection - Stored selection
  * @property {boolean} showVisualSelection - Whether to show selection decoration
+ * @property {boolean} skipFocusReset - Whether to skip clearing selection on next focus
  */
 
 /**
@@ -118,11 +132,7 @@ export const CustomSelection = Extension.create({
     const customSelectionPlugin = new Plugin({
       key: CustomSelectionPluginKey,
       state: {
-        init: () => ({
-          focused: false,
-          preservedSelection: null,
-          showVisualSelection: false,
-        }),
+        init: () => ({ ...DEFAULT_SELECTION_STATE }),
         apply: (tr, value) => {
           const meta = getFocusMeta(tr);
           if (meta !== undefined) {
@@ -144,6 +154,10 @@ export const CustomSelection = Extension.create({
       props: {
         handleDOMEvents: {
           contextmenu: (view, event) => {
+            if (shouldAllowNativeContextMenu(event)) {
+              return false;
+            }
+
             // Prevent context menu from removing focus/selection
             event.preventDefault();
             const { selection } = view.state;
@@ -153,6 +167,7 @@ export const CustomSelection = Extension.create({
                   focused: true,
                   preservedSelection: selection,
                   showVisualSelection: true,
+                  skipFocusReset: true,
                 }),
               );
             }
@@ -168,6 +183,10 @@ export const CustomSelection = Extension.create({
           mousedown: (view, event) => {
             // Handle right clicks - prevent focus loss
             if (event.button === 2) {
+              if (shouldAllowNativeContextMenu(event)) {
+                return false;
+              }
+
               event.preventDefault(); // Prevent default right-click behavior
               const { selection } = view.state;
               if (!selection.empty) {
@@ -177,6 +196,7 @@ export const CustomSelection = Extension.create({
                     focused: true,
                     preservedSelection: selection,
                     showVisualSelection: true,
+                    skipFocusReset: true,
                   }),
                 );
 
@@ -208,6 +228,7 @@ export const CustomSelection = Extension.create({
                   focused: true,
                   preservedSelection: selection,
                   showVisualSelection: true,
+                  skipFocusReset: false,
                 }),
               );
 
@@ -231,6 +252,7 @@ export const CustomSelection = Extension.create({
                     focused: true,
                     preservedSelection: selection,
                     showVisualSelection: true,
+                    skipFocusReset: false,
                   }),
                 );
               }
@@ -245,6 +267,7 @@ export const CustomSelection = Extension.create({
                   focused: false,
                   preservedSelection: null,
                   showVisualSelection: false,
+                  skipFocusReset: false,
                 }),
               );
 
@@ -264,6 +287,14 @@ export const CustomSelection = Extension.create({
             const isElement = target instanceof Element;
             const isToolbarBtn = isElement && isToolbarButton(target);
             const isToolbarInp = isElement && isToolbarInput(target);
+            const focusState = getFocusState(view.state);
+
+            if (focusState?.skipFocusReset) {
+              view.dispatch(
+                setFocusMeta(view.state.tr, normalizeSelectionState({ ...focusState, skipFocusReset: false })),
+              );
+              return false;
+            }
 
             // Don't change state if toolbar element caused the focus
             if (!isToolbarBtn && !isToolbarInp) {
@@ -272,6 +303,7 @@ export const CustomSelection = Extension.create({
                   focused: false,
                   preservedSelection: null,
                   showVisualSelection: false,
+                  skipFocusReset: false,
                 }),
               );
             }
@@ -284,6 +316,10 @@ export const CustomSelection = Extension.create({
             const isToolbarInp = isElement && isToolbarInput(target);
             const state = getFocusState(view.state);
 
+            if (state?.skipFocusReset) {
+              return false;
+            }
+
             if (isToolbarBtn || isToolbarInp) {
               // Maintain visual selection when toolbar elements are focused
               view.dispatch(
@@ -291,6 +327,7 @@ export const CustomSelection = Extension.create({
                   focused: true,
                   preservedSelection: state.preservedSelection || view.state.selection,
                   showVisualSelection: true,
+                  skipFocusReset: false,
                 }),
               );
             } else {
@@ -300,6 +337,7 @@ export const CustomSelection = Extension.create({
                   focused: false,
                   preservedSelection: null,
                   showVisualSelection: false,
+                  skipFocusReset: false,
                 }),
               );
             }

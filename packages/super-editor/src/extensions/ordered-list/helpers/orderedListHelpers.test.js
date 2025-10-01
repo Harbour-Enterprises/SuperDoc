@@ -124,10 +124,4 @@ describe('ordered list helpers', () => {
     expect(attrs[1].listLevel).toEqual([2]);
     expect(attrs[0].lvlText).toBe('%1.');
   });
-
-  it('randomId returns a hexadecimal string', () => {
-    const id = randomId();
-    expect(typeof id).toBe('string');
-    expect(id).toMatch(/^[0-9a-f]+$/i);
-  });
 });

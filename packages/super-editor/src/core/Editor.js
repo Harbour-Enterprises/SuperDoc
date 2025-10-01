@@ -564,7 +564,7 @@ export class Editor extends EventEmitter {
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
     if (!this.extensionService || !this.state) return;
 
-    const pm = this.view?.dom;
+    const pm = this.view?.dom || this.options.element?.querySelector?.('.ProseMirror');
 
     if (this.options.role === 'viewer') cleanedMode = 'viewing';
     if (this.options.role === 'suggester' && cleanedMode === 'editing') cleanedMode = 'suggesting';
@@ -1033,7 +1033,7 @@ export class Editor extends EventEmitter {
             isEditMode: false,
             documentMode: this.options.documentMode,
           });
-          const pm = this.view?.dom;
+          const pm = this.view?.dom || this.options.element?.querySelector?.('.ProseMirror');
           if (pm) {
             pm.classList.remove('header-footer-edit');
             pm.setAttribute('aria-readonly', false);
@@ -1629,6 +1629,7 @@ export class Editor extends EventEmitter {
           },
           media,
           true,
+          updatedDocs,
         );
         return updatedDocs;
       }

@@ -1,3 +1,56 @@
+# [0.22.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.21.0...v0.22.0) (2025-09-30)
+
+### Bug Fixes
+
+- context menu bypass standards ([#1029](https://github.com/Harbour-Enterprises/SuperDoc/issues/1029)) ([99e6bf7](https://github.com/Harbour-Enterprises/SuperDoc/commit/99e6bf70244116f5be464737dc03d7e1b2dc4f83))
+- context menu bypass standards ([#1032](https://github.com/Harbour-Enterprises/SuperDoc/issues/1032)) ([8c80c2c](https://github.com/Harbour-Enterprises/SuperDoc/commit/8c80c2cc92a531e2296de9d7d03c8a85ea415da6))
+- do not track the annotation deletion on table generation ([#1036](https://github.com/Harbour-Enterprises/SuperDoc/issues/1036)) ([5e77dd4](https://github.com/Harbour-Enterprises/SuperDoc/commit/5e77dd419ae71514b1c68f96ef4907f250c199b1))
+- import/export of missing pict separators ([#1048](https://github.com/Harbour-Enterprises/SuperDoc/issues/1048)) ([8320a2c](https://github.com/Harbour-Enterprises/SuperDoc/commit/8320a2c92f81cde20db871828f9daf14a9b3e40e))
+- losing selection on right click ([1e66343](https://github.com/Harbour-Enterprises/SuperDoc/commit/1e663436f36d8ba316d70521da7982605908e718))
+- missing docx defaults from llm generated files ([#1030](https://github.com/Harbour-Enterprises/SuperDoc/issues/1030)) ([de7a2b2](https://github.com/Harbour-Enterprises/SuperDoc/commit/de7a2b27d2a0eb37ce9c8d371268194be10a5d56))
+- scope editor DOM queries to recover typing latency ([#1033](https://github.com/Harbour-Enterprises/SuperDoc/issues/1033)) ([7149090](https://github.com/Harbour-Enterprises/SuperDoc/commit/71490902574402c815f546656881d521afea8a70))
+- tracked changes don't have corresponding comments ([#1045](https://github.com/Harbour-Enterprises/SuperDoc/issues/1045)) ([ebead1a](https://github.com/Harbour-Enterprises/SuperDoc/commit/ebead1a1ede27f88f58734325888f695b7a40e4b))
+
+### Features
+
+- add MS Word fallback sizes to tables from LLM generated docx missing key data ([#1035](https://github.com/Harbour-Enterprises/SuperDoc/issues/1035)) ([850cc0b](https://github.com/Harbour-Enterprises/SuperDoc/commit/850cc0bc0781f386b3fb1e62ca1cd2be4ba0177d))
+- **menu:** add custom context menu items functionality ([#988](https://github.com/Harbour-Enterprises/SuperDoc/issues/988)) ([57e77d9](https://github.com/Harbour-Enterprises/SuperDoc/commit/57e77d9c87f5aabb71b0005254fb925645803fcd))
+- structured content commands ([#1037](https://github.com/Harbour-Enterprises/SuperDoc/issues/1037)) ([1acf705](https://github.com/Harbour-Enterprises/SuperDoc/commit/1acf705849a219b5c59428410db3875f25acc52c))
+
+# [0.21.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.20.2...v0.21.0) (2025-09-24)
+
+### Bug Fixes
+
+- allow regex search across docx run wrappers ([#1021](https://github.com/Harbour-Enterprises/SuperDoc/issues/1021)) ([053fedc](https://github.com/Harbour-Enterprises/SuperDoc/commit/053fedcf2f6b611ea5b4bb431fcb306c299d73a0))
+- bookmarkStart custom round trip, tests, add example doc with round trip tests ([#1014](https://github.com/Harbour-Enterprises/SuperDoc/issues/1014)) ([0849157](https://github.com/Harbour-Enterprises/SuperDoc/commit/0849157933eda9bf4c0917620e28cac8a9f34cab))
+- build ([#992](https://github.com/Harbour-Enterprises/SuperDoc/issues/992)) ([9ce8d6f](https://github.com/Harbour-Enterprises/SuperDoc/commit/9ce8d6fc614158ea83e143e7175319902f74e952))
+- commitlint for historical commits ([8294dc5](https://github.com/Harbour-Enterprises/SuperDoc/commit/8294dc5fe64e2fd6e2f01c99deb78070900b33c6))
+- deprecation message ([5e2a112](https://github.com/Harbour-Enterprises/SuperDoc/commit/5e2a112a026bac3690dcd784c6ad8ce6bd7b9d89))
+- example tests ([25adfea](https://github.com/Harbour-Enterprises/SuperDoc/commit/25adfea9ca37a60057fbfeaa3d2dc7de38df4328))
+- examples tests ([21a834a](https://github.com/Harbour-Enterprises/SuperDoc/commit/21a834acf6df93740b14050498b3286a0c80f6c5))
+- export table annotation images with sanitized media paths, add tests ([a270b2a](https://github.com/Harbour-Enterprises/SuperDoc/commit/a270b2a3639adc17922ead9791088622bce3232f))
+- field annotation export test ([f0a68f4](https://github.com/Harbour-Enterprises/SuperDoc/commit/f0a68f4fa7e5563ead5479d1658daffc7417d849))
+- headless mode crash ([#1002](https://github.com/Harbour-Enterprises/SuperDoc/issues/1002)) ([08a72cb](https://github.com/Harbour-Enterprises/SuperDoc/commit/08a72cbf0005804e746eea98caf19b658a597a6d))
+- **image:** preserve anchored rotation margins and add coverage ([#1013](https://github.com/Harbour-Enterprises/SuperDoc/issues/1013)) ([15aaba7](https://github.com/Harbour-Enterprises/SuperDoc/commit/15aaba7725b233b27c22d0ceb70113cd0aada779))
+- **importer:** retain gdocs comments without extended metadata ([#1017](https://github.com/Harbour-Enterprises/SuperDoc/issues/1017)) ([c232308](https://github.com/Harbour-Enterprises/SuperDoc/commit/c232308289473b41f071326cf8edd1d658e7310e))
+- legacy publish ([bffa3da](https://github.com/Harbour-Enterprises/SuperDoc/commit/bffa3dad5853ca04f3ef5d10c73d5fdd9e5a2e5e))
+- make 'structured content' title more opaque so its clearly visible over content ([e422e86](https://github.com/Harbour-Enterprises/SuperDoc/commit/e422e86c403a4a68b8f158683828c6b85e517e6f))
+- mirror superdoc releases to scoped package ([#1018](https://github.com/Harbour-Enterprises/SuperDoc/issues/1018)) ([fe2ed0f](https://github.com/Harbour-Enterprises/SuperDoc/commit/fe2ed0f89d7e194d75517c9c16165e7c9c104954))
+- normalize file names for images, add tests ([#1009](https://github.com/Harbour-Enterprises/SuperDoc/issues/1009)) ([a841905](https://github.com/Harbour-Enterprises/SuperDoc/commit/a841905092d4eb18c25cf0a2b5a43074d832d2a0))
+- skip table rows without content ([#990](https://github.com/Harbour-Enterprises/SuperDoc/issues/990)) ([62ce156](https://github.com/Harbour-Enterprises/SuperDoc/commit/62ce15688ba43f987959237751754f25291c6a47))
+- table spacing import export ([#1008](https://github.com/Harbour-Enterprises/SuperDoc/issues/1008)) ([7deb5d2](https://github.com/Harbour-Enterprises/SuperDoc/commit/7deb5d2ca0b2195a5f02741de5e90b93eb96ef8c))
+- test ([93eb27d](https://github.com/Harbour-Enterprises/SuperDoc/commit/93eb27d78c4cf35f01d2170e6988ea5daf296191))
+- ul lists importing as ol ([#978](https://github.com/Harbour-Enterprises/SuperDoc/issues/978)) ([#979](https://github.com/Harbour-Enterprises/SuperDoc/issues/979)) ([d02ea82](https://github.com/Harbour-Enterprises/SuperDoc/commit/d02ea824865e903063c9b7e4003578b573ffe0c6)), closes [#977](https://github.com/Harbour-Enterprises/SuperDoc/issues/977)
+
+### Features
+
+- add bookmark start and end node handlers with v3 translators ([#946](https://github.com/Harbour-Enterprises/SuperDoc/issues/946)) ([81c0b24](https://github.com/Harbour-Enterprises/SuperDoc/commit/81c0b24d286d4cf4c916f86eb8abce0b68b1e8c9))
+- add v3 handler for w:tbl table (HAR-10483) ([#985](https://github.com/Harbour-Enterprises/SuperDoc/issues/985)) ([be58be8](https://github.com/Harbour-Enterprises/SuperDoc/commit/be58be842907d12752b81a2f1fb67b5179d52ed8))
+- custom highlight plugin example ([7beede6](https://github.com/Harbour-Enterprises/SuperDoc/commit/7beede658b2ce408a6d81a870509d1b37712805d))
+- register images from paste + HTML insertion, fixes [#790](https://github.com/Harbour-Enterprises/SuperDoc/issues/790) ([#1010](https://github.com/Harbour-Enterprises/SuperDoc/issues/1010)) ([b444138](https://github.com/Harbour-Enterprises/SuperDoc/commit/b444138ad899acc817e4dad065d9f9fc081e017b))
+- run node ([#986](https://github.com/Harbour-Enterprises/SuperDoc/issues/986)) ([4e85dcd](https://github.com/Harbour-Enterprises/SuperDoc/commit/4e85dcd17fdc2f563f247a0f2687558d0d2ccd32))
+- structured content node views ([#987](https://github.com/Harbour-Enterprises/SuperDoc/issues/987)) ([1df4d91](https://github.com/Harbour-Enterprises/SuperDoc/commit/1df4d910b658c1cba3b11a157988e10b6662a4cc))
+
 ## [0.20.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.20.1...v0.20.2) (2025-09-22)
 
 ### Bug Fixes
