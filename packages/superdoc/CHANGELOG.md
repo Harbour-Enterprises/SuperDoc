@@ -1,3 +1,9 @@
+## [0.22.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.0...v0.22.1) (2025-10-01)
+
+### Bug Fixes
+
+- instrtext bug with unhandled angled brackets ([#1051](https://github.com/Harbour-Enterprises/SuperDoc/issues/1051)) ([71cf182](https://github.com/Harbour-Enterprises/SuperDoc/commit/71cf1825b46832da1039269a1c727d3a7c74ffaf))
+
 # [0.22.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.21.0...v0.22.0) (2025-09-30)
 
 ### Bug Fixes
