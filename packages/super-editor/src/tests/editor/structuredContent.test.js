@@ -110,4 +110,49 @@ describe('Structured content tests', () => {
 
     expect(getStructuredContentTags(editor.state).length).toBe(0);
   });
+
+  it('tests updating multiple fields with same alias', () => {
+    // Create 3 fields with same alias
+    editor.commands.insertStructuredContentInline({
+      text: 'Customer Name 1',
+      attrs: { id: '1', alias: 'customer_name' },
+    });
+    editor.commands.insertStructuredContentInline({
+      text: 'Customer Name 2',
+      attrs: { id: '2', alias: 'customer_name' },
+    });
+    editor.commands.insertStructuredContentInline({
+      text: 'Customer Name 3',
+      attrs: { id: '3', alias: 'customer_name' },
+    });
+
+    // Verify all 3 have same alias
+    expect(getStructuredContentTagsByAlias('customer_name', editor.state).length).toBe(3);
+
+    // Update by alias should update ALL fields with that alias
+    editor.commands.updateStructuredContentByAlias('customer_name', {
+      text: 'John Doe',
+    });
+
+    // Verify all 3 were updated
+    const updatedFields = getStructuredContentTagsByAlias('customer_name', editor.state);
+    expect(updatedFields.length).toBe(3);
+    expect(updatedFields[0].node.textContent).toBe('John Doe');
+    expect(updatedFields[1].node.textContent).toBe('John Doe');
+    expect(updatedFields[2].node.textContent).toBe('John Doe');
+
+    // Update by ID should only update one
+    editor.commands.updateStructuredContentById('2', {
+      text: 'Jane Doe',
+    });
+
+    // Verify only the one with ID '2' changed
+    const field1 = getStructuredContentTagsById('1', editor.state)[0];
+    const field2 = getStructuredContentTagsById('2', editor.state)[0];
+    const field3 = getStructuredContentTagsById('3', editor.state)[0];
+
+    expect(field1.node.textContent).toBe('John Doe');
+    expect(field2.node.textContent).toBe('Jane Doe');
+    expect(field3.node.textContent).toBe('John Doe');
+  });
 });
