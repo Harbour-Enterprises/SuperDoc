@@ -1370,7 +1370,10 @@ export class DocxExporter {
 
     if (elements) {
       if (name === 'w:instrText') {
-        tags.push(elements[0].text);
+        const textContent = (elements || [])
+          .map((child) => (typeof child?.text === 'string' ? child.text : ''))
+          .join('');
+        tags.push(this.#replaceSpecialCharacters(textContent));
       } else if (name === 'w:t' || name === 'w:delText' || name === 'wp:posOffset') {
         try {
           // test for valid string
