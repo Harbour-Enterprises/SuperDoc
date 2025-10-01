@@ -1,3 +1,28 @@
+## [0.22.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.0...v0.22.1) (2025-10-01)
+
+### Bug Fixes
+
+- instrtext bug with unhandled angled brackets ([#1051](https://github.com/Harbour-Enterprises/SuperDoc/issues/1051)) ([71cf182](https://github.com/Harbour-Enterprises/SuperDoc/commit/71cf1825b46832da1039269a1c727d3a7c74ffaf))
+
+# [0.22.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.21.0...v0.22.0) (2025-09-30)
+
+### Bug Fixes
+
+- context menu bypass standards ([#1029](https://github.com/Harbour-Enterprises/SuperDoc/issues/1029)) ([99e6bf7](https://github.com/Harbour-Enterprises/SuperDoc/commit/99e6bf70244116f5be464737dc03d7e1b2dc4f83))
+- context menu bypass standards ([#1032](https://github.com/Harbour-Enterprises/SuperDoc/issues/1032)) ([8c80c2c](https://github.com/Harbour-Enterprises/SuperDoc/commit/8c80c2cc92a531e2296de9d7d03c8a85ea415da6))
+- do not track the annotation deletion on table generation ([#1036](https://github.com/Harbour-Enterprises/SuperDoc/issues/1036)) ([5e77dd4](https://github.com/Harbour-Enterprises/SuperDoc/commit/5e77dd419ae71514b1c68f96ef4907f250c199b1))
+- import/export of missing pict separators ([#1048](https://github.com/Harbour-Enterprises/SuperDoc/issues/1048)) ([8320a2c](https://github.com/Harbour-Enterprises/SuperDoc/commit/8320a2c92f81cde20db871828f9daf14a9b3e40e))
+- losing selection on right click ([1e66343](https://github.com/Harbour-Enterprises/SuperDoc/commit/1e663436f36d8ba316d70521da7982605908e718))
+- missing docx defaults from llm generated files ([#1030](https://github.com/Harbour-Enterprises/SuperDoc/issues/1030)) ([de7a2b2](https://github.com/Harbour-Enterprises/SuperDoc/commit/de7a2b27d2a0eb37ce9c8d371268194be10a5d56))
+- scope editor DOM queries to recover typing latency ([#1033](https://github.com/Harbour-Enterprises/SuperDoc/issues/1033)) ([7149090](https://github.com/Harbour-Enterprises/SuperDoc/commit/71490902574402c815f546656881d521afea8a70))
+- tracked changes don't have corresponding comments ([#1045](https://github.com/Harbour-Enterprises/SuperDoc/issues/1045)) ([ebead1a](https://github.com/Harbour-Enterprises/SuperDoc/commit/ebead1a1ede27f88f58734325888f695b7a40e4b))
+
+### Features
+
+- add MS Word fallback sizes to tables from LLM generated docx missing key data ([#1035](https://github.com/Harbour-Enterprises/SuperDoc/issues/1035)) ([850cc0b](https://github.com/Harbour-Enterprises/SuperDoc/commit/850cc0bc0781f386b3fb1e62ca1cd2be4ba0177d))
+- **menu:** add custom context menu items functionality ([#988](https://github.com/Harbour-Enterprises/SuperDoc/issues/988)) ([57e77d9](https://github.com/Harbour-Enterprises/SuperDoc/commit/57e77d9c87f5aabb71b0005254fb925645803fcd))
+- structured content commands ([#1037](https://github.com/Harbour-Enterprises/SuperDoc/issues/1037)) ([1acf705](https://github.com/Harbour-Enterprises/SuperDoc/commit/1acf705849a219b5c59428410db3875f25acc52c))
+
 # [0.21.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.20.2...v0.21.0) (2025-09-24)
 
 ### Bug Fixes
