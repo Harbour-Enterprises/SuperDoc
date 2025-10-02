@@ -223,7 +223,7 @@ const handleSuperEditorKeydown = (event) => {
     openPopover(markRaw(LinkInput), {}, { left, top });
   }
 
-  emit('editor-keydown', { editor: editor.value });
+  emit('editor-keydown', { editor: editor.value, event });
 };
 
 const handleSuperEditorClick = (event) => {

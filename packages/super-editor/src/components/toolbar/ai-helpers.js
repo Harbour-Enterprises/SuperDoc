@@ -17,12 +17,48 @@
  */
 
 // Default API endpoint if none is provided in config
-// Default is the SuperDoc gateway (passthrough to Harbour API)
-const DEFAULT_API_ENDPOINT = 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights';
+// Updated to use localhost FastAPI server for OpenAI/Azure integration
+const DEFAULT_API_ENDPOINT = 'http://localhost:3001/api/suggest-actions';
+const LEGACY_API_ENDPOINT = 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights';
 const SYSTEM_PROMPT =
   'You are an expert copywriter and you are immersed in a document editor. You are to provide document related text responses based on the user prompts. Only write what is asked for. Do not provide explanations. Try to keep placeholders as short as possible. Do not output your prompt. Your instructions are: ';
 /**
- * UTILITY - Makes a fetch request to the Harbour API
+ * UTILITY - Makes a fetch request to the localhost FastAPI server
+ * @param {string} query - The user query/prompt
+ * @param {string} text - The document context
+ * @param {Object} options - Configuration options
+ * @returns {Promise<Object>} - The API response with suggestions
+ */
+async function fetchFromLocalhost(query, text, options = {}) {
+  const apiEndpoint = options.endpoint || DEFAULT_API_ENDPOINT;
+
+  try {
+    const response = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: query,
+        text: text,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`FastAPI server error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Error calling FastAPI server:', error);
+    throw error;
+  }
+}
+
+/**
+ * UTILITY - Makes a fetch request to the Harbour API (legacy)
  * @param {Object} payload - The request payload
  * @param {Object} options - Configuration options
  * @param {string} options.apiKey - API key for authentication
@@ -32,8 +68,8 @@ const SYSTEM_PROMPT =
 async function baseInsightsFetch(payload, options = {}) {
   const apiKey = options.apiKey;
 
-  // Use the provided endpoint from config, or fall back to the default
-  const apiEndpoint = options.endpoint || DEFAULT_API_ENDPOINT;
+  // Use the provided endpoint from config, or fall back to the legacy endpoint
+  const apiEndpoint = options.endpoint || LEGACY_API_ENDPOINT;
 
   try {
     const headers = {
@@ -150,7 +186,31 @@ async function returnNonStreamingJson(response) {
 }
 
 /**
- * Generate text based on a prompt with streaming
+ * Generate text using localhost FastAPI server
+ * @param {string} prompt - User prompt
+ * @param {Object} options - Additional options
+ * @param {string} options.documentXml - Document XML for context
+ * @param {Object} options.config - API configuration
+ * @returns {Promise<Array>} - Array of suggestions with label and insertText
+ */
+export async function generateSuggestions(prompt, options = {}) {
+  if (!prompt) {
+    throw new Error('Prompt is required for text generation');
+  }
+
+  const documentContext = options.documentXml || '';
+
+  try {
+    const result = await fetchFromLocalhost(prompt, documentContext, options.config || {});
+    return result.suggestions || [];
+  } catch (error) {
+    console.error('Error generating suggestions:', error);
+    throw error;
+  }
+}
+
+/**
+ * Generate text based on a prompt with streaming (legacy)
  * @param {string} prompt - User prompt
  * @param {Object} options - Additional options
  * @param {string} options.context - System prompt to guide generation
@@ -344,6 +404,45 @@ const formatRegistry = {
  *
  * @param {Object} editor - The ProseMirror editor instance containing the document state and view
  */
+/**
+ * Generate text using localhost FastAPI server with OpenAI/Azure integration
+ * @param {string} prompt - User prompt
+ * @param {string} documentContext - Document content for context
+ * @param {Object} config - Configuration options
+ * @returns {Promise<Array>} - Array of suggestions with label and insertText
+ */
+export async function generateWithLocalhost(prompt, documentContext = '', config = {}) {
+  if (!prompt) {
+    throw new Error('Prompt is required for text generation');
+  }
+
+  const apiEndpoint = config.endpoint || DEFAULT_API_ENDPOINT;
+
+  try {
+    const response = await fetch(apiEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        query: prompt,
+        text: documentContext,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`FastAPI server error: ${response.status} - ${errorText}`);
+    }
+
+    const result = await response.json();
+    return result.suggestions || [];
+  } catch (error) {
+    console.error('Error calling localhost FastAPI server:', error);
+    throw error;
+  }
+}
+
 export function formatDocument(editor) {
   try {
     let doc = editor.state.doc;
