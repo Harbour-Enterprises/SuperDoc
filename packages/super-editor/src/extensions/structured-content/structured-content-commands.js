@@ -4,6 +4,7 @@ import { htmlHandler } from '@core/InputRule';
 import { findParentNode } from '@helpers/findParentNode';
 import { generateRandomSigned32BitIntStrId } from '@core/helpers/generateDocxRandomId.js';
 import { getStructuredContentTagsById } from './structuredContentHelpers/getStructuredContentTagsById';
+import { getStructuredContentTagsByAlias } from './structuredContentHelpers/getStructuredContentTagsByAlias';
 import * as structuredContentHelpers from './structuredContentHelpers/index';
 
 const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock'];
@@ -142,10 +143,11 @@ export const StructuredContentCommands = Extension.create({
         },
 
       /**
-       * Updates a structured content attributes or content.
+       * Updates a single structured content field by its unique ID.
+       * IDs are unique identifiers, so this will update at most one field.
        * If the updated node does not match the schema, it will not be updated.
        * @category Command
-       * @param {string} id
+       * @param {string} id - Unique identifier of the field
        * @param {StructuredContentUpdate} options
        */
       updateStructuredContentById:
@@ -194,6 +196,73 @@ export const StructuredContentCommands = Extension.create({
             }
 
             tr.replaceWith(posFrom, posTo, updatedNode);
+          }
+
+          return true;
+        },
+
+      /**
+       * Updates all structured content fields with the same alias.
+       * Unlike IDs (which are unique), aliases can be shared across multiple fields.
+       * This will update every field that matches the given alias.
+       * If any updated node does not match the schema, no updates will be applied.
+       * @category Command
+       * @param {string | string[]} alias - Shared identifier for fields (e.g., "customer_name")
+       * @param {StructuredContentUpdate} options
+       */
+      updateStructuredContentByAlias:
+        (alias, options = {}) =>
+        ({ editor, dispatch, state, tr }) => {
+          const structuredContentTags = getStructuredContentTagsByAlias(alias, state);
+
+          if (!structuredContentTags.length) {
+            return true;
+          }
+
+          const { schema } = editor;
+
+          const createContent = (node) => {
+            if (options.text) {
+              return schema.text(options.text);
+            }
+
+            if (options.html) {
+              const html = htmlHandler(options.html, editor);
+              const doc = PMDOMParser.fromSchema(schema).parse(html);
+              return doc.content;
+            }
+
+            if (options.json) {
+              return schema.nodeFromJSON(options.json);
+            }
+
+            return node.content;
+          };
+
+          // Validate all updates first
+          for (const { node } of structuredContentTags) {
+            const content = createContent(node);
+            const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
+            try {
+              updatedNode.check();
+            } catch {
+              console.error('Updated node does not conform to the schema');
+              return false;
+            }
+          }
+
+          // Apply updates using mapping to handle position changes
+          if (dispatch) {
+            structuredContentTags.forEach(({ pos, node }) => {
+              const mappedPos = tr.mapping.map(pos);
+              const currentNode = tr.doc.nodeAt(mappedPos);
+
+              if (currentNode && node.eq(currentNode)) {
+                const content = createContent(node);
+                const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
+                tr.replaceWith(mappedPos, mappedPos + node.nodeSize, updatedNode);
+              }
+            });
           }
 
           return true;

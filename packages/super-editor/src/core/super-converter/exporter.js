@@ -12,7 +12,6 @@ import { generateDocxRandomId, generateRandomSigned32BitIntStrId } from '@helper
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
-import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
@@ -177,8 +176,6 @@ export function exportSchemaToJson(params) {
     hardBreak: wBrNodeTranslator,
     commentRangeStart: wCommentRangeStartTranslator,
     commentRangeEnd: wCommentRangeEndTranslator,
-    // commentRangeStart: () => translateCommentNode(params, 'Start'),
-    // commentRangeEnd: () => translateCommentNode(params, 'End'),
     commentReference: () => null,
     shapeContainer: translateShapeContainer,
     shapeTextbox: translateShapeTextbox,

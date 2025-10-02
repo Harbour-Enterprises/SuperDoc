@@ -12,14 +12,7 @@ vi.mock('@converter/helpers.js', () => ({
 // Import all named exports to allow spying on internal helpers
 import * as helpers from './w-p-helpers.js';
 
-const {
-  parseParagraphBorders,
-  getParagraphIndent,
-  getParagraphSpacing,
-  getDefaultParagraphStyle,
-  preProcessNodesForFldChar,
-  processCombinedNodesForFldChar,
-} = helpers;
+const { parseParagraphBorders, getParagraphIndent, getParagraphSpacing, getDefaultParagraphStyle } = helpers;
 
 describe('w-p-helpers', () => {
   afterEach(() => {
@@ -370,86 +363,6 @@ describe('w-p-helpers', () => {
       expect(res.spacing).toEqual({ 'w:line': '480', 'w:before': '240', 'w:after': '240' });
       expect(res.indent).toEqual({ 'w:left': '200', 'w:right': '80' });
       expect(res.justify).toEqual({ 'w:val': 'center' });
-    });
-  });
-
-  describe('preProcessNodesForFldChar', () => {
-    it('passes through non-field nodes and replaces PAGE fields with autoPageNumber', () => {
-      const A = { name: 'w:r', elements: [] };
-      const begin = { name: 'w:r', elements: [{ name: 'w:fldChar', attributes: { 'w:fldCharType': 'begin' } }] };
-      const instr = { name: 'w:r', elements: [{ name: 'w:instrText', elements: [{ type: 'text', text: ' PAGE ' }] }] };
-      const end = { name: 'w:r', elements: [{ name: 'w:fldChar', attributes: { 'w:fldCharType': 'end' } }] };
-      const B = { name: 'w:r', elements: [] };
-
-      const out = preProcessNodesForFldChar([A, begin, instr, end, B]);
-      expect(out[0]).toEqual(A);
-      expect(out[1].name).toBe('sd:autoPageNumber');
-      expect(out[2]).toEqual(B);
-    });
-
-    it('keeps buffer if field is unclosed', () => {
-      const begin = { name: 'w:r', elements: [{ name: 'w:fldChar', attributes: { 'w:fldCharType': 'begin' } }] };
-      const mid = { name: 'w:r', elements: [] };
-      const out = preProcessNodesForFldChar([begin, mid]);
-      expect(out).toEqual([begin, mid]);
-    });
-  });
-
-  describe('processCombinedNodesForFldChar', () => {
-    const mkInstr = (text) => ({
-      name: 'w:r',
-      elements: [{ name: 'w:instrText', elements: [{ type: 'text', text }] }],
-    });
-    const fld = (type) => ({ name: 'w:r', elements: [{ name: 'w:fldChar', attributes: { 'w:fldCharType': type } }] });
-
-    it('creates sd:autoPageNumber for PAGE fields and preserves rPr', () => {
-      const rPr = { name: 'w:rPr', elements: [{ name: 'w:b' }] };
-      const nodes = [fld('begin'), mkInstr(' PAGE  '), { name: 'w:r', elements: [rPr] }, fld('end')];
-      const out = processCombinedNodesForFldChar(nodes);
-      expect(out).toHaveLength(1);
-      expect(out[0].name).toBe('sd:autoPageNumber');
-      expect(out[0].elements).toEqual([rPr]);
-    });
-
-    it('creates sd:totalPageNumber for NUMPAGES fields and preserves rPr', () => {
-      const rPr = { name: 'w:rPr', elements: [{ name: 'w:i' }] };
-      const nodes = [fld('begin'), mkInstr(' NUMPAGES  '), { name: 'w:r', elements: [rPr] }, fld('end')];
-      const out = processCombinedNodesForFldChar(nodes);
-      expect(out).toHaveLength(1);
-      expect(out[0].name).toBe('sd:totalPageNumber');
-      expect(out[0].elements).toEqual([rPr]);
-    });
-
-    it('wraps hyperlink text with link mark and text marks', () => {
-      const rPr1 = { name: 'w:rPr', elements: [{ name: 'w:b' }] };
-      const rPr2 = { name: 'w:rPr', elements: [{ name: 'w:color', attributes: { 'w:val': 'FF0000' } }] };
-      const text1 = { name: 'w:t', elements: [{ type: 'text', text: 'Click' }] };
-      const text2 = { name: 'w:t', elements: [{ type: 'text', text: ' here' }] };
-      const nodes = [
-        fld('begin'),
-        mkInstr(' HYPERLINK "https://example.com" '),
-        { name: 'w:r', elements: [rPr1, text1] },
-        fld('separate'),
-        { name: 'w:r', elements: [rPr2, text2] },
-        fld('end'),
-      ];
-      const out = processCombinedNodesForFldChar(nodes);
-      expect(out).toHaveLength(1);
-      expect(out[0].name).toBe('w:r');
-      const rPr = out[0].elements[0];
-      expect(rPr.name).toBe('w:rPr');
-      expect(rPr.elements[0]).toEqual({ name: 'link', attributes: { href: 'https://example.com' } });
-      // then includes all collected text marks
-      // Only marks from nodes between 'separate' and 'end' are collected (rPr2)
-      expect(rPr.elements.slice(1)).toEqual([...rPr2.elements]);
-      // followed by original text nodes
-      expect(out[0].elements.slice(1)).toEqual([{ name: 'w:r', elements: [rPr2, text2] }]);
-    });
-
-    it('returns empty array when no recognized markers are present', () => {
-      const nodes = [fld('begin'), mkInstr('UNKNOWN'), fld('end')];
-      const out = processCombinedNodesForFldChar(nodes);
-      expect(out).toEqual([]);
     });
   });
 });

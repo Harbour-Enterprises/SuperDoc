@@ -5,7 +5,12 @@
 
 /**
  * Represents a node in the Open XML document structure.
- * @typedef {Object} OpenXmlNode
+ * @typedef {object} OpenXmlNode
+ * @property {string} name
+ * @property {string} [type]
+ * @property {object} [attributes]
+ * @property {OpenXmlNode[]} [elements]
+ * @property {string} [text]
  */
 
 export {};

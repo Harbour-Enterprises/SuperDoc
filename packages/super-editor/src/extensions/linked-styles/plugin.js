@@ -125,7 +125,13 @@ const generateDecorations = (state, styles) => {
     };
 
     const pMap = buildStyleMap(paragraphStyleId);
-    const tMap = buildStyleMap(inlineTextStyleId);
+    let tMap;
+    if (paragraphStyleId?.startsWith('TOC')) {
+      // Word ignores inline text styles for text in TOC paragraphs, so we do the same
+      tMap = {};
+    } else {
+      tMap = buildStyleMap(inlineTextStyleId);
+    }
     const rMap = buildStyleMap(runStyleId);
     const finalStyles = { ...pMap, ...tMap, ...rMap };
     if (Object.keys(finalStyles).length === 0) return;

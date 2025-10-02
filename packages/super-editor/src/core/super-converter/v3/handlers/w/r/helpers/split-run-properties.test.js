@@ -71,6 +71,12 @@ describe('splitRunProperties', () => {
     expect(result.remainingProps).toEqual([{ xmlName: 'w:rStyle', attributes: { 'w:val': 'Heading1' } }]);
   });
 
+  it('handles complex script font size (w:szCs) correctly', () => {
+    const entries = [{ xmlName: 'w:szCs', attributes: { 'w:val': '24' } }];
+    const result = splitRunProperties(entries);
+    expect(result.textStyleAttrs).toEqual({ fontSizeCs: '12pt' });
+  });
+
   it('returns defaults when entries list is empty', () => {
     const result = splitRunProperties();
     expect(result).toEqual({ remainingProps: [], inlineMarks: [], textStyleAttrs: null, runStyleId: null });
