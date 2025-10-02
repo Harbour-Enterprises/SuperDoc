@@ -145,7 +145,6 @@ function decode(params) {
  *
  * @param {import('@translator').SCDecoderConfig} params
  * @param {string} [link] The URL of this link
- * @param {string|null} [rId] The existing relationship ID, if any
  * @returns {string} The new relationship ID
  */
 function _addNewLinkRelationship(params, link) {
@@ -153,14 +152,6 @@ function _addNewLinkRelationship(params, link) {
 
   if (!params.relationships || !Array.isArray(params.relationships)) {
     params.relationships = [];
-  }
-
-  // Check if the relationship already exists
-  const existingRel = params.relationships.find(
-    (rel) => rel.attributes && rel.attributes.Id === id && rel.attributes.Target === link,
-  );
-  if (existingRel) {
-    return id;
   }
 
   params.relationships.push({
