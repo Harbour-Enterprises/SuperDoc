@@ -37,3 +37,12 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+
+.ProseMirror.view-mode .sd-document-section-block {
+  background: none;
+  border: none;
+}
+
+.ProseMirror.view-mode .sd-document-section-block-info {
+  display: none;
+}
