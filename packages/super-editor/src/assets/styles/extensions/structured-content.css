@@ -7,6 +7,11 @@
   position: relative;
 }
 
+.sd-structured-content:has(img),
+.sd-structured-content:has(img) .sd-structured-content__content {
+  display: inline-block;
+}
+
 .sd-structured-content-draggable {
   font-size: 10px;
   align-items: center;
