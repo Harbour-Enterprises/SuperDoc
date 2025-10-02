@@ -152,7 +152,7 @@ export function handleImageNode(node, params, isAnchor) {
   }
 
   const marginOffset = {
-    left: positionHValue,
+    horizontal: positionHValue,
     top: positionVValue,
   };
 

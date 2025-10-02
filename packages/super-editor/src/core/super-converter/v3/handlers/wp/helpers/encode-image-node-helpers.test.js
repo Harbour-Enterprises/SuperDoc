@@ -198,7 +198,7 @@ describe('handleImageNode', () => {
       alignH: 'center',
       alignV: 'bottom',
     });
-    expect(result.attrs.marginOffset).toEqual({ left: 1, top: 2 });
+    expect(result.attrs.marginOffset).toEqual({ horizontal: 1, top: 2 });
   });
 
   it('delegates to handleShapeDrawing when uri matches shape', () => {

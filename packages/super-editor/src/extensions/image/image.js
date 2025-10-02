@@ -27,7 +27,7 @@ import { getRotationMargins } from './imageHelpers/rotation.js';
  * @property {number} [padding.bottom] - Bottom padding in pixels
  * @property {number} [padding.right] - Right padding in pixels
  * @property {Object} [marginOffset] - Margin offset for anchored images
- * @property {number} [marginOffset.left] - Left margin offset
+ * @property {number} [marginOffset.horizontal] - Left/right margin offset
  * @property {number} [marginOffset.top] - Top margin offset
  * @property {string} [style] - Custom inline CSS styles
  * @property {string} [id] @internal Image element ID
@@ -130,7 +130,7 @@ export const Image = Node.create({
        */
       wrap: {
         default: { type: 'Inline' },
-        renderDOM: ({ wrap }) => {
+        renderDOM: ({ wrap, marginOffset }) => {
           console.log('wrap', wrap);
           if (!wrap || !wrap.type) return {};
 
@@ -151,18 +151,21 @@ export const Image = Node.create({
             case 'Square':
               // Default to float left, allow wrapText to override
               if (attrs.wrapText === 'right') {
-                style += 'float: left;';
+                style += 'float: left; shape-outside: border-box;';
               } else if (attrs.wrapText === 'left') {
-                style += 'float: right;';
+                style += 'float: right; shape-outside: border-box;';
               } else if (attrs.wrapText === 'largest') {
                 // TODO
               } else if (attrs.wrapText === 'bothSides') {
-                // TODO
+                // TODO: wrapping text on both sides of an image is not currently supported
+                // in browsers.
+                // For now, we'll float it like 'largest'.
               }
-              if (attrs.distTop) style += `margin-top: ${attrs.distTop}px;`;
+              if (attrs.distTop && marginOffset?.top == null) style += `margin-top: ${attrs.distTop}px;`;
               if (attrs.distBottom) style += `margin-bottom: ${attrs.distBottom}px;`;
-              if (attrs.distLeft) style += `margin-left: ${attrs.distLeft}px;`;
-              if (attrs.distRight) style += `margin-right: ${attrs.distRight}px;`;
+              if (attrs.distLeft && marginOffset?.horizontal == null) style += `margin-left: ${attrs.distLeft}px;`;
+              if (attrs.distRight && marginOffset?.horizontal == null) style += `margin-right: ${attrs.distRight}px;`;
+              console.log('Square image style:', style, attrs);
               break;
 
             case 'Through':
@@ -287,7 +290,7 @@ export const Image = Node.create({
             bottom += vertical;
           }
           let style = '';
-          if (left && marginOffset?.left == null) style += `margin-left: ${left}px;`;
+          if (left && marginOffset?.horizontal == null) style += `margin-left: ${left}px;`;
           if (top && marginOffset?.top == null) style += `margin-top: ${top}px;`;
           if (bottom) style += `margin-bottom: ${bottom}px;`;
           if (right) style += `margin-right: ${right}px;`;
@@ -297,31 +300,32 @@ export const Image = Node.create({
 
       marginOffset: {
         default: {},
-        renderDOM: ({ marginOffset, anchorData, transformData, size }) => {
+        renderDOM: ({ marginOffset, anchorData, transformData, size, wrap }) => {
           const hasAnchorData = Boolean(anchorData);
-          const hasMarginOffsets = marginOffset?.left != null || marginOffset?.top != null;
+          const hasMarginOffsets = marginOffset?.horizontal != null || marginOffset?.top != null;
           if (!hasAnchorData && !hasMarginOffsets) return {};
-
+          const relativeToRight = wrap.type === 'Square' && wrap.attrs?.wrapText === 'left';
+          console.log('relativeToRight', relativeToRight, wrap);
           const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
           const maxMarginV = 500;
-          const baseLeft = marginOffset?.left ?? 0;
+          const baseHorizontal = marginOffset?.horizontal ?? 0;
           const baseTop = marginOffset?.top ?? 0;
 
-          let rotationLeft = 0;
+          let rotationHorizontal = 0;
           let rotationTop = 0;
           const { rotation } = transformData ?? {};
           const { height, width } = size ?? {};
           if (rotation && height && width) {
             const { horizontal, vertical } = getRotationMargins(width, height, rotation);
-            rotationLeft = horizontal;
+            rotationHorizontal = horizontal;
             rotationTop = vertical;
           }
 
-          const left = baseLeft + rotationLeft;
+          const horizontal = baseHorizontal + rotationHorizontal;
           const top = baseTop + rotationTop;
 
           let style = '';
-          if (left) style += `margin-left: ${left}px;`;
+          if (horizontal) style += `margin-${relativeToRight ? 'right' : 'left'}: ${horizontal}px;`;
           if (top) {
             if (relativeFromPageV && top >= maxMarginV) style += `margin-top: ${maxMarginV}px;`;
             else style += `margin-top: ${top}px;`;

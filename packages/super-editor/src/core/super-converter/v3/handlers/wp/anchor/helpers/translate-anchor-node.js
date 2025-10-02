@@ -22,10 +22,10 @@ export function translateAnchorNode(params) {
 
   if (attrs.anchorData) {
     const hElements = [];
-    if (attrs.marginOffset.left !== undefined) {
+    if (attrs.marginOffset.horizontal !== undefined) {
       hElements.push({
         name: 'wp:posOffset',
-        elements: [{ type: 'text', text: pixelsToEmu(attrs.marginOffset.left).toString() }],
+        elements: [{ type: 'text', text: pixelsToEmu(attrs.marginOffset.horizontal).toString() }],
       });
     }
     if (attrs.anchorData.alignH) {

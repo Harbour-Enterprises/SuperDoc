@@ -50,12 +50,12 @@ describe('translateAnchorNode', () => {
     );
   });
 
-  it('should add wp:positionH with posOffset when marginOffset.left is defined', () => {
+  it('should add wp:positionH with posOffset when marginOffset.horizontal is defined', () => {
     const params = {
       node: {
         attrs: {
           anchorData: { hRelativeFrom: 'margin' },
-          marginOffset: { left: 10 },
+          marginOffset: { horizontal: 10 },
         },
       },
     };

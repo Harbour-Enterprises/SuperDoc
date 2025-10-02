@@ -104,7 +104,7 @@ describe('Image Extension DOM rendering', () => {
 
   describe('margin offset styling', () => {
     it('applies basic margin offsets', () => {
-      const { style } = renderImageAttributes({ marginOffset: { left: 30, top: 40 } });
+      const { style } = renderImageAttributes({ marginOffset: { horizontal: 30, top: 40 } });
       const styles = parseStyle(style);
       expect(styles['margin-left']).toBe('30px');
       expect(styles['margin-top']).toBe('40px');
@@ -112,7 +112,7 @@ describe('Image Extension DOM rendering', () => {
 
     it('caps page-relative top margins at 500px', () => {
       const { style } = renderImageAttributes({
-        marginOffset: { left: 10, top: 600 },
+        marginOffset: { horizontal: 10, top: 600 },
         anchorData: { vRelativeFrom: 'page' },
       });
       const styles = parseStyle(style);
@@ -125,7 +125,7 @@ describe('Image Extension DOM rendering', () => {
         size: { width: 100, height: 100 },
         transformData: { rotation: 45 },
         padding: { left: 10, top: 12, bottom: 4, right: 8 },
-        marginOffset: { left: 5, top: 7 },
+        marginOffset: { horizontal: 5, top: 7 },
       });
       const styles = parseStyle(style);
       expect(styles['margin-left']).toBe('26px');
@@ -159,7 +159,7 @@ describe('Image Extension DOM rendering', () => {
       const imageNode = nodes.image.create({
         src: 'word/media/test-image.png',
         size: { width: 120, height: 80 },
-        marginOffset: { left: 10, top: 20 },
+        marginOffset: { horizontal: 10, top: 20 },
         padding: { right: 4, bottom: 6 },
         transformData: { rotation: 30 },
         isAnchor: true,
@@ -188,7 +188,7 @@ describe('Image Extension DOM rendering', () => {
 
       expect(insertedImage).toBeTruthy();
       expect(insertedImage.attrs.transformData.rotation).toBe(30);
-      expect(insertedImage.attrs.marginOffset.left).toBe(10);
+      expect(insertedImage.attrs.marginOffset.horizontal).toBe(10);
       expect(insertedImage.attrs.marginOffset.top).toBe(20);
     });
 
@@ -547,7 +547,7 @@ describe('Image Extension DOM rendering', () => {
         const imageNode = nodes.image.create({
           src: 'word/media/test-image.png',
           size: { width: 180, height: 100 },
-          marginOffset: { left: 12, top: 8 },
+          marginOffset: { horizontal: 12, top: 8 },
           wrap: { type: 'Square', attrs: { wrapText: 'largest', distLeft: 5 } },
         });
         const paragraph = nodes.paragraph.create({}, imageNode);
@@ -574,7 +574,7 @@ describe('Image Extension DOM rendering', () => {
 
         expect(updatedImage).toBeTruthy();
         expect(updatedImage.attrs.size).toEqual({ width: 180, height: 100 });
-        expect(updatedImage.attrs.marginOffset).toEqual({ left: 12, top: 8 });
+        expect(updatedImage.attrs.marginOffset).toEqual({ horizontal: 12, top: 8 });
         expect(updatedImage.attrs.wrap.type).toBe('Square');
         expect(updatedImage.attrs.wrap.attrs.wrapText).toBe('left');
         expect(updatedImage.attrs.wrap.attrs.distLeft).toBe(7);
