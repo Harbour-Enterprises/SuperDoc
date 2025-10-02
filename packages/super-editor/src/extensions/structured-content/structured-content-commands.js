@@ -207,7 +207,7 @@ export const StructuredContentCommands = Extension.create({
        * This will update every field that matches the given alias.
        * If any updated node does not match the schema, no updates will be applied.
        * @category Command
-       * @param {string} alias - Shared identifier for fields (e.g., "customer_name")
+       * @param {string | string[]} alias - Shared identifier for fields (e.g., "customer_name")
        * @param {StructuredContentUpdate} options
        */
       updateStructuredContentByAlias:
@@ -221,43 +221,47 @@ export const StructuredContentCommands = Extension.create({
 
           const { schema } = editor;
 
-          // Prepare and validate all updates first
-          const updates = [];
-          for (const { pos, node } of structuredContentTags) {
-            let content = null;
-
+          const createContent = (node) => {
             if (options.text) {
-              content = schema.text(options.text);
+              return schema.text(options.text);
             }
 
             if (options.html) {
               const html = htmlHandler(options.html, editor);
               const doc = PMDOMParser.fromSchema(schema).parse(html);
-              content = doc.content;
+              return doc.content;
             }
 
             if (options.json) {
-              content = schema.nodeFromJSON(options.json);
+              return schema.nodeFromJSON(options.json);
             }
 
-            if (!content) {
-              content = node.content;
-            }
+            return node.content;
+          };
 
+          // Validate all updates first
+          for (const { node } of structuredContentTags) {
+            const content = createContent(node);
             const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
             try {
               updatedNode.check();
-              updates.push({ pos, node: updatedNode, size: node.nodeSize });
             } catch {
               console.error('Updated node does not conform to the schema');
               return false;
             }
           }
 
-          // Apply all updates in reverse order to avoid position offset issues
+          // Apply updates using mapping to handle position changes
           if (dispatch) {
-            updates.reverse().forEach(({ pos, node, size }) => {
-              tr.replaceWith(pos, pos + size, node);
+            structuredContentTags.forEach(({ pos, node }) => {
+              const mappedPos = tr.mapping.map(pos);
+              const currentNode = tr.doc.nodeAt(mappedPos);
+
+              if (currentNode && node.eq(currentNode)) {
+                const content = createContent(node);
+                const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
+                tr.replaceWith(mappedPos, mappedPos + node.nodeSize, updatedNode);
+              }
             });
           }
 
