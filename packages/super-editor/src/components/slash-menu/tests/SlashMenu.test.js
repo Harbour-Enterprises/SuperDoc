@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import SlashMenu from '../SlashMenu.vue';
+import { TRIGGERS } from '../constants.js';
 import {
   createMockEditor,
   setupCommonMocks,
@@ -74,7 +75,7 @@ describe('SlashMenu.vue', () => {
           label: 'Test Item',
           icon: '<svg>test-icon</svg>',
           action: vi.fn(),
-          allowedTriggers: ['slash', 'click'],
+          showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
         },
       ]),
     );
@@ -219,7 +220,7 @@ describe('SlashMenu.vue', () => {
               id: 'custom-item',
               label: 'Custom Item',
               render: renderSpy,
-              allowedTriggers: ['slash', 'click'],
+              showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
             },
           ],
         },
@@ -315,7 +316,7 @@ describe('SlashMenu.vue', () => {
               id: 'custom-item',
               label: 'Custom Item',
               render: renderSpy,
-              allowedTriggers: ['slash', 'click'],
+              showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
             },
           ],
         },
@@ -341,11 +342,11 @@ describe('SlashMenu.vue', () => {
       mockGetItems.mockReturnValue([
         {
           id: 'section1',
-          items: [{ id: 'item1', label: 'Item 1', allowedTriggers: ['slash'] }],
+          items: [{ id: 'item1', label: 'Item 1', showWhen: (context) => context.trigger === TRIGGERS.slash }],
         },
         {
           id: 'section2',
-          items: [{ id: 'item2', label: 'Item 2', allowedTriggers: ['slash'] }],
+          items: [{ id: 'item2', label: 'Item 2', showWhen: (context) => context.trigger === TRIGGERS.slash }],
         },
       ]);
 
@@ -364,9 +365,9 @@ describe('SlashMenu.vue', () => {
     beforeEach(() => {
       mockGetItems.mockReturnValue(
         createMockMenuItems(0, [
-          { id: 'insert-table', label: 'Insert Table', allowedTriggers: ['slash'] },
-          { id: 'insert-image', label: 'Insert Image', allowedTriggers: ['slash'] },
-          { id: 'insert-link', label: 'Insert Link', allowedTriggers: ['slash'] },
+          { id: 'insert-table', label: 'Insert Table', showWhen: (context) => context.trigger === TRIGGERS.slash },
+          { id: 'insert-image', label: 'Insert Image', showWhen: (context) => context.trigger === TRIGGERS.slash },
+          { id: 'insert-link', label: 'Insert Link', showWhen: (context) => context.trigger === TRIGGERS.slash },
         ]),
       );
     });
@@ -408,9 +409,9 @@ describe('SlashMenu.vue', () => {
     beforeEach(() => {
       mockGetItems.mockReturnValue(
         createMockMenuItems(0, [
-          { id: 'item1', label: 'Item 1', allowedTriggers: ['slash'], action: vi.fn() },
-          { id: 'item2', label: 'Item 2', allowedTriggers: ['slash'], action: vi.fn() },
-          { id: 'item3', label: 'Item 3', allowedTriggers: ['slash'], action: vi.fn() },
+          { id: 'item1', label: 'Item 1', showWhen: (context) => context.trigger === TRIGGERS.slash, action: vi.fn() },
+          { id: 'item2', label: 'Item 2', showWhen: (context) => context.trigger === TRIGGERS.slash, action: vi.fn() },
+          { id: 'item3', label: 'Item 3', showWhen: (context) => context.trigger === TRIGGERS.slash, action: vi.fn() },
         ]),
       );
     });
@@ -451,7 +452,14 @@ describe('SlashMenu.vue', () => {
       mockGetItems.mockReturnValue([
         {
           id: 'test-section',
-          items: [{ id: 'test-item', label: 'Test Item', allowedTriggers: ['slash'], action: mockAction }],
+          items: [
+            {
+              id: 'test-item',
+              label: 'Test Item',
+              showWhen: (context) => context.trigger === TRIGGERS.slash,
+              action: mockAction,
+            },
+          ],
         },
       ]);
 
@@ -508,7 +516,7 @@ describe('SlashMenu.vue', () => {
               id: 'custom-item',
               label: 'Custom Item',
               render: mockRender,
-              allowedTriggers: ['slash'],
+              showWhen: (context) => context.trigger === TRIGGERS.slash,
             },
           ],
         },
@@ -545,7 +553,7 @@ describe('SlashMenu.vue', () => {
               id: 'error-item',
               label: 'Error Item',
               render: mockRender,
-              allowedTriggers: ['slash'],
+              showWhen: (context) => context.trigger === TRIGGERS.slash,
             },
           ],
         },
@@ -581,7 +589,7 @@ describe('SlashMenu.vue', () => {
               id: 'custom-item',
               label: 'Custom Item',
               render: mockRender,
-              allowedTriggers: ['slash'],
+              showWhen: (context) => context.trigger === TRIGGERS.slash,
             },
           ],
         },
@@ -608,7 +616,14 @@ describe('SlashMenu.vue', () => {
       mockGetItems.mockReturnValue([
         {
           id: 'test-section',
-          items: [{ id: 'test-item', label: 'Test Item', allowedTriggers: ['slash'], action: mockAction }],
+          items: [
+            {
+              id: 'test-item',
+              label: 'Test Item',
+              showWhen: (context) => context.trigger === TRIGGERS.slash,
+              action: mockAction,
+            },
+          ],
         },
       ]);
 
@@ -639,7 +654,7 @@ describe('SlashMenu.vue', () => {
             {
               id: 'component-item',
               label: 'Component Item',
-              allowedTriggers: ['slash'],
+              showWhen: (context) => context.trigger === TRIGGERS.slash,
               component: MockComponent,
             },
           ],

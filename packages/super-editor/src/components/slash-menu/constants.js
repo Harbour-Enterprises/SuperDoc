@@ -10,6 +10,8 @@ import tableIconSvg from '@harbour-enterprises/common/icons/table-solid.svg?raw'
 import scissorsIconSvg from '@harbour-enterprises/common/icons/scissors-solid.svg?raw';
 import copyIconSvg from '@harbour-enterprises/common/icons/copy-solid.svg?raw';
 import pasteIconSvg from '@harbour-enterprises/common/icons/paste-solid.svg?raw';
+import checkIconSvg from '@harbour-enterprises/common/icons/check-solid.svg?raw';
+import xMarkIconSvg from '@harbour-enterprises/common/icons/xmark-solid.svg?raw';
 
 export const ICONS = {
   addRowBefore: plusIconSvg,
@@ -31,6 +33,8 @@ export const ICONS = {
   paste: pasteIconSvg,
   addDocumentSection: plusIconSvg,
   removeDocumentSection: trashIconSvg,
+  trackChangesAccept: checkIconSvg,
+  trackChangesReject: xMarkIconSvg,
 };
 
 // Table actions constant
@@ -56,6 +60,8 @@ export const TEXTS = {
   paste: 'Paste',
   removeDocumentSection: 'Remove section',
   createDocumentSection: 'Create section',
+  trackChangesAccept: 'Accept change',
+  trackChangesReject: 'Reject change',
 };
 
 export const tableActionsOptions = [
