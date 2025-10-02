@@ -2,7 +2,7 @@ import { Attribute, Node } from '@core/index.js';
 import { ImageRegistrationPlugin } from './imageHelpers/imageRegistrationPlugin.js';
 import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
 import { getRotationMargins } from './imageHelpers/rotation.js';
-import { twipsToPixels } from '@converter/helpers.js';
+import { inchesToPixels } from '@converter/helpers.js';
 
 /**
  * Configuration options for Image
@@ -305,9 +305,9 @@ export const Image = Node.create({
             // For 'largest', float to the side that would leave the most space for text
             const pageStyles = this.editor?.converter?.pageStyles;
             if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
-              const pageWidth = twipsToPixels(pageStyles.pageSize.width);
-              const leftMargin = twipsToPixels(pageStyles.pageMargins.left);
-              const rightMargin = twipsToPixels(pageStyles.pageMargins.right);
+              const pageWidth = inchesToPixels(pageStyles.pageSize.width);
+              const leftMargin = inchesToPixels(pageStyles.pageMargins.left);
+              const rightMargin = inchesToPixels(pageStyles.pageMargins.right);
               const contentWidth = pageWidth - leftMargin - rightMargin;
               const imageWidth = size.width + (attrs.distLeft || 0) + (attrs.distRight || 0);
 
@@ -339,17 +339,44 @@ export const Image = Node.create({
 
         case 'Through':
         case 'Tight':
+          const pageStyles = this.editor?.converter?.pageStyles;
+          if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
+            const pageWidth = inchesToPixels(pageStyles.pageSize.width);
+            const leftMargin = inchesToPixels(pageStyles.pageMargins.left);
+            const rightMargin = inchesToPixels(pageStyles.pageMargins.right);
+            const contentWidth = pageWidth - leftMargin - rightMargin;
+            const imageWidth = size.width + (attrs.distLeft || 0) + (attrs.distRight || 0);
+
+            // marginOffset.horizontal is space on the left when wrapText === "largest"
+            // We can therefore calculate the space on the right vs on the left:
+            const leftSpace = marginOffset.horizontal;
+            const rightSpace = contentWidth - leftSpace - imageWidth;
+            if (rightSpace < 0) {
+              // There is not enough space, float the image to the left
+              style += 'float: left;';
+            } else if (rightSpace > leftSpace) {
+              style += 'float: left;';
+            } else {
+              style += 'float: right;';
+              floatRight = true;
+              baseHorizontal = rightSpace;
+            }
+          } else {
+            // Fallback to left if page dimensions unavailable
+            style += 'float: left;';
+          }
           // Use float and shape-outside if polygon is provided
-          style += 'float: left;';
+
           if (attrs.distTop) margin.top += attrs.distTop;
           if (attrs.distBottom) margin.bottom += attrs.distBottom;
           if (attrs.distLeft) margin.left += attrs.distLeft;
           if (attrs.distRight) margin.right += attrs.distRight;
           if (attrs.polygon) {
             // Convert polygon points to CSS polygon string
-            const points = attrs.polygon.map(([x, y]) => `${x}px ${y}px`).join(', ');
+            const points = attrs.polygon
+              .map(([x, y]) => `${x + marginOffset.horizontal + 15}px ${y + marginOffset.top + 15}px`)
+              .join(', ');
             style += `shape-outside: polygon(${points});`;
-            style += 'clip-path: polygon(' + points + ');';
           }
           break;
 

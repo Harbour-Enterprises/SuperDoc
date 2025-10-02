@@ -16,15 +16,24 @@ function twipsToInches(twips) {
 function twipsToPixels(twips) {
   if (twips == null) return;
   const inches = twipsToInches(twips);
+  return inchesToPixels(inches);
+}
+
+function pixelsToTwips(pixels) {
+  const inches = pixelsToInches(pixels);
+  return inchesToTwips(inches);
+}
+
+function inchesToPixels(inches) {
   if (inches == null) return;
   const pixels = inches * 96;
   return Math.round(pixels * 1000) / 1000;
 }
 
-function pixelsToTwips(pixels) {
+function pixelsToInches(pixels) {
   if (pixels == null) return;
   const inches = Number(pixels) / 96;
-  return inchesToTwips(inches);
+  return Math.round(inches * 1000) / 1000;
 }
 
 function twipsToLines(twips) {
@@ -111,7 +120,8 @@ function polygonToObj(polygonNode) {
   polygonNode.elements.forEach((element) => {
     if (['wp:start', 'wp:lineTo'].includes(element.name)) {
       const { x, y } = element.attributes;
-      points.push([emuToPixels(x), emuToPixels(y)]);
+
+      points.push([pixelsToInches(x), pixelsToInches(y)]); // TODO: Unclear what unit is used here.
     }
   });
 
@@ -143,8 +153,8 @@ function objToPolygon(points) {
     const pointNode = {
       type: index === 0 ? 'wp:start' : 'wp:lineTo',
       attributes: {
-        x: pixelsToEmu(x),
-        y: pixelsToEmu(y),
+        x: pixelsToInches(x), // TODO: Unclear what unit is used here.
+        y: pixelsToInches(y), // TODO: Unclear what unit is used here.
       },
     };
     polygonNode.elements.push(pointNode);
@@ -336,6 +346,8 @@ export {
   twipsToInches,
   twipsToPixels,
   pixelsToTwips,
+  pixelsToInches,
+  inchesToPixels,
   twipsToLines,
   linesToTwips,
   halfPointToPixels,

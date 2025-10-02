@@ -116,7 +116,7 @@ export function handleImageNode(node, params, isAnchor) {
       if ('distB' in (wrapNode.attributes || {})) {
         wrap.attrs.distBottom = emuToPixels(wrapNode.attributes.distB);
       }
-      const polygon = wrapNode.elements?.find((el) => el.name === 'wp:polygon');
+      const polygon = wrapNode.elements?.find((el) => el.name === 'wp:wrapPolygon');
       if (polygon) {
         wrap.attrs.polygon = polygonToObj(polygon);
       }
