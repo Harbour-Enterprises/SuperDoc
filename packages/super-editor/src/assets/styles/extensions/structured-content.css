@@ -45,3 +45,13 @@
 .sd-structured-content-block:hover .sd-structured-content-draggable {
   display: inline-flex;
 }
+
+.ProseMirror.view-mode .sd-structured-content,
+.ProseMirror.view-mode .sd-structured-content-block {
+  padding: 0;
+  border: none;
+}
+
+.ProseMirror.view-mode .sd-structured-content-draggable {
+  display: none;
+}
