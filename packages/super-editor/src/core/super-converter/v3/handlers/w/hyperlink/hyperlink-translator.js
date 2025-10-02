@@ -107,12 +107,6 @@ function decode(params) {
 
   const linkMark = node.marks.find((m) => m.type === 'link');
   const linkAttrs = this.decodeAttributes({ ...params, node: linkMark });
-  let { anchor, href: link } = linkMark.attrs;
-
-  const isExternalLink = !anchor;
-  if (isExternalLink) {
-    linkAttrs['r:id'] = _addNewLinkRelationship(params, link, linkAttrs['r:id']);
-  }
 
   let contentNodes = [];
   hyperlinkGroup.forEach((linkNode) => {
