@@ -30,6 +30,9 @@ export const TranslatorTypes = Object.freeze({
  * @property {{ attrs?: any, marks?: any[], type: string, content?: any[] }} node
  * @property {any[]} [children]
  * @property {any[]} [relationships]
+ * @property {import('../../../../../../superdoc/src/components/CommentsLayer/types').Comment[]} comments
+ * @property {'external' | 'clean'} commentsExportType
+ * @property {any[]} exportedCommentDefs
  * @property {Record<string, any>} [extraParams]
  * @property {import('../../../Editor.js').Editor} [editor]
  */
