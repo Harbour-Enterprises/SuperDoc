@@ -118,6 +118,11 @@ export class SuperDoc extends EventEmitter {
       ...config,
     };
 
+    this.config.modules = this.config.modules || {};
+    if (!Object.prototype.hasOwnProperty.call(this.config.modules, 'comments')) {
+      this.config.modules.comments = {};
+    }
+
     this.config.colors = shuffleArray(this.config.colors);
     this.userColorMap = new Map();
     this.colorIndex = 0;
@@ -290,7 +295,8 @@ export class SuperDoc extends EventEmitter {
       this.superdocStore.setExceptionHandler((payload) => this.emit('exception', payload));
     }
     this.superdocStore.init(this.config);
-    this.commentsStore.init(this.config.modules.comments);
+    const commentsModuleConfig = this.config.modules.comments;
+    this.commentsStore.init(commentsModuleConfig && commentsModuleConfig !== false ? commentsModuleConfig : {});
   }
 
   #initListeners() {
