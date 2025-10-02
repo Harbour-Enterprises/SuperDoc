@@ -7,6 +7,7 @@ import { checkAndProcessImage, uploadAndInsertImage } from './startImageUpload';
 import { buildMediaPath, ensureUniqueFileName } from './fileNameUtils.js';
 import { addImageRelationship } from '@extensions/image/imageHelpers/startImageUpload.js';
 const key = new PluginKey('ImageRegistration');
+const WORD_MEDIA_PREFIX = 'word/';
 
 export const ImageRegistrationPlugin = ({ editor }) => {
   const { view } = editor;
@@ -70,16 +71,16 @@ export const ImageRegistrationPlugin = ({ editor }) => {
         }
       });
 
+      if (!foundImages || foundImages.length === 0) {
+        return null;
+      }
+
       // NODE PATH
       if (editor.options.isHeadless) {
         return handleNodePath(foundImages, editor, state);
       }
 
       // BROWSER PATH
-      if (!foundImages || foundImages.length === 0) {
-        return null;
-      }
-
       return handleBrowserPath(foundImages, editor, view, state);
     },
     props: {
@@ -130,9 +131,9 @@ export const handleNodePath = (foundImages, editor, state) => {
     existingFileNames.add(uniqueFileName);
 
     const mediaPath = buildMediaPath(uniqueFileName);
-    editor.storage.image.media = Object.assign(mediaStore, { [mediaPath]: src });
+    mediaStore[mediaPath] = src;
 
-    const [, path] = mediaPath.split('word/'); // Path without 'word/' part.
+    const path = mediaPath.startsWith(WORD_MEDIA_PREFIX) ? mediaPath.slice(WORD_MEDIA_PREFIX.length) : mediaPath;
     const rId = addImageRelationship({ editor, path });
 
     tr.setNodeMarkup(pos, undefined, {
