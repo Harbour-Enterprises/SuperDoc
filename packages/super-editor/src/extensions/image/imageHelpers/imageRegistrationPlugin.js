@@ -1,10 +1,11 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { ReplaceStep, ReplaceAroundStep } from 'prosemirror-transform';
-import { base64ToFile } from './handleBase64';
+import { base64ToFile, getBase64FileMeta } from './handleBase64';
 import { urlToFile, validateUrlAccessibility } from './handleUrl';
 import { checkAndProcessImage, uploadAndInsertImage } from './startImageUpload';
-
+import { buildMediaPath, ensureUniqueFileName } from './fileNameUtils.js';
+import { addImageRelationship } from '@extensions/image/imageHelpers/startImageUpload.js';
 const key = new PluginKey('ImageRegistration');
 
 export const ImageRegistrationPlugin = ({ editor }) => {
@@ -69,47 +70,17 @@ export const ImageRegistrationPlugin = ({ editor }) => {
         }
       });
 
+      // NODE PATH
+      if (editor.options.isHeadless) {
+        return handleNodePath(foundImages, editor, state);
+      }
+
+      // BROWSER PATH
       if (!foundImages || foundImages.length === 0) {
         return null;
       }
 
-      // Register the images. (async process).
-      registerImages(foundImages, editor, view);
-
-      // Remove all the images that were found. These will eventually be replaced by the updated images.
-      const tr = state.tr;
-
-      // We need to delete the image nodes and replace them with decorations. This will change their positions.
-
-      // Get the current decoration set
-      let { set } = key.getState(state);
-
-      // Add decorations for the images first at their current positions
-      foundImages
-        .slice()
-        .sort((a, b) => a.pos - b.pos)
-        .forEach(({ pos, id }) => {
-          let deco = Decoration.widget(pos, () => document.createElement('placeholder'), {
-            side: -1,
-            id,
-          });
-          set = set.add(tr.doc, [deco]);
-        });
-
-      // Then delete the image nodes (highest position first to avoid position shifting issues)
-      foundImages
-        .slice()
-        .sort((a, b) => b.pos - a.pos)
-        .forEach(({ node, pos }) => {
-          tr.delete(pos, pos + node.nodeSize);
-        });
-      // Map the decoration set through the transaction to adjust positions
-      set = set.map(tr.mapping, tr.doc);
-
-      // Set the updated decoration set in the transaction metadata
-      tr.setMeta(key, { set });
-
-      return tr;
+      return handleBrowserPath(foundImages, editor, view, state);
     },
     props: {
       decorations(state) {
@@ -118,6 +89,108 @@ export const ImageRegistrationPlugin = ({ editor }) => {
       },
     },
   });
+};
+
+const derivePreferredFileName = (src) => {
+  if (typeof src !== 'string' || src.length === 0) {
+    return 'image.bin';
+  }
+
+  if (src.startsWith('data:')) {
+    return getBase64FileMeta(src).filename;
+  }
+
+  const lastSegment = src.split('/').pop() ?? '';
+  const trimmed = lastSegment.split(/[?#]/)[0];
+  return trimmed || 'image.bin';
+};
+
+/**
+ * Handles the node path for image registration.
+ *
+ * @param {Array} foundImages - Array of found image nodes with their positions and IDs.
+ * @param {Object} editor - The editor instance.
+ * @param {import('prosemirror-state').EditorState} state - The current editor state.
+ * @returns {import('prosemirror-state').Transaction} - The updated transaction with image nodes updated with registered paths and IDs.
+ */
+export const handleNodePath = (foundImages, editor, state) => {
+  const { tr } = state;
+  const mediaStore = editor.storage.image.media ?? {};
+
+  if (!editor.storage.image.media) {
+    editor.storage.image.media = mediaStore;
+  }
+
+  const existingFileNames = new Set(Object.keys(mediaStore).map((key) => key.split('/').pop()));
+
+  foundImages.forEach(({ node, pos }) => {
+    const { src } = node.attrs;
+    const preferredFileName = derivePreferredFileName(src);
+    const uniqueFileName = ensureUniqueFileName(preferredFileName, existingFileNames);
+    existingFileNames.add(uniqueFileName);
+
+    const mediaPath = buildMediaPath(uniqueFileName);
+    editor.storage.image.media = Object.assign(mediaStore, { [mediaPath]: src });
+
+    const [, path] = mediaPath.split('word/'); // Path without 'word/' part.
+    const rId = addImageRelationship({ editor, path });
+
+    tr.setNodeMarkup(pos, undefined, {
+      ...node.attrs,
+      src: mediaPath,
+      rId,
+    });
+  });
+
+  return tr;
+};
+
+/**
+ * Handles the browser path for image registration.
+ *
+ * @param {Array} foundImages - Array of found image nodes with their positions and IDs.
+ * @param {Object} editor - The editor instance.
+ * @param {import('prosemirror-view').EditorView} view - The editor view instance.
+ * @param {import('prosemirror-state').EditorState} state - The current editor state.
+ * @returns {import('prosemirror-state').Transaction} - The updated transaction with image nodes replaced by placeholders and registration process initiated.
+ */
+const handleBrowserPath = (foundImages, editor, view, state) => {
+  // Register the images. (async process).
+  registerImages(foundImages, editor, view);
+
+  // Remove all the images that were found. These will eventually be replaced by the updated images.
+  const tr = state.tr;
+
+  // We need to delete the image nodes and replace them with decorations. This will change their positions.
+
+  // Get the current decoration set
+  let { set } = key.getState(state);
+
+  // Add decorations for the images first at their current positions
+  foundImages
+    .slice()
+    .sort((a, b) => a.pos - b.pos)
+    .forEach(({ pos, id }) => {
+      let deco = Decoration.widget(pos, () => document.createElement('placeholder'), {
+        side: -1,
+        id,
+      });
+      set = set.add(tr.doc, [deco]);
+    });
+
+  // Then delete the image nodes (highest position first to avoid position shifting issues)
+  foundImages
+    .slice()
+    .sort((a, b) => b.pos - a.pos)
+    .forEach(({ node, pos }) => {
+      tr.delete(pos, pos + node.nodeSize);
+    });
+  // Map the decoration set through the transaction to adjust positions
+  set = set.map(tr.mapping, tr.doc);
+
+  // Set the updated decoration set in the transaction metadata
+  tr.setMeta(key, { set });
+  return tr;
 };
 
 export const findPlaceholder = (state, id) => {
