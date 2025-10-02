@@ -2,6 +2,7 @@ import { Attribute, Node } from '@core/index.js';
 import { ImageRegistrationPlugin } from './imageHelpers/imageRegistrationPlugin.js';
 import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
 import { getRotationMargins } from './imageHelpers/rotation.js';
+import { twipsToPixels } from '@converter/helpers.js';
 
 /**
  * Configuration options for Image
@@ -130,76 +131,7 @@ export const Image = Node.create({
        */
       wrap: {
         default: { type: 'Inline' },
-        renderDOM: ({ wrap, marginOffset }) => {
-          console.log('wrap', wrap);
-          if (!wrap || !wrap.type) return {};
-
-          const { type, attrs = {} } = wrap;
-          let style = '';
-          let extra = {};
-
-          switch (type) {
-            case 'None':
-              style += 'position: relative;';
-              if (attrs.behindDoc) {
-                style += 'z-index: 0;';
-              } else {
-                style += 'z-index: 1;';
-              }
-              break;
-
-            case 'Square':
-              // Default to float left, allow wrapText to override
-              if (attrs.wrapText === 'right') {
-                style += 'float: left; shape-outside: border-box;';
-              } else if (attrs.wrapText === 'left') {
-                style += 'float: right; shape-outside: border-box;';
-              } else if (attrs.wrapText === 'largest') {
-                // TODO
-              } else if (attrs.wrapText === 'bothSides') {
-                // TODO: wrapping text on both sides of an image is not currently supported
-                // in browsers.
-                // For now, we'll float it like 'largest'.
-              }
-              if (attrs.distTop && marginOffset?.top == null) style += `margin-top: ${attrs.distTop}px;`;
-              if (attrs.distBottom) style += `margin-bottom: ${attrs.distBottom}px;`;
-              if (attrs.distLeft && marginOffset?.horizontal == null) style += `margin-left: ${attrs.distLeft}px;`;
-              if (attrs.distRight && marginOffset?.horizontal == null) style += `margin-right: ${attrs.distRight}px;`;
-              console.log('Square image style:', style, attrs);
-              break;
-
-            case 'Through':
-            case 'Tight':
-              // Use float and shape-outside if polygon is provided
-              style += 'float: left;';
-              if (attrs.distTop) style += `margin-top: ${attrs.distTop}px;`;
-              if (attrs.distBottom) style += `margin-bottom: ${attrs.distBottom}px;`;
-              if (attrs.distLeft) style += `margin-left: ${attrs.distLeft}px;`;
-              if (attrs.distRight) style += `margin-right: ${attrs.distRight}px;`;
-              if (attrs.polygon) {
-                // Convert polygon points to CSS polygon string
-                const points = attrs.polygon.map(([x, y]) => `${x}px ${y}px`).join(', ');
-                style += `shape-outside: polygon(${points});`;
-                style += 'clip-path: polygon(' + points + ');';
-              }
-              break;
-
-            case 'TopAndBottom':
-              style += 'display: block;';
-              if (attrs.distTop) style += `margin-top: ${attrs.distTop}px;`;
-              if (attrs.distBottom) style += `margin-bottom: ${attrs.distBottom}px;`;
-              style += 'margin-left: auto; margin-right: auto;';
-              break;
-
-            case 'Inline':
-            default:
-              // No extra styling needed
-              break;
-          }
-
-          if (style) extra.style = style;
-          return extra;
-        },
+        rendered: false, // Handled in main renderDOM
       },
 
       anchorData: {
@@ -269,70 +201,12 @@ export const Image = Node.create({
 
       padding: {
         default: {},
-        renderDOM: ({ size = {}, padding, marginOffset, transformData = {} }) => {
-          let { left = 0, top = 0, bottom = 0, right = 0 } = padding ?? {};
-          // TODO: The wp:effectExtent (transformData.sizeExtension) sometimes
-          // gives the right data (as calculated by getRotationMargins)
-          // and sometimes it doesn't. We should investigate why there is a discrepancy.
-          // if (transformData?.sizeExtension) {
-          //   left += transformData.sizeExtension.left || 0;
-          //   right += transformData.sizeExtension.right || 0;
-          //   top += transformData.sizeExtension.top || 0;
-          //   bottom += transformData.sizeExtension.bottom || 0;
-          // }
-          const { rotation } = transformData;
-          const { height, width } = size;
-          if (rotation && height && width) {
-            const { horizontal, vertical } = getRotationMargins(width, height, rotation);
-            left += horizontal;
-            right += horizontal;
-            top += vertical;
-            bottom += vertical;
-          }
-          let style = '';
-          if (left && marginOffset?.horizontal == null) style += `margin-left: ${left}px;`;
-          if (top && marginOffset?.top == null) style += `margin-top: ${top}px;`;
-          if (bottom) style += `margin-bottom: ${bottom}px;`;
-          if (right) style += `margin-right: ${right}px;`;
-          return { style };
-        },
+        rendered: false, // Handled in main renderDOM
       },
 
       marginOffset: {
         default: {},
-        renderDOM: ({ marginOffset, anchorData, transformData, size, wrap }) => {
-          const hasAnchorData = Boolean(anchorData);
-          const hasMarginOffsets = marginOffset?.horizontal != null || marginOffset?.top != null;
-          if (!hasAnchorData && !hasMarginOffsets) return {};
-          const relativeToRight = wrap.type === 'Square' && wrap.attrs?.wrapText === 'left';
-          console.log('relativeToRight', relativeToRight, wrap);
-          const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
-          const maxMarginV = 500;
-          const baseHorizontal = marginOffset?.horizontal ?? 0;
-          const baseTop = marginOffset?.top ?? 0;
-
-          let rotationHorizontal = 0;
-          let rotationTop = 0;
-          const { rotation } = transformData ?? {};
-          const { height, width } = size ?? {};
-          if (rotation && height && width) {
-            const { horizontal, vertical } = getRotationMargins(width, height, rotation);
-            rotationHorizontal = horizontal;
-            rotationTop = vertical;
-          }
-
-          const horizontal = baseHorizontal + rotationHorizontal;
-          const top = baseTop + rotationTop;
-
-          let style = '';
-          if (horizontal) style += `margin-${relativeToRight ? 'right' : 'left'}: ${horizontal}px;`;
-          if (top) {
-            if (relativeFromPageV && top >= maxMarginV) style += `margin-top: ${maxMarginV}px;`;
-            else style += `margin-top: ${top}px;`;
-          }
-          if (!style) return {};
-          return { style };
-        },
+        rendered: false, // Handled in main renderDOM
       },
 
       style: {
@@ -354,8 +228,197 @@ export const Image = Node.create({
     ];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['img', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
+  renderDOM({ node, htmlAttributes }) {
+    // multiple attributes influence the margin sizes, so we handle them here together rather than separately.
+    // Also, the editor context is needed for wrap styling in some cases.
+
+    const { wrap, marginOffset, anchorData, padding, transformData = {}, size = {} } = node.attrs;
+
+    const margin = {
+      left: 0,
+      right: 0,
+      top: 0,
+      bottom: 0,
+    };
+    let centered = false;
+    let floatRight = false;
+    let baseHorizontal = marginOffset?.horizontal || 0;
+
+    let style = '';
+
+    // Handle padding
+    if (padding) {
+      if (padding.left) margin.left += padding.left;
+      if (padding.right) margin.right += padding.right;
+      if (padding.top) margin.top += padding.top;
+      if (padding.bottom) margin.bottom += padding.bottom;
+    }
+
+    // Handle extra padding due to rotation
+    // TODO: The wp:effectExtent (transformData.sizeExtension) sometimes
+    // gives the right data (as calculated by getRotationMargins)
+    // and sometimes it doesn't. We should investigate why there is a discrepancy.
+    // if (transformData?.sizeExtension) {
+    //   left += transformData.sizeExtension.left || 0;
+    //   right += transformData.sizeExtension.right || 0;
+    //   top += transformData.sizeExtension.top || 0;
+    //   bottom += transformData.sizeExtension.bottom || 0;
+    // }
+    const { rotation } = transformData;
+    const { height, width } = size;
+    if (rotation && height && width) {
+      const { horizontal, vertical } = getRotationMargins(width, height, rotation);
+      margin.left += horizontal;
+      margin.right += horizontal;
+      margin.top += vertical;
+      margin.bottom += vertical;
+    }
+
+    // Handle wrap styling (needs editor context)
+    if (wrap && wrap.type) {
+      const { type, attrs = {} } = wrap;
+
+      switch (type) {
+        case 'None':
+          style += 'position: absolute;';
+          if (attrs.behindDoc) {
+            style += 'z-index: -1;';
+          } else {
+            style += 'z-index: 1;';
+          }
+          break;
+
+        case 'Square':
+          // TODO: HTML/CSS currently does not support floating an item to the top of the paragraph. So if
+          // the image is further down in the pargraph, it will be positioned further down on the page.
+          style += 'shape-outside: border-box;';
+          // Default to float left, allow wrapText to override
+          if (attrs.wrapText === 'right') {
+            style += 'float: left;';
+          } else if (attrs.wrapText === 'left') {
+            style += 'float: right;';
+            floatRight = true;
+          } else if (['largest', 'bothSides'].includes(attrs.wrapText)) {
+            // TODO: HTML/CSS doesn't support true both-sides wrapping
+            // We use 'largest' as best approximation
+            //
+            // For 'largest', float to the side that would leave the most space for text
+            const pageStyles = this.editor?.converter?.pageStyles;
+            if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
+              const pageWidth = twipsToPixels(pageStyles.pageSize.width);
+              const leftMargin = twipsToPixels(pageStyles.pageMargins.left);
+              const rightMargin = twipsToPixels(pageStyles.pageMargins.right);
+              const contentWidth = pageWidth - leftMargin - rightMargin;
+              const imageWidth = size.width + (attrs.distLeft || 0) + (attrs.distRight || 0);
+
+              // marginOffset.horizontal is space on the left when wrapText === "largest"
+              // We can therefore calculate the space on the right vs on the left:
+              const leftSpace = marginOffset.horizontal;
+              const rightSpace = contentWidth - leftSpace - imageWidth;
+
+              if (rightSpace < 0) {
+                // There is not enough space, float the image to the left
+                style += 'float: left;';
+              } else if (rightSpace > leftSpace) {
+                style += 'float: left;';
+              } else {
+                style += 'float: right;';
+                floatRight = true;
+                baseHorizontal = rightSpace;
+              }
+            } else {
+              // Fallback to left if page dimensions unavailable
+              style += 'float: left;';
+            }
+          }
+          if (attrs.distTop) margin.top += attrs.distTop;
+          if (attrs.distBottom) margin.bottom += attrs.distBottom;
+          if (attrs.distLeft) margin.left += attrs.distLeft;
+          if (attrs.distRight) margin.right += attrs.distRight;
+          break;
+
+        case 'Through':
+        case 'Tight':
+          // Use float and shape-outside if polygon is provided
+          style += 'float: left;';
+          if (attrs.distTop) margin.top += attrs.distTop;
+          if (attrs.distBottom) margin.bottom += attrs.distBottom;
+          if (attrs.distLeft) margin.left += attrs.distLeft;
+          if (attrs.distRight) margin.right += attrs.distRight;
+          if (attrs.polygon) {
+            // Convert polygon points to CSS polygon string
+            const points = attrs.polygon.map(([x, y]) => `${x}px ${y}px`).join(', ');
+            style += `shape-outside: polygon(${points});`;
+            style += 'clip-path: polygon(' + points + ');';
+          }
+          break;
+
+        case 'TopAndBottom':
+          style += 'display: block;';
+          if (attrs.distTop) margin.top += attrs.distTop;
+          if (attrs.distBottom) margin.bottom += attrs.distBottom;
+          centered = true;
+          break;
+
+        case 'Inline':
+        default:
+          // No extra styling needed
+          break;
+      }
+    }
+
+    // Calculate margin data based on anchor data, margin offsets and float direction
+    const hasAnchorData = Boolean(anchorData);
+    const hasMarginOffsets = marginOffset?.horizontal != null || marginOffset?.top != null;
+    if (hasAnchorData || hasMarginOffsets) {
+      const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
+      const maxMarginV = 500;
+      const baseTop = marginOffset?.top ?? 0;
+
+      let rotationHorizontal = 0;
+      let rotationTop = 0;
+      const { rotation } = transformData ?? {};
+      const { height, width } = size ?? {};
+      if (rotation && height && width) {
+        const { horizontal, vertical } = getRotationMargins(width, height, rotation);
+        rotationHorizontal = horizontal;
+        rotationTop = vertical;
+      }
+
+      const horizontal = baseHorizontal + rotationHorizontal;
+      const top = baseTop + rotationTop;
+
+      if (horizontal) {
+        if (floatRight) {
+          margin.right += horizontal;
+        } else {
+          margin.left += horizontal;
+        }
+      }
+
+      if (top) {
+        if (relativeFromPageV && top >= maxMarginV) margin.top += maxMarginV;
+        else margin.top += top;
+      }
+    }
+
+    if (centered) {
+      style += 'margin-left: auto; margin-right: auto;';
+    } else {
+      if (margin.left) style += `margin-left: ${margin.left}px;`;
+      if (margin.right) style += `margin-right: ${margin.right}px;`;
+    }
+    if (margin.top) style += `margin-top: ${margin.top}px;`;
+    if (margin.bottom) style += `margin-bottom: ${margin.bottom}px;`;
+
+    // Merge wrap styling with existing htmlAttributes style
+    const finalAttributes = { ...htmlAttributes };
+    if (style) {
+      const existingStyle = finalAttributes.style || '';
+      finalAttributes.style = existingStyle + (existingStyle ? ' ' : '') + style;
+    }
+
+    return ['img', Attribute.mergeAttributes(this.options.htmlAttributes, finalAttributes)];
   },
 
   addCommands() {
