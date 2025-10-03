@@ -1,6 +1,6 @@
 //@ts-check
 /**
- * Strip all inline styles and non-semantic attributes from HTML
+ * Strip all inline styles(but alignment) and non-semantic attributes from HTML
  * Preserves structure while removing presentation
  *
  * @param {string} html - Raw HTML string
@@ -36,6 +36,15 @@ export function stripHtmlStyles(html) {
     [...node.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
 
+      if (name === 'style') {
+        const cleanedStyle = cleanStyle(attr.value);
+        if (!cleanedStyle) {
+          node.removeAttribute(attr.name);
+        } else node.setAttribute(attr.name, cleanedStyle);
+
+        return;
+      }
+
       const shouldKeep = SUPPORTED_ATTRS.includes(name) || name.startsWith('data-'); // Keep all data-* attributes
 
       if (!shouldKeep) {
@@ -47,4 +56,22 @@ export function stripHtmlStyles(html) {
 
   cleanNode(doc.body);
   return doc.body.innerHTML;
+}
+
+/**
+ * Strip all styles except of alignment
+ *
+ * @param {string} style - Style attribute value
+ * @returns {string} Clean style string with supported styling
+ */
+function cleanStyle(style) {
+  if (!style) return '';
+
+  const declarations = style
+    .split(';')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const textAlign = declarations.find((d) => d.startsWith('text-align'));
+
+  return textAlign ? `${textAlign};` : '';
 }
