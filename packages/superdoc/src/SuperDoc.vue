@@ -72,7 +72,14 @@ const {
   hasInitializedLocations,
   isCommentHighlighted,
 } = storeToRefs(commentsStore);
-const { showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
+const {
+  showAddComment,
+  handleEditorLocationsUpdate,
+  handleTrackedChangeUpdate,
+  addComment,
+  getComment,
+  COMMENT_EVENTS,
+} = commentsStore;
 const { proxy } = getCurrentInstance();
 commentsStore.proxy = proxy;
 
@@ -332,7 +339,40 @@ const onEditorCommentLocationsUpdate = ({ allCommentIds: activeThreadId, allComm
 
 const onEditorCommentsUpdate = (params = {}) => {
   // Set the active comment in the store
-  const { activeCommentId, type } = params;
+  let { activeCommentId, type, comment: commentPayload } = params;
+
+  if (COMMENT_EVENTS?.ADD && type === COMMENT_EVENTS.ADD && commentPayload) {
+    if (!commentPayload.commentText && commentPayload.text) {
+      commentPayload.commentText = commentPayload.text;
+    }
+
+    const currentUser = proxy.$superdoc?.user;
+    if (currentUser) {
+      if (!commentPayload.creatorName) commentPayload.creatorName = currentUser.name;
+      if (!commentPayload.creatorEmail) commentPayload.creatorEmail = currentUser.email;
+    }
+
+    if (!commentPayload.createdTime) commentPayload.createdTime = Date.now();
+
+    const primaryDocumentId = commentPayload.documentId || documents.value?.[0]?.id;
+    if (!commentPayload.documentId && primaryDocumentId) {
+      commentPayload.documentId = primaryDocumentId;
+    }
+
+    if (!commentPayload.fileId && primaryDocumentId) {
+      commentPayload.fileId = primaryDocumentId;
+    }
+
+    const id = commentPayload.commentId || commentPayload.importedId;
+    if (id && !getComment(id)) {
+      const commentModel = useComment(commentPayload);
+      addComment({ superdoc: proxy.$superdoc, comment: commentModel, skipEditorUpdate: true });
+    }
+
+    if (!activeCommentId && id) {
+      activeCommentId = id;
+    }
+  }
 
   if (type === 'trackedChange') {
     handleTrackedChangeUpdate({ superdoc: proxy.$superdoc, params });
