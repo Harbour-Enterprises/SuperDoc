@@ -12,7 +12,6 @@ import { generateDocxRandomId, generateRandomSigned32BitIntStrId } from '@helper
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
-import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
@@ -29,6 +28,10 @@ import { translator as wDrawingNodeTranslator } from './v3/handlers/w/drawing/dr
 import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark-start/index.js';
 import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
 import { translator as alternateChoiceTranslator } from '@converter/v3/handlers/mc/altermateContent';
+import {
+  commentRangeStartTranslator as wCommentRangeStartTranslator,
+  commentRangeEndTranslator as wCommentRangeEndTranslator,
+} from './v3/handlers/w/commentRange/index.js';
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
 
@@ -171,8 +174,8 @@ export function exportSchemaToJson(params) {
     tab: wTabNodeTranslator,
     image: wDrawingNodeTranslator,
     hardBreak: wBrNodeTranslator,
-    commentRangeStart: () => translateCommentNode(params, 'Start'),
-    commentRangeEnd: () => translateCommentNode(params, 'End'),
+    commentRangeStart: wCommentRangeStartTranslator,
+    commentRangeEnd: wCommentRangeEndTranslator,
     commentReference: () => null,
     shapeContainer: translateShapeContainer,
     shapeTextbox: translateShapeTextbox,
