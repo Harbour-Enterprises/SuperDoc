@@ -107,11 +107,10 @@ function decode(params) {
 
   const linkMark = node.marks.find((m) => m.type === 'link');
   const linkAttrs = this.decodeAttributes({ ...params, node: linkMark });
-  let { anchor, href: link } = linkMark.attrs;
+  let { href: link, anchor } = linkMark.attrs;
 
-  const isExternalLink = !anchor;
-  if (isExternalLink) {
-    linkAttrs['r:id'] = _addNewLinkRelationship(params, link, linkAttrs['r:id']);
+  if (!linkAttrs['r:id'] && !anchor) {
+    linkAttrs['r:id'] = _addNewLinkRelationship(params, link);
   }
 
   let contentNodes = [];
@@ -146,35 +145,26 @@ function decode(params) {
  *
  * @param {import('@translator').SCDecoderConfig} params
  * @param {string} [link] The URL of this link
- * @param {string|null} [rId] The existing relationship ID, if any
  * @returns {string} The new relationship ID
  */
-function _addNewLinkRelationship(params, link, rId) {
-  if (!rId) rId = generateDocxRandomId();
+function _addNewLinkRelationship(params, link) {
+  let id = generateDocxRandomId();
 
   if (!params.relationships || !Array.isArray(params.relationships)) {
     params.relationships = [];
-  }
-
-  // Check if the relationship already exists
-  const existingRel = params.relationships.find(
-    (rel) => rel.attributes && rel.attributes.Id === rId && rel.attributes.Target === link,
-  );
-  if (existingRel) {
-    return rId;
   }
 
   params.relationships.push({
     type: 'element',
     name: 'Relationship',
     attributes: {
-      Id: rId,
+      Id: id,
       Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
       Target: link,
       TargetMode: 'External',
     },
   });
-  return rId;
+  return id;
 }
 
 /** @type {import('@translator').NodeTranslatorConfig} */

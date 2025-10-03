@@ -17,6 +17,7 @@ export function handleAnnotationNode(params) {
   const sdtPr = node.elements.find((el) => el.name === 'w:sdtPr');
   const sdtContent = node.elements.find((el) => el.name === 'w:sdtContent');
 
+  const sdtId = sdtPr?.elements?.find((el) => el.name === 'w:id');
   const alias = sdtPr?.elements.find((el) => el.name === 'w:alias');
   const tag = sdtPr?.elements.find((el) => el.name === 'w:tag');
   const tagValue = tag?.attributes['w:val'];
@@ -43,7 +44,7 @@ export function handleAnnotationNode(params) {
     attrs = attrsFromJSON;
   } else {
     // IMPORTANT: FOR BACKWARD COMPATIBILITY.
-    const attrsFromElements = getAttrsFromElements({ sdtPr, tag, alias });
+    const attrsFromElements = getAttrsFromElements({ sdtPr, tag, alias, sdtId });
     attrs = attrsFromElements;
   }
 
@@ -124,7 +125,7 @@ export const parseAnnotationMarks = (content = {}) => {
   };
 };
 
-export function getAttrsFromElements({ sdtPr, tag, alias }) {
+export function getAttrsFromElements({ sdtPr, tag, alias, sdtId }) {
   const type = sdtPr?.elements.find((el) => el.name === 'w:fieldTypeShort')?.attributes['w:val'];
   const fieldType = sdtPr?.elements.find((el) => el.name === 'w:fieldType')?.attributes['w:val'];
   const fieldColor = sdtPr?.elements.find((el) => el.name === 'w:fieldColor')?.attributes['w:val'];
@@ -144,6 +145,7 @@ export function getAttrsFromElements({ sdtPr, tag, alias }) {
     fontSize: fontSize !== 'null' ? fontSize : null,
     textColor: textColor !== 'null' ? textColor : null,
     textHighlight: textHighlight !== 'null' ? textHighlight : null,
+    sdtId: sdtId?.attributes['w:val'],
   };
   return attrs;
 }

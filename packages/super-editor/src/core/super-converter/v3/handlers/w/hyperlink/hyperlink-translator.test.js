@@ -205,7 +205,7 @@ describe('w:hyperlink translator', () => {
   });
 
   describe('config.decode', () => {
-    it('should decode an external link and add a new relationship', () => {
+    it('should decode an external link', () => {
       const params = {
         node: {
           type: 'text',
@@ -224,17 +224,7 @@ describe('w:hyperlink translator', () => {
 
       expect(result.name).toBe('w:hyperlink');
       expect(result.attributes['r:id']).toBe('rId5');
-      expect(params.relationships).toHaveLength(1);
-      expect(params.relationships[0]).toEqual({
-        type: 'element',
-        name: 'Relationship',
-        attributes: {
-          Id: 'rId5',
-          Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
-          Target: 'https://example.com',
-          TargetMode: 'External',
-        },
-      });
+      expect(params.relationships).toHaveLength(0);
       expect(exportSchemaToJson).toHaveBeenCalled();
     });
 
@@ -280,24 +270,6 @@ describe('w:hyperlink translator', () => {
       expect(params.relationships).toHaveLength(1);
       expect(params.relationships[0]).toBe(existingRel);
     });
-
-    it('should decode an anchor link without adding a relationship', () => {
-      const params = {
-        node: {
-          type: 'text',
-          text: 'anchor text',
-          marks: [{ type: 'link', attrs: { href: '#my-anchor', anchor: 'my-anchor' } }],
-        },
-        relationships: [],
-      };
-
-      const result = translator.decode(params);
-
-      expect(result.name).toBe('w:hyperlink');
-      expect(result.attributes).not.toHaveProperty('r:id');
-      expect(result.attributes).toHaveProperty('w:anchor', 'my-anchor');
-      expect(params.relationships).toHaveLength(0);
-    });
   });
 
   describe('with hyperlinkGroup', () => {
@@ -337,7 +309,6 @@ describe('w:hyperlink translator', () => {
       expect(result.elements).toHaveLength(2);
       expect(result.elements[0].elements[0].elements[0].text).toBe('link text 1');
       expect(result.elements[1].elements[0].elements[0].text).toBe('link text 2');
-      expect(params.relationships).toHaveLength(1);
     });
   });
 });

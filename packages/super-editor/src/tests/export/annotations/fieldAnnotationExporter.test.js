@@ -91,10 +91,8 @@ describe('AnnotationNodeExporter', async () => {
     expect(attrs.fieldTypeShort).toBe('html');
 
     const node = body.elements[8].elements[1].elements[1];
-    const par = node.elements.find((el) => el.name === 'w:p');
-    expect(par).toBeDefined();
 
-    const run = par.elements.find((el) => el.name === 'w:r');
+    const run = node.elements.find((el) => el.name === 'w:r');
     expect(run).toBeDefined();
 
     const textNode = run.elements.find((el) => el.name === 'w:t');

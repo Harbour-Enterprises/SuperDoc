@@ -329,6 +329,11 @@ export const FieldAnnotation = Node.create({
         rendered: false,
         default: null,
       },
+
+      sdtId: {
+        rendered: false,
+        default: null,
+      },
     };
   },
 
