@@ -146,6 +146,8 @@ const additionalHandlers = Object.freeze({
   'w:wBefore': w_wBefore_translator,
   'wp:anchor': wp_anchor_translator,
   'wp:inline': wp_inline_translator,
+  'w:commentRangeStart': w_commentRangeStart_translator,
+  'w:commentRangeEnd': w_commentRangeEnd_translator,
 });
 
 const baseHandlers = {
