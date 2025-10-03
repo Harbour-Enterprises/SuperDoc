@@ -73,5 +73,5 @@ function cleanStyle(style) {
     .filter(Boolean);
   const textAlign = declarations.find((d) => d.startsWith('text-align'));
 
-  return textAlign || '';
+  return textAlign ? `${textAlign};` : '';
 }
