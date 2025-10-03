@@ -1,9 +1,9 @@
 import { commentRangeStartTranslator, commentRangeEndTranslator } from './comment-range-translator';
 
 describe('w:commentRangeStart and w:commentRangeEnd', () => {
-  // The generic behavior uses commentRangeStartTranslator only, but it could as well be the commentRangeEndTranslator
+  // The `decode` describe block uses commentRangeStartTranslator only, but it could as well be the commentRangeEndTranslator
   // They share the same behavior, except for one specific case, and hence we have two separate describe blocks for that.
-  describe('generic behavior', () => {
+  describe('decode', () => {
     test('returns if node is not given', () => {
       expect(commentRangeStartTranslator.decode({ node: undefined })).toBe(undefined);
     });
@@ -75,7 +75,7 @@ describe('w:commentRangeStart and w:commentRangeEnd', () => {
     });
   });
 
-  describe('commentRangeStartTranslator', () => {
+  describe('decode:commentRangeStartTranslator', () => {
     test('returns comment schema', () => {
       expect(
         commentRangeStartTranslator.decode({
@@ -88,7 +88,7 @@ describe('w:commentRangeStart and w:commentRangeEnd', () => {
     });
   });
 
-  describe('commentRangeEndTranslator', () => {
+  describe('decode:commentRangeEndTranslator', () => {
     test('returns comment schema', () => {
       expect(
         commentRangeEndTranslator.decode({
