@@ -50,6 +50,11 @@ export function stripHtmlStyles(html) {
       if (!shouldKeep) {
         node.removeAttribute(attr.name);
       }
+
+      if (node.nodeName.toLowerCase() === 'span') {
+        // Preserve trailing spaces
+        node.innerHTML = node.innerHTML.replace(/(\S) (<\/span>)/g, '$1&nbsp;$2');
+      }
     });
     [...node.children].forEach(cleanNode);
   };
