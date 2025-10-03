@@ -588,6 +588,32 @@ describe('table live xml test', () => {
     expect(firstRow.content[1].attrs.colwidth[0]).toBeCloseTo(312, 0);
   });
 
+  it('preserves rows when merged cells span the grid', async () => {
+    const docx = await getTestDataByFileName('table-merged-cells.docx');
+    const documentXml = docx['word/document.xml'];
+
+    const document = documentXml.elements[0];
+    const body = document.elements.find((el) => el.name === 'w:body');
+    const tableXml = body.elements.find((el) => el.name === 'w:tbl');
+
+    const result = tableNodeHandlerEntity.handler({
+      nodes: [tableXml],
+      docx,
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const table = result.nodes[0];
+    expect(table.type).toBe('table');
+    expect(table.content).toHaveLength(3);
+
+    const firstRow = table.content[0];
+    expect(firstRow.content[0].attrs.colspan).toBe(2);
+
+    const mergedRow = table.content[2];
+    expect(mergedRow.content).toHaveLength(1);
+    expect(mergedRow.content[0].attrs.colspan).toBe(3);
+  });
+
   it('imports cantSplit attribute on table row', () => {
     const xml = `<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:left w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:bottom w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:right w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideH w:val="single" w:sz="4" w:space="0" w:color="auto"/><w:insideV w:val="single" w:sz="4" w:space="0" w:color="auto"/></w:tblBorders></w:tblPr><w:tr><w:trPr><w:cantSplit/><w:trHeight w:val="254"/></w:trPr><w:tc><w:tcPr><w:tcW w:w="1000" w:type="dxa"/></w:tcPr><w:p><w:r><w:t>Cell</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`;
 
