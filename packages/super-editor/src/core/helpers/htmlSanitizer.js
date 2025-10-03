@@ -36,6 +36,11 @@ export function stripHtmlStyles(html) {
     [...node.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
 
+      if (node.nodeName.toLowerCase() === 'span') {
+        // Preserve trailing spaces
+        node.innerHTML = node.innerHTML.replace(/(\S) (<\/span>)/g, '$1&nbsp;$2');
+      }
+
       if (name === 'style') {
         const cleanedStyle = cleanStyle(attr.value);
         if (!cleanedStyle) {
@@ -49,11 +54,6 @@ export function stripHtmlStyles(html) {
 
       if (!shouldKeep) {
         node.removeAttribute(attr.name);
-      }
-
-      if (node.nodeName.toLowerCase() === 'span') {
-        // Preserve trailing spaces
-        node.innerHTML = node.innerHTML.replace(/(\S) (<\/span>)/g, '$1&nbsp;$2');
       }
     });
     [...node.children].forEach(cleanNode);
