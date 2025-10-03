@@ -1,3 +1,9 @@
+## [0.22.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.2...v0.22.3) (2025-10-03)
+
+### Bug Fixes
+
+- preserve trailing spaces when inject html ([#1070](https://github.com/Harbour-Enterprises/SuperDoc/issues/1070)) ([2e78997](https://github.com/Harbour-Enterprises/SuperDoc/commit/2e78997a8a3a475888de7049bd3b3cfd8868ec94))
+
 ## [0.22.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.1...v0.22.2) (2025-10-03)
 
 ### Bug Fixes
