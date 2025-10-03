@@ -1,12 +1,11 @@
 // @ts-check
 
-export const encode = (attributes) => attributes?.['w:id'];
-export const decode = (attrs) => attrs?.id;
+export const decode = (attrs) => attrs?.['w:id'];
 
 /** @type {import('@translator').AttrConfig} */
 export const attrConfig = Object.freeze({
   xmlName: 'w:id',
-  sdName: 'id',
-  encode,
+  sdName: 'w:id', // We do not translate it from 'w:id' to 'id' when encoding, so the name is the same
+  encode: () => {},
   decode,
 });
