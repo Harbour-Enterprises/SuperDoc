@@ -139,7 +139,7 @@ jobs:
           curl -L \
             -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ steps.generate_token.outputs.token }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPERDOC_PAT }}" \
             ${{ secrets.SD_TESTS_URL }} \
             -d '{
               "ref": "main",
