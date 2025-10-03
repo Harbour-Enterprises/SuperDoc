@@ -1,6 +1,6 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import { idAttrConfig, displacedByCustomXmlAttrConfig } from './attributes/index.js';
+import { idAttrConfig } from './attributes/index.js';
 
 /**
  * @type {import('@translator').XmlNodeName}
@@ -82,7 +82,7 @@ const getConfig = (type) => ({
   type: NodeTranslator.translatorTypes.NODE,
   encode: () => {},
   decode,
-  attributes: [idAttrConfig, displacedByCustomXmlAttrConfig],
+  attributes: [idAttrConfig],
 });
 
 export const commentRangeStartTranslator = NodeTranslator.from(getConfig('Start'));
