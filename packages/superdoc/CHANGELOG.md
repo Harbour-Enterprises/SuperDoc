@@ -1,3 +1,9 @@
+## [0.22.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.1...v0.22.2) (2025-10-03)
+
+### Bug Fixes
+
+- import alignment from injected html ([#1068](https://github.com/Harbour-Enterprises/SuperDoc/issues/1068)) ([0cdb9ea](https://github.com/Harbour-Enterprises/SuperDoc/commit/0cdb9eab72bc68ba64996348bb701bacf4fbfbf4))
+
 ## [0.22.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.0...v0.22.1) (2025-10-01)
 
 ### Bug Fixes
