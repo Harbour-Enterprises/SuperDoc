@@ -884,6 +884,7 @@ function getActualBreakCoords(view, pos, calculatedThreshold) {
  * @returns {void}
  */
 const onImageLoad = (editor) => {
+  if (typeof requestAnimationFrame !== 'function') return;
   requestAnimationFrame(() => {
     const newTr = editor.view.state.tr;
     newTr.setMeta('forceUpdatePagination', true);

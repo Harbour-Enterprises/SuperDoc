@@ -127,7 +127,7 @@ const encode = (params, encodedAttrs) => {
         columnWidths,
       },
     });
-    if (result.content?.length) content.push(result);
+    if (result) content.push(result);
   });
 
   return {

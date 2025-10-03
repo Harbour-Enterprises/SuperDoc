@@ -198,7 +198,11 @@ export const useCommentsStore = defineStore('comments', () => {
     if (!superdoc.config.isInternal) pendingComment.value.isInternal = false;
 
     if (superdoc.activeEditor?.commands) {
-      superdoc.activeEditor.commands.insertComment({ ...pendingComment.value.getValues(), commentId: 'pending' });
+      superdoc.activeEditor.commands.insertComment({
+        ...pendingComment.value.getValues(),
+        commentId: 'pending',
+        skipEmit: true,
+      });
     }
 
     if (pendingComment.value.selection.source === 'super-editor' && superdocStore.selectionPosition) {
@@ -328,7 +332,7 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {Object} param0.superdoc The SuperDoc instance
    * @returns {void}
    */
-  const addComment = ({ superdoc, comment }) => {
+  const addComment = ({ superdoc, comment, skipEditorUpdate = false }) => {
     let parentComment = commentsList.value.find((c) => c.commentId === activeComment.value);
     if (!parentComment) parentComment = comment;
 
@@ -355,9 +359,9 @@ export const useCommentsStore = defineStore('comments', () => {
 
     // If this is not a tracked change, and it belongs to a Super Editor, and its not a child comment
     // We need to let the editor know about the new comment
-    if (!comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
+    if (!skipEditorUpdate && !comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
       // Add the comment to the active editor
-      superdoc.activeEditor.commands.insertComment(newComment.getValues());
+      superdoc.activeEditor.commands.insertComment({ ...newComment.getValues(), skipEmit: true });
     }
 
     const event = { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() };
