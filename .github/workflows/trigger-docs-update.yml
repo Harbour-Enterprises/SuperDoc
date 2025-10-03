@@ -1,4 +1,6 @@
 name: 📚 Trigger Docs Update [auto]
+permissions:
+  contents: read
 
 on:
   release:
