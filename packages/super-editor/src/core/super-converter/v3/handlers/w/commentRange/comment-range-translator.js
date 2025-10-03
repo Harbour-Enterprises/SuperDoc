@@ -14,24 +14,6 @@ const XML_NODE_NAME = 'w:commentRange';
 const SD_NODE_NAME = 'commentRange';
 
 /**
- * Encode an unhandled node as a passthrough node.
- * @param {import('@translator').SCEncoderConfig} _
- * @param {import('@translator').EncodedAttributes} [encodedAttrs] - The already encoded attributes
- * @returns {import('@translator').SCEncoderResult}
- */
-// const encode = (_, encodedAttrs) => {
-//   const isPageBreak = encodedAttrs?.lineBreakType === 'page';
-//   const translated = {
-//     type: isPageBreak ? 'hardBreak' : 'lineBreak',
-//   };
-//   if (encodedAttrs) {
-//     translated.attrs = { ...encodedAttrs };
-//   }
-
-//   return translated;
-// };
-
-/**
  * Decode the commentRange(Start|End) node back into OOXML <w:commentRange(Start|End)>.
  * @param {import('@translator').SCDecoderConfig} params
  * @param {import('@translator').DecodedAttributes} [decodedAttrs] - The already decoded attributes
@@ -43,7 +25,7 @@ const decode = (params, decodedAttrs) => {
 
   if (!node) return;
   if (!comments) return;
-  if (exportedCommentDefs.length === 0) return;
+  if (exportedCommentDefs?.length === 0) return;
   if (commentsExportType === 'clean') return;
 
   const commentNodeId = node.attrs['w:id'];
@@ -51,14 +33,12 @@ const decode = (params, decodedAttrs) => {
   const originalComment = comments.find((comment) => {
     return comment.commentId == commentNodeId;
   });
-
   if (!originalComment) return;
 
   const parentCommentId = originalComment.parentCommentId;
   const parentComment = comments.find(
     ({ commentId, importedId }) => commentId === parentCommentId || importedId === parentCommentId,
   );
-
   const isInternal = parentComment?.isInternal || originalComment.isInternal;
   if (commentsExportType === 'external' && isInternal) return;
 
