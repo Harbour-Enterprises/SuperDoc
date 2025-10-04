@@ -232,7 +232,7 @@ export const Image = Node.create({
     // multiple attributes influence the margin sizes, so we handle them here together rather than separately.
     // Also, the editor context is needed for wrap styling in some cases.
 
-    const { wrap, marginOffset, anchorData, padding, transformData = {}, size = {} } = node.attrs;
+    const { wrap, marginOffset, anchorData, padding, transformData = {}, size = { width: 0, height: 0 } } = node.attrs;
 
     const margin = {
       left: 0,
@@ -290,8 +290,8 @@ export const Image = Node.create({
 
         case 'Square':
           // TODO: HTML/CSS currently does not support floating an item to the top of the paragraph. So if
-          // the image is further down in the pargraph, it will be positioned further down on the page.
-          style += 'shape-outside: border-box;';
+          // the image is further down in the paragraph, it will be positioned further down on the page.
+          style += 'shape-outside: border-box; clear: both;';
           // Default to float left, allow wrapText to override
           if (attrs.wrapText === 'right') {
             style += 'float: left;';
@@ -339,6 +339,7 @@ export const Image = Node.create({
 
         case 'Through':
         case 'Tight':
+          style += 'clear: both;';
           const pageStyles = this.editor?.converter?.pageStyles;
           if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
             const pageWidth = inchesToPixels(pageStyles.pageSize.width);
@@ -373,15 +374,25 @@ export const Image = Node.create({
           if (attrs.distRight) margin.right += attrs.distRight;
           if (attrs.polygon) {
             // Convert polygon points to CSS polygon string
+            // For left floating images - we add 15 to the horizontal offset to prevent overlap with text.
+            // For right floating images - we pick the smallest x value of the polygon. Difference is due to
+            // the polygons in HTML/CSS being defined in relation to the image's bounding box.
+            let horizontalOffset = floatRight ? attrs.polygon[0][0] || 0 : marginOffset.horizontal + 15;
+            if (floatRight) {
+              attrs.polygon.forEach(([x, y]) => {
+                if (x < horizontalOffset) horizontalOffset = x;
+              });
+            }
+            const verticalOffset = Math.max(15, marginOffset.top + 15);
             const points = attrs.polygon
-              .map(([x, y]) => `${x + marginOffset.horizontal + 15}px ${y + marginOffset.top + 15}px`)
+              .map(([x, y]) => `${x + horizontalOffset}px ${y + verticalOffset}px`)
               .join(', ');
             style += `shape-outside: polygon(${points});`;
           }
           break;
 
         case 'TopAndBottom':
-          style += 'display: block;';
+          style += 'display: block; clear: both;';
           if (attrs.distTop) margin.top += attrs.distTop;
           if (attrs.distBottom) margin.bottom += attrs.distBottom;
           centered = true;
@@ -400,7 +411,10 @@ export const Image = Node.create({
     if (hasAnchorData || hasMarginOffsets) {
       const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
       const maxMarginV = 500;
-      const baseTop = marginOffset?.top ?? 0;
+      const baseTop = Math.max(0, marginOffset?.top ?? 0);
+      // TODO: Images that go into the margin have negative offsets - often by high values.
+      // These values will not be shown correctly when rendered in browser. Adjusting to zero is smallest possible
+      // adjustment that continues to give a result close to the original.
 
       let rotationHorizontal = 0;
       let rotationTop = 0;
