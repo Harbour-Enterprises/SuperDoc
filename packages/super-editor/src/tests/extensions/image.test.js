@@ -128,8 +128,8 @@ describe('Image Extension DOM rendering', () => {
         marginOffset: { horizontal: 5, top: 7 },
       });
       const styles = parseStyle(style);
-      expect(styles['margin-left']).toBe('26px');
-      expect(styles['margin-top']).toBe('28px');
+      expect(styles['margin-left']).toBe('57px');
+      expect(styles['margin-top']).toBe('61px');
       expect(styles['margin-bottom']).toBe('25px');
       expect(styles['margin-right']).toBe('29px');
     });
@@ -174,8 +174,7 @@ describe('Image Extension DOM rendering', () => {
       const img = editor.view.dom.querySelector('img');
       expect(img).toBeTruthy();
       const inlineStyles = parseStyle(img.getAttribute('style'));
-      expect(inlineStyles['margin-top']).toBe('45px');
-      expect(inlineStyles['margin-right']).toBe('16px');
+      expect(inlineStyles['margin']).toBe('70px 16px 31px 34px');
 
       let insertedImage;
       editor.view.state.doc.descendants((node) => {

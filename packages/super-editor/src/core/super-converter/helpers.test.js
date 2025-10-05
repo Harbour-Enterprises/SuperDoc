@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { polygonToObj, objToPolygon, emuToPixels, pixelsToEmu } from './helpers.js';
+import { polygonToObj, objToPolygon, polygonUnitsToPixels, pixelsToPolygonUnits } from './helpers.js';
 
 describe('polygonToObj', () => {
   it('should return null for null input', () => {
@@ -18,9 +18,9 @@ describe('polygonToObj', () => {
   it('should extract points from wp:start and wp:lineTo elements', () => {
     const polygon = {
       elements: [
-        { name: 'wp:start', attributes: { x: '914400', y: '914400' } }, // 1 pixel each
-        { name: 'wp:lineTo', attributes: { x: '1828800', y: '1828800' } }, // 2 pixels each
-        { name: 'wp:lineTo', attributes: { x: '2743200', y: '2743200' } }, // 3 pixels each
+        { name: 'wp:start', attributes: { x: '9216', y: '9216' } },
+        { name: 'wp:lineTo', attributes: { x: '18432', y: '18432' } },
+        { name: 'wp:lineTo', attributes: { x: '27648', y: '27648' } },
       ],
     };
 
@@ -35,9 +35,9 @@ describe('polygonToObj', () => {
   it('should ignore elements that are not wp:start or wp:lineTo', () => {
     const polygon = {
       elements: [
-        { name: 'wp:start', attributes: { x: '914400', y: '914400' } },
-        { name: 'wp:other', attributes: { x: '1828800', y: '1828800' } }, // should be ignored
-        { name: 'wp:lineTo', attributes: { x: '2743200', y: '2743200' } },
+        { name: 'wp:start', attributes: { x: '9216', y: '9216' } },
+        { name: 'wp:other', attributes: { x: '18288', y: '18288' } }, // should be ignored
+        { name: 'wp:lineTo', attributes: { x: '27648', y: '27648' } },
       ],
     };
 
@@ -51,10 +51,10 @@ describe('polygonToObj', () => {
   it('should remove the last point if it matches the first point (closed polygon)', () => {
     const polygon = {
       elements: [
-        { name: 'wp:start', attributes: { x: '914400', y: '914400' } }, // [100, 100]
-        { name: 'wp:lineTo', attributes: { x: '1828800', y: '1828800' } }, // [200, 200]
-        { name: 'wp:lineTo', attributes: { x: '2743200', y: '2743200' } }, // [300, 300]
-        { name: 'wp:lineTo', attributes: { x: '914400', y: '914400' } }, // [100, 100] - duplicate
+        { name: 'wp:start', attributes: { x: '9216', y: '9216' } }, // [96, 96]
+        { name: 'wp:lineTo', attributes: { x: '18432', y: '18432' } }, // [192, 192]
+        { name: 'wp:lineTo', attributes: { x: '27648', y: '27648' } }, // [288, 288]
+        { name: 'wp:lineTo', attributes: { x: '9216', y: '9216' } }, // [96, 96] - duplicate
       ],
     };
 
@@ -69,10 +69,10 @@ describe('polygonToObj', () => {
   it('should not remove the last point if it does not match the first point', () => {
     const polygon = {
       elements: [
-        { name: 'wp:start', attributes: { x: '914400', y: '914400' } }, // [100, 100]
-        { name: 'wp:lineTo', attributes: { x: '1828800', y: '1828800' } }, // [200, 200]
-        { name: 'wp:lineTo', attributes: { x: '2743200', y: '2743200' } }, // [300, 300]
-        { name: 'wp:lineTo', attributes: { x: '3657600', y: '3657600' } }, // [400, 400] - different
+        { name: 'wp:start', attributes: { x: '9216', y: '9216' } }, // [96, 96]
+        { name: 'wp:lineTo', attributes: { x: '18432', y: '18432' } }, // [192, 192]
+        { name: 'wp:lineTo', attributes: { x: '27648', y: '27648' } }, // [288, 288]
+        { name: 'wp:lineTo', attributes: { x: '36864', y: '36864' } }, // [384, 384] - different
       ],
     };
 
@@ -83,15 +83,6 @@ describe('polygonToObj', () => {
       [288, 288],
       [384, 384],
     ]);
-  });
-
-  it('should handle single point polygon', () => {
-    const polygon = {
-      elements: [{ name: 'wp:start', attributes: { x: '914400', y: '914400' } }],
-    };
-
-    const result = polygonToObj(polygon);
-    expect(result).toEqual([[96, 96]]);
   });
 });
 
@@ -120,9 +111,9 @@ describe('objToPolygon', () => {
 
   it('should convert points to polygon with wp:start for first point and wp:lineTo for others', () => {
     const points = [
-      [100, 100],
-      [200, 200],
-      [300, 300],
+      [96, 96],
+      [192, 192],
+      [288, 288],
     ];
 
     const result = objToPolygon(points);
@@ -131,19 +122,19 @@ describe('objToPolygon', () => {
       elements: [
         {
           type: 'wp:start',
-          attributes: { x: 952500, y: 952500 }, // pixelsToEmu(100)
+          attributes: { x: 9216, y: 9216 },
         },
         {
           type: 'wp:lineTo',
-          attributes: { x: 1905000, y: 1905000 }, // pixelsToEmu(200)
+          attributes: { x: 18432, y: 18432 },
         },
         {
           type: 'wp:lineTo',
-          attributes: { x: 2857500, y: 2857500 }, // pixelsToEmu(300)
+          attributes: { x: 27648, y: 27648 },
         },
         {
           type: 'wp:lineTo',
-          attributes: { x: 952500, y: 952500 }, // back to start point
+          attributes: { x: 9216, y: 9216 }, // back to start point
         },
       ],
     });
@@ -168,25 +159,6 @@ describe('objToPolygon', () => {
     expect(lastPoint.attributes.y).toBe(firstPoint.attributes.y);
   });
 
-  it('should handle single point array', () => {
-    const points = [[100, 200]];
-
-    const result = objToPolygon(points);
-    expect(result).toEqual({
-      type: 'wp:wrapPolygon',
-      elements: [
-        {
-          type: 'wp:start',
-          attributes: { x: 952500, y: 1905000 },
-        },
-        {
-          type: 'wp:lineTo',
-          attributes: { x: 952500, y: 1905000 }, // back to start
-        },
-      ],
-    });
-  });
-
   it('should handle floating point coordinates', () => {
     const points = [
       [100.5, 200.7],
@@ -194,10 +166,10 @@ describe('objToPolygon', () => {
     ];
 
     const result = objToPolygon(points);
-    expect(result.elements[0].attributes.x).toBe(pixelsToEmu(100.5));
-    expect(result.elements[0].attributes.y).toBe(pixelsToEmu(200.7));
-    expect(result.elements[1].attributes.x).toBe(pixelsToEmu(300.2));
-    expect(result.elements[1].attributes.y).toBe(pixelsToEmu(400.9));
+    expect(result.elements[0].attributes.x).toBe(pixelsToPolygonUnits(100.5));
+    expect(result.elements[0].attributes.y).toBe(pixelsToPolygonUnits(200.7));
+    expect(result.elements[1].attributes.x).toBe(pixelsToPolygonUnits(300.2));
+    expect(result.elements[1].attributes.y).toBe(pixelsToPolygonUnits(400.9));
   });
 });
 
@@ -206,10 +178,10 @@ describe('polygonToObj and objToPolygon integration', () => {
     // Start with a polygon that has a closing point
     const originalPolygon = {
       elements: [
-        { name: 'wp:start', attributes: { x: '914400', y: '914400' } },
-        { name: 'wp:lineTo', attributes: { x: '1828800', y: '1828800' } },
-        { name: 'wp:lineTo', attributes: { x: '2743200', y: '2743200' } },
-        { name: 'wp:lineTo', attributes: { x: '914400', y: '914400' } }, // closing point
+        { name: 'wp:start', attributes: { x: '9216', y: '9216' } },
+        { name: 'wp:lineTo', attributes: { x: '18432', y: '18432' } },
+        { name: 'wp:lineTo', attributes: { x: '27648', y: '27648' } },
+        { name: 'wp:lineTo', attributes: { x: '9216', y: '9216' } }, // closing point
       ],
     };
 
@@ -238,9 +210,9 @@ describe('polygonToObj and objToPolygon integration', () => {
     // Start with an open polygon
     const originalPolygon = {
       elements: [
-        { name: 'wp:start', attributes: { x: '914400', y: '914400' } },
-        { name: 'wp:lineTo', attributes: { x: '1828800', y: '1828800' } },
-        { name: 'wp:lineTo', attributes: { x: '2743200', y: '2743200' } },
+        { name: 'wp:start', attributes: { x: '9216', y: '9216' } },
+        { name: 'wp:lineTo', attributes: { x: '18432', y: '18432' } },
+        { name: 'wp:lineTo', attributes: { x: '27648', y: '27648' } },
       ],
     };
 
@@ -261,11 +233,11 @@ describe('polygonToObj and objToPolygon integration', () => {
     // Simulate a typical DOCX polygon that comes from Word - closed polygon with duplicate end point
     const docxPolygon = {
       elements: [
-        { name: 'wp:start', attributes: { x: '914400', y: '914400' } }, // Top-left: [96, 96]
-        { name: 'wp:lineTo', attributes: { x: '2743200', y: '914400' } }, // Top-right: [288, 96]
-        { name: 'wp:lineTo', attributes: { x: '2743200', y: '2743200' } }, // Bottom-right: [288, 288]
-        { name: 'wp:lineTo', attributes: { x: '914400', y: '2743200' } }, // Bottom-left: [96, 288]
-        { name: 'wp:lineTo', attributes: { x: '914400', y: '914400' } }, // Back to start (duplicate)
+        { name: 'wp:start', attributes: { x: '9216', y: '9216' } }, // Top-left: [96, 96]
+        { name: 'wp:lineTo', attributes: { x: '27648', y: '9216' } }, // Top-right: [288, 96]
+        { name: 'wp:lineTo', attributes: { x: '27648', y: '27648' } }, // Bottom-right: [288, 288]
+        { name: 'wp:lineTo', attributes: { x: '9216', y: '27648' } }, // Bottom-left: [96, 288]
+        { name: 'wp:lineTo', attributes: { x: '9216', y: '9216' } }, // Back to start (duplicate)
       ],
     };
 

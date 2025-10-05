@@ -106,6 +106,20 @@ function degreesToRot(degrees) {
   return degrees * 60000;
 }
 
+function pixelsToPolygonUnits(pixels) {
+  // TODO: Unclear what unit is used here
+  if (pixels == null) return;
+  const pu = pixels * 96;
+  return Math.round(pu * 1000) / 1000;
+}
+
+function polygonUnitsToPixels(pu) {
+  // TODO: Unclear what unit is used here
+  if (pu == null) return;
+  const pixels = Number(pu) / 96;
+  return Math.round(pixels * 1000) / 1000;
+}
+
 /**
  * Converts a DOCX polygon node to an array of pixel coordinates.
  * Automatically removes duplicate closing points that are the same as the starting point,
@@ -120,8 +134,7 @@ function polygonToObj(polygonNode) {
   polygonNode.elements.forEach((element) => {
     if (['wp:start', 'wp:lineTo'].includes(element.name)) {
       const { x, y } = element.attributes;
-
-      points.push([pixelsToInches(x), pixelsToInches(y)]); // TODO: Unclear what unit is used here.
+      points.push([polygonUnitsToPixels(x), polygonUnitsToPixels(y)]);
     }
   });
 
@@ -153,8 +166,8 @@ function objToPolygon(points) {
     const pointNode = {
       type: index === 0 ? 'wp:start' : 'wp:lineTo',
       attributes: {
-        x: pixelsToInches(x), // TODO: Unclear what unit is used here.
-        y: pixelsToInches(y), // TODO: Unclear what unit is used here.
+        x: pixelsToPolygonUnits(x),
+        y: pixelsToPolygonUnits(y),
       },
     };
     polygonNode.elements.push(pointNode);
@@ -166,8 +179,8 @@ function objToPolygon(points) {
     const closePointNode = {
       type: 'wp:lineTo',
       attributes: {
-        x: pixelsToEmu(startX),
-        y: pixelsToEmu(startY),
+        x: pixelsToPolygonUnits(startX),
+        y: pixelsToPolygonUnits(startY),
       },
     };
     polygonNode.elements.push(closePointNode);
@@ -374,4 +387,6 @@ export {
   deobfuscateFont,
   hasSomeParentWithClass,
   getTextIndentExportValue,
+  polygonUnitsToPixels,
+  pixelsToPolygonUnits,
 };

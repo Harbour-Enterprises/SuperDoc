@@ -311,7 +311,7 @@ describe('handleImageNode', () => {
         },
         elements: [
           {
-            name: 'wp:polygon',
+            name: 'wp:wrapPolygon',
             elements: [
               { name: 'wp:start', attributes: { x: '1000', y: '2000' } },
               { name: 'wp:lineTo', attributes: { x: '3000', y: '4000' } },
@@ -360,7 +360,7 @@ describe('handleImageNode', () => {
         name: 'wp:wrapThrough',
         elements: [
           {
-            name: 'wp:polygon',
+            name: 'wp:wrapPolygon',
             elements: [
               { name: 'wp:start', attributes: { x: '10000', y: '20000' } },
               { name: 'wp:lineTo', attributes: { x: '30000', y: '40000' } },
