@@ -1474,14 +1474,22 @@ export class Editor extends EventEmitter {
    * @returns {Object} Editor content as JSON
    */
   getJSON() {
-    const json = this.state.doc.toJSON();
+    return this.state.doc.toJSON();
+  }
+
+  /**
+   * Get document metadata including GUID, modification status, and version
+   * @returns {{
+   *   documentGuid: string | null,
+   *   isModified: boolean,
+   *   version: string | null
+   * }} Document metadata
+   */
+  getMetadata() {
     return {
-      ...json,
-      metadata: {
-        documentGuid: this.converter?.documentGuid || null,
-        isModified: this.isDocumentModified(),
-        version: this.converter?.getSuperdocVersion() || null,
-      },
+      documentGuid: this.converter?.documentGuid || null,
+      isModified: this.isDocumentModified(),
+      version: this.converter?.getSuperdocVersion() || null,
     };
   }
 
