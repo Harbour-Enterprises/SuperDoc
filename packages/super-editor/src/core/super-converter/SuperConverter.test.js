@@ -144,10 +144,10 @@ describe('SuperConverter Document GUID', () => {
             '<w:settings xmlns:w15="http://schemas.microsoft.com/office/word/2012/wordml"><w15:docId w15:val="{MS-GUID}"/></w:settings>',
         },
       ];
-      expect(SuperConverter.getDocumentGuid(docxWithMsGuid)).toBe('MS-GUID');
+      expect(SuperConverter.extractDocumentGuid(docxWithMsGuid)).toBe('MS-GUID');
 
       // Test when no GUID exists
-      const guid = SuperConverter.getDocumentGuid(mockDocx);
+      const guid = SuperConverter.extractDocumentGuid(mockDocx);
       expect(guid).toBeNull();
     });
   });

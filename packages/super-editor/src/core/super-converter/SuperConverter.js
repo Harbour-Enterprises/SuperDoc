@@ -375,7 +375,7 @@ class SuperConverter {
    * @param {Array} docx - Array of docx file objects
    * @returns {string|null} The document GUID
    */
-  static getDocumentGuid(docx) {
+  static extractDocumentGuid(docx) {
     try {
       const settingsXml = docx.find((doc) => doc.name === 'word/settings.xml');
       if (!settingsXml) return null;
@@ -1025,7 +1025,7 @@ class SuperConverter {
   // Deprecated methods for backward compatibility
   static getStoredSuperdocId(docx) {
     console.warn('getStoredSuperdocId is deprecated, use getDocumentGuid instead');
-    return SuperConverter.getDocumentGuid(docx);
+    return SuperConverter.extractDocumentGuid(docx);
   }
 
   static updateDocumentVersion(docx, version) {

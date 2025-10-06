@@ -934,7 +934,7 @@ export class Editor extends EventEmitter {
    * @returns {string|null} Document GUID
    */
   static getDocumentGuid(doc) {
-    return SuperConverter.getDocumentGuid(doc);
+    return SuperConverter.extractDocumentGuid(doc);
   }
 
   // Deprecated
