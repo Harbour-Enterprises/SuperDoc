@@ -2,7 +2,7 @@ import { NodeTranslator } from '@translator';
 import { createAttributeHandler } from '../../utils.js';
 
 /**
- * The NodeTranslator instance for the gridBefore element.
+ * The NodeTranslator instance for the w:shd element.
  * @type {import('@translator').NodeTranslator}
  * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 416
  */
