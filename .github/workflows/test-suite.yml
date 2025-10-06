@@ -142,7 +142,7 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.SUPERDOC_PAT }}" \
             ${{ secrets.SD_TESTS_URL }} \
             -d '{
-              "ref": "main",
+              "ref": "feat/tag-people-on-mention",
               "inputs": {
                 "superdoc-branch": "${{ github.head_ref }}",
                 "superdoc-sha": "${{ github.sha }}",
