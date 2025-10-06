@@ -452,7 +452,7 @@ class SuperConverter {
   /**
    * Generate document hash for telemetry (async, lazy)
    */
-  async generateDocumentHash() {
+  async #generateDocumentHash() {
     if (!this.fileSource) return `HASH-${Date.now()}`;
 
     try {
@@ -486,7 +486,7 @@ class SuperConverter {
     }
 
     if (!this.documentHash && this.fileSource) {
-      this.documentHash = await this.generateDocumentHash();
+      this.documentHash = await this.#generateDocumentHash();
     }
 
     return this.documentHash;
