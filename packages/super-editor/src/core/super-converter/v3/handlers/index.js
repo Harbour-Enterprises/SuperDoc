@@ -72,6 +72,7 @@ import { translator as wp_anchor_translator } from './wp/anchor/anchor-translato
 import { translator as wp_inline_translator } from './wp/inline/inline-translator.js';
 
 import { runPropertyTranslators } from './w/rpr/run-property-translators.js';
+import { translator as w_vMerge_translator } from './w/vMerge/vMerge-translator.js';
 
 /**
  * @typedef {Object} RegisteredHandlers
@@ -148,6 +149,7 @@ const additionalHandlers = Object.freeze({
   'wp:inline': wp_inline_translator,
   'w:commentRangeStart': w_commentRangeStart_translator,
   'w:commentRangeEnd': w_commentRangeEnd_translator,
+  'w:vMerge': w_vMerge_translator,
 });
 
 const baseHandlers = {
