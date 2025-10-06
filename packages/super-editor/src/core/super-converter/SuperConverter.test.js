@@ -181,6 +181,55 @@ describe('SuperConverter Document GUID', () => {
     });
   });
 
+  describe('Custom Properties', () => {
+    it('stores a custom property', () => {
+      const docx = {
+        'docProps/custom.xml': {
+          elements: [
+            {
+              name: 'Properties',
+              elements: [],
+            },
+          ],
+        },
+      };
+
+      SuperConverter.setStoredCustomProperty(docx, 'MyCustomProp', 'MyValue');
+      const prop = docx['docProps/custom.xml'].elements[0].elements[0];
+      expect(prop.attributes.name).toBe('MyCustomProp');
+      expect(prop.elements[0].elements[0].text).toBe('MyValue');
+    });
+
+    it('retrieves a custom property', () => {
+      const docx = {
+        name: 'docProps/custom.xml',
+        content: `<?xml version="1.0" encoding="UTF-8"?>
+        <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
+          <property name="MyCustomProp" pid="2">
+            <vt:lpwstr>MyValue</vt:lpwstr>
+          </property>
+        </Properties>`,
+      };
+      const value = SuperConverter.getStoredCustomProperty([docx], 'MyCustomProp');
+      expect(value).toBe('MyValue');
+    });
+
+    it('returns null if custom property does not exist', () => {
+      const value = SuperConverter.getStoredCustomProperty(
+        [
+          {
+            name: 'docProps/custom.xml',
+            content: `<?xml version="1.0" encoding="UTF-8"?>
+            <Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties">
+            </Properties>`,
+          },
+        ],
+        'NonExistentProp',
+      );
+      expect(value).toBeNull();
+    });
+  });
+
   describe('Backward Compatibility', () => {
     it('deprecated methods show warnings', () => {
       const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
