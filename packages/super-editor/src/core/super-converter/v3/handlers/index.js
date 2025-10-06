@@ -67,6 +67,7 @@ import { translator as w_wBefore_translator } from './w/wBefore/wBefore-translat
 import { translator as wp_anchor_translator } from './wp/anchor/anchor-translator.js';
 import { translator as wp_inline_translator } from './wp/inline/inline-translator.js';
 import { runPropertyTranslators } from './w/rpr/run-property-translators.js';
+import { translator as w_vMerge_translator } from './w/vMerge/vMerge-translator.js';
 
 /**
  * @typedef {Object} RegisteredHandlers
@@ -141,6 +142,7 @@ const additionalHandlers = Object.freeze({
   'w:wBefore': w_wBefore_translator,
   'wp:anchor': wp_anchor_translator,
   'wp:inline': wp_inline_translator,
+  'w:vMerge': w_vMerge_translator,
 });
 
 const baseHandlers = {
