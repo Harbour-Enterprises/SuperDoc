@@ -1,5 +1,7 @@
 import { NodeTranslator } from '../node-translator/index.js';
 
+import { NodeTranslator } from '../node-translator/index.js';
+
 /**
  * Generates a handler entity for a given node translator.
  * @param {string} handlerName - The name of the handler.
@@ -304,7 +306,7 @@ export function createNestedPropertiesTranslator(xmlName, sdName, propertyTransl
       const node = nodes[0];
 
       // Process property translators
-      const attributes = { ...defaultEncodedAttrs, ...encodeProperties(node, propertyTranslatorsByXmlName) };
+      const attributes = {...defaultEncodedAttrs, ...encodeProperties(node, propertyTranslatorsByXmlName)};
 
       return Object.keys(attributes).length > 0 ? attributes : undefined;
     },
