@@ -1,3 +1,5 @@
+import { NodeTranslator } from '../node-translator/index.js';
+
 /**
  * Generates a handler entity for a given node translator.
  * @param {string} handlerName - The name of the handler.
@@ -179,6 +181,54 @@ export function decodeProperties(translatorsBySdName, properties) {
     }
   });
   return elements;
+}
+
+/**
+ * Helper to create property handlers for nested properties (eg: w:tcBorders => borders)
+ * @param {string} xmlName The XML element name (with namespace).
+ * @param {string} sdName The SuperDoc attribute name (without namespace).
+ * @param {import('@translator').NodeTranslatorConfig[]} propertyTranslators An array of property translators to handle nested properties.
+ * @param {object} [defaultEncodedAttrs={}] Optional default attributes to include during encoding.
+ * @returns {import('@translator').NodeTranslatorConfig} The nested property handler config with xmlName, sdName, encode, and decode functions.
+ */
+export function createNestedPropertiesTranslator(xmlName, sdName, propertyTranslators, defaultEncodedAttrs = {}) {
+  const propertyTranslatorsByXmlName = {};
+  const propertyTranslatorsBySdName = {};
+  propertyTranslators.forEach((translator) => {
+    propertyTranslatorsByXmlName[translator.xmlName] = translator;
+    propertyTranslatorsBySdName[translator.sdNodeOrKeyName] = translator;
+  });
+
+  return {
+    xmlName: xmlName,
+    sdNodeOrKeyName: sdName,
+    type: NodeTranslator.translatorTypes.NODE,
+    attributes: [],
+    encode: (params) => {
+      const { nodes } = params;
+      const node = nodes[0];
+
+      // Process property translators
+      const attributes = {...defaultEncodedAttrs, ...encodeProperties(node, propertyTranslatorsByXmlName)};
+
+      return Object.keys(attributes).length > 0 ? attributes : undefined;
+    },
+    decode: (params) => {
+      const currentValue = params.node.attrs?.[sdName];
+
+      // Process property translators
+      const elements = decodeProperties(propertyTranslatorsBySdName, currentValue);
+
+      const newNode = {
+        name: xmlName,
+        type: 'element',
+        attributes: {},
+        elements: elements,
+      };
+
+      return newNode;
+    },
+  };
 }
 
 /**
