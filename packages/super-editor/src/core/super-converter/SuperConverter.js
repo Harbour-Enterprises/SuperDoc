@@ -493,14 +493,6 @@ class SuperConverter {
   }
 
   /**
-   * Check if using temporary ID
-   */
-  hasTemporaryId() {
-    // Has temporary ID if no GUID but has hash (or could generate one)
-    return !this.documentGuid && !!(this.documentHash || this.fileSource);
-  }
-
-  /**
    * Promote from hash to GUID on first edit
    */
   promoteToGuid() {

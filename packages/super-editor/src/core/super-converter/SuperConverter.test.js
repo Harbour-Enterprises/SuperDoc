@@ -6,6 +6,11 @@ vi.mock('uuid', () => ({
   v4: vi.fn(() => 'test-uuid-1234'),
 }));
 
+function hasTemporaryId(converter) {
+  // Has temporary ID if no GUID but has hash (or could generate one)
+  return !converter.documentGuid && !!(converter.documentHash || converter.fileSource);
+}
+
 describe('SuperConverter Document GUID', () => {
   let mockDocx;
   let mockCustomXml;
@@ -51,7 +56,7 @@ describe('SuperConverter Document GUID', () => {
 
       const converter = new SuperConverter({ docx: mockDocx });
       expect(converter.getDocumentGuid()).toBe('MICROSOFT-GUID-123');
-      expect(converter.hasTemporaryId()).toBe(false);
+      expect(hasTemporaryId(converter)).toBe(false);
     });
 
     it('uses custom DocumentGuid when no Microsoft GUID exists', () => {
@@ -69,7 +74,7 @@ describe('SuperConverter Document GUID', () => {
 
       const converter = new SuperConverter({ docx: customDocx });
       expect(converter.getDocumentGuid()).toBe('CUSTOM-GUID-456');
-      expect(converter.hasTemporaryId()).toBe(false);
+      expect(hasTemporaryId(converter)).toBe(false);
     });
 
     it('generates hash for unmodified document without GUID', async () => {
@@ -82,7 +87,7 @@ describe('SuperConverter Document GUID', () => {
       // getDocumentIdentifier is now async
       const identifier = await converter.getDocumentIdentifier();
       expect(identifier).toMatch(/^HASH-/);
-      expect(converter.hasTemporaryId()).toBe(true);
+      expect(hasTemporaryId(converter)).toBe(true);
       expect(converter.getDocumentGuid()).toBeNull();
     });
   });
@@ -99,13 +104,13 @@ describe('SuperConverter Document GUID', () => {
       await converter.getDocumentIdentifier();
 
       // Now check if has temporary ID
-      expect(converter.hasTemporaryId()).toBe(true);
+      expect(hasTemporaryId(converter)).toBe(true);
 
       // Promote to GUID
       const guid = converter.promoteToGuid();
       expect(guid).toBe('test-uuid-1234');
       expect(converter.getDocumentGuid()).toBe('test-uuid-1234');
-      expect(converter.hasTemporaryId()).toBe(false);
+      expect(hasTemporaryId(converter)).toBe(false);
       expect(converter.documentModified).toBe(true);
     });
 
