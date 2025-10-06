@@ -73,6 +73,20 @@ import { translator as wp_inline_translator } from './wp/inline/inline-translato
 
 import { runPropertyTranslators } from './w/rpr/run-property-translators.js';
 import { translator as w_vMerge_translator } from './w/vMerge/vMerge-translator.js';
+import { translator as w_gridSpan_translator } from './w/gridSpan/gridSpan-translator.js';
+import { translator as w_vAlign_translator } from './w/vAlign/vAlign-translator.js';
+import { translator as w_noWrap_translator } from './w/noWrap/noWrap-translator.js';
+import { translator as w_tcFitText_translator } from './w/tcFitText/tcFitText-translator.js';
+import { translator as w_tcW_translator } from './w/tcW/tcW-translator.js';
+import { translator as w_hideMark_translator } from './w/hideMark/hideMark-translator.js';
+import { translator as w_textDirection_translator } from './w/textDirection/textDirection-translator.js';
+import { translator as w_tl2br_translator } from './w/tl2br/tl2br-translator.js';
+import { translator as w_tr2bl_translator } from './w/tr2bl/tr2bl-translator.js';
+import { translator as w_header_translator } from './w/header/header-translator.js';
+import { translator as w_headers_translator } from './w/headers/headers-translator.js';
+import { translator as w_tcBorders_translator } from './w/tcBorders/tcBorders-translator.js';
+import { translator as w_tcMar_translator } from './w/tcMar/tcMar-translator.js';
+import { translator as w_tcPr_translator } from './w/tcPr/tcPr-translator.js';
 
 /**
  * @typedef {Object} RegisteredHandlers
@@ -150,6 +164,20 @@ const additionalHandlers = Object.freeze({
   'w:commentRangeStart': w_commentRangeStart_translator,
   'w:commentRangeEnd': w_commentRangeEnd_translator,
   'w:vMerge': w_vMerge_translator,
+  'w:gridSpan': w_gridSpan_translator,
+  'w:vAlign': w_vAlign_translator,
+  'w:noWrap': w_noWrap_translator,
+  'w:tcFitText': w_tcFitText_translator,
+  'w:tcW': w_tcW_translator,
+  'w:hideMark': w_hideMark_translator,
+  'w:textDirection': w_textDirection_translator,
+  'w:tl2br': w_tl2br_translator,
+  'w:tr2bl': w_tr2bl_translator,
+  'w:header': w_header_translator,
+  'w:headers': w_headers_translator,
+  'w:tcBorders': w_tcBorders_translator,
+  'w:tcMar': w_tcMar_translator,
+  'w:tcPr': w_tcPr_translator,
 });
 
 const baseHandlers = {
