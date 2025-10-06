@@ -1660,7 +1660,10 @@ export class Editor extends EventEmitter {
 
       const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
       const styles = this.converter.schemaToXml(this.converter.convertedXml['word/styles.xml'].elements[0]);
-      const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
+      const hasCustomSettings = !!this.converter.convertedXml['word/settings.xml']?.elements?.length;
+      const customSettings = hasCustomSettings
+        ? this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml']?.elements?.[0])
+        : null;
       const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
       const media = this.converter.addedMedia;
 
@@ -1678,7 +1681,6 @@ export class Editor extends EventEmitter {
         ...this.options.customUpdatedFiles,
         'word/document.xml': String(documentXml),
         'docProps/custom.xml': String(customXml),
-        'word/settings.xml': String(customSettings),
         'word/_rels/document.xml.rels': String(rels),
         'word/numbering.xml': String(numbering),
 
@@ -1686,6 +1688,10 @@ export class Editor extends EventEmitter {
         'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
         ...updatedHeadersFooters,
       };
+
+      if (hasCustomSettings) {
+        updatedDocs['word/settings.xml'] = String(customSettings);
+      }
 
       if (comments.length) {
         const commentsXml = this.converter.schemaToXml(this.converter.convertedXml['word/comments.xml'].elements[0]);
