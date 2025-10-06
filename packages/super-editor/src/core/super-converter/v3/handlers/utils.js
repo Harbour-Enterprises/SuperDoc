@@ -43,7 +43,7 @@ export function createSingleAttrPropertyHandler(
     xmlName,
     sdNodeOrKeyName: sdName,
     encode: ({ nodes }) => {
-      return transformEncode(nodes[0].attributes[attrName]) ?? undefined;
+      return transformEncode(nodes[0]?.attributes?.[attrName]) ?? undefined;
     },
     decode: ({ node }) => {
       const value = node.attrs?.[sdName] != null ? transformDecode(node.attrs[sdName]) : undefined;
