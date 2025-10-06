@@ -63,7 +63,7 @@ const decode = (params, decodedAttrs) => {
 /**
  * Generate a w:commentRangeStart or w:commentRangeEnd node
  *
- * @param {string} type Must be 'commandRangeStart' or 'commandRangeEnd'
+ * @param {'commentRangeStart' | 'commentRangeEnd'} type Must be 'commentRangeStart' or 'commentRangeEnd'
  * @param {number} commentIndex The comment index
  * @returns {Object} The comment node
  */
