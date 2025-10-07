@@ -271,6 +271,60 @@ describe('toggleList', () => {
     expect(numIds.size).toBe(1);
   });
 
+  it('toggle-off unwraps all bullet list containers created from a multi-paragraph selection', () => {
+    const baseDoc = doc(p('One'), p('Two'), p('Three'));
+    const { editor, state } = createEditor(baseDoc, schema);
+
+    const [from0, to0] = inlineSpanOf(baseDoc);
+    const s1 = state.apply(state.tr.setSelection(TextSelection.create(baseDoc, from0, to0)));
+
+    const s2 = applyCmd(s1, editor, toggleList('bulletList'));
+    expect(s2.doc.childCount).toBe(3);
+    for (let i = 0; i < s2.doc.childCount; i++) {
+      expect(s2.doc.child(i).type.name).toBe('bulletList');
+    }
+
+    const s3 = applyCmd(s2, editor, toggleList('bulletList'));
+
+    expect(s3.doc.childCount).toBe(3);
+    for (let i = 0; i < s3.doc.childCount; i++) {
+      expect(s3.doc.child(i).type.name).toBe('paragraph');
+    }
+
+    expect(s3.doc.toJSON()).toEqual(baseDoc.toJSON());
+
+    const [expectedFrom, expectedTo] = inlineSpanOf(s3.doc);
+    const [from, to] = getSelectionRange(s3);
+    expect(from).toBe(expectedFrom);
+    expect(to).toBeGreaterThanOrEqual(expectedTo);
+    expect(to).toBeLessThanOrEqual(expectedTo + 1);
+  });
+
+  it('toggle-off only unwraps lists matching the target kind when selection spans multiple list kinds', () => {
+    const mixed = doc(
+      bulletList(listItem(p('bullet one')), listItem(p('bullet two'))),
+      orderedList(listItem(p('ordered one')), listItem(p('ordered two'))),
+    );
+    const { editor, state } = createEditor(mixed, schema);
+
+    const [from0, to0] = inlineSpanOf(mixed);
+    const s1 = state.apply(state.tr.setSelection(TextSelection.create(mixed, from0, to0)));
+
+    const s2 = applyCmd(s1, editor, toggleList('bulletList'));
+
+    expect(s2.doc.childCount).toBe(3);
+    expect(s2.doc.child(0).type.name).toBe('paragraph');
+    expect(s2.doc.child(0).textContent).toBe('bullet one');
+    expect(s2.doc.child(1).type.name).toBe('paragraph');
+    expect(s2.doc.child(1).textContent).toBe('bullet two');
+
+    const remainingList = s2.doc.child(2);
+    expect(remainingList.type.name).toBe('orderedList');
+    expect(remainingList.childCount).toBe(2);
+    expect(remainingList.child(0).textContent).toBe('ordered one');
+    expect(remainingList.child(1).textContent).toBe('ordered two');
+  });
+
   it('wraps multiple paragraphs into multiple ORDERED list containers (one item each, shared numId)', () => {
     const d = doc(p('One'), p('Two'));
     const { editor, state } = createEditor(d, schema);
