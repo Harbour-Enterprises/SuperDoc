@@ -33,7 +33,7 @@ vi.mock('../tc', () => ({
 
 vi.mock('../trPr', () => ({
   translator: {
-    encode: vi.fn(() => ({ attributes: { encoded: 'trPr' } })),
+    encode: vi.fn(() => ({ encoded: 'trPr' })),
     decode: vi.fn(() => ({ name: 'w:trPr', comment: 'mocked trPr' })),
   },
 }));
