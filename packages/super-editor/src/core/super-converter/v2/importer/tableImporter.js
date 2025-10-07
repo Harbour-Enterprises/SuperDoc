@@ -12,7 +12,7 @@ export const tableNodeHandlerEntity = generateV2HandlerEntity('tableNodeHandler'
  * @param tblStyleTag
  * @param {ParsedDocx} docx
  * @param {NodeListHandler} nodeListHandler
- * @returns {{uiPriotity: *, borders: {}, name: *, rowBorders: {}, basedOn: *}|null}
+ * @returns {{borders: {}, name: *, rowBorders: {}, fonts: *, justification: *, cellMargins: {}, fontSize: *}|null}
  */
 export function getReferencedTableStyles(tblStyleTag, docx) {
   if (!tblStyleTag) return null;
