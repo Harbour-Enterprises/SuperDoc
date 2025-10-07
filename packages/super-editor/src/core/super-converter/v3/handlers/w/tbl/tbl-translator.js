@@ -28,7 +28,7 @@ const encode = (params, encodedAttrs) => {
   const tblPr = node.elements.find((el) => el.name === 'w:tblPr');
   if (tblPr) {
     const encodedProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
-    encodedAttrs['tableProperties'] = encodedProperties?.attributes || {};
+    encodedAttrs['tableProperties'] = encodedProperties || {};
   }
 
   // Table grid
@@ -258,7 +258,7 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
     if (baseTblPr && baseTblPr.elements) {
       tblPr.elements.push(...baseTblPr.elements);
     }
-    const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] }).attributes;
+    const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
     const { borders, rowBorders } = _processTableBorders(tableProperties.borders || {});
 
     if (borders) stylesToReturn.borders = borders;
