@@ -73,6 +73,17 @@ describe('w:commentRangeStart and w:commentRangeEnd', () => {
         }),
       ).toBe(undefined);
     });
+
+    test('returns if node type is not commentRangeStart or commentRangeEnd', () => {
+      expect(
+        commentRangeStartTranslator.decode({
+          node: { attrs: { 'w:id': 'id1', type: 'randomNode' } },
+          comments: [{ commentId: 'id1' }],
+          exportedCommentDefs: [{}],
+          commentsExportType: 'external',
+        }),
+      ).toBe(undefined);
+    });
   });
 
   describe('decode:commentRangeStartTranslator', () => {

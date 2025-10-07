@@ -45,6 +45,9 @@ const decode = (params, decodedAttrs) => {
   const isResolved = !!originalComment.resolvedTime;
   if (isResolved) return;
 
+  if (node.type !== 'commentRangeStart' && node.type !== 'commentRangeEnd') {
+    return;
+  }
   const { type } = node;
   const commentIndex = comments.findIndex((comment) => comment.commentId === originalComment.commentId);
   let commentSchema = getCommentSchema(type, commentIndex);
