@@ -219,7 +219,7 @@ const init = async () => {
         //       {
         //         id: 'insert-emoji',
         //         label: 'Insert Emoji',
-        //         showWhen: (context) => context.trigger === 'click' && context.hasSelection && context.trigger === 'slash',
+        //         showWhen: (context) => (context.trigger === 'click' || context.trigger === 'slash') && context.hasSelection,
         //         render: (context) => {
         //           const container = document.createElement('div');
         //           container.style.display = 'flex';
