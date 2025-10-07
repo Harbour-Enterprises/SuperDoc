@@ -52,5 +52,17 @@ describe('htmlSanitizer', () => {
       const result = stripHtmlStyles(input);
       expect(result).toBe('<ol type="A"><li>Item</li></ol>');
     });
+
+    it('preserves text-align style', () => {
+      const input = '<p style="margin-bottom: 11px; line-height: 1; text-align: center;"><span>Text</span></p>';
+      const result = stripHtmlStyles(input);
+      expect(result).toBe('<p style="text-align: center;"><span>Text</span></p>');
+    });
+
+    it('removes style tag if no text-align found', () => {
+      const input = '<p style="margin-bottom: 11px; line-height: 1;"><span>Text</span></p>';
+      const result = stripHtmlStyles(input);
+      expect(result).toBe('<p><span>Text</span></p>');
+    });
   });
 });

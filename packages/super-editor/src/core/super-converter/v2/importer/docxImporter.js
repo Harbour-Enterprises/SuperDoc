@@ -61,17 +61,30 @@ export const createDocumentJson = (docx, converter, editor) => {
       };
     });
 
-    converter.telemetry.trackFileStructure(
-      {
-        totalFiles: files.length,
-        maxDepth: Math.max(...files.map((f) => f.fileDepth)),
-        totalNodes: 0,
-        files,
-      },
-      converter.fileSource,
-      converter.documentId,
-      converter.documentInternalId,
-    );
+    const trackStructure = (documentIdentifier = null) =>
+      converter.telemetry.trackFileStructure(
+        {
+          totalFiles: files.length,
+          maxDepth: Math.max(...files.map((f) => f.fileDepth)),
+          totalNodes: 0,
+          files,
+        },
+        converter.fileSource,
+        converter.documentGuid ?? converter.documentId ?? null,
+        documentIdentifier ?? converter.documentId ?? null,
+        converter.documentInternalId,
+      );
+
+    try {
+      const identifierResult = converter.getDocumentIdentifier?.();
+      if (identifierResult && typeof identifierResult.then === 'function') {
+        identifierResult.then(trackStructure).catch(() => trackStructure());
+      } else {
+        trackStructure(identifierResult);
+      }
+    } catch (error) {
+      trackStructure();
+    }
   }
 
   const nodeListHandler = defaultNodeListHandler();

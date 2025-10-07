@@ -211,4 +211,41 @@ describe('createDocumentJson', () => {
 
     expect(horizontalRules).toHaveLength(3);
   });
+
+  it('passes GUID, identifier, and internal id to telemetry in correct order', async () => {
+    const simpleDocXml =
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Telemetry</w:t></w:r></w:p></w:body></w:document>';
+
+    const docx = {
+      'word/document.xml': parseXmlToJson(simpleDocXml),
+    };
+
+    const trackFileStructure = vi.fn();
+    const converter = {
+      telemetry: {
+        trackFileStructure,
+        trackStatistic: vi.fn(),
+        trackUsage: vi.fn(),
+      },
+      fileSource: { name: 'telemetry.docx', size: 1234 },
+      documentGuid: 'GUID-1234',
+      documentId: 'legacy-id',
+      documentInternalId: '{ABC-123}',
+      getDocumentIdentifier: vi.fn().mockResolvedValue('HASH-5678'),
+    };
+
+    const editor = { options: {}, emit: vi.fn() };
+
+    createDocumentJson(docx, converter, editor);
+
+    await Promise.resolve();
+
+    expect(trackFileStructure).toHaveBeenCalledWith(
+      expect.objectContaining({ totalFiles: 1 }),
+      converter.fileSource,
+      converter.documentGuid,
+      'HASH-5678',
+      converter.documentInternalId,
+    );
+  });
 });

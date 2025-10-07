@@ -2,9 +2,9 @@ name: 🔄 Sync Patches [auto]
 
 on:
   push:
-    branches: [stable, '*.x']
+    branches: [stable, "*.x"]
     paths:
-      - 'packages/**'
+      - "packages/**"
   workflow_dispatch:
 
 permissions:
@@ -19,24 +19,31 @@ jobs:
       !contains(github.event.head_commit.message, '[skip ci]') &&
       !contains(github.event.head_commit.message, 'chore(release)') &&
       !contains(github.event.head_commit.message, 'chore: promote')
-    
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Generate token
+        id: generate_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.SUPERDOC_PAT }}
+          token: ${{ steps.generate_token.outputs.token }}
 
       - name: Create sync PR
         env:
-          GH_TOKEN: ${{ secrets.SUPERDOC_PAT }}
+          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
+
           # Create patch branch
           PATCH_BRANCH="sync-patch-${{ github.sha }}"
           git checkout -b "$PATCH_BRANCH" origin/main
-          
+
           # Cherry-pick the commit
           if git cherry-pick "${{ github.sha }}"; then
             git push origin "$PATCH_BRANCH"

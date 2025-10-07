@@ -71,6 +71,9 @@ export const useSuperdocStore = defineStore('superdoc', () => {
 
     // Set up module config
     Object.assign(modules, configModules);
+    if (!Object.prototype.hasOwnProperty.call(modules, 'comments')) {
+      modules.comments = {};
+    }
 
     // For shorthand 'format' key, we can initialize a blank docx
     if (!configDocs?.length && !config.modules.collaboration) {

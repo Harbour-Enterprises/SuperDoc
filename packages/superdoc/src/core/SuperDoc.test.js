@@ -44,6 +44,11 @@ vi.mock('@harbour-enterprises/super-editor', () => ({
   createZip: createZipMock,
 }));
 
+const superCommentsConstructor = vi.fn();
+vi.mock('../components/CommentsLayer/commentsList/super-comments-list.js', () => ({
+  SuperComments: superCommentsConstructor,
+}));
+
 const createDownloadMock = vi.fn(() => 'downloaded');
 const cleanNameMock = vi.fn((value) => value.replace(/\s+/g, '-'));
 
@@ -164,6 +169,7 @@ describe('SuperDoc core', () => {
     initSuperdocYdocMock.mockClear();
     initCollaborationCommentsMock.mockClear();
     hocuspocusConstructor.mockClear();
+    superCommentsConstructor.mockClear();
 
     document.body.innerHTML = '<div id="host"></div>';
 
@@ -199,6 +205,24 @@ describe('SuperDoc core', () => {
     expect(instance.config.documents[0]).toMatchObject({ type: DOCX, url: 'https://example.com/doc.docx' });
     expect(instance.colors).toEqual(['blue', 'red']);
     expect(shuffleArrayMock).toHaveBeenCalledWith(['red', 'blue']);
+  });
+
+  it('defaults comments module config when omitted', async () => {
+    const { commentsStore } = createAppHarness();
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { toolbar: {} },
+      colors: ['red'],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    await flushMicrotasks();
+
+    expect(Object.prototype.hasOwnProperty.call(instance.config.modules, 'comments')).toBe(true);
+    expect(instance.config.modules.comments).toMatchObject({});
+    expect(commentsStore.init).toHaveBeenCalledWith({});
   });
 
   it('warns when both document object and documents list provided', async () => {
@@ -420,6 +444,62 @@ describe('SuperDoc core', () => {
     expect(app.unmount).toHaveBeenCalled();
     expect(instance.app.config.globalProperties.$config).toBeUndefined();
     expect(instance.listenerCount('ready')).toBe(0);
+  });
+
+  it('removes comments in viewing mode and restores them when returning to editing', async () => {
+    const { superdocStore } = createAppHarness();
+    const removeComments = vi.fn();
+    const restoreComments = vi.fn();
+    const setDocumentMode = vi.fn();
+    const docStub = {
+      removeComments,
+      restoreComments,
+      getEditor: vi.fn(() => ({ setDocumentMode })),
+    };
+    superdocStore.documents = [docStub];
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: ['red'],
+      role: 'editor',
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    await flushMicrotasks();
+
+    instance.setDocumentMode('viewing');
+    expect(removeComments).toHaveBeenCalledTimes(1);
+    expect(setDocumentMode).toHaveBeenLastCalledWith('viewing');
+
+    instance.setDocumentMode('editing');
+    expect(restoreComments).toHaveBeenCalledTimes(1);
+    expect(setDocumentMode).toHaveBeenLastCalledWith('editing');
+  });
+
+  it('skips rendering comments list when role is viewer', async () => {
+    createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: ['red'],
+      role: 'viewer',
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    await flushMicrotasks();
+
+    const container = document.createElement('div');
+    instance.addCommentsList(container);
+
+    expect(superCommentsConstructor).not.toHaveBeenCalled();
+    expect(instance.config.modules.comments.element).toBeUndefined();
+    expect(instance.commentsList).toBeUndefined();
   });
 
   it('applies CSP nonce to style tags when configured', async () => {
