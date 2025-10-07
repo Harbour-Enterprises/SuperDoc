@@ -91,8 +91,32 @@ export function createBorderPropertyHandler(xmlName, sdName = null) {
     xmlName,
     sdNodeOrKeyName: sdName,
     attributes: [
-      createAttributeHandler('w:val'),
-      createAttributeHandler('w:color'),
+      createAttributeHandler(
+        'w:val',
+        'val',
+        (v) => (v === 'nil' ? 'none' : v),
+        (v) => (v === 'none' ? 'nil' : v),
+      ),
+      createAttributeHandler(
+        'w:color',
+        'color',
+        (v) => {
+          if (v === 'auto') {
+            return null;
+          } else if (v) {
+            return `#${v}`;
+          } else {
+            return undefined;
+          }
+        },
+        (v) => {
+          if (v) {
+            return v.replace('#', '');
+          } else {
+            return undefined;
+          }
+        },
+      ),
       createAttributeHandler('w:themeColor'),
       createAttributeHandler('w:themeTint'),
       createAttributeHandler('w:themeShade'),
@@ -209,7 +233,7 @@ export function createNestedPropertiesTranslator(xmlName, sdName, propertyTransl
       const node = nodes[0];
 
       // Process property translators
-      const attributes = {...defaultEncodedAttrs, ...encodeProperties(node, propertyTranslatorsByXmlName)};
+      const attributes = { ...defaultEncodedAttrs, ...encodeProperties(node, propertyTranslatorsByXmlName) };
 
       return Object.keys(attributes).length > 0 ? attributes : undefined;
     },
