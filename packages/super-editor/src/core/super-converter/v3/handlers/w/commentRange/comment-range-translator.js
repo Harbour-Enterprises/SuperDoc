@@ -20,7 +20,6 @@ const SD_NODE_NAME = 'commentRange';
  * @returns {import('@translator').SCDecoderResult}
  */
 const decode = (params, decodedAttrs) => {
-  // TODO: Is exportedCommentDefs needed?
   const { node, comments, commentsExportType, exportedCommentDefs } = params;
 
   if (!node) return;
