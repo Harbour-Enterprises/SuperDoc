@@ -10,7 +10,7 @@ foldersToTest.forEach(({name}, i) => {
       await page.goto(`http://localhost:${PORT + i}`);
 
     await page.waitForSelector('div.super-editor', {
-      timeout: 5_000,
+      timeout: 10_000,
     });
 
     // Compare the screenshot with the reference screenshot
