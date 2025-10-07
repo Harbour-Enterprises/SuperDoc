@@ -97,8 +97,7 @@ export const TableCell = Node.create({
 
       verticalAlign: {
         renderDOM({ verticalAlign }) {
-          if (!verticalAlign) return {};
-          const style = `vertical-align: ${verticalAlign}`;
+          const style = `vertical-align: ${verticalAlign ?? 'top'}`;
           return { style };
         },
       },
