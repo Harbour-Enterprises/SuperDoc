@@ -913,20 +913,37 @@ export class Editor extends EventEmitter {
    * @returns {string} Document version
    */
   static getDocumentVersion(doc) {
-    const version = SuperConverter.getStoredSuperdocVersion(doc);
-    return version;
+    return SuperConverter.getStoredSuperdocVersion(doc);
   }
 
   /**
-   * Update the document version
+   * Set the document version
    * @static
    * @param {Object} doc - Document object
    * @param {string} version - New version
-   * @returns {Object}
+   * @returns {string} The set version
+   */
+  static setDocumentVersion(doc, version) {
+    return SuperConverter.setStoredSuperdocVersion(doc, version);
+  }
+
+  /**
+   * Get the document GUID
+   * @static
+   * @param {Object} doc - Document object
+   * @returns {string|null} Document GUID
+   */
+  static getDocumentGuid(doc) {
+    return SuperConverter.extractDocumentGuid(doc);
+  }
+
+  // Deprecated
+  /**
+   * @deprecated use setDocumentVersion instead
    */
   static updateDocumentVersion(doc, version) {
-    const updatedContent = SuperConverter.updateDocumentVersion(doc, version);
-    return updatedContent;
+    console.warn('updateDocumentVersion is deprecated, use setDocumentVersion instead');
+    return Editor.setDocumentVersion(doc, version);
   }
 
   /**
@@ -1369,10 +1386,61 @@ export class Editor extends EventEmitter {
       return;
     }
 
+    // Track document modifications and promote to GUID if needed
+    if (transaction.docChanged && this.converter) {
+      if (!this.converter.documentGuid) {
+        this.converter.promoteToGuid();
+        console.debug('Document modified - assigned GUID:', this.converter.documentGuid);
+      }
+      this.converter.documentModified = true;
+    }
+
     this.emit('update', {
       editor: this,
       transaction,
     });
+  }
+
+  /**
+   * Get document identifier for telemetry (async - may generate hash)
+   * @returns {Promise<string>} GUID for modified docs, hash for unmodified
+   */
+  async getDocumentIdentifier() {
+    return (await this.converter?.getDocumentIdentifier()) || null;
+  }
+
+  /**
+   * Get permanent document GUID (sync - only for modified documents)
+   * @returns {string|null} GUID or null if document hasn't been modified
+   */
+  getDocumentGuid() {
+    return this.converter?.documentGuid || null;
+  }
+
+  /**
+   * Check if document has been modified
+   * @returns {boolean}
+   */
+  isDocumentModified() {
+    return this.converter?.documentModified || false;
+  }
+
+  /**
+   * Get telemetry data (async because of lazy hash generation)
+   */
+  async getTelemetryData() {
+    return {
+      documentId: await this.getDocumentIdentifier(),
+      isModified: this.isDocumentModified(),
+      isPermanentId: !!this.converter?.documentGuid,
+      version: this.converter?.getSuperdocVersion(),
+    };
+  }
+
+  // Deprecated for backward compatibility
+  getDocumentId() {
+    console.warn('getDocumentId is deprecated, use getDocumentGuid instead');
+    return this.getDocumentGuid();
   }
 
   /**
@@ -1410,6 +1478,22 @@ export class Editor extends EventEmitter {
   }
 
   /**
+   * Get document metadata including GUID, modification status, and version
+   * @returns {{
+   *   documentGuid: string | null,
+   *   isModified: boolean,
+   *   version: string | null
+   * }} Document metadata
+   */
+  getMetadata() {
+    return {
+      documentGuid: this.converter?.documentGuid || null,
+      isModified: this.isDocumentModified(),
+      version: this.converter?.getSuperdocVersion() || null,
+    };
+  }
+
+  /**
    * Get the editor content as HTML
    * @param {Object} options - Options for the HTML serializer
    * @param {boolean} [options.unflattenLists] - Whether to unflatten lists in the HTML
@@ -1425,6 +1509,14 @@ export class Editor extends EventEmitter {
       html = unflattenListsInHtml(html);
     }
     return html;
+  }
+
+  /**
+   * Get the document version from the converter
+   * @returns {string|null} The SuperDoc version stored in the document
+   */
+  getDocumentVersion() {
+    return this.converter?.getSuperdocVersion() || null;
   }
 
   /**
@@ -1557,6 +1649,7 @@ export class Editor extends EventEmitter {
       const json = this.#prepareDocumentForExport(comments);
 
       // Export the document to DOCX
+      // GUID will be handled automatically in converter.exportToDocx if document was modified
       const documentXml = await this.converter.exportToDocx(
         json,
         this.schema,
@@ -1575,7 +1668,10 @@ export class Editor extends EventEmitter {
 
       const customXml = this.converter.schemaToXml(this.converter.convertedXml['docProps/custom.xml'].elements[0]);
       const styles = this.converter.schemaToXml(this.converter.convertedXml['word/styles.xml'].elements[0]);
-      const customSettings = this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml'].elements[0]);
+      const hasCustomSettings = !!this.converter.convertedXml['word/settings.xml']?.elements?.length;
+      const customSettings = hasCustomSettings
+        ? this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml']?.elements?.[0])
+        : null;
       const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
       const media = this.converter.addedMedia;
 
@@ -1593,7 +1689,6 @@ export class Editor extends EventEmitter {
         ...this.options.customUpdatedFiles,
         'word/document.xml': String(documentXml),
         'docProps/custom.xml': String(customXml),
-        'word/settings.xml': String(customSettings),
         'word/_rels/document.xml.rels': String(rels),
         'word/numbering.xml': String(numbering),
 
@@ -1601,6 +1696,10 @@ export class Editor extends EventEmitter {
         'word/styles.xml': String(styles).replace(/&/gi, '&amp;'),
         ...updatedHeadersFooters,
       };
+
+      if (hasCustomSettings) {
+        updatedDocs['word/settings.xml'] = String(customSettings);
+      }
 
       if (comments.length) {
         const commentsXml = this.converter.schemaToXml(this.converter.convertedXml['word/comments.xml'].elements[0]);
