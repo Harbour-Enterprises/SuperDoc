@@ -37,7 +37,7 @@ describe('w:tl2br border translator', () => {
           attrs: {
             tl2br: {
               val: 'double',
-              color: '00FF00',
+              color: '#00FF00',
               size: 12,
               space: 2,
               shadow: false,
