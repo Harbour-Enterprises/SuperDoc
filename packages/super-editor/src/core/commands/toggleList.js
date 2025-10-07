@@ -332,16 +332,50 @@ export const toggleList =
 
       // A1) Effective kind already target → unwrap that list only
       if (isSameAsTarget) {
-        const { pos, node } = near;
-        const spanFromBefore = pos;
-        const spanToBefore = pos + node.nodeSize;
+        const candidateLists = collectIntersectingTopLists({ doc, selection, OrderedType, BulletType });
+        let listsToUnwrap = candidateLists.filter(({ node }) => getEffectiveListKind(node) === targetKind);
 
-        const paras = [];
-        for (let i = 0; i < node.childCount; i++) {
-          const li = node.child(i);
-          paras.push(li.firstChild || editor.schema.nodes.paragraph.create());
+        if (listsToUnwrap.length === 0 && getEffectiveListKind(near.node) === targetKind) {
+          listsToUnwrap = [{ node: near.node, pos: near.pos, depth: near.depth ?? null }];
         }
-        tr.replaceWith(pos, pos + node.nodeSize, paras);
+
+        if (listsToUnwrap.length === 0) return false;
+
+        let spanFromBefore = listsToUnwrap[0].pos;
+        let spanToBefore = listsToUnwrap[0].pos + listsToUnwrap[0].node.nodeSize;
+        for (let i = 1; i < listsToUnwrap.length; i++) {
+          const { node, pos } = listsToUnwrap[i];
+          spanFromBefore = Math.min(spanFromBefore, pos);
+          spanToBefore = Math.max(spanToBefore, pos + node.nodeSize);
+        }
+
+        const ParagraphType = editor.schema.nodes.paragraph;
+        listsToUnwrap.sort((a, b) => b.pos - a.pos);
+        for (const { node, pos } of listsToUnwrap) {
+          const mappedFrom = tr.mapping.map(pos, -1);
+          const mappedTo = tr.mapping.map(pos + node.nodeSize, 1);
+          const currentListNode = tr.doc.nodeAt(mappedFrom);
+          const sourceListNode =
+            currentListNode && (currentListNode.type === OrderedType || currentListNode.type === BulletType)
+              ? currentListNode
+              : node;
+
+          const paragraphs = [];
+          for (let i = 0; i < sourceListNode.childCount; i++) {
+            const li = sourceListNode.child(i);
+            if (li.type !== editor.schema.nodes.listItem) continue;
+            const firstChild = li.firstChild;
+            paragraphs.push(firstChild || ParagraphType.create());
+          }
+
+          if (paragraphs.length === 0) {
+            paragraphs.push(ParagraphType.create());
+          }
+
+          const replacement = paragraphs.length === 1 ? paragraphs[0] : Fragment.from(paragraphs);
+          tr.replaceWith(mappedFrom, mappedTo, replacement);
+        }
+
         setMappedSelectionSpan(tr, spanFromBefore, spanToBefore);
 
         if (dispatch) dispatch(tr);

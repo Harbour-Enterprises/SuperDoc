@@ -8,7 +8,7 @@ import {
   ptToTwips,
   rgbToHex,
 } from './helpers.js';
-import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
+import { generateDocxRandomId, generateRandomSigned32BitIntStrId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
@@ -21,7 +21,6 @@ import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-transl
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wRNodeTranslator } from './v3/handlers/w/r/r-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
-import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
 import { translator as wTblNodeTranslator } from './v3/handlers/w/tbl/tbl-translator.js';
@@ -30,6 +29,8 @@ import { translator as wDrawingNodeTranslator } from './v3/handlers/w/drawing/dr
 import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark-start/index.js';
 import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
 import { translator as alternateChoiceTranslator } from '@converter/v3/handlers/mc/altermateContent';
+import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
+import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -107,8 +108,8 @@ export const isLineBreakOnlyRun = (node) => {
 /**
  * @typedef {Object} ExportParams
  * @property {Object} node JSON node to translate (from PM schema)
- * @property {Object} bodyNode The stored body node to restore, if available
- * @property {Object[]} relationships The relationships to add to the document
+ * @property {Object} [bodyNode] The stored body node to restore, if available
+ * @property {Object[]} [relationships] The relationships to add to the document
  */
 
 /**
@@ -178,9 +179,12 @@ export function exportSchemaToJson(params) {
     contentBlock: translateContentBlock,
     structuredContent: wSdtNodeTranslator,
     structuredContentBlock: wSdtNodeTranslator,
+    documentPartObject: wSdtNodeTranslator,
     documentSection: wSdtNodeTranslator,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
+    pageReference: sdPageReferenceTranslator,
+    tableOfContents: sdTableOfContentsTranslator,
   };
 
   let handler = router[type];
@@ -657,10 +661,6 @@ function translateTextNode(params) {
   const trackedMarks = [TrackInsertMarkName, TrackDeleteMarkName];
   const isTrackedNode = node.marks?.some((m) => trackedMarks.includes(m.type));
   if (isTrackedNode) return translateTrackedNode(params);
-
-  // Separate links from regular text
-  const isLinkNode = node.marks?.some((m) => m.type === 'link');
-  if (isLinkNode) return wHyperlinkTranslator.decode(params);
 
   const { text, marks = [] } = node;
 
@@ -1220,7 +1220,7 @@ function translateShapeContainer(params) {
   const pict = {
     name: 'w:pict',
     attributes: {
-      'w14:anchorId': Math.floor(Math.random() * 0xffffffff).toString(),
+      'w14:anchorId': generateRandomSigned32BitIntStrId(),
     },
     elements: [shape],
   };
@@ -1307,7 +1307,7 @@ function translateVRectContentBlock(params) {
   const pict = {
     name: 'w:pict',
     attributes: {
-      'w14:anchorId': Math.floor(Math.random() * 0xffffffff).toString(),
+      'w14:anchorId': generateRandomSigned32BitIntStrId(),
     },
     elements: [rect],
   };
@@ -1370,7 +1370,10 @@ export class DocxExporter {
 
     if (elements) {
       if (name === 'w:instrText') {
-        tags.push(elements[0].text);
+        const textContent = (elements || [])
+          .map((child) => (typeof child?.text === 'string' ? child.text : ''))
+          .join('');
+        tags.push(this.#replaceSpecialCharacters(textContent));
       } else if (name === 'w:t' || name === 'w:delText' || name === 'wp:posOffset') {
         try {
           // test for valid string
@@ -1442,6 +1445,7 @@ const getAutoPageJson = (type, outputMarks = []) => {
         },
         {
           name: 'w:instrText',
+          attributes: { 'xml:space': 'preserve' },
           elements: [
             {
               type: 'text',

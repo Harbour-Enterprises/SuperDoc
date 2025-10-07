@@ -10,6 +10,8 @@ import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '.
 import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
 import { comments_module_events } from '@harbour-enterprises/common';
 import { translateFormatChangesToEnglish } from './comments-helpers.js';
+import { normalizeCommentEventPayload, updatePosition } from './helpers/index.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const TRACK_CHANGE_MARKS = [TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName];
 
@@ -21,23 +23,46 @@ export const CommentsPlugin = Extension.create({
   addCommands() {
     return {
       insertComment:
-        (conversation) =>
+        (conversation = {}) =>
         ({ tr, dispatch }) => {
           const { selection } = tr;
           const { $from, $to } = selection;
-          const { commentId, isInternal } = conversation;
+          const skipEmit = conversation?.skipEmit;
+          const resolvedCommentId = conversation?.commentId ?? uuidv4();
+          const resolvedInternal = conversation?.isInternal ?? false;
 
           tr.setMeta(CommentsPluginKey, { event: 'add' });
           tr.addMark(
             $from.pos,
             $to.pos,
             this.editor.schema.marks[CommentMarkName].create({
-              commentId,
-              internal: isInternal,
+              commentId: resolvedCommentId,
+              internal: resolvedInternal,
             }),
           );
 
-          dispatch(tr);
+          if (dispatch) dispatch(tr);
+
+          const shouldEmit = !skipEmit && resolvedCommentId !== 'pending';
+          if (shouldEmit) {
+            const commentPayload = normalizeCommentEventPayload({
+              conversation,
+              editorOptions: this.editor.options,
+              fallbackCommentId: resolvedCommentId,
+              fallbackInternal: resolvedInternal,
+            });
+
+            const activeCommentId = commentPayload.commentId || commentPayload.importedId || null;
+
+            const event = {
+              type: comments_module_events.ADD,
+              comment: commentPayload,
+              ...(activeCommentId && { activeCommentId }),
+            };
+
+            this.editor.emit('commentsUpdate', event);
+          }
+
           return true;
         },
 
@@ -346,37 +371,6 @@ export const CommentsPlugin = Extension.create({
   },
 });
 
-const updatePosition = ({ allCommentPositions, threadId, pos, currentBounds, node }) => {
-  let bounds = {};
-
-  if (currentBounds instanceof DOMRect) {
-    bounds = {
-      top: currentBounds.top,
-      bottom: currentBounds.bottom,
-      left: currentBounds.left,
-      right: currentBounds.right,
-    };
-  } else {
-    bounds = { ...currentBounds };
-  }
-
-  if (!allCommentPositions[threadId]) {
-    allCommentPositions[threadId] = {
-      threadId,
-      start: pos,
-      end: pos + node.nodeSize,
-      bounds,
-    };
-  } else {
-    // Adjust the positional indices
-    const existing = allCommentPositions[threadId];
-    existing.start = Math.min(existing.start, pos);
-    existing.end = Math.max(existing.end, pos + node.nodeSize);
-    existing.bounds.top = Math.min(existing.bounds.top, currentBounds.top);
-    existing.bounds.bottom = Math.max(existing.bounds.bottom, currentBounds.bottom);
-  }
-};
-
 /**
  * This is run when a new selection is set (tr.selectionSet) to return the active comment ID, if any
  * If there are multiple, only return the first one
@@ -545,12 +539,16 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
   return newTrackedChanges;
 };
 
-const getTrackedChangeText = ({ state, node, mark, marks, trackedChangeType, isDeletionInsertion }) => {
+const getTrackedChangeText = ({ nodes, mark, trackedChangeType, isDeletionInsertion }) => {
   let trackedChangeText = '';
   let deletionText = '';
 
   if (trackedChangeType === TrackInsertMarkName) {
-    trackedChangeText = node?.text ?? '';
+    trackedChangeText = nodes.reduce((acc, node) => {
+      if (!node.marks.find((nodeMark) => nodeMark.type.name === mark.type.name)) return acc;
+      acc += node?.text || node?.textContent || '';
+      return acc;
+    }, '');
   }
 
   // If this is a format change, let's get the string of what changes were made
@@ -559,19 +557,11 @@ const getTrackedChangeText = ({ state, node, mark, marks, trackedChangeType, isD
   }
 
   if (trackedChangeType === TrackDeleteMarkName || isDeletionInsertion) {
-    deletionText = node?.text ?? '';
-
-    if (isDeletionInsertion) {
-      let { id } = marks.deletionMark.attrs;
-      let deletionNode = findNode(state.doc, (node) => {
-        const { marks = [] } = node;
-        const changeMarks = marks.filter((mark) => TRACK_CHANGE_MARKS.includes(mark.type.name));
-        if (!changeMarks.length) return false;
-        const hasMatchingId = changeMarks.find((mark) => mark.attrs.id === id);
-        if (hasMatchingId) return true;
-      });
-      deletionText = deletionNode?.node.text ?? '';
-    }
+    deletionText = nodes.reduce((acc, node) => {
+      if (!node.marks.find((nodeMark) => nodeMark.type.name === TrackDeleteMarkName)) return acc;
+      acc += node?.text || node?.textContent || '';
+      return acc;
+    }, '');
   }
 
   return {
@@ -591,19 +581,18 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   const node = nodes[0];
   const isDeletionInsertion = !!(marks.insertedMark && marks.deletionMark);
 
-  let existingNode;
+  let nodesWithMark = [];
   newEditorState.doc.descendants((node) => {
     const { marks = [] } = node;
     const changeMarks = marks.filter((mark) => TRACK_CHANGE_MARKS.includes(mark.type.name));
     if (!changeMarks.length) return;
     const hasMatchingId = changeMarks.find((mark) => mark.attrs.id === id);
-    if (hasMatchingId) existingNode = node;
-    if (existingNode) return false;
+    if (hasMatchingId) nodesWithMark.push(node);
   });
 
   const { deletionText, trackedChangeText } = getTrackedChangeText({
     state: newEditorState,
-    node: existingNode || node,
+    nodes: nodesWithMark.length ? nodesWithMark : [node],
     mark: trackedMark,
     marks,
     trackedChangeType,
@@ -639,15 +628,6 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   return params;
 };
 
-function findNode(node, predicate) {
-  let found = null;
-  node.descendants((node, pos) => {
-    if (predicate(node)) found = { node, pos };
-    if (found) return false;
-  });
-  return found;
-}
-
 function findRangeById(doc, id) {
   let from = null,
     to = null;
@@ -667,3 +647,12 @@ function findRangeById(doc, id) {
   });
   return from !== null && to !== null ? { from, to } : null;
 }
+
+export const __test__ = {
+  getActiveCommentId,
+  findTrackedMark,
+  handleTrackedChangeTransaction,
+  getTrackedChangeText,
+  createOrUpdateTrackedChangeComment,
+  findRangeById,
+};

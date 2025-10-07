@@ -41,6 +41,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const isCommentsListVisible = ref(false);
   const editorCommentIds = ref([]);
   const editorCommentPositions = ref({});
+  const isCommentHighlighted = ref(false);
 
   // Floating comments
   const floatingCommentsOffset = ref(0);
@@ -197,7 +198,11 @@ export const useCommentsStore = defineStore('comments', () => {
     if (!superdoc.config.isInternal) pendingComment.value.isInternal = false;
 
     if (superdoc.activeEditor?.commands) {
-      superdoc.activeEditor.commands.insertComment({ ...pendingComment.value.getValues(), commentId: 'pending' });
+      superdoc.activeEditor.commands.insertComment({
+        ...pendingComment.value.getValues(),
+        commentId: 'pending',
+        skipEmit: true,
+      });
     }
 
     if (pendingComment.value.selection.source === 'super-editor' && superdocStore.selectionPosition) {
@@ -327,7 +332,7 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {Object} param0.superdoc The SuperDoc instance
    * @returns {void}
    */
-  const addComment = ({ superdoc, comment }) => {
+  const addComment = ({ superdoc, comment, skipEditorUpdate = false }) => {
     let parentComment = commentsList.value.find((c) => c.commentId === activeComment.value);
     if (!parentComment) parentComment = comment;
 
@@ -354,9 +359,9 @@ export const useCommentsStore = defineStore('comments', () => {
 
     // If this is not a tracked change, and it belongs to a Super Editor, and its not a child comment
     // We need to let the editor know about the new comment
-    if (!comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
+    if (!skipEditorUpdate && !comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
       // Add the comment to the active editor
-      superdoc.activeEditor.commands.insertComment(newComment.getValues());
+      superdoc.activeEditor.commands.insertComment({ ...newComment.getValues(), skipEmit: true });
     }
 
     const event = { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() };
@@ -497,9 +502,8 @@ export const useCommentsStore = defineStore('comments', () => {
         tr.setMeta(CommentsPluginKey, { type: 'forceTrackChanges' });
         tr.setMeta(TrackChangesBasePluginKey, trackChangesPayload);
       }
+      dispatch(tr);
     });
-
-    dispatch(tr);
   };
 
   const translateCommentsForExport = () => {
@@ -604,6 +608,7 @@ export const useCommentsStore = defineStore('comments', () => {
     try {
       const normalizedContent = normalizeCommentForEditor(commentTextJson);
       const schemaContent = Array.isArray(normalizedContent) ? normalizedContent[0] : normalizedContent;
+      if (!schemaContent.content.length) return null;
       const editor = new Editor({
         mode: 'text',
         isHeadless: true,
@@ -638,6 +643,7 @@ export const useCommentsStore = defineStore('comments', () => {
     commentsParentElement,
     editorCommentPositions,
     hasInitializedLocations,
+    isCommentHighlighted,
 
     // Floating comments
     floatingCommentsOffset,

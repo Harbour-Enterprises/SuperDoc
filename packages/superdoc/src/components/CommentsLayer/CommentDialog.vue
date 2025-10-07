@@ -49,6 +49,7 @@ const {
   isDebugging,
   editingCommentId,
   editorCommentPositions,
+  isCommentHighlighted,
 } = storeToRefs(commentsStore);
 
 const { activeZoom } = storeToRefs(superdocStore);
@@ -135,7 +136,7 @@ const handleClickOutside = (e) => {
     'track-format-dec',
   ];
 
-  if (excludedClasses.some((className) => e.target.classList.contains(className))) return;
+  if (excludedClasses.some((className) => e.target.classList.contains(className)) || isCommentHighlighted.value) return;
 
   if (activeComment.value === props.comment.commentId) {
     floatingCommentsOffset.value = 0;
@@ -143,6 +144,7 @@ const handleClickOutside = (e) => {
   }
   activeComment.value = null;
   commentsStore.setActiveComment(proxy.$superdoc, activeComment.value);
+  isCommentHighlighted.value = false;
 };
 
 const handleAddComment = () => {

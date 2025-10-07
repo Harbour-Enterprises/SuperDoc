@@ -15,6 +15,7 @@ import { bookmarkStartNodeHandlerEntity } from './bookmarkStartImporter.js';
 import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
+import { pageReferenceEntity } from './pageReferenceImporter.js';
 import { listHandlerEntity } from './listImporter.js';
 import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
@@ -23,6 +24,8 @@ import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
+import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
+import { preProcessNodesForFldChar } from '../../field-references';
 
 /**
  * @typedef {import()} XmlNode
@@ -58,25 +61,43 @@ export const createDocumentJson = (docx, converter, editor) => {
       };
     });
 
-    converter.telemetry.trackFileStructure(
-      {
-        totalFiles: files.length,
-        maxDepth: Math.max(...files.map((f) => f.fileDepth)),
-        totalNodes: 0,
-        files,
-      },
-      converter.fileSource,
-      converter.documentId,
-      converter.documentInternalId,
-    );
+    const trackStructure = (documentIdentifier = null) =>
+      converter.telemetry.trackFileStructure(
+        {
+          totalFiles: files.length,
+          maxDepth: Math.max(...files.map((f) => f.fileDepth)),
+          totalNodes: 0,
+          files,
+        },
+        converter.fileSource,
+        converter.documentGuid ?? converter.documentId ?? null,
+        documentIdentifier ?? converter.documentId ?? null,
+        converter.documentInternalId,
+      );
+
+    try {
+      const identifierResult = converter.getDocumentIdentifier?.();
+      if (identifierResult && typeof identifierResult.then === 'function') {
+        identifierResult.then(trackStructure).catch(() => trackStructure());
+      } else {
+        trackStructure(identifierResult);
+      }
+    } catch (error) {
+      trackStructure();
+    }
   }
 
   const nodeListHandler = defaultNodeListHandler();
   const bodyNode = json.elements[0].elements.find((el) => el.name === 'w:body');
 
   if (bodyNode) {
-    ensureSectionProperties(bodyNode, converter);
+    ensureSectionProperties(bodyNode);
     const node = bodyNode;
+
+    // Pre-processing step for replacing fldChar sequences with SD-specific elements
+    const { processedNodes } = preProcessNodesForFldChar(node.elements ?? [], docx);
+    node.elements = processedNodes;
+
     const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
     const content = pruneIgnoredNodes(contentElements);
     const comments = importCommentData({ docx, nodeListHandler, converter, editor });
@@ -141,8 +162,10 @@ export const defaultNodeListHandler = () => {
     trackChangeNodeHandlerEntity,
     tableNodeHandlerEntity,
     tabNodeEntityHandler,
+    tableOfContentsHandlerEntity,
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
+    pageReferenceEntity,
     standardNodeHandlerEntity,
   ];
 
@@ -378,7 +401,7 @@ const DEFAULT_SECTION_PROPS = Object.freeze({
   }),
 });
 
-function ensureSectionProperties(bodyNode, converter) {
+function ensureSectionProperties(bodyNode) {
   if (!bodyNode.elements) bodyNode.elements = [];
 
   let sectPr = bodyNode.elements.find((el) => el.name === 'w:sectPr');

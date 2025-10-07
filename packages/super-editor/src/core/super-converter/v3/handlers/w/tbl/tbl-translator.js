@@ -6,10 +6,7 @@ import { translateChildNodes } from '@core/super-converter/v2/exporter/helpers/i
 import { translator as trTranslator } from '../tr';
 import { translator as tblPrTranslator } from '../tblPr';
 import { translator as tblGridTranslator } from '../tblGrid';
-import {
-  buildFallbackGridForTable,
-  resolveMeasurementWidthPx,
-} from '@core/super-converter/helpers/tableFallbackHelpers.js';
+import { buildFallbackGridForTable } from '@core/super-converter/helpers/tableFallbackHelpers.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:tbl';
@@ -130,7 +127,7 @@ const encode = (params, encodedAttrs) => {
         columnWidths,
       },
     });
-    if (result.content?.length) content.push(result);
+    if (result) content.push(result);
   });
 
   return {

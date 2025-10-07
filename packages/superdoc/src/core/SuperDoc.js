@@ -21,6 +21,7 @@ import { normalizeDocumentEntry } from './helpers/file.js';
 /** @typedef {import('./types').Editor} Editor */
 /** @typedef {import('./types').DocumentMode} DocumentMode */
 /** @typedef {import('./types').Config} Config */
+/** @typedef {import('./types').ExportParams} ExportParams */
 
 /**
  * SuperDoc class
@@ -116,6 +117,11 @@ export class SuperDoc extends EventEmitter {
       ...this.config,
       ...config,
     };
+
+    this.config.modules = this.config.modules || {};
+    if (!Object.prototype.hasOwnProperty.call(this.config.modules, 'comments')) {
+      this.config.modules.comments = {};
+    }
 
     this.config.colors = shuffleArray(this.config.colors);
     this.userColorMap = new Map();
@@ -289,7 +295,8 @@ export class SuperDoc extends EventEmitter {
       this.superdocStore.setExceptionHandler((payload) => this.emit('exception', payload));
     }
     this.superdocStore.init(this.config);
-    this.commentsStore.init(this.config.modules.comments);
+    const commentsModuleConfig = this.config.modules.comments;
+    this.commentsStore.init(commentsModuleConfig && commentsModuleConfig !== false ? commentsModuleConfig : {});
   }
 
   #initListeners() {
@@ -692,15 +699,8 @@ export class SuperDoc extends EventEmitter {
 
   /**
    * Export the superdoc to a file
-   * @param {Object} params
-   * @param {string[]} [params.exportType]
-   * @param {string} [params.commentsType]
-   * @param {string} [params.exportedName]
-   * @param {Array} [params.additionalFiles]
-   * @param {Array} [params.additionalFileNames]
-   * @param {boolean} [params.isFinalDoc]
-   * @param {boolean} [params.triggerDownload] Whether to trigger the download of the exported file
-   * @returns {Promise<void | Blob>} Returns void if triggerDownload is false, otherwise returns the exported file
+   * @param {ExportParams} params - Export configuration
+   * @returns {Promise<void | Blob>}
    */
   async export({
     exportType = ['docx'],

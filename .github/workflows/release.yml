@@ -5,10 +5,10 @@ on:
     branches:
       - main
       - stable
-      - '*.x' # Maintenance branches
+      - "*.x" # Maintenance branches
     paths:
-      - 'packages/**'
-      - '!**.md'
+      - "packages/**"
+      - "!**.md"
   workflow_dispatch:
 
 permissions:
@@ -32,16 +32,23 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Generate token
+        id: generate_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.SUPERDOC_PAT }}
-      
-      - uses: actions/setup-node@v4
+          token: ${{ steps.generate_token.outputs.token }}
+
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: "https://registry.npmjs.org"
 
       - name: Install dependencies
         run: npm ci
@@ -52,7 +59,7 @@ jobs:
       - name: Release
         id: semantic
         env:
-          GITHUB_TOKEN: ${{ secrets.SUPERDOC_PAT }}
+          GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |

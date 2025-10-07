@@ -199,6 +199,7 @@ const buildCommentsStore = () => ({
   getFloatingComments: ref([]),
   hasSyncedCollaborationComments: ref(false),
   hasInitializedLocations: ref(true),
+  isCommentHighlighted: ref(false),
 });
 
 const mountComponent = async (superdocStub) => {
@@ -397,5 +398,38 @@ describe('SuperDoc.vue', () => {
     await nextTick();
     await nextTick();
     expect(commentsStoreStub.hasInitializedLocations.value).toBe(true);
+  });
+
+  it('hides comment interactions when comments module is disabled', async () => {
+    const superdocStub = createSuperdocStub();
+    superdocStub.config.modules.comments = false;
+
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    superdocStoreStub.modules.comments = false;
+    await nextTick();
+
+    expect(wrapper.find('.superdoc__selection-layer').exists()).toBe(false);
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const editorMock = {
+      options: { documentId: 'doc-1' },
+      commands: { togglePagination: vi.fn() },
+      view: {
+        coordsAtPos: vi.fn(() => ({ top: 100, bottom: 140, left: 10, right: 30 })),
+        state: { selection: { empty: true } },
+      },
+      getPageStyles: vi.fn(() => ({ pageMargins: {} })),
+    };
+
+    options.onSelectionUpdate({
+      editor: editorMock,
+      transaction: { selection: { $from: { pos: 1 }, $to: { pos: 4 } } },
+    });
+    await nextTick();
+
+    expect(superdocStoreStub.activeSelection.value).toBeNull();
+    expect(wrapper.find('.superdoc__tools').exists()).toBe(false);
   });
 });

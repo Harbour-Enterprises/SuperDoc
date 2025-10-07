@@ -7,6 +7,11 @@
   position: relative;
 }
 
+.sd-structured-content:has(img),
+.sd-structured-content:has(img) .sd-structured-content__content {
+  display: inline-block;
+}
+
 .sd-structured-content-draggable {
   font-size: 10px;
   align-items: center;
@@ -23,6 +28,7 @@
   border-bottom: none;
   border-radius: 6px 6px 0 0;
   background-color: #629be7dd;
+  box-sizing: border-box;
   z-index: 10;
   cursor: grab;
   display: none;
@@ -38,4 +44,14 @@
 .sd-structured-content:hover .sd-structured-content-draggable,
 .sd-structured-content-block:hover .sd-structured-content-draggable {
   display: inline-flex;
+}
+
+.ProseMirror.view-mode .sd-structured-content,
+.ProseMirror.view-mode .sd-structured-content-block {
+  padding: 0;
+  border: none;
+}
+
+.ProseMirror.view-mode .sd-structured-content-draggable {
+  display: none;
 }

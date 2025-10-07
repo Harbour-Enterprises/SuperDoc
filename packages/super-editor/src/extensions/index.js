@@ -13,6 +13,7 @@ import { Collaboration } from './collaboration/index.js';
 import { CollaborationCursor } from './collaboration-cursor/index.js';
 import { AiPlugin, AiMark, AiAnimationMark, AiLoaderNode } from './ai/index.js';
 import { SlashMenu } from './slash-menu';
+import { StructuredContentCommands } from './structured-content/index.js';
 
 // Nodes extensions
 import { Document } from './document/index.js';
@@ -35,11 +36,18 @@ import { Image } from './image/index.js';
 import { BookmarkStart, BookmarkEnd } from './bookmarks/index.js';
 import { Mention } from './mention/index.js';
 import { PageNumber, TotalPageCount } from './page-number/index.js';
+import { PageReference } from './page-reference/index.js';
 import { ShapeContainer } from './shape-container/index.js';
 import { ShapeTextbox } from './shape-textbox/index.js';
 import { ContentBlock } from './content-block/index.js';
-import { StructuredContent, StructuredContentBlock, DocumentSection } from './structured-content/index.js';
+import {
+  StructuredContent,
+  StructuredContentBlock,
+  DocumentSection,
+  DocumentPartObject,
+} from './structured-content/index.js';
 import { BlockNode } from './block-node/index.js';
+import { TableOfContents } from './table-of-contents/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -136,6 +144,7 @@ const getStarterExtensions = () => {
     SlashMenu,
     Strike,
     TabNode,
+    TableOfContents,
     Text,
     TextAlign,
     TextIndent,
@@ -170,13 +179,16 @@ const getStarterExtensions = () => {
     AiLoaderNode,
     PageNumber,
     TotalPageCount,
+    PageReference,
     ShapeContainer,
     ShapeTextbox,
     ContentBlock,
     Search,
     StructuredContent,
     StructuredContentBlock,
+    StructuredContentCommands,
     DocumentSection,
+    DocumentPartObject,
     NodeResizer,
     CustomSelection,
     TextTransform,
@@ -245,6 +257,7 @@ export {
   Search,
   StructuredContent,
   StructuredContentBlock,
+  StructuredContentCommands,
   DocumentSection,
   NodeResizer,
   CustomSelection,

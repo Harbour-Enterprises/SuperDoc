@@ -57,6 +57,13 @@ export const splitRunProperties = (entries = [], docx = null) => {
         }
         break;
       }
+      case 'w:caps': {
+        if (attributes['textTransform'] != null) {
+          hasTextStyle = true;
+          textStyleAttrs.textTransform = attributes['textTransform'];
+        }
+        break;
+      }
       case 'w:rFonts': {
         const asciiFamily =
           attributes['w:ascii'] ||
@@ -82,9 +89,10 @@ export const splitRunProperties = (entries = [], docx = null) => {
       case 'w:sz':
       case 'w:szCs': {
         const rawSize = Number(attributes['w:val']);
+        const attrName = entry.xmlName === 'w:sz' ? 'fontSize' : 'fontSizeCs';
         if (Number.isFinite(rawSize) && rawSize > 0) {
           hasTextStyle = true;
-          textStyleAttrs.fontSize = `${rawSize / 2}pt`;
+          textStyleAttrs[attrName] = `${rawSize / 2}pt`;
         }
         break;
       }

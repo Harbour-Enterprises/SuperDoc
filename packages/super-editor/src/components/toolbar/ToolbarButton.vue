@@ -68,7 +68,7 @@ const handleClick = () => {
 
 const handleInputSubmit = () => {
   const value = inlineTextInput.value;
-  const cleanValue = value.replace(/[^0-9]/g, '');
+  const cleanValue = value.match(/^\d+(\.5)?$/) ? value : Math.floor(parseFloat(value)).toString();
   emit('textSubmit', cleanValue);
   inlineTextInput.value = cleanValue;
 };
