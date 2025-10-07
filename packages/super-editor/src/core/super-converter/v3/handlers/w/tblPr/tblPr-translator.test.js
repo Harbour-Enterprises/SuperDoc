@@ -43,8 +43,7 @@ describe('w:tblPr translator', () => {
 
       const result = translator.encode(params);
 
-      expect(result.sdNodeOrKeyName).toBe('tableProperties');
-      expect(result.attributes).toEqual({
+      expect(result).toEqual({
         tableStyleId: 'TableGrid',
         tableWidth: { value: 5000, type: 'pct' },
         justification: 'center',
@@ -78,11 +77,9 @@ describe('w:tblPr translator', () => {
         ],
       };
 
-      const { attributes } = translator.encode(params);
+      const attributes = translator.encode(params);
 
-      expect(attributes.tableWidth).toBeUndefined();
-      expect(attributes.justification).toBeUndefined();
-      expect(attributes.tblLook).toBeUndefined();
+      expect(attributes).toBeUndefined();
     });
   });
 
@@ -197,7 +194,7 @@ describe('w:tblPr translator', () => {
       };
 
       // Remove undefined properties from borders for comparison
-      const borders = encodedResult.attributes.borders;
+      const borders = encodedResult.borders;
       if (borders) {
         Object.keys(borders).forEach((borderKey) => {
           Object.keys(borders[borderKey]).forEach((key) => {
@@ -208,7 +205,7 @@ describe('w:tblPr translator', () => {
         });
       }
 
-      expect(encodedResult.attributes).toEqual(expectedTableProperties);
+      expect(encodedResult).toEqual(expectedTableProperties);
     });
   });
 });
