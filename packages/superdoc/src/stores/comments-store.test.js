@@ -50,38 +50,46 @@ vi.mock('../core/collaboration/helpers.js', () => ({
   syncCommentsToClients: vi.fn(),
 }));
 
-vi.mock('../helpers/group-changes.js', () => ({
-  groupChanges: vi.fn(() => []),
-}));
+vi.mock('../helpers/group-changes.js', () => {
+  return {
+    groupChanges: vi.fn(() => []),
+  };
+});
 
-vi.mock('@harbour-enterprises/super-editor', () => ({
-  Editor: class {
-    getJSON() {
-      return { content: [{}] };
-    }
-    getHTML() {
-      return '<p></p>';
-    }
-    get state() {
-      return {};
-    }
-    get view() {
-      return { state: { tr: { setMeta: vi.fn() } }, dispatch: vi.fn() };
-    }
-  },
-  trackChangesHelpers: {
+vi.mock('@harbour-enterprises/super-editor', () => {
+  const mockedTrackChangesHelpers = {
     getTrackChanges: vi.fn(() => []),
-  },
-  TrackChangesBasePluginKey: 'TrackChangesBasePluginKey',
-  CommentsPluginKey: 'CommentsPluginKey',
-  getRichTextExtensions: vi.fn(() => []),
-}));
+  };
+
+  return {
+    Editor: class {
+      getJSON() {
+        return { content: [{}] };
+      }
+      getHTML() {
+        return '<p></p>';
+      }
+      get state() {
+        return {};
+      }
+      get view() {
+        return { state: { tr: { setMeta: vi.fn() } }, dispatch: vi.fn() };
+      }
+    },
+    trackChangesHelpers: mockedTrackChangesHelpers,
+    TrackChangesBasePluginKey: 'TrackChangesBasePluginKey',
+    CommentsPluginKey: 'CommentsPluginKey',
+    getRichTextExtensions: vi.fn(() => []),
+  };
+});
 
 import { useCommentsStore } from './comments-store.js';
 import { __mockSuperdoc } from './superdoc-store.js';
 import { comments_module_events } from '@harbour-enterprises/common';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
+import { groupChanges } from '../helpers/group-changes.js';
+import { trackChangesHelpers } from '@harbour-enterprises/super-editor';
 
 const useCommentMock = useComment;
 const syncCommentsToClientsMock = syncCommentsToClients;
@@ -195,6 +203,75 @@ describe('comments-store', () => {
       expect.objectContaining({
         type: comments_module_events.UPDATE,
         comment: { commentId: 'change-1' },
+      }),
+    );
+  });
+
+  it('reopens resolved tracked change comments on undo transactions', () => {
+    const superdoc = {
+      emit: vi.fn(),
+    };
+
+    const resolvedComment = {
+      commentId: 'change-undo',
+      trackedChange: true,
+      resolvedTime: 123,
+      resolvedByEmail: 'user@example.com',
+      resolvedByName: 'User Example',
+      getValues: vi.fn(() => ({
+        commentId: resolvedComment.commentId,
+        resolvedTime: resolvedComment.resolvedTime,
+        resolvedByEmail: resolvedComment.resolvedByEmail,
+        resolvedByName: resolvedComment.resolvedByName,
+      })),
+    };
+
+    store.commentsList = [resolvedComment];
+
+    const trackedMark = {
+      mark: {
+        type: { name: 'trackInsert' },
+        attrs: { id: 'change-undo' },
+      },
+      from: 0,
+      to: 1,
+    };
+
+    trackChangesHelpers.getTrackChanges.mockReturnValueOnce([trackedMark]);
+    groupChanges.mockReturnValueOnce([{ insertedMark: trackedMark }]);
+
+    const editor = {
+      state: {},
+      view: {
+        state: { tr: { setMeta: vi.fn() } },
+        dispatch: vi.fn(),
+      },
+    };
+
+    const transaction = {
+      getMeta: vi.fn((key) => (key === 'inputType' ? 'historyUndo' : undefined)),
+    };
+
+    store.refreshTrackedChangeComments({ superdoc, editor, transaction });
+
+    expect(resolvedComment.resolvedTime).toBeNull();
+    expect(resolvedComment.resolvedByEmail).toBeNull();
+    expect(resolvedComment.resolvedByName).toBeNull();
+
+    expect(resolvedComment.getValues).toHaveBeenCalled();
+    expect(syncCommentsToClientsMock).toHaveBeenCalledWith(
+      superdoc,
+      expect.objectContaining({
+        type: comments_module_events.UPDATE,
+        changes: expect.arrayContaining([expect.objectContaining({ key: 'resolvedTime', value: null })]),
+      }),
+    );
+
+    expect(superdoc.emit).toHaveBeenCalledWith(
+      'comments-update',
+      expect.objectContaining({
+        type: comments_module_events.UPDATE,
+        comment: expect.objectContaining({ commentId: 'change-undo' }),
       }),
     );
   });

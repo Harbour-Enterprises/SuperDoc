@@ -460,12 +460,38 @@ export const useCommentsStore = defineStore('comments', () => {
     setTimeout(() => {
       // do not block the first rendering of the doc
       // and create comments asynchronously.
-      createCommentForTrackChanges(editor);
+      createCommentForTrackChanges({ editor, superdoc });
     }, 0);
   };
 
-  const createCommentForTrackChanges = (editor) => {
-    let trackedChanges = trackChangesHelpers.getTrackChanges(editor.state);
+  const reOpenTrackedChangeComment = ({ comment, superdoc }) => {
+    const wasResolved = Boolean(comment.resolvedTime);
+    if (!wasResolved) {
+      return;
+    }
+
+    comment.resolvedTime = null;
+    comment.resolvedByEmail = null;
+    comment.resolvedByName = null;
+
+    const emitData = {
+      type: COMMENT_EVENTS.UPDATE,
+      changes: [
+        { key: 'resolvedTime', value: null },
+        { key: 'resolvedByEmail', value: null },
+        { key: 'resolvedByName', value: null },
+      ],
+      comment: comment.getValues(),
+    };
+
+    superdoc?.emit?.('comments-update', emitData);
+    syncCommentsToClients(superdoc, emitData);
+  };
+
+  const createCommentForTrackChanges = ({ editor, superdoc, trackedChangesOverride = null }) => {
+    let trackedChanges = Array.isArray(trackedChangesOverride)
+      ? trackedChangesOverride
+      : trackChangesHelpers.getTrackChanges(editor.state);
 
     const groupedChanges = groupChanges(trackedChanges);
 
@@ -475,7 +501,8 @@ export const useCommentsStore = defineStore('comments', () => {
     const { dispatch } = editor.view;
 
     groupedChanges.forEach(({ insertedMark, deletionMark, formatMark }, index) => {
-      console.debug(`Create comment for track change: ${index}`);
+      const changeId = insertedMark?.mark.attrs.id || deletionMark?.mark.attrs.id || formatMark?.mark.attrs.id || null;
+
       const foundComment = commentsList.value.find(
         (i) =>
           i.commentId === insertedMark?.mark.attrs.id ||
@@ -485,6 +512,7 @@ export const useCommentsStore = defineStore('comments', () => {
       const isLastIteration = trackedChanges.length === index + 1;
 
       if (foundComment) {
+        reOpenTrackedChangeComment({ comment: foundComment, superdoc });
         if (isLastIteration) {
           tr.setMeta(CommentsPluginKey, { type: 'force' });
         }
@@ -503,6 +531,44 @@ export const useCommentsStore = defineStore('comments', () => {
         tr.setMeta(TrackChangesBasePluginKey, trackChangesPayload);
       }
       dispatch(tr);
+    });
+  };
+
+  const refreshTrackedChangeComments = ({ superdoc, editor, transaction }) => {
+    if (!editor || !transaction) {
+      return;
+    }
+
+    const inputType = transaction.getMeta?.('inputType');
+    const historyMeta = transaction.getMeta?.('history');
+    const addToHistory = transaction.getMeta?.('addToHistory');
+    const hasHistoryMeta =
+      historyMeta && typeof historyMeta === 'object' && ('redo' in historyMeta || 'historyState' in historyMeta);
+    const docChanged = Boolean(transaction.docChanged);
+    const selectionSet = Boolean(transaction.selectionSet);
+    const stepCount = Array.isArray(transaction.steps) ? transaction.steps.length : 0;
+    const docChangeCandidate =
+      docChanged && stepCount > 0 && addToHistory !== false && !transaction.getMeta?.('acceptReject');
+
+    let trackedChangesSnapshot = null;
+
+    let shouldRefresh = inputType === 'historyUndo' || inputType === 'historyRedo' || hasHistoryMeta || false;
+
+    // If the history meta is missing (observed in some undo flows), fall back to detecting
+    // doc changes that leave tracked marks in the document so we can re-sync comment bubbles.
+    if (!shouldRefresh && docChangeCandidate) {
+      trackedChangesSnapshot = trackChangesHelpers.getTrackChanges(editor.state);
+      shouldRefresh = trackedChangesSnapshot.length > 0;
+    }
+
+    if (!shouldRefresh) {
+      return;
+    }
+
+    createCommentForTrackChanges({
+      editor,
+      superdoc,
+      trackedChangesOverride: trackedChangesSnapshot || undefined,
     });
   };
 
@@ -674,5 +740,6 @@ export const useCommentsStore = defineStore('comments', () => {
     translateCommentsForExport,
     handleEditorLocationsUpdate,
     handleTrackedChangeUpdate,
+    refreshTrackedChangeComments,
   };
 });

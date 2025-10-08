@@ -79,6 +79,7 @@ const {
   addComment,
   getComment,
   COMMENT_EVENTS,
+  refreshTrackedChangeComments,
 } = commentsStore;
 const { proxy } = getCurrentInstance();
 commentsStore.proxy = proxy;
@@ -394,6 +395,12 @@ const onEditorTransaction = ({ editor, transaction, duration }) => {
   if (typeof proxy.$superdoc.config.onTransaction === 'function') {
     proxy.$superdoc.config.onTransaction({ editor, transaction, duration });
   }
+
+  refreshTrackedChangeComments({
+    superdoc: proxy.$superdoc,
+    editor,
+    transaction,
+  });
 };
 
 const isCommentsEnabled = computed(() => Boolean(commentsModuleConfig.value));
