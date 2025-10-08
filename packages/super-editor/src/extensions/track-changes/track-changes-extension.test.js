@@ -194,6 +194,90 @@ describe('TrackChanges extension commands', () => {
     expect(rejectSpy).toHaveBeenCalledWith(2, 3);
   });
 
+  it('acceptTrackedChangeById links contiguous insertion segments sharing an id across formatting', () => {
+    const italicMark = schema.marks.italic.create();
+    const insertionId = 'ins-multi';
+    const firstSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const secondSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const thirdSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('A', [firstSegmentMark]),
+      schema.text('B', [italicMark, secondSegmentMark]),
+      schema.text('C', [thirdSegmentMark]),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const acceptSpy = vi.fn().mockReturnValue(true);
+    const tr = state.tr;
+    const result = commands.acceptTrackedChangeById(insertionId)({
+      state,
+      tr,
+      commands: { acceptTrackedChangesBetween: acceptSpy },
+    });
+
+    expect(result).toBe(true);
+    expect(acceptSpy).toHaveBeenCalledTimes(3);
+    expect(acceptSpy).toHaveBeenNthCalledWith(1, 1, 2);
+    expect(acceptSpy).toHaveBeenNthCalledWith(2, 2, 3);
+    expect(acceptSpy).toHaveBeenNthCalledWith(3, 3, 4);
+
+    const rejectSpy = vi.fn().mockReturnValue(true);
+    const rejectResult = commands.rejectTrackedChangeById(insertionId)({
+      state,
+      tr,
+      commands: { rejectTrackedChangesBetween: rejectSpy },
+    });
+
+    expect(rejectResult).toBe(true);
+    expect(rejectSpy).toHaveBeenCalledTimes(3);
+    expect(rejectSpy).toHaveBeenNthCalledWith(1, 1, 2);
+    expect(rejectSpy).toHaveBeenNthCalledWith(2, 2, 3);
+    expect(rejectSpy).toHaveBeenNthCalledWith(3, 3, 4);
+  });
+
+  it('acceptTrackedChangeById chains contiguous same-id insertions before linking complementary deletions', () => {
+    const italicMark = schema.marks.italic.create();
+    const deletionMark = schema.marks[TrackDeleteMarkName].create({ id: 'del-id' });
+    const insertionId = 'shared-id';
+    const firstSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const secondSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('old', [deletionMark]),
+      schema.text('A', [firstSegmentMark]),
+      schema.text('B', [italicMark, secondSegmentMark]),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const acceptSpy = vi.fn().mockReturnValue(true);
+    const tr = state.tr;
+    const result = commands.acceptTrackedChangeById(insertionId)({
+      state,
+      tr,
+      commands: { acceptTrackedChangesBetween: acceptSpy },
+    });
+
+    expect(result).toBe(true);
+    expect(acceptSpy).toHaveBeenCalledTimes(3);
+    expect(acceptSpy).toHaveBeenNthCalledWith(1, 4, 5);
+    expect(acceptSpy).toHaveBeenNthCalledWith(2, 5, 6);
+    expect(acceptSpy).toHaveBeenNthCalledWith(3, 1, 4);
+
+    const rejectSpy = vi.fn().mockReturnValue(true);
+    const rejectResult = commands.rejectTrackedChangeById(insertionId)({
+      state,
+      tr,
+      commands: { rejectTrackedChangesBetween: rejectSpy },
+    });
+
+    expect(rejectResult).toBe(true);
+    expect(rejectSpy).toHaveBeenCalledTimes(3);
+    expect(rejectSpy).toHaveBeenNthCalledWith(1, 4, 5);
+    expect(rejectSpy).toHaveBeenNthCalledWith(2, 5, 6);
+    expect(rejectSpy).toHaveBeenNthCalledWith(3, 1, 4);
+  });
+
   it('acceptTrackedChangeById and rejectTrackedChangeById SHOULD link deletion-insertion pairs', () => {
     const deletionMark = schema.marks[TrackDeleteMarkName].create({ id: 'del-id' });
     const insertionMark = schema.marks[TrackInsertMarkName].create({ id: 'ins-id' });

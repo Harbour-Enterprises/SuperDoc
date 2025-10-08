@@ -313,52 +313,69 @@ const getChangesByIdToResolve = (state, id) => {
   if (changeIndex === -1) return;
 
   const matchingChange = trackedChanges[changeIndex];
-  const prev = trackedChanges[changeIndex - 1];
-  const next = trackedChanges[changeIndex + 1];
-  const matchingMarkType = matchingChange.mark.type.name;
+  const matchingId = matchingChange.mark.attrs.id;
 
-  // Determine the linked change - ONLY link deletion-insertion pairs
-  let linkedChange;
+  const getSegmentSize = ({ from, to }) => to - from;
+  const areDirectlyConnected = (left, right) => {
+    if (!left || !right) {
+      return false;
+    }
 
-  if (prev && matchingChange.from === prev.to) {
-    // Connected nodes found
-    const prevMarkType = prev.mark.type.name;
+    if (left.to !== right.from) {
+      return false;
+    }
 
-    // Only link if one is deletion and other is insertion
-    if (
-      (matchingMarkType === TrackDeleteMarkName && prevMarkType === TrackInsertMarkName) ||
-      (matchingMarkType === TrackInsertMarkName && prevMarkType === TrackDeleteMarkName)
-    ) {
-      const hasContentBetween =
-        state.doc.textBetween(prev.from, matchingChange.to, '\n').length >
-        prev.to - prev.from + (matchingChange.to - matchingChange.from);
+    const hasContentBetween =
+      state.doc.textBetween(left.from, right.to, '\n').length > getSegmentSize(left) + getSegmentSize(right);
 
-      if (!hasContentBetween) {
-        linkedChange = prev;
+    return !hasContentBetween;
+  };
+
+  const isComplementaryPair = (firstType, secondType) =>
+    (firstType === TrackDeleteMarkName && secondType === TrackInsertMarkName) ||
+    (firstType === TrackInsertMarkName && secondType === TrackDeleteMarkName);
+
+  const linkedBefore = [];
+  const linkedAfter = [];
+
+  const collectDirection = (direction, collection) => {
+    let currentIndex = changeIndex;
+    let currentChange = matchingChange;
+
+    while (true) {
+      const neighborIndex = currentIndex + direction;
+      const neighbor = trackedChanges[neighborIndex];
+
+      if (!neighbor) {
+        break;
+      }
+
+      const [left, right] = direction < 0 ? [neighbor, currentChange] : [currentChange, neighbor];
+
+      if (!areDirectlyConnected(left, right)) {
+        break;
+      }
+
+      const sharesId = neighbor.mark.attrs.id === matchingId;
+      const complementary = isComplementaryPair(currentChange.mark.type.name, neighbor.mark.type.name);
+
+      if (!sharesId && !complementary) {
+        break;
+      }
+
+      collection.push(neighbor);
+
+      currentIndex = neighborIndex;
+      currentChange = neighbor;
+
+      if (!sharesId) {
+        break;
       }
     }
-  }
+  };
 
-  // Check if next change
-  // Will not trigger if linkedChange is already set (from previous check)
-  // Prevents linking BOTH before and after a node
-  if (!linkedChange && next && matchingChange.to === next.from) {
-    const nextMarkType = next.mark.type.name;
+  collectDirection(-1, linkedBefore);
+  collectDirection(1, linkedAfter);
 
-    // Only link if one is deletion and other is insertion
-    if (
-      (matchingMarkType === TrackDeleteMarkName && nextMarkType === TrackInsertMarkName) ||
-      (matchingMarkType === TrackInsertMarkName && nextMarkType === TrackDeleteMarkName)
-    ) {
-      const hasContentBetween =
-        state.doc.textBetween(matchingChange.from, next.to, '\n').length >
-        matchingChange.to - matchingChange.from + (next.to - next.from);
-
-      if (!hasContentBetween) {
-        linkedChange = next;
-      }
-    }
-  }
-
-  return [matchingChange, linkedChange].filter(Boolean);
+  return [matchingChange, ...linkedAfter, ...linkedBefore];
 };
