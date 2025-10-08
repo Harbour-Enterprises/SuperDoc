@@ -3,7 +3,7 @@ import { Slice } from 'prosemirror-model';
 import { Mapping, ReplaceStep, AddMarkStep, RemoveMarkStep } from 'prosemirror-transform';
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from './constants.js';
 import { TrackChangesBasePlugin, TrackChangesBasePluginKey } from './plugins/index.js';
-import { getTrackChanges } from './trackChangesHelpers/getTrackChanges.js';
+import { getTrackedChangeById } from './trackChangesHelpers/generateTrackedChangeId.js';
 
 export const TrackChanges = Extension.create({
   name: 'trackChanges',
@@ -149,7 +149,7 @@ export const TrackChanges = Extension.create({
       acceptTrackedChangeById:
         (id) =>
         ({ state, tr, commands }) => {
-          const toResolve = getChangesByIdToResolve(state, id) || [];
+          const toResolve = getTrackedChangeById(state, id) || [];
 
           return toResolve
             .map(({ from, to }) => {
@@ -171,7 +171,7 @@ export const TrackChanges = Extension.create({
       rejectTrackedChangeById:
         (id) =>
         ({ state, tr, commands }) => {
-          const toReject = getChangesByIdToResolve(state, id) || [];
+          const toReject = getTrackedChangeById(state, id) || [];
 
           return toReject
             .map(({ from, to }) => {
@@ -296,32 +296,3 @@ export const TrackChanges = Extension.create({
     return [TrackChangesBasePlugin()];
   },
 });
-
-// For reference.
-// const trackChangesCallback = (action, acceptedChanges, revertedChanges, editor) => {
-//   const id = acceptedChanges.modifiers[0]?.id || revertedChanges.modifiers[0]?.id;
-//   if (action === 'accept') {
-//     editor.emit('trackedChangesUpdate', { action, id });
-//   } else {
-//     editor.emit('trackedChangesUpdate', { action, id });
-//   }
-// };
-
-const getChangesByIdToResolve = (state, id) => {
-  const trackedChanges = getTrackChanges(state);
-  const changeIndex = trackedChanges.findIndex(({ mark }) => mark.attrs.id === id);
-  if (changeIndex === -1) return;
-
-  const matchingChange = trackedChanges[changeIndex];
-  const prev = trackedChanges[changeIndex - 1];
-  const next = trackedChanges[changeIndex + 1];
-
-  // Determine the linked change
-  let linkedChange;
-  if (prev && matchingChange.start === prev.end) {
-    linkedChange = prev;
-  } else if (next && matchingChange.end === next.start) {
-    linkedChange = next;
-  }
-  return [matchingChange, linkedChange].filter(Boolean);
-};

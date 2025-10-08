@@ -483,7 +483,7 @@ const findTrackedMark = ({
 };
 
 const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEditorState, editor) => {
-  const { insertedMark, deletionMark, formatMark, deletionNodes } = trackedChangeMeta;
+  const { insertedMark, deletionMark, formatMark } = trackedChangeMeta;
 
   if (!insertedMark && !deletionMark && !formatMark) {
     return;
@@ -529,7 +529,6 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
       deletionMark,
       formatMark,
     },
-    deletionNodes,
     nodes,
     newEditorState,
   });
@@ -539,29 +538,45 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
   return newTrackedChanges;
 };
 
-const getTrackedChangeText = ({ nodes, mark, trackedChangeType, isDeletionInsertion }) => {
+const getTrackedChangeText = ({ nodes }) => {
   let trackedChangeText = '';
   let deletionText = '';
 
-  if (trackedChangeType === TrackInsertMarkName) {
-    trackedChangeText = nodes.reduce((acc, node) => {
-      if (!node.marks.find((nodeMark) => nodeMark.type.name === mark.type.name)) return acc;
-      acc += node?.text || node?.textContent || '';
-      return acc;
-    }, '');
-  }
+  // Process all nodes with the same ID to collect both insertion and deletion text
+  const insertionTextParts = [];
+  const deletionTextParts = [];
+  let formatText = '';
 
-  // If this is a format change, let's get the string of what changes were made
-  if (trackedChangeType === TrackFormatMarkName) {
-    trackedChangeText = translateFormatChangesToEnglish(mark.attrs);
-  }
+  nodes.forEach((node) => {
+    const nodeText = node?.text || node?.textContent || '';
+    if (!nodeText.trim()) return; // Skip empty nodes
 
-  if (trackedChangeType === TrackDeleteMarkName || isDeletionInsertion) {
-    deletionText = nodes.reduce((acc, node) => {
-      if (!node.marks.find((nodeMark) => nodeMark.type.name === TrackDeleteMarkName)) return acc;
-      acc += node?.text || node?.textContent || '';
-      return acc;
-    }, '');
+    // Check for insertion marks
+    const insertionMark = node.marks.find((nodeMark) => nodeMark.type.name === TrackInsertMarkName);
+    if (insertionMark) {
+      insertionTextParts.push(nodeText.trim());
+    }
+
+    // Check for deletion marks
+    const deletionMark = node.marks.find((nodeMark) => nodeMark.type.name === TrackDeleteMarkName);
+    if (deletionMark) {
+      deletionTextParts.push(nodeText.trim());
+    }
+
+    // Check for format marks
+    const formatMark = node.marks.find((nodeMark) => nodeMark.type.name === TrackFormatMarkName);
+    if (formatMark && !formatText) {
+      formatText = translateFormatChangesToEnglish(formatMark.attrs);
+    }
+  });
+
+  // Join text parts with spaces and clean up for display
+  trackedChangeText = insertionTextParts.join(' ').replace(/\s+/g, ' ').trim();
+  deletionText = deletionTextParts.join(' ').replace(/\s+/g, ' ').trim();
+
+  // If we have format text but no insertion text, use format text as the tracked change text
+  if (formatText && !trackedChangeText) {
+    trackedChangeText = formatText;
   }
 
   return {
@@ -570,7 +585,7 @@ const getTrackedChangeText = ({ nodes, mark, trackedChangeType, isDeletionInsert
   };
 };
 
-const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes, newEditorState, documentId }) => {
+const createOrUpdateTrackedChangeComment = ({ event, marks, nodes, newEditorState, documentId }) => {
   const trackedMark = marks.insertedMark || marks.deletionMark || marks.formatMark;
   const { type, attrs } = trackedMark;
 
@@ -579,7 +594,6 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   const id = attrs.id;
 
   const node = nodes[0];
-  const isDeletionInsertion = !!(marks.insertedMark && marks.deletionMark);
 
   let nodesWithMark = [];
   newEditorState.doc.descendants((node) => {
@@ -591,17 +605,21 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   });
 
   const { deletionText, trackedChangeText } = getTrackedChangeText({
-    state: newEditorState,
     nodes: nodesWithMark.length ? nodesWithMark : [node],
-    mark: trackedMark,
-    marks,
-    trackedChangeType,
-    isDeletionInsertion,
-    deletionNodes,
   });
 
   if (!deletionText && !trackedChangeText) {
     return;
+  }
+
+  // Determine the tracked change type based on what we actually found
+  let finalTrackedChangeType = trackedChangeType;
+  if (trackedChangeText && deletionText) {
+    finalTrackedChangeType = 'both';
+  } else if (trackedChangeText) {
+    finalTrackedChangeType = TrackInsertMarkName;
+  } else if (deletionText) {
+    finalTrackedChangeType = TrackDeleteMarkName;
   }
 
   const params = {
@@ -609,9 +627,9 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
     type: 'trackedChange',
     documentId,
     changeId: id,
-    trackedChangeType: isDeletionInsertion ? 'both' : trackedChangeType,
+    trackedChangeType: finalTrackedChangeType,
     trackedChangeText,
-    deletedText: marks.deletionMark ? deletionText : null,
+    deletedText: deletionText || null,
     author,
     authorEmail,
     date,

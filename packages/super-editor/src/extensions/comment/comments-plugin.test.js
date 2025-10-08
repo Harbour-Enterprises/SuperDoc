@@ -690,11 +690,27 @@ describe('internal helper functions', () => {
 
     const combinedResult = getTrackedChangeText({
       nodes: [...insertionNodes, ...deletionNodes],
-      mark: insertMark,
-      trackedChangeType: TrackInsertMarkName,
-      isDeletionInsertion: true,
     });
+    expect(combinedResult.trackedChangeText).toBe('Added');
     expect(combinedResult.deletionText).toBe('Removed');
+  });
+
+  it('getTrackedChangeText preserves both insertion and deletion text for same ID', () => {
+    const schema = createCommentSchema();
+    const sameId = 'change-1';
+    const insertMark = schema.marks[TrackInsertMarkName].create({ id: sameId });
+    const deleteMark = schema.marks[TrackDeleteMarkName].create({ id: sameId });
+
+    // Simulate the bug scenario: first add text, then delete adjacent text
+    const nodesWithSameId = [schema.text('Added text', [insertMark]), schema.text('Deleted text', [deleteMark])];
+
+    const result = getTrackedChangeText({
+      nodes: nodesWithSameId,
+    });
+
+    // Both insertion and deletion text should be preserved
+    expect(result.trackedChangeText).toBe('Added text');
+    expect(result.deletionText).toBe('Deleted text');
   });
 
   it('createOrUpdateTrackedChangeComment builds add and update payloads', () => {

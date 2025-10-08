@@ -1,34 +1,28 @@
-import { v4 as uuidv4 } from 'uuid';
 import { TrackInsertMarkName, TrackDeleteMarkName } from '../constants.js';
-import { findTrackedMarkBetween } from './findTrackedMarkBetween.js';
+import { generateTrackedChangeId } from './generateTrackedChangeId.js';
 
 /**
  * Mark insertion.
- * @param {Transaction} options.tr Transaction.
+ * @param {Object} options
+ * @param {Object} options.tr Transaction.
  * @param {number} options.from From position.
  * @param {number} options.to To position.
- * @param {object} options.user User object ({ name, email }).
+ * @param {Object} options.user User object ({ name, email }).
  * @param {string} options.date Date.
- * @returns {Mark} Insertion mark.
+ * @returns {Object} Insertion mark.
  */
 export const markInsertion = ({ tr, from, to, user, date }) => {
   tr.removeMark(from, to, tr.doc.type.schema.marks[TrackDeleteMarkName]);
   tr.removeMark(from, to, tr.doc.type.schema.marks[TrackInsertMarkName]);
 
-  let trackedMark = findTrackedMarkBetween({
+  // Use smart ID generation based on logical grouping rules
+  const id = generateTrackedChangeId({
     tr,
     from,
     to,
-    markName: TrackInsertMarkName,
-    attrs: { authorEmail: user.email },
+    changeType: 'insert',
+    user,
   });
-
-  let id;
-  if (trackedMark) {
-    id = trackedMark.mark.attrs.id;
-  } else {
-    id = uuidv4();
-  }
 
   const insertionMark = tr.doc.type.schema.marks[TrackInsertMarkName].create({
     id,

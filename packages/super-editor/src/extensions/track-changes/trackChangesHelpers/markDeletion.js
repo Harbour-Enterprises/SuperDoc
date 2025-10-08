@@ -1,33 +1,27 @@
 import { Mapping, ReplaceStep } from 'prosemirror-transform';
 import { Slice } from 'prosemirror-model';
-import { v4 as uuidv4 } from 'uuid';
 import { TrackDeleteMarkName, TrackInsertMarkName } from '../constants.js';
-import { findTrackedMarkBetween } from './findTrackedMarkBetween.js';
+import { generateTrackedChangeId } from './generateTrackedChangeId.js';
 
 /**
  * Mark deletion.
- * @param {Transaction} options.tr Transaction.
+ * @param {Object} options
+ * @param {Object} options.tr Transaction.
  * @param {number} options.from From position.
  * @param {number} options.to To position.
- * @param {object} options.user User object ({ name, email }).
+ * @param {Object} options.user User object ({ name, email }).
  * @param {string} options.date Date.
  * @returns {Object} Deletion map and deletionMark
  */
 export const markDeletion = ({ tr, from, to, user, date }) => {
-  let trackedMark = findTrackedMarkBetween({
+  // Use smart ID generation based on logical grouping rules
+  const id = generateTrackedChangeId({
     tr,
     from,
     to,
-    markName: TrackDeleteMarkName,
-    attrs: { authorEmail: user.email },
+    changeType: 'delete',
+    user,
   });
-
-  let id;
-  if (trackedMark) {
-    id = trackedMark.mark.attrs.id;
-  } else {
-    id = uuidv4();
-  }
 
   const deletionMark = tr.doc.type.schema.marks[TrackDeleteMarkName].create({
     id,
