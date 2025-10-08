@@ -78,7 +78,10 @@ function flattenFoundList(listElem, editor, NodeInterface) {
   }
 
   // Calculate the level of this list
-  let level = listElem.getAttribute('data-level') || 0;
+  let level = Number(listElem.getAttribute('data-level'));
+  if (Number.isNaN(level)) {
+    level = 0;
+  }
   let ancestor = listElem.parentElement;
   while (ancestor && ancestor !== localDoc.body) {
     if (ancestor.tagName && ancestor.tagName.toLowerCase() === 'li') {
