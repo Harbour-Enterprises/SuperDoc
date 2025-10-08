@@ -16,7 +16,7 @@ import {
 import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@harbour-enterprises/common';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 
-export * from './core/index.js';
+export { SuperDoc } from './core/SuperDoc.js';
 export {
   BlankDOCX,
   getFileObject,
