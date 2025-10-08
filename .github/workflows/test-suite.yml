@@ -149,6 +149,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: validate
     steps:
+      - name: Generate token
+        id: generate_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Trigger E2E tests
         run: |
           curl -L \
