@@ -424,6 +424,7 @@ export const makeDefaultItems = ({
     type: 'dropdown',
     name: 'tableActions',
     command: 'executeTableCommand',
+    tooltip: toolbarTexts.tableActions,
     icon: toolbarIcons.tableActions,
     hideLabel: true,
     disabled: true,
