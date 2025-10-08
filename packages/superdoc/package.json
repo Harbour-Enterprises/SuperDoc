@@ -40,10 +40,11 @@
   "module": "./dist/superdoc.es.js",
   "scripts": {
     "dev": "vite",
-    "build": "cd ../super-editor && npm run build && cd ../superdoc && vite build && tsc && npm run build:umd",
+    "build": "cd ../super-editor && npm run build && cd ../superdoc && vite build && tsc && npm run verify:types && npm run build:umd",
     "build:es": "cd ../super-editor && npm run build && cd ../superdoc && vite build",
     "watch:es": "nodemon --watch src --watch ../super-editor/src --ext js,ts,vue --exec \"npm run build:es\" --delay 100ms",
     "build:umd": "vite build --config vite.config.umd.js",
+    "verify:types": "node scripts/verify-types.js",
     "release": "release-it --ci --increment=patch",
     "release:next": "release-it --config .release-it.next.json",
     "clean": "rm -rf dist",
