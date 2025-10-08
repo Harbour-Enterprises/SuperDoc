@@ -33,7 +33,7 @@ function inchesToPixels(inches) {
 function pixelsToInches(pixels) {
   if (pixels == null) return;
   const inches = Number(pixels) / 96;
-  return Math.round(inches * 1000) / 1000;
+  return inches;
 }
 
 function twipsToLines(twips) {
