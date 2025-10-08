@@ -64,8 +64,13 @@ import { translator as w_trPr_translator } from './w/trPr/trPr-translator.js';
 import { translator as w_u_translator } from './w/u/u-translator.js';
 import { translator as w_wAfter_translator } from './w/wAfter/wAfter-translator.js';
 import { translator as w_wBefore_translator } from './w/wBefore/wBefore-translator.js';
+import {
+  commentRangeStartTranslator as w_commentRangeStart_translator,
+  commentRangeEndTranslator as w_commentRangeEnd_translator,
+} from './w/commentRange/comment-range-translator.js';
 import { translator as wp_anchor_translator } from './wp/anchor/anchor-translator.js';
 import { translator as wp_inline_translator } from './wp/inline/inline-translator.js';
+
 import { runPropertyTranslators } from './w/rpr/run-property-translators.js';
 
 /**
@@ -141,6 +146,8 @@ const additionalHandlers = Object.freeze({
   'w:wBefore': w_wBefore_translator,
   'wp:anchor': wp_anchor_translator,
   'wp:inline': wp_inline_translator,
+  'w:commentRangeStart': w_commentRangeStart_translator,
+  'w:commentRangeEnd': w_commentRangeEnd_translator,
 });
 
 const baseHandlers = {
