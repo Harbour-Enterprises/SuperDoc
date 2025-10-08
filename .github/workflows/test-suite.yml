@@ -4,14 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       run-visual:
+        description: "Run visual tests"
         type: boolean
         default: true
       run-e2e:
+        description: "Run end-to-end tests"
         type: boolean
         default: false
       update-screenshots:
+        description: "Update visual snapshots"
         type: boolean
         default: false
+      branch-to-test:
+        description: "Branch to test (for E2E)"
+        type: string
+        required: false
+      commit-sha:
+        description: "Commit SHA (for E2E)"
+        type: string
+        required: false
+      pr-url:
+        description: "Pull request URL (for E2E)"
+        type: string
+        required: false
   workflow_call:
     inputs:
       run-visual:
@@ -144,8 +159,8 @@ jobs:
             -d '{
               "ref": "main",
               "inputs": {
-                "superdoc-branch": "${{ github.head_ref }}",
-                "superdoc-sha": "${{ github.sha }}",
-                "pull-request-url": "${{ github.event.pull_request.html_url }}"
+                "superdoc-branch": "${{ inputs.branch-to-test || github.head_ref }}",
+                "superdoc-sha": "${{ inputs.commit-sha || github.sha }}",
+                "pull-request-url": "${{ inputs.pr-url || github.event.pull_request.html_url }}"
               }
             }'
