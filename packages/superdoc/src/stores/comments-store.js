@@ -53,6 +53,26 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const pendingComment = ref(null);
 
+  let cachedHistoryPluginKey = null;
+  const resolveHistoryPluginKey = (editorInstance) => {
+    if (cachedHistoryPluginKey) return cachedHistoryPluginKey;
+    const editorState = editorInstance?.view?.state || editorInstance?.state;
+    const pluginsByKey = editorState?.config?.pluginsByKey;
+    if (!pluginsByKey) return null;
+
+    for (const key of Object.keys(pluginsByKey)) {
+      const plugin = pluginsByKey[key];
+      const pluginKey = plugin?.spec?.key;
+      const pluginKeyId = pluginKey?.key;
+      if (pluginKey && typeof pluginKeyId === 'string' && pluginKeyId.startsWith('history$')) {
+        cachedHistoryPluginKey = pluginKey;
+        break;
+      }
+    }
+
+    return cachedHistoryPluginKey;
+  };
+
   /**
    * Initialize the store
    *
@@ -488,7 +508,12 @@ export const useCommentsStore = defineStore('comments', () => {
     syncCommentsToClients(superdoc, emitData);
   };
 
-  const createCommentForTrackChanges = ({ editor, superdoc, trackedChangesOverride = null }) => {
+  const createCommentForTrackChanges = ({
+    editor,
+    superdoc,
+    trackedChangesOverride = null,
+    allowReopenResolved = false,
+  }) => {
     let trackedChanges = Array.isArray(trackedChangesOverride)
       ? trackedChangesOverride
       : trackChangesHelpers.getTrackChanges(editor.state);
@@ -503,16 +528,13 @@ export const useCommentsStore = defineStore('comments', () => {
     groupedChanges.forEach(({ insertedMark, deletionMark, formatMark }, index) => {
       const changeId = insertedMark?.mark.attrs.id || deletionMark?.mark.attrs.id || formatMark?.mark.attrs.id || null;
 
-      const foundComment = commentsList.value.find(
-        (i) =>
-          i.commentId === insertedMark?.mark.attrs.id ||
-          i.commentId === deletionMark?.mark.attrs.id ||
-          i.commentId === formatMark?.mark.attrs.id,
-      );
+      const foundComment = changeId ? commentsList.value.find((i) => i.commentId === changeId) : null;
       const isLastIteration = trackedChanges.length === index + 1;
 
       if (foundComment) {
-        reOpenTrackedChangeComment({ comment: foundComment, superdoc });
+        if (allowReopenResolved) {
+          reOpenTrackedChangeComment({ comment: foundComment, superdoc });
+        }
         if (isLastIteration) {
           tr.setMeta(CommentsPluginKey, { type: 'force' });
         }
@@ -540,10 +562,21 @@ export const useCommentsStore = defineStore('comments', () => {
     }
 
     const inputType = transaction.getMeta?.('inputType');
-    const historyMeta = transaction.getMeta?.('history');
+    const getTransactionMeta = typeof transaction.getMeta === 'function' ? transaction.getMeta.bind(transaction) : null;
+    const historyPluginKey = resolveHistoryPluginKey(editor);
+    const historyMetaFromPluginKey =
+      historyPluginKey && getTransactionMeta ? getTransactionMeta(historyPluginKey) : undefined;
+    const historyMeta =
+      historyMetaFromPluginKey !== undefined
+        ? historyMetaFromPluginKey
+        : getTransactionMeta
+          ? getTransactionMeta('history')
+          : undefined;
     const addToHistory = transaction.getMeta?.('addToHistory');
     const hasHistoryMeta =
-      historyMeta && typeof historyMeta === 'object' && ('redo' in historyMeta || 'historyState' in historyMeta);
+      historyMeta &&
+      typeof historyMeta === 'object' &&
+      ('redo' in historyMeta || 'undo' in historyMeta || 'historyState' in historyMeta);
     const docChanged = Boolean(transaction.docChanged);
     const selectionSet = Boolean(transaction.selectionSet);
     const stepCount = Array.isArray(transaction.steps) ? transaction.steps.length : 0;
@@ -552,7 +585,9 @@ export const useCommentsStore = defineStore('comments', () => {
 
     let trackedChangesSnapshot = null;
 
-    let shouldRefresh = inputType === 'historyUndo' || inputType === 'historyRedo' || hasHistoryMeta || false;
+    const isHistoryInputType = inputType === 'historyUndo' || inputType === 'historyRedo';
+    const isHistoryEvent = isHistoryInputType || hasHistoryMeta;
+    let shouldRefresh = isHistoryEvent;
 
     // If the history meta is missing (observed in some undo flows), fall back to detecting
     // doc changes that leave tracked marks in the document so we can re-sync comment bubbles.
@@ -569,6 +604,7 @@ export const useCommentsStore = defineStore('comments', () => {
       editor,
       superdoc,
       trackedChangesOverride: trackedChangesSnapshot || undefined,
+      allowReopenResolved: isHistoryEvent,
     });
   };
 
