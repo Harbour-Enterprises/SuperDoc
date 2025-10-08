@@ -315,13 +315,50 @@ const getChangesByIdToResolve = (state, id) => {
   const matchingChange = trackedChanges[changeIndex];
   const prev = trackedChanges[changeIndex - 1];
   const next = trackedChanges[changeIndex + 1];
+  const matchingMarkType = matchingChange.mark.type.name;
 
-  // Determine the linked change
+  // Determine the linked change - ONLY link deletion-insertion pairs
   let linkedChange;
-  if (prev && matchingChange.start === prev.end) {
-    linkedChange = prev;
-  } else if (next && matchingChange.end === next.start) {
-    linkedChange = next;
+
+  if (prev && matchingChange.from === prev.to) {
+    // Connected nodes found
+    const prevMarkType = prev.mark.type.name;
+
+    // Only link if one is deletion and other is insertion
+    if (
+      (matchingMarkType === TrackDeleteMarkName && prevMarkType === TrackInsertMarkName) ||
+      (matchingMarkType === TrackInsertMarkName && prevMarkType === TrackDeleteMarkName)
+    ) {
+      const hasContentBetween =
+        state.doc.textBetween(prev.from, matchingChange.to, '\n').length >
+        prev.to - prev.from + (matchingChange.to - matchingChange.from);
+
+      if (!hasContentBetween) {
+        linkedChange = prev;
+      }
+    }
   }
+
+  // Check if next change
+  // Will not trigger if linkedChange is already set (from previous check)
+  // Prevents linking BOTH before and after a node
+  if (!linkedChange && next && matchingChange.to === next.from) {
+    const nextMarkType = next.mark.type.name;
+
+    // Only link if one is deletion and other is insertion
+    if (
+      (matchingMarkType === TrackDeleteMarkName && nextMarkType === TrackInsertMarkName) ||
+      (matchingMarkType === TrackInsertMarkName && nextMarkType === TrackDeleteMarkName)
+    ) {
+      const hasContentBetween =
+        state.doc.textBetween(matchingChange.from, next.to, '\n').length >
+        matchingChange.to - matchingChange.from + (next.to - next.from);
+
+      if (!hasContentBetween) {
+        linkedChange = next;
+      }
+    }
+  }
+
   return [matchingChange, linkedChange].filter(Boolean);
 };
