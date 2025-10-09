@@ -95,6 +95,7 @@ export class SuperDoc extends EventEmitter {
     onCommentsListChange: () => null,
     onException: () => null,
     onListDefinitionsChange: () => null,
+    onFontsResolved: () => null,
     onTransaction: () => null,
     // Image upload handler
     // async (file) => url;
@@ -314,6 +315,7 @@ export class SuperDoc extends EventEmitter {
     this.on('content-error', this.onContentError);
     this.on('exception', this.config.onException);
     this.on('list-definitions-change', this.config.onListDefinitionsChange);
+    this.on('fonts-resolved', this.config.onFontsResolved);
   }
 
   /**

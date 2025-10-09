@@ -278,6 +278,10 @@ const onEditorListdefinitionsChange = (params) => {
   proxy.$superdoc.emit('list-definitions-change', params);
 };
 
+const onFontsResolved = (params) => {
+  proxy.$superdoc.emit('fonts-resolved', params);
+};
+
 const editorOptions = (doc) => {
   const options = {
     isDebug: proxy.$superdoc.config.isDebug || false,
@@ -310,6 +314,7 @@ const editorOptions = (doc) => {
     onCommentsUpdate: onEditorCommentsUpdate,
     onCommentLocationsUpdate: onEditorCommentLocationsUpdate,
     onListDefinitionsChange: onEditorListdefinitionsChange,
+    onFontsResolved: onFontsResolved,
     onTransaction: onEditorTransaction,
     ydoc: doc.ydoc,
     collaborationProvider: doc.provider || null,

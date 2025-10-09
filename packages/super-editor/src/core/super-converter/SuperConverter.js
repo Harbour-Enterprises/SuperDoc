@@ -562,6 +562,24 @@ class SuperConverter {
 
   getDocumentFonts() {
     const fontTable = this.convertedXml['word/fontTable.xml'];
+    if (!fontTable) {
+      return [];
+    }
+
+    const wFonts = fontTable.elements.find((element) => element.name === 'w:fonts');
+    if (!wFonts) {
+      return [];
+    }
+
+    const fontsUsedInDocument = wFonts.elements
+      .filter((element) => element.name === 'w:font')
+      .map((element) => element.attributes['w:name']);
+
+    return fontsUsedInDocument;
+  }
+
+  getFontFaceImportString() {
+    const fontTable = this.convertedXml['word/fontTable.xml'];
     if (!fontTable || !Object.keys(this.fonts).length) return;
 
     const fonts = fontTable.elements.find((el) => el.name === 'w:fonts');

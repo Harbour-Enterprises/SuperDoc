@@ -30,6 +30,7 @@ import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 import { setWordSelection } from './helpers/setWordSelection.js';
 import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
+import { isFontAvailable } from './helpers/isFontAvailable.js';
 import {
   migrateListsToV2IfNecessary,
   migrateParagraphFieldsListsV2,
@@ -128,6 +129,7 @@ import { transformListsInCopiedContent } from '@core/inputRules/html/transform-c
  * @property {Function} [onPaginationUpdate] - Called when pagination updates
  * @property {Function} [onException] - Called when an exception occurs
  * @property {Function} [onListDefinitionsChange] - Called when list definitions change
+ * @property {Function} [onFontsResolved] - Called when all fonts used in the document are determined
  * @property {Function} [handleImageUpload] - Handler for image uploads
  * @property {Object} [telemetry] - Telemetry configuration
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
@@ -238,6 +240,7 @@ export class Editor extends EventEmitter {
     onPaginationUpdate: () => null,
     onException: () => null,
     onListDefinitionsChange: () => null,
+    onFontsResolved: () => null,
     // async (file) => url;
     handleImageUpload: null,
 
@@ -874,13 +877,25 @@ export class Editor extends EventEmitter {
    * @returns {void}
    */
   #initFonts() {
-    const styleString = this.converter.getDocumentFonts();
+    const styleString = this.converter.getFontFaceImportString();
 
     if (styleString?.length) {
       const style = document.createElement('style');
       style.textContent = styleString;
       document.head.appendChild(style);
     }
+
+    // FIXME: Check if this is enough to determine whether we're running on NodeJS
+    if (this.options.isHeadless) {
+      return;
+    }
+
+    const fontsUsedInDocument = this.converter.getDocumentFonts();
+    const unsupportedFonts = fontsUsedInDocument.filter((font) => !isFontAvailable(font));
+    this.options.onFontsResolved({
+      documentFonts: fontsUsedInDocument,
+      unsupportedFonts: unsupportedFonts,
+    });
   }
 
   /**
