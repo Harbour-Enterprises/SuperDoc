@@ -80,6 +80,34 @@ export const createSingleIntegerPropertyHandler = (xmlName, sdName = null) =>
   createSingleAttrPropertyHandler(xmlName, sdName, 'w:val', parseInteger, integerToString);
 
 /**
+ * Helper to create property handlers for track changes attributes (CT_TrackChange => w:id, w:author, w:date, w:original)
+ * @param {string} xmlName The XML attribute name (with namespace).
+ * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
+ * @param {Array} extraAttrs Additional attribute handlers to include.
+ * @returns {import('@translator').NodeTranslatorConfig} The attribute handler config with xmlName, sdName, encode, and decode functions.
+ */
+export function createTrackChangesPropertyHandler(xmlName, sdName = null, extraAttrs = []) {
+  if (!sdName) sdName = xmlName.split(':')[1];
+  return {
+    xmlName,
+    sdNodeOrKeyName: sdName,
+    attributes: [
+      createIntegerAttributeHandler('w:id'),
+      createAttributeHandler('w:author'),
+      createAttributeHandler('w:date'),
+      ...extraAttrs,
+    ],
+    encode: (_, encodedAttrs) => {
+      return Object.keys(encodedAttrs).length > 0 ? encodedAttrs : undefined;
+    },
+    decode: function ({ node }) {
+      const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs[sdName] || {} } });
+      return Object.keys(decodedAttrs).length > 0 ? { attributes: decodedAttrs } : undefined;
+    },
+  };
+}
+
+/**
  * Helper to create property handlers for measurement attributes (CT_TblWidth => w:w and w:type)
  * @param {string} xmlName The XML attribute name (with namespace).
  * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
