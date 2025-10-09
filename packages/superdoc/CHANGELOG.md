@@ -1,3 +1,9 @@
+## [0.22.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.3...v0.22.4) (2025-10-09)
+
+### Bug Fixes
+
+- allow both leading and trailing spaces ([#1100](https://github.com/Harbour-Enterprises/SuperDoc/issues/1100)) ([b74bbd5](https://github.com/Harbour-Enterprises/SuperDoc/commit/b74bbd517024388ed0779f023f7a296cc2774551))
+
 ## [0.22.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.2...v0.22.3) (2025-10-03)
 
 ### Bug Fixes
