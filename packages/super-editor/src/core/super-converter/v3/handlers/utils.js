@@ -1,7 +1,5 @@
 import { NodeTranslator } from '../node-translator/index.js';
 
-import { NodeTranslator } from '../node-translator/index.js';
-
 /**
  * Generates a handler entity for a given node translator.
  * @param {string} handlerName - The name of the handler.
@@ -243,8 +241,16 @@ export function encodeProperties(node, translatorsByXmlName, asArray = false) {
   node.elements.forEach((el) => {
     const translator = translatorsByXmlName[el.name];
     if (translator) {
-      const encodedAttr = translator.encode({ nodes: [el] });
+      let encodedAttr = translator.encode({ nodes: [el] });
       if (encodedAttr != null) {
+        if (typeof encodedAttr === 'object') {
+          // If the translator returned a full node, extract its attributes
+          if ('attrs' in encodedAttr) {
+            encodedAttr = encodedAttr.attrs;
+          } else if ('attributes' in encodedAttr) {
+            encodedAttr = encodedAttr.attributes;
+          }
+        }
         if (asArray) {
           attributes.push({ [translator.sdNodeOrKeyName]: encodedAttr });
         } else {
@@ -306,7 +312,7 @@ export function createNestedPropertiesTranslator(xmlName, sdName, propertyTransl
       const node = nodes[0];
 
       // Process property translators
-      const attributes = {...defaultEncodedAttrs, ...encodeProperties(node, propertyTranslatorsByXmlName)};
+      const attributes = { ...defaultEncodedAttrs, ...encodeProperties(node, propertyTranslatorsByXmlName) };
 
       return Object.keys(attributes).length > 0 ? attributes : undefined;
     },
@@ -321,6 +327,74 @@ export function createNestedPropertiesTranslator(xmlName, sdName, propertyTransl
         type: 'element',
         attributes: {},
         elements: elements,
+      };
+
+      return newNode;
+    },
+  };
+}
+
+/**
+ * Helper to create property handlers for nested array properties (eg: w:tabs => w:tab)
+ * @param {string} xmlName The XML element name (with namespace).
+ * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
+ * @param {import('@translator').NodeTranslatorConfig[]} propertyTranslators An array of property translators to handle nested properties.
+ * @returns {import('@translator').NodeTranslatorConfig} The nested array property handler config with xmlName, sdName, encode, and decode functions.
+ */
+export function createNestedArrayPropertyHandler(
+  xmlName,
+  sdName = null,
+  propertyTranslators,
+  extraParamsForDecode = {},
+) {
+  if (!sdName) sdName = xmlName.split(':')[1];
+
+  const propertyTranslatorsByXmlName = {};
+  const propertyTranslatorsBySdName = {};
+  propertyTranslators.forEach((translator) => {
+    propertyTranslatorsByXmlName[translator.xmlName] = translator;
+    propertyTranslatorsBySdName[translator.sdNodeOrKeyName] = translator;
+  });
+
+  return {
+    xmlName,
+    sdNodeOrKeyName: sdName,
+    attributes: [],
+    encode: (params) => {
+      const { nodes } = params;
+      const node = nodes[0];
+
+      const content = encodeProperties(node, propertyTranslatorsByXmlName, true);
+
+      return content;
+    },
+    decode: (params) => {
+      const arrayContainer = params.node.attrs?.[sdName] || [];
+      if (!Array.isArray(arrayContainer) || arrayContainer.length === 0) {
+        return undefined;
+      }
+      const elements = [];
+      arrayContainer.forEach((item) => {
+        const sdKey = Object.keys(item)[0];
+        const childTranslator = propertyTranslatorsBySdName[sdKey];
+        if (childTranslator) {
+          const result = childTranslator.decode({
+            ...params,
+            node: { type: sdKey, attrs: { [sdKey]: item[sdKey] } },
+            extraParams: { ...params.extraParams, ...extraParamsForDecode },
+          });
+
+          // const result = translator.decode({ node: { attrs: { [key]: properties[key] } } });
+          if (result != null) {
+            elements.push(result);
+          }
+        }
+      });
+
+      const newNode = {
+        name: xmlName,
+        attributes: {},
+        elements: elements.flat(),
       };
 
       return newNode;
