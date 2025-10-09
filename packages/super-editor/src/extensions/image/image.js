@@ -378,14 +378,30 @@ export const Image = Node.create({
             // For right floating images - we pick the smallest x value of the polygon. Difference is due to
             // the polygons in HTML/CSS being defined in relation to the image's bounding box.
             let horizontalOffset = floatRight ? attrs.polygon[0][0] || 0 : marginOffset.horizontal + 15;
-            if (floatRight) {
-              attrs.polygon.forEach(([x, y]) => {
-                if (x < horizontalOffset) horizontalOffset = x;
-              });
-            }
-            const verticalOffset = Math.max(15, marginOffset.top + 15);
+
+            let maxX = 0;
+            let minX = 0;
+            let minY = 0;
+            let maxY = 0;
+            attrs.polygon.forEach(([x, y]) => {
+              if (floatRight && x < horizontalOffset) horizontalOffset = x;
+              if (x > maxX) maxX = x;
+              if (x < minX) minX = x;
+              if (y > maxY) maxY = y;
+              if (y < minY) minY = y;
+            });
+            const originalWidth = maxX - minX;
+            const originalHeight = maxY - minY;
+            const scaleWidth = Math.min(1, size.width / originalWidth);
+            const scaleHeight = Math.min(1, size.height / originalHeight);
+            // TODO: Calculating the scale factors based on the declared size of the image and the size of the
+            // polygon will work if the polygon touch all the edges of the images (typical case). It will give
+            // somewhat incorrect values not if the polygon does not touch the right and bottom edges of the image.
+            // To solve this properly, we need to determine the actual image size based on the image file and
+            // base the scale factors on that.
+            const verticalOffset = Math.max(0, marginOffset.top);
             const points = attrs.polygon
-              .map(([x, y]) => `${x + horizontalOffset}px ${y + verticalOffset}px`)
+              .map(([x, y]) => `${horizontalOffset + x * scaleWidth}px ${verticalOffset + y * scaleHeight}px`)
               .join(', ');
             style += `shape-outside: polygon(${points});`;
           }

@@ -107,14 +107,14 @@ function degreesToRot(degrees) {
 }
 
 function pixelsToPolygonUnits(pixels) {
-  // TODO: Unclear what unit is used here
+  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
   if (pixels == null) return;
   const pu = pixels * 96;
   return Math.round(pu * 1000) / 1000;
 }
 
 function polygonUnitsToPixels(pu) {
-  // TODO: Unclear what unit is used here
+  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
   if (pu == null) return;
   const pixels = Number(pu) / 96;
   return Math.round(pixels * 1000) / 1000;
