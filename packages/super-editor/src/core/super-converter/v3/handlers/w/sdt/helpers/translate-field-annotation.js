@@ -3,7 +3,7 @@ import { EditorState } from 'prosemirror-state';
 import { translateChildNodes } from '@converter/v2/exporter/helpers/translateChildNodes';
 import { translator as wDrawingNodeTranslator } from '@converter/v3/handlers/w/drawing';
 import { ListHelpers } from '@helpers/list-numbering-helpers';
-import { generateDocxRandomId } from '@helpers/generateDocxRandomId';
+import { generateDocxRandomId, generateRandomSigned32BitIntStrId } from '@helpers/generateDocxRandomId';
 import { sanitizeHtml } from '@core/InputRule';
 import { getTextNodeForExport, processLinkContentNode, addNewLinkRelationship } from '@converter/exporter';
 import he from 'he';
@@ -21,9 +21,14 @@ export function translateFieldAnnotation(params) {
 
   let processedNode;
   let sdtContentElements;
+  let id = attrs.sdtId;
 
   if ((attrs.type === 'image' || attrs.type === 'signature') && !attrs.hash) {
     attrs.hash = generateDocxRandomId(4);
+  }
+
+  if (!attrs.sdtId) {
+    id = generateRandomSigned32BitIntStrId();
   }
 
   if (isFinalDoc) {
@@ -33,7 +38,8 @@ export function translateFieldAnnotation(params) {
     sdtContentElements = [processedNode];
 
     if (attrs.type === 'html') {
-      sdtContentElements = [...processedNode.elements];
+      const runElements = processedNode.elements[0].elements.filter((el) => el.name === 'w:r');
+      sdtContentElements = [...runElements];
     }
   }
 
@@ -68,8 +74,9 @@ export function translateFieldAnnotation(params) {
       {
         name: 'w:sdtPr',
         elements: [
-          { name: 'w:tag', attributes: { 'w:val': annotationAttrsJson } },
           { name: 'w:alias', attributes: { 'w:val': attrs.displayLabel } },
+          { name: 'w:tag', attributes: { 'w:val': annotationAttrsJson } },
+          { name: 'w:id', attributes: { 'w:val': id } },
         ],
       },
       {
@@ -219,6 +226,9 @@ export function prepareUrlAnnotation(params) {
   const {
     node: { attrs = {}, marks = [] },
   } = params;
+
+  if (!attrs.linkUrl) return prepareTextAnnotation(params);
+
   const newId = addNewLinkRelationship(params, attrs.linkUrl);
 
   const linkTextNode = getTextNodeForExport(attrs.linkUrl, marks, params);
