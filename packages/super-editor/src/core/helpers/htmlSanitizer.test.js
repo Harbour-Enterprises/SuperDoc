@@ -64,5 +64,23 @@ describe('htmlSanitizer', () => {
       const result = stripHtmlStyles(input);
       expect(result).toBe('<p><span>Text</span></p>');
     });
+
+    it('preserves trailing space in span', () => {
+      const input = '<p><span>Text </span></p>';
+      const result = stripHtmlStyles(input);
+      expect(result).toBe('<p><span>Text&nbsp;</span></p>');
+    });
+
+    it('preserves trailing space in span defined by \n', () => {
+      const input = '<p><span>Text\n</span></p>';
+      const result = stripHtmlStyles(input);
+      expect(result).toBe('<p><span>Text&nbsp;</span></p>');
+    });
+
+    it('preserves leading space in span', () => {
+      const input = '<p><span> Text</span></p>';
+      const result = stripHtmlStyles(input);
+      expect(result).toBe('<p><span>&nbsp;Text</span></p>');
+    });
   });
 });
