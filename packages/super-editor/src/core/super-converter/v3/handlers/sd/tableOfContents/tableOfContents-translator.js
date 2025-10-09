@@ -1,6 +1,6 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import { exportSchemaToJson, processOutputMarks } from '../../../../exporter.js';
+import { exportSchemaToJson } from '../../../../exporter.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'sd:tableOfContents';
@@ -11,10 +11,9 @@ const SD_NODE_NAME = 'tableOfContents';
 /**
  * Encode a <sd:tableOfContents> node as a SuperDoc tableOfContents node.
  * @param {import('@translator').SCEncoderConfig} [params]
- * @param {import('@translator').EncodedAttributes} [_] - The already encoded attributes
  * @returns {import('@translator').SCEncoderResult}
  */
-const encode = (params, _) => {
+const encode = (params) => {
   const { nodes = [], nodeListHandler } = params || {};
   const node = nodes[0];
 
@@ -36,10 +35,9 @@ const encode = (params, _) => {
 /**
  * Decode the tableOfContents node back into OOXML <w:br>.
  * @param {import('@translator').SCDecoderConfig} params
- * @param {import('@translator').DecodedAttributes} [_] - The already decoded attributes
  * @returns {import('@translator').SCDecoderResult[]}
  */
-const decode = (params, _) => {
+const decode = (params) => {
   const { node } = params;
 
   const contentNodes = node.content.map((n) => exportSchemaToJson({ ...params, node: n }));

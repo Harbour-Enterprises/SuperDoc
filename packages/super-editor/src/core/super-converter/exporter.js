@@ -8,7 +8,7 @@ import {
   ptToTwips,
   rgbToHex,
 } from './helpers.js';
-import { generateDocxRandomId, generateRandomSigned32BitIntStrId } from '@helpers/generateDocxRandomId.js';
+import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';

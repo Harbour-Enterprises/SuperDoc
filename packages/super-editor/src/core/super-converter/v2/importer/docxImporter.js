@@ -82,7 +82,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       } else {
         trackStructure(identifierResult);
       }
-    } catch (error) {
+    } catch {
       trackStructure();
     }
   }
