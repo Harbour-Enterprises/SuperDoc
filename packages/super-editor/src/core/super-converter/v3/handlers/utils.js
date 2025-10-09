@@ -172,6 +172,24 @@ export const createAttributeHandler = (xmlName, sdName = null, transformEncode =
 };
 
 /**
+ * Helper to create integer attribute handlers with parsing and stringifying.
+ * @param {string} xmlName The XML attribute name (with namespace).
+ * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
+ * @returns {import('@translator').AttrConfig} The integer attribute handler config with xmlName, sdName, encode, and decode functions.
+ */
+export const createIntegerAttributeHandler = (xmlName, sdName = null) =>
+  createAttributeHandler(xmlName, sdName, parseInteger, integerToString);
+
+/**
+ * Helper to create boolean attribute handlers with parsing and stringifying.
+ * @param {string} xmlName The XML attribute name (with namespace).
+ * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
+ * @returns {import('@translator').AttrConfig} The boolean attribute handler config with xmlName, sdName, encode, and decode functions.
+ */
+export const createBooleanAttributeHandler = (xmlName, sdName = null) =>
+  createAttributeHandler(xmlName, sdName, parseBoolean, booleanToString);
+
+/**
  * Encodes properties of a node using provided translators and adds them to the attributes object.
  * @param {object} [node] The node containing elements to be encoded.
  * @param {object} [translatorsByXmlName] A mapping of XML names to their corresponding translators.
