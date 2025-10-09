@@ -33,17 +33,13 @@ export function stripHtmlStyles(html) {
   const cleanNode = (node) => {
     if (node.nodeType !== window.Node.ELEMENT_NODE) return;
 
+    // Process spans with only text inside
+    if (node.nodeName.toLowerCase() === 'span' && !node.children.length) {
+      node.innerHTML = preserveSpaces(node.innerHTML);
+    }
+
     [...node.attributes].forEach((attr) => {
       const name = attr.name.toLowerCase();
-
-      if (node.nodeName.toLowerCase() === 'span') {
-        // Preserve leading and trailing spaces inside span tags
-        node.innerHTML = node.innerHTML.replace(/(<span[^>]*>)([\s\S]*?)(<\/span>)/g, (_, open, content, close) => {
-          content = content.replace(/^\s+/, '&nbsp;');
-          content = content.replace(/\s+$/, '&nbsp;');
-          return open + content + close;
-        });
-      }
 
       if (name === 'style') {
         const cleanedStyle = cleanStyle(attr.value);
@@ -83,4 +79,14 @@ function cleanStyle(style) {
   const textAlign = declarations.find((d) => d.startsWith('text-align'));
 
   return textAlign ? `${textAlign};` : '';
+}
+
+/**
+ * Replaces all leading and trailing spaces inside innerHtml with special space symbol
+ *
+ * @param {string} innerHtml - innerHtml of DOM node
+ * @returns {string} Updated innerHTML
+ */
+function preserveSpaces(innerHtml) {
+  return innerHtml.replace(/^\s+/, '&nbsp;').replace(/\s+$/, '&nbsp;');
 }
