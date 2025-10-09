@@ -26,15 +26,17 @@ export function handleVRectImport({ pNode, pict }) {
 
     // Extract dimensions for the size attribute
     const size = {};
-    if (parsedStyle.width !== undefined) {
-      const inlineWidth = parsePointsToPixels(parsedStyle.width);
-      size.width = inlineWidth;
+    const isFullWidthHR = rectAttrs['o:hr'] === 't' || rectAttrs['o:hrstd'] === 't';
 
-      // Check for full page width identifier and adjust width to be 100%
-      if (rectAttrs['o:hr'] === 't' && !inlineWidth) {
+    if (parsedStyle.width !== undefined) {
+      if (isFullWidthHR) {
         size.width = '100%';
+      } else {
+        const inlineWidth = parsePointsToPixels(parsedStyle.width);
+        size.width = inlineWidth;
       }
     }
+
     if (parsedStyle.height !== undefined) {
       size.height = parsePointsToPixels(parsedStyle.height);
     }
