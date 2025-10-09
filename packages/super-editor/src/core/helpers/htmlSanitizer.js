@@ -37,8 +37,12 @@ export function stripHtmlStyles(html) {
       const name = attr.name.toLowerCase();
 
       if (node.nodeName.toLowerCase() === 'span') {
-        // Preserve trailing spaces
-        node.innerHTML = node.innerHTML.replace(/(\S) (<\/span>)/g, '$1&nbsp;$2');
+        // Preserve leading and trailing spaces inside span tags
+        node.innerHTML = node.innerHTML.replace(/(<span[^>]*>)([\s\S]*?)(<\/span>)/g, (_, open, content, close) => {
+          content = content.replace(/^\s+/, '&nbsp;');
+          content = content.replace(/\s+$/, '&nbsp;');
+          return open + content + close;
+        });
       }
 
       if (name === 'style') {
