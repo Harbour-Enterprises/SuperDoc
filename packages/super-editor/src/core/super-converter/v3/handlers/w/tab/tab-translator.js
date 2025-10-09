@@ -34,8 +34,12 @@ const decode = (params, decodedAttrs = {}) => {
   const { node } = params || {};
   if (!node) return;
 
-  const wTab = { name: 'w:tab' };
+  const wTab = { name: 'w:tab', elements: [] };
   if (decodedAttrs) wTab.attributes = { ...decodedAttrs };
+
+  if (params.extraParams?.skipRun) {
+    return wTab;
+  }
 
   const translated = {
     name: 'w:r',

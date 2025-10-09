@@ -45,14 +45,14 @@ describe('w:tab translator config', () => {
       expect(res.name).toBe('w:r');
       expect(Array.isArray(res.elements)).toBe(true);
       // decode(_, decodedAttrs = {}) sets attributes: {} because {} is truthy
-      expect(res.elements[0]).toEqual({ name: 'w:tab', attributes: {} });
+      expect(res.elements[0]).toEqual({ name: 'w:tab', attributes: {}, elements: [] });
     });
 
     it('copies decodedAttrs to <w:tab>.attributes verbatim', () => {
       const decoded = { 'w:val': '96', 'w:pos': '720', 'w:leader': 'dot', 'w:custom': 'foo' };
       const res = config.decode({ node: { type: 'tab' } }, decoded);
       expect(res.name).toBe('w:r');
-      expect(res.elements[0]).toEqual({ name: 'w:tab', attributes: decoded });
+      expect(res.elements[0]).toEqual({ name: 'w:tab', attributes: decoded, elements: [] });
     });
 
     it('returns undefined when params.node is missing', () => {
@@ -88,7 +88,7 @@ describe('w:tab translator config', () => {
       expect(Array.isArray(res.elements)).toBe(true);
 
       expect(res.elements[0]).toEqual(rPrNode); // run props first
-      expect(res.elements[1]).toEqual({ name: 'w:tab', attributes: {} });
+      expect(res.elements[1]).toEqual({ name: 'w:tab', attributes: {}, elements: [] });
     });
 
     it('does not add run props when processOutputMarks returns an empty array', () => {
@@ -101,7 +101,7 @@ describe('w:tab translator config', () => {
       expect(generateRunProps).not.toHaveBeenCalled();
 
       expect(res.name).toBe('w:r');
-      expect(res.elements).toEqual([{ name: 'w:tab', attributes: {} }]);
+      expect(res.elements).toEqual([{ name: 'w:tab', attributes: {}, elements: [] }]);
     });
 
     it('still places run props before <w:tab> when decodedAttrs are present', () => {
@@ -117,6 +117,7 @@ describe('w:tab translator config', () => {
       expect(res.elements[1]).toEqual({
         name: 'w:tab',
         attributes: { 'w:val': '96', 'w:custom': 'foo' },
+        elements: [],
       });
     });
 
@@ -127,7 +128,7 @@ describe('w:tab translator config', () => {
 
       expect(processOutputMarks).toHaveBeenCalledTimes(1);
       expect(processOutputMarks).toHaveBeenCalledWith([]);
-      expect(res.elements).toEqual([{ name: 'w:tab', attributes: {} }]);
+      expect(res.elements).toEqual([{ name: 'w:tab', attributes: {}, elements: [] }]);
     });
   });
 });
