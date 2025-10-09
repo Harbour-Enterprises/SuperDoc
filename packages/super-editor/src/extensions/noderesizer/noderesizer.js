@@ -51,6 +51,11 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
 
         if (typeof document === 'undefined' || editor.options.isHeadless) return oldState;
 
+        // Check if document is in view mode or not editable
+        if (editor.options.documentMode === 'viewing' || !editor.isEditable) {
+          return DecorationSet.empty;
+        }
+
         // If selection is not on a resizable node — keep current decorations
         const { selection } = newState;
         const node = selection.node;
