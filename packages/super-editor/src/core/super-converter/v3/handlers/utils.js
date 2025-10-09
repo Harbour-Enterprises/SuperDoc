@@ -55,6 +55,22 @@ export function createSingleAttrPropertyHandler(
 }
 
 /**
+ * Helper to create property handlers for boolean attributes (CT_OnOff => w:val)
+ * @param {string} xmlName The XML attribute name (with namespace).
+ * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
+ * @returns {import('@translator').NodeTranslatorConfig} The attribute handler config with xmlName, sdName, encode, and decode functions.
+ */
+export function createSingleBooleanPropertyHandler(xmlName, sdName = null) {
+  if (!sdName) sdName = xmlName.split(':')[1];
+  return {
+    xmlName: xmlName,
+    sdNodeOrKeyName: sdName,
+    encode: ({ nodes }) => parseBoolean(nodes[0].attributes?.['w:val'] ?? '1'),
+    decode: ({ node }) => (node.attrs[sdName] ? { attributes: {} } : undefined),
+  };
+}
+
+/**
  * Helper to create property handlers for measurement attributes (CT_TblWidth => w:w and w:type)
  * @param {string} xmlName The XML attribute name (with namespace).
  * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
