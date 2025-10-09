@@ -71,6 +71,15 @@ export function createSingleBooleanPropertyHandler(xmlName, sdName = null) {
 }
 
 /**
+ * Helper to create property handlers for integer attributes (CT_DecimalNumber => w:val)
+ * @param {string} xmlName The XML attribute name (with namespace).
+ * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
+ * @returns {import('@translator').NodeTranslatorConfig} The attribute handler config with xmlName, sdName, encode, and decode functions.
+ */
+export const createSingleIntegerPropertyHandler = (xmlName, sdName = null) =>
+  createSingleAttrPropertyHandler(xmlName, sdName, 'w:val', parseInteger, integerToString);
+
+/**
  * Helper to create property handlers for measurement attributes (CT_TblWidth => w:w and w:type)
  * @param {string} xmlName The XML attribute name (with namespace).
  * @param {string|null} sdName The SuperDoc attribute name (without namespace). If null, it will be derived from xmlName.
