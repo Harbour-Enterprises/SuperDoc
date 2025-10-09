@@ -4,8 +4,8 @@ import { translator } from './textDirection-translator.js';
 describe('w:textDirection translator', () => {
   describe('encode', () => {
     it('extracts the w:val attribute', () => {
-      const result = translator.encode({ nodes: [{ attributes: { 'w:val': 'div123' } }] });
-      expect(result).toBe('div123');
+      const result = translator.encode({ nodes: [{ attributes: { 'w:val': 'lr' } }] });
+      expect(result).toBe('lr');
     });
 
     it('returns undefined if w:val is missing', () => {
@@ -16,8 +16,8 @@ describe('w:textDirection translator', () => {
 
   describe('decode', () => {
     it('creates a w:textDirection element with the value in w:val', () => {
-      const { attributes: result } = translator.decode({ node: { attrs: { textDirection: 'div123' } } });
-      expect(result).toEqual({ 'w:val': 'div123' });
+      const { attributes: result } = translator.decode({ node: { attrs: { textDirection: 'lr' } } });
+      expect(result).toEqual({ 'w:val': 'lr' });
     });
 
     it('returns undefined if textDirection property is missing', () => {
