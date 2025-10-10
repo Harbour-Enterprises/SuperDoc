@@ -4,6 +4,8 @@ import { NSkeleton, useMessage } from 'naive-ui';
 import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw } from 'vue';
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
+import { ref as vueRef } from 'vue';
+import { useAutocomplete, getAutocompleteEndpoint } from '@/composables/use-autocomplete.js';
 import SlashMenu from './slash-menu/SlashMenu.vue';
 import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
@@ -44,6 +46,29 @@ const props = defineProps({
 const editorReady = ref(false);
 const editor = shallowRef(null);
 const message = useMessage();
+
+// --- autocomplete ghost text feature integration ---
+const autocompleteEnabled = vueRef(true); // on by default
+const autocomplete = useAutocomplete();
+
+// Utility: build API call function from env (or prop)
+function buildAutocompleteApiCall(endpoint) {
+  return async function (inputText) {
+    if (!endpoint) throw new Error('No autocomplete API endpoint set.');
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: inputText }),
+    });
+    if (!res.ok) throw new Error('Autocomplete API error: ' + res.status);
+    const data = await res.json();
+    // Support both common OpenAI and generic field names
+    return data.completion || data.text || inputText;
+  };
+}
 
 const editorWrapper = ref(null);
 const editorElem = ref(null);
@@ -173,6 +198,18 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     ...props.options,
   });
 
+  // Enable autocomplete/ghost text with endpoint from env or override prop
+  let autocompleteApiCall = props.options.autocompleteApiCall;
+  if (!autocompleteApiCall) {
+    // Accept prop.options.autocompleteEndpoint or .env
+    let endpoint = props.options.autocompleteEndpoint || getAutocompleteEndpoint();
+    autocompleteApiCall = buildAutocompleteApiCall(endpoint);
+  }
+  autocomplete.initializeAutocomplete(editor.value, {
+    enabled: autocompleteEnabled,
+    apiCallFunction: autocompleteApiCall,
+  });
+
   editor.value.on('paginationUpdate', () => {
     adjustPaginationBreaks(editorElem, editor);
   });
@@ -251,6 +288,25 @@ const handleSuperEditorClick = (event) => {
 onMounted(() => {
   initializeData();
   if (props.options?.suppressSkeletonLoader || !props.options?.collaborationProvider) editorReady.value = true;
+
+  // Listen for autocomplete toggle from toolbar and update state
+  const toolbarElem = document.querySelector('.superdoc-toolbar');
+  if (toolbarElem && toolbarElem.__vue_app__) {
+    const vm = toolbarElem.__vue_app__._instance?.proxy?.$toolbar;
+    if (vm && vm.on) {
+      vm.on('toggle-autocomplete', ({ enabled }) => {
+        autocompleteEnabled.value = enabled;
+        // If disabled, ensure autocomplete is cleaned up right away
+        if (editor.value && !enabled) {
+          autocomplete.cleanup();
+        }
+        // If enabled, re-initialize (if not already set)
+        if (editor.value && enabled) {
+          autocomplete.initializeAutocomplete(editor.value, { enabled: autocompleteEnabled });
+        }
+      });
+    }
+  }
 });
 
 const handleMarginClick = (event) => {

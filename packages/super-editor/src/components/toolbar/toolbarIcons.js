@@ -35,6 +35,7 @@ import rulerSvg from '@harbour-enterprises/common/icons/ruler-solid.svg?raw';
 import paintbrushSvg from '@harbour-enterprises/common/icons/paintbrush-solid.svg?raw';
 import highlighterIcon from '@harbour-enterprises/common/icons/highlighter-icon.svg?raw';
 import magicWandIcon from '@harbour-enterprises/common/icons/magic-wand-solid.svg?raw';
+import autoCompleteIcon from '@harbour-enterprises/common/icons/auto-complete-solid.svg?raw';
 import tableIconSvg from '@harbour-enterprises/common/icons/table-solid.svg?raw';
 import tableColumnsIconSvg from '@harbour-enterprises/common/icons/table-columns-solid.svg?raw';
 import arrowsLeftRightIconSvg from '@harbour-enterprises/common/icons/arrows-left-right-solid.svg?raw';
@@ -91,6 +92,7 @@ export const toolbarIcons = {
   paintbrush: paintbrushSvg,
   highlight: highlighterIcon,
   ai: magicWandIcon,
+  autocomplete: autoCompleteIcon,
   table: tableIconSvg,
   tableActions: tableColumnsIconSvg,
   splitCell: arrowsLeftRightIconSvg,

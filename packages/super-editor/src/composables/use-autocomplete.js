@@ -4,6 +4,14 @@ import { ref } from 'vue';
  * Composable for ghost text autocomplete functionality
  * Provides intelligent text suggestions with Tab-to-accept UI
  */
+export function getAutocompleteEndpoint() {
+  if (typeof process !== 'undefined' && process.env && process.env.VITE_AUTOCOMPLETE_URL) {
+    return process.env.VITE_AUTOCOMPLETE_URL;
+  }
+  // For Vite and other build tools: set VITE_AUTOCOMPLETE_URL in your .env file!
+  return '';
+}
+
 export function useAutocomplete() {
   // Ghost text state
   const ghostText = ref('');

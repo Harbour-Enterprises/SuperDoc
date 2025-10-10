@@ -64,6 +64,7 @@ import { LinkedStyles } from './linked-styles/linked-styles.js';
 import { Search } from './search/index.js';
 import { NodeResizer } from './noderesizer/index.js';
 import { CustomSelection } from './custom-selection/index.js';
+import { useAutocomplete } from '../composables/use-autocomplete.js';
 
 // Helpers
 import { trackChangesHelpers } from './track-changes/index.js';
@@ -187,6 +188,7 @@ const getStarterExtensions = () => {
 
 export {
   History,
+  useAutocomplete, // Export composable to main consumer
   Heading,
   Document,
   Text,

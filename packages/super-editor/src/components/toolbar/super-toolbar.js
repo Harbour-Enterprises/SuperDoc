@@ -260,7 +260,15 @@ export class SuperToolbar extends EventEmitter {
    * @private
    * @type {Object.<string, function(CommandItem): void>}
    */
+  #autocompleteEnabled = false;
   #interceptedCommands = {
+    toggleAutocomplete: ({ item }) => {
+      this.#autocompleteEnabled = !this.#autocompleteEnabled;
+      item.active.value = this.#autocompleteEnabled;
+      // Optionally, emit an event for other components/editors:
+      this.emit('toggle-autocomplete', { enabled: this.#autocompleteEnabled });
+      this.updateToolbarState();
+    },
     /**
      * Handles zoom level changes
      * @param {Object} params - Command parameters

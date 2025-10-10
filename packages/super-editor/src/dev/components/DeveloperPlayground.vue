@@ -12,7 +12,7 @@ import { PaginationPluginKey } from '@extensions/pagination/pagination-helpers.j
 import BasicUpload from './BasicUpload.vue';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
-import { useAutocomplete } from '@/composables/use-autocomplete.js';
+import { useAutocomplete, getAutocompleteEndpoint } from '@/composables/use-autocomplete.js';
 
 // Import the component the same you would in your app
 let activeEditor;
@@ -27,7 +27,7 @@ const contentType = ref('html');
 const isInjectingContent = ref(false);
 
 // Autocomplete configuration
-const autocompleteEndpoint = ref('http://localhost:58414/api/v1/autocomplete');
+const autocompleteEndpoint = ref(getAutocompleteEndpoint());
 const useAutocompleteFeature = ref(false);
 
 // Initialize autocomplete composable
@@ -46,9 +46,23 @@ const handleNewFile = async (file) => {
 };
 
 // API call function for autocomplete
-const callAutocompleteAPIFunction = async (inputText) => {
-  return await callAutocompleteAPI(inputText);
-};
+function buildAutocompleteApiCall(endpoint) {
+  return async function (inputText) {
+    if (!endpoint) throw new Error('No autocomplete API endpoint set.');
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: inputText }),
+    });
+    if (!res.ok) throw new Error('Autocomplete API error: ' + res.status);
+    const data = await res.json();
+    return data.completion || data.text || inputText;
+  };
+}
+const callAutocompleteAPIFunction = buildAutocompleteApiCall(autocompleteEndpoint.value);
 
 const onCreate = ({ editor }) => {
   console.debug('[Dev] Editor created', editor);
@@ -226,6 +240,24 @@ onMounted(async () => {
     enabled: false,
     superdocId: 'dev-playground',
   });
+
+  // === Listen for production toolbar autocomplete event and sync to dev toggle ===
+  setTimeout(() => {
+    const toolbarElem = document.querySelector('.sd-toolbar');
+    if (toolbarElem && toolbarElem.__vue_app__) {
+      const toolbarVm = toolbarElem.__vue_app__._instance?.proxy?.$toolbar;
+      if (toolbarVm && toolbarVm.on) {
+        toolbarVm.on('toggle-autocomplete', ({ enabled }) => {
+          useAutocompleteFeature.value = enabled;
+          if (!activeEditor) return;
+          if (!enabled) {
+            cleanupAutocomplete();
+          }
+          // No need to re-init, the composable will watch the ref via enabled
+        });
+      }
+    }
+  }, 300);
 });
 
 onBeforeUnmount(() => {
@@ -257,8 +289,21 @@ onBeforeUnmount(() => {
               </select>
 
               <label class="dev-app__autocomplete-toggle">
-                <input type="checkbox" v-model="useAutocompleteFeature" />
-                Autocomplete
+                <button
+                  class="dev-app__autocomplete-wand"
+                  :class="{ active: useAutocompleteFeature }"
+                  @click="useAutocompleteFeature = !useAutocompleteFeature"
+                  title="Toggle Autocomplete"
+                  type="button"
+                  style="background: none; border: none; padding: 0; cursor: pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" height="24" width="24" viewBox="0 -960 960 960">
+                    <path
+                      d="m480-280-62-138-138-62 138-63 62-137 63 137 137 63-137 62-63 138Zm0 240q-108 0-202.5-49.5T120-228v108H40v-240h240v80h-98q51 75 129.5 117.5T480-120q115 0 208.5-66T820-361l78 18q-45 136-160 219.5T480-40ZM42-520q7-67 32-128.5T143-762l57 57q-32 41-52 87.5T123-520H42Zm214-241-57-57q53-44 114-69.5T440-918v80q-51 5-97 25t-87 52Zm449 0q-41-32-87.5-52T520-838v-80q67 6 128.5 31T762-818l-57 57Zm133 241q-5-51-25-97.5T761-705l57-57q44 52 69 113.5T918-520h-80Z"
+                    />
+                  </svg>
+                </button>
+                <span>Autocomplete</span>
               </label>
 
               <button
@@ -483,6 +528,27 @@ onBeforeUnmount(() => {
   font-size: 12px;
   cursor: pointer;
   white-space: nowrap;
+}
+
+.dev-app__autocomplete-wand {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: none;
+  transition: background-color 0.2s;
+}
+.dev-app__autocomplete-wand svg {
+  fill: #8090a8;
+  width: 24px;
+  height: 24px;
+  margin-right: 2px;
+}
+.dev-app__autocomplete-wand.active {
+  background-color: #e0fee3;
+}
+.dev-app__autocomplete-wand.active svg {
+  fill: #33bb42;
 }
 
 .dev-app__autocomplete-toggle input[type='checkbox'] {
