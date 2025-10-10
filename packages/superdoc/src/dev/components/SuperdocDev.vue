@@ -331,7 +331,7 @@ const init = async () => {
         // apiKey: 'test',
         // endpoint: 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights',
         // Option 3: custom AI Provider
-        // provider: openAIProvider,
+        provider: openAIProvider,
       },
       pdf: {
         pdfLib: pdfjsLib,

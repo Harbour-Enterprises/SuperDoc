@@ -92,7 +92,7 @@ describe('ai plugin commands', () => {
   const setup = () => {
     const schema = createAiSchema();
     const state = createStateWithAiMark(schema);
-    const editor = { schema, options: { aiProvider: { id: 'default-provider' } } };
+    const editor = { schema, options: { ai: { provider: { id: 'default-provider' } } } };
     const commands = AiPlugin.config.addCommands.call({ editor });
     return { schema, state, editor, commands };
   };
@@ -193,7 +193,7 @@ describe('ai plugin commands', () => {
     const { commands, editor } = setup();
     const promise = commands.aiFindContent('find me this')({});
     await promise;
-    expect(aiFindContent).toHaveBeenCalledWith(editor, 'find me this', editor.options.aiProvider);
+    expect(aiFindContent).toHaveBeenCalledWith(editor, 'find me this', editor.options.ai.provider);
   });
 
   it('allows overriding provider for aiGenerateContent and aiRewriteSelection', async () => {

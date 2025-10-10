@@ -10,6 +10,14 @@ export const AiPlugin = Extension.create({
   name: 'ai',
 
   addCommands() {
+    const resolveProvider = (override) => {
+      if (override) return override;
+
+      const options = this.editor?.options || {};
+
+      return options?.ai?.provider ?? null;
+    };
+
     return {
       insertAiMark:
         () =>
@@ -150,11 +158,9 @@ export const AiPlugin = Extension.create({
        * @param {import('./provider-interface.js').AIProviderInterface} [provider] - Optional provider override.
        * @returns {Promise<string|undefined>} - Resolves with provider result, if any.
        */
-      aiFindContent:
-        (prompt, provider = this.editor.options?.ai.provider) =>
-        () => {
-          return aiFindContent(this.editor, prompt, provider);
-        },
+      aiFindContent: (prompt, provider) => () => {
+        return aiFindContent(this.editor, prompt, resolveProvider(provider));
+      },
 
       /**
        * Generate new content via AI and insert it at the current selection.
@@ -164,9 +170,9 @@ export const AiPlugin = Extension.create({
        * @returns {Promise<void>} - Resolves when generation completes.
        */
       aiGenerateContent:
-        (prompt, provider = this.editor.options?.ai.provider, streaming = false) =>
+        (prompt, provider, streaming = false) =>
         () => {
-          return aiGenerateContent(this.editor, prompt, provider, streaming);
+          return aiGenerateContent(this.editor, prompt, resolveProvider(provider), streaming);
         },
 
       /**
@@ -177,9 +183,9 @@ export const AiPlugin = Extension.create({
        * @returns {Promise<void>} - Resolves when rewrite completes.
        */
       aiRewriteSelection:
-        (instructions, provider = this.editor.options?.ai.provider, streaming = false) =>
+        (instructions, provider, streaming = false) =>
         () => {
-          return aiRewriteSelection(this.editor, instructions, provider, streaming);
+          return aiRewriteSelection(this.editor, instructions, resolveProvider(provider), streaming);
         },
     };
   },
