@@ -3,18 +3,17 @@ import { twipsToLines, twipsToPixels, twipsToPt } from '@converter/helpers.js';
 
 /**
  * Gets the paragraph indentation.
- * @param {Object} node - The paragraph node.
+ * @param {Object} inlineIndent - The inline indentation attributes.
  * @param {Object} docx - The DOCX document.
  * @param {string} styleId - The style ID.
  * @returns {Object} The paragraph indentation.
  */
-export const getParagraphIndent = (node, docx, styleId = '') => {
+export const getParagraphIndent = (inlineIndent, docx, styleId = '') => {
   const indent = {
     left: 0,
     right: 0,
     firstLine: 0,
     hanging: 0,
-    textIndent: 0,
     explicitLeft: false,
     explicitRight: false,
     explicitFirstLine: false,
@@ -23,14 +22,12 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
 
   const { indent: pDefaultIndent = {} } = getDefaultParagraphStyle(docx, styleId);
 
-  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
-  const inLineIndentTag = pPr?.elements?.find((el) => el.name === 'w:ind');
-  const inLineIndent = inLineIndentTag?.attributes || {};
-
-  const inlineLeft = inLineIndent?.['w:left'];
-  const inlineRight = inLineIndent?.['w:right'];
-  const inlineFirstLine = inLineIndent?.['w:firstLine'];
-  const inlineHanging = inLineIndent?.['w:hanging'];
+  const {
+    left: inlineLeft,
+    right: inlineRight,
+    firstLine: inlineFirstLine,
+    hanging: inlineHanging,
+  } = inlineIndent || {};
 
   const leftIndent = inlineLeft ?? pDefaultIndent?.['w:left'];
   const rightIndent = inlineRight ?? pDefaultIndent?.['w:right'];
@@ -52,12 +49,6 @@ export const getParagraphIndent = (node, docx, styleId = '') => {
   if (hanging) {
     indent.hanging = twipsToPixels(hanging);
     indent.explicitHanging = inlineHanging !== undefined;
-  }
-
-  const textIndentValue = leftIndent - parseInt(hanging || 0) || 0;
-
-  if (textIndentValue) {
-    indent.textIndent = twipsToInches(textIndentValue);
   }
 
   return indent;
