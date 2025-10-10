@@ -566,8 +566,12 @@ class SuperConverter {
       return [];
     }
 
-    const wFonts = fontTable.elements.find((element) => element.name === 'w:fonts');
+    const wFonts = fontTable.elements?.find((element) => element.name === 'w:fonts');
     if (!wFonts) {
+      return [];
+    }
+
+    if (!wFonts.elements) {
       return [];
     }
 
