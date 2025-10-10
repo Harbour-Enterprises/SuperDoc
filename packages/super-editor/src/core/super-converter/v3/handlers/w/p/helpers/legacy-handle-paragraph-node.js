@@ -60,32 +60,8 @@ export const handleParagraphNode = (params) => {
   schemaNode.attrs['styleId'] = styleId;
 
   if (docx) {
-    const indent = getParagraphIndent(node, docx, styleId);
-
-    if (!schemaNode.attrs.indent) {
-      schemaNode.attrs.indent = {};
-    }
-
-    if (indent.left || indent.left === 0) {
-      schemaNode.attrs.indent.left = indent.left;
-    }
-    if (indent.right || indent.right === 0) {
-      schemaNode.attrs.indent.right = indent.right;
-    }
-    if (indent.firstLine || indent.firstLine === 0) {
-      schemaNode.attrs.indent.firstLine = indent.firstLine;
-    }
-    if (indent.hanging || indent.hanging === 0) {
-      schemaNode.attrs.indent.hanging = indent.hanging;
-    }
-    if (indent.textIndent || indent.textIndent === 0) {
-      schemaNode.attrs.textIndent = `${indent.textIndent}in`;
-    }
-  }
-
-  const justify = pPr?.elements?.find((el) => el.name === 'w:jc');
-  if (justify && justify.attributes) {
-    schemaNode.attrs['textAlign'] = justify.attributes['w:val'];
+    const indent = getParagraphIndent(paragraphProperties.indent, docx, styleId);
+    schemaNode.attrs.indent = indent;
   }
 
   const keepLines = pPr?.elements?.find((el) => el.name === 'w:keepLines');
@@ -97,6 +73,7 @@ export const handleParagraphNode = (params) => {
   if (keepNext && keepNext.attributes) {
     schemaNode.attrs['keepNext'] = keepNext.attributes['w:val'];
   }
+  schemaNode.attrs['textAlign'] = paragraphProperties.justification;
 
   if (docx) {
     const defaultStyleId = node.attributes?.['w:rsidRDefault'];
