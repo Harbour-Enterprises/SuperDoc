@@ -1,5 +1,5 @@
-// packages/faddock-superdoc/src/components/PdfViewer/PdfViewer.vue
-const PDF_VIEWER_CLASS = '.faddock-superdoc-pdf-viewer';
+// packages/superdoc/src/components/PdfViewer/PdfViewer.vue
+const PDF_VIEWER_CLASS = '.superdoc-pdf-viewer';
 
 module.exports = {
   plugins: [

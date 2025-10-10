@@ -55,7 +55,7 @@ const createTestConfig = (documents = [], overrides = {}) => {
   };
 };
 
-describe('FaddockSuperdoc Store - Blob Support', () => {
+describe('SuperDoc Store - Blob Support', () => {
   let store;
 
   beforeEach(() => {

@@ -6,25 +6,25 @@ import { addYComment, updateYComment, deleteYComment } from './collaboration-com
 /**
  * Initialize sync for comments if the module is enabled
  *
- * @param {Object} superdoc The FaddockSuperdoc instance
+ * @param {Object} superdoc The SuperDoc instance
  * @returns {void}
  */
 export const initCollaborationComments = (superdoc) => {
   if (!superdoc.config.modules.comments || !superdoc.provider) return;
 
   // If we have comments and collaboration, wait for sync and then let the store know when its ready
-  const onFaddockSuperdocYdocSynced = () => {
+  const onSuperDocYdocSynced = () => {
     // Update the editor comment locations
     const parent = superdoc.commentsStore.commentsParentElement;
     const ids = superdoc.commentsStore.editorCommentIds;
     superdoc.commentsStore.handleEditorLocationsUpdate(parent, ids);
     superdoc.commentsStore.hasSyncedCollaborationComments = true;
 
-    superdoc.provider.off('synced', onFaddockSuperdocYdocSynced);
+    superdoc.provider.off('synced', onSuperDocYdocSynced);
   };
 
   // Listen for the synced event
-  superdoc.provider.on('synced', onFaddockSuperdocYdocSynced);
+  superdoc.provider.on('synced', onSuperDocYdocSynced);
 
   // Get the comments map from the Y.Doc
   const commentsArray = superdoc.ydoc.getArray('comments');
@@ -55,10 +55,10 @@ export const initCollaborationComments = (superdoc) => {
 };
 
 /**
- * Initialize FaddockSuperdoc general Y.Doc for high level collaboration
+ * Initialize SuperDoc general Y.Doc for high level collaboration
  * Assigns superdoc.ydoc and superdoc.provider in place
  *
- * @param {Object} superdoc The FaddockSuperdoc instance
+ * @param {Object} superdoc The SuperDoc instance
  * @returns {void}
  */
 export const initSuperdocYdoc = (superdoc) => {
@@ -81,10 +81,10 @@ export const initSuperdocYdoc = (superdoc) => {
 };
 
 /**
- * Process FaddockSuperdoc's documents to make them collaborative by
+ * Process SuperDoc's documents to make them collaborative by
  * adding provider, ydoc, awareness handler, and socket to each document.
  *
- * @param {Object} superdoc The FaddockSuperdoc instance
+ * @param {Object} superdoc The SuperDoc instance
  * @returns {Array[Object]} The processed documents
  */
 export const makeDocumentsCollaborative = (superdoc) => {

@@ -93,7 +93,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
   };
 
   /**
-   * Initialize the documents for this FaddockSuperdoc. Changes the store's documents array ref directly.
+   * Initialize the documents for this SuperDoc. Changes the store's documents array ref directly.
    * @param {Array[Object]} docsToProcess The documents to process from the config
    * @returns {Promise<void>}
    */

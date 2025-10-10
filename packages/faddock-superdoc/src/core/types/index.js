@@ -40,7 +40,7 @@
  */
 
 /** @typedef {import('@harbour-enterprises/super-editor').Editor} Editor */
-/** @typedef {import('../FaddockSuperdoc.js').FaddockSuperdoc} FaddockSuperdoc */
+/** @typedef {import('../SuperDoc.js').SuperDoc} SuperDoc */
 
 /**
  * @typedef {string} DocumentMode
@@ -51,14 +51,14 @@
 
 /**
  * @typedef {Object} Config
- * @property {string} [superdocId] The ID of the FaddockSuperdoc
- * @property {string | HTMLElement} selector The selector or element to mount the FaddockSuperdoc into
+ * @property {string} [superdocId] The ID of the SuperDoc
+ * @property {string | HTMLElement} selector The selector or element to mount the SuperDoc into
  * @property {DocumentMode} documentMode The mode of the document
- * @property {'editor' | 'viewer' | 'suggester'} [role] The role of the user in this FaddockSuperdoc
+ * @property {'editor' | 'viewer' | 'suggester'} [role] The role of the user in this SuperDoc
  * @property {Object | string | File | Blob} [document] The document to load. If a string, it will be treated as a URL. If a File or Blob, it will be used directly.
  * @property {Array<Document>} [documents] The documents to load -> Soon to be deprecated
- * @property {User} [user] The current user of this FaddockSuperdoc
- * @property {Array<User>} [users] All users of this FaddockSuperdoc (can be used for "@"-mentions)
+ * @property {User} [user] The current user of this SuperDoc
+ * @property {Array<User>} [users] All users of this SuperDoc (can be used for "@"-mentions)
  * @property {Array<string>} [colors] Colors to use for user awareness
  * @property {Modules} [modules] Modules to load
  * @property {boolean} [pagination] Whether to show pagination in SuperEditors
@@ -66,17 +66,17 @@
  * @property {Array<string>} [toolbarGroups] Toolbar groups to show
  * @property {Object} [toolbarIcons] Icons to show in the toolbar
  * @property {Object} [toolbarTexts] Texts to override in the toolbar
- * @property {boolean} [isDev] Whether the FaddockSuperdoc is in development mode
+ * @property {boolean} [isDev] Whether the SuperDoc is in development mode
  * @property {TelemetryConfig} [telemetry] Telemetry configuration
  * @property {(editor: Editor) => void} [onEditorBeforeCreate] Callback before an editor is created
  * @property {(editor: Editor) => void} [onEditorCreate] Callback after an editor is created
  * @property {(params: { editor: Editor, transaction: any, duration: number }) => void} [onTransaction] Callback when a transaction is made
  * @property {() => void} [onEditorDestroy] Callback after an editor is destroyed
  * @property {(params: { error: object, editor: Editor, documentId: string, file: File }) => void} [onContentError] Callback when there is an error in the content
- * @property {(editor: { superdoc: FaddockSuperdoc }) => void} [onReady] Callback when the FaddockSuperdoc is ready
+ * @property {(editor: { superdoc: SuperDoc }) => void} [onReady] Callback when the SuperDoc is ready
  * @property {(params: { type: string, data: object}) => void} [onCommentsUpdate] Callback when comments are updated
- * @property {(params: { context: FaddockSuperdoc, states: Array }) => void} [onAwarenessUpdate] Callback when awareness is updated
- * @property {(params: { isLocked: boolean, lockedBy: User }) => void} [onLocked] Callback when the FaddockSuperdoc is locked
+ * @property {(params: { context: SuperDoc, states: Array }) => void} [onAwarenessUpdate] Callback when awareness is updated
+ * @property {(params: { isLocked: boolean, lockedBy: User }) => void} [onLocked] Callback when the SuperDoc is locked
  * @property {() => void} [onPdfDocumentReady] Callback when the PDF document is ready
  * @property {(isOpened: boolean) => void} [onSidebarToggle] Callback when the sidebar is toggled
  * @property {(params: { editor: Editor }) => void} [onCollaborationReady] Callback when collaboration is ready
@@ -86,12 +86,12 @@
  * @property {(params: {})} [onListDefinitionsChange] Callback when the list definitions change
  * @property {string} [format] The format of the document (docx, pdf, html)
  * @property {Object[]} [editorExtensions] The extensions to load for the editor
- * @property {boolean} [isInternal] Whether the FaddockSuperdoc is internal
- * @property {string} [title] The title of the FaddockSuperdoc
+ * @property {boolean} [isInternal] Whether the SuperDoc is internal
+ * @property {string} [title] The title of the SuperDoc
  * @property {Object[]} [conversations] The conversations to load
- * @property {boolean} [isLocked] Whether the FaddockSuperdoc is locked
+ * @property {boolean} [isLocked] Whether the SuperDoc is locked
  * @property {function(File): Promise<string>} [handleImageUpload] The function to handle image uploads
- * @property {User} [lockedBy] The user who locked the FaddockSuperdoc
+ * @property {User} [lockedBy] The user who locked the SuperDoc
  * @property {boolean} [rulers] Whether to show the ruler in the editor
  * @property {boolean} [suppressDefaultDocxStyles] Whether to suppress default styles in docx mode
  * @property {Object} [jsonOverride] Provided JSON to override content with

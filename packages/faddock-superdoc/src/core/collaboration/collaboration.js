@@ -47,7 +47,7 @@ function createProvider({ config, user, documentId, socket, superdocInstance }) 
 
   const providers = {
     hocuspocus: () => createHocuspocusProvider({ config, user, documentId, socket, superdocInstance }),
-    superdoc: () => createFaddockSuperdocProvider({ config, user, documentId, socket, superdocInstance }),
+    superdoc: () => createSuperDocProvider({ config, user, documentId, socket, superdocInstance }),
   };
   if (!providers) throw new Error(`Provider type ${config.providerType} is not supported.`);
 
@@ -63,7 +63,7 @@ function createProvider({ config, user, documentId, socket, superdocInstance }) 
  * @param {string} param.documentId The document ID
  * @returns {Object} The provider and socket
  */
-function createFaddockSuperdocProvider({ config, user, documentId, superdocInstance }) {
+function createSuperDocProvider({ config, user, documentId, superdocInstance }) {
   const ydoc = new YDoc({ gc: false });
   const options = {
     params: {

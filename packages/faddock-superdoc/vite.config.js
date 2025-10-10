@@ -89,7 +89,7 @@ export default defineConfig(({ mode, command}) => {
       cssCodeSplit: false,
       lib: {
         entry: "src/index.js",
-        name: "FaddockSuperdoc",
+        name: "SuperDoc",
         cssFileName: 'style',
       },
       minify: false,

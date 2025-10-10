@@ -7,7 +7,7 @@ import CommentsList from './commentsList.vue';
 /**
  * Comments list renderer (not floating comments)
  *
- * This renders a list of comments into an element, connected to main FaddockSuperdoc instance
+ * This renders a list of comments into an element, connected to main SuperDoc instance
  */
 export class SuperComments extends EventEmitter {
   element;

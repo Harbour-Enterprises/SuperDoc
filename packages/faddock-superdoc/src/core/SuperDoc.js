@@ -23,13 +23,13 @@ import { normalizeDocumentEntry } from './helpers/file.js';
 /** @typedef {import('./types').Config} Config */
 
 /**
- * FaddockSuperdoc class
+ * SuperDoc class
  * Expects a config object
  *
  * @class
  * @extends EventEmitter
  */
-export class FaddockSuperdoc extends EventEmitter {
+export class SuperDoc extends EventEmitter {
   /** @type {Array<string>} */
   static allowedTypes = [DOCX, PDF, HTML];
 
@@ -62,7 +62,7 @@ export class FaddockSuperdoc extends EventEmitter {
 
     modules: {}, // Optional: Modules to load. Use modules.ai.{your_key} to pass in your key
 
-    title: 'FaddockSuperdoc',
+    title: 'SuperDoc',
     conversations: [],
     pagination: false, // Optional: Whether to show pagination in SuperEditors
     isInternal: false,
@@ -117,31 +117,53 @@ export class FaddockSuperdoc extends EventEmitter {
       ...config,
     };
 
-    // SANITY CHECK: Only render Hello earthlings.
-    const target =
-      typeof this.config.selector === 'string' ? document.querySelector(this.config.selector) : this.config.selector;
-    if (target) {
-      target.innerHTML = '<h2>Hello earthlings.</h2>';
-    }
-    // End of sanity check.
+    this.config.colors = shuffleArray(this.config.colors);
+    this.userColorMap = new Map();
+    this.colorIndex = 0;
 
-    // (Commented out editor + Vue mounting logic for this test)
-    // // this.#initVueApp();
-    // // this.#initListeners();
-    // // this.user = this.config.user; // The current user
-    // // this.users = this.config.users || [];
-    // // this.socket = null;
-    // // this.isDev = this.config.isDev || false;
-    // // this.activeEditor = null;
-    // // this.comments = [];
-    // // if (!this.config.selector) {
-    // //   throw new Error('FaddockSuperdoc: selector is required');
-    // // }
-    // // this.app.mount(this.config.selector);
-    // // this.readyEditors = 0;
-    // // this.isLocked = this.config.isLocked || false;
-    // // this.lockedBy = this.config.lockedBy || null;
-    // // this.#addToolbar();
+    // @ts-ignore
+    this.version = __APP_VERSION__;
+    this.#log('🦋 [superdoc] Using SuperDoc version:', this.version);
+
+    this.superdocId = config.superdocId || uuidv4();
+    this.colors = this.config.colors;
+
+    // Preprocess document
+    this.#initDocuments();
+
+    // Initialize collaboration if configured
+    await this.#initCollaboration(this.config.modules);
+
+    // Apply csp nonce if provided
+    if (this.config.cspNonce) this.#patchNaiveUIStyles();
+
+    // this.#initTelemetry();
+    this.#initVueApp();
+    this.#initListeners();
+
+    this.user = this.config.user; // The current user
+    this.users = this.config.users || []; // All users who have access to this superdoc
+    this.socket = null;
+
+    this.isDev = this.config.isDev || false;
+
+    this.activeEditor = null;
+    this.comments = [];
+
+    if (!this.config.selector) {
+      throw new Error('SuperDoc: selector is required');
+    }
+
+    this.app.mount(this.config.selector);
+
+    // Required editors
+    this.readyEditors = 0;
+
+    this.isLocked = this.config.isLocked || false;
+    this.lockedBy = this.config.lockedBy || null;
+
+    // If a toolbar element is provided, render a toolbar
+    this.#addToolbar();
   }
 
   /**
@@ -160,7 +182,7 @@ export class FaddockSuperdoc extends EventEmitter {
   }
 
   /**
-   * Get the FaddockSuperdoc container element
+   * Get the SuperDoc container element
    * @returns {HTMLElement | null}
    */
   get element() {
@@ -298,7 +320,7 @@ export class FaddockSuperdoc extends EventEmitter {
     // Flag this superdoc as collaborative
     this.isCollaborative = true;
 
-    // Start a socket for all documents and general metaMap for this FaddockSuperdoc
+    // Start a socket for all documents and general metaMap for this SuperDoc
     if (collaborationModuleConfig.providerType === 'hocuspocus') {
       this.config.socket = new HocuspocusProviderWebsocket({
         url: collaborationModuleConfig.url,

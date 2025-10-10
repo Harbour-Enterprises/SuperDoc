@@ -67,7 +67,7 @@ const inferTypeFromName = (name = '') => {
 };
 
 /**
- * Normalize any supported document input into FaddockSuperdoc's expected shape.
+ * Normalize any supported document input into SuperDoc's expected shape.
  * Accepts File/Blob/uploader wrappers directly, or a config-like object with a `data` field.
  * URL-based entries are returned unchanged for downstream handling.
  *

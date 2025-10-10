@@ -1,15 +1,15 @@
-.faddock-superdoc *,
-.faddock-superdoc ::before,
-.faddock-superdoc ::after,
-.faddock-superdoc-toolbar *,
-.faddock-superdoc-toolbar ::before,
-.faddock-superdoc-toolbar ::after {
+.superdoc *,
+.superdoc ::before,
+.superdoc ::after,
+.superdoc-toolbar *,
+.superdoc-toolbar ::before,
+.superdoc-toolbar ::after {
   box-sizing: border-box;
 }
 
-.faddock-superdoc .disabled,
+.superdoc .disabled,
 .super-editor .disabled,
-.faddock-superdoc-toolbar .disabled {
+.superdoc-toolbar .disabled {
   opacity: 0.5;
   cursor: not-allowed;
   pointer-events: none;
@@ -62,7 +62,7 @@
   width: 300px;
 }
 
-.faddock-superdoc-field {
+.superdoc-field {
   border-radius: 8px;
   padding: 12px;
   outline: none;
@@ -70,12 +70,12 @@
   width: 100%;
 }
 
-.faddock-superdoc-field:focus,
-.faddock-superdoc-field:active {
+.superdoc-field:focus,
+.superdoc-field:active {
   border: 1px solid #1355ff;
 }
 
-.faddock-superdoc-field .ProseMirror {
+.superdoc-field .ProseMirror {
   border: 0;
   outline: 0;
   margin: 0;

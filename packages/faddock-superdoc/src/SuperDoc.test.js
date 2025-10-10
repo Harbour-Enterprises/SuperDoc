@@ -208,7 +208,7 @@ const mountComponent = async (superdocStub) => {
   superdocStoreStub.modules.ai = { endpoint: '/ai' };
   commentsStoreStub.documentsWithConverations.value = [{ id: 'doc-1' }];
 
-  const component = (await import('./FaddockSuperdoc.vue')).default;
+  const component = (await import('./SuperDoc.vue')).default;
 
   return mount(component, {
     global: {
@@ -264,7 +264,7 @@ const createSuperdocStub = () => {
   };
 };
 
-describe('FaddockSuperdoc.vue', () => {
+describe('SuperDoc.vue', () => {
   beforeEach(() => {
     useSelectionMock.mockClear();
     useAiMock.mockClear();

@@ -147,8 +147,8 @@ const originalCreateElement = document.createElement;
 let consoleDebugSpy;
 let consoleLogSpy;
 
-describe('FaddockSuperdoc core', () => {
-  let FaddockSuperdoc;
+describe('SuperDoc core', () => {
+  let SuperDoc;
 
   beforeEach(async () => {
     consoleDebugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
@@ -167,7 +167,7 @@ describe('FaddockSuperdoc core', () => {
 
     document.body.innerHTML = '<div id="host"></div>';
 
-    ({ FaddockSuperdoc } = await import('./FaddockSuperdoc.js'));
+    ({ SuperDoc } = await import('./SuperDoc.js'));
   });
 
   afterEach(() => {
@@ -189,7 +189,7 @@ describe('FaddockSuperdoc core', () => {
       onException: vi.fn(),
     };
 
-    const instance = new FaddockSuperdoc(config);
+    const instance = new SuperDoc(config);
     await flushMicrotasks();
 
     expect(createVueAppMock).toHaveBeenCalled();
@@ -216,7 +216,7 @@ describe('FaddockSuperdoc core', () => {
       onException: vi.fn(),
     };
 
-    const instance = new FaddockSuperdoc(config);
+    const instance = new SuperDoc(config);
     await flushMicrotasks();
 
     expect(warnSpy).toHaveBeenCalledWith('🦋 [superdoc] You can only provide one of document or documents');
@@ -253,7 +253,7 @@ describe('FaddockSuperdoc core', () => {
       onException: vi.fn(),
     };
 
-    const instance = new FaddockSuperdoc(config);
+    const instance = new SuperDoc(config);
     await flushMicrotasks();
 
     expect(hocuspocusConstructor).toHaveBeenCalledWith({ url: 'wss://example.com' });
@@ -274,7 +274,7 @@ describe('FaddockSuperdoc core', () => {
       },
     ];
 
-    const instance = new FaddockSuperdoc({
+    const instance = new SuperDoc({
       selector: '#host',
       document: 'https://example.com/doc.docx',
       documents: [],
@@ -298,7 +298,7 @@ describe('FaddockSuperdoc core', () => {
       { type: DOCX, getEditor: vi.fn(() => ({})), setEditor: vi.fn() },
     ];
 
-    const instance = new FaddockSuperdoc({
+    const instance = new SuperDoc({
       selector: '#host',
       document: 'https://example.com/doc.docx',
       documents: [],
@@ -326,7 +326,7 @@ describe('FaddockSuperdoc core', () => {
     const metaSet = vi.fn();
     const metaMap = { set: metaSet };
 
-    const instance = new FaddockSuperdoc({
+    const instance = new SuperDoc({
       selector: '#host',
       document: 'https://example.com/doc.docx',
       documents: [],
@@ -360,7 +360,7 @@ describe('FaddockSuperdoc core', () => {
   it('exports docx files alongside additional assets', async () => {
     createAppHarness();
 
-    const instance = new FaddockSuperdoc({
+    const instance = new SuperDoc({
       selector: '#host',
       document: 'https://example.com/doc.docx',
       documents: [],
@@ -390,7 +390,7 @@ describe('FaddockSuperdoc core', () => {
   it('destroys app and cleans providers', async () => {
     const { app } = createAppHarness();
 
-    const instance = new FaddockSuperdoc({
+    const instance = new SuperDoc({
       selector: '#host',
       document: 'https://example.com/doc.docx',
       documents: [],
@@ -425,7 +425,7 @@ describe('FaddockSuperdoc core', () => {
   it('applies CSP nonce to style tags when configured', async () => {
     createAppHarness();
 
-    const instance = new FaddockSuperdoc({
+    const instance = new SuperDoc({
       selector: '#host',
       document: 'https://example.com/doc.docx',
       documents: [],
@@ -441,7 +441,7 @@ describe('FaddockSuperdoc core', () => {
     expect(styleElement.getAttribute('nonce')).toBe('nonce-123');
   });
 
-  describe('FaddockSuperdoc document normalization', () => {
+  describe('SuperDoc document normalization', () => {
     describe('real-world document handling', () => {
       it('handles File from browser input', async () => {
         createAppHarness();
@@ -451,7 +451,7 @@ describe('FaddockSuperdoc core', () => {
           type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         });
 
-        const instance = new FaddockSuperdoc({
+        const instance = new SuperDoc({
           selector: '#host',
           document: file,
         });
@@ -475,7 +475,7 @@ describe('FaddockSuperdoc core', () => {
           type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         });
 
-        const instance = new FaddockSuperdoc({
+        const instance = new SuperDoc({
           selector: '#host',
           document: blob,
         });
@@ -498,7 +498,7 @@ describe('FaddockSuperdoc core', () => {
         // Some browsers can't determine MIME type
         const file = new File(['content'], 'report.docx', { type: '' });
 
-        const instance = new FaddockSuperdoc({
+        const instance = new SuperDoc({
           selector: '#host',
           document: file,
         });
@@ -515,7 +515,7 @@ describe('FaddockSuperdoc core', () => {
         // Untyped Blob (edge case)
         const blob = new Blob(['content']);
 
-        const instance = new FaddockSuperdoc({
+        const instance = new SuperDoc({
           selector: '#host',
           document: blob,
         });
@@ -544,7 +544,7 @@ describe('FaddockSuperdoc core', () => {
         ];
 
         for (const config of testCases) {
-          const instance = new FaddockSuperdoc({
+          const instance = new SuperDoc({
             selector: '#host',
             ...config,
           });
@@ -558,7 +558,7 @@ describe('FaddockSuperdoc core', () => {
       it('leaves non-object entries untouched when normalizing arrays', async () => {
         createAppHarness();
 
-        const instance = new FaddockSuperdoc({
+        const instance = new SuperDoc({
           selector: '#host',
           documents: [null, { type: DOCX, data: new Blob(['test'], { type: DOCX }), name: 'doc.docx' }],
         });
@@ -575,7 +575,7 @@ describe('FaddockSuperdoc core', () => {
       it('preserves existing IDs in documents array', async () => {
         createAppHarness();
 
-        const instance = new FaddockSuperdoc({
+        const instance = new SuperDoc({
           selector: '#host',
           documents: [
             { id: 'custom-id-1', type: DOCX, data: new Blob(['test']) },
@@ -595,7 +595,7 @@ describe('FaddockSuperdoc core', () => {
         createAppHarness();
 
         const blob = new Blob(['test'], { type: DOCX });
-        const instance = new FaddockSuperdoc({
+        const instance = new SuperDoc({
           selector: '#host',
           document: {
             data: blob,
@@ -619,7 +619,7 @@ describe('FaddockSuperdoc core', () => {
         createAppHarness();
 
         const blob = new Blob(['test'], { type: DOCX });
-        const instance = new FaddockSuperdoc({
+        const instance = new SuperDoc({
           selector: '#host',
           document: {
             data: blob,

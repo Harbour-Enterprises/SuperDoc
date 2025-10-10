@@ -24,7 +24,7 @@ export default defineConfig(({ command }) => {
       lib: {
         entry: 'src/index.js',
         formats: ['umd'],
-        name: 'FaddockSuperdocLibrary',
+        name: 'SuperDocLibrary',
         cssFileName: 'style',
         fileName: (format) => `superdoc.${format}.js`,
       },

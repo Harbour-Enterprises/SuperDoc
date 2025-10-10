@@ -85,7 +85,7 @@ export default function useComment(params) {
    *
    * @param {Object} param0
    * @param {Boolean} param0.isInternal The new isInternal value
-   * @param {Object} param0.superdoc The FaddockSuperdoc instance
+   * @param {Object} param0.superdoc The SuperDoc instance
    * @returns {void}
    */
   const setIsInternal = ({ isInternal: newIsInternal, superdoc }) => {
@@ -111,7 +111,7 @@ export default function useComment(params) {
   /**
    * Set this comment as the active comment in the editor
    *
-   * @param {Object} superdoc The FaddockSuperdoc instance
+   * @param {Object} superdoc The SuperDoc instance
    * @returns {void}
    */
   const setActive = (superdoc) => {
@@ -124,7 +124,7 @@ export default function useComment(params) {
    *
    * @param {Object} param0
    * @param {String} param0.text The new text value
-   * @param {Object} param0.superdoc The FaddockSuperdoc instance
+   * @param {Object} param0.superdoc The SuperDoc instance
    * @returns {void}
    */
   const setText = ({ text, superdoc, suppressUpdate }) => {
@@ -204,7 +204,7 @@ export default function useComment(params) {
   /**
    * Emit updates to the end client, and sync with collaboration if necessary
    *
-   * @param {Object} superdoc The FaddockSuperdoc instance
+   * @param {Object} superdoc The SuperDoc instance
    * @param {Object} event The data to emit to the client
    * @returns {void}
    */

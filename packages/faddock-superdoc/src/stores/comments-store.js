@@ -56,7 +56,7 @@ export const useCommentsStore = defineStore('comments', () => {
   /**
    * Initialize the store
    *
-   * @param {Object} config The comments module config from FaddockSuperdoc
+   * @param {Object} config The comments module config from SuperDoc
    * @returns {void}
    */
   const init = (config = {}) => {
@@ -110,7 +110,7 @@ export const useCommentsStore = defineStore('comments', () => {
    * or updates an existing tracked-change comment.
    *
    * @param {Object} param0
-   * @param {Object} param0.superdoc The FaddockSuperdoc instance
+   * @param {Object} param0.superdoc The SuperDoc instance
    * @param {Object} param0.params The tracked change params
    * @returns {void}
    */
@@ -325,7 +325,7 @@ export const useCommentsStore = defineStore('comments', () => {
    * Add a new comment to the document
    *
    * @param {Object} param0
-   * @param {Object} param0.superdoc The FaddockSuperdoc instance
+   * @param {Object} param0.superdoc The SuperDoc instance
    * @returns {void}
    */
   const addComment = ({ superdoc, comment }) => {
@@ -406,8 +406,8 @@ export const useCommentsStore = defineStore('comments', () => {
   };
 
   /**
-   * Initialize loaded comments into FaddockSuperdoc by mapping the imported
-   * comment data to FaddockSuperdoc useComment objects.
+   * Initialize loaded comments into SuperDoc by mapping the imported
+   * comment data to SuperDoc useComment objects.
    *
    * Updates the commentsList ref with the new comments.
    *
