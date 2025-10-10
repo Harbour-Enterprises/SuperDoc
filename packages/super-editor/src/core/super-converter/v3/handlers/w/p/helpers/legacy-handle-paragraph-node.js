@@ -99,38 +99,14 @@ export const handleParagraphNode = (params) => {
   schemaNode.attrs['filename'] = filename;
 
   // Parse tab stops
-  const tabs = pPr?.elements?.find((el) => el.name === 'w:tabs');
-  if (tabs && tabs.elements) {
-    const tabStops = tabs.elements
-      .filter((el) => el.name === 'w:tab')
-      .map((tab) => {
-        let val = tab.attributes['w:val'] || 'start';
-        // Test files continue to contain "left" and "right" rather than "start" and "end"
-        if (val == 'left') {
-          val = 'start';
-        } else if (val == 'right') {
-          val = 'end';
-        }
-        const rawPos = tab.attributes['w:pos'];
-        const tabStop = {
-          val,
-          pos: twipsToPixels(rawPos),
-        };
-        if (rawPos !== undefined) {
-          tabStop.originalPos = rawPos;
-        }
-
-        // Add leader if present
-        if (tab.attributes['w:leader']) {
-          tabStop.leader = tab.attributes['w:leader'];
-        }
-
-        return tabStop;
-      });
-
-    if (tabStops.length > 0) {
-      schemaNode.attrs.tabStops = tabStops;
-    }
+  if (paragraphProperties.tabs) {
+    const aliases = { left: 'start', right: 'end' };
+    schemaNode.attrs.tabStops = paragraphProperties.tabs.map(({ tab }) => ({
+      val: aliases[tab.tabSize] || tab.tabSize,
+      pos: twipsToPixels(tab.pos),
+      originalPos: tab.pos,
+      leader: tab.leader,
+    }));
   }
 
   // Normalize text nodes.
@@ -144,7 +120,6 @@ export const handleParagraphNode = (params) => {
   // Pass through this paragraph's sectPr, if any
   const sectPr = pPr?.elements?.find((el) => el.name === 'w:sectPr');
   if (sectPr) {
-    if (!schemaNode.attrs.paragraphProperties) schemaNode.attrs.paragraphProperties = {};
     schemaNode.attrs.paragraphProperties.sectPr = sectPr;
     schemaNode.attrs.pageBreakSource = 'sectPr';
   }
