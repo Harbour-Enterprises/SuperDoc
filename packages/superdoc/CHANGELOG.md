@@ -1,3 +1,38 @@
+# [0.23.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.4...v0.23.0) (2025-10-10)
+
+### Bug Fixes
+
+- add tooltip to table actions ([#1093](https://github.com/Harbour-Enterprises/SuperDoc/issues/1093)) ([983f0de](https://github.com/Harbour-Enterprises/SuperDoc/commit/983f0de9fa7e1bf7e885eb30b26f74fc4d63e546))
+- allow .5 font sizes ([#1060](https://github.com/Harbour-Enterprises/SuperDoc/issues/1060)) ([4747145](https://github.com/Harbour-Enterprises/SuperDoc/commit/47471457a54193f6eea02e5bce20ebd03e5108b0))
+- allow both leading and trailing spaces ([#1100](https://github.com/Harbour-Enterprises/SuperDoc/issues/1100)) ([#1103](https://github.com/Harbour-Enterprises/SuperDoc/issues/1103)) ([315d3e2](https://github.com/Harbour-Enterprises/SuperDoc/commit/315d3e2b177619af25d7b68619fdd8908a9e8afc))
+- exported annotations are suppressed in Google Docs ([#1061](https://github.com/Harbour-Enterprises/SuperDoc/issues/1061)) ([3f8dea6](https://github.com/Harbour-Enterprises/SuperDoc/commit/3f8dea65598b5e98655ad9dea79f59596c7f1c1c))
+- import alignment from injected html ([#1068](https://github.com/Harbour-Enterprises/SuperDoc/issues/1068)) ([#1069](https://github.com/Harbour-Enterprises/SuperDoc/issues/1069)) ([38f44a9](https://github.com/Harbour-Enterprises/SuperDoc/commit/38f44a954d8044754d4d5d978d3f7ce58c4e122f))
+- insertComment does not emit to SuperDoc ([#1065](https://github.com/Harbour-Enterprises/SuperDoc/issues/1065)) ([b95cd42](https://github.com/Harbour-Enterprises/SuperDoc/commit/b95cd42ff5be9c2314e60a7c4a38ea8c1470ecb9))
+- instrtext bug with unhandled angled brackets ([#1051](https://github.com/Harbour-Enterprises/SuperDoc/issues/1051)) ([#1052](https://github.com/Harbour-Enterprises/SuperDoc/issues/1052)) ([ae0d772](https://github.com/Harbour-Enterprises/SuperDoc/commit/ae0d7722658c216e54d8c7997e0a03763d8f0f42))
+- missing content when paste html ([#1097](https://github.com/Harbour-Enterprises/SuperDoc/issues/1097)) ([0f78f3e](https://github.com/Harbour-Enterprises/SuperDoc/commit/0f78f3ed60e1bcd31029a9b56fe305975fee46af))
+- node path for image upload [SD-415] ([#1064](https://github.com/Harbour-Enterprises/SuperDoc/issues/1064)) ([1b786de](https://github.com/Harbour-Enterprises/SuperDoc/commit/1b786de5f81e6f4b2dbfabe73b88343d34a25758))
+- node views in view mode ([#1059](https://github.com/Harbour-Enterprises/SuperDoc/issues/1059)) ([5881df8](https://github.com/Harbour-Enterprises/SuperDoc/commit/5881df826481fe31aa27e6046fa6c276306455e0))
+- preserve trailing spaces when inject html ([#1070](https://github.com/Harbour-Enterprises/SuperDoc/issues/1070)) ([#1071](https://github.com/Harbour-Enterprises/SuperDoc/issues/1071)) ([bf87ba3](https://github.com/Harbour-Enterprises/SuperDoc/commit/bf87ba30251a7d53d5217ae5a058ff8512c1d8da))
+- prevent resize decorations in view mode and when editor is not editable ([#1084](https://github.com/Harbour-Enterprises/SuperDoc/issues/1084)) ([34620a9](https://github.com/Harbour-Enterprises/SuperDoc/commit/34620a9492c25da101cb0230e1eb7c4f38e76a7d))
+- requestAnimationFrame in pagination ([#1063](https://github.com/Harbour-Enterprises/SuperDoc/issues/1063)) ([20f47ee](https://github.com/Harbour-Enterprises/SuperDoc/commit/20f47ee2c4095a8dadce58499276a55b7d800c6e))
+- restore html input value from sdt content, add tests ([#1104](https://github.com/Harbour-Enterprises/SuperDoc/issues/1104)) ([0ae2766](https://github.com/Harbour-Enterprises/SuperDoc/commit/0ae27665684f7a8dd1ec212447eafc0af1bdb2a5))
+- select default font/size in toolbar dropdown ([#1098](https://github.com/Harbour-Enterprises/SuperDoc/issues/1098)) ([dcd1e51](https://github.com/Harbour-Enterprises/SuperDoc/commit/dcd1e51d7712485002d22eb43fbe957f57183f39))
+- structured content style with image ([#1057](https://github.com/Harbour-Enterprises/SuperDoc/issues/1057)) ([67dee6d](https://github.com/Harbour-Enterprises/SuperDoc/commit/67dee6d6c95462190d6029bd33e008976937f0b0))
+- toggle list and toggle off ([#1089](https://github.com/Harbour-Enterprises/SuperDoc/issues/1089)) ([61b30f6](https://github.com/Harbour-Enterprises/SuperDoc/commit/61b30f6816d3176a9c2201f6f73c0a16deb9dc36))
+- **track-changes:** relink contiguous insert segments across formatting ([dbb1820](https://github.com/Harbour-Enterprises/SuperDoc/commit/dbb18208ed70cf6292955d1f12a20ac4dda2dec4))
+- update tracked changes linking logic ([#1092](https://github.com/Harbour-Enterprises/SuperDoc/issues/1092)) ([f539995](https://github.com/Harbour-Enterprises/SuperDoc/commit/f5399951f522be9d0d2ba5015466b35e0ca771a9))
+- use SUPERDOC_PAT to trigger e2e tests ([#1075](https://github.com/Harbour-Enterprises/SuperDoc/issues/1075)) ([29eaad0](https://github.com/Harbour-Enterprises/SuperDoc/commit/29eaad0a8b1d1d28199050449bbc30a94844e1da))
+- vmerge issue and tests ([#1072](https://github.com/Harbour-Enterprises/SuperDoc/issues/1072)) ([5f8f005](https://github.com/Harbour-Enterprises/SuperDoc/commit/5f8f0058e75999fc6bcc1b1adb33ed22198656e7))
+
+### Features
+
+- add import/export support for TOC nodes (SD-175) ([#1042](https://github.com/Harbour-Enterprises/SuperDoc/issues/1042)) ([f665876](https://github.com/Harbour-Enterprises/SuperDoc/commit/f6658769c31aa2b99f2fdb0b5a7071b47c31a2ec))
+- add new command and helpers to structured content using alias ([#1053](https://github.com/Harbour-Enterprises/SuperDoc/issues/1053)) ([3cd48d3](https://github.com/Harbour-Enterprises/SuperDoc/commit/3cd48d3c133971915e9ba7f4350f07fb0218dde3))
+- **context-menu:** make track changes menu items default items [SD-328] ([#1039](https://github.com/Harbour-Enterprises/SuperDoc/issues/1039)) ([99d4ce7](https://github.com/Harbour-Enterprises/SuperDoc/commit/99d4ce77dbe699eeded73531957782fa05c9afc8))
+- enhance export functionality with ExportParams type definition ([#1054](https://github.com/Harbour-Enterprises/SuperDoc/issues/1054)) ([5ae099c](https://github.com/Harbour-Enterprises/SuperDoc/commit/5ae099c56a36cc9f188d9173fef63dbbb0f333cd))
+- fix type export on build ([#1095](https://github.com/Harbour-Enterprises/SuperDoc/issues/1095)) ([a8dae03](https://github.com/Harbour-Enterprises/SuperDoc/commit/a8dae03f690f363399ccabc40ad0083a1feabcc0))
+- turn comments on by default ([#1056](https://github.com/Harbour-Enterprises/SuperDoc/issues/1056)) ([52e930f](https://github.com/Harbour-Enterprises/SuperDoc/commit/52e930f0a20b3c5879d0e81722442a509ccfadd9))
+
 ## [0.22.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.3...v0.22.4) (2025-10-09)
 
 ### Bug Fixes
