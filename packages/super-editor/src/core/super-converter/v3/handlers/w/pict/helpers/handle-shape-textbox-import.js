@@ -6,7 +6,7 @@ import { handleParagraphNode } from '@converter/v2/importer/paragraphNodeImporte
  * @param {Object} options
  * @returns {Object}
  */
-export function handleShapeTextboxImport({ params, pNode, pict }) {
+export function handleShapeTextboxImport({ params, pict }) {
   const shape = pict.elements?.find((el) => el.name === 'v:shape');
 
   const schemaAttrs = {};

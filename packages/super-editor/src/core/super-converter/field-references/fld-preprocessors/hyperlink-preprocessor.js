@@ -34,16 +34,16 @@ export function preProcessHyperlinkInstruction(nodesToCombine, instruction, docx
     }
   } else {
     const availableSwitches = {
-      'w:anchor': `\l "(?<value>[^"]+)"`,
-      new_window: `\n`,
-      'w:tgtFrame': `\t "(?<value>[^"]+)"`,
-      'w:tooltip': `\o "(?<value>[^"]+)"`,
+      'w:anchor': /(?:\\)?l "(?<value>[^"]+)"/,
+      new_window: /(?:\\n|\n)/,
+      'w:tgtFrame': /(?:\\t|\t) "(?<value>[^"]+)"/,
+      'w:tooltip': /(?:\\)?o "(?<value>[^"]+)"/,
     };
 
     const parsedSwitches = {};
 
-    for (const [key, regex] of Object.entries(availableSwitches)) {
-      const match = instruction.match(new RegExp(regex));
+    for (const [key, pattern] of Object.entries(availableSwitches)) {
+      const match = instruction.match(pattern);
       if (match) {
         parsedSwitches[key] = match.groups?.value || true;
       }

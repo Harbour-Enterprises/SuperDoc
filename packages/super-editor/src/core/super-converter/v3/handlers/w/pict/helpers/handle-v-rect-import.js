@@ -6,7 +6,7 @@ import { twipsToPixels, twipsToLines } from '@converter/helpers';
  * @param {Object} options
  * @returns {Object}
  */
-export function handleVRectImport({ params, pNode, pict }) {
+export function handleVRectImport({ pNode, pict }) {
   const rect = pict.elements?.find((el) => el.name === 'v:rect');
 
   const schemaAttrs = {};
