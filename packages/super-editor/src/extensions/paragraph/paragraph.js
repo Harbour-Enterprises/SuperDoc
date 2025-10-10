@@ -3,6 +3,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
+import { twipsToInches, twipsToLines, twipsToPixels, twipsToPt, eigthPointsToPixels } from '@converter/helpers.js';
 
 /**
  * Configuration options for Paragraph
@@ -162,16 +163,21 @@ export const Paragraph = OxmlNode.create({
           sideOrder.forEach((side) => {
             const b = borders[side];
             if (!b) return;
+            // Remove border if style is 'nil' or undefined
+            if (['nil', 'none', undefined].includes(b.val)) {
+              style += `border-${side}: none;`;
+              return;
+            }
 
-            const width = b.size != null ? `${b.size}px` : '1px';
+            const width = b.size != null ? `${eigthPointsToPixels(b.size)}px` : '1px';
             const cssStyle = valToCss[b.val] || 'solid';
-            const color = b.color || '#000000';
+            const color = !b.color || b.color === 'auto' ? '#000000' : `#${b.color}`;
 
             style += `border-${side}: ${width} ${cssStyle} ${color};`;
 
             // Optionally handle space attribute (distance from text)
             if (b.space != null && side === 'bottom') {
-              style += `padding-bottom: ${b.space}px;`;
+              style += `padding-bottom: ${eigthPointsToPixels(b.space)}px;`;
             }
           });
 

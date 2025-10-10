@@ -1,7 +1,8 @@
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { mergeTextNodes, parseMarks } from '@converter/v2/importer/index.js';
 import { twipsToPixels } from '@converter/helpers.js';
-import { getParagraphIndent, getParagraphSpacing, getDefaultParagraphStyle, parseParagraphBorders } from './index.js';
+import { getParagraphIndent, getParagraphSpacing, getDefaultParagraphStyle } from './index.js';
+import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 
 /**
  * Paragraph node handler
@@ -30,15 +31,16 @@ export const handleParagraphNode = (params) => {
   }
 
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');
-  // Extract paragraph borders if present
-  const pBdr = pPr?.elements?.find((el) => el.name === 'w:pBdr');
-  if (pBdr) {
-    const borders = parseParagraphBorders(pBdr);
-    if (Object.keys(borders).length) {
-      schemaNode.attrs.borders = borders;
-    }
+  let paragraphProperties = {};
+
+  if (pPr) {
+    paragraphProperties = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
   }
+  schemaNode.attrs.paragraphProperties = paragraphProperties;
+
+  // Extract paragraph borders if present
   const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
+  schemaNode.attrs.borders = paragraphProperties.borders;
   const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
   const framePr = pPr?.elements?.find((el) => el.name === 'w:framePr');
 
