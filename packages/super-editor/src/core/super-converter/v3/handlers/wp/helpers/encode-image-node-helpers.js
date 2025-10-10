@@ -1,4 +1,4 @@
-import { emuToPixels, rotToDegrees } from '@converter/helpers.js';
+import { emuToPixels, rotToDegrees, polygonToObj } from '@converter/helpers.js';
 
 /**
  * Encodes image xml into Editor node
@@ -77,8 +77,67 @@ export function handleImageNode(node, params, isAnchor) {
   const alignV = positionVTag?.elements?.find((el) => el.name === 'wp:align')?.elements[0]?.text;
 
   const simplePos = node.elements.find((el) => el.name === 'wp:simplePos');
-  const wrapSquare = node.elements.find((el) => el.name === 'wp:wrapSquare');
-  const wrapTopAndBottom = node.elements.find((el) => el.name === 'wp:wrapTopAndBottom');
+
+  // Look for one of <wp:wrapNone>,<wp:wrapSquare>,<wp:wrapThrough>,<wp:wrapTight>,<wp:wrapTopAndBottom>
+  const wrapNode = isAnchor
+    ? node.elements.find((el) =>
+        ['wp:wrapNone', 'wp:wrapSquare', 'wp:wrapThrough', 'wp:wrapTight', 'wp:wrapTopAndBottom'].includes(el.name),
+      )
+    : null;
+  const wrap = isAnchor ? { type: wrapNode?.name.slice(7) || 'None', attrs: {} } : { type: 'Inline' };
+
+  switch (wrap.type) {
+    case 'Square':
+      wrap.attrs.wrapText = wrapNode.attributes.wrapText;
+      if ('distB' in (wrapNode.attributes || {})) {
+        wrap.attrs.distBottom = emuToPixels(wrapNode.attributes.distB);
+      }
+      if ('distL' in (wrapNode.attributes || {})) {
+        wrap.attrs.distLeft = emuToPixels(wrapNode.attributes.distL);
+      }
+      if ('distR' in (wrapNode.attributes || {})) {
+        wrap.attrs.distRight = emuToPixels(wrapNode.attributes.distR);
+      }
+      if ('distT' in (wrapNode.attributes || {})) {
+        wrap.attrs.distTop = emuToPixels(wrapNode.attributes.distT);
+      }
+      break;
+    case 'Tight':
+    case 'Through': {
+      if ('distL' in (wrapNode.attributes || {})) {
+        wrap.attrs.distLeft = emuToPixels(wrapNode.attributes.distL);
+      }
+      if ('distR' in (wrapNode.attributes || {})) {
+        wrap.attrs.distRight = emuToPixels(wrapNode.attributes.distR);
+      }
+      if ('distT' in (wrapNode.attributes || {})) {
+        wrap.attrs.distTop = emuToPixels(wrapNode.attributes.distT);
+      }
+      if ('distB' in (wrapNode.attributes || {})) {
+        wrap.attrs.distBottom = emuToPixels(wrapNode.attributes.distB);
+      }
+      const polygon = wrapNode.elements?.find((el) => el.name === 'wp:wrapPolygon');
+      if (polygon) {
+        wrap.attrs.polygon = polygonToObj(polygon);
+      }
+      break;
+    }
+    case 'TopAndBottom':
+      if ('distB' in (wrapNode.attributes || {})) {
+        wrap.attrs.distBottom = emuToPixels(wrapNode.attributes.distB);
+      }
+      if ('distT' in (wrapNode.attributes || {})) {
+        wrap.attrs.distTop = emuToPixels(wrapNode.attributes.distT);
+      }
+      break;
+    case 'None':
+      wrap.attrs.behindDoc = node.attributes?.behindDoc === '1';
+      break;
+    case 'Inline':
+      break;
+    default:
+      break;
+  }
 
   const docPr = node.elements.find((el) => el.name === 'wp:docPr');
 
@@ -93,7 +152,7 @@ export function handleImageNode(node, params, isAnchor) {
   }
 
   const marginOffset = {
-    left: positionHValue,
+    horizontal: positionHValue,
     top: positionVValue,
   };
 
@@ -141,10 +200,7 @@ export function handleImageNode(node, params, isAnchor) {
           y: simplePos.attributes.y,
         },
       }),
-      ...(wrapSquare && {
-        wrapText: wrapSquare.attributes.wrapText,
-      }),
-      wrapTopAndBottom: !!wrapTopAndBottom,
+      wrap,
       originalPadding: {
         distT: attributes['distT'],
         distB: attributes['distB'],
@@ -159,7 +215,7 @@ export function handleImageNode(node, params, isAnchor) {
 
 /**
  * Handles a shape drawing within a WordprocessingML graphic node.
- 
+ *
  * @param {Object} params - Parameters object.
  * @param {Object} node - The `wp:drawing` node or similar containing the shape.
  * @param {Object} graphicData - The `a:graphicData` node containing the shape elements.
