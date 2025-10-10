@@ -64,16 +64,9 @@ export const handleParagraphNode = (params) => {
     schemaNode.attrs.indent = indent;
   }
 
-  const keepLines = pPr?.elements?.find((el) => el.name === 'w:keepLines');
-  if (keepLines && keepLines.attributes) {
-    schemaNode.attrs['keepLines'] = keepLines.attributes['w:val'];
-  }
-
-  const keepNext = pPr?.elements?.find((el) => el.name === 'w:keepNext');
-  if (keepNext && keepNext.attributes) {
-    schemaNode.attrs['keepNext'] = keepNext.attributes['w:val'];
-  }
   schemaNode.attrs['textAlign'] = paragraphProperties.justification;
+  schemaNode.attrs['keepLines'] = paragraphProperties.keepLines;
+  schemaNode.attrs['keepNext'] = paragraphProperties.keepNext;
 
   if (docx) {
     const defaultStyleId = node.attributes?.['w:rsidRDefault'];
