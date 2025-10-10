@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { InsightsAIProvider } from '@extensions/ai/index.js';
 import { writeStreaming, rewriteStreaming, formatDocument } from './ai-helpers';
 import { TextSelection } from 'prosemirror-state';
 import edit from '@harbour-enterprises/common/icons/edit-regular.svg?raw';
@@ -18,6 +19,9 @@ const props = defineProps({
     type: Object,
     required: true,
   },
+  provider: {
+    type: Object,
+  },
   apiKey: {
     type: String,
   },
@@ -25,6 +29,17 @@ const props = defineProps({
     type: String,
     required: false,
   },
+});
+
+const aiProvider = computed(() => {
+  if (props.provider) {
+    return props.provider;
+  }
+
+  return new InsightsAIProvider({
+    apiKey: props.apiKey,
+    endpoint: props.endpoint,
+  });
 });
 
 // Store the selection state
@@ -305,10 +320,12 @@ const handleSubmit = async () => {
     const documentXml = getDocumentXml();
 
     // Common options for API calls
+    const provider = aiProvider.value;
     const options = {
       // @todo: implement grabbing document text
       docText: '',
       documentXml: documentXml,
+      provider,
       config: {
         // Pass the aiApiKey to the AI helper functions
         apiKey: props.apiKey,

@@ -11,6 +11,8 @@ import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
 import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
 import { getWorkerSrcFromCDN } from '../../components/PdfViewer/pdf/pdf-adapter.js';
+import { InsightsAIProvider } from '@harbour-enterprises/super-editor';
+import { ConfigurableAIProvider } from '@harbour-enterprises/super-editor';
 
 // Or set worker globally outside the component.
 // pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -100,6 +102,58 @@ const init = async () => {
   if (currentFile.value.htmlContent) {
     documentConfig.html = currentFile.value.htmlContent;
   }
+  const openAIProvider = new ConfigurableAIProvider({
+    endpoint: 'https://api.openai.com/v1/chat/completions',
+    headers: {
+      Authorization: 'Bearer sk-',
+      'Content-Type': 'application/json',
+    },
+    model: 'gpt-4o-mini',
+    max_tokens: 1000,
+    buildFindContentRequest: (prompt, options) => ({
+      temperature: 0,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a precise text extractor. Your job is to find and return ONLY the exact text ' +
+            'that uniquely identifies the requested content from the document that matches the query. ' +
+            'this will be used with prosemirror search so be careful with quotes and special characters.',
+        },
+        {
+          role: 'user',
+          content: `Document:\n${options.documentXml}\n\nFind the the exact text searchable phrase for: ${prompt}`,
+        },
+      ],
+    }),
+
+    buildWriteRequest: (prompt, options) => ({
+      messages: [
+        { role: 'system', content: 'You are a helpful writing assistant.' },
+        { role: 'user', content: prompt },
+      ],
+    }),
+
+    buildRewriteRequest: (text, instructions, options) => ({
+      messages: [
+        { role: 'system', content: 'You are an expert editor.' },
+        { role: 'user', content: `Rewrite this: "${text}"\n\nInstructions: ${instructions}` },
+      ],
+    }),
+
+    parseResponse: (data) => data.choices[0].message.content,
+
+    parseStreamChunk: (chunk) => {
+      // Parse SSE format
+      const lines = chunk.split('\n').filter((line) => line.startsWith('data: '));
+      return lines
+        .map((line) => {
+          const json = JSON.parse(line.slice(6));
+          return json.choices[0]?.delta?.content || '';
+        })
+        .join('');
+    },
+  });
 
   const config = {
     superdocId: 'superdoc-dev',
@@ -267,10 +321,17 @@ const init = async () => {
       //   providerType: 'hocuspocus',
       // },
       ai: {
-        // Provide your Harbour API key here for direct endpoint access
+        // Option 1: Use built-in Harbour provider (recommended)
+        // provider: new InsightsAIProvider({
+        //   apiKey: 'test',
+        //   endpoint: 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights',
+        //   // model: 'optional-model-name' // if your API supports it
+        // }),
+        // Option 2: Or pass config and let editor create provider (legacy support)
         // apiKey: 'test',
-        // Optional: Provide a custom endpoint for AI services
         // endpoint: 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights',
+        // Option 3: custom AI Provider
+        // provider: openAIProvider,
       },
       pdf: {
         pdfLib: pdfjsLib,
@@ -356,6 +417,8 @@ const exportDocxBlob = async () => {
 const onEditorCreate = ({ editor }) => {
   activeEditor.value = editor;
   window.editor = editor;
+
+  editor.commands.aiFindContent('Find GDPR clause');
 
   editor.on('fieldAnnotationClicked', (params) => {
     console.log('fieldAnnotationClicked', { params });

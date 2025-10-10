@@ -2,6 +2,7 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { AiMarkName, AiLoaderNodeName } from './ai-constants.js';
+import { aiFindContent, aiGenerateContent, aiRewriteSelection } from './ai-commands.js';
 
 export const AiPluginKey = new PluginKey('ai');
 
@@ -141,6 +142,44 @@ export const AiPlugin = Extension.create({
 
           if (dispatch) dispatch(tr);
           return true;
+        },
+
+      /**
+       * Run an AI-powered content search and insert the results at the current selection.
+       * @param {string} prompt - The natural language prompt to send to the provider.
+       * @param {import('./provider-interface.js').AIProviderInterface} [provider] - Optional provider override.
+       * @returns {Promise<string|undefined>} - Resolves with provider result, if any.
+       */
+      aiFindContent:
+        (prompt, provider = this.editor.options?.ai.provider) =>
+        () => {
+          return aiFindContent(this.editor, prompt, provider);
+        },
+
+      /**
+       * Generate new content via AI and insert it at the current selection.
+       * @param {string} prompt - Prompt describing the desired output.
+       * @param {import('./provider-interface.js').AIProviderInterface} [provider] - Optional provider override.
+       * @param {boolean} [streaming=false] - Enable streaming mode when provider supports it.
+       * @returns {Promise<void>} - Resolves when generation completes.
+       */
+      aiGenerateContent:
+        (prompt, provider = this.editor.options?.ai.provider, streaming = false) =>
+        () => {
+          return aiGenerateContent(this.editor, prompt, provider, streaming);
+        },
+
+      /**
+       * Rewrite the current selection using AI instructions.
+       * @param {string} instructions - Rewrite guidance (e.g. "summarize this").
+       * @param {import('./provider-interface.js').AIProviderInterface} [provider] - Optional provider override.
+       * @param {boolean} [streaming=false] - Enable streaming mode when provider supports it.
+       * @returns {Promise<void>} - Resolves when rewrite completes.
+       */
+      aiRewriteSelection:
+        (instructions, provider = this.editor.options?.ai.provider, streaming = false) =>
+        () => {
+          return aiRewriteSelection(this.editor, instructions, provider, streaming);
         },
     };
   },

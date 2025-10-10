@@ -20,7 +20,7 @@ import { TEXTS, ICONS, TRIGGERS } from './constants.js';
 const isModuleEnabled = (editorOptions, moduleName) => {
   switch (moduleName) {
     case 'ai':
-      return !!editorOptions?.isAiEnabled;
+      return !!editorOptions?.ai;
 
     default:
       return true;

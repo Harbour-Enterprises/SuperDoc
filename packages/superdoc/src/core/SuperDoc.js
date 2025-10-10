@@ -515,6 +515,7 @@ export class SuperDoc extends EventEmitter {
       superdoc: this,
       aiApiKey: this.config.modules?.ai?.apiKey,
       aiEndpoint: this.config.modules?.ai?.endpoint,
+      aiProvider: this.config.modules?.ai?.provider,
       ...moduleConfig,
     };
 
