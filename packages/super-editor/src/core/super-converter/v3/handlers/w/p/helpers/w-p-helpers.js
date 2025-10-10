@@ -1,42 +1,5 @@
 // @ts-check
-import { twipsToInches, twipsToLines, twipsToPixels, twipsToPt, eighthPointsToPixels } from '@converter/helpers.js';
-
-/**
- * Parses the borders of a paragraph.
- * @param {Object} pBdr - The paragraph border element.
- * @returns An object representing the parsed border properties.
- */
-export const parseParagraphBorders = (pBdr) => {
-  if (!pBdr || !pBdr.elements) return {};
-  // These are the possible sides
-  const sides = ['top', 'bottom', 'left', 'right'];
-  const result = {};
-
-  sides.forEach((side) => {
-    const el = pBdr.elements.find((e) => e.name === `w:${side}`);
-    if (!el || !el.attributes) return;
-
-    const { attributes: a } = el;
-    if (a['w:val'] === 'nil' || a['w:val'] === undefined) return;
-
-    // Set size of border
-    let sizePx;
-    if (a['w:sz'] !== undefined) sizePx = eighthPointsToPixels(a['w:sz']);
-
-    // Track space of border
-    let spacePx;
-    if (a['w:space'] !== undefined) spacePx = eighthPointsToPixels(a['w:space']);
-
-    result[side] = {
-      val: a['w:val'],
-      size: sizePx,
-      space: spacePx,
-      color: a['w:color'] ? `#${a['w:color']}` : '#000000',
-    };
-  });
-
-  return result;
-};
+import { twipsToLines, twipsToPixels, twipsToPt } from '@converter/helpers.js';
 
 /**
  * Gets the paragraph indentation.
