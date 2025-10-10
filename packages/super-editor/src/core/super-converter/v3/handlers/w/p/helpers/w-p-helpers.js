@@ -56,24 +56,20 @@ export const getParagraphIndent = (inlineIndent, docx, styleId = '') => {
 
 /**
  * Gets the paragraph spacing.
- * @param {Object} node - The paragraph node.
+ * @param {Object} inlineSpacing - The inline spacing attributes.
  * @param {Object} docx - The DOCX document.
  * @param {string} styleId - The style ID.
  * @param {Array} marks - The text style marks.
  * @returns {Object} The paragraph spacing.
  */
-export const getParagraphSpacing = (node, docx, styleId = '', marks = [], options = {}) => {
+export const getParagraphSpacing = (inlineSpacing, docx, styleId = '', marks = [], options = {}) => {
   const { insideTable = false } = options;
   // Check if we have default paragraph styles to override
   const spacing = {};
 
   const { spacing: pDefaultSpacing = {}, spacingSource } = getDefaultParagraphStyle(docx, styleId);
-  let lineSpaceAfter, lineSpaceBefore, line, lineRuleStyle;
 
-  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
-  const inLineSpacingTag = pPr?.elements?.find((el) => el.name === 'w:spacing');
-  const inLineSpacing = inLineSpacingTag?.attributes || {};
-  const hasInlineSpacing = !!Object.keys(inLineSpacing).length;
+  const hasInlineSpacing = !!inlineSpacing;
 
   const textStyleMark = marks.find((el) => el.type === 'textStyle');
   const fontSize = textStyleMark?.attrs?.fontSize;
@@ -82,28 +78,28 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = [], option
   // 1. Inline spacing
   // 2. Default style spacing
   // 3. Default paragraph spacing
-  const lineSpacing = inLineSpacing?.['w:line'] || line || pDefaultSpacing?.['w:line'];
+  const lineSpacing = inlineSpacing?.line ?? pDefaultSpacing?.['w:line'];
   if (lineSpacing) spacing.line = twipsToLines(lineSpacing);
 
-  const lineRule = inLineSpacing?.['w:lineRule'] || lineRuleStyle || pDefaultSpacing?.['w:lineRule'];
+  const lineRule = inlineSpacing?.lineRule ?? pDefaultSpacing?.['w:lineRule'];
   if (lineRule) spacing.lineRule = lineRule;
 
   if (lineRule === 'exact' && lineSpacing) {
     spacing.line = `${twipsToPt(lineSpacing)}pt`;
   }
 
-  const beforeSpacing = inLineSpacing?.['w:before'] || lineSpaceBefore || pDefaultSpacing?.['w:before'];
+  const beforeSpacing = inlineSpacing?.before ?? pDefaultSpacing?.['w:before'];
   if (beforeSpacing) spacing.lineSpaceBefore = twipsToPixels(beforeSpacing);
 
-  const beforeAutospacing = inLineSpacing?.['w:beforeAutospacing'];
+  const beforeAutospacing = inlineSpacing?.beforeAutospacing;
   if (beforeAutospacing === '1' && fontSize) {
     spacing.lineSpaceBefore += Math.round((parseInt(fontSize) * 0.5 * 96) / 72);
   }
 
-  const afterSpacing = inLineSpacing?.['w:after'] || lineSpaceAfter || pDefaultSpacing?.['w:after'];
+  const afterSpacing = inlineSpacing?.after ?? pDefaultSpacing?.['w:after'];
   if (afterSpacing) spacing.lineSpaceAfter = twipsToPixels(afterSpacing);
 
-  const afterAutospacing = inLineSpacing?.['w:afterAutospacing'];
+  const afterAutospacing = inlineSpacing?.afterAutospacing;
   if (afterAutospacing === '1' && fontSize) {
     spacing.lineSpaceAfter += Math.round((parseInt(fontSize) * 0.5 * 96) / 72);
   }
@@ -111,8 +107,7 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = [], option
   if (insideTable && !hasInlineSpacing && spacingSource === 'docDefault') {
     // Word ignores doc-default spacing inside table cells unless explicitly set,
     // so drop the derived values when nothing is defined inline or via style.
-    const hasExplicitSpacing = Object.keys(inLineSpacing).length > 0;
-    if (!hasExplicitSpacing) {
+    if (!hasInlineSpacing) {
       return undefined;
     }
   }

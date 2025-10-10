@@ -68,14 +68,14 @@ export const handleParagraphNode = (params) => {
   schemaNode.attrs['keepNext'] = paragraphProperties.keepNext;
 
   if (docx) {
-    const defaultStyleId = node.attributes?.['w:rsidRDefault'];
     const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
-    const spacing = getParagraphSpacing(node, docx, styleId, schemaNode.attrs.marksAttrs, {
+    const spacing = getParagraphSpacing(paragraphProperties.spacing, docx, styleId, schemaNode.attrs.marksAttrs, {
       insideTable,
     });
     if (spacing) {
       schemaNode.attrs['spacing'] = spacing;
     }
+    const defaultStyleId = node.attributes?.['w:rsidRDefault'];
     schemaNode.attrs['rsidRDefault'] = defaultStyleId;
   }
 
