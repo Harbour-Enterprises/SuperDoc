@@ -39,7 +39,6 @@ export const handleParagraphNode = (params) => {
   schemaNode.attrs.paragraphProperties = paragraphProperties;
 
   // Extract paragraph borders if present
-  const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
   schemaNode.attrs.borders = paragraphProperties.borders;
   const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
   const framePr = pPr?.elements?.find((el) => el.name === 'w:framePr');
@@ -57,11 +56,8 @@ export const handleParagraphNode = (params) => {
     schemaNode.attrs.marksAttrs = marks;
   }
 
-  let styleId;
-  if (styleTag) {
-    styleId = styleTag.attributes['w:val'];
-    schemaNode.attrs['styleId'] = styleId;
-  }
+  const styleId = paragraphProperties.styleId;
+  schemaNode.attrs['styleId'] = styleId;
 
   if (docx) {
     const indent = getParagraphIndent(node, docx, styleId);
