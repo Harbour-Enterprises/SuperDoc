@@ -41,7 +41,6 @@ export const handleParagraphNode = (params) => {
   // Extract paragraph borders if present
   schemaNode.attrs.borders = paragraphProperties.borders;
   const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
-  const framePr = pPr?.elements?.find((el) => el.name === 'w:framePr');
 
   if (nestedRPr) {
     let marks = parseMarks(nestedRPr, []);
@@ -89,14 +88,12 @@ export const handleParagraphNode = (params) => {
     }
   }
 
-  if (framePr && framePr.attributes['w:dropCap']) {
+  if (paragraphProperties.framePr) {
     schemaNode.attrs.dropcap = {
-      type: framePr.attributes['w:dropCap'],
-      lines: framePr.attributes['w:lines'],
-      wrap: framePr.attributes['w:wrap'],
-      hAnchor: framePr.attributes['w:hAnchor'],
-      vAnchor: framePr.attributes['w:vAnchor'],
+      ...paragraphProperties.framePr,
+      type: paragraphProperties.framePr.dropCap,
     };
+    delete schemaNode.attrs.dropcap.dropCap;
   }
 
   schemaNode.attrs['filename'] = filename;
