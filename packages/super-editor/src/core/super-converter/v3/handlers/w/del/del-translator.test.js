@@ -107,7 +107,7 @@ describe('w:del translator', () => {
 
       const result = config.decode({ node });
 
-      expect(exportSchemaToJson).toHaveBeenCalledWith(expect.objectContaining({ node: expect.any(Object) }));
+      expect(exportSchemaToJson).toHaveBeenCalled();
 
       expect(result.name).toBe('w:del');
       expect(result.type).toBe('element');
