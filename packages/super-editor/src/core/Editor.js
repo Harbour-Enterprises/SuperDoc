@@ -240,7 +240,7 @@ export class Editor extends EventEmitter {
     onPaginationUpdate: () => null,
     onException: () => null,
     onListDefinitionsChange: () => null,
-    onFontsResolved: () => null,
+    onFontsResolved: null,
     // async (file) => url;
     handleImageUpload: null,
 
@@ -885,17 +885,20 @@ export class Editor extends EventEmitter {
       document.head.appendChild(style);
     }
 
-    // FIXME: Check if this is enough to determine whether we're running on NodeJS
-    if (this.options.isHeadless) {
+    // Ignore when running in NodeJS environment
+    if (process && process.version && process.versions) {
       return;
     }
 
-    const fontsUsedInDocument = this.converter.getDocumentFonts();
-    const unsupportedFonts = fontsUsedInDocument.filter((font) => !isFontAvailable(font));
-    this.options.onFontsResolved({
-      documentFonts: fontsUsedInDocument,
-      unsupportedFonts: unsupportedFonts,
-    });
+    if (this.options.onFontsResolved && typeof this.options.onFontsResolved === 'function') {
+      const fontsUsedInDocument = this.converter.getDocumentFonts();
+      const unsupportedFonts = fontsUsedInDocument.filter((font) => !isFontAvailable(font));
+
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+    }
   }
 
   /**

@@ -95,8 +95,8 @@ export class SuperDoc extends EventEmitter {
     onCommentsListChange: () => null,
     onException: () => null,
     onListDefinitionsChange: () => null,
-    onFontsResolved: () => null,
     onTransaction: () => null,
+    onFontsResolved: null,
     // Image upload handler
     // async (file) => url;
     handleImageUpload: null,
@@ -315,7 +315,11 @@ export class SuperDoc extends EventEmitter {
     this.on('content-error', this.onContentError);
     this.on('exception', this.config.onException);
     this.on('list-definitions-change', this.config.onListDefinitionsChange);
-    this.on('fonts-resolved', this.config.onFontsResolved);
+
+    // We only want to run the algorithm to resolve the fonts if the user has passed it.
+    if (this.config.onFontsResolved) {
+      this.on('fonts-resolved', this.config.onFontsResolved);
+    }
   }
 
   /**

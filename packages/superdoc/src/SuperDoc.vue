@@ -314,7 +314,7 @@ const editorOptions = (doc) => {
     onCommentsUpdate: onEditorCommentsUpdate,
     onCommentLocationsUpdate: onEditorCommentLocationsUpdate,
     onListDefinitionsChange: onEditorListdefinitionsChange,
-    onFontsResolved: onFontsResolved,
+    onFontsResolved: proxy?.$superdoc?.config?.onFontsResolved ? onFontsResolved : null,
     onTransaction: onEditorTransaction,
     ydoc: doc.ydoc,
     collaborationProvider: doc.provider || null,
