@@ -68,7 +68,6 @@ function decode(params) {
 
   return {
     name: 'w:ins',
-    type: 'element',
     attributes: {
       'w:id': trackedMark.attrs.id,
       'w:author': trackedMark.attrs.author,

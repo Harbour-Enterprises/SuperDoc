@@ -70,7 +70,6 @@ function decode(params) {
 
   return {
     name: 'w:del',
-    type: 'element',
     attributes: {
       'w:id': trackedMark.attrs.id,
       'w:author': trackedMark.attrs.author,
