@@ -265,7 +265,7 @@ export function handleHtmlPaste(html, editor, source) {
     const paragraphContent = doc.firstChild.content;
     const tr = state.tr.replaceSelectionWith(paragraphContent, false);
     dispatch(tr);
-  } else if (isInParagraph) {
+  } else if (isInParagraph && state.doc.textContent) {
     // We're in a paragraph but pasting multiple nodes, extract content from all paragraph nodes
     const allContent = [];
     doc.content.forEach((node, index) => {
@@ -382,6 +382,7 @@ export function sanitizeHtml(html, forbiddenTags = ['meta', 'svg', 'script', 'st
  */
 export function handleClipboardPaste({ editor, view }, html) {
   let source;
+
   if (!html) {
     source = 'plain-text';
   } else if (isWordHtml(html)) {

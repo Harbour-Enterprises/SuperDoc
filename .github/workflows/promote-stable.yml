@@ -4,17 +4,24 @@ on:
   workflow_dispatch:
     inputs:
       source_tag:
-        description: 'Tag to promote (optional - uses latest next if empty)'
+        description: "Tag to promote (optional - uses latest next if empty)"
         required: false
 
 jobs:
   promote:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Generate token
+        id: generate_token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          token: ${{ secrets.SUPERDOC_PAT }}
+          token: ${{ steps.generate_token.outputs.token }}
 
       - name: Configure Git
         run: |

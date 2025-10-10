@@ -92,7 +92,12 @@ export const applyRunMarks = (node, inlineMarks, textStyleAttrs) => {
 
 export const deriveStyleMarks = ({ docx, paragraphStyleId, runStyleId }) => {
   const paragraphStyleMarks = collectStyleMarks(paragraphStyleId, docx);
-  const runStyleMarks = collectStyleMarks(runStyleId, docx);
+  if (paragraphStyleId?.startsWith('TOC')) {
+    // Word ignores run styles for text in TOC paragraphs, so we do the same
+    return paragraphStyleMarks;
+  }
+
+  let runStyleMarks = collectStyleMarks(runStyleId, docx);
 
   const inlineMarks = mergeInlineMarkSets(paragraphStyleMarks.inlineMarks, runStyleMarks.inlineMarks);
   const textStyleAttrs = mergeTextStyleAttrs(paragraphStyleMarks.textStyleAttrs, runStyleMarks.textStyleAttrs);

@@ -72,11 +72,24 @@ const {
   hasInitializedLocations,
   isCommentHighlighted,
 } = storeToRefs(commentsStore);
-const { showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
+const {
+  showAddComment,
+  handleEditorLocationsUpdate,
+  handleTrackedChangeUpdate,
+  addComment,
+  getComment,
+  COMMENT_EVENTS,
+} = commentsStore;
 const { proxy } = getCurrentInstance();
 commentsStore.proxy = proxy;
 
 const { isHighContrastMode } = useHighContrastMode();
+
+const commentsModuleConfig = computed(() => {
+  const config = modules.comments;
+  if (config === false || config == null) return null;
+  return config;
+});
 
 // Refs
 const layers = ref(null);
@@ -280,7 +293,7 @@ const editorOptions = (doc) => {
     rulers: doc.rulers,
     isInternal: proxy.$superdoc.config.isInternal,
     annotations: proxy.$superdoc.config.annotations,
-    isCommentsEnabled: proxy.$superdoc.config.modules?.comments,
+    isCommentsEnabled: Boolean(commentsModuleConfig.value),
     isAiEnabled: proxy.$superdoc.config.modules?.ai,
     slashMenuConfig: proxy.$superdoc.config.modules?.slashMenu,
     onBeforeCreate: onEditorBeforeCreate,
@@ -319,13 +332,47 @@ const editorOptions = (doc) => {
  * @returns {void}
  */
 const onEditorCommentLocationsUpdate = ({ allCommentIds: activeThreadId, allCommentPositions }) => {
-  if (!proxy.$superdoc.config.modules?.comments) return;
+  const commentsConfig = proxy.$superdoc.config.modules?.comments;
+  if (!commentsConfig || commentsConfig === false) return;
   handleEditorLocationsUpdate(allCommentPositions, activeThreadId);
 };
 
 const onEditorCommentsUpdate = (params = {}) => {
   // Set the active comment in the store
-  const { activeCommentId, type } = params;
+  let { activeCommentId, type, comment: commentPayload } = params;
+
+  if (COMMENT_EVENTS?.ADD && type === COMMENT_EVENTS.ADD && commentPayload) {
+    if (!commentPayload.commentText && commentPayload.text) {
+      commentPayload.commentText = commentPayload.text;
+    }
+
+    const currentUser = proxy.$superdoc?.user;
+    if (currentUser) {
+      if (!commentPayload.creatorName) commentPayload.creatorName = currentUser.name;
+      if (!commentPayload.creatorEmail) commentPayload.creatorEmail = currentUser.email;
+    }
+
+    if (!commentPayload.createdTime) commentPayload.createdTime = Date.now();
+
+    const primaryDocumentId = commentPayload.documentId || documents.value?.[0]?.id;
+    if (!commentPayload.documentId && primaryDocumentId) {
+      commentPayload.documentId = primaryDocumentId;
+    }
+
+    if (!commentPayload.fileId && primaryDocumentId) {
+      commentPayload.fileId = primaryDocumentId;
+    }
+
+    const id = commentPayload.commentId || commentPayload.importedId;
+    if (id && !getComment(id)) {
+      const commentModel = useComment(commentPayload);
+      addComment({ superdoc: proxy.$superdoc, comment: commentModel, skipEditorUpdate: true });
+    }
+
+    if (!activeCommentId && id) {
+      activeCommentId = id;
+    }
+  }
 
   if (type === 'trackedChange') {
     handleTrackedChangeUpdate({ superdoc: proxy.$superdoc, params });
@@ -349,7 +396,7 @@ const onEditorTransaction = ({ editor, transaction, duration }) => {
   }
 };
 
-const isCommentsEnabled = computed(() => 'comments' in modules);
+const isCommentsEnabled = computed(() => Boolean(commentsModuleConfig.value));
 const showCommentsSidebar = computed(() => {
   return (
     pendingComment.value ||
@@ -367,7 +414,7 @@ const showToolsFloatingMenu = computed(() => {
 });
 const showActiveSelection = computed(() => {
   if (!isCommentsEnabled.value) return false;
-  !getConfig?.readOnly && selectionPosition.value;
+  return !getConfig.value?.readOnly && selectionPosition.value;
 });
 
 watch(showCommentsSidebar, (value) => {
@@ -380,7 +427,8 @@ watch(showCommentsSidebar, (value) => {
  * @param {String} commentId The commentId to scroll to
  */
 const scrollToComment = (commentId) => {
-  if (!proxy.$superdoc.config?.modules?.comments) return;
+  const commentsConfig = proxy.$superdoc.config?.modules?.comments;
+  if (!commentsConfig || commentsConfig === false) return;
 
   const element = document.querySelector(`[data-thread-id=${commentId}]`);
   if (element) {
@@ -390,7 +438,8 @@ const scrollToComment = (commentId) => {
 };
 
 onMounted(() => {
-  if (isCommentsEnabled.value && !modules.comments.readOnly) {
+  const config = commentsModuleConfig.value;
+  if (config && !config.readOnly) {
     document.addEventListener('mousedown', handleDocumentMouseDown);
   }
 });
@@ -540,6 +589,7 @@ const handleDragEnd = (e) => {
 
 const shouldShowSelection = computed(() => {
   const config = proxy.$superdoc.config.modules?.comments;
+  if (!config || config === false) return false;
   return !config.readOnly;
 });
 

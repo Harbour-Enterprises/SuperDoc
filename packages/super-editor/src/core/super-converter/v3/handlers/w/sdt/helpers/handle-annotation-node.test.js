@@ -40,9 +40,48 @@ describe('handleAnnotationNode', () => {
     attributes: { 'w:val': value },
   });
 
+  const createTextRun = (text) => ({
+    name: 'w:r',
+    elements: [
+      {
+        name: 'w:t',
+        elements: [{ type: 'text', text }],
+      },
+    ],
+  });
+
+  const createParagraph = (...elements) => ({
+    name: 'w:p',
+    elements,
+  });
+
+  const createRunWithTab = (textBefore = '', textAfter = '') => ({
+    name: 'w:r',
+    elements: [
+      ...(textBefore
+        ? [
+            {
+              name: 'w:t',
+              elements: [{ type: 'text', text: textBefore }],
+            },
+          ]
+        : []),
+      { name: 'w:tab' },
+      ...(textAfter
+        ? [
+            {
+              name: 'w:t',
+              elements: [{ type: 'text', text: textAfter }],
+            },
+          ]
+        : []),
+    ],
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     parseMarks.mockReturnValue([]);
+    generateDocxRandomId.mockReturnValue('test-hash-1234');
   });
 
   it('returns null when nodes array is empty', () => {
@@ -77,16 +116,16 @@ describe('handleAnnotationNode', () => {
     const result = handleAnnotationNode(params);
 
     expect(parseTagValueJSON).toHaveBeenCalledWith(tagValue);
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       type: 'text',
       text: '{{Test Field}}',
       attrs: {
         type: 'text',
         fieldId: '123',
         displayLabel: 'Test Field',
+        defaultDisplayLabel: 'Test Field',
         hash: 'test-hash-1234',
       },
-      marks: undefined,
     });
   });
 
@@ -111,11 +150,15 @@ describe('handleAnnotationNode', () => {
         type: 'text',
         fieldId: 'field-123',
         displayLabel: 'Legacy Field',
+        defaultDisplayLabel: 'Legacy Field',
         multipleImage: false,
+        fieldType: undefined,
+        fieldColor: undefined,
         fontFamily: undefined,
         fontSize: undefined,
         textColor: undefined,
         textHighlight: undefined,
+        sdtId: undefined,
         hash: 'test-hash-1234',
       },
       marks: undefined,
@@ -140,5 +183,317 @@ describe('handleAnnotationNode', () => {
 
     expect(result.type).toBe('fieldAnnotation');
     expect(result).not.toHaveProperty('text');
+  });
+
+  it('keeps placeholder text when annotations are disabled even if SDT content differs', () => {
+    const tagValue =
+      '{"fieldId":"field-html","fieldTypeShort":"html","displayLabel":"Placeholder","fieldType":"HTMLINPUT","fieldColor":"#980043","fieldMultipleImage":false,"fieldFontFamily":"Arial","fieldFontSize":"9pt","fieldTextColor":null,"fieldTextHighlight":null,"hash":"b43b"}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-html',
+      fieldTypeShort: 'html',
+      displayLabel: 'Placeholder',
+      defaultDisplayLabel: '',
+      fieldType: 'HTMLINPUT',
+      fieldColor: '#980043',
+      fieldMultipleImage: false,
+      fieldFontFamily: 'Arial',
+      fieldFontSize: '9pt',
+      fieldTextColor: null,
+      fieldTextHighlight: null,
+      hash: 'b43b',
+    });
+
+    const node = createNode([createTag(tagValue), createAlias('Placeholder')], [createTextRun('Actual Content')]);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: false } } });
+
+    expect(result.text).toBe('{{Placeholder}}');
+    expect(result.attrs.displayLabel).toBe('Actual Content');
+    expect(result.attrs.defaultDisplayLabel).toBe('Placeholder');
+    expect(result.attrs.hash).toBe('b43b');
+    expect(result.attrs).toMatchObject({
+      fieldId: 'field-html',
+      fieldType: 'HTMLINPUT',
+      fieldColor: '#980043',
+      type: 'html',
+    });
+    expect(generateDocxRandomId).not.toHaveBeenCalled();
+  });
+
+  it('uses moustache SDT content when placeholder text differs', () => {
+    const tagValue =
+      '{"fieldId":"field-text","fieldTypeShort":"text","displayLabel":"Placeholder","defaultDisplayLabel":"","hash":"abcd"}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-text',
+      fieldTypeShort: 'text',
+      displayLabel: 'Placeholder',
+      defaultDisplayLabel: '',
+      hash: 'abcd',
+    });
+
+    const node = createNode([createTag(tagValue), createAlias('Placeholder')], [createTextRun('{{Custom Value}}')]);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: false } } });
+
+    expect(result.text).toBe('{{Custom Value}}');
+    expect(result.attrs.displayLabel).toBe('{{Custom Value}}');
+    expect(result.attrs.defaultDisplayLabel).toBe('Placeholder');
+  });
+
+  it('keeps existing moustache placeholders without double wrapping', () => {
+    const tagValue =
+      '{"fieldId":"field-text","fieldTypeShort":"text","displayLabel":"{{Wrapped}}","defaultDisplayLabel":"","hash":"abcd"}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-text',
+      fieldTypeShort: 'text',
+      displayLabel: '{{Wrapped}}',
+      defaultDisplayLabel: '',
+      hash: 'abcd',
+    });
+
+    const node = createNode([createTag(tagValue)], []);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: false } } });
+
+    expect(result.text).toBe('{{Wrapped}}');
+    expect(result.attrs.displayLabel).toBe('{{Wrapped}}');
+  });
+
+  it('uses SDT content when no placeholder labels are provided', () => {
+    const tagValue =
+      '{"fieldId":"field-text","fieldTypeShort":"text","displayLabel":"","defaultDisplayLabel":"","hash":"abcd"}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-text',
+      fieldTypeShort: 'text',
+      displayLabel: '',
+      defaultDisplayLabel: '',
+      hash: 'abcd',
+    });
+
+    const node = createNode([createTag(tagValue)], [createTextRun('Custom content')]);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: false } } });
+
+    expect(result.text).toBe('Custom content');
+    expect(result.attrs.displayLabel).toBe('Custom content');
+    expect(result.attrs.defaultDisplayLabel).toBe('');
+  });
+
+  it('collects paragraph content with line breaks without trailing newline characters', () => {
+    const tagValue =
+      '{"fieldId":"field-text","fieldTypeShort":"text","displayLabel":"Paragraph","defaultDisplayLabel":"","hash":"abcd"}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-text',
+      fieldTypeShort: 'text',
+      displayLabel: 'Paragraph',
+      defaultDisplayLabel: '',
+      hash: 'abcd',
+    });
+
+    const paragraph = createParagraph(createTextRun('Line one'), { name: 'w:br' }, createTextRun('Line two'));
+    const node = createNode([createTag(tagValue), createAlias('Paragraph')], [paragraph]);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: false } } });
+
+    expect(result.text).toBe('{{Paragraph}}');
+    expect(result.attrs.displayLabel).toBe('Line one\nLine two');
+    expect(result.attrs.defaultDisplayLabel).toBe('Paragraph');
+  });
+
+  it('uses alias label when display labels are empty', () => {
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-alias',
+      fieldTypeShort: 'text',
+      displayLabel: '',
+      defaultDisplayLabel: '',
+      hash: null,
+    });
+
+    const node = createNode([createTag('{}'), createAlias('Alias Only')], []);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: false } } });
+
+    expect(result.text).toBe('{{Alias Only}}');
+    expect(result.attrs.displayLabel).toBe('Alias Only');
+    expect(result.attrs.defaultDisplayLabel).toBe('Alias Only');
+  });
+
+  it('returns empty text when no labels or content exist', () => {
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-empty',
+      fieldTypeShort: 'text',
+      displayLabel: '',
+      defaultDisplayLabel: '',
+      hash: null,
+    });
+
+    const node = createNode([createTag('{}')], []);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: false } } });
+
+    expect(result.text).toBe('');
+    expect(result.attrs.displayLabel).toBe('');
+    expect(result.attrs.defaultDisplayLabel).toBe('');
+  });
+
+  it('captures tab characters when extracting SDT content', () => {
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-tab',
+      fieldTypeShort: 'text',
+      displayLabel: 'Tab Field',
+      defaultDisplayLabel: '',
+      hash: null,
+    });
+
+    const paragraph = createParagraph(createRunWithTab('Left', 'Right'));
+    const node = createNode([createTag('{}'), createAlias('Tab Field')], [paragraph]);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: true } } });
+
+    expect(result.attrs.displayLabel).toBe('Left\tRight');
+    expect(result.attrs.defaultDisplayLabel).toBe('Tab Field');
+    expect(result.type).toBe('fieldAnnotation');
+  });
+
+  it('uses SDT content when placeholder is empty', () => {
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-content',
+      fieldTypeShort: 'text',
+      displayLabel: '',
+      defaultDisplayLabel: '',
+      hash: null,
+    });
+
+    const node = createNode([createTag('{}')], [createTextRun('Actual content')]);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: false } } });
+
+    expect(result.text).toBe('Actual content');
+    expect(result.attrs.displayLabel).toBe('Actual content');
+  });
+
+  it('prefers display label when alias uses Word default placeholder text', () => {
+    const tagValue =
+      '{"fieldId":"field-text","fieldTypeShort":"text","displayLabel":"Service","defaultDisplayLabel":"","hash":null}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-text',
+      fieldTypeShort: 'text',
+      displayLabel: 'Service',
+      defaultDisplayLabel: '',
+      hash: null,
+    });
+
+    const node = createNode([createTag(tagValue), createAlias('Enter paragraph text')], []);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: false } } });
+
+    expect(result.text).toBe('{{Service}}');
+    expect(result.attrs.defaultDisplayLabel).toBe('Service');
+  });
+
+  it('returns fieldAnnotation with SDT content when annotations are enabled', () => {
+    const tagValue =
+      '{"fieldId":"field-html","fieldTypeShort":"html","displayLabel":"Placeholder","fieldType":"HTMLINPUT","fieldColor":"#980043","fieldMultipleImage":false,"fieldFontFamily":"Arial","fieldFontSize":"9pt","fieldTextColor":null,"fieldTextHighlight":null,"hash":"b43b"}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-html',
+      fieldTypeShort: 'html',
+      displayLabel: 'Placeholder',
+      defaultDisplayLabel: '',
+      fieldType: 'HTMLINPUT',
+      fieldColor: '#980043',
+      fieldMultipleImage: false,
+      fieldFontFamily: 'Arial',
+      fieldFontSize: '9pt',
+      fieldTextColor: null,
+      fieldTextHighlight: null,
+      hash: 'b43b',
+    });
+
+    const node = createNode([createTag(tagValue), createAlias('Placeholder')], [createTextRun('Actual Content')]);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: { annotations: true } } });
+
+    expect(result.type).toBe('fieldAnnotation');
+    expect(result).not.toHaveProperty('text');
+    expect(result.attrs.displayLabel).toBe('Actual Content');
+    expect(result.attrs.defaultDisplayLabel).toBe('Placeholder');
+    expect(result.attrs.hash).toBe('b43b');
+    expect(generateDocxRandomId).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the placeholder when SDT content normalizes to the same text', () => {
+    const tagValue = '{"fieldId":"field-legacy","fieldTypeShort":"html","displayLabel":"Placeholder"}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-legacy',
+      fieldTypeShort: 'html',
+      displayLabel: 'Placeholder',
+      defaultDisplayLabel: '',
+      hash: null,
+    });
+
+    const node = createNode(
+      [createTag(tagValue), createAlias('Placeholder')],
+      [createTextRun('  Placeholder\u00a0  ')],
+    );
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: {} } });
+
+    expect(result.text).toBe('{{Placeholder}}');
+    expect(result.attrs.displayLabel).toBe('Placeholder');
+    expect(result.attrs.defaultDisplayLabel).toBe('Placeholder');
+    expect(result.attrs.hash).toBe('test-hash-1234');
+    expect(generateDocxRandomId).toHaveBeenCalledTimes(1);
+  });
+
+  it('ignores exported placeholder content wrapped in double braces', () => {
+    const tagValue = '{"fieldId":"field-placeholder","fieldTypeShort":"text","displayLabel":"Label"}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-placeholder',
+      fieldTypeShort: 'text',
+      displayLabel: 'Label',
+      defaultDisplayLabel: '',
+      hash: null,
+    });
+
+    const node = createNode([createTag(tagValue), createAlias('Label')], [createTextRun('{{Label}}')]);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: {} } });
+
+    expect(result.text).toBe('{{Label}}');
+    expect(result.attrs.displayLabel).toBe('Label');
+    expect(result.attrs.defaultDisplayLabel).toBe('Label');
+    expect(result.attrs.hash).toBe('test-hash-1234');
+    expect(generateDocxRandomId).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns empty text when both placeholder and SDT content are empty', () => {
+    const tagValue = '{"fieldId":"field-empty","fieldTypeShort":"text","displayLabel":""}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-empty',
+      fieldTypeShort: 'text',
+      displayLabel: '',
+      defaultDisplayLabel: '',
+      hash: null,
+    });
+
+    const node = createNode([createTag(tagValue)], []);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: {} } });
+
+    expect(result.text).toBe('');
+    expect(result.attrs.displayLabel).toBe('');
+    expect(result.attrs.defaultDisplayLabel).toBe('');
+    expect(result.attrs.hash).toBe('test-hash-1234');
+    expect(generateDocxRandomId).toHaveBeenCalledTimes(1);
   });
 });

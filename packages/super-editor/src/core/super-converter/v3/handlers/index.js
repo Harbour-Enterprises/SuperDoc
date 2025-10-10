@@ -1,5 +1,7 @@
 // @ts-check
 import { translator as mc_AlternateContent_translator } from './mc/altermateContent/alternate-content-translator.js';
+import { translator as sd_pageReference_translator } from './sd/pageReference/pageReference-translator.js';
+import { translator as sd_tableOfContents_translator } from './sd/tableOfContents/tableOfContents-translator.js';
 import { translator as w_b_translator } from './w/b/b-translator.js';
 import { translator as w_bidiVisual_translator } from './w/bidiVisual/bidiVisual-translator.js';
 import { translator as w_bookmarkEnd_translator } from './w/bookmark-end/bookmark-end-translator.js';
@@ -62,8 +64,13 @@ import { translator as w_trPr_translator } from './w/trPr/trPr-translator.js';
 import { translator as w_u_translator } from './w/u/u-translator.js';
 import { translator as w_wAfter_translator } from './w/wAfter/wAfter-translator.js';
 import { translator as w_wBefore_translator } from './w/wBefore/wBefore-translator.js';
+import {
+  commentRangeStartTranslator as w_commentRangeStart_translator,
+  commentRangeEndTranslator as w_commentRangeEnd_translator,
+} from './w/commentRange/comment-range-translator.js';
 import { translator as wp_anchor_translator } from './wp/anchor/anchor-translator.js';
 import { translator as wp_inline_translator } from './wp/inline/inline-translator.js';
+
 import { runPropertyTranslators } from './w/rpr/run-property-translators.js';
 
 /**
@@ -73,6 +80,8 @@ import { runPropertyTranslators } from './w/rpr/run-property-translators.js';
 // Additional translator registrations keyed by OOXML element name.
 const additionalHandlers = Object.freeze({
   'mc:AlternateContent': mc_AlternateContent_translator,
+  'sd:pageReference': sd_pageReference_translator,
+  'sd:tableOfContents': sd_tableOfContents_translator,
   'w:b': w_b_translator,
   'w:bidiVisual': w_bidiVisual_translator,
   'w:bookmarkEnd': w_bookmarkEnd_translator,
@@ -137,6 +146,8 @@ const additionalHandlers = Object.freeze({
   'w:wBefore': w_wBefore_translator,
   'wp:anchor': wp_anchor_translator,
   'wp:inline': wp_inline_translator,
+  'w:commentRangeStart': w_commentRangeStart_translator,
+  'w:commentRangeEnd': w_commentRangeEnd_translator,
 });
 
 const baseHandlers = {

@@ -48,7 +48,7 @@ export function replaceSelectionWithImagePlaceholder({ editorOptions, view, id }
   view.dispatch(tr);
 }
 
-const generateUniqueDocPrId = (editor) => {
+export const generateUniqueDocPrId = (editor) => {
   const existingIds = new Set();
   editor?.state?.doc?.descendants((node) => {
     if (node.type.name === 'image' && node.attrs.id !== undefined && node.attrs.id !== null) {
@@ -135,7 +135,7 @@ export async function uploadAndInsertImage({ editor, view, file, size, id }) {
   }
 }
 
-function addImageRelationship({ editor, path }) {
+export function addImageRelationship({ editor, path }) {
   const target = path;
   const type = 'image';
   try {

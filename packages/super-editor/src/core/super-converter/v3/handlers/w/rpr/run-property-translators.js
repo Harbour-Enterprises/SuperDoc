@@ -9,6 +9,7 @@ import { translator as fontFamilyTranslator } from '../rFonts/rFonts-translator.
 import { translator as runStyleTranslator } from '../rStyle/rstyle-translator.js';
 import { translator as fontSizeTranslator } from '../sz/sz-translator.js';
 import { translator as fontSizeCsTranslator } from '../szcs/szcs-translator.js';
+import { translator as capsTranslator } from '../caps/caps-translator.js';
 
 /**
  * Map of OOXML run property element names to their translators.
@@ -26,6 +27,7 @@ export const runPropertyTranslators = Object.freeze({
   'w:rStyle': runStyleTranslator,
   'w:sz': fontSizeTranslator,
   'w:szCs': fontSizeCsTranslator,
+  'w:caps': capsTranslator,
 });
 
 /**

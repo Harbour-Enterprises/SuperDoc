@@ -1,4 +1,4 @@
-import { getExportedResult, getTextFromNode } from './export-helpers/index';
+import { getExportedResult } from './export-helpers/index';
 
 const getHyperlinkNodeFromParagraph = (paragraph) => {
   const directHyperlink = paragraph.elements.find((el) => el.name === 'w:hyperlink');
@@ -59,25 +59,28 @@ describe('HyperlinkNodeExporter', async () => {
     expect(rPr.elements[3].attributes['w:val']).toBe('SubtitleChar');
   });
 
-  it('exports hyperlink marks spanning multiple runs as separate hyperlink elements while preserving formatting', async () => {
+  it('exports hyperlink marks spanning multiple runs as single hyperlink element while preserving formatting', async () => {
     const fileName = 'hyperlink_multiple_runs.docx';
     const result = await getExportedResult(fileName);
     const body = result.elements?.find((el) => el.name === 'w:body');
     const paragraph = body.elements[0];
 
     const hyperlinkNodes = paragraph.elements.filter((el) => el.name === 'w:hyperlink');
-    expect(hyperlinkNodes).toHaveLength(3);
-    hyperlinkNodes.forEach((node) => {
-      expect(node.attributes['r:id']).toBe('rId9');
-    });
+    expect(hyperlinkNodes).toHaveLength(1);
 
-    const texts = hyperlinkNodes.map((node) => getTextFromNode(node));
+    const hyperlink = hyperlinkNodes[0];
+    expect(hyperlink.attributes['r:id']).toBe('rId9');
+
+    const allRuns = hyperlink.elements.filter((el) => el.name === 'w:r');
+    expect(allRuns).toHaveLength(3);
+
+    const texts = allRuns.map((node) => node.elements.find((el) => el.name === 'w:t')?.elements[0]?.text);
     expect(texts).toEqual(['Click', 'here', 'now']);
 
-    const boldRunProps = hyperlinkNodes[1]?.elements?.[0]?.elements?.[0];
+    const boldRunProps = allRuns[1]?.elements?.[0];
     expect(boldRunProps?.elements?.some((el) => el.name === 'w:b')).toBe(true);
 
-    const italicRunProps = hyperlinkNodes[2]?.elements?.[0]?.elements?.[0];
+    const italicRunProps = allRuns[2]?.elements?.[0];
     expect(italicRunProps?.elements?.some((el) => el.name === 'w:i')).toBe(true);
   });
 });

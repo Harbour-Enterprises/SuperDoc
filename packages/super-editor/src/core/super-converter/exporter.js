@@ -8,11 +8,10 @@ import {
   ptToTwips,
   rgbToHex,
 } from './helpers.js';
-import { generateDocxRandomId, generateRandomSigned32BitIntStrId } from '@helpers/generateDocxRandomId.js';
+import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
-import { translateCommentNode } from './v2/exporter/commentsExporter.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
@@ -21,7 +20,6 @@ import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-transl
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wRNodeTranslator } from './v3/handlers/w/r/r-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
-import { translator as wHyperlinkTranslator } from './v3/handlers/w/hyperlink/hyperlink-translator.js';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
 import { translator as wTblNodeTranslator } from './v3/handlers/w/tbl/tbl-translator.js';
@@ -29,7 +27,13 @@ import { translator as wUnderlineTranslator } from './v3/handlers/w/u/u-translat
 import { translator as wDrawingNodeTranslator } from './v3/handlers/w/drawing/drawing-translator.js';
 import { translator as wBookmarkStartTranslator } from './v3/handlers/w/bookmark-start/index.js';
 import { translator as wBookmarkEndTranslator } from './v3/handlers/w/bookmark-end/index.js';
-import { translator as alternateChoiceTranslator } from '@converter/v3/handlers/mc/altermateContent';
+import {
+  commentRangeStartTranslator as wCommentRangeStartTranslator,
+  commentRangeEndTranslator as wCommentRangeEndTranslator,
+} from './v3/handlers/w/commentRange/index.js';
+import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
+import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
+import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -107,8 +111,8 @@ export const isLineBreakOnlyRun = (node) => {
 /**
  * @typedef {Object} ExportParams
  * @property {Object} node JSON node to translate (from PM schema)
- * @property {Object} bodyNode The stored body node to restore, if available
- * @property {Object[]} relationships The relationships to add to the document
+ * @property {Object} [bodyNode] The stored body node to restore, if available
+ * @property {Object[]} [relationships] The relationships to add to the document
  */
 
 /**
@@ -170,17 +174,20 @@ export function exportSchemaToJson(params) {
     tab: wTabNodeTranslator,
     image: wDrawingNodeTranslator,
     hardBreak: wBrNodeTranslator,
-    commentRangeStart: () => translateCommentNode(params, 'Start'),
-    commentRangeEnd: () => translateCommentNode(params, 'End'),
+    commentRangeStart: wCommentRangeStartTranslator,
+    commentRangeEnd: wCommentRangeEndTranslator,
     commentReference: () => null,
-    shapeContainer: translateShapeContainer,
-    shapeTextbox: translateShapeTextbox,
-    contentBlock: translateContentBlock,
+    shapeContainer: pictTranslator,
+    shapeTextbox: pictTranslator,
+    contentBlock: pictTranslator,
     structuredContent: wSdtNodeTranslator,
     structuredContentBlock: wSdtNodeTranslator,
+    documentPartObject: wSdtNodeTranslator,
     documentSection: wSdtNodeTranslator,
     'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
+    pageReference: sdPageReferenceTranslator,
+    tableOfContents: sdTableOfContentsTranslator,
   };
 
   let handler = router[type];
@@ -657,10 +664,6 @@ function translateTextNode(params) {
   const trackedMarks = [TrackInsertMarkName, TrackDeleteMarkName];
   const isTrackedNode = node.marks?.some((m) => trackedMarks.includes(m.type));
   if (isTrackedNode) return translateTrackedNode(params);
-
-  // Separate links from regular text
-  const isLinkNode = node.marks?.some((m) => m.type === 'link');
-  if (isLinkNode) return wHyperlinkTranslator.decode(params);
 
   const { text, marks = [] } = node;
 
@@ -1194,127 +1197,6 @@ export function translateHardBreak(params) {
   };
 }
 
-function translateShapeContainer(params) {
-  const { node } = params;
-  const elements = translateChildNodes(params);
-
-  const shape = {
-    name: 'v:shape',
-    attributes: {
-      ...node.attrs.attributes,
-      fillcolor: node.attrs.fillcolor,
-    },
-    elements: [
-      ...elements,
-      ...(node.attrs.wrapAttributes
-        ? [
-            {
-              name: 'w10:wrap',
-              attributes: { ...node.attrs.wrapAttributes },
-            },
-          ]
-        : []),
-    ],
-  };
-
-  const pict = {
-    name: 'w:pict',
-    attributes: {
-      'w14:anchorId': generateRandomSigned32BitIntStrId(),
-    },
-    elements: [shape],
-  };
-
-  const par = {
-    name: 'w:p',
-    elements: [wrapTextInRun(pict)],
-  };
-
-  return par;
-}
-
-function translateShapeTextbox(params) {
-  const { node } = params;
-  const elements = translateChildNodes(params);
-
-  const textboxContent = {
-    name: 'w:txbxContent',
-    elements,
-  };
-
-  const textbox = {
-    name: 'v:textbox',
-    attributes: {
-      ...node.attrs.attributes,
-    },
-    elements: [textboxContent],
-  };
-
-  return textbox;
-}
-
-function translateContentBlock(params) {
-  const { node } = params;
-  const { vmlAttributes, horizontalRule } = node.attrs;
-
-  // Handle VML v:rect elements (like horizontal rules)
-  if (vmlAttributes || horizontalRule) {
-    return translateVRectContentBlock(params);
-  }
-
-  const alternateContent = alternateChoiceTranslator.decode(params);
-  return wrapTextInRun(alternateContent);
-}
-
-function translateVRectContentBlock(params) {
-  const { node } = params;
-  const { vmlAttributes, background, attributes, style } = node.attrs;
-
-  const rectAttrs = {
-    id: attributes?.id || `_x0000_i${Math.floor(Math.random() * 10000)}`,
-  };
-
-  if (style) {
-    rectAttrs.style = style;
-  }
-
-  if (background) {
-    rectAttrs.fillcolor = background;
-  }
-
-  if (vmlAttributes) {
-    if (vmlAttributes.hralign) rectAttrs['o:hralign'] = vmlAttributes.hralign;
-    if (vmlAttributes.hrstd) rectAttrs['o:hrstd'] = vmlAttributes.hrstd;
-    if (vmlAttributes.hr) rectAttrs['o:hr'] = vmlAttributes.hr;
-    if (vmlAttributes.stroked) rectAttrs.stroked = vmlAttributes.stroked;
-  }
-
-  if (attributes) {
-    Object.entries(attributes).forEach(([key, value]) => {
-      if (!rectAttrs[key] && value !== undefined) {
-        rectAttrs[key] = value;
-      }
-    });
-  }
-
-  // Create the v:rect element
-  const rect = {
-    name: 'v:rect',
-    attributes: rectAttrs,
-  };
-
-  // Wrap in w:pict
-  const pict = {
-    name: 'w:pict',
-    attributes: {
-      'w14:anchorId': generateRandomSigned32BitIntStrId(),
-    },
-    elements: [rect],
-  };
-
-  return wrapTextInRun(pict);
-}
-
 export class DocxExporter {
   constructor(converter) {
     this.converter = converter;
@@ -1445,6 +1327,7 @@ const getAutoPageJson = (type, outputMarks = []) => {
         },
         {
           name: 'w:instrText',
+          attributes: { 'xml:space': 'preserve' },
           elements: [
             {
               type: 'text',

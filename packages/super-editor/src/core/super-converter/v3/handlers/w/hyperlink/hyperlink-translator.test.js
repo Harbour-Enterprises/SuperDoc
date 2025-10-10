@@ -154,27 +154,23 @@ describe('w:hyperlink translator', () => {
       expect(result[0].marks).toEqual([linkMark]);
     });
 
-    it('does not leave link mark on run nodes', () => {
-      const mockRunHandler = vi.fn(({ nodes }) =>
-        nodes.map((run) => ({
-          type: 'run',
-          marks: Array.isArray(run.marks) ? run.marks.map((mark) => ({ ...mark })) : [],
-          content: [
-            {
-              type: 'text',
-              text: 'link text',
-              marks: Array.isArray(run.marks) ? run.marks.map((mark) => ({ ...mark })) : [],
-            },
-          ],
-        })),
-      );
-
+    it('should add link mark to child runs and page reference nodes', () => {
       const params = {
         nodes: [
           {
             name: 'w:hyperlink',
             attributes: { 'r:id': 'rId1' },
-            elements: [{ name: 'w:r', elements: [] }],
+            elements: [
+              { name: 'w:r', elements: [] },
+              {
+                name: 'sd:pageReference',
+                type: 'element',
+                attributes: {
+                  instruction: 'PAGEREF _Toc123456789 h',
+                },
+                elements: [{ type: 'text', text: '1' }],
+              },
+            ],
           },
         ],
         docx: {
@@ -187,25 +183,29 @@ describe('w:hyperlink translator', () => {
             ],
           },
         },
-        nodeListHandler: { handler: mockRunHandler },
+        nodeListHandler: mockNodeListHandler,
         path: [],
       };
-
       const encodedAttrs = { rId: 'rId1' };
 
       const result = config.encode(params, encodedAttrs);
 
-      const runNode = result[0];
-      const hasRunLevelLink = Array.isArray(runNode.marks) && runNode.marks.some((mark) => mark.type === 'link');
-      expect(hasRunLevelLink).toBe(false);
-
-      const textMarks = runNode.content?.[0]?.marks || [];
-      expect(textMarks.some((mark) => mark.type === 'link')).toBe(true);
+      expect(result).toHaveLength(2);
+      const linkMark = { type: 'link', attrs: { rId: 'rId1', href: 'https://example.com' } };
+      expect(result[0].type).toBe('text');
+      expect(result[0].marks).toEqual([linkMark]);
+      expect(result[1].type).toBe('text');
+      expect(result[1].marks).toEqual([linkMark]);
+      expect(mockNodeListHandler.handler).toHaveBeenCalledWith({
+        ...params,
+        nodes: params.nodes[0].elements,
+        path: [...params.path, params.nodes[0]],
+      });
     });
   });
 
   describe('config.decode', () => {
-    it('should decode an external link and add a new relationship', () => {
+    it('should decode an external link', () => {
       const params = {
         node: {
           type: 'text',
@@ -224,17 +224,7 @@ describe('w:hyperlink translator', () => {
 
       expect(result.name).toBe('w:hyperlink');
       expect(result.attributes['r:id']).toBe('rId5');
-      expect(params.relationships).toHaveLength(1);
-      expect(params.relationships[0]).toEqual({
-        type: 'element',
-        name: 'Relationship',
-        attributes: {
-          Id: 'rId5',
-          Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
-          Target: 'https://example.com',
-          TargetMode: 'External',
-        },
-      });
+      expect(params.relationships).toHaveLength(0);
       expect(exportSchemaToJson).toHaveBeenCalled();
     });
 
@@ -280,23 +270,45 @@ describe('w:hyperlink translator', () => {
       expect(params.relationships).toHaveLength(1);
       expect(params.relationships[0]).toBe(existingRel);
     });
+  });
 
-    it('should decode an anchor link without adding a relationship', () => {
+  describe('with hyperlinkGroup', () => {
+    it('should wrap multiple nodes with the same link mark in a single w:hyperlink', () => {
       const params = {
         node: {
           type: 'text',
-          text: 'anchor text',
-          marks: [{ type: 'link', attrs: { href: '#my-anchor', anchor: 'my-anchor' } }],
+          text: 'link text 1',
+          marks: [{ type: 'link', attrs: { href: 'https://example.com', rId: 'rId1' } }],
+        },
+        extraParams: {
+          hyperlinkGroup: [
+            {
+              type: 'text',
+              text: 'link text 1',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com', rId: 'rId1' } }],
+            },
+            {
+              type: 'text',
+              text: 'link text 2',
+              marks: [{ type: 'link', attrs: { href: 'https://example.com', rId: 'rId1' } }],
+            },
+          ],
         },
         relationships: [],
       };
 
+      vi.mocked(exportSchemaToJson).mockImplementation((p) => ({
+        name: 'w:r',
+        elements: [{ name: 'w:t', elements: [{ type: 'text', text: p.node.text }] }],
+      }));
+
       const result = translator.decode(params);
 
       expect(result.name).toBe('w:hyperlink');
-      expect(result.attributes).not.toHaveProperty('r:id');
-      expect(result.attributes).toHaveProperty('w:anchor', 'my-anchor');
-      expect(params.relationships).toHaveLength(0);
+      expect(result.attributes['r:id']).toBe('rId1');
+      expect(result.elements).toHaveLength(2);
+      expect(result.elements[0].elements[0].elements[0].text).toBe('link text 1');
+      expect(result.elements[1].elements[0].elements[0].text).toBe('link text 2');
     });
   });
 });

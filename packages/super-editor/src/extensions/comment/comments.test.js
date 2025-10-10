@@ -8,6 +8,7 @@ import { CommentsMark } from './comments-marks.js';
 import { CommentMarkName } from './comments-constants.js';
 import * as CommentHelpers from './comments-helpers.js';
 import { CommentsPlugin, CommentsPluginKey } from './comments-plugin.js';
+import { comments_module_events } from '@harbour-enterprises/common';
 
 const {
   removeCommentsById,
@@ -241,7 +242,12 @@ describe('comments plugin commands', () => {
     const editor = {
       schema,
       view,
-      options: { isHeadless: false, isInternal: false },
+      options: {
+        isHeadless: false,
+        isInternal: false,
+        user: { name: 'Another User', email: 'another.user@example.com' },
+        documentId: 'doc-1',
+      },
       storage: { image: { media: {} } },
       emit: vi.fn(),
     };
@@ -253,15 +259,33 @@ describe('comments plugin commands', () => {
   };
 
   it('inserts a comment mark across selection', () => {
-    const { schema, state, commands } = setup();
+    const { schema, state, commands, editor } = setup();
     const tr = state.tr;
     const dispatch = vi.fn();
 
-    const result = commands.insertComment({ commentId: 'c-10', isInternal: true })({ tr, dispatch });
+    const result = commands.insertComment({ commentId: 'c-10', isInternal: true, text: '<p>Hey</p>' })({
+      tr,
+      dispatch,
+    });
 
     expect(result).toBe(true);
     expect(tr.getMeta(CommentsPluginKey)).toEqual({ event: 'add' });
     expect(dispatch).toHaveBeenCalledWith(tr);
+    expect(editor.emit).toHaveBeenCalledWith(
+      'commentsUpdate',
+      expect.objectContaining({
+        type: comments_module_events.ADD,
+        comment: expect.objectContaining({
+          commentId: 'c-10',
+          isInternal: true,
+          commentText: '<p>Hey</p>',
+          creatorName: 'Another User',
+          creatorEmail: 'another.user@example.com',
+          fileId: 'doc-1',
+        }),
+        activeCommentId: 'c-10',
+      }),
+    );
 
     const applied = state.apply(tr);
     const mark = applied.doc.nodeAt(1).marks[0];

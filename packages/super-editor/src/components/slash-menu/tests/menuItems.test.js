@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getItems } from '../menuItems.js';
 import { createMockEditor, createMockContext, assertMenuSectionsStructure, SlashMenuConfigs } from './testHelpers.js';
+import { TRIGGERS } from '../constants.js';
 
 vi.mock('../../cursor-helpers.js', () => ({
   selectionHasNodeOrMark: vi.fn(),
@@ -18,6 +19,8 @@ vi.mock('../constants.js', () => ({
     cut: 'Cut',
     copy: 'Copy',
     paste: 'Paste',
+    trackChangesAccept: 'Accept Tracked Changes',
+    trackChangesReject: 'Reject Tracked Changes',
   },
   ICONS: {
     ai: '<svg>ai-icon</svg>',
@@ -40,7 +43,7 @@ vi.mock('../../toolbar/AIWriter.vue', () => ({ default: { template: '<div>AIWrit
 vi.mock('../../toolbar/TableActions.vue', () => ({ default: { template: '<div>TableActions</div>' } }));
 vi.mock('../../toolbar/LinkInput.vue', () => ({ default: { template: '<div>LinkInput</div>' } }));
 
-vi.mock('@/core/InputRule.js', () => ({
+vi.mock('../../core/InputRule.js', () => ({
   handleClipboardPaste: vi.fn(() => true),
 }));
 
@@ -101,13 +104,19 @@ describe('menuItems.js', () => {
     });
 
     it('should filter items based on trigger type', () => {
-      mockContext.trigger = 'slash';
+      mockContext.trigger = TRIGGERS.slash;
       const sections = getItems(mockContext);
 
       const allItems = sections.flatMap((s) => s.items);
-      const slashItems = allItems.filter((item) => item.allowedTriggers.includes('slash'));
-
-      expect(allItems).toEqual(slashItems);
+      // With showWhen functions, all returned items should be appropriate for the trigger
+      // This test verifies that getItems properly filters items for the slash trigger
+      expect(allItems.length).toBeGreaterThan(0);
+      // Verify that no items without appropriate showWhen logic are included
+      allItems.forEach((item) => {
+        if (item.showWhen) {
+          expect(item.showWhen(mockContext)).toBe(true);
+        }
+      });
     });
 
     it('should filter items based on selection requirement', () => {
@@ -160,6 +169,7 @@ describe('menuItems.js', () => {
       mockContext.clipboardContent = {
         content: { size: 1 },
         size: 1,
+        hasContent: true, // Ensure the normalized clipboard content structure is used
       };
 
       const sections = getItems(mockContext);
@@ -174,6 +184,7 @@ describe('menuItems.js', () => {
   describe('getItems - custom configuration', () => {
     it('should add custom items when customItems is provided', () => {
       mockEditor.options.slashMenuConfig = SlashMenuConfigs.customOnly;
+      mockContext.editor = mockEditor;
 
       const sections = getItems(mockContext);
       const customSection = sections.find((s) => s.id === 'custom-section');
@@ -193,13 +204,14 @@ describe('menuItems.js', () => {
               {
                 id: 'custom-item',
                 label: 'Custom Item',
-                allowedTriggers: ['slash', 'click'],
+                showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
                 action: () => {},
               },
             ],
           },
         ],
       };
+      mockContext.editor = mockEditor;
 
       const sections = getItems(mockContext);
 
@@ -218,7 +230,7 @@ describe('menuItems.js', () => {
               {
                 id: 'provider-item',
                 label: `Provider item for ${context.trigger}`,
-                allowedTriggers: ['slash', 'click'],
+                showWhen: (context) => [TRIGGERS.slash, TRIGGERS.click].includes(context.trigger),
                 action: vi.fn(),
               },
             ],
@@ -227,6 +239,7 @@ describe('menuItems.js', () => {
       };
 
       mockEditor.options.slashMenuConfig = SlashMenuConfigs.withProvider(customProvider);
+      mockContext.editor = mockEditor;
 
       const sections = getItems(mockContext);
       const providerSection = sections.find((s) => s.id === 'provider-section');
@@ -255,6 +268,7 @@ describe('menuItems.js', () => {
       mockContext.selectedText = '';
       mockContext.hasSelection = false;
       mockEditor.options.slashMenuConfig = SlashMenuConfigs.withConditionalItems;
+      mockContext.editor = mockEditor;
 
       const sections = getItems(mockContext);
       const conditionalSection = sections.find((s) => s.id === 'conditional-section');
@@ -267,6 +281,7 @@ describe('menuItems.js', () => {
       mockContext.selectedText = 'selected';
       mockContext.hasSelection = true;
       mockEditor.options.slashMenuConfig = SlashMenuConfigs.withConditionalItems;
+      mockContext.editor = mockEditor;
 
       const sections = getItems(mockContext);
       const conditionalSection = sections.find((s) => s.id === 'conditional-section');
@@ -288,11 +303,10 @@ describe('menuItems.js', () => {
               {
                 id: 'error-item',
                 label: 'Error Item',
-                allowedTriggers: ['slash', 'click'],
-                action: () => {},
                 showWhen: () => {
                   throw new Error('showWhen error');
                 },
+                action: () => {},
               },
             ],
           },
@@ -318,9 +332,8 @@ describe('menuItems.js', () => {
               {
                 id: 'never-show',
                 label: 'Never Show',
-                allowedTriggers: ['slash', 'click'],
-                action: () => {},
                 showWhen: () => false,
+                action: () => {},
               },
             ],
           },
@@ -346,6 +359,7 @@ describe('menuItems.js', () => {
     });
 
     it('should show edit-table item when in table', () => {
+      mockContext.isInTable = true;
       const sections = getItems(mockContext);
       const generalSection = sections.find((s) => s.id === 'general');
       const editTableItem = generalSection?.items.find((item) => item.id === 'edit-table');
@@ -354,6 +368,7 @@ describe('menuItems.js', () => {
     });
 
     it('should hide insert-table item when in table', () => {
+      mockContext.isInTable = true;
       const sections = getItems(mockContext);
       const generalSection = sections.find((s) => s.id === 'general');
       const insertTableItem = generalSection?.items.find((item) => item.id === 'insert-table');
@@ -375,6 +390,7 @@ describe('menuItems.js', () => {
 
     it('should show remove-section item when in document section', () => {
       mockContext.trigger = 'click';
+      mockContext.isInSectionNode = true;
       const sections = getItems(mockContext);
       const docSection = sections.find((s) => s.id === 'document-sections');
       const removeItem = docSection?.items.find((item) => item.id === 'remove-section');

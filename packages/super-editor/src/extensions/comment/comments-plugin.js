@@ -10,6 +10,8 @@ import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '.
 import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
 import { comments_module_events } from '@harbour-enterprises/common';
 import { translateFormatChangesToEnglish } from './comments-helpers.js';
+import { normalizeCommentEventPayload, updatePosition } from './helpers/index.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const TRACK_CHANGE_MARKS = [TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName];
 
@@ -21,23 +23,46 @@ export const CommentsPlugin = Extension.create({
   addCommands() {
     return {
       insertComment:
-        (conversation) =>
+        (conversation = {}) =>
         ({ tr, dispatch }) => {
           const { selection } = tr;
           const { $from, $to } = selection;
-          const { commentId, isInternal } = conversation;
+          const skipEmit = conversation?.skipEmit;
+          const resolvedCommentId = conversation?.commentId ?? uuidv4();
+          const resolvedInternal = conversation?.isInternal ?? false;
 
           tr.setMeta(CommentsPluginKey, { event: 'add' });
           tr.addMark(
             $from.pos,
             $to.pos,
             this.editor.schema.marks[CommentMarkName].create({
-              commentId,
-              internal: isInternal,
+              commentId: resolvedCommentId,
+              internal: resolvedInternal,
             }),
           );
 
-          dispatch(tr);
+          if (dispatch) dispatch(tr);
+
+          const shouldEmit = !skipEmit && resolvedCommentId !== 'pending';
+          if (shouldEmit) {
+            const commentPayload = normalizeCommentEventPayload({
+              conversation,
+              editorOptions: this.editor.options,
+              fallbackCommentId: resolvedCommentId,
+              fallbackInternal: resolvedInternal,
+            });
+
+            const activeCommentId = commentPayload.commentId || commentPayload.importedId || null;
+
+            const event = {
+              type: comments_module_events.ADD,
+              comment: commentPayload,
+              ...(activeCommentId && { activeCommentId }),
+            };
+
+            this.editor.emit('commentsUpdate', event);
+          }
+
           return true;
         },
 
@@ -346,37 +371,6 @@ export const CommentsPlugin = Extension.create({
   },
 });
 
-const updatePosition = ({ allCommentPositions, threadId, pos, currentBounds, node }) => {
-  let bounds = {};
-
-  if (currentBounds instanceof DOMRect) {
-    bounds = {
-      top: currentBounds.top,
-      bottom: currentBounds.bottom,
-      left: currentBounds.left,
-      right: currentBounds.right,
-    };
-  } else {
-    bounds = { ...currentBounds };
-  }
-
-  if (!allCommentPositions[threadId]) {
-    allCommentPositions[threadId] = {
-      threadId,
-      start: pos,
-      end: pos + node.nodeSize,
-      bounds,
-    };
-  } else {
-    // Adjust the positional indices
-    const existing = allCommentPositions[threadId];
-    existing.start = Math.min(existing.start, pos);
-    existing.end = Math.max(existing.end, pos + node.nodeSize);
-    existing.bounds.top = Math.min(existing.bounds.top, currentBounds.top);
-    existing.bounds.bottom = Math.max(existing.bounds.bottom, currentBounds.bottom);
-  }
-};
-
 /**
  * This is run when a new selection is set (tr.selectionSet) to return the active comment ID, if any
  * If there are multiple, only return the first one
@@ -653,3 +647,12 @@ function findRangeById(doc, id) {
   });
   return from !== null && to !== null ? { from, to } : null;
 }
+
+export const __test__ = {
+  getActiveCommentId,
+  findTrackedMark,
+  handleTrackedChangeTransaction,
+  getTrackedChangeText,
+  createOrUpdateTrackedChangeComment,
+  findRangeById,
+};

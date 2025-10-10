@@ -142,10 +142,11 @@ export const StructuredContentCommands = Extension.create({
         },
 
       /**
-       * Updates a structured content attributes or content.
+       * Updates a single structured content field by its unique ID.
+       * IDs are unique identifiers, so this will update at most one field.
        * If the updated node does not match the schema, it will not be updated.
        * @category Command
-       * @param {string} id
+       * @param {string} id - Unique identifier of the field
        * @param {StructuredContentUpdate} options
        */
       updateStructuredContentById:
