@@ -24,10 +24,11 @@ export function handleAnnotationNode(params) {
   const shouldProcessAsJson = tagValue?.startsWith('{') && tagValue?.endsWith('}');
 
   let attrs = {};
+  const aliasLabel = getSafeString(alias?.attributes?.['w:val']);
 
   if (shouldProcessAsJson) {
     const parsedAttrs = parseTagValueJSON(tagValue);
-    const attrsFromJSON = {
+    attrs = {
       type: parsedAttrs.fieldTypeShort,
       fieldId: parsedAttrs.fieldId,
       displayLabel: parsedAttrs.displayLabel,
@@ -41,11 +42,32 @@ export function handleAnnotationNode(params) {
       textHighlight: parsedAttrs.fieldTextHighlight,
       hash: parsedAttrs.hash,
     };
-    attrs = attrsFromJSON;
   } else {
     // IMPORTANT: FOR BACKWARD COMPATIBILITY.
-    const attrsFromElements = getAttrsFromElements({ sdtPr, tag, alias, sdtId });
-    attrs = attrsFromElements;
+    attrs = getAttrsFromElements({ sdtPr, tag, alias, sdtId });
+  }
+
+  const initialDisplayLabel = getSafeString(attrs.displayLabel);
+  const extractedContent = getTextFromSdtContent(sdtContent);
+  if (!attrs.defaultDisplayLabel) {
+    if (initialDisplayLabel) {
+      attrs.defaultDisplayLabel = initialDisplayLabel;
+    } else if (aliasLabel) {
+      attrs.defaultDisplayLabel = aliasLabel;
+    }
+  }
+
+  const placeholderLabel = getPlaceholderLabel(attrs, aliasLabel);
+  const placeholderText = ensurePlaceholderFormat(placeholderLabel);
+  const isAnnotationsEnabled = Boolean(params.editor?.options?.annotations);
+  const contentIsDistinct = shouldUseSdtContent(extractedContent, placeholderText);
+  const shouldUseContent =
+    !isAnnotationsEnabled && contentIsDistinct && (hasMoustache(extractedContent) || !placeholderText);
+
+  if (contentIsDistinct) {
+    attrs.displayLabel = extractedContent;
+  } else if (!attrs.displayLabel && placeholderLabel) {
+    attrs.displayLabel = placeholderLabel;
   }
 
   const { attrs: marksAsAttrs, marks } = parseAnnotationMarks(sdtContent);
@@ -58,14 +80,16 @@ export function handleAnnotationNode(params) {
     return null;
   }
 
+  const textContent = shouldUseContent ? extractedContent : placeholderText;
+
   let result = {
     type: 'text',
-    text: `{{${attrs.displayLabel}}}`,
+    text: textContent,
     attrs: allAttrs,
     marks,
   };
 
-  if (params.editor.options.annotations) {
+  if (isAnnotationsEnabled) {
     result = {
       type: 'fieldAnnotation',
       attrs: allAttrs,
@@ -148,4 +172,107 @@ export function getAttrsFromElements({ sdtPr, tag, alias, sdtId }) {
     sdtId: sdtId?.attributes['w:val'],
   };
   return attrs;
+}
+
+function getTextFromSdtContent(sdtContent) {
+  if (!sdtContent?.elements?.length) return '';
+
+  const chunks = [];
+  collectTextChunks(sdtContent.elements, chunks);
+
+  // Remove trailing newline if it was added due to paragraph handling
+  if (chunks.length && chunks[chunks.length - 1] === '\n') {
+    chunks.pop();
+  }
+
+  const text = chunks.join('');
+  return text.replace(/\u00a0/g, ' ');
+}
+
+function getPlaceholderLabel(attrs, aliasValue) {
+  const displayLabel = trimSafeString(attrs.displayLabel);
+  if (displayLabel) return displayLabel;
+
+  const defaultLabel = trimSafeString(attrs.defaultDisplayLabel);
+  if (defaultLabel) return defaultLabel;
+
+  return trimSafeString(aliasValue);
+}
+
+function shouldUseSdtContent(extractedContent, placeholderText) {
+  const normalizedContent = normalizePlaceholderText(extractedContent);
+  if (!normalizedContent) return false;
+
+  const normalizedPlaceholder = normalizePlaceholderText(placeholderText);
+  return normalizedContent !== normalizedPlaceholder;
+}
+
+function ensurePlaceholderFormat(label) {
+  const trimmed = trimSafeString(label);
+  if (!trimmed) return '';
+  if (trimmed.startsWith('{{') && trimmed.endsWith('}}')) {
+    return trimmed;
+  }
+  return `{{${trimmed}}}`;
+}
+
+function normalizePlaceholderText(value = '') {
+  const trimmed = trimSafeString(value);
+  if (!trimmed) return '';
+  return stripPlaceholderBraces(trimmed).toLowerCase();
+}
+
+function stripPlaceholderBraces(value = '') {
+  if (value.startsWith('{{') && value.endsWith('}}')) {
+    return trimSafeString(value.slice(2, -2));
+  }
+  return value;
+}
+
+function hasMoustache(value = '') {
+  return /\{\{\s*.+?\s*\}\}/.test(getSafeString(value));
+}
+
+function collectTextChunks(elements, chunks) {
+  if (!elements) return;
+
+  elements.forEach((element) => {
+    if (!element) return;
+
+    if (element.type === 'text') {
+      chunks.push(element.text || '');
+      return;
+    }
+
+    if (element.name === 'w:tab') {
+      chunks.push('\t');
+      return;
+    }
+
+    if (element.name === 'w:br') {
+      chunks.push('\n');
+      return;
+    }
+
+    const isParagraph = element.name === 'w:p';
+    const initialLength = chunks.length;
+    if (element.elements?.length) {
+      collectTextChunks(element.elements, chunks);
+    }
+
+    if (isParagraph && chunks.length > initialLength) {
+      chunks.push('\n');
+    }
+  });
+}
+
+function getSafeString(value) {
+  if (typeof value !== 'string') return '';
+  return value;
+}
+
+function trimSafeString(value) {
+  return getSafeString(value)
+    .replace(/\u00a0/g, ' ')
+    .trim();
 }
