@@ -1,0 +1,13 @@
+{
+  "name": "superdoc-preset-geometry",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "http-server . -p 4173 --cors -c-1 -o /preview/index.html",
+    "preview": "npm run dev",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}

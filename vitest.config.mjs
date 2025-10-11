@@ -7,6 +7,7 @@ export default defineConfig({
       './packages/super-editor',
       './packages/superdoc',
       './packages/collaboration-yjs',
+      './packages/preset-geometry',
       './shared/common',
     ],
     coverage: {
