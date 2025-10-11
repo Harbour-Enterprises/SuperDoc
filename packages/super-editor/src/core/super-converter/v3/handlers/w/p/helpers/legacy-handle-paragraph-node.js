@@ -1,7 +1,7 @@
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { mergeTextNodes, parseMarks } from '@converter/v2/importer/index.js';
 import { twipsToPixels } from '@converter/helpers.js';
-import { getParagraphIndent, getParagraphSpacing, getDefaultParagraphStyle } from './index.js';
+import { resolveParagraphProperties } from './index.js';
 import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 
 /**
@@ -10,7 +10,7 @@ import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
  * @returns {Object} Handler result
  */
 export const handleParagraphNode = (params) => {
-  const { nodes, docx, nodeListHandler, filename } = params;
+  const { nodes, nodeListHandler, filename } = params;
 
   const node = carbonCopy(nodes[0]);
   let schemaNode;
@@ -31,17 +31,9 @@ export const handleParagraphNode = (params) => {
   }
 
   const pPr = node.elements?.find((el) => el.name === 'w:pPr');
-  let paragraphProperties = {};
 
-  if (pPr) {
-    paragraphProperties = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
-  }
-  schemaNode.attrs.paragraphProperties = paragraphProperties;
-
-  // Extract paragraph borders if present
-  schemaNode.attrs.borders = paragraphProperties.borders;
+  // Parse direct run properties (w:rPr) inside w:pPr
   const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
-
   if (nestedRPr) {
     let marks = parseMarks(nestedRPr, []);
 
@@ -55,53 +47,39 @@ export const handleParagraphNode = (params) => {
     schemaNode.attrs.marksAttrs = marks;
   }
 
-  const styleId = paragraphProperties.styleId;
-  schemaNode.attrs['styleId'] = styleId;
-
-  if (docx) {
-    const indent = getParagraphIndent(paragraphProperties.indent, docx, styleId);
-    schemaNode.attrs.indent = indent;
+  // Resolve paragraph properties according to styles hierarchy
+  let inlineParagraphProperties = {};
+  if (pPr) {
+    inlineParagraphProperties = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
   }
+  const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
+  const resolvedParagraphProperties = resolveParagraphProperties(params, inlineParagraphProperties, insideTable);
 
-  schemaNode.attrs['textAlign'] = paragraphProperties.justification;
-  schemaNode.attrs['keepLines'] = paragraphProperties.keepLines;
-  schemaNode.attrs['keepNext'] = paragraphProperties.keepNext;
+  // Pull out some commonly used properties to top-level attrs
+  schemaNode.attrs.paragraphProperties = inlineParagraphProperties;
+  schemaNode.attrs.borders = resolvedParagraphProperties.borders;
+  schemaNode.attrs.styleId = resolvedParagraphProperties.styleId;
+  schemaNode.attrs.indent = resolvedParagraphProperties.indent;
+  schemaNode.attrs.textAlign = resolvedParagraphProperties.justification;
+  schemaNode.attrs.keepLines = resolvedParagraphProperties.keepLines;
+  schemaNode.attrs.keepNext = resolvedParagraphProperties.keepNext;
+  schemaNode.attrs.spacing = resolvedParagraphProperties.spacing;
+  schemaNode.attrs.rsidRDefault = node.attributes?.['w:rsidRDefault'];
+  schemaNode.attrs.filename = filename;
 
-  if (docx) {
-    const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
-    const spacing = getParagraphSpacing(paragraphProperties.spacing, docx, styleId, schemaNode.attrs.marksAttrs, {
-      insideTable,
-    });
-    if (spacing) {
-      schemaNode.attrs['spacing'] = spacing;
-    }
-    const defaultStyleId = node.attributes?.['w:rsidRDefault'];
-    schemaNode.attrs['rsidRDefault'] = defaultStyleId;
-  }
-
-  if (docx) {
-    const { justify } = getDefaultParagraphStyle(docx, styleId);
-    if (justify) {
-      schemaNode.attrs.justify = {
-        val: justify['w:val'],
-      };
-    }
-  }
-
-  if (paragraphProperties.framePr) {
+  // Dropcap settings
+  if (resolvedParagraphProperties.framePr && resolvedParagraphProperties.framePr.dropCap) {
     schemaNode.attrs.dropcap = {
-      ...paragraphProperties.framePr,
-      type: paragraphProperties.framePr.dropCap,
+      ...resolvedParagraphProperties.framePr,
+      type: resolvedParagraphProperties.framePr.dropCap,
     };
     delete schemaNode.attrs.dropcap.dropCap;
   }
 
-  schemaNode.attrs['filename'] = filename;
-
   // Parse tab stops
-  if (paragraphProperties.tabs) {
+  if (resolvedParagraphProperties.tabs) {
     const aliases = { left: 'start', right: 'end' };
-    schemaNode.attrs.tabStops = paragraphProperties.tabs.map(({ tab }) => ({
+    schemaNode.attrs.tabStops = resolvedParagraphProperties.tabs.map(({ tab }) => ({
       val: aliases[tab.tabSize] || tab.tabSize,
       pos: twipsToPixels(tab.pos),
       originalPos: tab.pos,
