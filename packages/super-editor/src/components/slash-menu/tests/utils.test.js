@@ -183,12 +183,18 @@ describe('utils.js', () => {
             4: { type: { name: 'tableRow' }, marks: [] },
             5: {
               type: { name: 'documentSection' },
-              marks: [{ type: { name: 'trackDelete' }, attrs: { id: 'track-1' } }],
+              marks: [],
             },
           };
           return map[depth] || { type: { name: 'doc' }, marks: [] };
         },
         marks: vi.fn(() => []),
+        // In ProseMirror, marks are on inline nodes, not block nodes
+        nodeBefore: {
+          type: { name: 'text' },
+          marks: [{ type: { name: 'trackDelete' }, attrs: { id: 'track-1' } }],
+        },
+        nodeAfter: null,
       });
 
       const context = await getEditorContext(mockEditor, mockEvent);

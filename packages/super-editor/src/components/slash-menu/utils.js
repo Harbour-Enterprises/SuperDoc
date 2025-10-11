@@ -169,12 +169,18 @@ export async function getEditorContext(editor, event) {
       }
     };
 
-    // Check all parent nodes for marks
-    for (let depth = 0; depth <= $pos.depth; depth++) {
-      const nodeAtDepth = $pos.node(depth);
-      if (nodeAtDepth && nodeAtDepth.marks) {
-        nodeAtDepth.marks.forEach(processMark);
-      }
+    const marksAtPos = $pos.marks();
+    marksAtPos.forEach(processMark);
+
+    const nodeBefore = $pos.nodeBefore;
+    const nodeAfter = $pos.nodeAfter;
+
+    if (nodeBefore && nodeBefore.marks) {
+      nodeBefore.marks.forEach(processMark);
+    }
+
+    if (nodeAfter && nodeAfter.marks) {
+      nodeAfter.marks.forEach(processMark);
     }
 
     if (state.storedMarks) {
