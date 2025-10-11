@@ -90,8 +90,9 @@ export const SlashMenu = Extension.create({
                 menuPosition,
               };
 
-              // Emit event after state update
+              // Emit events after state update (back-compat and new name)
               editor.emit('slashMenu:open', { menuPosition });
+              editor.emit('contextMenu:open', { menuPosition });
 
               return newState;
             }
@@ -101,7 +102,9 @@ export const SlashMenu = Extension.create({
             }
 
             case 'close': {
+              // Emit both legacy and new close events
               editor.emit('slashMenu:close');
+              editor.emit('contextMenu:close');
               return { ...value, open: false, anchorPos: null };
             }
 
