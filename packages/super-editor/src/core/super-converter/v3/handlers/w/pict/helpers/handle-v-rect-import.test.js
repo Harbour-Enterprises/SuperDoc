@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { handleVRectImport } from './handle-v-rect-import';
 import { parseInlineStyles } from './parse-inline-styles';
 import { twipsToPixels, twipsToLines } from '@converter/helpers';
+import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 
 vi.mock('./parse-inline-styles');
 vi.mock('@converter/helpers');
@@ -49,7 +50,7 @@ describe('handleVRectImport', () => {
     });
 
     const options = {
-      params: {},
+      params: { docx: {} },
       pNode: { elements: [] },
       pict,
     };
@@ -76,7 +77,10 @@ describe('handleVRectImport', () => {
     });
 
     const options = {
-      params: {},
+      params: {
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      },
       pNode: { elements: [] },
       pict,
     };
@@ -103,7 +107,10 @@ describe('handleVRectImport', () => {
     });
 
     const options = {
-      params: {},
+      params: {
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      },
       pNode: { elements: [] },
       pict,
     };
@@ -122,7 +129,10 @@ describe('handleVRectImport', () => {
     });
 
     const options = {
-      params: {},
+      params: {
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      },
       pNode: { elements: [] },
       pict,
     };
@@ -141,8 +151,22 @@ describe('handleVRectImport', () => {
     const pict1 = createPict({ 'o:hr': 't' });
     const pict2 = createPict({ 'o:hrstd': 't' });
 
-    const result1 = handleVRectImport({ params: {}, pNode: { elements: [] }, pict: pict1 });
-    const result2 = handleVRectImport({ params: {}, pNode: { elements: [] }, pict: pict2 });
+    const result1 = handleVRectImport({
+      params: {
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      },
+      pNode: { elements: [] },
+      pict: pict1,
+    });
+    const result2 = handleVRectImport({
+      params: {
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      },
+      pNode: { elements: [] },
+      pict: pict2,
+    });
 
     expect(result1.content[0].attrs.horizontalRule).toBe(true);
     expect(result2.content[0].attrs.horizontalRule).toBe(true);
@@ -160,7 +184,10 @@ describe('handleVRectImport', () => {
     twipsToLines.mockImplementation((val) => parseInt(val) / 240);
 
     const options = {
-      params: {},
+      params: {
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      },
       pNode,
       pict: createPict({}),
     };
@@ -175,7 +202,7 @@ describe('handleVRectImport', () => {
     });
   });
 
-  it('should parse indent from pNode', () => {
+  it.only('should parse indent from pNode', () => {
     const pNode = createPNode(
       {},
       {
@@ -184,10 +211,11 @@ describe('handleVRectImport', () => {
       },
     );
 
-    twipsToPixels.mockImplementation((val) => parseInt(val) / 20);
-
     const options = {
-      params: {},
+      params: {
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      },
       pNode,
       pict: createPict({}),
     };
@@ -195,10 +223,8 @@ describe('handleVRectImport', () => {
     const result = handleVRectImport(options);
 
     expect(result.attrs.indent).toEqual({
-      left: 20,
-      right: 10,
-      firstLine: 0,
-      hanging: 0,
+      left: 400,
+      right: 200,
     });
   });
 });

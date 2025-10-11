@@ -356,7 +356,8 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 .ProseMirror div[data-horizontal-rule='true'] {
   position: relative;
   z-index: auto;
-  display: block;
+  display: inline-block;
+  vertical-align: middle;
   margin-top: auto;
   align-self: flex-end;
 }
