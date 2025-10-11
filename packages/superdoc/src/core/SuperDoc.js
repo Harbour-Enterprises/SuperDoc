@@ -102,6 +102,8 @@ export class SuperDoc extends EventEmitter {
 
     // Disable context menus (slash and right-click) globally
     disableContextMenu: false,
+    // Preferred config key; fallback supported via SuperDoc.vue mapping
+    contextMenu: undefined,
   };
 
   /**

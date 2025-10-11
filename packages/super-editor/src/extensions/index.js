@@ -12,7 +12,7 @@ import { Gapcursor } from './gapcursor/index.js';
 import { Collaboration } from './collaboration/index.js';
 import { CollaborationCursor } from './collaboration-cursor/index.js';
 import { AiPlugin, AiMark, AiAnimationMark, AiLoaderNode } from './ai/index.js';
-import { SlashMenu } from './slash-menu';
+import { SlashMenu, ContextMenu, ContextMenuPluginKey } from './slash-menu';
 import { StructuredContentCommands } from './structured-content/index.js';
 
 // Nodes extensions
@@ -262,4 +262,7 @@ export {
   NodeResizer,
   CustomSelection,
   TextTransform,
+  // New preferred naming for the context menu extension
+  ContextMenu,
+  ContextMenuPluginKey,
 };

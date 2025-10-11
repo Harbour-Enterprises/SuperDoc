@@ -55,9 +55,11 @@ const shouldShowItem = (item, context) => {
 export function getItems(context, customItems = [], includeDefaultItems = true) {
   const { selectedText, editor } = context;
 
-  if (arguments.length === 1 && editor?.options?.slashMenuConfig) {
-    customItems = editor.options.slashMenuConfig.items || editor.options.slashMenuConfig.customItems || [];
-    includeDefaultItems = editor.options.slashMenuConfig.includeDefaultItems !== false;
+  // Prefer new config name, fallback to legacy
+  const cfg = editor?.options?.contextMenuConfig ?? editor?.options?.slashMenuConfig;
+  if (arguments.length === 1 && cfg) {
+    customItems = cfg.items || cfg.customItems || [];
+    includeDefaultItems = cfg.includeDefaultItems !== false;
   }
 
   // Enhanced context object - ensure we have all necessary computed properties
@@ -319,9 +321,10 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
   }
 
   // Apply menuProvider if present - advanced use case
-  if (editor?.options?.slashMenuConfig?.menuProvider) {
+  if ((editor?.options?.contextMenuConfig ?? editor?.options?.slashMenuConfig)?.menuProvider) {
     try {
-      allSections = editor.options.slashMenuConfig.menuProvider(enhancedContext, allSections) || allSections;
+      const provider = (editor.options.contextMenuConfig ?? editor.options.slashMenuConfig).menuProvider;
+      allSections = provider(enhancedContext, allSections) || allSections;
     } catch (error) {
       console.warn('[SlashMenu] menuProvider error:', error);
     }

@@ -34,6 +34,8 @@ function getCursorPositionRelativeToContainer(view, eventLocation) {
 }
 
 export const SlashMenuPluginKey = new PluginKey('slashMenu');
+// New preferred aliases for naming consistency
+export const ContextMenuPluginKey = SlashMenuPluginKey;
 
 /**
  * @module SlashMenu
@@ -90,8 +92,9 @@ export const SlashMenu = Extension.create({
                 menuPosition,
               };
 
-              // Emit event after state update
+              // Emit event after state update (both legacy and new names)
               editor.emit('slashMenu:open', { menuPosition });
+              editor.emit('contextMenu:open', { menuPosition });
 
               return newState;
             }
@@ -101,7 +104,9 @@ export const SlashMenu = Extension.create({
             }
 
             case 'close': {
+              // Emit both legacy and new event names
               editor.emit('slashMenu:close');
+              editor.emit('contextMenu:close');
               return { ...value, open: false, anchorPos: null };
             }
 

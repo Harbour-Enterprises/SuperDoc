@@ -33,10 +33,14 @@
  * @property {string} [ai.endpoint] Custom endpoint URL for AI services
  * @property {Object} [collaboration] Collaboration module configuration
  * @property {Object} [toolbar] Toolbar module configuration
- * @property {Object} [slashMenu] Slash menu module configuration
- * @property {Array} [slashMenu.customItems] Array of custom menu sections with items
- * @property {Function} [slashMenu.menuProvider] Function to customize menu items
- * @property {boolean} [slashMenu.includeDefaultItems] Whether to include default menu items
+ * @property {Object} [contextMenu] Context menu configuration (preferred)
+ * @property {Array} [contextMenu.customItems] Array of custom menu sections with items
+ * @property {Function} [contextMenu.menuProvider] Function to customize menu items
+ * @property {boolean} [contextMenu.includeDefaultItems] Whether to include default menu items
+ * @property {Object} [slashMenu] Deprecated: use contextMenu instead
+ * @property {Array} [slashMenu.customItems]
+ * @property {Function} [slashMenu.menuProvider]
+ * @property {boolean} [slashMenu.includeDefaultItems]
  */
 
 /** @typedef {import('@harbour-enterprises/super-editor').Editor} Editor */

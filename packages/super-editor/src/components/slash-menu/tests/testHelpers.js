@@ -132,7 +132,9 @@ export function createMockEditor(options = {}) {
     options: {
       documentMode: config.documentMode,
       isAiEnabled: config.isAiEnabled,
+      // Support both legacy and new config keys in tests
       slashMenuConfig: config.slashMenuConfig,
+      contextMenuConfig: config.contextMenuConfig || config.slashMenuConfig,
       aiApiKey: config.aiApiKey,
       aiEndpoint: config.aiEndpoint,
     },

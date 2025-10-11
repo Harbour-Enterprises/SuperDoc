@@ -13,6 +13,8 @@ import { Extension } from '@core/Extension.js';
 import { Plugin } from 'prosemirror-state';
 import { Mark } from '@core/Mark.js';
 import SlashMenu from './components/slash-menu/SlashMenu.vue';
+// New preferred naming alias for the component
+const ContextMenu = SlashMenu;
 import { BasicUpload } from '@harbour-enterprises/common';
 
 import SuperEditor from './components/SuperEditor.vue';
@@ -58,6 +60,8 @@ export {
   Toolbar,
   AIWriter,
   SlashMenu,
+  // Preferred component name
+  ContextMenu,
 
   // Helpers
   helpers,

@@ -302,8 +302,28 @@ onMounted(() => {
   props.editor.on('update', handleEditorUpdate);
 
   // Listen for the slash menu to open
+  // Listen to both legacy and new event names
   props.editor.on('slashMenu:open', async (event) => {
     // Prevent opening the menu in read-only mode
+    const readOnly = !props.editor?.isEditable;
+    if (readOnly) return;
+    isOpen.value = true;
+    menuPosition.value = event.menuPosition;
+    searchQuery.value = '';
+    // Set sections and selectedId when menu opens
+    if (!currentContext.value) {
+      const context = await getEditorContext(props.editor);
+      currentContext.value = context; // Store context for later use
+      sections.value = getItems({ ...context, trigger: 'slash' });
+      selectedId.value = flattenedItems.value[0]?.id || null;
+    } else if (sections.value.length === 0) {
+      const trigger = currentContext.value.event?.type === 'contextmenu' ? 'click' : 'slash';
+      sections.value = getItems({ ...currentContext.value, trigger });
+      selectedId.value = flattenedItems.value[0]?.id || null;
+    }
+  });
+
+  props.editor.on('contextMenu:open', async (event) => {
     const readOnly = !props.editor?.isEditable;
     if (readOnly) return;
     isOpen.value = true;
@@ -325,6 +345,13 @@ onMounted(() => {
   props.editor.view.dom.addEventListener('contextmenu', handleRightClick);
 
   props.editor.on('slashMenu:close', () => {
+    cleanupCustomItems();
+    isOpen.value = false;
+    searchQuery.value = '';
+    currentContext.value = null;
+  });
+
+  props.editor.on('contextMenu:close', () => {
     cleanupCustomItems();
     isOpen.value = false;
     searchQuery.value = '';

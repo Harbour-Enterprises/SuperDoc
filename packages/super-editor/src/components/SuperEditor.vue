@@ -5,6 +5,8 @@ import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw } from '
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import SlashMenu from './slash-menu/SlashMenu.vue';
+// New preferred naming alias
+const ContextMenu = SlashMenu;
 import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
 import Ruler from './rulers/Ruler.vue';
@@ -295,7 +297,7 @@ onBeforeUnmount(() => {
       @mousedown="handleMarginClick"
     >
       <div ref="editorElem" class="editor-element super-editor__element" role="presentation"></div>
-      <SlashMenu
+      <ContextMenu
         v-if="!props.options.disableContextMenu && editorReady && editor"
         :editor="editor"
         :popoverControls="popoverControls"
