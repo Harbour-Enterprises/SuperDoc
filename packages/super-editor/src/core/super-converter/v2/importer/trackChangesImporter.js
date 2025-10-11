@@ -1,55 +1,38 @@
-import { TrackDeleteMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
-import { parseProperties } from './importerHelpers.js';
+import { translator as wDelTranslator } from '@converter/v3/handlers/w/del';
+import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins';
 
 /**
  * @type {import("docxImporter").NodeHandler}
  */
 export const handleTrackChangeNode = (params) => {
-  const { nodes, nodeListHandler } = params;
-  if (nodes.length === 0 || !(nodes[0].name === 'w:del' || nodes[0].name === 'w:ins' || nodes[0].name === 'w:sdt')) {
+  const { nodes } = params;
+  if (nodes.length === 0 || !(nodes[0].name === 'w:del' || nodes[0].name === 'w:ins')) {
     return { nodes: [], consumed: 0 };
   }
 
   const mainNode = nodes[0];
-  let node;
+  let result;
 
-  if (['w:ins', 'w:del'].includes(mainNode.name)) {
-    node = mainNode;
-  } else {
-    const sdtContent = mainNode.elements.find((el) => el.name === 'w:sdtContent');
-    const trackedChange = sdtContent?.elements.find((el) => ['w:ins', 'w:del'].includes(el.name));
-    if (trackedChange) node = trackedChange;
+  switch (mainNode.name) {
+    case 'w:del':
+      result = wDelTranslator.encode({
+        extraParams: {
+          node: mainNode,
+        },
+        ...params,
+      });
+      break;
+    case 'w:ins':
+      result = wInsTranslator.encode({
+        extraParams: {
+          node: mainNode,
+        },
+        ...params,
+      });
+      break;
   }
 
-  if (!node) {
-    return { nodes: [], consumed: 0 };
-  }
-
-  const { name } = node;
-  const { attributes, elements } = parseProperties(node);
-
-  const subs = nodeListHandler.handler({
-    ...params,
-    insideTrackChange: true,
-    nodes: elements,
-    path: [...(params.path || []), node],
-  });
-  const changeType = name === 'w:del' ? TrackDeleteMarkName : TrackInsertMarkName;
-
-  const mappedAttributes = {
-    id: attributes['w:id'],
-    date: attributes['w:date'],
-    author: attributes['w:author'],
-    authorEmail: attributes['w:authorEmail'],
-    importedAuthor: `${attributes['w:author']} (imported)`,
-  };
-
-  subs.forEach((subElement) => {
-    if (subElement.marks === undefined) subElement.marks = [];
-    subElement.marks.push({ type: changeType, attrs: mappedAttributes });
-  });
-
-  return { nodes: subs, consumed: 1 };
+  return { nodes: result, consumed: 1 };
 };
 
 /**

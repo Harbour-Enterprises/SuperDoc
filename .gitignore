@@ -1,5 +1,6 @@
 logs
 *.log
+docs
 .cache
 .DS_Store
 .temp

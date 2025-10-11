@@ -29,7 +29,7 @@ import { preProcessNodesForFldChar } from '../../field-references';
 
 /**
  * @typedef {import()} XmlNode
- * @typedef {{type: string, content: *, attrs: {}}} PmNodeJson
+ * @typedef {{type: string, content: *, marks: *, attrs: {},}} PmNodeJson
  * @typedef {{type: string, attrs: {}}} PmMarkJson
  *
  * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackChange: boolean) => PmNodeJson[]} NodeListHandlerFn
