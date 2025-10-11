@@ -411,6 +411,37 @@ describe('SuperDoc core', () => {
     expect(createDownloadMock).toHaveBeenCalledWith(expect.any(Object), 'Test-Export', 'zip');
   });
 
+  it('falls back to original document data when an editor export yields no blob', async () => {
+    const { superdocStore } = createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: [],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    await flushMicrotasks();
+
+    const originalBlob = { name: 'fallback.docx' };
+    const exportDocxMock = vi.fn().mockResolvedValue(undefined);
+
+    instance.superdocStore.documents = [
+      {
+        id: 'doc-1',
+        data: originalBlob,
+        getEditor: () => ({ exportDocx: exportDocxMock }),
+      },
+    ];
+
+    const results = await instance.exportEditorsToDOCX();
+
+    expect(exportDocxMock).toHaveBeenCalledTimes(1);
+    expect(results).toEqual([originalBlob]);
+  });
+
   it('destroys app and cleans providers', async () => {
     const { app } = createAppHarness();
 

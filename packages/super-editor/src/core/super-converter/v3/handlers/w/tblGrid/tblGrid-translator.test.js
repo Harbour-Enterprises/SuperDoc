@@ -295,6 +295,28 @@ describe('w:tblGrid translator', () => {
       const widths = result.elements.map((el) => el.attributes['w:w']);
       expect(widths).toEqual(['2000', '4000']);
     });
+
+    it('preserves narrow grid columns for placeholder cells without inflating width', () => {
+      const params = {
+        node: {
+          attrs: {
+            grid: [{ col: 8 }, { col: 3413 }],
+          },
+        },
+        extraParams: {
+          firstRow: {
+            content: [
+              { type: 'tableCell', attrs: { colspan: 1, colwidth: [0], __placeholder: 'gridBefore' } },
+              { type: 'tableCell', attrs: { colspan: 1, colwidth: [170.65] } },
+            ],
+          },
+        },
+      };
+
+      const result = translator.decode(params);
+      const widths = result.elements.map((el) => el.attributes['w:w']);
+      expect(widths).toEqual(['8', '3413']);
+    });
   });
 
   describe('round-trip', () => {

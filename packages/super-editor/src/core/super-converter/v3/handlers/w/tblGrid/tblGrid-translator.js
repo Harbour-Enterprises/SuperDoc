@@ -57,14 +57,21 @@ const decode = (params) => {
   const elements = [];
   let columnIndex = 0;
 
-  const pushColumn = (widthTwips) => {
+  const pushColumn = (widthTwips, { enforceMinimum = false } = {}) => {
     let numericWidth = typeof widthTwips === 'string' ? parseInt(widthTwips, 10) : widthTwips;
+    let shouldEnforceMinimum = enforceMinimum;
+
     if (numericWidth == null || Number.isNaN(numericWidth) || numericWidth <= 0) {
       numericWidth = fallbackColumnWidthTwips;
+      shouldEnforceMinimum = true;
     }
-    numericWidth = Math.max(numericWidth, cellMinWidth);
+
+    const roundedWidth = Math.round(numericWidth);
+    const minimumWidth = shouldEnforceMinimum ? cellMinWidth : 1;
+    const safeWidth = Math.max(roundedWidth, minimumWidth);
+
     const decoded = gridColTranslator.decode({
-      node: { type: /** @type {string} */ (gridColTranslator.sdNodeOrKeyName), attrs: { col: numericWidth } },
+      node: { type: /** @type {string} */ (gridColTranslator.sdNodeOrKeyName), attrs: { col: safeWidth } },
     });
     if (decoded) elements.push(decoded);
   };
@@ -74,14 +81,23 @@ const decode = (params) => {
     const spanCount = Math.max(1, colspan);
 
     for (let span = 0; span < spanCount; span++) {
-      const cellWidthPixels = Array.isArray(colwidth) ? colwidth[span] : undefined;
+      const rawWidth = Array.isArray(colwidth) ? colwidth[span] : undefined;
+      const cellWidthPixels = typeof rawWidth === 'number' && Number.isFinite(rawWidth) ? rawWidth : Number(rawWidth);
+      const hasCellWidth = Number.isFinite(cellWidthPixels) && cellWidthPixels > 0;
+
       const colGridAttrs = grid?.[columnIndex] || {};
       const gridWidthTwips = normalizeTwipWidth(colGridAttrs.col);
       const gridWidthPixels = gridWidthTwips != null ? twipsToPixels(gridWidthTwips) : null;
 
       let cellWidthTwips;
-      if (cellWidthPixels != null) {
-        if (gridWidthTwips != null && gridWidthPixels === cellWidthPixels) {
+      let enforceMinimum = false;
+      if (hasCellWidth) {
+        const tolerance = 0.5;
+        if (
+          gridWidthTwips != null &&
+          gridWidthPixels != null &&
+          Math.abs(gridWidthPixels - cellWidthPixels) <= tolerance
+        ) {
           cellWidthTwips = gridWidthTwips;
         } else {
           cellWidthTwips = pixelsToTwips(cellWidthPixels);
@@ -90,9 +106,10 @@ const decode = (params) => {
         cellWidthTwips = gridWidthTwips;
       } else {
         cellWidthTwips = fallbackColumnWidthTwips;
+        enforceMinimum = true;
       }
 
-      pushColumn(cellWidthTwips);
+      pushColumn(cellWidthTwips, { enforceMinimum });
       columnIndex++;
     }
   });

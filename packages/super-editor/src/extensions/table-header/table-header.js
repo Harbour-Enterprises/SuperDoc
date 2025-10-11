@@ -63,6 +63,20 @@ export const TableHeader = Node.create({
           };
         },
       },
+
+      __placeholder: {
+        default: null,
+        parseDOM: (element) => {
+          const value = element.getAttribute('data-placeholder');
+          return value || null;
+        },
+        renderDOM({ __placeholder }) {
+          if (!__placeholder) return {};
+          return {
+            'data-placeholder': __placeholder,
+          };
+        },
+      },
     };
   },
 
