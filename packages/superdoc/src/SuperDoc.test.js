@@ -205,7 +205,7 @@ const buildCommentsStore = () => ({
 const mountComponent = async (superdocStub) => {
   superdocStoreStub = buildSuperdocStore();
   commentsStoreStub = buildCommentsStore();
-  superdocStoreStub.modules.ai = { endpoint: '/ai' };
+  superdocStoreStub.modules.ai = { endpoint: '/ai', provider: { id: 'test-provider' } };
   commentsStoreStub.documentsWithConverations.value = [{ id: 'doc-1' }];
 
   const component = (await import('./SuperDoc.vue')).default;
@@ -239,10 +239,14 @@ const mountComponent = async (superdocStub) => {
 };
 
 const createSuperdocStub = () => {
-  const toolbar = { config: { aiApiKey: 'abc' }, setActiveEditor: vi.fn(), updateToolbarState: vi.fn() };
+  const toolbar = {
+    config: { aiApiKey: 'abc', aiProvider: { id: 'toolbar-provider' } },
+    setActiveEditor: vi.fn(),
+    updateToolbarState: vi.fn(),
+  };
   return {
     config: {
-      modules: { comments: {}, ai: {}, toolbar: {}, pdf: {} },
+      modules: { comments: {}, ai: { provider: { id: 'config-provider' } }, toolbar: {}, pdf: {} },
       pagination: false,
       isDebug: false,
       documentMode: 'editing',
@@ -252,6 +256,7 @@ const createSuperdocStub = () => {
     },
     activeEditor: null,
     toolbar,
+    aiProvider: { id: 'superdoc-provider' },
     colors: ['#111'],
     broadcastEditorBeforeCreate: vi.fn(),
     broadcastEditorCreate: vi.fn(),

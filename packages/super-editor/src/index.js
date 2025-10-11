@@ -26,6 +26,7 @@ import { CommentsPluginKey } from './extensions/comment/comments-plugin.js';
 import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { SectionHelpers } from '@extensions/structured-content/document-section/index.js';
 import { registeredHandlers } from './core/super-converter/v3/handlers/index.js';
+import { AIProviderInterface, InsightsAIProvider, ConfigurableAIProvider } from './extensions/ai/index.js';
 
 const Extensions = {
   Node,
@@ -50,6 +51,9 @@ export {
   DocxZipper,
   SuperToolbar,
   Editor,
+  AIProviderInterface,
+  InsightsAIProvider,
+  ConfigurableAIProvider,
 
   // Components
   SuperEditor,

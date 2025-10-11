@@ -32,6 +32,15 @@
     "./ai-writer": {
       "import": "./dist/ai-writer.es.js"
     },
+    "./ai": {
+      "import": "./src/extensions/ai/index.js"
+    },
+    "./src/extensions/ai": {
+      "import": "./src/extensions/ai/index.js"
+    },
+    "./src/extensions/ai/*": {
+      "import": "./src/extensions/ai/*.js"
+    },
     "./style.css": "./dist/style.css"
   },
   "main": "./dist/super-editor.es.js",

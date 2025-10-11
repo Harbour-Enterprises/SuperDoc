@@ -294,7 +294,7 @@ const editorOptions = (doc) => {
     isInternal: proxy.$superdoc.config.isInternal,
     annotations: proxy.$superdoc.config.annotations,
     isCommentsEnabled: Boolean(commentsModuleConfig.value),
-    isAiEnabled: proxy.$superdoc.config.modules?.ai,
+    ai: proxy.$superdoc.config.modules?.ai,
     slashMenuConfig: proxy.$superdoc.config.modules?.slashMenu,
     onBeforeCreate: onEditorBeforeCreate,
     onCreate: onEditorCreate,
@@ -736,6 +736,7 @@ watch(getFloatingComments, () => {
         :selected-text="selectedText"
         :handle-close="handleAiWriterClose"
         :editor="proxy.$superdoc.activeEditor"
+        :provider="proxy.$superdoc.config?.modules?.ai?.provider"
         :api-key="proxy.$superdoc.toolbar?.config?.aiApiKey"
         :endpoint="proxy.$superdoc.config?.modules?.ai?.endpoint"
       />

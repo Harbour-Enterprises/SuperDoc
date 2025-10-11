@@ -20,7 +20,21 @@ import { TEXTS, ICONS, TRIGGERS } from './constants.js';
 const isModuleEnabled = (editorOptions, moduleName) => {
   switch (moduleName) {
     case 'ai':
-      return !!editorOptions?.isAiEnabled;
+      if (typeof editorOptions?.ai?.enabled === 'boolean') {
+        return editorOptions.ai.enabled;
+      }
+
+      if (typeof editorOptions?.modules?.ai?.enabled === 'boolean') {
+        return editorOptions.modules.ai.enabled;
+      }
+
+      if (typeof editorOptions?.isAiEnabled === 'boolean') {
+        return editorOptions.isAiEnabled;
+      }
+
+      return Boolean(
+        editorOptions?.ai || editorOptions?.aiProvider || editorOptions?.aiApiKey || editorOptions?.aiEndpoint,
+      );
 
     default:
       return true;

@@ -4,11 +4,17 @@ import { EditorState, TextSelection } from 'prosemirror-state';
 import { DecorationSet } from 'prosemirror-view';
 
 vi.mock('@harbour-enterprises/common/icons/dots-loader.svg', () => ({ default: 'dots-loader.svg' }));
+vi.mock('./ai-commands.js', () => ({
+  aiFindContent: vi.fn().mockResolvedValue('search-result'),
+  aiGenerateContent: vi.fn().mockResolvedValue(),
+  aiRewriteSelection: vi.fn().mockResolvedValue(),
+}));
 
 import { AiMarkName, AiAnimationMarkName, AiLoaderNodeName } from './ai-constants.js';
 import { AiMark, AiAnimationMark } from './ai-marks.js';
 import { AiLoaderNode } from './ai-nodes.js';
 import { AiPlugin, AiPluginKey } from './ai-plugin.js';
+import { aiFindContent, aiGenerateContent, aiRewriteSelection } from './ai-commands.js';
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -86,7 +92,7 @@ describe('ai plugin commands', () => {
   const setup = () => {
     const schema = createAiSchema();
     const state = createStateWithAiMark(schema);
-    const editor = { schema };
+    const editor = { schema, options: { ai: { provider: { id: 'default-provider' } } } };
     const commands = AiPlugin.config.addCommands.call({ editor });
     return { schema, state, editor, commands };
   };
@@ -181,6 +187,24 @@ describe('ai plugin commands', () => {
       if (node.type === schema.nodes[AiLoaderNodeName]) loaderCount += 1;
     });
     expect(loaderCount).toBe(0);
+  });
+
+  it('proxies aiFindContent to the underlying helper with default provider fallback', async () => {
+    const { commands, editor } = setup();
+    const promise = commands.aiFindContent('find me this')({});
+    await promise;
+    expect(aiFindContent).toHaveBeenCalledWith(editor, 'find me this', editor.options.ai.provider);
+  });
+
+  it('allows overriding provider for aiGenerateContent and aiRewriteSelection', async () => {
+    const { commands, editor } = setup();
+    const customProvider = { id: 'custom' };
+
+    await commands.aiGenerateContent('write something', customProvider, true)({});
+    expect(aiGenerateContent).toHaveBeenCalledWith(editor, 'write something', customProvider, true);
+
+    await commands.aiRewriteSelection('summarize', customProvider, false)({});
+    expect(aiRewriteSelection).toHaveBeenCalledWith(editor, 'summarize', customProvider, false);
   });
 });
 
