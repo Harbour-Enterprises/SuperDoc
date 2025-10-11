@@ -1,190 +1,124 @@
 // @ts-check
-import { twipsToLines, twipsToPixels, twipsToPt } from '@converter/helpers.js';
+import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 
 /**
- * Gets the paragraph indentation.
- * @param {Object} inlineIndent - The inline indentation attributes.
- * @param {Object} docx - The DOCX document.
- * @param {string} styleId - The style ID.
- * @returns {Object} The paragraph indentation.
+ * Gets the resolved paragraph properties by merging defaults, styles, and inline properties.
+ * @param {import('@translator').SCEncoderConfig} params
+ * @param {Object} inlinePpr - The inline paragraph properties.
+ * @param {boolean} [insideTable=false] - Whether the paragraph is inside a table.
+ * @returns {Object} The resolved paragraph properties.
  */
-export const getParagraphIndent = (inlineIndent, docx, styleId = '') => {
-  const indent = {
-    left: 0,
-    right: 0,
-    firstLine: 0,
-    hanging: 0,
-    explicitLeft: false,
-    explicitRight: false,
-    explicitFirstLine: false,
-    explicitHanging: false,
-  };
-
-  const { indent: pDefaultIndent = {} } = getDefaultParagraphStyle(docx, styleId);
-
-  const {
-    left: inlineLeft,
-    right: inlineRight,
-    firstLine: inlineFirstLine,
-    hanging: inlineHanging,
-  } = inlineIndent || {};
-
-  const leftIndent = inlineLeft ?? pDefaultIndent?.['w:left'];
-  const rightIndent = inlineRight ?? pDefaultIndent?.['w:right'];
-  const firstLine = inlineFirstLine ?? pDefaultIndent?.['w:firstLine'];
-  const hanging = inlineHanging ?? pDefaultIndent?.['w:hanging'];
-
-  if (leftIndent) {
-    indent.left = twipsToPixels(leftIndent);
-    indent.explicitLeft = inlineLeft !== undefined;
+export const resolveParagraphProperties = (params, inlinePpr, insideTable = false) => {
+  const styleId = inlinePpr?.styleId;
+  const defaultPpr = getDefaultParagraphProperties(params);
+  const { properties: normalPpr, isDefault: isNormalDefault } = getStyleParagraphProperties(params, 'Normal');
+  let stylePpr = {},
+    basedOn = null;
+  if (styleId && styleId !== 'Normal') {
+    ({ properties: stylePpr, basedOn } = getStyleParagraphProperties(params, styleId));
   }
-  if (rightIndent) {
-    indent.right = twipsToPixels(rightIndent);
-    indent.explicitRight = inlineRight !== undefined;
+  let styleChain = [stylePpr];
+  const seenStyles = new Set();
+  let nextBasedOn = basedOn;
+  while (nextBasedOn) {
+    if (seenStyles.has(basedOn)) {
+      break;
+    }
+    seenStyles.add(basedOn);
+    const { properties: basedOnPpr, basedOn: nextBasedOn } = getStyleParagraphProperties(params, basedOn);
+    if (basedOnPpr && Object.keys(basedOnPpr).length) {
+      styleChain.push(basedOnPpr);
+    }
+    basedOn = nextBasedOn;
   }
-  if (firstLine) {
-    indent.firstLine = twipsToPixels(firstLine);
-    indent.explicitFirstLine = inlineFirstLine !== undefined;
-  }
-  if (hanging) {
-    indent.hanging = twipsToPixels(hanging);
-    indent.explicitHanging = inlineHanging !== undefined;
+  styleChain = styleChain.reverse();
+  const combinedStylePpr = combineProperties(styleChain);
+
+  if (isNormalDefault) {
+    styleChain = [defaultPpr, normalPpr, combinedStylePpr, inlinePpr];
+  } else {
+    styleChain = [normalPpr, defaultPpr, combinedStylePpr, inlinePpr];
   }
 
-  return indent;
-};
+  const finalPpr = combineProperties(styleChain);
 
-/**
- * Gets the paragraph spacing.
- * @param {Object} inlineSpacing - The inline spacing attributes.
- * @param {Object} docx - The DOCX document.
- * @param {string} styleId - The style ID.
- * @param {Array} marks - The text style marks.
- * @returns {Object} The paragraph spacing.
- */
-export const getParagraphSpacing = (inlineSpacing, docx, styleId = '', marks = [], options = {}) => {
-  const { insideTable = false } = options;
-  // Check if we have default paragraph styles to override
-  const spacing = {};
-
-  const { spacing: pDefaultSpacing = {}, spacingSource } = getDefaultParagraphStyle(docx, styleId);
-
-  const hasInlineSpacing = !!inlineSpacing;
-
-  const textStyleMark = marks.find((el) => el.type === 'textStyle');
-  const fontSize = textStyleMark?.attrs?.fontSize;
-
-  // These styles are taken in order of precedence
-  // 1. Inline spacing
-  // 2. Default style spacing
-  // 3. Default paragraph spacing
-  const lineSpacing = inlineSpacing?.line ?? pDefaultSpacing?.['w:line'];
-  if (lineSpacing) spacing.line = twipsToLines(lineSpacing);
-
-  const lineRule = inlineSpacing?.lineRule ?? pDefaultSpacing?.['w:lineRule'];
-  if (lineRule) spacing.lineRule = lineRule;
-
-  if (lineRule === 'exact' && lineSpacing) {
-    spacing.line = `${twipsToPt(lineSpacing)}pt`;
-  }
-
-  const beforeSpacing = inlineSpacing?.before ?? pDefaultSpacing?.['w:before'];
-  if (beforeSpacing) spacing.lineSpaceBefore = twipsToPixels(beforeSpacing);
-
-  const beforeAutospacing = inlineSpacing?.beforeAutospacing;
-  if (beforeAutospacing === '1' && fontSize) {
-    spacing.lineSpaceBefore += Math.round((parseInt(fontSize) * 0.5 * 96) / 72);
-  }
-
-  const afterSpacing = inlineSpacing?.after ?? pDefaultSpacing?.['w:after'];
-  if (afterSpacing) spacing.lineSpaceAfter = twipsToPixels(afterSpacing);
-
-  const afterAutospacing = inlineSpacing?.afterAutospacing;
-  if (afterAutospacing === '1' && fontSize) {
-    spacing.lineSpaceAfter += Math.round((parseInt(fontSize) * 0.5 * 96) / 72);
-  }
-
-  if (insideTable && !hasInlineSpacing && spacingSource === 'docDefault') {
+  if (insideTable && !inlinePpr?.spacing && !combinedStylePpr.spacing) {
     // Word ignores doc-default spacing inside table cells unless explicitly set,
     // so drop the derived values when nothing is defined inline or via style.
-    if (!hasInlineSpacing) {
-      return undefined;
-    }
+    finalPpr.spacing = undefined;
   }
-
-  return spacing;
+  return finalPpr;
 };
 
-/**
- * Gets the default paragraph style.
- * @param {Object} docx - The DOCX document.
- * @param {string} styleId - The style ID.
- * @returns {Object} The default paragraph style.
- */
-export const getDefaultParagraphStyle = (docx, styleId = '') => {
+export const getDefaultParagraphProperties = (params) => {
+  const { docx } = params;
   const styles = docx['word/styles.xml'];
   const rootElements = styles?.elements?.[0]?.elements;
   if (!rootElements?.length) {
     return {};
   }
   const defaults = rootElements.find((el) => el.name === 'w:docDefaults');
-  const pDefault = defaults?.elements?.find((el) => el.name === 'w:pPrDefault') || {};
-  const pPrDefault = pDefault?.elements?.find((el) => el.name === 'w:pPr');
-  const pPrDefaultSpacingTag = pPrDefault?.elements?.find((el) => el.name === 'w:spacing') || {};
-  const pPrDefaultIndentTag = pPrDefault?.elements?.find((el) => el.name === 'w:ind') || {};
+  const pPrDefault = defaults?.elements?.find((el) => el.name === 'w:pPrDefault') || {};
+  const pPr = pPrDefault?.elements?.find((el) => el.name === 'w:pPr');
+  if (!pPr) {
+    return {};
+  }
+  const result = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
+  return result;
+};
 
-  // Paragraph 'Normal' styles
-  const stylesNormal = rootElements.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === 'Normal');
-  const pPrNormal = stylesNormal?.elements?.find((el) => el.name === 'w:pPr');
-  const pPrNormalSpacingTag = pPrNormal?.elements?.find((el) => el.name === 'w:spacing') || {};
-  const pPrNormalIndentTag = pPrNormal?.elements?.find((el) => el.name === 'w:ind') || {};
-  const isNormalAsDefault = stylesNormal?.attributes?.['w:default'] === '1';
-
-  // Styles based on styleId
-  let pPrStyleIdSpacingTag = {};
-  let pPrStyleIdIndentTag = {};
-  let pPrStyleJc = {};
-  if (styleId) {
-    const stylesById = rootElements.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId);
-    const pPrById = stylesById?.elements?.find((el) => el.name === 'w:pPr');
-    pPrStyleIdSpacingTag = pPrById?.elements?.find((el) => el.name === 'w:spacing') || {};
-    pPrStyleIdIndentTag = pPrById?.elements?.find((el) => el.name === 'w:ind') || {};
-    pPrStyleJc = pPrById?.elements?.find((el) => el.name === 'w:jc') || {};
+export const getStyleParagraphProperties = (params, styleId) => {
+  const { docx } = params;
+  const emptyResult = { properties: {}, isDefault: false, basedOn: null };
+  if (!styleId) return emptyResult;
+  const styles = docx['word/styles.xml'];
+  const rootElements = styles?.elements?.[0]?.elements;
+  if (!rootElements?.length) {
+    return emptyResult;
   }
 
-  const { attributes: pPrDefaultSpacingAttr } = pPrDefaultSpacingTag;
-  const { attributes: pPrNormalSpacingAttr } = pPrNormalSpacingTag;
-  const { attributes: pPrByIdSpacingAttr } = pPrStyleIdSpacingTag;
-  const { attributes: pPrByIdJcAttr } = pPrStyleJc;
+  const style = rootElements.find((el) => el.name === 'w:style' && el.attributes['w:styleId'] === styleId);
+  let basedOn = style?.elements?.find((el) => el.name === 'w:basedOn');
+  if (basedOn) {
+    basedOn = basedOn?.attributes?.['w:val'];
+  }
+  const pPr = style?.elements?.find((el) => el.name === 'w:pPr');
+  if (!pPr) {
+    return emptyResult;
+  }
+  const result = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
 
-  const { attributes: pPrDefaultIndentAttr } = pPrDefaultIndentTag;
-  const { attributes: pPrNormalIndentAttr } = pPrNormalIndentTag;
-  const { attributes: pPrByIdIndentAttr } = pPrStyleIdIndentTag;
+  return { properties: result, isDefault: style?.attributes?.['w:default'] === '1', basedOn };
+};
 
-  const spacingRest = isNormalAsDefault
-    ? pPrNormalSpacingAttr || pPrDefaultSpacingAttr
-    : pPrDefaultSpacingAttr || pPrNormalSpacingAttr;
-
-  const indentRest = isNormalAsDefault
-    ? pPrNormalIndentAttr || pPrDefaultIndentAttr
-    : pPrDefaultIndentAttr || pPrNormalIndentAttr;
-
-  let spacingToUse = pPrByIdSpacingAttr || spacingRest;
-  let spacingSource = 'docDefault';
-  if (pPrByIdSpacingAttr) {
-    spacingSource = 'style';
-  } else if (spacingRest === pPrNormalSpacingAttr && pPrNormalSpacingAttr) {
-    spacingSource = isNormalAsDefault ? 'docDefault' : 'normal';
-  } else if (spacingRest === pPrDefaultSpacingAttr && pPrDefaultSpacingAttr) {
-    spacingSource = 'docDefault';
+const combineProperties = (propertiesArray) => {
+  if (!propertiesArray || propertiesArray.length === 0) {
+    return {};
   }
 
-  let indentToUse = pPrByIdIndentAttr || indentRest;
+  const isObject = (item) => item && typeof item === 'object' && !Array.isArray(item);
 
-  return {
-    spacing: spacingToUse,
-    spacingSource,
-    indent: indentToUse,
-    justify: pPrByIdJcAttr,
+  const merge = (target, source) => {
+    const output = { ...target };
+
+    if (isObject(target) && isObject(source)) {
+      for (const key in source) {
+        if (Object.prototype.hasOwnProperty.call(source, key)) {
+          if (isObject(source[key])) {
+            if (key in target && isObject(target[key])) {
+              output[key] = merge(target[key], source[key]);
+            } else {
+              output[key] = source[key];
+            }
+          } else {
+            output[key] = source[key];
+          }
+        }
+      }
+    }
+
+    return output;
   };
+
+  return propertiesArray.reduce((acc, current) => merge(acc, current), {});
 };
