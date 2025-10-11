@@ -1,4 +1,5 @@
 import { emuToPixels, rotToDegrees } from '@converter/helpers.js';
+import { carbonCopy } from '@core/utilities/carbonCopy.js';
 
 /**
  * Encodes image xml into Editor node
@@ -21,33 +22,7 @@ export function handleImageNode(node, params, isAnchor) {
     height: emuToPixels(extent.attributes?.cy),
   };
 
-  const graphic = node.elements.find((el) => el.name === 'a:graphic');
-  const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
-  const { uri } = graphicData?.attributes || {};
-  const shapeURI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
-  if (!!uri && uri === shapeURI) {
-    return handleShapeDrawing(params, node, graphicData);
-  }
-
-  const picture = graphicData.elements.find((el) => el.name === 'pic:pic');
-  if (!picture || !picture.elements) return null;
-
-  const blipFill = picture.elements.find((el) => el.name === 'pic:blipFill');
-  const blip = blipFill.elements.find((el) => el.name === 'a:blip');
-
-  const spPr = picture.elements.find((el) => el.name === 'pic:spPr');
   let transformData = {};
-  if (spPr) {
-    const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
-    if (xfrm?.attributes) {
-      transformData = {
-        rotation: rotToDegrees(xfrm.attributes['rot']),
-        verticalFlip: xfrm.attributes['flipV'] === '1',
-        horizontalFlip: xfrm.attributes['flipH'] === '1',
-      };
-    }
-  }
-
   const effectExtent = node.elements.find((el) => el.name === 'wp:effectExtent');
   if (effectExtent) {
     const sanitizeEmuValue = (value) => {
@@ -76,6 +51,11 @@ export function handleImageNode(node, params, isAnchor) {
   const vRelativeFrom = positionVTag?.attributes.relativeFrom;
   const alignV = positionVTag?.elements?.find((el) => el.name === 'wp:align')?.elements[0]?.text;
 
+  const marginOffset = {
+    left: positionHValue,
+    top: positionVValue,
+  };
+
   const simplePos = node.elements.find((el) => el.name === 'wp:simplePos');
   const wrapSquare = node.elements.find((el) => el.name === 'wp:wrapSquare');
   const wrapTopAndBottom = node.elements.find((el) => el.name === 'wp:wrapTopAndBottom');
@@ -92,10 +72,32 @@ export function handleImageNode(node, params, isAnchor) {
     };
   }
 
-  const marginOffset = {
-    left: positionHValue,
-    top: positionVValue,
-  };
+  const graphic = node.elements.find((el) => el.name === 'a:graphic');
+  const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
+  const { uri } = graphicData?.attributes || {};
+  const shapeURI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+  if (!!uri && uri === shapeURI) {
+    return handleShapeDrawing(params, node, graphicData, size, padding, marginOffset);
+  }
+
+  const picture = graphicData.elements.find((el) => el.name === 'pic:pic');
+  if (!picture || !picture.elements) return null;
+
+  const blipFill = picture.elements.find((el) => el.name === 'pic:blipFill');
+  const blip = blipFill.elements.find((el) => el.name === 'a:blip');
+
+  const spPr = picture.elements.find((el) => el.name === 'pic:spPr');
+  if (spPr) {
+    const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
+    if (xfrm?.attributes) {
+      transformData = {
+        ...transformData,
+        rotation: rotToDegrees(xfrm.attributes['rot']),
+        verticalFlip: xfrm.attributes['flipV'] === '1',
+        horizontalFlip: xfrm.attributes['flipH'] === '1',
+      };
+    }
+  }
 
   const { attributes: blipAttributes = {} } = blip;
   const rEmbed = blipAttributes['r:embed'];
@@ -159,13 +161,16 @@ export function handleImageNode(node, params, isAnchor) {
 
 /**
  * Handles a shape drawing within a WordprocessingML graphic node.
- 
- * @param {Object} params - Parameters object.
- * @param {Object} node - The `wp:drawing` node or similar containing the shape.
+ *
+ * @param {{ nodes: Array }} params - Translator params including the surrounding drawing node.
+ * @param {Object} node - The `wp:drawing` or related shape container node.
  * @param {Object} graphicData - The `a:graphicData` node containing the shape elements.
- * @returns {Object|null} The translated node or contentBlock, or null if no content exists.
+ * @param {{ width?: number, height?: number }} size - Shape bounding box in pixels.
+ * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Distance attributes converted to pixels.
+ * @param {{ left?: number, top?: number }} marginOffset - Shape offsets relative to its anchor.
+ * @returns {Object|null} A contentBlock node representing the shape, or null when no content exists.
  */
-const handleShapeDrawing = (params, node, graphicData) => {
+const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffset) => {
   const wsp = graphicData.elements.find((el) => el.name === 'wps:wsp');
   const textBox = wsp.elements.find((el) => el.name === 'wps:txbx');
   const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
@@ -181,18 +186,10 @@ const handleShapeDrawing = (params, node, graphicData) => {
   }
 
   if (!textBoxContent) {
-    return null;
+    return buildShapePlaceholder(node, size, padding, marginOffset, 'drawing');
   }
 
-  const { nodeListHandler } = params;
-  const translatedElement = nodeListHandler.handler({
-    ...params,
-    node: textBoxContent.elements[0],
-    nodes: textBoxContent.elements,
-    path: [...(params.path || []), textBoxContent],
-  });
-
-  return translatedElement[0];
+  return buildShapePlaceholder(node, size, padding, marginOffset, 'textbox');
 };
 
 /**
@@ -237,5 +234,65 @@ const getRectangleShape = (params, node) => {
   return {
     type: 'contentBlock',
     attrs: schemaAttrs,
+  };
+};
+
+/**
+ * Builds a contentBlock placeholder for shapes that we cannot fully translate yet.
+ *
+ * @param {Object} node - Original shape `wp:drawing` node to snapshot for round-tripping.
+ * @param {{ width?: number, height?: number }} size - Calculated size of the shape in pixels.
+ * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Padding around the shape in pixels.
+ * @param {{ left?: number, top?: number }} marginOffset - Offset of the anchored shape relative to its origin in pixels.
+ * @param {'drawing'|'textbox'} shapeType - Identifier describing the kind of shape placeholder.
+ * @returns {{ type: 'contentBlock', attrs: Object }} Placeholder node that retains the original XML.
+ */
+const buildShapePlaceholder = (node, size, padding, marginOffset, shapeType) => {
+  const attrs = {
+    drawingContent: {
+      name: 'w:drawing',
+      elements: [carbonCopy(node)],
+    },
+    attributes: {
+      'data-shape-type': shapeType,
+    },
+  };
+
+  if (size && (Number.isFinite(size.width) || Number.isFinite(size.height))) {
+    attrs.size = {
+      ...(Number.isFinite(size.width) ? { width: size.width } : {}),
+      ...(Number.isFinite(size.height) ? { height: size.height } : {}),
+    };
+  }
+
+  if (padding) {
+    const paddingData = {};
+    if (Number.isFinite(padding.top)) paddingData['data-padding-top'] = padding.top;
+    if (Number.isFinite(padding.right)) paddingData['data-padding-right'] = padding.right;
+    if (Number.isFinite(padding.bottom)) paddingData['data-padding-bottom'] = padding.bottom;
+    if (Number.isFinite(padding.left)) paddingData['data-padding-left'] = padding.left;
+    if (Object.keys(paddingData).length) {
+      attrs.attributes = {
+        ...attrs.attributes,
+        ...paddingData,
+      };
+    }
+  }
+
+  if (marginOffset) {
+    const offsetData = {};
+    if (Number.isFinite(marginOffset.left)) offsetData['data-offset-x'] = marginOffset.left;
+    if (Number.isFinite(marginOffset.top)) offsetData['data-offset-y'] = marginOffset.top;
+    if (Object.keys(offsetData).length) {
+      attrs.attributes = {
+        ...attrs.attributes,
+        ...offsetData,
+      };
+    }
+  }
+
+  return {
+    type: 'contentBlock',
+    attrs,
   };
 };

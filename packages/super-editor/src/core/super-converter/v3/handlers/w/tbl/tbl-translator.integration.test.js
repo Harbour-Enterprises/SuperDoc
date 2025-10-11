@@ -1,5 +1,6 @@
 // @ts-check
 import { describe, it, expect, vi } from 'vitest';
+import { twipsToPixels } from '@core/super-converter/helpers.js';
 
 import { translator as tblTranslator } from './tbl-translator.js';
 import { translator as tblPrTranslator } from '../tblPr/tblPr-translator.js';
@@ -93,6 +94,97 @@ describe('w:tbl translator integration', () => {
     };
 
     expect(() => tblTranslator.encode(params, {})).not.toThrow();
+  });
+
+  it('aligns vertically merged cells when gridBefore placeholders are present', () => {
+    const tableNode = {
+      name: 'w:tbl',
+      elements: [
+        { name: 'w:tblPr', elements: [] },
+        {
+          name: 'w:tblGrid',
+          elements: [
+            { name: 'w:gridCol', attributes: { 'w:w': '1000' } },
+            { name: 'w:gridCol', attributes: { 'w:w': '2000' } },
+            { name: 'w:gridCol', attributes: { 'w:w': '3000' } },
+          ],
+        },
+        {
+          name: 'w:tr',
+          elements: [
+            {
+              name: 'w:trPr',
+              elements: [{ name: 'w:gridBefore', attributes: { 'w:val': '1' } }],
+            },
+            {
+              name: 'w:tc',
+              elements: [
+                {
+                  name: 'w:tcPr',
+                  elements: [{ name: 'w:vMerge', attributes: { 'w:val': 'restart' } }],
+                },
+                { name: 'w:p', elements: [] },
+              ],
+            },
+            {
+              name: 'w:tc',
+              elements: [
+                { name: 'w:tcPr', elements: [] },
+                { name: 'w:p', elements: [] },
+              ],
+            },
+          ],
+        },
+        {
+          name: 'w:tr',
+          elements: [
+            {
+              name: 'w:trPr',
+              elements: [{ name: 'w:gridBefore', attributes: { 'w:val': '1' } }],
+            },
+            {
+              name: 'w:tc',
+              elements: [
+                {
+                  name: 'w:tcPr',
+                  elements: [{ name: 'w:vMerge', attributes: { 'w:val': 'continue' } }],
+                },
+                { name: 'w:p', elements: [] },
+              ],
+            },
+            {
+              name: 'w:tc',
+              elements: [
+                { name: 'w:tcPr', elements: [] },
+                { name: 'w:p', elements: [] },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const params = {
+      nodes: [tableNode],
+      docx: minimalDocx,
+      nodeListHandler: minimalNodeListHandler,
+    };
+
+    const result = tblTranslator.encode(params, {});
+    expect(result.content).toHaveLength(2);
+
+    const [firstRow, secondRow] = result.content;
+
+    expect(firstRow.content).toHaveLength(3);
+    expect(firstRow.content[0].attrs?.__placeholder).toBe('gridBefore');
+    const mergedCell = firstRow.content[1];
+    expect(mergedCell.attrs?.rowspan).toBe(2);
+    expect(mergedCell.attrs?.colwidth?.[0]).toBeCloseTo(twipsToPixels(2000), 3);
+
+    expect(secondRow.content).toHaveLength(2);
+    expect(secondRow.content[0].attrs?.__placeholder).toBe('gridBefore');
+    const secondRowDataCell = secondRow.content[1];
+    expect(secondRowDataCell.attrs?.colwidth?.[0]).toBeCloseTo(twipsToPixels(3000), 3);
   });
 
   it('preserves table style cell margins on decode', () => {
