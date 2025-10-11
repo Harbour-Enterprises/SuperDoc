@@ -1,6 +1,7 @@
 import { handleParagraphNode } from './paragraphNodeImporter.js';
 import { defaultNodeListHandler } from './docxImporter.js';
 import { twipsToPixels, twipsToLines } from '../../helpers.js';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 
 export const handlePictNode = (params) => {
   const { nodes } = params;
@@ -72,7 +73,7 @@ export const handlePictNode = (params) => {
 };
 
 // Handler for v:rect elements
-export function handleVRectImport({ rect, pNode }) {
+export function handleVRectImport({ rect, pNode, params }) {
   const schemaAttrs = {};
   const rectAttrs = rect.attributes || {};
 
@@ -129,49 +130,18 @@ export function handleVRectImport({ rect, pNode }) {
     schemaAttrs.horizontalRule = true;
   }
 
-  const pPr = pNode.elements?.find((el) => el.name === 'w:pPr');
-  const spacingElement = pPr?.elements?.find((el) => el.name === 'w:spacing');
-  const spacingAttrs = spacingElement?.attributes || {};
-  const inLineIndentTag = pPr?.elements?.find((el) => el.name === 'w:ind');
-  const inLineIndent = inLineIndentTag?.attributes || {};
-
-  // Parse spacing using the same logic as paragraphNodeImporter
-  const spacing = {};
-  if (spacingAttrs['w:after']) spacing.lineSpaceAfter = twipsToPixels(spacingAttrs['w:after']);
-  if (spacingAttrs['w:before']) spacing.lineSpaceBefore = twipsToPixels(spacingAttrs['w:before']);
-  if (spacingAttrs['w:line']) spacing.line = twipsToLines(spacingAttrs['w:line']);
-  if (spacingAttrs['w:lineRule']) spacing.lineRule = spacingAttrs['w:lineRule'];
-
-  const indent = {
-    left: 0,
-    right: 0,
-    firstLine: 0,
-    hanging: 0,
-  };
-  const leftIndent = inLineIndent?.['w:left'];
-  const rightIndent = inLineIndent?.['w:right'];
-
-  if (leftIndent) {
-    indent.left = twipsToPixels(leftIndent);
-  }
-  if (rightIndent) {
-    indent.right = twipsToPixels(rightIndent);
-  }
-
-  return {
-    type: 'paragraph',
-    content: [
-      {
-        type: 'contentBlock',
-        attrs: schemaAttrs,
-      },
-    ],
-    attrs: {
-      spacing: Object.keys(spacing).length > 0 ? spacing : undefined,
-      rsidRDefault: pNode.attributes?.['w:rsidRDefault'],
-      indent,
+  const pElement = wPTranslator.encode({
+    ...params,
+    nodes: [{ ...pNode, elements: pNode.elements.filter((el) => el.name !== 'w:r') }],
+  });
+  pElement.content = [
+    {
+      type: 'contentBlock',
+      attrs: schemaAttrs,
     },
-  };
+  ];
+
+  return pElement;
 }
 
 export function handleShapTextboxImport({ shape, params }) {
