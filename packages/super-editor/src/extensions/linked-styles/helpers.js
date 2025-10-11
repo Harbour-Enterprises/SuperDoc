@@ -4,6 +4,7 @@ import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 import { findParentNode } from '@helpers/index.js';
 import { kebabCase } from '@harbour-enterprises/common';
 import { getUnderlineCssString } from './index.js';
+import { twipsToLines, twipsToPixels, twipsToPt, halfPointToPixels } from '@converter/helpers.js';
 
 /**
  * Get the (parsed) linked style from the styles.xml
@@ -44,14 +45,33 @@ export const getSpacingStyle = (spacing) => {
  * Convert spacing object to a CSS style string
  * @category Helper
  * @param {Object} spacing - The spacing object
+ * @param {Array} marks - The marks array for font size reference
  * @returns {string} The CSS style string
  * @private
  */
-export const getSpacingStyleString = (spacing) => {
-  const { lineSpaceBefore, lineSpaceAfter, line } = spacing;
+export const getSpacingStyleString = (spacing, marks) => {
+  let { before, after, line, lineRule, beforeAutospacing, afterAutospacing } = spacing;
+  line = twipsToLines(line);
+  if (lineRule === 'exact' && line) {
+    line = `${twipsToPt(line)}pt`;
+  }
+
+  const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
+  const fontSize = textStyleMark?.attrs?.fontSize;
+
+  before = twipsToPixels(before);
+  if (beforeAutospacing && fontSize) {
+    before += halfPointToPixels(parseInt(fontSize) * 0.5);
+  }
+
+  after = twipsToPixels(after);
+  if (afterAutospacing && fontSize) {
+    after += halfPointToPixels(parseInt(fontSize) * 0.5);
+  }
+
   return `
-    ${lineSpaceBefore ? `margin-top: ${lineSpaceBefore}px;` : ''}
-    ${lineSpaceAfter ? `margin-bottom: ${lineSpaceAfter}px;` : ''}
+    ${before ? `margin-top: ${before}px;` : ''}
+    ${after ? `margin-bottom: ${after}px;` : ''}
     ${line ? getLineHeightValueString(line, '') : ''}
   `.trim();
 };
