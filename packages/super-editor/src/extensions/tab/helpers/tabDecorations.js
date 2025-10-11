@@ -1,4 +1,5 @@
 import { Decoration } from 'prosemirror-view';
+import { twipsToPixels } from '@converter/helpers.js';
 
 export const defaultTabDistance = 48;
 export const defaultLineLength = 816;
@@ -196,9 +197,9 @@ export function getIndentWidth(view, paragraphStartPos, indentAttrs = {}) {
 export function calculateIndentFallback(indentAttrs = {}) {
   if (!indentAttrs) return 0;
 
-  const left = Number(indentAttrs.left) || 0;
-  const firstLine = Number(indentAttrs.firstLine) || 0;
-  const hanging = Number(indentAttrs.hanging) || 0;
+  const left = twipsToPixels(Number(indentAttrs.left) || 0);
+  const firstLine = twipsToPixels(Number(indentAttrs.firstLine) || 0);
+  const hanging = twipsToPixels(Number(indentAttrs.hanging) || 0);
 
   let textIndent = 0;
   if (firstLine && hanging) {
