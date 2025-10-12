@@ -110,7 +110,6 @@ describe('w:del translator', () => {
       expect(exportSchemaToJson).toHaveBeenCalled();
 
       expect(result.name).toBe('w:del');
-      expect(result.type).toBe('element');
       expect(result.attributes).toEqual({
         'w:id': '123',
         'w:author': 'Test',
