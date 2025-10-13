@@ -1,6 +1,6 @@
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { mergeTextNodes, parseMarks } from '@converter/v2/importer/index.js';
-import { resolveParagraphProperties } from './index.js';
+import { resolveParagraphProperties } from '@converter/styles';
 import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 
 /**
