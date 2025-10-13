@@ -891,9 +891,8 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Determines the fonts used in the document and the unsupported ones.
-   * This will also trigger the `onFontsResolved` callback.
-   * @returns {Promise<{documentFonts: string[], unsupportedFonts: string[]}>} List with document fonts and unsupported fonts
+   * Determines the fonts used in the document and the unsupported ones and triggers the `onFontsResolved` callback.
+   * @returns {void}
    */
   #checkFonts() {
     // We only want to run the algorithm to resolve the fonts if the user has asked for it
