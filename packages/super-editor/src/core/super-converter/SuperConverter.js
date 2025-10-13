@@ -582,7 +582,13 @@ class SuperConverter {
       .map((element) => element.attributes['w:name']);
 
     const allFonts = [...inlineDocumentFonts, ...fontsInFontTable];
-    return allFonts;
+    const uniqueFonts = [];
+    for (const font of allFonts) {
+      if (!uniqueFonts.includes(font)) {
+        uniqueFonts.push(font);
+      }
+    }
+    return uniqueFonts;
   }
 
   getFontFaceImportString() {

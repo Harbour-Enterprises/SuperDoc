@@ -351,6 +351,16 @@ describe('SuperConverter Document GUID', () => {
 
         expect(fonts).toEqual(['SomeFont', 'SomeFont2']);
       });
+
+      it('should not return duplicate fonts', () => {
+        const converter = new SuperConverter({ docx: [...mockDocx, mockFontTableWithFonts] });
+        // Include some fonts that are already on the fontTable
+        converter.inlineDocumentFonts = ['Aptos', 'Times New Roman'];
+        const fonts = converter.getDocumentFonts();
+        const expected = ['Aptos', 'Aptos Display', 'Times New Roman'];
+
+        expect(fonts.sort()).toEqual(expected.sort());
+      });
     });
   });
 });
