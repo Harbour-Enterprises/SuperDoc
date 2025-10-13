@@ -13,6 +13,7 @@ import {
 } from './v2/exporter/commentsExporter.js';
 import { FOOTER_RELATIONSHIP_TYPE, HEADER_RELATIONSHIP_TYPE, HYPERLINK_RELATIONSHIP_TYPE } from './constants.js';
 import { DocxHelpers } from './docx-helpers/index.js';
+import { removeDuplicates } from './helpers/removeDuplicates';
 
 const FONT_FAMILY_FALLBACKS = Object.freeze({
   swiss: 'Arial, sans-serif',
@@ -565,7 +566,7 @@ class SuperConverter {
     const inlineDocumentFonts = this.inlineDocumentFonts || [];
     const fontTable = this.convertedXml['word/fontTable.xml'];
     if (!fontTable) {
-      return inlineDocumentFonts;
+      return removeDuplicates(inlineDocumentFonts);
     }
 
     const wFonts = fontTable.elements?.find((element) => element.name === 'w:fonts');
@@ -582,13 +583,7 @@ class SuperConverter {
       .map((element) => element.attributes['w:name']);
 
     const allFonts = [...inlineDocumentFonts, ...fontsInFontTable];
-    const uniqueFonts = [];
-    for (const font of allFonts) {
-      if (!uniqueFonts.includes(font)) {
-        uniqueFonts.push(font);
-      }
-    }
-    return uniqueFonts;
+    return removeDuplicates(allFonts);
   }
 
   getFontFaceImportString() {
