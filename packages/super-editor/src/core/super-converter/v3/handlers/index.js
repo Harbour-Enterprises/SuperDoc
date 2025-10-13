@@ -64,6 +64,7 @@ import { translator as w_trPr_translator } from './w/trPr/trPr-translator.js';
 import { translator as w_u_translator } from './w/u/u-translator.js';
 import { translator as w_wAfter_translator } from './w/wAfter/wAfter-translator.js';
 import { translator as w_wBefore_translator } from './w/wBefore/wBefore-translator.js';
+import { translator as w_bCs_translator } from './w/bCs/bCs-translator.js';
 import {
   commentRangeStartTranslator as w_commentRangeStart_translator,
   commentRangeEndTranslator as w_commentRangeEnd_translator,
@@ -98,6 +99,7 @@ const additionalHandlers = Object.freeze({
   'sd:pageReference': sd_pageReference_translator,
   'sd:tableOfContents': sd_tableOfContents_translator,
   'w:b': w_b_translator,
+  'w:bCs': w_bCs_translator,
   'w:bidiVisual': w_bidiVisual_translator,
   'w:bookmarkEnd': w_bookmarkEnd_translator,
   'w:bookmarkStart': w_bookmarkStart_translator,
