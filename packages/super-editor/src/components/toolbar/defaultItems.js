@@ -1035,37 +1035,37 @@ export const makeDefaultItems = ({
     },
     options: [
       {
-        label: '1,0',
+        label: '1.0',
         key: '1',
         icon: () => renderIcon('1', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '1,15',
+        label: '1.15',
         key: '1.15',
         icon: () => renderIcon('1.15', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '1,5',
+        label: '1.5',
         key: '1.5',
         icon: () => renderIcon('1.5', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '2,0',
+        label: '2.0',
         key: '2',
         icon: () => renderIcon('2', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '2,5',
+        label: '2.5',
         key: '2.5',
         icon: () => renderIcon('2.5', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '3,0',
+        label: '3.0',
         key: '3',
         icon: () => renderIcon('3', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
