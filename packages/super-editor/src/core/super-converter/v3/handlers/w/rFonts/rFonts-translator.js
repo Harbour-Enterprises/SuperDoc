@@ -49,7 +49,10 @@ const encode = (params, encodedAttrs = {}) => {
 
   if (params.inlineDocumentFonts) {
     // Right now we only support 'w:ascii'
-    params.inlineDocumentFonts.push(attributes['w:ascii']);
+    const font = attributes['w:ascii'];
+    if (!params.inlineDocumentFonts.includes(font)) {
+      params.inlineDocumentFonts.push(font);
+    }
   }
 
   return {
