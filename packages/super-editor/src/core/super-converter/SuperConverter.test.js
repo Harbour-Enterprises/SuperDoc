@@ -343,6 +343,14 @@ describe('SuperConverter Document GUID', () => {
 
         expect(fonts).toEqual([]);
       });
+
+      it('should return inline document fonts if fontTable is not available', () => {
+        const converter = new SuperConverter({ docx: mockDocx });
+        converter.inlineDocumentFonts = ['SomeFont', 'SomeFont2'];
+        const fonts = converter.getDocumentFonts();
+
+        expect(fonts).toEqual(['SomeFont', 'SomeFont2']);
+      });
     });
   });
 });
