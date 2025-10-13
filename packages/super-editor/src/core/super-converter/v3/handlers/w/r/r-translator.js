@@ -2,24 +2,13 @@
 import { NodeTranslator } from '@translator';
 import { translateChildNodes } from '../../../../v2/exporter/helpers/index.js';
 import { generateRunProps, processOutputMarks } from '../../../../exporter.js';
-import {
-  collectRunProperties,
-  buildRunAttrs,
-  applyRunMarks,
-  deriveStyleMarks,
-  mergeInlineMarkSets,
-  mergeTextStyleAttrs,
-  cloneMark,
-  cloneRunAttrs,
-  createRunPropertiesElement,
-  cloneXmlNode,
-  applyRunPropertiesTemplate,
-} from './helpers/helpers.js';
-import { splitRunProperties } from './helpers/split-run-properties.js';
+import { cloneMark, createRunPropertiesElement, cloneXmlNode, applyRunPropertiesTemplate } from './helpers/helpers.js';
 import { ensureTrackedWrapper, prepareRunTrackingContext } from './helpers/track-change-helpers.js';
 import { translator as wHyperlinkTranslator } from '../hyperlink/hyperlink-translator.js';
+import { translator as wRPrTranslator } from '../rpr';
 import validXmlAttributes from './attributes/index.js';
-
+import { parseMarksFromRPr, handleStyleChangeMarksV2 } from '../../../../v2/importer/markImporter.js';
+import { resolveRunProperties } from '@converter/styles.js';
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:r';
 
@@ -36,59 +25,72 @@ const encode = (params, encodedAttrs = {}) => {
   if (!runNode) return undefined;
 
   const elements = Array.isArray(runNode.elements) ? runNode.elements : [];
+
+  // Parsing run properties
   const rPrNode = elements.find((child) => child?.name === 'w:rPr');
-  const contentElements = rPrNode ? elements.filter((el) => el !== rPrNode) : elements;
+  const runProperties = rPrNode ? wRPrTranslator.encode({ ...params, nodes: [rPrNode] }) : {};
 
-  const { entries: runPropEntries, hadRPr, styleChangeMarks } = collectRunProperties(params, rPrNode);
-  const { remainingProps, inlineMarks, textStyleAttrs, runStyleId } = splitRunProperties(runPropEntries, params?.docx);
+  // Resolving run properties following style hierarchy
+  const resolvedRunProperties = resolveRunProperties(params, runProperties, params?.parentStyleId);
 
-  const styleMarks = deriveStyleMarks({
-    docx: params?.docx,
-    paragraphStyleId: params?.parentStyleId,
-    runStyleId,
-  });
+  // Parsing marks from run properties
+  const marks = parseMarksFromRPr(resolvedRunProperties, params?.docx) || [];
+  const rPrChange = rPrNode?.elements?.find((el) => el.name === 'w:rPrChange');
+  const styleChangeMarks = handleStyleChangeMarksV2(rPrChange, marks, params) || [];
 
-  const mergedInlineMarks = mergeInlineMarkSets(styleMarks.inlineMarks, inlineMarks);
-  let mergedTextStyleAttrs = mergeTextStyleAttrs(styleMarks.textStyleAttrs, textStyleAttrs);
-  if (runStyleId) {
-    mergedTextStyleAttrs = mergedTextStyleAttrs
-      ? { ...mergedTextStyleAttrs, styleId: runStyleId }
-      : { styleId: runStyleId };
-  }
-
-  const runAttrs = buildRunAttrs(encodedAttrs, hadRPr, remainingProps);
+  // Handling direct marks on the run node
   let runLevelMarks = Array.isArray(runNode.marks) ? runNode.marks.map((mark) => cloneMark(mark)) : [];
   if (styleChangeMarks?.length) {
     runLevelMarks = [...runLevelMarks, ...styleChangeMarks.map((mark) => cloneMark(mark))];
   }
 
+  // Encoding child nodes within the run
+  const contentElements = rPrNode ? elements.filter((el) => el !== rPrNode) : elements;
   const childParams = { ...params, nodes: contentElements };
   const content = nodeListHandler?.handler(childParams) || [];
 
+  // Applying marks to child nodes
   const contentWithRunMarks = content.map((child) => {
     if (!child || typeof child !== 'object') return child;
-    const baseMarks = Array.isArray(child.marks) ? child.marks.map((mark) => cloneMark(mark)) : [];
-    if (!runLevelMarks.length) return child;
-    return { ...child, marks: [...baseMarks, ...runLevelMarks.map((mark) => cloneMark(mark))] };
+
+    // Preserve existing marks on child nodes
+    const baseMarks = Array.isArray(child.marks) ? child.marks : [];
+
+    let childMarks = [...marks, ...baseMarks, ...runLevelMarks].map((mark) => cloneMark(mark));
+
+    // De-duplicate marks by type, preserving order (later marks override earlier ones)
+    const seenTypes = new Set();
+    let textStyleMark;
+    childMarks = childMarks.filter((mark) => {
+      if (!mark || !mark.type) return false;
+      if (seenTypes.has(mark.type)) {
+        if (mark.type === 'textStyle') {
+          // Merge textStyle attributes
+          textStyleMark.attrs = { ...(textStyleMark.attrs || {}), ...(mark.attrs || {}) };
+        }
+        return false;
+      }
+      if (mark.type === 'textStyle') {
+        textStyleMark = mark;
+      }
+      seenTypes.add(mark.type);
+      return true;
+    });
+
+    // Apply marks to child nodes
+    return { ...child, marks: childMarks };
   });
 
-  const marked = contentWithRunMarks.map((child) => applyRunMarks(child, mergedInlineMarks, mergedTextStyleAttrs));
-
-  const filtered = marked.filter(Boolean);
+  const filtered = contentWithRunMarks.filter(Boolean);
 
   const runNodeResult = {
     type: SD_KEY_NAME,
     content: filtered,
+    attrs: { ...encodedAttrs, runProperties: resolvedRunProperties },
   };
 
-  const attrs = cloneRunAttrs(runAttrs);
-  if (attrs && Object.keys(attrs).length) {
-    if (attrs.runProperties == null) delete attrs.runProperties;
-    if (Object.keys(attrs).length) runNodeResult.attrs = attrs;
-  }
-
   if (runLevelMarks.length) {
-    runNodeResult.marks = runLevelMarks.map((mark) => cloneMark(mark));
+    runNodeResult.marks = runLevelMarks;
   }
 
   return runNodeResult;
