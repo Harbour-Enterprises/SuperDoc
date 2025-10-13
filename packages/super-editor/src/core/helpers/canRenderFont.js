@@ -10,11 +10,7 @@
  * }
  */
 
-export function canRenderFont(
-  fontName,
-  fallbackFont = 'sans-serif',
-  { foundLocalFonts = [] } = { foundLocalFonts: [] },
-) {
+export function canRenderFont(fontName, fallbackFont = 'sans-serif') {
   const _canRenderFont = (fontName, fallbackFont) => {
     // Create a canvas context to measure text
     const canvas = document.createElement('canvas');
