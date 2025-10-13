@@ -64,6 +64,7 @@ import { translator as w_trPr_translator } from './w/trPr/trPr-translator.js';
 import { translator as w_u_translator } from './w/u/u-translator.js';
 import { translator as w_wAfter_translator } from './w/wAfter/wAfter-translator.js';
 import { translator as w_wBefore_translator } from './w/wBefore/wBefore-translator.js';
+import { translator as w_caps_translator } from './w/caps/caps-translator.js';
 import { translator as w_bCs_translator } from './w/bCs/bCs-translator.js';
 import {
   commentRangeStartTranslator as w_commentRangeStart_translator,
@@ -71,8 +72,6 @@ import {
 } from './w/commentRange/comment-range-translator.js';
 import { translator as wp_anchor_translator } from './wp/anchor/anchor-translator.js';
 import { translator as wp_inline_translator } from './wp/inline/inline-translator.js';
-
-import { runPropertyTranslators } from './w/rpr/run-property-translators.js';
 import { translator as w_vMerge_translator } from './w/vMerge/vMerge-translator.js';
 import { translator as w_gridSpan_translator } from './w/gridSpan/gridSpan-translator.js';
 import { translator as w_vAlign_translator } from './w/vAlign/vAlign-translator.js';
@@ -106,6 +105,7 @@ const additionalHandlers = Object.freeze({
   'w:bottom': w_bottom_translator,
   'w:br': w_br_translator,
   'w:cantSplit': w_cantSplit_translator,
+  'w:caps': w_caps_translator,
   'w:cnfStyle': w_cnfStyle_translator,
   'w:color': w_color_translator,
   'w:divId': w_divId_translator,
@@ -183,7 +183,6 @@ const additionalHandlers = Object.freeze({
 });
 
 const baseHandlers = {
-  ...runPropertyTranslators,
   ...additionalHandlers,
 };
 
