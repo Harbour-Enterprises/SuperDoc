@@ -14,6 +14,12 @@ export const handleParagraphNode = (params) => {
   const node = carbonCopy(nodes[0]);
   let schemaNode;
 
+  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
+  let inlineParagraphProperties = {};
+  if (pPr) {
+    inlineParagraphProperties = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
+  }
+
   // If it is a standard paragraph node, process normally
   const handleStandardNode = nodeListHandler.handlerEntities.find(
     (e) => e.handlerName === 'standardNodeHandler',
@@ -28,8 +34,6 @@ export const handleParagraphNode = (params) => {
   if (result.nodes.length === 1) {
     schemaNode = result.nodes[0];
   }
-
-  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
 
   // Parse direct run properties (w:rPr) inside w:pPr
   const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
@@ -47,10 +51,6 @@ export const handleParagraphNode = (params) => {
   }
 
   // Resolve paragraph properties according to styles hierarchy
-  let inlineParagraphProperties = {};
-  if (pPr) {
-    inlineParagraphProperties = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
-  }
   const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
   const resolvedParagraphProperties = resolveParagraphProperties(params, inlineParagraphProperties, insideTable);
 

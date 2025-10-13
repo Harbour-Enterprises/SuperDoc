@@ -322,6 +322,10 @@ export function createNestedPropertiesTranslator(xmlName, sdName, propertyTransl
       // Process property translators
       const elements = decodeProperties(propertyTranslatorsBySdName, currentValue);
 
+      if (elements.length === 0) {
+        return undefined;
+      }
+
       const newNode = {
         name: xmlName,
         type: 'element',
