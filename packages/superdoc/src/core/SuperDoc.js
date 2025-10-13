@@ -316,7 +316,6 @@ export class SuperDoc extends EventEmitter {
     this.on('exception', this.config.onException);
     this.on('list-definitions-change', this.config.onListDefinitionsChange);
 
-    // We only want to run the algorithm to resolve the fonts if the user has passed it.
     if (this.config.onFontsResolved) {
       this.on('fonts-resolved', this.config.onFontsResolved);
     }

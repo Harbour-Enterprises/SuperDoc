@@ -895,6 +895,7 @@ export class Editor extends EventEmitter {
    * @returns {{documentFonts: string[], unsupportedFonts: string[]}} List with document fonts and unsupported fonts
    */
   #checkFonts() {
+    // We only want to run the algorithm to resolve the fonts if the user has passed it.
     if (!this.options.onFontsResolved || typeof this.options.onFontsResolved !== 'function') {
       return;
     }
