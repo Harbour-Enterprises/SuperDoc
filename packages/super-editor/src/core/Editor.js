@@ -338,6 +338,10 @@ export class Editor extends EventEmitter {
 
     this.mount(this.options.element);
 
+    if (!this.options.isHeadless) {
+      this.#checkFonts();
+    }
+
     this.on('create', this.options.onCreate);
     this.on('update', this.options.onUpdate);
     this.on('selectionUpdate', this.options.onSelectionUpdate);
@@ -884,21 +888,28 @@ export class Editor extends EventEmitter {
       style.textContent = styleString;
       document.head.appendChild(style);
     }
+  }
 
-    // Ignore when running in NodeJS environment
+  /**
+   * Checks whether the document has potentially unsupported fonts
+   * @returns {{documentFonts: string[], unsupportedFonts: string[]}} List with document fonts and unsupported fonts
+   */
+  #checkFonts() {
+    if (!this.options.onFontsResolved || typeof this.options.onFontsResolved !== 'function') {
+      return;
+    }
+
     if (process && process.version && process.versions) {
       return;
     }
 
-    if (this.options.onFontsResolved && typeof this.options.onFontsResolved === 'function') {
-      const fontsUsedInDocument = this.converter.getDocumentFonts();
-      const unsupportedFonts = fontsUsedInDocument.filter((font) => !isFontAvailable(font));
+    const fontsUsedInDocument = this.converter.getDocumentFonts();
+    const unsupportedFonts = fontsUsedInDocument.filter((font) => !isFontAvailable(font));
 
-      this.options.onFontsResolved({
-        documentFonts: fontsUsedInDocument,
-        unsupportedFonts: unsupportedFonts,
-      });
-    }
+    this.options.onFontsResolved({
+      documentFonts: fontsUsedInDocument,
+      unsupportedFonts: unsupportedFonts,
+    });
   }
 
   /**
@@ -988,7 +999,6 @@ export class Editor extends EventEmitter {
           doc = this.#prepareDocumentForImport(doc);
         } else {
           doc = createDocument(this.converter, this.schema, this);
-
           // Perform any additional document processing prior to finalizing the doc here
           doc = this.#prepareDocumentForImport(doc);
 

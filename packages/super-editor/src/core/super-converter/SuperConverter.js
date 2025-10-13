@@ -178,6 +178,7 @@ class SuperConverter {
 
     this.addedMedia = {};
     this.comments = [];
+    this.inlineDocumentFonts = [];
 
     // Store custom highlight colors
     this.docHiglightColors = new Set([]);
@@ -561,9 +562,10 @@ class SuperConverter {
   }
 
   getDocumentFonts() {
+    const inlineDocumentFonts = this.inlineDocumentFonts || [];
     const fontTable = this.convertedXml['word/fontTable.xml'];
     if (!fontTable) {
-      return [];
+      return inlineDocumentFonts;
     }
 
     const wFonts = fontTable.elements?.find((element) => element.name === 'w:fonts');
@@ -575,11 +577,12 @@ class SuperConverter {
       return [];
     }
 
-    const fontsUsedInDocument = wFonts.elements
+    const fontsInFontTable = wFonts.elements
       .filter((element) => element.name === 'w:font')
       .map((element) => element.attributes['w:name']);
 
-    return fontsUsedInDocument;
+    const allFonts = [...inlineDocumentFonts, ...fontsInFontTable];
+    return allFonts;
   }
 
   getFontFaceImportString() {
@@ -701,6 +704,7 @@ class SuperConverter {
       this.numbering = result.numbering;
       this.comments = result.comments;
       this.linkedStyles = result.linkedStyles;
+      this.inlineDocumentFonts = result.inlineDocumentFonts;
 
       return result.pmDoc;
     } else {
