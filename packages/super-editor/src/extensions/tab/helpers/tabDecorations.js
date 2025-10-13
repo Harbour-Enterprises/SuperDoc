@@ -32,15 +32,18 @@ export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
         const tabStop = tabStops.find((stop) => stop.pos > currentWidth && stop.val !== 'clear');
         if (tabStop) {
           tabWidth = tabStop.pos - currentWidth;
+          let val = tabStop.val;
+          const aliases = { left: 'start', right: 'end' };
+          if (aliases[val]) val = aliases[val];
 
-          if (tabStop.val === 'center' || tabStop.val === 'end' || tabStop.val === 'right') {
+          if (val === 'center' || val === 'end' || val === 'right') {
             const nextTabIndex = findNextTabIndex(flattened, entryIndex + 1);
             const segmentStartPos = pos + node.nodeSize;
             const segmentEndPos =
               nextTabIndex === -1 ? startPos + paragraphContext.paragraph.nodeSize - 1 : flattened[nextTabIndex].pos;
             const segmentWidth = measureRangeWidth(view, segmentStartPos, segmentEndPos);
-            tabWidth -= tabStop.val === 'center' ? segmentWidth / 2 : segmentWidth;
-          } else if (tabStop.val === 'decimal' || tabStop.val === 'num') {
+            tabWidth -= val === 'center' ? segmentWidth / 2 : segmentWidth;
+          } else if (val === 'decimal' || val === 'num') {
             const breakChar = tabStop.decimalChar || '.';
             const decimalPos = findDecimalBreakPos(flattened, entryIndex + 1, breakChar);
             const integralWidth = decimalPos
@@ -92,7 +95,11 @@ export function getParagraphContext($pos, cache, helpers) {
       if (!cache.has(startPos)) {
         let tabStops = [];
         if (Array.isArray(node.attrs?.tabStops)) {
-          tabStops = node.attrs.tabStops;
+          tabStops = node.attrs.tabStops.map(({ tab }) => ({
+            val: tab.tabSize,
+            pos: twipsToPixels(tab.pos),
+            leader: tab.leader,
+          }));
         } else {
           const style = helpers.linkedStyles.getStyleById(node.attrs?.styleId);
           if (Array.isArray(style?.definition?.styles?.tabStops)) {

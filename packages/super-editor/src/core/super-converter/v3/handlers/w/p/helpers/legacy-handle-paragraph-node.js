@@ -1,6 +1,5 @@
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { mergeTextNodes, parseMarks } from '@converter/v2/importer/index.js';
-import { twipsToPixels } from '@converter/helpers.js';
 import { resolveParagraphProperties } from './index.js';
 import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 
@@ -66,6 +65,7 @@ export const handleParagraphNode = (params) => {
   schemaNode.attrs.spacing = resolvedParagraphProperties.spacing;
   schemaNode.attrs.rsidRDefault = node.attributes?.['w:rsidRDefault'];
   schemaNode.attrs.filename = filename;
+  schemaNode.attrs.tabStops = resolvedParagraphProperties.tabs;
 
   // Dropcap settings
   if (resolvedParagraphProperties.framePr && resolvedParagraphProperties.framePr.dropCap) {
@@ -74,17 +74,6 @@ export const handleParagraphNode = (params) => {
       type: resolvedParagraphProperties.framePr.dropCap,
     };
     delete schemaNode.attrs.dropcap.dropCap;
-  }
-
-  // Parse tab stops
-  if (resolvedParagraphProperties.tabs) {
-    const aliases = { left: 'start', right: 'end' };
-    schemaNode.attrs.tabStops = resolvedParagraphProperties.tabs.map(({ tab }) => ({
-      val: aliases[tab.tabSize] || tab.tabSize,
-      pos: twipsToPixels(tab.pos),
-      originalPos: tab.pos,
-      leader: tab.leader,
-    }));
   }
 
   // Normalize text nodes.
