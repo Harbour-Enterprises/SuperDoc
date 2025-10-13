@@ -30,7 +30,7 @@ import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 import { setWordSelection } from './helpers/setWordSelection.js';
 import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
-import { isFontAvailable } from './helpers/isFontAvailable.js';
+import { canRenderFont } from './helpers/canRenderFont.js';
 import {
   migrateListsToV2IfNecessary,
   migrateParagraphFieldsListsV2,
@@ -891,26 +891,44 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Checks whether the document has potentially unsupported fonts
-   * @returns {{documentFonts: string[], unsupportedFonts: string[]}} List with document fonts and unsupported fonts
+   * Determines the fonts used in the document and the unsupported ones.
+   * This will also trigger the `onFontsResolved` callback.
+   * @returns {Promise<{documentFonts: string[], unsupportedFonts: string[]}>} List with document fonts and unsupported fonts
    */
   #checkFonts() {
-    // We only want to run the algorithm to resolve the fonts if the user has passed it.
+    // We only want to run the algorithm to resolve the fonts if the user has asked for it
     if (!this.options.onFontsResolved || typeof this.options.onFontsResolved !== 'function') {
       return;
     }
 
+    // Ignore this in NodeJS
     if (process && process.version && process.versions) {
       return;
     }
 
     const fontsUsedInDocument = this.converter.getDocumentFonts();
-    const unsupportedFonts = fontsUsedInDocument.filter((font) => !isFontAvailable(font));
+    let unsupportedFonts = [];
 
-    this.options.onFontsResolved({
-      documentFonts: fontsUsedInDocument,
-      unsupportedFonts: unsupportedFonts,
-    });
+    if (window.queryLocalFonts) {
+      window.queryLocalFonts().then((localFonts) => {
+        const localFontFamilies = localFonts.map((font) => font.family);
+        unsupportedFonts = fontsUsedInDocument.filter((font) => !localFontFamilies.includes(font));
+
+        this.options.onFontsResolved({
+          documentFonts: fontsUsedInDocument,
+          unsupportedFonts: unsupportedFonts,
+        });
+      });
+
+      // If we can't access the local fonts API, we try to render the fonts
+    } else {
+      unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+    }
   }
 
   /**

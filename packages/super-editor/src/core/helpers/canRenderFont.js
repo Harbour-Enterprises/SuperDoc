@@ -1,17 +1,21 @@
 /**
- * Checks if a given font is available in the user's browser.
+ * Checks if a given font can be rendered on the browser
  *
  * @param {string} fontName - The name of the font to check for availability.
- * @returns {boolean} True if the font is available, false otherwise.
+ * @returns {boolean} True if the font can be rendered, false otherwise.
  *
  * @example
- * if (isFontAvailable('Arial')) {
+ * if (canRenderFont('Arial')) {
  *   // Use Arial font
  * }
  */
 
-export function isFontAvailable(fontName, fallbackFont = 'sans-serif') {
-  const _isFontAvailable = (fontName, fallbackFont) => {
+export function canRenderFont(
+  fontName,
+  fallbackFont = 'sans-serif',
+  { foundLocalFonts = [] } = { foundLocalFonts: [] },
+) {
+  const _canRenderFont = (fontName, fallbackFont) => {
     // Create a canvas context to measure text
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -38,7 +42,7 @@ export function isFontAvailable(fontName, fallbackFont = 'sans-serif') {
     return isAvailable;
   };
 
-  if (_isFontAvailable(fontName, fallbackFont)) {
+  if (_canRenderFont(fontName, fallbackFont)) {
     return true;
   }
   // This extra verification is for the case where the `fontName` is the actual fallback font.
@@ -47,5 +51,5 @@ export function isFontAvailable(fontName, fallbackFont = 'sans-serif') {
   // and height wouldn't change at all. To avoid that case, we check it again switching
   // the fallback font.
   const oppositeFallbackFont = fallbackFont === 'sans-serif' ? 'serif' : 'sans-serif';
-  return _isFontAvailable(fontName, oppositeFallbackFont);
+  return _canRenderFont(fontName, oppositeFallbackFont);
 }
