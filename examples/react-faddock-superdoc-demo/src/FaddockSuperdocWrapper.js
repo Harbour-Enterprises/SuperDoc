@@ -44,9 +44,15 @@ export default function FaddockSuperdocWrapper({ documents = [], ...rest }) {
   }, [documents, rest]);
 
   return (
-    <div style={{ width: '100%' }}>
-      <div id="superdoc-toolbar" />
-      <div ref={containerRef} id="superdoc" style={{ width: '100%', height: '600px' }} />
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'stretch' }}>
+      <div id="superdoc-toolbar" style={{ width: '100%' }} />
+      <div style={{ display: 'flex', justifyContent: 'center', width: '100%', flex: 1 }}>
+        <div
+          ref={containerRef}
+          id="superdoc"
+          style={{ width: '100%', maxWidth: 900, height: '600px', margin: '0 auto' }}
+        />
+      </div>
     </div>
   );
 }
