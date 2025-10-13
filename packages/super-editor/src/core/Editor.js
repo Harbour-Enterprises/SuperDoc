@@ -910,20 +910,25 @@ export class Editor extends EventEmitter {
     let unsupportedFonts = [];
 
     if (window.queryLocalFonts) {
-      window
-        .queryLocalFonts()
-        .then((localFonts) => {
-          const localFontFamilies = localFonts.map((font) => font.family);
-          unsupportedFonts = fontsUsedInDocument.filter((font) => !localFontFamilies.includes(font));
+      navigator.permissions.query({ name: 'local-fonts' }).then((result) => {
+        if (result.state === 'granted') {
+          window
+            .queryLocalFonts()
+            .then((localFonts) => {
+              const localFontFamilies = localFonts.map((font) => font.family);
+              unsupportedFonts = fontsUsedInDocument.filter((font) => !localFontFamilies.includes(font));
 
-          this.options.onFontsResolved({
-            documentFonts: fontsUsedInDocument,
-            unsupportedFonts: unsupportedFonts,
-          });
-        })
-        .catch(() => {
-          console.warn('[SuperDoc] - Could not determine local fonts on the system. Skipping font check.');
-        });
+              this.options.onFontsResolved({
+                documentFonts: fontsUsedInDocument,
+                unsupportedFonts: unsupportedFonts,
+              });
+            })
+            .catch(() => {
+              console.warn('[SuperDoc] - Could not determine local fonts on the system. Skipping font check.');
+            });
+        }
+      });
+
       // If we can't access the local fonts API, we try to render the fonts
     } else {
       unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
