@@ -752,6 +752,12 @@ export class SuperToolbar extends EventEmitter {
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
 
+      // --- Patch: Maintain active state for autocomplete button ---
+      if (item.name.value === 'autocomplete') {
+        item.active.value = this.#autocompleteEnabled;
+        return;
+      }
+      // ----------------------------------------------------------
       // Linked Styles dropdown behaves a bit different from other buttons.
       // We need to disable it manually if there are no linked styles to show
       if (item.name.value === 'linkedStyles') {

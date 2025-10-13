@@ -2,6 +2,7 @@ export const toolbarTexts = {
   bold: 'Bold',
   fontFamily: 'Font',
   ai: 'AI text generation',
+  autocomplete: 'AI Autocomplete',
   fontSize: 'Font size',
   italic: 'Italic',
   underline: 'Underline',

@@ -84,11 +84,7 @@ export const makeDefaultItems = ({
     name: 'autocomplete',
     command: 'toggleAutocomplete',
     icon: toolbarIcons.autocomplete,
-    active: true, // enabled by default
-    tooltip: toolbarTexts.autocomplete || 'Autocomplete',
-    attributes: {
-      ariaLabel: 'Autocomplete',
-    },
+    tooltip: toolbarTexts.autocomplete,
   });
 
   // ai button
@@ -1092,13 +1088,11 @@ export const makeDefaultItems = ({
     redo,
 
     // ---- autocomplete toggle after ai and before overflow ----
-    aiButton,
-    autocompleteToggle,
-
+    // aiButton,
     // Dev - tracked changes
     // toggleTrackChanges,
-    acceptTrackedChangeBySelection,
-    rejectTrackedChangeOnSelection,
+    // acceptTrackedChangeBySelection,
+    // rejectTrackedChangeOnSelection,
     // toggleTrackChangesOriginal,
     // toggleTrackChangesFinal,
 
@@ -1134,22 +1128,12 @@ export const makeDefaultItems = ({
     clearFormatting,
     aiButton,
     overflow,
-    documentMode,
+    autocompleteToggle,
+    // documentMode,
   ];
 
   if (!superToolbar.config?.superdoc?.config?.modules?.ai) {
     toolbarItems = toolbarItems.filter((item) => item.name.value !== 'ai');
-  }
-
-  // 🔒 Never filter out autocomplete (for dev/test/standalone/editor usage)
-  // (This will restore autocomplete if it was filtered elsewhere)
-  if (!toolbarItems.find((item) => item.name.value === 'autocomplete')) {
-    toolbarItems.splice(toolbarItems.findIndex((item) => item.name.value === 'ai') + 1, 0, autocompleteToggle);
-  }
-
-  // If config.excludeItems removed autocomplete, forcibly restore it
-  if (Array.isArray(superToolbar.config?.excludeItems)) {
-    superToolbar.config.excludeItems = superToolbar.config.excludeItems.filter((val) => val !== 'autocomplete');
   }
 
   // Hide separators on small screens
