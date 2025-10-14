@@ -224,6 +224,7 @@ const createNodeListHandler = (nodeHandlers) => {
     lists,
     inlineDocumentFonts,
     path = [],
+    extraParams = {},
   }) => {
     if (!elements || !elements.length) return [];
     const filteredElements = pruneIgnoredNodes(elements);
@@ -255,6 +256,7 @@ const createNodeListHandler = (nodeHandlers) => {
                 lists,
                 inlineDocumentFonts,
                 path,
+                extraParams,
               });
             },
             { nodes: [], consumed: 0 },
