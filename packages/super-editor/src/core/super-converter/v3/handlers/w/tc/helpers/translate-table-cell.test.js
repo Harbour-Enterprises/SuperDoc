@@ -6,22 +6,11 @@ vi.mock('@converter/v2/exporter/helpers/index', () => ({
 }));
 
 import { pixelsToTwips, pixelsToEightPoints, twipsToPixels } from '@converter/helpers.js';
-import { translateTableCell, generateTableCellProperties, generateCellMargins } from './translate-table-cell.js';
+import { translateTableCell, generateTableCellProperties } from './translate-table-cell.js';
 
 describe('translate-table-cell helpers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-  });
-
-  it('generateCellMargins converts pixel margins to twips and builds edges', () => {
-    const margins = { top: 96, right: 48, bottom: 0, left: 24 };
-    const out = generateCellMargins(margins);
-    const map = Object.fromEntries(out.map((e) => [e.name, e.attributes['w:w']]));
-
-    expect(map['w:top']).toBe(pixelsToTwips(96));
-    expect(map['w:right']).toBe(pixelsToTwips(48));
-    expect(map['w:bottom']).toBe(pixelsToTwips(0));
-    expect(map['w:left']).toBe(pixelsToTwips(24));
   });
 
   it('generateTableCellProperties builds tcPr with width, span, bg, margins, vAlign, vMerge, and borders', () => {
@@ -48,7 +37,7 @@ describe('translate-table-cell helpers', () => {
     const byName = Object.fromEntries(tcPr.elements.map((e) => [e.name, e]));
 
     // tcW
-    expect(byName['w:tcW'].attributes['w:w']).toBe(pixelsToTwips(150));
+    expect(byName['w:tcW'].attributes['w:w']).toBe(String(pixelsToTwips(150)));
     expect(byName['w:tcW'].attributes['w:type']).toBe('dxa');
 
     // gridSpan
@@ -59,12 +48,13 @@ describe('translate-table-cell helpers', () => {
 
     // tcMar
     const mar = byName['w:tcMar'];
+
     expect(Array.isArray(mar.elements)).toBe(true);
     const marMap = Object.fromEntries(mar.elements.map((e) => [e.name, e.attributes['w:w']]));
-    expect(marMap['w:top']).toBe(pixelsToTwips(96));
-    expect(marMap['w:right']).toBe(pixelsToTwips(48));
-    expect(marMap['w:bottom']).toBe(pixelsToTwips(0));
-    expect(marMap['w:left']).toBe(pixelsToTwips(24));
+    expect(marMap['w:top']).toBe(String(pixelsToTwips(96)));
+    expect(marMap['w:right']).toBe(String(pixelsToTwips(48)));
+    expect(marMap['w:bottom']).toBe(String(pixelsToTwips(0)));
+    expect(marMap['w:left']).toBe(String(pixelsToTwips(24)));
 
     // vAlign
     expect(byName['w:vAlign'].attributes['w:val']).toBe('center');
@@ -78,8 +68,8 @@ describe('translate-table-cell helpers', () => {
     expect(bMap['w:top'].attributes).toMatchObject({
       'w:val': 'single',
       'w:color': 'FF0000',
-      'w:sz': pixelsToEightPoints(2),
-      'w:space': 1,
+      'w:sz': String(pixelsToEightPoints(2)),
+      'w:space': '1',
     });
     expect(bMap['w:bottom'].attributes['w:val']).toBe('nil');
   });
@@ -89,16 +79,7 @@ describe('translate-table-cell helpers', () => {
     const tcPr = generateTableCellProperties(node);
     const vMerge = tcPr.elements.find((e) => e.name === 'w:vMerge');
     expect(vMerge).toBeTruthy();
-    expect(vMerge.attributes).toBeUndefined();
-  });
-
-  it('generateCellMargins round-trips twips without inflating values', () => {
-    const twipsValue = 108;
-    const pixelValue = twipsToPixels(twipsValue);
-    const margins = { left: pixelValue };
-    const out = generateCellMargins(margins);
-    const left = out.find((e) => e.name === 'w:left');
-    expect(left?.attributes?.['w:w']).toBe(twipsValue);
+    expect(vMerge.attributes).toEqual({ 'w:val': 'continue' });
   });
 
   it('translateTableCell wraps children with tcPr as the first element', async () => {

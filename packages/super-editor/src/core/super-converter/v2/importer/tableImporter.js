@@ -1,4 +1,4 @@
-import { eigthPointsToPixels, halfPointToPoints } from '../../helpers.js';
+import { eighthPointsToPixels, halfPointToPoints } from '../../helpers.js';
 import { generateV2HandlerEntity } from '@converter/v3/handlers/utils.js';
 import { translator as tableTranslator } from '@converter/v3/handlers/w/tbl/tbl-translator.js';
 
@@ -12,7 +12,7 @@ export const tableNodeHandlerEntity = generateV2HandlerEntity('tableNodeHandler'
  * @param tblStyleTag
  * @param {ParsedDocx} docx
  * @param {NodeListHandler} nodeListHandler
- * @returns {{uiPriotity: *, borders: {}, name: *, rowBorders: {}, basedOn: *}|null}
+ * @returns {{borders: {}, name: *, rowBorders: {}, fonts: *, justification: *, cellMargins: {}, fontSize: *}|null}
  */
 export function getReferencedTableStyles(tblStyleTag, docx) {
   if (!tblStyleTag) return null;
@@ -104,7 +104,7 @@ function processTableBorders(borderElements) {
     const color = attributes['w:color'];
     const size = attributes['w:sz'];
     if (color && color !== 'auto') attrs['color'] = color.startsWith('#') ? color : `#${color}`;
-    if (size && size !== 'auto') attrs['size'] = eigthPointsToPixels(size);
+    if (size && size !== 'auto') attrs['size'] = eighthPointsToPixels(size);
 
     const rowBorderNames = ['insideH', 'insideV'];
     if (rowBorderNames.includes(borderName)) rowBorders[borderName] = attrs;

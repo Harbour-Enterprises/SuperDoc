@@ -41,9 +41,7 @@ describe('w:trPr translator', () => {
 
       const result = translator.encode(params);
 
-      expect(result.type).toBe(NodeTranslator.translatorTypes.ATTRIBUTE);
-      expect(result.sdNodeOrKeyName).toBe('tableRowProperties');
-      expect(result.attributes).toEqual({
+      expect(result).toEqual({
         cantSplit: true,
         cnfStyle: {
           firstRow: true,
@@ -84,7 +82,7 @@ describe('w:trPr translator', () => {
         ],
       };
 
-      const { attributes } = translator.encode(params);
+      const attributes = translator.encode(params);
 
       expect(attributes.cantSplit).toBe(false);
       expect(attributes.cnfStyle).toBeUndefined({});
@@ -236,7 +234,7 @@ describe('w:trPr translator', () => {
       const encodeParams = { nodes: [decodedResult] };
       const encodedResult = translator.encode(encodeParams);
 
-      expect(encodedResult.attributes).toEqual(tableRowProperties);
+      expect(encodedResult).toEqual(tableRowProperties);
     });
   });
 });

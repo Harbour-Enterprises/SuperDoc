@@ -1,6 +1,6 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import { twipsToPixels, eigthPointsToPixels, halfPointToPoints } from '@core/super-converter/helpers.js';
+import { twipsToPixels, eighthPointsToPixels, halfPointToPoints } from '@core/super-converter/helpers.js';
 import { preProcessVerticalMergeCells } from '@core/super-converter/export-helpers/pre-process-vertical-merge-cells.js';
 import { translateChildNodes } from '@core/super-converter/v2/exporter/helpers/index.js';
 import { translator as trTranslator } from '../tr';
@@ -28,7 +28,7 @@ const encode = (params, encodedAttrs) => {
   const tblPr = node.elements.find((el) => el.name === 'w:tblPr');
   if (tblPr) {
     const encodedProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
-    encodedAttrs['tableProperties'] = encodedProperties?.attributes || {};
+    encodedAttrs['tableProperties'] = encodedProperties || {};
   }
 
   // Table grid
@@ -191,7 +191,7 @@ function _processTableBorders(rawBorders) {
     const color = attributes.color;
     const size = attributes.size;
     if (color && color !== 'auto') attrs['color'] = color.startsWith('#') ? color : `#${color}`;
-    if (size && size !== 'auto') attrs['size'] = eigthPointsToPixels(size);
+    if (size && size !== 'auto') attrs['size'] = eighthPointsToPixels(size);
 
     const rowBorderNames = ['insideH', 'insideV'];
     if (rowBorderNames.includes(name)) rowBorders[name] = attrs;
@@ -258,7 +258,7 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
     if (baseTblPr && baseTblPr.elements) {
       tblPr.elements.push(...baseTblPr.elements);
     }
-    const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] }).attributes;
+    const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
     const { borders, rowBorders } = _processTableBorders(tableProperties.borders || {});
 
     if (borders) stylesToReturn.borders = borders;
