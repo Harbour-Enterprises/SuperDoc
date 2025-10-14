@@ -906,12 +906,54 @@ export class Editor extends EventEmitter {
     }
 
     const fontsUsedInDocument = this.converter.getDocumentFonts();
-    const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
 
-    this.options.onFontsResolved({
-      documentFonts: fontsUsedInDocument,
-      unsupportedFonts: unsupportedFonts,
-    });
+    if (!('queryLocalFonts' in window)) {
+      // Fallback in case the queryLocalFonts API is not available
+      const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+
+      return;
+    }
+
+    // Check if user has granted permission to access local font API
+    navigator.permissions
+      .query({ name: 'local-fonts' })
+      .then((result) => {
+        if (result.state === 'denied') {
+          // Fallback in case the permission is not granted
+          const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+
+          this.options.onFontsResolved({
+            documentFonts: fontsUsedInDocument,
+            unsupportedFonts: unsupportedFonts,
+          });
+        } else {
+          // If its `granted` or `prompt` we'll proceed
+          // If it's `prompt` this means the user will be prompted to give access to the API
+          // and then it will proceed normally
+          window
+            .queryLocalFonts()
+            .then((fonts) => {
+              const localFonts = [...new Set(fonts.map((font) => font.family))];
+              const unsupportedFonts = fontsUsedInDocument.map((font) => !localFonts.includes(font));
+
+              this.options.onFontsResolved({
+                documentFonts: fontsUsedInDocument,
+                unsupportedFonts: unsupportedFonts,
+              });
+            })
+            .catch(() => {
+              console.warn('[SuperDoc] Could not get access to local fonts.');
+            });
+        }
+      })
+      .catch(() => {
+        console.warn('[SuperDoc] Could not get access to local fonts.');
+      });
   }
 
   /**
