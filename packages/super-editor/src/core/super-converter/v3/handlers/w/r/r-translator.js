@@ -111,35 +111,27 @@ const decode = (params, decodedAttrs = {}) => {
     return wHyperlinkTranslator.decode({ ...params, extraParams });
   }
 
+  // Separate out tracking marks
   const { runNode: runNodeForExport, trackingMarksByType } = prepareRunTrackingContext(node);
 
-  const runAttrs = runNodeForExport.attrs || {};
-  const runProperties = Array.isArray(runAttrs.runProperties) ? runAttrs.runProperties : [];
+  // Decode child nodes within the run
   const exportParams = { ...params, node: runNodeForExport };
   if (!exportParams.editor) {
     exportParams.editor = { extensionService: { extensions: [] } };
   }
-
   const childElements = translateChildNodes(exportParams) || [];
 
-  let runPropertiesElement = createRunPropertiesElement(runProperties);
+  // Parse marks back into run properties
+  // and combine with any direct run properties
+  const runAttrs = runNodeForExport.attrs || {};
+  const runProperties = runAttrs.runProperties || {};
+  const marksProperties = decodeRPrFromMarks(runNodeForExport.marks || []);
+  const finalRunProperties = combineProperties([runProperties, marksProperties], ['fontFamily']);
 
-  const markElements = processOutputMarks(Array.isArray(runNodeForExport.marks) ? runNodeForExport.marks : []);
-  if (markElements.length) {
-    if (!runPropertiesElement) {
-      runPropertiesElement = generateRunProps(markElements);
-    } else {
-      if (!Array.isArray(runPropertiesElement.elements)) runPropertiesElement.elements = [];
-      const existingNames = new Set(
-        runPropertiesElement.elements.map((el) => el?.name).filter((name) => typeof name === 'string'),
-      );
-      markElements.forEach((element) => {
-        if (!element || !element.name || existingNames.has(element.name)) return;
-        runPropertiesElement.elements.push({ ...element, attributes: { ...(element.attributes || {}) } });
-        existingNames.add(element.name);
-      });
-    }
-  }
+  let runPropertiesElement = wRPrTranslator.decode({
+    ...params,
+    node: { attrs: { runProperties: finalRunProperties } },
+  });
 
   const runPropsTemplate = runPropertiesElement ? cloneXmlNode(runPropertiesElement) : null;
   const applyBaseRunProps = (runNode) => applyRunPropertiesTemplate(runNode, runPropsTemplate);
