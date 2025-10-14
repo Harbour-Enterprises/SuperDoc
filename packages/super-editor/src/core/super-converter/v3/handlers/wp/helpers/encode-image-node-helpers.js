@@ -1,6 +1,8 @@
 import { emuToPixels, rotToDegrees, polygonToObj } from '@converter/helpers.js';
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 
+const DRAWING_XML_TAG = 'w:drawing';
+
 /**
  * Encodes image xml into Editor node
  * @param {Object} params
@@ -280,7 +282,7 @@ const getRectangleShape = (params, node) => {
 
   const [drawingNode] = params.nodes;
 
-  if (drawingNode?.name === 'w:drawing') {
+  if (drawingNode?.name === DRAWING_XML_TAG) {
     schemaAttrs.drawingContent = drawingNode;
   }
 
@@ -326,7 +328,7 @@ const getRectangleShape = (params, node) => {
 const buildShapePlaceholder = (node, size, padding, marginOffset, shapeType) => {
   const attrs = {
     drawingContent: {
-      name: 'w:drawing',
+      name: DRAWING_XML_TAG,
       elements: [carbonCopy(node)],
     },
     attributes: {

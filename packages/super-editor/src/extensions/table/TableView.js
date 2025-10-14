@@ -1,5 +1,5 @@
 import { getColStyleDeclaration } from './tableHelpers/getColStyleDeclaration.js';
-import { twipsToPixels } from '@core/super-converter/helpers.js';
+import { twipsToPixels, PIXELS_PER_INCH } from '@core/super-converter/helpers.js';
 import { Attribute } from '@core/Attribute.js';
 
 /**
@@ -91,7 +91,7 @@ export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, 
     const pageWidth = toNumber(pageStyles.pageSize.width);
     const marginLeft = toNumber(pageStyles.pageMargins?.left);
     const marginRight = toNumber(pageStyles.pageMargins?.right);
-    const pageAvailableWidthPx = Math.max((pageWidth - marginLeft - marginRight) * 96, 0);
+    const pageAvailableWidthPx = Math.max((pageWidth - marginLeft - marginRight) * PIXELS_PER_INCH, 0);
     if (pageAvailableWidthPx > 0) {
       availableWidth = availableWidth ? Math.min(availableWidth, pageAvailableWidthPx) : pageAvailableWidthPx;
     }

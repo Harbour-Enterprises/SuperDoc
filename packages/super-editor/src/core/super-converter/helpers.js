@@ -1,5 +1,8 @@
 import { parseSizeUnit } from '../utilities/index.js';
 
+// CSS pixels per inch; used to convert between Word's inch-based measurements and DOM pixels.
+const PIXELS_PER_INCH = 96;
+
 function inchesToTwips(inches) {
   if (inches == null) return;
   if (typeof inches === 'string') inches = parseFloat(inches);
@@ -26,13 +29,13 @@ function pixelsToTwips(pixels) {
 
 function inchesToPixels(inches) {
   if (inches == null) return;
-  const pixels = inches * 96;
+  const pixels = inches * PIXELS_PER_INCH;
   return Math.round(pixels * 1000) / 1000;
 }
 
 function pixelsToInches(pixels) {
   if (pixels == null) return;
-  const inches = Number(pixels) / 96;
+  const inches = Number(pixels) / PIXELS_PER_INCH;
   return inches;
 }
 
@@ -48,7 +51,7 @@ function linesToTwips(lines) {
 
 function halfPointToPixels(halfPoints) {
   if (halfPoints == null) return;
-  return Math.round((halfPoints * 96) / 72);
+  return Math.round((halfPoints * PIXELS_PER_INCH) / 72);
 }
 
 function halfPointToPoints(halfPoints) {
@@ -59,7 +62,7 @@ function halfPointToPoints(halfPoints) {
 function emuToPixels(emu) {
   if (emu == null) return;
   if (typeof emu === 'string') emu = parseFloat(emu);
-  const pixels = (emu * 96) / 914400;
+  const pixels = (emu * PIXELS_PER_INCH) / 914400;
   return Math.round(pixels);
 }
 
@@ -71,7 +74,7 @@ function pixelsToEmu(px) {
 
 function pixelsToHalfPoints(pixels) {
   if (pixels == null) return;
-  return Math.round((pixels * 72) / 96);
+  return Math.round((pixels * 72) / PIXELS_PER_INCH);
 }
 
 function eighthPointsToPixels(eighthPoints) {
@@ -109,7 +112,7 @@ function degreesToRot(degrees) {
 function pixelsToPolygonUnits(pixels) {
   // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
   if (pixels == null) return;
-  const pu = pixels * 96;
+  const pu = pixels * PIXELS_PER_INCH;
   // Word requires integer ST_Coordinate32 values; fractional values fail OOXML validation.
   // The previous rounding to 3 decimals produced fractional coordinates and broke anchors.
   return Math.round(pu);
@@ -118,7 +121,7 @@ function pixelsToPolygonUnits(pixels) {
 function polygonUnitsToPixels(pu) {
   // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
   if (pu == null) return;
-  const pixels = Number(pu) / 96;
+  const pixels = Number(pu) / PIXELS_PER_INCH;
   return Math.round(pixels * 1000) / 1000;
 }
 
@@ -367,6 +370,7 @@ const hasSomeParentWithClass = (element, classname) => {
 };
 
 export {
+  PIXELS_PER_INCH,
   inchesToTwips,
   twipsToInches,
   twipsToPixels,

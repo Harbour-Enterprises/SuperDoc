@@ -2,6 +2,9 @@
 import { getColStyleDeclaration } from './getColStyleDeclaration.js';
 import { twipsToPixels } from '@core/super-converter/helpers.js';
 
+// Treat extremely small column widths as zero so placeholder columns collapse.
+const MIN_MEANINGFUL_WIDTH_PX = 1;
+
 export const createColGroup = (node, cellMinWidth, overrideCol, overrideValue) => {
   let totalWidth = 0;
   let fixedWidth = true;
@@ -33,7 +36,7 @@ export const createColGroup = (node, cellMinWidth, overrideCol, overrideValue) =
       const candidateWidth = resolveColumnWidth(colIndex, colwidth && colwidth[j]);
       const numericWidth = Number(candidateWidth);
       let effectiveWidth = Number.isFinite(numericWidth) && numericWidth > 0 ? numericWidth : null;
-      if (effectiveWidth != null && effectiveWidth < 1) {
+      if (effectiveWidth != null && effectiveWidth < MIN_MEANINGFUL_WIDTH_PX) {
         effectiveWidth = 0;
       }
 
@@ -55,7 +58,7 @@ export const createColGroup = (node, cellMinWidth, overrideCol, overrideValue) =
       const candidateWidth = resolveColumnWidth(col);
       const numericWidth = Number(candidateWidth);
       let effectiveWidth = Number.isFinite(numericWidth) && numericWidth > 0 ? numericWidth : null;
-      if (effectiveWidth != null && effectiveWidth < 1) {
+      if (effectiveWidth != null && effectiveWidth < MIN_MEANINGFUL_WIDTH_PX) {
         effectiveWidth = 0;
       }
 

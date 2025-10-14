@@ -147,14 +147,15 @@ const decode = (params, decodedAttrs) => {
     trailingPlaceholders += 1;
   }
 
-  const trimmedContent = cells.slice(leadingPlaceholders, cells.length - trailingPlaceholders).filter((cell) => {
-    if (!isPlaceholderCell(cell)) return true;
-    if (cell?.attrs) {
+  const trimmedSlice = cells.slice(leadingPlaceholders, cells.length - trailingPlaceholders);
+  const sanitizedCells = trimmedSlice.map((cell) => {
+    if (cell?.attrs && '__placeholder' in cell.attrs) {
       const { __placeholder, ...rest } = cell.attrs;
-      cell.attrs = rest;
+      return { ...cell, attrs: rest };
     }
-    return false;
+    return cell;
   });
+  const trimmedContent = sanitizedCells.filter((_, index) => !isPlaceholderCell(trimmedSlice[index]));
 
   const translateParams = {
     ...params,
