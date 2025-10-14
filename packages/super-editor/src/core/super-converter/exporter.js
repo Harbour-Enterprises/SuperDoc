@@ -30,6 +30,7 @@ import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translat
 import { translator as wDelTranslator } from '@converter/v3/handlers/w/del';
 import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins';
 import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/hyperlink-translator.js';
+import { combineRunProperties, decodeRPrFromMarks } from '@converter/styles.js';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -371,6 +372,11 @@ export function generateParagraphProperties(params) {
   if (JSON.stringify(paragraphProperties.framePr) !== JSON.stringify(framePr)) {
     paragraphProperties.framePr = framePr;
   }
+
+  // Get run properties from marksAttrs
+  const marksProps = decodeRPrFromMarks(attrs.marksAttrs || []);
+  const finalRunProps = combineRunProperties([paragraphProperties.runProperties || {}, marksProps]);
+  paragraphProperties.runProperties = finalRunProps;
 
   const pPr = wPPrNodeTranslator.decode({ node: { ...node, attrs: { paragraphProperties } } });
   const sectPr = node.attrs?.paragraphProperties?.sectPr;
