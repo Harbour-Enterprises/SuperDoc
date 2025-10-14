@@ -174,6 +174,19 @@ export const handleParagraphNode = (params) => {
       ...schemaNode,
       content: mergeTextNodes(schemaNode.content),
     };
+
+    const anchoredImages = [];
+    const otherContent = [];
+    schemaNode.content.forEach((child) => {
+      if (child?.type === 'image' && child?.attrs?.isAnchor) anchoredImages.push(child);
+      else otherContent.push(child);
+    });
+    if (anchoredImages.length) {
+      schemaNode = {
+        ...schemaNode,
+        content: [...anchoredImages, ...otherContent],
+      };
+    }
   }
 
   // Pass through this paragraph's sectPr, if any

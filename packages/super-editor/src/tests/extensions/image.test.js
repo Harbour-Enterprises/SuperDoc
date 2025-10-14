@@ -148,6 +148,54 @@ describe('Image Extension DOM rendering', () => {
     });
   });
 
+  describe('anchored horizontal alignment', () => {
+    it('floats left when anchor alignment is left without offsets', () => {
+      const { style } = renderImageAttributes({
+        size: { width: 180, height: 120 },
+        wrap: { type: 'Square', attrs: { wrapText: 'bothSides' } },
+        anchorData: { alignH: 'left', hRelativeFrom: 'margin' },
+        marginOffset: {},
+        isAnchor: true,
+      });
+      const styles = parseStyle(style);
+      expect(styles.float).toBe('left');
+      expect(styles['margin-left']).toBe('-180px');
+      expect(styles['margin-right']).toBeUndefined();
+      expect(styles.clear).toBeUndefined();
+    });
+
+    it('floats right when anchor alignment is right without offsets', () => {
+      const { style } = renderImageAttributes({
+        size: { width: 180, height: 120 },
+        wrap: { type: 'Square', attrs: { wrapText: 'bothSides' } },
+        anchorData: { alignH: 'right', hRelativeFrom: 'margin' },
+        marginOffset: {},
+        isAnchor: true,
+      });
+      const styles = parseStyle(style);
+      expect(styles.float).toBe('right');
+      expect(styles['margin-right']).toBe('-180px');
+      expect(styles['margin-left']).toBeUndefined();
+      expect(styles.clear).toBeUndefined();
+    });
+
+    it('centers image when anchor alignment is center without offsets', () => {
+      const { style } = renderImageAttributes({
+        size: { width: 180, height: 120 },
+        wrap: { type: 'Square', attrs: { wrapText: 'bothSides' } },
+        anchorData: { alignH: 'center' },
+        marginOffset: {},
+        isAnchor: true,
+      });
+      const styles = parseStyle(style);
+      expect(styles.display).toBe('block');
+      expect(styles['margin-left']).toBe('auto');
+      expect(styles['margin-right']).toBe('auto');
+      expect(styles.float).toBeUndefined();
+      expect(styles.clear).toBeUndefined();
+    });
+  });
+
   describe('editor integration', () => {
     it('renders anchored rotation margins in the live DOM', () => {
       const {
