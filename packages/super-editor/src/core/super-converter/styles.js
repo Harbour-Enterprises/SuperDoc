@@ -1,5 +1,5 @@
 // @ts-check
-import { halfPointToPoints, twipsToPt } from '@converter/helpers.js';
+import { halfPointToPoints, ptToTwips, twipsToPt } from '@converter/helpers.js';
 import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 import { translator as w_rPrTranslator } from '@converter/v3/handlers/w/rpr';
 import { isValidHexColor, getHexColorFromDocxSystem } from '@converter/helpers';
@@ -348,6 +348,92 @@ export function encodeMarksFromRPr(runProperties, docx) {
     marks.push({ type: 'highlight', attrs: { color: highlightColor } });
   }
   return marks;
+}
+
+export function decodeRPrFromMarks(marks) {
+  const runProperties = {};
+  if (!marks) {
+    return runProperties;
+  }
+
+  marks.forEach((mark) => {
+    switch (mark.type) {
+      case 'strike':
+      case 'italic':
+      case 'bold':
+        if (mark.attrs.value != null) {
+          runProperties[mark.type] = mark.attrs.value;
+        }
+        break;
+      case 'underline': {
+        const { underlineType, underlineColor } = mark.attrs;
+        const underlineAttrs = {};
+        if (underlineType) {
+          underlineAttrs['w:val'] = underlineType;
+        }
+        if (underlineColor) {
+          underlineAttrs['w:color'] = underlineColor.replace('#', '');
+        }
+        if (Object.keys(underlineAttrs).length > 0) {
+          runProperties.underline = underlineAttrs;
+        }
+        break;
+      }
+      case 'highlight':
+        if (mark.attrs.color) {
+          if (mark.attrs.color.toLowerCase() === 'transparent') {
+            runProperties.highlight = { 'w:val': 'none' };
+          } else {
+            runProperties.highlight = { 'w:val': mark.attrs.color };
+          }
+        }
+        break;
+      case 'textStyle':
+        Object.keys(mark.attrs).forEach((attr) => {
+          const value = mark.attrs[attr];
+          switch (attr) {
+            case 'textTransform':
+              if (value != null) {
+                runProperties[attr] = value;
+              }
+              break;
+            case 'color':
+              if (value != null) {
+                runProperties.color = { val: value.replace('#', '') };
+              }
+              break;
+            case 'fontSize': {
+              const points = parseFloat(value);
+              if (!isNaN(points)) {
+                runProperties.fontSize = points * 2;
+              }
+              break;
+            }
+            case 'letterSpacing': {
+              const ptValue = parseFloat(value);
+              if (!isNaN(ptValue)) {
+                // convert to twips
+                runProperties.letterSpacing = ptToTwips(ptValue);
+              }
+              break;
+            }
+            case 'fontFamily':
+              if (value != null) {
+                const cleanValue = value.split(',')[0].trim();
+                const result = {};
+                ['ascii', 'eastAsia', 'hAnsi', 'cs'].forEach((attr) => {
+                  result[attr] = cleanValue;
+                });
+                runProperties.fontFamily = result;
+              }
+              break;
+          }
+        });
+        break;
+    }
+  });
+
+  return runProperties;
 }
 
 function getFontFamilyValue(attributes, docx) {
