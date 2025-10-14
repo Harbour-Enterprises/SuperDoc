@@ -604,6 +604,7 @@ class SuperConverter {
     const relationships = rels?.elements.find((el) => el.name === 'Relationships') || {};
     const { elements } = relationships;
 
+    const fontsImported = [];
     let styleString = '';
     for (const font of fontsToInclude) {
       const filePath = elements.find((el) => el.attributes.Id === font.attributes['r:id'])?.attributes?.Target;
@@ -625,6 +626,10 @@ class SuperConverter {
       const isLight = font.name.includes('Light');
       const fontWeight = isNormal ? 'normal' : isBold ? 'bold' : isLight ? '200' : 'normal';
 
+      if (!fontsImported.includes(font.fontFamily)) {
+        fontsImported.push(font.fontFamily);
+      }
+
       styleString += `
         @font-face {
           font-style: ${isItalic ? 'italic' : 'normal'};
@@ -636,7 +641,10 @@ class SuperConverter {
       `;
     }
 
-    return styleString;
+    return {
+      styleString,
+      fontsImported,
+    };
   }
 
   getDocumentInternalId() {

@@ -181,6 +181,11 @@ export class Editor extends EventEmitter {
    */
   isFocused = false;
 
+  /**
+   * All the embedded fonts that were imported by the Editor
+   */
+  fontsImported = [];
+
   options = {
     element: null,
     selector: null,
@@ -881,12 +886,14 @@ export class Editor extends EventEmitter {
    * @returns {void}
    */
   #initFonts() {
-    const styleString = this.converter.getFontFaceImportString();
+    const results = this.converter.getFontFaceImportString();
 
-    if (styleString?.length) {
+    if (results?.styleString?.length) {
       const style = document.createElement('style');
-      style.textContent = styleString;
+      style.textContent = results.styleString;
       document.head.appendChild(style);
+
+      this.fontsImported = results.fontsImported;
     }
   }
 
@@ -910,7 +917,13 @@ export class Editor extends EventEmitter {
       console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
 
       // Fallback
-      const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+      const unsupportedFonts = fontsUsedInDocument.filter((font) => {
+        const canRender = canRenderFont(font);
+        const isFontImported = this.fontsImported.includes(font);
+
+        return !canRender && !isFontImported;
+      });
+
       this.options.onFontsResolved({
         documentFonts: fontsUsedInDocument,
         unsupportedFonts: unsupportedFonts,
@@ -924,7 +937,12 @@ export class Editor extends EventEmitter {
       console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
 
       // Fallback
-      const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+      const unsupportedFonts = fontsUsedInDocument.filter((font) => {
+        const canRender = canRenderFont(font);
+        const isFontImported = this.fontsImported.includes(font);
+
+        return !canRender && !isFontImported;
+      });
 
       this.options.onFontsResolved({
         documentFonts: fontsUsedInDocument,
@@ -937,7 +955,14 @@ export class Editor extends EventEmitter {
     try {
       const fonts = await window.queryLocalFonts();
       const localFonts = [...new Set(fonts.map((font) => font.family))];
-      const unsupportedFonts = fontsUsedInDocument.filter((font) => !localFonts.includes(font));
+      const unsupportedFonts = fontsUsedInDocument.filter((font) => {
+        const isLocalFont = localFonts.includes(font);
+        const isFontImported = this.fontsImported.includes(font);
+
+        return !isLocalFont && !isFontImported;
+      });
+
+      console.log('fonts imported:', this.fontsImported);
 
       this.options.onFontsResolved({
         documentFonts: fontsUsedInDocument,
@@ -947,7 +972,12 @@ export class Editor extends EventEmitter {
       console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
 
       // Fallback
-      const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+      const unsupportedFonts = fontsUsedInDocument.filter((font) => {
+        const canRender = canRenderFont(font);
+        const isFontImported = this.fontsImported.includes(font);
+
+        return !canRender && !isFontImported;
+      });
 
       this.options.onFontsResolved({
         documentFonts: fontsUsedInDocument,
