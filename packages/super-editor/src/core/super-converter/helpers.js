@@ -16,15 +16,24 @@ function twipsToInches(twips) {
 function twipsToPixels(twips) {
   if (twips == null) return;
   const inches = twipsToInches(twips);
+  return inchesToPixels(inches);
+}
+
+function pixelsToTwips(pixels) {
+  const inches = pixelsToInches(pixels);
+  return inchesToTwips(inches);
+}
+
+function inchesToPixels(inches) {
   if (inches == null) return;
   const pixels = inches * 96;
   return Math.round(pixels * 1000) / 1000;
 }
 
-function pixelsToTwips(pixels) {
+function pixelsToInches(pixels) {
   if (pixels == null) return;
   const inches = Number(pixels) / 96;
-  return inchesToTwips(inches);
+  return inches;
 }
 
 function twipsToLines(twips) {
@@ -95,6 +104,89 @@ function rotToDegrees(rot) {
 function degreesToRot(degrees) {
   if (degrees == null) return;
   return degrees * 60000;
+}
+
+function pixelsToPolygonUnits(pixels) {
+  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
+  if (pixels == null) return;
+  const pu = pixels * 96;
+  return Math.round(pu * 1000) / 1000;
+}
+
+function polygonUnitsToPixels(pu) {
+  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
+  if (pu == null) return;
+  const pixels = Number(pu) / 96;
+  return Math.round(pixels * 1000) / 1000;
+}
+
+/**
+ * Converts a DOCX polygon node to an array of pixel coordinates.
+ * Automatically removes duplicate closing points that are the same as the starting point,
+ * since polygons are assumed to be closed shapes.
+ *
+ * @param {Object} polygonNode - The polygon node from DOCX XML with wp:start and wp:lineTo elements
+ * @returns {Array<[number, number]>|null} Array of [x, y] pixel coordinate pairs, or null if invalid input
+ */
+function polygonToObj(polygonNode) {
+  if (!polygonNode) return null;
+  const points = [];
+  polygonNode.elements.forEach((element) => {
+    if (['wp:start', 'wp:lineTo'].includes(element.name)) {
+      const { x, y } = element.attributes;
+      points.push([polygonUnitsToPixels(x), polygonUnitsToPixels(y)]);
+    }
+  });
+
+  // Remove the last point if it's the same as the first point (closed polygon)
+  if (points.length > 1) {
+    const firstPoint = points[0];
+    const lastPoint = points[points.length - 1];
+    if (firstPoint[0] === lastPoint[0] && firstPoint[1] === lastPoint[1]) {
+      points.pop();
+    }
+  }
+
+  return points;
+}
+
+/**
+ * Converts an array of pixel coordinates to a DOCX polygon node.
+ * Automatically adds a closing wp:lineTo element that connects back to the starting point,
+ * ensuring the polygon is properly closed in the DOCX format.
+ *
+ * @param {Array<[number, number]>} points - Array of [x, y] pixel coordinate pairs
+ * @returns {Object|null} DOCX polygon node with wp:start and wp:lineTo elements, or null if invalid input
+ */
+function objToPolygon(points) {
+  if (!points || !Array.isArray(points)) return null;
+  const polygonNode = { type: 'wp:wrapPolygon', elements: [] };
+  points.forEach((point, index) => {
+    const [x, y] = point;
+    const pointNode = {
+      type: index === 0 ? 'wp:start' : 'wp:lineTo',
+      attributes: {
+        x: pixelsToPolygonUnits(x),
+        y: pixelsToPolygonUnits(y),
+      },
+    };
+    polygonNode.elements.push(pointNode);
+  });
+
+  // Add a lineTo back to the starting point to close the polygon
+  if (points.length > 0) {
+    const [startX, startY] = points[0];
+    const closePointNode = {
+      type: 'wp:lineTo',
+      attributes: {
+        x: pixelsToPolygonUnits(startX),
+        y: pixelsToPolygonUnits(startY),
+      },
+    };
+    polygonNode.elements.push(closePointNode);
+  }
+
+  return polygonNode;
 }
 
 /**
@@ -267,6 +359,8 @@ export {
   twipsToInches,
   twipsToPixels,
   pixelsToTwips,
+  pixelsToInches,
+  inchesToPixels,
   twipsToLines,
   linesToTwips,
   halfPointToPixels,
@@ -278,6 +372,8 @@ export {
   pixelsToEightPoints,
   rotToDegrees,
   degreesToRot,
+  objToPolygon,
+  polygonToObj,
   getArrayBufferFromUrl,
   getContentTypesFromXml,
   getHexColorFromDocxSystem,
@@ -291,4 +387,6 @@ export {
   deobfuscateFont,
   hasSomeParentWithClass,
   getTextIndentExportValue,
+  polygonUnitsToPixels,
+  pixelsToPolygonUnits,
 };

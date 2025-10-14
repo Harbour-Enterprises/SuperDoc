@@ -100,7 +100,13 @@ const decode = (params, decodedAttrs = {}) => {
 
   // Separate links from regular text
   const isLinkNode = node.marks?.some((m) => m.type === 'link');
-  if (isLinkNode) return wHyperlinkTranslator.decode(params);
+  if (isLinkNode) {
+    const extraParams = {
+      ...params.extraParams,
+      linkProcessed: true,
+    };
+    return wHyperlinkTranslator.decode({ ...params, extraParams });
+  }
 
   const { runNode: runNodeForExport, trackingMarksByType } = prepareRunTrackingContext(node);
 

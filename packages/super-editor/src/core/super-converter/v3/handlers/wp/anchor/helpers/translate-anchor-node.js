@@ -1,5 +1,5 @@
 import { translateImageNode } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers.js';
-import { pixelsToEmu } from '@converter/helpers.js';
+import { pixelsToEmu, objToPolygon } from '@converter/helpers.js';
 
 /**
  * Translates anchor image
@@ -9,7 +9,6 @@ import { pixelsToEmu } from '@converter/helpers.js';
 export function translateAnchorNode(params) {
   const { attrs } = params.node;
   const anchorElements = [];
-  const wrapElements = [];
 
   if (attrs.simplePos) {
     anchorElements.push({
@@ -23,10 +22,10 @@ export function translateAnchorNode(params) {
 
   if (attrs.anchorData) {
     const hElements = [];
-    if (attrs.marginOffset.left !== undefined) {
+    if (attrs.marginOffset.horizontal !== undefined) {
       hElements.push({
         name: 'wp:posOffset',
-        elements: [{ type: 'text', text: pixelsToEmu(attrs.marginOffset.left).toString() }],
+        elements: [{ type: 'text', text: pixelsToEmu(attrs.marginOffset.horizontal).toString() }],
       });
     }
     if (attrs.anchorData.alignH) {
@@ -62,44 +61,98 @@ export function translateAnchorNode(params) {
     });
   }
 
-  if (attrs.wrapText) {
-    wrapElements.push({
-      name: 'wp:wrapSquare',
-      attributes: {
-        wrapText: attrs.wrapText,
-      },
-    });
-  }
-
-  if (attrs.wrapTopAndBottom) {
-    wrapElements.push({
-      name: 'wp:wrapTopAndBottom',
-    });
-  }
-
-  // Important: wp:anchor will break if no wrapping is specified. We need to use wrapNone.
-  if (!wrapElements.length) {
-    wrapElements.push({
-      name: 'wp:wrapNone',
-    });
-  }
-
   const nodeElements = translateImageNode(params);
 
   const inlineAttrs = {
     ...nodeElements.attributes,
     simplePos: attrs.originalAttributes?.simplePos,
     relativeHeight: 1,
-    behindDoc: attrs.originalAttributes?.behindDoc,
     locked: attrs.originalAttributes?.locked,
     layoutInCell: attrs.originalAttributes?.layoutInCell,
     allowOverlap: attrs.originalAttributes?.allowOverlap,
   };
 
+  const wrapElement = {
+    name: `wp:wrap${attrs.wrap?.type || 'None'}`, // Important: wp:anchor will break if no wrapping is specified. We need to use wrapNone.
+  };
+  switch (attrs.wrap?.type) {
+    case 'Square':
+      wrapElement.attributes = {
+        wrapText: attrs.wrap.attrs.wrapText,
+      };
+      if ('distBottom' in (attrs.wrap.attrs || {})) {
+        wrapElement.attributes.distB = pixelsToEmu(attrs.wrap.attrs.distBottom);
+      }
+      if ('distLeft' in (attrs.wrap.attrs || {})) {
+        wrapElement.attributes.distL = pixelsToEmu(attrs.wrap.attrs.distLeft);
+      }
+      if ('distRight' in (attrs.wrap.attrs || {})) {
+        wrapElement.attributes.distR = pixelsToEmu(attrs.wrap.attrs.distRight);
+      }
+      if ('distTop' in (attrs.wrap.attrs || {})) {
+        wrapElement.attributes.distT = pixelsToEmu(attrs.wrap.attrs.distTop);
+      }
+      break;
+    case 'TopAndBottom': {
+      const attributes = {};
+      let hasKeys = false;
+      if ('distBottom' in (attrs.wrap.attrs || {})) {
+        attributes.distB = pixelsToEmu(attrs.wrap.attrs.distBottom);
+        hasKeys = true;
+      }
+      if ('distTop' in (attrs.wrap.attrs || {})) {
+        attributes.distT = pixelsToEmu(attrs.wrap.attrs.distTop);
+        hasKeys = true;
+      }
+      if (hasKeys) {
+        wrapElement.attributes = attributes;
+      }
+      break;
+    }
+    case 'Through':
+    case 'Tight': {
+      const attributes = {};
+      let hasKeys = false;
+      if ('distLeft' in (attrs.wrap.attrs || {})) {
+        attributes.distL = pixelsToEmu(attrs.wrap.attrs.distLeft);
+        hasKeys = true;
+      }
+      if ('distRight' in (attrs.wrap.attrs || {})) {
+        attributes.distR = pixelsToEmu(attrs.wrap.attrs.distRight);
+        hasKeys = true;
+      }
+      if ('distTop' in (attrs.wrap.attrs || {})) {
+        attributes.distT = pixelsToEmu(attrs.wrap.attrs.distTop);
+        hasKeys = true;
+      }
+      if ('distBottom' in (attrs.wrap.attrs || {})) {
+        attributes.distB = pixelsToEmu(attrs.wrap.attrs.distBottom);
+        hasKeys = true;
+      }
+      if (hasKeys) {
+        wrapElement.attributes = attributes;
+      }
+
+      // Add polygon if present
+      if (attrs.wrap.attrs?.polygon) {
+        const polygonNode = objToPolygon(attrs.wrap.attrs.polygon);
+        if (polygonNode) {
+          wrapElement.elements = [polygonNode];
+        }
+      }
+      break;
+    }
+    case 'None':
+      inlineAttrs.behindDoc = attrs.wrap.attrs?.behindDoc ? '1' : '0';
+      break;
+    default:
+      break;
+  }
+
   const effectIndex = nodeElements.elements.findIndex((el) => el.name === 'wp:effectExtent');
   const elementsWithWrap = [
     ...nodeElements.elements.slice(0, effectIndex + 1),
-    ...wrapElements,
+    wrapElement,
     ...nodeElements.elements.slice(effectIndex + 1),
   ];
 
