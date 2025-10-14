@@ -939,7 +939,7 @@ export class Editor extends EventEmitter {
             .queryLocalFonts()
             .then((fonts) => {
               const localFonts = [...new Set(fonts.map((font) => font.family))];
-              const unsupportedFonts = fontsUsedInDocument.map((font) => !localFonts.includes(font));
+              const unsupportedFonts = fontsUsedInDocument.filter((font) => !localFonts.includes(font));
 
               this.options.onFontsResolved({
                 documentFonts: fontsUsedInDocument,
