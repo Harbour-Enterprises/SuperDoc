@@ -178,6 +178,7 @@ class SuperConverter {
 
     this.addedMedia = {};
     this.comments = [];
+    this.inlineDocumentFonts = [];
 
     // Store custom highlight colors
     this.docHiglightColors = new Set([]);
@@ -561,6 +562,30 @@ class SuperConverter {
   }
 
   getDocumentFonts() {
+    const inlineDocumentFonts = [...new Set(this.inlineDocumentFonts || [])];
+    const fontTable = this.convertedXml['word/fontTable.xml'];
+    if (!fontTable) {
+      return inlineDocumentFonts;
+    }
+
+    const wFonts = fontTable.elements?.find((element) => element.name === 'w:fonts');
+    if (!wFonts) {
+      return inlineDocumentFonts;
+    }
+
+    if (!wFonts.elements) {
+      return inlineDocumentFonts;
+    }
+
+    const fontsInFontTable = wFonts.elements
+      .filter((element) => element.name === 'w:font')
+      .map((element) => element.attributes['w:name']);
+
+    const allFonts = [...inlineDocumentFonts, ...fontsInFontTable];
+    return [...new Set(allFonts)];
+  }
+
+  getFontFaceImportString() {
     const fontTable = this.convertedXml['word/fontTable.xml'];
     if (!fontTable || !Object.keys(this.fonts).length) return;
 
@@ -579,6 +604,7 @@ class SuperConverter {
     const relationships = rels?.elements.find((el) => el.name === 'Relationships') || {};
     const { elements } = relationships;
 
+    const fontsImported = [];
     let styleString = '';
     for (const font of fontsToInclude) {
       const filePath = elements.find((el) => el.attributes.Id === font.attributes['r:id'])?.attributes?.Target;
@@ -600,6 +626,10 @@ class SuperConverter {
       const isLight = font.name.includes('Light');
       const fontWeight = isNormal ? 'normal' : isBold ? 'bold' : isLight ? '200' : 'normal';
 
+      if (!fontsImported.includes(font.fontFamily)) {
+        fontsImported.push(font.fontFamily);
+      }
+
       styleString += `
         @font-face {
           font-style: ${isItalic ? 'italic' : 'normal'};
@@ -611,7 +641,10 @@ class SuperConverter {
       `;
     }
 
-    return styleString;
+    return {
+      styleString,
+      fontsImported,
+    };
   }
 
   getDocumentInternalId() {
@@ -679,6 +712,7 @@ class SuperConverter {
       this.numbering = result.numbering;
       this.comments = result.comments;
       this.linkedStyles = result.linkedStyles;
+      this.inlineDocumentFonts = result.inlineDocumentFonts;
 
       return result.pmDoc;
     } else {
