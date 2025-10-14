@@ -1,5 +1,6 @@
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { twipsToPixels } from '../../helpers.js';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 import { ensureNumberingCache, LEVELS_MAP_KEY } from './numberingCache.js';
 
 /**
@@ -126,46 +127,25 @@ function handleListNodes(params, node) {
   attrs.numPrType = numPrType;
   attrs.styleId = styleId;
   attrs.customFormat = customFormat;
+  attrs.indent = listpPrs?.indent;
 
   // Get the contents of the node
   node.isList = true;
 
-  const nodePpr = node.attrs?.paragraphProperties?.elements?.find((el) => el.name === 'w:pPr');
-  const numPrIndex = node.attrs?.paragraphProperties?.elements?.findIndex((el) => el.name === 'w:numPr');
-  nodePpr?.elements?.splice(numPrIndex, 1);
-
-  const listContents = nodeListHandler.handler({
+  const innerParagraph = wPTranslator.encode({
     ...params,
     nodes: [node],
     path: [...(params.path || []), node],
   });
-  const innerParagraph = listContents.find((el) => el.type === 'paragraph');
   const firstElement = innerParagraph.content[0];
 
   // eslint-disable-next-line no-unused-vars
   const textStyle = firstElement?.marks?.find((mark) => mark.type === 'textStyle');
 
-  attrs.indent = listpPrs?.indent;
-
-  const processedContents = listContents.map((el, index) => {
-    const { attrs: elementAttrs } = el;
-
-    // eslint-disable-next-line no-unused-vars
-    const { indent, textIndent, paragraphProperties, ...rest } = elementAttrs;
-
-    // Take indent from the first paragraph if its not defined
-    if (index === 0 && !attrs.indent) attrs.indent = indent;
-
-    return {
-      ...el,
-      attrs: rest,
-    };
-  });
-
   // Generate the list item
   const listItem = {
     type: 'listItem',
-    content: processedContents || [],
+    content: [innerParagraph],
     attrs,
   };
 
