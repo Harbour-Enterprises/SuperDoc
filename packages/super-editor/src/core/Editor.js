@@ -947,12 +947,26 @@ export class Editor extends EventEmitter {
               });
             })
             .catch(() => {
-              console.warn('[SuperDoc] Could not get access to local fonts.');
+              console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
+              // Fallback in case the queryLocalFonts API is not available
+              const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+
+              this.options.onFontsResolved({
+                documentFonts: fontsUsedInDocument,
+                unsupportedFonts: unsupportedFonts,
+              });
             });
         }
       })
       .catch(() => {
-        console.warn('[SuperDoc] Could not get access to local fonts.');
+        console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
+        // Fallback in case the queryLocalFonts API is not available
+        const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+
+        this.options.onFontsResolved({
+          documentFonts: fontsUsedInDocument,
+          unsupportedFonts: unsupportedFonts,
+        });
       });
   }
 
