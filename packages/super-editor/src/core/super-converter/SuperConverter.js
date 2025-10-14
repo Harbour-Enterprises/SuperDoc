@@ -562,19 +562,19 @@ class SuperConverter {
   }
 
   getDocumentFonts() {
-    const inlineDocumentFonts = this.inlineDocumentFonts || [];
+    const inlineDocumentFonts = [...new Set(this.inlineDocumentFonts || [])];
     const fontTable = this.convertedXml['word/fontTable.xml'];
     if (!fontTable) {
-      return [...new Set(inlineDocumentFonts)];
+      return inlineDocumentFonts;
     }
 
     const wFonts = fontTable.elements?.find((element) => element.name === 'w:fonts');
     if (!wFonts) {
-      return [];
+      return inlineDocumentFonts;
     }
 
     if (!wFonts.elements) {
-      return [];
+      return inlineDocumentFonts;
     }
 
     const fontsInFontTable = wFonts.elements
