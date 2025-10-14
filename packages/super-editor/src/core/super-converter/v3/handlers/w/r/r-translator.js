@@ -31,7 +31,8 @@ const encode = (params, encodedAttrs = {}) => {
   const runProperties = rPrNode ? wRPrTranslator.encode({ ...params, nodes: [rPrNode] }) : {};
 
   // Resolving run properties following style hierarchy
-  const resolvedRunProperties = resolveRunProperties(params, runProperties, params?.parentStyleId);
+  const paragraphProperties = params?.extraParams?.paragraphProperties || {};
+  const resolvedRunProperties = resolveRunProperties(params, runProperties ?? {}, paragraphProperties);
 
   // Parsing marks from run properties
   const marks = parseMarksFromRPr(resolvedRunProperties, params?.docx) || [];
