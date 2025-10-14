@@ -1,5 +1,5 @@
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
-import { mergeTextNodes, parseMarks } from '@converter/v2/importer/index.js';
+import { mergeTextNodes } from '@converter/v2/importer/index.js';
 import { resolveParagraphProperties } from '@converter/styles';
 import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 
@@ -42,11 +42,11 @@ export const handleParagraphNode = (params) => {
   if (result.nodes.length === 1) {
     schemaNode = result.nodes[0];
   }
+  schemaNode.type = 'paragraph';
 
   // Parse direct run properties (w:rPr) inside w:pPr
-  const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
-  if (nestedRPr) {
-    let marks = parseMarks(nestedRPr, []);
+  if (inlineParagraphProperties?.runProperties) {
+    let marks = encodeMarksFromRPr(inlineParagraphProperties?.runProperties);
 
     if (!schemaNode.content?.length) {
       let highlightIndex = marks?.findIndex((i) => i.type === 'highlight');
@@ -69,7 +69,7 @@ export const handleParagraphNode = (params) => {
   schemaNode.attrs.spacing = resolvedParagraphProperties.spacing;
   schemaNode.attrs.rsidRDefault = node.attributes?.['w:rsidRDefault'];
   schemaNode.attrs.filename = filename;
-  schemaNode.attrs.tabStops = resolvedParagraphProperties.tabs;
+  schemaNode.attrs.tabStops = resolvedParagraphProperties.tabStops;
 
   // Dropcap settings
   if (resolvedParagraphProperties.framePr && resolvedParagraphProperties.framePr.dropCap) {
