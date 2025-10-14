@@ -60,6 +60,7 @@ import { Link } from './link/index.js';
 import { TrackInsert, TrackDelete, TrackFormat } from './track-changes/index.js';
 import { CommentsMark } from './comment/index.js';
 import { TextTransform } from './text-transform/index.js';
+import { StructuredContentTableCommands } from './structured-content/structured-content-table-commands.js';
 
 // Plugins
 import { CommentsPlugin } from './comment/index.js';
@@ -192,6 +193,7 @@ const getStarterExtensions = () => {
     NodeResizer,
     CustomSelection,
     TextTransform,
+    StructuredContentTableCommands,
   ];
 };
 
@@ -258,6 +260,7 @@ export {
   StructuredContent,
   StructuredContentBlock,
   StructuredContentCommands,
+  StructuredContentTableCommands,
   DocumentSection,
   NodeResizer,
   CustomSelection,
