@@ -328,8 +328,9 @@ export function getFontFamilyValue(attributes, docx) {
       const { elements } = topElements[0] || {};
       const themeElements = elements?.find((el) => el.name === 'a:themeElements');
       const fontScheme = themeElements?.elements?.find((el) => el.name === 'a:fontScheme');
-      const majorFont = fontScheme?.elements?.find((el) => el.name === 'a:majorFont');
-      const latin = majorFont?.elements?.find((el) => el.name === 'a:latin');
+      const prefix = themeAscii.startsWith('minor') ? 'minor' : 'major';
+      const font = fontScheme?.elements?.find((el) => el.name === `a:${prefix}Font`);
+      const latin = font?.elements?.find((el) => el.name === 'a:latin');
       resolved = latin?.attributes?.typeface || resolved;
     }
   }
