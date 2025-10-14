@@ -892,9 +892,9 @@ export class Editor extends EventEmitter {
 
   /**
    * Determines the fonts used in the document and the unsupported ones and triggers the `onFontsResolved` callback.
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  #checkFonts() {
+  async #checkFonts() {
     // We only want to run the algorithm to resolve the fonts if the user has asked for it
     if (!this.options.onFontsResolved || typeof this.options.onFontsResolved !== 'function') {
       return;
@@ -908,7 +908,23 @@ export class Editor extends EventEmitter {
     const fontsUsedInDocument = this.converter.getDocumentFonts();
 
     if (!('queryLocalFonts' in window)) {
-      // Fallback in case the queryLocalFonts API is not available
+      console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
+
+      // Fallback
+      const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+
+      return;
+    }
+
+    const localFontAccess = await navigator.permissions.query({ name: 'local-fonts' });
+    if (localFontAccess.state === 'denied') {
+      console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
+
+      // Fallback
       const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
 
       this.options.onFontsResolved({
@@ -919,55 +935,27 @@ export class Editor extends EventEmitter {
       return;
     }
 
-    // Check if user has granted permission to access local font API
-    navigator.permissions
-      .query({ name: 'local-fonts' })
-      .then((result) => {
-        if (result.state === 'denied') {
-          // Fallback in case the permission is not granted
-          const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+    try {
+      const fonts = await window.queryLocalFonts();
+      const localFonts = [...new Set(fonts.map((font) => font.family))];
+      const unsupportedFonts = fontsUsedInDocument.filter((font) => !localFonts.includes(font));
 
-          this.options.onFontsResolved({
-            documentFonts: fontsUsedInDocument,
-            unsupportedFonts: unsupportedFonts,
-          });
-        } else {
-          // If its `granted` or `prompt` we'll proceed
-          // If it's `prompt` this means the user will be prompted to give access to the API
-          // and then it will proceed normally
-          window
-            .queryLocalFonts()
-            .then((fonts) => {
-              const localFonts = [...new Set(fonts.map((font) => font.family))];
-              const unsupportedFonts = fontsUsedInDocument.filter((font) => !localFonts.includes(font));
-
-              this.options.onFontsResolved({
-                documentFonts: fontsUsedInDocument,
-                unsupportedFonts: unsupportedFonts,
-              });
-            })
-            .catch(() => {
-              console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
-              // Fallback in case the queryLocalFonts API is not available
-              const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
-
-              this.options.onFontsResolved({
-                documentFonts: fontsUsedInDocument,
-                unsupportedFonts: unsupportedFonts,
-              });
-            });
-        }
-      })
-      .catch(() => {
-        console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
-        // Fallback in case the queryLocalFonts API is not available
-        const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
-
-        this.options.onFontsResolved({
-          documentFonts: fontsUsedInDocument,
-          unsupportedFonts: unsupportedFonts,
-        });
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
       });
+    } catch (err) {
+      console.error(err);
+      console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
+
+      // Fallback
+      const unsupportedFonts = fontsUsedInDocument.filter((font) => !canRenderFont(font));
+
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+    }
   }
 
   /**
