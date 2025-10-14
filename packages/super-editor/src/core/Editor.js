@@ -944,7 +944,7 @@ export class Editor extends EventEmitter {
         documentFonts: fontsUsedInDocument,
         unsupportedFonts: unsupportedFonts,
       });
-    } catch (_) {
+    } catch {
       console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
 
       // Fallback
