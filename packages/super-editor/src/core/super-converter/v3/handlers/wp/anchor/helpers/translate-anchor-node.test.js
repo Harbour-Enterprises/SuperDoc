@@ -26,12 +26,18 @@ describe('translateAnchorNode', () => {
 
     // default mock for objToPolygon
     objToPolygon.mockImplementation((points) => ({
+      name: 'wp:wrapPolygon',
       type: 'wp:wrapPolygon',
+      attributes: { edited: '0' },
       elements:
-        points?.map((point, index) => ({
-          type: index === 0 ? 'wp:start' : 'wp:lineTo',
-          attributes: { x: point[0] * 1000, y: point[1] * 1000 },
-        })) || [],
+        points?.map((point, index) => {
+          const tagName = index === 0 ? 'wp:start' : 'wp:lineTo';
+          return {
+            name: tagName,
+            type: tagName,
+            attributes: { x: point[0] * 1000, y: point[1] * 1000 },
+          };
+        }) || [],
     }));
   });
 
@@ -275,12 +281,13 @@ describe('translateAnchorNode', () => {
         expect.arrayContaining([
           expect.objectContaining({
             name: 'wp:wrapTight',
-            attributes: {
+            attributes: expect.objectContaining({
               distL: 12000,
               distR: 18000,
               distT: 5000,
               distB: 8000,
-            },
+              wrapText: 'bothSides',
+            }),
           }),
         ]),
       );
@@ -308,7 +315,7 @@ describe('translateAnchorNode', () => {
         ]),
       );
       const wrapElement = result.elements.find((el) => el.name === 'wp:wrapTight');
-      expect(wrapElement.attributes).toBeUndefined();
+      expect(wrapElement.attributes).toEqual({ wrapText: 'bothSides' });
     });
 
     it('should add wp:wrapThrough with distance attributes', () => {
@@ -334,12 +341,13 @@ describe('translateAnchorNode', () => {
         expect.arrayContaining([
           expect.objectContaining({
             name: 'wp:wrapThrough',
-            attributes: {
+            attributes: expect.objectContaining({
               distL: 7000,
               distR: 14000,
               distT: 3000,
               distB: 6000,
-            },
+              wrapText: 'bothSides',
+            }),
           }),
         ]),
       );
@@ -367,7 +375,7 @@ describe('translateAnchorNode', () => {
         ]),
       );
       const wrapElement = result.elements.find((el) => el.name === 'wp:wrapThrough');
-      expect(wrapElement.attributes).toBeUndefined();
+      expect(wrapElement.attributes).toEqual({ wrapText: 'bothSides' });
     });
 
     it('should add wp:wrapNone when wrap type is None', () => {
@@ -448,14 +456,17 @@ describe('translateAnchorNode', () => {
       expect(wrapElement.attributes).toEqual({
         distL: 5000,
         distR: 10000,
+        wrapText: 'bothSides',
       });
       expect(wrapElement.elements).toEqual([
         {
+          name: 'wp:wrapPolygon',
           type: 'wp:wrapPolygon',
+          attributes: { edited: '0' },
           elements: [
-            { type: 'wp:start', attributes: { x: 1000, y: 2000 } },
-            { type: 'wp:lineTo', attributes: { x: 3000, y: 4000 } },
-            { type: 'wp:lineTo', attributes: { x: 5000, y: 6000 } },
+            { name: 'wp:start', type: 'wp:start', attributes: { x: 1000, y: 2000 } },
+            { name: 'wp:lineTo', type: 'wp:lineTo', attributes: { x: 3000, y: 4000 } },
+            { name: 'wp:lineTo', type: 'wp:lineTo', attributes: { x: 5000, y: 6000 } },
           ],
         },
       ]);
@@ -491,16 +502,89 @@ describe('translateAnchorNode', () => {
       expect(wrapElement.attributes).toEqual({
         distT: 8000,
         distB: 12000,
+        wrapText: 'bothSides',
       });
       expect(wrapElement.elements).toEqual([
         {
+          name: 'wp:wrapPolygon',
           type: 'wp:wrapPolygon',
+          attributes: { edited: '0' },
           elements: [
-            { type: 'wp:start', attributes: { x: 10000, y: 20000 } },
-            { type: 'wp:lineTo', attributes: { x: 30000, y: 40000 } },
+            { name: 'wp:start', type: 'wp:start', attributes: { x: 10000, y: 20000 } },
+            { name: 'wp:lineTo', type: 'wp:lineTo', attributes: { x: 30000, y: 40000 } },
           ],
         },
       ]);
+    });
+
+    it('should honor provided wrapText value for tight wrap', () => {
+      const params = {
+        node: {
+          attrs: {
+            wrap: {
+              type: 'Tight',
+              attrs: {
+                wrapText: 'left',
+                polygon: [
+                  [1, 1],
+                  [2, 2],
+                ],
+              },
+            },
+          },
+        },
+      };
+
+      const result = translateAnchorNode(params);
+
+      const wrapElement = result.elements.find((el) => el.name === 'wp:wrapTight');
+      expect(wrapElement.attributes).toEqual({
+        wrapText: 'left',
+      });
+    });
+
+    it('should preserve wp14 anchor metadata from original attributes', () => {
+      const params = {
+        node: {
+          attrs: {
+            originalAttributes: {
+              'wp14:anchorId': '52C3A784',
+              'wp14:editId': '36FE4467',
+              relativeHeight: '251651584',
+            },
+          },
+        },
+      };
+
+      const result = translateAnchorNode(params);
+
+      expect(result.attributes['wp14:anchorId']).toBe('52C3A784');
+      expect(result.attributes['wp14:editId']).toBe('36FE4467');
+      expect(result.attributes.relativeHeight).toBe('251651584');
+    });
+
+    it('should apply polygonEdited value when provided', () => {
+      const params = {
+        node: {
+          attrs: {
+            wrap: {
+              type: 'Tight',
+              attrs: {
+                polygon: [
+                  [1, 2],
+                  [3, 4],
+                ],
+                polygonEdited: '1',
+              },
+            },
+          },
+        },
+      };
+
+      const result = translateAnchorNode(params);
+
+      const wrapElement = result.elements.find((el) => el.name === 'wp:wrapTight');
+      expect(wrapElement.elements?.[0].attributes).toEqual({ edited: '1' });
     });
 
     it('should not call objToPolygon for wrap types that do not support polygons', () => {
@@ -577,13 +661,17 @@ describe('translateAnchorNode', () => {
       const result = translateAnchorNode(params);
 
       const wrapElement = result.elements.find((el) => el.name === 'wp:wrapTight');
-      expect(wrapElement.attributes).toBeUndefined();
+      expect(wrapElement.attributes).toEqual({
+        wrapText: 'bothSides',
+      });
       expect(wrapElement.elements).toEqual([
         {
+          name: 'wp:wrapPolygon',
           type: 'wp:wrapPolygon',
+          attributes: { edited: '0' },
           elements: [
-            { type: 'wp:start', attributes: { x: 5000, y: 10000 } },
-            { type: 'wp:lineTo', attributes: { x: 15000, y: 20000 } },
+            { name: 'wp:start', type: 'wp:start', attributes: { x: 5000, y: 10000 } },
+            { name: 'wp:lineTo', type: 'wp:lineTo', attributes: { x: 15000, y: 20000 } },
           ],
         },
       ]);

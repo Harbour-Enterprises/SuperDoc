@@ -116,9 +116,15 @@ export function handleImageNode(node, params, isAnchor) {
       if ('distB' in (wrapNode.attributes || {})) {
         wrap.attrs.distBottom = emuToPixels(wrapNode.attributes.distB);
       }
+      if ('wrapText' in (wrapNode.attributes || {})) {
+        wrap.attrs.wrapText = wrapNode.attributes.wrapText;
+      }
       const polygon = wrapNode.elements?.find((el) => el.name === 'wp:wrapPolygon');
       if (polygon) {
         wrap.attrs.polygon = polygonToObj(polygon);
+        if (polygon.attributes?.edited !== undefined) {
+          wrap.attrs.polygonEdited = polygon.attributes.edited;
+        }
       }
       break;
     }

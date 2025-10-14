@@ -104,7 +104,9 @@ describe('objToPolygon', () => {
   it('should handle empty array', () => {
     const result = objToPolygon([]);
     expect(result).toEqual({
+      name: 'wp:wrapPolygon',
       type: 'wp:wrapPolygon',
+      attributes: { edited: '0' },
       elements: [],
     });
   });
@@ -118,21 +120,27 @@ describe('objToPolygon', () => {
 
     const result = objToPolygon(points);
     expect(result).toEqual({
+      name: 'wp:wrapPolygon',
       type: 'wp:wrapPolygon',
+      attributes: { edited: '0' },
       elements: [
         {
+          name: 'wp:start',
           type: 'wp:start',
           attributes: { x: 9216, y: 9216 },
         },
         {
+          name: 'wp:lineTo',
           type: 'wp:lineTo',
           attributes: { x: 18432, y: 18432 },
         },
         {
+          name: 'wp:lineTo',
           type: 'wp:lineTo',
           attributes: { x: 27648, y: 27648 },
         },
         {
+          name: 'wp:lineTo',
           type: 'wp:lineTo',
           attributes: { x: 9216, y: 9216 }, // back to start point
         },
@@ -150,10 +158,13 @@ describe('objToPolygon', () => {
 
     // Check that the last element is a lineTo back to the starting point
     const elements = result.elements;
+    expect(result.attributes).toEqual({ edited: '0' });
     const firstPoint = elements[0];
     const lastPoint = elements[elements.length - 1];
 
+    expect(firstPoint.name).toBe('wp:start');
     expect(firstPoint.type).toBe('wp:start');
+    expect(lastPoint.name).toBe('wp:lineTo');
     expect(lastPoint.type).toBe('wp:lineTo');
     expect(lastPoint.attributes.x).toBe(firstPoint.attributes.x);
     expect(lastPoint.attributes.y).toBe(firstPoint.attributes.y);
@@ -195,12 +206,15 @@ describe('polygonToObj and objToPolygon integration', () => {
 
     // Convert back to polygon (should add closing point)
     const newPolygon = objToPolygon(points);
+    expect(newPolygon.attributes).toEqual({ edited: '0' });
     expect(newPolygon.elements).toHaveLength(4); // 3 original + 1 closing
 
     // First and last points should be the same
     const firstElement = newPolygon.elements[0];
     const lastElement = newPolygon.elements[3];
+    expect(firstElement.name).toBe('wp:start');
     expect(firstElement.type).toBe('wp:start');
+    expect(lastElement.name).toBe('wp:lineTo');
     expect(lastElement.type).toBe('wp:lineTo');
     expect(lastElement.attributes.x).toBe(firstElement.attributes.x);
     expect(lastElement.attributes.y).toBe(firstElement.attributes.y);
@@ -253,12 +267,18 @@ describe('polygonToObj and objToPolygon integration', () => {
     // Step 2: Export back to DOCX (should add closing point)
     const exportedPolygon = objToPolygon(importedPoints);
     expect(exportedPolygon.elements).toHaveLength(5); // 4 original + 1 closing
+    expect(exportedPolygon.attributes).toEqual({ edited: '0' });
 
     // Verify structure
+    expect(exportedPolygon.elements[0].name).toBe('wp:start');
     expect(exportedPolygon.elements[0].type).toBe('wp:start');
+    expect(exportedPolygon.elements[1].name).toBe('wp:lineTo');
     expect(exportedPolygon.elements[1].type).toBe('wp:lineTo');
+    expect(exportedPolygon.elements[2].name).toBe('wp:lineTo');
     expect(exportedPolygon.elements[2].type).toBe('wp:lineTo');
+    expect(exportedPolygon.elements[3].name).toBe('wp:lineTo');
     expect(exportedPolygon.elements[3].type).toBe('wp:lineTo');
+    expect(exportedPolygon.elements[4].name).toBe('wp:lineTo');
     expect(exportedPolygon.elements[4].type).toBe('wp:lineTo'); // Closing point
 
     // Verify closing point matches starting point

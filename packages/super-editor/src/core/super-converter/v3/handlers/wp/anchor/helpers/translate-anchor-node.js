@@ -64,13 +64,31 @@ export function translateAnchorNode(params) {
   const nodeElements = translateImageNode(params);
 
   const inlineAttrs = {
-    ...nodeElements.attributes,
-    simplePos: attrs.originalAttributes?.simplePos,
-    relativeHeight: 1,
-    locked: attrs.originalAttributes?.locked,
-    layoutInCell: attrs.originalAttributes?.layoutInCell,
-    allowOverlap: attrs.originalAttributes?.allowOverlap,
+    ...(attrs.originalAttributes || {}),
+    ...(nodeElements.attributes || {}),
   };
+
+  if (inlineAttrs.relativeHeight == null) {
+    inlineAttrs.relativeHeight = 1;
+  }
+
+  if (attrs.originalAttributes?.simplePos !== undefined) {
+    inlineAttrs.simplePos = attrs.originalAttributes.simplePos;
+  } else if (attrs.simplePos !== undefined) {
+    inlineAttrs.simplePos = attrs.simplePos;
+  }
+
+  if (attrs.originalAttributes?.locked !== undefined) {
+    inlineAttrs.locked = attrs.originalAttributes.locked;
+  }
+
+  if (attrs.originalAttributes?.layoutInCell !== undefined) {
+    inlineAttrs.layoutInCell = attrs.originalAttributes.layoutInCell;
+  }
+
+  if (attrs.originalAttributes?.allowOverlap !== undefined) {
+    inlineAttrs.allowOverlap = attrs.originalAttributes.allowOverlap;
+  }
 
   const wrapElement = {
     name: `wp:wrap${attrs.wrap?.type || 'None'}`, // Important: wp:anchor will break if no wrapping is specified. We need to use wrapNone.
@@ -112,24 +130,23 @@ export function translateAnchorNode(params) {
     case 'Through':
     case 'Tight': {
       const attributes = {};
-      let hasKeys = false;
       if ('distLeft' in (attrs.wrap.attrs || {})) {
         attributes.distL = pixelsToEmu(attrs.wrap.attrs.distLeft);
-        hasKeys = true;
       }
       if ('distRight' in (attrs.wrap.attrs || {})) {
         attributes.distR = pixelsToEmu(attrs.wrap.attrs.distRight);
-        hasKeys = true;
       }
       if ('distTop' in (attrs.wrap.attrs || {})) {
         attributes.distT = pixelsToEmu(attrs.wrap.attrs.distTop);
-        hasKeys = true;
       }
       if ('distBottom' in (attrs.wrap.attrs || {})) {
         attributes.distB = pixelsToEmu(attrs.wrap.attrs.distBottom);
-        hasKeys = true;
       }
-      if (hasKeys) {
+      const wrapText = attrs.wrap.attrs?.wrapText || 'bothSides';
+      if (wrapText) {
+        attributes.wrapText = wrapText;
+      }
+      if (Object.keys(attributes).length) {
         wrapElement.attributes = attributes;
       }
 
@@ -137,6 +154,12 @@ export function translateAnchorNode(params) {
       if (attrs.wrap.attrs?.polygon) {
         const polygonNode = objToPolygon(attrs.wrap.attrs.polygon);
         if (polygonNode) {
+          if (attrs.wrap.attrs?.polygonEdited !== undefined) {
+            polygonNode.attributes = {
+              ...(polygonNode.attributes || {}),
+              edited: String(attrs.wrap.attrs.polygonEdited),
+            };
+          }
           wrapElement.elements = [polygonNode];
         }
       }

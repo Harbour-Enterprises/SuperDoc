@@ -308,10 +308,12 @@ describe('handleImageNode', () => {
         attributes: {
           distT: '1000',
           distB: '2000',
+          wrapText: 'bothSides',
         },
         elements: [
           {
             name: 'wp:wrapPolygon',
+            attributes: { edited: '0' },
             elements: [
               { name: 'wp:start', attributes: { x: '1000', y: '2000' } },
               { name: 'wp:lineTo', attributes: { x: '3000', y: '4000' } },
@@ -326,11 +328,13 @@ describe('handleImageNode', () => {
       expect(result.attrs.wrap.type).toBe('Tight');
       expect(result.attrs.wrap.attrs.distTop).toBe(1);
       expect(result.attrs.wrap.attrs.distBottom).toBe(2);
+      expect(result.attrs.wrap.attrs.wrapText).toBe('bothSides');
       expect(result.attrs.wrap.attrs.polygon).toEqual([
         [1, 2],
         [3, 4],
         [5, 6],
       ]);
+      expect(result.attrs.wrap.attrs.polygonEdited).toBe('0');
     });
 
     it('handles wrap type Through without polygon', () => {
@@ -342,6 +346,7 @@ describe('handleImageNode', () => {
           distR: '2500',
           distT: '500',
           distB: '750',
+          wrapText: 'bothSides',
         },
       });
 
@@ -352,6 +357,7 @@ describe('handleImageNode', () => {
       expect(result.attrs.wrap.attrs.distRight).toBe(2.5);
       expect(result.attrs.wrap.attrs.distTop).toBe(0.5);
       expect(result.attrs.wrap.attrs.distBottom).toBe(0.75);
+      expect(result.attrs.wrap.attrs.wrapText).toBe('bothSides');
     });
 
     it('handles wrap type Through with polygon', () => {
@@ -361,6 +367,7 @@ describe('handleImageNode', () => {
         elements: [
           {
             name: 'wp:wrapPolygon',
+            attributes: { edited: '1' },
             elements: [
               { name: 'wp:start', attributes: { x: '10000', y: '20000' } },
               { name: 'wp:lineTo', attributes: { x: '30000', y: '40000' } },
@@ -376,6 +383,7 @@ describe('handleImageNode', () => {
         [10, 20],
         [30, 40],
       ]);
+      expect(result.attrs.wrap.attrs.polygonEdited).toBe('1');
     });
 
     it('defaults to None wrap type when no wrap element found', () => {
