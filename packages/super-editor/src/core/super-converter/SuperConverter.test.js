@@ -361,6 +361,14 @@ describe('SuperConverter Document GUID', () => {
 
         expect(fonts.sort()).toEqual(expected.sort());
       });
+
+      it('should not return duplicate fonts (inline fonts)', () => {
+        const converter = new SuperConverter({ docx: mockDocx });
+        converter.inlineDocumentFonts = ['SomeFont', 'SomeFont', 'SomeFont'];
+        const fonts = converter.getDocumentFonts();
+        const expected = ['SomeFont'];
+        expect(fonts.sort()).toEqual(expected.sort());
+      });
     });
   });
 });
