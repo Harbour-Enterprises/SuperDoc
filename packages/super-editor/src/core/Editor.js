@@ -183,6 +183,7 @@ export class Editor extends EventEmitter {
 
   /**
    * All the embedded fonts that were imported by the Editor
+   * @type {string[]}
    */
   fontsImported = [];
 
