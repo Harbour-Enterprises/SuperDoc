@@ -762,14 +762,30 @@ export class SuperDoc extends EventEmitter {
       }
     }
 
-    const docxPromises = [];
-    this.superdocStore.documents.forEach((doc) => {
-      const editor = doc.getEditor();
-      if (editor) {
-        docxPromises.push(editor.exportDocx({ isFinalDoc, comments, commentsType, fieldsHighlightColor }));
+    const docxPromises = this.superdocStore.documents.map(async (doc) => {
+      if (!doc || doc.type !== DOCX) return null;
+
+      const editor = typeof doc.getEditor === 'function' ? doc.getEditor() : null;
+      const fallbackDocx = () => {
+        if (!doc.data) return null;
+        if (doc.data.type && doc.data.type !== DOCX) return null;
+        return doc.data;
+      };
+
+      if (!editor) return fallbackDocx();
+
+      try {
+        const exported = await editor.exportDocx({ isFinalDoc, comments, commentsType, fieldsHighlightColor });
+        if (exported) return exported;
+      } catch (error) {
+        this.emit('exception', { error, document: doc });
       }
+
+      return fallbackDocx();
     });
-    return await Promise.all(docxPromises);
+
+    const docxFiles = await Promise.all(docxPromises);
+    return docxFiles.filter(Boolean);
   }
 
   /**

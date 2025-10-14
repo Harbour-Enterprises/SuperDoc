@@ -76,6 +76,72 @@ describe('handleImageNode', () => {
     },
   });
 
+  const shapeUri = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+
+  const makeShapeNode = ({ includeTextbox = false, prst = 'ellipse' } = {}) => {
+    const wspChildren = [
+      {
+        name: 'wps:spPr',
+        elements: [
+          {
+            name: 'a:prstGeom',
+            attributes: { prst },
+          },
+        ],
+      },
+    ];
+
+    if (includeTextbox) {
+      wspChildren.push({
+        name: 'wps:txbx',
+        elements: [
+          {
+            name: 'w:txbxContent',
+            elements: [{ name: 'w:p' }],
+          },
+        ],
+      });
+    }
+
+    return {
+      attributes: {
+        distT: '1000',
+        distB: '2000',
+        distL: '3000',
+        distR: '4000',
+      },
+      elements: [
+        { name: 'wp:extent', attributes: { cx: '5000', cy: '6000' } },
+        {
+          name: 'a:graphic',
+          elements: [
+            {
+              name: 'a:graphicData',
+              attributes: { uri: shapeUri },
+              elements: [
+                {
+                  name: 'wps:wsp',
+                  elements: wspChildren,
+                },
+              ],
+            },
+          ],
+        },
+        { name: 'wp:docPr', attributes: { id: '99', name: 'Shape', descr: 'Shape placeholder' } },
+        {
+          name: 'wp:positionH',
+          attributes: { relativeFrom: 'page' },
+          elements: [{ name: 'wp:posOffset', elements: [{ text: '7000' }] }],
+        },
+        {
+          name: 'wp:positionV',
+          attributes: { relativeFrom: 'paragraph' },
+          elements: [{ name: 'wp:posOffset', elements: [{ text: '8000' }] }],
+        },
+      ],
+    };
+  };
+
   it('returns null if picture is missing', () => {
     const node = makeNode();
     node.elements[1].elements[0].elements = [];
@@ -202,12 +268,34 @@ describe('handleImageNode', () => {
   });
 
   it('delegates to handleShapeDrawing when uri matches shape', () => {
-    const node = makeNode();
-    node.elements[1].elements[0].attributes.uri = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
-    node.elements[1].elements[0].elements = [{ name: 'wps:wsp', elements: [] }];
+    const node = makeShapeNode();
 
     const result = handleImageNode(node, makeParams(), false);
-    expect(result === null || result.type === 'contentBlock').toBe(true);
+    expect(result.type).toBe('contentBlock');
+    expect(result.attrs.size).toEqual({ width: 5, height: 6 });
+    expect(result.attrs.attributes).toMatchObject({
+      'data-shape-type': 'drawing',
+      'data-padding-top': 1,
+      'data-padding-bottom': 2,
+      'data-padding-left': 3,
+      'data-padding-right': 4,
+      'data-offset-x': 7,
+      'data-offset-y': 8,
+    });
+    expect(result.attrs.drawingContent.name).toBe('w:drawing');
+    expect(result.attrs.drawingContent.elements[0]).toEqual(node);
+    expect(result.attrs.drawingContent.elements[0]).not.toBe(node);
+  });
+
+  it('marks textbox shapes with a specific placeholder type', () => {
+    const node = makeShapeNode({ includeTextbox: true });
+    const result = handleImageNode(node, makeParams(), false);
+
+    expect(result.type).toBe('contentBlock');
+    expect(result.attrs.attributes).toMatchObject({
+      'data-shape-type': 'textbox',
+      'data-padding-top': 1,
+    });
   });
 
   describe('wrap types', () => {

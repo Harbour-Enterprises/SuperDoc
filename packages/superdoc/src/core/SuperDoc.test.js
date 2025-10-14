@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DOCX } from '@harbour-enterprises/common';
+import { DOCX, PDF } from '@harbour-enterprises/common';
 
 const shuffleArrayMock = vi.fn((arr) => [...arr].reverse());
 
@@ -409,6 +409,75 @@ describe('SuperDoc core', () => {
 
     expect(createZipMock).toHaveBeenCalled();
     expect(createDownloadMock).toHaveBeenCalledWith(expect.any(Object), 'Test-Export', 'zip');
+  });
+
+  it('falls back to original document data when an editor export yields no blob', async () => {
+    const { superdocStore } = createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: [],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    await flushMicrotasks();
+
+    const originalBlob = { name: 'fallback.docx' };
+    const exportDocxMock = vi.fn().mockResolvedValue(undefined);
+
+    instance.superdocStore.documents = [
+      {
+        id: 'doc-1',
+        type: DOCX,
+        data: originalBlob,
+        getEditor: () => ({ exportDocx: exportDocxMock }),
+      },
+    ];
+
+    const results = await instance.exportEditorsToDOCX();
+
+    expect(exportDocxMock).toHaveBeenCalledTimes(1);
+    expect(results).toEqual([originalBlob]);
+  });
+
+  it('skips non-DOCX documents when exporting editors to DOCX', async () => {
+    createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.pdf',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: [],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    await flushMicrotasks();
+
+    const docxBlob = { name: 'doc-1.docx', type: DOCX };
+    const pdfBlob = { name: 'doc-2.pdf', type: PDF };
+
+    instance.superdocStore.documents = [
+      {
+        id: 'doc-1',
+        type: DOCX,
+        data: docxBlob,
+        getEditor: () => null,
+      },
+      {
+        id: 'doc-2',
+        type: PDF,
+        data: pdfBlob,
+        getEditor: () => null,
+      },
+    ];
+
+    const results = await instance.exportEditorsToDOCX();
+
+    expect(results).toEqual([docxBlob]);
   });
 
   it('destroys app and cleans providers', async () => {

@@ -194,6 +194,18 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   overflow-wrap: anywhere;
 }
 
+.ProseMirror td[data-placeholder],
+.ProseMirror th[data-placeholder] {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.ProseMirror td[data-placeholder] > *,
+.ProseMirror th[data-placeholder] > * {
+  display: none !important;
+}
+
 .ProseMirror th {
   font-weight: bold;
   text-align: left;
