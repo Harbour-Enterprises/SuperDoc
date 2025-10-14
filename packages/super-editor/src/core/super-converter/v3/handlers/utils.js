@@ -412,7 +412,7 @@ export function createNestedArrayPropertyHandler(
  * @param {string} value The string value to parse.
  * @returns {boolean|undefined} The boolean representation of the input string, or undefined if the input is null or undefined.
  */
-export const parseBoolean = (value) => (value != null ? ['1', 'true'].includes(value) : undefined);
+export const parseBoolean = (value) => (value != null ? ['1', 'true', 'on'].includes(value) : undefined);
 
 /**
  * Converts a boolean value to its string representation.
