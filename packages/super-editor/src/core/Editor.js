@@ -962,8 +962,6 @@ export class Editor extends EventEmitter {
         return !isLocalFont && !isFontImported;
       });
 
-      console.log('fonts imported:', this.fontsImported);
-
       this.options.onFontsResolved({
         documentFonts: fontsUsedInDocument,
         unsupportedFonts: unsupportedFonts,
