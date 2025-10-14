@@ -20,6 +20,10 @@ export const handleParagraphNode = (params) => {
     inlineParagraphProperties = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
   }
 
+  // Resolve paragraph properties according to styles hierarchy
+  const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
+  const resolvedParagraphProperties = resolveParagraphProperties(params, inlineParagraphProperties, insideTable);
+
   // If it is a standard paragraph node, process normally
   const handleStandardNode = nodeListHandler.handlerEntities.find(
     (e) => e.handlerName === 'standardNodeHandler',
@@ -29,7 +33,11 @@ export const handleParagraphNode = (params) => {
     return null;
   }
 
-  const updatedParams = { ...params, nodes: [node] };
+  const updatedParams = {
+    ...params,
+    nodes: [node],
+    extraParams: { ...params.extraParams, paragraphProperties: resolvedParagraphProperties },
+  };
   const result = handleStandardNode(updatedParams);
   if (result.nodes.length === 1) {
     schemaNode = result.nodes[0];
@@ -49,10 +57,6 @@ export const handleParagraphNode = (params) => {
 
     schemaNode.attrs.marksAttrs = marks;
   }
-
-  // Resolve paragraph properties according to styles hierarchy
-  const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
-  const resolvedParagraphProperties = resolveParagraphProperties(params, inlineParagraphProperties, insideTable);
 
   // Pull out some commonly used properties to top-level attrs
   schemaNode.attrs.paragraphProperties = inlineParagraphProperties;
