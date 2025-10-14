@@ -1,14 +1,26 @@
 import { handleImageNode } from './encode-image-node-helpers.js';
-import { emuToPixels } from '@converter/helpers.js';
+import { emuToPixels, polygonToObj } from '@converter/helpers.js';
 
 vi.mock('@converter/helpers.js', () => ({
   emuToPixels: vi.fn(),
+  polygonToObj: vi.fn(),
 }));
 
 describe('handleImageNode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     emuToPixels.mockImplementation((emu) => (emu ? parseInt(emu, 10) / 1000 : 0));
+    polygonToObj.mockImplementation((polygon) => {
+      if (!polygon) return null;
+      const points = [];
+      polygon.elements.forEach((element) => {
+        if (['wp:start', 'wp:lineTo'].includes(element.name)) {
+          const { x, y } = element.attributes;
+          points.push([parseInt(x, 10) / 1000, parseInt(y, 10) / 1000]);
+        }
+      });
+      return points;
+    });
   });
 
   const makeNode = (overrides = {}) => ({
@@ -152,14 +164,13 @@ describe('handleImageNode', () => {
     expect(result.attrs.extension).toBe('emf');
   });
 
-  it('includes simplePos, wrapSquare, wrapTopAndBottom, anchorData', () => {
+  it('includes simplePos, wrapSquare, anchorData', () => {
     const node = makeNode({
       attributes: { distT: '111', distB: '222', distL: '333', distR: '444' },
     });
 
     node.elements.push({ name: 'wp:simplePos', attributes: { x: '1', y: '2' } });
     node.elements.push({ name: 'wp:wrapSquare', attributes: { wrapText: 'bothSides' } });
-    node.elements.push({ name: 'wp:wrapTopAndBottom' });
     node.elements.push({
       name: 'wp:positionH',
       attributes: { relativeFrom: 'page' },
@@ -180,15 +191,14 @@ describe('handleImageNode', () => {
     const result = handleImageNode(node, makeParams(), true);
 
     expect(result.attrs.simplePos).toEqual({ x: '1', y: '2' });
-    expect(result.attrs.wrapText).toBe('bothSides');
-    expect(result.attrs.wrapTopAndBottom).toBe(true);
+    expect(result.attrs.wrap.attrs.wrapText).toBe('bothSides');
     expect(result.attrs.anchorData).toEqual({
       hRelativeFrom: 'page',
       vRelativeFrom: 'margin',
       alignH: 'center',
       alignV: 'bottom',
     });
-    expect(result.attrs.marginOffset).toEqual({ left: 1, top: 2 });
+    expect(result.attrs.marginOffset).toEqual({ horizontal: 1, top: 2 });
   });
 
   it('delegates to handleShapeDrawing when uri matches shape', () => {
@@ -198,5 +208,184 @@ describe('handleImageNode', () => {
 
     const result = handleImageNode(node, makeParams(), false);
     expect(result === null || result.type === 'contentBlock').toBe(true);
+  });
+
+  describe('wrap types', () => {
+    it('handles wrap type None', () => {
+      const node = makeNode();
+      node.elements.push({ name: 'wp:wrapNone' });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('None');
+      expect(result.attrs.wrap.attrs).toEqual({ behindDoc: false });
+    });
+
+    it('handles wrap type Square with wrapText only', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapSquare',
+        attributes: { wrapText: 'bothSides' },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Square');
+      expect(result.attrs.wrap.attrs.wrapText).toBe('bothSides');
+    });
+
+    it('handles wrap type Square with distance attributes', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapSquare',
+        attributes: {
+          wrapText: 'largest',
+          distT: '1000',
+          distB: '2000',
+          distL: '3000',
+          distR: '4000',
+        },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Square');
+      expect(result.attrs.wrap.attrs.wrapText).toBe('largest');
+      expect(result.attrs.wrap.attrs.distTop).toBe(1);
+      expect(result.attrs.wrap.attrs.distBottom).toBe(2);
+      expect(result.attrs.wrap.attrs.distLeft).toBe(3);
+      expect(result.attrs.wrap.attrs.distRight).toBe(4);
+    });
+
+    it('handles wrap type TopAndBottom without distance attributes', () => {
+      const node = makeNode();
+      node.elements.push({ name: 'wp:wrapTopAndBottom' });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('TopAndBottom');
+      expect(result.attrs.wrap.attrs).toEqual({});
+    });
+
+    it('handles wrap type TopAndBottom with distance attributes', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapTopAndBottom',
+        attributes: {
+          distT: '5000',
+          distB: '6000',
+        },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('TopAndBottom');
+      expect(result.attrs.wrap.attrs.distTop).toBe(5);
+      expect(result.attrs.wrap.attrs.distBottom).toBe(6);
+    });
+
+    it('handles wrap type Tight without polygon', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapTight',
+        attributes: {
+          distL: '2000',
+          distR: '3000',
+        },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Tight');
+      expect(result.attrs.wrap.attrs.distLeft).toBe(2);
+      expect(result.attrs.wrap.attrs.distRight).toBe(3);
+    });
+
+    it('handles wrap type Tight with polygon', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapTight',
+        attributes: {
+          distT: '1000',
+          distB: '2000',
+        },
+        elements: [
+          {
+            name: 'wp:wrapPolygon',
+            elements: [
+              { name: 'wp:start', attributes: { x: '1000', y: '2000' } },
+              { name: 'wp:lineTo', attributes: { x: '3000', y: '4000' } },
+              { name: 'wp:lineTo', attributes: { x: '5000', y: '6000' } },
+            ],
+          },
+        ],
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Tight');
+      expect(result.attrs.wrap.attrs.distTop).toBe(1);
+      expect(result.attrs.wrap.attrs.distBottom).toBe(2);
+      expect(result.attrs.wrap.attrs.polygon).toEqual([
+        [1, 2],
+        [3, 4],
+        [5, 6],
+      ]);
+    });
+
+    it('handles wrap type Through without polygon', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapThrough',
+        attributes: {
+          distL: '1500',
+          distR: '2500',
+          distT: '500',
+          distB: '750',
+        },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Through');
+      expect(result.attrs.wrap.attrs.distLeft).toBe(1.5);
+      expect(result.attrs.wrap.attrs.distRight).toBe(2.5);
+      expect(result.attrs.wrap.attrs.distTop).toBe(0.5);
+      expect(result.attrs.wrap.attrs.distBottom).toBe(0.75);
+    });
+
+    it('handles wrap type Through with polygon', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapThrough',
+        elements: [
+          {
+            name: 'wp:wrapPolygon',
+            elements: [
+              { name: 'wp:start', attributes: { x: '10000', y: '20000' } },
+              { name: 'wp:lineTo', attributes: { x: '30000', y: '40000' } },
+            ],
+          },
+        ],
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Through');
+      expect(result.attrs.wrap.attrs.polygon).toEqual([
+        [10, 20],
+        [30, 40],
+      ]);
+    });
+
+    it('defaults to None wrap type when no wrap element found', () => {
+      const node = makeNode();
+      // No wrap element added
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('None');
+      expect(result.attrs.wrap.attrs).toEqual({ behindDoc: false });
+    });
   });
 });
