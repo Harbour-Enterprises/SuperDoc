@@ -159,7 +159,7 @@ describe('TrackChanges extension commands', () => {
     expect(markPresent(afterReject.doc, 'italic')).toBe(false);
   });
 
-  it('acceptTrackedChangeById and rejectTrackedChangeById resolve adjacent changes', () => {
+  it('acceptTrackedChangeById and rejectTrackedChangeById should NOT link two insertions', () => {
     const prevMark = schema.marks[TrackInsertMarkName].create({ id: 'prev' });
     const targetMark = schema.marks[TrackInsertMarkName].create({ id: 'ins-id' });
     const paragraph = schema.nodes.paragraph.create(null, [
@@ -178,9 +178,9 @@ describe('TrackChanges extension commands', () => {
     });
 
     expect(result).toBe(true);
-    expect(acceptSpy).toHaveBeenCalledTimes(2);
-    expect(acceptSpy).toHaveBeenNthCalledWith(1, 2, 3);
-    expect(acceptSpy).toHaveBeenNthCalledWith(2, 1, 2);
+    // Call one time not multiple
+    expect(acceptSpy).toHaveBeenCalledTimes(1);
+    expect(acceptSpy).toHaveBeenCalledWith(2, 3);
 
     const rejectSpy = vi.fn().mockReturnValue(true);
     const rejectResult = commands.rejectTrackedChangeById('ins-id')({
@@ -189,9 +189,179 @@ describe('TrackChanges extension commands', () => {
       commands: { rejectTrackedChangesBetween: rejectSpy },
     });
     expect(rejectResult).toBe(true);
+    // Call one time not multiple
+    expect(rejectSpy).toHaveBeenCalledTimes(1);
+    expect(rejectSpy).toHaveBeenCalledWith(2, 3);
+  });
+
+  it('acceptTrackedChangeById links contiguous insertion segments sharing an id across formatting', () => {
+    const italicMark = schema.marks.italic.create();
+    const insertionId = 'ins-multi';
+    const firstSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const secondSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const thirdSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('A', [firstSegmentMark]),
+      schema.text('B', [italicMark, secondSegmentMark]),
+      schema.text('C', [thirdSegmentMark]),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const acceptSpy = vi.fn().mockReturnValue(true);
+    const tr = state.tr;
+    const result = commands.acceptTrackedChangeById(insertionId)({
+      state,
+      tr,
+      commands: { acceptTrackedChangesBetween: acceptSpy },
+    });
+
+    expect(result).toBe(true);
+    expect(acceptSpy).toHaveBeenCalledTimes(3);
+    expect(acceptSpy).toHaveBeenNthCalledWith(1, 1, 2);
+    expect(acceptSpy).toHaveBeenNthCalledWith(2, 2, 3);
+    expect(acceptSpy).toHaveBeenNthCalledWith(3, 3, 4);
+
+    const rejectSpy = vi.fn().mockReturnValue(true);
+    const rejectResult = commands.rejectTrackedChangeById(insertionId)({
+      state,
+      tr,
+      commands: { rejectTrackedChangesBetween: rejectSpy },
+    });
+
+    expect(rejectResult).toBe(true);
+    expect(rejectSpy).toHaveBeenCalledTimes(3);
+    expect(rejectSpy).toHaveBeenNthCalledWith(1, 1, 2);
+    expect(rejectSpy).toHaveBeenNthCalledWith(2, 2, 3);
+    expect(rejectSpy).toHaveBeenNthCalledWith(3, 3, 4);
+  });
+
+  it('acceptTrackedChangeById chains contiguous same-id insertions before linking complementary deletions', () => {
+    const italicMark = schema.marks.italic.create();
+    const deletionMark = schema.marks[TrackDeleteMarkName].create({ id: 'del-id' });
+    const insertionId = 'shared-id';
+    const firstSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const secondSegmentMark = schema.marks[TrackInsertMarkName].create({ id: insertionId });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('old', [deletionMark]),
+      schema.text('A', [firstSegmentMark]),
+      schema.text('B', [italicMark, secondSegmentMark]),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const acceptSpy = vi.fn().mockReturnValue(true);
+    const tr = state.tr;
+    const result = commands.acceptTrackedChangeById(insertionId)({
+      state,
+      tr,
+      commands: { acceptTrackedChangesBetween: acceptSpy },
+    });
+
+    expect(result).toBe(true);
+    expect(acceptSpy).toHaveBeenCalledTimes(3);
+    expect(acceptSpy).toHaveBeenNthCalledWith(1, 4, 5);
+    expect(acceptSpy).toHaveBeenNthCalledWith(2, 5, 6);
+    expect(acceptSpy).toHaveBeenNthCalledWith(3, 1, 4);
+
+    const rejectSpy = vi.fn().mockReturnValue(true);
+    const rejectResult = commands.rejectTrackedChangeById(insertionId)({
+      state,
+      tr,
+      commands: { rejectTrackedChangesBetween: rejectSpy },
+    });
+
+    expect(rejectResult).toBe(true);
+    expect(rejectSpy).toHaveBeenCalledTimes(3);
+    expect(rejectSpy).toHaveBeenNthCalledWith(1, 4, 5);
+    expect(rejectSpy).toHaveBeenNthCalledWith(2, 5, 6);
+    expect(rejectSpy).toHaveBeenNthCalledWith(3, 1, 4);
+  });
+
+  it('acceptTrackedChangeById and rejectTrackedChangeById SHOULD link deletion-insertion pairs', () => {
+    const deletionMark = schema.marks[TrackDeleteMarkName].create({ id: 'del-id' });
+    const insertionMark = schema.marks[TrackInsertMarkName].create({ id: 'ins-id' });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('old', [deletionMark]),
+      schema.text('new', [insertionMark]),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const acceptSpy = vi.fn().mockReturnValue(true);
+    const tr = state.tr;
+    const result = commands.acceptTrackedChangeById('ins-id')({
+      state,
+      tr,
+      commands: { acceptTrackedChangesBetween: acceptSpy },
+    });
+
+    expect(result).toBe(true);
+    // Should resolve both the insertion and the linked deletion
+    expect(acceptSpy).toHaveBeenCalledTimes(2);
+    expect(acceptSpy).toHaveBeenNthCalledWith(1, 4, 7);
+    expect(acceptSpy).toHaveBeenNthCalledWith(2, 1, 4);
+
+    const rejectSpy = vi.fn().mockReturnValue(true);
+    const rejectResult = commands.rejectTrackedChangeById('ins-id')({
+      state,
+      tr,
+      commands: { rejectTrackedChangesBetween: rejectSpy },
+    });
+    expect(rejectResult).toBe(true);
+    // Should resolve both the insertion and the linked deletion
     expect(rejectSpy).toHaveBeenCalledTimes(2);
-    expect(rejectSpy).toHaveBeenNthCalledWith(1, 2, 3);
-    expect(rejectSpy).toHaveBeenNthCalledWith(2, 1, 2);
+    expect(rejectSpy).toHaveBeenNthCalledWith(1, 4, 7); // insertion "new"
+    expect(rejectSpy).toHaveBeenNthCalledWith(2, 1, 4); // deletion "old"
+  });
+
+  it('should NOT link changes separated by untracked content', () => {
+    const deletionMark = schema.marks[TrackDeleteMarkName].create({ id: 'del-id' });
+    const insertionMark = schema.marks[TrackInsertMarkName].create({ id: 'ins-id' });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('deleted', [deletionMark]),
+      schema.text(' '), // Untracked space between
+      schema.text('inserted', [insertionMark]),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const acceptSpy = vi.fn().mockReturnValue(true);
+    const tr = state.tr;
+    const result = commands.acceptTrackedChangeById('ins-id')({
+      state,
+      tr,
+      commands: { acceptTrackedChangesBetween: acceptSpy },
+    });
+
+    expect(result).toBe(true);
+    // Should only resolve the insertion, not the deletion
+    expect(acceptSpy).toHaveBeenCalledTimes(1);
+    expect(acceptSpy).toHaveBeenCalledWith(9, 17);
+  });
+
+  it('should NOT link two deletions', () => {
+    const deletionMark1 = schema.marks[TrackDeleteMarkName].create({ id: 'del-1' });
+    const deletionMark2 = schema.marks[TrackDeleteMarkName].create({ id: 'del-2' });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('first', [deletionMark1]),
+      schema.text('second', [deletionMark2]),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const acceptSpy = vi.fn().mockReturnValue(true);
+    const tr = state.tr;
+    const result = commands.acceptTrackedChangeById('del-2')({
+      state,
+      tr,
+      commands: { acceptTrackedChangesBetween: acceptSpy },
+    });
+
+    expect(result).toBe(true);
+    // Should only resolve the target deletion, not the previous deletion
+    expect(acceptSpy).toHaveBeenCalledTimes(1);
+    expect(acceptSpy).toHaveBeenCalledWith(6, 12);
   });
 
   it('toggle and enable commands set plugin metadata', () => {

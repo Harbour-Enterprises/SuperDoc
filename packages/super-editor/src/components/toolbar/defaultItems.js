@@ -65,16 +65,21 @@ export const makeDefaultItems = ({
       if (!fontFamily) return;
       fontButton.label.value = fontFamily;
 
+      const defaultFont = fontOptions.find((i) => i.label === fontButton.defaultLabel.value);
       const foundFont = fontOptions.find((i) => i.label === fontFamily);
       if (foundFont) {
         fontButton.selectedValue.value = foundFont.key;
+      } else if (defaultFont) {
+        fontButton.selectedValue.value = defaultFont.key;
       } else {
         fontButton.selectedValue.value = '';
       }
     },
     onDeactivate: () => {
       fontButton.label.value = fontButton.defaultLabel.value;
-      fontButton.selectedValue.value = '';
+      const defaultFont = fontOptions.find((i) => i.label === fontButton.defaultLabel.value);
+      if (defaultFont) fontButton.selectedValue.value = defaultFont.key;
+      else fontButton.selectedValue.value = '';
     },
   });
 
@@ -149,9 +154,11 @@ export const makeDefaultItems = ({
     },
     options: fontSizeOptions,
     onActivate: ({ fontSize: size }) => {
+      const defaultSize = fontSizeOptions.find((i) => i.label === String(fontSize.defaultLabel.value));
       if (!size) {
         fontSize.label.value = fontSize.defaultLabel.value;
-        fontSize.selectedValue.value = '';
+        if (defaultSize) fontSize.selectedValue.value = defaultSize.key;
+        else fontSize.selectedValue.value = '';
         return;
       }
 
@@ -165,6 +172,8 @@ export const makeDefaultItems = ({
       });
       if (foundSize) {
         fontSize.selectedValue.value = foundSize.key;
+      } else if (defaultSize) {
+        fontSize.selectedValue.value = defaultSize.key;
       } else {
         fontSize.selectedValue.value = '';
       }
@@ -174,7 +183,9 @@ export const makeDefaultItems = ({
     },
     onDeactivate: () => {
       fontSize.label.value = fontSize.defaultLabel.value;
-      fontSize.selectedValue.value = '';
+      const defaultSize = fontSizeOptions.find((i) => i.label === String(fontSize.defaultLabel.value));
+      if (defaultSize) fontSize.selectedValue.value = defaultSize.key;
+      else fontSize.selectedValue.value = '';
     },
   });
 
@@ -424,6 +435,7 @@ export const makeDefaultItems = ({
     type: 'dropdown',
     name: 'tableActions',
     command: 'executeTableCommand',
+    tooltip: toolbarTexts.tableActions,
     icon: toolbarIcons.tableActions,
     hideLabel: true,
     disabled: true,
@@ -1023,37 +1035,37 @@ export const makeDefaultItems = ({
     },
     options: [
       {
-        label: '1,0',
+        label: '1.0',
         key: '1',
         icon: () => renderIcon('1', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '1,15',
+        label: '1.15',
         key: '1.15',
         icon: () => renderIcon('1.15', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '1,5',
+        label: '1.5',
         key: '1.5',
         icon: () => renderIcon('1.5', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '2,0',
+        label: '2.0',
         key: '2',
         icon: () => renderIcon('2', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '2,5',
+        label: '2.5',
         key: '2.5',
         icon: () => renderIcon('2.5', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '3,0',
+        label: '3.0',
         key: '3',
         icon: () => renderIcon('3', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },

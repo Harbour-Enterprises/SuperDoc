@@ -16,10 +16,9 @@ const SD_NODE_NAME = 'commentRange';
 /**
  * Decode the commentRange(Start|End) node back into OOXML <w:commentRange(Start|End)>.
  * @param {import('@translator').SCDecoderConfig} params
- * @param {import('@translator').DecodedAttributes} [decodedAttrs] - The already decoded attributes
  * @returns {import('@translator').SCDecoderResult}
  */
-const decode = (params, decodedAttrs) => {
+const decode = (params) => {
   const { node, comments, commentsExportType, exportedCommentDefs } = params;
 
   if (!node) return;

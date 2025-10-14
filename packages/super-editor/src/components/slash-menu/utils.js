@@ -149,17 +149,42 @@ export async function getEditorContext(editor, event) {
   const currentNodeType = node?.type?.name || null;
 
   const activeMarks = [];
+  let trackedChangeId = null;
 
   if (event && pos !== null) {
-    // For right-click events, get marks at the clicked position
     const $pos = state.doc.resolve(pos);
-    if ($pos.marks && typeof $pos.marks === 'function') {
-      $pos.marks().forEach((mark) => activeMarks.push(mark.type.name));
+
+    // Process marks with a helper function to avoid duplication
+    const processMark = (mark) => {
+      if (!activeMarks.includes(mark.type.name)) {
+        activeMarks.push(mark.type.name);
+      }
+
+      // extract tracked change ID if this is a tracked change mark and we haven't found one yet
+      if (
+        !trackedChangeId &&
+        (mark.type.name === 'trackInsert' || mark.type.name === 'trackDelete' || mark.type.name === 'trackFormat')
+      ) {
+        trackedChangeId = mark.attrs.id;
+      }
+    };
+
+    const marksAtPos = $pos.marks();
+    marksAtPos.forEach(processMark);
+
+    const nodeBefore = $pos.nodeBefore;
+    const nodeAfter = $pos.nodeAfter;
+
+    if (nodeBefore && nodeBefore.marks) {
+      nodeBefore.marks.forEach(processMark);
     }
 
-    // Also check marks on the node at this position if it exists
-    if (node && node.marks) {
-      node.marks.forEach((mark) => activeMarks.push(mark.type.name));
+    if (nodeAfter && nodeAfter.marks) {
+      nodeAfter.marks.forEach(processMark);
+    }
+
+    if (state.storedMarks) {
+      state.storedMarks.forEach(processMark);
     }
   } else {
     // For slash trigger, use stored marks and selection head marks
@@ -167,17 +192,8 @@ export async function getEditorContext(editor, event) {
     state.selection.$head.marks().forEach((mark) => activeMarks.push(mark.type.name));
   }
 
-  const isTrackedChange = activeMarks.includes('trackInsert') || activeMarks.includes('trackDelete');
-
-  let trackedChangeId = null;
-  if (isTrackedChange && event && pos !== null) {
-    const $pos = state.doc.resolve(pos);
-    const marksAtPos = $pos.marks();
-    const trackedMark = marksAtPos.find((mark) => mark.type.name === 'trackInsert' || mark.type.name === 'trackDelete');
-    if (trackedMark) {
-      trackedChangeId = trackedMark.attrs.id;
-    }
-  }
+  const isTrackedChange =
+    activeMarks.includes('trackInsert') || activeMarks.includes('trackDelete') || activeMarks.includes('trackFormat');
 
   const cursorCoords = pos ? view.coordsAtPos(pos) : null;
   const cursorPosition = cursorCoords
@@ -187,7 +203,7 @@ export async function getEditorContext(editor, event) {
       }
     : null;
 
-  return {
+  const context = {
     // Selection info
     selectedText,
     hasSelection: !empty,
@@ -217,10 +233,13 @@ export async function getEditorContext(editor, event) {
     pos,
     node,
     event,
+    trigger: event ? 'click' : 'slash',
 
     // Editor reference for advanced use cases
     editor,
   };
+
+  return context;
 }
 
 function computeCanUndo(editor, state) {

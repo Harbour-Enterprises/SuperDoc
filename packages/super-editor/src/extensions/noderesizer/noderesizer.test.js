@@ -15,7 +15,10 @@ describe('NodeResizer extension', () => {
   });
 
   it('produces resize decorations when an image node is selected', () => {
-    const editor = { options: { isHeadless: false } };
+    const editor = {
+      options: { isHeadless: false, documentMode: 'editing' },
+      isEditable: true,
+    };
     const [plugin] = NodeResizer.config.addPmPlugins.call({ editor });
     expect(plugin).toBeDefined();
 
@@ -52,7 +55,10 @@ describe('NodeResizer extension', () => {
   });
 
   it('installs global handlers and applies resize on mouse interactions', () => {
-    const editor = { options: { isHeadless: false } };
+    const editor = {
+      options: { isHeadless: false, documentMode: 'editing' },
+      isEditable: true,
+    };
     const [plugin] = NodeResizer.config.addPmPlugins.call({ editor });
 
     const addDocumentSpy = vi.spyOn(document, 'addEventListener');
@@ -129,5 +135,73 @@ describe('NodeResizer extension', () => {
     expect(removeWindowSpy).toHaveBeenCalledWith('scroll', scrollHandler, true);
 
     document.body.removeChild(handle);
+  });
+
+  it('should not create resize decorations when document is in view mode', () => {
+    const editor = {
+      options: { isHeadless: false, documentMode: 'viewing' },
+      isEditable: false,
+    };
+    const [plugin] = NodeResizer.config.addPmPlugins.call({ editor });
+
+    const schema = new Schema({
+      nodes: {
+        doc: { content: 'block+' },
+        text: { group: 'inline' },
+        image: {
+          group: 'block',
+          inline: false,
+          selectable: true,
+          draggable: true,
+          attrs: { size: { default: { width: 120, height: 60 } } },
+          toDOM: (node) => ['img', { 'data-width': node.attrs.size.width }],
+          parseDOM: [{ tag: 'img', getAttrs: () => ({}) }],
+        },
+      },
+    });
+
+    const imageNode = schema.nodes.image.create();
+    const doc = schema.node('doc', null, [imageNode]);
+    const state = EditorState.create({ schema, doc, plugins: [plugin] });
+
+    const selection = NodeSelection.create(doc, 0);
+    const nextState = state.apply(state.tr.setSelection(selection));
+
+    const decorations = plugin.getState(nextState);
+    expect(decorations.find()).toHaveLength(0);
+  });
+
+  it('should not create resize decorations when editor is not editable', () => {
+    const editor = {
+      options: { isHeadless: false, documentMode: 'editing' },
+      isEditable: false,
+    };
+    const [plugin] = NodeResizer.config.addPmPlugins.call({ editor });
+
+    const schema = new Schema({
+      nodes: {
+        doc: { content: 'block+' },
+        text: { group: 'inline' },
+        image: {
+          group: 'block',
+          inline: false,
+          selectable: true,
+          draggable: true,
+          attrs: { size: { default: { width: 120, height: 60 } } },
+          toDOM: (node) => ['img', { 'data-width': node.attrs.size.width }],
+          parseDOM: [{ tag: 'img', getAttrs: () => ({}) }],
+        },
+      },
+    });
+
+    const imageNode = schema.nodes.image.create();
+    const doc = schema.node('doc', null, [imageNode]);
+    const state = EditorState.create({ schema, doc, plugins: [plugin] });
+
+    const selection = NodeSelection.create(doc, 0);
+    const nextState = state.apply(state.tr.setSelection(selection));
+
+    const decorations = plugin.getState(nextState);
+    expect(decorations.find()).toHaveLength(0);
   });
 });
