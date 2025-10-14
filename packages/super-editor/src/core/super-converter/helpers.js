@@ -110,7 +110,9 @@ function pixelsToPolygonUnits(pixels) {
   // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
   if (pixels == null) return;
   const pu = pixels * 96;
-  return Math.round(pu * 1000) / 1000;
+  // Word requires integer ST_Coordinate32 values; fractional values fail OOXML validation.
+  // The previous rounding to 3 decimals produced fractional coordinates and broke anchors.
+  return Math.round(pu);
 }
 
 function polygonUnitsToPixels(pu) {
@@ -160,11 +162,20 @@ function polygonToObj(polygonNode) {
  */
 function objToPolygon(points) {
   if (!points || !Array.isArray(points)) return null;
-  const polygonNode = { type: 'wp:wrapPolygon', elements: [] };
+  const polygonNode = {
+    name: 'wp:wrapPolygon',
+    type: 'wp:wrapPolygon',
+    attributes: {
+      edited: '0',
+    },
+    elements: [],
+  };
   points.forEach((point, index) => {
     const [x, y] = point;
+    const tagName = index === 0 ? 'wp:start' : 'wp:lineTo';
     const pointNode = {
-      type: index === 0 ? 'wp:start' : 'wp:lineTo',
+      name: tagName,
+      type: tagName,
       attributes: {
         x: pixelsToPolygonUnits(x),
         y: pixelsToPolygonUnits(y),
@@ -177,6 +188,7 @@ function objToPolygon(points) {
   if (points.length > 0) {
     const [startX, startY] = points[0];
     const closePointNode = {
+      name: 'wp:lineTo',
       type: 'wp:lineTo',
       attributes: {
         x: pixelsToPolygonUnits(startX),

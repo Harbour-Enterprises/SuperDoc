@@ -6,3 +6,4 @@ export * from './processUploadedImage.js';
 export * from './imagePositionPlugin.js';
 export * from './fileNameUtils.js';
 export * from './rotation.js';
+export * from './legacyAttributes.js';

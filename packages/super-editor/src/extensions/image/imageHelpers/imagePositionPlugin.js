@@ -2,6 +2,7 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { PaginationPluginKey } from '../../pagination/pagination-helpers.js';
+import { getNormalizedImageAttrs } from './legacyAttributes.js';
 
 const ImagePositionPluginKey = new PluginKey('ImagePosition');
 
@@ -78,7 +79,8 @@ const getImagePositionDecorations = (state, view) => {
       let style = '';
       let className = '';
       const { vRelativeFrom, alignH } = node.attrs.anchorData;
-      const { size, padding, marginOffset } = node.attrs;
+      const { size, padding } = node.attrs;
+      const { marginOffset } = getNormalizedImageAttrs(node.attrs);
       const pageBreak = findPreviousDomNodeWithClass(view, pos, 'pagination-break-wrapper');
       if (pageBreak) {
         switch (alignH) {

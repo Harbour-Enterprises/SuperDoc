@@ -1,6 +1,7 @@
 import { Attribute, Node } from '@core/index.js';
 import { ImageRegistrationPlugin } from './imageHelpers/imageRegistrationPlugin.js';
 import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
+import { getNormalizedImageAttrs } from './imageHelpers/legacyAttributes.js';
 import { getRotationMargins } from './imageHelpers/rotation.js';
 import { inchesToPixels } from '@converter/helpers.js';
 
@@ -232,7 +233,8 @@ export const Image = Node.create({
     // multiple attributes influence the margin sizes, so we handle them here together rather than separately.
     // Also, the editor context is needed for wrap styling in some cases.
 
-    const { wrap, marginOffset, anchorData, padding, transformData = {}, size = { width: 0, height: 0 } } = node.attrs;
+    const { wrap, marginOffset } = getNormalizedImageAttrs(node.attrs);
+    const { anchorData, padding, transformData = {}, size = { width: 0, height: 0 } } = node.attrs;
 
     const margin = {
       left: 0,
