@@ -1,15 +1,8 @@
 import { SuperConverter } from '../../SuperConverter.js';
 import { TrackFormatMarkName } from '@extensions/track-changes/constants.js';
-import {
-  getHexColorFromDocxSystem,
-  halfPointToPoints,
-  isValidHexColor,
-  twipsToInches,
-  twipsToLines,
-  twipsToPixels,
-  twipsToPt,
-} from '../../helpers.js';
+import { getHexColorFromDocxSystem, isValidHexColor, twipsToInches, twipsToLines, twipsToPt } from '../../helpers.js';
 import { translator as wRPrTranslator } from '../../v3/handlers/w/rpr/index.js';
+import { encodeMarksFromRPr } from '@converter/styles.js';
 
 /**
  *
@@ -118,98 +111,6 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
   return createImportMarks(marks);
 }
 
-export function parseMarksFromRPr(runProperties, docx) {
-  const marks = [];
-  const textStyleAttrs = {};
-  let highlightColor = null;
-  let hasHighlightTag = false;
-  Object.keys(runProperties).forEach((key) => {
-    const value = runProperties[key];
-    switch (key) {
-      case 'strike':
-      case 'italic':
-      case 'bold':
-        // case 'boldCs':
-        marks.push({ type: key, attrs: { value } });
-        break;
-      case 'textTransform':
-        textStyleAttrs[key] = value;
-        break;
-      case 'color':
-        if (!value.val || value.val.toLowerCase() === 'auto') {
-          textStyleAttrs[key] = `#000000`;
-        } else {
-          textStyleAttrs[key] = `#${value['val'].replace('#', '').toUpperCase()}`;
-        }
-        break;
-      case 'underline':
-        let underlineType = value['w:val'];
-        if (!underlineType) {
-          break;
-        }
-        let underlineColor = value['w:color'];
-        if (underlineColor && underlineColor.toLowerCase() !== 'auto' && !underlineColor.startsWith('#')) {
-          underlineColor = `#${underlineColor}`;
-        }
-        marks.push({
-          type: key,
-          attrs: {
-            underlineType,
-            underlineColor,
-          },
-        });
-        break;
-      case 'fontSize':
-        // case 'fontSizeCs':
-        const points = halfPointToPoints(value);
-        textStyleAttrs[key] = `${points}pt`;
-        break;
-      case 'letterSpacing':
-        const spacing = twipsToPt(value);
-        textStyleAttrs[key] = `${spacing}pt`;
-        break;
-      case 'fontFamily':
-        const fontFamily = getFontFamilyValue(value, docx);
-        if (fontFamily) {
-          textStyleAttrs[key] = fontFamily;
-        }
-        break;
-      case 'highlight':
-        const color = getHighLightValue(value);
-        if (color) {
-          hasHighlightTag = true;
-          highlightColor = color;
-        }
-        break;
-      case 'shading': {
-        if (hasHighlightTag) {
-          break;
-        }
-        const fill = value['fill'];
-        const shdVal = value['val'];
-        if (fill && String(fill).toLowerCase() !== 'auto') {
-          highlightColor = `#${String(fill).replace('#', '')}`;
-        } else if (typeof shdVal === 'string') {
-          const normalized = shdVal.toLowerCase();
-          if (normalized === 'clear' || normalized === 'nil' || normalized === 'none') {
-            highlightColor = 'transparent';
-          }
-        }
-        break;
-      }
-    }
-  });
-
-  if (Object.keys(textStyleAttrs).length) {
-    marks.push({ type: 'textStyle', attrs: textStyleAttrs });
-  }
-
-  if (highlightColor) {
-    marks.push({ type: 'highlight', attrs: { color: highlightColor } });
-  }
-  return marks;
-}
-
 export function handleStyleChangeMarksV2(rPrChange, currentMarks, params) {
   if (!rPrChange) {
     return [];
@@ -226,7 +127,7 @@ export function handleStyleChangeMarksV2(rPrChange, currentMarks, params) {
   const rPr = rPrChange.elements?.find((el) => el.name === 'w:rPr');
   if (rPr) {
     const runProperties = wRPrTranslator.encode({ ...params, nodes: [rPr] });
-    submarks = parseMarksFromRPr(runProperties, params?.docx);
+    submarks = encodeMarksFromRPr(runProperties, params?.docx);
   }
 
   return [{ type: TrackFormatMarkName, attrs: { ...mappedAttributes, before: submarks, after: [...currentMarks] } }];

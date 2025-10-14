@@ -7,8 +7,8 @@ import { ensureTrackedWrapper, prepareRunTrackingContext } from './helpers/track
 import { translator as wHyperlinkTranslator } from '../hyperlink/hyperlink-translator.js';
 import { translator as wRPrTranslator } from '../rpr';
 import validXmlAttributes from './attributes/index.js';
-import { parseMarksFromRPr, handleStyleChangeMarksV2 } from '../../../../v2/importer/markImporter.js';
-import { resolveRunProperties } from '@converter/styles.js';
+import { handleStyleChangeMarksV2 } from '../../../../v2/importer/markImporter.js';
+import { resolveRunProperties, encodeMarksFromRPr, decodeRPrFromMarks, combineProperties } from '@converter/styles.js';
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:r';
 
@@ -35,7 +35,7 @@ const encode = (params, encodedAttrs = {}) => {
   const resolvedRunProperties = resolveRunProperties(params, runProperties ?? {}, paragraphProperties);
 
   // Parsing marks from run properties
-  const marks = parseMarksFromRPr(resolvedRunProperties, params?.docx) || [];
+  const marks = encodeMarksFromRPr(resolvedRunProperties, params?.docx) || [];
   const rPrChange = rPrNode?.elements?.find((el) => el.name === 'w:rPrChange');
   const styleChangeMarks = handleStyleChangeMarksV2(rPrChange, marks, params) || [];
 
