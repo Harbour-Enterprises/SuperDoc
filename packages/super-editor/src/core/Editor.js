@@ -30,6 +30,7 @@ import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 import { setWordSelection } from './helpers/setWordSelection.js';
 import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
+import { canRenderFont } from './helpers/canRenderFont.js';
 import {
   migrateListsToV2IfNecessary,
   migrateParagraphFieldsListsV2,
@@ -128,6 +129,7 @@ import { transformListsInCopiedContent } from '@core/inputRules/html/transform-c
  * @property {Function} [onPaginationUpdate] - Called when pagination updates
  * @property {Function} [onException] - Called when an exception occurs
  * @property {Function} [onListDefinitionsChange] - Called when list definitions change
+ * @property {Function} [onFontsResolved] - Called when all fonts used in the document are determined
  * @property {Function} [handleImageUpload] - Handler for image uploads
  * @property {Object} [telemetry] - Telemetry configuration
  * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
@@ -178,6 +180,12 @@ export class Editor extends EventEmitter {
    * @type {boolean}
    */
   isFocused = false;
+
+  /**
+   * All the embedded fonts that were imported by the Editor
+   * @type {string[]}
+   */
+  fontsImported = [];
 
   options = {
     element: null,
@@ -238,6 +246,7 @@ export class Editor extends EventEmitter {
     onPaginationUpdate: () => null,
     onException: () => null,
     onListDefinitionsChange: () => null,
+    onFontsResolved: null,
     // async (file) => url;
     handleImageUpload: null,
 
@@ -334,6 +343,10 @@ export class Editor extends EventEmitter {
     this.on('contentError', this.options.onContentError);
 
     this.mount(this.options.element);
+
+    if (!this.options.isHeadless) {
+      this.#checkFonts();
+    }
 
     this.on('create', this.options.onCreate);
     this.on('update', this.options.onUpdate);
@@ -874,13 +887,117 @@ export class Editor extends EventEmitter {
    * @returns {void}
    */
   #initFonts() {
-    const styleString = this.converter.getDocumentFonts();
+    const results = this.converter.getFontFaceImportString();
 
-    if (styleString?.length) {
+    if (results?.styleString?.length) {
       const style = document.createElement('style');
-      style.textContent = styleString;
+      style.textContent = results.styleString;
       document.head.appendChild(style);
+
+      this.fontsImported = results.fontsImported;
     }
+  }
+
+  /**
+   * Determines the fonts used in the document and the unsupported ones and triggers the `onFontsResolved` callback.
+   * @returns {Promise<void>}
+   */
+  async #checkFonts() {
+    // We only want to run the algorithm to resolve the fonts if the user has asked for it
+    if (!this.options.onFontsResolved || typeof this.options.onFontsResolved !== 'function') {
+      return;
+    }
+
+    if (this.options.isHeadless) {
+      return;
+    }
+
+    const fontsUsedInDocument = this.converter.getDocumentFonts();
+
+    if (!('queryLocalFonts' in window)) {
+      console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
+
+      // Fallback
+      const unsupportedFonts = this.#determineUnsupportedFontsWithCanvas(fontsUsedInDocument);
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+
+      return;
+    }
+
+    const localFontAccess = await navigator.permissions.query({ name: 'local-fonts' });
+    if (localFontAccess.state === 'denied') {
+      console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
+
+      // Fallback
+      const unsupportedFonts = this.#determineUnsupportedFontsWithCanvas(fontsUsedInDocument);
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+
+      return;
+    }
+
+    try {
+      const localFonts = await window.queryLocalFonts();
+      const uniqueLocalFonts = [...new Set(localFonts.map((font) => font.family))];
+      const unsupportedFonts = this.#determineUnsupportedFontsWithLocalFonts(fontsUsedInDocument, uniqueLocalFonts);
+
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+    } catch {
+      console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
+
+      // Fallback
+      const unsupportedFonts = this.#determineUnsupportedFontsWithCanvas(fontsUsedInDocument);
+      this.options.onFontsResolved({
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+    }
+  }
+
+  /**
+   * Determines which fonts used in the document are not available locally nor imported.
+   *
+   * @param {string[]} fonts - Array of font family names used in the document.
+   * @param {string[]} localFonts - Array of local font family names available on the system.
+   * @returns {string[]} Array of font names that are unsupported.
+   */
+  #determineUnsupportedFontsWithLocalFonts(fonts, localFonts) {
+    const unsupportedFonts = fonts.filter((font) => {
+      const isLocalFont = localFonts.includes(font);
+      const isFontImported = this.fontsImported.includes(font);
+
+      return !isLocalFont && !isFontImported;
+    });
+
+    return unsupportedFonts;
+  }
+
+  /**
+   * Determines which fonts used in the document are not supported
+   * by attempting to render them on a canvas.
+   * Fonts are considered unsupported if they cannot be rendered
+   * and are not already imported in the document via @font-face.
+   *
+   * @param {string[]} fonts - Array of font family names used in the document.
+   * @returns {string[]} Array of unsupported font family names.
+   */
+  #determineUnsupportedFontsWithCanvas(fonts) {
+    const unsupportedFonts = fonts.filter((font) => {
+      const canRender = canRenderFont(font);
+      const isFontImported = this.fontsImported.includes(font);
+
+      return !canRender && !isFontImported;
+    });
+
+    return unsupportedFonts;
   }
 
   /**
@@ -970,7 +1087,6 @@ export class Editor extends EventEmitter {
           doc = this.#prepareDocumentForImport(doc);
         } else {
           doc = createDocument(this.converter, this.schema, this);
-
           // Perform any additional document processing prior to finalizing the doc here
           doc = this.#prepareDocumentForImport(doc);
 

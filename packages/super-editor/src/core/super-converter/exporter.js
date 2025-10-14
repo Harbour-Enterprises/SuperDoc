@@ -34,6 +34,9 @@ import {
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
 import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
+import { translator as wDelTranslator } from '@converter/v3/handlers/w/del';
+import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins';
+import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/hyperlink-translator.js';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -113,6 +116,7 @@ export const isLineBreakOnlyRun = (node) => {
  * @property {Object} node JSON node to translate (from PM schema)
  * @property {Object} [bodyNode] The stored body node to restore, if available
  * @property {Object[]} [relationships] The relationships to add to the document
+ * @property {Object} [extraParams] The extra params from NodeTranslator
  */
 
 /**
@@ -658,72 +662,30 @@ export function getTextNodeForExport(text, marks, params) {
  * @returns {XmlReadyNode} The translated text node
  */
 function translateTextNode(params) {
-  const { node } = params;
+  const { node, extraParams } = params;
 
   // Separate tracked changes from regular text
   const trackedMarks = [TrackInsertMarkName, TrackDeleteMarkName];
-  const isTrackedNode = node.marks?.some((m) => trackedMarks.includes(m.type));
-  if (isTrackedNode) return translateTrackedNode(params);
+  const trackedMark = node.marks?.find((m) => trackedMarks.includes(m.type));
+
+  if (trackedMark) {
+    switch (trackedMark.type) {
+      case 'trackDelete':
+        return wDelTranslator.decode(params);
+      case 'trackInsert':
+        return wInsTranslator.decode(params);
+    }
+  }
+
+  // Separate links from regular text
+  const isLinkNode = node.marks?.some((m) => m.type === 'link');
+  if (isLinkNode && !extraParams?.linkProcessed) {
+    return wHyperlinkTranslator.decode(params);
+  }
 
   const { text, marks = [] } = node;
 
   return getTextNodeForExport(text, marks, params);
-}
-
-function createTrackStyleMark(marks) {
-  const trackStyleMark = marks.find((mark) => mark.type === TrackFormatMarkName);
-  if (trackStyleMark) {
-    const markElement = {
-      type: 'element',
-      name: 'w:rPrChange',
-      attributes: {
-        'w:id': trackStyleMark.attrs.id,
-        'w:author': trackStyleMark.attrs.author,
-        'w:authorEmail': trackStyleMark.attrs.authorEmail,
-        'w:date': trackStyleMark.attrs.date,
-      },
-      elements: trackStyleMark.attrs.before.map((mark) => processOutputMarks([mark])).filter((r) => r !== undefined),
-    };
-    return markElement;
-  }
-  return undefined;
-}
-
-function translateTrackedNode(params) {
-  const { node } = params;
-  const marks = node.marks;
-  const trackingMarks = [TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName];
-  const trackedMark = marks.find((m) => trackingMarks.includes(m.type));
-  const isInsert = trackedMark.type === TrackInsertMarkName;
-
-  // Remove marks that we aren't exporting and add style mark if present
-  const trackStyleMark = createTrackStyleMark(marks);
-  node.marks = marks.filter((m) => !trackingMarks.includes(m.type));
-  if (trackStyleMark) {
-    node.marks.push(trackStyleMark);
-  }
-
-  const translatedTextNode = exportSchemaToJson({ ...params, node });
-
-  // If this is not an insert, we need to change the text node name
-  if (!isInsert) {
-    const textNode = translatedTextNode.elements.find((n) => n.name === 'w:t');
-    textNode.name = 'w:delText';
-  }
-
-  const trackedNode = {
-    name: isInsert ? 'w:ins' : 'w:del',
-    type: 'element',
-    attributes: {
-      'w:id': trackedMark.attrs.id,
-      'w:author': trackedMark.attrs.author,
-      'w:authorEmail': trackedMark.attrs.authorEmail,
-      'w:date': trackedMark.attrs.date,
-    },
-    elements: [translatedTextNode],
-  };
-
-  return trackedNode;
 }
 
 /**
@@ -1173,7 +1135,7 @@ function translateMark(mark) {
     }
 
     case 'link':
-      break;
+      return {};
   }
 
   return markElement;

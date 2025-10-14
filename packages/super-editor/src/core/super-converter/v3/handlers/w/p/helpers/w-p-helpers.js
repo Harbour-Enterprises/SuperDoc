@@ -1,5 +1,5 @@
 // @ts-check
-import { twipsToInches, twipsToLines, twipsToPixels, twipsToPt, eigthPointsToPixels } from '@converter/helpers.js';
+import { twipsToInches, twipsToLines, twipsToPixels, twipsToPt, eighthPointsToPixels } from '@converter/helpers.js';
 
 /**
  * Parses the borders of a paragraph.
@@ -21,11 +21,11 @@ export const parseParagraphBorders = (pBdr) => {
 
     // Set size of border
     let sizePx;
-    if (a['w:sz'] !== undefined) sizePx = eigthPointsToPixels(a['w:sz']);
+    if (a['w:sz'] !== undefined) sizePx = eighthPointsToPixels(a['w:sz']);
 
     // Track space of border
     let spacePx;
-    if (a['w:space'] !== undefined) spacePx = eigthPointsToPixels(a['w:space']);
+    if (a['w:space'] !== undefined) spacePx = eighthPointsToPixels(a['w:space']);
 
     result[side] = {
       val: a['w:val'],

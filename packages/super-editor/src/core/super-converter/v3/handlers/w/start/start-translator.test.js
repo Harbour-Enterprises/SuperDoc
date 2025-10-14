@@ -21,7 +21,7 @@ describe('w:start border translator', () => {
 
       expect(result).toEqual({
         val: 'single',
-        color: 'FF0000',
+        color: '#FF0000',
         size: 8,
         space: 4,
         shadow: true,
@@ -37,7 +37,7 @@ describe('w:start border translator', () => {
           attrs: {
             start: {
               val: 'double',
-              color: '00FF00',
+              color: '#00FF00',
               size: 12,
               space: 2,
               shadow: false,

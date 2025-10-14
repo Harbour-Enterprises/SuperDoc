@@ -39,6 +39,9 @@ echo "🥡 Created destination directory: $DIR_PATH"
 
 cp "$FILE_PATH" "$BASE_PATH"
 echo "🥡 Copied file to destination directory"
+DOCX_DEST="$BASE_PATH/$FILE_NAME"
+ABSOLUTE_DOCX_PATH=$(realpath "$DOCX_DEST")
+echo "🥡 Docx file saved to: $ABSOLUTE_DOCX_PATH"
 
 DATA_PATH="$DIR_PATH"
 echo "🥡 Extracting file to: $DATA_PATH"

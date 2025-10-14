@@ -5,7 +5,7 @@ vi.mock('@converter/v2/importer/tableImporter', () => ({
   getGridColumnWidths: vi.fn(() => [90, 100, 110]),
   getReferencedTableStyles: vi.fn(() => ({
     fontSize: '12pt',
-    fonts: { ascii: { ascii: 'Arial' } },
+    fonts: { ascii: 'Arial' },
     cellMargins: { marginLeft: 720, marginBottom: 240 },
   })),
 }));

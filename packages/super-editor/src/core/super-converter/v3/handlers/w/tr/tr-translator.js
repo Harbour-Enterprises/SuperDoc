@@ -36,10 +36,10 @@ const encode = (params, encodedAttrs) => {
   let tableRowProperties = {};
   const tPr = row.elements.find((el) => el.name === 'w:trPr');
   if (tPr) {
-    ({ attributes: tableRowProperties } = trPrTranslator.encode({
+    tableRowProperties = trPrTranslator.encode({
       ...params,
       nodes: [tPr],
-    }));
+    });
   }
   const gridBeforeRaw = tableRowProperties?.['gridBefore'];
   const safeGridBefore =

@@ -1,5 +1,6 @@
-import { eigthPointsToPixels, twipsToPixels } from '@converter/helpers';
+import { eighthPointsToPixels, twipsToPixels } from '@converter/helpers';
 import { getReferencedTableStyles } from '@converter/v2/importer/tableImporter';
+import { translator as tcPrTranslator } from '../../tcPr';
 
 /**
  * @param {Object} options
@@ -17,9 +18,14 @@ export function handleTableCellNode({
   allColumnWidths = [],
 }) {
   const { docx, nodeListHandler } = params;
-  const tcPr = node.elements.find((el) => el.name === 'w:tcPr');
-  const borders = tcPr?.elements?.find((el) => el.name === 'w:tcBorders');
+  const attributes = {};
 
+  // Table Cell Properties
+  const tcPr = node.elements.find((el) => el.name === 'w:tcPr');
+  const tableCellProperties = tcPr ? (tcPrTranslator.encode({ ...params, nodes: [tcPr] }) ?? {}) : {};
+  attributes['tableCellProperties'] = tableCellProperties;
+
+  // Borders
   if (rowBorders?.insideH) {
     rowBorders['bottom'] = rowBorders.insideH;
     delete rowBorders.insideH;
@@ -28,46 +34,26 @@ export function handleTableCellNode({
     rowBorders['right'] = rowBorders.insideV;
     delete rowBorders?.insideV;
   }
-  const inlineBorders = processInlineCellBorders(borders, rowBorders);
+  if (rowBorders) attributes['borders'] = { ...rowBorders };
+  const inlineBorders = processInlineCellBorders(tableCellProperties.borders, rowBorders);
+  if (inlineBorders) attributes['borders'] = Object.assign(attributes['borders'] || {}, inlineBorders);
 
-  const gridColumnWidths = allColumnWidths;
+  // Colspan
+  const colspan = tableCellProperties.gridSpan;
+  if (colspan && !isNaN(parseInt(colspan, 10))) attributes['colspan'] = parseInt(colspan, 10);
 
-  const tcWidth = tcPr?.elements?.find((el) => el.name === 'w:tcW');
-  let width = tcWidth ? twipsToPixels(tcWidth.attributes['w:w']) : null;
-  const widthType = tcWidth?.attributes['w:type'];
+  // Width
+  let width = tableCellProperties.cellWidth?.value ? twipsToPixels(tableCellProperties.cellWidth?.value) : null;
+  const widthType = tableCellProperties.cellWidth?.type;
+  if (widthType) attributes['widthType'] = widthType;
 
   if (!width && columnWidth) width = columnWidth;
-
-  const vMerge = getTableCellMergeTag(node);
-  const { attributes: vMergeAttrs } = vMerge || {};
-
-  // TODO: Do we need other background attrs?
-  const backgroundColor = tcPr?.elements?.find((el) => el.name === 'w:shd');
-  const background = {
-    color: backgroundColor?.attributes['w:fill'],
-  };
-
-  const colspanTag = tcPr?.elements?.find((el) => el.name === 'w:gridSpan');
-  const colspan = colspanTag?.attributes['w:val'];
-
-  const marginTag = tcPr?.elements?.find((el) => el.name === 'w:tcMar');
-
-  const verticalAlignTag = tcPr?.elements?.find((el) => el.name === 'w:vAlign');
-  const verticalAlign = verticalAlignTag?.attributes['w:val'] || 'top';
-
-  const attributes = {};
-  const referencedStyles = getReferencedTableStyles(styleTag, docx) || {};
-  attributes.cellMargins = getTableCellMargins(marginTag, referencedStyles);
-
-  const { fontSize, fonts = {} } = referencedStyles;
-  const fontFamily = fonts['ascii'];
-
   if (width) {
     attributes['colwidth'] = [width];
     attributes['widthUnit'] = 'px';
 
-    const defaultColWidths = gridColumnWidths;
-    const hasDefaultColWidths = gridColumnWidths && gridColumnWidths.length > 0;
+    const defaultColWidths = allColumnWidths;
+    const hasDefaultColWidths = allColumnWidths && allColumnWidths.length > 0;
     const colspanNum = parseInt(colspan || 1, 10);
 
     if (colspanNum && colspanNum > 1 && hasDefaultColWidths) {
@@ -90,18 +76,29 @@ export function handleTableCellNode({
     }
   }
 
-  if (widthType) attributes['widthType'] = widthType;
-  if (colspan) attributes['colspan'] = parseInt(colspan, 10);
-  if (background) attributes['background'] = background;
-  if (verticalAlign) attributes['verticalAlign'] = verticalAlign;
-  if (fontSize) attributes['fontSize'] = fontSize;
-  if (fontFamily) attributes['fontFamily'] = fontFamily['ascii'];
-  if (rowBorders) attributes['borders'] = { ...rowBorders };
-  if (inlineBorders) attributes['borders'] = Object.assign(attributes['borders'] || {}, inlineBorders);
+  // Background
+  const background = {
+    color: tableCellProperties.shading?.fill,
+  };
+  // TODO: Do we need other background attrs?
+  if (background.color) attributes['background'] = background;
 
-  // Tables can have vertically merged cells, indicated by the vMergeAttrs
-  // if (vMerge) attributes['vMerge'] = vMergeAttrs || 'merged';
-  if (vMergeAttrs && vMergeAttrs['w:val'] === 'restart') {
+  // Vertical Align
+  const verticalAlign = tableCellProperties.vAlign;
+  if (verticalAlign) attributes['verticalAlign'] = verticalAlign;
+
+  // Cell Margins
+  const referencedStyles = getReferencedTableStyles(styleTag, docx) || { fontSize: null, fonts: {}, cellMargins: {} };
+  attributes.cellMargins = getTableCellMargins(tableCellProperties.cellMargins, referencedStyles);
+
+  // Font size and family
+  const { fontSize, fonts = {} } = referencedStyles;
+  const fontFamily = fonts['ascii'];
+  if (fontSize) attributes['fontSize'] = fontSize;
+  if (fontFamily) attributes['fontFamily'] = fontFamily;
+
+  // Rowspan - tables can have vertically merged cells
+  if (tableCellProperties.vMerge === 'restart') {
     const rows = table.elements.filter((el) => el.name === 'w:tr');
     const currentRowIndex = rows.findIndex((r) => r === row);
     const remainingRows = rows.slice(currentRowIndex + 1);
@@ -117,12 +114,9 @@ export function handleTableCellNode({
 
       if (!cellAtIndex) break;
 
-      const vMerge = getTableCellMergeTag(cellAtIndex);
-      const { attributes: currentCellMergeAttrs } = vMerge || {};
-      if (
-        (!vMerge && !currentCellMergeAttrs) ||
-        (currentCellMergeAttrs && currentCellMergeAttrs['w:val'] === 'restart')
-      ) {
+      const vMerge = getTableCellVMerge(cellAtIndex);
+
+      if (!vMerge || vMerge === 'restart') {
         // We have reached the end of the vertically merged cells
         break;
       }
@@ -148,82 +142,59 @@ export function handleTableCellNode({
 const processInlineCellBorders = (borders, rowBorders) => {
   if (!borders) return null;
 
-  const processedBorders = {};
-  const inlineBorderBottom = processBorder(borders, 'bottom', rowBorders);
-  if (inlineBorderBottom) processedBorders['bottom'] = inlineBorderBottom;
-  const inlineBorderTop = processBorder(borders, 'top', rowBorders);
-  if (inlineBorderTop) processedBorders['top'] = inlineBorderTop;
-  const inlineBorderLeft = processBorder(borders, 'left', rowBorders);
-  if (inlineBorderLeft) processedBorders['left'] = inlineBorderLeft;
-  const inlineBorderRight = processBorder(borders, 'right', rowBorders);
-  if (inlineBorderRight) processedBorders['right'] = inlineBorderRight;
+  return ['bottom', 'top', 'left', 'right'].reduce((acc, direction) => {
+    const borderAttrs = borders[direction];
+    const rowBorderAttrs = rowBorders[direction];
 
-  return processedBorders;
+    if (borderAttrs && borderAttrs['val'] !== 'nil') {
+      const color = borderAttrs['color'];
+      let size = borderAttrs['size'];
+      if (size) size = eighthPointsToPixels(size);
+      acc[direction] = { color, size, val: borderAttrs['val'] };
+      return acc;
+    }
+    if (borderAttrs && borderAttrs['val'] === 'nil') {
+      const border = Object.assign({}, rowBorderAttrs || {});
+      if (!Object.keys(border).length) {
+        return acc;
+      } else {
+        border['val'] = 'none';
+        acc[direction] = border;
+        return acc;
+      }
+    }
+    return acc;
+  }, {});
 };
 
-const processBorder = (borders, direction, rowBorders = {}) => {
-  const borderAttrs = borders?.elements?.find((el) => el.name === `w:${direction}`)?.attributes;
-
-  if (borderAttrs && borderAttrs['w:val'] !== 'nil') {
-    const border = {};
-    const color = borderAttrs['w:color'];
-    if (color) border['color'] = color === 'auto' ? '#000000' : `#${color}`;
-    const size = borderAttrs['w:sz'];
-    if (size) border['size'] = eigthPointsToPixels(size);
-    return border;
-  }
-  if (borderAttrs && borderAttrs['w:val'] === 'nil') {
-    const border = Object.assign({}, rowBorders[direction] || {});
-    if (!Object.keys(border)) return null;
-    border['val'] = 'none';
-    return border;
-  }
-  return null;
-};
-
-const getTableCellMergeTag = (node) => {
+const getTableCellVMerge = (node) => {
   const tcPr = node.elements.find((el) => el.name === 'w:tcPr');
   const vMerge = tcPr?.elements?.find((el) => el.name === 'w:vMerge');
-  return vMerge;
+  if (!vMerge) return null;
+  return vMerge.attributes?.['w:val'] || 'continue';
 };
 
 /**
  * Process the margins for a table cell
- * @param {Object} marginTag
+ * @param {Object} inlineMargins
  * @param {Object} referencedStyles
  * @returns
  */
-const getTableCellMargins = (marginTag, referencedStyles) => {
-  const inlineMarginLeftTag = marginTag?.elements?.find((el) => el.name === 'w:left');
-  const inlineMarginRightTag = marginTag?.elements?.find((el) => el.name === 'w:right');
-  const inlineMarginTopTag = marginTag?.elements?.find((el) => el.name === 'w:top');
-  const inlineMarginBottomTag = marginTag?.elements?.find((el) => el.name === 'w:bottom');
-
-  const inlineMarginLeftValue = inlineMarginLeftTag?.attributes['w:w'];
-  const inlineMarginRightValue = inlineMarginRightTag?.attributes['w:w'];
-  const inlineMarginTopValue = inlineMarginTopTag?.attributes['w:w'];
-  const inlineMarginBottomValue = inlineMarginBottomTag?.attributes['w:w'];
-
+const getTableCellMargins = (inlineMargins, referencedStyles) => {
   const { cellMargins = {} } = referencedStyles;
-  const {
-    marginLeft: marginLeftStyle,
-    marginRight: marginRightStyle,
-    marginTop: marginTopStyle,
-    marginBottom: marginBottomStyle,
-  } = cellMargins;
-
-  const resolveMargin = (inlineValue, styleValue) => {
-    if (inlineValue != null) return inlineValue;
-    if (styleValue == null) return undefined;
-    if (typeof styleValue === 'object') return styleValue.value;
-    return styleValue;
-  };
-
-  const margins = {
-    left: twipsToPixels(resolveMargin(inlineMarginLeftValue, marginLeftStyle)),
-    right: twipsToPixels(resolveMargin(inlineMarginRightValue, marginRightStyle)),
-    top: twipsToPixels(resolveMargin(inlineMarginTopValue, marginTopStyle)),
-    bottom: twipsToPixels(resolveMargin(inlineMarginBottomValue, marginBottomStyle)),
-  };
-  return margins;
+  return ['left', 'right', 'top', 'bottom'].reduce((acc, direction) => {
+    const key = `margin${direction.charAt(0).toUpperCase() + direction.slice(1)}`;
+    const inlineValue = inlineMargins ? inlineMargins?.[key]?.value : null;
+    const styleValue = cellMargins ? cellMargins[key] : null;
+    if (inlineValue != null) {
+      acc[direction] = twipsToPixels(inlineValue);
+    } else if (styleValue == null) {
+      acc[direction] = undefined;
+    } else if (typeof styleValue === 'object') {
+      acc[direction] = twipsToPixels(styleValue.value);
+    } else {
+      acc[direction] = twipsToPixels(styleValue);
+    }
+    return acc;
+  }, {});
 };
