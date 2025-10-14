@@ -102,6 +102,7 @@ export default defineConfig(({ mode }) => {
         '@converter': fileURLToPath(new URL('./src/core/super-converter', import.meta.url)),
         '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
         '@translator': fileURLToPath(new URL('./src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
+        '@preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
       },
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
     },
