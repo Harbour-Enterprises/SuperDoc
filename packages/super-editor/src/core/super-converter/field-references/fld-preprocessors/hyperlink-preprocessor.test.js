@@ -31,7 +31,6 @@ describe('preProcessHyperlinkInstruction', () => {
       },
     };
 
-    debugger;
     const result = preProcessHyperlinkInstruction(mockNodesToCombine, instruction, mockDocx);
     expect(result).toEqual([
       {
