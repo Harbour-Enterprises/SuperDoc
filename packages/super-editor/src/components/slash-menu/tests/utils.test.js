@@ -183,12 +183,18 @@ describe('utils.js', () => {
             4: { type: { name: 'tableRow' }, marks: [] },
             5: {
               type: { name: 'documentSection' },
-              marks: [{ type: { name: 'trackDelete' }, attrs: { id: 'track-1' } }],
+              marks: [],
             },
           };
           return map[depth] || { type: { name: 'doc' }, marks: [] };
         },
         marks: vi.fn(() => []),
+        // In ProseMirror, marks are on inline nodes, not block nodes
+        nodeBefore: {
+          type: { name: 'text' },
+          marks: [{ type: { name: 'trackDelete' }, attrs: { id: 'track-1' } }],
+        },
+        nodeAfter: null,
       });
 
       const context = await getEditorContext(mockEditor, mockEvent);
@@ -203,6 +209,61 @@ describe('utils.js', () => {
       expect(context.isInSectionNode).toBe(true);
       expect(context.trackedChangeId).toBe('track-1');
       expect(context.activeMarks).toContain('trackDelete');
+      expect(context.isTrackedChange).toBe(true);
+    });
+
+    it('should detect tracked change marks directly at the resolved cursor position', async () => {
+      const mockEvent = { clientX: 150, clientY: 250 };
+      const trackFormatMark = { type: { name: 'trackFormat' }, attrs: { id: 'track-format-1' } };
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+      mockEditor.view.posAtCoords.mockReturnValue({ pos: 42 });
+      mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'text' } });
+      mockEditor.view.state.doc.resolve.mockImplementation(() => ({
+        depth: 1,
+        node: (depth) => ({
+          type: { name: depth === 1 ? 'paragraph' : 'doc' },
+          marks: [],
+        }),
+        marks: () => [trackFormatMark],
+        nodeBefore: null,
+        nodeAfter: null,
+      }));
+
+      const context = await getEditorContext(mockEditor, mockEvent);
+
+      expect(context.activeMarks).toContain('trackFormat');
+      expect(context.trackedChangeId).toBe('track-format-1');
+      expect(context.isTrackedChange).toBe(true);
+    });
+
+    it('should detect tracked change marks on the node after the resolved position', async () => {
+      const mockEvent = { clientX: 180, clientY: 280 };
+      const trackDeleteMark = { type: { name: 'trackDelete' }, attrs: { id: 'track-after-1' } };
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+      mockEditor.view.posAtCoords.mockReturnValue({ pos: 58 });
+      mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'text' } });
+      mockEditor.view.state.doc.resolve.mockImplementation(() => ({
+        depth: 1,
+        node: (depth) => ({
+          type: { name: depth === 1 ? 'paragraph' : 'doc' },
+          marks: [],
+        }),
+        marks: () => [],
+        nodeBefore: null,
+        nodeAfter: {
+          type: { name: 'text' },
+          marks: [trackDeleteMark],
+        },
+      }));
+
+      const context = await getEditorContext(mockEditor, mockEvent);
+
+      expect(context.activeMarks).toContain('trackDelete');
+      expect(context.trackedChangeId).toBe('track-after-1');
       expect(context.isTrackedChange).toBe(true);
     });
 

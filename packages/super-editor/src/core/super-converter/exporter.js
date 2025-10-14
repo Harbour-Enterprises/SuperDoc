@@ -36,6 +36,7 @@ import { translator as sdTableOfContentsTranslator } from '@converter/v3/handler
 import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
 import { translator as wDelTranslator } from '@converter/v3/handlers/w/del';
 import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins';
+import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/hyperlink-translator.js';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -115,6 +116,7 @@ export const isLineBreakOnlyRun = (node) => {
  * @property {Object} node JSON node to translate (from PM schema)
  * @property {Object} [bodyNode] The stored body node to restore, if available
  * @property {Object[]} [relationships] The relationships to add to the document
+ * @property {Object} [extraParams] The extra params from NodeTranslator
  */
 
 /**
@@ -660,7 +662,7 @@ export function getTextNodeForExport(text, marks, params) {
  * @returns {XmlReadyNode} The translated text node
  */
 function translateTextNode(params) {
-  const { node } = params;
+  const { node, extraParams } = params;
 
   // Separate tracked changes from regular text
   const trackedMarks = [TrackInsertMarkName, TrackDeleteMarkName];
@@ -673,6 +675,12 @@ function translateTextNode(params) {
       case 'trackInsert':
         return wInsTranslator.decode(params);
     }
+  }
+
+  // Separate links from regular text
+  const isLinkNode = node.marks?.some((m) => m.type === 'link');
+  if (isLinkNode && !extraParams?.linkProcessed) {
+    return wHyperlinkTranslator.decode(params);
   }
 
   const { text, marks = [] } = node;
@@ -1127,7 +1135,7 @@ function translateMark(mark) {
     }
 
     case 'link':
-      break;
+      return {};
   }
 
   return markElement;
