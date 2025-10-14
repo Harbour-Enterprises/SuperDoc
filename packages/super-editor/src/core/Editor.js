@@ -900,8 +900,7 @@ export class Editor extends EventEmitter {
       return;
     }
 
-    // Ignore this in NodeJS
-    if (process && process.version && process.versions) {
+    if (this.options.isHeadless) {
       return;
     }
 
