@@ -1,4 +1,4 @@
-import { eigthPointsToPixels, twipsToPixels } from '@converter/helpers';
+import { eighthPointsToPixels, twipsToPixels } from '@converter/helpers';
 import { getReferencedTableStyles } from '@converter/v2/importer/tableImporter';
 import { translator as tcPrTranslator } from '../../tcPr';
 
@@ -149,7 +149,7 @@ const processInlineCellBorders = (borders, rowBorders) => {
     if (borderAttrs && borderAttrs['val'] !== 'nil') {
       const color = borderAttrs['color'];
       let size = borderAttrs['size'];
-      if (size) size = eigthPointsToPixels(size);
+      if (size) size = eighthPointsToPixels(size);
       acc[direction] = { color, size, val: borderAttrs['val'] };
       return acc;
     }

@@ -74,9 +74,9 @@ function pixelsToHalfPoints(pixels) {
   return Math.round((pixels * 72) / 96);
 }
 
-function eigthPointsToPixels(eigthPoints) {
-  if (eigthPoints == null) return;
-  const points = parseFloat(eigthPoints) / 8;
+function eighthPointsToPixels(eighthPoints) {
+  if (eighthPoints == null) return;
+  const points = parseFloat(eighthPoints) / 8;
   const pixels = points * 1.3333;
   return pixels;
 }
@@ -368,7 +368,7 @@ export {
   pixelsToEmu,
   pixelsToHalfPoints,
   halfPointToPoints,
-  eigthPointsToPixels,
+  eighthPointsToPixels,
   pixelsToEightPoints,
   rotToDegrees,
   degreesToRot,

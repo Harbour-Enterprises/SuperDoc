@@ -3,7 +3,7 @@ import {
   inchesToTwips,
   pixelsToEightPoints,
   twipsToPixels,
-  eigthPointsToPixels,
+  eighthPointsToPixels,
 } from '@converter/helpers';
 import { translateChildNodes } from '@converter/v2/exporter/helpers/index';
 import { translator as tcPrTranslator } from '../../tcPr';
@@ -104,7 +104,7 @@ export function generateTableCellProperties(node) {
     ['top', 'bottom', 'left', 'right'].forEach((side) => {
       if (borders[side]) {
         let currentPropertyValue = tableCellProperties.borders?.[side];
-        let currentPropertySizePixels = eigthPointsToPixels(currentPropertyValue?.size);
+        let currentPropertySizePixels = eighthPointsToPixels(currentPropertyValue?.size);
         let color = borders[side].color;
         if (borders[side].color && color === '#000000') {
           color = 'auto';

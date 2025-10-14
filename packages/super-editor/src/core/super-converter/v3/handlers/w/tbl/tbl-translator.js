@@ -1,6 +1,6 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import { twipsToPixels, eigthPointsToPixels, halfPointToPoints } from '@core/super-converter/helpers.js';
+import { twipsToPixels, eighthPointsToPixels, halfPointToPoints } from '@core/super-converter/helpers.js';
 import { preProcessVerticalMergeCells } from '@core/super-converter/export-helpers/pre-process-vertical-merge-cells.js';
 import { translateChildNodes } from '@core/super-converter/v2/exporter/helpers/index.js';
 import { translator as trTranslator } from '../tr';
@@ -191,7 +191,7 @@ function _processTableBorders(rawBorders) {
     const color = attributes.color;
     const size = attributes.size;
     if (color && color !== 'auto') attrs['color'] = color.startsWith('#') ? color : `#${color}`;
-    if (size && size !== 'auto') attrs['size'] = eigthPointsToPixels(size);
+    if (size && size !== 'auto') attrs['size'] = eighthPointsToPixels(size);
 
     const rowBorderNames = ['insideH', 'insideV'];
     if (rowBorderNames.includes(name)) rowBorders[name] = attrs;
