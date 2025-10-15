@@ -1,3 +1,19 @@
+# [0.24.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.23.0...v0.24.0) (2025-10-15)
+
+### Bug Fixes
+
+- bookmarks inside table cells break import ([#1133](https://github.com/Harbour-Enterprises/SuperDoc/issues/1133)) ([a090084](https://github.com/Harbour-Enterprises/SuperDoc/commit/a090084d4eac56f49c82684bca64fcf10fb2ee8d))
+- grab tracked change from inline node for contextMenu ([#1113](https://github.com/Harbour-Enterprises/SuperDoc/issues/1113)) ([ff20085](https://github.com/Harbour-Enterprises/SuperDoc/commit/ff200851eab4fb2a961b8749c010a40f1d20953a))
+- hyperlink export causes issues in Word ([#1121](https://github.com/Harbour-Enterprises/SuperDoc/issues/1121)) ([8c61646](https://github.com/Harbour-Enterprises/SuperDoc/commit/8c6164625dba72b0bc8d53dfdd254c18de3f9a50))
+- preserve word anchor metadata and improve legacy image wrap ([#1127](https://github.com/Harbour-Enterprises/SuperDoc/issues/1127)) ([c0b55ca](https://github.com/Harbour-Enterprises/SuperDoc/commit/c0b55ca1c472027a5a97ce60ce4701bdcf94089e))
+- table import fixes, tblGrid fixes, col group ([#1108](https://github.com/Harbour-Enterprises/SuperDoc/issues/1108)) ([6f7c048](https://github.com/Harbour-Enterprises/SuperDoc/commit/6f7c0487ea3d0581f5706beab0da679da322471b))
+- update line height dropdown ([#1122](https://github.com/Harbour-Enterprises/SuperDoc/issues/1122)) ([3b8fd7a](https://github.com/Harbour-Enterprises/SuperDoc/commit/3b8fd7ad41535b6e598bb43797cb32cc2bf5ab20))
+
+### Features
+
+- add handler for w:tcpr (SD-76) ([#1090](https://github.com/Harbour-Enterprises/SuperDoc/issues/1090)) ([6b94b9d](https://github.com/Harbour-Enterprises/SuperDoc/commit/6b94b9dc7a91d6d8486dd52f06a36b3d10c1bc95))
+- add preset geometry pre-built lib ([#1124](https://github.com/Harbour-Enterprises/SuperDoc/issues/1124)) ([b0ca171](https://github.com/Harbour-Enterprises/SuperDoc/commit/b0ca17122de54465bc7a86ffbb92e2656554fd6a))
+
 # [0.23.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.22.4...v0.23.0) (2025-10-10)
 
 ### Bug Fixes

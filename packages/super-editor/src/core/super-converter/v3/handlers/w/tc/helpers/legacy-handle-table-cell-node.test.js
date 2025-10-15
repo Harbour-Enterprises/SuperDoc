@@ -12,6 +12,24 @@ vi.mock('@converter/v2/importer/tableImporter', () => ({
 
 import { handleTableCellNode } from './legacy-handle-table-cell-node.js';
 
+const createEditorStub = (typeConfig = {}) => {
+  const nodes = {};
+
+  Object.entries(typeConfig).forEach(([type, config]) => {
+    const { isInline = undefined, group = 'inline' } = config || {};
+    nodes[type] = {
+      isInline,
+      spec: { group },
+    };
+  });
+
+  return {
+    schema: {
+      nodes,
+    },
+  };
+};
+
 describe('legacy-handle-table-cell-node', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -83,6 +101,7 @@ describe('legacy-handle-table-cell-node', () => {
       docx: {},
       nodeListHandler: { handler: vi.fn(() => 'CONTENT') },
       path: [],
+      editor: createEditorStub(),
     };
 
     const out = handleTableCellNode({
@@ -120,5 +139,232 @@ describe('legacy-handle-table-cell-node', () => {
 
     // rowspan derived from vertical merge (restart + 2 continuations)
     expect(out.attrs.rowspan).toBe(3);
+  });
+
+  it('moves leading bookmark markers into the first block within the cell', () => {
+    const bookmarkStart = { type: 'bookmarkStart', attrs: { id: '0', name: 'title' } };
+    const bookmarkEnd = { type: 'bookmarkEnd', attrs: { id: '0' } };
+    const paragraph = { type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] };
+
+    const cellNode = { name: 'w:tc', elements: [] };
+    const row = { name: 'w:tr', elements: [cellNode] };
+    const table = { name: 'w:tbl', elements: [row] };
+
+    const params = {
+      docx: {},
+      nodeListHandler: { handler: vi.fn(() => [bookmarkStart, bookmarkEnd, paragraph]) },
+      path: [],
+      editor: createEditorStub({
+        bookmarkStart: { isInline: true },
+        bookmarkEnd: { isInline: true },
+        text: { isInline: true },
+      }),
+    };
+
+    const out = handleTableCellNode({
+      params,
+      node: cellNode,
+      table,
+      row,
+      rowBorders: {},
+      styleTag: null,
+      columnIndex: 0,
+      columnWidth: null,
+      allColumnWidths: [],
+    });
+
+    expect(out.type).toBe('tableCell');
+    expect(Array.isArray(out.content)).toBe(true);
+    expect(out.content).toHaveLength(1);
+    const firstBlock = out.content[0];
+    expect(firstBlock.type).toBe('paragraph');
+    expect(firstBlock.content?.[0]).toEqual(bookmarkStart);
+    expect(firstBlock.content?.[1]).toEqual(bookmarkEnd);
+    expect(firstBlock.content?.[2]).toEqual(paragraph.content[0]);
+  });
+
+  it('appends trailing inline nodes to the last block when no subsequent block exists', () => {
+    const bookmarkEnd = { type: 'bookmarkEnd', attrs: { id: '9' } };
+    const paragraph = { type: 'paragraph', content: [{ type: 'text', text: 'Row' }] };
+
+    const cellNode = { name: 'w:tc', elements: [] };
+    const row = { name: 'w:tr', elements: [cellNode] };
+    const table = { name: 'w:tbl', elements: [row] };
+
+    const params = {
+      docx: {},
+      nodeListHandler: { handler: vi.fn(() => [paragraph, bookmarkEnd]) },
+      path: [],
+      editor: createEditorStub({
+        bookmarkStart: { isInline: true },
+        bookmarkEnd: { isInline: true },
+        text: { isInline: true },
+      }),
+    };
+
+    const out = handleTableCellNode({
+      params,
+      node: cellNode,
+      table,
+      row,
+      rowBorders: {},
+      styleTag: null,
+      columnIndex: 0,
+      columnWidth: null,
+      allColumnWidths: [],
+    });
+
+    expect(out.content).toHaveLength(1);
+    const firstBlock = out.content[0];
+    expect(firstBlock.content?.[firstBlock.content.length - 1]).toEqual(bookmarkEnd);
+  });
+
+  it('preserves bookmark ordering when the cell ends with bookmark markers', () => {
+    const paragraph = { type: 'paragraph', content: [{ type: 'text', text: 'Cell text' }] };
+    const bookmarkStart = { type: 'bookmarkStart', attrs: { id: '12', name: 'cellBookmark' } };
+    const bookmarkEnd = { type: 'bookmarkEnd', attrs: { id: '12' } };
+
+    const cellNode = { name: 'w:tc', elements: [] };
+    const row = { name: 'w:tr', elements: [cellNode] };
+    const table = { name: 'w:tbl', elements: [row] };
+
+    const params = {
+      docx: {},
+      nodeListHandler: { handler: vi.fn(() => [paragraph, bookmarkStart, bookmarkEnd]) },
+      path: [],
+      editor: createEditorStub({
+        bookmarkStart: { isInline: true },
+        bookmarkEnd: { isInline: true },
+        text: { isInline: true },
+      }),
+    };
+
+    const out = handleTableCellNode({
+      params,
+      node: cellNode,
+      table,
+      row,
+      rowBorders: {},
+      styleTag: null,
+      columnIndex: 0,
+      columnWidth: null,
+      allColumnWidths: [],
+    });
+
+    expect(out.content).toHaveLength(1);
+    const firstBlock = out.content[0];
+    expect(firstBlock.type).toBe('paragraph');
+    expect(firstBlock.content?.slice(-2)).toEqual([bookmarkStart, bookmarkEnd]);
+  });
+
+  it('wraps purely inline content in a fallback paragraph when no blocks exist', () => {
+    const bookmarkStart = { type: 'bookmarkStart', attrs: { id: '42' } };
+    const textNode = { type: 'text', text: 'inline text' };
+    const bookmarkEnd = { type: 'bookmarkEnd', attrs: { id: '42' } };
+
+    const cellNode = { name: 'w:tc', elements: [] };
+    const row = { name: 'w:tr', elements: [cellNode] };
+    const table = { name: 'w:tbl', elements: [row] };
+
+    const params = {
+      docx: {},
+      nodeListHandler: { handler: vi.fn(() => [bookmarkStart, textNode, bookmarkEnd]) },
+      path: [],
+      editor: createEditorStub({
+        bookmarkStart: { isInline: true },
+        bookmarkEnd: { isInline: true },
+        text: { isInline: true },
+      }),
+    };
+
+    const out = handleTableCellNode({
+      params,
+      node: cellNode,
+      table,
+      row,
+      rowBorders: {},
+      styleTag: null,
+      columnIndex: 0,
+      columnWidth: null,
+      allColumnWidths: [],
+    });
+
+    expect(out.content).toHaveLength(1);
+    const fallbackParagraph = out.content[0];
+    expect(fallbackParagraph.type).toBe('paragraph');
+    expect(fallbackParagraph.content).toEqual([bookmarkStart, textNode, bookmarkEnd]);
+  });
+
+  it('merges inline nodes detected via schema groups into the previous block', () => {
+    const paragraph = { type: 'paragraph', content: [{ type: 'text', text: 'Intro' }] };
+    const mention = { type: 'mention', attrs: { id: 'x' } };
+    const nextParagraph = { type: 'paragraph', content: [{ type: 'text', text: 'Next' }] };
+
+    const cellNode = { name: 'w:tc', elements: [] };
+    const row = { name: 'w:tr', elements: [cellNode] };
+    const table = { name: 'w:tbl', elements: [row] };
+
+    const params = {
+      docx: {},
+      nodeListHandler: { handler: vi.fn(() => [paragraph, mention, nextParagraph]) },
+      path: [],
+      editor: createEditorStub({
+        text: { isInline: true },
+        mention: { group: 'inline custom-inline' },
+      }),
+    };
+
+    const out = handleTableCellNode({
+      params,
+      node: cellNode,
+      table,
+      row,
+      rowBorders: {},
+      styleTag: null,
+      columnIndex: 0,
+      columnWidth: null,
+      allColumnWidths: [],
+    });
+
+    expect(out.content).toHaveLength(2);
+    const firstParagraph = out.content[0];
+    expect(firstParagraph.content?.slice(-1)[0]).toEqual(mention);
+    expect(out.content[1]).toEqual(nextParagraph);
+  });
+
+  it('treats nodes missing schema entries as blocks and prepends pending inline content', () => {
+    const bookmarkStart = { type: 'bookmarkStart', attrs: { id: '7' } };
+    const customBlock = { type: 'customBlock', content: [{ type: 'text', text: 'Block text' }] };
+
+    const cellNode = { name: 'w:tc', elements: [] };
+    const row = { name: 'w:tr', elements: [cellNode] };
+    const table = { name: 'w:tbl', elements: [row] };
+
+    const params = {
+      docx: {},
+      nodeListHandler: { handler: vi.fn(() => [bookmarkStart, customBlock]) },
+      path: [],
+      editor: createEditorStub({
+        bookmarkStart: { isInline: true },
+        text: { isInline: true },
+      }),
+    };
+
+    const out = handleTableCellNode({
+      params,
+      node: cellNode,
+      table,
+      row,
+      rowBorders: {},
+      styleTag: null,
+      columnIndex: 0,
+      columnWidth: null,
+      allColumnWidths: [],
+    });
+
+    expect(out.content).toHaveLength(1);
+    const blockNode = out.content[0];
+    expect(blockNode.type).toBe('customBlock');
+    expect(blockNode.content?.[0]).toEqual(bookmarkStart);
   });
 });

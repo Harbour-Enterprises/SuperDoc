@@ -77,6 +77,28 @@ describe('TrackChanges extension commands', () => {
     expect(nextState.doc.textContent).toBe('');
   });
 
+  it('blocks accepting tracked changes when permissionResolver denies access', () => {
+    const insertMark = schema.marks[TrackInsertMarkName].create({ id: 'ins-guard', authorEmail: 'author@example.com' });
+    const doc = createDoc('Pending', [insertMark]);
+    const state = createState(doc);
+
+    editor.options.user = { email: 'reviewer@example.com' };
+    editor.options.role = 'editor';
+    editor.options.permissionResolver = vi.fn(() => false);
+
+    const dispatch = vi.fn();
+    const result = commands.acceptTrackedChangesBetween(1, doc.content.size)({ state, dispatch, editor });
+
+    expect(result).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(editor.options.permissionResolver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: 'RESOLVE_OTHER',
+        trackedChange: expect.objectContaining({ id: 'ins-guard' }),
+      }),
+    );
+  });
+
   it('rejectTrackedChangesBetween deletes inserted content and keeps deletions', () => {
     const insertMark = schema.marks[TrackInsertMarkName].create({ id: 'ins-2' });
     const insertDoc = createDoc('New', [insertMark]);
@@ -114,6 +136,28 @@ describe('TrackChanges extension commands', () => {
     expect(restoredState).toBeDefined();
     expect(restoredState.doc.textContent).toBe('Legacy');
     expect(markPresent(restoredState.doc, TrackDeleteMarkName)).toBe(false);
+  });
+
+  it('blocks rejecting tracked changes when permissionResolver denies access', () => {
+    const deleteMark = schema.marks[TrackDeleteMarkName].create({ id: 'del-guard', authorEmail: 'author@example.com' });
+    const doc = createDoc('Legacy', [deleteMark]);
+    const state = createState(doc);
+
+    editor.options.user = { email: 'author@example.com' };
+    editor.options.role = 'editor';
+    editor.options.permissionResolver = vi.fn(({ permission }) => permission !== 'REJECT_OWN');
+
+    const dispatch = vi.fn();
+    const result = commands.rejectTrackedChangesBetween(1, doc.content.size)({ state, dispatch, editor });
+
+    expect(result).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(editor.options.permissionResolver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: 'REJECT_OWN',
+        trackedChange: expect.objectContaining({ id: 'del-guard' }),
+      }),
+    );
   });
 
   it('accept/reject operations handle format changes', () => {

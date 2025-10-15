@@ -6,6 +6,7 @@ import { createAttributeHandler } from '@converter/v3/handlers/utils.js';
 import { translateChildNodes } from '@core/super-converter/v2/exporter/helpers/index.js';
 import { translator as tcTranslator } from '../tc';
 import { translator as trPrTranslator } from '../trPr';
+import { advancePastRowSpans, fillPlaceholderColumns, isPlaceholderCell } from './tr-helpers.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:tr';
@@ -40,6 +41,10 @@ const encode = (params, encodedAttrs) => {
       nodes: [tPr],
     });
   }
+  const gridBeforeRaw = tableRowProperties?.['gridBefore'];
+  const safeGridBefore =
+    typeof gridBeforeRaw === 'number' && Number.isFinite(gridBeforeRaw) && gridBeforeRaw > 0 ? gridBeforeRaw : 0;
+
   encodedAttrs['tableRowProperties'] = Object.freeze(tableRowProperties);
 
   // Move some properties up a level for easier access
@@ -47,30 +52,69 @@ const encode = (params, encodedAttrs) => {
   encodedAttrs['cantSplit'] = tableRowProperties['cantSplit'];
 
   // Handling cells
-  const { columnWidths: gridColumnWidths } = params.extraParams;
+  const { columnWidths: gridColumnWidths, activeRowSpans = [] } = params.extraParams;
+  const totalColumns = Array.isArray(gridColumnWidths) ? gridColumnWidths.length : 0;
+  const pendingRowSpans = Array.isArray(activeRowSpans) ? activeRowSpans.slice() : [];
+  while (pendingRowSpans.length < totalColumns) pendingRowSpans.push(0);
   const cellNodes = row.elements.filter((el) => el.name === 'w:tc');
+  const content = [];
   let currentColumnIndex = 0;
-  const content =
-    cellNodes?.map((n) => {
-      let columnWidth = gridColumnWidths?.[currentColumnIndex] || null;
 
-      const result = tcTranslator.encode({
-        ...params,
-        extraParams: {
-          ...params.extraParams,
-          node: n,
-          columnIndex: currentColumnIndex,
-          columnWidth,
-        },
-      });
+  const fillUntil = (target, reason) => {
+    currentColumnIndex = fillPlaceholderColumns({
+      content,
+      pendingRowSpans,
+      currentIndex: currentColumnIndex,
+      targetIndex: target,
+      totalColumns,
+      gridColumnWidths,
+      reason,
+    });
+  };
 
-      const tcPr = n.elements?.find((el) => el.name === 'w:tcPr');
-      const colspanTag = tcPr?.elements?.find((el) => el.name === 'w:gridSpan');
-      const colspan = parseInt(colspanTag?.attributes['w:val'] || 1, 10);
-      currentColumnIndex += colspan;
+  const skipOccupiedColumns = () => {
+    currentColumnIndex = advancePastRowSpans(pendingRowSpans, currentColumnIndex, totalColumns);
+  };
 
-      return result;
-    }) || [];
+  fillUntil(safeGridBefore, 'gridBefore');
+  skipOccupiedColumns();
+
+  cellNodes?.forEach((node) => {
+    skipOccupiedColumns();
+
+    const startColumn = currentColumnIndex;
+    const columnWidth = gridColumnWidths?.[startColumn] || null;
+
+    const result = tcTranslator.encode({
+      ...params,
+      extraParams: {
+        ...params.extraParams,
+        node,
+        columnIndex: startColumn,
+        columnWidth,
+      },
+    });
+
+    if (result) {
+      content.push(result);
+      const colspan = Math.max(1, result.attrs?.colspan || 1);
+      const rowspan = Math.max(1, result.attrs?.rowspan || 1);
+
+      if (rowspan > 1) {
+        for (let offset = 0; offset < colspan; offset += 1) {
+          const target = startColumn + offset;
+          if (target < pendingRowSpans.length) {
+            pendingRowSpans[target] = Math.max(pendingRowSpans[target], rowspan - 1);
+          }
+        }
+      }
+
+      currentColumnIndex = startColumn + colspan;
+    }
+  });
+
+  skipOccupiedColumns();
+  fillUntil(totalColumns, 'gridAfter');
 
   const newNode = {
     type: 'tableRow',
@@ -88,9 +132,46 @@ const encode = (params, encodedAttrs) => {
  */
 const decode = (params, decodedAttrs) => {
   const { node } = params;
-  const elements = translateChildNodes(params);
+
+  const cells = node.content || [];
+  let leadingPlaceholders = 0;
+  while (leadingPlaceholders < cells.length && isPlaceholderCell(cells[leadingPlaceholders])) {
+    leadingPlaceholders += 1;
+  }
+
+  let trailingPlaceholders = 0;
+  while (
+    trailingPlaceholders < cells.length - leadingPlaceholders &&
+    isPlaceholderCell(cells[cells.length - 1 - trailingPlaceholders])
+  ) {
+    trailingPlaceholders += 1;
+  }
+
+  const trimmedSlice = cells.slice(leadingPlaceholders, cells.length - trailingPlaceholders);
+  const sanitizedCells = trimmedSlice.map((cell) => {
+    if (cell?.attrs && '__placeholder' in cell.attrs) {
+      const { __placeholder, ...rest } = cell.attrs;
+      return { ...cell, attrs: rest };
+    }
+    return cell;
+  });
+  const trimmedContent = sanitizedCells.filter((_, index) => !isPlaceholderCell(trimmedSlice[index]));
+
+  const translateParams = {
+    ...params,
+    node: { ...node, content: trimmedContent },
+  };
+
+  const elements = translateChildNodes(translateParams);
+
   if (node.attrs?.tableRowProperties) {
     const tableRowProperties = { ...node.attrs.tableRowProperties };
+    if (leadingPlaceholders > 0) {
+      tableRowProperties.gridBefore = leadingPlaceholders;
+    }
+    if (trailingPlaceholders > 0) {
+      tableRowProperties.gridAfter = trailingPlaceholders;
+    }
     // Update rowHeight and cantSplit in tableRowProperties if they exist
     if (node.attrs.rowHeight != null) {
       const rowHeightPixels = twipsToPixels(node.attrs.tableRowProperties['rowHeight']?.value);

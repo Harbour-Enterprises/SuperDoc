@@ -4,6 +4,7 @@ import TableActions from '../toolbar/TableActions.vue';
 import LinkInput from '../toolbar/LinkInput.vue';
 import { handleClipboardPaste } from '../../core/InputRule.js';
 import { TEXTS, ICONS, TRIGGERS } from './constants.js';
+import { isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
 
 /**
  * Check if a module is enabled based on editor options
@@ -43,6 +44,15 @@ const shouldShowItem = (item, context) => {
       return false;
     }
   }
+};
+
+const canPerformTrackedChange = (context, action) => {
+  if (!context?.editor) return true;
+  return isTrackedChangeActionAllowed({
+    editor: context.editor,
+    action,
+    trackedChanges: context.trackedChanges ?? [],
+  });
 };
 
 /**
@@ -114,7 +124,7 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
           },
           showWhen: (context) => {
             const { trigger, isTrackedChange } = context;
-            return trigger === TRIGGERS.click && isTrackedChange;
+            return trigger === TRIGGERS.click && isTrackedChange && canPerformTrackedChange(context, 'accept');
           },
         },
         {
@@ -131,7 +141,7 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
           },
           showWhen: (context) => {
             const { trigger, isTrackedChange } = context;
-            return trigger === TRIGGERS.click && isTrackedChange;
+            return trigger === TRIGGERS.click && isTrackedChange && canPerformTrackedChange(context, 'reject');
           },
         },
       ],

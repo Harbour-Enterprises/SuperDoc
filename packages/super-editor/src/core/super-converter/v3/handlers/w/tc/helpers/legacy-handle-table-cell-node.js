@@ -130,15 +130,121 @@ export function handleTableCellNode({
 
   return {
     type: 'tableCell',
-    content: nodeListHandler.handler({
-      ...params,
-      nodes: node.elements,
-      path: [...(params.path || []), node],
-    }),
+    content: normalizeTableCellContent(
+      nodeListHandler.handler({
+        ...params,
+        nodes: node.elements,
+        path: [...(params.path || []), node],
+      }),
+      params.editor,
+    ),
     attrs: attributes,
   };
 }
 
+function normalizeTableCellContent(content, editor) {
+  if (!Array.isArray(content) || content.length === 0) return content;
+
+  const normalized = [];
+  const pendingForNextBlock = [];
+  const schema = editor?.schema;
+
+  const cloneBlock = (node) => {
+    if (!node) return node;
+    const cloned = { ...node };
+    if (Array.isArray(node.content)) {
+      cloned.content = [...node.content];
+    } else if (!('content' in node)) {
+      // Leave undefined; will be set only if needed
+    }
+    return cloned;
+  };
+
+  const ensureArray = (node) => {
+    if (!Array.isArray(node.content)) {
+      node.content = [];
+    }
+    return node.content;
+  };
+
+  const isInlineNode = (node) => {
+    if (!node || typeof node.type !== 'string') return false;
+    if (node.type === 'text') return true;
+    if (node.type === 'bookmarkStart' || node.type === 'bookmarkEnd') return true;
+
+    const nodeType = schema?.nodes?.[node.type];
+    if (nodeType) {
+      if (typeof nodeType.isInline === 'boolean') return nodeType.isInline;
+      if (nodeType.spec?.group && typeof nodeType.spec.group === 'string') {
+        return nodeType.spec.group.split(' ').includes('inline');
+      }
+    }
+
+    return false;
+  };
+
+  for (const node of content) {
+    if (!node || typeof node.type !== 'string') {
+      normalized.push(node);
+      continue;
+    }
+
+    if (!isInlineNode(node)) {
+      const blockNode = cloneBlock(node);
+      if (pendingForNextBlock.length) {
+        const blockContent = ensureArray(blockNode);
+        const leadingInline = pendingForNextBlock.splice(0);
+        blockNode.content = [...leadingInline, ...blockContent];
+      } else if (Array.isArray(blockNode.content)) {
+        blockNode.content = [...blockNode.content];
+      }
+
+      normalized.push(blockNode);
+      continue;
+    }
+
+    const targetIsNextBlock = node.type === 'bookmarkStart' || normalized.length === 0;
+    if (targetIsNextBlock) {
+      pendingForNextBlock.push(node);
+    } else {
+      const lastIndex = normalized.length - 1;
+      const lastNode = normalized[lastIndex];
+      if (!lastNode || typeof lastNode.type !== 'string' || isInlineNode(lastNode)) {
+        pendingForNextBlock.push(node);
+        continue;
+      }
+
+      const blockContent = ensureArray(lastNode);
+      if (pendingForNextBlock.length) {
+        blockContent.push(...pendingForNextBlock.splice(0));
+      }
+      blockContent.push(node);
+    }
+  }
+
+  if (pendingForNextBlock.length) {
+    if (normalized.length) {
+      const lastIndex = normalized.length - 1;
+      const lastNode = normalized[lastIndex];
+      if (lastNode && typeof lastNode.type === 'string' && !isInlineNode(lastNode)) {
+        const blockContent = ensureArray(lastNode);
+        blockContent.push(...pendingForNextBlock);
+        pendingForNextBlock.length = 0;
+      }
+    }
+
+    if (pendingForNextBlock.length) {
+      normalized.push({
+        type: 'paragraph',
+        attrs: {},
+        content: [...pendingForNextBlock],
+      });
+      pendingForNextBlock.length = 0;
+    }
+  }
+
+  return normalized;
+}
 const processInlineCellBorders = (borders, rowBorders) => {
   if (!borders) return null;
 

@@ -14,18 +14,27 @@ vi.mock('@extensions/linked-styles/linked-styles.js', () => ({
   getQuickFormatList: vi.fn(),
 }));
 
+vi.mock('@extensions/track-changes/permission-helpers.js', () => ({
+  collectTrackedChanges: vi.fn(() => []),
+  isTrackedChangeActionAllowed: vi.fn(() => true),
+}));
+
 describe('updateToolbarState', () => {
   let toolbar;
   let mockEditor;
   let mockGetActiveFormatting;
   let mockIsInTable;
   let mockGetQuickFormatList;
+  let mockCollectTrackedChanges;
+  let mockIsTrackedChangeActionAllowed;
 
   beforeEach(async () => {
     vi.clearAllMocks();
 
     mockEditor = {
-      state: {},
+      state: {
+        selection: { from: 1, to: 1 },
+      },
       commands: {
         setFieldAnnotationsFontSize: vi.fn(),
         setFieldAnnotationsFontFamily: vi.fn(),
@@ -54,10 +63,18 @@ describe('updateToolbarState', () => {
     const { getActiveFormatting } = await import('@core/helpers/getActiveFormatting.js');
     const { isInTable } = await import('@helpers/isInTable.js');
     const { getQuickFormatList } = await import('@extensions/linked-styles/linked-styles.js');
+    const { collectTrackedChanges, isTrackedChangeActionAllowed } = await import(
+      '@extensions/track-changes/permission-helpers.js'
+    );
 
     getActiveFormatting.mockImplementation(mockGetActiveFormatting);
     isInTable.mockImplementation(mockIsInTable);
     getQuickFormatList.mockImplementation(mockGetQuickFormatList);
+    mockCollectTrackedChanges = collectTrackedChanges;
+    mockIsTrackedChangeActionAllowed = isTrackedChangeActionAllowed;
+
+    mockCollectTrackedChanges.mockReturnValue([]);
+    mockIsTrackedChangeActionAllowed.mockReturnValue(true);
 
     toolbar = new SuperToolbar({
       selector: '#test-toolbar',
@@ -143,6 +160,22 @@ describe('updateToolbarState', () => {
         nestedOptions: { value: [] },
         allowWithoutEditor: { value: false },
       },
+      {
+        name: { value: 'acceptTrackedChangeBySelection' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      },
+      {
+        name: { value: 'rejectTrackedChangeOnSelection' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      },
     ];
 
     toolbar.activeEditor = mockEditor;
@@ -203,6 +236,50 @@ describe('updateToolbarState', () => {
     const boldItem = toolbar.toolbarItems.find((item) => item.name.value === 'bold');
     expect(boldItem.activate).not.toHaveBeenCalled();
     expect(boldItem.deactivate).toHaveBeenCalled();
+  });
+
+  it('disables tracked change buttons when permission resolver denies access', () => {
+    mockGetActiveFormatting.mockReturnValue([]);
+    mockCollectTrackedChanges.mockReturnValue([{ id: 'change-1', attrs: { authorEmail: 'author@example.com' } }]);
+    mockIsTrackedChangeActionAllowed.mockImplementation(({ action }) => action === 'reject');
+
+    toolbar.updateToolbarState();
+
+    expect(mockCollectTrackedChanges).toHaveBeenCalled();
+
+    const acceptItem = toolbar.toolbarItems.find((item) => item.name.value === 'acceptTrackedChangeBySelection');
+    const rejectItem = toolbar.toolbarItems.find((item) => item.name.value === 'rejectTrackedChangeOnSelection');
+
+    expect(acceptItem.setDisabled).toHaveBeenCalledWith(true);
+    expect(rejectItem.setDisabled).toHaveBeenCalledWith(false);
+  });
+
+  it('disables tracked change buttons when there are no tracked changes in selection', () => {
+    mockGetActiveFormatting.mockReturnValue([]);
+    mockCollectTrackedChanges.mockReturnValue([]);
+
+    toolbar.updateToolbarState();
+
+    const acceptItem = toolbar.toolbarItems.find((item) => item.name.value === 'acceptTrackedChangeBySelection');
+    const rejectItem = toolbar.toolbarItems.find((item) => item.name.value === 'rejectTrackedChangeOnSelection');
+
+    expect(acceptItem.setDisabled).toHaveBeenCalledWith(true);
+    expect(rejectItem.setDisabled).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps tracked change buttons enabled for collapsed selection within change', () => {
+    mockEditor.state.selection.from = 5;
+    mockEditor.state.selection.to = 5;
+    mockCollectTrackedChanges.mockReturnValue([{ id: 'change-1', attrs: { authorEmail: 'author@example.com' } }]);
+    mockGetActiveFormatting.mockReturnValue([]);
+
+    toolbar.updateToolbarState();
+
+    const acceptItem = toolbar.toolbarItems.find((item) => item.name.value === 'acceptTrackedChangeBySelection');
+    const rejectItem = toolbar.toolbarItems.find((item) => item.name.value === 'rejectTrackedChangeOnSelection');
+
+    expect(acceptItem.setDisabled).toHaveBeenCalledWith(false);
+    expect(rejectItem.setDisabled).toHaveBeenCalledWith(false);
   });
 
   it('should deactivate toolbar items when no active editor', () => {

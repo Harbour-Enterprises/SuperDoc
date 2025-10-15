@@ -13,6 +13,7 @@ import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
 import { createDownload, cleanName } from './helpers/export.js';
 import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative } from './collaboration/helpers.js';
 import { normalizeDocumentEntry } from './helpers/file.js';
+import { isAllowed } from './collaboration/permissions.js';
 
 /** @typedef {import('./types').User} User */
 /** @typedef {import('./types').TelemetryConfig} TelemetryConfig */
@@ -62,6 +63,7 @@ export class SuperDoc extends EventEmitter {
     users: [],
 
     modules: {}, // Optional: Modules to load. Use modules.ai.{your_key} to pass in your key
+    permissionResolver: null, // Optional: Override for permission checks
 
     title: 'SuperDoc',
     conversations: [],
@@ -500,6 +502,46 @@ export class SuperDoc extends EventEmitter {
     });
   }
 
+  /**
+   * Determine whether the current configuration allows a given permission.
+   * Used by downstream consumers (toolbar, context menu, commands) to keep
+   * tracked-change affordances consistent with customer overrides.
+   *
+   * @param {Object} params
+   * @param {string} params.permission Permission key to evaluate
+   * @param {string} [params.role=this.config.role] Role to evaluate against
+   * @param {boolean} [params.isInternal=this.config.isInternal] Internal/external flag
+   * @param {Object|null} [params.comment] Comment object (if already resolved)
+   * @param {Object|null} [params.trackedChange] Tracked change metadata (id, attrs, etc.)
+   * @returns {boolean}
+   */
+  canPerformPermission({
+    permission,
+    role = this.config.role,
+    isInternal = this.config.isInternal,
+    comment = null,
+    trackedChange = null,
+  } = {}) {
+    if (!permission) return false;
+
+    let resolvedComment = comment ?? trackedChange?.comment ?? null;
+
+    const commentId = trackedChange?.commentId || trackedChange?.id;
+    if (!resolvedComment && commentId && this.commentsStore?.getComment) {
+      const storeComment = this.commentsStore.getComment(commentId);
+      resolvedComment = storeComment?.getValues ? storeComment.getValues() : storeComment;
+    }
+
+    const context = {
+      superdoc: this,
+      currentUser: this.config.user,
+      comment: resolvedComment ?? null,
+      trackedChange: trackedChange ?? null,
+    };
+
+    return isAllowed(permission, role, isInternal, context);
+  }
+
   #addToolbar() {
     const moduleConfig = this.config.modules?.toolbar || {};
     this.toolbarElement = this.config.modules?.toolbar?.selector || this.config.toolbar;
@@ -762,14 +804,30 @@ export class SuperDoc extends EventEmitter {
       }
     }
 
-    const docxPromises = [];
-    this.superdocStore.documents.forEach((doc) => {
-      const editor = doc.getEditor();
-      if (editor) {
-        docxPromises.push(editor.exportDocx({ isFinalDoc, comments, commentsType, fieldsHighlightColor }));
+    const docxPromises = this.superdocStore.documents.map(async (doc) => {
+      if (!doc || doc.type !== DOCX) return null;
+
+      const editor = typeof doc.getEditor === 'function' ? doc.getEditor() : null;
+      const fallbackDocx = () => {
+        if (!doc.data) return null;
+        if (doc.data.type && doc.data.type !== DOCX) return null;
+        return doc.data;
+      };
+
+      if (!editor) return fallbackDocx();
+
+      try {
+        const exported = await editor.exportDocx({ isFinalDoc, comments, commentsType, fieldsHighlightColor });
+        if (exported) return exported;
+      } catch (error) {
+        this.emit('exception', { error, document: doc });
       }
+
+      return fallbackDocx();
     });
-    return await Promise.all(docxPromises);
+
+    const docxFiles = await Promise.all(docxPromises);
+    return docxFiles.filter(Boolean);
   }
 
   /**

@@ -10,7 +10,7 @@ import {
 } from './helpers.js';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
-import { TrackDeleteMarkName, TrackFormatMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
+import { TrackDeleteMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';

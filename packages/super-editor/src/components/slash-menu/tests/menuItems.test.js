@@ -47,9 +47,14 @@ vi.mock('../../core/InputRule.js', () => ({
   handleClipboardPaste: vi.fn(() => true),
 }));
 
+vi.mock('@extensions/track-changes/permission-helpers.js', () => ({
+  isTrackedChangeActionAllowed: vi.fn(() => true),
+}));
+
 describe('menuItems.js', () => {
   let mockEditor;
   let mockContext;
+  let mockIsTrackedChangeActionAllowed;
 
   beforeEach(async () => {
     vi.clearAllMocks();
@@ -71,7 +76,10 @@ describe('menuItems.js', () => {
     });
 
     const { selectionHasNodeOrMark } = await import('../../cursor-helpers.js');
+    const { isTrackedChangeActionAllowed } = await import('@extensions/track-changes/permission-helpers.js');
     selectionHasNodeOrMark.mockReturnValue(false);
+    mockIsTrackedChangeActionAllowed = isTrackedChangeActionAllowed;
+    mockIsTrackedChangeActionAllowed.mockReturnValue(true);
   });
 
   describe('getItems - default behavior', () => {
@@ -83,6 +91,23 @@ describe('menuItems.js', () => {
       const sectionIds = sections.map((s) => s.id);
       expect(sectionIds.length).toBeGreaterThan(0);
       expect(sectionIds).toContain('general');
+    });
+
+    it('should hide tracked-change actions when permission resolver denies access', () => {
+      mockContext = createMockContext({
+        editor: mockEditor,
+        trigger: TRIGGERS.click,
+        isTrackedChange: true,
+        trackedChanges: [{ id: 'track-1', attrs: { authorEmail: 'author@example.com' } }],
+      });
+      mockIsTrackedChangeActionAllowed.mockReturnValue(false);
+
+      const sections = getItems(mockContext);
+      const trackSection = sections.find((section) => section.id === 'track-changes');
+      const itemIds = trackSection ? trackSection.items.map((item) => item.id) : [];
+
+      expect(itemIds).not.toContain('track-changes-accept');
+      expect(itemIds).not.toContain('track-changes-reject');
     });
 
     it('should filter AI items when AI module is not enabled', () => {
