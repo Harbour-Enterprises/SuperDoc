@@ -283,7 +283,7 @@ const editorOptions = (doc) => {
   // The font check might request extra permissions, and we don't want to run it unless the developer has requested it
   // So, if the callback is not defined, we won't run the font check
   const onFontsResolvedFn =
-    proxy.$superdoc.listeners('fonts-resolved')?.length > 0 ? proxy.$superdoc.listeners('fonts-resolved')[0] : null;
+    proxy.$superdoc.listeners?.('fonts-resolved')?.length > 0 ? proxy.$superdoc.listeners('fonts-resolved')[0] : null;
 
   const options = {
     isDebug: proxy.$superdoc.config.isDebug || false,

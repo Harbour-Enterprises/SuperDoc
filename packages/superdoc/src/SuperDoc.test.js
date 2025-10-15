@@ -261,6 +261,7 @@ const createSuperdocStub = () => {
     setActiveEditor: vi.fn(),
     lockSuperdoc: vi.fn(),
     emit: vi.fn(),
+    listeners: vi.fn(),
   };
 };
 
