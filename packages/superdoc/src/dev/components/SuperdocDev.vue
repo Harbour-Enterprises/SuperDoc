@@ -38,6 +38,22 @@ const user = {
   email: testUserEmail,
 };
 
+const commentPermissionResolver = ({ permission, comment, defaultDecision, currentUser }) => {
+  if (!comment) return defaultDecision;
+
+  // Example: hide tracked-change buttons for matching author email domain
+  if (
+    comment.trackedChange &&
+    comment.creatorEmail?.endsWith('@example.com') &&
+    ['RESOLVE_OWN', 'REJECT_OWN'].includes(permission)
+  ) {
+    return false;
+  }
+
+  // Allow default behaviour for everything else
+  return defaultDecision;
+};
+
 const handleNewFile = async (file) => {
   // Generate a file url
   const url = URL.createObjectURL(file);
@@ -140,6 +156,7 @@ const init = async () => {
         // selector: 'comments-panel',
         // useInternalExternalComments: true,
         // suppressInternalExternal: true,
+        permissionResolver: commentPermissionResolver,
       },
       toolbar: {
         selector: 'toolbar',

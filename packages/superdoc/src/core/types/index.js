@@ -28,6 +28,15 @@
 /**
  * @typedef {Object} Modules
  * @property {Object} [comments] Comments module configuration
+ * @property {(params: {
+ *   permission: string,
+ *   role?: string,
+ *   isInternal?: boolean,
+ *   comment?: Object | null,
+ *   trackedChange?: Object | null,
+ *   currentUser?: User | null,
+ *   superdoc?: SuperDoc | null,
+ * }) => boolean | undefined} [comments.permissionResolver] Custom permission resolver for comment actions
  * @property {Object} [ai] AI module configuration
  * @property {string} [ai.apiKey] Harbour API key for AI features
  * @property {string} [ai.endpoint] Custom endpoint URL for AI services
@@ -77,6 +86,15 @@
  * @property {Array<User>} [users] All users of this SuperDoc (can be used for "@"-mentions)
  * @property {Array<string>} [colors] Colors to use for user awareness
  * @property {Modules} [modules] Modules to load
+ * @property {(params: {
+ *   permission: string,
+ *   role?: string,
+ *   isInternal?: boolean,
+ *   comment?: Object | null,
+ *   trackedChange?: Object | null,
+ *   currentUser?: User | null,
+ *   superdoc?: SuperDoc | null,
+ * }) => boolean | undefined} [permissionResolver] Top-level override for permission checks
  * @property {boolean} [pagination] Whether to show pagination in SuperEditors
  * @property {string} [toolbar] Optional DOM element to render the toolbar in
  * @property {Array<string>} [toolbarGroups] Toolbar groups to show

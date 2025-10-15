@@ -20,6 +20,7 @@ import { isInTable } from '@helpers/isInTable.js';
 import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
 import { yUndoPluginKey } from 'y-prosemirror';
 import { isNegatedMark } from './format-negation.js';
+import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
 
 /**
  * @typedef {function(CommandItem): void} CommandCallback
@@ -738,11 +739,41 @@ export class SuperToolbar extends EventEmitter {
       return;
     }
 
+    const { state } = this.activeEditor;
+    const selection = state.selection;
+    const selectionTrackedChanges = this.#enrichTrackedChanges(
+      collectTrackedChanges({ state, from: selection.from, to: selection.to }),
+    );
+    const hasTrackedChanges = selectionTrackedChanges.length > 0;
+    const hasValidSelection = hasTrackedChanges;
+    const canAcceptTrackedChanges =
+      hasValidSelection &&
+      isTrackedChangeActionAllowed({
+        editor: this.activeEditor,
+        action: 'accept',
+        trackedChanges: selectionTrackedChanges,
+      });
+    const canRejectTrackedChanges =
+      hasValidSelection &&
+      isTrackedChangeActionAllowed({
+        editor: this.activeEditor,
+        action: 'reject',
+        trackedChanges: selectionTrackedChanges,
+      });
+
     const marks = getActiveFormatting(this.activeEditor);
     const inTable = isInTable(this.activeEditor.state);
 
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
+
+      if (item.name.value === 'acceptTrackedChangeBySelection') {
+        item.setDisabled(!canAcceptTrackedChanges);
+      }
+
+      if (item.name.value === 'rejectTrackedChangeOnSelection') {
+        item.setDisabled(!canRejectTrackedChanges);
+      }
 
       // Linked Styles dropdown behaves a bit different from other buttons.
       // We need to disable it manually if there are no linked styles to show
@@ -858,6 +889,21 @@ export class SuperToolbar extends EventEmitter {
       this.undoDepth = undoDepth(this.activeEditor.state);
       this.redoDepth = redoDepth(this.activeEditor.state);
     }
+  }
+
+  #enrichTrackedChanges(trackedChanges = []) {
+    if (!trackedChanges?.length) return trackedChanges;
+    const store = this.superdoc?.commentsStore;
+    if (!store?.getComment) return trackedChanges;
+
+    return trackedChanges.map((change) => {
+      const commentId = change.id;
+      if (!commentId) return change;
+      const storeComment = store.getComment(commentId);
+      if (!storeComment) return change;
+      const comment = typeof storeComment.getValues === 'function' ? storeComment.getValues() : storeComment;
+      return { ...change, comment };
+    });
   }
 
   /**

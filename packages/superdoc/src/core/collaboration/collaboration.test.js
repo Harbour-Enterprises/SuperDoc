@@ -8,7 +8,9 @@ import {
 } from './helpers.js';
 import * as commentsModule from './collaboration-comments.js';
 const { addYComment, updateYComment, deleteYComment, getCommentIndex } = commentsModule;
+import { SuperDoc } from '../SuperDoc.js';
 import { PERMISSIONS, isAllowed } from './permissions.js';
+import * as permissionsModule from './permissions.js';
 
 var awarenessStatesToArrayMock;
 
@@ -413,5 +415,113 @@ describe('permissions', () => {
     expect(isAllowed(PERMISSIONS.RESOLVE_OWN, 'viewer', true)).toBe(false);
     expect(isAllowed(PERMISSIONS.REJECT_OWN, 'suggester', false)).toBe(true);
     expect(isAllowed(PERMISSIONS.REJECT_OTHER, 'suggester', false)).toBe(false);
+  });
+
+  it('delegates permission decisions to a hook when provided', () => {
+    const permissionResolver = vi.fn().mockImplementation(({ defaultDecision, comment, currentUser, superdoc }) => {
+      expect(defaultDecision).toBe(true);
+      expect(comment.commentId).toBe('comment-1');
+      expect(currentUser.email).toBe('editor@example.com');
+      expect(superdoc).toBeDefined();
+      return false;
+    });
+
+    const superdoc = {
+      config: {
+        user: { email: 'editor@example.com' },
+        modules: {
+          comments: {
+            permissionResolver,
+          },
+        },
+      },
+    };
+
+    const allowed = isAllowed(PERMISSIONS.RESOLVE_OWN, 'editor', true, {
+      superdoc,
+      comment: { commentId: 'comment-1' },
+      trackedChange: { id: 'comment-1', attrs: { authorEmail: 'editor@example.com' } },
+    });
+
+    expect(allowed).toBe(false);
+    expect(permissionResolver).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permission: PERMISSIONS.RESOLVE_OWN,
+        role: 'editor',
+        isInternal: true,
+        defaultDecision: true,
+        trackedChange: expect.objectContaining({ id: 'comment-1' }),
+      }),
+    );
+  });
+
+  it('falls back to default decision when hook returns non-boolean', () => {
+    const superdoc = {
+      config: {
+        user: { email: 'viewer@example.com' },
+        modules: {
+          comments: {
+            permissionResolver: vi.fn(() => undefined),
+          },
+        },
+      },
+    };
+
+    const allowed = isAllowed(PERMISSIONS.RESOLVE_OWN, 'viewer', true, {
+      superdoc,
+      comment: { commentId: 'comment-2' },
+    });
+
+    expect(allowed).toBe(false);
+  });
+
+  it('canPerformPermission resolves tracked-change comments via store', () => {
+    const originalIsAllowed = permissionsModule.isAllowed;
+    const resolver = vi.fn(({ comment }) => {
+      expect(comment).toEqual({ commentId: 'change-1', text: 'hello' });
+      return true;
+    });
+
+    const superdoc = {
+      config: {
+        role: 'editor',
+        isInternal: true,
+        user: { email: 'editor@example.com' },
+        modules: {
+          comments: {
+            permissionResolver: resolver,
+          },
+        },
+      },
+      commentsStore: {
+        getComment: vi.fn(() => ({
+          getValues: () => ({ commentId: 'change-1', text: 'hello' }),
+        })),
+      },
+    };
+
+    const isAllowedSpy = vi
+      .spyOn(permissionsModule, 'isAllowed')
+      .mockImplementation((permission, role, isInternal, ctx) => {
+        expect(ctx.comment).toEqual({ commentId: 'change-1', text: 'hello' });
+        return originalIsAllowed(permission, role, isInternal, ctx);
+      });
+
+    const result = SuperDoc.prototype.canPerformPermission.call(superdoc, {
+      permission: PERMISSIONS.RESOLVE_OWN,
+      trackedChange: { id: 'change-1', attrs: { authorEmail: 'editor@example.com' } },
+    });
+
+    expect(result).toBe(true);
+    expect(superdoc.commentsStore.getComment).toHaveBeenCalledWith('change-1');
+    expect(resolver).toHaveBeenCalled();
+    expect(isAllowedSpy).toHaveBeenCalledWith(
+      PERMISSIONS.RESOLVE_OWN,
+      'editor',
+      true,
+      expect.objectContaining({ trackedChange: expect.objectContaining({ id: 'change-1' }) }),
+    );
+
+    isAllowedSpy.mockRestore();
   });
 });

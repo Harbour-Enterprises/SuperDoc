@@ -4,6 +4,7 @@ import { Mapping, ReplaceStep, AddMarkStep, RemoveMarkStep } from 'prosemirror-t
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from './constants.js';
 import { TrackChangesBasePlugin, TrackChangesBasePluginKey } from './plugins/index.js';
 import { getTrackChanges } from './trackChangesHelpers/getTrackChanges.js';
+import { collectTrackedChanges, isTrackedChangeActionAllowed } from './permission-helpers.js';
 
 export const TrackChanges = Extension.create({
   name: 'trackChanges',
@@ -12,7 +13,10 @@ export const TrackChanges = Extension.create({
     return {
       acceptTrackedChangesBetween:
         (from, to) =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch, editor }) => {
+          const trackedChanges = collectTrackedChanges({ state, from, to });
+          if (!isTrackedChangeActionAllowed({ editor, action: 'accept', trackedChanges })) return false;
+
           let { tr, doc } = state;
 
           // if (from === to) {
@@ -65,7 +69,10 @@ export const TrackChanges = Extension.create({
 
       rejectTrackedChangesBetween:
         (from, to) =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch, editor }) => {
+          const trackedChanges = collectTrackedChanges({ state, from, to });
+          if (!isTrackedChangeActionAllowed({ editor, action: 'reject', trackedChanges })) return false;
+
           const { tr, doc } = state;
 
           tr.setMeta('acceptReject', true);
