@@ -479,7 +479,6 @@ export const Image = Node.create({
       }
     }
 
-    //debugger
     if (centered) {
       style += 'margin-left: auto; margin-right: auto;';
     } else {

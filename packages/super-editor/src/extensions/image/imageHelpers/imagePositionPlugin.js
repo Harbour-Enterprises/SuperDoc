@@ -3,7 +3,7 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { PaginationPluginKey } from '../../pagination/pagination-helpers.js';
 
-export const ImagePositionPluginKey = new PluginKey('ImagePosition');
+const ImagePositionPluginKey = new PluginKey('ImagePosition');
 
 /**
  * Creates a ProseMirror plugin for managing anchored image positioning
