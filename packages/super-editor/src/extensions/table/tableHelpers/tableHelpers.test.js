@@ -128,6 +128,25 @@ describe('tableHelpers', () => {
     expect(secondCol[1].style).toBe('width: 200px');
   });
 
+  it('createColGroup uses table grid to add trailing columns', () => {
+    const cellType = schema.nodes.tableCell;
+    const rowType = schema.nodes.tableRow;
+    const tableType = schema.nodes.table;
+
+    const content = schema.nodes.paragraph.create(null);
+    const cell = cellType.create({ colspan: 2, colwidth: [120, 150] }, content);
+    const row = rowType.create(null, [cell]);
+    const table = tableType.create(
+      { grid: [{ col: 1440 }, { col: 2880 }, { col: 1440 }] }, // 1in, 2in, 1in in twips
+      [row],
+    );
+
+    const result = createColGroup(table, cellMinWidth, null, null);
+    expect(result.tableWidth).toBe('366px');
+    expect(result.colgroup.length - 2).toBe(3); // subtract ['colgroup', {}]
+    expect(result.colgroupValues).toEqual([120, 150, 96]);
+  });
+
   it('createTable builds tables with rows, optional header, and borders', () => {
     const table = createTable(schema, 2, 3, true);
     expect(table.type.name).toBe('table');

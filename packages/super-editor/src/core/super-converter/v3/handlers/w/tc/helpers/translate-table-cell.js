@@ -1,5 +1,12 @@
-import { pixelsToTwips, inchesToTwips, pixelsToEightPoints } from '@converter/helpers';
+import {
+  pixelsToTwips,
+  inchesToTwips,
+  pixelsToEightPoints,
+  twipsToPixels,
+  eighthPointsToPixels,
+} from '@converter/helpers';
 import { translateChildNodes } from '@converter/v2/exporter/helpers/index';
+import { translator as tcPrTranslator } from '../../tcPr';
 
 /**
  * Main translation function for a table cell.
@@ -27,117 +34,102 @@ export function translateTableCell(params) {
  * @returns {import('@converter/exporter').XmlReadyNode}
  */
 export function generateTableCellProperties(node) {
-  const elements = [];
+  const tableCellProperties = { ...(node.attrs?.tableCellProperties || {}) };
 
   const { attrs } = node;
-  const { colwidth = [], cellWidthType = 'dxa', background = {}, colspan, rowspan, widthUnit } = attrs;
+
+  // Width
+  const { colwidth = [], cellWidthType = 'dxa', widthUnit } = attrs;
   const colwidthSum = colwidth.reduce((acc, curr) => acc + curr, 0);
-
-  const cellWidthElement = {
-    name: 'w:tcW',
-    attributes: {
-      'w:w': widthUnit === 'px' ? pixelsToTwips(colwidthSum) : inchesToTwips(colwidthSum),
-      'w:type': cellWidthType,
-    },
-  };
-  elements.push(cellWidthElement);
-
-  if (colspan) {
-    const gridSpanElement = {
-      name: 'w:gridSpan',
-      attributes: { 'w:val': `${colspan}` },
+  const propertiesWidthPixels = twipsToPixels(tableCellProperties.cellWidth?.value);
+  if (propertiesWidthPixels !== colwidthSum) {
+    // If the value has changed, update it
+    tableCellProperties['cellWidth'] = {
+      value: widthUnit === 'px' ? pixelsToTwips(colwidthSum) : inchesToTwips(colwidthSum),
+      type: cellWidthType,
     };
-    elements.push(gridSpanElement);
   }
 
-  const { color } = background || {};
-  if (color) {
-    const cellBgElement = {
-      name: 'w:shd',
-      attributes: { 'w:fill': color },
-    };
-    elements.push(cellBgElement);
+  // Colspan
+  const { colspan } = attrs;
+  if (colspan > 1 && tableCellProperties.gridSpan !== colspan) {
+    tableCellProperties['gridSpan'] = colspan;
+  } else if (!colspan || tableCellProperties?.gridSpan === 1) {
+    delete tableCellProperties.gridSpan;
   }
 
+  // Background
+  const { background = {} } = attrs;
+  if (background?.color && tableCellProperties.shading?.fill !== background?.color) {
+    tableCellProperties['shading'] = { fill: background.color };
+  } else if (!background?.color && tableCellProperties?.shading?.fill) {
+    delete tableCellProperties.shading;
+  }
+
+  // Margins
   const { cellMargins } = attrs;
   if (cellMargins) {
-    const cellMarginsElement = {
-      name: 'w:tcMar',
-      elements: generateCellMargins(cellMargins),
-    };
-    elements.push(cellMarginsElement);
+    ['left', 'right', 'top', 'bottom'].forEach((side) => {
+      const key = `margin${side.charAt(0).toUpperCase() + side.slice(1)}`;
+      if (cellMargins[side] != null) {
+        if (!tableCellProperties.cellMargins) tableCellProperties['cellMargins'] = {};
+        let currentPropertyValuePixels = twipsToPixels(tableCellProperties.cellMargins?.[key]?.value);
+        if (currentPropertyValuePixels !== cellMargins[side]) {
+          tableCellProperties.cellMargins[key] = { value: pixelsToTwips(cellMargins[side]), type: 'dxa' };
+        }
+      } else if (tableCellProperties?.cellMargins?.[key]) {
+        delete tableCellProperties.cellMargins[key];
+      }
+    });
   }
 
   const { verticalAlign } = attrs;
-  if (verticalAlign) {
-    const vertAlignElement = {
-      name: 'w:vAlign',
-      attributes: { 'w:val': verticalAlign },
-    };
-    elements.push(vertAlignElement);
+  if (verticalAlign && verticalAlign !== tableCellProperties.vAlign) {
+    tableCellProperties['vAlign'] = verticalAlign;
+  } else if (!verticalAlign && tableCellProperties?.vAlign) {
+    delete tableCellProperties.vAlign;
   }
 
-  // const { vMerge } = attrs;
-  // if (vMerge) {}
-  if (rowspan && rowspan > 1) {
-    const vMergeElement = {
-      name: 'w:vMerge',
-      type: 'element',
-      attributes: { 'w:val': 'restart' },
-    };
-    elements.push(vMergeElement);
+  const { rowspan } = attrs;
+  if (rowspan && rowspan > 1 && tableCellProperties.vMerge !== 'restart') {
+    tableCellProperties['vMerge'] = 'restart';
   } else if (attrs.continueMerge) {
-    const vMergeElement = {
-      name: 'w:vMerge',
-      type: 'element',
-    };
-    elements.push(vMergeElement);
+    tableCellProperties['vMerge'] = 'continue';
+  } else if (tableCellProperties?.vMerge) {
+    delete tableCellProperties.vMerge;
   }
 
   const { borders = {} } = attrs;
   if (!!borders && Object.keys(borders).length) {
-    const cellBordersElement = {
-      name: 'w:tcBorders',
-      elements: Object.entries(borders).map(([key, value]) => {
-        if (!value.size || value.val === 'none') {
-          return {
-            name: `w:${key}`,
-            attributes: {
-              'w:val': 'nil',
-            },
+    ['top', 'bottom', 'left', 'right'].forEach((side) => {
+      if (borders[side]) {
+        let currentPropertyValue = tableCellProperties.borders?.[side];
+        let currentPropertySizePixels = eighthPointsToPixels(currentPropertyValue?.size);
+        let color = borders[side].color;
+        if (borders[side].color && color === '#000000') {
+          color = 'auto';
+        }
+        if (
+          currentPropertySizePixels !== borders[side].size ||
+          currentPropertyValue?.color !== color ||
+          borders[side].val !== currentPropertyValue?.val
+        ) {
+          if (!tableCellProperties.borders) tableCellProperties['borders'] = {};
+          tableCellProperties.borders[side] = {
+            size: pixelsToEightPoints(borders[side].size || 0),
+            color: color,
+            space: borders[side].space || 0,
+            val: borders[side].val || 'single',
           };
         }
-        return {
-          name: `w:${key}`,
-          attributes: {
-            'w:val': 'single',
-            'w:color': value.color ? value.color.substring(1) : 'auto',
-            'w:sz': pixelsToEightPoints(value.size),
-            'w:space': value.space || 0,
-          },
-        };
-      }),
-    };
-
-    elements.push(cellBordersElement);
+      } else if (tableCellProperties.borders?.[side]) {
+        delete tableCellProperties.borders[side];
+      }
+    });
+  } else if (tableCellProperties?.borders) {
+    delete tableCellProperties.borders;
   }
 
-  return {
-    name: 'w:tcPr',
-    elements,
-  };
-}
-
-/**
- * @param {Object} cellMargins
- * @returns {Array}
- */
-export function generateCellMargins(cellMargins) {
-  const elements = [];
-  const { top, right, bottom, left } = cellMargins;
-  if (top != null) elements.push({ name: 'w:top', attributes: { 'w:w': pixelsToTwips(top) } });
-  if (right != null) elements.push({ name: 'w:right', attributes: { 'w:w': pixelsToTwips(right) } });
-  if (bottom != null) elements.push({ name: 'w:bottom', attributes: { 'w:w': pixelsToTwips(bottom) } });
-  if (left != null) elements.push({ name: 'w:left', attributes: { 'w:w': pixelsToTwips(left) } });
-  return elements;
+  const result = tcPrTranslator.decode({ node: { ...node, attrs: { ...node.attrs, tableCellProperties } } });
+  return result;
 }

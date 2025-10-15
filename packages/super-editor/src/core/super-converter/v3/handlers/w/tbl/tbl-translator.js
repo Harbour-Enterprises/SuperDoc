@@ -1,6 +1,6 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import { twipsToPixels, eigthPointsToPixels, halfPointToPoints } from '@core/super-converter/helpers.js';
+import { twipsToPixels, eighthPointsToPixels, halfPointToPoints } from '@core/super-converter/helpers.js';
 import { preProcessVerticalMergeCells } from '@core/super-converter/export-helpers/pre-process-vertical-merge-cells.js';
 import { translateChildNodes } from '@core/super-converter/v2/exporter/helpers/index.js';
 import { translator as trTranslator } from '../tr';
@@ -28,7 +28,7 @@ const encode = (params, encodedAttrs) => {
   const tblPr = node.elements.find((el) => el.name === 'w:tblPr');
   if (tblPr) {
     const encodedProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
-    encodedAttrs['tableProperties'] = encodedProperties?.attributes || {};
+    encodedAttrs['tableProperties'] = encodedProperties || {};
   }
 
   // Table grid
@@ -115,7 +115,9 @@ const encode = (params, encodedAttrs) => {
   }
 
   const content = [];
-  rows.forEach((row) => {
+  const totalColumns = columnWidths.length;
+  const activeRowSpans = totalColumns > 0 ? new Array(totalColumns).fill(0) : [];
+  rows.forEach((row, rowIndex) => {
     const result = trTranslator.encode({
       ...params,
       nodes: [row],
@@ -125,9 +127,57 @@ const encode = (params, encodedAttrs) => {
         rowBorders: borderRowData,
         styleTag: tblStyleTag,
         columnWidths,
+        activeRowSpans: activeRowSpans.slice(),
+        rowIndex,
       },
     });
-    if (result) content.push(result);
+    if (result) {
+      content.push(result);
+
+      if (totalColumns > 0) {
+        // Preserve the current-row occupancy so column advancement still skips cells covered by active rowspans.
+        const activeRowSpansForCurrentRow = activeRowSpans.slice();
+
+        // Consume one row of coverage for any column that was spanning into this row.
+        for (let col = 0; col < totalColumns; col++) {
+          if (activeRowSpans[col] > 0) {
+            activeRowSpans[col] -= 1;
+          }
+        }
+
+        // Start at the zeroth column; trTranslator already emitted placeholders for any gridBefore spacing.
+        let columnIndex = 0;
+
+        const advanceColumnIndex = () => {
+          // Skip over columns that are still occupied in the current row (pre-decrement state).
+          while (columnIndex < totalColumns && activeRowSpansForCurrentRow[columnIndex] > 0) {
+            columnIndex += 1;
+          }
+        };
+
+        advanceColumnIndex();
+
+        result.content?.forEach((cell) => {
+          advanceColumnIndex();
+          const colspan = Math.max(1, cell.attrs?.colspan || 1);
+          const rowspan = Math.max(1, cell.attrs?.rowspan || 1);
+
+          if (rowspan > 1) {
+            for (let offset = 0; offset < colspan && columnIndex + offset < totalColumns; offset++) {
+              const targetIndex = columnIndex + offset;
+              const remainingRows = rowspan - 1;
+              // Track the maximum remaining rowspan so future rows know this column is blocked.
+              if (remainingRows > 0 && remainingRows > activeRowSpans[targetIndex]) {
+                activeRowSpans[targetIndex] = remainingRows;
+              }
+            }
+          }
+
+          columnIndex += colspan;
+          advanceColumnIndex();
+        });
+      }
+    }
   });
 
   return {
@@ -191,7 +241,7 @@ function _processTableBorders(rawBorders) {
     const color = attributes.color;
     const size = attributes.size;
     if (color && color !== 'auto') attrs['color'] = color.startsWith('#') ? color : `#${color}`;
-    if (size && size !== 'auto') attrs['size'] = eigthPointsToPixels(size);
+    if (size && size !== 'auto') attrs['size'] = eighthPointsToPixels(size);
 
     const rowBorderNames = ['insideH', 'insideV'];
     if (rowBorderNames.includes(name)) rowBorders[name] = attrs;
@@ -258,7 +308,7 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
     if (baseTblPr && baseTblPr.elements) {
       tblPr.elements.push(...baseTblPr.elements);
     }
-    const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] }).attributes;
+    const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
     const { borders, rowBorders } = _processTableBorders(tableProperties.borders || {});
 
     if (borders) stylesToReturn.borders = borders;

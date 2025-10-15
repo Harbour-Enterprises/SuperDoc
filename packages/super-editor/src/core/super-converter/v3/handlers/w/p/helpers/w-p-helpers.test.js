@@ -6,7 +6,7 @@ vi.mock('@converter/helpers.js', () => ({
   twipsToLines: (n) => Number(n) / 240, // arbitrary stub for predictable tests
   twipsToPixels: (n) => Number(n) / 10,
   twipsToPt: (n) => Number(n) / 20,
-  eigthPointsToPixels: (n) => Number(n) / 2,
+  eighthPointsToPixels: (n) => Number(n) / 2,
 }));
 
 // Import all named exports to allow spying on internal helpers

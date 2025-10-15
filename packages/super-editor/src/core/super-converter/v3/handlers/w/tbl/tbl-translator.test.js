@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock dependencies
 vi.mock('@core/super-converter/helpers.js', () => ({
   twipsToPixels: vi.fn((val) => (val ? parseInt(val, 10) / 20 : null)),
-  eigthPointsToPixels: vi.fn((val) => (val ? parseInt(val, 10) / 8 : null)),
+  eighthPointsToPixels: vi.fn((val) => (val ? parseInt(val, 10) / 8 : null)),
   halfPointToPoints: vi.fn((val) => (val ? parseInt(val, 10) / 2 : null)),
   pixelsToTwips: vi.fn((val) => (val ? Math.round(val * 20) : 0)),
 }));

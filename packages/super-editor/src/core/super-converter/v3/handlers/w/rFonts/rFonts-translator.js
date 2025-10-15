@@ -47,6 +47,16 @@ const encode = (params, encodedAttrs = {}) => {
 
   if (attributes['w:val'] === undefined) delete attributes['w:val'];
 
+  if (params.inlineDocumentFonts) {
+    // Right now we only support 'w:ascii'
+    const font = attributes['w:ascii'];
+    if (font) {
+      if (!params.inlineDocumentFonts.includes(font)) {
+        params.inlineDocumentFonts.push(font);
+      }
+    }
+  }
+
   return {
     type: 'attr',
     xmlName: XML_NODE_NAME,

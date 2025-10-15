@@ -1,14 +1,26 @@
 import { handleImageNode } from './encode-image-node-helpers.js';
-import { emuToPixels } from '@converter/helpers.js';
+import { emuToPixels, polygonToObj } from '@converter/helpers.js';
 
 vi.mock('@converter/helpers.js', () => ({
   emuToPixels: vi.fn(),
+  polygonToObj: vi.fn(),
 }));
 
 describe('handleImageNode', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     emuToPixels.mockImplementation((emu) => (emu ? parseInt(emu, 10) / 1000 : 0));
+    polygonToObj.mockImplementation((polygon) => {
+      if (!polygon) return null;
+      const points = [];
+      polygon.elements.forEach((element) => {
+        if (['wp:start', 'wp:lineTo'].includes(element.name)) {
+          const { x, y } = element.attributes;
+          points.push([parseInt(x, 10) / 1000, parseInt(y, 10) / 1000]);
+        }
+      });
+      return points;
+    });
   });
 
   const makeNode = (overrides = {}) => ({
@@ -63,6 +75,72 @@ describe('handleImageNode', () => {
       },
     },
   });
+
+  const shapeUri = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+
+  const makeShapeNode = ({ includeTextbox = false, prst = 'ellipse' } = {}) => {
+    const wspChildren = [
+      {
+        name: 'wps:spPr',
+        elements: [
+          {
+            name: 'a:prstGeom',
+            attributes: { prst },
+          },
+        ],
+      },
+    ];
+
+    if (includeTextbox) {
+      wspChildren.push({
+        name: 'wps:txbx',
+        elements: [
+          {
+            name: 'w:txbxContent',
+            elements: [{ name: 'w:p' }],
+          },
+        ],
+      });
+    }
+
+    return {
+      attributes: {
+        distT: '1000',
+        distB: '2000',
+        distL: '3000',
+        distR: '4000',
+      },
+      elements: [
+        { name: 'wp:extent', attributes: { cx: '5000', cy: '6000' } },
+        {
+          name: 'a:graphic',
+          elements: [
+            {
+              name: 'a:graphicData',
+              attributes: { uri: shapeUri },
+              elements: [
+                {
+                  name: 'wps:wsp',
+                  elements: wspChildren,
+                },
+              ],
+            },
+          ],
+        },
+        { name: 'wp:docPr', attributes: { id: '99', name: 'Shape', descr: 'Shape placeholder' } },
+        {
+          name: 'wp:positionH',
+          attributes: { relativeFrom: 'page' },
+          elements: [{ name: 'wp:posOffset', elements: [{ text: '7000' }] }],
+        },
+        {
+          name: 'wp:positionV',
+          attributes: { relativeFrom: 'paragraph' },
+          elements: [{ name: 'wp:posOffset', elements: [{ text: '8000' }] }],
+        },
+      ],
+    };
+  };
 
   it('returns null if picture is missing', () => {
     const node = makeNode();
@@ -152,14 +230,13 @@ describe('handleImageNode', () => {
     expect(result.attrs.extension).toBe('emf');
   });
 
-  it('includes simplePos, wrapSquare, wrapTopAndBottom, anchorData', () => {
+  it('includes simplePos, wrapSquare, anchorData', () => {
     const node = makeNode({
       attributes: { distT: '111', distB: '222', distL: '333', distR: '444' },
     });
 
     node.elements.push({ name: 'wp:simplePos', attributes: { x: '1', y: '2' } });
     node.elements.push({ name: 'wp:wrapSquare', attributes: { wrapText: 'bothSides' } });
-    node.elements.push({ name: 'wp:wrapTopAndBottom' });
     node.elements.push({
       name: 'wp:positionH',
       attributes: { relativeFrom: 'page' },
@@ -180,23 +257,231 @@ describe('handleImageNode', () => {
     const result = handleImageNode(node, makeParams(), true);
 
     expect(result.attrs.simplePos).toEqual({ x: '1', y: '2' });
-    expect(result.attrs.wrapText).toBe('bothSides');
-    expect(result.attrs.wrapTopAndBottom).toBe(true);
+    expect(result.attrs.wrap.attrs.wrapText).toBe('bothSides');
     expect(result.attrs.anchorData).toEqual({
       hRelativeFrom: 'page',
       vRelativeFrom: 'margin',
       alignH: 'center',
       alignV: 'bottom',
     });
-    expect(result.attrs.marginOffset).toEqual({ left: 1, top: 2 });
+    expect(result.attrs.marginOffset).toEqual({ horizontal: 1, top: 2 });
   });
 
   it('delegates to handleShapeDrawing when uri matches shape', () => {
-    const node = makeNode();
-    node.elements[1].elements[0].attributes.uri = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
-    node.elements[1].elements[0].elements = [{ name: 'wps:wsp', elements: [] }];
+    const node = makeShapeNode();
 
     const result = handleImageNode(node, makeParams(), false);
-    expect(result === null || result.type === 'contentBlock').toBe(true);
+    expect(result.type).toBe('contentBlock');
+    expect(result.attrs.size).toEqual({ width: 5, height: 6 });
+    expect(result.attrs.attributes).toMatchObject({
+      'data-shape-type': 'drawing',
+      'data-padding-top': 1,
+      'data-padding-bottom': 2,
+      'data-padding-left': 3,
+      'data-padding-right': 4,
+      'data-offset-x': 7,
+      'data-offset-y': 8,
+    });
+    expect(result.attrs.drawingContent.name).toBe('w:drawing');
+    expect(result.attrs.drawingContent.elements[0]).toEqual(node);
+    expect(result.attrs.drawingContent.elements[0]).not.toBe(node);
+  });
+
+  it('marks textbox shapes with a specific placeholder type', () => {
+    const node = makeShapeNode({ includeTextbox: true });
+    const result = handleImageNode(node, makeParams(), false);
+
+    expect(result.type).toBe('contentBlock');
+    expect(result.attrs.attributes).toMatchObject({
+      'data-shape-type': 'textbox',
+      'data-padding-top': 1,
+    });
+  });
+
+  describe('wrap types', () => {
+    it('handles wrap type None', () => {
+      const node = makeNode();
+      node.elements.push({ name: 'wp:wrapNone' });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('None');
+      expect(result.attrs.wrap.attrs).toEqual({ behindDoc: false });
+    });
+
+    it('handles wrap type Square with wrapText only', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapSquare',
+        attributes: { wrapText: 'bothSides' },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Square');
+      expect(result.attrs.wrap.attrs.wrapText).toBe('bothSides');
+    });
+
+    it('handles wrap type Square with distance attributes', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapSquare',
+        attributes: {
+          wrapText: 'largest',
+          distT: '1000',
+          distB: '2000',
+          distL: '3000',
+          distR: '4000',
+        },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Square');
+      expect(result.attrs.wrap.attrs.wrapText).toBe('largest');
+      expect(result.attrs.wrap.attrs.distTop).toBe(1);
+      expect(result.attrs.wrap.attrs.distBottom).toBe(2);
+      expect(result.attrs.wrap.attrs.distLeft).toBe(3);
+      expect(result.attrs.wrap.attrs.distRight).toBe(4);
+    });
+
+    it('handles wrap type TopAndBottom without distance attributes', () => {
+      const node = makeNode();
+      node.elements.push({ name: 'wp:wrapTopAndBottom' });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('TopAndBottom');
+      expect(result.attrs.wrap.attrs).toEqual({});
+    });
+
+    it('handles wrap type TopAndBottom with distance attributes', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapTopAndBottom',
+        attributes: {
+          distT: '5000',
+          distB: '6000',
+        },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('TopAndBottom');
+      expect(result.attrs.wrap.attrs.distTop).toBe(5);
+      expect(result.attrs.wrap.attrs.distBottom).toBe(6);
+    });
+
+    it('handles wrap type Tight without polygon', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapTight',
+        attributes: {
+          distL: '2000',
+          distR: '3000',
+        },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Tight');
+      expect(result.attrs.wrap.attrs.distLeft).toBe(2);
+      expect(result.attrs.wrap.attrs.distRight).toBe(3);
+    });
+
+    it('handles wrap type Tight with polygon', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapTight',
+        attributes: {
+          distT: '1000',
+          distB: '2000',
+          wrapText: 'bothSides',
+        },
+        elements: [
+          {
+            name: 'wp:wrapPolygon',
+            attributes: { edited: '0' },
+            elements: [
+              { name: 'wp:start', attributes: { x: '1000', y: '2000' } },
+              { name: 'wp:lineTo', attributes: { x: '3000', y: '4000' } },
+              { name: 'wp:lineTo', attributes: { x: '5000', y: '6000' } },
+            ],
+          },
+        ],
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Tight');
+      expect(result.attrs.wrap.attrs.distTop).toBe(1);
+      expect(result.attrs.wrap.attrs.distBottom).toBe(2);
+      expect(result.attrs.wrap.attrs.wrapText).toBe('bothSides');
+      expect(result.attrs.wrap.attrs.polygon).toEqual([
+        [1, 2],
+        [3, 4],
+        [5, 6],
+      ]);
+      expect(result.attrs.wrap.attrs.polygonEdited).toBe('0');
+    });
+
+    it('handles wrap type Through without polygon', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapThrough',
+        attributes: {
+          distL: '1500',
+          distR: '2500',
+          distT: '500',
+          distB: '750',
+          wrapText: 'bothSides',
+        },
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Through');
+      expect(result.attrs.wrap.attrs.distLeft).toBe(1.5);
+      expect(result.attrs.wrap.attrs.distRight).toBe(2.5);
+      expect(result.attrs.wrap.attrs.distTop).toBe(0.5);
+      expect(result.attrs.wrap.attrs.distBottom).toBe(0.75);
+      expect(result.attrs.wrap.attrs.wrapText).toBe('bothSides');
+    });
+
+    it('handles wrap type Through with polygon', () => {
+      const node = makeNode();
+      node.elements.push({
+        name: 'wp:wrapThrough',
+        elements: [
+          {
+            name: 'wp:wrapPolygon',
+            attributes: { edited: '1' },
+            elements: [
+              { name: 'wp:start', attributes: { x: '10000', y: '20000' } },
+              { name: 'wp:lineTo', attributes: { x: '30000', y: '40000' } },
+            ],
+          },
+        ],
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('Through');
+      expect(result.attrs.wrap.attrs.polygon).toEqual([
+        [10, 20],
+        [30, 40],
+      ]);
+      expect(result.attrs.wrap.attrs.polygonEdited).toBe('1');
+    });
+
+    it('defaults to None wrap type when no wrap element found', () => {
+      const node = makeNode();
+      // No wrap element added
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.wrap.type).toBe('None');
+      expect(result.attrs.wrap.attrs).toEqual({ behindDoc: false });
+    });
   });
 });

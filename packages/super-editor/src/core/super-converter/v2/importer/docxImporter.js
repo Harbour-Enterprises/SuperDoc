@@ -29,7 +29,7 @@ import { preProcessNodesForFldChar } from '../../field-references';
 
 /**
  * @typedef {import()} XmlNode
- * @typedef {{type: string, content: *, attrs: {}}} PmNodeJson
+ * @typedef {{type: string, content: *, marks: *, attrs: {},}} PmNodeJson
  * @typedef {{type: string, attrs: {}}} PmMarkJson
  *
  * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackChange: boolean) => PmNodeJson[]} NodeListHandlerFn
@@ -104,12 +104,15 @@ export const createDocumentJson = (docx, converter, editor) => {
 
     // Track imported lists
     const lists = {};
+    const inlineDocumentFonts = [];
+
     let parsedContent = nodeListHandler.handler({
       nodes: content,
       nodeListHandler,
       docx,
       converter,
       editor,
+      inlineDocumentFonts,
       lists,
       path: [],
     });
@@ -138,6 +141,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       savedTagsToRestore: node,
       pageStyles: getDocumentStyles(node, docx, converter, editor),
       comments,
+      inlineDocumentFonts,
       linkedStyles: getStyleDefinitions(docx, converter, editor),
       numbering: getNumberingDefinitions(docx),
     };
@@ -218,6 +222,7 @@ const createNodeListHandler = (nodeHandlers) => {
     filename,
     parentStyleId,
     lists,
+    inlineDocumentFonts,
     path = [],
   }) => {
     if (!elements || !elements.length) return [];
@@ -248,6 +253,7 @@ const createNodeListHandler = (nodeHandlers) => {
                 filename,
                 parentStyleId,
                 lists,
+                inlineDocumentFonts,
                 path,
               });
             },

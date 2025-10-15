@@ -1,4 +1,7 @@
-import { emuToPixels, rotToDegrees } from '@converter/helpers.js';
+import { emuToPixels, rotToDegrees, polygonToObj } from '@converter/helpers.js';
+import { carbonCopy } from '@core/utilities/carbonCopy.js';
+
+const DRAWING_XML_TAG = 'w:drawing';
 
 /**
  * Encodes image xml into Editor node
@@ -17,37 +20,11 @@ export function handleImageNode(node, params, isAnchor) {
 
   const extent = node.elements.find((el) => el.name === 'wp:extent');
   const size = {
-    width: emuToPixels(extent.attributes?.cx),
-    height: emuToPixels(extent.attributes?.cy),
+    width: emuToPixels(extent?.attributes?.cx),
+    height: emuToPixels(extent?.attributes?.cy),
   };
 
-  const graphic = node.elements.find((el) => el.name === 'a:graphic');
-  const graphicData = graphic.elements.find((el) => el.name === 'a:graphicData');
-  const { uri } = graphicData?.attributes || {};
-  const shapeURI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
-  if (!!uri && uri === shapeURI) {
-    return handleShapeDrawing(params, node, graphicData);
-  }
-
-  const picture = graphicData.elements.find((el) => el.name === 'pic:pic');
-  if (!picture || !picture.elements) return null;
-
-  const blipFill = picture.elements.find((el) => el.name === 'pic:blipFill');
-  const blip = blipFill.elements.find((el) => el.name === 'a:blip');
-
-  const spPr = picture.elements.find((el) => el.name === 'pic:spPr');
   let transformData = {};
-  if (spPr) {
-    const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
-    if (xfrm?.attributes) {
-      transformData = {
-        rotation: rotToDegrees(xfrm.attributes['rot']),
-        verticalFlip: xfrm.attributes['flipV'] === '1',
-        horizontalFlip: xfrm.attributes['flipH'] === '1',
-      };
-    }
-  }
-
   const effectExtent = node.elements.find((el) => el.name === 'wp:effectExtent');
   if (effectExtent) {
     const sanitizeEmuValue = (value) => {
@@ -57,28 +34,100 @@ export function handleImageNode(node, params, isAnchor) {
     };
 
     transformData.sizeExtension = {
-      left: emuToPixels(sanitizeEmuValue(effectExtent.attributes['l'])),
-      top: emuToPixels(sanitizeEmuValue(effectExtent.attributes['t'])),
-      right: emuToPixels(sanitizeEmuValue(effectExtent.attributes['r'])),
-      bottom: emuToPixels(sanitizeEmuValue(effectExtent.attributes['b'])),
+      left: emuToPixels(sanitizeEmuValue(effectExtent.attributes?.['l'])),
+      top: emuToPixels(sanitizeEmuValue(effectExtent.attributes?.['t'])),
+      right: emuToPixels(sanitizeEmuValue(effectExtent.attributes?.['r'])),
+      bottom: emuToPixels(sanitizeEmuValue(effectExtent.attributes?.['b'])),
     };
   }
 
   const positionHTag = node.elements.find((el) => el.name === 'wp:positionH');
   const positionH = positionHTag?.elements.find((el) => el.name === 'wp:posOffset');
   const positionHValue = emuToPixels(positionH?.elements[0]?.text);
-  const hRelativeFrom = positionHTag?.attributes.relativeFrom;
-  const alignH = positionHTag?.elements.find((el) => el.name === 'wp:align')?.elements[0]?.text;
+  const hRelativeFrom = positionHTag?.attributes?.relativeFrom;
+  const alignH = positionHTag?.elements.find((el) => el.name === 'wp:align')?.elements?.[0]?.text;
 
   const positionVTag = node.elements.find((el) => el.name === 'wp:positionV');
   const positionV = positionVTag?.elements?.find((el) => el.name === 'wp:posOffset');
   const positionVValue = emuToPixels(positionV?.elements[0]?.text);
-  const vRelativeFrom = positionVTag?.attributes.relativeFrom;
-  const alignV = positionVTag?.elements?.find((el) => el.name === 'wp:align')?.elements[0]?.text;
+  const vRelativeFrom = positionVTag?.attributes?.relativeFrom;
+  const alignV = positionVTag?.elements?.find((el) => el.name === 'wp:align')?.elements?.[0]?.text;
+
+  const marginOffset = {
+    horizontal: positionHValue,
+    top: positionVValue,
+  };
 
   const simplePos = node.elements.find((el) => el.name === 'wp:simplePos');
-  const wrapSquare = node.elements.find((el) => el.name === 'wp:wrapSquare');
-  const wrapTopAndBottom = node.elements.find((el) => el.name === 'wp:wrapTopAndBottom');
+
+  // Look for one of <wp:wrapNone>,<wp:wrapSquare>,<wp:wrapThrough>,<wp:wrapTight>,<wp:wrapTopAndBottom>
+  const wrapNode = isAnchor
+    ? node.elements.find((el) =>
+        ['wp:wrapNone', 'wp:wrapSquare', 'wp:wrapThrough', 'wp:wrapTight', 'wp:wrapTopAndBottom'].includes(el.name),
+      )
+    : null;
+  const wrap = isAnchor ? { type: wrapNode?.name.slice(7) || 'None', attrs: {} } : { type: 'Inline' };
+
+  switch (wrap.type) {
+    case 'Square':
+      if (wrapNode?.attributes?.wrapText) {
+        wrap.attrs.wrapText = wrapNode.attributes.wrapText;
+      }
+      if ('distB' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distBottom = emuToPixels(wrapNode.attributes.distB);
+      }
+      if ('distL' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distLeft = emuToPixels(wrapNode.attributes.distL);
+      }
+      if ('distR' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distRight = emuToPixels(wrapNode.attributes.distR);
+      }
+      if ('distT' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distTop = emuToPixels(wrapNode.attributes.distT);
+      }
+      break;
+    case 'Tight':
+    case 'Through': {
+      if ('distL' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distLeft = emuToPixels(wrapNode.attributes.distL);
+      }
+      if ('distR' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distRight = emuToPixels(wrapNode.attributes.distR);
+      }
+      if ('distT' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distTop = emuToPixels(wrapNode.attributes.distT);
+      }
+      if ('distB' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distBottom = emuToPixels(wrapNode.attributes.distB);
+      }
+      if ('wrapText' in (wrapNode?.attributes || {})) {
+        wrap.attrs.wrapText = wrapNode.attributes.wrapText;
+      }
+      const polygon = wrapNode?.elements?.find((el) => el.name === 'wp:wrapPolygon');
+      if (polygon) {
+        wrap.attrs.polygon = polygonToObj(polygon);
+        if (polygon.attributes?.edited !== undefined) {
+          wrap.attrs.polygonEdited = polygon.attributes.edited;
+        }
+      }
+      break;
+    }
+    case 'TopAndBottom':
+      if ('distB' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distBottom = emuToPixels(wrapNode.attributes.distB);
+      }
+      if ('distT' in (wrapNode?.attributes || {})) {
+        wrap.attrs.distTop = emuToPixels(wrapNode.attributes.distT);
+      }
+      break;
+    case 'None':
+      wrap.attrs.behindDoc = node.attributes?.behindDoc === '1';
+      break;
+    case 'Inline':
+      break;
+    default:
+      break;
+  }
 
   const docPr = node.elements.find((el) => el.name === 'wp:docPr');
 
@@ -92,10 +141,38 @@ export function handleImageNode(node, params, isAnchor) {
     };
   }
 
-  const marginOffset = {
-    left: positionHValue,
-    top: positionVValue,
-  };
+  const graphic = node.elements.find((el) => el.name === 'a:graphic');
+  const graphicData = graphic?.elements.find((el) => el.name === 'a:graphicData');
+  const { uri } = graphicData?.attributes || {};
+  const shapeURI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+  if (!!uri && uri === shapeURI) {
+    const shapeMarginOffset = {
+      left: positionHValue,
+      horizontal: positionHValue,
+      top: positionVValue,
+    };
+    return handleShapeDrawing(params, node, graphicData, size, padding, shapeMarginOffset);
+  }
+
+  const picture = graphicData?.elements.find((el) => el.name === 'pic:pic');
+  if (!picture || !picture.elements) return null;
+
+  const blipFill = picture.elements.find((el) => el.name === 'pic:blipFill');
+  const blip = blipFill?.elements.find((el) => el.name === 'a:blip');
+  if (!blip) return null;
+
+  const spPr = picture.elements.find((el) => el.name === 'pic:spPr');
+  if (spPr) {
+    const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
+    if (xfrm?.attributes) {
+      transformData = {
+        ...transformData,
+        rotation: rotToDegrees(xfrm.attributes['rot']),
+        verticalFlip: xfrm.attributes['flipV'] === '1',
+        horizontalFlip: xfrm.attributes['flipH'] === '1',
+      };
+    }
+  }
 
   const { attributes: blipAttributes = {} } = blip;
   const rEmbed = blipAttributes['r:embed'];
@@ -105,7 +182,7 @@ export function handleImageNode(node, params, isAnchor) {
   let rels = docx[`word/_rels/${currentFile}.rels`];
   if (!rels) rels = docx[`word/_rels/document.xml.rels`];
 
-  const relationships = rels.elements.find((el) => el.name === 'Relationships');
+  const relationships = rels?.elements.find((el) => el.name === 'Relationships');
   const { elements } = relationships || [];
 
   const rel = elements?.find((el) => el.attributes['Id'] === rEmbed);
@@ -124,10 +201,10 @@ export function handleImageNode(node, params, isAnchor) {
     type: 'image',
     attrs: {
       src: path,
-      alt: ['emf', 'wmf'].includes(extension) ? 'Unable to render EMF/WMF image' : docPr?.attributes.name || 'Image',
+      alt: ['emf', 'wmf'].includes(extension) ? 'Unable to render EMF/WMF image' : docPr?.attributes?.name || 'Image',
       extension,
-      id: docPr?.attributes.id || '',
-      title: docPr?.attributes.descr || 'Image',
+      id: docPr?.attributes?.id || '',
+      title: docPr?.attributes?.descr || 'Image',
       inline: true,
       padding,
       marginOffset,
@@ -141,10 +218,13 @@ export function handleImageNode(node, params, isAnchor) {
           y: simplePos.attributes.y,
         },
       }),
-      ...(wrapSquare && {
-        wrapText: wrapSquare.attributes.wrapText,
-      }),
-      wrapTopAndBottom: !!wrapTopAndBottom,
+      wrap,
+      ...(wrap.type === 'Square' && wrap.attrs.wrapText
+        ? {
+            wrapText: wrap.attrs.wrapText,
+          }
+        : {}),
+      wrapTopAndBottom: wrap.type === 'TopAndBottom',
       originalPadding: {
         distT: attributes['distT'],
         distB: attributes['distB'],
@@ -159,13 +239,16 @@ export function handleImageNode(node, params, isAnchor) {
 
 /**
  * Handles a shape drawing within a WordprocessingML graphic node.
- 
- * @param {Object} params - Parameters object.
- * @param {Object} node - The `wp:drawing` node or similar containing the shape.
+ *
+ * @param {{ nodes: Array }} params - Translator params including the surrounding drawing node.
+ * @param {Object} node - The `wp:drawing` or related shape container node.
  * @param {Object} graphicData - The `a:graphicData` node containing the shape elements.
- * @returns {Object|null} The translated node or contentBlock, or null if no content exists.
+ * @param {{ width?: number, height?: number }} size - Shape bounding box in pixels.
+ * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Distance attributes converted to pixels.
+ * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Shape offsets relative to its anchor.
+ * @returns {Object|null} A contentBlock node representing the shape, or null when no content exists.
  */
-const handleShapeDrawing = (params, node, graphicData) => {
+const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffset) => {
   const wsp = graphicData.elements.find((el) => el.name === 'wps:wsp');
   const textBox = wsp.elements.find((el) => el.name === 'wps:txbx');
   const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
@@ -181,18 +264,10 @@ const handleShapeDrawing = (params, node, graphicData) => {
   }
 
   if (!textBoxContent) {
-    return null;
+    return buildShapePlaceholder(node, size, padding, marginOffset, 'drawing');
   }
 
-  const { nodeListHandler } = params;
-  const translatedElement = nodeListHandler.handler({
-    ...params,
-    node: textBoxContent.elements[0],
-    nodes: textBoxContent.elements,
-    path: [...(params.path || []), textBoxContent],
-  });
-
-  return translatedElement[0];
+  return buildShapePlaceholder(node, size, padding, marginOffset, 'textbox');
 };
 
 /**
@@ -207,7 +282,7 @@ const getRectangleShape = (params, node) => {
 
   const [drawingNode] = params.nodes;
 
-  if (drawingNode?.name === 'w:drawing') {
+  if (drawingNode?.name === DRAWING_XML_TAG) {
     schemaAttrs.drawingContent = drawingNode;
   }
 
@@ -237,5 +312,70 @@ const getRectangleShape = (params, node) => {
   return {
     type: 'contentBlock',
     attrs: schemaAttrs,
+  };
+};
+
+/**
+ * Builds a contentBlock placeholder for shapes that we cannot fully translate yet.
+ *
+ * @param {Object} node - Original shape `wp:drawing` node to snapshot for round-tripping.
+ * @param {{ width?: number, height?: number }} size - Calculated size of the shape in pixels.
+ * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Padding around the shape in pixels.
+ * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Offset of the anchored shape relative to its origin in pixels.
+ * @param {'drawing'|'textbox'} shapeType - Identifier describing the kind of shape placeholder.
+ * @returns {{ type: 'contentBlock', attrs: Object }} Placeholder node that retains the original XML.
+ */
+const buildShapePlaceholder = (node, size, padding, marginOffset, shapeType) => {
+  const attrs = {
+    drawingContent: {
+      name: DRAWING_XML_TAG,
+      elements: [carbonCopy(node)],
+    },
+    attributes: {
+      'data-shape-type': shapeType,
+    },
+  };
+
+  if (size && (Number.isFinite(size.width) || Number.isFinite(size.height))) {
+    attrs.size = {
+      ...(Number.isFinite(size.width) ? { width: size.width } : {}),
+      ...(Number.isFinite(size.height) ? { height: size.height } : {}),
+    };
+  }
+
+  if (padding) {
+    const paddingData = {};
+    if (Number.isFinite(padding.top)) paddingData['data-padding-top'] = padding.top;
+    if (Number.isFinite(padding.right)) paddingData['data-padding-right'] = padding.right;
+    if (Number.isFinite(padding.bottom)) paddingData['data-padding-bottom'] = padding.bottom;
+    if (Number.isFinite(padding.left)) paddingData['data-padding-left'] = padding.left;
+    if (Object.keys(paddingData).length) {
+      attrs.attributes = {
+        ...attrs.attributes,
+        ...paddingData,
+      };
+    }
+  }
+
+  if (marginOffset) {
+    const offsetData = {};
+    const horizontal = Number.isFinite(marginOffset.horizontal)
+      ? marginOffset.horizontal
+      : Number.isFinite(marginOffset.left)
+        ? marginOffset.left
+        : undefined;
+    if (Number.isFinite(horizontal)) offsetData['data-offset-x'] = horizontal;
+    if (Number.isFinite(marginOffset.top)) offsetData['data-offset-y'] = marginOffset.top;
+    if (Object.keys(offsetData).length) {
+      attrs.attributes = {
+        ...attrs.attributes,
+        ...offsetData,
+      };
+    }
+  }
+
+  return {
+    type: 'contentBlock',
+    attrs,
   };
 };

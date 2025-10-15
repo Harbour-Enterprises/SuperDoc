@@ -1,5 +1,8 @@
 import { parseSizeUnit } from '../utilities/index.js';
 
+// CSS pixels per inch; used to convert between Word's inch-based measurements and DOM pixels.
+const PIXELS_PER_INCH = 96;
+
 function inchesToTwips(inches) {
   if (inches == null) return;
   if (typeof inches === 'string') inches = parseFloat(inches);
@@ -16,15 +19,24 @@ function twipsToInches(twips) {
 function twipsToPixels(twips) {
   if (twips == null) return;
   const inches = twipsToInches(twips);
-  if (inches == null) return;
-  const pixels = inches * 96;
-  return Math.round(pixels * 1000) / 1000;
+  return inchesToPixels(inches);
 }
 
 function pixelsToTwips(pixels) {
-  if (pixels == null) return;
-  const inches = Number(pixels) / 96;
+  const inches = pixelsToInches(pixels);
   return inchesToTwips(inches);
+}
+
+function inchesToPixels(inches) {
+  if (inches == null) return;
+  const pixels = inches * PIXELS_PER_INCH;
+  return Math.round(pixels * 1000) / 1000;
+}
+
+function pixelsToInches(pixels) {
+  if (pixels == null) return;
+  const inches = Number(pixels) / PIXELS_PER_INCH;
+  return inches;
 }
 
 function twipsToLines(twips) {
@@ -39,7 +51,7 @@ function linesToTwips(lines) {
 
 function halfPointToPixels(halfPoints) {
   if (halfPoints == null) return;
-  return Math.round((halfPoints * 96) / 72);
+  return Math.round((halfPoints * PIXELS_PER_INCH) / 72);
 }
 
 function halfPointToPoints(halfPoints) {
@@ -50,7 +62,7 @@ function halfPointToPoints(halfPoints) {
 function emuToPixels(emu) {
   if (emu == null) return;
   if (typeof emu === 'string') emu = parseFloat(emu);
-  const pixels = (emu * 96) / 914400;
+  const pixels = (emu * PIXELS_PER_INCH) / 914400;
   return Math.round(pixels);
 }
 
@@ -62,12 +74,12 @@ function pixelsToEmu(px) {
 
 function pixelsToHalfPoints(pixels) {
   if (pixels == null) return;
-  return Math.round((pixels * 72) / 96);
+  return Math.round((pixels * 72) / PIXELS_PER_INCH);
 }
 
-function eigthPointsToPixels(eigthPoints) {
-  if (eigthPoints == null) return;
-  const points = parseFloat(eigthPoints) / 8;
+function eighthPointsToPixels(eighthPoints) {
+  if (eighthPoints == null) return;
+  const points = parseFloat(eighthPoints) / 8;
   const pixels = points * 1.3333;
   return pixels;
 }
@@ -95,6 +107,101 @@ function rotToDegrees(rot) {
 function degreesToRot(degrees) {
   if (degrees == null) return;
   return degrees * 60000;
+}
+
+function pixelsToPolygonUnits(pixels) {
+  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
+  if (pixels == null) return;
+  const pu = pixels * PIXELS_PER_INCH;
+  // Word requires integer ST_Coordinate32 values; fractional values fail OOXML validation.
+  // The previous rounding to 3 decimals produced fractional coordinates and broke anchors.
+  return Math.round(pu);
+}
+
+function polygonUnitsToPixels(pu) {
+  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
+  if (pu == null) return;
+  const pixels = Number(pu) / PIXELS_PER_INCH;
+  return Math.round(pixels * 1000) / 1000;
+}
+
+/**
+ * Converts a DOCX polygon node to an array of pixel coordinates.
+ * Automatically removes duplicate closing points that are the same as the starting point,
+ * since polygons are assumed to be closed shapes.
+ *
+ * @param {Object} polygonNode - The polygon node from DOCX XML with wp:start and wp:lineTo elements
+ * @returns {Array<[number, number]>|null} Array of [x, y] pixel coordinate pairs, or null if invalid input
+ */
+function polygonToObj(polygonNode) {
+  if (!polygonNode) return null;
+  const points = [];
+  polygonNode.elements.forEach((element) => {
+    if (['wp:start', 'wp:lineTo'].includes(element.name)) {
+      const { x, y } = element.attributes;
+      points.push([polygonUnitsToPixels(x), polygonUnitsToPixels(y)]);
+    }
+  });
+
+  // Remove the last point if it's the same as the first point (closed polygon)
+  if (points.length > 1) {
+    const firstPoint = points[0];
+    const lastPoint = points[points.length - 1];
+    if (firstPoint[0] === lastPoint[0] && firstPoint[1] === lastPoint[1]) {
+      points.pop();
+    }
+  }
+
+  return points;
+}
+
+/**
+ * Converts an array of pixel coordinates to a DOCX polygon node.
+ * Automatically adds a closing wp:lineTo element that connects back to the starting point,
+ * ensuring the polygon is properly closed in the DOCX format.
+ *
+ * @param {Array<[number, number]>} points - Array of [x, y] pixel coordinate pairs
+ * @returns {Object|null} DOCX polygon node with wp:start and wp:lineTo elements, or null if invalid input
+ */
+function objToPolygon(points) {
+  if (!points || !Array.isArray(points)) return null;
+  const polygonNode = {
+    name: 'wp:wrapPolygon',
+    type: 'wp:wrapPolygon',
+    attributes: {
+      edited: '0',
+    },
+    elements: [],
+  };
+  points.forEach((point, index) => {
+    const [x, y] = point;
+    const tagName = index === 0 ? 'wp:start' : 'wp:lineTo';
+    const pointNode = {
+      name: tagName,
+      type: tagName,
+      attributes: {
+        x: pixelsToPolygonUnits(x),
+        y: pixelsToPolygonUnits(y),
+      },
+    };
+    polygonNode.elements.push(pointNode);
+  });
+
+  // Add a lineTo back to the starting point to close the polygon
+  if (points.length > 0) {
+    const [startX, startY] = points[0];
+    const closePointNode = {
+      name: 'wp:lineTo',
+      type: 'wp:lineTo',
+      attributes: {
+        x: pixelsToPolygonUnits(startX),
+        y: pixelsToPolygonUnits(startY),
+      },
+    };
+    polygonNode.elements.push(closePointNode);
+  }
+
+  return polygonNode;
 }
 
 /**
@@ -263,10 +370,13 @@ const hasSomeParentWithClass = (element, classname) => {
 };
 
 export {
+  PIXELS_PER_INCH,
   inchesToTwips,
   twipsToInches,
   twipsToPixels,
   pixelsToTwips,
+  pixelsToInches,
+  inchesToPixels,
   twipsToLines,
   linesToTwips,
   halfPointToPixels,
@@ -274,10 +384,12 @@ export {
   pixelsToEmu,
   pixelsToHalfPoints,
   halfPointToPoints,
-  eigthPointsToPixels,
+  eighthPointsToPixels,
   pixelsToEightPoints,
   rotToDegrees,
   degreesToRot,
+  objToPolygon,
+  polygonToObj,
   getArrayBufferFromUrl,
   getContentTypesFromXml,
   getHexColorFromDocxSystem,
@@ -291,4 +403,6 @@ export {
   deobfuscateFont,
   hasSomeParentWithClass,
   getTextIndentExportValue,
+  polygonUnitsToPixels,
+  pixelsToPolygonUnits,
 };

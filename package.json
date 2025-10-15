@@ -39,7 +39,8 @@
     "lint:staged": "lint-staged",
     "watch": "npm run watch:es --workspace=packages/superdoc",
     "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build && npm run test",
-    "local:publish": "npm version prerelease --preid=local --workspace=superdoc && npm publish --workspace=superdoc --registry http://localhost:4873"
+    "local:publish": "npm version prerelease --preid=local --workspace=superdoc && npm publish --workspace=superdoc --registry http://localhost:4873",
+    "update-preset-geometry": "ROOT=$(pwd) && cd ../superdoc-devtools/preset-geometry && npm run build && cp ./dist/index.js ./dist/index.d.ts \"$ROOT/packages/preset-geometry/\""
   },
   "lint-staged": {
     "*.{js,jsx}": [

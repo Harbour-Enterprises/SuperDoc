@@ -13,6 +13,7 @@
   -webkit-font-variant-ligatures: none;
   font-variant-ligatures: none;
   font-feature-settings: 'liga' 0; /* the above doesn't seem to work in Edge */
+  z-index: 0; /* Needed to place images behind text with lower z-index */
 }
 
 .ProseMirror pre {
@@ -148,8 +149,8 @@ img.ProseMirror-separator {
   margin-bottom: 1.5px;
 }
 
-/* 
-Tables 
+/*
+Tables
 https://github.com/ProseMirror/prosemirror-tables/blob/master/style/tables.css
 https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 */
@@ -166,8 +167,8 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   scrollbar-width: thin;
   overflow: hidden;
 
-  /* 
-  The border width does not need to be multiplied by two, 
+  /*
+  The border width does not need to be multiplied by two,
   for tables it works differently. */
   width: calc(100% + (var(--table-border-width) + var(--offset)));
 }
@@ -191,6 +192,18 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   vertical-align: top;
   box-sizing: border-box;
   overflow-wrap: anywhere;
+}
+
+.ProseMirror td[data-placeholder],
+.ProseMirror th[data-placeholder] {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.ProseMirror td[data-placeholder] > *,
+.ProseMirror th[data-placeholder] > * {
+  display: none !important;
 }
 
 .ProseMirror th {

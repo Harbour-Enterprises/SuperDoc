@@ -1,8 +1,62 @@
 import { SuperConverter } from '@converter/SuperConverter.js';
-import { handleTrackChangeNode } from '@converter/v2/importer/trackChangesImporter.js';
+import { handleTrackChangeNode, __testables__ } from '@converter/v2/importer/trackChangesImporter.js';
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from '@extensions/track-changes/constants.js';
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
+
+const { unwrapTrackChangeNode } = __testables__;
+
+describe('unwrapTrackChangeNode', () => {
+  it('returns null when node is missing', () => {
+    expect(unwrapTrackChangeNode()).toBeNull();
+    expect(unwrapTrackChangeNode(null)).toBeNull();
+  });
+
+  it('returns track change node as-is', () => {
+    const node = { name: 'w:ins' };
+    expect(unwrapTrackChangeNode(node)).toBe(node);
+  });
+
+  it('returns first track change node found inside content controls', () => {
+    const trackChangeNode = { name: 'w:del' };
+    const contentControlNode = {
+      name: 'w:sdt',
+      elements: [
+        {
+          name: 'w:sdtContent',
+          elements: [
+            { name: 'w:p', elements: [] },
+            {
+              name: 'w:sdt',
+              elements: [
+                {
+                  name: 'w:sdtContent',
+                  elements: [trackChangeNode],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(unwrapTrackChangeNode(contentControlNode)).toBe(trackChangeNode);
+  });
+
+  it('returns null when there is no track change in content control', () => {
+    const contentControlNode = {
+      name: 'w:sdt',
+      elements: [
+        {
+          name: 'w:sdtContent',
+          elements: [{ name: 'w:p', elements: [] }],
+        },
+      ],
+    };
+
+    expect(unwrapTrackChangeNode(contentControlNode)).toBeNull();
+  });
+});
 
 describe('TrackChangesImporter', () => {
   it('parses only track change nodes', () => {
@@ -53,6 +107,56 @@ describe('TrackChangesImporter', () => {
       author: 'Author',
       importedAuthor: 'Author (imported)',
     });
+  });
+
+  it('unwraps track change insert nodes nested in content controls', () => {
+    const sdtInsertXml = `<w:sdt>
+        <w:sdtContent>
+          <w:ins w:id="3" w:date="2024-09-05T10:44:00Z" w:author="Nested Author">
+            <w:r>
+              <w:t xml:space="preserve">nested insert </w:t>
+            </w:r>
+          </w:ins>
+        </w:sdtContent>
+      </w:sdt>`;
+    const nodes = parseXmlToJson(sdtInsertXml).elements;
+    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+    expect(result.nodes.length).toBe(1);
+    expect(result.consumed).toBe(1);
+    const mark = result.nodes[0].marks.find((item) => item.type === TrackInsertMarkName);
+    expect(mark).toBeDefined();
+    expect(mark.attrs).toEqual({
+      id: '3',
+      date: '2024-09-05T10:44:00Z',
+      author: 'Nested Author',
+      importedAuthor: 'Nested Author (imported)',
+    });
+    expect(result.nodes[0].content?.[0]?.text).toBe('nested insert ');
+  });
+
+  it('unwraps track change delete nodes nested in content controls', () => {
+    const sdtDeleteXml = `<w:sdt>
+        <w:sdtContent>
+          <w:del w:id="4" w:date="2024-09-05T11:12:00Z" w:author="Nested Author">
+            <w:r>
+              <w:delText xml:space="preserve">nested delete </w:delText>
+            </w:r>
+          </w:del>
+        </w:sdtContent>
+      </w:sdt>`;
+    const nodes = parseXmlToJson(sdtDeleteXml).elements;
+    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+    expect(result.nodes.length).toBe(1);
+    expect(result.consumed).toBe(1);
+    const mark = result.nodes[0].marks.find((item) => item.type === TrackDeleteMarkName);
+    expect(mark).toBeDefined();
+    expect(mark.attrs).toEqual({
+      id: '4',
+      date: '2024-09-05T11:12:00Z',
+      author: 'Nested Author',
+      importedAuthor: 'Nested Author (imported)',
+    });
+    expect(result.nodes[0].content?.[0]?.text).toBe('nested delete ');
   });
 });
 
