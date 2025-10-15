@@ -906,7 +906,6 @@ export class Editor extends EventEmitter {
   async #checkFonts() {
     // We only want to run the algorithm to resolve the fonts if the user has asked for it
     if (!this.options.onFontsResolved || typeof this.options.onFontsResolved !== 'function') {
-      console.log('no onFontsResolved');
       return;
     }
 
