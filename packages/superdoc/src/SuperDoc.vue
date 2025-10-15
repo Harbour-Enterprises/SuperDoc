@@ -278,11 +278,12 @@ const onEditorListdefinitionsChange = (params) => {
   proxy.$superdoc.emit('list-definitions-change', params);
 };
 
-const onFontsResolved = (params) => {
-  proxy.$superdoc.emit('fonts-resolved', params);
-};
-
 const editorOptions = (doc) => {
+  // We only want to run the font check if the user has provided a callback
+  // The font check might request extra permissions, and we don't want to run it unless the developer has requested it
+  const onFontsResolvedFn =
+    proxy.$superdoc.listeners('fonts-resolved')?.length > 0 ? proxy.$superdoc.listeners('fonts-resolved')[0] : null;
+
   const options = {
     isDebug: proxy.$superdoc.config.isDebug || false,
     pagination: proxy.$superdoc.config.pagination,
@@ -314,7 +315,7 @@ const editorOptions = (doc) => {
     onCommentsUpdate: onEditorCommentsUpdate,
     onCommentLocationsUpdate: onEditorCommentLocationsUpdate,
     onListDefinitionsChange: onEditorListdefinitionsChange,
-    onFontsResolved: proxy?.$superdoc?.config?.onFontsResolved ? onFontsResolved : null,
+    onFontsResolved: onFontsResolvedFn,
     onTransaction: onEditorTransaction,
     ydoc: doc.ydoc,
     collaborationProvider: doc.provider || null,
