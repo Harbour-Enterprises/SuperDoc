@@ -268,6 +268,9 @@ export class Editor extends EventEmitter {
 
     focusTarget: null,
     permissionResolver: null,
+
+    // header/footer editors may have parent(main) editor set
+    parentEditor: null,
   };
 
   /**

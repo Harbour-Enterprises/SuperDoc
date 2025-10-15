@@ -51,8 +51,8 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
 
         if (typeof document === 'undefined' || editor.options.isHeadless) return oldState;
 
-        // Check if document is in view mode or not editable
-        if (editor.options.documentMode === 'viewing' || !editor.isEditable) {
+        // Check if document is in view mode or not editable but allow decorations for header/footer
+        if (!editor.options.isHeaderOrFooter && (editor.options.documentMode === 'viewing' || !editor.isEditable)) {
           return DecorationSet.empty;
         }
 

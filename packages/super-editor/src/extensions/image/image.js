@@ -305,7 +305,8 @@ export const Image = Node.create({
             // We use 'largest' as best approximation
             //
             // For 'largest', float to the side that would leave the most space for text
-            const pageStyles = this.editor?.converter?.pageStyles;
+            const pageStyles =
+              this.editor?.converter?.pageStyles || this.editor?.options.parentEditor?.converter?.pageStyles;
             if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
               const pageWidth = inchesToPixels(pageStyles.pageSize.width);
               const leftMargin = inchesToPixels(pageStyles.pageMargins.left);
@@ -342,7 +343,8 @@ export const Image = Node.create({
         case 'Through':
         case 'Tight':
           style += 'clear: both;';
-          const pageStyles = this.editor?.converter?.pageStyles;
+          const pageStyles =
+            this.editor?.converter?.pageStyles || this.editor?.options.parentEditor?.converter?.pageStyles;
           if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
             const pageWidth = inchesToPixels(pageStyles.pageSize.width);
             const leftMargin = inchesToPixels(pageStyles.pageMargins.left);
@@ -426,6 +428,22 @@ export const Image = Node.create({
     // Calculate margin data based on anchor data, margin offsets and float direction
     const hasAnchorData = Boolean(anchorData);
     const hasMarginOffsets = marginOffset?.horizontal != null || marginOffset?.top != null;
+
+    if (hasAnchorData) {
+      switch (anchorData.hRelativeFrom) {
+        case 'page':
+          const pageStyles =
+            this.editor?.converter?.pageStyles || this.editor?.options.parentEditor?.converter?.pageStyles;
+          margin.left -= inchesToPixels(pageStyles?.pageMargins?.left) || 0;
+          break;
+        case 'margin':
+          style += anchorData.alignH ? `position: absolute; ${anchorData.alignH}: 0;` : '';
+          break;
+        default:
+          break;
+      }
+    }
+
     if (hasAnchorData || hasMarginOffsets) {
       const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
       const maxMarginV = 500;
@@ -461,6 +479,7 @@ export const Image = Node.create({
       }
     }
 
+    //debugger
     if (centered) {
       style += 'margin-left: auto; margin-right: auto;';
     } else {
