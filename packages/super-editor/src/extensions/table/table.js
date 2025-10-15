@@ -466,31 +466,43 @@ export const Table = Node.create({
        */
       appendRowsWithContentToTable:
         ({ tablePos, tableNode, valueRows = [], copyRowStyle = false }) =>
-        ({ editor, state, chain }) => {
+        ({ editor, chain }) => {
           if ((typeof tablePos !== 'number' && !tableNode) || !Array.isArray(valueRows) || !valueRows.length) {
             return false;
           }
-          const workingTable = defineTableForRowAppend(state.tr, tablePos, tableNode);
-          if (!workingTable) return false;
-
-          const templateRow = pickTemplateRowForAppend(workingTable, editor.schema);
-          if (!templateRow) return false;
-
-          const newRows = valueRows
-            .map((vals) =>
-              buildRowFromTemplateRow({
-                schema: editor.schema,
-                tableNode: workingTable,
-                templateRow,
-                values: vals,
-                copyRowStyle,
-              }),
-            )
-            .filter(Boolean);
-          if (!newRows.length) return false;
 
           return chain()
             .command(({ tr, dispatch }) => {
+              const workingTable = defineTableForRowAppend(tr, tablePos, tableNode);
+              if (!workingTable) return false;
+
+              const templateRow = pickTemplateRowForAppend(workingTable, editor.schema);
+              if (!templateRow) return false;
+
+              const newRows = valueRows
+                .map((vals) =>
+                  buildRowFromTemplateRow({
+                    schema: editor.schema,
+                    tableNode: workingTable,
+                    templateRow,
+                    values: vals,
+                    copyRowStyle,
+                  }),
+                )
+                .filter(Boolean);
+              if (!newRows.length) return false;
+
+              let resolvedTablePos = tablePos;
+              if (typeof resolvedTablePos !== 'number' && workingTable) {
+                // Try to find the position of the table node in the document
+                const tables = editor.getNodesOfType('table');
+                const match = workingTable ? tables.find((t) => t.node.eq(workingTable)) : tables[0];
+                resolvedTablePos = match?.pos ?? null;
+              }
+              if (typeof resolvedTablePos !== 'number') {
+                return false;
+              }
+
               if (dispatch) {
                 insertRowsAtTableEnd({ tr, tablePos, tableNode: workingTable, rows: newRows });
               }
@@ -1275,7 +1287,7 @@ function extractRowTemplateFormatting(cellNode, schema) {
  * @param {boolean} [copyRowStyle=false] - Whether to copy marks from the template row
  * @returns {import('prosemirror-model').Node} Block node ready to insert into the cell
  */
-function buildFormattedRowBlock(schema, value, { blockType, blockAttrs, textMarks }, copyRowStyle = false) {
+function buildFormattedCellBlock(schema, value, { blockType, blockAttrs, textMarks }, copyRowStyle = false) {
   const text = typeof value === 'string' ? value : value == null ? '' : String(value);
   const marks = copyRowStyle ? textMarks || [] : [];
   const textNode = schema.text(text, marks);
@@ -1315,7 +1327,7 @@ function buildRowFromTemplateRow({ schema, tableNode, templateRow, values, copyR
       cellValue = Array.isArray(values) ? (values[cellIndex] ?? '') : '';
     }
 
-    const content = buildFormattedRowBlock(schema, cellValue, formatting, copyRowStyle);
+    const content = buildFormattedCellBlock(schema, cellValue, formatting, copyRowStyle);
     const newCell = targetCellType.createAndFill(attrs, content);
     if (newCell) newCells.push(newCell);
   });

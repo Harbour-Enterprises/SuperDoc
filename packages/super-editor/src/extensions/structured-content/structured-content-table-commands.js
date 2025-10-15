@@ -102,7 +102,13 @@ export const StructuredContentTableCommands = Extension.create({
           if (dispatch) {
             return commands.appendRowsWithContentToTable({ tablePos, tableNode, valueRows: normalized, copyRowStyle });
           }
-          return true;
+          return commands.appendRowsWithContentToTable({
+            tablePos,
+            tableNode,
+            valueRows: normalized,
+            copyRowStyle,
+            dispatch: false,
+          });
         },
     };
   },
