@@ -281,6 +281,7 @@ const onEditorListdefinitionsChange = (params) => {
 const editorOptions = (doc) => {
   // We only want to run the font check if the user has provided a callback
   // The font check might request extra permissions, and we don't want to run it unless the developer has requested it
+  // So, if the callback is not defined, we won't run the font check
   const onFontsResolvedFn =
     proxy.$superdoc.listeners('fonts-resolved')?.length > 0 ? proxy.$superdoc.listeners('fonts-resolved')[0] : null;
 
