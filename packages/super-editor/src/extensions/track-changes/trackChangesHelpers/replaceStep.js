@@ -81,6 +81,7 @@ export const replaceStep = ({ state, tr, step, newTr, map, user, date, originalS
       to: step.to,
       user,
       date,
+      id: meta.insertedMark?.attrs?.id,
     });
 
     meta.deletionNodes = deletionNodes;
