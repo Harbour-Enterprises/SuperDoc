@@ -18,6 +18,11 @@ vi.mock('@extensions/linked-styles/index.js', () => ({
   getQuickFormatList: vi.fn(() => []),
 }));
 
+vi.mock('@extensions/track-changes/permission-helpers.js', () => ({
+  collectTrackedChanges: vi.fn(() => []),
+  isTrackedChangeActionAllowed: vi.fn(() => true),
+}));
+
 vi.mock('../../components/toolbar/defaultItems.js', () => ({
   makeDefaultItems: () => ({ defaultItems: [], overflowItems: [] }),
 }));
@@ -50,7 +55,15 @@ describe('SuperToolbar intercepted color commands', () => {
     mockEditor = {
       focus: vi.fn(),
       options: { isHeaderOrFooter: false, mode: 'docx' },
-      state: {},
+      state: {
+        selection: { from: 1, to: 1 },
+        doc: {
+          content: { size: 10 },
+          resolve: vi.fn(() => ({ depth: 0, node: () => ({ marks: [] }), marks: () => [] })),
+          nodeAt: vi.fn(() => ({ marks: [] })),
+          nodesBetween: vi.fn(() => {}),
+        },
+      },
       commands: {
         setColor: vi.fn(),
         setFieldAnnotationsTextColor: vi.fn(),

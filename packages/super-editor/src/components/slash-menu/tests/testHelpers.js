@@ -165,6 +165,7 @@ export function createMockContext(options = {}) {
     currentNodeType: 'paragraph',
     activeMarks: [],
     isTrackedChange: false,
+    trackedChanges: [],
     documentMode: 'editing',
     canUndo: false,
     canRedo: false,

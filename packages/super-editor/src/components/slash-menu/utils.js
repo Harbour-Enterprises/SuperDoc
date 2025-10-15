@@ -4,6 +4,10 @@ import { tableActionsOptions } from './constants.js';
 import { markRaw } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { yUndoPluginKey } from 'y-prosemirror';
+import {
+  collectTrackedChanges,
+  collectTrackedChangesForContext,
+} from '@extensions/track-changes/permission-helpers.js';
 /**
  * Get props by item id
  *
@@ -195,6 +199,10 @@ export async function getEditorContext(editor, event) {
   const isTrackedChange =
     activeMarks.includes('trackInsert') || activeMarks.includes('trackDelete') || activeMarks.includes('trackFormat');
 
+  const trackedChanges = event
+    ? collectTrackedChangesForContext({ state, pos, trackedChangeId })
+    : collectTrackedChanges({ state, from, to });
+
   const cursorCoords = pos ? view.coordsAtPos(pos) : null;
   const cursorPosition = cursorCoords
     ? {
@@ -237,6 +245,9 @@ export async function getEditorContext(editor, event) {
 
     // Editor reference for advanced use cases
     editor,
+
+    // Tracked change metadata
+    trackedChanges,
   };
 
   return context;

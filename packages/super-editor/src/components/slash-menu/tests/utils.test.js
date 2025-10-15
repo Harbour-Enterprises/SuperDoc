@@ -17,6 +17,12 @@ vi.mock('y-prosemirror', () => ({
   },
 }));
 
+vi.mock('@extensions/track-changes/permission-helpers.js', () => ({
+  collectTrackedChanges: vi.fn(() => []),
+  collectTrackedChangesForContext: vi.fn(() => []),
+  isTrackedChangeActionAllowed: vi.fn(() => true),
+}));
+
 import {
   getEditorContext,
   getPropsByItemId,
@@ -96,6 +102,7 @@ describe('utils.js', () => {
         // Document state
         isTrackedChange: false,
         trackedChangeId: null,
+        trackedChanges: [],
         documentMode: 'editing',
         canUndo: true,
         canRedo: true,
@@ -154,6 +161,7 @@ describe('utils.js', () => {
       expect(context.activeMarks).toContain('trackInsert');
       expect(context.activeMarks).toContain('bold');
       expect(context.isTrackedChange).toBe(true);
+      expect(Array.isArray(context.trackedChanges)).toBe(true);
     });
 
     it('should handle event-based context (right-click)', async () => {
@@ -210,6 +218,7 @@ describe('utils.js', () => {
       expect(context.trackedChangeId).toBe('track-1');
       expect(context.activeMarks).toContain('trackDelete');
       expect(context.isTrackedChange).toBe(true);
+      expect(Array.isArray(context.trackedChanges)).toBe(true);
     });
 
     it('should detect tracked change marks directly at the resolved cursor position', async () => {
@@ -236,6 +245,7 @@ describe('utils.js', () => {
       expect(context.activeMarks).toContain('trackFormat');
       expect(context.trackedChangeId).toBe('track-format-1');
       expect(context.isTrackedChange).toBe(true);
+      expect(Array.isArray(context.trackedChanges)).toBe(true);
     });
 
     it('should detect tracked change marks on the node after the resolved position', async () => {
@@ -265,6 +275,7 @@ describe('utils.js', () => {
       expect(context.activeMarks).toContain('trackDelete');
       expect(context.trackedChangeId).toBe('track-after-1');
       expect(context.isTrackedChange).toBe(true);
+      expect(Array.isArray(context.trackedChanges)).toBe(true);
     });
 
     it('should handle document mode variations', async () => {

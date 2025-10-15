@@ -137,6 +137,13 @@ import { transformListsInCopiedContent } from '@core/inputRules/html/transform-c
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
  * @property {boolean} [isDebug=false] - Whether to enable debug mode
+ * @property {(params: {
+ *   permission: string,
+ *   role?: string,
+ *   isInternal?: boolean,
+ *   comment?: Object | null,
+ *   trackedChange?: Object | null,
+ }) => boolean | undefined} [permissionResolver] - Host-provided permission hook
  */
 
 /**
@@ -260,6 +267,7 @@ export class Editor extends EventEmitter {
     isCustomXmlChanged: false,
 
     focusTarget: null,
+    permissionResolver: null,
   };
 
   /**

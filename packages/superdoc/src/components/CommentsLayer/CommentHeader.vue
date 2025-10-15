@@ -53,16 +53,34 @@ const allowResolve = computed(() => {
   // Do not allow child comments to resolve
   if (props.comment.parentCommentId) return false;
 
-  if (isOwnComment || props.comment.trackedChange) return isAllowed(PERMISSIONS.RESOLVE_OWN, role, isInternal);
-  else return isAllowed(PERMISSIONS.RESOLVE_OTHER, role, isInternal);
+  const context = {
+    comment: props.comment,
+    currentUser: proxy.$superdoc.config.user,
+    superdoc: proxy.$superdoc,
+  };
+
+  if (isOwnComment || props.comment.trackedChange) {
+    return isAllowed(PERMISSIONS.RESOLVE_OWN, role, isInternal, context);
+  } else {
+    return isAllowed(PERMISSIONS.RESOLVE_OTHER, role, isInternal, context);
+  }
 });
 
 const allowReject = computed(() => {
   if (!generallyAllowed.value) return false;
   if (!props.comment.trackedChange) return false;
 
-  if (isOwnComment || props.comment.trackedChange) return isAllowed(PERMISSIONS.REJECT_OWN, role, isInternal);
-  else return isAllowed(PERMISSIONS.REJECT_OTHER, role, isInternal);
+  const context = {
+    comment: props.comment,
+    currentUser: proxy.$superdoc.config.user,
+    superdoc: proxy.$superdoc,
+  };
+
+  if (isOwnComment || props.comment.trackedChange) {
+    return isAllowed(PERMISSIONS.REJECT_OWN, role, isInternal, context);
+  } else {
+    return isAllowed(PERMISSIONS.REJECT_OTHER, role, isInternal, context);
+  }
 });
 
 const allowOverflow = computed(() => {
@@ -87,9 +105,15 @@ const getOverflowOptions = computed(() => {
 
   const isOwnComment = props.comment.creatorEmail === proxy.$superdoc.config.user.email;
 
-  if (isOwnComment && isAllowed(PERMISSIONS.COMMENTS_DELETE_OWN, role, isInternal)) {
+  const context = {
+    comment: props.comment,
+    currentUser: proxy.$superdoc.config.user,
+    superdoc: proxy.$superdoc,
+  };
+
+  if (isOwnComment && isAllowed(PERMISSIONS.COMMENTS_DELETE_OWN, role, isInternal, context)) {
     options.add('delete');
-  } else if (!isOwnComment && isAllowed(PERMISSIONS.COMMENTS_DELETE_OTHER, role, isInternal)) {
+  } else if (!isOwnComment && isAllowed(PERMISSIONS.COMMENTS_DELETE_OTHER, role, isInternal, context)) {
     options.add('delete');
   }
 
