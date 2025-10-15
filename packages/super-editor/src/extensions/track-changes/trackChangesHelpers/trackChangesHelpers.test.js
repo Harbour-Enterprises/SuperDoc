@@ -268,4 +268,118 @@ describe('trackChangesHelpers', () => {
     const updatedState = state.apply(tracked);
     expect(updatedState.selection.from).toBeGreaterThan(1);
   });
+
+  describe('Replace operations and ID sharing', () => {
+    it('replace operation creates insertion and deletion marks with the same ID', () => {
+      const state = createState(createDocWithText('old text'));
+
+      // Simulate selecting "old" and typing "new" (a replace operation)
+      const tr = state.tr.replaceWith(1, 4, schema.text('new'));
+      tr.setMeta('inputType', 'insertText');
+
+      const tracked = trackedTransaction({ tr, state, user });
+      const meta = tracked.getMeta(TrackChangesBasePluginKey);
+
+      // CRITICAL: Both marks should have the same ID for replace operations
+      expect(meta.insertedMark).toBeDefined();
+      expect(meta.deletionMark).toBeDefined();
+      expect(meta.insertedMark.attrs.id).toBe(meta.deletionMark.attrs.id);
+
+      const finalState = state.apply(tracked);
+      const inlineNodes = documentHelpers.findInlineNodes(finalState.doc);
+
+      const insertedNodes = inlineNodes.filter(({ node }) =>
+        node.marks.some((mark) => mark.type.name === TrackInsertMarkName),
+      );
+      const deletedNodes = inlineNodes.filter(({ node }) =>
+        node.marks.some((mark) => mark.type.name === TrackDeleteMarkName),
+      );
+
+      expect(insertedNodes.length).toBeGreaterThan(0);
+      expect(deletedNodes.length).toBeGreaterThan(0);
+
+      const insertId = insertedNodes[0].node.marks.find((m) => m.type.name === TrackInsertMarkName).attrs.id;
+      const deleteId = deletedNodes[0].node.marks.find((m) => m.type.name === TrackDeleteMarkName).attrs.id;
+      expect(insertId).toBe(deleteId);
+    });
+
+    it('deletion-only operation creates unique ID (no insertion)', () => {
+      const state = createState(createDocWithText('delete me'));
+
+      // Pure deletion without replacement
+      const tr = state.tr.delete(1, 10);
+      tr.setMeta('inputType', 'deleteContentBackward');
+
+      const tracked = trackedTransaction({ tr, state, user });
+      const meta = tracked.getMeta(TrackChangesBasePluginKey);
+
+      expect(meta.deletionMark).toBeDefined();
+      expect(meta.insertedMark).toBeUndefined();
+    });
+
+    it('insertion-only operation creates unique ID (no deletion)', () => {
+      const state = createState(createDocWithText('existing'));
+
+      // Pure insertion without deletion
+      const tr = state.tr.insertText(' new text', 9);
+      tr.setMeta('inputType', 'insertText');
+
+      const tracked = trackedTransaction({ tr, state, user });
+      const meta = tracked.getMeta(TrackChangesBasePluginKey);
+
+      expect(meta.insertedMark).toBeDefined();
+      expect(meta.deletionMark).toBeUndefined();
+    });
+
+    it('multiple sequential replace operations create different IDs', () => {
+      const state1 = createState(createDocWithText('first'));
+      const tr1 = state1.tr.replaceWith(1, 6, schema.text('1st'));
+      tr1.setMeta('inputType', 'insertText');
+      const tracked1 = trackedTransaction({ tr: tr1, state: state1, user });
+      const meta1 = tracked1.getMeta(TrackChangesBasePluginKey);
+
+      const state2 = createState(createDocWithText('second'));
+      const tr2 = state2.tr.replaceWith(1, 7, schema.text('2nd'));
+      tr2.setMeta('inputType', 'insertText');
+      const tracked2 = trackedTransaction({ tr: tr2, state: state2, user });
+      const meta2 = tracked2.getMeta(TrackChangesBasePluginKey);
+
+      expect(meta1.insertedMark.attrs.id).not.toBe(meta2.insertedMark.attrs.id);
+    });
+
+    it('replace operation maintains author and date consistency', () => {
+      const state = createState(createDocWithText('test'));
+      const tr = state.tr.replaceWith(1, 5, schema.text('TEST'));
+      tr.setMeta('inputType', 'insertText');
+
+      const tracked = trackedTransaction({ tr, state, user });
+      const meta = tracked.getMeta(TrackChangesBasePluginKey);
+
+      expect(meta.insertedMark.attrs.author).toBe(user.name);
+      expect(meta.deletionMark.attrs.author).toBe(user.name);
+      expect(meta.insertedMark.attrs.authorEmail).toBe(user.email);
+      expect(meta.deletionMark.attrs.authorEmail).toBe(user.email);
+      expect(meta.insertedMark.attrs.date).toBe(meta.deletionMark.attrs.date);
+    });
+
+    it('getTrackChanges returns both marks with same ID for replace', () => {
+      const state = createState(createDocWithText('original'));
+      const tr = state.tr.replaceWith(1, 9, schema.text('modified'));
+      tr.setMeta('inputType', 'insertText');
+
+      const tracked = trackedTransaction({ tr, state, user });
+      const finalState = state.apply(tracked);
+      const changes = getTrackChanges(finalState);
+
+      const insertions = changes.filter((c) => c.mark.type.name === TrackInsertMarkName);
+      const deletions = changes.filter((c) => c.mark.type.name === TrackDeleteMarkName);
+
+      expect(insertions.length).toBeGreaterThan(0);
+      expect(deletions.length).toBeGreaterThan(0);
+
+      const insertId = insertions[0].mark.attrs.id;
+      const deleteId = deletions[0].mark.attrs.id;
+      expect(insertId).toBe(deleteId);
+    });
+  });
 });
