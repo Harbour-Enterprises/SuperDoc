@@ -781,7 +781,7 @@ export const makeDefaultItems = ({
     disabled: false,
     name: 'acceptTrackedChangeBySelection',
     tooltip: toolbarTexts.trackChangesAccept,
-    command: 'acceptTrackedChangeBySelection',
+    command: 'acceptTrackedChangeFromToolbar',
     icon: toolbarIcons.trackChangesAccept,
     group: 'left',
     attributes: {
@@ -794,7 +794,7 @@ export const makeDefaultItems = ({
     disabled: false,
     name: 'rejectTrackedChangeOnSelection',
     tooltip: toolbarTexts.trackChangesReject,
-    command: 'rejectTrackedChangeOnSelection',
+    command: 'rejectTrackedChangeFromToolbar',
     icon: toolbarIcons.trackChangesReject,
     group: 'left',
     attributes: {

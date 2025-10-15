@@ -5,6 +5,7 @@ import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from '.
 import { TrackChangesBasePlugin, TrackChangesBasePluginKey } from './plugins/index.js';
 import { getTrackChanges } from './trackChangesHelpers/getTrackChanges.js';
 import { collectTrackedChanges, isTrackedChangeActionAllowed } from './permission-helpers.js';
+import { CommentsPluginKey } from '../comment/comments-plugin.js';
 
 export const TrackChanges = Extension.create({
   name: 'trackChanges',
@@ -153,6 +154,19 @@ export const TrackChanges = Extension.create({
           return commands.acceptTrackedChangesBetween(from, to);
         },
 
+      acceptTrackedChangeFromToolbar:
+        () =>
+        ({ state, commands }) => {
+          const commentsPluginState = CommentsPluginKey.getState(state);
+          const activeThreadId = commentsPluginState?.activeThreadId;
+
+          if (activeThreadId && commentsPluginState?.trackedChanges?.[activeThreadId]) {
+            return commands.acceptTrackedChangeById(activeThreadId);
+          } else {
+            return commands.acceptTrackedChangeBySelection();
+          }
+        },
+
       acceptTrackedChangeById:
         (id) =>
         ({ state, tr, commands }) => {
@@ -201,6 +215,19 @@ export const TrackChanges = Extension.create({
         ({ state, commands }) => {
           const { from, to } = state.selection;
           return commands.rejectTrackedChangesBetween(from, to);
+        },
+
+      rejectTrackedChangeFromToolbar:
+        () =>
+        ({ state, commands }) => {
+          const commentsPluginState = CommentsPluginKey.getState(state);
+          const activeThreadId = commentsPluginState?.activeThreadId;
+
+          if (activeThreadId && commentsPluginState?.trackedChanges?.[activeThreadId]) {
+            return commands.rejectTrackedChangeById(activeThreadId);
+          } else {
+            return commands.rejectTrackedChangeOnSelection();
+          }
         },
 
       rejectAllTrackedChanges:
