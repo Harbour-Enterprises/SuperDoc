@@ -96,7 +96,7 @@ export function getParagraphContext($pos, cache, helpers) {
         let tabStops = [];
         if (Array.isArray(node.attrs?.tabStops)) {
           tabStops = node.attrs.tabStops.map(({ tab }) => ({
-            val: tab.tabSize,
+            val: tab.tabType,
             pos: twipsToPixels(tab.pos),
             leader: tab.leader,
           }));

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { encode, decode, attrConfig } from './w-tab-size.js';
 
-describe('w:tab w:val (tabSize) encoder', () => {
+describe('w:tab w:val (tabType) encoder', () => {
   it('returns the value when present', () => {
-    expect(encode({ 'w:val': '96' })).toBe('96');
-    expect(encode({ 'w:val': '1440' })).toBe('1440');
+    expect(encode({ 'w:val': 'left' })).toBe('left');
+    expect(encode({ 'w:val': 'right' })).toBe('right');
   });
 
   it('returns undefined when attribute is missing', () => {
@@ -16,13 +16,13 @@ describe('w:tab w:val (tabSize) encoder', () => {
   });
 });
 
-describe('tabSize decoder', () => {
-  it('returns the tabSize value when present', () => {
-    expect(decode({ tabSize: '96' })).toBe('96');
-    expect(decode({ tabSize: '1440' })).toBe('1440');
+describe('tabType decoder', () => {
+  it('returns the tabType value when present', () => {
+    expect(decode({ tabType: 'left' })).toBe('left');
+    expect(decode({ tabType: 'right' })).toBe('right');
   });
 
-  it('returns undefined when tabSize is missing', () => {
+  it('returns undefined when tabType is missing', () => {
     expect(decode({})).toBeUndefined();
   });
 
@@ -32,14 +32,14 @@ describe('tabSize decoder', () => {
 });
 
 describe('round-trip consistency', () => {
-  const values = ['96', '1440'];
+  const values = ['left', 'right'];
 
   for (const val of values) {
     it(`encodes and decodes '${val}' consistently`, () => {
       const encoded = encode({ 'w:val': val });
       expect(encoded).toBe(val);
 
-      const decoded = decode({ tabSize: encoded });
+      const decoded = decode({ tabType: encoded });
       expect(decoded).toBe(val);
     });
   }
@@ -48,6 +48,6 @@ describe('round-trip consistency', () => {
 describe('attrConfig metadata', () => {
   it('exposes correct xmlName and sdName', () => {
     expect(attrConfig.xmlName).toBe('w:val');
-    expect(attrConfig.sdName).toBe('tabSize');
+    expect(attrConfig.sdName).toBe('tabType');
   });
 });

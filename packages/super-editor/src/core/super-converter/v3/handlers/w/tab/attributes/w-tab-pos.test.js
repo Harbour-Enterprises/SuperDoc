@@ -27,7 +27,7 @@ describe('pos decoder', () => {
   });
 
   it('ignores unrelated attributes', () => {
-    expect(decode({ tabSize: '96' })).toBeUndefined();
+    expect(decode({ tabType: 'left' })).toBeUndefined();
   });
 });
 

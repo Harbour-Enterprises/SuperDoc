@@ -34,9 +34,9 @@ describe('w:tabs translator', () => {
       const result = translator.encode({ nodes: [xmlNode] });
 
       expect(result).toEqual([
-        { tab: { tabSize: 'left', pos: '100', leader: 'dot' } },
-        { tab: { tabSize: 'center', pos: '200' } },
-        { tab: { tabSize: 'right', pos: '300', leader: 'hyphen' } },
+        { tab: { tabType: 'left', pos: '100', leader: 'dot' } },
+        { tab: { tabType: 'center', pos: '200' } },
+        { tab: { tabType: 'right', pos: '300', leader: 'hyphen' } },
       ]);
     });
 
@@ -72,7 +72,7 @@ describe('w:tabs translator', () => {
     it('should decode a SuperDoc array of tab objects into a w:tabs XML node', () => {
       const superDocNode = {
         attrs: {
-          tabs: [{ tab: { tabSize: 'left', pos: '100', leader: 'dot' } }, { tab: { tabSize: 'center', pos: '200' } }],
+          tabs: [{ tab: { tabType: 'left', pos: '100', leader: 'dot' } }, { tab: { tabType: 'center', pos: '200' } }],
         },
       };
 
