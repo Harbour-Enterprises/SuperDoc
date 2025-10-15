@@ -353,7 +353,7 @@ describe('comments plugin commands', () => {
 
 describe('comments plugin pm plugin', () => {
   it('skips plugin creation when editor is headless', () => {
-    const result = CommentsPlugin.config.addPmPlugins.call({ editor: { options: { isHeadless: true } } });
+    const result = CommentsPlugin.config.addPmPlugins.call({ editor: { isNode: true, options: { isHeadless: true } } });
     expect(result).toEqual([]);
   });
 
@@ -362,6 +362,7 @@ describe('comments plugin pm plugin', () => {
     const state = createStateWithComment(schema, 'comment-1');
     const context = {
       editor: {
+        isNode: false,
         options: { isHeadless: false, isInternal: false },
         view: { state, dispatch: vi.fn() },
         emit: vi.fn(),

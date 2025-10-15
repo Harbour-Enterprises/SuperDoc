@@ -147,7 +147,7 @@ export const CommentsPlugin = Extension.create({
     const editor = this.editor;
     let shouldUpdate;
 
-    if (editor.options.isHeadless) return [];
+    if (editor.isNode) return [];
 
     const commentsPlugin = new Plugin({
       key: CommentsPluginKey,

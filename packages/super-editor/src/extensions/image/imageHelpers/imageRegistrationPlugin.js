@@ -76,7 +76,7 @@ export const ImageRegistrationPlugin = ({ editor }) => {
       }
 
       // NODE PATH
-      if (editor.options.isHeadless) {
+      if (editor.isNode) {
         return handleNodePath(foundImages, editor, state);
       }
 

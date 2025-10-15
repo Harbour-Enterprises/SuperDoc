@@ -11,11 +11,13 @@ describe('SlashMenu extension', () => {
 
   it('skips plugin creation when disabled or headless', () => {
     const disabledContextMenu = SlashMenu.config.addPmPlugins.call({
-      editor: { options: { disableContextMenu: true } },
+      editor: { isNode: false, options: { disableContextMenu: true } },
     });
     expect(disabledContextMenu).toEqual([]);
 
-    const headless = SlashMenu.config.addPmPlugins.call({ editor: { options: { isHeadless: true } } });
+    const headless = SlashMenu.config.addPmPlugins.call({
+      editor: { isNode: true, options: { isHeadless: true } },
+    });
     expect(headless).toEqual([]);
   });
 
@@ -26,6 +28,7 @@ describe('SlashMenu extension', () => {
       isHeadless: false,
       disableContextMenu: false,
     });
+    vi.spyOn(editor, 'isNode', 'get').mockReturnValue(false);
     const plugins = SlashMenu.config.addPmPlugins.call({ editor });
     expect(plugins).toHaveLength(1);
     expect(typeof plugins[0].props.handleKeyDown).toBe('function');
@@ -38,6 +41,7 @@ describe('SlashMenu extension', () => {
     let state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection });
 
     const editor = {
+      isNode: false,
       options: {},
       emit: vi.fn(),
       view: null,

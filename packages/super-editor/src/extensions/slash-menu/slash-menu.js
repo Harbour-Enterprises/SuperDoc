@@ -207,6 +207,6 @@ export const SlashMenu = Extension.create({
     });
 
     // If we are in headless mode, do not add the plugin
-    return this.editor.options.isHeadless ? [] : [slashMenuPlugin];
+    return this.editor.isNode ? [] : [slashMenuPlugin];
   },
 });

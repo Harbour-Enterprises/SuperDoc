@@ -49,7 +49,7 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
           return oldState;
         }
 
-        if (typeof document === 'undefined' || editor.options.isHeadless) return oldState;
+        if (typeof document === 'undefined' || editor.isNode) return oldState;
 
         // Check if document is in view mode or not editable
         if (editor.options.documentMode === 'viewing' || !editor.isEditable) {
@@ -355,9 +355,9 @@ export const NodeResizer = Extension.create({
   },
 
   addPmPlugins() {
-    const isHeadless = this.editor.options.isHeadless;
+    const isNode = this.editor.isNode;
     const hasDocument = typeof document !== 'undefined';
-    if (isHeadless || !hasDocument) return [];
+    if (isNode || !hasDocument) return [];
     return [nodeResizer(['image'], this.editor)];
   },
 });

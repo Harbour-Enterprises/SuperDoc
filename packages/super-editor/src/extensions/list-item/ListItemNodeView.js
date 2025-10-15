@@ -237,7 +237,7 @@ function calculateMarkerWidth(dom, numberingDOM, editor, { withPadding = true } 
 
   try {
     // If we're in headless mode, we can't use canvas, so we return 0
-    if (editor?.options?.isHeadless) return 0;
+    if (editor?.isNode) return 0;
 
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
