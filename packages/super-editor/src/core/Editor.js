@@ -372,6 +372,7 @@ export class Editor extends EventEmitter {
     this.on('paginationUpdate', this.options.onPaginationUpdate);
     this.on('comment-positions', this.options.onCommentLocationsUpdate);
     this.on('list-definitions-change', this.options.onListDefinitionsChange);
+    this.on('fonts-resolved', this.options.onFontsResolved);
     this.on('exception', this.options.onException);
 
     if (!this.options.isHeadless) {
@@ -927,7 +928,7 @@ export class Editor extends EventEmitter {
 
       // Fallback
       const unsupportedFonts = this.#determineUnsupportedFontsWithCanvas(fontsUsedInDocument);
-      this.options.onFontsResolved({
+      this.emit('fonts-resolved', {
         documentFonts: fontsUsedInDocument,
         unsupportedFonts: unsupportedFonts,
       });
@@ -941,7 +942,7 @@ export class Editor extends EventEmitter {
 
       // Fallback
       const unsupportedFonts = this.#determineUnsupportedFontsWithCanvas(fontsUsedInDocument);
-      this.options.onFontsResolved({
+      this.emit('fonts-resolved', {
         documentFonts: fontsUsedInDocument,
         unsupportedFonts: unsupportedFonts,
       });
@@ -954,7 +955,7 @@ export class Editor extends EventEmitter {
       const uniqueLocalFonts = [...new Set(localFonts.map((font) => font.family))];
       const unsupportedFonts = this.#determineUnsupportedFontsWithLocalFonts(fontsUsedInDocument, uniqueLocalFonts);
 
-      this.options.onFontsResolved({
+      this.emit('fonts-resolved', {
         documentFonts: fontsUsedInDocument,
         unsupportedFonts: unsupportedFonts,
       });
@@ -963,7 +964,7 @@ export class Editor extends EventEmitter {
 
       // Fallback
       const unsupportedFonts = this.#determineUnsupportedFontsWithCanvas(fontsUsedInDocument);
-      this.options.onFontsResolved({
+      this.emit('fonts-resolved', {
         documentFonts: fontsUsedInDocument,
         unsupportedFonts: unsupportedFonts,
       });
