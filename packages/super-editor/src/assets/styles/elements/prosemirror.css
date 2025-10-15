@@ -257,8 +257,8 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   border-top: 1px dashed #cb0e47;
   border-bottom: 1px dashed #cb0e47;
   background-color: #cb0e4722;
-  text-decoration: line-through;
-  text-decoration-thickness: 2px;
+  text-decoration: line-through !important;
+  text-decoration-thickness: 2px !important;
 }
 
 .ProseMirror .track-format-dec.highlighted {

@@ -90,6 +90,12 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
     // so drop the derived values when nothing is defined inline or via style.
     finalProps.spacing = undefined;
   }
+
+  // START: Remove this code after re-implementation of lists
+  if (ilvl != null && numId != null) {
+    delete finalProps.indent;
+  }
+  // END: Remove this code after re-implementation of lists
   return finalProps;
 }
 
