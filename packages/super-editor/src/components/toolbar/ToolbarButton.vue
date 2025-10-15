@@ -125,7 +125,7 @@ const caretIcon = computed(() => {
           v-model="inlineTextInput"
           @keydown.enter.prevent="handleInputSubmit"
           type="text"
-          class="button-text-input"
+          class="button-text-input button-text-input--font-size"
           :class="{ 'high-contrast': isHighContrastMode }"
           :id="'inlineTextInput-' + name"
           autocomplete="off"
@@ -271,6 +271,10 @@ const caretIcon = computed(() => {
   &.high-contrast {
     background-color: #fff;
   }
+}
+
+.button-text-input--font-size {
+  width: 36px;
 }
 
 .button-text-input::placeholder {
