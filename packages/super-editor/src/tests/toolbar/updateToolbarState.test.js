@@ -338,7 +338,7 @@ describe('updateToolbarState', () => {
     toolbar.updateToolbarState();
 
     const fontSizeItem = toolbar.toolbarItems.find((item) => item.name.value === 'fontSize');
-    expect(fontSizeItem.activate).toHaveBeenCalledWith({ fontSize: '20pt' });
+    expect(fontSizeItem.activate).toHaveBeenCalledWith({ fontSize: '20pt' }, false);
     expect(fontSizeItem.activate).not.toHaveBeenCalledWith({ fontSize: '14pt' });
   });
 });
