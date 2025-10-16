@@ -790,7 +790,13 @@ export class SuperToolbar extends EventEmitter {
       const activeMark = markNegated ? null : rawActiveMark;
 
       if (activeMark) {
-        item.activate(activeMark.attrs);
+        if (activeMark.name === 'fontSize') {
+          const fontSizes = marks.filter((i) => i.name === 'fontSize').map((i) => i.attrs.fontSize);
+          const isMultiple = [...new Set(fontSizes)].length > 1;
+          item.activate(activeMark.attrs, isMultiple);
+        } else {
+          item.activate(activeMark.attrs);
+        }
       } else {
         item.deactivate();
       }

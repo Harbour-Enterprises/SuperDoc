@@ -10,7 +10,7 @@ import { createZip } from './core/super-converter/zipper.js';
 import { getAllowedImageDimensions } from './extensions/image/imageHelpers/processUploadedImage.js';
 import { Node, Attribute } from '@core/index.js';
 import { Extension } from '@core/Extension.js';
-import { Plugin } from 'prosemirror-state';
+import { Plugin, PluginKey } from 'prosemirror-state';
 import { Mark } from '@core/Mark.js';
 import SlashMenu from './components/slash-menu/SlashMenu.vue';
 import { BasicUpload } from '@harbour-enterprises/common';
@@ -26,13 +26,18 @@ import { CommentsPluginKey } from './extensions/comment/comments-plugin.js';
 import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { SectionHelpers } from '@extensions/structured-content/document-section/index.js';
 import { registeredHandlers } from './core/super-converter/v3/handlers/index.js';
+import { Decoration, DecorationSet } from 'prosemirror-view';
 
 const Extensions = {
   Node,
   Attribute,
   Extension,
-  Plugin,
   Mark,
+  //
+  Plugin,
+  PluginKey,
+  Decoration,
+  DecorationSet,
 };
 
 /**

@@ -1,47 +1,19 @@
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
+import {
+  selectAlternateContentElements,
+  translator as alternateContentTranslator,
+} from '../../v3/handlers/mc/altermateContent/alternate-content-translator.js';
 
 const ALTERNATE_CONTENT_NODE = 'mc:AlternateContent';
-const SUPPORTED_REQUIRES = new Set([
-  'wps',
-  'wp14',
-  'w14',
-  'w15',
-  'w16',
-  'w16cex',
-  'w16cid',
-  'w16du',
-  'w16sdtdh',
-  'w16sdtfl',
-  'w16se',
-]);
 
 const skipHandlerResponse = { nodes: [], consumed: 0 };
 
 const isAlternateContentNode = (node) => node?.name === ALTERNATE_CONTENT_NODE;
 
-const isSupportedChoice = (choice) => {
-  if (!choice?.attributes) return false;
-  const requires = choice.attributes.Requires || choice.attributes.requires;
-  if (!requires) return false;
-
-  return requires
-    .split(/\s+/)
-    .filter(Boolean)
-    .some((namespace) => SUPPORTED_REQUIRES.has(namespace));
-};
-
 const resolveAlternateContentElements = (alternateContent) => {
-  if (!alternateContent?.elements?.length) return null;
-
-  const choices = alternateContent.elements.filter((el) => el.name === 'mc:Choice');
-  const fallback = alternateContent.elements.find((el) => el.name === 'mc:Fallback');
-
-  const supportedChoice = choices.find(isSupportedChoice);
-  const selectedElements = supportedChoice?.elements || fallback?.elements || choices[0]?.elements;
-
-  if (!selectedElements) return null;
-
-  return carbonCopy(selectedElements);
+  const { elements } = selectAlternateContentElements(alternateContent);
+  if (!elements) return null;
+  return elements;
 };
 
 const buildNodeWithoutAlternateContent = (node) => {
@@ -86,18 +58,23 @@ const handleAlternateChoice = (params) => {
   const [currentNode] = nodes;
 
   if (isAlternateContentNode(currentNode)) {
-    const resolvedElements = resolveAlternateContentElements(currentNode);
-    if (!resolvedElements) {
+    const nodeForTranslator = currentNode?.type
+      ? currentNode
+      : {
+          ...currentNode,
+          type: 'element',
+        };
+    const translated = alternateContentTranslator.encode({
+      ...params,
+      nodes: [nodeForTranslator],
+      extraParams: { ...(params.extraParams || {}), node: nodeForTranslator },
+    });
+    if (!translated) {
       return skipHandlerResponse;
     }
 
-    const result = nodeListHandler.handler({
-      ...params,
-      nodes: resolvedElements,
-      path: [...(params.path || []), currentNode],
-    });
-
-    return { nodes: result, consumed: 1 };
+    const nodesArray = Array.isArray(translated) ? translated : [translated];
+    return { nodes: nodesArray, consumed: 1 };
   }
 
   const sanitizedNode = buildNodeWithoutAlternateContent(currentNode);

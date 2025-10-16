@@ -153,7 +153,14 @@ export const makeDefaultItems = ({
       ariaLabel: 'Font size',
     },
     options: fontSizeOptions,
-    onActivate: ({ fontSize: size }) => {
+    onActivate: ({ fontSize: size }, isMultiple = false) => {
+      if (isMultiple) {
+        // if there are multiple sizes in the selection.
+        fontSize.label.value = '';
+        fontSize.selectedValue.value = '';
+        return;
+      }
+
       const defaultSize = fontSizeOptions.find((i) => i.label === String(fontSize.defaultLabel.value));
       if (!size) {
         fontSize.label.value = fontSize.defaultLabel.value;
@@ -172,8 +179,6 @@ export const makeDefaultItems = ({
       });
       if (foundSize) {
         fontSize.selectedValue.value = foundSize.key;
-      } else if (defaultSize) {
-        fontSize.selectedValue.value = defaultSize.key;
       } else {
         fontSize.selectedValue.value = '';
       }
