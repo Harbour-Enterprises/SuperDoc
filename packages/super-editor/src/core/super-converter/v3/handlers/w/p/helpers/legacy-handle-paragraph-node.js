@@ -44,20 +44,6 @@ export const handleParagraphNode = (params) => {
   }
   schemaNode.type = 'paragraph';
 
-  // Parse direct run properties (w:rPr) inside w:pPr
-  if (inlineParagraphProperties?.runProperties) {
-    let marks = encodeMarksFromRPr(inlineParagraphProperties?.runProperties);
-
-    if (!schemaNode.content?.length) {
-      let highlightIndex = marks?.findIndex((i) => i.type === 'highlight');
-      if (highlightIndex !== -1) {
-        marks.splice(highlightIndex, 1);
-      }
-    }
-
-    schemaNode.attrs.marksAttrs = marks;
-  }
-
   // Pull out some commonly used properties to top-level attrs
   schemaNode.attrs.paragraphProperties = inlineParagraphProperties;
   schemaNode.attrs.borders = resolvedParagraphProperties.borders;
