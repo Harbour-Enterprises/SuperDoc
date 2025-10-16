@@ -2,7 +2,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { PaginationPluginKey } from '../../pagination/pagination-helpers.js';
-import { getNormalizedImageAttrs } from './legacyAttributes.js';
 
 const ImagePositionPluginKey = new PluginKey('ImagePosition');
 
@@ -31,8 +30,9 @@ export const ImagePositionPlugin = ({ editor }) => {
       },
 
       apply(tr, oldDecorationSet, oldState, newState) {
-        if (!tr.docChanged) return oldDecorationSet;
+        if (!tr.docChanged && !shouldUpdate) return oldDecorationSet;
         const decorations = getImagePositionDecorations(newState, view);
+        shouldUpdate = false;
         return DecorationSet.create(newState.doc, decorations);
       },
     },
@@ -42,7 +42,6 @@ export const ImagePositionPlugin = ({ editor }) => {
         update: (view, lastState) => {
           const pagination = PaginationPluginKey.getState(lastState);
           if (shouldUpdate) {
-            shouldUpdate = false;
             const decorations = getImagePositionDecorations(lastState, view);
             const updateTransaction = view.state.tr.setMeta(ImagePositionPluginKey, { decorations });
             view.dispatch(updateTransaction);
@@ -80,46 +79,40 @@ const getImagePositionDecorations = (state, view) => {
       let className = '';
       const { vRelativeFrom, alignH } = node.attrs.anchorData;
       const { size, padding } = node.attrs;
-      const { marginOffset } = getNormalizedImageAttrs(node.attrs);
       const pageBreak = findPreviousDomNodeWithClass(view, pos, 'pagination-break-wrapper');
-      if (pageBreak) {
-        switch (alignH) {
-          case 'left':
-            style += 'float: left; left: 0; margin-left: 0; ';
-            break;
-          case 'right':
-            style += 'float: right; right: 0; margin-right: 0; ';
-            break;
-          case 'center':
-            style += 'display: block; margin-left: auto; margin-right: auto; ';
-            break;
-        }
-        const topPos =
-          marginOffset.top !== undefined ? marginOffset.top : pageBreak?.offsetTop + pageBreak?.offsetHeight;
-        style += vRelativeFrom === 'margin' ? `position: absolute; top: ${topPos}px; ` : '';
-        if (vRelativeFrom === 'margin') {
-          const nextPos = view.posAtDOM(pageBreak, 1);
+      if (pageBreak && vRelativeFrom === 'margin' && alignH) {
+        const topPos = pageBreak?.offsetTop + pageBreak?.offsetHeight;
+        let horizontalAlignment = `${alignH}: 0;`;
+        if (alignH === 'center') horizontalAlignment = 'left: 50%; transform: translateX(-50%);';
 
-          if (nextPos < 0) {
-            const $pos = view.state.doc.resolve(pos);
-            // When no placeholder can be added apply height to the parent node to occupy absolute image size
-            decorations.push(
-              Decoration.node(pos - 1, pos + $pos.parent.nodeSize - 1, {
-                style: `height: ${size.height + parseInt(padding.top) + parseInt(padding.bottom)}px`,
-              }),
-            );
-          }
+        style += vRelativeFrom === 'margin' ? `position: absolute; top: ${topPos}px; ${horizontalAlignment}` : '';
+        const nextPos = view.posAtDOM(pageBreak, 1);
 
-          const imageBlock = document.createElement('div');
-          imageBlock.className = 'anchor-image-placeholder';
-          imageBlock.style.float = alignH;
-          imageBlock.style.width = size.width + parseInt(padding[alignH]) + 'px';
-          imageBlock.style.height = size.height + parseInt(padding.top) + parseInt(padding.bottom) + 'px';
-          decorations.push(Decoration.widget(nextPos, imageBlock, { key: 'stable-key' }));
+        if (nextPos < 0) {
+          const $pos = view.state.doc.resolve(pos);
+          // When no placeholder can be added apply height to the parent node to occupy absolute image size
+          decorations.push(
+            Decoration.node(pos - 1, pos + $pos.parent.nodeSize - 1, {
+              style: `height: ${size.height + parseInt(padding.top) + parseInt(padding.bottom)}px`,
+            }),
+          );
         }
+
+        const imageBlock = document.createElement('div');
+        imageBlock.className = 'anchor-image-placeholder';
+        imageBlock.style.float = alignH === 'left' || alignH === 'right' ? alignH : 'none';
+        let paddingHorizontal;
+        if (alignH === 'center') {
+          paddingHorizontal = (parseInt(padding.left) || 0) + (parseInt(padding.right) || 0);
+        } else {
+          paddingHorizontal = parseInt(padding[alignH]) || 0;
+        }
+        imageBlock.style.width = size.width + paddingHorizontal + 'px';
+        imageBlock.style.height = size.height + parseInt(padding.top) + parseInt(padding.bottom) + 'px';
+        decorations.push(Decoration.widget(nextPos, imageBlock, { key: 'stable-key' }));
+
+        decorations.push(Decoration.inline(pos, pos + node.nodeSize, { style, class: className }));
       }
-
-      decorations.push(Decoration.inline(pos, pos + node.nodeSize, { style, class: className }));
     }
   });
   return decorations;
