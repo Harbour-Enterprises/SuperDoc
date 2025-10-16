@@ -1,3 +1,14 @@
+# [0.25.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.24.0...v0.25.0) (2025-10-15)
+
+### Bug Fixes
+
+- replace (addition/deletion) tracked change bubble ([#1135](https://github.com/Harbour-Enterprises/SuperDoc/issues/1135)) ([cd8b480](https://github.com/Harbour-Enterprises/SuperDoc/commit/cd8b4806a31fb1734861e882597264b4bf2f4614))
+- toolbar font-size when multiple selected ([#1139](https://github.com/Harbour-Enterprises/SuperDoc/issues/1139)) ([234f8e1](https://github.com/Harbour-Enterprises/SuperDoc/commit/234f8e187f82ecc323fbe81b228db538f51eaed6))
+
+### Features
+
+- allow customizing of tracked change permissions ([#1132](https://github.com/Harbour-Enterprises/SuperDoc/issues/1132)) ([1078801](https://github.com/Harbour-Enterprises/SuperDoc/commit/1078801236f30045b5f393b3d60a9cf551065579))
+
 # [0.24.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.23.0...v0.24.0) (2025-10-15)
 
 ### Bug Fixes
