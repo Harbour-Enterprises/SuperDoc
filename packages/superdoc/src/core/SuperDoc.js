@@ -15,6 +15,11 @@ import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative
 import { normalizeDocumentEntry } from './helpers/file.js';
 import { isAllowed } from './collaboration/permissions.js';
 
+const DEFAULT_USER = Object.freeze({
+  name: 'Default SuperDoc user',
+  email: null,
+});
+
 /** @typedef {import('./types').User} User */
 /** @typedef {import('./types').TelemetryConfig} TelemetryConfig */
 /** @typedef {import('./types').Document} Document */
@@ -120,6 +125,19 @@ export class SuperDoc extends EventEmitter {
       ...this.config,
       ...config,
     };
+
+    const incomingUser = this.config.user;
+    if (!incomingUser || typeof incomingUser !== 'object') {
+      this.config.user = { ...DEFAULT_USER };
+    } else {
+      this.config.user = {
+        ...DEFAULT_USER,
+        ...incomingUser,
+      };
+      if (!this.config.user.name) {
+        this.config.user.name = DEFAULT_USER.name;
+      }
+    }
 
     this.config.modules = this.config.modules || {};
     if (!Object.prototype.hasOwnProperty.call(this.config.modules, 'comments')) {
