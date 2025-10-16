@@ -928,13 +928,17 @@ export class Editor extends EventEmitter {
       return;
     }
 
-    const fontsUsedInDocument = this.converter.getDocumentFonts();
-    const unsupportedFonts = this.#determineUnsupportedFonts(fontsUsedInDocument);
+    try {
+      const fontsUsedInDocument = this.converter.getDocumentFonts();
+      const unsupportedFonts = this.#determineUnsupportedFonts(fontsUsedInDocument);
 
-    this.emit('fonts-resolved', {
-      documentFonts: fontsUsedInDocument,
-      unsupportedFonts: unsupportedFonts,
-    });
+      this.emit('fonts-resolved', {
+        documentFonts: fontsUsedInDocument,
+        unsupportedFonts: unsupportedFonts,
+      });
+    } catch {
+      console.warn('[SuperDoc] Could not determine document fonts and unsupported fonts');
+    }
   }
 
   /**
