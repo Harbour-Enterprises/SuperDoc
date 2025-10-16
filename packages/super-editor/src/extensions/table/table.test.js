@@ -68,11 +68,11 @@ describe('Table commands', () => {
     templateBlockAttrs = null;
   });
 
-  it('appendRowsWithContentToTable appends values as a new row at the end', () => {
+  it('appendRowsWithContent appends values as a new row at the end', () => {
     const tablePos = findTablePos(editor.state.doc);
     expect(tablePos).not.toBeNull();
 
-    const didAppend = editor.commands.appendRowsWithContentToTable({
+    const didAppend = editor.commands.appendRowsWithContent({
       tablePos,
       valueRows: [['One', 'Two']],
     });
@@ -88,11 +88,11 @@ describe('Table commands', () => {
     expect(cellTexts).toEqual(['One', 'Two']);
   });
 
-  it('appendRowsWithContentToTable copies template marks when copyRowStyle is true', () => {
+  it('appendRowsWithContent copies template marks when copyRowStyle is true', () => {
     const tablePos = findTablePos(editor.state.doc);
     expect(tablePos).not.toBeNull();
 
-    const didAppend = editor.commands.appendRowsWithContentToTable({
+    const didAppend = editor.commands.appendRowsWithContent({
       tablePos,
       valueRows: [['Styled Copy', 'Other']],
       copyRowStyle: true,
