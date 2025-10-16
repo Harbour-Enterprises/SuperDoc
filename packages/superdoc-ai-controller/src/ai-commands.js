@@ -174,9 +174,6 @@ async function handleReplace(editor, position, newText) {
 /**
  * Action: Insert tracked change
  */
-/**
- * Action: Insert tracked change
- */
 async function handleTrackedChange(editor, position, newText, author) {
   const { from, to } = position;
   const { state } = editor;
