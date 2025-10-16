@@ -592,6 +592,8 @@ export class Editor extends EventEmitter {
    * @param {string} documentMode - The document mode ('editing', 'viewing', 'suggesting')
    */
   setDocumentMode(documentMode) {
+    if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
+
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
     if (!this.extensionService || !this.state) return;
 
@@ -601,7 +603,6 @@ export class Editor extends EventEmitter {
     if (this.options.role === 'suggester' && cleanedMode === 'editing') cleanedMode = 'suggesting';
     // Viewing mode: Not editable, no tracked changes, no comments
     if (cleanedMode === 'viewing') {
-      // this.unregisterPlugin('comments');
       this.commands.toggleTrackChangesShowOriginal();
       this.setEditable(false, false);
       this.setOptions({ documentMode: 'viewing' });
@@ -611,12 +612,11 @@ export class Editor extends EventEmitter {
         isEditMode: false,
         documentMode: cleanedMode,
       });
-      if (!this.options.isHeaderOrFooter && pm) pm.classList.add('view-mode');
+      if (pm) pm.classList.add('view-mode');
     }
 
     // Suggesting: Editable, tracked changes plugin enabled, comments
     else if (cleanedMode === 'suggesting') {
-      // this.#registerPluginByNameIfNotExists('comments')
       this.#registerPluginByNameIfNotExists('TrackChangesBase');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.enableTrackChanges();
@@ -628,7 +628,6 @@ export class Editor extends EventEmitter {
     // Editing: Editable, tracked changes plguin disabled, comments
     else if (cleanedMode === 'editing') {
       this.#registerPluginByNameIfNotExists('TrackChangesBase');
-      // this.#registerPluginByNameIfNotExists('comments');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.disableTrackChanges();
       this.setEditable(true, false);
@@ -1377,6 +1376,33 @@ export class Editor extends EventEmitter {
       const tr = state.tr.setMeta(CommentsPluginKey, { type: 'force' });
       dispatch(tr);
     }, 50);
+  }
+
+  /**
+   * Initialize track changes based on document mode
+   * @returns {void}
+   */
+  #initTrackChanges() {
+    if (!this.extensionService || this.options.isHeaderOrFooter) {
+      return;
+    }
+    switch (this.options.documentMode) {
+      case 'editing':
+        this.#registerPluginByNameIfNotExists('TrackChangesBase');
+        this.commands.disableTrackChangesShowOriginal();
+        this.commands.disableTrackChanges();
+        break;
+      case 'suggesting':
+        this.#registerPluginByNameIfNotExists('TrackChangesBase');
+        this.commands.disableTrackChangesShowOriginal();
+        this.commands.enableTrackChanges();
+        break;
+      case 'viewing':
+        this.commands.toggleTrackChangesShowOriginal();
+        break;
+      default:
+        break;
+    }
   }
 
   /**
