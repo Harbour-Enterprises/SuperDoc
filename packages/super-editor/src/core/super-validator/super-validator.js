@@ -1,8 +1,17 @@
 // @ts-check
+import { Selection } from 'prosemirror-state';
 import { createLogger } from './logger/logger.js';
 import { StateValidators } from './validators/state/index.js';
 import { XmlValidators } from './validators/xml/index.js';
 import { RelationshipCache } from './relationship-cache.js';
+
+const queueMicrotaskSafe = (callback) => {
+  if (typeof globalThis !== 'undefined' && typeof globalThis.queueMicrotask === 'function') {
+    globalThis.queueMicrotask(callback);
+  } else {
+    Promise.resolve().then(callback);
+  }
+};
 
 /**
  * @typedef {import('./types.js').ElementInfo} ElementInfo
@@ -186,7 +195,7 @@ export class SuperValidator {
     let dispatchPromise = null;
 
     if (!this.dryRun) {
-      if (tr.steps.length > 0) dispatchPromise = this.#scheduleStepDispatch(tr.steps.slice());
+      if (tr.steps.length > 0) dispatchPromise = this.#scheduleStepDispatch(tr);
       else this.logger.debug('No changes detected; skipping dispatch.');
     } else {
       this.logger.debug('DRY RUN: No changes applied to the document.');
@@ -197,19 +206,34 @@ export class SuperValidator {
   }
 
   /**
-   * Schedule the provided steps to be dispatched in a new transaction.
-   * @param {import('prosemirror-transform').Step[]} steps
+   * Schedule the provided transaction to be dispatched, chunking its steps when necessary.
+   * @param {import('prosemirror-state').Transaction} originalTransaction
    * @returns {Promise<void> | null}
    */
-  #scheduleStepDispatch(steps) {
+  #scheduleStepDispatch(originalTransaction) {
+    if (!originalTransaction) return null;
+
+    const steps = originalTransaction.steps.slice();
     if (!steps.length) return null;
 
+    const CHUNK_SIZE = 100;
+    if (steps.length <= CHUNK_SIZE) {
+      return this.#dispatchOriginalTransaction(originalTransaction);
+    }
+
+    /** @type {() => void} */
     let resolveDispatch = () => {};
     const dispatchPromise = new Promise((resolve) => {
-      resolveDispatch = resolve;
+      resolveDispatch = () => {
+        resolve();
+      };
     });
 
-    const CHUNK_SIZE = 100;
+    const metaEntries = this.#getTransactionMetaEntries(originalTransaction);
+    const selectionJSON = this.#getTransactionSelectionJSON(originalTransaction);
+    const storedMarks = originalTransaction.storedMarks ? [...originalTransaction.storedMarks] : null;
+    const scrolledIntoView = Boolean(originalTransaction.scrolledIntoView);
+    const originalTime = originalTransaction.time;
 
     const applyChunk = () => {
       if (this.#editor.isDestroyed) {
@@ -225,11 +249,24 @@ export class SuperValidator {
         transaction.step(step);
       });
 
+      const isFinalChunk = steps.length === 0;
+
+      if (isFinalChunk) {
+        this.#applyTransactionMetadata({
+          transaction,
+          metaEntries,
+          selectionJSON,
+          storedMarks,
+          scrolledIntoView,
+          time: originalTime,
+        });
+      }
+
       if (transaction.steps.length) {
         view.dispatch(transaction);
       }
 
-      if (steps.length) {
+      if (!isFinalChunk) {
         scheduleNextChunk();
       } else {
         resolveDispatch();
@@ -253,6 +290,95 @@ export class SuperValidator {
     scheduleNextChunk();
 
     return dispatchPromise;
+  }
+
+  /**
+   * Dispatch the original transaction while preserving async scheduling.
+   * @param {import('prosemirror-state').Transaction} transaction
+   * @returns {Promise<void>}
+   */
+  #dispatchOriginalTransaction(transaction) {
+    return new Promise((resolve) => {
+      const runDispatch = () => {
+        if (!this.#editor.isDestroyed) {
+          this.#editor.view.dispatch(transaction);
+        }
+        resolve();
+      };
+
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(runDispatch);
+        return;
+      }
+
+      queueMicrotaskSafe(runDispatch);
+    });
+  }
+
+  /**
+   * Collect the metadata entries from a transaction.
+   * @param {import('prosemirror-state').Transaction} transaction
+   * @returns {Array<[any, any]>}
+   */
+  #getTransactionMetaEntries(transaction) {
+    const rawTransaction = /** @type {any} */ (transaction);
+    const meta = rawTransaction?.meta;
+    if (!meta) return [];
+    return Reflect.ownKeys(meta).map((key) => [key, meta[key]]);
+  }
+
+  /**
+   * Safely serialize the transaction selection for later restoration.
+   * @param {import('prosemirror-state').Transaction} transaction
+   * @returns {Record<string, any> | null}
+   */
+  #getTransactionSelectionJSON(transaction) {
+    try {
+      if (!transaction.selection) return null;
+      return transaction.selection.toJSON();
+    } catch (error) {
+      this.logger.debug('Failed to serialize transaction selection:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Apply metadata and selection information to the chunked transaction.
+   * @param {{
+   *   transaction: import('prosemirror-state').Transaction,
+   *   metaEntries: Array<[any, any]>,
+   *   selectionJSON: Record<string, any> | null,
+   *   storedMarks: import('prosemirror-model').Mark[] | null,
+   *   scrolledIntoView: boolean,
+   *   time: number
+   * }} params
+   * @returns {void}
+   */
+  #applyTransactionMetadata({ transaction, metaEntries, selectionJSON, storedMarks, scrolledIntoView, time }) {
+    metaEntries.forEach(([key, value]) => {
+      transaction.setMeta(key, value);
+    });
+
+    if (Array.isArray(storedMarks) || storedMarks === null) {
+      transaction.setStoredMarks(storedMarks);
+    }
+
+    if (selectionJSON) {
+      try {
+        const selection = Selection.fromJSON(transaction.doc, selectionJSON);
+        transaction.setSelection(selection);
+      } catch (error) {
+        this.logger.debug('Failed to restore transaction selection:', error);
+      }
+    }
+
+    if (scrolledIntoView) {
+      transaction.scrollIntoView();
+    }
+
+    if (typeof time === 'number') {
+      transaction.time = time;
+    }
   }
 
   /**

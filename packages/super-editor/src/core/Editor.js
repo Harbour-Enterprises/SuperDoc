@@ -1266,7 +1266,7 @@ export class Editor extends EventEmitter {
 
     this.updateEditorStyles(element, proseMirror, isPaginationEnabled);
 
-    if (!this.options.isHeadless) {
+    if (!this.options.isHeadless && typeof window !== 'undefined') {
       requestAnimationFrame(() => {
         this.initMobileStyles(element);
       });

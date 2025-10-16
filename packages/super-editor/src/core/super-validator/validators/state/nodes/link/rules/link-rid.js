@@ -14,6 +14,7 @@
  * @param {Editor} editor
  * @param {Transaction} tr
  * @param {ValidatorLogger} logger
+ * @param {{ find: (target: string) => string | undefined, getOrCreate: (target: string, type: 'hyperlink') => string | null } | null} relationshipCache
  * @returns {{ modified: boolean, results: string[] }}
  */
 export function ensureValidLinkRID(links, editor, tr, logger, relationshipCache) {

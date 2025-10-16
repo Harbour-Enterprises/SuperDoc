@@ -11,7 +11,7 @@ import {
  */
 export class RelationshipCache {
   /**
-   * @param {import('../types.js').Editor} editor
+   * @param {import('./types.js').Editor} editor
    */
   constructor(editor) {
     this.editor = editor;

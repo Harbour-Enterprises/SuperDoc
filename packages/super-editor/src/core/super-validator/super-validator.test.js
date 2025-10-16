@@ -145,6 +145,45 @@ describe('SuperValidator', () => {
     expect(result.results).toHaveLength(2);
   });
 
+  it('falls back to promises when queueMicrotask is unavailable', async () => {
+    const hadQueueMicrotask = Object.prototype.hasOwnProperty.call(globalThis, 'queueMicrotask');
+    const originalQueueMicrotask = globalThis.queueMicrotask;
+    const originalWindow = globalThis.window;
+    const originalRequestAnimationFrame = originalWindow?.requestAnimationFrame;
+
+    globalThis.queueMicrotask = undefined;
+    if (originalWindow) {
+      originalWindow.requestAnimationFrame = undefined;
+    }
+
+    try {
+      const validator = createMockValidator({}, { modified: true, results: [] });
+      StateValidators.validatorA.mockReturnValue(validator);
+      StateValidators.validatorB.mockReturnValue(createMockValidator({}));
+
+      const instance = new SuperValidator({ editor: mockEditor });
+
+      const { dispatchPromise } = instance.validateActiveDocument();
+
+      expect(dispatchPromise).toBeInstanceOf(Promise);
+      expect(mockView.dispatch).not.toHaveBeenCalled();
+
+      await dispatchPromise;
+
+      expect(mockView.dispatch).toHaveBeenCalledWith(mockTr);
+    } finally {
+      if (originalWindow) {
+        originalWindow.requestAnimationFrame = originalRequestAnimationFrame;
+      }
+
+      if (hadQueueMicrotask) {
+        globalThis.queueMicrotask = originalQueueMicrotask;
+      } else {
+        delete globalThis.queueMicrotask;
+      }
+    }
+  });
+
   describe('validateDocumentExport', () => {
     it('calls all XML validators and aggregates results; dispatches when modified', () => {
       const xmlValidatorA = vi.fn(() => ({ modified: true, results: ['fixed numbering'] }));
