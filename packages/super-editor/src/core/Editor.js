@@ -380,7 +380,16 @@ export class Editor extends EventEmitter {
       this.initDefaultStyles();
     }
 
-    if (!this.options.ydoc || this.options.markdown || this.options.html) {
+    const shouldMigrateListsOnInit = Boolean(
+      this.options.markdown ||
+        this.options.html ||
+        this.options.loadFromSchema ||
+        this.options.jsonOverride ||
+        this.options.mode === 'html' ||
+        this.options.mode === 'text',
+    );
+
+    if (shouldMigrateListsOnInit) {
       this.migrateListsToV2();
     }
 
@@ -1386,6 +1395,10 @@ export class Editor extends EventEmitter {
     console.debug('🔗 [super-editor] Collaboration ready');
 
     this.#validateDocumentInit();
+
+    if (this.options.ydoc) {
+      this.migrateListsToV2();
+    }
 
     this.options.onCollaborationReady({ editor, ydoc });
     this.options.collaborationIsReady = true;
