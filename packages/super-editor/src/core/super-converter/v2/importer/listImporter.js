@@ -796,7 +796,7 @@ function _processListRunProperties(data) {
   return runProperties;
 }
 
-export const docxNumberigHelpers = {
+export const docxNumberingHelpers = {
   getListLevelDefinitionTag,
   combineIndents,
   parseIndentElement,

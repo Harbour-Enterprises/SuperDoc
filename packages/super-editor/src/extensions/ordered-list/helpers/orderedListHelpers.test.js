@@ -5,7 +5,7 @@ import { orderedListMarker } from './orderedListMarkerPlugin.js';
 import { orderedListSync, randomId } from './orderedListSyncPlugin.js';
 
 vi.mock('@core/super-converter/v2/importer/listImporter.js', () => ({
-  docxNumberigHelpers: {
+  docxNumberingHelpers: {
     generateListPath: vi.fn(() => [1]),
   },
 }));

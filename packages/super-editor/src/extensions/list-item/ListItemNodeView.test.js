@@ -3,7 +3,7 @@ import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest';
 const hoistedMocks = vi.hoisted(() => {
   const parseIndentElementMock = vi.fn();
   const combineIndentsMock = vi.fn();
-  const docxNumberigHelpersMock = {
+  const docxNumberingHelpersMock = {
     normalizeLvlTextChar: vi.fn(),
   };
   const generateOrderedListIndexMock = vi.fn();
@@ -13,7 +13,7 @@ const hoistedMocks = vi.hoisted(() => {
   return {
     parseIndentElementMock,
     combineIndentsMock,
-    docxNumberigHelpersMock,
+    docxNumberingHelpersMock,
     generateOrderedListIndexMock,
     getListItemStyleDefinitionsMock,
     resolveListItemTypographyMock,
@@ -23,7 +23,7 @@ const hoistedMocks = vi.hoisted(() => {
 const {
   parseIndentElementMock,
   combineIndentsMock,
-  docxNumberigHelpersMock,
+  docxNumberingHelpersMock,
   generateOrderedListIndexMock,
   getListItemStyleDefinitionsMock,
   resolveListItemTypographyMock,
@@ -37,7 +37,7 @@ vi.mock('@core/super-converter/v2/importer/listImporter.js', () => ({
 vi.mock('@/core/super-converter/v2/importer/listImporter.js', () => ({
   parseIndentElement: (...args) => hoistedMocks.parseIndentElementMock(...args),
   combineIndents: (...args) => hoistedMocks.combineIndentsMock(...args),
-  docxNumberigHelpers: hoistedMocks.docxNumberigHelpersMock,
+  docxNumberingHelpers: hoistedMocks.docxNumberingHelpersMock,
 }));
 
 vi.mock('@helpers/orderedListUtils.js', () => ({
@@ -109,7 +109,7 @@ beforeEach(() => {
   combineIndentsMock.mockImplementation((...indents) =>
     Object.assign({}, ...indents.filter((item) => item && Object.keys(item).length > 0)),
   );
-  docxNumberigHelpersMock.normalizeLvlTextChar.mockImplementation((value) => (value == null ? '•' : value));
+  docxNumberingHelpersMock.normalizeLvlTextChar.mockImplementation((value) => (value == null ? '•' : value));
   generateOrderedListIndexMock.mockReturnValue('1.');
   getListItemStyleDefinitionsMock.mockReturnValue(
     createDefaultIndentDefinitions({ style: { left: 30 }, numDef: { hanging: 10 }, align: 'left' }),
@@ -149,7 +149,7 @@ describe('ListItemNodeView', () => {
         lvlText: '%1.',
       }),
     );
-    expect(docxNumberigHelpersMock.normalizeLvlTextChar).not.toHaveBeenCalled();
+    expect(docxNumberingHelpersMock.normalizeLvlTextChar).not.toHaveBeenCalled();
     expect(resolveListItemTypographyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         node: nodeView.node,
@@ -174,14 +174,14 @@ describe('ListItemNodeView', () => {
       createDefaultIndentDefinitions({ style: { left: 50 }, numDef: { hanging: 5 }, align: 'right' }),
     );
     const normalized = '•';
-    docxNumberigHelpersMock.normalizeLvlTextChar.mockReturnValue(normalized);
+    docxNumberingHelpersMock.normalizeLvlTextChar.mockReturnValue(normalized);
     const nodeView = createNodeView({
       nodeAttrs: { listNumberingType: 'bullet', lvlText: 'o' },
       editorOptions: { isHeadless: true },
     });
 
     expect(generateOrderedListIndexMock).not.toHaveBeenCalled();
-    expect(docxNumberigHelpersMock.normalizeLvlTextChar).toHaveBeenCalledWith('o');
+    expect(docxNumberingHelpersMock.normalizeLvlTextChar).toHaveBeenCalledWith('o');
     expect(nodeView.numberingDOM.textContent).toBe(normalized);
     expect(nodeView.contentDOM.style.marginLeft).toBe('50px');
     expect(nodeView.numberingDOM.style.left).toBe('26px');
@@ -277,27 +277,25 @@ describe('ListItemNodeView', () => {
     nodeView.destroy();
   });
 
-  it('caches the resolved position and allows invalidation', () => {
-    const getPos = vi.fn().mockReturnValueOnce(7).mockReturnValueOnce(11);
+  it('resolves positions on demand and tolerates invalid results', () => {
+    const getPos = vi.fn().mockReturnValueOnce(7).mockReturnValueOnce(11).mockReturnValueOnce(13);
     const nodeView = createNodeView({ getPos });
 
-    expect(nodeView.getResolvedPos()).toBe(7);
+    // First call happens during initialization.
     expect(getPos).toHaveBeenCalledTimes(1);
 
-    expect(nodeView.getResolvedPos()).toBe(7);
-    expect(getPos).toHaveBeenCalledTimes(1);
-
-    expect(nodeView.getResolvedPos({ force: true })).toBe(11);
+    expect(nodeView.getResolvedPos()).toBe(11);
     expect(getPos).toHaveBeenCalledTimes(2);
 
+    expect(nodeView.getResolvedPos()).toBe(13);
+    expect(getPos).toHaveBeenCalledTimes(3);
+
     nodeView._rawGetPos = () => 'not-a-number';
-    nodeView.invalidateResolvedPos();
     expect(nodeView.getResolvedPos()).toBeNull();
 
     nodeView._rawGetPos = () => {
       throw new Error('position unavailable');
     };
-    nodeView.invalidateResolvedPos();
     expect(nodeView.getResolvedPos()).toBeNull();
 
     nodeView.destroy();
@@ -308,7 +306,7 @@ describe('ListItemNodeView', () => {
     const nodeView = createNodeView({ getPos });
 
     expect(nodeView.getPos()).toBe(4);
-    expect(getPos).toHaveBeenCalledTimes(1);
+    expect(getPos).toHaveBeenCalledTimes(2);
 
     nodeView.destroy();
   });
@@ -318,7 +316,7 @@ describe('ListItemNodeView', () => {
       .mockReturnValueOnce({ fontSize: '15pt', fontFamily: 'MockFamily', lineHeight: '1.4' })
       .mockReturnValueOnce({ fontSize: '18pt', fontFamily: 'Updated', lineHeight: '1.8' });
 
-    const getPos = vi.fn().mockReturnValueOnce(4).mockReturnValueOnce(8);
+    const getPos = vi.fn().mockReturnValueOnce(4).mockReturnValue(8);
     installCanvasMock(12);
     const nodeView = createNodeView({ getPos });
 

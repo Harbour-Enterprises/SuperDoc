@@ -1,7 +1,7 @@
 import { parseIndentElement, combineIndents } from '@core/super-converter/v2/importer/listImporter.js';
 import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 import { getListItemStyleDefinitions } from '@helpers/list-numbering-helpers.js';
-import { docxNumberigHelpers } from '@/core/super-converter/v2/importer/listImporter.js';
+import { docxNumberingHelpers } from '@/core/super-converter/v2/importer/listImporter.js';
 import { resolveListItemTypography } from './helpers/listItemTypography.js';
 
 const MARKER_PADDING = 6;
@@ -39,9 +39,8 @@ export class ListItemNodeView {
     this.decorations = decorations;
     this.view = editor.view;
     this._rawGetPos = getPos;
-    this._posCache = null;
     this._pendingIndentRefresh = null;
-    this.getPos = (options) => this.getResolvedPos(options);
+    this.getPos = () => this.getResolvedPos();
 
     this.#init();
 
@@ -63,7 +62,7 @@ export class ListItemNodeView {
           customFormat,
         });
       } else {
-        orderMarker = docxNumberigHelpers.normalizeLvlTextChar(lvlText);
+        orderMarker = docxNumberingHelpers.normalizeLvlTextChar(lvlText);
       }
     }
 
@@ -106,21 +105,18 @@ export class ListItemNodeView {
     this.refreshIndentStyling();
   }
 
-  getResolvedPos({ force = false } = {}) {
-    if (force) this._posCache = null;
-    if (this._posCache == null && typeof this._rawGetPos === 'function') {
-      try {
-        const resolved = this._rawGetPos();
-        this._posCache = typeof resolved === 'number' ? resolved : null;
-      } catch {
-        this._posCache = null;
-      }
+  getResolvedPos() {
+    if (typeof this._rawGetPos !== 'function') return null;
+    try {
+      const resolved = this._rawGetPos();
+      return typeof resolved === 'number' ? resolved : null;
+    } catch {
+      return null;
     }
-    return this._posCache;
   }
 
   invalidateResolvedPos() {
-    this._posCache = null;
+    /* no-op; retained for compatibility with earlier caching implementation */
   }
 
   refreshIndentStyling({ immediate = false } = {}) {
