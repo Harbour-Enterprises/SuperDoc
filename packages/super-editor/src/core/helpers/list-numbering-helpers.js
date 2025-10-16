@@ -577,8 +577,9 @@ export const getListItemStyleDefinitions = ({ styleId, numId, level, editor, tri
   if (typeof numId === 'string') numId = Number(numId);
   if (typeof level === 'string') level = Number(level);
 
-  const docx = { ...editor?.converter?.convertedXml };
-  const newNumbering = { ...editor?.converter?.numbering };
+  const docx = editor?.converter?.convertedXml;
+  const numbering = editor?.converter?.numbering;
+  if (!docx) return {};
 
   // We need definitions for the styleId if we have one.
   const styleDefinition = getStyleTagFromStyleId(styleId, docx);
@@ -587,9 +588,9 @@ export const getListItemStyleDefinitions = ({ styleId, numId, level, editor, tri
   // We also check definitions for the numId which can contain styles.
   let abstractDefinition = getAbstractDefinition(numId, docx);
   if (!abstractDefinition) {
-    const listDef = newNumbering.definitions[numId];
+    const listDef = numbering?.definitions?.[numId];
     const abstractId = listDef?.elements?.find((item) => item.name === 'w:abstractNumId')?.attributes?.['w:val'];
-    abstractDefinition = newNumbering.abstracts[abstractId];
+    abstractDefinition = numbering?.abstracts?.[abstractId];
   }
 
   const numDefinition = getDefinitionForLevel(abstractDefinition, level);

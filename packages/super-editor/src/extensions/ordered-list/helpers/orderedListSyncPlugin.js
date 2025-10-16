@@ -1,5 +1,5 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
-import { docxNumberigHelpers } from '@core/super-converter/v2/importer/listImporter.js';
+import { docxNumberingHelpers } from '@core/super-converter/v2/importer/listImporter.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { refreshAllListItemNodeViews } from '@extensions/list-item/ListItemNodeView.js';
 
@@ -59,7 +59,7 @@ export function orderedListSync(editor) {
         if (!listMap.has(numId)) {
           // Get the initial path to understand the starting state
           const generatedLevels = {};
-          const initialPath = docxNumberigHelpers.generateListPath(level, numId, styleId, generatedLevels, docx);
+          const initialPath = docxNumberingHelpers.generateListPath(level, numId, styleId, generatedLevels, docx);
 
           // Set the initial path, we'll use it as a template
           listMap.set(numId, initialPath || []);

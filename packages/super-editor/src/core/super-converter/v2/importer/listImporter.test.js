@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { getAbstractDefinition, getListLevelDefinitionTag } from '@core/super-converter/v2/importer/listImporter.js';
+import {
+  getAbstractDefinition,
+  getListLevelDefinitionTag,
+  getDefinitionForLevel,
+} from '@core/super-converter/v2/importer/listImporter.js';
+import { LEVELS_MAP_KEY } from '@core/super-converter/v2/importer/numberingCache.js';
 
 function numberingXml(elements) {
   return {
@@ -118,5 +123,31 @@ describe('getListLevelDefinitionTag + template fallback behavior', () => {
     const { numFmt } = getListLevelDefinitionTag('5', 0, null, docx);
     // Should come from abstract 42 (decimal), not template-matching abstract 0 (lowerRoman)
     expect(numFmt).toBe('decimal');
+  });
+});
+
+describe('getDefinitionForLevel', () => {
+  it('returns memoized levels when cache is populated', () => {
+    const lvlNode = { attributes: { 'w:ilvl': '0' } };
+    const abstract = {
+      elements: [lvlNode],
+      [LEVELS_MAP_KEY]: new Map([[0, lvlNode]]),
+    };
+
+    expect(getDefinitionForLevel(abstract, '0')).toBe(lvlNode);
+  });
+
+  it('falls back to scanning elements when memoized levels are missing', () => {
+    const lvlNode = { attributes: { 'w:ilvl': '3' } };
+    const abstract = { elements: [{ name: 'w:lvl', attributes: { 'w:ilvl': '1' } }, lvlNode] };
+
+    expect(getDefinitionForLevel(abstract, 3)).toBe(lvlNode);
+  });
+
+  it('returns undefined when level cannot be resolved', () => {
+    const abstract = { elements: [] };
+
+    expect(getDefinitionForLevel(null, 0)).toBeUndefined();
+    expect(getDefinitionForLevel(abstract, 'not-a-level')).toBeUndefined();
   });
 });
