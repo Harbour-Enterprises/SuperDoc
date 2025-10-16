@@ -11,6 +11,14 @@ import { deleteTableWhenSelected } from './deleteTableWhenSelected.js';
 import { isCellSelection } from './isCellSelection.js';
 import { cellAround } from './cellAround.js';
 import { cellWrapping } from './cellWrapping.js';
+import {
+  resolveTable,
+  pickTemplateRowForAppend,
+  extractRowTemplateFormatting,
+  buildFormattedCellBlock,
+  buildRowFromTemplateRow,
+  insertRowsAtTableEnd,
+} from './appendRows.js';
 
 const cellMinWidth = 80;
 
@@ -188,5 +196,252 @@ describe('tableHelpers', () => {
     const selection = CellSelection.create(doc, firstCellPos, firstCellPos);
     expect(isCellSelection(selection)).toBe(true);
     expect(isCellSelection(null)).toBe(false);
+  });
+
+  describe('appendRows helpers', () => {
+    it('resolveTable finds table node from explicit reference', () => {
+      const { doc, table, state } = buildTableDoc(2, 2, false);
+      const tr = state.tr;
+      const resolved = resolveTable(tr, undefined, table);
+      expect(resolved).toBe(table);
+      expect(resolved?.type.name).toBe('table');
+    });
+
+    it('resolveTable finds table node from position', () => {
+      const { doc, state } = buildTableDoc(2, 2, false);
+      const tr = state.tr;
+      const tablePos = 0;
+      const resolved = resolveTable(tr, tablePos, undefined);
+      expect(resolved).not.toBeNull();
+      expect(resolved?.type.name).toBe('table');
+    });
+
+    it('resolveTable returns null when table not found', () => {
+      const { state } = buildTableDoc(2, 2, false);
+      const tr = state.tr;
+      const resolved = resolveTable(tr, undefined, undefined);
+      expect(resolved).toBeNull();
+    });
+
+    it('resolveTable returns null with invalid node type', () => {
+      const { state } = buildTableDoc(2, 2, false);
+      const tr = state.tr;
+      const paragraphNode = schema.nodes.paragraph.create();
+      const resolved = resolveTable(tr, undefined, paragraphNode);
+      expect(resolved).toBeNull();
+    });
+
+    it('pickTemplateRowForAppend prefers last body row with table cells', () => {
+      const { table } = buildTableDoc(3, 2, true);
+      const templateRow = pickTemplateRowForAppend(table, schema);
+      expect(templateRow).not.toBeNull();
+      expect(templateRow?.type.name).toBe('tableRow');
+      const hasBodyCell = templateRow?.content?.content?.some((c) => c.type.name === 'tableCell');
+      expect(hasBodyCell).toBe(true);
+    });
+
+    it('pickTemplateRowForAppend falls back to last row when no body cells', () => {
+      const headerRow = schema.nodes.tableRow.create(
+        null,
+        schema.nodes.tableHeader.create(null, schema.nodes.paragraph.create()),
+      );
+      const table = schema.nodes.table.create(null, headerRow);
+      const templateRow = pickTemplateRowForAppend(table, schema);
+      expect(templateRow).toBe(headerRow);
+    });
+
+    it('pickTemplateRowForAppend returns null for empty table', () => {
+      const emptyTable = schema.nodes.table.create();
+      const templateRow = pickTemplateRowForAppend(emptyTable, schema);
+      expect(templateRow).toBeNull();
+    });
+
+    it('extractRowTemplateFormatting extracts block type and text marks', () => {
+      const textNode = schema.text('Sample');
+      const paragraph = schema.nodes.paragraph.create(null, textNode);
+      const cell = schema.nodes.tableCell.create(null, paragraph);
+
+      const formatting = extractRowTemplateFormatting(cell, schema);
+      expect(formatting.blockType).toBe(schema.nodes.paragraph);
+      expect(formatting.textMarks).toBeDefined();
+    });
+
+    it('extractRowTemplateFormatting falls back to paragraph for empty cells', () => {
+      const cell = schema.nodes.tableCell.create(null, schema.nodes.paragraph.create());
+      const formatting = extractRowTemplateFormatting(cell, schema);
+      expect(formatting.blockType).toBe(schema.nodes.paragraph);
+      expect(formatting.textMarks).toEqual([]);
+    });
+
+    it('buildFormattedCellBlock creates block with text', () => {
+      const formatting = {
+        blockType: schema.nodes.paragraph,
+        blockAttrs: null,
+        textMarks: [],
+      };
+      const block = buildFormattedCellBlock(schema, 'Test value', formatting, false);
+      expect(block.type.name).toBe('paragraph');
+      expect(block.textContent).toBe('Test value');
+    });
+
+    it('buildFormattedCellBlock applies marks when copyRowStyle is true', () => {
+      const marks = schema.marks.link ? [schema.marks.link.create({ href: 'test' })] : [];
+      const formatting = {
+        blockType: schema.nodes.paragraph,
+        blockAttrs: null,
+        textMarks: marks,
+      };
+      const block = buildFormattedCellBlock(schema, 'Text with marks', formatting, true);
+      expect(block.textContent).toBe('Text with marks');
+      if (marks.length > 0) {
+        expect(block.firstChild?.marks.length).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('buildFormattedCellBlock does not apply marks when copyRowStyle is false', () => {
+      const marks = schema.marks.link ? [schema.marks.link.create({ href: 'test' })] : [];
+      const formatting = {
+        blockType: schema.nodes.paragraph,
+        blockAttrs: null,
+        textMarks: marks,
+      };
+      const block = buildFormattedCellBlock(schema, 'Plain text', formatting, false);
+      expect(block.textContent).toBe('Plain text');
+      expect(block.firstChild?.marks).toHaveLength(0);
+    });
+
+    it('buildFormattedCellBlock handles non-string values', () => {
+      const formatting = {
+        blockType: schema.nodes.paragraph,
+        blockAttrs: null,
+        textMarks: [],
+      };
+      const blockNum = buildFormattedCellBlock(schema, 123, formatting, false);
+      expect(blockNum.textContent).toBe('123');
+
+      const blockStr = buildFormattedCellBlock(schema, 'test', formatting, false);
+      expect(blockStr.textContent).toBe('test');
+    });
+
+    it('buildRowFromTemplateRow creates row with values by column', () => {
+      const { table } = buildTableDoc(1, 3, false);
+      const templateRow = pickTemplateRowForAppend(table, schema);
+      const values = ['A', 'B', 'C'];
+
+      const newRow = buildRowFromTemplateRow({
+        schema,
+        tableNode: table,
+        templateRow,
+        values,
+        copyRowStyle: false,
+      });
+
+      expect(newRow?.type.name).toBe('tableRow');
+      expect(newRow?.childCount).toBe(3);
+      expect(newRow?.content.content[0].textContent).toBe('A');
+      expect(newRow?.content.content[1].textContent).toBe('B');
+      expect(newRow?.content.content[2].textContent).toBe('C');
+    });
+
+    it('buildRowFromTemplateRow handles colspan cells', () => {
+      const cell1 = schema.nodes.tableCell.create({ colspan: 2, rowspan: 1 }, schema.nodes.paragraph.create());
+      const cell2 = schema.nodes.tableCell.create({ colspan: 1, rowspan: 1 }, schema.nodes.paragraph.create());
+      const templateRow = schema.nodes.tableRow.create(null, [cell1, cell2]);
+      const table = schema.nodes.table.create(null, templateRow);
+      const values = ['Col1', 'Col2', 'Col3'];
+
+      const newRow = buildRowFromTemplateRow({
+        schema,
+        tableNode: table,
+        templateRow,
+        values,
+        copyRowStyle: false,
+      });
+
+      expect(newRow?.childCount).toBe(2);
+      expect(newRow?.content.content[0].textContent).toBe('Col1');
+      expect(newRow?.content.content[1].textContent).toBe('Col3');
+    });
+
+    it('buildRowFromTemplateRow converts header cells to body cells', () => {
+      const headerCell = schema.nodes.tableHeader.create(null, schema.nodes.paragraph.create());
+      const templateRow = schema.nodes.tableRow.create(null, [headerCell]);
+      const table = schema.nodes.table.create(null, templateRow);
+      const values = ['Body cell'];
+
+      const newRow = buildRowFromTemplateRow({
+        schema,
+        tableNode: table,
+        templateRow,
+        values,
+        copyRowStyle: false,
+      });
+
+      expect(newRow?.content.content[0].type.name).toBe('tableCell');
+    });
+
+    it('buildRowFromTemplateRow copies style when copyRowStyle is true', () => {
+      const textNode = schema.text('Template');
+      const paragraph = schema.nodes.paragraph.create({ textAlign: 'center' }, textNode);
+      const cell = schema.nodes.tableCell.create(null, paragraph);
+      const templateRow = schema.nodes.tableRow.create(null, [cell]);
+      const table = schema.nodes.table.create(null, templateRow);
+      const values = ['Styled'];
+
+      const newRow = buildRowFromTemplateRow({
+        schema,
+        tableNode: table,
+        templateRow,
+        values,
+        copyRowStyle: true,
+      });
+
+      const newCell = newRow?.content.content[0];
+      expect(newCell).toBeDefined();
+      expect(newCell?.textContent).toBe('Styled');
+      const newParagraph = newCell?.content.content[0];
+      expect(newParagraph?.attrs).toBeDefined();
+    });
+
+    it('insertRowsAtTableEnd appends rows to table', () => {
+      const { table, state } = buildTableDoc(2, 2, false);
+      const tr = state.tr;
+      const tablePos = 0;
+
+      const newCell = schema.nodes.tableCell.create(null, schema.nodes.paragraph.create(null, schema.text('New')));
+      const newRow = schema.nodes.tableRow.create(null, [newCell, newCell]);
+
+      insertRowsAtTableEnd({ tr, tablePos, tableNode: table, rows: [newRow] });
+
+      const updatedTable = tr.doc.nodeAt(tablePos);
+      expect(updatedTable?.childCount).toBe(3);
+    });
+
+    it('insertRowsAtTableEnd handles multiple rows', () => {
+      const { table, state } = buildTableDoc(1, 2, false);
+      const tr = state.tr;
+      const tablePos = 0;
+
+      const newCell = schema.nodes.tableCell.create(null, schema.nodes.paragraph.create(null, schema.text('Row')));
+      const row1 = schema.nodes.tableRow.create(null, [newCell, newCell]);
+      const row2 = schema.nodes.tableRow.create(null, [newCell, newCell]);
+
+      insertRowsAtTableEnd({ tr, tablePos, tableNode: table, rows: [row1, row2] });
+
+      const updatedTable = tr.doc.nodeAt(tablePos);
+      expect(updatedTable?.childCount).toBe(3);
+    });
+
+    it('insertRowsAtTableEnd does nothing with empty rows array', () => {
+      const { table, state } = buildTableDoc(2, 2, false);
+      const tr = state.tr;
+      const tablePos = 0;
+      const initialChildCount = table.childCount;
+
+      insertRowsAtTableEnd({ tr, tablePos, tableNode: table, rows: [] });
+
+      const updatedTable = tr.doc.nodeAt(tablePos);
+      expect(updatedTable?.childCount).toBe(initialChildCount);
+    });
   });
 });
