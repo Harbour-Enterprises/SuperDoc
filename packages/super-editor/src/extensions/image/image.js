@@ -305,34 +305,16 @@ export const Image = Node.create({
             // We use 'largest' as best approximation
             //
             // For 'largest', float to the side that would leave the most space for text
-            const pageStyles =
-              this.editor?.converter?.pageStyles || this.editor?.options.parentEditor?.converter?.pageStyles;
-            if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
-              const pageWidth = inchesToPixels(pageStyles.pageSize.width);
-              const leftMargin = inchesToPixels(pageStyles.pageMargins.left);
-              const rightMargin = inchesToPixels(pageStyles.pageMargins.right);
-              const contentWidth = pageWidth - leftMargin - rightMargin;
-              const imageWidth = size.width + (attrs.distLeft || 0) + (attrs.distRight || 0);
+            const pageStylesData = getDataFromPageStyles({
+              editor: this.editor,
+              marginOffset,
+              size,
+              attrs,
+            });
 
-              // marginOffset.horizontal is space on the left when wrapText === "largest"
-              // We can therefore calculate the space on the right vs on the left:
-              const leftSpace = marginOffset.horizontal;
-              const rightSpace = contentWidth - leftSpace - imageWidth;
-
-              if (rightSpace < 0) {
-                // There is not enough space, float the image to the left
-                style += 'float: left;';
-              } else if (rightSpace > leftSpace) {
-                style += 'float: left;';
-              } else {
-                style += 'float: right;';
-                floatRight = true;
-                baseHorizontal = rightSpace;
-              }
-            } else {
-              // Fallback to left if page dimensions unavailable
-              style += 'float: left;';
-            }
+            style += pageStylesData.style;
+            floatRight = pageStylesData.floatRight;
+            baseHorizontal = pageStylesData.baseHorizontal;
           }
           if (attrs.distTop) margin.top += attrs.distTop;
           if (attrs.distBottom) margin.bottom += attrs.distBottom;
@@ -343,33 +325,18 @@ export const Image = Node.create({
         case 'Through':
         case 'Tight':
           style += 'clear: both;';
-          const pageStyles =
-            this.editor?.converter?.pageStyles || this.editor?.options.parentEditor?.converter?.pageStyles;
-          if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
-            const pageWidth = inchesToPixels(pageStyles.pageSize.width);
-            const leftMargin = inchesToPixels(pageStyles.pageMargins.left);
-            const rightMargin = inchesToPixels(pageStyles.pageMargins.right);
-            const contentWidth = pageWidth - leftMargin - rightMargin;
-            const imageWidth = size.width + (attrs.distLeft || 0) + (attrs.distRight || 0);
 
-            // marginOffset.horizontal is space on the left when wrapText === "largest"
-            // We can therefore calculate the space on the right vs on the left:
-            const leftSpace = marginOffset.horizontal;
-            const rightSpace = contentWidth - leftSpace - imageWidth;
-            if (rightSpace < 0) {
-              // There is not enough space, float the image to the left
-              style += 'float: left;';
-            } else if (rightSpace > leftSpace) {
-              style += 'float: left;';
-            } else {
-              style += 'float: right;';
-              floatRight = true;
-              baseHorizontal = rightSpace;
-            }
-          } else {
-            // Fallback to left if page dimensions unavailable
-            style += 'float: left;';
-          }
+          const pageStylesData = getDataFromPageStyles({
+            editor: this.editor,
+            marginOffset,
+            size,
+            attrs,
+          });
+
+          style += pageStylesData.style;
+          floatRight = pageStylesData.floatRight;
+          baseHorizontal = pageStylesData.baseHorizontal;
+
           // Use float and shape-outside if polygon is provided
 
           if (attrs.distTop) margin.top += attrs.distTop;
@@ -437,7 +404,12 @@ export const Image = Node.create({
           margin.left -= inchesToPixels(pageStyles?.pageMargins?.left) || 0;
           break;
         case 'margin':
-          style += anchorData.alignH ? `position: absolute; ${anchorData.alignH}: 0;` : '';
+          if (anchorData.alignH === 'center') {
+            style += 'position: absolute; left: 50%; transform: translateX(-50%);';
+          }
+          if (anchorData.alignH === 'left' || anchorData.alignH === 'right') {
+            style += `position: absolute; ${anchorData.alignH}: 0;`;
+          }
           break;
         default:
           break;
@@ -618,3 +590,43 @@ export const Image = Node.create({
     return [ImageRegistrationPlugin({ editor: this.editor }), ImagePositionPlugin({ editor: this.editor })];
   },
 });
+
+const getDataFromPageStyles = ({ editor, marginOffset, size, attrs }) => {
+  let style = '';
+  let floatRight = false;
+  let baseHorizontal = marginOffset?.horizontal || 0;
+  const pageStyles = editor?.converter?.pageStyles || editor?.options.parentEditor?.converter?.pageStyles;
+
+  if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
+    const pageWidth = inchesToPixels(pageStyles.pageSize.width);
+    const leftMargin = inchesToPixels(pageStyles.pageMargins.left);
+    const rightMargin = inchesToPixels(pageStyles.pageMargins.right);
+    const contentWidth = pageWidth - leftMargin - rightMargin;
+    const imageWidth = size.width + (attrs.distLeft || 0) + (attrs.distRight || 0);
+
+    // marginOffset.horizontal is space on the left when wrapText === "largest"
+    // We can therefore calculate the space on the right vs on the left:
+    const leftSpace = marginOffset.horizontal;
+    const rightSpace = contentWidth - leftSpace - imageWidth;
+
+    if (rightSpace < 0) {
+      // There is not enough space, float the image to the left
+      style += 'float: left;';
+    } else if (rightSpace > leftSpace) {
+      style += 'float: left;';
+    } else {
+      style += 'float: right;';
+      floatRight = true;
+      baseHorizontal = rightSpace;
+    }
+  } else {
+    // Fallback to left if page dimensions unavailable
+    style += 'float: left;';
+  }
+
+  return {
+    style,
+    floatRight,
+    baseHorizontal,
+  };
+};

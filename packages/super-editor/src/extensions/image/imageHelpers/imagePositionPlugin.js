@@ -82,7 +82,10 @@ const getImagePositionDecorations = (state, view) => {
       const pageBreak = findPreviousDomNodeWithClass(view, pos, 'pagination-break-wrapper');
       if (pageBreak && vRelativeFrom === 'margin' && alignH) {
         const topPos = pageBreak?.offsetTop + pageBreak?.offsetHeight;
-        style += vRelativeFrom === 'margin' ? `position: absolute; top: ${topPos}px; ${alignH}: 0;` : '';
+        let horizontalAlignment = `${alignH}: 0;`;
+        if (alignH === 'center') horizontalAlignment = 'left: 50%; transform: translateX(-50%);';
+
+        style += vRelativeFrom === 'margin' ? `position: absolute; top: ${topPos}px; ${horizontalAlignment}` : '';
         const nextPos = view.posAtDOM(pageBreak, 1);
 
         if (nextPos < 0) {
@@ -97,8 +100,14 @@ const getImagePositionDecorations = (state, view) => {
 
         const imageBlock = document.createElement('div');
         imageBlock.className = 'anchor-image-placeholder';
-        imageBlock.style.float = alignH;
-        imageBlock.style.width = size.width + parseInt(padding[alignH]) + 'px';
+        imageBlock.style.float = alignH === 'left' || alignH === 'right' ? alignH : 'none';
+        let paddingHorizontal;
+        if (alignH === 'center') {
+          paddingHorizontal = (parseInt(padding.left) || 0) + (parseInt(padding.right) || 0);
+        } else {
+          paddingHorizontal = parseInt(padding[alignH]) || 0;
+        }
+        imageBlock.style.width = size.width + paddingHorizontal + 'px';
         imageBlock.style.height = size.height + parseInt(padding.top) + parseInt(padding.bottom) + 'px';
         decorations.push(Decoration.widget(nextPos, imageBlock, { key: 'stable-key' }));
 
