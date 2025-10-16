@@ -1045,7 +1045,7 @@ class SuperConverter {
     const processedData = {};
     for (const filePath in media) {
       if (typeof media[filePath] !== 'string') continue;
-      processedData[filePath] = await getArrayBufferFromUrl(media[filePath], editor.options.isHeadless);
+      processedData[filePath] = await getArrayBufferFromUrl(media[filePath], editor.isNode);
     }
 
     this.convertedXml.media = {

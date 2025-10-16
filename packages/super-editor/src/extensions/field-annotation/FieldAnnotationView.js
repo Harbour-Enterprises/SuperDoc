@@ -135,7 +135,7 @@ export class FieldAnnotationView {
   buildHTMLView() {
     let { displayLabel, rawHtml } = this.node.attrs;
 
-    if (!this.editor.options.isHeadless && !!rawHtml) {
+    if (!this.editor.isNode && !!rawHtml) {
       try {
         const tempDiv = document.createElement('div');
         const childEditor = this.editor.createChildEditor({

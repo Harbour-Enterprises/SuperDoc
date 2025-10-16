@@ -17,6 +17,7 @@ describe('FieldAnnotationView', () => {
 
   beforeEach(() => {
     editorStub = {
+      isNode: true,
       options: { isHeadless: true, pagination: false },
       isEditable: true,
       emit: vi.fn(),

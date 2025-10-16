@@ -183,6 +183,12 @@ export class Editor extends EventEmitter {
   view;
 
   /**
+   * Cached flag indicating whether the runtime is headless/Node.
+   * @type {boolean}
+   */
+  #isNodeRuntime = false;
+
+  /**
    * Whether the editor currently has focus
    * @type {boolean}
    */
@@ -277,6 +283,8 @@ export class Editor extends EventEmitter {
   constructor(options) {
     super();
 
+    this.#isNodeRuntime = this.#isNodeEnvironment(options);
+
     this.#initContainerElement(options);
     this.#checkHeadless(options);
     this.setOptions(options);
@@ -310,6 +318,36 @@ export class Editor extends EventEmitter {
   }
 
   /**
+   * Determine if the editor runs in a Node/headless context.
+   * @returns {boolean}
+   */
+  get isNode() {
+    return this.#isNodeRuntime;
+  }
+
+  /**
+   * Resolve whether we should treat the current environment as Node/headless.
+   * @param {EditorOptions} [options=this.options] - Options to inspect for headless overrides
+   * @returns {boolean}
+   */
+  #isNodeEnvironment(options = this.options) {
+    if (typeof options?.isHeadless === 'boolean') {
+      return options.isHeadless;
+    }
+
+    const hasDom =
+      typeof window !== 'undefined' && typeof document !== 'undefined' && typeof document.createElement === 'function';
+
+    const usingMockDom =
+      (options?.mockDocument && typeof document !== 'undefined' && options.mockDocument === document) ||
+      (options?.mockWindow && typeof window !== 'undefined' && options.mockWindow === window);
+
+    if (hasDom && !usingMockDom) return false;
+
+    return typeof process !== 'undefined' && Boolean(process.versions?.node);
+  }
+
+  /**
    * Initialize the container element for the editor
    * @param {EditorOptions} options - Editor options
    * @returns {void}
@@ -328,7 +366,8 @@ export class Editor extends EventEmitter {
         options.element.classList.add('sd-super-editor-html');
       }
     }
-    options.element = options.isHeadless ? null : options.element || document.createElement('div');
+    const isNode = this.#isNodeRuntime;
+    options.element = isNode ? null : options.element || document.createElement('div');
   }
 
   /**
@@ -342,7 +381,7 @@ export class Editor extends EventEmitter {
     this.#createConverter();
     this.#initMedia();
 
-    if (!this.options.isHeadless) {
+    if (!this.isNode) {
       this.#initFonts();
     }
 
@@ -352,7 +391,7 @@ export class Editor extends EventEmitter {
 
     this.mount(this.options.element);
 
-    if (!this.options.isHeadless) {
+    if (!this.isNode) {
       this.#checkFonts();
     }
 
@@ -375,7 +414,7 @@ export class Editor extends EventEmitter {
     this.on('fonts-resolved', this.options.onFontsResolved);
     this.on('exception', this.options.onException);
 
-    if (!this.options.isHeadless) {
+    if (!this.isNode) {
       this.initializeCollaborationData();
       this.initDefaultStyles();
     }
@@ -487,14 +526,22 @@ export class Editor extends EventEmitter {
    * @returns {void}
    */
   #checkHeadless(options) {
-    if (!options.isHeadless) return;
+    const isNodeEnv = this.#isNodeRuntime;
+    const needsDomGlobals =
+      (typeof window === 'undefined' || typeof document === 'undefined') &&
+      (options.mockDocument || options.mockWindow);
 
-    if (typeof navigator === 'undefined') {
+    if (!isNodeEnv && !needsDomGlobals) return;
+
+    if (isNodeEnv && typeof navigator === 'undefined') {
       global.navigator = { isHeadless: true };
     }
 
-    if (options.mockDocument) {
+    if (typeof document === 'undefined' && options.mockDocument) {
       global.document = options.mockDocument;
+    }
+
+    if (typeof window === 'undefined' && options.mockWindow) {
       global.window = options.mockWindow;
     }
   }
@@ -761,6 +808,14 @@ export class Editor extends EventEmitter {
       ...options,
     };
 
+    const hasHeadlessOverride = Object.prototype.hasOwnProperty.call(options, 'isHeadless');
+
+    if (hasHeadlessOverride) {
+      this.#isNodeRuntime = this.#isNodeEnvironment(this.options);
+    }
+
+    this.options.isHeadless = this.#isNodeRuntime;
+
     if ((this.options.isNewFile || !this.options.ydoc) && this.options.isCommentsEnabled) {
       this.options.shouldLoadComments = true;
     }
@@ -926,7 +981,7 @@ export class Editor extends EventEmitter {
       return;
     }
 
-    if (this.options.isHeadless) {
+    if (this.isNode) {
       return;
     }
 
@@ -1313,7 +1368,7 @@ export class Editor extends EventEmitter {
    * @returns {void}
    */
   initDefaultStyles(element = this.element, isPaginationEnabled = true) {
-    if (this.options.isHeadless || this.options.suppressDefaultDocxStyles) return;
+    if (this.isNode || this.options.suppressDefaultDocxStyles) return;
 
     const proseMirror = element?.querySelector('.ProseMirror');
 
@@ -1421,7 +1476,7 @@ export class Editor extends EventEmitter {
    */
   #initComments() {
     if (!this.options.isCommentsEnabled) return;
-    if (this.options.isHeadless) return;
+    if (this.isNode) return;
     if (!this.options.shouldLoadComments) return;
     const replacedFile = this.options.replacedFile;
     this.emit('commentsLoaded', { editor: this, replacedFile, comments: this.converter.comments || [] });
@@ -1440,7 +1495,7 @@ export class Editor extends EventEmitter {
    * @returns {Promise<void>}
    */
   async #initPagination() {
-    if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
+    if (this.isNode || !this.extensionService || this.options.isHeaderOrFooter) {
       return;
     }
 
@@ -1877,7 +1932,7 @@ export class Editor extends EventEmitter {
         originalDocxFile: this.options.fileSource,
         media,
         fonts: this.options.fonts,
-        isHeadless: this.options.isHeadless,
+        isHeadless: this.isNode,
       });
 
       this.options.telemetry?.trackUsage('document_export', {

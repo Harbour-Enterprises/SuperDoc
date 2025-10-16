@@ -10,12 +10,13 @@ describe('NodeResizer extension', () => {
 
   it('skips plugin registration when running headless', () => {
     const factory = NodeResizer.config.addPmPlugins;
-    const plugins = factory.call({ editor: { options: { isHeadless: true } } });
+    const plugins = factory.call({ editor: { isNode: true, options: { isHeadless: true } } });
     expect(plugins).toEqual([]);
   });
 
   it('produces resize decorations when an image node is selected', () => {
     const editor = {
+      isNode: false,
       options: { isHeadless: false, documentMode: 'editing' },
       isEditable: true,
     };
@@ -56,6 +57,7 @@ describe('NodeResizer extension', () => {
 
   it('installs global handlers and applies resize on mouse interactions', () => {
     const editor = {
+      isNode: false,
       options: { isHeadless: false, documentMode: 'editing' },
       isEditable: true,
     };

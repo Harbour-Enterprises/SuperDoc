@@ -129,7 +129,7 @@ export const createHeaderFooterEditor = ({
     mediaFiles: editor.storage.image.media,
     fonts: editor.options.fonts,
     isHeaderOrFooter: true,
-    isHeadless: editor.options.isHeadless,
+    isHeadless: editor.isNode,
     annotations: true,
     currentPageNumber,
     parentEditor: editor,
