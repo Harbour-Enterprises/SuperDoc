@@ -15,19 +15,22 @@
  * @param {ValidatorLogger} logger
  * @returns {{ modified: boolean, results: string[] }}
  */
-export function ensureValidImageRID(images, editor, tr, logger) {
+export function ensureValidImageRID(images, editor, tr, logger, relationshipCache) {
   let modified = false;
   const results = [];
 
   images.forEach(({ node, pos }) => {
     const { rId, src } = node.attrs;
     if (!rId && src) {
-      let newId = editor.converter.docxHelpers.findRelationshipIdFromTarget(src, editor);
+      let newId;
+      if (relationshipCache) newId = relationshipCache.find(src);
+      else newId = editor.converter.docxHelpers.findRelationshipIdFromTarget(src, editor);
       if (newId) logger.debug('Reusing existing rId for image:', newId, 'at pos:', pos);
 
       // If we still don't have an rId, create a new relationship
       if (!newId) {
-        newId = editor.converter.docxHelpers.insertNewRelationship(src, 'image', editor);
+        if (relationshipCache) newId = relationshipCache.getOrCreate(src, 'image');
+        else newId = editor.converter.docxHelpers.insertNewRelationship(src, 'image', editor);
         logger.debug('Creating new rId for image at pos:', pos, 'with src:', src);
       }
 

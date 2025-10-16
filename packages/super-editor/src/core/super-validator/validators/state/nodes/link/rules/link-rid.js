@@ -16,7 +16,7 @@
  * @param {ValidatorLogger} logger
  * @returns {{ modified: boolean, results: string[] }}
  */
-export function ensureValidLinkRID(links, editor, tr, logger) {
+export function ensureValidLinkRID(links, editor, tr, logger, relationshipCache) {
   let modified = false;
   const results = [];
 
@@ -24,12 +24,15 @@ export function ensureValidLinkRID(links, editor, tr, logger) {
     const { rId, href, anchor } = mark.attrs;
 
     if (!rId && href && !anchor) {
-      let newId = editor.converter.docxHelpers.findRelationshipIdFromTarget(href, editor);
+      let newId;
+      if (relationshipCache) newId = relationshipCache.find(href);
+      else newId = editor.converter.docxHelpers.findRelationshipIdFromTarget(href, editor);
       if (newId) logger.debug('Reusing existing rId for link:', newId, 'from pos:', from, 'to pos:', to);
 
       // If we still don't have an rId, create a new relationship
       if (!newId) {
-        newId = editor.converter.docxHelpers.insertNewRelationship(href, 'hyperlink', editor);
+        if (relationshipCache) newId = relationshipCache.getOrCreate(href, 'hyperlink');
+        else newId = editor.converter.docxHelpers.insertNewRelationship(href, 'hyperlink', editor);
         logger.debug('Creating new rId for link from pos:', from, 'to pos:', to, 'with href:', href);
       }
 

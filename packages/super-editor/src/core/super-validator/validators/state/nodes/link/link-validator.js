@@ -19,10 +19,11 @@ import { ensureValidLinkRID } from './rules/index.js';
  */
 export function createLinkMarkValidator({ editor, logger }) {
   /** @type {ValidatorFunction} */
-  const validator = (tr, analysis) => {
+  const validator = (tr, analysis, context = {}) => {
     const links = analysis.link || [];
+    const relationshipCache = context.relationshipCache;
 
-    const ruleResults = [ensureValidLinkRID(links, editor, tr, logger)];
+    const ruleResults = [ensureValidLinkRID(links, editor, tr, logger, relationshipCache)];
 
     const modified = ruleResults.some((r) => r.modified);
     const results = ruleResults.flatMap((r) => r.results);

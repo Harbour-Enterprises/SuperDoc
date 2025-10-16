@@ -164,4 +164,21 @@ describe('ensureValidLinkRID', () => {
     expect(mockTransaction.removeMark).toHaveBeenCalledTimes(2);
     expect(mockTransaction.addMark).toHaveBeenCalledTimes(2);
   });
+
+  it('uses relationship cache when provided', () => {
+    const relationshipCache = {
+      find: vi.fn().mockReturnValue(null),
+      getOrCreate: vi.fn().mockReturnValue('cached-link-rId'),
+    };
+
+    const links = [{ mark: { attrs: { href: 'https://cached.com' } }, from: 1, to: 4 }];
+
+    const result = ensureValidLinkRID(links, mockEditor, mockTransaction, mockLogger, relationshipCache);
+
+    expect(result.modified).toBe(true);
+    expect(relationshipCache.find).toHaveBeenCalledWith('https://cached.com');
+    expect(relationshipCache.getOrCreate).toHaveBeenCalledWith('https://cached.com', 'hyperlink');
+    expect(mockEditor.converter.docxHelpers.findRelationshipIdFromTarget).not.toHaveBeenCalled();
+    expect(mockEditor.converter.docxHelpers.insertNewRelationship).not.toHaveBeenCalled();
+  });
 });

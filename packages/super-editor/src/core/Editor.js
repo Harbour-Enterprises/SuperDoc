@@ -159,6 +159,12 @@ export class Editor extends EventEmitter {
   #commandService;
 
   /**
+   * Tracks whether the initial validation has been scheduled.
+   * @type {boolean}
+   */
+  #isValidateInitScheduled = false;
+
+  /**
    * Service for managing extensions
    * @type {Object}
    */
@@ -376,7 +382,6 @@ export class Editor extends EventEmitter {
 
     if (!this.options.isHeadless) {
       this.initializeCollaborationData();
-      this.initDefaultStyles();
       this.#checkFonts();
     }
 
@@ -401,13 +406,14 @@ export class Editor extends EventEmitter {
       if (!this.options.isChildEditor) {
         this.#initPagination();
         this.#initComments();
-
         this.#validateDocumentInit();
       }
     }
 
     this.#initDevTools();
     this.#registerCopyHandler();
+
+    this.#scheduleInitDefaultStyles();
   }
 
   /**
@@ -599,9 +605,7 @@ export class Editor extends EventEmitter {
 
     if (this.options.role === 'viewer') cleanedMode = 'viewing';
     if (this.options.role === 'suggester' && cleanedMode === 'editing') cleanedMode = 'suggesting';
-    // Viewing mode: Not editable, no tracked changes, no comments
     if (cleanedMode === 'viewing') {
-      // this.unregisterPlugin('comments');
       this.commands.toggleTrackChangesShowOriginal();
       this.setEditable(false, false);
       this.setOptions({ documentMode: 'viewing' });
@@ -612,23 +616,15 @@ export class Editor extends EventEmitter {
         documentMode: cleanedMode,
       });
       if (!this.options.isHeaderOrFooter && pm) pm.classList.add('view-mode');
-    }
-
-    // Suggesting: Editable, tracked changes plugin enabled, comments
-    else if (cleanedMode === 'suggesting') {
-      // this.#registerPluginByNameIfNotExists('comments')
+    } else if (cleanedMode === 'suggesting') {
       this.#registerPluginByNameIfNotExists('TrackChangesBase');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.enableTrackChanges();
       this.setOptions({ documentMode: 'suggesting' });
       this.setEditable(true, false);
       if (pm) pm.classList.remove('view-mode');
-    }
-
-    // Editing: Editable, tracked changes plguin disabled, comments
-    else if (cleanedMode === 'editing') {
+    } else if (cleanedMode === 'editing') {
       this.#registerPluginByNameIfNotExists('TrackChangesBase');
-      // this.#registerPluginByNameIfNotExists('comments');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.disableTrackChanges();
       this.setEditable(true, false);
@@ -662,6 +658,11 @@ export class Editor extends EventEmitter {
 
       clipboardData.setData('text/html', html);
     });
+  }
+
+  #scheduleInitDefaultStyles() {
+    if (this.options.isHeadless || this.isDestroyed) return;
+    this.initDefaultStyles();
   }
 
   /**
@@ -1049,7 +1050,9 @@ export class Editor extends EventEmitter {
           doc = this.schema.nodeFromJSON(content);
           doc = this.#prepareDocumentForImport(doc);
         } else {
-          doc = createDocument(this.converter, this.schema, this);
+          const documentResult = createDocument(this.converter, this.schema, this);
+          doc = documentResult;
+
           // Perform any additional document processing prior to finalizing the doc here
           doc = this.#prepareDocumentForImport(doc);
 
@@ -1091,7 +1094,6 @@ export class Editor extends EventEmitter {
     if (!this.options.ydoc) state.doc = doc;
 
     this.options.initialState = EditorState.create(state);
-
     this.view = new EditorView(element, {
       ...this.options.editorProps,
       dispatchTransaction: this.#dispatchTransaction.bind(this),
@@ -1264,7 +1266,11 @@ export class Editor extends EventEmitter {
 
     this.updateEditorStyles(element, proseMirror, isPaginationEnabled);
 
-    this.initMobileStyles(element);
+    if (!this.options.isHeadless) {
+      requestAnimationFrame(() => {
+        this.initMobileStyles(element);
+      });
+    }
   }
 
   /**
@@ -1337,7 +1343,6 @@ export class Editor extends EventEmitter {
    */
   #onCollaborationReady({ editor, ydoc }) {
     if (this.options.collaborationIsReady) return;
-    console.debug('🔗 [super-editor] Collaboration ready');
 
     this.#validateDocumentInit();
 
@@ -1410,11 +1415,12 @@ export class Editor extends EventEmitter {
     const start = Date.now();
 
     let state;
+    let appliedTransaction = transaction;
     try {
       const trackChangesState = TrackChangesBasePluginKey.getState(this.view.state);
       const isTrackChangesActive = trackChangesState?.isTrackChangesActive ?? false;
 
-      const tr = isTrackChangesActive
+      appliedTransaction = isTrackChangesActive
         ? trackedTransaction({
             tr: transaction,
             state: this.state,
@@ -1422,7 +1428,7 @@ export class Editor extends EventEmitter {
           })
         : transaction;
 
-      const { state: newState } = this.view.state.applyTransaction(tr);
+      const { state: newState } = this.view.state.applyTransaction(appliedTransaction);
       state = newState;
     } catch (error) {
       // just in case
@@ -1436,7 +1442,7 @@ export class Editor extends EventEmitter {
     const end = Date.now();
     this.emit('transaction', {
       editor: this,
-      transaction,
+      transaction: appliedTransaction,
       duration: end - start,
     });
 
@@ -1473,7 +1479,6 @@ export class Editor extends EventEmitter {
     if (transaction.docChanged && this.converter) {
       if (!this.converter.documentGuid) {
         this.converter.promoteToGuid();
-        console.debug('Document modified - assigned GUID:', this.converter.documentGuid);
       }
       this.converter.documentModified = true;
     }
@@ -1844,7 +1849,6 @@ export class Editor extends EventEmitter {
   #endCollaboration() {
     if (!this.options.ydoc) return;
     try {
-      console.debug('🔗 [super-editor] Ending collaboration');
       if (this.options.collaborationProvider) this.options.collaborationProvider.disconnect();
       if (this.options.ydoc) this.options.ydoc.destroy();
     } catch (error) {
@@ -1894,7 +1898,6 @@ export class Editor extends EventEmitter {
   static checkIfMigrationsNeeded() {
     const dataVersion = version || 'initial';
     const migrations = getNecessaryMigrations(dataVersion) || [];
-    console.debug('[checkVersionMigrations] Migrations needed:', dataVersion, migrations.length);
     return migrations.length > 0;
   }
 
@@ -1903,13 +1906,11 @@ export class Editor extends EventEmitter {
    * @returns {Object | void} Migration results
    */
   processCollaborationMigrations() {
-    console.debug('[checkVersionMigrations] Current editor version', __APP_VERSION__);
     if (!this.options.ydoc) return;
 
     const metaMap = this.options.ydoc.getMap('meta');
     let docVersion = metaMap.get('version');
     if (!docVersion) docVersion = 'initial';
-    console.debug('[checkVersionMigrations] Document version', docVersion);
     const migrations = getNecessaryMigrations(docVersion) || [];
 
     const plugins = this.state.plugins;
@@ -1918,7 +1919,6 @@ export class Editor extends EventEmitter {
 
     let hasRunMigrations = false;
     for (let migration of migrations) {
-      console.debug('🏃‍♂️ Running migration', migration.name);
       const result = migration(this);
       if (!result) throw new Error('Migration failed at ' + migration.name);
       else hasRunMigrations = true;
@@ -2110,10 +2110,24 @@ export class Editor extends EventEmitter {
    */
   #validateDocumentInit() {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
+    if (this.#isValidateInitScheduled) return;
 
-    /** @type {import('./super-validator/index.js').SuperValidator} */
-    const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
-    validator.validateActiveDocument();
+    this.#isValidateInitScheduled = true;
+
+    const runValidation = () => {
+      this.#isValidateInitScheduled = false;
+      if (this.isDestroyed) return;
+
+      const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
+      validator.validateActiveDocument();
+    };
+
+    // Defer validation to avoid blocking initialization
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(runValidation, { timeout: 200 });
+    } else {
+      setTimeout(runValidation, 0);
+    }
   }
 
   /**

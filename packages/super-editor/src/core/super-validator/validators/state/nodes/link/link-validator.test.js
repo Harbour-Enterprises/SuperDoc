@@ -31,7 +31,13 @@ describe('createLinkMarkValidator', () => {
     const analysis = { link: [{ attrs: { rId: null, href: 'https://example.com' } }] };
     validator(mockTransaction, analysis);
 
-    expect(rules.ensureValidLinkRID).toHaveBeenCalledWith(analysis.link, mockEditor, mockTransaction, mockLogger);
+    expect(rules.ensureValidLinkRID).toHaveBeenCalledWith(
+      analysis.link,
+      mockEditor,
+      mockTransaction,
+      mockLogger,
+      undefined,
+    );
   });
 
   it('should return modified = false and empty results if rule returns no issues', () => {
@@ -66,6 +72,6 @@ describe('createLinkMarkValidator', () => {
 
     validator(mockTransaction, {}); // No link key
 
-    expect(rules.ensureValidLinkRID).toHaveBeenCalledWith([], mockEditor, mockTransaction, mockLogger);
+    expect(rules.ensureValidLinkRID).toHaveBeenCalledWith([], mockEditor, mockTransaction, mockLogger, undefined);
   });
 });

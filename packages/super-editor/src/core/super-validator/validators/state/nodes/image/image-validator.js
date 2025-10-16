@@ -20,10 +20,11 @@ import { ensureValidImageRID } from './rules/index.js';
  */
 export function createImageNodeValidator({ editor, logger }) {
   /** @type {ValidatorFunction} */
-  const validator = (tr, analysis) => {
+  const validator = (tr, analysis, context = {}) => {
     const images = analysis.image || [];
+    const relationshipCache = context.relationshipCache;
 
-    const ruleResults = [ensureValidImageRID(images, editor, tr, logger)];
+    const ruleResults = [ensureValidImageRID(images, editor, tr, logger, relationshipCache)];
 
     const modified = ruleResults.some((r) => r.modified);
     const results = ruleResults.flatMap((r) => r.results);

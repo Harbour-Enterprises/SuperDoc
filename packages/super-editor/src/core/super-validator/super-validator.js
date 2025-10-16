@@ -2,6 +2,7 @@
 import { createLogger } from './logger/logger.js';
 import { StateValidators } from './validators/state/index.js';
 import { XmlValidators } from './validators/xml/index.js';
+import { RelationshipCache } from './relationship-cache.js';
 
 /**
  * @typedef {import('./types.js').ElementInfo} ElementInfo
@@ -159,31 +160,99 @@ export class SuperValidator {
 
   /**
    * Validate the active document in the editor. Triggered automatically on editor initialization.
-   * @returns {{ modified: boolean, results: Array<{ key: string, results: string[] }> }}
+   * @returns {{ modified: boolean, results: Array<{ key: string, results: string[] }>, dispatchPromise: Promise<void> | null }}
    */
   validateActiveDocument() {
     const { tr } = this.#editor.state;
-    const { dispatch } = this.#editor.view;
 
     const documentAnalysis = this.#analyzeDocument();
     this.logger.debug('Document analysis:', documentAnalysis);
+
+    const validationContext = {
+      relationshipCache: new RelationshipCache(this.#editor),
+    };
 
     let hasModifiedDocument = false;
     const validationResults = [];
     Object.entries(this.#stateValidators).forEach(([key, validator]) => {
       this.logger.debug(`🕵 Validating with ${key}...`);
 
-      const { results, modified } = validator(tr, documentAnalysis);
+      const { results, modified } = validator(tr, documentAnalysis, validationContext);
       validationResults.push({ key, results });
 
       hasModifiedDocument = hasModifiedDocument || modified;
     });
 
-    if (!this.dryRun) dispatch(tr);
-    else this.logger.debug('DRY RUN: No changes applied to the document.');
+    let dispatchPromise = null;
+
+    if (!this.dryRun) {
+      if (tr.steps.length > 0) dispatchPromise = this.#scheduleStepDispatch(tr.steps.slice());
+      else this.logger.debug('No changes detected; skipping dispatch.');
+    } else {
+      this.logger.debug('DRY RUN: No changes applied to the document.');
+    }
 
     this.logger.debug('Results:', validationResults);
-    return { modified: hasModifiedDocument, results: validationResults };
+    return { modified: hasModifiedDocument, results: validationResults, dispatchPromise };
+  }
+
+  /**
+   * Schedule the provided steps to be dispatched in a new transaction.
+   * @param {import('prosemirror-transform').Step[]} steps
+   * @returns {Promise<void> | null}
+   */
+  #scheduleStepDispatch(steps) {
+    if (!steps.length) return null;
+
+    let resolveDispatch = () => {};
+    const dispatchPromise = new Promise((resolve) => {
+      resolveDispatch = resolve;
+    });
+
+    const CHUNK_SIZE = 100;
+
+    const applyChunk = () => {
+      if (this.#editor.isDestroyed) {
+        resolveDispatch();
+        return;
+      }
+
+      const { state, view } = this.#editor;
+      const transaction = state.tr;
+      const chunk = steps.splice(0, CHUNK_SIZE);
+
+      chunk.forEach((step) => {
+        transaction.step(step);
+      });
+
+      if (transaction.steps.length) {
+        view.dispatch(transaction);
+      }
+
+      if (steps.length) {
+        scheduleNextChunk();
+      } else {
+        resolveDispatch();
+      }
+    };
+
+    const scheduleNextChunk = () => {
+      if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => {
+          if (typeof window.requestIdleCallback === 'function') {
+            window.requestIdleCallback(applyChunk, { timeout: 200 });
+          } else {
+            applyChunk();
+          }
+        });
+      } else {
+        applyChunk();
+      }
+    };
+
+    scheduleNextChunk();
+
+    return dispatchPromise;
   }
 
   /**

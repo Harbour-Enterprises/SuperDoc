@@ -34,7 +34,14 @@ describe('SuperValidator', () => {
   let mockEditor, mockDoc, mockView, mockTr;
 
   beforeEach(() => {
-    mockTr = { setMeta: vi.fn() };
+    mockTr = {
+      steps: [],
+      setMeta: vi.fn(),
+      step: vi.fn(function stepFn(step) {
+        this.steps.push(step);
+        return this;
+      }),
+    };
     mockDoc = {
       descendants: vi.fn(),
     };
@@ -48,7 +55,13 @@ describe('SuperValidator', () => {
   });
 
   function createMockValidator(requiredElements, returnValue) {
-    const fn = vi.fn().mockReturnValue(returnValue || { modified: false, results: [] });
+    const fn = vi.fn().mockImplementation((tr) => {
+      const output = returnValue || { modified: false, results: [] };
+      if (output.modified && typeof tr?.step === 'function') {
+        tr.step({ apply: vi.fn(), invert: vi.fn() });
+      }
+      return output;
+    });
     fn.requiredElements = requiredElements;
     return fn;
   }
@@ -67,7 +80,7 @@ describe('SuperValidator', () => {
     expect(StateValidators.validatorB).toHaveBeenCalled();
   });
 
-  it('calls all validators with analysis results', () => {
+  it('calls all validators with analysis results', async () => {
     const linkMark = { type: { name: 'link' } };
     const textNode = {
       isText: true,
@@ -94,6 +107,10 @@ describe('SuperValidator', () => {
 
     const result = instance.validateActiveDocument();
 
+    if (result.dispatchPromise) {
+      await result.dispatchPromise;
+    }
+
     expect(result.modified).toBe(true);
     expect(result.results).toEqual([
       { key: 'validatorA', results: ['fixed link'] },
@@ -101,6 +118,7 @@ describe('SuperValidator', () => {
     ]);
 
     expect(mockView.dispatch).toHaveBeenCalled();
+    expect(mockEditor.state.tr.step).toHaveBeenCalled();
   });
 
   it('does not dispatch if dryRun is true', () => {

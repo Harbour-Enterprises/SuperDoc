@@ -127,4 +127,21 @@ describe('ensureValidImageRID', () => {
       rId: 'reused-rId',
     });
   });
+
+  it('uses relationship cache when provided', () => {
+    const relationshipCache = {
+      find: vi.fn().mockReturnValue(null),
+      getOrCreate: vi.fn().mockReturnValue('cached-rId'),
+    };
+
+    const images = [{ node: { attrs: { src: 'cached.png' } }, pos: 4 }];
+
+    const result = ensureValidImageRID(images, mockEditor, mockTransaction, mockLogger, relationshipCache);
+
+    expect(result.modified).toBe(true);
+    expect(relationshipCache.find).toHaveBeenCalledWith('cached.png');
+    expect(relationshipCache.getOrCreate).toHaveBeenCalledWith('cached.png', 'image');
+    expect(mockEditor.converter.docxHelpers.findRelationshipIdFromTarget).not.toHaveBeenCalled();
+    expect(mockEditor.converter.docxHelpers.insertNewRelationship).not.toHaveBeenCalled();
+  });
 });
