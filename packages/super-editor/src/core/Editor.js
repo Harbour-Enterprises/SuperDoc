@@ -398,7 +398,7 @@ export class Editor extends EventEmitter {
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady
     if (!this.options.ydoc) {
-      if (!this.options.isChildEditor) {
+      if (!this.options.isChildEditor && !this.options.isHeaderFooterChanged) {
         this.#initPagination();
         this.#initComments();
 
@@ -2111,9 +2111,15 @@ export class Editor extends EventEmitter {
   #validateDocumentInit() {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
 
-    /** @type {import('./super-validator/index.js').SuperValidator} */
-    const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
-    validator.validateActiveDocument();
+    const validate = () => {
+      /** @type {import('./super-validator/index.js').SuperValidator} */
+      const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
+      validator.validateActiveDocument();
+    };
+
+    setTimeout(() => {
+      validate();
+    }, 0);
   }
 
   /**

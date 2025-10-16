@@ -114,8 +114,13 @@ export class SuperValidator {
    * Analyze the document to collect all required elements
    * @returns {DocumentAnalysis}
    */
-  #analyzeDocument() {
-    const { doc } = this.#editor.state;
+  #analyzeDocument(editorState = this.#editor?.state) {
+    const doc = editorState?.doc;
+
+    if (!doc) {
+      this.logger.debug('Skipping document analysis: editor doc unavailable.');
+      return {};
+    }
 
     /** @type {DocumentAnalysis} */
     const analysis = {};
@@ -162,10 +167,18 @@ export class SuperValidator {
    * @returns {{ modified: boolean, results: Array<{ key: string, results: string[] }> }}
    */
   validateActiveDocument() {
-    const { tr } = this.#editor.state;
-    const { dispatch } = this.#editor.view;
+    const editorState = this.#editor?.state;
+    const editorView = this.#editor?.view;
 
-    const documentAnalysis = this.#analyzeDocument();
+    if (!editorState || !editorView) {
+      this.logger.debug('Skipping active-document validation: editor state unavailable.');
+      return { modified: false, results: [] };
+    }
+
+    const { tr } = editorState;
+    const { dispatch } = editorView;
+
+    const documentAnalysis = this.#analyzeDocument(editorState);
     this.logger.debug('Document analysis:', documentAnalysis);
 
     let hasModifiedDocument = false;
@@ -179,8 +192,10 @@ export class SuperValidator {
       hasModifiedDocument = hasModifiedDocument || modified;
     });
 
-    if (!this.dryRun) dispatch(tr);
-    else this.logger.debug('DRY RUN: No changes applied to the document.');
+    if (!this.dryRun) {
+      if (typeof dispatch === 'function') dispatch(tr);
+      else this.logger.debug('Skipping dispatch: editor view dispatch unavailable.');
+    } else this.logger.debug('DRY RUN: No changes applied to the document.');
 
     this.logger.debug('Results:', validationResults);
     return { modified: hasModifiedDocument, results: validationResults };
@@ -191,8 +206,16 @@ export class SuperValidator {
    * @returns {{ modified: boolean, results: Array<{ key: string, results: string[] }> }}
    */
   validateDocumentExport() {
-    const { tr } = this.#editor.state;
-    const { dispatch } = this.#editor.view;
+    const editorState = this.#editor?.state;
+    const editorView = this.#editor?.view;
+
+    if (!editorState || !editorView) {
+      this.logger.debug('Skipping export validation: editor state unavailable.');
+      return { modified: false, results: [] };
+    }
+
+    const { tr } = editorState;
+    const { dispatch } = editorView;
 
     let hasModifiedDocument = false;
     const validationResults = [];
@@ -207,8 +230,10 @@ export class SuperValidator {
       hasModifiedDocument = hasModifiedDocument || modified;
     });
 
-    if (!this.dryRun && hasModifiedDocument) dispatch(tr);
-    else this.logger.debug('DRY RUN: No export changes applied to the document.');
+    if (!this.dryRun && hasModifiedDocument) {
+      if (typeof dispatch === 'function') dispatch(tr);
+      else this.logger.debug('Skipping dispatch: editor view dispatch unavailable.');
+    } else if (this.dryRun) this.logger.debug('DRY RUN: No export changes applied to the document.');
 
     this.logger.debug('Export validation results:', validationResults);
     return { modified: hasModifiedDocument, results: validationResults };
