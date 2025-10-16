@@ -44,6 +44,7 @@ import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions
  * @property {Object} [editor=null] - The editor instance
  * @property {string} [aiApiKey=null] - API key for AI integration
  * @property {string} [aiEndpoint=null] - Endpoint for AI integration
+ * @property {Object|null} [aiProvider=null] - AI provider instance implementing write/rewrite helpers
  * @property {ToolbarItem[]} [customButtons=[]] - Custom buttons to add to the toolbar
  */
 
@@ -159,6 +160,7 @@ export class SuperToolbar extends EventEmitter {
     editor: null,
     aiApiKey: null,
     aiEndpoint: null,
+    aiProvider: null,
     customButtons: [],
   };
 

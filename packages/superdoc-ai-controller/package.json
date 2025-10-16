@@ -1,0 +1,21 @@
+{
+  "name": "@harbour-enterprises/superdoc-ai-controller",
+  "version": "0.0.1",
+  "license": "AGPL-3.0",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "exports": {
+    ".": {
+      "import": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "test": "vitest --config ./vitest.config.mjs"
+  },
+  "dependencies": {
+    "prosemirror-model": "^1.25.2",
+    "prosemirror-state": "^1.4.3"
+  }
+}

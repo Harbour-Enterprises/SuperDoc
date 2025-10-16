@@ -284,10 +284,17 @@ const init = async () => {
       //   providerType: 'hocuspocus',
       // },
       ai: {
-        // Provide your Harbour API key here for direct endpoint access
+        // Option 1: Use built-in Harbour provider (recommended)
+        // provider: new InsightsAIProvider({
+        //   apiKey: 'test',
+        //   endpoint: 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights',
+        //   // model: 'optional-model-name' // if your API supports it
+        // }),
+        // Option 2: Or pass config and let editor create provider (legacy support)
         // apiKey: 'test',
-        // Optional: Provide a custom endpoint for AI services
         // endpoint: 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights',
+        // Option 3: custom AI Provider
+        // provider: openAIProvider,
       },
       pdf: {
         pdfLib: pdfjsLib,

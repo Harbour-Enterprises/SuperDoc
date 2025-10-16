@@ -122,6 +122,7 @@ export const makeDefaultItems = ({
               handleClose,
               selectedText,
               editor: superToolbar.activeEditor,
+              provider: superToolbar.config.aiProvider,
               apiKey: superToolbar.config.aiApiKey,
               endpoint: superToolbar.config.aiEndpoint,
               superToolbar: superToolbar,

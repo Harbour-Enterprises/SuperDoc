@@ -205,8 +205,10 @@ const buildCommentsStore = () => ({
 const mountComponent = async (superdocStub) => {
   superdocStoreStub = buildSuperdocStore();
   commentsStoreStub = buildCommentsStore();
-  superdocStoreStub.modules.ai = { endpoint: '/ai' };
-  commentsStoreStub.documentsWithConverations.value = [{ id: 'doc-1' }];
+
+  // Use new provider pattern
+  const provider = { id: 'test-provider', findContent: vi.fn(), write: vi.fn() };
+  superdocStoreStub.modules.ai = { provider }; // Updated
 
   const component = (await import('./SuperDoc.vue')).default;
 
@@ -239,10 +241,25 @@ const mountComponent = async (superdocStub) => {
 };
 
 const createSuperdocStub = () => {
-  const toolbar = { config: { aiApiKey: 'abc' }, setActiveEditor: vi.fn(), updateToolbarState: vi.fn() };
+  const provider = { id: 'test-provider', findContent: vi.fn(), write: vi.fn(), rewrite: vi.fn() };
+
+  const toolbar = {
+    config: {
+      // Remove legacy apiKey, use provider pattern
+      ai: { provider },
+    },
+    setActiveEditor: vi.fn(),
+    updateToolbarState: vi.fn(),
+  };
+
   return {
     config: {
-      modules: { comments: {}, ai: {}, toolbar: {}, pdf: {} },
+      modules: {
+        comments: {},
+        ai: { provider }, // Updated: use provider instead of separate apiKey/endpoint
+        toolbar: {},
+        pdf: {},
+      },
       pagination: false,
       isDebug: false,
       documentMode: 'editing',
@@ -252,6 +269,7 @@ const createSuperdocStub = () => {
     },
     activeEditor: null,
     toolbar,
+    aiProvider: provider, // Keep for backwards compatibility
     colors: ['#111'],
     broadcastEditorBeforeCreate: vi.fn(),
     broadcastEditorCreate: vi.fn(),

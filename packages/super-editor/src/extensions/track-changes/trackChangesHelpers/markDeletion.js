@@ -37,6 +37,7 @@ export const markDeletion = ({ tr, from, to, user, date, id: providedId }) => {
     id,
     author: user.name,
     authorEmail: user.email,
+    ...(user.image && { authorImage: user.image }),
     date,
   });
 

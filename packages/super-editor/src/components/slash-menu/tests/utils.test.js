@@ -424,6 +424,7 @@ describe('utils.js', () => {
       mockEditor.options = {
         aiApiKey: 'test-key',
         aiEndpoint: 'https://test-endpoint.com',
+        aiProvider: { id: 'provider' },
       };
 
       const props = getPropsByItemId('insert-text', mockProps);
@@ -432,6 +433,7 @@ describe('utils.js', () => {
         editor: expect.any(Object),
         selectedText: 'selected text',
         handleClose: mockProps.closePopover,
+        provider: { id: 'provider' },
         apiKey: 'test-key',
         endpoint: 'https://test-endpoint.com',
       });

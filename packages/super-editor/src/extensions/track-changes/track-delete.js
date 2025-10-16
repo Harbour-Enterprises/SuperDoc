@@ -53,6 +53,17 @@ export const TrackDelete = Mark.create({
         },
       },
 
+      authorImage: {
+        default: '',
+        parseDOM: (elem) => elem.getAttribute('data-authorimage'),
+        renderDOM: (attrs) => {
+          if (!attrs.authorImage) return {};
+          return {
+            'data-authorimage': attrs.authorImage,
+          };
+        },
+      },
+
       date: {
         default: '',
         parseDOM: (elem) => elem.getAttribute('data-date'),

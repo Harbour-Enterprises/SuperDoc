@@ -122,6 +122,7 @@ export const useCommentsStore = defineStore('comments', () => {
       trackedChangeType,
       deletedText,
       authorEmail,
+      authorImage,
       date,
       author: authorName,
       importedAuthor,
@@ -139,6 +140,7 @@ export const useCommentsStore = defineStore('comments', () => {
       createdTime: date,
       creatorName: authorName,
       creatorEmail: authorEmail,
+      creatorImage: authorImage,
       isInternal: false,
       importedAuthor,
       selection: {
@@ -305,6 +307,7 @@ export const useCommentsStore = defineStore('comments', () => {
       parentCommentId,
       creatorEmail: superdocStore.user.email,
       creatorName: superdocStore.user.name,
+      creatorImage: superdocStore.user.image,
       commentText: currentCommentText.value,
       selection,
       ...options,

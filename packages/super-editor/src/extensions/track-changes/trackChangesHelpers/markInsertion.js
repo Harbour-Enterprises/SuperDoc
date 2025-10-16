@@ -34,6 +34,7 @@ export const markInsertion = ({ tr, from, to, user, date }) => {
     id,
     author: user.name,
     authorEmail: user.email,
+    ...(user.image && { authorImage: user.image }),
     date,
   });
 
