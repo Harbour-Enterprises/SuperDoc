@@ -352,10 +352,6 @@ export class Editor extends EventEmitter {
 
     this.mount(this.options.element);
 
-    if (!this.options.isHeadless) {
-      this.#checkFonts();
-    }
-
     this.on('create', this.options.onCreate);
     this.on('update', this.options.onUpdate);
     this.on('selectionUpdate', this.options.onSelectionUpdate);
@@ -378,6 +374,7 @@ export class Editor extends EventEmitter {
     if (!this.options.isHeadless) {
       this.initializeCollaborationData();
       this.initDefaultStyles();
+      this.#checkFonts();
     }
 
     const shouldMigrateListsOnInit = Boolean(
@@ -923,6 +920,7 @@ export class Editor extends EventEmitter {
   async #checkFonts() {
     // We only want to run the algorithm to resolve the fonts if the user has asked for it
     if (!this.options.onFontsResolved || typeof this.options.onFontsResolved !== 'function') {
+      console.log('returning because no onFontsResolved callback is provided');
       return;
     }
 
@@ -931,71 +929,12 @@ export class Editor extends EventEmitter {
     }
 
     const fontsUsedInDocument = this.converter.getDocumentFonts();
+    const unsupportedFonts = this.#determineUnsupportedFonts(fontsUsedInDocument);
 
-    if (!('queryLocalFonts' in window)) {
-      console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
-
-      // Fallback
-      const unsupportedFonts = this.#determineUnsupportedFontsWithCanvas(fontsUsedInDocument);
-      this.emit('fonts-resolved', {
-        documentFonts: fontsUsedInDocument,
-        unsupportedFonts: unsupportedFonts,
-      });
-
-      return;
-    }
-
-    const localFontAccess = await navigator.permissions.query({ name: 'local-fonts' });
-    if (localFontAccess.state === 'denied') {
-      console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
-
-      // Fallback
-      const unsupportedFonts = this.#determineUnsupportedFontsWithCanvas(fontsUsedInDocument);
-      this.emit('fonts-resolved', {
-        documentFonts: fontsUsedInDocument,
-        unsupportedFonts: unsupportedFonts,
-      });
-
-      return;
-    }
-
-    try {
-      const localFonts = await window.queryLocalFonts();
-      const uniqueLocalFonts = [...new Set(localFonts.map((font) => font.family))];
-      const unsupportedFonts = this.#determineUnsupportedFontsWithLocalFonts(fontsUsedInDocument, uniqueLocalFonts);
-
-      this.emit('fonts-resolved', {
-        documentFonts: fontsUsedInDocument,
-        unsupportedFonts: unsupportedFonts,
-      });
-    } catch {
-      console.warn('[SuperDoc] Could not get access to local fonts. Using fallback solution.');
-
-      // Fallback
-      const unsupportedFonts = this.#determineUnsupportedFontsWithCanvas(fontsUsedInDocument);
-      this.emit('fonts-resolved', {
-        documentFonts: fontsUsedInDocument,
-        unsupportedFonts: unsupportedFonts,
-      });
-    }
-  }
-
-  /**
-   * Determines which fonts used in the document are not available locally nor imported.
-   *
-   * @param {string[]} fonts - Array of font family names used in the document.
-   * @param {string[]} localFonts - Array of local font family names available on the system.
-   * @returns {string[]} Array of font names that are unsupported.
-   */
-  #determineUnsupportedFontsWithLocalFonts(fonts, localFonts) {
-    const unsupportedFonts = fonts.filter((font) => {
-      const isLocalFont = localFonts.includes(font);
-      const isFontImported = this.fontsImported.includes(font);
-
-      return !isLocalFont && !isFontImported;
+    this.emit('fonts-resolved', {
+      documentFonts: fontsUsedInDocument,
+      unsupportedFonts: unsupportedFonts,
     });
-
-    return unsupportedFonts;
   }
 
   /**
@@ -1007,7 +946,7 @@ export class Editor extends EventEmitter {
    * @param {string[]} fonts - Array of font family names used in the document.
    * @returns {string[]} Array of unsupported font family names.
    */
-  #determineUnsupportedFontsWithCanvas(fonts) {
+  #determineUnsupportedFonts(fonts) {
     const unsupportedFonts = fonts.filter((font) => {
       const canRender = canRenderFont(font);
       const isFontImported = this.fontsImported.includes(font);
