@@ -1,15 +1,15 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 
-const aiCommands = {
+vi.mock('./ai-commands.js', () => ({
   aiFindContent: vi.fn().mockResolvedValue('find-result'),
   aiFindContents: vi.fn().mockResolvedValue(['result']),
   aiFindAndSelect: vi.fn().mockResolvedValue('select-result'),
   aiChange: vi.fn().mockResolvedValue({}),
   aiGenerateContent: vi.fn().mockResolvedValue(),
   aiRewriteSelection: vi.fn().mockResolvedValue(),
-};
+}));
 
-vi.mock('./ai-commands.js', () => aiCommands);
+const aiCommands = await import('./ai-commands.js');
 
 import { SuperDocAiController } from './SuperDocAiController.js';
 import { ConfigurableAIProvider } from './providers/configurable-provider.js';

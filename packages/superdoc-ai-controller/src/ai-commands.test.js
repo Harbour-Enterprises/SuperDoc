@@ -20,7 +20,7 @@ const createEditor = (content, selection = { from: 1, to: 1 }) => {
     marks: {},
   });
 
-  const paragraph = schema.nodes.paragraph.create(null, schema.text(content));
+  const paragraph = schema.nodes.paragraph.create(null, content ? schema.text(content) : undefined);
   const doc = schema.nodes.doc.create(null, [paragraph]);
   const state = EditorState.create({
     schema,
