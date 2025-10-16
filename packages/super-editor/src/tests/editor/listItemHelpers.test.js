@@ -2,6 +2,7 @@ import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpe
 import { getVisibleIndent } from '@extensions/list-item/ListItemNodeView.js';
 import { getListItemStyleDefinitions } from '@helpers/list-numbering-helpers.js';
 import { expect } from 'vitest';
+import { getNumberingCache } from '@core/super-converter/v2/importer/numberingCache.js';
 
 describe(' test list item rendering indents from styles', () => {
   const filename = 'base-custom.docx';
@@ -45,6 +46,29 @@ describe(' test list item rendering indents from styles', () => {
     expect(numDefIndentHanging).toBe('360');
     expect(numDefIndentTag.attributes['w:firstLine']).toBeUndefined();
     expect(numDefIndentTag.attributes['w:right']).toBeUndefined();
+
+    const cache = getNumberingCache(editor.converter.convertedXml);
+    expect(cache).toBeDefined();
+    expect(Object.prototype.hasOwnProperty.call(editor.converter.convertedXml, 'numbering-cache')).toBe(false);
+
+    getListItemStyleDefinitions({
+      styleId: 'ListParagraph',
+      numId,
+      level,
+      editor,
+    });
+    expect(getNumberingCache(editor.converter.convertedXml)).toBe(cache);
+  });
+
+  it('[getListItemStyleDefinitions] returns empty definitions when numbering data is unavailable', () => {
+    const result = getListItemStyleDefinitions({
+      styleId: 'ListParagraph',
+      numId: 1,
+      level: 0,
+      editor: { converter: {} },
+    });
+
+    expect(result).toEqual({});
   });
 
   it('[getVisibleIndent] can calculate visible indent', () => {

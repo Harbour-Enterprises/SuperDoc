@@ -137,7 +137,6 @@ describe('w:del translator', () => {
 
       expect(createTrackStyleMark).toHaveBeenCalled();
       expect(result).toBeTruthy();
-      console.log(result.elements[0].elements[0]);
       expect(result.elements[0].elements[0].name).toBe('w:t');
     });
   });

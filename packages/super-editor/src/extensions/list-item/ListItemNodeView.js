@@ -38,7 +38,10 @@ export class ListItemNodeView {
     this.editor = editor;
     this.decorations = decorations;
     this.view = editor.view;
-    this.getPos = getPos;
+    this._rawGetPos = getPos;
+    this._posCache = null;
+    this._pendingIndentRefresh = null;
+    this.getPos = (options) => this.getResolvedPos(options);
 
     this.#init();
 
@@ -64,7 +67,7 @@ export class ListItemNodeView {
       }
     }
 
-    const pos = this.getPos();
+    const pos = this.getResolvedPos();
     const { fontSize, fontFamily, lineHeight } = resolveListItemTypography({
       node: this.node,
       pos,
@@ -103,7 +106,42 @@ export class ListItemNodeView {
     this.refreshIndentStyling();
   }
 
-  refreshIndentStyling() {
+  getResolvedPos({ force = false } = {}) {
+    if (force) this._posCache = null;
+    if (this._posCache == null && typeof this._rawGetPos === 'function') {
+      try {
+        const resolved = this._rawGetPos();
+        this._posCache = typeof resolved === 'number' ? resolved : null;
+      } catch {
+        this._posCache = null;
+      }
+    }
+    return this._posCache;
+  }
+
+  invalidateResolvedPos() {
+    this._posCache = null;
+  }
+
+  refreshIndentStyling({ immediate = false } = {}) {
+    const raf = typeof globalThis !== 'undefined' ? globalThis.requestAnimationFrame : undefined;
+    const shouldSchedule = !immediate && typeof raf === 'function';
+
+    if (!shouldSchedule) {
+      this._pendingIndentRefresh = null;
+      this.#applyIndentStyling();
+      return;
+    }
+
+    if (this._pendingIndentRefresh != null) return;
+
+    this._pendingIndentRefresh = raf(() => {
+      this._pendingIndentRefresh = null;
+      this.#applyIndentStyling();
+    });
+  }
+
+  #applyIndentStyling() {
     const { attrs } = this.node;
     const { styleId, numId, level, indent: inlineIndent } = attrs;
 
@@ -155,10 +193,11 @@ export class ListItemNodeView {
   update(node, decorations) {
     this.node = node;
     this.decorations = decorations;
+    this.invalidateResolvedPos();
 
     const { fontSize, fontFamily, lineHeight } = resolveListItemTypography({
       node,
-      pos: this.getPos(),
+      pos: this.getResolvedPos(),
       editor: this.editor,
       nodeView: this,
       activeNodeViews: activeListItemNodeViews,
@@ -166,12 +205,19 @@ export class ListItemNodeView {
     this.dom.style.fontSize = fontSize;
     this.dom.style.fontFamily = fontFamily || 'inherit';
     this.dom.style.lineHeight = lineHeight || '';
+
+    this.refreshIndentStyling();
   }
 
   destroy() {
     // Unregister this node view
     activeListItemNodeViews.delete(this);
     this.numberingDOM.removeEventListener('click', this.handleNumberingClick);
+    const caf = typeof globalThis !== 'undefined' ? globalThis.cancelAnimationFrame : undefined;
+    if (this._pendingIndentRefresh != null && typeof caf === 'function') {
+      caf(this._pendingIndentRefresh);
+    }
+    this._pendingIndentRefresh = null;
   }
 }
 
@@ -179,7 +225,7 @@ export class ListItemNodeView {
 export function refreshAllListItemNodeViews() {
   activeListItemNodeViews.forEach((nodeView) => {
     try {
-      nodeView.refreshIndentStyling();
+      nodeView.refreshIndentStyling({ immediate: true });
     } catch (error) {
       console.error('Error refreshing list item node view:', error);
       // Remove broken node views from the set

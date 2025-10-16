@@ -1,5 +1,6 @@
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { twipsToPixels } from '../../helpers.js';
+import { ensureNumberingCache, LEVELS_MAP_KEY } from './numberingCache.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -361,21 +362,24 @@ const getListNumIdFromStyleRef = (styleId, docx) => {
 };
 
 export const getAbstractDefinition = (numId, docx) => {
-  const def = docx['word/numbering.xml'];
-  if (!def) return {};
+  const numberingXml = docx['word/numbering.xml'];
+  if (!numberingXml) return {};
+  if (numId == null) return undefined;
 
-  const { elements } = def;
-  const listData = elements[0];
+  const cache = ensureNumberingCache(docx);
 
-  const numberingElements = listData.elements;
-  const abstractDefinitions = numberingElements?.filter((style) => style.name === 'w:abstractNum');
-  const numDefinitions = numberingElements?.filter((style) => style.name === 'w:num');
-  const numDefinition = numDefinitions?.find((style) => style.attributes['w:numId'] == numId);
+  const numKey = String(numId);
+  let listDefinitionForThisNumId = cache.numToDefinition.get(numKey);
 
-  const abstractNumId = numDefinition?.elements[0].attributes['w:val'];
-  let listDefinitionForThisNumId = abstractDefinitions?.find(
-    (style) => style.attributes['w:abstractNumId'] === abstractNumId,
-  );
+  if (!listDefinitionForThisNumId) {
+    const abstractNumId = cache.numToAbstractId.get(numKey);
+    if (abstractNumId) {
+      listDefinitionForThisNumId = cache.abstractById.get(abstractNumId);
+      if (listDefinitionForThisNumId) {
+        cache.numToDefinition.set(numKey, listDefinitionForThisNumId);
+      }
+    }
+  }
 
   /**
    * Only fall back to a template-based abstractNum if the direct definition
@@ -383,19 +387,13 @@ export const getAbstractDefinition = (numId, docx) => {
    * picking the first matching template (e.g., abstractNumId=0) and
    * preserves the concrete mapping from w:num -> w:abstractNumId.
    */
-  const hasLevels = listDefinitionForThisNumId?.elements?.some((el) => el.name === 'w:lvl');
+  const levelMap = listDefinitionForThisNumId ? listDefinitionForThisNumId[LEVELS_MAP_KEY] : null;
+  const hasLevels = levelMap && levelMap.size > 0;
   if (!listDefinitionForThisNumId || !hasLevels) {
     const templateIdTag = listDefinitionForThisNumId?.elements?.find((el) => el.name === 'w:tmpl');
     const templateId = templateIdTag?.attributes?.['w:val'];
     if (templateId) {
-      const byTemplate = numberingElements?.find((el) => {
-        if (el.name !== 'w:abstractNum') return false;
-        const tmpl = el.elements?.find((el) => el.name === 'w:tmpl');
-        if (!tmpl) return false;
-        const tmplId = tmpl.attributes?.['w:val'];
-        const hasLvl = el.elements?.some((e) => e.name === 'w:lvl');
-        return tmplId && hasLvl && tmplId === templateId;
-      });
+      const byTemplate = cache.templateById.get(String(templateId));
       if (byTemplate) listDefinitionForThisNumId = byTemplate;
     }
   }
@@ -667,7 +665,16 @@ function extractDefinitionFromLevel(level, initialPpr) {
 }
 
 export function getDefinitionForLevel(data, level) {
-  return data?.elements?.find((item) => Number(item.attributes['w:ilvl']) === level);
+  if (!data) return undefined;
+  const parsedLevel = Number(level);
+  if (Number.isNaN(parsedLevel)) return undefined;
+
+  const cachedLevels = data[LEVELS_MAP_KEY];
+  if (cachedLevels?.has(parsedLevel)) {
+    return cachedLevels.get(parsedLevel);
+  }
+
+  return data?.elements?.find((item) => Number(item.attributes?.['w:ilvl']) === parsedLevel);
 }
 
 export function parseIndentElement(indElem) {

@@ -20,12 +20,12 @@ import { listHandlerEntity } from './listImporter.js';
 import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
 import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
-import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
 import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
 import { preProcessNodesForFldChar } from '../../field-references';
+import { ensureNumberingCache } from './numberingCache.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -679,30 +679,26 @@ export function filterOutRootInlineNodes(content = []) {
  * @returns {Object} The numbering definitions
  */
 function getNumberingDefinitions(docx) {
-  let numbering = docx['word/numbering.xml'];
-  if (!numbering || !numbering.elements?.length || !numbering.elements[0].elements?.length) numbering = baseNumbering;
-
-  const elements = numbering.elements[0].elements;
-  const abstractDefs = elements.filter((el) => el.name === 'w:abstractNum');
-  const definitions = elements.filter((el) => el.name === 'w:num');
+  const cache = ensureNumberingCache(docx);
 
   const abstractDefinitions = {};
-  abstractDefs.forEach((el) => {
-    const abstractId = Number(el.attributes['w:abstractNumId']);
-    abstractDefinitions[abstractId] = el;
+  cache.abstractById.forEach((value, key) => {
+    const numericKey = Number(key);
+    if (!Number.isNaN(numericKey)) {
+      abstractDefinitions[numericKey] = value;
+    }
   });
 
   let importListDefs = {};
-  definitions.forEach((el) => {
-    const numId = Number(el.attributes['w:numId']);
-    if (Number.isInteger(numId)) {
-      importListDefs[numId] = el;
+  cache.numNodesById.forEach((value, key) => {
+    const numericKey = Number(key);
+    if (Number.isInteger(numericKey)) {
+      importListDefs[numericKey] = value;
     }
   });
 
   const listDefsEntries = Object.entries(importListDefs);
   const foundByDurableId = listDefsEntries.filter(([, def]) => def.attributes?.['w16cid:durableId'] === '485517411');
-  // To fix corrupted numbering.xml file.
   if (foundByDurableId.length > 1) {
     importListDefs = Object.fromEntries(
       listDefsEntries.filter(([, def]) => def.attributes?.['w16cid:durableId'] !== '485517411'),
