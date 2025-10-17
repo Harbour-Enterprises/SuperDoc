@@ -1,7 +1,9 @@
 import { emuToPixels, rotToDegrees, polygonToObj } from '@converter/helpers.js';
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
+import { extractStrokeWidth, extractStrokeColor, extractFillColor } from './vector-shape-helpers';
 
 const DRAWING_XML_TAG = 'w:drawing';
+const SHAPE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 
 /**
  * Encodes image xml into Editor node
@@ -144,8 +146,8 @@ export function handleImageNode(node, params, isAnchor) {
   const graphic = node.elements.find((el) => el.name === 'a:graphic');
   const graphicData = graphic?.elements.find((el) => el.name === 'a:graphicData');
   const { uri } = graphicData?.attributes || {};
-  const shapeURI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
-  if (!!uri && uri === shapeURI) {
+
+  if (!!uri && uri === SHAPE_URI) {
     const shapeMarginOffset = {
       left: positionHValue,
       horizontal: positionHValue,
@@ -258,9 +260,15 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
 
   const spPr = wsp.elements.find((el) => el.name === 'wps:spPr');
   const prstGeom = spPr?.elements.find((el) => el.name === 'a:prstGeom');
+  const shapeType = prstGeom?.attributes['prst'];
 
-  if (!!prstGeom && prstGeom.attributes['prst'] === 'rect' && !textBoxContent) {
+  if (shapeType === 'rect' && !textBoxContent) {
     return getRectangleShape(params, spPr);
+  }
+
+  if (shapeType && !textBoxContent) {
+    const result = getVectorShape({ params, node, graphicData });
+    if (result) return result;
   }
 
   if (!textBoxContent) {
@@ -379,3 +387,70 @@ const buildShapePlaceholder = (node, size, padding, marginOffset, shapeType) => 
     attrs,
   };
 };
+
+/**
+ * Extracts vector shape data.
+ * Parses shape geometry, transformations, and styling information.
+ * @param {Object} options - Options
+ * @param {Object} options.params - Translator params
+ * @param {Object} options.node - The node
+ * @param {Object} options.graphicData - The graphicData node
+ * @returns {Object|null} A vectorShape node with extracted attributes
+ */
+export function getVectorShape({ params, node, graphicData }) {
+  const schemaAttrs = {};
+
+  const drawingNode = params.nodes?.[0];
+  if (drawingNode?.name === 'w:drawing') {
+    schemaAttrs.drawingContent = drawingNode;
+  }
+
+  const wsp = graphicData.elements?.find((el) => el.name === 'wps:wsp');
+  if (!wsp) {
+    return null;
+  }
+
+  const spPr = wsp.elements?.find((el) => el.name === 'wps:spPr');
+  if (!spPr) {
+    return null;
+  }
+
+  // Extract shape kind
+  const prstGeom = spPr.elements?.find((el) => el.name === 'a:prstGeom');
+  const shapeKind = prstGeom?.attributes?.['prst'];
+  if (!shapeKind) {
+    console.warn('Shape kind not found');
+  }
+  schemaAttrs.kind = shapeKind;
+
+  // Extract size and transformations
+  const xfrm = spPr.elements?.find((el) => el.name === 'a:xfrm');
+  const extent = xfrm?.elements?.find((el) => el.name === 'a:ext');
+
+  const width = extent?.attributes?.['cx'] ? emuToPixels(extent.attributes['cx']) : 100;
+  const height = extent?.attributes?.['cy'] ? emuToPixels(extent.attributes['cy']) : 100;
+  const rotation = xfrm?.attributes?.['rot'] ? rotToDegrees(xfrm.attributes['rot']) : 0;
+  const flipH = xfrm?.attributes?.['flipH'] === '1';
+  const flipV = xfrm?.attributes?.['flipV'] === '1';
+
+  // Extract colors
+  const style = wsp.elements?.find((el) => el.name === 'wps:style');
+  const fillColor = extractFillColor(spPr, style);
+  const strokeColor = extractStrokeColor(spPr, style);
+  const strokeWidth = extractStrokeWidth(spPr);
+
+  return {
+    type: 'vectorShape',
+    attrs: {
+      ...schemaAttrs,
+      width,
+      height,
+      rotation,
+      flipH,
+      flipV,
+      fillColor,
+      strokeColor,
+      strokeWidth,
+    },
+  };
+}

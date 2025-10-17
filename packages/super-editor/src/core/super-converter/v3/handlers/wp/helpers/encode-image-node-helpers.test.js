@@ -1,9 +1,18 @@
-import { handleImageNode } from './encode-image-node-helpers.js';
-import { emuToPixels, polygonToObj } from '@converter/helpers.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { handleImageNode, getVectorShape } from './encode-image-node-helpers.js';
+import { emuToPixels, polygonToObj, rotToDegrees } from '@converter/helpers.js';
+import { extractFillColor, extractStrokeColor, extractStrokeWidth } from './vector-shape-helpers.js';
 
 vi.mock('@converter/helpers.js', () => ({
   emuToPixels: vi.fn(),
   polygonToObj: vi.fn(),
+  rotToDegrees: vi.fn(),
+}));
+
+vi.mock('./vector-shape-helpers.js', () => ({
+  extractFillColor: vi.fn(),
+  extractStrokeColor: vi.fn(),
+  extractStrokeWidth: vi.fn(),
 }));
 
 describe('handleImageNode', () => {
@@ -271,20 +280,7 @@ describe('handleImageNode', () => {
     const node = makeShapeNode();
 
     const result = handleImageNode(node, makeParams(), false);
-    expect(result.type).toBe('contentBlock');
-    expect(result.attrs.size).toEqual({ width: 5, height: 6 });
-    expect(result.attrs.attributes).toMatchObject({
-      'data-shape-type': 'drawing',
-      'data-padding-top': 1,
-      'data-padding-bottom': 2,
-      'data-padding-left': 3,
-      'data-padding-right': 4,
-      'data-offset-x': 7,
-      'data-offset-y': 8,
-    });
-    expect(result.attrs.drawingContent.name).toBe('w:drawing');
-    expect(result.attrs.drawingContent.elements[0]).toEqual(node);
-    expect(result.attrs.drawingContent.elements[0]).not.toBe(node);
+    expect(result.type).toBe('vectorShape');
   });
 
   it('marks textbox shapes with a specific placeholder type', () => {
@@ -483,5 +479,142 @@ describe('handleImageNode', () => {
       expect(result.attrs.wrap.type).toBe('None');
       expect(result.attrs.wrap.attrs).toEqual({ behindDoc: false });
     });
+  });
+});
+
+describe('getVectorShape', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    emuToPixels.mockImplementation((emu) => parseInt(emu, 10) / 12700);
+    rotToDegrees.mockImplementation((rot) => parseInt(rot, 10) / 60000);
+    extractFillColor.mockReturnValue('#70ad47');
+    extractStrokeColor.mockReturnValue('#000000');
+    extractStrokeWidth.mockReturnValue(1);
+  });
+
+  const makeGraphicData = (overrides = {}) => ({
+    elements: [
+      {
+        name: 'wps:wsp',
+        elements: [
+          {
+            name: 'wps:spPr',
+            elements: [
+              {
+                name: 'a:prstGeom',
+                attributes: { prst: 'ellipse' },
+              },
+              {
+                name: 'a:xfrm',
+                attributes: { rot: '0', flipH: '0', flipV: '0' },
+                elements: [
+                  {
+                    name: 'a:ext',
+                    attributes: { cx: '914400', cy: '914400' },
+                  },
+                ],
+              },
+              ...(overrides.spPrElements || []),
+            ],
+          },
+          {
+            name: 'wps:style',
+            elements: [],
+          },
+        ],
+      },
+    ],
+  });
+
+  const makeParams = () => ({
+    nodes: [{ name: 'w:drawing', elements: [] }],
+  });
+
+  it('returns null when wsp is missing', () => {
+    const graphicData = { elements: [] };
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+    expect(result).toBeNull();
+  });
+
+  it('returns null when spPr is missing', () => {
+    const graphicData = {
+      elements: [{ name: 'wps:wsp', elements: [] }],
+    };
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+    expect(result).toBeNull();
+  });
+
+  it('extracts basic shape properties', () => {
+    const graphicData = makeGraphicData();
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+
+    expect(result.type).toBe('vectorShape');
+    expect(result.attrs.kind).toBe('ellipse');
+    expect(result.attrs.width).toBe(72); // 914400 / 12700
+    expect(result.attrs.height).toBe(72);
+    expect(result.attrs.rotation).toBe(0);
+    expect(result.attrs.flipH).toBe(false);
+    expect(result.attrs.flipV).toBe(false);
+  });
+
+  it('extracts colors and stroke width', () => {
+    const graphicData = makeGraphicData();
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+
+    expect(extractFillColor).toHaveBeenCalled();
+    expect(extractStrokeColor).toHaveBeenCalled();
+    expect(extractStrokeWidth).toHaveBeenCalled();
+
+    expect(result.attrs.fillColor).toBe('#70ad47');
+    expect(result.attrs.strokeColor).toBe('#000000');
+    expect(result.attrs.strokeWidth).toBe(1);
+  });
+
+  it('handles rotation and flips', () => {
+    const graphicData = makeGraphicData();
+    graphicData.elements[0].elements[0].elements[1].attributes = {
+      rot: '5400000', // 90 degrees
+      flipH: '1',
+      flipV: '1',
+    };
+
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+
+    expect(result.attrs.rotation).toBe(90);
+    expect(result.attrs.flipH).toBe(true);
+    expect(result.attrs.flipV).toBe(true);
+  });
+
+  it('uses default size when extent is missing', () => {
+    const graphicData = makeGraphicData();
+    graphicData.elements[0].elements[0].elements[1].elements = [];
+
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+
+    expect(result.attrs.width).toBe(100);
+    expect(result.attrs.height).toBe(100);
+  });
+
+  it('stores drawingContent when present', () => {
+    const drawingNode = { name: 'w:drawing', elements: [] };
+    const params = { nodes: [drawingNode] };
+    const graphicData = makeGraphicData();
+
+    const result = getVectorShape({ params, node: {}, graphicData });
+
+    expect(result.attrs.drawingContent).toBe(drawingNode);
+  });
+
+  it('handles missing shape kind with warning', () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const graphicData = makeGraphicData();
+    graphicData.elements[0].elements[0].elements[0].attributes = {}; // No prst
+
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+
+    expect(consoleWarnSpy).toHaveBeenCalledWith('Shape kind not found');
+    expect(result.attrs.kind).toBeUndefined();
+
+    consoleWarnSpy.mockRestore();
   });
 });

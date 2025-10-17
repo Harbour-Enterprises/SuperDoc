@@ -48,6 +48,7 @@ import {
 } from './structured-content/index.js';
 import { BlockNode } from './block-node/index.js';
 import { TableOfContents } from './table-of-contents/index.js';
+import { VectorShape } from './vector-shape/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -192,6 +193,7 @@ const getStarterExtensions = () => {
     NodeResizer,
     CustomSelection,
     TextTransform,
+    VectorShape,
   ];
 };
 
@@ -262,4 +264,5 @@ export {
   NodeResizer,
   CustomSelection,
   TextTransform,
+  VectorShape,
 };
