@@ -1,4 +1,5 @@
-import { ref, reactive } from 'vue';
+import { reactive, ref, shallowRef, watch } from 'vue';
+import { SuperDocAiController } from '@harbour-enterprises/superdoc-ai-controller';
 
 /**
  * Composable to manage AI layer and AI writer functionality
@@ -13,6 +14,48 @@ export function useAi({ activeEditorRef }) {
   const showAiWriter = ref(false);
   const aiWriterPosition = reactive({ top: 0, left: 0 });
   const aiLayer = ref(null);
+  const aiControllerRef = shallowRef(null);
+
+  watch(
+    () => activeEditorRef.value,
+    (editor) => {
+      if (editor && !editor.isDestroyed) {
+        aiControllerRef.value =
+          aiControllerRef.value?.editor === editor ? aiControllerRef.value : new SuperDocAiController({ editor });
+      } else {
+        aiControllerRef.value = null;
+      }
+    },
+    { immediate: true },
+  );
+
+  const ensureAiController = () => {
+    const editor = activeEditorRef.value;
+    if (!editor || editor.isDestroyed) {
+      console.error('[useAi] Editor not available');
+      return null;
+    }
+
+    if (!aiControllerRef.value || aiControllerRef.value.editor !== editor) {
+      aiControllerRef.value = new SuperDocAiController({ editor });
+    }
+
+    return aiControllerRef.value;
+  };
+
+  const runWithController = async (methodName, handler) => {
+    const controller = ensureAiController();
+    if (!controller) {
+      throw new Error('[useAi] Editor not available');
+    }
+
+    try {
+      return await handler(controller);
+    } catch (error) {
+      console.error(`[useAi] ${methodName} failed:`, error);
+      throw error;
+    }
+  };
 
   /**
    * Show the AI writer at the current cursor position
@@ -106,17 +149,44 @@ export function useAi({ activeEditorRef }) {
     showAiWriterAtCursor();
   };
 
+  const aiFindContent = (prompt, provider) =>
+    runWithController('aiFindContent', (controller) => controller.aiFindContent(prompt, provider));
+
+  const aiFindContents = (prompt, provider) =>
+    runWithController('aiFindContents', (controller) => controller.aiFindContents(prompt, provider));
+
+  const aiFindAndSelect = (prompt, provider) =>
+    runWithController('aiFindAndSelect', (controller) => controller.aiFindAndSelect(prompt, provider));
+
+  const aiChange = (config, provider) =>
+    runWithController('aiChange', (controller) => controller.aiChange(config, provider));
+
+  const aiGenerateContent = (prompt, provider, streaming = false) =>
+    runWithController('aiGenerateContent', (controller) => controller.aiGenerateContent(prompt, provider, streaming));
+
+  const aiRewriteSelection = (instructions, provider, streaming = false) =>
+    runWithController('aiRewriteSelection', (controller) =>
+      controller.aiRewriteSelection(instructions, provider, streaming),
+    );
+
   return {
     // State
     showAiLayer,
     showAiWriter,
     aiWriterPosition,
     aiLayer,
+    aiController: aiControllerRef,
 
     // Methods
     initAiLayer,
     showAiWriterAtCursor,
     handleAiWriterClose,
     handleAiToolClick,
+    aiFindContent,
+    aiFindContents,
+    aiFindAndSelect,
+    aiChange,
+    aiGenerateContent,
+    aiRewriteSelection,
   };
 }

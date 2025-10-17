@@ -35,6 +35,7 @@ export const getPropsByItemId = (itemId, props) => {
         ...baseProps,
         selectedText,
         handleClose: props.closePopover || (() => null),
+        provider: editor.options?.aiProvider,
         apiKey: editor.options?.aiApiKey,
         endpoint: editor.options?.aiEndpoint,
       };

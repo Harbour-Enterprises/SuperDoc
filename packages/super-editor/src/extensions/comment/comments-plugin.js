@@ -575,7 +575,7 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   const { type, attrs } = trackedMark;
 
   const { name: trackedChangeType } = type;
-  const { author, authorEmail, date, importedAuthor } = attrs;
+  const { author, authorEmail, authorImage, date, importedAuthor } = attrs;
   const id = attrs.id;
 
   const node = nodes[0];
@@ -614,6 +614,7 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
     deletedText: marks.deletionMark ? deletionText : null,
     author,
     authorEmail,
+    ...(authorImage && { authorImage }),
     date,
     ...(importedAuthor && {
       importedAuthor: {

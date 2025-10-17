@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SuperDoc AI Controller (JS)</title>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <h1>SuperDoc Example</h1>
+        <button id="loadButton" type="button">Load Document</button>
+        <input
+          type="file"
+          id="fileInput"
+          accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          hidden
+        />
+      </header>
+
+      <main class="main-content">
+        <div class="document-editor">
+          <div id="superdoc-toolbar" class="toolbar"></div>
+          <div id="superdoc" class="superdoc-container"></div>
+        </div>
+
+        <button class="drawer-tab drawer-open" id="drawerTab" type="button">
+          <span>◀</span>
+        </button>
+
+        <aside class="drawer open" id="drawer">
+          <div class="drawer-content">
+            <h3>AI Assistance</h3>
+                <div class="form-group">
+                    <label for="findContent">Find content</label>
+                    <input
+                            id="findContent"
+                            type="text"
+                            value="Find GDPR clause"
+                            placeholder="Search the document..."
+                    />
+                    <button class="apply-btn" id="findContentButton" type="button">
+                        Find match
+                    </button>
+                    <ul id="aiFindContent"></ul>
+                </div>
+                <div class="form-group">
+                  <label for="findContents">Find contents</label>
+                  <input
+                    id="findContents"
+                    type="text"
+                    value="Find GDPR clause"
+                    placeholder="Search the document..."
+                  />
+                  <button class="apply-btn" id="findContentsButton" type="button">
+                    Find matches
+                  </button>
+                  <ul id="aiFindContents"></ul>
+                </div>
+                <div class="form-group">
+                    <label for="redline">Redline</label>
+                    <input
+                            id="redline"
+                            type="text"
+                            value="Make the GDRP clause into bullet points"
+                            placeholder="Search the document..."
+                    />
+                    <button class="apply-btn" id="redlineButton" type="button">
+                        Redline
+                    </button>
+                    <ul id="redline"></ul>
+                </div>
+                <div class="form-group">
+                  <label for="replace">Replace</label>
+                  <input
+                          id="replace"
+                          type="text"
+                          value="Make the GDRP clause into bullet points"
+                          placeholder="Search the document..."
+                  />
+                  <button class="apply-btn" id="replaceButton" type="button">
+                      Replace
+                  </button>
+                  <ul id="replace"></ul>
+              </div>
+              <div class="form-group">
+                  <label for="comment">Insert Comment</label>
+                  <input
+                          id="comment"
+                          type="text"
+                          value="Make the GDRP clause into bullet points"
+                          placeholder="Search the document..."
+                  />
+                  <button class="apply-btn" id="commentButton" type="button">
+                      Comment
+                  </button>
+                  <ul id="comment"></ul>
+              </div>
+
+            <div class="form-group">
+              <label>AI events</label>
+              <div id="aiEventLog" class="event-log"></div>
+            </div>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

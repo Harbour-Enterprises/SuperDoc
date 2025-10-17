@@ -21,7 +21,9 @@ import { isTrackedChangeActionAllowed } from '@extensions/track-changes/permissi
 const isModuleEnabled = (editorOptions, moduleName) => {
   switch (moduleName) {
     case 'ai':
-      return !!editorOptions?.isAiEnabled;
+      return Boolean(
+        editorOptions?.ai || editorOptions?.aiProvider || editorOptions?.aiApiKey || editorOptions?.aiEndpoint,
+      );
 
     default:
       return true;

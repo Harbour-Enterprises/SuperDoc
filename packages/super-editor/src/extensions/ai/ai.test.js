@@ -86,7 +86,7 @@ describe('ai plugin commands', () => {
   const setup = () => {
     const schema = createAiSchema();
     const state = createStateWithAiMark(schema);
-    const editor = { schema };
+    const editor = { schema, options: { ai: { provider: { id: 'default-provider' } } } };
     const commands = AiPlugin.config.addCommands.call({ editor });
     return { schema, state, editor, commands };
   };

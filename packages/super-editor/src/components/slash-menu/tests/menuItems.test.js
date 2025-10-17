@@ -118,7 +118,7 @@ describe('menuItems.js', () => {
     });
 
     it('should include AI items when AI module is enabled', () => {
-      mockEditor.options.isAiEnabled = true;
+      mockEditor.options.aiProvider = { id: 'provider' };
       const sections = getItems(mockContext);
 
       const aiSection = sections.find((s) => s.id === 'ai-content');

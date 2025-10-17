@@ -122,6 +122,7 @@ export function createMockEditor(options = {}) {
     slashMenuConfig: null,
     aiApiKey: null,
     aiEndpoint: null,
+    aiProvider: null,
   };
 
   const config = { ...defaults, ...options };
@@ -131,10 +132,10 @@ export function createMockEditor(options = {}) {
     view: mockView,
     options: {
       documentMode: config.documentMode,
-      isAiEnabled: config.isAiEnabled,
       slashMenuConfig: config.slashMenuConfig,
       aiApiKey: config.aiApiKey,
       aiEndpoint: config.aiEndpoint,
+      aiProvider: config.aiProvider,
     },
     isEditable: config.isEditable,
     commands: options.commands || {},
