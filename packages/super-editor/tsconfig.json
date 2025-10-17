@@ -20,5 +20,6 @@
       "@translator": ["./src/core/super-converter/v3/node-translator/"]
     }
   },
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "**/*.test.js"]
 }
