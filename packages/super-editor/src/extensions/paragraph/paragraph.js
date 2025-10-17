@@ -3,7 +3,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
-import { pixelsToTwips, linesToTwips, twipsToPixels, eigthPointsToPixels } from '@converter/helpers.js';
+import { pixelsToTwips, linesToTwips, twipsToPixels, eighthPointsToPixels } from '@converter/helpers.js';
 
 /**
  * Configuration options for Paragraph
@@ -169,7 +169,7 @@ export const Paragraph = OxmlNode.create({
               return;
             }
 
-            const width = b.size != null ? `${eigthPointsToPixels(b.size)}px` : '1px';
+            const width = b.size != null ? `${eighthPointsToPixels(b.size)}px` : '1px';
             const cssStyle = valToCss[b.val] || 'solid';
             const color = !b.color || b.color === 'auto' ? '#000000' : `#${b.color}`;
 
@@ -177,7 +177,7 @@ export const Paragraph = OxmlNode.create({
 
             // Optionally handle space attribute (distance from text)
             if (b.space != null && side === 'bottom') {
-              style += `padding-bottom: ${eigthPointsToPixels(b.space)}px;`;
+              style += `padding-bottom: ${eighthPointsToPixels(b.space)}px;`;
             }
           });
 
