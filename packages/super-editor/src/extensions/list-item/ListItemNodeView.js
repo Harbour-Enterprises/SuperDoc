@@ -102,7 +102,7 @@ export class ListItemNodeView {
     this.dom.appendChild(this.contentDOM);
 
     // Apply initial indent styling
-    this.refreshIndentStyling();
+    this.refreshIndentStyling({ immediate: true });
   }
 
   getResolvedPos() {

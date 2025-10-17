@@ -30,6 +30,7 @@ describe('[blank-doc.docx] import, add node, export', () => {
     expect(currentState.content[0].content[0].content.length).toBe(1);
     expect(currentState.content[0].content[0].content[0].type).toBe('paragraph');
     expect(currentState.content[0].content[0].content[0].content).toBeUndefined();
+    expect(currentState.content[0].content[0].attrs.indent).toBeDefined();
   });
 
   it('can export the empty list node', () => {
