@@ -71,11 +71,83 @@ describe(' test list item rendering indents from styles', () => {
     expect(result).toEqual({});
   });
 
+  it('[getListItemStyleDefinitions] falls back to converter.numbering when docx XML is missing', () => {
+    const numbering = {
+      definitions: {
+        1: {
+          elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '10' } }],
+        },
+      },
+      abstracts: {
+        10: {
+          elements: [
+            {
+              name: 'w:lvl',
+              attributes: { 'w:ilvl': '0' },
+              elements: [
+                {
+                  name: 'w:pPr',
+                  elements: [
+                    {
+                      name: 'w:ind',
+                      attributes: { 'w:left': '720', 'w:hanging': '360' },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = getListItemStyleDefinitions({
+      styleId: undefined,
+      numId: 1,
+      level: 0,
+      editor: { converter: { numbering } },
+    });
+
+    expect(result.numDefPpr?.elements?.[0]?.name).toBe('w:ind');
+    expect(result.numDefPpr?.elements?.[0]?.attributes?.['w:left']).toBe('720');
+  });
+
+  it('[getVisibleIndent] derives non-zero values for imported list items', () => {
+    let listItemNode = null;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'listItem' && !listItemNode) {
+        listItemNode = node;
+        return false;
+      }
+      return true;
+    });
+    expect(listItemNode).toBeTruthy();
+    const defs = getListItemStyleDefinitions({
+      styleId: listItemNode.attrs.styleId,
+      numId: listItemNode.attrs.numId,
+      level: listItemNode.attrs.level,
+      editor,
+    });
+    const visibleIndent = getVisibleIndent(defs.stylePpr, defs.numDefPpr, listItemNode.attrs.indent);
+    expect(visibleIndent.left).toBeGreaterThan(0);
+    expect(visibleIndent.hanging).toBeGreaterThan(0);
+  });
+
   it('[getVisibleIndent] can calculate visible indent', () => {
     const visibleIndent = getVisibleIndent(stylePpr, numDefPpr);
     expect(visibleIndent).toBeDefined();
     expect(visibleIndent.left).toBe(96);
     expect(visibleIndent.hanging).toBe(24);
     expect(visibleIndent.right).toBeUndefined();
+  });
+});
+
+describe('list helpers in blank editor state', () => {
+  it('provides base numbering definitions without imported docx', () => {
+    const { editor } = initTestEditor();
+    const numbering = editor.converter.numbering || {};
+    expect(Object.keys(numbering.definitions || {})).not.toHaveLength(0);
+    expect(Object.keys(numbering.abstracts || {})).not.toHaveLength(0);
+    editor.destroy();
   });
 });
