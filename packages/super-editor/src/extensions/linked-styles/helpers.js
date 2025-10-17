@@ -56,7 +56,7 @@ export const getSpacingStyleString = (spacing, marks) => {
     line = `${twipsToPt(line)}pt`;
   }
 
-  const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
+  const textStyleMark = marks?.find((mark) => mark.type === 'textStyle');
   const fontSize = textStyleMark?.attrs?.fontSize;
 
   before = twipsToPixels(before);
