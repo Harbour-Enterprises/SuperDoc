@@ -6,6 +6,8 @@ export const defaultLineLength = 816;
 export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
   const decorations = [];
   const paragraphCache = new Map();
+  const coordCache = new Map();
+  const domPosCache = new Map();
 
   const end = to ?? doc.content.size;
 
@@ -22,9 +24,10 @@ export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
       const entryIndex = flattened.findIndex((entry) => entry.pos === pos);
       if (entryIndex === -1) return;
 
-      const indentWidth = getIndentWidth(view, startPos, paragraphContext.indent);
+      const indentWidth = getIndentWidth(view, startPos, paragraphContext.indent, coordCache, domPosCache);
       const accumulatedTabWidth = paragraphContext.accumulatedTabWidth || 0;
-      const currentWidth = indentWidth + measureRangeWidth(view, startPos + 1, pos) + accumulatedTabWidth;
+      const currentWidth =
+        indentWidth + measureRangeWidth(view, startPos + 1, pos, coordCache, domPosCache) + accumulatedTabWidth;
 
       let tabWidth;
       if (tabStops.length) {
@@ -37,14 +40,20 @@ export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
             const segmentStartPos = pos + node.nodeSize;
             const segmentEndPos =
               nextTabIndex === -1 ? startPos + paragraphContext.paragraph.nodeSize - 1 : flattened[nextTabIndex].pos;
-            const segmentWidth = measureRangeWidth(view, segmentStartPos, segmentEndPos);
+            const segmentWidth = measureRangeWidth(view, segmentStartPos, segmentEndPos, coordCache, domPosCache);
             tabWidth -= tabStop.val === 'center' ? segmentWidth / 2 : segmentWidth;
           } else if (tabStop.val === 'decimal' || tabStop.val === 'num') {
             const breakChar = tabStop.decimalChar || '.';
             const decimalPos = findDecimalBreakPos(flattened, entryIndex + 1, breakChar);
             const integralWidth = decimalPos
-              ? measureRangeWidth(view, pos + node.nodeSize, decimalPos)
-              : measureRangeWidth(view, pos + node.nodeSize, startPos + paragraphContext.paragraph.nodeSize - 1);
+              ? measureRangeWidth(view, pos + node.nodeSize, decimalPos, coordCache, domPosCache)
+              : measureRangeWidth(
+                  view,
+                  pos + node.nodeSize,
+                  startPos + paragraphContext.paragraph.nodeSize - 1,
+                  coordCache,
+                  domPosCache,
+                );
             tabWidth -= integralWidth;
           }
 
@@ -162,28 +171,28 @@ export function findDecimalBreakPos(flattened, startIndex, breakChar) {
   return null;
 }
 
-export function measureRangeWidth(view, from, to) {
+export function measureRangeWidth(view, from, to, coordCache = null, domPosCache = null) {
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0;
   try {
     const range = document.createRange();
-    const fromRef = view.domAtPos(from);
-    const toRef = view.domAtPos(to);
+    const fromRef = getCachedDomAtPos(view, from, domPosCache);
+    const toRef = getCachedDomAtPos(view, to, domPosCache);
     range.setStart(fromRef.node, fromRef.offset);
     range.setEnd(toRef.node, toRef.offset);
     const rect = range.getBoundingClientRect();
     range.detach?.();
     return rect.width || 0;
   } catch {
-    const startLeft = getLeftCoord(view, from);
-    const endLeft = getLeftCoord(view, to);
+    const startLeft = getLeftCoord(view, from, coordCache, domPosCache);
+    const endLeft = getLeftCoord(view, to, coordCache, domPosCache);
     if (startLeft == null || endLeft == null) return 0;
     return Math.max(0, endLeft - startLeft);
   }
 }
 
-export function getIndentWidth(view, paragraphStartPos, indentAttrs = {}) {
-  const marginLeft = getLeftCoord(view, paragraphStartPos);
-  const lineLeft = getLeftCoord(view, paragraphStartPos + 1);
+export function getIndentWidth(view, paragraphStartPos, indentAttrs = {}, coordCache = null, domPosCache = null) {
+  const marginLeft = getLeftCoord(view, paragraphStartPos, coordCache, domPosCache);
+  const lineLeft = getLeftCoord(view, paragraphStartPos + 1, coordCache, domPosCache);
   if (marginLeft != null && lineLeft != null) {
     const diff = lineLeft - marginLeft;
     if (!Number.isNaN(diff) && Math.abs(diff) > 0.5) {
@@ -219,23 +228,51 @@ export function calculateIndentFallback(indentAttrs = {}) {
   return 0;
 }
 
-export function getLeftCoord(view, pos) {
+export function getLeftCoord(view, pos, coordCache = null, domPosCache = null) {
   if (!Number.isFinite(pos)) return null;
+
+  // Check cache first
+  if (coordCache && coordCache.has(pos)) {
+    return coordCache.get(pos);
+  }
+
+  let result = null;
   try {
-    return view.coordsAtPos(pos).left;
+    result = view.coordsAtPos(pos).left;
   } catch {
     try {
-      const ref = view.domAtPos(pos);
+      const ref = getCachedDomAtPos(view, pos, domPosCache);
       const range = document.createRange();
       range.setStart(ref.node, ref.offset);
       range.setEnd(ref.node, ref.offset);
       const rect = range.getBoundingClientRect();
       range.detach?.();
-      return rect.left;
+      result = rect.left;
     } catch {
-      return null;
+      result = null;
     }
   }
+
+  // Store in cache if available
+  if (coordCache) {
+    coordCache.set(pos, result);
+  }
+
+  return result;
+}
+
+export function getCachedDomAtPos(view, pos, domPosCache = null) {
+  if (domPosCache && domPosCache.has(pos)) {
+    return domPosCache.get(pos);
+  }
+
+  const result = view.domAtPos(pos);
+
+  if (domPosCache) {
+    domPosCache.set(pos, result);
+  }
+
+  return result;
 }
 
 export function calcTabHeight(pos) {
