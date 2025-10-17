@@ -12,6 +12,7 @@ import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-transl
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
 import { translator as wPPrNodeTranslator } from './v3/handlers/w/pPr/pPr-translator.js';
 import { translator as wRNodeTranslator } from './v3/handlers/w/r/r-translator.js';
+import { translator as wRPrNodeTranslator } from './v3/handlers/w/rpr/rpr-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
@@ -423,7 +424,11 @@ export function getTextNodeForExport(text, marks, params) {
   const nodeAttrs = space ? { 'xml:space': space } : null;
   const textNodes = [];
 
-  const outputMarks = processOutputMarks(marks);
+  const textRunProperties = decodeRPrFromMarks(marks || []);
+  const parentRunProperties = params.extraParams?.runProperties || {};
+  const combinedRunProperties = combineRunProperties([parentRunProperties, textRunProperties]);
+  const rPrNode = wRPrNodeTranslator.decode({ node: { attrs: { runProperties: combinedRunProperties } } });
+
   textNodes.push({
     name: 'w:t',
     elements: [{ text, type: 'text' }],
@@ -471,7 +476,10 @@ export function getTextNodeForExport(text, marks, params) {
     });
   }
 
-  return wrapTextInRun(textNodes, outputMarks);
+  return {
+    name: 'w:r',
+    elements: rPrNode ? [rPrNode, ...textNodes] : textNodes,
+  };
 }
 
 /**
