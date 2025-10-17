@@ -86,7 +86,11 @@ export class ConfigurableAIProvider extends AIProviderInterface {
   }
 
   async findContent(prompt, options = {}) {
-    const requestBody = this.buildRequest('find and return ONLY the exact text as it appear', { prompt }, options);
+    const requestBody = this.buildRequest(
+      'findContent',
+      `${prompt}\n\n find and return ONLY the exact text as it appear`,
+      options,
+    );
     const response = await this.fetch(requestBody);
     const data = await response.json();
     return this.parseResponse(data);
@@ -94,8 +98,8 @@ export class ConfigurableAIProvider extends AIProviderInterface {
 
   async findContents(prompt, options = {}) {
     const requestBody = this.buildRequest(
-      'find and return all occurrences, ONLY exact text as it appear for each result',
-      { prompt },
+      'findContents',
+      `${prompt}\n\n Find ALL occurrences exact text. Return JSON: ["exact text", "exact text", ...]`,
       options,
     );
     const response = await this.fetch(requestBody);
