@@ -231,12 +231,13 @@ export const createBooleanAttributeHandler = (xmlName, sdName = null) =>
 
 /**
  * Encodes properties of a node using provided translators and adds them to the attributes object.
- * @param {object} [node] The node containing elements to be encoded.
+ * @param {import('@translator').SCEncoderConfig} params The encoding parameters containing the nodes to process.
  * @param {object} [translatorsByXmlName] A mapping of XML names to their corresponding translators.
  * @param {boolean} [asArray=false] If true, encodes attributes as an array of objects; otherwise, as a single object.
  * @returns {object|Array} The encoded attributes as an object or array based on the asArray flag.
  */
-export function encodeProperties(node, translatorsByXmlName, asArray = false) {
+export function encodeProperties(params, translatorsByXmlName, asArray = false) {
+  const node = params.nodes[0];
   if (!node?.elements || node.elements.length === 0) {
     return asArray ? [] : {};
   }
@@ -244,7 +245,7 @@ export function encodeProperties(node, translatorsByXmlName, asArray = false) {
   node.elements.forEach((el) => {
     const translator = translatorsByXmlName[el.name];
     if (translator) {
-      let encodedAttr = translator.encode({ nodes: [el] });
+      let encodedAttr = translator.encode({ ...params, nodes: [el] });
       if (encodedAttr != null) {
         if (typeof encodedAttr === 'object') {
           // If the translator returned a full node, extract its attributes
@@ -266,12 +267,12 @@ export function encodeProperties(node, translatorsByXmlName, asArray = false) {
 }
 
 /** Decodes properties from a given properties object using provided translators and adds them to the elements array.
- * @param {object} [node] The node being processed.
+ * @param {import('@translator').SCDecoderConfig} params The decodeing parameters containing the node to process.
  * @param {object} [translatorsBySdName] A mapping of SuperDoc names to their corresponding translators.
  * @param {object} [properties] The properties object containing attributes to be decoded.
  * @returns {Array} An array of decoded elements.
  */
-export function decodeProperties(translatorsBySdName, properties) {
+export function decodeProperties(params, translatorsBySdName, properties) {
   if (!properties || typeof properties !== 'object') {
     return [];
   }
@@ -279,7 +280,7 @@ export function decodeProperties(translatorsBySdName, properties) {
   Object.keys(properties).forEach((key) => {
     const translator = translatorsBySdName[key];
     if (translator) {
-      const result = translator.decode({ node: { attrs: { [key]: properties[key] } } });
+      const result = translator.decode({ ...params, node: { attrs: { [key]: properties[key] } } });
       if (result != null) {
         result.name = translator.xmlName;
         elements.push(result);
@@ -315,7 +316,10 @@ export function createNestedPropertiesTranslator(xmlName, sdName, propertyTransl
       const node = nodes[0];
 
       // Process property translators
-      const attributes = { ...defaultEncodedAttrs, ...encodeProperties(node, propertyTranslatorsByXmlName) };
+      const attributes = {
+        ...defaultEncodedAttrs,
+        ...encodeProperties({ ...params, nodes: [node] }, propertyTranslatorsByXmlName),
+      };
 
       return Object.keys(attributes).length > 0 ? attributes : undefined;
     },
@@ -323,7 +327,7 @@ export function createNestedPropertiesTranslator(xmlName, sdName, propertyTransl
       const currentValue = params.node.attrs?.[sdName];
 
       // Process property translators
-      const elements = decodeProperties(propertyTranslatorsBySdName, currentValue);
+      const elements = decodeProperties(params, propertyTranslatorsBySdName, currentValue);
 
       if (elements.length === 0) {
         return undefined;
@@ -371,7 +375,7 @@ export function createNestedArrayPropertyHandler(
       const { nodes } = params;
       const node = nodes[0];
 
-      const content = encodeProperties(node, propertyTranslatorsByXmlName, true);
+      const content = encodeProperties({ ...params, nodes: [node] }, propertyTranslatorsByXmlName, true);
 
       return content;
     },
