@@ -1379,33 +1379,6 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Initialize track changes based on document mode
-   * @returns {void}
-   */
-  #initTrackChanges() {
-    if (!this.extensionService || this.options.isHeaderOrFooter) {
-      return;
-    }
-    switch (this.options.documentMode) {
-      case 'editing':
-        this.#registerPluginByNameIfNotExists('TrackChangesBase');
-        this.commands.disableTrackChangesShowOriginal();
-        this.commands.disableTrackChanges();
-        break;
-      case 'suggesting':
-        this.#registerPluginByNameIfNotExists('TrackChangesBase');
-        this.commands.disableTrackChangesShowOriginal();
-        this.commands.enableTrackChanges();
-        break;
-      case 'viewing':
-        this.commands.toggleTrackChangesShowOriginal();
-        break;
-      default:
-        break;
-    }
-  }
-
-  /**
    * Initialize pagination, if the pagination extension is enabled.
    * @async
    * @returns {Promise<void>}
