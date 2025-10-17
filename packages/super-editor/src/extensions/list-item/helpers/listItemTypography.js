@@ -100,7 +100,11 @@ export function getAdjacentListItemNodeView({ nodeView, pos, direction, activeNo
     if (view === nodeView) return;
     let viewPos;
     try {
-      viewPos = view.getPos();
+      if (typeof view.getResolvedPos === 'function') {
+        viewPos = view.getResolvedPos();
+      } else if (typeof view.getPos === 'function') {
+        viewPos = view.getPos();
+      }
     } catch {
       return;
     }

@@ -1,3 +1,4 @@
+/* @vitest-environment jsdom */
 // prettier-ignore
 import { beforeAll, expect } from 'vitest';
 import { loadTestDataForEditorTests, initTestEditor, getNewTransaction } from '@tests/helpers/helpers.js';

@@ -70,6 +70,11 @@ const derivePermissionKey = ({ action, isOwn }) => {
   return isOwn ? mapping.own : mapping.other;
 };
 
+const normalizeEmail = (value) => {
+  if (typeof value !== 'string') return '';
+  return value.trim().toLowerCase();
+};
+
 const resolveChanges = (editor) => {
   if (!editor) return { role: 'editor', isInternal: false, currentUser: null, resolver: null };
   const role = editor.options?.role ?? 'editor';
@@ -93,11 +98,11 @@ export const isTrackedChangeActionAllowed = ({ editor, action, trackedChanges })
   const { role, isInternal, currentUser, resolver } = resolveChanges(editor);
   if (typeof resolver !== 'function') return true;
 
-  const currentEmail = currentUser?.email ?? null;
+  const currentEmail = normalizeEmail(currentUser?.email);
 
   return trackedChanges.every((change) => {
-    const authorEmail = change.attrs?.authorEmail ?? null;
-    const isOwn = Boolean(currentEmail && authorEmail && currentEmail === authorEmail);
+    const authorEmail = normalizeEmail(change.attrs?.authorEmail);
+    const isOwn = !currentEmail || !authorEmail || currentEmail === authorEmail;
     const permission = derivePermissionKey({ action, isOwn });
 
     if (!permission) return true;

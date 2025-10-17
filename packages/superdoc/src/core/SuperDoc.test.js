@@ -225,6 +225,22 @@ describe('SuperDoc core', () => {
     expect(commentsStore.init).toHaveBeenCalledWith({});
   });
 
+  it('creates a default user when none is provided', async () => {
+    createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+    });
+
+    await flushMicrotasks();
+
+    expect(instance.config.user).toEqual(expect.objectContaining({ name: 'Default SuperDoc user', email: null }));
+    expect(instance.user).toEqual(expect.objectContaining({ name: 'Default SuperDoc user', email: null }));
+  });
+
   it('warns when both document object and documents list provided', async () => {
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     createAppHarness();

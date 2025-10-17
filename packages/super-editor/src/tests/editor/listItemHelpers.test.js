@@ -2,6 +2,7 @@ import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpe
 import { getVisibleIndent } from '@extensions/list-item/ListItemNodeView.js';
 import { getListItemStyleDefinitions } from '@helpers/list-numbering-helpers.js';
 import { expect } from 'vitest';
+import { getNumberingCache } from '@core/super-converter/v2/importer/numberingCache.js';
 
 describe(' test list item rendering indents from styles', () => {
   const filename = 'base-custom.docx';
@@ -45,6 +46,91 @@ describe(' test list item rendering indents from styles', () => {
     expect(numDefIndentHanging).toBe('360');
     expect(numDefIndentTag.attributes['w:firstLine']).toBeUndefined();
     expect(numDefIndentTag.attributes['w:right']).toBeUndefined();
+
+    const cache = getNumberingCache(editor.converter.convertedXml);
+    expect(cache).toBeDefined();
+    expect(Object.prototype.hasOwnProperty.call(editor.converter.convertedXml, 'numbering-cache')).toBe(false);
+
+    getListItemStyleDefinitions({
+      styleId: 'ListParagraph',
+      numId,
+      level,
+      editor,
+    });
+    expect(getNumberingCache(editor.converter.convertedXml)).toBe(cache);
+  });
+
+  it('[getListItemStyleDefinitions] returns empty definitions when numbering data is unavailable', () => {
+    const result = getListItemStyleDefinitions({
+      styleId: 'ListParagraph',
+      numId: 1,
+      level: 0,
+      editor: { converter: {} },
+    });
+
+    expect(result).toEqual({});
+  });
+
+  it('[getListItemStyleDefinitions] falls back to converter.numbering when docx XML is missing', () => {
+    const numbering = {
+      definitions: {
+        1: {
+          elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '10' } }],
+        },
+      },
+      abstracts: {
+        10: {
+          elements: [
+            {
+              name: 'w:lvl',
+              attributes: { 'w:ilvl': '0' },
+              elements: [
+                {
+                  name: 'w:pPr',
+                  elements: [
+                    {
+                      name: 'w:ind',
+                      attributes: { 'w:left': '720', 'w:hanging': '360' },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = getListItemStyleDefinitions({
+      styleId: undefined,
+      numId: 1,
+      level: 0,
+      editor: { converter: { numbering } },
+    });
+
+    expect(result.numDefPpr?.elements?.[0]?.name).toBe('w:ind');
+    expect(result.numDefPpr?.elements?.[0]?.attributes?.['w:left']).toBe('720');
+  });
+
+  it('[getVisibleIndent] derives non-zero values for imported list items', () => {
+    let listItemNode = null;
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'listItem' && !listItemNode) {
+        listItemNode = node;
+        return false;
+      }
+      return true;
+    });
+    expect(listItemNode).toBeTruthy();
+    const defs = getListItemStyleDefinitions({
+      styleId: listItemNode.attrs.styleId,
+      numId: listItemNode.attrs.numId,
+      level: listItemNode.attrs.level,
+      editor,
+    });
+    const visibleIndent = getVisibleIndent(defs.stylePpr, defs.numDefPpr, listItemNode.attrs.indent);
+    expect(visibleIndent.left).toBeGreaterThan(0);
+    expect(visibleIndent.hanging).toBeGreaterThan(0);
   });
 
   it('[getVisibleIndent] can calculate visible indent', () => {
@@ -53,5 +139,15 @@ describe(' test list item rendering indents from styles', () => {
     expect(visibleIndent.left).toBe(96);
     expect(visibleIndent.hanging).toBe(24);
     expect(visibleIndent.right).toBeUndefined();
+  });
+});
+
+describe('list helpers in blank editor state', () => {
+  it('provides base numbering definitions without imported docx', () => {
+    const { editor } = initTestEditor();
+    const numbering = editor.converter.numbering || {};
+    expect(Object.keys(numbering.definitions || {})).not.toHaveLength(0);
+    expect(Object.keys(numbering.abstracts || {})).not.toHaveLength(0);
+    editor.destroy();
   });
 });

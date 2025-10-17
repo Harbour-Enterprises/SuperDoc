@@ -132,6 +132,42 @@
  * @property {ColWidth[]} [colWidths] - Array of column widths in twips
  */
 
+/**
+ * Row template formatting
+ * @typedef {Object} RowTemplateFormatting
+ * @property {import('prosemirror-model').NodeType} blockType - Node type used when building cell content
+ * @property {Object|null} blockAttrs - Attributes to apply to the created block node
+ * @property {Array<import('prosemirror-model').Mark>} textMarks - Marks copied from the template text node
+ */
+
+/**
+ * Build row from template row parameters
+ * @typedef {Object} BuildRowFromTemplateRowParams
+ * @property {import('prosemirror-model').Schema} schema - Editor schema
+ * @property {import('prosemirror-model').Node} tableNode - Table node used for column map lookup
+ * @property {import('prosemirror-model').Node} templateRow - Row providing structure and formatting
+ * @property {Array} values - Values to populate each table cell
+ * @property {boolean} [copyRowStyle=false] - Clone template marks and block attrs when true
+ */
+
+/**
+ * Append rows to the end of a table in a single transaction.
+ * @typedef {Object} appendRowsWithContentOptions
+ * @property {number} [tablePos] - Absolute position of the target table; required when `tableNode` is not provided
+ * @property {import('prosemirror-model').Node} [tableNode] - Table node reference; required when `tablePos` is not provided
+ * @property {string[][]} valueRows - Cell values for each appended row
+ * @property {boolean} [copyRowStyle=false] - Clone template styling when true
+ */
+
+/**
+ * Insert rows at table end parameters
+ * @typedef {Object} InsertRowsAtTableEndParams
+ * @property {import('prosemirror-state').Transaction} tr - Transaction to mutate
+ * @property {number} tablePos - Absolute position of the target table
+ * @property {import('prosemirror-model').Node} tableNode - Table node receiving new rows
+ * @property {import('prosemirror-model').Node[]} rows - Row nodes to append
+ */
+
 import { Node, Attribute } from '@core/index.js';
 import { callOrGet } from '@core/utilities/callOrGet.js';
 import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.js';
@@ -170,6 +206,12 @@ import {
 } from 'prosemirror-tables';
 import { cellAround } from './tableHelpers/cellAround.js';
 import { cellWrapping } from './tableHelpers/cellWrapping.js';
+import {
+  resolveTable,
+  pickTemplateRowForAppend,
+  buildRowFromTemplateRow,
+  insertRowsAtTableEnd,
+} from './tableHelpers/appendRows.js';
 
 /**
  * Table configuration options
@@ -420,6 +462,59 @@ export const Table = Node.create({
 
   addCommands() {
     return {
+      /**
+       * Append multiple rows to the end of a table in a single transaction.
+       * @category Command
+       * @param {appendRowsWithContentOptions} options - Append configuration
+       * @example
+       * editor.commands.appendRowsWithContent({ tablePos, valueRows: [['A','B'], ['C','D']], copyRowStyle: true })
+       */
+      appendRowsWithContent:
+        ({ tablePos, tableNode, valueRows = [], copyRowStyle = false }) =>
+        ({ editor, chain }) => {
+          if ((typeof tablePos !== 'number' && !tableNode) || !Array.isArray(valueRows) || !valueRows.length) {
+            return false;
+          }
+
+          return chain()
+            .command(({ tr, dispatch }) => {
+              const workingTable = resolveTable(tr, tablePos, tableNode);
+              if (!workingTable) return false;
+
+              const templateRow = pickTemplateRowForAppend(workingTable, editor.schema);
+              if (!templateRow) return false;
+
+              const newRows = valueRows
+                .map((vals) =>
+                  buildRowFromTemplateRow({
+                    schema: editor.schema,
+                    tableNode: workingTable,
+                    templateRow,
+                    values: vals,
+                    copyRowStyle,
+                  }),
+                )
+                .filter(Boolean);
+              if (!newRows.length) return false;
+
+              let resolvedTablePos = tablePos;
+              if (typeof resolvedTablePos !== 'number' && workingTable) {
+                // Try to find the position of the table node in the document
+                const tables = editor.getNodesOfType('table');
+                const match = workingTable ? tables.find((t) => t.node.eq(workingTable)) : tables[0];
+                resolvedTablePos = match?.pos ?? null;
+              }
+              if (typeof resolvedTablePos !== 'number') {
+                return false;
+              }
+
+              if (dispatch) {
+                insertRowsAtTableEnd({ tr, tablePos, tableNode: workingTable, rows: newRows });
+              }
+              return true;
+            })
+            .run();
+        },
       /**
        * Insert a new table into the document
        * @category Command
