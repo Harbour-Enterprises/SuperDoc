@@ -1,3 +1,19 @@
+# [0.26.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.25.0...v0.26.0) (2025-10-17)
+
+### Bug Fixes
+
+- add pm exports ([#1146](https://github.com/Harbour-Enterprises/SuperDoc/issues/1146)) ([0bf371a](https://github.com/Harbour-Enterprises/SuperDoc/commit/0bf371a0936c416cfed9309a61ec77f841afd207))
+- disable setDocumentMode for header/footer editors ([#1149](https://github.com/Harbour-Enterprises/SuperDoc/issues/1149)) ([ab75952](https://github.com/Harbour-Enterprises/SuperDoc/commit/ab75952e9a90b3c28484054517fb91f0935b2b56))
+- list item node views not receiving numbering data on first pass ([#1154](https://github.com/Harbour-Enterprises/SuperDoc/issues/1154)) ([c96c75a](https://github.com/Harbour-Enterprises/SuperDoc/commit/c96c75ae5f7779bc6263a65dd3de26f6a4fa32a4))
+- memory leak in getAbstractDefiniton, cache numbering.xml ([#1152](https://github.com/Harbour-Enterprises/SuperDoc/issues/1152)) ([e05904e](https://github.com/Harbour-Enterprises/SuperDoc/commit/e05904eb25dc46a1dd95d6561d69bbfc81d17596))
+- **toolbar:** allow accept and reject tracked changes from the toolbar ([#1140](https://github.com/Harbour-Enterprises/SuperDoc/issues/1140)) ([bbc00c2](https://github.com/Harbour-Enterprises/SuperDoc/commit/bbc00c2e56090214b9fa64eca2f831a576a80f2a))
+- update anchor image top position ([#1141](https://github.com/Harbour-Enterprises/SuperDoc/issues/1141)) ([2b493bc](https://github.com/Harbour-Enterprises/SuperDoc/commit/2b493bc38d7b8beb6de007b85a8e5d6696c88948))
+- use a default user when none is provided, permissions fixes ([#1150](https://github.com/Harbour-Enterprises/SuperDoc/issues/1150)) ([56b3617](https://github.com/Harbour-Enterprises/SuperDoc/commit/56b3617404aa0a94397bfa781bfb1bc574c85635))
+
+### Features
+
+- added support for annotating tables in the structured content blocks ([#1128](https://github.com/Harbour-Enterprises/SuperDoc/issues/1128)) ([0b3f660](https://github.com/Harbour-Enterprises/SuperDoc/commit/0b3f6609a814a55b55b9e495a5c97d3a1f785d6c))
+
 # [0.25.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.24.0...v0.25.0) (2025-10-15)
 
 ### Bug Fixes
