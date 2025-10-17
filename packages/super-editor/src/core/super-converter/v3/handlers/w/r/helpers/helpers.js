@@ -4,132 +4,15 @@ import { EAST_ASIAN_CHARACTER_REGEX } from '../../../constants/east-asian-regex.
 
 const containsEastAsianCharacters = (text) => EAST_ASIAN_CHARACTER_REGEX.test(text);
 
-const ensureInlineMarks = (marks, inlineMarks = []) => {
-  inlineMarks.forEach(({ type, attrs }) => {
-    if (!type) return;
-    if (marks.some((mark) => mark?.type === type)) return;
-    marks.push(attrs ? { type, attrs: { ...attrs } } : { type });
-  });
-};
-
-const ensureTextStyleMark = (marks, textStyleAttrs) => {
-  if (!textStyleAttrs) return;
-  const existingTextStyle = marks.find((mark) => mark?.type === 'textStyle');
-  if (existingTextStyle) {
-    existingTextStyle.attrs = { ...(existingTextStyle.attrs || {}), ...textStyleAttrs };
-    return;
-  }
-  marks.push({ type: 'textStyle', attrs: { ...textStyleAttrs } });
-};
-
-export const normalizeTextStyleAttrsForNode = (textStyleAttrs, node) => {
-  if (!textStyleAttrs || typeof textStyleAttrs !== 'object') return null;
-
+export const resolveFontFamily = (textStyleAttrs, text) => {
+  if (!text) return textStyleAttrs;
+  const eastAsiaFont = textStyleAttrs?.eastAsiaFontFamily;
+  if (!eastAsiaFont) return textStyleAttrs;
   const normalized = { ...textStyleAttrs };
-  const eastAsiaFont = normalized.eastAsiaFontFamily;
-
-  if (eastAsiaFont) {
-    delete normalized.eastAsiaFontFamily;
-    const text = typeof node?.text === 'string' ? node.text : null;
-    const shouldUseEastAsia = typeof text === 'string' && containsEastAsianCharacters(text);
-
-    if (shouldUseEastAsia) {
-      normalized.fontFamily = eastAsiaFont;
-    }
-  }
-
-  return Object.keys(normalized).length ? normalized : null;
-};
-
-export const collectStyleMarks = (styleId, docx, seen = new Set()) => {
-  if (!styleId || !docx || seen.has(styleId)) return { inlineMarks: [], textStyleAttrs: null };
-
-  seen.add(styleId);
-  const chain = collectStyleChain(styleId, docx, seen);
-  if (!chain.length) return { inlineMarks: [], textStyleAttrs: null };
-
-  const inlineMap = new Map();
-  let textStyleAttrs = {};
-
-  chain.forEach((styleTag) => {
-    const marks = extractMarksFromStyle(styleTag, docx);
-    marks.inlineMarks.forEach((mark) => {
-      inlineMap.set(mark.type, mark.attrs ? { type: mark.type, attrs: { ...mark.attrs } } : { type: mark.type });
-    });
-    if (marks.textStyleAttrs) textStyleAttrs = { ...textStyleAttrs, ...marks.textStyleAttrs };
-  });
-
-  return {
-    inlineMarks: Array.from(inlineMap.values()),
-    textStyleAttrs: Object.keys(textStyleAttrs).length ? textStyleAttrs : null,
-  };
-};
-
-export const collectStyleChain = (styleId, docx, seen) => {
-  if (!styleId || !docx) return [];
-  const styleTag = findStyleTag(docx, styleId);
-  if (!styleTag || !styleTag.elements) return [];
-
-  const basedOn = styleTag.elements?.find((el) => el.name === 'w:basedOn')?.attributes?.['w:val'];
-
-  let chain = [];
-  if (basedOn && !seen.has(basedOn)) {
-    seen.add(basedOn);
-    chain = collectStyleChain(basedOn, docx, seen);
-  }
-  chain.push(styleTag);
-  return chain;
-};
-
-export const findStyleTag = (docx, styleId) => {
-  const stylesFile = docx?.['word/styles.xml'];
-  if (!stylesFile?.elements?.length) return null;
-
-  const candidates = [];
-  stylesFile.elements.forEach((el) => {
-    if (!el) return;
-    if (el.name === 'w:styles' && Array.isArray(el.elements)) {
-      el.elements.forEach((child) => {
-        if (child?.name === 'w:style') candidates.push(child);
-      });
-      return;
-    }
-    if (el.name === 'w:style') {
-      candidates.push(el);
-      return;
-    }
-    if (Array.isArray(el.elements)) {
-      el.elements.forEach((child) => {
-        if (child?.name === 'w:style') candidates.push(child);
-      });
-    }
-  });
-
-  return candidates.find((tag) => tag?.attributes?.['w:styleId'] === styleId) || null;
-};
-
-export const extractMarksFromStyle = (styleTag, docx) => {
-  const rPr = styleTag?.elements?.find((el) => el.name === 'w:rPr');
-  if (!rPr) return { inlineMarks: [], textStyleAttrs: null };
-
-  const marks = parseMarks(rPr, [], docx) || [];
-  const inlineMarks = [];
-  let textStyleAttrs = {};
-
-  marks.forEach((mark) => {
-    if (!mark) return;
-    if (mark.type === 'textStyle') {
-      const attrs = mark.attrs || {};
-      if (Object.keys(attrs).length) textStyleAttrs = { ...textStyleAttrs, ...attrs };
-      return;
-    }
-    if (mark.type) inlineMarks.push(mark.attrs ? { type: mark.type, attrs: { ...mark.attrs } } : { type: mark.type });
-  });
-
-  return {
-    inlineMarks,
-    textStyleAttrs: Object.keys(textStyleAttrs).length ? textStyleAttrs : null,
-  };
+  delete normalized.eastAsiaFontFamily;
+  const shouldUseEastAsia = typeof text === 'string' && containsEastAsianCharacters(text);
+  if (!shouldUseEastAsia) return normalized;
+  return { ...normalized, fontFamily: eastAsiaFont };
 };
 
 export const cloneMark = (mark) => {
@@ -145,37 +28,6 @@ export const cloneMark = (mark) => {
     }
   }
   return cloned;
-};
-
-export const normalizeBool = (value) => {
-  if (value === undefined || value === null) return true;
-  if (typeof value === 'boolean') return value;
-  if (typeof value === 'number') return value !== 0;
-  const normalized = String(value).trim().toLowerCase();
-  if (normalized === '0' || normalized === 'false' || normalized === 'off') return false;
-  if (normalized === '1' || normalized === 'true' || normalized === 'on') return true;
-  return true;
-};
-
-export const createRunPropertiesElement = (entries = []) => {
-  if (!Array.isArray(entries) || !entries.length) return null;
-
-  const elements = entries
-    .map((entry) => {
-      if (!entry || !entry.xmlName) return null;
-      return {
-        name: entry.xmlName,
-        attributes: { ...(entry.attributes || {}) },
-      };
-    })
-    .filter(Boolean);
-
-  if (!elements.length) return null;
-
-  return {
-    name: 'w:rPr',
-    elements,
-  };
 };
 
 export const cloneXmlNode = (nodeLike) => {

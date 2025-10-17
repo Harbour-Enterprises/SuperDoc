@@ -1,14 +1,18 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
 import { translateChildNodes } from '../../../../v2/exporter/helpers/index.js';
-import { generateRunProps, processOutputMarks } from '../../../../exporter.js';
-import { cloneMark, createRunPropertiesElement, cloneXmlNode, applyRunPropertiesTemplate } from './helpers/helpers.js';
+import { cloneMark, cloneXmlNode, applyRunPropertiesTemplate, resolveFontFamily } from './helpers/helpers.js';
 import { ensureTrackedWrapper, prepareRunTrackingContext } from './helpers/track-change-helpers.js';
 import { translator as wHyperlinkTranslator } from '../hyperlink/hyperlink-translator.js';
 import { translator as wRPrTranslator } from '../rpr';
 import validXmlAttributes from './attributes/index.js';
 import { handleStyleChangeMarksV2 } from '../../../../v2/importer/markImporter.js';
-import { resolveRunProperties, encodeMarksFromRPr, decodeRPrFromMarks, combineProperties } from '@converter/styles.js';
+import {
+  resolveRunProperties,
+  encodeMarksFromRPr,
+  decodeRPrFromMarks,
+  combineRunProperties,
+} from '@converter/styles.js';
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:r';
 
@@ -68,6 +72,7 @@ const encode = (params, encodedAttrs = {}) => {
         if (mark.type === 'textStyle') {
           // Merge textStyle attributes
           textStyleMark.attrs = { ...(textStyleMark.attrs || {}), ...(mark.attrs || {}) };
+          textStyleMark.attrs = resolveFontFamily(textStyleMark.attrs, child?.text);
         }
         return false;
       }
@@ -87,7 +92,7 @@ const encode = (params, encodedAttrs = {}) => {
   const runNodeResult = {
     type: SD_KEY_NAME,
     content: filtered,
-    attrs: { ...encodedAttrs, runProperties: resolvedRunProperties },
+    attrs: { ...encodedAttrs, runProperties },
   };
 
   if (runLevelMarks.length) {
@@ -114,8 +119,17 @@ const decode = (params, decodedAttrs = {}) => {
   // Separate out tracking marks
   const { runNode: runNodeForExport, trackingMarksByType } = prepareRunTrackingContext(node);
 
+  const runAttrs = runNodeForExport.attrs || {};
+  const runProperties = runAttrs.runProperties || {};
+  const marksProperties = decodeRPrFromMarks(runNodeForExport.marks || []);
+  const finalRunProperties = combineRunProperties([runProperties, marksProperties]);
+
   // Decode child nodes within the run
-  const exportParams = { ...params, node: runNodeForExport };
+  const exportParams = {
+    ...params,
+    node: runNodeForExport,
+    extraParams: { ...params?.extraParams, runProperties: finalRunProperties },
+  };
   if (!exportParams.editor) {
     exportParams.editor = { extensionService: { extensions: [] } };
   }
@@ -123,11 +137,6 @@ const decode = (params, decodedAttrs = {}) => {
 
   // Parse marks back into run properties
   // and combine with any direct run properties
-  const runAttrs = runNodeForExport.attrs || {};
-  const runProperties = runAttrs.runProperties || {};
-  const marksProperties = decodeRPrFromMarks(runNodeForExport.marks || []);
-  const finalRunProperties = combineProperties([runProperties, marksProperties], ['fontFamily']);
-
   let runPropertiesElement = wRPrTranslator.decode({
     ...params,
     node: { attrs: { runProperties: finalRunProperties } },

@@ -665,13 +665,6 @@ function translateList(params) {
     });
   }
 
-  let numPrTag;
-
-  // These should exist for all imported nodes
-  if (numId !== undefined && numId !== null) {
-    numPrTag = generateNumPrTag(numId, level);
-  }
-
   // Collapse multiple paragraphs into a single node for this list item
   // In docx we need a single paragraph, but can include line breaks in a run
   const collapsedParagraphNode = convertMultipleListItemsIntoSingleNode(listItem);
@@ -739,16 +732,13 @@ function translateList(params) {
   }
 
   const pPr = outputNode.elements?.find((n) => n.name === 'w:pPr');
-  if (pPr && pPr.elements && numPrTag) {
+  const hasNumPr = pPr?.elements?.some((e) => e?.name === 'w:numPr');
+  if (pPr && !hasNumPr) {
+    const numPrTag = generateNumPrTag(numId, level);
     pPr.elements.unshift(numPrTag);
   }
-
   const indentTag = restoreIndent(listItem.attrs.indent);
   indentTag && pPr?.elements?.push(indentTag);
-
-  const runNode = outputNode.elements?.find((n) => n.name === 'w:r');
-  const rPr = runNode?.elements?.find((n) => n.name === 'w:rPr');
-  if (rPr) pPr.elements.push(rPr);
 
   if (listItem.attrs.numPrType !== 'inline') {
     const numPrIndex = pPr?.elements?.findIndex((e) => e?.name === 'w:numPr');
