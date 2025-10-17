@@ -66,7 +66,10 @@ export function createSingleBooleanPropertyHandler(xmlName, sdName = null) {
     xmlName: xmlName,
     sdNodeOrKeyName: sdName,
     encode: ({ nodes }) => parseBoolean(nodes[0].attributes?.['w:val'] ?? '1'),
-    decode: ({ node }) => (node.attrs[sdName] ? { attributes: {} } : undefined),
+    decode: ({ node }) => {
+      if (node.attrs[sdName] == null) return undefined;
+      return node.attrs[sdName] ? { attributes: {} } : { attributes: { 'w:val': '0' } };
+    },
   };
 }
 
@@ -412,7 +415,7 @@ export function createNestedArrayPropertyHandler(
  * @param {string} value The string value to parse.
  * @returns {boolean|undefined} The boolean representation of the input string, or undefined if the input is null or undefined.
  */
-export const parseBoolean = (value) => (value != null ? ['1', 'true', 'on'].includes(value) : undefined);
+export const parseBoolean = (value) => (value != null ? ['1', 'true', 'on', 1, true].includes(value) : undefined);
 
 /**
  * Converts a boolean value to its string representation.

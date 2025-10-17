@@ -22,8 +22,10 @@ describe('w:suppressLineNumbers translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if suppressLineNumbers is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { suppressLineNumbers: false } } })).toBeUndefined();
+    it('returns val=0 if suppressLineNumbers is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { suppressLineNumbers: false } } })).toEqual({
+        attributes: { 'w:val': '0' },
+      });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

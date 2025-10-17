@@ -22,8 +22,10 @@ describe('w:mirrorIndents translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if mirrorIndents is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { mirrorIndents: false } } })).toBeUndefined();
+    it('returns val=0 if mirrorIndents is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { mirrorIndents: false } } })).toEqual({
+        attributes: { 'w:val': '0' },
+      });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

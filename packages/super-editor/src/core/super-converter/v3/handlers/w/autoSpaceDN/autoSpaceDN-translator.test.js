@@ -22,8 +22,8 @@ describe('w:autoSpaceDN translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if autoSpaceDN is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { autoSpaceDN: false } } })).toBeUndefined();
+    it('returns val=0 if autoSpaceDN is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { autoSpaceDN: false } } })).toEqual({ attributes: { 'w:val': '0' } });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

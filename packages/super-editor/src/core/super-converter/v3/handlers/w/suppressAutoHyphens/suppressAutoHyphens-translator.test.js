@@ -22,8 +22,10 @@ describe('w:suppressAutoHyphens translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if suppressAutoHyphens is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { suppressAutoHyphens: false } } })).toBeUndefined();
+    it('returns val=0 if suppressAutoHyphens is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { suppressAutoHyphens: false } } })).toEqual({
+        attributes: { 'w:val': '0' },
+      });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

@@ -22,8 +22,8 @@ describe('w:wordWrap translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if wordWrap is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { wordWrap: false } } })).toBeUndefined();
+    it('returns val=0 if wordWrap is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { wordWrap: false } } })).toEqual({ attributes: { 'w:val': '0' } });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

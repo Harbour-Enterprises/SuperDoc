@@ -22,8 +22,10 @@ describe('w:overflowPunct translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if overflowPunct is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { overflowPunct: false } } })).toBeUndefined();
+    it('returns val=0 if overflowPunct is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { overflowPunct: false } } })).toEqual({
+        attributes: { 'w:val': '0' },
+      });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

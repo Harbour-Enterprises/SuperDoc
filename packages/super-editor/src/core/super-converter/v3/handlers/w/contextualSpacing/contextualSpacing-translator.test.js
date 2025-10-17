@@ -22,8 +22,10 @@ describe('w:contextualSpacing translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if contextualSpacing is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { contextualSpacing: false } } })).toBeUndefined();
+    it('returns val=0 if contextualSpacing is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { contextualSpacing: false } } })).toEqual({
+        attributes: { 'w:val': '0' },
+      });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

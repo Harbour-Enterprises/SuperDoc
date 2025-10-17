@@ -22,8 +22,8 @@ describe('w:kinsoku translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if kinsoku is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { kinsoku: false } } })).toBeUndefined();
+    it('returns val=0 if kinsoku is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { kinsoku: false } } })).toEqual({ attributes: { 'w:val': '0' } });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

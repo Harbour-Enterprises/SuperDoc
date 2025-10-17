@@ -22,8 +22,8 @@ describe('w:snapToGrid translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if snapToGrid is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { snapToGrid: false } } })).toBeUndefined();
+    it('returns val=0 if snapToGrid is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { snapToGrid: false } } })).toEqual({ attributes: { 'w:val': '0' } });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

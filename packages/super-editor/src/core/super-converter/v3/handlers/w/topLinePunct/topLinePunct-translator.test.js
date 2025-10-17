@@ -22,8 +22,8 @@ describe('w:topLinePunct translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if topLinePunct is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { topLinePunct: false } } })).toBeUndefined();
+    it('returns val=0 if topLinePunct is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { topLinePunct: false } } })).toEqual({ attributes: { 'w:val': '0' } });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

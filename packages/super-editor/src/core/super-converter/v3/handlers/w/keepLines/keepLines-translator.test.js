@@ -22,8 +22,8 @@ describe('w:keepLines translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if keepLines is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { keepLines: false } } })).toBeUndefined();
+    it('returns val=0 if keepLines is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { keepLines: false } } })).toEqual({ attributes: { 'w:val': '0' } });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

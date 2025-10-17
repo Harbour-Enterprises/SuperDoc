@@ -22,8 +22,10 @@ describe('w:suppressOverlap translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if suppressOverlap is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { suppressOverlap: false } } })).toBeUndefined();
+    it('returns val=0 if suppressOverlap is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { suppressOverlap: false } } })).toEqual({
+        attributes: { 'w:val': '0' },
+      });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

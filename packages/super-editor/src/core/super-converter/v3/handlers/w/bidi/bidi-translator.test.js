@@ -22,8 +22,8 @@ describe('w:bidi translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if bidi is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { rightToLeft: false } } })).toBeUndefined();
+    it('returns val=0 if bidi is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { rightToLeft: false } } })).toEqual({ attributes: { 'w:val': '0' } });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

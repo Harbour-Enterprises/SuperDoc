@@ -22,8 +22,10 @@ describe('w:pageBreakBefore translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if pageBreakBefore is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { pageBreakBefore: false } } })).toBeUndefined();
+    it('returns val=0 if pageBreakBefore is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { pageBreakBefore: false } } })).toEqual({
+        attributes: { 'w:val': '0' },
+      });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });

@@ -22,8 +22,10 @@ describe('w:adjustRightInd translator', () => {
       expect(result).toEqual({});
     });
 
-    it('returns undefined if adjustRightInd is false or missing', () => {
-      expect(translator.decode({ node: { attrs: { adjustRightInd: false } } })).toBeUndefined();
+    it('returns val=0 if adjustRightInd is false and undefined if missing', () => {
+      expect(translator.decode({ node: { attrs: { adjustRightInd: false } } })).toEqual({
+        attributes: { 'w:val': '0' },
+      });
       expect(translator.decode({ node: { attrs: {} } })).toBeUndefined();
     });
   });
