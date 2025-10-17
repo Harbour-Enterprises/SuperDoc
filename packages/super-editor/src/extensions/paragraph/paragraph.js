@@ -164,7 +164,7 @@ export const Paragraph = OxmlNode.create({
             const b = borders[side];
             if (!b) return;
             // Remove border if style is 'nil' or undefined
-            if (['nil', 'none', undefined].includes(b.val)) {
+            if (['nil', 'none', undefined, null].includes(b.val)) {
               style += `border-${side}: none;`;
               return;
             }
