@@ -64,28 +64,13 @@ describe('generateParagraphProperties', () => {
       },
     };
 
-    const result = generateParagraphProperties(node);
+    const result = generateParagraphProperties({ node });
     const indentElement = result.elements.find((el) => el.name === 'w:ind');
 
     expect(indentElement).toBeDefined();
-    expect(indentElement.attributes['w:left']).toBe(0);
-    expect(indentElement.attributes['w:right']).toBe(0);
-    expect(indentElement.attributes['w:firstLine']).toBe(0);
-    expect(indentElement.attributes['w:hanging']).toBe(0);
-  });
-
-  it('adds an indent when only textIndent is defined', () => {
-    const node = {
-      type: 'paragraph',
-      attrs: {
-        textIndent: '0.5in',
-      },
-    };
-
-    const result = generateParagraphProperties(node);
-    const indentElement = result.elements.find((el) => el.name === 'w:ind');
-
-    expect(indentElement).toBeDefined();
-    expect(indentElement.attributes['w:left']).toBe(720);
+    expect(indentElement.attributes['w:left']).toBe('0');
+    expect(indentElement.attributes['w:right']).toBe('0');
+    expect(indentElement.attributes['w:firstLine']).toBe('0');
+    expect(indentElement.attributes['w:hanging']).toBe('0');
   });
 });

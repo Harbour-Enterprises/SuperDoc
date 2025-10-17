@@ -37,12 +37,12 @@ describe('w:pBdr translator', () => {
       const result = translator.encode({ nodes: [xmlNode] });
 
       expect(result).toEqual({
-        bar: { val: 'single', color: 'FF0000', size: 8 },
-        between: { val: 'double', color: '00FF00', size: 12 },
-        bottom: { val: 'dashDot', color: '0000FF', size: 16 },
-        left: { val: 'dot', color: 'FFFF00', size: 20 },
-        right: { val: 'dashDotDot', color: 'FF00FF', size: 24 },
-        top: { val: 'triple', color: '00FFFF', size: 28 },
+        bar: { val: 'single', color: '#FF0000', size: 8 },
+        between: { val: 'double', color: '#00FF00', size: 12 },
+        bottom: { val: 'dashDot', color: '#0000FF', size: 16 },
+        left: { val: 'dot', color: '#FFFF00', size: 20 },
+        right: { val: 'dashDotDot', color: '#FF00FF', size: 24 },
+        top: { val: 'triple', color: '#00FFFF', size: 28 },
       });
     });
 
@@ -64,8 +64,8 @@ describe('w:pBdr translator', () => {
       const result = translator.encode({ nodes: [xmlNode] });
 
       expect(result).toEqual({
-        bottom: { val: 'single', color: 'FF0000', size: 8 },
-        top: { val: 'double', color: '0000FF', size: 16 },
+        bottom: { val: 'single', color: '#FF0000', size: 8 },
+        top: { val: 'double', color: '#0000FF', size: 16 },
       });
     });
 
@@ -160,7 +160,7 @@ describe('w:pBdr translator', () => {
       });
     });
 
-    it('should return a w:pBdr node with empty elements if borders is empty', () => {
+    it('should return undefined if borders is empty', () => {
       const superDocNode = {
         attrs: {
           borders: {},
@@ -169,27 +169,17 @@ describe('w:pBdr translator', () => {
 
       const result = translator.decode({ node: superDocNode });
 
-      expect(result).toEqual({
-        name: 'w:pBdr',
-        type: 'element',
-        attributes: {},
-        elements: [],
-      });
+      expect(result).toBeUndefined();
     });
 
-    it('should return a w:pBdr node with empty elements if borders is missing', () => {
+    it('should return undefined if borders is missing', () => {
       const superDocNode = {
         attrs: {},
       };
 
       const result = translator.decode({ node: superDocNode });
 
-      expect(result).toEqual({
-        name: 'w:pBdr',
-        type: 'element',
-        attributes: {},
-        elements: [],
-      });
+      expect(result).toBeUndefined();
     });
   });
 });

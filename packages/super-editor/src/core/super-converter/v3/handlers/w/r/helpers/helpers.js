@@ -1,5 +1,4 @@
 // @ts-check
-import { parseMarks } from '../../../../../v2/importer/markImporter.js';
 import { EAST_ASIAN_CHARACTER_REGEX } from '../../../constants/east-asian-regex.js';
 
 const containsEastAsianCharacters = (text) => EAST_ASIAN_CHARACTER_REGEX.test(text);

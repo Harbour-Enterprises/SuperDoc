@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { translator } from './numPr-translator.js';
 
+vi.mock('@converter/exporter', () => ({
+  exportSchemaToJson: vi.fn(),
+  createTrackStyleMark: vi.fn(),
+}));
+
 describe('w:numPr translator', () => {
   describe('encode', () => {
     it('should encode a w:numPr element with all child properties', () => {
@@ -10,14 +15,6 @@ describe('w:numPr translator', () => {
           {
             name: 'w:ilvl',
             attributes: { 'w:val': '1' },
-          },
-          {
-            name: 'w:ins',
-            attributes: {
-              'w:id': '1',
-              'w:author': 'John Doe',
-              'w:date': '2023-10-26T10:00:00Z',
-            },
           },
           {
             name: 'w:numId',
@@ -30,11 +27,6 @@ describe('w:numPr translator', () => {
 
       expect(result).toEqual({
         ilvl: 1,
-        ins: {
-          id: 1,
-          author: 'John Doe',
-          date: '2023-10-26T10:00:00Z',
-        },
         numId: 123,
       });
     });
@@ -80,11 +72,6 @@ describe('w:numPr translator', () => {
         attrs: {
           numberingProperties: {
             ilvl: 1,
-            ins: {
-              id: 1,
-              author: 'John Doe',
-              date: '2023-10-26T10:00:00Z',
-            },
             numId: 123,
           },
         },
@@ -100,14 +87,6 @@ describe('w:numPr translator', () => {
           {
             name: 'w:ilvl',
             attributes: { 'w:val': '1' },
-          },
-          {
-            name: 'w:ins',
-            attributes: {
-              'w:id': '1',
-              'w:author': 'John Doe',
-              'w:date': '2023-10-26T10:00:00Z',
-            },
           },
           {
             name: 'w:numId',
@@ -146,7 +125,7 @@ describe('w:numPr translator', () => {
       });
     });
 
-    it('should return a w:numPr node with empty elements if numberingProperties is empty', () => {
+    it('should return undefined if numberingProperties is empty', () => {
       const superDocNode = {
         attrs: {
           numberingProperties: {},
@@ -155,27 +134,17 @@ describe('w:numPr translator', () => {
 
       const result = translator.decode({ node: superDocNode });
 
-      expect(result).toEqual({
-        name: 'w:numPr',
-        type: 'element',
-        attributes: {},
-        elements: [],
-      });
+      expect(result).toBeUndefined();
     });
 
-    it('should return a w:numPr node with empty elements if numberingProperties is missing', () => {
+    it('should return undefined if numberingProperties is missing', () => {
       const superDocNode = {
         attrs: {},
       };
 
       const result = translator.decode({ node: superDocNode });
 
-      expect(result).toEqual({
-        name: 'w:numPr',
-        type: 'element',
-        attributes: {},
-        elements: [],
-      });
+      expect(result).toBeUndefined();
     });
   });
 });

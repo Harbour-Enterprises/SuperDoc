@@ -3,16 +3,16 @@ import { encode, decode, attrConfig } from './w-tab-pos.js';
 
 describe('w:tab w:pos (pos) encoder', () => {
   it('returns the value when present', () => {
-    expect(encode({ 'w:pos': '720' })).toBe('720');
-    expect(encode({ 'w:pos': '1080' })).toBe('1080');
+    expect(encode({ 'w:pos': '720' })).toBe(720);
+    expect(encode({ 'w:pos': '1080' })).toBe(1080);
   });
 
   it('returns undefined when attribute is missing', () => {
-    expect(encode({})).toBeUndefined();
+    expect(encode({})).toBeNull();
   });
 
   it('ignores unrelated attributes', () => {
-    expect(encode({ 'w:val': '96' })).toBeUndefined();
+    expect(encode({ 'w:val': '96' })).toBeNull();
   });
 });
 
@@ -37,7 +37,7 @@ describe('round-trip consistency', () => {
   for (const val of values) {
     it(`encodes and decodes '${val}' consistently`, () => {
       const encoded = encode({ 'w:pos': val });
-      expect(encoded).toBe(val);
+      expect(encoded).toBe(parseInt(val));
 
       const decoded = decode({ pos: encoded });
       expect(decoded).toBe(val);

@@ -21,7 +21,7 @@ describe('w:bar border translator', () => {
 
       expect(result).toEqual({
         val: 'single',
-        color: 'FF0000',
+        color: '#FF0000',
         size: 8,
         space: 4,
         shadow: true,

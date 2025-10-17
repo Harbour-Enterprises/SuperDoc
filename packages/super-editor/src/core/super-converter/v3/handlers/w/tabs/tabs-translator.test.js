@@ -34,9 +34,9 @@ describe('w:tabs translator', () => {
       const result = translator.encode({ nodes: [xmlNode] });
 
       expect(result).toEqual([
-        { tab: { tabType: 'left', pos: '100', leader: 'dot' } },
-        { tab: { tabType: 'center', pos: '200' } },
-        { tab: { tabType: 'right', pos: '300', leader: 'hyphen' } },
+        { tab: { tabType: 'left', pos: 100, leader: 'dot' } },
+        { tab: { tabType: 'center', pos: 200 } },
+        { tab: { tabType: 'right', pos: 300, leader: 'hyphen' } },
       ]);
     });
 
@@ -53,7 +53,7 @@ describe('w:tabs translator', () => {
 
       const result = translator.encode({ nodes: [xmlNode] });
 
-      expect(result).toEqual([{ tab: { pos: '150' } }]);
+      expect(result).toEqual([{ tab: { pos: 150 } }]);
     });
 
     it('should return an empty array if no w:tab child elements are present', () => {
@@ -72,7 +72,10 @@ describe('w:tabs translator', () => {
     it('should decode a SuperDoc array of tab objects into a w:tabs XML node', () => {
       const superDocNode = {
         attrs: {
-          tabs: [{ tab: { tabType: 'left', pos: '100', leader: 'dot' } }, { tab: { tabType: 'center', pos: '200' } }],
+          tabStops: [
+            { tab: { tabType: 'left', pos: '100', leader: 'dot' } },
+            { tab: { tabType: 'center', pos: '200' } },
+          ],
         },
       };
 
@@ -91,7 +94,7 @@ describe('w:tabs translator', () => {
     it('should decode a SuperDoc array of tab objects with partial properties', () => {
       const superDocNode = {
         attrs: {
-          tabs: [{ tab: { pos: '150' } }],
+          tabStops: [{ tab: { pos: '150' } }],
         },
       };
 
@@ -107,7 +110,7 @@ describe('w:tabs translator', () => {
     it('should return undefined if the SuperDoc array is empty', () => {
       const superDocNode = {
         attrs: {
-          tabs: [],
+          tabStops: [],
         },
       };
 

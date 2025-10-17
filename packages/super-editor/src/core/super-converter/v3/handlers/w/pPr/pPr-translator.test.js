@@ -1,3 +1,12 @@
+vi.mock('../../../../exporter.js', () => {
+  const processOutputMarks = vi.fn((marks) => marks || []);
+  const generateRunProps = vi.fn((processedMarks) => ({
+    name: 'w:rPr',
+    elements: [],
+  }));
+  return { processOutputMarks, generateRunProps };
+});
+
 import { describe, it, expect } from 'vitest';
 import { translator } from './pPr-translator.js';
 import { NodeTranslator } from '@translator';
@@ -102,7 +111,7 @@ describe('w:pPr translator', () => {
         suppressAutoHyphens: true,
         suppressLineNumbers: true,
         suppressOverlap: true,
-        tabs: [{ tab: { tabSize: 'left', pos: '100' } }],
+        tabStops: [{ tab: { tabType: 'left', pos: 100 } }],
         textAlignment: 'top',
         textDirection: 'lrTb',
         textboxTightWrap: 'all',
@@ -128,7 +137,7 @@ describe('w:pPr translator', () => {
 
       expect(result).toEqual({
         adjustRightInd: false,
-        tabs: [],
+        tabStops: [],
       });
     });
 
@@ -175,7 +184,7 @@ describe('w:pPr translator', () => {
             suppressAutoHyphens: true,
             suppressLineNumbers: true,
             suppressOverlap: true,
-            tabs: [],
+            tabStops: [],
             textAlignment: 'top',
             textDirection: 'lrTb',
             textboxTightWrap: 'all',
@@ -249,31 +258,29 @@ describe('w:pPr translator', () => {
             divId: undefined,
             numberingProperties: {},
             borders: {},
-            tabs: [],
+            tabStops: [],
           },
         },
       };
 
       const result = translator.decode({ node: superDocNode });
 
-      expect(result.name).toBe('w:pPr');
-      expect(result.elements).toEqual([
-        {
-          attributes: {},
-          elements: [],
-          name: 'w:numPr',
-          type: 'element',
-        },
-        {
-          attributes: {},
-          elements: [],
-          name: 'w:pBdr',
-          type: 'element',
-        },
-      ]);
+      expect(result).toEqual({
+        attributes: {},
+        elements: [
+          {
+            attributes: {
+              'w:val': '0',
+            },
+            name: 'w:adjustRightInd',
+          },
+        ],
+        name: 'w:pPr',
+        type: 'element',
+      });
     });
 
-    it('should return a w:pPr node with empty elements if paragraphProperties is empty', () => {
+    it('should return undefined if paragraphProperties is empty', () => {
       const superDocNode = {
         attrs: {
           paragraphProperties: {},
@@ -282,19 +289,17 @@ describe('w:pPr translator', () => {
 
       const result = translator.decode({ node: superDocNode });
 
-      expect(result.name).toBe('w:pPr');
-      expect(result.elements).toEqual([]);
+      expect(result).toBeUndefined();
     });
 
-    it('should return a w:pPr node with empty elements if paragraphProperties is missing', () => {
+    it('should return undefined if paragraphProperties is missing', () => {
       const superDocNode = {
         attrs: {},
       };
 
       const result = translator.decode({ node: superDocNode });
 
-      expect(result.name).toBe('w:pPr');
-      expect(result.elements).toEqual([]);
+      expect(result).toBeUndefined();
     });
   });
 
@@ -317,7 +322,7 @@ describe('w:pPr translator', () => {
         numberingProperties: { ilvl: 0, numId: 1 },
         outlineLvl: 1,
         overflowPunct: true,
-        borders: { bottom: { val: 'single', color: 'FF0000', size: 8 } },
+        borders: { bottom: { val: 'single', color: '#FF0000', size: 8 } },
         styleId: 'Heading1',
         pageBreakBefore: true,
         shading: { fill: 'FF0000' },
@@ -326,7 +331,7 @@ describe('w:pPr translator', () => {
         suppressAutoHyphens: true,
         suppressLineNumbers: true,
         suppressOverlap: true,
-        tabs: [{ tab: { tabSize: 'left', pos: '100' } }],
+        tabStops: [{ tab: { tabType: 'left', pos: 100 } }],
         textAlignment: 'top',
         textDirection: 'lrTb',
         textboxTightWrap: 'all',

@@ -50,7 +50,10 @@ describe('handleVRectImport', () => {
     });
 
     const options = {
-      params: { docx: {} },
+      params: {
+        docx: {},
+        nodeListHandler: defaultNodeListHandler(),
+      },
       pNode: { elements: [] },
       pict,
     };
@@ -195,14 +198,14 @@ describe('handleVRectImport', () => {
     const result = handleVRectImport(options);
 
     expect(result.attrs.spacing).toEqual({
-      lineSpaceAfter: 10,
-      lineSpaceBefore: 5,
-      line: 1,
+      after: 200,
+      before: 100,
+      line: 240,
       lineRule: 'auto',
     });
   });
 
-  it.only('should parse indent from pNode', () => {
+  it('should parse indent from pNode', () => {
     const pNode = createPNode(
       {},
       {

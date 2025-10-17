@@ -2,6 +2,7 @@ import { getExportedResult } from '../export/export-helpers/index';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { beforeAll, beforeEach, expect } from 'vitest';
 import { extractParagraphText } from '../helpers/getParagraphText.js';
+import { linesToTwips } from '@converter/helpers.js';
 
 describe('[custom-list1.docx] test import custom lists', () => {
   const filename = 'custom-list1.docx';
@@ -120,9 +121,9 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     const { spacing } = pNodeAttrs;
     expect(spacing).toBeDefined();
 
-    expect(spacing.lineSpaceBefore).toBeUndefined();
-    expect(spacing.lineSpaceAfter).toBe(0);
-    expect(spacing.line).toBe(1);
+    expect(spacing.before).toBeUndefined();
+    expect(spacing.after).toBe(0);
+    expect(spacing.line).toBe(linesToTwips(1));
     expect(spacing.lineRule).toBe('auto');
 
     // Compare with exported data
@@ -143,7 +144,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     expect(numId).toBe('5');
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
-    expect(iLvl).toBe(1);
+    expect(iLvl).toBe('1');
 
     const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
     expect(indentTag).toBeDefined();
@@ -160,8 +161,8 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     const spacingAfter = spacingTag?.attributes['w:after'];
     const spacingBefore = spacingTag?.attributes['w:before'];
     const lineRule = spacingTag?.attributes['w:lineRule'];
-    expect(spacingLine).toBe(240);
-    expect(spacingAfter).toBe(0);
+    expect(spacingLine).toBe('240');
+    expect(spacingAfter).toBe('0');
     expect(spacingBefore).toBeUndefined();
     expect(lineRule).toBe('auto');
   });
