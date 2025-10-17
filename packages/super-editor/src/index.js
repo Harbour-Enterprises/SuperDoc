@@ -13,6 +13,7 @@ import { Extension } from '@core/Extension.js';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Mark } from '@core/Mark.js';
 import SlashMenu from './components/slash-menu/SlashMenu.vue';
+import ContextMenu from './components/context-menu/ContextMenu.vue';
 import { BasicUpload } from '@harbour-enterprises/common';
 
 import SuperEditor from './components/SuperEditor.vue';
@@ -63,6 +64,7 @@ export {
   Toolbar,
   AIWriter,
   SlashMenu,
+  ContextMenu,
 
   // Helpers
   helpers,

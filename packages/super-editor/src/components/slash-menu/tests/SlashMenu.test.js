@@ -19,6 +19,13 @@ vi.mock('@/extensions/slash-menu', () => ({
   },
 }));
 
+// Ensure new path remains compatible
+vi.mock('@/extensions/context-menu', () => ({
+  ContextMenuPluginKey: {
+    getState: vi.fn(() => ({ anchorPos: 100 })),
+  },
+}));
+
 vi.mock('../utils.js', () => ({
   getPropsByItemId: vi.fn(() => ({ editor: {} })),
   getEditorContext: vi.fn(),
