@@ -12,7 +12,7 @@ import { Gapcursor } from './gapcursor/index.js';
 import { Collaboration } from './collaboration/index.js';
 import { CollaborationCursor } from './collaboration-cursor/index.js';
 import { AiPlugin, AiMark, AiAnimationMark, AiLoaderNode } from './ai/index.js';
-import { SlashMenu } from './slash-menu';
+import { ContextMenu, SlashMenu } from './context-menu';
 import { StructuredContentCommands } from './structured-content/index.js';
 
 // Nodes extensions
@@ -141,7 +141,7 @@ const getStarterExtensions = () => {
     LineBreak,
     HardBreak,
     Run,
-    SlashMenu,
+    ContextMenu,
     Strike,
     TabNode,
     TableOfContents,
@@ -254,6 +254,9 @@ export {
   AiAnimationMark,
   AiLoaderNode,
   AiPlugin,
+  ContextMenu,
+  // Backward-compatibility alias export so external callers can still import { SlashMenu }
+  SlashMenu,
   Search,
   StructuredContent,
   StructuredContentBlock,

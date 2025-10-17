@@ -54,6 +54,11 @@ vi.mock('./slash-menu/SlashMenu.vue', () => ({
   default: { name: 'SlashMenu', render: () => null },
 }));
 
+// Also allow new component path to be imported by other tests
+vi.mock('./context-menu/ContextMenu.vue', () => ({
+  default: { name: 'ContextMenu', render: () => null },
+}));
+
 vi.mock('./rulers/Ruler.vue', () => ({
   default: { name: 'Ruler', render: () => null },
 }));

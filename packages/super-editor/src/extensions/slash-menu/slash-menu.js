@@ -34,6 +34,10 @@ function getCursorPositionRelativeToContainer(view, eventLocation) {
 }
 
 export const SlashMenuPluginKey = new PluginKey('slashMenu');
+/**
+ * @deprecated Use ContextMenuPluginKey instead
+ */
+export const ContextMenuPluginKey = SlashMenuPluginKey;
 
 /**
  * @module SlashMenu

@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed, markRaw } from 'vue';
+// Import new key alias for future compatibility while retaining old import path
 import { SlashMenuPluginKey } from '../../extensions/slash-menu/slash-menu.js';
 import { getPropsByItemId } from './utils.js';
 import { shouldBypassContextMenu } from '../../utils/contextmenu-helpers.js';
@@ -351,30 +352,30 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="isOpen" ref="menuRef" class="slash-menu" :style="menuPosition" @mousedown.stop>
+  <div v-if="isOpen" ref="menuRef" class="context-menu slash-menu" :style="menuPosition" @mousedown.stop>
     <!-- Hide the input visually but keep it focused for typing -->
     <input
       ref="searchInput"
       v-model="searchQuery"
       type="text"
-      class="slash-menu-hidden-input"
+      class="context-menu-hidden-input slash-menu-hidden-input"
       @keydown="handleGlobalKeyDown"
       @keydown.stop
     />
 
-    <div class="slash-menu-items">
+    <div class="context-menu-items slash-menu-items">
       <template v-for="(section, sectionIndex) in filteredSections" :key="section.id">
         <!-- Render divider before section (except for first section) -->
-        <div v-if="sectionIndex > 0 && section.items.length > 0" class="slash-menu-divider" tabindex="0"></div>
+        <div v-if="sectionIndex > 0 && section.items.length > 0" class="context-menu-divider slash-menu-divider" tabindex="0"></div>
 
         <!-- Render section items -->
         <template v-for="item in section.items" :key="item.id">
-          <div class="slash-menu-item" :class="{ 'is-selected': item.id === selectedId }" @click="executeCommand(item)">
+          <div class="context-menu-item slash-menu-item" :class="{ 'is-selected': item.id === selectedId }" @click="executeCommand(item)">
             <!-- Custom rendered content or default rendering -->
-            <div :ref="(el) => setCustomItemRef(el, item)" class="slash-menu-custom-item">
+            <div :ref="(el) => setCustomItemRef(el, item)" class="context-menu-custom-item slash-menu-custom-item">
               <!-- Fallback content for items without custom render (will be replaced by defaultRender) -->
               <template v-if="!item.render">
-                <span v-if="item.icon" class="slash-menu-item-icon" v-html="item.icon"></span>
+                <span v-if="item.icon" class="context-menu-item-icon slash-menu-item-icon" v-html="item.icon"></span>
                 <span>{{ item.label }}</span>
               </template>
             </div>
@@ -399,8 +400,23 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
+/* context-menu aliases for backward compatibility during transition */
+.context-menu {
+  position: absolute;
+  z-index: 50;
+  width: 180px;
+  color: #47484a;
+  background: white;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.05),
+    0px 10px 20px rgba(0, 0, 0, 0.1);
+  margin-top: 0.5rem;
+  font-size: 12px;
+}
+
 /* Hide the input but keep it functional */
-.slash-menu-hidden-input {
+.slash-menu-hidden-input,
+.context-menu-hidden-input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
@@ -411,33 +427,39 @@ onBeforeUnmount(() => {
   border: none;
 }
 
-.slash-menu-items {
+.slash-menu-items,
+.context-menu-items {
   max-height: 300px;
   overflow-y: auto;
 }
 
-.slash-menu-search {
+.slash-menu-search,
+.context-menu-search {
   padding: 0.5rem;
   border-bottom: 1px solid #eee;
 }
 
-.slash-menu-search input {
+.slash-menu-search input,
+.context-menu-search input {
   width: 100%;
   padding: 0.25rem 0.5rem;
   border: 1px solid #ddd;
   outline: none;
 }
 
-.slash-menu-search input:focus {
+.slash-menu-search input:focus,
+.context-menu-search input:focus {
   border-color: #0096fd;
 }
 
 /* Remove unused group styles */
-.slash-menu-group-label {
+.slash-menu-group-label,
+.context-menu-group-label {
   display: none;
 }
 
-.slash-menu-item {
+.slash-menu-item,
+.context-menu-item {
   padding: 0.25rem 0.5rem;
   cursor: pointer;
   user-select: none;
@@ -446,34 +468,40 @@ onBeforeUnmount(() => {
   align-items: center;
 }
 
-.slash-menu-item:hover {
+.slash-menu-item:hover,
+.context-menu-item:hover {
   background: #f5f5f5;
 }
 
-.slash-menu-item.is-selected {
+.slash-menu-item.is-selected,
+.context-menu-item.is-selected {
   background: #edf6ff;
   color: #0096fd;
   fill: #0096fd;
 }
 
-.slash-menu-item-icon {
+.slash-menu-item-icon,
+.context-menu-item-icon {
   display: flex;
   align-items: center;
   margin-right: 10px;
 }
 
-.slash-menu-item-icon svg {
+.slash-menu-item-icon svg,
+.context-menu-item-icon svg {
   height: 12px;
   width: 12px;
 }
 
-.slash-menu-custom-item {
+.slash-menu-custom-item,
+.context-menu-custom-item {
   display: flex;
   align-items: center;
   width: 100%;
 }
 
-.slash-menu-default-content {
+.slash-menu-default-content,
+.context-menu-default-content {
   display: flex;
   align-items: center;
   width: 100%;
@@ -488,7 +516,8 @@ onBeforeUnmount(() => {
   z-index: 100;
 }
 
-.slash-menu-divider {
+.slash-menu-divider,
+.context-menu-divider {
   height: 1px;
   background: #eee;
   margin: 4px 0;
