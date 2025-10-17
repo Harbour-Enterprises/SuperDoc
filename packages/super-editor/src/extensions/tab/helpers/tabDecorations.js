@@ -96,7 +96,7 @@ export function getParagraphContext($pos, cache, helpers) {
         let tabStops = [];
         if (Array.isArray(node.attrs?.tabStops)) {
           tabStops = node.attrs.tabStops.map(({ tab }) => ({
-            val: tab.tabType,
+            val: tab.tabType || 'start',
             pos: twipsToPixels(tab.pos),
             leader: tab.leader,
           }));
@@ -215,11 +215,6 @@ export function calculateIndentFallback(indentAttrs = {}) {
     textIndent = firstLine;
   } else if (hanging) {
     textIndent = -hanging;
-  } else if (typeof indentAttrs.textIndent === 'string') {
-    const match = indentAttrs.textIndent.match(/(-?\d*\.?\d+)in$/);
-    if (match) {
-      textIndent = Number(match[1]) * 96;
-    }
   }
 
   if (textIndent) return left + textIndent;
