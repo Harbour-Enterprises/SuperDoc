@@ -8,7 +8,6 @@ import { SuperEditor } from '@/index.js';
 import { getFileObject } from '@harbour-enterprises/common/helpers/get-file-object';
 import { DOCX } from '@harbour-enterprises/common';
 import { SuperToolbar } from '@components/toolbar/super-toolbar';
-import { PaginationPluginKey } from '@extensions/pagination/pagination-helpers.js';
 import BasicUpload from './BasicUpload.vue';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
@@ -48,9 +47,6 @@ const onCreate = ({ editor }) => {
     }
   });
   attachAnnotationEventHandlers();
-
-  // Set debugging pagination value from editor plugin state
-  isDebuggingPagination.value = PaginationPluginKey.getState(editor.state)?.isDebugging;
 
   // editor.commands.addFieldAnnotation(0, {
   //   type: 'text',

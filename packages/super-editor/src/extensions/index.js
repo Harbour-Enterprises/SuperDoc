@@ -262,4 +262,5 @@ export {
   NodeResizer,
   CustomSelection,
   TextTransform,
+  Pagination,
 };

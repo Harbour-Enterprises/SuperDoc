@@ -1,7 +1,7 @@
 // @ts-check
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { PaginationPluginKey } from '../../pagination/pagination-helpers.js';
+import { PaginationPluginKey } from '../../pagination/pagination.js';
 
 const ImagePositionPluginKey = new PluginKey('ImagePosition');
 

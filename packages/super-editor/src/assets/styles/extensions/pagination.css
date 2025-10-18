@@ -16,7 +16,7 @@
   min-width: 100%;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: flex-start;
   cursor: default;
   /* To not inherit styles from the wrapper paragraph */
   p {
@@ -84,8 +84,66 @@ on the right if it is inside shape textbox.
   color: initial;
 }
 
-/* TODO: This is going to be enabled again */
-/* .pagination-section-header div[contenteditable="false"]:not([documentmode="viewing"]),
-.pagination-section-footer div[contenteditable="false"]:not([documentmode="viewing"]) {
-  opacity: 0.5;
-} */
+.super-editor-base-page {
+  border-radius: 8px;
+  display: block;
+  width: 8.5in;
+  height: 11in;
+  left: -1px;
+  top: 0;
+  position: absolute;
+  border: 1px solid black;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.super-editor-page-background-view {
+  background-color: white;
+  z-index: 1;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+}
+
+.super-editor-page-view {
+  z-index: 100;
+}
+
+.super-editor-page-section {
+  position: absolute;
+  width: 100%;
+  z-index: 30;
+}
+
+.super-editor-page-header {
+  top: 0;
+}
+
+.super-editor-page-footer {
+  bottom: 0;
+}
+
+.super-editor-page-section.editing {
+  border: 1px solid #2563eb;
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.25);
+}
+
+.super-editor-page-section.editing::before {
+  content: attr(data-pagination-label);
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: #1d4ed8;
+  background: rgba(37, 99, 235, 0.08);
+  padding: 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.super-editor-page-section.editing.super-editor-page-header::before {
+  top: -28px;
+}
+.super-editor-page-section.editing.super-editor-page-footer::before {
+  bottom: -28px;
+}

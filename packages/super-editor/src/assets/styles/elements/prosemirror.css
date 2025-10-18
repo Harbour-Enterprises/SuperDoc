@@ -4,15 +4,25 @@
  */
 .ProseMirror {
   position: relative;
+  z-index: 2;
 }
 
 .ProseMirror {
   word-wrap: break-word;
   white-space: pre-wrap;
-  white-space: break-spaces;
-  -webkit-font-variant-ligatures: none;
-  font-variant-ligatures: none;
-  font-feature-settings: 'liga' 0; /* the above doesn't seem to work in Edge */
+  /* Typography closer to Word */
+  font-kerning: normal;
+  -webkit-font-variant-ligatures: normal;
+  font-variant-ligatures: common-ligatures;
+  font-feature-settings:
+    'liga' 1,
+    'kern' 1;
+  text-rendering: optimizeLegibility;
+}
+
+.ProseMirror p {
+  margin: 0;
+  padding: 0;
   z-index: 0; /* Needed to place images behind text with lower z-index */
 }
 
@@ -47,7 +57,7 @@
 .ProseMirror li > p {
   margin: 0;
   padding: 0;
-  display: inline-block;
+  display: block;
 }
 
 .ProseMirror.header-footer-edit {
@@ -192,6 +202,21 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   vertical-align: top;
   box-sizing: border-box;
   overflow-wrap: anywhere;
+
+  /* Approximate Word default cell margins: T/B 0.05in, L/R 0.08in */
+  padding: 0.05in 0.08in;
+}
+
+.ProseMirror td[data-placeholder],
+.ProseMirror th[data-placeholder] {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.ProseMirror td[data-placeholder] > *,
+.ProseMirror th[data-placeholder] > * {
+  display: none !important;
 }
 
 .ProseMirror td[data-placeholder],
@@ -354,9 +379,6 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 }
 
 .ProseMirror div[data-horizontal-rule='true'] {
-  position: relative;
-  z-index: auto;
-  display: block;
   margin-top: auto;
   align-self: flex-end;
 }

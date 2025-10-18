@@ -13,11 +13,7 @@ import { createDocument } from './helpers/createDocument.js';
 import { isActive } from './helpers/isActive.js';
 import { trackedTransaction } from '@extensions/track-changes/trackChangesHelpers/trackedTransaction.js';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
-import {
-  initPaginationData,
-  PaginationPluginKey,
-  toggleHeaderFooterEditMode,
-} from '@extensions/pagination/pagination-helpers';
+import { toggleHeaderFooterEditMode } from '@extensions/pagination/legacy-pagination/pagination-helpers.js';
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
 import { getRichTextExtensions } from '../extensions/index.js';
@@ -25,11 +21,8 @@ import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
 import { generateCollaborationData } from '@extensions/collaboration/collaboration.js';
-import { hasSomeParentWithClass } from './super-converter/helpers.js';
 import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
-import { setWordSelection } from './helpers/setWordSelection.js';
-import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
 import { canRenderFont } from './helpers/canRenderFont.js';
 import {
   migrateListsToV2IfNecessary,
@@ -109,6 +102,7 @@ import { transformListsInCopiedContent } from '@core/inputRules/html/transform-c
  * @property {Array} [externalExtensions=[]] - External extensions
  * @property {Object} [numbering={}] - Numbering configuration
  * @property {boolean} [isHeaderOrFooter=false] - Whether this is a header or footer editor
+ * @property {boolean} [isMeasurementEditor=false] - Whether this is a measurement editor
  * @property {Function} [onBeforeCreate] - Called before editor creation
  * @property {Function} [onCreate] - Called after editor creation
  * @property {Function} [onUpdate] - Called when editor content updates
@@ -181,6 +175,11 @@ export class Editor extends EventEmitter {
    * @type {Object}
    */
   view;
+  /**
+   * DOM element that hosts the ProseMirror view
+   * @type {HTMLElement|null}
+   */
+  viewContainer = null;
 
   /**
    * Whether the editor currently has focus
@@ -399,7 +398,6 @@ export class Editor extends EventEmitter {
     // it will be in itialized via this.#onCollaborationReady
     if (!this.options.ydoc) {
       if (!this.options.isChildEditor) {
-        this.#initPagination();
         this.#initComments();
 
         this.#validateDocumentInit();
@@ -444,7 +442,25 @@ export class Editor extends EventEmitter {
   }
 
   mount(el) {
-    this.#createView(el);
+    let mountTarget = el;
+
+    if (el) {
+      el.classList.add('super-editor-mount');
+      let viewContainer = el.querySelector(':scope > .super-editor-mount__content');
+
+      if (!viewContainer) {
+        viewContainer = el.ownerDocument.createElement('div');
+        viewContainer.className = 'super-editor-mount__content';
+        el.appendChild(viewContainer);
+      } else {
+        while (viewContainer.firstChild) viewContainer.removeChild(viewContainer.firstChild);
+      }
+
+      this.viewContainer = viewContainer;
+      mountTarget = viewContainer;
+    }
+
+    this.#createView(mountTarget);
 
     window.setTimeout(() => {
       if (this.isDestroyed) return;
@@ -457,7 +473,12 @@ export class Editor extends EventEmitter {
       this.view.destroy();
     }
 
+    if (this.viewContainer?.parentNode) {
+      this.viewContainer.parentNode.removeChild(this.viewContainer);
+    }
+
     this.view = null;
+    this.viewContainer = null;
   }
 
   /**
@@ -732,7 +753,6 @@ export class Editor extends EventEmitter {
     this.view.dispatch(tr);
 
     setTimeout(() => {
-      this.#initPagination();
       this.#initComments();
     }, 50);
   }
@@ -1095,49 +1115,6 @@ export class Editor extends EventEmitter {
       ...this.options.editorProps,
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: this.options.initialState,
-      handleClick: this.#handleNodeSelection.bind(this),
-      handleDoubleClick: async (view, pos, event) => {
-        // Prevent edits if editor is not editable
-        if (this.options.documentMode !== 'editing') return;
-
-        // Deactivates header/footer editing mode when double-click on main editor
-        const isHeader = hasSomeParentWithClass(event.target, 'pagination-section-header');
-        const isFooter = hasSomeParentWithClass(event.target, 'pagination-section-footer');
-        if (isHeader || isFooter) {
-          const eventClone = new event.constructor(event.type);
-          event.target.dispatchEvent(eventClone);
-
-          // Imitate default double click behavior - word selection
-          if (this.options.isHeaderOrFooter && this.options.editable) setWordSelection(view, pos);
-          return;
-        }
-        event.stopPropagation();
-
-        if (!this.options.editable) {
-          // ToDo don't need now but consider to update pagination when recalculate header/footer height
-          // this.storage.pagination.sectionData = await initPaginationData(this);
-          //
-          // const newTr = this.view.state.tr;
-          // newTr.setMeta('forceUpdatePagination', true);
-          // this.view.dispatch(newTr);
-
-          this.setEditable(true, false);
-          toggleHeaderFooterEditMode({
-            editor: this,
-            focusedSectionEditor: null,
-            isEditMode: false,
-            documentMode: this.options.documentMode,
-          });
-          const pm = this.view?.dom || this.options.element?.querySelector?.('.ProseMirror');
-          if (pm) {
-            pm.classList.remove('header-footer-edit');
-            pm.setAttribute('aria-readonly', false);
-          }
-        }
-
-        // Imitate default double click behavior - word selection
-        setWordSelection(view, pos);
-      },
     });
 
     const newState = this.state.reconfigure({
@@ -1215,8 +1192,6 @@ export class Editor extends EventEmitter {
 
     proseMirror.style.outline = 'none';
     proseMirror.style.border = 'none';
-    element.style.backgroundColor = '#fff';
-    proseMirror.style.backgroundColor = '#fff';
 
     // Typeface and font size
     const { typeface, fontSizePt, fontFamilyCss } = this.converter.getDocumentDefaultStyles() ?? {};
@@ -1353,7 +1328,6 @@ export class Editor extends EventEmitter {
     this.view.dispatch(tr);
 
     if (!this.options.isNewFile) {
-      this.#initPagination();
       this.#initComments();
       updateYdocDocxData(this);
     }
@@ -1377,29 +1351,6 @@ export class Editor extends EventEmitter {
       dispatch(tr);
     }, 50);
   }
-
-  /**
-   * Initialize pagination, if the pagination extension is enabled.
-   * @async
-   * @returns {Promise<void>}
-   */
-  async #initPagination() {
-    if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
-      return;
-    }
-
-    const pagination = this.options.extensions.find((e) => e.name === 'pagination');
-    if (pagination && this.options.pagination) {
-      const sectionData = await initPaginationData(this);
-      this.storage.pagination.sectionData = sectionData;
-
-      // Trigger transaction to initialize pagination
-      const { state, dispatch } = this.view;
-      const tr = state.tr.setMeta(PaginationPluginKey, { isReadyToInit: true });
-      dispatch(tr);
-    }
-  }
-
   /**
    * Dispatch a transaction to update the editor state
    * @param {Object} transaction - ProseMirror transaction
@@ -1646,17 +1597,6 @@ export class Editor extends EventEmitter {
 
   /**
    * Handles image node selection for header/footer editor
-   */
-  #handleNodeSelection(view, pos) {
-    this.setOptions({
-      lastSelection: null,
-    });
-
-    if (this.options.isHeaderOrFooter) {
-      return setImageNodeSelection(view, pos);
-    }
-  }
-
   /**
    * Perform any post conversion pre prosemirror import processing.
    * Comments are processed here.
@@ -1963,7 +1903,6 @@ export class Editor extends EventEmitter {
     }
 
     if (!this.options.ydoc) {
-      this.#initPagination();
       this.#initComments();
     }
   }
@@ -2128,7 +2067,7 @@ export class Editor extends EventEmitter {
   }
 
   #initDevTools() {
-    if (this.options.isHeaderOrFooter) return;
+    if (this.options.isHeaderOrFooter || this.options.isMeasurementEditor) return;
 
     if (process.env.NODE_ENV === 'development' || this.options.isDebug) {
       window.superdocdev = {
