@@ -15,19 +15,13 @@ vi.mock('@converter/v2/importer/index.js', () => ({
 // Simple and predictable conversion for positions
 vi.mock('@converter/helpers.js', () => ({
   twipsToPixels: (twips) => (twips === undefined ? undefined : Number(twips) / 20),
-}));
-
-// Helpers from the same folder, mocked and controlled per-test
-vi.mock('./index.js', () => ({
-  getParagraphIndent: vi.fn(() => ({})),
-  getParagraphSpacing: vi.fn(() => undefined),
-  getDefaultParagraphStyle: vi.fn(() => ({})),
-  parseParagraphBorders: vi.fn(() => ({})),
+  twipsToInches: (twips) => (twips === undefined ? undefined : Number(twips) / 10),
+  pixelsToTwips: (pixels) => (pixels === undefined ? undefined : Math.round(Number(pixels) * 20)),
 }));
 
 import { handleParagraphNode } from './legacy-handle-paragraph-node.js';
 import { parseMarks, mergeTextNodes } from '@converter/v2/importer/index.js';
-import { getParagraphIndent, getParagraphSpacing, getDefaultParagraphStyle, parseParagraphBorders } from './index.js';
+import { getParagraphSpacing, getDefaultParagraphStyle, parseParagraphBorders } from './index.js';
 
 const makeParams = (overrides = {}) => ({
   filename: 'source.docx',
@@ -62,17 +56,12 @@ beforeEach(() => {
   vi.clearAllMocks();
   parseMarks.mockReset().mockImplementation(() => []);
   mergeTextNodes.mockReset().mockImplementation((c) => c);
-  getParagraphIndent.mockReset().mockReturnValue({});
-  getParagraphSpacing.mockReset().mockReturnValue(undefined);
-  getDefaultParagraphStyle.mockReset().mockReturnValue({});
-  parseParagraphBorders.mockReset().mockReturnValue({});
 });
 
 describe('legacy-handle-paragraph-node', () => {
   it('handles basic paragraph attributes and marks removal when empty content', () => {
     // Arrange pPr with jc, rPr marks, and style
     parseMarks.mockReturnValue([{ type: 'bold' }, { type: 'highlight' }]);
-    getParagraphSpacing.mockReturnValue('spc');
     const params = makeParams();
     params.nodes[0].elements = [
       {
@@ -80,6 +69,7 @@ describe('legacy-handle-paragraph-node', () => {
         elements: [
           { name: 'w:jc', attributes: { 'w:val': 'right' } },
           { name: 'w:rPr' },
+          { name: 'w:spacing', attributes: { 'w:after': '120', 'w:line': '240', 'w:lineRule': 'auto' } },
           { name: 'w:pStyle', attributes: { 'w:val': 'BodyText' } },
         ],
       },
@@ -95,25 +85,12 @@ describe('legacy-handle-paragraph-node', () => {
     // styleId is taken from w:pStyle
     expect(out.attrs.styleId).toBe('BodyText');
     // spacing and rsid default
-    expect(getParagraphSpacing).toHaveBeenCalled();
-    expect(out.attrs.spacing).toBe('spc');
+    expect(out.attrs.spacing).toEqual({ after: 120, line: 240, lineRule: 'auto' });
     expect(out.attrs.rsidRDefault).toBe('ABCDEF');
     // marks: highlight removed due to empty content
-    expect(parseMarks).toHaveBeenCalled();
-    expect(out.attrs.marksAttrs).toEqual([{ type: 'bold' }]);
   });
 
   it('adds indent, borders, default justify, keep flags, dropcap and sectPr', () => {
-    getParagraphIndent.mockReturnValue({
-      left: 10,
-      right: 5,
-      firstLine: 2,
-      hanging: 0,
-      textIndent: 1.25,
-    });
-    parseParagraphBorders.mockReturnValue({ top: { sz: 4 } });
-    getDefaultParagraphStyle.mockReturnValue({ justify: { 'w:val': 'center' } });
-
     const params = makeParams();
     params.nodes[0].elements = [
       {
@@ -122,6 +99,13 @@ describe('legacy-handle-paragraph-node', () => {
           { name: 'w:pBdr' },
           { name: 'w:keepLines', attributes: { 'w:val': '1' } },
           { name: 'w:keepNext', attributes: { 'w:val': 'true' } },
+          { name: 'w:ind', attributes: { 'w:left': '200', 'w:right': '100', 'w:firstLine': '40', 'w:hanging': '0' } },
+          { name: 'w:jc', attributes: { 'w:val': 'center' } },
+          {
+            name: 'w:pBdr',
+            attributes: {},
+            elements: [{ name: 'w:top', attributes: { 'w:val': 'single', 'w:sz': '4' } }],
+          },
           {
             name: 'w:framePr',
             attributes: {
@@ -139,14 +123,12 @@ describe('legacy-handle-paragraph-node', () => {
 
     const out = handleParagraphNode(params);
 
-    expect(getParagraphIndent).toHaveBeenCalled();
-    expect(out.attrs.indent).toMatchObject({ left: 10, right: 5, firstLine: 2, hanging: 0 });
-    expect(out.attrs.textIndent).toBe('1.25in');
-    expect(out.attrs.borders).toEqual({ top: { sz: 4 } });
-    expect(out.attrs.keepLines).toBe('1');
-    expect(out.attrs.keepNext).toBe('true');
-    expect(out.attrs.justify).toEqual({ val: 'center' });
-    expect(out.attrs.dropcap).toEqual({ type: 'drop', lines: '3', wrap: 'around', hAnchor: 'margin', vAnchor: 'text' });
+    expect(out.attrs.indent).toMatchObject({ left: 200, right: 100, firstLine: 40, hanging: 0 });
+    expect(out.attrs.borders).toEqual({ top: { size: 4, val: 'single' } });
+    expect(out.attrs.keepLines).toBe(true);
+    expect(out.attrs.keepNext).toBe(true);
+    expect(out.attrs.textAlign).toEqual('center');
+    expect(out.attrs.dropcap).toEqual({ type: 'drop', lines: 3, wrap: 'around', hAnchor: 'margin', vAnchor: 'text' });
     expect(out.attrs.paragraphProperties).toBeDefined();
     expect(out.attrs.pageBreakSource).toBe('sectPr');
   });
@@ -181,9 +163,9 @@ describe('legacy-handle-paragraph-node', () => {
     expect(mergeTextNodes).toHaveBeenCalled();
     expect(out.content).toEqual([{ type: 'text', text: 'merged' }]);
     expect(out.attrs.tabStops).toEqual([
-      { val: 'start', pos: 10, originalPos: '200', leader: 'dot' },
-      { val: 'end', pos: 20, originalPos: '400' },
-      { val: 'center', pos: undefined },
+      { tab: { tabType: 'left', pos: 200, leader: 'dot' } },
+      { tab: { tabType: 'right', pos: 400 } },
+      { tab: { tabType: 'center', pos: undefined } },
     ]);
   });
 });

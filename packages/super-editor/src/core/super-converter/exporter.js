@@ -1,13 +1,5 @@
 import { SuperConverter } from './SuperConverter.js';
-import {
-  getTextIndentExportValue,
-  inchesToTwips,
-  linesToTwips,
-  pixelsToEightPoints,
-  pixelsToTwips,
-  ptToTwips,
-  rgbToHex,
-} from './helpers.js';
+import { inchesToTwips, linesToTwips, pixelsToEightPoints, pixelsToTwips, rgbToHex } from './helpers.js';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { TrackDeleteMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
@@ -18,7 +10,9 @@ import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translato
 import { translator as wHighlightTranslator } from './v3/handlers/w/highlight/highlight-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
+import { translator as wPPrNodeTranslator } from './v3/handlers/w/pPr/pPr-translator.js';
 import { translator as wRNodeTranslator } from './v3/handlers/w/r/r-translator.js';
+import { translator as wRPrNodeTranslator } from './v3/handlers/w/rpr/rpr-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
@@ -37,6 +31,7 @@ import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translat
 import { translator as wDelTranslator } from '@converter/v3/handlers/w/del';
 import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins';
 import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/hyperlink-translator.js';
+import { combineRunProperties, decodeRPrFromMarks } from '@converter/styles.js';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -313,7 +308,7 @@ export function translateParagraphNode(params) {
   }
 
   // Insert paragraph properties at the beginning of the elements array
-  const pPr = generateParagraphProperties(params.node);
+  const pPr = generateParagraphProperties(params);
   if (pPr) elements.unshift(pPr);
 
   let attributes = {};
@@ -354,213 +349,42 @@ function normalizeLineHeight(value) {
  * @param {SchemaNode} node
  * @returns {XmlReadyNode} The paragraph properties node
  */
-export function generateParagraphProperties(node) {
+export function generateParagraphProperties(params) {
+  const { node } = params;
   const { attrs = {} } = node;
 
-  const pPrElements = [];
+  const paragraphProperties = carbonCopy(attrs.paragraphProperties || {});
+  if (attrs.styleId !== paragraphProperties.styleId) {
+    paragraphProperties.styleId = attrs.styleId;
+  }
 
-  const { styleId } = attrs;
-  if (styleId) pPrElements.push({ name: 'w:pStyle', attributes: { 'w:val': styleId } });
-
-  const { spacing, indent, textAlign, textIndent, lineHeight, marksAttrs, keepLines, keepNext, dropcap, borders } =
-    attrs;
-  if (spacing) {
-    const { lineSpaceBefore, lineSpaceAfter, lineRule } = spacing;
-
-    const attributes = {};
-
-    // Zero values have to be considered in export to maintain accurate line height
-    if (lineSpaceBefore >= 0) attributes['w:before'] = pixelsToTwips(lineSpaceBefore);
-    if (lineSpaceAfter >= 0) attributes['w:after'] = pixelsToTwips(lineSpaceAfter);
-
-    attributes['w:lineRule'] = lineRule || 'auto';
-
-    const normalized = normalizeLineHeight(lineHeight);
-    if (normalized !== null) {
-      if (lineRule === 'exact') {
-        attributes['w:line'] = ptToTwips(normalized);
-      } else if (lineHeight.endsWith('px')) {
-        // Conditional for agreements created via API
-        attributes['w:line'] = pixelsToTwips(normalized);
-        attributes['w:lineRule'] = 'exact';
-      } else {
-        attributes['w:line'] = linesToTwips(normalized);
-      }
+  // Check which properties have changed
+  ['borders', 'styleId', 'indent', 'textAlign', 'keepLines', 'keepNext', 'spacing', 'tabStops'].forEach((key) => {
+    if (JSON.stringify(paragraphProperties[key]) !== JSON.stringify(attrs[key])) {
+      paragraphProperties[key] = attrs[key];
     }
-
-    const spacingElement = {
-      name: 'w:spacing',
-      attributes,
-    };
-    pPrElements.push(spacingElement);
-  }
-
-  if (lineHeight && !spacing) {
-    const spacingElement = {
-      name: 'w:spacing',
-      attributes: {
-        'w:line': linesToTwips(lineHeight),
-      },
-    };
-    pPrElements.push(spacingElement);
-  }
-
-  const hasIndent = !!indent;
-  if (hasIndent) {
-    const { left, right, firstLine, hanging, explicitLeft, explicitRight, explicitFirstLine, explicitHanging } = indent;
-
-    const attributes = {};
-
-    if (left !== undefined && (left !== 0 || explicitLeft || textIndent)) {
-      attributes['w:left'] = pixelsToTwips(left);
-    }
-    if (right !== undefined && (right !== 0 || explicitRight)) {
-      attributes['w:right'] = pixelsToTwips(right);
-    }
-    if (firstLine !== undefined && (firstLine !== 0 || explicitFirstLine)) {
-      attributes['w:firstLine'] = pixelsToTwips(firstLine);
-    }
-    if (hanging !== undefined && (hanging !== 0 || explicitHanging)) {
-      attributes['w:hanging'] = pixelsToTwips(hanging);
-    }
-
-    if (textIndent && attributes['w:left'] === undefined) {
-      attributes['w:left'] = getTextIndentExportValue(textIndent);
-    }
-
-    if (Object.keys(attributes).length) {
-      const indentElement = {
-        name: 'w:ind',
-        attributes,
-      };
-      pPrElements.push(indentElement);
-    }
-  } else if (textIndent && textIndent !== '0in') {
-    const indentElement = {
-      name: 'w:ind',
-      attributes: {
-        'w:left': getTextIndentExportValue(textIndent),
-      },
-    };
-    pPrElements.push(indentElement);
-  }
-
-  if (textAlign) {
-    const textAlignElement = {
-      name: 'w:jc',
-      attributes: { 'w:val': textAlign === 'justify' ? 'both' : textAlign },
-    };
-    pPrElements.push(textAlignElement);
-  }
-
-  if (marksAttrs) {
-    const outputMarks = processOutputMarks(marksAttrs);
-    const rPrElement = generateRunProps(outputMarks);
-    pPrElements.push(rPrElement);
-  }
-
-  if (keepLines) {
-    pPrElements.push({
-      name: 'w:keepLines',
-      attributes: { 'w:val': keepLines },
-    });
-  }
-
-  if (keepNext) {
-    pPrElements.push({
-      name: 'w:keepNext',
-      attributes: { 'w:val': keepNext },
-    });
-  }
-
-  if (dropcap) {
-    pPrElements.push({
-      name: 'w:framePr',
-      attributes: {
-        'w:dropCap': dropcap.type,
-        'w:lines': dropcap.lines,
-        'w:wrap': dropcap.wrap,
-        'w:vAnchor': dropcap.vAnchor,
-        'w:hAnchor': dropcap.hAnchor,
-      },
-    });
-  }
-
-  const sectPr = node.attrs?.paragraphProperties?.sectPr;
-  if (sectPr) {
-    pPrElements.push(sectPr);
-  }
-
-  // Add tab stops
-  const mapTabVal = (value) => {
-    if (!value || value === 'start') return 'left';
-    if (value === 'end') return 'right';
-    return value;
-  };
-
-  const { tabStops } = attrs;
-  if (tabStops && tabStops.length > 0) {
-    const tabElements = tabStops.map((tab) => {
-      const posValue = tab.originalPos !== undefined ? tab.originalPos : pixelsToTwips(tab.pos).toString();
-      const tabAttributes = {
-        'w:val': mapTabVal(tab.val),
-        'w:pos': posValue,
-      };
-
-      if (tab.leader) {
-        tabAttributes['w:leader'] = tab.leader;
-      }
-
-      return {
-        name: 'w:tab',
-        attributes: tabAttributes,
-      };
-    });
-
-    pPrElements.push({
-      name: 'w:tabs',
-      elements: tabElements,
-    });
-  }
-
-  const numPr = node.attrs?.paragraphProperties?.elements?.find((n) => n.name === 'w:numPr');
-  const hasNumPr = pPrElements.some((n) => n.name === 'w:numPr');
-  if (numPr && !hasNumPr) pPrElements.push(numPr);
-  if (!pPrElements.length) return null;
-
-  if (borders && Object.keys(borders).length) {
-    pPrElements.push(generateParagraphBorders(borders));
-  }
-
-  return {
-    name: 'w:pPr',
-    elements: pPrElements,
-  };
-}
-
-function generateParagraphBorders(borders) {
-  const elements = [];
-  const sides = ['top', 'bottom', 'left', 'right'];
-  sides.forEach((side) => {
-    const b = borders[side];
-    if (!b) return;
-
-    let attributes;
-    if (!b.size) {
-      attributes = { 'w:val': 'nil' };
-    } else {
-      attributes = {
-        'w:val': b.val || 'single',
-        'w:sz': pixelsToEightPoints(b.size),
-        'w:space': b.space ? pixelsToEightPoints(b.space) : 0,
-        'w:color': (b.color || '#000000').replace('#', ''),
-      };
-    }
-
-    elements.push({ name: `w:${side}`, attributes });
   });
 
-  return { name: 'w:pBdr', elements };
+  const framePr = attrs.dropcap;
+  if (framePr) {
+    framePr.dropCap = framePr.type;
+    delete framePr.type;
+  }
+  if (JSON.stringify(paragraphProperties.framePr) !== JSON.stringify(framePr)) {
+    paragraphProperties.framePr = framePr;
+  }
+
+  // Get run properties from marksAttrs
+  const marksProps = decodeRPrFromMarks(attrs.marksAttrs || []);
+  const finalRunProps = combineRunProperties([paragraphProperties.runProperties || {}, marksProps]);
+  paragraphProperties.runProperties = finalRunProps;
+
+  const pPr = wPPrNodeTranslator.decode({ node: { ...node, attrs: { paragraphProperties } } });
+  const sectPr = node.attrs?.paragraphProperties?.sectPr;
+  if (sectPr) {
+    pPr.elements.push(sectPr);
+  }
+  return pPr;
 }
 
 /**
@@ -600,7 +424,11 @@ export function getTextNodeForExport(text, marks, params) {
   const nodeAttrs = space ? { 'xml:space': space } : null;
   const textNodes = [];
 
-  const outputMarks = processOutputMarks(marks);
+  const textRunProperties = decodeRPrFromMarks(marks || []);
+  const parentRunProperties = params.extraParams?.runProperties || {};
+  const combinedRunProperties = combineRunProperties([parentRunProperties, textRunProperties]);
+  const rPrNode = wRPrNodeTranslator.decode({ node: { attrs: { runProperties: combinedRunProperties } } });
+
   textNodes.push({
     name: 'w:t',
     elements: [{ text, type: 'text' }],
@@ -648,7 +476,10 @@ export function getTextNodeForExport(text, marks, params) {
     });
   }
 
-  return wrapTextInRun(textNodes, outputMarks);
+  return {
+    name: 'w:r',
+    elements: rPrNode ? [rPrNode, ...textNodes] : textNodes,
+  };
 }
 
 /**
@@ -834,13 +665,6 @@ function translateList(params) {
     });
   }
 
-  let numPrTag;
-
-  // These should exist for all imported nodes
-  if (numId !== undefined && numId !== null) {
-    numPrTag = generateNumPrTag(numId, level);
-  }
-
   // Collapse multiple paragraphs into a single node for this list item
   // In docx we need a single paragraph, but can include line breaks in a run
   const collapsedParagraphNode = convertMultipleListItemsIntoSingleNode(listItem);
@@ -908,16 +732,13 @@ function translateList(params) {
   }
 
   const pPr = outputNode.elements?.find((n) => n.name === 'w:pPr');
-  if (pPr && pPr.elements && numPrTag) {
+  const hasNumPr = pPr?.elements?.some((e) => e?.name === 'w:numPr');
+  if (pPr && !hasNumPr) {
+    const numPrTag = generateNumPrTag(numId, level);
     pPr.elements.unshift(numPrTag);
   }
-
   const indentTag = restoreIndent(listItem.attrs.indent);
   indentTag && pPr?.elements?.push(indentTag);
-
-  const runNode = outputNode.elements?.find((n) => n.name === 'w:r');
-  const rPr = runNode?.elements?.find((n) => n.name === 'w:rPr');
-  if (rPr) pPr.elements.push(rPr);
 
   if (listItem.attrs.numPrType !== 'inline') {
     const numPrIndex = pPr?.elements?.findIndex((e) => e?.name === 'w:numPr');

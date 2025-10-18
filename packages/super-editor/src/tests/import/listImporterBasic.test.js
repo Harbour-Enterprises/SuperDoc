@@ -1,6 +1,7 @@
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { expect } from 'vitest';
 import { extractParagraphText } from '../helpers/getParagraphText.js';
+import { pixelsToTwips } from '@converter/helpers.js';
 
 describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
   const filename = 'sublist-issue.docx';
@@ -25,10 +26,10 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
 
     const spacerP1 = content.content[3];
     expect(spacerP1.type).toBe('paragraph');
-    expect(spacerP1.attrs.indent.firstLine).toBe(0);
-    expect(spacerP1.attrs.indent.left).toBe(48);
-    expect(spacerP1.attrs.indent.right).toBeCloseTo(-14.667, 3);
-    expect(spacerP1.attrs.indent.hanging).toBe(0);
+    expect(spacerP1.attrs.indent.firstLine).toBeUndefined();
+    expect(spacerP1.attrs.indent.left).toBe(pixelsToTwips(48));
+    expect(spacerP1.attrs.indent.right).toBeCloseTo(pixelsToTwips(-14.667), 3);
+    expect(spacerP1.attrs.indent.hanging).toBeUndefined();
   });
 
   it('imports second list item and break', () => {

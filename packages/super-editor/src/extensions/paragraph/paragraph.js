@@ -3,6 +3,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
+import { pixelsToTwips, linesToTwips, twipsToPixels, eighthPointsToPixels } from '@converter/helpers.js';
 
 /**
  * Configuration options for Paragraph
@@ -84,20 +85,20 @@ export const Paragraph = OxmlNode.create({
           // default spacing which is needed to make the docx look correct
           if (element && element.closest('[data-superdoc-import]')) {
             return {
-              lineSpaceAfter: 11,
-              lineSpaceBefore: 0,
-              line: 1.15,
+              after: pixelsToTwips(11),
+              before: 0,
+              line: linesToTwips(1.15),
               lineRule: 'auto',
             };
           }
           return undefined;
         },
         renderDOM: (attrs) => {
-          const { spacing } = attrs;
+          const { spacing, marksAttrs } = attrs;
           if (!spacing) return {};
           const spacingCopy = { ...spacing };
           if (attrs.lineHeight) delete spacingCopy.line; // we'll get line-height from lineHeight
-          const style = getSpacingStyleString(spacingCopy);
+          const style = getSpacingStyleString(spacingCopy, marksAttrs ?? []);
           if (style) return { style };
           return {};
         },
@@ -136,11 +137,11 @@ export const Paragraph = OxmlNode.create({
           }
 
           let style = '';
-          if (left) style += `margin-left: ${left}px;`;
-          if (right) style += `margin-right: ${right}px;`;
-          if (firstLine && !hanging) style += `text-indent: ${firstLine}px;`;
-          if (firstLine && hanging) style += `text-indent: ${firstLine - hanging}px;`;
-          if (!firstLine && hanging) style += `text-indent: ${-hanging}px;`;
+          if (left) style += `margin-left: ${twipsToPixels(left)}px;`;
+          if (right) style += `margin-right: ${twipsToPixels(right)}px;`;
+          if (firstLine && !hanging) style += `text-indent: ${twipsToPixels(firstLine)}px;`;
+          if (firstLine && hanging) style += `text-indent: ${twipsToPixels(firstLine - hanging)}px;`;
+          if (!firstLine && hanging) style += `text-indent: ${twipsToPixels(-hanging)}px;`;
 
           return { style };
         },
@@ -162,16 +163,21 @@ export const Paragraph = OxmlNode.create({
           sideOrder.forEach((side) => {
             const b = borders[side];
             if (!b) return;
+            // Remove border if style is 'nil' or undefined
+            if (['nil', 'none', undefined, null].includes(b.val)) {
+              style += `border-${side}: none;`;
+              return;
+            }
 
-            const width = b.size != null ? `${b.size}px` : '1px';
+            const width = b.size != null ? `${eighthPointsToPixels(b.size)}px` : '1px';
             const cssStyle = valToCss[b.val] || 'solid';
-            const color = b.color || '#000000';
+            const color = !b.color || b.color === 'auto' ? '#000000' : `#${b.color}`;
 
             style += `border-${side}: ${width} ${cssStyle} ${color};`;
 
             // Optionally handle space attribute (distance from text)
             if (b.space != null && side === 'bottom') {
-              style += `padding-bottom: ${b.space}px;`;
+              style += `padding-bottom: ${eighthPointsToPixels(b.space)}px;`;
             }
           });
 
@@ -204,16 +210,15 @@ export const Paragraph = OxmlNode.create({
       paragraphProperties: { rendered: false },
       dropcap: { rendered: false },
       pageBreakSource: { rendered: false },
-      justify: {
-        renderDOM: ({ justify }) => {
-          const { val: jc } = justify || {};
-          if (!jc) return {};
+      textAlign: {
+        renderDOM: ({ textAlign }) => {
+          if (!textAlign) return {};
 
           let style = '';
-          if (jc === 'left') style += 'text-align: left;';
-          else if (jc === 'right') style += 'text-align: right;';
-          else if (jc === 'center') style += 'text-align: center;';
-          else if (jc === 'both') style += 'text-align: justify;';
+          if (textAlign === 'left') style += 'text-align: left;';
+          else if (textAlign === 'right') style += 'text-align: right;';
+          else if (textAlign === 'center') style += 'text-align: center;';
+          else if (textAlign === 'both') style += 'text-align: justify;';
 
           return { style };
         },

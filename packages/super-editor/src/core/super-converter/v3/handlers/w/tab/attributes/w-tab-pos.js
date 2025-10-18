@@ -3,10 +3,11 @@
 /**
  * Maps `w:pos` on <w:tab> to `pos` in SuperDoc.
  * @param {Object} attributes
- * @returns {string|undefined}
+ * @returns {number|undefined}
  */
 export const encode = (attributes) => {
-  return attributes['w:pos'];
+  if (attributes['w:pos'] != null) return parseInt(attributes['w:pos']);
+  return null;
 };
 
 /**
@@ -16,7 +17,7 @@ export const encode = (attributes) => {
  */
 export const decode = (attrs) => {
   const { pos } = attrs || {};
-  return pos;
+  return pos?.toString();
 };
 
 /** @type {import('@translator').AttrConfig} */

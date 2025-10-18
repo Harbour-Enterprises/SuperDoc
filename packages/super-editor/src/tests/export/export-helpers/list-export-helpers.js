@@ -43,7 +43,7 @@ export const testListNodes = ({ node, expectedLevel, expectedNumPr, text }) => {
  */
 export const getListAttrFromNumPr = (attrName, node) => {
   const pPr = node.elements.find((el) => el.name === 'w:pPr');
-  const numPr = pPr.elements.find((el) => el.name === 'w:numPr');
+  const numPr = pPr?.elements?.find((el) => el.name === 'w:numPr');
   const givenNode = numPr?.elements?.find((el) => el.name === attrName);
   return givenNode?.attributes['w:val'];
 };

@@ -152,15 +152,13 @@ describe('w:tblPr translator', () => {
     it('handles missing tableProperties object', () => {
       const params = { node: { attrs: {} } };
       const result = translator.decode(params);
-      expect(result.name).toBe('w:tblPr');
-      expect(result.elements).toEqual([]);
+      expect(result).toBeUndefined();
     });
 
     it('handles empty tableProperties object', () => {
       const params = { node: { attrs: { tableProperties: {} } } };
       const result = translator.decode(params);
-      expect(result.name).toBe('w:tblPr');
-      expect(result.elements).toEqual([]);
+      expect(result).toBeUndefined();
     });
   });
 
