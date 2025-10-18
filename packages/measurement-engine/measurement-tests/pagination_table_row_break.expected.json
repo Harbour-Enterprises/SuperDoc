@@ -1,0 +1,98 @@
+{
+  "units": {
+    "unit": "px",
+    "dpi": 96
+  },
+  "pages": [
+    {
+      "pageIndex": 0,
+      "pageTopOffsetPx": 0,
+      "pageGapPx": 20,
+      "pageBottomSpacingPx": 0,
+      "break": {
+        "startOffsetPx": 0,
+        "pos": 2970,
+        "top": 864,
+        "bottom": 864,
+        "fittedTop": 864,
+        "fittedBottom": 864
+      },
+      "metrics": {
+        "pageHeightPx": 1056,
+        "pageWidthPx": 816,
+        "marginTopPx": 96,
+        "marginBottomPx": 96,
+        "marginLeftPx": 120,
+        "marginRightPx": 120,
+        "contentHeightPx": 864,
+        "contentWidthPx": 576,
+        "headerHeightPx": 96,
+        "footerHeightPx": 96,
+        "pageGapPx": 20
+      },
+      "headerFooterAreas": {
+        "header": {
+          "heightPx": 96,
+          "metrics": {
+            "offsetPx": 96,
+            "contentHeightPx": 0,
+            "effectiveHeightPx": 96
+          }
+        },
+        "footer": {
+          "heightPx": 96,
+          "metrics": {
+            "offsetPx": 96,
+            "contentHeightPx": 0,
+            "effectiveHeightPx": 96
+          }
+        }
+      }
+    },
+    {
+      "pageIndex": 1,
+      "pageTopOffsetPx": 1076,
+      "pageGapPx": 20,
+      "pageBottomSpacingPx": 328,
+      "break": {
+        "startOffsetPx": 864,
+        "pos": 4648,
+        "top": 1400,
+        "bottom": 1400,
+        "fittedTop": 1400,
+        "fittedBottom": 1400
+      },
+      "metrics": {
+        "pageHeightPx": 1056,
+        "pageWidthPx": 816,
+        "marginTopPx": 96,
+        "marginBottomPx": 96,
+        "marginLeftPx": 120,
+        "marginRightPx": 120,
+        "contentHeightPx": 864,
+        "contentWidthPx": 576,
+        "headerHeightPx": 96,
+        "footerHeightPx": 96,
+        "pageGapPx": 20
+      },
+      "headerFooterAreas": {
+        "header": {
+          "heightPx": 96,
+          "metrics": {
+            "offsetPx": 96,
+            "contentHeightPx": 0,
+            "effectiveHeightPx": 96
+          }
+        },
+        "footer": {
+          "heightPx": 96,
+          "metrics": {
+            "offsetPx": 96,
+            "contentHeightPx": 0,
+            "effectiveHeightPx": 96
+          }
+        }
+      }
+    }
+  ]
+}

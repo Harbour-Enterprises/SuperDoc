@@ -1,0 +1,54 @@
+{
+  "units": {
+    "unit": "px",
+    "dpi": 96
+  },
+  "pages": [
+    {
+      "pageIndex": 0,
+      "pageTopOffsetPx": 0,
+      "pageGapPx": 20,
+      "pageBottomSpacingPx": 495.4000000000001,
+      "break": {
+        "startOffsetPx": 0,
+        "pos": 2,
+        "top": 80,
+        "bottom": 80,
+        "fittedTop": 80,
+        "fittedBottom": 80
+      },
+      "metrics": {
+        "pageHeightPx": 1056,
+        "pageWidthPx": 816,
+        "marginTopPx": 286.79999999999995,
+        "marginBottomPx": 193.79999999999998,
+        "marginLeftPx": 96,
+        "marginRightPx": 96,
+        "contentHeightPx": 575.4000000000001,
+        "contentWidthPx": 624,
+        "headerHeightPx": 286.79999999999995,
+        "footerHeightPx": 193.79999999999998,
+        "pageGapPx": 20
+      },
+      "headerFooterAreas": {
+        "header": {
+          "heightPx": 286.79999999999995,
+          "metrics": {
+            "offsetPx": 286.79999999999995,
+            "contentHeightPx": 0,
+            "effectiveHeightPx": 286.79999999999995
+          }
+        },
+        "footer": {
+          "heightPx": 193.79999999999998,
+          "metrics": {
+            "offsetPx": 193.79999999999998,
+            "contentHeightPx": 0,
+            "effectiveHeightPx": 193.79999999999998
+          }
+        }
+      }
+    }
+  ],
+  "fieldSegments": []
+}
