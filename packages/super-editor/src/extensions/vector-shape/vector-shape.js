@@ -29,7 +29,7 @@ export const VectorShape = Node.create({
       width: {
         default: 100,
         renderDOM: (attrs) => {
-          if (!attrs.width) return {};
+          if (attrs.width == null) return {};
           return { 'data-width': attrs.width };
         },
       },
@@ -37,7 +37,7 @@ export const VectorShape = Node.create({
       height: {
         default: 100,
         renderDOM: (attrs) => {
-          if (!attrs.height) return {};
+          if (attrs.height == null) return {};
           return { 'data-height': attrs.height };
         },
       },
@@ -61,7 +61,7 @@ export const VectorShape = Node.create({
       strokeWidth: {
         default: 1,
         renderDOM: (attrs) => {
-          if (!attrs.strokeWidth) return {};
+          if (attrs.strokeWidth == null) return {};
           return { 'data-stroke-width': attrs.strokeWidth };
         },
       },
@@ -69,7 +69,7 @@ export const VectorShape = Node.create({
       rotation: {
         default: 0,
         renderDOM: (attrs) => {
-          if (!attrs.rotation) return {};
+          if (attrs.rotation == null) return {};
           return { 'data-rotation': attrs.rotation };
         },
       },

@@ -77,7 +77,7 @@ export class VectorShapeView {
   generateTransform() {
     const attrs = this.node.attrs;
     const transforms = [];
-    if (attrs.rotation) {
+    if (attrs.rotation != null) {
       transforms.push(`rotate(${attrs.rotation}deg)`);
     }
     if (attrs.flipH) {
