@@ -110,13 +110,16 @@ export const TabNode = Node.create({
                 rangesToRecalculate.push([start, end]);
               }
             }
-            rangesToRecalculate = rangesToRecalculate.map(([from, to]) => {
-              const mappedFrom = stepMap.map(from, -1);
-              const mappedTo = stepMap.map(to, 1);
-              return [mappedFrom, mappedTo];
-            });
+            rangesToRecalculate = rangesToRecalculate
+              .map(([from, to]) => {
+                const mappedFrom = stepMap.map(from, -1);
+                const mappedTo = stepMap.map(to, 1);
+                return [mappedFrom, mappedTo];
+              })
+              .filter(([from, to]) => Number.isFinite(from) && Number.isFinite(to) && to > from);
           });
-          rangesToRecalculate.forEach(([start, end]) => {
+          const mergedRanges = mergeRanges(rangesToRecalculate);
+          mergedRanges.forEach(([start, end]) => {
             const oldDecorations = decorations.find(start, end);
             decorations = decorations.remove(oldDecorations);
             const newDecorations = getTabDecorations(newState.doc, view, helpers, start, end);
@@ -137,4 +140,26 @@ export const TabNode = Node.create({
 
 export const __testing__ = {
   getTabDecorations,
+  mergeRanges,
 };
+
+function mergeRanges(ranges) {
+  if (!ranges.length) return [];
+  const sorted = [...ranges].sort((a, b) => a[0] - b[0]);
+  const result = [];
+  let [currentStart, currentEnd] = sorted[0];
+
+  for (let i = 1; i < sorted.length; i++) {
+    const [start, end] = sorted[i];
+    if (start <= currentEnd) {
+      currentEnd = Math.max(currentEnd, end);
+    } else {
+      result.push([currentStart, currentEnd]);
+      currentStart = start;
+      currentEnd = end;
+    }
+  }
+
+  result.push([currentStart, currentEnd]);
+  return result;
+}

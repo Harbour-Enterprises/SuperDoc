@@ -18,7 +18,9 @@ export function orderedListSync(editor) {
       if (updateNodeViews || !hasInitialized) refreshAllListItemNodeViews();
 
       const isFromPlugin = transactions.some((tr) => tr.getMeta('orderedListSync'));
-      if (isFromPlugin || !transactions.some((tr) => tr.docChanged)) {
+      const docChanged = transactions.some((tr) => tr.docChanged) && !oldState.doc.eq(newState.doc);
+
+      if (isFromPlugin || !docChanged) {
         return null;
       }
 
