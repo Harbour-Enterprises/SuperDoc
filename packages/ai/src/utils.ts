@@ -1,7 +1,7 @@
 /**
  * Shared utility functions
  */
-import {ReplacementEntry} from "./types";
+import {FoundMatch, type Result} from "./types";
 
 export function validateInput(input: string, name: string): void {
     if (!input?.trim()) {
@@ -66,42 +66,30 @@ export function generateId(prefix: string): string {
 /**
  * Normalizes find and replace entries from AI response
  */
-export function normalizeReplacements(response: Record<string, unknown>): ReplacementEntry[] {
-    const entries: ReplacementEntry[] = [];
+export function normalizeReplacements(response: Result): FoundMatch[] {
+    const entries: FoundMatch[] = [];
     const seen = new Set<string>();
 
     const addEntry = (entry: unknown) => {
         if (!entry) return;
-
-        let oldText: string | undefined;
-        let newText: string | undefined;
-
-        // Handle array format: [old, new, type?]
+        let originalText: string | undefined;
+        let suggestedText: string | undefined;
         if (Array.isArray(entry) && entry.length >= 2) {
-            oldText = String(entry[0]).trim();
-            newText = String(entry[1]).trim();
+            originalText = String(entry[0]).trim();
+            suggestedText = String(entry[1]).trim();
         }
-        // Handle object format with various key names
         else if (typeof entry === 'object') {
             const obj = entry as Record<string, unknown>;
-            oldText = String(obj.oldText ?? obj.old_text ?? obj.text ?? obj.old ?? '').trim();
-            newText = String(obj.newText ?? obj.new_text ?? obj.replacement ?? obj.new ?? '').trim();
+            originalText = String(obj.originalText ?? obj.original_text ?? obj.text ?? obj.original ?? '').trim();
+            suggestedText = String(obj.suggestedText ?? obj.suggested_text ?? obj.replacement ?? obj.suggested ?? '').trim();
         }
-
-        // Validate and deduplicate
-        if (!oldText || !newText) return;
-
-        const key = `${oldText}→${newText}`;
+        if (!originalText || !suggestedText) return;
+        const key = `${originalText}→${suggestedText}`;
         if (seen.has(key)) return;
-
         seen.add(key);
-
-        entries.push({ oldText, newText });
+        entries.push({ originalText, suggestedText });
     };
-
-    // Process both 'results' and 'replacements' arrays
-    const arrays = [response.results, response.replacements].filter(Array.isArray);
+    const arrays = [response.results].filter(Array.isArray);
     arrays.forEach(arr => arr.forEach(addEntry));
-
     return entries;
 }

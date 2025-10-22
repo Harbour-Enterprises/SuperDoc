@@ -13,28 +13,29 @@ export class EditorAdapter {
     constructor(private editor: EditorLike) {}
 
     // Search for string occurrences and resolve document positions
-    findResults(results: Array<string>): FoundMatch[] {
+    findResults(results: FoundMatch[]): FoundMatch[] {
         if (!results?.length) {
             return [];
         }
 
         return results
-            .map((text) => {
+            .map((match) => {
+                const text = match.originalText;
                 const rawMatches = this.editor.commands?.search?.(text) ?? [];
 
                 const positions = rawMatches
-                    .map((match: { from?: number; to?: number; start?: number; end?: number }) => {
-                        const from = match.from ?? match.start;
-                    const to = match.to ?? match.end;
-                    if (typeof from !== 'number' || typeof to !== 'number') {
-                        return null;
-                    }
-                    return { from, to };
-                })
+                    .map((match: { from?: number; to?: number}) => {
+                        const from = match.from;
+                        const to = match.to;
+                        if (typeof from !== 'number' || typeof to !== 'number') {
+                            return null;
+                        }
+                        return { from, to };
+                    })
                 .filter((value: any): value is { from: number; to: number } => value !== null);
 
                 return {
-                    text,
+                    ...match,
                     positions,
                 };
             })
@@ -76,8 +77,8 @@ export class EditorAdapter {
     ): Promise<string> {
         const changeId = generateId('tracked-change');
         this.editor.options.user = {
-            name: author.display_name || author,
-            image: author.profile_url || '',
+            name: author.displayName || author,
+            image: author.profileUrl || '',
         };
 
         this.editor.commands.setTextSelection({ from, to })
@@ -119,6 +120,17 @@ export class EditorAdapter {
 
     // Insert operations
     async insertText(newText: string): Promise<void> {
-        this.editor.commands.insertContentAt(this.editor.state.doc.content.size, newText);
+        const pos: number = this.editor.state.doc.content.size;
+        const from: number = pos-50;
+        this.editor.commands.setTextSelection({ from, pos });
+        const marks = this.editor.commands.getSelectionMarks();
+        this.editor.commands.insertContentAt(this.editor.state.doc.content.size, {
+            type: 'text',
+            text: newText,
+            marks: marks.map((mark: any) => ({
+                type: mark.type.name,
+                attrs: mark.attrs,
+            })),
+        });
     }
 }

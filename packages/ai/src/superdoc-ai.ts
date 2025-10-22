@@ -1,6 +1,6 @@
 import type {
     CompletionOptions,
-    EditorLike,
+    EditorLike, Result,
     StreamOptions,
     SuperDocAICallbacks,
     SuperDocAIConfig,
@@ -47,44 +47,38 @@ export class SuperDocAI<TSuperdoc = SuperDocInstance> {
 
     public readonly action = {
         find: async (query: string) => {
-            return this.actions.find(query);
+            return this.executeActionWithCallbacks(() => this.actions.find(query));
         },
         findAll: async (query: string) => {
-            return this.actions.findAll(query);
+            return this.executeActionWithCallbacks(() => this.actions.findAll(query));
         },
         highlight: async (query: string) => {
-            return this.actions.highlight(query);
+            return this.executeActionWithCallbacks(() => this.actions.highlight(query));
         },
         replace: async (instruction: string) => {
-            return this.actions.replace(instruction);
+            return this.executeActionWithCallbacks(() => this.actions.replace(instruction));
         },
         replaceAll: async (instruction: string) => {
-            return this.actions.replaceAll(instruction);
+            return this.executeActionWithCallbacks(() => this.actions.replaceAll(instruction));
         },
         insertTrackedChange: async (instruction: string) => {
-            return this.actions.insertTrackedChange(instruction);
+            return this.executeActionWithCallbacks(() => this.actions.insertTrackedChange(instruction));
         },
         insertTrackedChanges: async (instruction: string) => {
-            return this.actions.insertTrackedChanges(instruction);
+            return this.executeActionWithCallbacks(() => this.actions.insertTrackedChanges(instruction));
         },
         insertComment: async (instruction: string) => {
-            return this.actions.insertComment(instruction);
+            return this.executeActionWithCallbacks(() => this.actions.insertComment(instruction));
         },
 
         insertComments: async (instruction: string) => {
-            return this.actions.insertComments(instruction);
+            return this.executeActionWithCallbacks(() => this.actions.insertComments(instruction));
         },
-        analyze: async (query: string) => {
-            return this.actions.analyze(query);
-        },
-        summarize: async (options?: { maxLength?: number }) => {
-            return this.actions.summarize(options);
-        },
-        ask: async (question: string) => {
-            return this.actions.ask(question);
+        summarize: async (instruction: string) => {
+            return this.executeActionWithCallbacks(() => this.actions.summarize(instruction));
         },
         insertContent: async (instruction: string) => {
-            return this.actions.insertContent(instruction);
+            return this.executeActionWithCallbacks(() => this.actions.insertContent(instruction));
         },
     };
 
@@ -124,6 +118,26 @@ export class SuperDocAI<TSuperdoc = SuperDocInstance> {
         this.actions = new AIActions(this.config.provider, editor, this.config.user, context, this.config.enableLogging);
 
         this.initializationPromise = this.initialize();
+    }
+
+    /**
+     * Executes an action with full callback lifecycle support
+     * @private
+     */
+    private async executeActionWithCallbacks<T extends Result>(
+        fn: () => Promise<T>
+    ): Promise<T> {
+        try {
+            this.callbacks.onStreamingStart?.();
+            const result: any = await fn();
+            this.callbacks.onStreamingEnd?.(result);
+
+            return result;
+        } catch (error: Error | any) {
+            this.callbacks.onError?.(error);
+            this.handleError(error as Error);
+            throw error;
+        }
     }
 
     /**
