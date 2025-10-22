@@ -104,11 +104,10 @@ export class AIActions {
             adapter.createHighlight(firstMatch.positions[0].from, firstMatch.positions[0].to, color);
             return {results: [firstMatch], success: true};
         } catch (error) {
-            console.log(`Failed to highlight: ${error instanceof Error ? error.message : 'Unknown error'}`)
-            return {
-                results: [],
-                success: false,
-            };
+            if (this.enableLogging) {
+                console.error(`Failed to highlight: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+            throw error;
         }
     }
 
@@ -159,7 +158,10 @@ export class AIActions {
                 await operationFn(adapter, result.positions[0], result);
                 if (!multiple) return [match];
             } catch (error) {
-                console.error(`Failed to execute operation: ${error instanceof Error ? error.message : 'Unknown'}`);
+                if (this.enableLogging) {
+                    console.error(`Failed to execute operation: ${error instanceof Error ? error.message : 'Unknown'}`);
+                }
+                throw error;
             }
         }
         return searchResults;
@@ -264,7 +266,6 @@ export class AIActions {
     async insertComment(query: string): Promise<Result> {
         validateInput(query, 'query');
 
-        const timestamp = new Date().toISOString();
         const matches = await this.executeOperation(
             query,
             false,
@@ -342,12 +343,11 @@ export class AIActions {
 
         const prompt = `${query}
         ${this.documentContext ? `Current document:\n${this.documentContext}\n` : ''}
-        
         Respond with JSON: { 
-                  "success": boolean, "results": [ { 
-                  "suggestedText": string,
-                }
-              ]`;
+            "success": boolean, "results": [ { 
+            "suggestedText": string,
+            }
+        ]`;
 
         const response = await this.provider.getCompletion([
             {
@@ -376,8 +376,10 @@ export class AIActions {
                 results: [suggestedResult],
             };
         } catch (error) {
-            console.error(`Failed to insert: ${error instanceof Error ? error.message : 'Unknown error'}`);
-            return {success: false, results: []};
+            if (this.enableLogging) {
+                console.error(`Failed to insert: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+            throw error;
         }
     }
 
@@ -398,18 +400,17 @@ export class AIActions {
         }
 
         return `Find the EXACT text FIRST occurrence ONLY of ${query}
-        
-        Document context:
-        ${this.documentContext}
-        
-        Respond with JSON:
-        {
-          "success": boolean,
-          "results": [ { 
-              "originalText": string,
-            }
-          ]
-        }`;
+            Document context:
+            ${this.documentContext}
+            
+            Respond with JSON:
+            {
+              "success": boolean,
+              "results": [ { 
+                  "originalText": string,
+                }
+              ]
+            }`;
     }
 
     private buildReplacePrompt(query: string, replaceAll: boolean): string {
@@ -424,10 +425,10 @@ export class AIActions {
         Respond with JSON:
         {
           "success": boolean,
-          "results": [
+          "results": [{
               "originalText": string,
               "suggestedText": string,
-          ],
+          }],
         }
         `;
     }
