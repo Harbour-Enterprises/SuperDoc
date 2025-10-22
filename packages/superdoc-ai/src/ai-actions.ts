@@ -1,26 +1,36 @@
 import type {
     AIProvider,
     AIUser,
-    EditorLike,
+    Editor,
     Result,
     FoundMatch,
     DocumentPosition
 } from './types';
 import {EditorAdapter} from './editor-adapter';
-import {validateInput, parseJSON, normalizeReplacements} from './utils';
+import {validateInput, parseJSON} from './utils';
+import {
+    buildFindPrompt,
+    buildReplacePrompt,
+    buildSummaryPrompt,
+    buildInsertContentPrompt,
+    SYSTEM_PROMPTS
+} from './prompts';
 
 /**
  * AI-powered document actions
  * All methods are pure - they receive dependencies and return results
  */
 export class AIActions {
+    private adapter: EditorAdapter;
+
     constructor(
         private provider: AIProvider,
-        private editor: EditorLike | null,
+        private editor: Editor | null,
         private user: AIUser,
         private documentContext: string,
         private enableLogging: boolean = false
     ) {
+        this.adapter = new EditorAdapter(this.editor);
     }
 
 
@@ -31,26 +41,26 @@ export class AIActions {
      * @returns Result with found locations enriched with editor positions
      */
     private async executeFindQuery(query: string, findAll: boolean): Promise<Result> {
-        validateInput(query, 'Query');
+        if (!validateInput(query, 'Query')) {
+            throw new Error('Query cannot be empty');
+        }
 
         if (!this.documentContext) {
             return {success: false, results: []};
         }
 
-        const prompt = this.buildFindPrompt(query, findAll);
+        const prompt = buildFindPrompt(query, this.documentContext, findAll);
         const response = await this.provider.getCompletion([
-            {role: 'system', content: 'You are a document search assistant. Always respond with valid JSON.'},
+            {role: 'system', content: SYSTEM_PROMPTS.SEARCH},
             {role: 'user', content: prompt},
         ]);
 
         const result = parseJSON<Result>(response, {success: false, results: []}, this.enableLogging);
 
-        if (!result.success || !result.results || !this.editor) {
+        if (!result.success || !result.results || !this.adapter) {
             return result;
         }
-
-        const adapter = new EditorAdapter(this.editor);
-        result.results = adapter.findResults(result.results);
+        result.results = this.adapter.findResults(result.results);
 
         return result;
     }
@@ -89,19 +99,18 @@ export class AIActions {
     async highlight(query: string, color: string = "#6CA0DC"): Promise<Result> {
         const findResult = await this.find(query);
 
-        if (!findResult.success || !this.editor) {
+        if (!findResult.success || !this.adapter) {
             return {...findResult, success: false};
         }
 
         try {
-            const adapter = new EditorAdapter(this.editor);
             const firstMatch = findResult.results?.find((match) => match.positions
                 && match.positions.length > 0);
             if (!firstMatch || !firstMatch.positions || !firstMatch.positions.length) {
                 return {success: false, results: []};
             }
 
-            adapter.createHighlight(firstMatch.positions[0].from, firstMatch.positions[0].to, color);
+            this.adapter.createHighlight(firstMatch.positions[0].from, firstMatch.positions[0].to, color);
             return {results: [firstMatch], success: true};
         } catch (error) {
             if (this.enableLogging) {
@@ -123,14 +132,14 @@ export class AIActions {
         multiple: boolean,
         operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
     ): Promise<FoundMatch[]> {
-        if (!this.documentContext || !this.editor) {
+        if (!this.documentContext || !this.adapter) {
             return [];
         }
 
         // Get AI query
-        const prompt = this.buildReplacePrompt(query, multiple);
+        const prompt = buildReplacePrompt(query, this.documentContext, multiple);
         const response = await this.provider.getCompletion([
-            {role: 'system', content: 'You are a document editing assistant. Always respond with valid JSON.'},
+            {role: 'system', content: SYSTEM_PROMPTS.EDIT},
             {role: 'user', content: prompt},
         ]);
 
@@ -140,22 +149,21 @@ export class AIActions {
             this.enableLogging
         );
 
-        const replacements = normalizeReplacements(parsed);
+        const replacements = parsed.results || [];
 
         if (!replacements.length) {
             return [];
         }
 
         // Find matches and execute operations
-        const adapter = new EditorAdapter(this.editor);
-        const searchResults = adapter.findResults(replacements);
+        const searchResults = this.adapter.findResults(replacements);
         const match = searchResults?.[0];
         for (const result of searchResults) {
             try {
                 if (!result.positions || !result.positions.length) {
                     return [];
                 }
-                await operationFn(adapter, result.positions[0], result);
+                await operationFn(this.adapter, result.positions[0], result);
                 if (!multiple) return [match];
             } catch (error) {
                 if (this.enableLogging) {
@@ -174,7 +182,9 @@ export class AIActions {
      * @returns Result with original and suggested text
      */
     async replace(query: string): Promise<Result> {
-        validateInput(query, 'query');
+        if (!validateInput(query, 'Query')) {
+            throw new Error('Query cannot be empty');
+        }
 
         const matches = await this.executeOperation(
             query,
@@ -195,7 +205,9 @@ export class AIActions {
      * @returns Result with all replacements made
      */
     async replaceAll(query: string): Promise<Result> {
-        validateInput(query, 'query');
+        if (!validateInput(query, 'Query')) {
+            throw new Error('Query cannot be empty');
+        }
 
         const matches = await this.executeOperation(
             query,
@@ -214,7 +226,9 @@ export class AIActions {
      * Insert a single tracked change
      */
     async insertTrackedChange(query: string): Promise<Result> {
-        validateInput(query, 'query');
+        if (!validateInput(query, 'Query')) {
+            throw new Error('Query cannot be empty');
+        }
 
         const matches = await this.executeOperation(
             query,
@@ -224,7 +238,6 @@ export class AIActions {
                     position.from,
                     position.to,
                     replacement.suggestedText || '',
-                    this.user
                 )
         );
 
@@ -238,7 +251,9 @@ export class AIActions {
      * Insert multiple tracked changes
      */
     async insertTrackedChanges(query: string): Promise<Result> {
-        validateInput(query, 'query');
+        if (!validateInput(query, 'query')) {
+            throw new Error('Query cannot be empty');
+        }
 
         const matches = await this.executeOperation(
             query,
@@ -248,7 +263,6 @@ export class AIActions {
                     position.from,
                     position.to,
                     replacement.suggestedText || '',
-                    this.user
                 )
         );
 
@@ -262,7 +276,9 @@ export class AIActions {
      * Insert a single comment
      */
     async insertComment(query: string): Promise<Result> {
-        validateInput(query, 'query');
+        if (!validateInput(query, 'Query')) {
+            throw new Error('Query cannot be empty');
+        }
 
         const matches = await this.executeOperation(
             query,
@@ -271,8 +287,7 @@ export class AIActions {
                 adapter.createComment(
                     position.from,
                     position.to,
-                    replacement.suggestedText || '',
-                    this.user
+                    replacement.suggestedText || ''
                 )
         );
 
@@ -286,7 +301,9 @@ export class AIActions {
      * Insert multiple comments
      */
     async insertComments(query: string): Promise<Result> {
-        validateInput(query, 'query');
+        if (!validateInput(query, 'Query')) {
+            throw new Error('Query cannot be empty');
+        }
 
         const matches = await this.executeOperation(
             query,
@@ -295,8 +312,7 @@ export class AIActions {
                 adapter.createComment(
                     position.from,
                     position.to,
-                    replacement.suggestedText || '',
-                    this.user
+                    replacement.suggestedText || ''
                 )
         );
 
@@ -314,9 +330,9 @@ export class AIActions {
         if (!this.documentContext) {
             return {results: [], success: false};
         }
-        const prompt = this.buildSummaryPrompt(query);
+        const prompt = buildSummaryPrompt(query, this.documentContext);
         const response = await this.provider.getCompletion([
-            {role: 'system', content: 'You are a document summarization assistant. Always respond with valid JSON.'},
+            {role: 'system', content: SYSTEM_PROMPTS.SUMMARY},
             {role: 'user', content: prompt},
         ]);
 
@@ -333,41 +349,36 @@ export class AIActions {
      * @returns Result with inserted content location
      */
     async insertContent(query: string): Promise<Result> {
-        validateInput(query, 'query');
+        if (!validateInput(query, 'query')) {
+            throw new Error('Query cannot be empty');
+        }
 
-        if (!this.editor) {
+        if (!this.adapter) {
             return {success: false, results: []};
         }
 
-        const prompt = `${query}
-        ${this.documentContext ? `Current document:\n${this.documentContext}\n` : ''}
-        Respond with JSON: { 
-            "success": boolean, "results": [ { 
-            "suggestedText": string,
-            }
-        ]`;
+        const prompt = buildInsertContentPrompt(query, this.documentContext);
 
         const response = await this.provider.getCompletion([
             {
                 role: 'system',
-                content: 'You are a document content generation assistant. Always respond with valid JSON.'
+                content: SYSTEM_PROMPTS.CONTENT_GENERATION
             },
             {role: 'user', content: prompt},
         ]);
 
         const result = parseJSON<Result>(response, {success: false, results: []}, this.enableLogging);
 
-        if (!result.success || !result.results || !this.editor) {
+        if (!result.success || !result.results || !this.adapter) {
             return {success: false, results: []};
         }
 
         try {
-            const adapter = new EditorAdapter(this.editor);
             const suggestedResult = result.results[0];
             if (!suggestedResult || !suggestedResult.suggestedText) {
                 return {success: false, results: []};
             }
-            await adapter.insertText(suggestedResult.suggestedText);
+            await this.adapter.insertText(suggestedResult.suggestedText);
 
             return {
                 success: true,
@@ -380,72 +391,4 @@ export class AIActions {
             throw error;
         }
     }
-
-    private buildFindPrompt(query: string, findAll: boolean): string {
-        if (findAll) {
-            return `apply this query: ${query} if find and replace query then Find the EXACT text of ALL occurrences of ${query}
-            Document context:
-            ${this.documentContext}
-            
-            Respond with JSON:
-            {
-              "success": boolean,
-              "results": [ { 
-                  "originalText": string,
-                }
-              ]
-            }`;
-        }
-
-        return `apply this query: ${query} if find and replace query then Find the EXACT text FIRST occurrence ONLY
-            Document context:
-            ${this.documentContext}
-            
-            Respond with JSON:
-            {
-              "success": boolean,
-              "results": [ { 
-                  "originalText": string,
-                }
-              ]
-            }`;
-    }
-
-    private buildReplacePrompt(query: string, replaceAll: boolean): string {
-        const finalQuery = replaceAll
-            ? `apply this query: ${query} if find and replace query then Find and replace the EXACT text of ALL occurrences`
-            : `apply this query: ${query} if find and replace query then Find and replace the EXACT FIRST occurrence ONLY ${query}`;
-
-        return `${finalQuery}
-        Document context:
-        ${this.documentContext}
-        
-        Respond with JSON:
-        {
-          "success": boolean,
-          "results": [{
-              "originalText": string,
-              "suggestedText": string,
-          }],
-        }
-        `;
-    }
-
-    private buildSummaryPrompt(query: string,): string {
-        return `${query}
-            Document context:
-            ${this.documentContext}
-            
-            Respond with JSON:
-            {
-              "success": boolean,
-              "results": [ { 
-                  "suggestedText": string,
-                }
-              ]
-            }`;
-    }
-
 }
-
-

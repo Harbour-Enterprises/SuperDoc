@@ -1,11 +1,51 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AIActions } from './ai-actions';
-import type { AIProvider, EditorLike, AIUser } from './types';
+import type { AIProvider, Editor, AIUser } from './types';
+
+const createChain = (commands?: any) => {
+    const chainApi = {
+        setTextSelection: vi.fn((args) => {
+            commands?.setTextSelection?.(args);
+            return chainApi;
+        }),
+        setHighlight: vi.fn((color) => {
+            commands?.setHighlight?.(color);
+            return chainApi;
+        }),
+        enableTrackChanges: vi.fn(() => {
+            commands?.enableTrackChanges?.();
+            return chainApi;
+        }),
+        deleteSelection: vi.fn(() => {
+            commands?.deleteSelection?.();
+            return chainApi;
+        }),
+        insertContent: vi.fn((content) => {
+            commands?.insertContent?.(content);
+            return chainApi;
+        }),
+        disableTrackChanges: vi.fn(() => {
+            commands?.disableTrackChanges?.();
+            return chainApi;
+        }),
+        insertComment: vi.fn((payload) => {
+            commands?.insertComment?.(payload);
+            return chainApi;
+        }),
+        run: vi.fn(() => true),
+    };
+
+    const chainFn = vi.fn(() => chainApi);
+
+    return { chainFn, chainApi };
+};
 
 describe('AIActions', () => {
     let mockProvider: AIProvider;
-    let mockEditor: EditorLike;
+    let mockEditor: Editor;
     let user: AIUser;
+    let chainFn: ReturnType<typeof createChain>['chainFn'];
+    let chainApi: ReturnType<typeof createChain>['chainApi'];
 
     beforeEach(() => {
         mockProvider = {
@@ -40,8 +80,13 @@ describe('AIActions', () => {
                 disableTrackChanges: vi.fn(),
                 insertComment: vi.fn(),
                 insertContentAt: vi.fn()
-            }
-        };
+            },
+            chain: vi.fn(),
+        } as any;
+        const chain = createChain(mockEditor.commands);
+        chainFn = chain.chainFn;
+        chainApi = chain.chainApi;
+        mockEditor.chain = chainFn;
 
         user = {
             displayName: 'AI Bot',
@@ -140,8 +185,10 @@ describe('AIActions', () => {
             const result = await actions.highlight('highlight this');
 
             expect(result.success).toBe(true);
-            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 5, to: 17 });
-            expect(mockEditor.commands.setHighlight).toHaveBeenCalledWith('#6CA0DC');
+            expect(chainFn).toHaveBeenCalled();
+            expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from: 5, to: 17 });
+            expect(chainApi.setHighlight).toHaveBeenCalledWith('#6CA0DC');
+            expect(chainApi.run).toHaveBeenCalled();
         });
 
         it('should use custom color', async () => {
@@ -156,7 +203,7 @@ describe('AIActions', () => {
             const actions = new AIActions(mockProvider, mockEditor, user, mockEditor.state.doc.textContent, false);
             await actions.highlight('highlight', '#FF0000');
 
-            expect(mockEditor.commands.setHighlight).toHaveBeenCalledWith('#FF0000');
+            expect(chainApi.setHighlight).toHaveBeenCalledWith('#FF0000');
         });
 
         it('should return failure when no positions found', async () => {
@@ -198,7 +245,7 @@ describe('AIActions', () => {
         it('should validate input', async () => {
             const actions = new AIActions(mockProvider, mockEditor, user, mockEditor.state.doc.textContent, false);
             
-            await expect(actions.replace('')).rejects.toThrow('query cannot be empty');
+            await expect(actions.replace('')).rejects.toThrow('Query cannot be empty');
         });
     });
 
@@ -241,8 +288,9 @@ describe('AIActions', () => {
             const result = await actions.insertTrackedChange('suggest change');
 
             expect(result.success).toBe(true);
-            expect(mockEditor.commands.enableTrackChanges).toHaveBeenCalled();
-            expect(mockEditor.commands.disableTrackChanges).toHaveBeenCalled();
+            expect(chainFn).toHaveBeenCalled();
+            expect(chainApi.enableTrackChanges).toHaveBeenCalled();
+            expect(chainApi.disableTrackChanges).toHaveBeenCalled();
         });
     });
 
@@ -285,7 +333,7 @@ describe('AIActions', () => {
             const result = await actions.insertComment('add comment');
 
             expect(result.success).toBe(true);
-            expect(mockEditor.commands.insertComment).toHaveBeenCalledWith({
+            expect(chainApi.insertComment).toHaveBeenCalledWith({
                 commentText: 'comment content'
             });
         });
@@ -366,7 +414,7 @@ describe('AIActions', () => {
         it('should validate input', async () => {
             const actions = new AIActions(mockProvider, mockEditor, user, mockEditor.state.doc.textContent, false);
             
-            await expect(actions.insertContent('')).rejects.toThrow('query cannot be empty');
+            await expect(actions.insertContent('')).rejects.toThrow('Query cannot be empty');
         });
 
         it('should return failure when no editor', async () => {
@@ -430,4 +478,3 @@ describe('AIActions', () => {
         });
     });
 });
-

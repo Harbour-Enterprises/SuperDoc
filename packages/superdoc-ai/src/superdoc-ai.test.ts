@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { SuperDocAI } from './superdoc-ai';
-import type { AIProvider, EditorLike, SuperDocAIOptions, SuperDocLike } from './types';
+import type { AIProvider, SuperDocAIOptions, SuperDoc, Editor } from './types';
 
 describe('SuperDocAI', () => {
     let mockProvider: AIProvider;
-    let mockEditor: EditorLike;
-    let mockSuperdoc: SuperDocLike;
+    let mockEditor: Editor;
+    let mockSuperdoc: SuperDoc;
 
     beforeEach(() => {
         mockProvider = {
@@ -42,12 +42,13 @@ describe('SuperDocAI', () => {
                 disableTrackChanges: vi.fn(),
                 insertComment: vi.fn(),
                 insertContentAt: vi.fn()
-            }
-        };
+            },
+            setOptions: vi.fn(),
+        } as any;
 
         mockSuperdoc = {
             activeEditor: mockEditor
-        };
+        } as any;
     });
 
     describe('constructor', () => {
@@ -348,9 +349,9 @@ describe('SuperDocAI', () => {
         });
 
         it('should return empty string when no editor', async () => {
-            const noEditorSuperdoc: SuperDocLike = {
+            const noEditorSuperdoc: SuperDoc = {
                 activeEditor: null
-            };
+            } as any;
 
             const options: SuperDocAIOptions = {
                 user: { displayName: 'AI Bot' },

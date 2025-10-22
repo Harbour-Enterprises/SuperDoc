@@ -328,20 +328,8 @@ async function* readStreamResponse(
 
     if (!response.body) {
         const text = await safeReadText(response);
-        if (!text) {
-            return;
-        }
-
-        let payload: unknown = text;
-        try {
-            payload = JSON.parse(text);
-        } catch {
-            // ignore JSON parse failure and treat as plain text
-        }
-
-        const parsed = parseStreamChunk(payload) ?? (typeof payload === 'string' ? payload : fallbackParser(payload));
-        if (parsed) {
-            yield parsed;
+        if (text) {
+            yield* processEventSegments(text, parseStreamChunk, fallbackParser);
         }
         return;
     }
@@ -351,61 +339,56 @@ async function* readStreamResponse(
     let buffer = '';
 
     try {
-        for (;;) {
+        while (true) {
             const { done, value } = await reader.read();
-            if (done) {
-                break;
-            }
+            if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
-
             const events = buffer.split('\n\n');
             buffer = events.pop() ?? '';
 
             for (const event of events) {
-                for (const segment of extractEventSegments(event)) {
-                    if (segment === '[DONE]') {
-                        return;
-                    }
-
-                    let payload: unknown = segment;
-                    if (typeof segment === 'string') {
-                        try {
-                            payload = JSON.parse(segment);
-                        } catch {
-                            // Keep payload as string if JSON parsing fails
-                        }
-                    }
-
-                    const chunk = parseStreamChunk(payload) ?? (typeof payload === 'string' ? payload : fallbackParser(payload));
-                    if (chunk) {
-                        yield chunk;
-                    }
-                }
+                yield* processEventSegments(event, parseStreamChunk, fallbackParser);
             }
         }
 
         if (buffer.trim()) {
-            for (const segment of extractEventSegments(buffer)) {
-                if (segment === '[DONE]') {
-                    return;
-                }
-                let payload: unknown = segment;
-                if (typeof segment === 'string') {
-                    try {
-                        payload = JSON.parse(segment);
-                    } catch {
-                        // noop
-                    }
-                }
-                const chunk = parseStreamChunk(payload) ?? (typeof payload === 'string' ? payload : fallbackParser(payload));
-                if (chunk) {
-                    yield chunk;
-                }
-            }
+            yield* processEventSegments(buffer, parseStreamChunk, fallbackParser);
         }
     } finally {
         reader.releaseLock();
+    }
+}
+
+/**
+ * Processes SSE event segments and yields parsed text chunks.
+ *
+ * @param event - Raw SSE event string.
+ * @param parseStreamChunk - Provider-specific chunk parser.
+ * @param fallbackParser - Fallback parser for unparseable chunks.
+ * @returns Generator yielding parsed string chunks.
+ */
+function* processEventSegments(
+    event: string,
+    parseStreamChunk: (payload: unknown) => string | undefined,
+    fallbackParser: (payload: unknown) => string,
+): Generator<string, void, unknown> {
+    for (const segment of extractEventSegments(event)) {
+        if (segment === '[DONE]') {
+            return;
+        }
+
+        let payload: unknown = segment;
+        try {
+            payload = JSON.parse(segment);
+        } catch {
+            // Keep payload as string if JSON parsing fails
+        }
+
+        const chunk = parseStreamChunk(payload) ?? (typeof payload === 'string' ? payload : fallbackParser(payload));
+        if (chunk) {
+            yield chunk;
+        }
     }
 }
 
@@ -479,42 +462,31 @@ async function parseResponsePayload(response: Response, parser: (payload: unknow
  * @returns Extracted text content suitable for callers.
  */
 function defaultParseCompletion(payload: unknown): string {
-    if (typeof payload === 'string') {
-        return payload;
+    if (typeof payload === 'string') return payload;
+    if (!payload || typeof payload !== 'object') return '';
+
+    const obj = payload as Record<string, unknown>;
+
+    // Try OpenAI format: choices[0].message.content or choices[0].text
+    const choice = Array.isArray(obj.choices) ? obj.choices[0] : null;
+    if (choice && typeof choice === 'object') {
+        const message = (choice as Record<string, unknown>).message as Record<string, unknown> | undefined;
+        if (message?.content && typeof message.content === 'string') return message.content;
+        const text = (choice as Record<string, unknown>).text;
+        if (typeof text === 'string') return text;
     }
 
-    if (!payload || typeof payload !== 'object') {
-        return '';
+    // Try Anthropic format: content (string or array of text blocks)
+    const { content } = obj;
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+        return content
+            .filter(part => part && typeof part === 'object' && 'text' in part)
+            .map(part => String((part as { text?: unknown }).text ?? ''))
+            .join('');
     }
 
-    if ('choices' in payload && Array.isArray((payload as { choices?: unknown }).choices)) {
-        const [firstChoice] = (payload as { choices: Array<Record<string, unknown>> }).choices;
-        if (!firstChoice) {
-            return '';
-        }
-
-        const message = firstChoice.message as { content?: string };
-        if (message?.content) {
-            return message.content;
-        }
-
-        const text = firstChoice.text as string;
-        return text;
-    }
-
-    if ('content' in payload) {
-        const content = (payload as { content?: unknown }).content;
-        if (typeof content === 'string') {
-            return content;
-        }
-
-        if (Array.isArray(content)) {
-            return content
-                .map((part) => (typeof part === 'object' && part && 'text' in part ? String((part as { text?: unknown }).text ?? '') : ''))
-                .join('');
-        }
-    }
-
+    // Fallback
     return JSON.stringify(payload);
 }
 

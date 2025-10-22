@@ -1,9 +1,50 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { EditorAdapter } from './editor-adapter';
-import type { EditorLike, AIUser, FoundMatch } from './types';
+import type { Editor, FoundMatch } from './types';
+
+const createChain = (commands?: any) => {
+    const chainApi = {
+        setTextSelection: vi.fn((args) => {
+            commands?.setTextSelection?.(args);
+            return chainApi;
+        }),
+        setHighlight: vi.fn((color) => {
+            commands?.setHighlight?.(color);
+            return chainApi;
+        }),
+        enableTrackChanges: vi.fn(() => {
+            commands?.enableTrackChanges?.();
+            return chainApi;
+        }),
+        deleteSelection: vi.fn(() => {
+            commands?.deleteSelection?.();
+            return chainApi;
+        }),
+        insertContent: vi.fn((content) => {
+            commands?.insertContent?.(content);
+            return chainApi;
+        }),
+        disableTrackChanges: vi.fn(() => {
+            commands?.disableTrackChanges?.();
+            return chainApi;
+        }),
+        insertComment: vi.fn((payload) => {
+            commands?.insertComment?.(payload);
+            return chainApi;
+        }),
+        run: vi.fn(() => true),
+    };
+
+    const chainFn = vi.fn(() => chainApi);
+
+    return { chainFn, chainApi };
+};
 
 describe('EditorAdapter', () => {
-    let mockEditor: EditorLike;
+    let mockEditor: Editor;
+    let mockAdapter: EditorAdapter;
+    let chainApi: ReturnType<typeof createChain>['chainApi'];
+    let chainFn: ReturnType<typeof createChain>['chainFn'];
 
     beforeEach(() => {
         mockEditor = {
@@ -29,8 +70,15 @@ describe('EditorAdapter', () => {
                 disableTrackChanges: vi.fn(),
                 insertComment: vi.fn(),
                 insertContentAt: vi.fn()
-            }
-        };
+            },
+            setOptions: vi.fn(),
+            chain: vi.fn(),
+        } as any;
+        const chain = createChain(mockEditor.commands);
+        chainFn = chain.chainFn;
+        chainApi = chain.chainApi;
+        mockEditor.chain = chainFn;
+        mockAdapter = new EditorAdapter(mockEditor);
     });
 
     describe('findResults', () => {
@@ -44,8 +92,7 @@ describe('EditorAdapter', () => {
                 { from: 10, to: 16 }
             ]);
 
-            const adapter = new EditorAdapter(mockEditor);
-            const results = adapter.findResults(matches);
+            const results = mockAdapter.findResults(matches);
 
             expect(results).toHaveLength(1);
             expect(results[0].positions).toHaveLength(2);
@@ -63,18 +110,16 @@ describe('EditorAdapter', () => {
                 .mockReturnValueOnce([{ from: 0, to: 5 }])
                 .mockReturnValueOnce([]);
 
-            const adapter = new EditorAdapter(mockEditor);
-            const results = adapter.findResults(matches);
+            const results = mockAdapter.findResults(matches);
 
             expect(results).toHaveLength(1);
             expect(results[0].originalText).toBe('found');
         });
 
         it('should handle empty input', () => {
-            const adapter = new EditorAdapter(mockEditor);
-            expect(adapter.findResults([])).toEqual([]);
-            expect(adapter.findResults(null as any)).toEqual([]);
-            expect(adapter.findResults(undefined as any)).toEqual([]);
+            expect(mockAdapter.findResults([])).toEqual([]);
+            expect(mockAdapter.findResults(null as any)).toEqual([]);
+            expect(mockAdapter.findResults(undefined as any)).toEqual([]);
         });
 
         it('should filter invalid position objects', () => {
@@ -89,8 +134,7 @@ describe('EditorAdapter', () => {
                 { notFrom: 0, notTo: 5 }
             ]);
 
-            const adapter = new EditorAdapter(mockEditor);
-            const results = adapter.findResults(matches);
+            const results = mockAdapter.findResults(matches);
 
             expect(results[0].positions).toHaveLength(1);
             expect(results[0].positions![0]).toEqual({ from: 0, to: 4 });
@@ -101,10 +145,7 @@ describe('EditorAdapter', () => {
                 { originalText: 'test', suggestedText: 'replacement' }
             ];
 
-            mockEditor.commands = {} as any;
-
-            const adapter = new EditorAdapter(mockEditor);
-            const results = adapter.findResults(matches);
+            const results = mockAdapter.findResults(matches);
 
             expect(results).toEqual([]);
         });
@@ -112,19 +153,20 @@ describe('EditorAdapter', () => {
 
     describe('createHighlight', () => {
         it('should create highlight with default color', () => {
-            const adapter = new EditorAdapter(mockEditor);
-            adapter.createHighlight(0, 10);
+            mockAdapter.createHighlight(0, 10);
 
-            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 10 });
-            expect(mockEditor.commands.setHighlight).toHaveBeenCalledWith('#6CA0DC');
+            expect(chainFn).toHaveBeenCalledTimes(1);
+            expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 10 });
+            expect(chainApi.setHighlight).toHaveBeenCalledWith('#6CA0DC');
+            expect(chainApi.run).toHaveBeenCalled();
         });
 
         it('should create highlight with custom color', () => {
-            const adapter = new EditorAdapter(mockEditor);
-            adapter.createHighlight(5, 15, '#FF0000');
+            mockAdapter.createHighlight(5, 15, '#FF0000');
 
-            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 5, to: 15 });
-            expect(mockEditor.commands.setHighlight).toHaveBeenCalledWith('#FF0000');
+            expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from: 5, to: 15 });
+            expect(chainApi.setHighlight).toHaveBeenCalledWith('#FF0000');
+            expect(chainApi.run).toHaveBeenCalled();
         });
     });
 
@@ -137,8 +179,7 @@ describe('EditorAdapter', () => {
 
             mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue(marks);
 
-            const adapter = new EditorAdapter(mockEditor);
-            await adapter.replaceText(0, 5, 'hello');
+            await mockAdapter.replaceText(0, 5, 'hello');
 
             expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 5 });
             expect(mockEditor.commands.deleteSelection).toHaveBeenCalled();
@@ -155,8 +196,7 @@ describe('EditorAdapter', () => {
         it('should replace text without marks when none exist', async () => {
             mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue([]);
 
-            const adapter = new EditorAdapter(mockEditor);
-            await adapter.replaceText(0, 5, 'hello');
+            await mockAdapter.replaceText(0, 5, 'hello');
 
             expect(mockEditor.commands.insertContent).toHaveBeenCalledWith('hello');
         });
@@ -164,22 +204,16 @@ describe('EditorAdapter', () => {
 
     describe('createTrackedChange', () => {
         it('should create tracked change with author', async () => {
-            const author: AIUser = {
-                displayName: 'AI Bot',
-                profileUrl: 'https://example.com/avatar.png',
-                userId: 'bot-123'
-            };
 
             mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue([]);
 
-            const adapter = new EditorAdapter(mockEditor);
-            const changeId = await adapter.createTrackedChange(0, 5, 'old', 'new', author);
+            const changeId = await mockAdapter.createTrackedChange(0, 5,  'new');
 
             expect(changeId).toMatch(/^tracked-change-/);
-            expect(mockEditor.options.user.name).toBe('AI Bot');
-            expect(mockEditor.options.user.image).toBe('https://example.com/avatar.png');
-            expect(mockEditor.commands.enableTrackChanges).toHaveBeenCalled();
-            expect(mockEditor.commands.disableTrackChanges).toHaveBeenCalled();
+            expect(chainFn).toHaveBeenCalled();
+            expect(chainApi.enableTrackChanges).toHaveBeenCalled();
+            expect(chainApi.disableTrackChanges).toHaveBeenCalled();
+            expect(chainApi.run).toHaveBeenCalled();
         });
 
         it('should preserve marks in tracked changes', async () => {
@@ -189,12 +223,7 @@ describe('EditorAdapter', () => {
 
             mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue(marks);
 
-            const author: AIUser = {
-                displayName: 'AI Bot'
-            };
-
-            const adapter = new EditorAdapter(mockEditor);
-            await adapter.createTrackedChange(0, 5, 'old', 'new', author);
+            await mockAdapter.createTrackedChange(0, 5, 'new');
 
             expect(mockEditor.commands.insertContent).toHaveBeenCalledWith({
                 type: 'text',
@@ -203,32 +232,19 @@ describe('EditorAdapter', () => {
             });
         });
 
-        it('should handle author as string', async () => {
-            mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue([]);
-
-            const adapter = new EditorAdapter(mockEditor);
-            await adapter.createTrackedChange(0, 5, 'old', 'new', 'Simple Name' as any);
-
-            expect(mockEditor.options.user.name).toBe('Simple Name');
-            expect(mockEditor.options.user.image).toBe('');
-        });
     });
 
     describe('createComment', () => {
         it('should create comment with text', async () => {
-            const author: AIUser = {
-                displayName: 'Reviewer'
-            };
-
-            const adapter = new EditorAdapter(mockEditor);
-            const commentId = await adapter.createComment(0, 5, 'Please revise', author);
+            const commentId = await mockAdapter.createComment(0, 5, 'Please revise');
 
             expect(commentId).toMatch(/^comment-/);
-            expect(mockEditor.commands.enableTrackChanges).toHaveBeenCalled();
-            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 5 });
-            expect(mockEditor.commands.insertComment).toHaveBeenCalledWith({
+            expect(chainApi.enableTrackChanges).toHaveBeenCalled();
+            expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 5 });
+            expect(chainApi.insertComment).toHaveBeenCalledWith({
                 commentText: 'Please revise'
             });
+            expect(chainApi.run).toHaveBeenCalled();
         });
     });
 
@@ -240,8 +256,7 @@ describe('EditorAdapter', () => {
 
             mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue(marks);
 
-            const adapter = new EditorAdapter(mockEditor);
-            await adapter.insertText('New content');
+            await mockAdapter.insertText('New content');
 
             const expectedPos = mockEditor.state.doc.content.size;
             const expectedFrom = expectedPos - 50;
@@ -264,8 +279,7 @@ describe('EditorAdapter', () => {
         it('should handle empty marks when inserting', async () => {
             mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue([]);
 
-            const adapter = new EditorAdapter(mockEditor);
-            await adapter.insertText('Plain text');
+            await mockAdapter.insertText('Plain text');
 
             expect(mockEditor.commands.insertContentAt).toHaveBeenCalledWith(
                 expect.any(Number),
@@ -278,4 +292,3 @@ describe('EditorAdapter', () => {
         });
     });
 });
-

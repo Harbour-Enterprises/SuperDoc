@@ -1,5 +1,5 @@
 {
-  "name": "@harbour-enterprises/ai",
+  "name": "@harbour-enterprises/superdoc-ai",
   "version": "0.1.0",
   "description": "AI integration package for SuperDoc",
   "main": "./src/index.js",
@@ -22,7 +22,11 @@
   ],
   "author": "Harbour Enterprises",
   "license": "AGPL-3.0",
+  "peerDependencies": {
+    "superdoc": "*"
+  },
   "devDependencies": {
+    "superdoc": "*",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0",
     "eslint": "^8.0.0",

@@ -1,12 +1,13 @@
 import type {
     CompletionOptions,
-    EditorLike, Result,
+    Editor,
+    Result,
     StreamOptions,
     SuperDocAICallbacks,
     SuperDocAIConfig,
     SuperDocAIOptions,
     SuperDocInstance,
-    SuperDocLike,
+    SuperDoc,
 } from './types';
 import {AIActions} from './ai-actions';
 import {createAIProvider, isAIProvider} from './providers';
@@ -114,6 +115,14 @@ export class SuperDocAI<TSuperdoc = SuperDocInstance> {
         const context = this.getDocumentContext();
         
         const editor = this.getEditor();
+
+        editor?.setOptions({
+            user: {
+                id: this.config.user.userId,
+                name: this.config.user.displayName,
+                image: this.config.user.profileUrl,
+            },
+        });
 
         this.actions = new AIActions(this.config.provider, editor, this.config.user, context, this.config.enableLogging);
 
@@ -308,8 +317,8 @@ export class SuperDocAI<TSuperdoc = SuperDocInstance> {
      * Gets the active editor from the SuperDoc instance.
      * @returns Editor instance or null
      */
-    private getEditor(): EditorLike | null {
-        const superdoc = this.superdoc as unknown as SuperDocLike | undefined;
+    private getEditor(): Editor | null {
+        const superdoc = this.superdoc as unknown as SuperDoc | undefined;
         return superdoc?.activeEditor ?? null;
     }
 }

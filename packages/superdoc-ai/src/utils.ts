@@ -3,10 +3,14 @@
  */
 import {FoundMatch, type Result} from "./types";
 
-export function validateInput(input: string, name: string): void {
-    if (!input?.trim()) {
-        throw new Error(`${name} cannot be empty`);
-    }
+/**
+ * Validates input string is not empty or whitespace-only
+ * @param input - String to validate
+ * @param name - Name of the input for error messages (used by caller)
+ * @returns true if valid, false if invalid
+ */
+export function validateInput(input: string, name: string): boolean {
+    return !!(input?.trim());
 }
 
 /**
@@ -77,36 +81,4 @@ export function removeMarkdownCodeBlocks(text: string): string {
  */
 export function generateId(prefix: string): string {
     return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-}
-
-
-/**
- * Normalizes find and replace entries from AI response
- */
-export function normalizeReplacements(response: Result): FoundMatch[] {
-    const entries: FoundMatch[] = [];
-    const seen = new Set<string>();
-
-    const addEntry = (entry: unknown) => {
-        if (!entry) return;
-        let originalText: string | undefined;
-        let suggestedText: string | undefined;
-        if (Array.isArray(entry) && entry.length >= 2) {
-            originalText = String(entry[0]).trim();
-            suggestedText = String(entry[1]).trim();
-        }
-        else if (typeof entry === 'object') {
-            const obj = entry as Record<string, unknown>;
-            originalText = String(obj.originalText ?? obj.original_text ?? obj.text ?? obj.original ?? '').trim();
-            suggestedText = String(obj.suggestedText ?? obj.suggested_text ?? obj.replacement ?? obj.suggested ?? '').trim();
-        }
-        if (!originalText || !suggestedText) return;
-        const key = `${originalText}→${suggestedText}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        entries.push({ originalText, suggestedText });
-    };
-    const arrays = [response.results].filter(Array.isArray);
-    arrays.forEach(arr => arr.forEach(addEntry));
-    return entries;
 }

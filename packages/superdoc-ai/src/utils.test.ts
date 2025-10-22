@@ -3,28 +3,27 @@ import {
     validateInput,
     parseJSON,
     removeMarkdownCodeBlocks,
-    generateId,
-    normalizeReplacements
+    generateId
 } from './utils';
 import type { Result } from './types';
 
 describe('utils', () => {
     describe('validateInput', () => {
-        it('should not throw for valid input', () => {
-            expect(() => validateInput('valid input', 'Test')).not.toThrow();
+        it('should return true for valid input', () => {
+            expect(validateInput('valid input', 'Test')).toBe(true);
         });
 
-        it('should throw for empty string', () => {
-            expect(() => validateInput('', 'Test')).toThrow('Test cannot be empty');
+        it('should return false for empty string', () => {
+            expect(validateInput('', 'Test')).toBe(false);
         });
 
-        it('should throw for whitespace-only string', () => {
-            expect(() => validateInput('   ', 'Query')).toThrow('Query cannot be empty');
+        it('should return false for whitespace-only string', () => {
+            expect(validateInput('   ', 'Query')).toBe(false);
         });
 
-        it('should throw for null/undefined', () => {
-            expect(() => validateInput(null as any, 'Input')).toThrow('Input cannot be empty');
-            expect(() => validateInput(undefined as any, 'Input')).toThrow('Input cannot be empty');
+        it('should return false for null/undefined', () => {
+            expect(validateInput(null as any, 'Input')).toBe(false);
+            expect(validateInput(undefined as any, 'Input')).toBe(false);
         });
     });
 
@@ -130,93 +129,6 @@ describe('utils', () => {
                 const id = generateId(prefix);
                 expect(id).toMatch(new RegExp(`^${prefix}-`));
             });
-        });
-    });
-
-    describe('normalizeReplacements', () => {
-        it('should normalize array format replacements', () => {
-            const response: Result = {
-                success: true,
-                results: [
-                    { originalText: 'hello', suggestedText: 'hi' }
-                ]
-            };
-            const normalized = normalizeReplacements(response);
-            expect(normalized).toEqual([
-                { originalText: 'hello', suggestedText: 'hi' }
-            ]);
-        });
-
-        it('should handle object format with various property names', () => {
-            const response = {
-                success: true,
-                results: [
-                    { originalText: 'old1', suggestedText: 'new1' },
-                    { original_text: 'old2', suggested_text: 'new2' },
-                    { text: 'old3', replacement: 'new3' },
-                    { original: 'old4', suggested: 'new4' }
-                ]
-            } as Result;
-            const normalized = normalizeReplacements(response);
-            expect(normalized).toHaveLength(4);
-            expect(normalized.map(n => n.originalText)).toContain('old1');
-            expect(normalized.map(n => n.suggestedText)).toContain('new1');
-        });
-
-        it('should trim whitespace from text', () => {
-            const response: Result = {
-                success: true,
-                results: [
-                    { originalText: '  hello  ', suggestedText: '  world  ' }
-                ]
-            };
-            const normalized = normalizeReplacements(response);
-            expect(normalized[0].originalText).toBe('hello');
-            expect(normalized[0].suggestedText).toBe('world');
-        });
-
-        it('should remove duplicates', () => {
-            const response: Result = {
-                success: true,
-                results: [
-                    { originalText: 'hello', suggestedText: 'hi' },
-                    { originalText: 'hello', suggestedText: 'hi' }
-                ]
-            };
-            const normalized = normalizeReplacements(response);
-            expect(normalized).toHaveLength(1);
-        });
-
-        it('should ignore entries without both original and suggested text', () => {
-            const response: Result = {
-                success: true,
-                results: [
-                    { originalText: 'hello', suggestedText: 'hi' },
-                    { originalText: 'incomplete', suggestedText: '' },
-                    { originalText: '', suggestedText: 'also incomplete' }
-                ]
-            };
-            const normalized = normalizeReplacements(response);
-            expect(normalized).toHaveLength(1);
-            expect(normalized[0].originalText).toBe('hello');
-        });
-
-        it('should handle empty results', () => {
-            const response: Result = {
-                success: true,
-                results: []
-            };
-            const normalized = normalizeReplacements(response);
-            expect(normalized).toEqual([]);
-        });
-
-        it('should handle null/undefined entries', () => {
-            const response: Result = {
-                success: true,
-                results: [null as any, undefined as any, { originalText: 'valid', suggestedText: 'text' }]
-            };
-            const normalized = normalizeReplacements(response);
-            expect(normalized).toHaveLength(1);
         });
     });
 });

@@ -1,6 +1,5 @@
 import type {
-    AIUser,
-    EditorLike,
+    Editor,
     FoundMatch,
 } from './types';
 import {generateId} from "./utils";
@@ -10,7 +9,7 @@ import {generateId} from "./utils";
  * Encapsulates all editor-specific API calls
  */
 export class EditorAdapter {
-    constructor(private editor: EditorLike) {}
+    constructor(private editor: Editor) {}
 
     // Search for string occurrences and resolve document positions
     findResults(results: FoundMatch[]): FoundMatch[] {
@@ -44,8 +43,7 @@ export class EditorAdapter {
 
     // Highlight operations
     createHighlight(from: number, to: number, inlineColor: string = "#6CA0DC"): void {
-        this.editor.commands.setTextSelection({ from, to })
-        this.editor.commands.setHighlight(inlineColor);
+        this.editor.chain().setTextSelection({ from, to }).setHighlight(inlineColor).run();
     }
 
     // Replace operations
@@ -72,31 +70,22 @@ export class EditorAdapter {
         from: number,
         to: number,
         suggestedText: string,
-        author: AIUser,
     ): Promise<string> {
         const changeId = generateId('tracked-change');
-        this.editor.options.user = {
-            name: author.displayName || author,
-            image: author.profileUrl || '',
-        };
-
-        this.editor.commands.setTextSelection({ from, to })
+        this.editor.chain().enableTrackChanges().setTextSelection({ from, to }).run();
         const marks = this.editor.commands.getSelectionMarks();
-        this.editor.commands.enableTrackChanges();
-        this.editor.commands.deleteSelection();
         if (marks.length > 0) {
-            this.editor.commands.insertContent({
+            this.editor.chain().deleteSelection().insertContent({
                 type: 'text',
                 text: suggestedText,
                 marks: marks.map((mark: any) => ({
                     type: mark.type.name,
                     attrs: mark.attrs,
                 })),
-            });
+            }).run();
         } else {
-            this.editor.commands.insertContent(suggestedText);
+            this.editor.chain().deleteSelection().insertContent(suggestedText).disableTrackChanges().run();
         }
-        this.editor.commands.disableTrackChanges();
         return changeId;
     }
 
@@ -105,14 +94,11 @@ export class EditorAdapter {
         from: number,
         to: number,
         text: string,
-        author: AIUser,
     ): Promise<string> {
         const commentId = generateId('comment');
-        this.editor.commands.enableTrackChanges();
-        this.editor.commands.setTextSelection({ from, to })
-        this.editor.commands.insertComment({
+        this.editor.chain().enableTrackChanges().setTextSelection({ from, to }).insertComment({
             commentText: text,
-        });
+        }).run();
 
         return commentId;
     }

@@ -1,3 +1,8 @@
+import { SuperDoc, Editor as EditorClass } from 'superdoc';
+
+export type Editor = InstanceType<typeof EditorClass>;
+export type SuperDocInstance = typeof SuperDoc | SuperDoc;
+
 /**
  * Represents a position range in the document
  */
@@ -95,28 +100,6 @@ export type SuperDocAIConfig = {
 }
 
 /**
- * Minimal editor interface required by SuperDocAI
- */
-export type EditorLike = {
-    state: { doc: { textContent: string; content: { size: number } } };
-    exportDocx: (options?: Record<string, unknown>) => Promise<unknown>;
-    options: { documentId?: string | number; user: any };
-    commands: any;
-}
-
-/**
- * Minimal SuperDoc instance interface
- */
-export type SuperDocLike = {
-    activeEditor?: EditorLike | null | undefined;
-}
-
-/**
- * Generic SuperDoc instance type
- */
-export type SuperDocInstance = unknown;
-
-/**
  * Lifecycle callbacks for SuperDocAI events
  */
 export type SuperDocAICallbacks<TSuperdoc = SuperDocInstance> = {
@@ -137,3 +120,6 @@ export type SuperDocAICallbacks<TSuperdoc = SuperDocInstance> = {
  */
 export type SuperDocAIOptions<TSuperdoc = SuperDocInstance> =
     SuperDocAIConfig & SuperDocAICallbacks<TSuperdoc>;
+
+// Re-export SuperDoc class
+export { SuperDoc };
