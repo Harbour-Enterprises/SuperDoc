@@ -1,0 +1,9 @@
+rules:
+  empty-heading: false # Disable this rule
+# exclude:
+#   - 'tests/**/*.html' # Skip files
+# global-components:
+#   AxeButton: button # Lint <AxeButton> as though it was a <button>
+# global-libraries:
+#   - 'react-native' # Run React Native rules
+#   - '@mui/material' # Enable linting MaterialUI components

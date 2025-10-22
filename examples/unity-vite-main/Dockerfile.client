@@ -1,0 +1,31 @@
+# This docker file ran successfuly with unity being consumed from a local folder as a .tar file
+# 
+# Stage 1: Build
+FROM node:16.13.2-slim as base
+ENV HOST=0.0.0.0 PORT=3000
+EXPOSE ${PORT}
+
+FROM base as build
+
+COPY . /app
+WORKDIR /app
+
+# Install dependencies
+RUN npm ci
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+
+# Build the application
+RUN npm run build
+
+##### Copy just the files we need into the image
+FROM base as deploy
+
+WORKDIR /app
+RUN mkdir dist
+COPY --from=build ./app/dist ./dist
+
+RUN npm install -g serve
+CMD [ "serve", "-s", "dist" ]

@@ -1,0 +1,15 @@
+{
+  "trailingComma": "all",
+  "semi": true,
+  "singleQuote": true,
+  "arrowParens": "always",
+  "plugins": ["prettier-plugin-tailwindcss"],
+  "overrides": [
+    {
+      "files": ["*.jsonc", ".eslint.config.mjs", "tsconfig*.json"],
+      "options": {
+        "trailingComma": "none"
+      }
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+// .dockerignore
+node_modules
+build
+dist
+.git
+.github

@@ -1,0 +1,31 @@
+on:
+  push:
+    branches: [master, main]
+
+# This action will relay Unity component usage analytics to the Unity team. 
+# The analytics will include the Unity version, the number of each component used, and the properties utilized.
+# We greatly appreciate your participation, as it helps us understand how the component library is used.
+name: Unity Analytics
+jobs:
+  analyze-and-track:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Send repo information to ZH
+        uses: zeroheight/action-design-system-adoption@v2
+        with:
+          command: 'monitor-repo'
+        env:
+          ZEROHEIGHT_CLIENT_ID: '${{ secrets.ZEROHEIGHT_CLIENT_ID }}'
+          ZEROHEIGHT_ACCESS_TOKEN: '${{ secrets.ZEROHEIGHT_ACCESS_TOKEN }}'
+
+      - name: Track package version
+        uses: zeroheight/action-design-system-adoption@v2
+        with:
+          command: 'analyze'
+          arguments: '--ignore "**/*.spec.*" --ignore "**/*.test.*"'
+        env:
+          ZEROHEIGHT_CLIENT_ID: '${{ secrets.ZEROHEIGHT_CLIENT_ID }}'
+          ZEROHEIGHT_ACCESS_TOKEN: '${{ secrets.ZEROHEIGHT_ACCESS_TOKEN }}'

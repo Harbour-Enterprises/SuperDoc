@@ -1,0 +1,50 @@
+// Inspired by the TotalTypeScript TSConfig Cheat Sheet https://www.totaltypescript.com/tsconfig-cheat-sheet
+{
+  "compilerOptions": {
+    /* Base Options: Here are the base options I recommend for all projects. */
+    "esModuleInterop": true, // Helps mend a few of the fences between CommonJS and ES Modules.
+    "skipLibCheck": true, // Skips checking the types of .d.ts files. This is important for performance, because otherwise all node_modules will be checked.
+    "target": "es2022", // The version of JavaScript you're targeting. I recommend es2022 over esnext for stability.
+    "allowJs": true, // Allows you to import .js files. Always useful.
+    "resolveJsonModule": true, // Allows you to import .json files. Always useful.
+    "moduleDetection": "force", // This option forces TypeScript to consider all files as modules. This helps to avoid 'cannot redeclare block-scoped variable' errors.
+    "isolatedModules": true, // This option prevents a few TS features which are unsafe when treating modules as isolated files.
+    "verbatimModuleSyntax": true, // This option forces you to use import type and export type, leading to more predictable behavior and fewer unnecessary imports. With module: NodeNext, it also enforces you're using the correct import syntax for ESM or CJS.
+
+    /* Strictness: Here are the strictness options I recommend for all projects. */
+    "strict": true, // Enables all strict type checking options. Indispensable.
+    "noUncheckedIndexedAccess": true, // Prevents you from accessing an array or object without first checking if it's defined. This is a great way to prevent runtime errors, and should really be included in strict.
+    "noImplicitOverride": true, // Makes the override keyword actually useful in classes.
+    // Many folks recommended the strictness options in tsconfig/bases, a wonderful repo which catalogs TSConfig options. These options include lots of rules which I consider too 'noisy', like noImplicitReturns, noUnusedLocals, noUnusedParameters, and noFallthroughCasesInSwitch. I recommend you add these rules to your tsconfig.json only if you want them.
+    "noFallthroughCasesInSwitch": true,
+
+    /* If transpiling with TypeScript: If you're transpiling your code (creating JavaScript files) with tsc, you'll want these options. */
+    // "module": "NodeNext", // Tells TypeScript what module syntax to use. NodeNext is the best option for Node. moduleResolution: NodeNext is implied from this option.
+    // "outDir": "dist",
+    // "sourceMap": true,
+
+    /* AND if you're building for a library: */
+    // "declaration": true,
+
+    /* AND if you're building for a library in a monorepo: */
+    // "composite": true,
+    // "declarationMap": true,
+
+    /* If NOT transpiling with TypeScript: If you're not transpiling your code with tsc, i.e. using TypeScript as more of a linter, you'll want these options. */
+    "module": "Preserve", // Preserve is the best option because it most closely mimics how bundlers treat modules. moduleResolution: Bundler is implied from this option.
+
+    "noEmit": true, // Tells TypeScript not to emit any files. This is important when you're using a bundler so you don't emit useless .js files.
+
+    /* If your code runs in the DOM: */
+    "lib": ["es2022", "dom", "dom.iterable"], // Tells TypeScript what built-in types to include. es2022 is the best option for stability. dom and dom.iterable give you types for window, document etc.
+    /* If your code doesn't run in the DOM: */
+    // "lib": ["es2022"]
+
+    /* Others not mentioned in Total TypeScript Cheat Sheet */
+    "baseUrl": "./src",
+    "jsx": "react-jsx",
+    "outDir": "dist-test",
+    "types": ["./src/types/vite-env"]
+  },
+  "include": ["src"]
+}

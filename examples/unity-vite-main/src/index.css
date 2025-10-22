@@ -1,0 +1,39 @@
+@layer theme, utilities;
+@import '@abbvie-unity/react/esm/unity-tailwind.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+
+:root {
+  font-family: var(--font-primary);
+  color: var(--color-brand-800);
+  background-color: var(--color-white);
+  font-size: var(--text-body);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  margin: 0 auto;
+  height: 100%;
+  overflow: auto;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5 {
+  text-wrap-style: balance;
+}
+
+p {
+  text-wrap-style: pretty;
+}

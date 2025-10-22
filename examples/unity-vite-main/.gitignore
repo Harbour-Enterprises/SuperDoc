@@ -1,0 +1,18 @@
+node_modules
+dist
+build
+*.local
+.env
+
+.DS_Store
+
+TODOs.txt
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional eslint cache
+.eslintcache
+
+# Output of 'npm pack'
+*.tgz
