@@ -40,12 +40,29 @@ export function parseJSON<T>(response: string, fallback: T, enableLogging: boole
  * @returns Cleaned text without markdown syntax
  */
 export function removeMarkdownCodeBlocks(text: string): string {
-    const codeBlockPattern = /^```(?:json|javascript|typescript|js|ts)?\s*\n?([\s\S]*?)\n?```$/;
-
-    const match = text.trim().match(codeBlockPattern);
-
-    if (match && match[1]) {
-        return match[1].trim();
+    const trimmed = text.trim();
+    
+    // Check for code block markers without regex for better performance and security
+    if (trimmed.startsWith('```') && trimmed.endsWith('```')) {
+        // Find the end of the first line (language specifier)
+        let startIndex = 3; // Length of '```'
+        const firstNewline = trimmed.indexOf('\n', startIndex);
+        
+        if (firstNewline !== -1) {
+            startIndex = firstNewline + 1;
+        } else {
+            // No newline after opening ```, look for language specifier
+            const languageMatch = trimmed.substring(3).match(/^(?:json|javascript|typescript|js|ts)/);
+            if (languageMatch) {
+                startIndex = 3 + languageMatch[0].length;
+            }
+        }
+        
+        // Remove closing ```
+        const endIndex = trimmed.lastIndexOf('```');
+        if (endIndex > startIndex) {
+            return trimmed.substring(startIndex, endIndex).trim();
+        }
     }
 
     return text;

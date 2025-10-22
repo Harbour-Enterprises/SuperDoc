@@ -750,11 +750,13 @@ function cleanUndefined<T extends Record<string, unknown>>(object: T): Record<st
  * @returns Normalized URL string.
  */
 function joinUrl(base: string, path: string): string {
-    if (base.endsWith('/')) {
-        return `${base.replace(/\/+$/u, '')}${path.startsWith('/') ? path : `/${path}`}`;
+    // Remove trailing slashes without regex to avoid ReDoS
+    let normalizedBase = base;
+    while (normalizedBase.endsWith('/')) {
+        normalizedBase = normalizedBase.slice(0, -1);
     }
 
-    return `${base}${path.startsWith('/') ? path : `/${path}`}`;
+    return `${normalizedBase}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 export type { FetchLike, ProviderRequestContext };

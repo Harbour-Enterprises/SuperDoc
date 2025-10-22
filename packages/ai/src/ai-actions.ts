@@ -385,7 +385,7 @@ export class AIActions {
 
     private buildFindPrompt(query: string, findAll: boolean): string {
         if (findAll) {
-            return `Find the EXACT text of ALL occurrences of ${query}
+            return `apply this query: ${query} if find and replace query then Find the EXACT text of ALL occurrences of ${query}
             Document context:
             ${this.documentContext}
             
@@ -399,7 +399,7 @@ export class AIActions {
             }`;
         }
 
-        return `Find the EXACT text FIRST occurrence ONLY of ${query}
+        return `apply this query: ${query} if find and replace query then Find the EXACT text FIRST occurrence ONLY
             Document context:
             ${this.documentContext}
             
@@ -415,8 +415,8 @@ export class AIActions {
 
     private buildReplacePrompt(query: string, replaceAll: boolean): string {
         const finalQuery = replaceAll
-            ? `Find and replace the exact text of ALL occurrences ${query}`
-            : `Find and replace the FIRST occurrence ONLY ${query}`;
+            ? `apply this query: ${query} if find and replace query then Find and replace the EXACT text of ALL occurrences`
+            : `apply this query: ${query} if find and replace query then Find and replace the EXACT FIRST occurrence ONLY ${query}`;
 
         return `${finalQuery}
         Document context:
