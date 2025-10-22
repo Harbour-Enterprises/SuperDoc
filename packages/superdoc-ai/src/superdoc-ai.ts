@@ -130,6 +130,34 @@ export class SuperDocAI<TSuperdoc = SuperDocInstance> {
     }
 
     /**
+     * Initializes the AI system and triggers onReady callback.
+     * @private
+     */
+    private async initialize(): Promise<void> {
+        try {
+            this.isProviderAvailable();
+            this.isReady = true;
+            this.callbacks.onReady?.({superdocAIBot: this});
+        } catch (error) {
+            this.handleError(error as Error);
+            throw error;
+        } finally {
+            this.initializationPromise = null;
+        }
+    }
+
+    /**
+     * Validates that a provider is configured.
+     * @private
+     * @throws Error if no provider is present
+     */
+    private isProviderAvailable(): void {
+        if (!this.config.provider) {
+            throw new Error('AI provider is required');
+        }
+    }
+
+    /**
      * Executes an action with full callback lifecycle support
      * @private
      */
@@ -149,33 +177,7 @@ export class SuperDocAI<TSuperdoc = SuperDocInstance> {
         }
     }
 
-    /**
-     * Initializes the AI system and triggers onReady callback.
-     * @private
-     */
-    private async initialize(): Promise<void> {
-        try {
-            this.ensureProviderPresent();
-            this.isReady = true;
-            this.callbacks.onReady?.({superdocAIBot: this});
-        } catch (error) {
-            this.handleError(error as Error);
-            throw error;
-        } finally {
-            this.initializationPromise = null;
-        }
-    }
 
-    /**
-     * Validates that a provider is configured.
-     * @private
-     * @throws Error if no provider is present
-     */
-    private ensureProviderPresent(): void {
-        if (!this.config.provider) {
-            throw new Error('AI provider is required');
-        }
-    }
 
     /**
      * Gets the default system prompt.
