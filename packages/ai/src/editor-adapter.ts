@@ -49,21 +49,21 @@ export class EditorAdapter {
     }
 
     // Replace operations
-    async replaceText(from: number, to: number, newText: string): Promise<void> {
+    async replaceText(from: number, to: number, suggestedText: string): Promise<void> {
         this.editor.commands.setTextSelection({ from, to })
         const marks = this.editor.commands.getSelectionMarks();
         this.editor.commands.deleteSelection();
         if (marks.length > 0) {
             this.editor.commands.insertContent({
                 type: 'text',
-                text: newText,
+                text: suggestedText,
                 marks: marks.map((mark: any) => ({
                     type: mark.type.name,
                     attrs: mark.attrs,
                 })),
             });
         } else {
-            this.editor.commands.insertContent(newText);
+            this.editor.commands.insertContent(suggestedText);
         }
     }
 
@@ -71,8 +71,7 @@ export class EditorAdapter {
     async createTrackedChange(
         from: number,
         to: number,
-        oldText: string,
-        newText: string,
+        suggestedText: string,
         author: AIUser,
     ): Promise<string> {
         const changeId = generateId('tracked-change');
@@ -88,14 +87,14 @@ export class EditorAdapter {
         if (marks.length > 0) {
             this.editor.commands.insertContent({
                 type: 'text',
-                text: newText,
+                text: suggestedText,
                 marks: marks.map((mark: any) => ({
                     type: mark.type.name,
                     attrs: mark.attrs,
                 })),
             });
         } else {
-            this.editor.commands.insertContent(newText);
+            this.editor.commands.insertContent(suggestedText);
         }
         this.editor.commands.disableTrackChanges();
         return changeId;
@@ -119,14 +118,14 @@ export class EditorAdapter {
     }
 
     // Insert operations
-    async insertText(newText: string): Promise<void> {
+    async insertText(suggestedText: string): Promise<void> {
         const pos: number = this.editor.state.doc.content.size;
         const from: number = pos-50;
         this.editor.commands.setTextSelection({ from, pos });
         const marks = this.editor.commands.getSelectionMarks();
         this.editor.commands.insertContentAt(this.editor.state.doc.content.size, {
             type: 'text',
-            text: newText,
+            text: suggestedText,
             marks: marks.map((mark: any) => ({
                 type: mark.type.name,
                 attrs: mark.attrs,

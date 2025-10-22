@@ -223,7 +223,6 @@ export class AIActions {
                 adapter.createTrackedChange(
                     position.from,
                     position.to,
-                    replacement.originalText || '',
                     replacement.suggestedText || '',
                     this.user
                 )
@@ -248,7 +247,6 @@ export class AIActions {
                 adapter.createTrackedChange(
                     position.from,
                     position.to,
-                    replacement.originalText || '',
                     replacement.suggestedText || '',
                     this.user
                 )
