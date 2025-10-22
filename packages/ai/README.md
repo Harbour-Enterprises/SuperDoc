@@ -2,8 +2,6 @@
 
 > AI integration package for SuperDoc - Add powerful AI capabilities to your document editor
 
-[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%203.0-blue.svg)](https://opensource.org/licenses/AGPL-3.0)
-
 ## Features
 
 - 🤖 **Multiple AI Providers**: Built-in support for OpenAI, Anthropic Claude, and custom HTTP endpoints
