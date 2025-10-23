@@ -11,8 +11,8 @@ import { useHighContrastMode } from '../composables/use-high-contrast-mode';
  *
  * @returns {Object} An object containing the vue app, the pinia reference, and the superdoc store
  */
-export const createSuperdocVueApp = () => {
-  const app = createApp(App);
+export const createSuperdocVueApp = (options = {}) => {
+  const app = createApp(App, options);
   const pinia = createPinia();
   app.use(pinia);
   app.directive('click-outside', vClickOutside);

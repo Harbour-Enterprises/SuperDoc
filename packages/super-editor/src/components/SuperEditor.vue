@@ -42,8 +42,15 @@ const props = defineProps({
     required: false,
     default: () => ({}),
   },
-});
 
+  onAddToChat: {
+    // <-- ADD THIS PROP (for AddToChat callbacks)
+    type: Function,
+    required: false,
+    default: null,
+  },
+});
+// console.log("SuperEditor.vue props.onAddToChat", props.onAddToChat);
 const editorReady = ref(false);
 const editor = shallowRef(null);
 const message = useMessage();
@@ -54,14 +61,14 @@ const autocomplete = useAutocomplete();
 
 // --- add-to-chat: selection-based floating button integration ---
 import { computed } from 'vue';
-const addToChat = useAddToChat();
+const addToChat = useAddToChat(props.onAddToChat);
 
-import { watch } from 'vue';
-watch(addToChat.selectedText, (val) => {
-  if (val) {
-    console.log('Highlighted text:', val);
-  }
-});
+// import { watch } from 'vue';
+// watch(addToChat.selectedText, (val) => {
+//   if (val) {
+//     console.log('Highlighted text:', val);
+//   }
+// });
 
 const addToChatButtonStyle = computed(() => ({
   position: 'fixed',

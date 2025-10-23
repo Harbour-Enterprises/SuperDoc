@@ -28,11 +28,20 @@ import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 
 import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
+
+const props = defineProps({
+  onAddToChat: {
+    type: Function,
+    default: null,
+  },
+});
+// console.log("SuperDoc.vue props.onAddToChat", props.onAddToChat);
 import { SuperEditor, AIWriter } from '@harbour-enterprises/super-editor';
 import HtmlViewer from './components/HtmlViewer/HtmlViewer.vue';
 import useComment from './components/CommentsLayer/use-comment';
 import AiLayer from './components/AiLayer/AiLayer.vue';
 import { useSelectedText } from './composables/use-selected-text';
+import { useAddToChat } from './composables/use-add-to-chat';
 import { useAi } from './composables/use-ai';
 import { useHighContrastMode } from './composables/use-high-contrast-mode';
 
@@ -88,6 +97,8 @@ const toolsMenuPosition = reactive({ top: null, right: '-25px', zIndex: 101 });
 // Create a ref to pass to the composable
 const activeEditorRef = computed(() => proxy.$superdoc.activeEditor);
 
+// Add-to-Chat API wired explicitly
+// const addToChatApi = useAddToChat(props.onAddToChat);
 // Use the composable to get the selected text
 const { selectedText } = useSelectedText(activeEditorRef);
 
@@ -646,6 +657,7 @@ watch(getFloatingComments, () => {
               :state="doc.state"
               :document-id="doc.id"
               :options="editorOptions(doc)"
+              :onAddToChat="props.onAddToChat"
               @pageMarginsChange="handleSuperEditorPageMarginsChange(doc, $event)"
             />
           </n-message-provider>

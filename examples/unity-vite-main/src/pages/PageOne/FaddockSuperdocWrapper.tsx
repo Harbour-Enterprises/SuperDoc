@@ -12,41 +12,38 @@ type Document = {
   data: unknown;
 };
 
+type FaddockSuperdocWrapperProps = {
+  documents?: Document[];
+  onAddToChat?: (selectedText: string) => void;
+  [key: string]: unknown;
+};
+
 export default function FaddockSuperdocWrapper({
   documents = [],
+  onAddToChat,
   ...rest
-}: {
-  documents?: Document[];
-  [key: string]: unknown;
-}) {
+}: FaddockSuperdocWrapperProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const superDocInstance = useRef<SuperDoc | null>(null);
 
+  // Mount the editor ONCE on mount
   useEffect(() => {
     if (!containerRef.current) return;
-
-    // Clean up previous instance on prop change or unmount
-    if (
-      superDocInstance.current &&
-      typeof superDocInstance.current.destroy === 'function'
-    ) {
-      superDocInstance.current.destroy();
-    }
 
     superDocInstance.current = new SuperDoc({
       selector: '#superdoc',
       toolbar: '#superdoc-toolbar',
       document: null,
-      // autocompleteApiUrl: 'http://localhost:58414/api/v1/autocomplete/',
       autocompleteApiUrl:
         'https://magellanbackend.atlas.ir-scc-fusion-dev.awscloud.abbvienet.com/api/v1/autocomplete',
       documentMode: 'editing',
       pagination: true,
       rulers: true,
-      ...rest, // allow other props through
+      onAddToChat,
+      ...rest,
     });
 
-    // Clean up on unmount
+        // Clean up on unmount ONLY
     return () => {
       if (
         superDocInstance.current &&
@@ -54,8 +51,11 @@ export default function FaddockSuperdocWrapper({
       ) {
         superDocInstance.current.destroy();
       }
+      superDocInstance.current = null;
     };
-  }, [documents, rest]);
+    // empty dependency array: mount once
+  }, []);
+
 
   return (
     <div

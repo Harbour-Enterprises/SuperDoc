@@ -256,6 +256,15 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   visibility: hidden;
 }
 /* Track changes - end */
+/* Custom selection highlight for super-editor */
+.ProseMirror ::selection {
+  background: #b4dfff;
+  color: #174ea6; /* pastel blue & readable blue text */
+}
+.ProseMirror ::-moz-selection {
+  background: #b4dfff;
+  color: #174ea6; /* pastel blue & readable blue text */
+}
 
 /* Collaboration cursors */
 .ProseMirror > .ProseMirror-yjs-cursor:first-child {

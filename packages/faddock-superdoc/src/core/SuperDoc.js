@@ -275,7 +275,9 @@ export class SuperDoc extends EventEmitter {
   }
 
   #initVueApp() {
-    const { app, pinia, superdocStore, commentsStore, highContrastModeStore } = createSuperdocVueApp();
+    const { app, pinia, superdocStore, commentsStore, highContrastModeStore } = createSuperdocVueApp({
+      onAddToChat: this.config.onAddToChat,
+    });
     this.app = app;
     this.pinia = pinia;
     this.app.config.globalProperties.$config = this.config;

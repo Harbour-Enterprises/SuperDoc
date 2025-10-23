@@ -22,7 +22,7 @@ export default function FaddockSuperdocWrapper({ documents = [], ...rest }) {
        selector: '#superdoc',
        toolbar: '#superdoc-toolbar',
        document: null,
-       autocompleteApiUrl: "https://magellanbackend.atlas.ir-scc-fusion-dev.awscloud.abbvienet.com/api/v1/autocomplete/",
+       autocompleteApiUrl: "http://localhost:58414/api/v1/autocomplete/",
        documentMode: 'editing',
        pagination: true,
        rulers: true,
