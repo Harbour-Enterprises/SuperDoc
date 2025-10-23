@@ -127,7 +127,7 @@ const encode = (params, encodedAttrs) => {
         columnWidths,
         activeRowSpans: activeRowSpans.slice(),
         rowIndex,
-        referencedStyles,
+        _referencedStyles: referencedStyles,
       },
     });
     if (result) {

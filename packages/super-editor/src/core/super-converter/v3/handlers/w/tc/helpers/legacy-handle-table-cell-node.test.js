@@ -113,7 +113,7 @@ describe('legacy-handle-table-cell-node', () => {
       columnIndex: 1,
       columnWidth: null,
       allColumnWidths: [90, 100, 110],
-      referencedStyles: {
+      _referencedStyles: {
         fontSize: '12pt',
         fonts: {
           ascii: 'Arial',
@@ -176,6 +176,7 @@ describe('legacy-handle-table-cell-node', () => {
       columnIndex: 0,
       columnWidth: null,
       allColumnWidths: [],
+      _referencedStyles: null,
     });
 
     expect(out.type).toBe('tableCell');
@@ -217,6 +218,7 @@ describe('legacy-handle-table-cell-node', () => {
       columnIndex: 0,
       columnWidth: null,
       allColumnWidths: [],
+      _referencedStyles: null,
     });
 
     expect(out.content).toHaveLength(1);
@@ -254,6 +256,7 @@ describe('legacy-handle-table-cell-node', () => {
       columnIndex: 0,
       columnWidth: null,
       allColumnWidths: [],
+      _referencedStyles: null,
     });
 
     expect(out.content).toHaveLength(1);
@@ -292,6 +295,7 @@ describe('legacy-handle-table-cell-node', () => {
       columnIndex: 0,
       columnWidth: null,
       allColumnWidths: [],
+      _referencedStyles: null,
     });
 
     expect(out.content).toHaveLength(1);
@@ -329,6 +333,7 @@ describe('legacy-handle-table-cell-node', () => {
       columnIndex: 0,
       columnWidth: null,
       allColumnWidths: [],
+      _referencedStyles: null,
     });
 
     expect(out.content).toHaveLength(2);
@@ -365,6 +370,7 @@ describe('legacy-handle-table-cell-node', () => {
       columnIndex: 0,
       columnWidth: null,
       allColumnWidths: [],
+      _referencedStyles: null,
     });
 
     expect(out.content).toHaveLength(1);

@@ -14,10 +14,11 @@ export function handleTableCellNode({
   columnIndex,
   columnWidth = null,
   allColumnWidths = [],
-  referencedStyles = { fontSize: null, fonts: {}, cellMargins: {} },
+  _referencedStyles,
 }) {
   const { nodeListHandler } = params;
   const attributes = {};
+  const referencedStyles = _referencedStyles ?? { fontSize: null, fonts: {}, cellMargins: {} };
 
   // Table Cell Properties
   const tcPr = node.elements.find((el) => el.name === 'w:tcPr');

@@ -25,7 +25,7 @@ function encode(params, encodedAttrs) {
     columnIndex,
     columnWidth,
     columnWidths: allColumnWidths,
-    referencedStyles,
+    _referencedStyles,
   } = params.extraParams;
 
   const schemaNode = handleTableCellNode({
@@ -37,7 +37,7 @@ function encode(params, encodedAttrs) {
     columnIndex,
     columnWidth,
     allColumnWidths,
-    referencedStyles,
+    _referencedStyles,
   });
 
   if (encodedAttrs && Object.keys(encodedAttrs).length) {
