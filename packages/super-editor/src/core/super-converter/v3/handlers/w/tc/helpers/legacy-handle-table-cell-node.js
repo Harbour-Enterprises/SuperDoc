@@ -1,5 +1,4 @@
 import { eighthPointsToPixels, twipsToPixels } from '@converter/helpers';
-import { getReferencedTableStyles } from '@converter/v2/importer/tableImporter';
 import { translator as tcPrTranslator } from '../../tcPr';
 
 /**
@@ -12,12 +11,12 @@ export function handleTableCellNode({
   table,
   row,
   rowBorders,
-  styleTag,
   columnIndex,
   columnWidth = null,
   allColumnWidths = [],
+  referencedStyles = { fontSize: null, fonts: {}, cellMargins: {} },
 }) {
-  const { docx, nodeListHandler } = params;
+  const { nodeListHandler } = params;
   const attributes = {};
 
   // Table Cell Properties
@@ -88,7 +87,6 @@ export function handleTableCellNode({
   if (verticalAlign) attributes['verticalAlign'] = verticalAlign;
 
   // Cell Margins
-  const referencedStyles = getReferencedTableStyles(styleTag, docx) || { fontSize: null, fonts: {}, cellMargins: {} };
   attributes.cellMargins = getTableCellMargins(tableCellProperties.cellMargins, referencedStyles);
 
   // Font size and family

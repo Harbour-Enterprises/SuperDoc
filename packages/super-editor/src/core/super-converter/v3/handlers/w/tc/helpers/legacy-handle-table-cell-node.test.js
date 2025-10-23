@@ -110,10 +110,15 @@ describe('legacy-handle-table-cell-node', () => {
       table,
       row: row1,
       rowBorders,
-      styleTag: { name: 'w:tblStyle', attributes: { 'w:val': 'TblGrid' } },
       columnIndex: 1,
       columnWidth: null,
       allColumnWidths: [90, 100, 110],
+      referencedStyles: {
+        fontSize: '12pt',
+        fonts: {
+          ascii: 'Arial',
+        },
+      },
     });
 
     expect(out.type).toBe('tableCell');

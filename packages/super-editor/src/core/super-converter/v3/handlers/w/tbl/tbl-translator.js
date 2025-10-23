@@ -96,7 +96,6 @@ const encode = (params, encodedAttrs) => {
   encodedAttrs['borders'] = borderData;
 
   // Process each row
-  const tblStyleTag = tblPr?.elements?.find((el) => el.name === 'w:tblStyle'); // used by the legacy table cell handler
   let columnWidths = Array.isArray(encodedAttrs['grid'])
     ? encodedAttrs['grid'].map((item) => twipsToPixels(item.col))
     : [];
@@ -125,10 +124,10 @@ const encode = (params, encodedAttrs) => {
         row,
         table: node,
         rowBorders: borderRowData,
-        styleTag: tblStyleTag,
         columnWidths,
         activeRowSpans: activeRowSpans.slice(),
         rowIndex,
+        referencedStyles,
       },
     });
     if (result) {
