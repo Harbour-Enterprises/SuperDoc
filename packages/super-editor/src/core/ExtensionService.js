@@ -246,7 +246,7 @@ export class ExtensionService {
 
         return [extension.name, nodeview];
       })
-      .filter(Boolean); // Remove null entries
+      .filter(Boolean);
 
     return Object.fromEntries(entries);
   }
