@@ -6,6 +6,7 @@ import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import { ref as vueRef } from 'vue';
 import { useAutocomplete, getAutocompleteEndpoint } from '@/composables/use-autocomplete.js';
+import { useAddToChat } from '@/composables/use-add-to-chat.js';
 import SlashMenu from './slash-menu/SlashMenu.vue';
 import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
@@ -50,6 +51,40 @@ const message = useMessage();
 // --- autocomplete ghost text feature integration ---
 const autocompleteEnabled = vueRef(true); // on by default
 const autocomplete = useAutocomplete();
+
+// --- add-to-chat: selection-based floating button integration ---
+import { computed } from 'vue';
+const addToChat = useAddToChat();
+
+import { watch } from 'vue';
+watch(addToChat.selectedText, (val) => {
+  if (val) {
+    console.log('Highlighted text:', val);
+  }
+});
+
+const addToChatButtonStyle = computed(() => ({
+  position: 'fixed',
+  bottom: '50px',
+  right: '50px',
+  zIndex: 2000,
+  background: '#222',
+  border: 'none',
+  color: '#fff',
+  borderRadius: '8px',
+  padding: '10px 22px',
+  fontSize: '17px',
+  fontWeight: '600',
+  cursor: 'pointer',
+  boxShadow: '0 4px 24px 2px rgba(0,0,0,0.11)',
+}));
+
+function handleAddToChatButtonClick() {
+  addToChat.addToChat((text) => {
+    emit('add-to-chat', text);
+    message.success('Text added to chat!');
+  });
+}
 
 // Utility: build API call function from env (or prop)
 function buildAutocompleteApiCall(endpoint) {
@@ -210,6 +245,9 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     apiCallFunction: autocompleteApiCall,
   });
 
+  // --- add-to-chat: initialize composable with editor ---
+  addToChat.initializeAddToChat(editor.value);
+
   editor.value.on('paginationUpdate', () => {
     adjustPaginationBreaks(editorElem, editor);
   });
@@ -334,6 +372,8 @@ const handleMarginChange = ({ side, value }) => {
 
 onBeforeUnmount(() => {
   stopPolling();
+  autocomplete.cleanup();
+  addToChat.cleanup();
   editor.value?.destroy();
   editor.value = null;
 });
