@@ -9,7 +9,9 @@ import {generateId} from "./utils";
  * Encapsulates all editor-specific API calls
  */
 export class EditorAdapter {
-    constructor(private editor: Editor) {}
+    constructor(private editor: Editor) {
+        this.editor = editor;
+    }
 
     // Search for string occurrences and resolve document positions
     findResults(results: FoundMatch[]): FoundMatch[] {
@@ -72,20 +74,11 @@ export class EditorAdapter {
         suggestedText: string,
     ): Promise<string> {
         const changeId = generateId('tracked-change');
-        this.editor.chain().enableTrackChanges().setTextSelection({ from, to }).run();
-        const marks = this.editor.commands.getSelectionMarks();
-        if (marks.length > 0) {
-            this.editor.chain().deleteSelection().insertContent({
-                type: 'text',
-                text: suggestedText,
-                marks: marks.map((mark: any) => ({
-                    type: mark.type.name,
-                    attrs: mark.attrs,
-                })),
-            }).run();
-        } else {
-            this.editor.chain().deleteSelection().insertContent(suggestedText).disableTrackChanges().run();
-        }
+        this.editor.commands.enableTrackChanges();
+        this.editor.commands.setTextSelection({ from, to });
+        this.editor.commands.deleteSelection();          // real dispatch
+        this.editor.commands.insertContent(suggestedText);
+        this.editor.commands.disableTrackChanges();
         return changeId;
     }
 

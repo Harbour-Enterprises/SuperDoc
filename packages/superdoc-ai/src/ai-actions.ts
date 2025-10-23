@@ -31,6 +31,7 @@ export class AIActions {
         private enableLogging: boolean = false
     ) {
         this.adapter = new EditorAdapter(this.editor);
+        //define the variables here
     }
 
 

@@ -453,7 +453,7 @@ async function parseResponsePayload(response: Response, parser: (payload: unknow
 
     return await response.text();
 }
-
+// TODO: LOOK again defaultParseCompletion
 /**
  * Fallback completion parser capable of handling several common payload shapes
  * (OpenAI-style choices, Anthropic content blocks, or raw strings).
@@ -461,18 +461,18 @@ async function parseResponsePayload(response: Response, parser: (payload: unknow
  * @param payload - Provider response payload.
  * @returns Extracted text content suitable for callers.
  */
-function defaultParseCompletion(payload: unknown): string {
+function defaultParseCompletion(payload: any): string {
     if (typeof payload === 'string') return payload;
     if (!payload || typeof payload !== 'object') return '';
 
-    const obj = payload as Record<string, unknown>;
+    const obj = payload;
 
     // Try OpenAI format: choices[0].message.content or choices[0].text
     const choice = Array.isArray(obj.choices) ? obj.choices[0] : null;
     if (choice && typeof choice === 'object') {
-        const message = (choice as Record<string, unknown>).message as Record<string, unknown> | undefined;
+        const message = (choice).message;
         if (message?.content && typeof message.content === 'string') return message.content;
-        const text = (choice as Record<string, unknown>).text;
+        const text = (choice).text;
         if (typeof text === 'string') return text;
     }
 
@@ -482,7 +482,7 @@ function defaultParseCompletion(payload: unknown): string {
     if (Array.isArray(content)) {
         return content
             .filter(part => part && typeof part === 'object' && 'text' in part)
-            .map(part => String((part as { text?: unknown }).text ?? ''))
+            .map(part => String((part as { text? }).text ?? ''))
             .join('');
     }
 
