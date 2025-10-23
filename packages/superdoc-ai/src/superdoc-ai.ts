@@ -38,23 +38,23 @@ import {createAIProvider, isAIProvider} from './providers';
  * });
  * ```
  */
-export class SuperDocAI<TSuperdoc = SuperDocInstance> {
-    private readonly superdoc: TSuperdoc;
+export class SuperDocAI {
+    private readonly superdoc: SuperDocInstance;
     private readonly config: SuperDocAIConfig;
-    private callbacks: SuperDocAICallbacks<TSuperdoc>;
+    private callbacks: SuperDocAICallbacks;
     private isReady = false;
     private initializationPromise: Promise<void> | null = null;
     private readonly actions: AIActions;
 
     public readonly action = {
-        find: async (query: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.find(query));
+        find: async (instruction: string) => {
+            return this.executeActionWithCallbacks(() => this.actions.find(instruction));
         },
-        findAll: async (query: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.findAll(query));
+        findAll: async (instruction: string) => {
+            return this.executeActionWithCallbacks(() => this.actions.findAll(instruction));
         },
-        highlight: async (query: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.highlight(query));
+        highlight: async (instruction: string) => {
+            return this.executeActionWithCallbacks(() => this.actions.highlight(instruction));
         },
         replace: async (instruction: string) => {
             return this.executeActionWithCallbacks(() => this.actions.replace(instruction));
@@ -90,7 +90,7 @@ export class SuperDocAI<TSuperdoc = SuperDocInstance> {
      * @param options - Configuration including provider, user, and callbacks
      * ```
      */
-    constructor(superdoc: TSuperdoc, options: SuperDocAIOptions<TSuperdoc>) {
+    constructor(superdoc: SuperDocInstance, options: SuperDocAIOptions) {
         this.superdoc = superdoc;
 
         const {onReady, onStreamingStart, onStreamingPartialResult, onStreamingEnd, onError, provider, ...config} =
@@ -124,7 +124,7 @@ export class SuperDocAI<TSuperdoc = SuperDocInstance> {
             },
         });
 
-        this.actions = new AIActions(this.config.provider, editor, this.config.user, context, this.config.enableLogging);
+        this.actions = new AIActions(this.config.provider, editor, context, this.config.enableLogging);
 
         this.initializationPromise = this.initialize();
     }

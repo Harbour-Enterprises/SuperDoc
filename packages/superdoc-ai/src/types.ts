@@ -102,7 +102,7 @@ export type SuperDocAIConfig = {
 /**
  * Lifecycle callbacks for SuperDocAI events
  */
-export type SuperDocAICallbacks<TSuperdoc = SuperDocInstance> = {
+export type SuperDocAICallbacks = {
     /** Called when AI is initialized and ready */
     onReady?: (context: { superdocAIBot: any }) => void;
     /** Called when streaming starts */
@@ -118,8 +118,7 @@ export type SuperDocAICallbacks<TSuperdoc = SuperDocInstance> = {
 /**
  * Complete options for SuperDocAI constructor
  */
-export type SuperDocAIOptions<TSuperdoc = SuperDocInstance> =
-    SuperDocAIConfig & SuperDocAICallbacks<TSuperdoc>;
+export type SuperDocAIOptions = SuperDocAIConfig & SuperDocAICallbacks;
 
 // Re-export SuperDoc class
 export { SuperDoc };

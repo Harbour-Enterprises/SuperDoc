@@ -1,7 +1,7 @@
 <script setup>
 import '@harbour-enterprises/common/styles/common-styles.css';
 import { nextTick, onMounted, provide, ref, shallowRef } from 'vue';
-import { SuperDocAI } from '@harbour-enterprises/superdoc-ai';
+
 import { SuperDoc } from '@superdoc/index.js';
 import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
 import { BasicUpload, getFileObject } from '@harbour-enterprises/common';
@@ -370,44 +370,9 @@ const exportDocxBlob = async () => {
   console.debug(blob);
 };
 
-const onEditorCreate = async ({ editor }) => {
+const onEditorCreate = ({ editor }) => {
   activeEditor.value = editor;
   window.editor = editor;
-
-  const ai = new SuperDocAI(superdoc.value, {
-    user: {
-      displayName: 'Jess Example',
-      profileUrl: 'https://developers.harbourshare.com/assets/picture.9G1GvEcu.png',
-    },
-    provider: {
-      type: 'http',
-      url: 'http://127.0.0.1:5001/api/ai',
-      model: 'gpt-4o-mini',
-      buildRequestBody: ({ messages, stream, options }) => ({
-        // Convert to custom format
-        messages,
-        model: 'gpt-4o-mini',
-        max_tokens: 2000,
-        temperature: 0,
-      }),
-    },
-    onReady: ({ redlineAIBot }) => {
-      console.log('AI ready');
-    },
-    onStreamingStart: () => {
-      console.log('‘Streaming result start’');
-    },
-    onStreamingPartialResult: (partialResult) => {
-      console.log(partialResult);
-    },
-    onStreamingEnd: (fullResult) => {
-      console.log(fullResult);
-    },
-  });
-  await ai.waitUntilReady();
-
-  const summary = await ai.action.insertTrackedChange('Find and replace the GDRP clause with bullet pointed version');
-  console.log(summary);
 
   editor.on('fieldAnnotationClicked', (params) => {
     console.log('fieldAnnotationClicked', { params });

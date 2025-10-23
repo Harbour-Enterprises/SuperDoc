@@ -90,7 +90,7 @@ describe('providers', () => {
 
         it('should throw for unsupported provider type', () => {
             const config = { type: 'unsupported' } as any;
-            expect(() => createAIProvider(config)).toThrow('Unsupported AI provider type: unsupported');
+            expect(() => createAIProvider(config)).toThrow('Unsupported AI provider');
         });
     });
 

@@ -210,10 +210,8 @@ describe('EditorAdapter', () => {
             const changeId = await mockAdapter.createTrackedChange(0, 5,  'new');
 
             expect(changeId).toMatch(/^tracked-change-/);
-            expect(chainFn).toHaveBeenCalled();
-            expect(chainApi.enableTrackChanges).toHaveBeenCalled();
-            expect(chainApi.disableTrackChanges).toHaveBeenCalled();
-            expect(chainApi.run).toHaveBeenCalled();
+            expect(mockEditor.commands.enableTrackChanges).toHaveBeenCalled();
+            expect(mockEditor.commands.disableTrackChanges).toHaveBeenCalled();
         });
 
         it('should preserve marks in tracked changes', async () => {

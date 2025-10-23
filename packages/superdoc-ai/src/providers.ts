@@ -32,9 +32,9 @@ export interface HttpProviderConfig extends ProviderDefaults {
     headers?: Record<string, string>;
     method?: string;
     fetch?: FetchLike;
-    buildRequestBody?: (context: ProviderRequestContext) => Record<string, unknown>;
-    parseCompletion?: (payload: unknown) => string;
-    parseStreamChunk?: (payload: unknown) => string | undefined;
+    buildRequestBody?: (context: ProviderRequestContext) => Record<string, any>;
+    parseCompletion?: (payload: any) => string;
+    parseStreamChunk?: (payload: any) => string | undefined;
 }
 
 export interface OpenAIProviderConfig extends ProviderDefaults {
@@ -45,7 +45,7 @@ export interface OpenAIProviderConfig extends ProviderDefaults {
     organizationId?: string;
     headers?: Record<string, string>;
     completionPath?: string;
-    requestOptions?: Record<string, unknown>;
+    requestOptions?: Record<string, any>;
     fetch?: FetchLike;
 }
 
@@ -56,7 +56,7 @@ export interface AnthropicProviderConfig extends ProviderDefaults {
     baseURL?: string;
     apiVersion?: string;
     headers?: Record<string, string>;
-    requestOptions?: Record<string, unknown>;
+    requestOptions?: Record<string, any>;
     fetch?: FetchLike;
 }
 
@@ -69,7 +69,7 @@ export type AIProviderInput = AIProvider | OpenAIProviderConfig | AnthropicProvi
  * @param value - Candidate object to validate.
  * @returns True if the value satisfies the provider interface.
  */
-export function isAIProvider(value: unknown): value is AIProvider {
+export function isAIProvider(value: any): value is AIProvider {
     if (!value || typeof value !== 'object') {
         return false;
     }
@@ -101,7 +101,7 @@ export function createAIProvider(config: AIProviderInput): AIProvider {
         case 'http':
             return createHttpProvider(config);
         default:
-            throw new Error(`Unsupported AI provider type: ${(config as { type?: string }).type ?? 'unknown'}`);
+            throw new Error('Unsupported AI provider type');
     }
 }
 
@@ -170,7 +170,7 @@ export function createHttpProvider(config: HttpProviderConfig): AIProvider {
     }
 
     return {
-        async *streamCompletion(messages: AIMessage[], options?: StreamOptions): AsyncGenerator<string, void, unknown> {
+        async *streamCompletion(messages: AIMessage[], options?: StreamOptions) {
             const target = streamUrl ?? url;
 
             if (!target) {
@@ -216,7 +216,7 @@ export function createOpenAIProvider(config: OpenAIProviderConfig): AIProvider {
     } = config;
 
     const url = joinUrl(baseURL, completionPath);
-    const baseHeaders: Record<string, string> = {
+    const baseHeaders = {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiKey}`,
         ...(organizationId ? { 'OpenAI-Organization': organizationId } : {}),
@@ -271,7 +271,7 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AIProv
     } = config;
 
     const url = joinUrl(baseURL, '/v1/messages');
-    const baseHeaders: Record<string, string> = {
+    const baseHeaders = {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': apiVersion,
@@ -318,22 +318,21 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AIProv
  */
 async function* readStreamResponse(
     response: Response,
-    parseStreamChunk: (payload: unknown) => string | undefined,
-    fallbackParser: (payload: unknown) => string,
-): AsyncGenerator<string, void, unknown> {
+    parseStreamChunk: (payload: any) => string | undefined,
+    fallbackParser: (payload: any) => string,
+) {
     if (!response.ok) {
-        const errorText = await safeReadText(response);
-        throw new Error(`AI provider stream failed with status ${response.status} (${response.statusText}): ${errorText}`);
+        throw new Error(`AI provider stream failed with status ${response.status}: ${await safeReadText(response)}`);
     }
 
+    // Handle non-streaming response
     if (!response.body) {
         const text = await safeReadText(response);
-        if (text) {
-            yield* processEventSegments(text, parseStreamChunk, fallbackParser);
-        }
+        if (text) yield* processEventSegments(text, parseStreamChunk, fallbackParser);
         return;
     }
 
+    // Handle streaming response
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
@@ -344,11 +343,11 @@ async function* readStreamResponse(
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
-            const events = buffer.split('\n\n');
-            buffer = events.pop() ?? '';
+            const parts = buffer.split('\n\n');
+            buffer = parts.pop() || '';
 
-            for (const event of events) {
-                yield* processEventSegments(event, parseStreamChunk, fallbackParser);
+            for (const part of parts) {
+                yield* processEventSegments(part, parseStreamChunk, fallbackParser);
             }
         }
 
@@ -370,15 +369,15 @@ async function* readStreamResponse(
  */
 function* processEventSegments(
     event: string,
-    parseStreamChunk: (payload: unknown) => string | undefined,
-    fallbackParser: (payload: unknown) => string,
-): Generator<string, void, unknown> {
+    parseStreamChunk: (payload: any) => string | undefined,
+    fallbackParser: (payload: any) => string,
+): Generator<string, void, any> {
     for (const segment of extractEventSegments(event)) {
         if (segment === '[DONE]') {
             return;
         }
 
-        let payload: unknown = segment;
+        let payload: any = segment;
         try {
             payload = JSON.parse(segment);
         } catch {
@@ -412,7 +411,7 @@ async function safeReadText(response: Response): Promise<string> {
  * @param eventChunk - Raw SSE data block separated by newlines.
  * @returns Array of cleaned event payload strings.
  */
-function extractEventSegments(eventChunk: string): Array<string> {
+function extractEventSegments(eventChunk: string) {
     const dataLines = eventChunk
         .split('\n')
         .map((line) => line.trim())
@@ -439,7 +438,7 @@ function extractEventSegments(eventChunk: string): Array<string> {
  * @param parser - Function that extracts a string from the JSON payload.
  * @returns Parsed string derived from the response.
  */
-async function parseResponsePayload(response: Response, parser: (payload: unknown) => string): Promise<string> {
+async function parseResponsePayload(response: Response, parser: (payload: any) => string): Promise<string> {
     const contentType = response.headers.get('content-type') ?? '';
 
     if (contentType.includes('application/json')) {
@@ -453,7 +452,19 @@ async function parseResponsePayload(response: Response, parser: (payload: unknow
 
     return await response.text();
 }
-// TODO: LOOK again defaultParseCompletion
+
+function extractTextFromBlock(block: any): string[] {
+    if (block?.text) return [String(block.text)];
+
+    if (Array.isArray(block?.content)) {
+        return block.content
+            .map((part: any) => typeof part === 'string' ? part : String(part?.text || ''))
+            .filter(Boolean);
+    }
+
+    return [];
+}
+
 /**
  * Fallback completion parser capable of handling several common payload shapes
  * (OpenAI-style choices, Anthropic content blocks, or raw strings).
@@ -465,28 +476,22 @@ function defaultParseCompletion(payload: any): string {
     if (typeof payload === 'string') return payload;
     if (!payload || typeof payload !== 'object') return '';
 
-    const obj = payload;
-
-    // Try OpenAI format: choices[0].message.content or choices[0].text
-    const choice = Array.isArray(obj.choices) ? obj.choices[0] : null;
-    if (choice && typeof choice === 'object') {
-        const message = (choice).message;
-        if (message?.content && typeof message.content === 'string') return message.content;
-        const text = (choice).text;
-        if (typeof text === 'string') return text;
+    // OpenAI format: choices[0].message.content or choices[0].text
+    const choice = payload.choices?.[0];
+    if (choice) {
+        if (choice.message?.content) return choice.message.content;
+        if (choice.text) return choice.text;
     }
 
-    // Try Anthropic format: content (string or array of text blocks)
-    const { content } = obj;
+    // Anthropic format: content (string or array)
+    const { content } = payload;
     if (typeof content === 'string') return content;
     if (Array.isArray(content)) {
         return content
-            .filter(part => part && typeof part === 'object' && 'text' in part)
-            .map(part => String((part as { text? }).text ?? ''))
+            .flatMap(block => extractTextFromBlock(block))
             .join('');
     }
 
-    // Fallback
     return JSON.stringify(payload);
 }
 
@@ -496,22 +501,8 @@ function defaultParseCompletion(payload: any): string {
  * @param payload - Raw OpenAI JSON payload.
  * @returns Message content or the default parsing result.
  */
-function parseOpenAICompletion(payload: unknown): string {
-    if (!payload || typeof payload !== 'object') {
-        return defaultParseCompletion(payload);
-    }
-
-    const choices = (payload as { choices?: Array<Record<string, unknown>> }).choices;
-    if (!choices?.length) {
-        return defaultParseCompletion(payload);
-    }
-
-    const message = choices[0]?.message as { content?: string };
-    if (message?.content) {
-        return message.content;
-    }
-
-    return defaultParseCompletion(payload);
+function parseOpenAICompletion(payload: any): string {
+    return payload?.choices?.[0]?.message?.content || defaultParseCompletion(payload);
 }
 
 /**
@@ -520,19 +511,17 @@ function parseOpenAICompletion(payload: unknown): string {
  * @param payload - Stream event payload.
  * @returns Concatenated chunk text or undefined when no content is present.
  */
-function parseOpenAIStreamChunk(payload: unknown): string | undefined {
+function parseOpenAIStreamChunk(payload: any): string | undefined {
     if (!payload || typeof payload !== 'object') {
         return undefined;
     }
 
-    if ('choices' in payload && Array.isArray((payload as { choices?: unknown }).choices)) {
-        const choices = (payload as { choices: Array<Record<string, unknown>> }).choices;
-        return choices
-            .map((choice) => {
-                const delta = choice.delta as { content?: string; text?: string } | undefined;
-                return delta?.content ?? delta?.text ?? '';
-            })
-            .join('');
+    if ('choices' in payload && Array.isArray(payload?.choices)) {
+        const choices = payload?.choices;
+        return choices.map((choice: any) => {
+            const delta = choice.delta;
+            return delta?.content ?? delta?.text ?? '';
+        }).join('');
     }
 
     return undefined;
@@ -545,8 +534,8 @@ function parseOpenAIStreamChunk(payload: unknown): string | undefined {
  * @param messages - Chat messages supplied by SuperDoc.
  * @returns Object containing an optional system string and Anthropic-formatted messages.
  */
-function convertToAnthropicMessages(messages: AIMessage[]): { system?: string; anthropicMessages: Array<Record<string, unknown>> } {
-    const anthropicMessages: Array<Record<string, unknown>> = [];
+function convertToAnthropicMessages(messages: AIMessage[]) {
+    const anthropicMessages = [];
     const systemMessages: string[] = [];
 
     for (const message of messages) {
@@ -554,15 +543,9 @@ function convertToAnthropicMessages(messages: AIMessage[]): { system?: string; a
             systemMessages.push(message.content);
             continue;
         }
-
         anthropicMessages.push({
             role: message.role,
-            content: [
-                {
-                    type: 'text',
-                    text: message.content,
-                },
-            ],
+            content: [{type: 'text', text: message.content}],
         });
     }
 
@@ -578,43 +561,15 @@ function convertToAnthropicMessages(messages: AIMessage[]): { system?: string; a
  * @param payload - Raw Anthropic JSON payload.
  * @returns Parsed text content, falling back to the default parser when needed.
  */
-function parseAnthropicCompletion(payload: unknown): string {
-    if (!payload || typeof payload !== 'object') {
+function parseAnthropicCompletion(payload: any): string {
+    if (!Array.isArray(payload?.content)) {
         return defaultParseCompletion(payload);
     }
 
-    const content = (payload as { content?: Array<Record<string, unknown>> }).content;
+    return payload.content
+        .flatMap((block: any) => extractTextFromBlock(block))
+        .join('');
 
-    if (Array.isArray(content)) {
-        return content
-            .map((block) => {
-                const text = block?.text;
-                if (typeof text === 'string') {
-                    return text;
-                }
-
-                if (Array.isArray(block?.content)) {
-                    return block.content
-                        .map((part: unknown) => {
-                            if (typeof part === 'string') {
-                                return part;
-                            }
-
-                            if (part && typeof part === 'object' && 'text' in part) {
-                                return String((part as { text?: unknown }).text ?? '');
-                            }
-
-                            return '';
-                        })
-                        .join('');
-                }
-
-                return '';
-            })
-            .join('');
-    }
-
-    return defaultParseCompletion(payload);
 }
 
 /**
@@ -623,25 +578,17 @@ function parseAnthropicCompletion(payload: unknown): string {
  * @param payload - Stream event payload emitted by Anthropic.
  * @returns Text chunk when available, otherwise undefined.
  */
-function parseAnthropicStreamChunk(payload: unknown): string | undefined {
+function parseAnthropicStreamChunk(payload: any): string | undefined {
     if (!payload || typeof payload !== 'object') {
         return undefined;
     }
 
-    const typedPayload = payload as Record<string, unknown>;
-
-    if (typedPayload.type === 'content_block_delta' && typedPayload.delta && typeof typedPayload.delta === 'object') {
-        const delta = typedPayload.delta as { text?: string };
-        return delta.text;
+    if ((payload.type === 'content_block_delta' || payload.type === 'message_delta') && payload.delta?.text) {
+        return payload.delta.text;
     }
 
-    if (typedPayload.type === 'message_delta' && typedPayload.delta && typeof typedPayload.delta === 'object') {
-        const delta = typedPayload.delta as { text?: string };
-        return delta.text;
-    }
-
-    if (typedPayload.type === 'message_start' && typedPayload.message && typeof typedPayload.message === 'object') {
-        return parseAnthropicCompletion(typedPayload.message);
+    if (payload.type === 'message_start' && payload.message) {
+        return parseAnthropicCompletion(payload.message);
     }
 
     return undefined;
@@ -671,17 +618,9 @@ function defaultParseStreamChunk(payload: unknown): string | undefined {
  * @throws Error when no fetch implementation can be determined.
  */
 function resolveFetch(customFetch?: FetchLike): FetchLike {
-    if (customFetch) {
-        return customFetch;
-    }
-
-    const globalFetch = typeof globalThis !== 'undefined' ? (globalThis as { fetch?: FetchLike }).fetch : undefined;
-
-    if (!globalFetch) {
-        throw new Error('No fetch implementation available. Provide a fetch function in the provider config.');
-    }
-
-    return globalFetch.bind(globalThis);
+    if (customFetch) return customFetch;
+    if (!globalThis?.fetch) throw new Error('No fetch available. Provide fetch in provider config.');
+    return globalThis.fetch.bind(globalThis);
 }
 
 /**
@@ -691,11 +630,10 @@ function resolveFetch(customFetch?: FetchLike): FetchLike {
  * @param headers - Original headers object.
  * @returns Headers object guaranteed to include `Content-Type`.
  */
-function ensureContentType(headers: Record<string, string>): Record<string, string> {
+function ensureContentType(headers: Record<string, string>) {
     if (Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
         return headers;
     }
-
     return {
         ...headers,
         'Content-Type': 'application/json',
@@ -709,9 +647,10 @@ function ensureContentType(headers: Record<string, string>): Record<string, stri
  * @param object - Source object to clean.
  * @returns New object without undefined values.
  */
-function cleanUndefined<T extends Record<string, unknown>>(object: T): Record<string, unknown> {
-    const entries = Object.entries(object).filter(([, value]) => value !== undefined);
-    return Object.fromEntries(entries);
+function cleanUndefined(object: Record<string, any>) {
+    return Object.fromEntries(
+        Object.entries(object).filter(([, v]) => v !== undefined)
+    );
 }
 
 /**
@@ -722,7 +661,6 @@ function cleanUndefined<T extends Record<string, unknown>>(object: T): Record<st
  * @returns Normalized URL string.
  */
 function joinUrl(base: string, path: string): string {
-    // Remove trailing slashes without regex to avoid ReDoS
     let normalizedBase = base;
     while (normalizedBase.endsWith('/')) {
         normalizedBase = normalizedBase.slice(0, -1);

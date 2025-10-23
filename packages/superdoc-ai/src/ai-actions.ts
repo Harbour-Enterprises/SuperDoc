@@ -26,12 +26,10 @@ export class AIActions {
     constructor(
         private provider: AIProvider,
         private editor: Editor | null,
-        private user: AIUser,
         private documentContext: string,
         private enableLogging: boolean = false
     ) {
         this.adapter = new EditorAdapter(this.editor);
-        //define the variables here
     }
 
 
@@ -58,7 +56,7 @@ export class AIActions {
 
         const result = parseJSON<Result>(response, {success: false, results: []}, this.enableLogging);
 
-        if (!result.success || !result.results || !this.adapter) {
+        if (!result.success || !result.results) {
             return result;
         }
         result.results = this.adapter.findResults(result.results);
@@ -100,7 +98,7 @@ export class AIActions {
     async highlight(query: string, color: string = "#6CA0DC"): Promise<Result> {
         const findResult = await this.find(query);
 
-        if (!findResult.success || !this.adapter) {
+        if (!findResult.success) {
             return {...findResult, success: false};
         }
 
@@ -133,7 +131,7 @@ export class AIActions {
         multiple: boolean,
         operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
     ): Promise<FoundMatch[]> {
-        if (!this.documentContext || !this.adapter) {
+        if (!this.documentContext) {
             return [];
         }
 
@@ -156,7 +154,6 @@ export class AIActions {
             return [];
         }
 
-        // Find matches and execute operations
         const searchResults = this.adapter.findResults(replacements);
         const match = searchResults?.[0];
         for (const result of searchResults) {
@@ -370,7 +367,7 @@ export class AIActions {
 
         const result = parseJSON<Result>(response, {success: false, results: []}, this.enableLogging);
 
-        if (!result.success || !result.results || !this.adapter) {
+        if (!result.success || !result.results) {
             return {success: false, results: []};
         }
 
