@@ -11,7 +11,7 @@ import { getStarterExtensions } from '@extensions/index.js';
 import { getTestDataAsFileBuffer } from '@tests/helpers/helpers.js';
 
 describe('Headless Mode Optimization', () => {
-  it.only('should filter optimized node views in headless mode', async () => {
+  it('should filter optimized node views in headless mode', async () => {
     const buffer = await getTestDataAsFileBuffer('complex2.docx');
     const [content, , mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
 
