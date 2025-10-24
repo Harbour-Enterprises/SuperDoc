@@ -257,11 +257,11 @@ describe('EditorAdapter', () => {
             await mockAdapter.insertText('New content');
 
             const expectedPos = mockEditor.state.doc.content.size;
-            const expectedFrom = expectedPos - 50;
+            const expectedFrom = Math.max(0, expectedPos - 50);
 
             expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({
                 from: expectedFrom,
-                pos: expectedPos
+                to: expectedPos
             });
 
             expect(mockEditor.commands.insertContentAt).toHaveBeenCalledWith(
@@ -272,6 +272,17 @@ describe('EditorAdapter', () => {
                     marks: [{ type: 'textStyle', attrs: { fontFamily: 'Arial' } }]
                 }
             );
+        });
+
+        it('clamps selection start to zero when document is short', async () => {
+            mockEditor.state.doc.content.size = 20;
+
+            await mockAdapter.insertText('Short doc content');
+
+            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({
+                from: 0,
+                to: 20
+            });
         });
 
         it('should handle empty marks when inserting', async () => {

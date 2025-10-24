@@ -109,10 +109,10 @@ export class EditorAdapter {
     // Insert operations
     async insertText(suggestedText: string): Promise<void> {
         const pos: number = this.editor.state.doc.content.size;
-        const from: number = pos-50;
-        this.editor.commands.setTextSelection({ from, pos });
+        const from: number = Math.max(0, pos - 50);
+        this.editor.commands.setTextSelection({ from, to: pos });
         const marks = this.editor.commands.getSelectionMarks();
-        this.editor.commands.insertContentAt(this.editor.state.doc.content.size, {
+        this.editor.commands.insertContentAt(pos, {
             type: 'text',
             text: suggestedText,
             marks: marks.map((mark: any) => ({
