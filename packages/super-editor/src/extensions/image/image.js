@@ -188,10 +188,16 @@ export const Image = Node.create({
       extension: { rendered: false },
 
       size: {
+        // Real size of image files
+        rendered: false,
+      },
+
+      scaledSize: {
+        // Image size as images appear in document.
         default: {},
-        renderDOM: ({ size, extension }) => {
+        renderDOM: ({ scaledSize, extension }) => {
           let style = '';
-          let { width, height } = size ?? {};
+          let { width, height } = scaledSize ?? {};
           if (width) style += `width: ${width}px;`;
           if (height && ['emf', 'wmf'].includes(extension))
             style += `height: ${height}px; border: 1px solid black; position: absolute;`;
@@ -234,7 +240,13 @@ export const Image = Node.create({
     // Also, the editor context is needed for wrap styling in some cases.
 
     const { wrap, marginOffset } = getNormalizedImageAttrs(node.attrs);
-    const { anchorData, padding, transformData = {}, size = { width: 0, height: 0 } } = node.attrs;
+    const {
+      anchorData,
+      padding,
+      transformData = {},
+      size = { width: 0, height: 0 },
+      scaledSize = { width: 0, height: 0 },
+    } = node.attrs;
 
     const margin = {
       left: 0,
@@ -267,7 +279,7 @@ export const Image = Node.create({
     //   bottom += transformData.sizeExtension.bottom || 0;
     // }
     const { rotation } = transformData;
-    const { height, width } = size;
+    const { height, width } = scaledSize ?? {};
     if (rotation && height && width) {
       const { horizontal, vertical } = getRotationMargins(width, height, rotation);
       margin.left += horizontal;
@@ -308,7 +320,7 @@ export const Image = Node.create({
             const pageStylesData = getDataFromPageStyles({
               editor: this.editor,
               marginOffset,
-              size,
+              scaledSize,
               attrs,
             });
 
@@ -329,7 +341,7 @@ export const Image = Node.create({
           const pageStylesData = getDataFromPageStyles({
             editor: this.editor,
             marginOffset,
-            size,
+            scaledSize,
             attrs,
           });
 
@@ -348,31 +360,20 @@ export const Image = Node.create({
             // For left floating images - we add 15 to the horizontal offset to prevent overlap with text.
             // For right floating images - we pick the smallest x value of the polygon. Difference is due to
             // the polygons in HTML/CSS being defined in relation to the image's bounding box.
-            let horizontalOffset = floatRight ? attrs.polygon[0][0] || 0 : marginOffset.horizontal + 15;
+            let horizontalOffset = floatRight ? attrs.polygon[0][0] || 0 : marginOffset.horizontal + 10;
 
-            let maxX = 0;
-            let minX = 0;
-            let minY = 0;
-            let maxY = 0;
             attrs.polygon.forEach(([x, y]) => {
               if (floatRight && x < horizontalOffset) horizontalOffset = x;
-              if (x > maxX) maxX = x;
-              if (x < minX) minX = x;
-              if (y > maxY) maxY = y;
-              if (y < minY) minY = y;
             });
-            const originalWidth = maxX - minX;
-            const originalHeight = maxY - minY;
-            const scaleWidth = Math.min(1, size.width / originalWidth);
-            const scaleHeight = Math.min(1, size.height / originalHeight);
-            // TODO: Calculating the scale factors based on the declared size of the image and the size of the
-            // polygon will work if the polygon touch all the edges of the images (typical case). It will give
-            // somewhat incorrect values not if the polygon does not touch the right and bottom edges of the image.
-            // To solve this properly, we need to determine the actual image size based on the image file and
-            // base the scale factors on that.
+
+            const scaleWidthFactor = Math.min(1, scaledSize.width / size.width);
+            const scaleHeightFactor = Math.min(1, scaledSize.height / size.height);
+
             const verticalOffset = Math.max(0, marginOffset.top);
             const points = attrs.polygon
-              .map(([x, y]) => `${horizontalOffset + x * scaleWidth}px ${verticalOffset + y * scaleHeight}px`)
+              .map(
+                ([x, y]) => `${horizontalOffset + x * scaleWidthFactor}px ${verticalOffset + y * scaleHeightFactor}px`,
+              )
               .join(', ');
             style += `shape-outside: polygon(${points});`;
           }
@@ -427,7 +428,7 @@ export const Image = Node.create({
       let rotationHorizontal = 0;
       let rotationTop = 0;
       const { rotation } = transformData ?? {};
-      const { height, width } = size ?? {};
+      const { height, width } = scaledSize ?? {};
       if (rotation && height && width) {
         const { horizontal, vertical } = getRotationMargins(width, height, rotation);
         rotationHorizontal = horizontal;
@@ -591,18 +592,18 @@ export const Image = Node.create({
   },
 });
 
-const getDataFromPageStyles = ({ editor, marginOffset, size, attrs }) => {
+const getDataFromPageStyles = ({ editor, marginOffset, scaledSize, attrs }) => {
   let style = '';
   let floatRight = false;
   let baseHorizontal = marginOffset?.horizontal || 0;
   const pageStyles = editor?.converter?.pageStyles || editor?.options.parentEditor?.converter?.pageStyles;
 
-  if (pageStyles?.pageSize && pageStyles?.pageMargins && size.width) {
+  if (pageStyles?.pageSize && pageStyles?.pageMargins && scaledSize.width) {
     const pageWidth = inchesToPixels(pageStyles.pageSize.width);
     const leftMargin = inchesToPixels(pageStyles.pageMargins.left);
     const rightMargin = inchesToPixels(pageStyles.pageMargins.right);
     const contentWidth = pageWidth - leftMargin - rightMargin;
-    const imageWidth = size.width + (attrs.distLeft || 0) + (attrs.distRight || 0);
+    const imageWidth = scaledSize.width + (attrs.distLeft || 0) + (attrs.distRight || 0);
 
     // marginOffset.horizontal is space on the left when wrapText === "largest"
     // We can therefore calculate the space on the right vs on the left:

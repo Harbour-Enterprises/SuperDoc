@@ -392,7 +392,7 @@ export class SuperToolbar extends EventEmitter {
         return;
       }
 
-      const { size, file } = await checkAndProcessImage({
+      const { size, scaledSize, file } = await checkAndProcessImage({
         file: result.file,
         getMaxContentSize: () => this.activeEditor.getMaxContentSize(),
       });
@@ -413,7 +413,7 @@ export class SuperToolbar extends EventEmitter {
         editor: this.activeEditor,
         view: this.activeEditor.view,
         file,
-        size,
+        imageDimensions: { size, scaledSize },
         id,
       });
     },

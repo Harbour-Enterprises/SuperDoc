@@ -35,7 +35,10 @@ describe('DOCX export image filenames', () => {
       editor,
       view: editor.view,
       file: new File([blob], weirdName, { type: 'image/png' }),
-      size: { width: 120, height: 120 },
+      imageDimensions: {
+        size: { width: 80, height: 80 },
+        scaledSize: { width: 80, height: 80 },
+      },
       id: firstId,
     });
 
@@ -53,7 +56,10 @@ describe('DOCX export image filenames', () => {
       editor,
       view: editor.view,
       file: new File([blob], weirdName, { type: 'image/png' }),
-      size: { width: 80, height: 80 },
+      imageDimensions: {
+        size: { width: 80, height: 80 },
+        scaledSize: { width: 80, height: 80 },
+      },
       id: secondId,
     });
 

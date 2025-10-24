@@ -36,10 +36,12 @@ export const translateImageNode = (params) => {
   }
   imageName = sanitizeDocxMediaName(imageName);
 
-  let size = attrs.size
+  // Use scaledSize for display dimensions if available, otherwise fall back to size
+  const sizeToUse = attrs.scaledSize || attrs.size;
+  let size = sizeToUse
     ? {
-        w: pixelsToEmu(attrs.size.width),
-        h: pixelsToEmu(attrs.size.height),
+        w: pixelsToEmu(sizeToUse.width),
+        h: pixelsToEmu(sizeToUse.height),
       }
     : imageSize;
 

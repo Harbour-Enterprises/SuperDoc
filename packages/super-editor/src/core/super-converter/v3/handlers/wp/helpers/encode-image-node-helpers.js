@@ -4,6 +4,68 @@ import { carbonCopy } from '@core/utilities/carbonCopy.js';
 const DRAWING_XML_TAG = 'w:drawing';
 
 /**
+ * Pre-load all image dimensions from docx media files
+ * This must be called before the import process starts since dimension reading is async
+ * @param {Object} docx - The docx object containing media files
+ * @returns {Promise<Map<string, {width: number, height: number}>>} Map of path -> dimensions
+ */
+export async function preloadImageDimensions(docx) {
+  const dimensionsMap = new Map();
+
+  // Find all image paths in the docx media
+  const imagePaths = Object.keys(docx).filter((key) => {
+    const path = key.toLowerCase();
+    return (
+      path.startsWith('word/media/') &&
+      (path.endsWith('.png') ||
+        path.endsWith('.jpg') ||
+        path.endsWith('.jpeg') ||
+        path.endsWith('.gif') ||
+        path.endsWith('.bmp') ||
+        path.endsWith('.svg'))
+    );
+  });
+
+  // Load dimensions for each image
+  await Promise.all(
+    imagePaths.map(async (path) => {
+      try {
+        const imageBlob = docx[path];
+        if (!imageBlob) return;
+
+        const dimensions = await new Promise((resolve) => {
+          const img = new window.Image();
+          img.onload = () => {
+            resolve({ width: img.width, height: img.height });
+          };
+          img.onerror = () => {
+            resolve(null);
+          };
+
+          // Handle both blob URLs and base64 data
+          if (typeof imageBlob === 'string') {
+            img.src = imageBlob;
+          } else if (imageBlob instanceof Blob) {
+            img.src = URL.createObjectURL(imageBlob);
+          } else {
+            resolve(null);
+          }
+        });
+
+        if (dimensions) {
+          dimensionsMap.set(path, dimensions);
+        }
+      } catch (error) {
+        // Skip images that fail to load
+        console.warn(`Failed to load dimensions for ${path}:`, error);
+      }
+    }),
+  );
+
+  return dimensionsMap;
+}
+
+/**
  * Encodes image xml into Editor node
  * @param {Object} params
  * @returns {Object|null}
@@ -19,7 +81,7 @@ export function handleImageNode(node, params, isAnchor) {
   };
 
   const extent = node.elements.find((el) => el.name === 'wp:extent');
-  const size = {
+  const displaySize = {
     width: emuToPixels(extent?.attributes?.cx),
     height: emuToPixels(extent?.attributes?.cy),
   };
@@ -151,7 +213,7 @@ export function handleImageNode(node, params, isAnchor) {
       horizontal: positionHValue,
       top: positionVValue,
     };
-    return handleShapeDrawing(params, node, graphicData, size, padding, shapeMarginOffset);
+    return handleShapeDrawing(params, node, graphicData, displaySize, padding, shapeMarginOffset);
   }
 
   const picture = graphicData?.elements.find((el) => el.name === 'pic:pic');
@@ -197,6 +259,16 @@ export function handleImageNode(node, params, isAnchor) {
   if (targetPath.startsWith('/word') || targetPath.startsWith('/media')) path = targetPath.substring(1);
   const extension = targetPath.substring(targetPath.lastIndexOf('.') + 1);
 
+  // Get actual image dimensions from preloaded map (if available)
+  // The wp:extent dimensions are the SCALED dimensions (how image appears in doc)
+  // We need the actual file dimensions for wrap polygon calculations
+  const imageDimensionsMap = docx.imageDimensionsMap;
+  const actualDimensions = imageDimensionsMap?.get(path);
+  // size = actual file dimensions (for wrap polygon calculations)
+  // scaledSize = display dimensions from wp:extent
+  const size = actualDimensions || displaySize; // Fall back to display size if actual not available
+  const scaledSize = displaySize;
+
   return {
     type: 'image',
     attrs: {
@@ -208,7 +280,8 @@ export function handleImageNode(node, params, isAnchor) {
       inline: true,
       padding,
       marginOffset,
-      size,
+      size, // Actual file dimensions (or fallback to display if not available)
+      scaledSize, // Display dimensions from wp:extent
       anchorData,
       isAnchor,
       transformData,

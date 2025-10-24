@@ -1,5 +1,25 @@
 // @ts-check
 /**
+ * Get the original dimensions of an image file
+ * @category Helper
+ * @param {string|File} fileData - Base64 string or File object
+ * @returns {Promise<{width: number, height: number}>} Original image dimensions
+ * @example
+ * const { width, height } = await getOriginalImageDimensions(file);
+ */
+export const getOriginalImageDimensions = (fileData) => {
+  return new Promise((resolve, reject) => {
+    const img = new window.Image();
+
+    img.onload = () => {
+      resolve({ width: img.width, height: img.height });
+    };
+    img.onerror = (error) => reject(error);
+    img.src = typeof fileData === 'string' ? fileData : URL.createObjectURL(fileData);
+  });
+};
+
+/**
  * Process an uploaded image to ensure it fits within the editor's content area
  * @category Helper
  * @param {string|File} fileData - Base64 string or File object

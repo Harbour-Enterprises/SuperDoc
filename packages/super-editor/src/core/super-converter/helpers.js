@@ -109,19 +109,19 @@ function degreesToRot(degrees) {
   return degrees * 60000;
 }
 
+const POLYGON_SCALE_FACTOR = 40; // Unclear why this scale factor is used or where it comes from.
+
 function pixelsToPolygonUnits(pixels) {
-  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
   if (pixels == null) return;
-  const pu = pixels * PIXELS_PER_INCH;
+  const pu = pixels * POLYGON_SCALE_FACTOR;
   // Word requires integer ST_Coordinate32 values; fractional values fail OOXML validation.
   // The previous rounding to 3 decimals produced fractional coordinates and broke anchors.
   return Math.round(pu);
 }
 
 function polygonUnitsToPixels(pu) {
-  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
   if (pu == null) return;
-  const pixels = Number(pu) / PIXELS_PER_INCH;
+  const pixels = Number(pu) / POLYGON_SCALE_FACTOR;
   return Math.round(pixels * 1000) / 1000;
 }
 

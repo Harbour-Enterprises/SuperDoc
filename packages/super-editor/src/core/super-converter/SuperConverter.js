@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import crc32 from 'buffer-crc32';
 import { DocxExporter, exportSchemaToJson } from './exporter';
 import { createDocumentJson, addDefaultStylesIfMissing } from './v2/importer/docxImporter.js';
+import { preloadImageDimensions } from './v3/handlers/wp/helpers/encode-image-node-helpers.js';
 import { deobfuscateFont, getArrayBufferFromUrl } from './helpers.js';
 import { baseNumbering } from './v2/exporter/helpers/base-list.definitions.js';
 import { DEFAULT_CUSTOM_XML, DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
@@ -208,6 +209,10 @@ class SuperConverter {
     // Linked Styles
     this.linkedStyles = [];
 
+    // Image dimensions cache and loading promise
+    this.imageDimensionsMap = new Map();
+    this.imageDimensionsPromise = null;
+
     // This is the JSON schema that we will be working with
     this.json = params?.json;
 
@@ -228,7 +233,32 @@ class SuperConverter {
     this.documentModified = false; // Track if document has been edited
 
     // Parse the initial XML, if provided
-    if (this.docx.length || this.xml) this.parseFromXml();
+    if (this.docx.length || this.xml) {
+      this.parseFromXml();
+      // Start preloading image dimensions asynchronously after parsing
+      // Store the promise so we can await it before creating the document
+      this.imageDimensionsPromise = this.#preloadImageDimensions();
+    }
+  }
+
+  /**
+   * Preload image dimensions from all images in the docx media
+   * This is async and populates imageDimensionsMap when ready
+   * @private
+   * @returns {Promise<void>}
+   */
+  async #preloadImageDimensions() {
+    if (!this.media) {
+      this.imageDimensionsMap = new Map();
+      return;
+    }
+
+    try {
+      this.imageDimensionsMap = await preloadImageDimensions(this.media);
+    } catch (error) {
+      console.warn('Failed to preload image dimensions:', error);
+      this.imageDimensionsMap = new Map();
+    }
   }
 
   /**
@@ -701,7 +731,11 @@ class SuperConverter {
     let result;
     try {
       this.getDocumentInternalId();
-      result = createDocumentJson({ ...this.convertedXml, media: this.media }, this, editor);
+      result = createDocumentJson(
+        { ...this.convertedXml, media: this.media, imageDimensionsMap: this.imageDimensionsMap },
+        this,
+        editor,
+      );
     } catch (error) {
       editor?.emit('exception', { error, editor });
     }
