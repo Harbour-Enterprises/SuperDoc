@@ -352,7 +352,6 @@ export class Editor extends EventEmitter {
     this.on('beforeCreate', this.options.onBeforeCreate);
     this.emit('beforeCreate', { editor: this });
     this.on('contentError', this.options.onContentError);
-    this.on('exception', this.options.onException);
 
     this.on('create', this.options.onCreate);
     this.on('update', this.options.onUpdate);
