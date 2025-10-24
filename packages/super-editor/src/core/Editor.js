@@ -448,11 +448,6 @@ export class Editor extends EventEmitter {
 
   async mount(el) {
     await this.#createView(el);
-
-    window.setTimeout(() => {
-      if (this.isDestroyed) return;
-      this.emit('create', { editor: this });
-    }, 0);
   }
 
   unmount() {
