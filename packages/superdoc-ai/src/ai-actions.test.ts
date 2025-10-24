@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AIActions } from './ai-actions';
-import type { AIProvider, Editor, AIUser } from './types';
+import type { AIProvider, Editor } from './types';
 
 const createChain = (commands?: any) => {
     const chainApi = {
@@ -43,7 +43,6 @@ const createChain = (commands?: any) => {
 describe('AIActions', () => {
     let mockProvider: AIProvider;
     let mockEditor: Editor;
-    let user: AIUser;
     let chainFn: ReturnType<typeof createChain>['chainFn'];
     let chainApi: ReturnType<typeof createChain>['chainApi'];
 
@@ -88,11 +87,6 @@ describe('AIActions', () => {
         chainApi = chain.chainApi;
         mockEditor.chain = chainFn;
 
-        user = {
-            displayName: 'AI Bot',
-            profileUrl: 'https://example.com/avatar.png',
-            userId: 'bot-123'
-        };
     });
 
     describe('find', () => {

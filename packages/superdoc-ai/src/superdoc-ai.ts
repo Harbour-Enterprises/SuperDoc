@@ -115,8 +115,11 @@ export class SuperDocAI {
         const context = this.getDocumentContext();
         
         const editor = this.getEditor();
+        if (!editor) {
+            throw new Error('SuperDocAI requires an active editor before initialization');
+        }
 
-        editor?.setOptions({
+        editor.setOptions({
             user: {
                 id: this.config.user.userId,
                 name: this.config.user.displayName,
@@ -164,6 +167,10 @@ export class SuperDocAI {
     private async executeActionWithCallbacks<T extends Result>(
         fn: () => Promise<T>
     ): Promise<T> {
+        const editor = this.getEditor();
+        if (!editor) {
+            throw new Error('No active SuperDoc editor available for AI actions');
+        }
         try {
             this.callbacks.onStreamingStart?.();
             const result: any = await fn();

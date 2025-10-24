@@ -1,11 +1,4 @@
-import type {
-    AIProvider,
-    AIUser,
-    Editor,
-    Result,
-    FoundMatch,
-    DocumentPosition
-} from './types';
+import type { AIProvider, Editor, Result, FoundMatch, DocumentPosition } from './types';
 import {EditorAdapter} from './editor-adapter';
 import {validateInput, parseJSON} from './utils';
 import {
@@ -25,11 +18,14 @@ export class AIActions {
 
     constructor(
         private provider: AIProvider,
-        private editor: Editor | null,
+        private editor: Editor,
         private documentContext: string,
         private enableLogging: boolean = false
     ) {
         this.adapter = new EditorAdapter(this.editor);
+        if (!this.adapter) {
+            throw new Error('SuperDoc editor is not available; retry once the editor is initialized');
+        }
     }
 
 

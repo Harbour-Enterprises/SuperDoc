@@ -348,21 +348,19 @@ describe('SuperDocAI', () => {
             expect(context).toBe('Sample document text');
         });
 
-        it('should return empty string when no editor', async () => {
+        it('throws during construction when no editor is available', () => {
             const noEditorSuperdoc: SuperDoc = {
-                activeEditor: null
+                activeEditor: null,
             } as any;
 
             const options: SuperDocAIOptions = {
                 user: { displayName: 'AI Bot' },
-                provider: mockProvider
+                provider: mockProvider,
             };
 
-            const ai = new SuperDocAI(noEditorSuperdoc, options);
-            await ai.waitUntilReady();
-
-            const context = ai.getDocumentContext();
-            expect(context).toBe('');
+            expect(() => new SuperDocAI(noEditorSuperdoc, options)).toThrow(
+                'SuperDocAI requires an active editor before initialization',
+            );
         });
     });
 
@@ -378,12 +376,28 @@ describe('SuperDocAI', () => {
                 provider: mockProvider
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
-            await ai.waitUntilReady();
+        const ai = new SuperDocAI(mockSuperdoc, options);
+        await ai.waitUntilReady();
 
-            const result = await ai.action.find('find test');
-            expect(result.success).toBe(true);
-        });
+        const result = await ai.action.find('find test');
+        expect(result.success).toBe(true);
+    });
+
+    it('rejects action calls when the active editor is missing', async () => {
+        const options: SuperDocAIOptions = {
+            user: { displayName: 'AI Bot' },
+            provider: mockProvider,
+        };
+
+        const ai = new SuperDocAI(mockSuperdoc, options);
+        await ai.waitUntilReady();
+
+        mockSuperdoc.activeEditor = null as any;
+
+        await expect(ai.action.find('find test')).rejects.toThrow(
+            'No active SuperDoc editor available for AI actions',
+        );
+    });
 
         it('should call callbacks for actions', async () => {
             const onStreamingStart = vi.fn();
@@ -470,4 +484,3 @@ describe('SuperDocAI', () => {
         });
     });
 });
-
