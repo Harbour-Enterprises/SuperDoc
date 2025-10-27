@@ -217,17 +217,25 @@ export const BlockNode = Extension.create({
     return [
       new Plugin({
         key: BlockNodePluginKey,
-        appendTransaction: (transactions, _oldState, newState) => {
-          if (hasInitialized && !transactions.some((tr) => tr.docChanged)) return null;
+        appendTransaction: (transactions, oldState, newState) => {
+          let docChanges = transactions.some((tr) => tr.docChanged) && !oldState.doc.eq(newState.doc);
+
+          if (hasInitialized && !docChanges) {
+            return;
+          }
 
           // Check for new block nodes and if none found, we don't need to do anything
-          if (hasInitialized && !checkForNewBlockNodesInTrs([...transactions])) return null;
+          if (hasInitialized && !checkForNewBlockNodesInTrs([...transactions])) {
+            return;
+          }
 
           const { tr } = newState;
           let changed = false;
           newState.doc.descendants((node, pos) => {
             // Only allow block nodes with a valid sdBlockId attribute
-            if (!nodeAllowsSdBlockIdAttr(node) || !nodeNeedsSdBlockId(node)) return null;
+            if (!nodeAllowsSdBlockIdAttr(node) || !nodeNeedsSdBlockId(node)) {
+              return;
+            }
 
             tr.setNodeMarkup(
               pos,
@@ -243,6 +251,7 @@ export const BlockNode = Extension.create({
 
           if (changed && !hasInitialized) {
             hasInitialized = true;
+            tr.setMeta('blockNodeInitialUpdate', true);
           }
 
           // Restore marks if they exist.
