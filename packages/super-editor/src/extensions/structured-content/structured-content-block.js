@@ -16,14 +16,16 @@ export const structuredContentInnerClass = 'sd-structured-content-block__content
  * Attributes for structured content block nodes
  * @typedef {Object} StructuredContentBlockAttributes
  * @category Attributes
- * @property {Object} [sdtPr] @internal - Internal structured document tag properties
+ * @property {string} [id] Unique identifier for the structured content block
+ * @property {string} [tag] Content control tag (e.g., 'block_table_sdt')
+ * @property {string} [alias='Structured content'] Display name for the block
+ * @property {Object} [sdtPr] @internal Internal structured document tag properties
+ * @example
+ * // Get attributes from a structured content block
+ * const attrs = editor.getAttributes('structuredContentBlock')
+ * console.log(attrs.id, attrs.alias)
  */
 
-/**
- * @module StructuredContentBlock
- * @sidebarTitle Structured Content Block
- * @snippetPath /snippets/extensions/structured-content-block.mdx
- */
 export const StructuredContentBlock = Node.create({
   name: 'structuredContentBlock',
 
