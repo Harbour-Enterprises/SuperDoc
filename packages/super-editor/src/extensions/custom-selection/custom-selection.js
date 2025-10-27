@@ -214,6 +214,7 @@ export const CustomSelection = Extension.create({
             const isElement = target instanceof Element;
             const isToolbarBtn = isElement && isToolbarButton(target);
             const isToolbarInp = isElement && isToolbarInput(target);
+            const editorElement = this.editor.options.element;
 
             // Store focus target for other components
             this.editor.setOptions({
@@ -261,6 +262,14 @@ export const CustomSelection = Extension.create({
 
             // Handle clicks outside toolbar
             if (!isToolbarBtn && !isToolbarInp) {
+              const clickedInsideEditor = editorElement?.contains(target);
+
+              if (clickedInsideEditor && this.editor.options.isHeaderOrFooter && this.editor.options.lastSelection) {
+                this.editor.setOptions({
+                  lastSelection: null,
+                });
+              }
+
               // Clear preserved selection and visual selection
               view.dispatch(
                 setFocusMeta(view.state.tr, {
@@ -272,7 +281,7 @@ export const CustomSelection = Extension.create({
               );
 
               // Clear selection if clicking outside editor
-              if (!selection.empty && !this.editor.options.element?.contains(target)) {
+              if (!selection.empty && !editorElement?.contains(target)) {
                 this.editor.setOptions({
                   lastSelection: selection,
                 });

@@ -8,6 +8,7 @@ export default defineConfig({
       './packages/superdoc',
       './packages/collaboration-yjs',
       './shared/common',
+      './packages/measurement-engine',
     ],
     coverage: {
       exclude: [

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /*
  * Runs Vitest coverage across the whole monorepo via Vitest workspace.
- * Usage: npm run test:cov -- [path/glob or flags]
+ * Usage: npm run test:cov -- [alias|path/glob or flags]
  *
  * Notes:
- * - Aggregates coverage for both packages: super-editor and superdoc.
+ * - Aggregates coverage for super-editor, superdoc, and measurement-engine.
  * - Accepts any Vitest CLI flags and test path globs relative to repo root.
  */
 import { spawn } from 'child_process';
@@ -20,8 +20,31 @@ const vitestBin = path.resolve(
   process.platform === 'win32' ? 'vitest.cmd' : 'vitest'
 );
 
-// Pass through any user-provided arguments unchanged
-const userArgs = process.argv.slice(2);
+// Pass through any user-provided arguments unchanged aside from known aliases
+let userArgs = process.argv.slice(2);
+
+const TARGET_ALIASES = {
+  'measurement-engine': {
+    extraArgs: [
+      '--config',
+      path.resolve(repoRoot, 'packages', 'measurement-engine', 'engine', 'vitest.config.mjs'),
+      '--root',
+      path.resolve(repoRoot, 'packages', 'measurement-engine', 'engine'),
+    ],
+    coverageDir: 'coverage/measurement-engine',
+  },
+};
+
+const aliasNames = new Set(Object.keys(TARGET_ALIASES));
+
+let targetAlias = null;
+if (userArgs.length > 0) {
+  const firstArg = userArgs[0];
+  if (!firstArg.startsWith('-') && aliasNames.has(firstArg)) {
+    targetAlias = firstArg;
+    userArgs = userArgs.slice(1);
+  }
+}
 
 // Default coverage opts suitable for the whole monorepo
 const coverageExcludePatterns = [
@@ -37,18 +60,27 @@ const coverageExcludePatterns = [
   '**/migration_after_0_4_14.js',
 ];
 
-const defaultCoverageArgs = [
+const coverageDir = targetAlias ? TARGET_ALIASES[targetAlias].coverageDir : 'coverage';
+
+const coverageArgs = [
   '--coverage',
   '--coverage.provider=v8',
   '--coverage.reporter=text',
   '--coverage.reporter=lcov',
   '--coverage.reporter=html',
   '--coverage.reporter=json-summary',
-  '--coverage.reportsDirectory=coverage',
+  `--coverage.reportsDirectory=${coverageDir}`,
   ...coverageExcludePatterns.map((pattern) => `--coverage.exclude=${pattern}`),
 ];
 
-const vitestArgs = ['run', ...defaultCoverageArgs, ...userArgs];
+const vitestArgs = ['run', ...coverageArgs];
+
+if (targetAlias) {
+  const { extraArgs = [] } = TARGET_ALIASES[targetAlias];
+  vitestArgs.push(...extraArgs);
+}
+
+vitestArgs.push(...userArgs);
 
 const child = spawn(vitestBin, vitestArgs, {
   stdio: 'inherit',
@@ -58,14 +90,40 @@ const child = spawn(vitestBin, vitestArgs, {
 child.on('close', (code) => {
   try {
     if (code === 0) {
-      const summaryPath = path.join(repoRoot, 'coverage', 'coverage-summary.json');
+      const summaryPath = path.join(repoRoot, coverageDir, 'coverage-summary.json');
       if (fs.existsSync(summaryPath)) {
         const raw = fs.readFileSync(summaryPath, 'utf8');
         const data = JSON.parse(raw);
 
         const normalize = (p) => p.replaceAll('\\\\', '/');
-        const editorRootAbs = normalize(path.join(repoRoot, 'packages', 'super-editor')) + '/';
-        const superdocRootAbs = normalize(path.join(repoRoot, 'packages', 'superdoc')) + '/';
+
+        const packages = [
+          {
+            name: 'super-editor',
+            label: 'super-editor package',
+            absPrefix: normalize(path.join(repoRoot, 'packages', 'super-editor')) + '/',
+            relSegment: '/packages/super-editor/',
+            relPrefix: 'packages/super-editor/',
+          },
+          {
+            name: 'superdoc',
+            label: 'superdoc package',
+            absPrefix: normalize(path.join(repoRoot, 'packages', 'superdoc')) + '/',
+            relSegment: '/packages/superdoc/',
+            relPrefix: 'packages/superdoc/',
+          },
+          {
+            name: 'measurement-engine',
+            label: 'measurement-engine package',
+            absPrefix: normalize(path.join(repoRoot, 'packages', 'measurement-engine', 'engine')) + '/',
+            relSegment: '/packages/measurement-engine/engine/',
+            relPrefix: 'packages/measurement-engine/engine/',
+          },
+        ];
+
+        const packagesToReport = targetAlias
+          ? packages.filter((pkg) => pkg.name === targetAlias)
+          : packages;
 
         function getTotals(obj) {
           const s = obj.statements || { total: 0, covered: 0 };
@@ -87,22 +145,25 @@ child.on('close', (code) => {
           const preAbs = normalize(absPrefix);
           const seg = normalize(relSegment);
           const preRel = normalize(relPrefix);
-          let sTot = 0, sCov = 0;
-          let fTot = 0, fCov = 0;
-          let lTot = 0, lCov = 0;
+          let sTot = 0;
+          let sCov = 0;
+          let fTot = 0;
+          let fCov = 0;
+          let lTot = 0;
+          let lCov = 0;
           for (const [file, obj] of Object.entries(data)) {
             if (file === 'total') continue;
             const fp = normalize(file);
-            const isMatch = (
-              fp.startsWith(preAbs) ||
-              fp.includes(seg) ||
-              fp.startsWith(preRel)
-            );
+            const isMatch =
+              fp.startsWith(preAbs) || fp.includes(seg) || fp.startsWith(preRel);
             if (!isMatch) continue;
             const t = getTotals(obj);
-            sTot += t.statements.total; sCov += t.statements.covered;
-            fTot += t.functions.total;  fCov += t.functions.covered;
-            lTot += t.lines.total;      lCov += t.lines.covered;
+            sTot += t.statements.total;
+            sCov += t.statements.covered;
+            fTot += t.functions.total;
+            fCov += t.functions.covered;
+            lTot += t.lines.total;
+            lCov += t.lines.covered;
           }
           return {
             statements: pct(sCov, sTot),
@@ -120,33 +181,22 @@ child.on('close', (code) => {
           };
         })();
 
-        const superEditor = aggForPackage({
-          absPrefix: editorRootAbs,
-          relSegment: '/packages/super-editor/',
-          relPrefix: 'packages/super-editor/',
-        });
-        const superDoc = aggForPackage({
-          absPrefix: superdocRootAbs,
-          relSegment: '/packages/superdoc/',
-          relPrefix: 'packages/superdoc/',
-        });
-
         const fmt = (n) => `${n.toFixed(1)} %`;
 
-        console.log('\nGlobal repo test coverage:');
-        console.log(`📄 Statements: ${fmt(globalTotals.statements)}`);
-        console.log(`🔧 Functions: ${fmt(globalTotals.functions)}`);
-        console.log(`📏 Lines: ${fmt(globalTotals.lines)}`);
+        if (!targetAlias) {
+          console.log('\nGlobal repo test coverage:');
+          console.log(`📄 Statements: ${fmt(globalTotals.statements)}`);
+          console.log(`🔧 Functions: ${fmt(globalTotals.functions)}`);
+          console.log(`📏 Lines: ${fmt(globalTotals.lines)}`);
+        }
 
-        console.log('\nsuper-editor package:');
-        console.log(`▌📄 Statements: ${fmt(superEditor.statements)}`);
-        console.log(`▌🔧 Functions: ${fmt(superEditor.functions)}`);
-        console.log(`▌📏 Lines: ${fmt(superEditor.lines)}`);
-
-        console.log('\nsuperdoc package:');
-        console.log(`▌📄 Statements: ${fmt(superDoc.statements)}`);
-        console.log(`▌🔧 Functions: ${fmt(superDoc.functions)}`);
-        console.log(`▌📏 Lines: ${fmt(superDoc.lines)}`);
+        for (const pkg of packagesToReport) {
+          const stats = aggForPackage(pkg);
+          console.log(`\n${pkg.label}:`);
+          console.log(`▌📄 Statements: ${fmt(stats.statements)}`);
+          console.log(`▌🔧 Functions: ${fmt(stats.functions)}`);
+          console.log(`▌📏 Lines: ${fmt(stats.lines)}`);
+        }
       }
     }
   } catch {}

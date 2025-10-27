@@ -291,4 +291,20 @@ describe('CustomSelection plugin', () => {
       showVisualSelection: true,
     });
   });
+
+  it('clears header lastSelection when clicking inside editor', () => {
+    const { plugin, view, editor } = createEnvironment();
+    editor.options.isHeaderOrFooter = true;
+    editor.options.lastSelection = view.state.selection;
+
+    const mouseEvent = {
+      button: 0,
+      target: editor.options.element,
+      type: 'mousedown',
+    };
+
+    plugin.props.handleDOMEvents.mousedown(view, mouseEvent);
+
+    expect(editor.options.lastSelection).toBeNull();
+  });
 });
