@@ -46,9 +46,9 @@ export function applyColorModifier(hexColor, modifier, value) {
     newG = g * percent;
     newB = b * percent;
   } else if (modifier === 'tint') {
-    newR = r + (255 - r) * (1 - percent);
-    newG = g + (255 - g) * (1 - percent);
-    newB = b + (255 - b) * (1 - percent);
+    newR = r + (255 - r) * percent;
+    newG = g + (255 - g) * percent;
+    newB = b + (255 - b) * percent;
   } else if (modifier === 'lumOff') {
     const offset = 255 * percent;
     newR = r + offset;
