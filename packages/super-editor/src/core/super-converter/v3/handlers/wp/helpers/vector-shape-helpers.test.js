@@ -32,6 +32,10 @@ describe('applyColorModifier', () => {
     expect(applyColorModifier('#70ad47', 'tint', '50000')).toBe('#b8d6a3');
   });
 
+  it('tint modifier at 100% produces white', () => {
+    expect(applyColorModifier('#70ad47', 'tint', '100000')).toBe('#ffffff');
+  });
+
   it('applies lumMod modifier', () => {
     expect(applyColorModifier('#4472c4', 'lumMod', '60000')).toBe('#294476');
   });
