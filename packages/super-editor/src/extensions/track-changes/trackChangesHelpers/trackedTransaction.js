@@ -15,7 +15,7 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
  * @returns {import('prosemirror-state').Transaction} Modified transaction.
  */
 export const trackedTransaction = ({ tr, state, user }) => {
-  const onlyInputTypeMeta = ['inputType', 'uiEvent', 'paste', 'pointer'];
+  const onlyInputTypeMeta = ['inputType', 'uiEvent', 'paste', 'pointer', 'addToHistory'];
   const notAllowedMeta = ['historyUndo', 'historyRedo', 'acceptReject'];
 
   if (

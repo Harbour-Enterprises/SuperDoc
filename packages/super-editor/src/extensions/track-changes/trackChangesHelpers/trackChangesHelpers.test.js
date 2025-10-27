@@ -253,6 +253,25 @@ describe('trackChangesHelpers', () => {
     expect(result).toBe(tr);
   });
 
+  it('trackedTransaction tracks changes when addToHistory is false', () => {
+    const state = createState(createDocWithText('abc'));
+    const tr = state.tr.insertText('Z', 1);
+    tr.setMeta('inputType', 'insertText');
+    tr.setMeta('addToHistory', false);
+
+    const tracked = trackedTransaction({ tr, state, user });
+    expect(tracked).not.toBe(tr);
+
+    const meta = tracked.getMeta(TrackChangesBasePluginKey);
+    expect(meta?.insertedMark?.type.name).toBe(TrackInsertMarkName);
+
+    const finalState = state.apply(tracked);
+    const hasInsertMark = documentHelpers
+      .findInlineNodes(finalState.doc)
+      .some(({ node }) => node.marks.some((mark) => mark.type.name === TrackInsertMarkName));
+    expect(hasInsertMark).toBe(true);
+  });
+
   it('no-op helpers exist for future implementations', () => {
     expect(markWrapping()).toBeUndefined();
     expect(replaceAroundStep()).toBeUndefined();
