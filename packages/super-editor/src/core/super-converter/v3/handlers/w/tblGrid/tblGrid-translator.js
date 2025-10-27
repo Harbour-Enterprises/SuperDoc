@@ -24,7 +24,11 @@ const encode = (params) => {
   const node = nodes[0];
 
   // Process property translators
-  const attributes = encodeProperties(node, { [gridColTranslator.xmlName]: gridColTranslator }, true);
+  const attributes = encodeProperties(
+    { ...params, nodes: [node] },
+    { [gridColTranslator.xmlName]: gridColTranslator },
+    true,
+  );
 
   return {
     xmlName: XML_NODE_NAME,

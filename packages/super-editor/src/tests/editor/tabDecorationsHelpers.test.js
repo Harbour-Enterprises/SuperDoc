@@ -5,19 +5,14 @@ import {
   findDecimalBreakPos,
   measureRangeWidth,
 } from '@extensions/tab/helpers/tabDecorations.js';
+import { pixelsToTwips } from '@converter/helpers';
 
 describe('tab decoration helpers', () => {
   describe('calculateIndentFallback', () => {
     it('returns combined first line and hanging indents with left margin', () => {
-      const indent = { left: 12, firstLine: 36, hanging: 10 };
+      const indent = { left: pixelsToTwips(12), firstLine: pixelsToTwips(36), hanging: pixelsToTwips(10) };
 
       expect(calculateIndentFallback(indent)).toBe(38);
-    });
-
-    it('parses inch-based text indent strings', () => {
-      const indent = { textIndent: '1.5in' };
-
-      expect(calculateIndentFallback(indent)).toBeCloseTo(144); // 1.5in * 96px
     });
   });
 

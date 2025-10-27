@@ -63,6 +63,7 @@ export const makeDefaultItems = ({
     options: fontOptions,
     onActivate: ({ fontFamily }) => {
       if (!fontFamily) return;
+      fontFamily = fontFamily.split(',')[0]; // in case of fonts with fallbacks
       fontButton.label.value = fontFamily;
 
       const defaultFont = fontOptions.find((i) => i.label === fontButton.defaultLabel.value);
