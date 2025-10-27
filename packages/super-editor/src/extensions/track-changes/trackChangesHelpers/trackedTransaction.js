@@ -88,6 +88,10 @@ export const trackedTransaction = ({ tr, state, user }) => {
     newTr.setMeta(tr.getMeta('uiEvent'));
   }
 
+  if (tr.getMeta('addToHistory')) {
+    newTr.setMeta('addToHistory', tr.getMeta('addToHistory'));
+  }
+
   if (tr.selectionSet) {
     const deletionMarkSchema = state.schema.marks[TrackDeleteMarkName];
     const deletionMark = findMark(state, deletionMarkSchema, false);

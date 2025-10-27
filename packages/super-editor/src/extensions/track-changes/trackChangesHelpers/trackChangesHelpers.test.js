@@ -262,6 +262,7 @@ describe('trackChangesHelpers', () => {
     const tracked = trackedTransaction({ tr, state, user });
     expect(tracked).not.toBe(tr);
 
+    // Verify tracking happens
     const meta = tracked.getMeta(TrackChangesBasePluginKey);
     expect(meta?.insertedMark?.type.name).toBe(TrackInsertMarkName);
 
@@ -270,6 +271,9 @@ describe('trackChangesHelpers', () => {
       .findInlineNodes(finalState.doc)
       .some(({ node }) => node.marks.some((mark) => mark.type.name === TrackInsertMarkName));
     expect(hasInsertMark).toBe(true);
+
+    // Verify addToHistory meta is preserved
+    expect(tracked.getMeta('addToHistory')).toBe(false);
   });
 
   it('no-op helpers exist for future implementations', () => {
