@@ -11,10 +11,11 @@ export const handleTextNode = (params) => {
   const node = nodes[0];
 
   const resultNode = wTextTranslator.encode({
+    ...params,
     extraParams: {
+      ...(params.extraParams || {}),
       node,
     },
-    ...params,
   });
 
   if (!resultNode) return { nodes: [], consumed: 0 };

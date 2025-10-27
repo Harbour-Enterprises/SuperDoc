@@ -20,7 +20,7 @@ const validXmlAttributes = [createAttributeHandler('xml:space', 'xmlSpace')];
  * Link nodes look the same as text nodes but with a link attr.
  * Also, tracked changes are text marks so those need to be separated here.
  * We need to check here and re-route as necessary
- * @param {import('@translator').SCEncoderConfig} _
+ * @param {import('@translator').SCEncoderConfig} params
  * @param {import('@translator').EncodedAttributes} [encodedAttrs] - The already encoded attributes
  * @returns {import('@translator').SCEncoderResult}
  */
@@ -39,14 +39,10 @@ const encode = (params, encodedAttrs = {}) => {
     }
     // Handle the removal of a temporary wrapper that we added to preserve empty spaces
     text = text.replace(/\[\[sdspace\]\]/g, '');
-  }
-  // Word sometimes will have an empty text node with a space attribute, in that case it should be a space
-  else if (!elements.length && encodedAttrs.xmlSpace === 'preserve') {
+  } else if (!elements.length && encodedAttrs.xmlSpace === 'preserve') {
+    // Word sometimes will have an empty text node with a space attribute, in that case it should be a space
     text = ' ';
-  }
-
-  // Ignore others - can catch other special cases here if necessary
-  else return null;
+  } else return null;
 
   return {
     type: 'text',
