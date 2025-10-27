@@ -1,6 +1,7 @@
 import { emuToPixels, pixelsToEmu, degreesToRot } from '@converter/helpers.js';
 import { getFallbackImageNameFromDataUri, sanitizeDocxMediaName } from '@converter/helpers/mediaHelpers.js';
 import { prepareTextAnnotation } from '@converter/v3/handlers/w/sdt/helpers/translate-field-annotation.js';
+import { wrapTextInRun } from '@converter/exporter.js';
 import { generateDocxRandomId } from '@core/helpers/index.js';
 
 /**
@@ -333,10 +334,10 @@ export function translateVectorShape(params) {
     elements: [drawing],
   };
 
-  const result = {
+  const alternateContent = {
     name: 'mc:AlternateContent',
     elements: [choice],
   };
 
-  return result;
+  return wrapTextInRun(alternateContent);
 }
