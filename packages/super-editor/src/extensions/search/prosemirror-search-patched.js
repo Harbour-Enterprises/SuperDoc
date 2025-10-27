@@ -261,24 +261,52 @@ function textContent(node) {
 }
 function mapIndexToDocPos(node, start, index) {
   if (index <= 0) return start;
-  const fullText = textContent(node);
-  if (index >= fullText.length) return start + node.content.size;
-  let target = start;
-  let remaining = index;
-  let found = false;
-  node.descendants((child, pos) => {
-    if (found) return false;
-    if (!child.isText) return true;
-    const len = child.text.length;
-    if (remaining <= len) {
-      target = start + pos + remaining;
-      found = true;
-      return false;
+  const fullTextLength = textContent(node).length;
+  if (index >= fullTextLength) return start + node.content.size;
+  return mapIndexWithinNode(node, start, index);
+}
+function mapIndexWithinNode(node, start, index) {
+  if (index <= 0) return start;
+  let offset = start;
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
+    const childStart = offset;
+    if (child.isText) {
+      const len = child.text.length;
+      if (index <= len) return childStart + index;
+      index -= len;
+      offset += child.nodeSize;
+      continue;
     }
-    remaining -= len;
-    return true;
-  });
-  return found ? target : start + node.content.size;
+
+    if (child.isLeaf) {
+      if (index <= 1) return childStart + Math.min(index, 1);
+      index -= 1;
+      offset += child.nodeSize;
+      continue;
+    }
+
+    const isTransparentInline = child.inlineContent && child.type && transparentInlineNodes.has(child.type.name);
+    const innerTextLength = textContent(child).length;
+
+    if (isTransparentInline) {
+      if (index <= innerTextLength) return mapIndexWithinNode(child, childStart + 1, index);
+      index -= innerTextLength;
+      offset += child.nodeSize;
+      continue;
+    }
+
+    const contribution = innerTextLength + 2;
+    if (index === 1) return childStart;
+    if (index > 1 && index <= contribution - 1) {
+      return mapIndexWithinNode(child, childStart + 1, index - 1);
+    }
+    if (index === contribution) return childStart + child.nodeSize;
+
+    index -= contribution;
+    offset += child.nodeSize;
+  }
+  return start + node.content.size;
 }
 const transparentInlineNodes = new Set(['run']);
 function scanTextblocks(node, from, to, f, nodeStart = 0) {
