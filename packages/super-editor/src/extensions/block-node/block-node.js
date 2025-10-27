@@ -218,8 +218,7 @@ export const BlockNode = Extension.create({
       new Plugin({
         key: BlockNodePluginKey,
         appendTransaction: (transactions, _oldState, newState) => {
-          const docChanged = transactions.some((tr) => tr.docChanged) && !_oldState.doc.eq(newState.doc);
-          if (hasInitialized && !docChanged) return null;
+          if (hasInitialized && !transactions.some((tr) => tr.docChanged)) return null;
 
           // Check for new block nodes and if none found, we don't need to do anything
           if (hasInitialized && !checkForNewBlockNodesInTrs([...transactions])) return null;
