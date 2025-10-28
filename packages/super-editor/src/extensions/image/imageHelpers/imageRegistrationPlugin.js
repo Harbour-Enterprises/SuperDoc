@@ -274,7 +274,13 @@ const registerImages = async (foundImages, editor, view) => {
         return;
       }
 
-      await uploadAndInsertImage({ editor, view, file: process.file, size: process.size, id });
+      await uploadAndInsertImage({
+        editor,
+        view,
+        file: process.file,
+        imageDimensions: { size: process.size, scaledSize: process.scaledSize },
+        id,
+      });
     } catch (error) {
       console.error(`Error processing image from ${src}:`, error);
       // Ensure placeholder is removed even on error

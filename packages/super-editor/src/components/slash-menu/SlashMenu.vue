@@ -322,7 +322,9 @@ onMounted(() => {
     }
   });
 
-  props.editor.view.dom.addEventListener('contextmenu', handleRightClick);
+  props.editor.on('create', () => {
+    props.editor.view.dom.addEventListener('contextmenu', handleRightClick);
+  });
 
   props.editor.on('slashMenu:close', () => {
     cleanupCustomItems();

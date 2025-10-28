@@ -1,6 +1,6 @@
 import { findPlaceholder, removeImagePlaceholder, addImagePlaceholder } from './imageRegistrationPlugin.js';
 import { handleImageUpload as handleImageUploadDefault } from './handleImageUpload.js';
-import { processUploadedImage } from './processUploadedImage.js';
+import { processUploadedImage, getOriginalImageDimensions } from './processUploadedImage.js';
 import { buildMediaPath, ensureUniqueFileName } from './fileNameUtils.js';
 import { generateDocxRandomId } from '@core/helpers/index.js';
 import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
@@ -17,17 +17,24 @@ const fileTooLarge = (file) => {
 
 export const checkAndProcessImage = async ({ getMaxContentSize, file }) => {
   if (fileTooLarge(file)) {
-    return { file: null, size: { width: 0, height: 0 } };
+    return { file: null, size: { width: 0, height: 0 }, scaledSize: { width: 0, height: 0 } };
   }
 
   try {
+    // Get original dimensions before processing
+    const originalDimensions = await getOriginalImageDimensions(file);
+
     // Will process the image file in place
     const processedImageResult = await processUploadedImage(file, getMaxContentSize);
     const process = processedImageResult;
-    return { file: process.file, size: { width: process.width, height: process.height } };
+    return {
+      file: process.file,
+      size: originalDimensions, // Original file dimensions
+      scaledSize: { width: process.width, height: process.height }, // Display dimensions
+    };
   } catch (err) {
     console.warn('Error processing image:', err);
-    return { file: null, size: { width: 0, height: 0 } };
+    return { file: null, size: { width: 0, height: 0 }, scaledSize: { width: 0, height: 0 } };
   }
 };
 
@@ -65,7 +72,7 @@ export const generateUniqueDocPrId = (editor) => {
   return candidate;
 };
 
-export async function uploadAndInsertImage({ editor, view, file, size, id }) {
+export async function uploadAndInsertImage({ editor, view, file, imageDimensions, id }) {
   const imageUploadHandler =
     typeof editor.options.handleImageUpload === 'function'
       ? editor.options.handleImageUpload
@@ -107,7 +114,8 @@ export async function uploadAndInsertImage({ editor, view, file, size, id }) {
 
     let imageNode = view.state.schema.nodes.image.create({
       src: mediaPath,
-      size,
+      size: imageDimensions.size, // Original file dimensions
+      scaledSize: imageDimensions.scaledSize, // Display dimensions
       id: docPrId,
       rId,
     });

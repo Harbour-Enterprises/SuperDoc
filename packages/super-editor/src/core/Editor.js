@@ -353,8 +353,6 @@ export class Editor extends EventEmitter {
     this.emit('beforeCreate', { editor: this });
     this.on('contentError', this.options.onContentError);
 
-    this.mount(this.options.element);
-
     this.on('create', this.options.onCreate);
     this.on('update', this.options.onUpdate);
     this.on('selectionUpdate', this.options.onSelectionUpdate);
@@ -373,41 +371,46 @@ export class Editor extends EventEmitter {
     this.on('list-definitions-change', this.options.onListDefinitionsChange);
     this.on('fonts-resolved', this.options.onFontsResolved);
     this.on('exception', this.options.onException);
-
-    if (!this.options.isHeadless) {
-      this.initializeCollaborationData();
-      this.initDefaultStyles();
-      this.#checkFonts();
-    }
-
-    const shouldMigrateListsOnInit = Boolean(
-      this.options.markdown ||
-        this.options.html ||
-        this.options.loadFromSchema ||
-        this.options.jsonOverride ||
-        this.options.mode === 'html' ||
-        this.options.mode === 'text',
-    );
-
-    if (shouldMigrateListsOnInit) {
-      this.migrateListsToV2();
-    }
-
-    this.setDocumentMode(this.options.documentMode);
-
-    // Init pagination only if we are not in collaborative mode. Otherwise
-    // it will be in itialized via this.#onCollaborationReady
-    if (!this.options.ydoc) {
-      if (!this.options.isChildEditor) {
-        this.#initPagination();
-        this.#initComments();
-
-        this.#validateDocumentInit();
+    // Mount is async now to wait for image dimensions
+    // All view-dependent initialization happens after mount completes
+    this.mount(this.options.element).then(() => {
+      if (!this.options.isHeadless) {
+        this.initializeCollaborationData();
+        this.initDefaultStyles();
+        this.#checkFonts();
       }
-    }
 
-    this.#initDevTools();
-    this.#registerCopyHandler();
+      const shouldMigrateListsOnInit = Boolean(
+        this.options.markdown ||
+          this.options.html ||
+          this.options.loadFromSchema ||
+          this.options.jsonOverride ||
+          this.options.mode === 'html' ||
+          this.options.mode === 'text',
+      );
+
+      if (shouldMigrateListsOnInit) {
+        this.migrateListsToV2();
+      }
+
+      this.setDocumentMode(this.options.documentMode);
+
+      // Init pagination only if we are not in collaborative mode. Otherwise
+      // it will be initialized via this.#onCollaborationReady
+      if (!this.options.ydoc) {
+        if (!this.options.isChildEditor) {
+          this.#initPagination();
+          this.#initComments();
+
+          this.#validateDocumentInit();
+        }
+      }
+
+      this.#initDevTools();
+      this.#registerCopyHandler();
+
+      this.emit('create', { editor: this });
+    });
   }
 
   /**
@@ -415,7 +418,7 @@ export class Editor extends EventEmitter {
    * @param {EditorOptions} options - Editor options
    * @returns {void}
    */
-  #initRichText() {
+  async #initRichText() {
     if (!this.options.extensions || !this.options.extensions.length) {
       this.options.extensions = getRichTextExtensions();
     }
@@ -428,7 +431,7 @@ export class Editor extends EventEmitter {
     this.emit('beforeCreate', { editor: this });
     this.on('contentError', this.options.onContentError);
 
-    this.mount(this.options.element);
+    await this.mount(this.options.element);
 
     this.on('create', this.options.onCreate);
     this.on('update', this.options.onUpdate);
@@ -443,13 +446,8 @@ export class Editor extends EventEmitter {
     this.on('list-definitions-change', this.options.onListDefinitionsChange);
   }
 
-  mount(el) {
-    this.#createView(el);
-
-    window.setTimeout(() => {
-      if (this.isDestroyed) return;
-      this.emit('create', { editor: this });
-    }, 0);
+  async mount(el) {
+    await this.#createView(el);
   }
 
   unmount() {
@@ -692,9 +690,7 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Replace content of editor that was created with loadFromSchema option
-   * Used to replace content of other header/footer when one of it was edited
-   *
+   * Replace the current editor content.
    * @param {object} content - new editor content json (retrieved from editor.getUpdatedJson)
    * @returns {void}
    */
@@ -721,11 +717,18 @@ export class Editor extends EventEmitter {
    */
   /**
    * Insert data for a new file
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  #insertNewFileData() {
+  async #insertNewFileData() {
     if (!this.options.isNewFile) return;
     this.options.isNewFile = false;
+
+    // Wait for image dimensions to be preloaded before generating PM data
+    // Skip for headless editors (tests) as they don't need actual dimensions
+    if (!this.options.isHeadless && this.converter && this.converter.imageDimensionsPromise) {
+      await this.converter.imageDimensionsPromise;
+    }
+
     const doc = this.#generatePmData();
     // hiding this transaction from history so it doesn't appear in undo stack
     const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc).setMeta('addToHistory', false);
@@ -1080,9 +1083,15 @@ export class Editor extends EventEmitter {
 
   /**
    * Create the PM editor view
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  #createView(element) {
+  async #createView(element) {
+    // Wait for image dimensions to be preloaded before generating PM data
+    // Skip for headless editors (tests) as they don't need actual dimensions
+    if (!this.options.isHeadless && this.converter && this.converter.imageDimensionsPromise) {
+      await this.converter.imageDimensionsPromise;
+    }
+
     let doc = this.#generatePmData();
 
     // Only initialize the doc if we are not using Yjs/collaboration.
@@ -1959,7 +1968,7 @@ export class Editor extends EventEmitter {
       updateYdocDocxData(this);
       this.initializeCollaborationData();
     } else {
-      this.#insertNewFileData();
+      await this.#insertNewFileData();
     }
 
     if (!this.options.ydoc) {

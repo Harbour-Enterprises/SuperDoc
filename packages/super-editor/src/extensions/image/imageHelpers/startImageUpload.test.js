@@ -35,13 +35,18 @@ describe('checkAndProcessImage', () => {
     });
 
     expect(window.alert).toHaveBeenCalledWith('Image size must be less than 5MB');
-    expect(result).toEqual({ file: null, size: { width: 0, height: 0 } });
+    expect(result).toEqual({ file: null, size: { width: 0, height: 0 }, scaledSize: { width: 0, height: 0 } });
     expect(spy).not.toHaveBeenCalled();
   });
 
   it('returns processed image data when resizing succeeds', async () => {
     const file = new File([new Uint8Array([1, 2, 3])], 'small.png', { type: 'image/png' });
     const processedFile = new File([new Uint8Array([4, 5, 6])], 'processed.png', { type: 'image/png' });
+
+    vi.spyOn(processModule, 'getOriginalImageDimensions').mockResolvedValue({
+      width: 200,
+      height: 300,
+    });
 
     vi.spyOn(processModule, 'processUploadedImage').mockResolvedValue({
       file: processedFile,
@@ -56,7 +61,8 @@ describe('checkAndProcessImage', () => {
 
     expect(result).toEqual({
       file: processedFile,
-      size: { width: 123, height: 456 },
+      size: { width: 200, height: 300 },
+      scaledSize: { width: 123, height: 456 },
     });
   });
 
@@ -72,7 +78,7 @@ describe('checkAndProcessImage', () => {
     });
 
     expect(consoleSpy).toHaveBeenCalledWith('Error processing image:', expect.any(Error));
-    expect(result).toEqual({ file: null, size: { width: 0, height: 0 } });
+    expect(result).toEqual({ file: null, size: { width: 0, height: 0 }, scaledSize: { width: 0, height: 0 } });
 
     consoleSpy.mockRestore();
   });
@@ -148,7 +154,7 @@ describe('image upload helpers integration', () => {
       editor,
       view: editor.view,
       file: createTestFile('missing.png'),
-      size: { width: 10, height: 10 },
+      imageDimensions: { size: { width: 10, height: 10 }, scaledSize: { width: 10, height: 10 } },
       id: missingId,
     });
 
@@ -182,7 +188,7 @@ describe('image upload helpers integration', () => {
         editor,
         view: editor.view,
         file: createTestFile('collab.png'),
-        size: { width: 20, height: 20 },
+        imageDimensions: { size: { width: 20, height: 20 }, scaledSize: { width: 20, height: 20 } },
         id,
       }),
     ).resolves.not.toThrow();
@@ -207,7 +213,7 @@ describe('image upload helpers integration', () => {
       editor,
       view: editor.view,
       file: createTestFile('relationship.png'),
-      size: { width: 30, height: 30 },
+      imageDimensions: { size: { width: 30, height: 30 }, scaledSize: { width: 30, height: 30 } },
       id,
     });
 
@@ -233,7 +239,7 @@ describe('image upload helpers integration', () => {
       editor,
       view: editor.view,
       file: createTestFile(weirdName),
-      size: { width: 40, height: 40 },
+      imageDimensions: { size: { width: 40, height: 40 }, scaledSize: { width: 40, height: 40 } },
       id: firstId,
     });
 
@@ -251,7 +257,7 @@ describe('image upload helpers integration', () => {
       editor,
       view: editor.view,
       file: createTestFile(weirdName),
-      size: { width: 50, height: 50 },
+      imageDimensions: { size: { width: 50, height: 50 }, scaledSize: { width: 50, height: 50 } },
       id: secondId,
     });
 
@@ -338,7 +344,7 @@ describe('uploadAndInsertImage collaboration branch (isolated)', () => {
       editor,
       view,
       file,
-      size: { width: 10, height: 10 },
+      imageDimensions: { size: { width: 10, height: 10 }, scaledSize: { width: 10, height: 10 } },
       id: {},
     });
 
@@ -439,7 +445,7 @@ describe('uploadAndInsertImage collaboration branch (isolated)', () => {
         editor,
         view,
         file: sourceFile,
-        size: { width: 10, height: 10 },
+        imageDimensions: { size: { width: 10, height: 10 }, scaledSize: { width: 10, height: 10 } },
         id: {},
       });
     } finally {
@@ -531,7 +537,7 @@ describe('uploadAndInsertImage collaboration branch (isolated)', () => {
       editor,
       view,
       file: basicFile,
-      size: { width: 20, height: 20 },
+      imageDimensions: { size: { width: 20, height: 20 }, scaledSize: { width: 20, height: 20 } },
       id: {},
     });
 

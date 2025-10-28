@@ -57,7 +57,10 @@ describe('Relationships tests', () => {
       editor,
       view: editor.view,
       file,
-      size: { width: 100, height: 100 },
+      imageDimensions: {
+        size: { width: 100, height: 100 },
+        scaledSize: { width: 100, height: 100 },
+      },
       id,
     });
 
@@ -94,7 +97,10 @@ describe('Relationships tests', () => {
         editor,
         view: editor.view,
         file,
-        size: { width: 100, height: 100 },
+        imageDimensions: {
+          size: { width: 100, height: 100 },
+          scaledSize: { width: 100, height: 100 },
+        },
         id,
       }),
     ).resolves.toBeUndefined();

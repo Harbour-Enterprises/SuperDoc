@@ -86,14 +86,21 @@ describe('Image Extension DOM rendering', () => {
 
   describe('size attribute styling', () => {
     it('applies width and auto height by default', () => {
-      const { style } = renderImageAttributes({ size: { width: 300, height: 200 } });
+      const { style } = renderImageAttributes({
+        scaledSize: { width: 300, height: 200 },
+        size: { width: 300, height: 200 },
+      });
       const styles = parseStyle(style);
       expect(styles.width).toBe('300px');
       expect(styles.height).toBe('auto');
     });
 
     it('renders EMF sizing with explicit height and border', () => {
-      const { style } = renderImageAttributes({ size: { width: 300, height: 200 }, extension: 'emf' });
+      const { style } = renderImageAttributes({
+        size: { width: 300, height: 200 },
+        scaledSize: { width: 300, height: 200 },
+        extension: 'emf',
+      });
       const styles = parseStyle(style);
       expect(styles.width).toBe('300px');
       expect(styles.height).toBe('200px');
@@ -123,6 +130,7 @@ describe('Image Extension DOM rendering', () => {
     it('adds rotation margins even when anchors are present', () => {
       const { style } = renderImageAttributes({
         size: { width: 100, height: 100 },
+        scaledSize: { width: 100, height: 100 },
         transformData: { rotation: 45 },
         padding: { left: 10, top: 12, bottom: 4, right: 8 },
         marginOffset: { horizontal: 5, top: 7 },
@@ -136,7 +144,7 @@ describe('Image Extension DOM rendering', () => {
 
     it('retains padding-based margins when rotated without explicit margin offsets', () => {
       const { style } = renderImageAttributes({
-        size: { width: 100, height: 100 },
+        scaledSize: { width: 100, height: 100 },
         transformData: { rotation: 45 },
         padding: { left: 10, top: 15, bottom: 3, right: 8 },
       });
@@ -159,6 +167,7 @@ describe('Image Extension DOM rendering', () => {
       const imageNode = nodes.image.create({
         src: 'word/media/test-image.png',
         size: { width: 120, height: 80 },
+        scaledSize: { width: 120, height: 80 },
         marginOffset: { horizontal: 10, top: 20 },
         padding: { right: 4, bottom: 6 },
         transformData: { rotation: 30 },
