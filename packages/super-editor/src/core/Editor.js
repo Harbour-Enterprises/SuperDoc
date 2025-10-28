@@ -1,7 +1,7 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMSerializer } from 'prosemirror-model';
-import { MarkdownSerializer, defaultMarkdownSerializer } from 'prosemirror-markdown';
+import TurndownService from 'turndown';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -1599,8 +1599,12 @@ export class Editor extends EventEmitter {
    * @returns {string} Editor content as Markdown
    */
   getMarkdown() {
-    const serializer = new MarkdownSerializer(defaultMarkdownSerializer.nodes, defaultMarkdownSerializer.marks);
-    return serializer.serialize(this.state.doc);
+    const turndownService = new TurndownService({
+      headingStyle: 'atx',
+      codeBlockStyle: 'fenced',
+    });
+    const html = this.getHTML();
+    return turndownService.turndown(html);
   }
 
   /**
