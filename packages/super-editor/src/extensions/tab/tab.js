@@ -78,9 +78,10 @@ export const TabNode = Node.create({
             decorations = DecorationSet.create(newState.doc, getTabDecorations(newState.doc, view, helpers));
           }
 
-          if (!tr.docChanged) {
+          if (!tr.docChanged || tr.getMeta('blockNodeInitialUpdate') === true) {
             return { decorations };
           }
+
           decorations = decorations.map(tr.mapping, tr.doc);
 
           let rangesToRecalculate = [];
@@ -116,12 +117,14 @@ export const TabNode = Node.create({
               return [mappedFrom, mappedTo];
             });
           });
+
           rangesToRecalculate.forEach(([start, end]) => {
             const oldDecorations = decorations.find(start, end);
             decorations = decorations.remove(oldDecorations);
             const newDecorations = getTabDecorations(newState.doc, view, helpers, start, end);
             decorations = decorations.add(newState.doc, newDecorations);
           });
+
           return { decorations };
         },
       },

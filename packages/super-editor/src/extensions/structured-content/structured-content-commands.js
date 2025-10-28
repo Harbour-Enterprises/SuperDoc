@@ -47,6 +47,16 @@ export const StructuredContentCommands = Extension.create({
        * Inserts a structured content inline at selection.
        * @category Command
        * @param {StructuredContentInlineInsert} options
+       * @example
+       * editor.commands.insertStructuredContentInline({
+       *  attrs: {
+       *   id: '123',
+       *   alias: 'Customer Name',
+       *  },
+       *  text: 'John Doe',
+       *  // or
+       *  json: { type: 'text', text: 'John Doe' },
+       * });
        */
       insertStructuredContentInline:
         (options = {}) =>
@@ -99,6 +109,16 @@ export const StructuredContentCommands = Extension.create({
        * Inserts a structured content block at selection.
        * @category Command
        * @param {StructuredContentBlockInsert} options
+       * @example
+       * editor.commands.insertStructuredContentBlock({
+       *  attrs: {
+       *    id: '456',
+       *    alias: 'Terms & Conditions',
+       *  },
+       *  json: { type: 'paragraph', content: [{ type: 'text', text: 'Legal content...' }] }
+       *  // or
+       *  html: '<p>Legal content...</p>',
+       * });
        */
       insertStructuredContentBlock:
         (options = {}) =>
@@ -156,6 +176,14 @@ export const StructuredContentCommands = Extension.create({
        * @category Command
        * @param {string} id - Unique identifier of the field
        * @param {StructuredContentUpdate} options
+       * @example
+       * editor.commands.updateStructuredContentById('123', { text: 'Jane Doe' });
+       * editor.commands.updateStructuredContentById('123', {
+       *  json: { type: 'text', text: 'Jane Doe' },
+       * });
+       * editor.commands.updateStructuredContentById('456', {
+       *  html: '<p>Updated legal content...</p>'
+       * });
        */
       updateStructuredContentById:
         (id, options = {}) =>
@@ -212,6 +240,9 @@ export const StructuredContentCommands = Extension.create({
        * Removes a structured content.
        * @category Command
        * @param {Array<{ node: Node, pos: number }>} structuredContentTags
+       * @example
+       * const fields = editor.helpers.structuredContentCommands.getStructuredContentTagsById(['123'], editor.state);
+       * editor.commands.deleteStructuredContent(fields);
        */
       deleteStructuredContent:
         (structuredContentTags) =>
@@ -239,6 +270,9 @@ export const StructuredContentCommands = Extension.create({
        * Removes a structured content by ID.
        * @category Command
        * @param {string | string[]} idOrIds
+       * @example
+       * editor.commands.deleteStructuredContentById('123');
+       * editor.commands.deleteStructuredContentById(['123', '456']);
        */
       deleteStructuredContentById:
         (idOrIds) =>
@@ -267,6 +301,8 @@ export const StructuredContentCommands = Extension.create({
       /**
        * Removes a structured content at cursor, preserving its content.
        * @category Command
+       * @example
+       * editor.commands.deleteStructuredContentAtSelection();
        */
       deleteStructuredContentAtSelection:
         () =>
