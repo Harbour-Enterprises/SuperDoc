@@ -1,8 +1,5 @@
 import { Fragment } from 'prosemirror-model';
-import {
-  createHeaderFooterEditor,
-  onHeaderFooterDataUpdate,
-} from '@extensions/pagination/legacy-pagination/pagination-helpers.js';
+import { createHeaderFooterEditor, onHeaderFooterDataUpdate } from '@extensions/pagination/pagination-helpers.js';
 
 /**
  * Get the field attributes based on the field type and value

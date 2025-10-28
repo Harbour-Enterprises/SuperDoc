@@ -1,38 +1,156 @@
-import { Plugin, EditorState } from 'prosemirror-state';
-import { EditorView } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
-import { Decoration, DecorationSet } from 'prosemirror-view';
+import { resolveSectionIdFromSummary, resolveSectionIdForPage } from './plugin/helpers/page-bands.js';
+import { getSectionPreviewClone } from './plugin/helpers/section-preview.js';
 import {
   createHeaderFooterEditor,
-  PaginationPluginKey,
-  toggleHeaderFooterEditMode,
   broadcastEditorEvents,
+  PaginationPluginKey as LegacyPaginationPluginKey,
 } from './pagination-helpers.js';
-import { CollaborationPluginKey } from '@extensions/collaboration/collaboration.js';
-import { getImageRegistrationMetaType } from '@extensions/image/imageHelpers/imageRegistrationPlugin.js';
-import { LinkedStylesPluginKey } from '@extensions/linked-styles/index.js';
-import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestToPos.js';
-import { generateDocxRandomId } from '../../core/helpers/index.js';
-import { computePosition, autoUpdate, hide } from '@floating-ui/dom';
+import { createHeaderFooterRepository } from './header-footer-repository.js';
+import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
+import { Decoration } from 'prosemirror-view';
+import { DecorationSet } from 'prosemirror-view';
 
-const SEPARATOR_CLASS = 'pagination-separator';
-const SEPARATOR_FLOATING_CLASS = 'pagination-separator-floating';
+const PAGINATION_INIT_SOURCE = 'pagination-extension-init';
+const REPOSITORY_INIT_DELAY_MS = 16;
+const REPOSITORY_INIT_MAX_ATTEMPTS = 5;
+const REPOSITORY_INIT_TIMER_KEY = Symbol('paginationRepositoryInitTimer');
+/**
+ * Clears a previously scheduled timeout or animation frame handle when available.
+ * @param {number|undefined|null} handle
+ * @returns {void}
+ */
+const cancelScheduledHandle = (handle) => {
+  if (!handle) return;
+  if (typeof globalThis?.clearTimeout === 'function') {
+    globalThis.clearTimeout(handle);
+    return;
+  }
+  if (typeof globalThis?.cancelAnimationFrame === 'function') {
+    globalThis.cancelAnimationFrame(handle);
+  }
+};
 
-const isDebugging = false;
-const cleanupFunctions = new Set();
-
+/**
+ * Pagination extension responsible for page layout chrome, spacing decorations, and header/footer management.
+ * @type {import('@core/Extension.js').Extension}
+ */
 export const Pagination = Extension.create({
   name: 'pagination',
   priority: 500,
 
+  /**
+   * Initializes storage defaults used by the pagination extension.
+   * @returns {Record<string, any>}
+   */
   addStorage() {
     return {
       height: 0,
       sectionData: null,
       headerFooterEditors: new Map(),
+      headerFooterDomCache: new Map(),
+      breakOverlayContainer: null,
+      pendingOverlayRaf: null,
+      repository: null,
+      repositoryConverter: null,
+      pendingInitMeta: false,
+      lastInitReason: null,
+      pageBreaks: [],
+      engine: null,
+      engineHandler: null,
+      headerFooterSummary: null,
+      pageViewElement: null,
+      pageChromeNodes: [],
+      layout: {},
     };
   },
 
+  /**
+   * Schedules repository initialization prior to extension creation.
+   * @returns {void}
+   */
+  onBeforeCreate() {
+    const editor = this.editor;
+    const storage = this.storage;
+    if (!storage) return;
+    scheduleRepositoryInitialization(editor, storage, {
+      reason: 'before-create',
+      maxAttempts: 3,
+      delayMs: 0,
+    });
+  },
+
+  /**
+   * Forces repository initialization once the extension finishes creating.
+   * @returns {void}
+   */
+  onCreate() {
+    const editor = this.editor;
+    const storage = this.storage;
+    if (!storage) return;
+    scheduleRepositoryInitialization(editor, storage, {
+      reason: 'create',
+      force: true,
+    });
+  },
+
+  /**
+   * Watches transactions to keep pagination state synchronized and dispatch init metadata when required.
+   * @returns {(params: { transaction: import('prosemirror-state').Transaction }) => void}
+   */
+  onTransaction() {
+    return ({ transaction }) => {
+      const editor = this.editor;
+      const storage = this.storage;
+      if (!storage) return;
+      if (!shouldInitializePagination(editor)) return;
+
+      const paginationMeta = transaction?.getMeta?.(PaginationPluginKey);
+      if (paginationMeta?.source === PAGINATION_INIT_SOURCE) {
+        return;
+      }
+
+      const legacyMeta =
+        typeof transaction?.getMeta === 'function' && LegacyPaginationPluginKey
+          ? transaction.getMeta(LegacyPaginationPluginKey)
+          : null;
+      if (legacyMeta?.source === PAGINATION_INIT_SOURCE) {
+        return;
+      }
+
+      const collabReady = typeof transaction?.getMeta === 'function' ? transaction.getMeta('collaborationReady') : null;
+      if (collabReady) {
+        storage.pendingInitMeta = true;
+        storage.lastInitReason = 'collaboration-ready';
+      }
+
+      const repositoryChanged = ensureRepositoryInitialized(editor, storage, {
+        reason: collabReady ? 'collaboration-ready' : 'transaction',
+      });
+
+      if (!repositoryChanged && !storage.repository) {
+        scheduleRepositoryInitialization(editor, storage, {
+          reason: collabReady ? 'collaboration-ready' : 'transaction',
+          force: true,
+        });
+      }
+
+      if (collabReady || repositoryChanged || storage.pendingInitMeta) {
+        const reason =
+          collabReady || storage.lastInitReason
+            ? storage.lastInitReason || 'collaboration-ready'
+            : repositoryChanged
+              ? 'converter-changed'
+              : 'transaction';
+        maybeDispatchInitMeta(editor, storage, reason);
+      }
+    };
+  },
+
+  /**
+   * Registers pagination commands.
+   * @returns {Record<string, import('@core/Extension.js').Command>}
+   */
   addCommands() {
     return {
       insertPageBreak:
@@ -43,24 +161,30 @@ export const Pagination = Extension.create({
           });
         },
 
-      /**
-       * Toggle pagination on/off
-       * @returns {void}
-       */
-      togglePagination:
-        () =>
-        ({ tr, state, dispatch, editor }) => {
-          const isEnabled = PaginationPluginKey.getState(state)?.isEnabled;
-          tr.setMeta(PaginationPluginKey, { isEnabled: !isEnabled });
-          if (dispatch) {
-            dispatch(tr);
-            editor.initDefaultStyles(editor.element, !isEnabled);
-            return true;
+      updatePagination:
+        (layout) =>
+        ({ editor }) => {
+          const storage = editor?.storage?.pagination;
+          if (storage) {
+            storage.layout = layout;
           }
+
+          ensurePageView(editor, storage, layout);
+
+          if (editor?.view) {
+            const tr = editor.state.tr.setMeta(PaginationPluginKey, { layout });
+            editor.view.dispatch(tr);
+          }
+
+          return true;
         },
     };
   },
 
+  /**
+   * Adds pagination keyboard shortcuts.
+   * @returns {Record<string, () => boolean>}
+   */
   addShortcuts() {
     return {
       'Mod-Enter': () => this.editor.commands.insertPageBreak(),
@@ -68,915 +192,1515 @@ export const Pagination = Extension.create({
   },
 
   /**
-   * The pagination plugin is responsible for calculating page breaks, and redering them using decorations.
+   * Provides the ProseMirror plugin instances used by pagination.
+   * @returns {import('prosemirror-state').Plugin[]}
    */
   addPmPlugins() {
-    const editor = this.editor;
-
-    let isUpdating = false;
-
-    // Used to prevent unnecessary transactions
-    let shouldUpdate = false;
-
-    // Track wether the first load has occured or not
-    let hasInitialized = false;
-    let shouldInitialize = false;
-
-    const paginationPlugin = new Plugin({
-      key: PaginationPluginKey,
-      state: {
-        isReadyToInit: false,
-        init() {
-          return {
-            isReadyToInit: false,
-            decorations: DecorationSet.empty,
-            isDebugging,
-            isEnabled: editor.options.pagination,
-          };
-        },
-        apply(tr, oldState, prevEditorState, newEditorState) {
-          const meta = tr.getMeta(PaginationPluginKey);
-          if (meta && 'isEnabled' in meta) {
-            const newEnabled = meta.isEnabled;
-
-            if (newEnabled) shouldUpdate = true;
-
-            return {
-              ...oldState,
-              decorations: newEnabled ? oldState.decorations : DecorationSet.empty,
-              isEnabled: newEnabled,
-            };
-          }
-
-          // Check for new decorations passed via metadata
-          if (meta && meta.isReadyToInit) {
-            if (isDebugging) console.debug('✅ INIT READY');
-            shouldUpdate = true;
-            shouldInitialize = meta.isReadyToInit;
-          }
-
-          const syncMeta = tr.getMeta('y-sync$');
-          const listSyncMeta = tr.getMeta('orderedListSync');
-          if ((syncMeta && syncMeta.isChangeOrigin) || listSyncMeta) {
-            return { ...oldState };
-          }
-
-          // We need special handling for images / the image placeholder plugin
-          const imageRegistrationMetaType = getImageRegistrationMetaType(tr);
-          if (imageRegistrationMetaType) {
-            if (imageRegistrationMetaType === 'remove') {
-              onImageLoad(editor);
-            }
-            return { ...oldState };
-          }
-
-          const isAnnotationUpdate = tr.getMeta('fieldAnnotationUpdate');
-          if (isAnnotationUpdate) {
-            return { ...oldState };
-          }
-
-          if (!shouldInitialize && !oldState.isReadyToInit) {
-            if (isDebugging) console.debug('🚫 NO INIT');
-            return { ...oldState };
-          }
-
-          if (meta && meta.decorations) {
-            shouldUpdate = true;
-            if (isDebugging) console.debug('🦋 RETURN META DECORATIONS');
-            return {
-              ...oldState,
-              decorations: meta.decorations.map(tr.mapping, tr.doc),
-            };
-          }
-
-          const isForceUpdate = tr.getMeta('forceUpdatePagination');
-
-          // If the document hasn't changed, and we've already initialized, don't update
-          if (!isForceUpdate && prevEditorState.doc.eq(newEditorState.doc) && hasInitialized) {
-            if (isDebugging) console.debug('🚫 NO UPDATE');
-            shouldUpdate = false;
-            return { ...oldState };
-          }
-
-          // content size
-          shouldUpdate = true;
-          if (isDebugging) console.debug('🚀 UPDATE DECORATIONS');
-          if (isForceUpdate) shouldUpdate = true;
-
-          return {
-            ...oldState,
-            decorations: meta?.decorations?.map(tr.mapping, tr.doc) || DecorationSet.empty,
-            isReadyToInit: shouldInitialize,
-          };
-        },
-      },
-
-      /* The view method is the most important part of the plugin */
-      view: () => {
-        let previousDecorations = DecorationSet.empty;
-
-        return {
-          update: (view) => {
-            if (!PaginationPluginKey.getState(view.state)?.isEnabled) return;
-            if (!shouldUpdate || isUpdating) return;
-
-            isUpdating = true;
-            hasInitialized = true;
-
-            /**
-             * Perform the actual update here.
-             * We call calculatePageBreaks which actually generates the decorations
-             */
-            if (isDebugging) console.debug('--- Calling performUpdate ---');
-            performUpdate(editor, view, previousDecorations);
-
-            isUpdating = false;
-            shouldUpdate = false;
-          },
-        };
-      },
-      props: {
-        decorations(state) {
-          const pluginState = PaginationPluginKey.getState(state);
-          return pluginState.isEnabled ? pluginState.decorations : DecorationSet.empty;
-        },
-      },
-    });
-
-    return [paginationPlugin];
+    return [createPlugin(this.editor)];
   },
 
+  /**
+   * Cleans up any scheduled timers when the extension is destroyed.
+   * @returns {void}
+   */
   onDestroy() {
-    cleanupFloatingSeparators();
-
-    const { headerFooterEditors } = this.editor.storage.pagination;
-
-    if (headerFooterEditors) {
-      headerFooterEditors.clear();
+    const storage = this.storage;
+    if (!storage) return;
+    const existingHandle = storage[REPOSITORY_INIT_TIMER_KEY];
+    if (existingHandle) {
+      cancelScheduledHandle(existingHandle);
+      storage[REPOSITORY_INIT_TIMER_KEY] = null;
     }
   },
 });
 
+export const PaginationPluginKey = new PluginKey('pagination');
+
 /**
- * Get the correct header or footer ID based on the current page number and section type
- * Consider wether or not we need to alternate odd/even pages or if we have a title page
- *
- * @param {Number} currentPageNumber
- * @param {String} sectionType
- * @param {Editor} editor
- * @returns {String|null} The header or footer ID
+ * Determines whether pagination should initialize for the current editor.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @returns {boolean}
  */
-const getHeaderFooterId = (currentPageNumber, sectionType, editor, node = null) => {
-  const { alternateHeaders } = editor.converter.pageStyles;
-  const sectionIds = editor.converter[sectionType];
-
-  if (node && node.attrs?.paragraphProperties?.sectPr) {
-    const sectPr = node.attrs?.paragraphProperties?.sectPr;
-
-    if (currentPageNumber === 1) {
-      if (sectionType === 'headerIds') {
-        const sectionData = sectPr?.elements?.find(
-          (el) => el.name === 'w:headerReference' && el.attributes?.['w:type'] === 'first',
-        );
-        const newId = sectionData?.attributes?.['r:id'];
-        return newId;
-      } else if (sectionType === 'footerIds') {
-        const sectionData = sectPr?.elements?.find(
-          (el) => el.name === 'w:footerReference' && el.attributes?.['w:type'] === 'first',
-        );
-        const newId = sectionData?.attributes?.['r:id'];
-        return newId;
-      }
-    }
-  }
-
-  if (sectionIds?.titlePg && !sectionIds.first && currentPageNumber === 1) return null;
-
-  const even = sectionIds.even;
-  const odd = sectionIds.odd;
-  const first = sectionIds.first;
-  const defaultHeader = sectionIds.default;
-
-  if (sectionIds?.titlePg && first && currentPageNumber === 1) return first;
-
-  let sectionId = sectionIds.default;
-  // this causes issue and displays incorrect header/footer for first page
-  // if (currentPageNumber === 1) sectionId = first || defaultHeader;
-  if (currentPageNumber === 1) sectionId = defaultHeader;
-
-  if (alternateHeaders) {
-    if (currentPageNumber === 1) sectionId = first;
-    if (currentPageNumber % 2 === 0) sectionId = even || defaultHeader;
-    else sectionId = odd || defaultHeader;
-  }
-
-  return sectionId;
-};
+function shouldInitializePagination(editor) {
+  if (!editor) return false;
+  const options = editor.options || {};
+  if (!options.pagination) return false;
+  if (options.isHeadless) return false;
+  if (options.isHeaderOrFooter) return false;
+  return true;
+}
 
 /**
- * Calculate page breaks and update the editor state with the new decorations
- * @param {Editor} editor The editor instance
- * @param {EditorView} view The editor view
- * @param {DecorationSet} previousDecorations The previous set of decorations
+ * Ensures the header/footer repository exists and is bound to the active converter.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {Record<string, any>} storage
+ * @param {{ force?: boolean, reason?: string }} [options={}]
+ * @returns {boolean}
+ */
+function ensureRepositoryInitialized(editor, storage, options = {}) {
+  if (!storage) return false;
+  if (!shouldInitializePagination(editor)) return false;
+
+  const converter = editor?.converter ?? null;
+  if (!converter) return false;
+
+  const force = options.force === true;
+  const needsRefresh = force || !storage.repository || storage.repositoryConverter !== converter;
+
+  if (!needsRefresh) {
+    return false;
+  }
+
+  try {
+    storage.repository = createHeaderFooterRepository({ converter });
+    storage.repositoryConverter = converter;
+    storage.pendingInitMeta = true;
+    storage.lastInitReason = options.reason ?? storage.lastInitReason ?? 'refresh';
+    return true;
+  } catch (error) {
+    try {
+      console.debug('[pagination] failed to initialize header/footer repository', error);
+    } catch {
+      // no-op if console.debug is unavailable
+    }
+    return false;
+  }
+}
+
+/**
+ * Schedules repository initialization with retry logic to handle lazy converter availability.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {Record<string, any>} storage
+ * @param {{ reason?: string, delayMs?: number, maxAttempts?: number, force?: boolean }} [options={}]
  * @returns {void}
  */
-const performUpdate = (editor, view, previousDecorations) => {
-  const sectionData = editor.storage.pagination.sectionData;
-  const newDecorations = calculatePageBreaks(view, editor, sectionData);
-  const editorElement = editor.options.element;
+function scheduleRepositoryInitialization(editor, storage, options = {}) {
+  if (!storage) return;
+  if (!shouldInitializePagination(editor)) return;
 
-  // Skip updating if decorations haven't changed
-  if (!previousDecorations.eq(newDecorations)) {
-    const updateTransaction = view.state.tr.setMeta(PaginationPluginKey, { decorations: newDecorations });
+  const {
+    reason = 'init',
+    delayMs = REPOSITORY_INIT_DELAY_MS,
+    maxAttempts = REPOSITORY_INIT_MAX_ATTEMPTS,
+    force = false,
+  } = options;
 
-    view.dispatch(updateTransaction);
+  let attempts = 0;
 
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        cleanupFloatingSeparators();
-        const separators = [...editorElement.querySelectorAll(`.${SEPARATOR_CLASS}--table`)];
-        separators.forEach((separator) => {
-          const { cleanup } = createFloatingSeparator(separator, editor);
-          cleanupFunctions.add(cleanup);
-        });
-      });
-    });
+  const cancelExisting = () => {
+    const handle = storage[REPOSITORY_INIT_TIMER_KEY];
+    if (!handle) return;
+
+    cancelScheduledHandle(handle);
+
+    storage[REPOSITORY_INIT_TIMER_KEY] = null;
+  };
+
+  const scheduleNext = (fn) => {
+    if (typeof globalThis?.setTimeout === 'function') {
+      return globalThis.setTimeout(fn, delayMs);
+    }
+    if (typeof globalThis?.requestAnimationFrame === 'function') {
+      return globalThis.requestAnimationFrame(fn);
+    }
+    return null;
+  };
+
+  const attemptInitialization = () => {
+    storage[REPOSITORY_INIT_TIMER_KEY] = null;
+    const repositoryChanged = ensureRepositoryInitialized(editor, storage, { reason, force });
+    if (repositoryChanged || storage.pendingInitMeta) {
+      maybeDispatchInitMeta(editor, storage, repositoryChanged ? reason : (storage.lastInitReason ?? reason));
+      return;
+    }
+
+    attempts += 1;
+    if (attempts >= maxAttempts) {
+      return;
+    }
+
+    const handle = scheduleNext(attemptInitialization);
+    if (handle != null) {
+      storage[REPOSITORY_INIT_TIMER_KEY] = handle;
+    }
+  };
+
+  cancelExisting();
+  attemptInitialization();
+}
+
+/**
+ * Dispatches pagination init metadata onto the current transaction.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {string} reason
+ * @returns {boolean}
+ */
+function dispatchInitMeta(editor, reason) {
+  const { state, dispatch } = editor?.view ?? {};
+  if (!state || typeof dispatch !== 'function') {
+    return false;
   }
 
-  // Emit that pagination has been updated
-  editor.emit('paginationUpdate');
+  const payload = {
+    isReadyToInit: true,
+    source: PAGINATION_INIT_SOURCE,
+    reason,
+  };
+
+  const tr = state.tr.setMeta(PaginationPluginKey, payload);
+  if (LegacyPaginationPluginKey) {
+    tr.setMeta(LegacyPaginationPluginKey, payload);
+  }
+  dispatch(tr);
+  return true;
+}
+
+/**
+ * Attempts to dispatch init metadata when pagination becomes ready, tracking pending state if dispatch fails.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {Record<string, any>} storage
+ * @param {string} [reason]
+ * @returns {boolean}
+ */
+function maybeDispatchInitMeta(editor, storage, reason) {
+  if (!storage) return false;
+  if (!shouldInitializePagination(editor)) {
+    storage.pendingInitMeta = false;
+    return false;
+  }
+
+  const effectiveReason = reason ?? storage.lastInitReason ?? 'refresh';
+  const dispatched = dispatchInitMeta(editor, effectiveReason);
+
+  if (dispatched) {
+    storage.pendingInitMeta = false;
+    storage.lastInitReason = effectiveReason;
+  } else {
+    storage.pendingInitMeta = true;
+    storage.lastInitReason = effectiveReason;
+  }
+
+  return dispatched;
+}
+
+/**
+ * Creates the pagination ProseMirror plugin.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @returns {import('prosemirror-state').Plugin}
+ */
+const createPlugin = (editor) => {
+  return new Plugin({
+    key: PaginationPluginKey,
+    state: {
+      init() {
+        return {
+          decorations: DecorationSet.empty,
+          layout: null,
+        };
+      },
+      apply(tr, value) {
+        let decorations = value.decorations ?? DecorationSet.empty;
+        let layout = value.layout ?? null;
+
+        if (decorations !== DecorationSet.empty) {
+          decorations = decorations.map(tr.mapping, tr.doc);
+        }
+
+        const meta = tr.getMeta(PaginationPluginKey);
+        let shouldRebuild = false;
+
+        if (meta?.layout) {
+          layout = meta.layout;
+          shouldRebuild = true;
+        }
+
+        if (shouldRebuild && layout) {
+          decorations = buildSpacingDecorations(editor, tr.doc, layout);
+        } else if (shouldRebuild) {
+          decorations = DecorationSet.empty;
+        }
+
+        return {
+          decorations,
+          layout,
+        };
+      },
+    },
+
+    props: {
+      decorations(state) {
+        const pluginState = PaginationPluginKey.getState(state);
+        return pluginState?.decorations ?? null;
+      },
+    },
+
+    view() {
+      return {
+        destroy() {},
+      };
+    },
+  });
 };
 
 /**
- * Generate page breaks. This prepares the initial sizing, as well as appending the initial header and final footer
- * Then, call generateInternalPageBreaks to calculate the inner page breaks
- * @param {EditorView} view The editor view
- * @param {Editor} editor The editor instance
- * @param {Object} sectionData The section data from the converter
- * @returns {DecorationSet} A set of decorations to be applied to the editor
+ * Generates gap decorations used to visualize reserved pagination spacing.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {import('prosemirror-model').Node} doc
+ * @param {{ pages?: any[] }} [layout={}]
+ * @returns {DecorationSet}
  */
-const calculatePageBreaks = (view, editor, sectionData) => {
-  // If we don't have a converter, return an empty decoration set
-  // Since we won't be able to calculate page breaks without a converter
-  if (!editor.converter) return DecorationSet.empty;
+const buildSpacingDecorations = (editor, doc, layout = {}) => {
+  const pages = Array.isArray(layout?.pages) ? layout.pages : [];
+  if (!pages.length) {
+    return DecorationSet.empty;
+  }
 
-  const pageSize = editor.converter.pageStyles?.pageSize;
-  if (!pageSize) return DecorationSet.empty;
-
-  const { width, height } = pageSize; // Page width and height are in inches
-
-  // We can't calculate page breaks without a page width and height
-  // Under normal docx operation, these are always set
-  if (!width || !height) return DecorationSet.empty;
-
-  const ignorePlugins = [CollaborationPluginKey, PaginationPluginKey];
-  const { state } = view;
-  const cleanState = EditorState.create({
-    schema: state.schema,
-    doc: state.doc,
-    plugins: state.plugins.filter((plugin) => ignorePlugins.includes(plugin.key)),
-  });
-
-  // Create a temporary container with a clean doc to recalculate page breaks
-  const tempContainer = editor.options.element.cloneNode();
-  if (!tempContainer) return [];
-
-  tempContainer.className = 'temp-container super-editor';
-  const HIDDEN_EDITOR_OFFSET_TOP = 0;
-  const HIDDEN_EDITOR_OFFSET_LEFT = 0;
-  tempContainer.style.left = HIDDEN_EDITOR_OFFSET_TOP + 'px';
-  tempContainer.style.top = HIDDEN_EDITOR_OFFSET_LEFT + 'px';
-  tempContainer.style.position = 'fixed';
-  tempContainer.style.visibility = 'hidden';
-
-  document.body.appendChild(tempContainer);
-  const tempView = new EditorView(tempContainer, {
-    state: cleanState,
-    dispatchTransaction: () => {},
-  });
-
-  // Generate decorations on a clean doc
-  editor.initDefaultStyles(tempContainer);
-  const decorations = generateInternalPageBreaks(cleanState.doc, tempView, editor, sectionData);
-
-  // Clean up
-  tempView.destroy();
-  document.body.removeChild(tempContainer);
-
-  // Return a list of page break decorations
-  return DecorationSet.create(view.state.doc, decorations);
-};
-
-/**
- * Generate internal page breaks by iterating through the document, keeping track of the height.
- * If we find a node that extends past where our page should end, we add a page break.
- * @param {Node} doc The document node
- * @param {EditorView} view The editor view
- * @param {Editor} editor The editor instance
- * @param {Array} decorations The current set of decorations
- * @param {Object} sectionData The section data from the converter
- * @returns {void} The decorations array is altered in place
- */
-function generateInternalPageBreaks(doc, view, editor, sectionData) {
   const decorations = [];
-  const { pageSize, pageMargins } = editor.converter.pageStyles;
-  const pageHeight = pageSize.height * 96; // Convert inches to pixels
+  const ownerDocument = editor?.view?.dom?.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+  const domSource =
+    ownerDocument ??
+    (typeof document !== 'undefined' ? document : null) ??
+    (typeof globalThis !== 'undefined' && globalThis.document ? globalThis.document : null);
+  if (!domSource?.createElement) {
+    return DecorationSet.empty;
+  }
 
-  let currentPageNumber = 1;
-  let pageHeightThreshold = pageHeight;
-  let footer = null,
-    header = null;
+  const createSpacingElement = ({ heightPx, pageIndex, kind }) => {
+    const element = domSource.createElement('div');
+    element.className = 'pagination-spacing-highlight';
+    element.style.display = 'block';
+    element.style.width = '100%';
+    element.style.boxSizing = 'border-box';
+    element.style.pointerEvents = 'none';
+    element.style.height = `${heightPx}px`;
+    element.style.minHeight = `${heightPx}px`;
+    element.style.backgroundColor = 'rgba(239, 68, 68, 0.25)';
+    element.style.border = '1px solid rgba(220, 38, 38, 0.55)';
+    element.style.borderRadius = '3px';
+    element.style.margin = '0';
+    element.dataset.paginationSpacing = 'true';
+    element.dataset.paginationSpacingHeight = String(heightPx);
+    element.dataset.paginationPageIndex = String(pageIndex);
+    if (kind) {
+      element.dataset.paginationSpacingKind = kind;
+    }
+    return element;
+  };
 
-  const firstHeaderId = getHeaderFooterId(currentPageNumber, 'headerIds', editor);
-  const isFirstHeader = true;
-  const firstHeader = createHeader(
-    pageMargins,
-    pageSize,
-    sectionData,
-    firstHeaderId,
-    editor,
-    currentPageNumber,
-    isFirstHeader,
-  );
-  const pageBreak = createPageBreak({ editor, header: firstHeader, isFirstHeader: true });
-  decorations.push(Decoration.widget(0, pageBreak, { key: 'stable-key' }));
+  const firstPage = pages[0] ?? null;
+  const firstHeaderEffective = Number.isFinite(firstPage?.headerFooterAreas?.header?.metrics?.effectiveHeightPx)
+    ? firstPage.headerFooterAreas.header.metrics.effectiveHeightPx
+    : Number.isFinite(firstPage?.metrics?.headerHeightPx)
+      ? firstPage.metrics.headerHeightPx
+      : null;
+  const firstHeaderMargin = Number.isFinite(firstPage?.metrics?.marginTopPx) ? firstPage.metrics.marginTopPx : null;
+  const leadingHeaderHeight =
+    Number.isFinite(firstHeaderEffective) || Number.isFinite(firstHeaderMargin)
+      ? Math.max(firstHeaderEffective ?? 0, firstHeaderMargin ?? 0, 0)
+      : null;
+  if (Number.isFinite(leadingHeaderHeight) && leadingHeaderHeight > 0) {
+    const leadingWidget = Decoration.widget(
+      0,
+      () =>
+        createSpacingElement({
+          heightPx: leadingHeaderHeight,
+          pageIndex: 0,
+          kind: 'leading-header',
+        }),
+      {
+        key: `pagination-leading-header-${Math.round(leadingHeaderHeight)}`,
+        side: -1,
+      },
+    );
+    decorations.push(leadingWidget);
+  }
 
-  const lastFooterId = getHeaderFooterId(currentPageNumber, 'footerIds', editor);
-  const isLastFooter = true;
-  const lastFooter = createFooter(
-    pageMargins,
-    pageSize,
-    sectionData,
-    lastFooterId,
-    editor,
-    currentPageNumber,
-    isLastFooter,
-  );
+  const totalPages = pages.length;
+  pages.forEach((pageEntry, index) => {
+    const breakInfo = pageEntry?.break ?? null;
+    if (!breakInfo) return;
 
-  // Reduce the usable page height by the header and footer heights now that they are prepped
-  pageHeightThreshold -= firstHeader.headerHeight + lastFooter.footerHeight;
-
-  let coords = view?.coordsAtPos(doc.content.size);
-  if (!coords) return [];
-
-  /**
-   * Iterate through the document, checking for hard page breaks and calculating the page height.
-   * If we find a node that extends past where our page should end, we add a page break.
-   */
-  doc.descendants((node, pos) => {
-    let currentNode = node;
-    let currentPos = pos;
-
-    coords = view?.coordsAtPos(currentPos);
-    if (!coords) return;
-
-    let isHardBreakNode = currentNode.type.name === 'hardBreak';
-    let isListItemNode = currentNode.type.name === 'listItem';
-
-    const endPos = currentPos + currentNode.nodeSize;
-    const endCoords = view.coordsAtPos(endPos); // bottom of the block
-    let shouldAddPageBreak =
-      currentNode.isBlock && isListItemNode
-        ? endCoords && endCoords.bottom > pageHeightThreshold
-        : coords.bottom > pageHeightThreshold;
-
-    // handle the w:cantSplit attribute for table rows
-    if (currentNode.type.name === 'tableRow' && currentNode.attrs?.cantSplit) {
-      const rowTop = coords.top;
-      const rowBottom = view.coordsAtPos(currentPos + currentNode.nodeSize).bottom;
-      const remaining = pageHeightThreshold - rowTop;
-
-      if (rowBottom - rowTop > remaining) {
-        shouldAddPageBreak = true;
-      }
+    if (!Number.isFinite(breakInfo.pos) || breakInfo.pos < 0) {
+      return;
     }
 
-    const paragraphSectPrBreak = currentNode.attrs?.pageBreakSource;
-    if (paragraphSectPrBreak === 'sectPr') {
-      const nextNode = doc.nodeAt(currentPos + currentNode.nodeSize);
-      const nextNodeSectPr = nextNode?.attrs?.pageBreakSource === 'sectPr';
-      if (!nextNodeSectPr) isHardBreakNode = true;
+    const isLastPage = index === totalPages - 1;
+    if (isLastPage) return;
 
-      if (currentPageNumber === 1) {
-        const headerId = getHeaderFooterId(currentPageNumber, 'headerIds', editor, currentNode);
-        decorations.pop(); // Remove the first header and replace with sectPr header
-        const isFirstHeader = true;
-        const newFirstHeader = createHeader(
-          pageMargins,
-          pageSize,
-          sectionData,
-          headerId,
-          editor,
-          currentPageNumber,
-          isFirstHeader,
-        );
-        const pageBreak = createPageBreak({ editor, header: newFirstHeader, isFirstHeader: true });
-        decorations.push(Decoration.widget(0, pageBreak, { key: 'stable-key' }));
-      }
-    }
+    const effectivePos = breakInfo.pos;
 
-    if (currentNode.type.name === 'paragraph' && currentNode.attrs.styleId) {
-      const linkedStyles = LinkedStylesPluginKey.getState(editor.state)?.styles;
-      const style = linkedStyles?.find((style) => style.id === currentNode.attrs.styleId);
-      if (style) {
-        const { definition = {} } = style;
-        const { pageBreakBefore, pageBreakAfter } = definition.attrs || {};
-        if (pageBreakBefore || pageBreakAfter) shouldAddPageBreak = true;
-      }
-    }
+    const metrics = pageEntry?.metrics ?? {};
+    const footerHeight = Number.isFinite(metrics?.footerHeightPx) ? metrics.footerHeightPx : 0;
+    const footerMargin = Number.isFinite(metrics?.marginBottomPx) ? metrics.marginBottomPx : footerHeight;
+    const footerReserved = Math.max(footerHeight, footerMargin, 0);
+    const pageBottomSpacing = Number.isFinite(pageEntry?.pageBottomSpacingPx) ? pageEntry.pageBottomSpacingPx : 0;
 
-    if (isHardBreakNode || shouldAddPageBreak) {
-      const $currentPos = view.state.doc.resolve(currentPos);
-      const table = findParentNodeClosestToPos($currentPos, (node) => node.type.name === 'table');
-      const tableRow = findParentNodeClosestToPos($currentPos, (node) => node.type.name === 'tableRow');
+    const nextPage = pages[index + 1] ?? null;
+    const nextMetrics = nextPage?.metrics ?? {};
+    const nextHeaderHeight = Number.isFinite(nextMetrics?.headerHeightPx) ? nextMetrics.headerHeightPx : 0;
+    const nextHeaderMargin = Number.isFinite(nextMetrics?.marginTopPx) ? nextMetrics.marginTopPx : nextHeaderHeight;
+    const nextHeaderReserved = Math.max(nextHeaderHeight, nextHeaderMargin, 0);
+    const nextPageGap = Number.isFinite(nextMetrics?.pageGapPx) ? nextMetrics.pageGapPx : 0;
 
-      let isInTable = table || tableRow ? true : false;
+    const totalSpace = pageBottomSpacing + footerReserved + nextHeaderReserved + nextPageGap;
+    if (!(totalSpace > 0)) return;
 
-      // if (tableRow) {
-      //   // If the node is in a table cell, then split the entire row.
-      //   console.debug('--ROW---')
-      //   currentNode = tableRow.node;
-      //   currentPos = tableRow.pos;
-      // }
+    const createChrome = () => {
+      return createSpacingElement({
+        heightPx: totalSpace,
+        pageIndex: index,
+        kind: 'page-spacing',
+      });
+    };
 
-      // The node we've found extends past our threshold
-      // We need to zoom in and investigate position by position until we find the exact break point
-      // And we get the actual top and bottom of the break
-      let {
-        top: actualBreakTop,
-        bottom: actualBreakBottom,
-        pos: breakPos,
-      } = getActualBreakCoords(view, currentPos, pageHeightThreshold);
+    const widget = Decoration.widget(effectivePos, createChrome, {
+      key: `pagination-spacing-${index}-${effectivePos}`,
+      side: -1,
+      ignoreSelection: true,
+    });
+    decorations.push(widget);
 
-      const $breakPos = view.state.doc.resolve(breakPos);
-      if ($breakPos.parent.type.name === 'listItem') {
-        breakPos = $breakPos.before($breakPos.depth);
-      }
-
-      if (isDebugging) {
-        console.debug('----- [pagination page break] ----');
-        console.debug('[pagination page break] Expected pageHeightThreshold:', pageHeightThreshold);
-        console.debug('[pagination page break]  Actual top:', actualBreakTop, 'Actual bottom:', actualBreakBottom);
-        console.debug('[pagination page break]  Pos:', currentPos, 'Break pos:', breakPos);
-        console.debug('---- [pagination page break end] ---- \n\n\n');
-      }
-
-      // Update the header and footer based on the current page number
-      const footerId = getHeaderFooterId(currentPageNumber, 'footerIds', editor, currentNode);
-
-      currentPageNumber++;
-      const headerId = getHeaderFooterId(currentPageNumber, 'headerIds', editor);
-      header = createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber - 1);
-      footer = createFooter(pageMargins, pageSize, sectionData, footerId, editor, currentPageNumber - 1);
-
-      const bufferHeight = pageHeightThreshold - actualBreakBottom;
-      const { node: spacingNode } = createFinalPagePadding(bufferHeight);
-      const pageSpacer = Decoration.widget(breakPos, spacingNode, { key: 'stable-key' });
-      decorations.push(pageSpacer);
-
-      const pageBreak = createPageBreak({ editor, header, footer, isInTable });
-      decorations.push(Decoration.widget(breakPos, pageBreak, { key: 'stable-key' }));
-
-      // Recalculate the page threshold based on where we actually inserted the break
-      pageHeightThreshold = actualBreakBottom + (pageHeight - header.headerHeight - footer.footerHeight);
+    const mirroredWidgets = mirrorSpacingWidgetAcrossRow({
+      editor,
+      doc,
+      basePos: effectivePos,
+      createChrome,
+      keyBase: `pagination-spacing-${index}`,
+    });
+    if (mirroredWidgets.length) {
+      decorations.push(...mirroredWidgets);
     }
   });
 
-  // Add blank padding to the last page to make a full page height
-  let finalPos = doc.content.size;
-  const lastNodeCoords = view.coordsAtPos(finalPos);
-  const headerId = getHeaderFooterId(currentPageNumber, 'headerIds', editor);
-  const footerId = getHeaderFooterId(currentPageNumber, 'footerIds', editor);
-  header = createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber);
-  footer = createFooter(pageMargins, pageSize, sectionData, footerId, editor, currentPageNumber);
-  const bufferHeight = pageHeightThreshold - lastNodeCoords.bottom;
-  const { node: spacingNode } = createFinalPagePadding(bufferHeight);
-  const pageSpacer = Decoration.widget(doc.content.size, spacingNode, { key: 'stable-key' });
-  decorations.push(pageSpacer);
+  if (!decorations.length) {
+    return DecorationSet.empty;
+  }
 
-  const footerBreak = createPageBreak({ editor, footer: footer, isLastFooter: true });
+  return DecorationSet.create(doc, decorations);
+};
 
-  // Add the final footer
-  decorations.push(Decoration.widget(doc.content.size, footerBreak, { key: 'stable-key' }));
+const TABLE_CELL_NODE_NAMES = new Set(['tableCell', 'tableHeader']);
+const TABLE_ROW_NODE_NAMES = new Set(['tableRow', 'row']);
 
-  // Update total page count, if any
-  decorations.forEach((decoration) => {
-    const sectionContainer = decoration.type.toDOM;
-    const totalPageNumber = sectionContainer?.querySelector('span[data-id="auto-total-pages"]');
-    if (totalPageNumber) {
-      const fontSize =
-        totalPageNumber.previousElementSibling?.style?.fontSize || totalPageNumber.nextElementSibling?.style?.fontSize;
-      if (fontSize) totalPageNumber.style.fontSize = fontSize;
-      totalPageNumber.innerText = currentPageNumber;
+/**
+ * Mirrors spacing widgets across table rows to keep gutters aligned in complex layouts.
+ * @param {{ editor: import('@core/Editor.js').Editor, doc: import('prosemirror-model').Node, basePos: number, createChrome: () => HTMLElement, keyBase: string }} params
+ * @returns {Decoration[]}
+ */
+const mirrorSpacingWidgetAcrossRow = ({ editor, doc, basePos, createChrome, keyBase }) => {
+  const view = editor?.view;
+  if (!view || !doc) {
+    return [];
+  }
+  const docSize = doc?.content?.size ?? null;
+  if (!Number.isFinite(basePos) || basePos < 0 || (Number.isFinite(docSize) && basePos > docSize)) {
+    return [];
+  }
+
+  let resolved = null;
+  try {
+    const safePos = Number.isFinite(docSize) ? Math.max(0, Math.min(basePos, docSize)) : Math.max(0, basePos);
+    resolved = doc.resolve(safePos);
+  } catch {
+    return [];
+  }
+
+  const context = resolveTableRowContext(resolved);
+  if (!context) {
+    return [];
+  }
+
+  let breakY = null;
+  if (typeof view?.coordsAtPos === 'function') {
+    try {
+      const coords = view.coordsAtPos(Math.max(0, Math.min(basePos, docSize ?? basePos)));
+      if (coords) {
+        if (Number.isFinite(coords.top)) {
+          breakY = coords.top;
+        } else if (Number.isFinite(coords.bottom)) {
+          breakY = coords.bottom;
+        }
+      }
+    } catch {}
+  }
+
+  const cells = [];
+  let baseCellIndex = -1;
+  let cellCursor = context.rowPos + 1;
+  for (let cellIndex = 0; cellIndex < context.rowNode.childCount; cellIndex += 1) {
+    const cellNode = context.rowNode.child(cellIndex);
+    const cellStart = cellCursor;
+    const cellEnd = cellStart + cellNode.nodeSize;
+    cellCursor = cellEnd;
+
+    if (baseCellIndex === -1 && basePos >= cellStart && basePos <= cellEnd) {
+      baseCellIndex = cellIndex;
     }
+
+    const rect = getTableCellRect(view, cellStart);
+    cells.push({
+      cellNode,
+      cellStart,
+      cellEnd,
+      rect,
+    });
+  }
+
+  const baseCell = baseCellIndex >= 0 ? (cells[baseCellIndex] ?? null) : null;
+  let targetOffset = null;
+  let fallbackFraction = null;
+  let baseRelativePos = null;
+  if (baseCell && Number.isFinite(basePos)) {
+    const { innerStart: baseInnerStart, innerEnd: baseInnerEnd } = getCellInnerBounds(
+      baseCell.cellStart,
+      baseCell.cellNode,
+      docSize,
+    );
+    if (baseInnerEnd >= baseInnerStart) {
+      const boundedBasePos = clampNumber(basePos, baseInnerStart, baseInnerEnd);
+      baseRelativePos = boundedBasePos - baseCell.cellStart;
+    }
+  }
+  if (baseCell?.rect && Number.isFinite(breakY)) {
+    const baseTop = baseCell.rect.top;
+    const baseBottom = baseCell.rect.bottom;
+    if (Number.isFinite(baseTop) && Number.isFinite(baseBottom) && baseBottom > baseTop) {
+      const span = baseBottom - baseTop;
+      const rawOffset = breakY - baseTop;
+      targetOffset = clampNumber(rawOffset, 0, span);
+      fallbackFraction = clampNumber(rawOffset / span, 0, 1);
+    }
+  }
+
+  const widgets = [];
+  const insertedPositions = new Set([Number.isFinite(basePos) ? basePos : 0]);
+
+  cells.forEach((cell, cellIndex) => {
+    const isSourceCell =
+      baseCellIndex >= 0 ? cellIndex === baseCellIndex : basePos >= cell.cellStart && basePos <= cell.cellEnd;
+    if (isSourceCell) {
+      return;
+    }
+
+    const { innerStart, innerEnd } = getCellInnerBounds(cell.cellStart, cell.cellNode, docSize);
+    let targetPos = null;
+
+    if (Number.isFinite(baseRelativePos)) {
+      const candidate = clampNumber(cell.cellStart + baseRelativePos, innerStart, innerEnd);
+      if (Number.isFinite(candidate)) {
+        targetPos = candidate;
+      }
+    }
+
+    let targetY = null;
+    if (!Number.isFinite(targetPos)) {
+      targetY = resolveTargetYForCell({
+        cellRect: cell.rect,
+        baseOffset: targetOffset,
+        baseFraction: fallbackFraction,
+        fallbackY: breakY,
+      });
+    }
+
+    targetPos = resolveCellInsertionPos({
+      view,
+      doc,
+      cellStart: cell.cellStart,
+      cellNode: cell.cellNode,
+      targetY,
+      cellRect: cell.rect,
+      innerStart,
+      innerEnd,
+      preferredPos: targetPos,
+    });
+
+    if (!Number.isFinite(targetPos) || insertedPositions.has(targetPos)) {
+      return;
+    }
+    insertedPositions.add(targetPos);
+
+    const decoration = Decoration.widget(targetPos, createChrome, {
+      key: `${keyBase}-cell-${cellIndex}-${targetPos}`,
+      side: -1,
+      ignoreSelection: true,
+    });
+    widgets.push(decoration);
   });
 
-  // Track the total pages in the editor instance
-  editor.currentTotalPages = currentPageNumber;
-
-  // Return the widget decorations array
-  return decorations;
-}
-
-/**
- * Create final page padding in order to extend the last page to the full height of the document
- * @param {Number} bufferHeight The padding to add to the final page in pixels
- * @returns {HTMLElement} The padding div
- */
-function createFinalPagePadding(bufferHeight) {
-  const div = document.createElement('div');
-  div.className = 'pagination-page-spacer';
-  div.style.userSelect = 'none';
-  div.style.pointerEvents = 'none';
-  div.style.height = bufferHeight + 'px';
-
-  if (isDebugging) div.style.backgroundColor = '#ff000033';
-  return { nodeHeight: bufferHeight, node: div };
-}
-
-/**
- * Generate a header element
- * @param {Object} pageMargins The page margins from the converter
- * @param {Object} pageSize page dimensions
- * @param {Object} sectionData The section data from the converter
- * @param {string} headerId The footer id to use
- * @param {string} editor SuperEditor instance
- * @returns {Object} The header element and its height
- */
-function createHeader(pageMargins, pageSize, sectionData, headerId, editor, currentPageNumber, isFirstHeader = false) {
-  const headerDef = sectionData?.headers?.[headerId];
-  const minHeaderHeight = pageMargins.top * 96; // pageMargins are in inches
-  const headerMargin = pageMargins.header * 96;
-
-  // If the header content is larger than the available space, we need to add the 'header' margin
-  const hasHeaderOffset = headerDef?.height > minHeaderHeight - headerMargin;
-  const headerOffset = hasHeaderOffset ? headerMargin : 0;
-  const headerHeight = Math.max(headerDef?.height || 0, minHeaderHeight) + headerOffset;
-
-  const availableHeight = headerHeight - headerMargin;
-  let editorContainer = document.createElement('div');
-
-  if (!headerId && !editor?.converter?.headerIds?.['default']) {
-    headerId = 'rId' + generateDocxRandomId();
-    editor.converter.headerIds['default'] = headerId;
-  }
-
-  if (!editor.converter.headers[headerId]) {
-    editor.converter.headers[headerId] = {
-      type: 'doc',
-      content: [{ type: 'paragraph', content: [] }],
-    };
-  }
-
-  const data = editor.converter.headers[headerId];
-
-  const pageNumberIndex = currentPageNumber - 1;
-  const editorKey = getHeaderFooterEditorKey({ pageNumber: pageNumberIndex, isHeader: true, isFirstHeader });
-
-  let editorSection = null;
-
-  const { headerFooterEditors } = editor.storage.pagination;
-  if (headerFooterEditors.has(editorKey) && editor.converter.headerEditors[pageNumberIndex]) {
-    const editorData = headerFooterEditors.get(editorKey);
-    editorSection = editorData.editor;
-    editorContainer = editorSection.element;
-  } else {
-    editorSection = createHeaderFooterEditor({
-      editor,
-      data,
-      editorContainer,
-      appendToBody: false,
-      sectionId: headerId,
-      type: 'header',
-      availableHeight,
-      currentPageNumber,
-    });
-    editor.converter.headerEditors.push({ id: headerId, editor: editorSection });
-    headerFooterEditors.set(editorKey, { editor: editorSection });
-    broadcastEditorEvents(editor, editorSection);
-  }
-
-  editorSection.setEditable(false, false);
-
-  editorContainer.classList.add('pagination-section-header');
-  editorContainer.style.paddingTop = headerMargin + 'px';
-  editorContainer.style.paddingLeft = pageMargins.left * 96 + 'px';
-  editorContainer.style.paddingRight = pageMargins.right * 96 + 'px';
-  editorContainer.style.height = headerHeight + 'px';
-  editorContainer.style.width = pageSize.width * 96 + 'px';
-  editorContainer.style.position = 'static';
-
-  if (isDebugging) editorContainer.style.backgroundColor = '#00aaaa55';
-
-  editorContainer.addEventListener('dblclick', () => onHeaderFooterDblClick(editor, editorSection));
-
-  return {
-    section: editorContainer,
-    headerHeight: headerHeight,
-  };
-}
-
-/**
- * Generate a footer element
- * @param {Object} pageMargins The page margins from the converter
- * @param {Object} pageSize page dimensions
- * @param {Object} sectionData The section data from the converter
- * @param {string} footerId The footer id to use
- * @param {string} editor SuperEditor instance
- * @param {Number} currentPageNumber The number of the page
- * @returns {Object} The footer element and its height
- */
-function createFooter(pageMargins, pageSize, sectionData, footerId, editor, currentPageNumber, isLastFooter = false) {
-  const footerDef = sectionData?.footers?.[footerId];
-  const minFooterHeight = pageMargins.bottom * 96; // pageMargins are in inches
-  const footerPaddingFromEdge = pageMargins.footer * 96;
-  const footerHeight = Math.max(footerDef?.height || 0, minFooterHeight - footerPaddingFromEdge);
-  let editorContainer = document.createElement('div');
-
-  if (!footerId && !editor.converter.footerIds['default']) {
-    footerId = 'rId' + generateDocxRandomId();
-    editor.converter.footerIds['default'] = footerId;
-  }
-
-  if (!editor.converter.footers[footerId]) {
-    editor.converter.footers[footerId] = {
-      type: 'doc',
-      content: [{ type: 'paragraph', content: [] }],
-    };
-  }
-
-  const data = editor.converter.footers[footerId];
-
-  const pageNumberIndex = currentPageNumber - 1;
-  const editorKey = getHeaderFooterEditorKey({ pageNumber: pageNumberIndex, isFooter: true, isLastFooter });
-
-  let editorSection = null;
-
-  const { headerFooterEditors } = editor.storage.pagination;
-  if (headerFooterEditors.has(editorKey) && editor.converter.footerEditors[pageNumberIndex]) {
-    const editorData = headerFooterEditors.get(editorKey);
-    editorSection = editorData.editor;
-    editorContainer = editorSection.element;
-  } else {
-    editorSection = createHeaderFooterEditor({
-      editor,
-      data,
-      editorContainer,
-      appendToBody: false,
-      sectionId: footerId,
-      type: 'footer',
-      availableHeight: footerHeight,
-      currentPageNumber,
-    });
-    editor.converter.footerEditors.push({ id: footerId, editor: editorSection });
-    headerFooterEditors.set(editorKey, { editor: editorSection });
-    broadcastEditorEvents(editor, editorSection);
-  }
-
-  editorSection.setEditable(false, false);
-
-  editorContainer.classList.add('pagination-section-footer');
-  editorContainer.style.height = footerHeight + 'px';
-  editorContainer.style.marginBottom = footerPaddingFromEdge + 'px';
-  editorContainer.style.paddingLeft = pageMargins.left * 96 + 'px';
-  editorContainer.style.paddingRight = pageMargins.right * 96 + 'px';
-  editorContainer.style.width = pageSize.width * 96 + 'px';
-  editorContainer.style.position = 'static';
-
-  if (isDebugging) editorContainer.style.backgroundColor = '#00aaaa55';
-
-  editorContainer.addEventListener('dblclick', () => onHeaderFooterDblClick(editor, editorSection));
-
-  return {
-    section: editorContainer,
-    footerHeight: footerHeight + footerPaddingFromEdge,
-  };
-}
-
-const getHeaderFooterEditorKey = ({ pageNumber, isHeader, isFooter, isFirstHeader = false, isLastFooter = false }) => {
-  if (isFirstHeader) return `first-header-${pageNumber}`;
-  if (isLastFooter) return `last-footer-${pageNumber}`;
-  if (isHeader) return `header-${pageNumber}`;
-  if (isFooter) return `footer-${pageNumber}`;
-  return undefined;
+  return widgets;
 };
 
 /**
- * Handles header/footer edit mode activation
- * @param {Editor} editor Main editor instance
- * @param {Editor} currentFocusedSectionEditor Focused header/footer editor
+ * Resolves the bounding rectangle for a table cell at a given document position.
+ * @param {import('prosemirror-view').EditorView} view
+ * @param {number} cellPos
+ * @returns {DOMRect|null}
  */
-const onHeaderFooterDblClick = (editor, currentFocusedSectionEditor) => {
-  if (editor.options.documentMode !== 'editing') return;
-
-  editor.setEditable(false, false);
-  toggleHeaderFooterEditMode({
-    editor,
-    focusedSectionEditor: currentFocusedSectionEditor,
-    isEditMode: true,
-    documentMode: editor.options.documentMode,
-  });
+const getTableCellRect = (view, cellPos) => {
+  if (!view || typeof view.nodeDOM !== 'function') {
+    return null;
+  }
+  try {
+    const dom = view.nodeDOM(cellPos);
+    if (dom && typeof dom.getBoundingClientRect === 'function') {
+      return dom.getBoundingClientRect();
+    }
+  } catch {}
+  return null;
 };
 
 /**
- * Combine header and footer into a page break element
- * @param {Object} param0
- * @param {Editor} param0.editor The editor instance
- * @param {HTMLElement} param0.header The header element
- * @param {HTMLElement} param0.footer The footer element
- * @returns {HTMLElement} The page break element
+ * Resolves a vertical coordinate within a table cell for mirroring purposes.
+ * @param {{ cellRect: DOMRect|null, baseOffset: number|null, baseFraction: number|null, fallbackY: number|null }} params
+ * @returns {number|null}
  */
-function createPageBreak({
-  editor,
-  header,
-  footer,
-  footerBottom = null,
-  isFirstHeader,
-  isLastFooter,
-  isInTable = false,
-}) {
-  const { pageSize, pageMargins } = editor.converter.pageStyles;
-
-  let sectionHeight = 0;
-  const paginationDiv = document.createElement('div');
-  paginationDiv.className = 'pagination-break-wrapper';
-
-  const innerDiv = document.createElement('div');
-  innerDiv.className = 'pagination-inner';
-  innerDiv.style.width = pageSize.width * 96 - 1 + 'px';
-
-  if (isFirstHeader) innerDiv.style.borderRadius = '8px 8px 0 0';
-  else if (isLastFooter) innerDiv.style.borderRadius = '0 0 8px 8px';
-  paginationDiv.appendChild(innerDiv);
-
-  if (footer) {
-    innerDiv.appendChild(footer.section);
-    sectionHeight += footer.footerHeight;
-  }
-
-  if (header && footer) {
-    const separatorHeight = 20;
-    sectionHeight += separatorHeight;
-    const separator = document.createElement('div');
-    separator.classList.add(SEPARATOR_CLASS);
-    if (isInTable) {
-      separator.classList.add(`${SEPARATOR_CLASS}--table`);
+const resolveTargetYForCell = ({ cellRect, baseOffset, baseFraction, fallbackY }) => {
+  if (cellRect && Number.isFinite(cellRect.top) && Number.isFinite(cellRect.bottom) && cellRect.bottom > cellRect.top) {
+    if (Number.isFinite(baseOffset)) {
+      const span = cellRect.bottom - cellRect.top;
+      const offset = clampNumber(baseOffset, 0, span);
+      return cellRect.top + offset;
     }
-    if (isDebugging) separator.style.backgroundColor = 'green';
-    innerDiv.appendChild(separator);
+    if (Number.isFinite(baseFraction)) {
+      const span = cellRect.bottom - cellRect.top;
+      const fraction = clampNumber(baseFraction, 0, 1);
+      return cellRect.top + span * fraction;
+    }
+    if (Number.isFinite(fallbackY)) {
+      return clampNumber(fallbackY, cellRect.top, cellRect.bottom);
+    }
+    return cellRect.bottom;
   }
-
-  if (header) {
-    innerDiv.appendChild(header.section);
-    sectionHeight += header.headerHeight;
-  }
-
-  paginationDiv.style.height = sectionHeight + 'px';
-  paginationDiv.style.minHeight = sectionHeight + 'px';
-  paginationDiv.style.maxHeight = sectionHeight + 'px';
-  innerDiv.style.height = sectionHeight + 'px';
-  paginationDiv.style.width = 100 + 'px';
-  paginationDiv.style.marginLeft = pageMargins.left * -96 + 'px';
-
-  if (isDebugging) {
-    innerDiv.style.backgroundColor = '#0000ff33';
-    paginationDiv.style.backgroundColor = '#00ff0099';
-  }
-
-  if (footerBottom !== null) {
-    paginationDiv.style.position = 'absolute';
-    paginationDiv.style.bottom = footerBottom + 'px';
-  }
-
-  return paginationDiv;
-}
+  return Number.isFinite(fallbackY) ? fallbackY : null;
+};
 
 /**
- * Get the actual break coordinates for a page split based on the approximate position (pos)
- * and the calculated threshold (which accounts for 'scale')
- *
- * Since we know the node at pos extends past the threshold, we iterate
- * backwards through all positions from there to find the exact break point
- * @param {EditorView} view The current editor view
- * @param {Number} pos The position of the outermost node that exceeds threshold
- * @param {Number} calculatedThreshold The page threshold accounting for scale
- * @returns {Object} Object containing the actual top, bottom, and position of the break
+ * Locates the table row context for a resolved position when mirroring decorations.
+ * @param {import('prosemirror-model').ResolvedPos} resolvedPos
+ * @returns {{ rowNode: import('prosemirror-model').Node, rowPos: number }|null}
  */
-function getActualBreakCoords(view, pos, calculatedThreshold) {
-  let currentPos = pos - 1;
-  const actualBreak = { top: 0, bottom: 0, pos: 0 };
-  while (currentPos > 0) {
-    const { top, bottom } = view.coordsAtPos(currentPos);
-    if (bottom < calculatedThreshold) {
-      Object.assign(actualBreak, { top, bottom, pos: currentPos + 1 });
-      break;
-    }
+const resolveTableRowContext = (resolvedPos) => {
+  if (!resolvedPos) return null;
 
-    currentPos--;
+  let rowDepth = -1;
+  let cellDepth = -1;
+
+  for (let depth = resolvedPos.depth; depth >= 0; depth -= 1) {
+    const node = resolvedPos.node(depth);
+    const name = node?.type?.name ?? null;
+    if (cellDepth === -1 && TABLE_CELL_NODE_NAMES.has(name)) {
+      cellDepth = depth;
+    }
+    if (TABLE_ROW_NODE_NAMES.has(name)) {
+      rowDepth = depth;
+      if (cellDepth !== -1) {
+        break;
+      }
+    }
   }
 
-  return actualBreak;
-}
+  if (rowDepth === -1 || cellDepth === -1 || cellDepth <= rowDepth) {
+    return null;
+  }
+
+  const rowNode = resolvedPos.node(rowDepth);
+  if (!rowNode) {
+    return null;
+  }
+
+  const rowPos = rowDepth > 0 ? resolvedPos.before(rowDepth) : 0;
+  return {
+    rowNode,
+    rowPos,
+  };
+};
 
 /**
- * Special handling for images in pagination. Trigger a pagination update transaction after an image loads.
- * @param {Editor} editor The editor instance
+ * Computes the inner positional bounds of a table cell.
+ * @param {number} cellStart
+ * @param {import('prosemirror-model').Node} cellNode
+ * @param {number|null} docSize
+ * @returns {{ innerStart: number, innerEnd: number }}
+ */
+const getCellInnerBounds = (cellStart, cellNode, docSize) => {
+  const innerStart = clampToDoc(cellStart + 1, docSize);
+  const innerEnd = clampToDoc(cellStart + Math.max(1, cellNode.nodeSize - 1), docSize);
+  return { innerStart, innerEnd };
+};
+
+/**
+ * Determines the best insertion position inside a table cell for mirrored decorations.
+ * @param {{ view: import('prosemirror-view').EditorView, doc: import('prosemirror-model').Node, cellStart: number, cellNode: import('prosemirror-model').Node, targetY: number|null, cellRect: DOMRect|null, innerStart?: number, innerEnd?: number, preferredPos?: number|null }} params
+ * @returns {number}
+ */
+const resolveCellInsertionPos = ({
+  view,
+  doc,
+  cellStart,
+  cellNode,
+  targetY,
+  cellRect,
+  innerStart: providedInnerStart,
+  innerEnd: providedInnerEnd,
+  preferredPos,
+}) => {
+  const docSize = doc?.content?.size ?? null;
+  const { innerStart, innerEnd } =
+    providedInnerStart != null && providedInnerEnd != null
+      ? { innerStart: providedInnerStart, innerEnd: providedInnerEnd }
+      : getCellInnerBounds(cellStart, cellNode, docSize);
+
+  if (innerEnd < innerStart) {
+    return innerStart;
+  }
+
+  if (!view) {
+    return innerEnd;
+  }
+
+  if (Number.isFinite(preferredPos)) {
+    return clampNumber(preferredPos, innerStart, innerEnd);
+  }
+
+  let rect = cellRect ?? null;
+  if (!rect && typeof view.nodeDOM === 'function') {
+    try {
+      const cellDom = view.nodeDOM(cellStart);
+      if (cellDom && typeof cellDom.getBoundingClientRect === 'function') {
+        rect = cellDom.getBoundingClientRect();
+      }
+    } catch {}
+  }
+
+  if (!rect) {
+    return innerEnd;
+  }
+
+  const verticalRange = rect.bottom - rect.top;
+  const safeTargetY = Number.isFinite(targetY)
+    ? clampNumber(targetY, rect.top, rect.bottom)
+    : rect.bottom - Math.min(Math.max(verticalRange * 0.1, 0.5), 2);
+
+  const horizontalRange = rect.right - rect.left;
+  const horizontalProbe =
+    Number.isFinite(horizontalRange) && horizontalRange > 0 ? horizontalRange / 2 : Math.max(horizontalRange, 1);
+  const defaultX = rect.left + horizontalProbe;
+  const safeX = clampNumber(defaultX, rect.left, rect.right);
+
+  let measuredPos = null;
+  if (typeof view.posAtCoords === 'function') {
+    try {
+      const probe = view.posAtCoords({ left: safeX, top: safeTargetY });
+      if (probe && Number.isFinite(probe.pos)) {
+        measuredPos = probe.pos;
+      }
+    } catch {}
+  }
+
+  let result = Number.isFinite(measuredPos) ? measuredPos : innerEnd;
+  result = Math.max(innerStart, Math.min(result, innerEnd));
+  if (Number.isFinite(docSize)) {
+    result = Math.max(0, Math.min(result, docSize));
+  }
+  return result;
+};
+
+/**
+ * Clamps a numeric value between provided bounds.
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ * @returns {number}
+ */
+const clampNumber = (value, min, max) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    if (Number.isFinite(min)) return min;
+    if (Number.isFinite(max)) return max;
+    return value;
+  }
+  if (Number.isFinite(min) && numeric < min) {
+    return min;
+  }
+  if (Number.isFinite(max) && numeric > max) {
+    return max;
+  }
+  return numeric;
+};
+
+/**
+ * Clamps a value to valid document positions.
+ * @param {number} value
+ * @param {number|null} docSize
+ * @returns {number}
+ */
+const clampToDoc = (value, docSize) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+  if (Number.isFinite(docSize)) {
+    if (numeric < 0) return 0;
+    if (numeric > docSize) return docSize;
+  }
+  return numeric;
+};
+
+/**
+ * Removes previously rendered page chrome elements.
+ * @param {Record<string, any>} storage
  * @returns {void}
  */
-const onImageLoad = (editor) => {
-  if (typeof requestAnimationFrame !== 'function') return;
-  requestAnimationFrame(() => {
-    const newTr = editor.view.state.tr;
-    newTr.setMeta('forceUpdatePagination', true);
-    editor.view.dispatch(newTr);
-  });
+const clearPageChrome = (storage) => {
+  if (!storage || !Array.isArray(storage.pageChromeNodes)) return;
+  while (storage.pageChromeNodes.length) {
+    const node = storage.pageChromeNodes.pop();
+    if (node?.parentNode) {
+      node.parentNode.removeChild(node);
+    }
+  }
 };
 
-function createFloatingSeparator(separator, editor) {
-  const floatingSeparator = document.createElement('div');
-  floatingSeparator.classList.add(SEPARATOR_FLOATING_CLASS);
-  floatingSeparator.dataset.floatingSeparator = '';
-
-  const editorElement = editor.options.element;
-  editorElement.append(floatingSeparator);
-
-  const updatePosition = () => {
-    computePosition(separator, floatingSeparator, {
-      strategy: 'absolute',
-      placement: 'top-start',
-      middleware: [
-        hide(),
-        {
-          name: 'copy',
-          fn: ({ elements }) => {
-            const rect = elements.reference.getBoundingClientRect();
-            const containerRect = editorElement.getBoundingClientRect();
-            const scaleFactor = getScaleFactor(editorElement);
-
-            const x = Math.round((rect.left - containerRect.left) / scaleFactor);
-            const y = Math.round((rect.top - containerRect.top) / scaleFactor);
-            const width = Math.round(rect.width / scaleFactor);
-            const height = Math.round(rect.height / scaleFactor);
-
-            return {
-              x,
-              y,
-              data: { width, height },
-            };
-          },
-        },
-      ],
-    }).then(({ x, y, middlewareData }) => {
-      Object.assign(floatingSeparator.style, {
-        top: `${y}px`,
-        left: `${x}px`,
-        width: `${middlewareData.copy.width}px`,
-        height: `${middlewareData.copy.height}px`,
-        visibility: middlewareData.hide?.referenceHidden ? 'hidden' : 'visible',
-      });
-    });
-  };
-
-  const cleanup = autoUpdate(separator, floatingSeparator, updatePosition);
-
-  const extendedCleanup = () => {
-    floatingSeparator?.remove();
-    cleanup();
-  };
-
-  return {
-    cleanup: extendedCleanup,
-    updatePosition,
-  };
-}
-
-function cleanupFloatingSeparators() {
-  cleanupFunctions.forEach((cleanup) => cleanup());
-  cleanupFunctions.clear();
-}
-
-function getScaleFactor(element) {
-  let scale = 1;
-  let currentElement = element;
-
-  while (currentElement && currentElement !== document.documentElement) {
-    let zoomStyle = currentElement.style.zoom;
-    if (zoomStyle) {
-      let zoom = parseFloat(zoomStyle) || 1;
-      scale *= zoom;
-    }
-
-    let transformStyle = currentElement.style.transform;
-    if (transformStyle) {
-      let scaleMatch = transformStyle.match(/scale\(([^)]+)\)/);
-      if (scaleMatch) {
-        let scaleValue = parseFloat(scaleMatch[1]) || 1;
-        scale *= scaleValue;
-      }
-    }
-
-    currentElement = currentElement.parentElement;
+/**
+ * Builds the page chrome overlay for the current layout and tracks injected DOM nodes.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {Record<string, any>} storage
+ * @param {{ pages?: any[] }} [layout={}]
+ * @returns {void}
+ */
+const generatePageView = (editor, storage, layout = {}) => {
+  const mount = editor.options.element;
+  const viewContainer = editor.view.dom.parentNode;
+  if (!viewContainer) {
+    return;
+  }
+  if (storage && !Array.isArray(storage.pageChromeNodes)) {
+    storage.pageChromeNodes = [];
   }
 
-  return scale;
+  const pages = Array.isArray(layout?.pages) ? layout.pages : [];
+  let fallbackTop = 0;
+  let fallbackGap = 0;
+
+  for (let index = 0; index < pages.length; index += 1) {
+    const page = pages[index] ?? null;
+    const metrics = page?.metrics ?? {};
+    const pageHeightPx = Number(metrics?.pageHeightPx) || 0;
+
+    const pageTop = Number.isFinite(page?.pageTopOffsetPx) ? page.pageTopOffsetPx : fallbackTop;
+    const pageGap = Number.isFinite(page?.pageGapPx) ? page.pageGapPx : fallbackGap;
+
+    insertPageChrome(editor, storage, mount, viewContainer, index, pageTop, layout);
+
+    fallbackTop = pageTop + pageHeightPx + pageGap;
+    fallbackGap = pageGap;
+  }
+};
+
+/**
+ * Injects page chrome elements for a specific page, including overlays and background containers.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {Record<string, any>} storage
+ * @param {HTMLElement|null} [_mount]
+ * @param {HTMLElement} viewContainer
+ * @param {number} pageNumber
+ * @param {number} pageTop
+ * @param {{ pages?: any[] }} layout
+ * @returns {void}
+ */
+const insertPageChrome = (editor, storage, _mount, viewContainer, pageNumber, pageTop, layout) => {
+  const pageView = editor.view.dom.ownerDocument.createElement('div');
+  pageView.className = 'super-editor-page-view super-editor-base-page';
+  pageView.style.top = pageTop + 'px';
+
+  const header = createSectionOverlay(editor, 'header', pageNumber, layout);
+  pageView.appendChild(header);
+
+  const footer = createSectionOverlay(editor, 'footer', pageNumber, layout);
+  pageView.appendChild(footer);
+
+  const overlayHost = viewContainer?.parentNode ?? null;
+  if (!overlayHost) {
+    return;
+  }
+  overlayHost.insertBefore(pageView, viewContainer);
+
+  if (storage?.pageChromeNodes) {
+    storage.pageChromeNodes.push(pageView);
+  }
+
+  const pageBackgroundView = editor.view.dom.ownerDocument.createElement('div');
+  pageBackgroundView.className = 'super-editor-page-background-view super-editor-base-page';
+  pageBackgroundView.style.top = pageTop + 'px';
+  const backgroundHost = viewContainer?.parentNode ?? null;
+  if (backgroundHost) {
+    backgroundHost.insertBefore(pageBackgroundView, viewContainer);
+    if (storage?.pageChromeNodes) {
+      storage.pageChromeNodes.push(pageBackgroundView);
+    }
+  }
+};
+
+/**
+ * Creates the DOM overlay used to render header/footer content for a page.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {'header'|'footer'} sectionType
+ * @param {number} pageIndex
+ * @param {{ pages?: any[] }} [layout={}]
+ * @returns {HTMLElement}
+ */
+const createSectionOverlay = (editor, sectionType, pageIndex, layout = {}) => {
+  const doc = editor.view.dom.ownerDocument;
+  const sectionDiv = doc.createElement('div');
+  sectionDiv.className = 'super-editor-page-section';
+  sectionDiv.dataset.paginationLabel = sectionType === 'header' ? 'Header' : 'Footer';
+
+  if (sectionType === 'header') {
+    sectionDiv.classList.add('super-editor-page-header');
+  } else if (sectionType === 'footer') {
+    sectionDiv.classList.add('super-editor-page-footer');
+  }
+
+  const hitArea = doc.createElement('div');
+  hitArea.className = 'super-editor-page-section-hitarea';
+  hitArea.dataset.paginationSection = sectionType;
+  hitArea.style.position = 'absolute';
+  hitArea.style.left = '0';
+  hitArea.style.right = '0';
+  hitArea.style.top = '0';
+  hitArea.style.bottom = '0';
+  hitArea.style.pointerEvents = 'auto';
+  sectionDiv.appendChild(hitArea);
+
+  const pages = Array.isArray(layout?.pages) ? layout.pages : [];
+  const currentPageSection =
+    pages.find((p) => Number.isInteger(p?.pageIndex) && p.pageIndex === pageIndex) ?? pages[pageIndex] ?? {};
+  const headerFooterAreas = currentPageSection?.headerFooterAreas ?? {};
+  const metrics = currentPageSection?.metrics ?? {};
+  const section = headerFooterAreas?.[sectionType] ?? {};
+
+  const marginKey = sectionType === 'header' ? 'marginTopPx' : 'marginBottomPx';
+  const marginValue = Number(metrics?.[marginKey]);
+  const sectionHeight = Number(section?.heightPx);
+  const resolvedHeight = Math.max(
+    Number.isFinite(marginValue) ? marginValue : 0,
+    Number.isFinite(sectionHeight) ? sectionHeight : 0,
+  );
+
+  if (resolvedHeight > 0) {
+    sectionDiv.style.height = `${resolvedHeight}px`;
+  }
+
+  const storage = editor?.storage?.pagination ?? {};
+  const summary = storage?.headerFooterSummary ?? null;
+  const isLastPage = sectionType === 'footer' && pageIndex === pages.length - 1;
+
+  let sectionId =
+    resolveSectionIdFromSummary(summary, sectionType, pageIndex, isLastPage) ??
+    (typeof section?.id === 'string' ? section.id : null) ??
+    (typeof section?.sectionId === 'string' ? section.sectionId : null) ??
+    (typeof section?.areaId === 'string' ? section.areaId : null);
+
+  if (!sectionId) {
+    const converterKey = sectionType === 'header' ? 'headerIds' : 'footerIds';
+    sectionId = resolveSectionIdForPage(editor, pageIndex + 1, converterKey);
+  }
+
+  if (sectionId && storage) {
+    const bucketKey = sectionType === 'header' ? 'headers' : 'footers';
+    const ensureSectionStore = () => {
+      if (!storage.sectionData || typeof storage.sectionData !== 'object') {
+        storage.sectionData = { headers: {}, footers: {} };
+      }
+      if (!storage.sectionData[bucketKey] || typeof storage.sectionData[bucketKey] !== 'object') {
+        storage.sectionData[bucketKey] = {};
+      }
+      return storage.sectionData[bucketKey];
+    };
+
+    const bucketStore = ensureSectionStore();
+    const existingEntry = bucketStore[sectionId] ?? null;
+    const hasData = existingEntry && existingEntry.data != null;
+
+    if (!hasData) {
+      const repoRecord = storage.repository?.get?.(sectionId) ?? null;
+      if (repoRecord?.contentJson) {
+        const nextEntry = {
+          ...existingEntry,
+          data: repoRecord.contentJson,
+        };
+        if (!Number.isFinite(nextEntry.reservedHeight) && Number.isFinite(resolvedHeight) && resolvedHeight > 0) {
+          nextEntry.reservedHeight = resolvedHeight;
+        }
+        bucketStore[sectionId] = nextEntry;
+      }
+    } else if (
+      Number.isFinite(resolvedHeight) &&
+      resolvedHeight > 0 &&
+      !Number.isFinite(existingEntry.reservedHeight)
+    ) {
+      bucketStore[sectionId] = {
+        ...existingEntry,
+        reservedHeight: resolvedHeight,
+      };
+    }
+  }
+
+  const pageNumber = pageIndex + 1;
+  const content = sectionId != null ? getSectionPreviewClone(editor, sectionType, sectionId, { pageNumber }) : null;
+
+  const slot = editor.view.dom.ownerDocument.createElement('div');
+  slot.className = 'super-editor-page-section-slot';
+  slot.style.position = 'absolute';
+  slot.style.display = 'flex';
+  slot.style.flexDirection = 'column';
+  slot.style.overflow = 'hidden';
+  slot.style.pointerEvents = 'none';
+
+  hitArea.addEventListener('dblclick', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    activateHeaderFooterEditor({
+      editor,
+      storage,
+      sectionType,
+      sectionId,
+      pageNumber,
+      pageIndex,
+      slot,
+      hitArea,
+      resolvedHeight,
+    });
+  });
+
+  const marginLeft = Number(metrics?.marginLeftPx);
+  const marginRight = Number(metrics?.marginRightPx);
+  if (Number.isFinite(marginLeft) && marginLeft > 0) {
+    slot.style.left = `${Math.round(marginLeft)}px`;
+  } else {
+    slot.style.left = '0';
+  }
+  if (Number.isFinite(marginRight) && marginRight > 0) {
+    slot.style.right = `${Math.round(marginRight)}px`;
+  } else {
+    slot.style.right = '0';
+  }
+
+  const offsetPx = Number.isFinite(section?.metrics?.offsetPx)
+    ? section.metrics.offsetPx
+    : Number.isFinite(section?.metrics?.distancePx)
+      ? section.metrics.distancePx
+      : null;
+  const resolvedOffset = Number.isFinite(offsetPx) ? Math.max(offsetPx, 0) : 0;
+  const maxOffset = Number.isFinite(resolvedHeight) ? Math.max(resolvedHeight, 0) : resolvedOffset;
+  const effectiveOffset = Math.min(resolvedOffset, maxOffset);
+  const contentHeight = Number.isFinite(section?.metrics?.contentHeightPx)
+    ? Math.max(section.metrics.contentHeightPx, 0)
+    : null;
+  let slotHeight = Number.isFinite(contentHeight) ? contentHeight : null;
+  if (!Number.isFinite(slotHeight)) {
+    slotHeight = Number.isFinite(resolvedHeight) ? Math.max(resolvedHeight - effectiveOffset, 0) : null;
+  }
+
+  if (sectionType === 'header') {
+    slot.style.top = `${Math.round(effectiveOffset)}px`;
+    slot.style.bottom = 'auto';
+    slot.style.justifyContent = 'flex-start';
+  } else {
+    slot.style.bottom = `${Math.round(effectiveOffset)}px`;
+    slot.style.top = 'auto';
+    slot.style.justifyContent = 'flex-end';
+  }
+  if (Number.isFinite(slotHeight)) {
+    const allowedHeight = Number.isFinite(resolvedHeight) ? Math.min(slotHeight, resolvedHeight) : slotHeight;
+    const clampedHeight = Math.max(0, Math.round(allowedHeight));
+    slot.style.height = `${clampedHeight}px`;
+    slot.style.maxHeight = `${clampedHeight}px`;
+  } else {
+    slot.style.height = 'auto';
+    slot.style.removeProperty('max-height');
+  }
+  slot.dataset.paginationSection = sectionType;
+  slot.dataset.paginationSectionRole = 'overlay-slot';
+  slot.dataset.paginationPage = String(pageNumber);
+  if (sectionId) {
+    slot.dataset.paginationSectionId = sectionId;
+  }
+  hitArea.dataset.paginationSection = sectionType;
+  hitArea.dataset.paginationSectionRole = 'hitarea';
+  hitArea.dataset.paginationPage = String(pageNumber);
+  if (sectionId) {
+    hitArea.dataset.paginationSectionId = sectionId;
+  }
+  slot.dataset.paginationOffset = String(Math.round(effectiveOffset));
+
+  const contentNode =
+    content ??
+    (() => {
+      const placeholder = editor.view.dom.ownerDocument.createElement('div');
+      placeholder.innerText = `${sectionType.toUpperCase()} for page ${pageNumber}`;
+      placeholder.style.display = 'flex';
+      placeholder.style.alignItems = sectionType === 'header' ? 'flex-start' : 'flex-end';
+      placeholder.style.justifyContent = 'center';
+      placeholder.style.height = '100%';
+      placeholder.style.fontSize = '12px';
+      placeholder.style.color = '#6b7280';
+      return placeholder;
+    })();
+
+  contentNode.dataset.paginationSection = sectionType;
+  contentNode.dataset.paginationSectionRole = 'overlay-content';
+  contentNode.dataset.paginationPage = String(pageNumber);
+  if (sectionId) {
+    contentNode.dataset.paginationSectionId = sectionId;
+  }
+  contentNode.dataset.paginationOffset = String(Math.round(effectiveOffset));
+  slot.appendChild(contentNode);
+  hitArea.appendChild(slot);
+
+  return sectionDiv;
+};
+
+/**
+ * Synchronizes the page view chrome with the latest pagination layout.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {Record<string, any>} storage
+ * @param {{ pages?: any[] }} breaks
+ * @returns {void}
+ */
+const ensurePageView = (editor, storage, breaks) => {
+  // if (!editor?.view?.dom) return null;
+  // const cached = storage?.pageViewElement;
+  // if (cached && cached.isConnected) return cached;
+
+  clearPageChrome(storage);
+  generatePageView(editor, storage, breaks);
+  // if (storage) {
+  //   storage.pageViewElement = pageView;
+  // }
+  // return pageView;
+};
+
+/**
+ * Mounts a section editor into the overlay slot for header/footer editing.
+ * @param {{ editor: import('@core/Editor.js').Editor, storage: Record<string, any>, sectionType: 'header'|'footer', sectionId: string|null, pageNumber: number, pageIndex: number, slot: HTMLElement, hitArea: HTMLElement, resolvedHeight: number|null }} params
+ * @returns {void}
+ */
+function activateHeaderFooterEditor({
+  editor,
+  storage,
+  sectionType,
+  sectionId,
+  pageNumber,
+  pageIndex,
+  slot,
+  hitArea,
+  resolvedHeight,
+}) {
+  if (!editor || !storage || !slot || !sectionType) {
+    return;
+  }
+
+  if (!slot.isConnected) {
+    console.debug('[pagination] header/footer edit aborted - slot not connected', {
+      sectionType,
+      sectionId,
+      pageNumber,
+      pageIndex,
+    });
+    return;
+  }
+
+  if (!sectionId) {
+    console.debug('[pagination] header/footer edit aborted - missing section id', {
+      sectionType,
+      pageNumber,
+      pageIndex,
+    });
+    return;
+  }
+
+  const map = ensureHeaderFooterEditorsMap(storage);
+  const editorKey = computeSectionEditorKey({ sectionType, sectionId, pageNumber });
+  const existingEntry = map.get(editorKey);
+  if (existingEntry && !existingEntry.deactivating) {
+    existingEntry.editor?.view?.focus?.();
+    return;
+  }
+
+  if (storage.activeHeaderFooterEditorKey && storage.activeHeaderFooterEditorKey !== editorKey) {
+    deactivateHeaderFooterEditor(editor, storage, storage.activeHeaderFooterEditorKey, { reason: 'switch' });
+  }
+
+  const doc = editor?.view?.dom?.ownerDocument ?? slot.ownerDocument;
+  if (!doc) {
+    console.debug('[pagination] header/footer edit aborted - missing owner document', {
+      sectionType,
+      sectionId,
+      pageNumber,
+    });
+    return;
+  }
+
+  const hadActiveEditors = hasActiveHeaderFooterEditor(map);
+  const { data, reservedHeight } = getSectionDataForEditing(editor, storage, sectionType, sectionId, {
+    fallbackHeight: resolvedHeight,
+  });
+
+  const editorContainer = doc.createElement('div');
+  editorContainer.className = 'super-editor-page-section-editor';
+  editorContainer.style.position = 'relative';
+  editorContainer.style.display = 'flex';
+  editorContainer.style.flexDirection = 'column';
+  editorContainer.style.width = '100%';
+  editorContainer.style.height = '100%';
+  editorContainer.style.maxHeight = '100%';
+  editorContainer.style.pointerEvents = 'auto';
+  editorContainer.style.background = 'transparent';
+  editorContainer.dataset.paginationSection = sectionType;
+  editorContainer.dataset.paginationSectionRole = 'editor';
+  editorContainer.dataset.paginationPage = String(pageNumber);
+  editorContainer.dataset.paginationEditorKey = editorKey;
+  if (sectionId) {
+    editorContainer.dataset.paginationSectionId = sectionId;
+  }
+
+  const previewNodes = hideSlotPreview(slot);
+  slot.style.pointerEvents = 'auto';
+  slot.dataset.paginationEditing = sectionType;
+  const sectionContainer = slot.closest('.super-editor-page-section');
+  sectionContainer?.classList.add('editing');
+  hitArea?.setAttribute?.('aria-pressed', 'true');
+  slot.appendChild(editorContainer);
+
+  const availableHeight = getSlotAvailableHeight(slot, reservedHeight ?? resolvedHeight);
+
+  let sectionEditor = null;
+  try {
+    sectionEditor = createHeaderFooterEditor({
+      editor,
+      data,
+      editorContainer,
+      appendToBody: false,
+      sectionId,
+      type: sectionType,
+      availableHeight,
+      currentPageNumber: pageNumber,
+      isEditable: true,
+      onBlurHook: () => {
+        deactivateHeaderFooterEditor(editor, storage, editorKey, { reason: 'blur' });
+      },
+    });
+  } catch (error) {
+    console.warn('[pagination] failed to initialize header/footer editor', error);
+    restoreSlotPreview(previewNodes);
+    if (slot.contains(editorContainer)) {
+      slot.removeChild(editorContainer);
+    }
+    slot.style.pointerEvents = 'none';
+    delete slot.dataset.paginationEditing;
+    hitArea?.removeAttribute?.('aria-pressed');
+    return;
+  }
+
+  broadcastEditorEvents(editor, sectionEditor);
+
+  const entry = {
+    key: editorKey,
+    type: sectionType,
+    sectionId,
+    pageNumber,
+    pageIndex,
+    editor: sectionEditor,
+    container: editorContainer,
+    slot,
+    hitArea,
+    previewNodes,
+    deactivating: false,
+  };
+  map.set(editorKey, entry);
+  storage.activeHeaderFooterEditorKey = editorKey;
+
+  if (!hadActiveEditors) {
+    setMainEditorHeaderFooterUi(editor, storage, true);
+  }
+
+  requestAnimationFrame(() => {
+    try {
+      const view = sectionEditor?.view;
+      view?.focus?.();
+      if (view) {
+        const endSelection = TextSelection.atEnd(view.state.doc);
+        if (!endSelection.eq(view.state.selection)) {
+          view.dispatch(view.state.tr.setSelection(endSelection));
+        }
+      }
+      const pm = view?.dom;
+      if (pm) {
+        pm.setAttribute('aria-readonly', 'false');
+      }
+    } catch (error) {
+      console.debug('[pagination] header/footer editor focus failed', error);
+    }
+  });
+}
+
+/**
+ * Deactivates a section editor, restoring UI chrome and cleaning up state.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {Record<string, any>} storage
+ * @param {string} key
+ * @param {{ reason?: string }} [options={}]
+ * @returns {boolean}
+ */
+function deactivateHeaderFooterEditor(editor, storage, key, options = {}) {
+  if (!editor || !storage || !key) return false;
+  const map = ensureHeaderFooterEditorsMap(storage, false);
+  if (!map) return false;
+  const entry = map.get(key);
+  if (!entry) return false;
+  if (entry.deactivating) return false;
+
+  entry.deactivating = true;
+  map.delete(key);
+  if (storage.activeHeaderFooterEditorKey === key) {
+    storage.activeHeaderFooterEditorKey = null;
+  }
+
+  try {
+    entry.hitArea?.removeAttribute?.('aria-pressed');
+  } catch {}
+
+  restoreSlotPreview(entry.previewNodes);
+  if (entry.slot) {
+    entry.slot.style.pointerEvents = 'none';
+    delete entry.slot.dataset.paginationEditing;
+  }
+  const sectionContainer = entry.slot?.closest?.('.super-editor-page-section');
+  sectionContainer?.classList.remove('editing');
+  if (entry.container?.parentNode) {
+    entry.container.parentNode.removeChild(entry.container);
+  }
+
+  try {
+    entry.editor?.destroy?.();
+  } catch (error) {
+    console.debug('[pagination] header/footer editor teardown failed', error);
+  }
+
+  const hasRemaining = hasActiveHeaderFooterEditor(map);
+  if (!hasRemaining) {
+    setMainEditorHeaderFooterUi(editor, storage, false);
+    const container = entry.slot?.closest?.('.super-editor-page-section');
+    container?.classList.remove('editing');
+  }
+
+  if (options?.reason === 'switch' && hasRemaining) {
+    // Ensure the new active editor is focused after switching.
+    const activeKey = storage.activeHeaderFooterEditorKey;
+    if (activeKey) {
+      const activeEntry = map.get(activeKey);
+      activeEntry?.editor?.view?.focus?.();
+    }
+  }
+
+  return true;
+}
+
+/**
+ * Retrieves the header/footer editors map from storage, optionally creating it.
+ * @param {Record<string, any>} storage
+ * @param {boolean} [createIfMissing=true]
+ * @returns {Map<string, any>|null}
+ */
+function ensureHeaderFooterEditorsMap(storage, createIfMissing = true) {
+  if (!storage) return null;
+  if (storage.headerFooterEditors instanceof Map) {
+    return storage.headerFooterEditors;
+  }
+
+  if (!createIfMissing) return null;
+  const map = new Map();
+  storage.headerFooterEditors = map;
+  return map;
+}
+
+/**
+ * Derives a unique identifier for a section editor keyed by type, id, and page.
+ * @param {{ sectionType?: string, sectionId?: string, pageNumber?: number }} params
+ * @returns {string}
+ */
+function computeSectionEditorKey({ sectionType, sectionId, pageNumber }) {
+  const type = sectionType ?? 'section';
+  const id = sectionId ?? 'unknown';
+  const page = Number.isFinite(pageNumber) ? String(pageNumber) : 'all';
+  return `${type}:${id}:${page}`;
+}
+
+/**
+ * Checks whether any active section editors remain attached to the overlay.
+ * @param {Map<string, any>} map
+ * @returns {boolean}
+ */
+function hasActiveHeaderFooterEditor(map) {
+  if (!(map instanceof Map)) return false;
+  for (const entry of map.values()) {
+    if (entry && !entry.deactivating) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Resolves source content and reserved height when preparing a section editor.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {Record<string, any>} storage
+ * @param {'header'|'footer'} sectionType
+ * @param {string} sectionId
+ * @param {{ fallbackHeight?: number|null }} [options={}]
+ * @returns {{ data: Record<string, any>|null, reservedHeight: number|null }}
+ */
+function getSectionDataForEditing(editor, storage, sectionType, sectionId, options = {}) {
+  const fallbackHeight = Number.isFinite(options?.fallbackHeight) ? options.fallbackHeight : null;
+  if (!storage || !sectionId) {
+    return { data: null, reservedHeight: fallbackHeight };
+  }
+
+  const bucketKey = sectionType === 'footer' ? 'footers' : 'headers';
+  const sectionEntry = storage.sectionData?.[bucketKey]?.[sectionId] ?? null;
+
+  let data = sectionEntry?.data ?? null;
+  let reservedHeight = Number.isFinite(sectionEntry?.reservedHeight) ? sectionEntry.reservedHeight : null;
+
+  if (!data) {
+    const repoRecord = storage.repository?.get?.(sectionId) ?? null;
+    data = repoRecord?.contentJson ?? null;
+  }
+
+  if (!Number.isFinite(reservedHeight)) {
+    const summary = storage.headerFooterSummary ?? null;
+    if (summary && summary.sectionMetricsById instanceof Map) {
+      const metrics = summary.sectionMetricsById.get(sectionId);
+      if (metrics && Number.isFinite(metrics.effectiveHeightPx)) {
+        reservedHeight = metrics.effectiveHeightPx;
+      }
+    }
+  }
+
+  if (!Number.isFinite(reservedHeight)) {
+    reservedHeight = fallbackHeight;
+  }
+
+  return { data, reservedHeight };
+}
+
+/**
+ * Removes non-editor nodes from the overlay slot to make room for an editor.
+ * @param {Node} slot
+ * @returns {Array<{ node: Node, parent: Node|null, nextSibling: Node|null }>}
+ */
+function hideSlotPreview(slot) {
+  if (!(slot instanceof Node)) return [];
+  const previews = [];
+  const children = Array.from(slot.childNodes ?? []);
+  children.forEach((node) => {
+    if (!(node instanceof Node)) return;
+    if (node instanceof HTMLElement && node.dataset?.paginationSectionRole === 'editor') return;
+    previews.push({
+      node,
+      parent: node.parentNode,
+      nextSibling: node.nextSibling,
+    });
+    try {
+      slot.removeChild(node);
+    } catch {}
+  });
+  return previews;
+}
+
+/**
+ * Reattaches preview nodes that were previously removed from the slot.
+ * @param {Array<{ node: Node, parent: Node|null, nextSibling: Node|null }>} previewNodes
+ * @returns {void}
+ */
+function restoreSlotPreview(previewNodes) {
+  if (!Array.isArray(previewNodes)) return;
+  previewNodes.forEach(({ node, parent, nextSibling }) => {
+    if (!node) return;
+    const targetParent = parent ?? nextSibling?.parentNode ?? null;
+    if (!targetParent) return;
+    try {
+      if (nextSibling && nextSibling.parentNode === targetParent) {
+        targetParent.insertBefore(node, nextSibling);
+      } else {
+        targetParent.appendChild(node);
+      }
+    } catch {}
+  });
+}
+
+/**
+ * Determines the usable height inside the overlay slot.
+ * @param {HTMLElement|null} slot
+ * @param {number|null} reservedHeight
+ * @returns {number|null}
+ */
+function getSlotAvailableHeight(slot, reservedHeight) {
+  if (!slot) return Number.isFinite(reservedHeight) ? reservedHeight : null;
+  const rect = typeof slot.getBoundingClientRect === 'function' ? slot.getBoundingClientRect() : null;
+  if (rect && Number.isFinite(rect.height) && rect.height > 0) {
+    return rect.height;
+  }
+  const offsetHeight = slot instanceof HTMLElement ? slot.offsetHeight : null;
+  if (Number.isFinite(offsetHeight) && offsetHeight > 0) {
+    return offsetHeight;
+  }
+  return Number.isFinite(reservedHeight) ? reservedHeight : null;
+}
+
+/**
+ * Toggles global editor UI affordances while a header/footer editor is active.
+ * @param {import('@core/Editor.js').Editor} editor
+ * @param {Record<string, any>} storage
+ * @param {boolean} enabled
+ * @returns {void}
+ */
+function setMainEditorHeaderFooterUi(editor, storage, enabled) {
+  if (!editor || !storage) return;
+  const pm = editor?.view?.dom;
+  if (!(pm instanceof HTMLElement)) return;
+
+  const stateKey = '__headerFooterUiState';
+  const state = storage[stateKey] || { active: false, wasEditable: false, previousAriaReadonly: null };
+
+  if (enabled) {
+    if (state.active) return;
+    state.active = true;
+    state.wasEditable = editor.isEditable;
+    state.previousAriaReadonly = pm.getAttribute('aria-readonly');
+    storage[stateKey] = state;
+
+    if (state.wasEditable) {
+      editor.setEditable(false, false);
+    }
+    pm.classList.add('header-footer-edit');
+    pm.setAttribute('aria-readonly', 'true');
+    return;
+  }
+
+  if (!state.active) return;
+  state.active = false;
+  storage[stateKey] = state;
+
+  if (state.wasEditable) {
+    editor.setEditable(true, false);
+  }
+
+  if (state.previousAriaReadonly != null) {
+    pm.setAttribute('aria-readonly', state.previousAriaReadonly);
+  } else {
+    pm.removeAttribute('aria-readonly');
+  }
+  pm.classList.remove('header-footer-edit');
 }

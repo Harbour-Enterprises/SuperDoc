@@ -13,7 +13,7 @@ import { createDocument } from './helpers/createDocument.js';
 import { isActive } from './helpers/isActive.js';
 import { trackedTransaction } from '@extensions/track-changes/trackChangesHelpers/trackedTransaction.js';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
-import { toggleHeaderFooterEditMode } from '@extensions/pagination/legacy-pagination/pagination-helpers.js';
+import { toggleHeaderFooterEditMode } from '@extensions/pagination/pagination-helpers.js';
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
 import { getRichTextExtensions } from '../extensions/index.js';
