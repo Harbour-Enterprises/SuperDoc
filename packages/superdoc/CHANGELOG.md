@@ -1,3 +1,9 @@
+## [0.27.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.1...v0.27.2) (2025-10-28)
+
+### Bug Fixes
+
+- images uploaded are dropped on export ([#1186](https://github.com/Harbour-Enterprises/SuperDoc/issues/1186)) ([77922c6](https://github.com/Harbour-Enterprises/SuperDoc/commit/77922c66f2261b8ff9856dd265fe8124fa6717c9))
+
 ## [0.27.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.0...v0.27.1) (2025-10-28)
 
 ### Bug Fixes
