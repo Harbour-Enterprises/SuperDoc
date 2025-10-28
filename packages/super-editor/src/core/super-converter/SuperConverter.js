@@ -1046,11 +1046,9 @@ class SuperConverter {
       ...(this.convertedXml.media || {}),
     };
 
-    const isHeadless = Boolean(editor?.options?.isHeadless);
-
     for (const [filePath, value] of Object.entries(media)) {
       if (value == null) continue;
-      processedData[filePath] = await getArrayBufferFromUrl(value, isHeadless);
+      processedData[filePath] = await getArrayBufferFromUrl(value);
     }
 
     this.convertedXml.media = processedData;
