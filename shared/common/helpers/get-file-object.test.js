@@ -30,6 +30,13 @@ afterAll(() => {
 describe('getFileObject', () => {
   let mockBlob;
 
+  it('requires Node.js >= 20 for atob, fetch, and File APIs', () => {
+    const version = parseInt(process.version.slice(1).split('.')[0], 10);
+    expect(version).toBeGreaterThanOrEqual(20);
+    expect(typeof globalThis.atob).toBe('function');
+    expect(typeof globalThis.fetch).toBe('function');
+  });
+
   beforeEach(() => {
     mockBlob = new Blob(['hello world'], { type: 'text/plain' });
 
