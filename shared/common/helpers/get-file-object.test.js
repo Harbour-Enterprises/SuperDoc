@@ -43,7 +43,7 @@ describe('getFileObject', () => {
     globalThis.fetch = originalFetch;
   });
 
-  it('fetches the file URL and returns a File with provided name and type', async () => {
+  it('fetches regular URLs and returns a File', async () => {
     const result = await getFileObject('https://example.com/file.txt', 'file.txt', 'text/plain');
 
     expect(globalThis.fetch).toHaveBeenCalledWith('https://example.com/file.txt');
@@ -51,5 +51,41 @@ describe('getFileObject', () => {
     expect(result.name).toBe('file.txt');
     expect(result.type).toBe('text/plain');
     await expect(result.text()).resolves.toBe('hello world');
+  });
+
+  it('handles data URIs without fetch (CSP-safe)', async () => {
+    const payload = 'Hello, World!';
+    const base64 = btoa(payload);
+    const dataUri = `data:text/plain;base64,${base64}`;
+
+    const result = await getFileObject(dataUri, 'test.txt', 'text/plain');
+
+    // Verify fetch was NOT called (CSP-safe)
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    expect(result).toBeInstanceOf(File);
+    expect(result.name).toBe('test.txt');
+    expect(result.type).toBe('text/plain');
+    await expect(result.text()).resolves.toBe(payload);
+  });
+
+  it('handles blank DOCX file import (the SD-720 use case)', async () => {
+    // This is the actual scenario that was failing with CSP
+    const blankDocxBase64 = 'UEsDBBQABgAIAAAAIQAykW9XZgEAAKUFAAATAAgCW0NvbnRlbnRfVHlwZXNdLnhtbCCiBAIooAAC';
+    const dataUri = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${blankDocxBase64}`;
+
+    const result = await getFileObject(
+      dataUri,
+      'blank.docx',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    );
+
+    // Critical: fetch should NOT be called (CSP violation prevention)
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    expect(result).toBeInstanceOf(File);
+    expect(result.name).toBe('blank.docx');
+    expect(result.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    expect(result.size).toBeGreaterThan(0);
   });
 });
