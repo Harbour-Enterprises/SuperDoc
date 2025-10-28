@@ -3,15 +3,9 @@
  * @returns {string} - 8 character random string
  */
 export function generateDocxRandomId(length = 8) {
-  const characters = '0123456789abcdef';
-
-  let id = [];
-  for (let i = 0; i < length; i++) {
-    const randomIndex = Math.floor(Math.random() * characters.length);
-    id.push(characters[randomIndex]);
-  }
-
-  return id.join('');
+  const max = 0x7fffffff;
+  const value = Math.floor(Math.random() * (max + 1));
+  return value.toString(16).padStart(length, '0').slice(0, length);
 }
 
 /**
