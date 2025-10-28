@@ -88,4 +88,18 @@ describe('getFileObject', () => {
     expect(result.type).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
     expect(result.size).toBeGreaterThan(0);
   });
+
+  it('handles non-base64 data URIs with fetch (no regression)', async () => {
+    // Non-base64 data URIs should still work via fetch
+    const dataUri = 'data:text/plain,Hello%20World';
+
+    const result = await getFileObject(dataUri, 'test.txt', 'text/plain');
+
+    // Non-base64 data URIs use fetch (no CSP issue)
+    expect(globalThis.fetch).toHaveBeenCalledWith(dataUri);
+
+    expect(result).toBeInstanceOf(File);
+    expect(result.name).toBe('test.txt');
+    expect(result.type).toBe('text/plain');
+  });
 });
