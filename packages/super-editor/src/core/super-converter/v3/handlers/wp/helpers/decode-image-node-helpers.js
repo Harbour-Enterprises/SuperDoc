@@ -1,6 +1,7 @@
 import { emuToPixels, pixelsToEmu, degreesToRot } from '@converter/helpers.js';
 import { getFallbackImageNameFromDataUri, sanitizeDocxMediaName } from '@converter/helpers/mediaHelpers.js';
 import { prepareTextAnnotation } from '@converter/v3/handlers/w/sdt/helpers/translate-field-annotation.js';
+import { wrapTextInRun } from '@converter/exporter.js';
 import { generateDocxRandomId } from '@core/helpers/index.js';
 
 /**
@@ -311,4 +312,32 @@ function addNewImageRelationship(params, imagePath) {
   };
   params.relationships.push(newRel);
   return newId;
+}
+
+/**
+ * Translates a vectorShape node back to XML.
+ * @param {Object} params - Translation parameters
+ * @returns {Object} XML node
+ */
+export function translateVectorShape(params) {
+  const { node } = params;
+  const { drawingContent } = node.attrs;
+
+  const drawing = {
+    name: 'w:drawing',
+    elements: [...(drawingContent ? [...(drawingContent.elements || [])] : [])],
+  };
+
+  const choice = {
+    name: 'mc:Choice',
+    attributes: { Requires: 'wps' },
+    elements: [drawing],
+  };
+
+  const alternateContent = {
+    name: 'mc:AlternateContent',
+    elements: [choice],
+  };
+
+  return wrapTextInRun(alternateContent);
 }

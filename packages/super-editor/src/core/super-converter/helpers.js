@@ -220,23 +220,50 @@ const getTextIndentExportValue = (indent) => {
   return exportValue;
 };
 
-const getArrayBufferFromUrl = async (input, isHeadless) => {
-  // Check if it's a full URL or blob/file/data URI
-  const isLikelyUrl = /^https?:|^blob:|^file:|^data:/i.test(input);
+const REMOTE_RESOURCE_PATTERN = /^https?:|^blob:|^file:/i;
+const DATA_URI_PATTERN = /^data:/i;
 
-  if (isHeadless && isLikelyUrl && typeof fetch === 'function') {
-    // Handle as fetchable resource
-    const res = await fetch(input);
-    if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
-    return await res.arrayBuffer();
+const getArrayBufferFromUrl = async (input) => {
+  if (input == null) {
+    return new ArrayBuffer(0);
   }
 
-  // Otherwise, assume it's a base64 string or Data URI
-  const base64 = input.includes(',') ? input.split(',', 2)[1] : input.trim().replace(/\s/g, '');
+  if (input instanceof ArrayBuffer) {
+    return input;
+  }
+
+  if (ArrayBuffer.isView(input)) {
+    const view = input;
+    return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+  }
+
+  if (typeof input !== 'string') {
+    throw new TypeError('Unsupported media input type');
+  }
+
+  const trimmed = input.trim();
+  const shouldFetchRemote = REMOTE_RESOURCE_PATTERN.test(trimmed);
+  const isDataUri = DATA_URI_PATTERN.test(trimmed);
+
+  if (shouldFetchRemote) {
+    if (typeof fetch !== 'function') {
+      throw new Error(`Fetch API is not available to retrieve media: ${trimmed}`);
+    }
+
+    const response = await fetch(trimmed);
+    if (!response.ok) {
+      throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.arrayBuffer();
+  }
+
+  // If this is a data URI we need only the payload portion
+  const base64Payload = isDataUri ? trimmed.split(',', 2)[1] : trimmed.replace(/\s/g, '');
 
   try {
     if (typeof globalThis.atob === 'function') {
-      const binary = globalThis.atob(base64);
+      const binary = globalThis.atob(base64Payload);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
@@ -247,7 +274,7 @@ const getArrayBufferFromUrl = async (input, isHeadless) => {
     console.warn('atob failed, falling back to Buffer:', err);
   }
 
-  const buf = Buffer.from(base64, 'base64');
+  const buf = Buffer.from(base64Payload, 'base64');
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 };
 
