@@ -17,18 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ !github.event.release.prerelease }} # only trigger for stable releases
     steps:
-      - name: Generate token
-        id: generate_token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
       - name: Trigger documentation update
         run: |
           curl -L \
             -X POST \
             -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ steps.generate_token.outputs.token }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPERDOC_PAT }}" \
             https://api.github.com/repos/Harbour-Enterprises/SuperDoc-Docs/dispatches \
             -d '{"event_type": "docs-update", "client_payload": {"version": "${{ github.event.release.tag_name }}"}}'
