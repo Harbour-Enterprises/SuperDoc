@@ -237,6 +237,10 @@ const getArrayBufferFromUrl = async (input) => {
     return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
   }
 
+  if (typeof Blob !== 'undefined' && input instanceof Blob) {
+    return await input.arrayBuffer();
+  }
+
   if (typeof input !== 'string') {
     throw new TypeError('Unsupported media input type');
   }
