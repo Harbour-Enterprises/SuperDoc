@@ -1,5 +1,8 @@
 import { SuperDoc, Editor as EditorClass } from 'superdoc';
+import { Mark, Node } from 'prosemirror-model';
 
+export type MarkType = Mark;
+export type NodeType = Node;
 export type Editor = InstanceType<typeof EditorClass>;
 export type SuperDocInstance = typeof SuperDoc | SuperDoc;
 

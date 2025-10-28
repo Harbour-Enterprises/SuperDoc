@@ -1,7 +1,4 @@
-import type {
-    Editor,
-    FoundMatch,
-} from './types';
+import type { Editor, FoundMatch, MarkType } from './types';
 import {generateId} from "./utils";
 
 /**
@@ -31,7 +28,7 @@ export class EditorAdapter {
                         }
                         return { from, to };
                     })
-                .filter((value: any): value is { from: number; to: number } => value !== null);
+                .filter((value: { from: number; to: number } | null) => value !== null);
 
                 return {
                     ...match,
@@ -49,13 +46,13 @@ export class EditorAdapter {
     // Replace operations
     async replaceText(from: number, to: number, suggestedText: string): Promise<void> {
         this.editor.commands.setTextSelection({ from, to })
-        const marks = this.editor.commands.getSelectionMarks();
+        const marks = this.editor.commands.getSelectionMarks() as MarkType[];
         this.editor.commands.deleteSelection();
         if (marks.length > 0) {
             this.editor.commands.insertContent({
                 type: 'text',
                 text: suggestedText,
-                marks: marks.map((mark: any) => ({
+                marks: marks.map((mark: MarkType) => ({
                     type: mark.type.name,
                     attrs: mark.attrs,
                 })),
@@ -73,14 +70,14 @@ export class EditorAdapter {
     ): Promise<string> {
         const changeId = generateId('tracked-change');
         this.editor.commands.enableTrackChanges();
-        this.editor.commands.setTextSelection({ from:from, to:to });
-        const marks = this.editor.commands.getSelectionMarks();
+        this.editor.commands.setTextSelection({ from, to });
+        const marks = this.editor.commands.getSelectionMarks() as MarkType[];
         this.editor.commands.deleteSelection();
         if (marks.length > 0) {
             this.editor.commands.insertContent({
                 type: 'text',
                 text: suggestedText,
-                marks: marks.map((mark: any) => ({
+                marks: marks.map((mark: MarkType) => ({
                     type: mark.type.name,
                     attrs: mark.attrs,
                 })),
@@ -111,11 +108,11 @@ export class EditorAdapter {
         const pos: number = this.editor.state.doc.content.size;
         const from: number = Math.max(0, pos - 50);
         this.editor.commands.setTextSelection({ from, to: pos });
-        const marks = this.editor.commands.getSelectionMarks();
+        const marks = this.editor.commands.getSelectionMarks() as MarkType[];
         this.editor.commands.insertContentAt(pos, {
             type: 'text',
             text: suggestedText,
-            marks: marks.map((mark: any) => ({
+            marks: marks.map((mark: MarkType) => ({
                 type: mark.type.name,
                 attrs: mark.attrs,
             })),

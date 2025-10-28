@@ -1,5 +1,5 @@
 {
-  "name": "@harbour-enterprises/superdoc-ai",
+  "name": "@superdoc-dev/superdoc-ai",
   "version": "0.1.0",
   "description": "AI integration package for SuperDoc",
   "main": "./src/index.js",
@@ -20,7 +20,6 @@
     "openai",
     "anthropic"
   ],
-  "author": "Harbour Enterprises",
   "license": "AGPL-3.0",
   "peerDependencies": {
     "superdoc": "*"

@@ -166,19 +166,18 @@ export class SuperDocAI {
      */
     private async executeActionWithCallbacks<T extends Result>(
         fn: () => Promise<T>
-    ): Promise<T> {
+    ): Promise<Result> {
         const editor = this.getEditor();
         if (!editor) {
             throw new Error('No active SuperDoc editor available for AI actions');
         }
         try {
             this.callbacks.onStreamingStart?.();
-            const result: any = await fn();
-            this.callbacks.onStreamingEnd?.(result);
+            const result: Result = await fn();
+            this.callbacks.onStreamingEnd?.({fullResult: result});
 
             return result;
         } catch (error: Error | any) {
-            this.callbacks.onError?.(error);
             this.handleError(error as Error);
             throw error;
         }

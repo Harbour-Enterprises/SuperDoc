@@ -1,4 +1,4 @@
-# @harbour-enterprises/superdoc-ai
+# @superdoc-dev/superdoc-ai
 
 > AI integration package for SuperDoc - Add powerful AI capabilities to your document editor
 
@@ -16,13 +16,13 @@
 ## Installation
 
 ```bash
-npm install @harbour-enterprises/superdoc-ai
+npm install @superdoc-dev/superdoc-ai
 ```
 
 ## Quick Start
 
 ```typescript
-import { SuperDocAI } from '@harbour-enterprises/superdoc-ai';
+import { SuperDocAI } from '@superdoc-dev/superdoc-ai';
 
 // Initialize with OpenAI
 const ai = new SuperDocAI(superdoc, {

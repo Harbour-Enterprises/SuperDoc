@@ -12,7 +12,7 @@ export const SYSTEM_PROMPTS = {
 export const buildFindPrompt = (query: string, documentContext: string, findAll: boolean): string => {
     const scope = findAll ? 'ALL occurrences' : 'FIRST occurrence ONLY';
 
-    return `apply this query: ${query} if find and replace query then Find the EXACT text of ${scope}
+    return `apply this query for original text return the EXACT text from the doc no title or added text: ${query}, ${scope}
             Document context:
             ${documentContext}
             

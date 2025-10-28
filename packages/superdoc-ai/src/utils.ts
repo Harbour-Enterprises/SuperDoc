@@ -1,7 +1,6 @@
 /**
  * Shared utility functions
  */
-import {FoundMatch, type Result} from "./types";
 
 /**
  * Validates input string is not empty or whitespace-only
