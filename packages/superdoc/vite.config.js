@@ -15,6 +15,7 @@ const visualizerConfig = {
   brotliSize: true,
   open: true
 }
+const measurementEngineDir = new URL('../engine/', import.meta.url)
 
 export const getAliases = (isDev) => {
   const aliases = {
@@ -33,6 +34,7 @@ export const getAliases = (isDev) => {
     '@tests': fileURLToPath(new URL('../super-editor/src/tests', import.meta.url)),
     '@translator': fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
     '@preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
+    '@measurement-engine': fileURLToPath(new URL('src/index.js', measurementEngineDir)),
   };
 
   if (isDev) {
