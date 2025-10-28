@@ -393,11 +393,10 @@ const buildShapePlaceholder = (node, size, padding, marginOffset, shapeType) => 
  * Parses shape geometry, transformations, and styling information.
  * @param {Object} options - Options
  * @param {Object} options.params - Translator params
- * @param {Object} options.node - The node
  * @param {Object} options.graphicData - The graphicData node
  * @returns {Object|null} A vectorShape node with extracted attributes
  */
-export function getVectorShape({ params, node, graphicData }) {
+export function getVectorShape({ params, graphicData }) {
   const schemaAttrs = {};
 
   const drawingNode = params.nodes?.[0];
