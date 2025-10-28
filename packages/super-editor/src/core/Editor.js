@@ -1,6 +1,7 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMSerializer } from 'prosemirror-model';
+import { MarkdownSerializer, defaultMarkdownSerializer } from 'prosemirror-markdown';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -1591,6 +1592,15 @@ export class Editor extends EventEmitter {
       html = unflattenListsInHtml(html);
     }
     return html;
+  }
+
+  /**
+   * Get the editor content as Markdown
+   * @returns {string} Editor content as Markdown
+   */
+  getMarkdown() {
+    const serializer = new MarkdownSerializer(defaultMarkdownSerializer.nodes, defaultMarkdownSerializer.marks);
+    return serializer.serialize(this.state.doc);
   }
 
   /**
