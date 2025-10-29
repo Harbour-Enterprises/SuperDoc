@@ -1,3 +1,27 @@
+## [0.27.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.1...v0.27.2) (2025-10-28)
+
+### Bug Fixes
+
+- images uploaded are dropped on export ([#1186](https://github.com/Harbour-Enterprises/SuperDoc/issues/1186)) ([77922c6](https://github.com/Harbour-Enterprises/SuperDoc/commit/77922c66f2261b8ff9856dd265fe8124fa6717c9))
+
+## [0.27.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.0...v0.27.1) (2025-10-28)
+
+### Bug Fixes
+
+- enhance getFileObject to handle data URIs ([#1187](https://github.com/Harbour-Enterprises/SuperDoc/issues/1187)) ([c61cf20](https://github.com/Harbour-Enterprises/SuperDoc/commit/c61cf202b4b139e0631efc73ade01e412e746ff6))
+
+# [0.27.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.26.0...v0.27.0) (2025-10-28)
+
+### Bug Fixes
+
+- images breaking on export ([#1182](https://github.com/Harbour-Enterprises/SuperDoc/issues/1182)) ([82af973](https://github.com/Harbour-Enterprises/SuperDoc/commit/82af973a0388091ad5fbb90cbefc6c9699faadd5))
+- tabs initial loading ([#1168](https://github.com/Harbour-Enterprises/SuperDoc/issues/1168)) ([5f97688](https://github.com/Harbour-Enterprises/SuperDoc/commit/5f9768807f4086159dcd27dd1d7fd5fee4a21e0a))
+
+### Features
+
+- cache tab decoration measurements ([#1155](https://github.com/Harbour-Enterprises/SuperDoc/issues/1155)) ([060092b](https://github.com/Harbour-Enterprises/SuperDoc/commit/060092b238c2cc465f17bf7a586a6df99b02e105))
+- vector shapes ([#1148](https://github.com/Harbour-Enterprises/SuperDoc/issues/1148)) ([e789819](https://github.com/Harbour-Enterprises/SuperDoc/commit/e789819198f576dd4de2486a43eed7413050e323))
+
 # [0.26.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.25.0...v0.26.0) (2025-10-17)
 
 ### Bug Fixes

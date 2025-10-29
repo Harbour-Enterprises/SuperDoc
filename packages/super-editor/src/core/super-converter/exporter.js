@@ -37,6 +37,7 @@ import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translat
 import { translator as wDelTranslator } from '@converter/v3/handlers/w/del';
 import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins';
 import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/hyperlink-translator.js';
+import { translateVectorShape } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -184,6 +185,7 @@ export function exportSchemaToJson(params) {
     shapeContainer: pictTranslator,
     shapeTextbox: pictTranslator,
     contentBlock: pictTranslator,
+    vectorShape: translateVectorShape,
     structuredContent: wSdtNodeTranslator,
     structuredContentBlock: wSdtNodeTranslator,
     documentPartObject: wSdtNodeTranslator,
