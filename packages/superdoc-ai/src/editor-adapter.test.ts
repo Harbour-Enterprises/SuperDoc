@@ -237,12 +237,13 @@ describe('EditorAdapter', () => {
             const commentId = await mockAdapter.createComment(0, 5, 'Please revise');
 
             expect(commentId).toMatch(/^comment-/);
-            expect(chainApi.enableTrackChanges).toHaveBeenCalled();
+            expect(mockEditor.commands.enableTrackChanges).toHaveBeenCalled();
             expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 5 });
             expect(chainApi.insertComment).toHaveBeenCalledWith({
                 commentText: 'Please revise'
             });
             expect(chainApi.run).toHaveBeenCalled();
+            expect(mockEditor.commands.disableTrackChanges).toHaveBeenCalled();
         });
     });
 

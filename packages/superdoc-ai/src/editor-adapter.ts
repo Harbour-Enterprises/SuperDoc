@@ -96,9 +96,18 @@ export class EditorAdapter {
         text: string,
     ): Promise<string> {
         const commentId = generateId('comment');
-        this.editor.chain().enableTrackChanges().setTextSelection({ from, to }).insertComment({
-            commentText: text,
-        }).run();
+        this.editor.commands.enableTrackChanges();
+        try {
+            this.editor
+                .chain()
+                .setTextSelection({ from, to })
+                .insertComment({
+                    commentText: text,
+                })
+                .run();
+        } finally {
+            this.editor.commands.disableTrackChanges();
+        }
 
         return commentId;
     }
