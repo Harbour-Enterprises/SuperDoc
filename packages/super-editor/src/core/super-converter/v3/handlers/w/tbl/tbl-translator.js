@@ -308,21 +308,23 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
       tblPr.elements.push(...baseTblPr.elements);
     }
     const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
-    const { borders, rowBorders } = _processTableBorders(tableProperties.borders || {});
+    if (tableProperties) {
+      const { borders, rowBorders } = _processTableBorders(tableProperties.borders || {});
 
-    if (borders) stylesToReturn.borders = borders;
-    if (rowBorders) stylesToReturn.rowBorders = rowBorders;
+      if (borders) stylesToReturn.borders = borders;
+      if (rowBorders) stylesToReturn.rowBorders = rowBorders;
 
-    const cellMargins = {};
-    Object.entries(tableProperties.cellMargins || {}).forEach(([key, attrs]) => {
-      if (attrs?.value != null) {
-        cellMargins[key] = {
-          value: attrs.value,
-          type: attrs.type || 'dxa',
-        };
-      }
-    });
-    if (Object.keys(cellMargins).length) stylesToReturn.cellMargins = cellMargins;
+      const cellMargins = {};
+      Object.entries(tableProperties.cellMargins || {}).forEach(([key, attrs]) => {
+        if (attrs?.value != null) {
+          cellMargins[key] = {
+            value: attrs.value,
+            type: attrs.type || 'dxa',
+          };
+        }
+      });
+      if (Object.keys(cellMargins).length) stylesToReturn.cellMargins = cellMargins;
+    }
   }
 
   return stylesToReturn;
