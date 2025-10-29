@@ -22,10 +22,10 @@ function encode(params, encodedAttrs) {
     table,
     row,
     rowBorders,
-    styleTag,
     columnIndex,
     columnWidth,
     columnWidths: allColumnWidths,
+    _referencedStyles,
   } = params.extraParams;
 
   const schemaNode = handleTableCellNode({
@@ -34,10 +34,10 @@ function encode(params, encodedAttrs) {
     table,
     row,
     rowBorders,
-    styleTag,
     columnIndex,
     columnWidth,
     allColumnWidths,
+    _referencedStyles,
   });
 
   if (encodedAttrs && Object.keys(encodedAttrs).length) {

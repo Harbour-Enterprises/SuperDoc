@@ -223,7 +223,7 @@ const getTextIndentExportValue = (indent) => {
 const REMOTE_RESOURCE_PATTERN = /^https?:|^blob:|^file:/i;
 const DATA_URI_PATTERN = /^data:/i;
 
-const getArrayBufferFromUrl = async (input, _isHeadless) => {
+const getArrayBufferFromUrl = async (input) => {
   if (input == null) {
     return new ArrayBuffer(0);
   }
@@ -235,6 +235,10 @@ const getArrayBufferFromUrl = async (input, _isHeadless) => {
   if (ArrayBuffer.isView(input)) {
     const view = input;
     return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+  }
+
+  if (typeof Blob !== 'undefined' && input instanceof Blob) {
+    return await input.arrayBuffer();
   }
 
   if (typeof input !== 'string') {
