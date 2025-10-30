@@ -1,3 +1,10 @@
+## [0.27.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.2...v0.27.3) (2025-10-30)
+
+### Bug Fixes
+
+- remove image contain-intrinsic and content-visibility breaking pagination ([cbb8d37](https://github.com/Harbour-Enterprises/SuperDoc/commit/cbb8d37791b6ec0d59376c593c7cb8be4f1b027d))
+- tests ([c58d332](https://github.com/Harbour-Enterprises/SuperDoc/commit/c58d332e554eae49dfa67c7a59b1c83f0d0d6f5e))
+
 ## [0.27.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.1...v0.27.2) (2025-10-28)
 
 ### Bug Fixes
