@@ -119,7 +119,7 @@ export const isLineBreakOnlyRun = (node) => {
  * @param {Array<Object>|Object} elements
  * @returns {Array<Object>}
  */
-export function convertStdContentToRuns(elements) {
+export function convertSdtContentToRuns(elements) {
   const normalized = Array.isArray(elements) ? elements : [elements];
   const runs = [];
 
@@ -139,13 +139,13 @@ export function convertStdContentToRuns(elements) {
       // Recursively flatten nested SDTs into the surrounding run sequence, skipping property bags.
       const sdtContent = (element.elements || []).find((child) => child?.name === 'w:sdtContent');
       if (sdtContent?.elements) {
-        runs.push(...convertStdContentToRuns(sdtContent.elements));
+        runs.push(...convertSdtContentToRuns(sdtContent.elements));
       }
       return;
     }
 
     if (RUN_LEVEL_WRAPPERS.has(element.name)) {
-      const wrapperElements = convertStdContentToRuns(element.elements || []);
+      const wrapperElements = convertSdtContentToRuns(element.elements || []);
       if (wrapperElements.length) {
         runs.push({
           ...element,

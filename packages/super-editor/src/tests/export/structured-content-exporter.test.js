@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { convertStdContentToRuns } from '@converter/exporter.js';
+import { convertSdtContentToRuns } from '@converter/exporter.js';
 
-describe('convertStdContentToRuns', () => {
+describe('convertSdtContentToRuns', () => {
   it('returns existing runs unchanged', () => {
     const runs = [
       {
@@ -11,7 +11,7 @@ describe('convertStdContentToRuns', () => {
       },
     ];
 
-    const result = convertStdContentToRuns(runs);
+    const result = convertSdtContentToRuns(runs);
 
     expect(result).toEqual(runs);
   });
@@ -24,7 +24,7 @@ describe('convertStdContentToRuns', () => {
       },
     ];
 
-    const result = convertStdContentToRuns(elements);
+    const result = convertSdtContentToRuns(elements);
 
     expect(result).toEqual([
       {
@@ -64,7 +64,7 @@ describe('convertStdContentToRuns', () => {
       },
     ];
 
-    const result = convertStdContentToRuns(elements);
+    const result = convertSdtContentToRuns(elements);
 
     expect(result).toEqual([
       {
@@ -117,7 +117,7 @@ describe('convertStdContentToRuns', () => {
       },
     ];
 
-    const result = convertStdContentToRuns(elements);
+    const result = convertSdtContentToRuns(elements);
 
     expect(result).toEqual([
       {

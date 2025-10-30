@@ -1,5 +1,5 @@
 import { translateChildNodes } from '@converter/v2/exporter/helpers/translateChildNodes';
-import { convertStdContentToRuns } from '@converter/exporter';
+import { convertSdtContentToRuns } from '@converter/exporter';
 
 /**
  * @param {Object} params - The parameters for translation.
@@ -15,7 +15,7 @@ export function translateStructuredContent(params) {
     if (node?.type === 'structuredContent') {
       // For final docs, inline structured content is flattened to run elements,
       // removing the SDT wrapper so content renders as plain text in the output DOCX.
-      return convertStdContentToRuns(childElements);
+      return convertSdtContentToRuns(childElements);
     }
 
     if (node?.type === 'structuredContentBlock') {
