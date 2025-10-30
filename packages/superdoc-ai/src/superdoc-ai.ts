@@ -95,15 +95,9 @@ export class SuperDocAI {
 
         const {onReady, onStreamingStart, onStreamingPartialResult, onStreamingEnd, onError, provider, ...config} =
             options;
-        let providerStreamPreference: boolean | undefined;
-        if (isAIProvider(provider)) {
-            providerStreamPreference = provider.streamResults;
-        } else if (typeof (provider as any).streamResults === 'boolean') {
-            providerStreamPreference = (provider as any).streamResults;
-        }
+        let streamResults = provider.streamResults;
 
         const aiProvider = isAIProvider(provider) ? provider : createAIProvider(provider);
-        const effectiveStreamPreference = providerStreamPreference ?? aiProvider.streamResults;
 
         this.config = {
             systemPrompt: this.getDefaultSystemPrompt(),
@@ -141,7 +135,7 @@ export class SuperDocAI {
             context,
             this.config.enableLogging,
             (partial) => this.callbacks.onStreamingPartialResult?.({partialResult: partial}),
-            effectiveStreamPreference,
+            streamResults,
         );
 
         this.initializationPromise = this.initialize();
