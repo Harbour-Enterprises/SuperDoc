@@ -80,8 +80,8 @@ describe('collectTargetListItemPositions', () => {
       selection: { from: 5, to: 12 },
       nodes: [
         { node: { type: paragraphType }, pos: 4 },
-        { node: { type: listItemType }, pos: 6 },
-        { node: { type: listItemType }, pos: 10 },
+        { node: { type: listItemType, nodeSize: 4 }, pos: 6 },
+        { node: { type: listItemType, nodeSize: 5 }, pos: 10 },
         { node: { type: paragraphType }, pos: 15 },
       ],
     });
@@ -94,10 +94,10 @@ describe('collectTargetListItemPositions', () => {
     const state = makeState({
       selection: { from: 0, to: 20 },
       nodes: [
-        { node: { type: listItemType }, pos: 2 },
-        { node: { type: listItemType }, pos: 2 }, // duplicate
+        { node: { type: listItemType, nodeSize: 3 }, pos: 2 },
+        { node: { type: listItemType, nodeSize: 3 }, pos: 2 }, // duplicate
         { node: { type: paragraphType }, pos: 8 },
-        { node: { type: listItemType }, pos: 12 },
+        { node: { type: listItemType, nodeSize: 4 }, pos: 12 },
       ],
     });
 
@@ -116,5 +116,19 @@ describe('collectTargetListItemPositions', () => {
     });
 
     expect(collectTargetListItemPositions(state, 17)).toEqual([17]);
+  });
+
+  it('returns only the deepest list items within a nested selection', () => {
+    const state = makeState({
+      selection: { from: 1, to: 20 },
+      nodes: [
+        { node: { type: listItemType, nodeSize: 15 }, pos: 2 },
+        { node: { type: paragraphType }, pos: 4 },
+        { node: { type: listItemType, nodeSize: 6 }, pos: 6 },
+        { node: { type: listItemType, nodeSize: 4 }, pos: 9 },
+      ],
+    });
+
+    expect(collectTargetListItemPositions(state)).toEqual([9]);
   });
 });

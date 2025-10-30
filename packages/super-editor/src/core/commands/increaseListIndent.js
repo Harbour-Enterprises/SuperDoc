@@ -26,16 +26,21 @@ export const increaseListIndent =
     const targetPositions = collectTargetListItemPositions(state, currentItem?.pos);
     if (!targetPositions.length) return false;
 
-    let noParentList = false;
+    let parentListsMap = {};
 
-    targetPositions.forEach((originalPos) => {
+    // Map each target position to its node and mapped position
+    const mappedNodes = targetPositions.map((originalPos) => {
       const mappedPos = tr.mapping ? tr.mapping.map(originalPos) : originalPos;
       const node =
         (tr.doc && tr.doc.nodeAt(mappedPos)) ||
         (currentItem && originalPos === currentItem.pos ? currentItem.node : null);
+      return { originalPos, mappedPos, node };
+    });
 
-      if (!node || node.type.name !== 'listItem') return;
+    // Filter out positions where node is not a valid listItem
+    const validNodes = mappedNodes.filter(({ node }) => node && node.type.name === 'listItem');
 
+    validNodes.forEach(({ mappedPos, node }) => {
       const attrs = node.attrs || {};
       const currentLevel = parseLevel(attrs.level);
       const newLevel = currentLevel + 1;
@@ -48,8 +53,8 @@ export const increaseListIndent =
         parentOrderedHelper ||
         parentBulletHelper;
 
+      parentListsMap[mappedPos] = parentListNode;
       if (!parentListNode) {
-        noParentList = true;
         return;
       }
 
@@ -72,10 +77,8 @@ export const increaseListIndent =
         level: newLevel,
         numId,
       });
-
-      noParentList = false;
     });
 
     // IMPORTANT: consume Tab so we don't indent paragraph text
-    return !noParentList;
+    return Object.values(parentListsMap).length ? !Object.values(parentListsMap).every((pos) => !pos) : true;
   };

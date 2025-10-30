@@ -27,20 +27,25 @@ export const collectTargetListItemPositions = (state, fallbackPos) => {
     return typeof fallbackPos === 'number' ? [fallbackPos] : [];
   }
 
-  const positions = new Set();
+  const candidates = [];
   const { from, to } = state.selection;
 
   doc.nodesBetween(from, to, (node, pos) => {
     if (node.type === listItemType) {
-      positions.add(pos);
-      return false;
+      const size = typeof node.nodeSize === 'number' ? node.nodeSize : 0;
+      candidates.push({ node, pos, end: pos + size });
     }
-    return true;
   });
 
-  if (!positions.size && typeof fallbackPos === 'number') {
-    positions.add(fallbackPos);
+  if (!candidates.length && typeof fallbackPos === 'number') {
+    return [fallbackPos];
   }
 
-  return Array.from(positions).sort((a, b) => a - b);
+  const filtered = candidates.filter(({ pos, end }) => {
+    return !candidates.some((other) => other.pos > pos && other.pos < end);
+  });
+
+  const sorted = filtered.map(({ pos }) => pos).sort((a, b) => a - b);
+
+  return sorted.filter((pos, index) => index === 0 || pos !== sorted[index - 1]);
 };
