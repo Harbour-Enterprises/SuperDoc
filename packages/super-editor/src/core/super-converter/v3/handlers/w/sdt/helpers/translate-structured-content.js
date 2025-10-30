@@ -1,16 +1,30 @@
 import { translateChildNodes } from '@converter/v2/exporter/helpers/translateChildNodes';
+import { convertStdContentToRuns } from '@converter/exporter';
 
 /**
  * @param {Object} params - The parameters for translation.
  * @returns {Object} The XML representation.
  */
 export function translateStructuredContent(params) {
-  const { node } = params;
+  const { node, isFinalDoc } = params;
 
-  const childContent = translateChildNodes({ ...params, nodes: node.content });
+  const childContent = translateChildNodes({ ...params, node });
+  const childElements = Array.isArray(childContent) ? childContent : [childContent];
+
+  if (isFinalDoc) {
+    if (node?.type === 'structuredContent') {
+      // Inline structured content is converted into plain runs so the final DOCX renders without SDT wrappers.
+      const runs = convertStdContentToRuns(childElements);
+      return runs.length === 1 ? runs[0] : runs;
+    }
+
+    if (node?.type === 'structuredContentBlock') {
+      return childElements.length === 1 ? childElements[0] : childElements;
+    }
+  }
 
   // We build the sdt node elements here, and re-add passthrough sdtPr node
-  const sdtContent = { name: 'w:sdtContent', elements: childContent };
+  const sdtContent = { name: 'w:sdtContent', elements: childElements };
   const sdtPr = generateSdtPrTagForStructuredContent({ node });
   const nodeElements = [sdtPr, sdtContent];
 
