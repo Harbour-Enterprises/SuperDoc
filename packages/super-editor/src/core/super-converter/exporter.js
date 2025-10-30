@@ -159,7 +159,7 @@ export function convertStdContentToRuns(elements) {
       runs.push({
         name: 'w:r',
         type: 'element',
-        elements: element.elements ? element.elements : [element],
+        elements: element.elements || [element],
       });
     }
   });
