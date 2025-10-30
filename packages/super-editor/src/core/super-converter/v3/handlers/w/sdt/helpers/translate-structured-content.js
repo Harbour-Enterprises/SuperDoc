@@ -13,12 +13,14 @@ export function translateStructuredContent(params) {
 
   if (isFinalDoc) {
     if (node?.type === 'structuredContent') {
-      // Inline structured content is converted into plain runs so the final DOCX renders without SDT wrappers.
-      const runs = convertStdContentToRuns(childElements);
-      return runs.length === 1 ? runs[0] : runs;
+      // For final docs, inline structured content is flattened to run elements,
+      // removing the SDT wrapper so content renders as plain text in the output DOCX.
+      return convertStdContentToRuns(childElements);
     }
 
     if (node?.type === 'structuredContentBlock') {
+      // For final docs, block-level structured content (tables, paragraphs) is unwrapped
+      // from the SDT container. Single elements are returned directly, multiple elements as an array.
       return childElements.length === 1 ? childElements[0] : childElements;
     }
   }
