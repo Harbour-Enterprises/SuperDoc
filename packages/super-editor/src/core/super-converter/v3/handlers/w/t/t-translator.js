@@ -53,7 +53,7 @@ const encode = (params, encodedAttrs = {}) => {
 };
 
 /**
- * Decode a SuperDoc tab node back into OOXML <w:tab> wrapped in a run.
+ * Decode a SuperDoc text node back into OOXML <w:t> wrapped in a run.
  * @param {import('@translator').SCDecoderConfig} params
  * @param {import('@translator').DecodedAttributes} [decodedAttrs] - The already decoded attributes
  * @returns {import('@translator').SCDecoderResult}
@@ -99,7 +99,7 @@ export const config = {
 };
 
 /**
- * The NodeTranslator instance for the <w:tab> element.
+ * The NodeTranslator instance for the <w:t> element.
  * @type {import('@translator').NodeTranslator}
  */
 export const translator = NodeTranslator.from(config);
