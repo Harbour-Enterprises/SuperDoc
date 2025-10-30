@@ -1,4 +1,4 @@
-import type { AIProvider, Editor, Result, FoundMatch, DocumentPosition } from './types';
+import {AIProvider, Editor, Result, FoundMatch, DocumentPosition, AIMessage} from './types';
 import {EditorAdapter} from './editor-adapter';
 import {validateInput, parseJSON} from './utils';
 import {
@@ -20,11 +20,17 @@ export class AIActions {
         private provider: AIProvider,
         private editor: Editor,
         private documentContext: string,
-        private enableLogging: boolean = false
+        private enableLogging: boolean = false,
+        private onStreamChunk?: (partialResult: string) => void,
+        private streamPreference?: boolean,
     ) {
         this.adapter = new EditorAdapter(this.editor);
         if (!this.adapter) {
             throw new Error('SuperDoc editor is not available; retry once the editor is initialized');
+        }
+
+        if (typeof this.provider.streamResults === 'boolean') {
+            this.streamPreference = this.provider.streamResults;
         }
     }
 
@@ -45,7 +51,7 @@ export class AIActions {
         }
 
         const prompt = buildFindPrompt(query, this.documentContext, findAll);
-        const response = await this.provider.getCompletion([
+        const response = await this.runCompletion([
             {role: 'system', content: SYSTEM_PROMPTS.SEARCH},
             {role: 'user', content: prompt},
         ]);
@@ -133,7 +139,7 @@ export class AIActions {
 
         // Get AI query
         const prompt = buildReplacePrompt(query, this.documentContext, multiple);
-        const response = await this.provider.getCompletion([
+        const response = await this.runCompletion([
             {role: 'system', content: SYSTEM_PROMPTS.EDIT},
             {role: 'user', content: prompt},
         ]);
@@ -325,16 +331,28 @@ export class AIActions {
             return {results: [], success: false};
         }
         const prompt = buildSummaryPrompt(query, this.documentContext);
-        const response = await this.provider.getCompletion([
+        const useStreaming = this.streamPreference !== false;
+        let streamedLength = 0;
+
+        const response = await this.runCompletion([
             {role: 'system', content: SYSTEM_PROMPTS.SUMMARY},
             {role: 'user', content: prompt},
-        ]);
+        ], useStreaming);
 
-        return parseJSON<Result>(
+        const parsed = parseJSON<Result>(
             response,
             {results: [], success: false},
             this.enableLogging
         );
+
+        const finalText = parsed.results?.[0]?.suggestedText;
+        if (finalText) {
+            if (!useStreaming || finalText.length > streamedLength) {
+                this.onStreamChunk?.(finalText);
+            }
+        }
+
+        return parsed;
     }
 
     /**
@@ -353,13 +371,31 @@ export class AIActions {
 
         const prompt = buildInsertContentPrompt(query, this.documentContext);
 
-        const response = await this.provider.getCompletion([
+        const useStreaming = this.streamPreference !== false;
+        let streamingInsertedLength = 0;
+        const response = await this.runCompletion([
             {
                 role: 'system',
                 content: SYSTEM_PROMPTS.CONTENT_GENERATION
             },
             {role: 'user', content: prompt},
-        ]);
+        ], useStreaming, async (aggregated) => {
+            const extraction = extractSuggestedText(aggregated);
+            if (!extraction?.available) {
+                return false;
+            }
+
+            this.onStreamChunk?.(extraction.text);
+
+            if (extraction.text.length > streamingInsertedLength) {
+                const delta = extraction.text.slice(streamingInsertedLength);
+                streamingInsertedLength = extraction.text.length;
+                if (delta) {
+                    await this.adapter.insertText(delta);
+                }
+            }
+            return true;
+        });
 
         const result = parseJSON<Result>(response, {success: false, results: []}, this.enableLogging);
 
@@ -372,7 +408,16 @@ export class AIActions {
             if (!suggestedResult || !suggestedResult.suggestedText) {
                 return {success: false, results: []};
             }
-            await this.adapter.insertText(suggestedResult.suggestedText);
+            if (useStreaming) {
+                const decoded = suggestedResult.suggestedText;
+                if (streamingInsertedLength < decoded.length) {
+                    await this.adapter.insertText(decoded.slice(streamingInsertedLength));
+                }
+                this.onStreamChunk?.(decoded);
+            } else {
+                await this.adapter.insertText(suggestedResult.suggestedText);
+                this.onStreamChunk?.(suggestedResult.suggestedText);
+            }
 
             return {
                 success: true,
@@ -385,4 +430,169 @@ export class AIActions {
             throw error;
         }
     }
+
+    private async runCompletion(
+        messages: AIMessage[],
+        stream: boolean = false,
+        onStreamProgress?: (aggregated: string, chunk: string) => Promise<boolean | void> | boolean | void,
+    ): Promise<string> {
+        if (!stream) {
+            return this.provider.getCompletion(messages);
+        }
+
+        let aggregated = '';
+        let streamed = false;
+
+        try {
+            const completionStream = this.provider.streamCompletion(messages);
+            for await (const chunk of completionStream) {
+                streamed = true;
+                if (!chunk) {
+                    continue;
+                }
+                aggregated += chunk;
+                let handled = false;
+                if (onStreamProgress) {
+                    handled = Boolean(await onStreamProgress(aggregated, chunk));
+                }
+                if (!handled) {
+                    this.onStreamChunk?.(aggregated);
+                }
+            }
+        } catch (error) {
+            if (!aggregated) {
+                // No progress, fallback to non-streaming completion so callers still get a response.
+                return this.provider.getCompletion(messages);
+            }
+            throw error;
+        }
+
+        if (!streamed || !aggregated) {
+            return this.provider.getCompletion(messages);
+        }
+
+        const trimmed = aggregated.trim();
+        if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) {
+            return this.provider.getCompletion(messages);
+        }
+
+        return aggregated;
+    }
+}
+
+type SuggestedTextExtraction = {
+    text: string;
+    complete: boolean;
+    available: boolean;
+};
+
+function extractSuggestedText(payload: string): SuggestedTextExtraction | null {
+    const key = '"suggestedText"';
+    const keyIndex = payload.lastIndexOf(key);
+
+    if (keyIndex === -1) {
+        return null;
+    }
+
+    let cursor = keyIndex + key.length;
+    let colonFound = false;
+
+    while (cursor < payload.length) {
+        const char = payload[cursor];
+        if (char === ':') {
+            colonFound = true;
+            cursor++;
+            break;
+        }
+        if (!isWhitespace(char)) {
+            return {text: '', complete: false, available: false};
+        }
+        cursor++;
+    }
+
+    if (!colonFound) {
+        return {text: '', complete: false, available: false};
+    }
+
+    while (cursor < payload.length && isWhitespace(payload[cursor])) {
+        cursor++;
+    }
+
+    if (cursor >= payload.length) {
+        return {text: '', complete: false, available: false};
+    }
+
+    if (payload[cursor] !== '"') {
+        return {text: '', complete: false, available: false};
+    }
+
+    cursor++; // skip opening quote
+
+    let result = '';
+    let escape = false;
+    let complete = false;
+    let index = cursor;
+
+    while (index < payload.length) {
+        const char = payload[index];
+
+        if (escape) {
+            if (char === 'n') {
+                result += '\n';
+                index++;
+            } else if (char === 'r') {
+                result += '\r';
+                index++;
+            } else if (char === 't') {
+                result += '\t';
+                index++;
+            } else if (char === '"') {
+                result += '"';
+                index++;
+            } else if (char === '\\') {
+                result += '\\';
+                index++;
+            } else if (char === 'u') {
+                const hex = payload.slice(index + 1, index + 5);
+                if (hex.length < 4 || !/^[0-9a-fA-F]{4}$/.test(hex)) {
+                    return {text: result, complete: false, available: true};
+                }
+                result += String.fromCharCode(parseInt(hex, 16));
+                index += 5;
+            } else {
+                result += char;
+                index++;
+            }
+            escape = false;
+            continue;
+        }
+
+        if (char === '\\') {
+            escape = true;
+            index++;
+            continue;
+        }
+
+        if (char === '"') {
+            complete = true;
+            break;
+        }
+
+        result += char;
+        index++;
+    }
+
+    if (escape) {
+        return {text: result, complete: false, available: true};
+    }
+
+    return {
+        text: result,
+        complete,
+        available: true,
+    };
+}
+
+function isWhitespace(char: string): boolean {
+    return char === ' ' || char === '\n' || char === '\r' || char === '\t';
 }

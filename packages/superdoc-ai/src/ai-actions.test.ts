@@ -378,6 +378,69 @@ describe('AIActions', () => {
 
             expect(result).toEqual({ results: [], success: false });
         });
+
+        it('should disable streaming when stream preference is false', async () => {
+            const response = JSON.stringify({
+                success: true,
+                results: [{ suggestedText: 'summary' }]
+            });
+
+            const streamSpy = vi.fn().mockImplementation(async function* () {
+                yield response;
+            });
+            const completionSpy = vi.fn().mockResolvedValue(response);
+
+            mockProvider.streamCompletion = streamSpy as any;
+            mockProvider.getCompletion = completionSpy;
+
+            const actions = new AIActions(
+                mockProvider,
+                mockEditor,
+                mockEditor.state.doc.textContent,
+                false,
+                undefined,
+                false
+            );
+
+            const result = await actions.summarize('summarize this document');
+
+            expect(result.success).toBe(true);
+            expect(streamSpy).not.toHaveBeenCalled();
+            expect(completionSpy).toHaveBeenCalled();
+        });
+
+        it('should emit partial summaries via onStreamChunk when streaming', async () => {
+            const streamingChunks = [
+                '{"success":true,"results":[{"suggestedText":"Part ',
+                'One"}]}'
+            ];
+
+            mockProvider.streamCompletion = vi.fn().mockImplementation(async function* () {
+                for (const chunk of streamingChunks) {
+                    yield chunk;
+                }
+            });
+
+            mockProvider.getCompletion = vi.fn().mockResolvedValue(
+                JSON.stringify({ success: true, results: [{ suggestedText: 'Part One' }] })
+            );
+
+            const onStreamChunk = vi.fn();
+            const actions = new AIActions(
+                mockProvider,
+                mockEditor,
+                mockEditor.state.doc.textContent,
+                false,
+                onStreamChunk,
+                true
+            );
+
+            const result = await actions.summarize('summarize this document');
+
+            expect(result.success).toBe(true);
+            expect(onStreamChunk).toHaveBeenCalled();
+            expect(onStreamChunk.mock.calls.at(-1)?.[0]).toBe('Part One');
+        });
     });
 
     describe('insertContent', () => {
@@ -429,6 +492,78 @@ describe('AIActions', () => {
             const result = await actions.insertContent('insert content');
 
             expect(result).toEqual({ success: false, results: [] });
+        });
+
+        it('should stream content chunks into the editor when enabled', async () => {
+            const finalPayload = JSON.stringify({
+                success: true,
+                results: [{ suggestedText: 'Generated content' }]
+            });
+
+            const streamingChunks = [
+                '{"success":true,"results":[{"suggestedText":"Generated ',
+                'content"}]}'
+            ];
+
+            const streamedPieces: string[] = [];
+            mockEditor.commands.insertContentAt = vi.fn((pos: number, content: { text: string }) => {
+                streamedPieces.push(content.text);
+            });
+
+            mockProvider.streamCompletion = vi.fn().mockImplementation(async function* () {
+                for (const chunk of streamingChunks) {
+                    yield chunk;
+                }
+            });
+
+            mockProvider.getCompletion = vi.fn().mockResolvedValue(finalPayload);
+
+            const actions = new AIActions(
+                mockProvider,
+                mockEditor,
+                mockEditor.state.doc.textContent,
+                false,
+                undefined,
+                true
+            );
+
+            const result = await actions.insertContent('generate introduction');
+
+            expect(result.success).toBe(true);
+            expect(streamedPieces.join('')).toBe('Generated content');
+            expect(streamedPieces.length).toBeGreaterThan(1);
+        });
+
+        it('should disable streaming when stream preference is false', async () => {
+            const response = JSON.stringify({
+                success: true,
+                results: [{
+                    suggestedText: 'Generated content'
+                }]
+            });
+
+            const streamSpy = vi.fn().mockImplementation(async function* () {
+                yield response;
+            });
+            const completionSpy = vi.fn().mockResolvedValue(response);
+
+            mockProvider.streamCompletion = streamSpy as any;
+            mockProvider.getCompletion = completionSpy;
+
+            const actions = new AIActions(
+                mockProvider,
+                mockEditor,
+                mockEditor.state.doc.textContent,
+                false,
+                undefined,
+                false
+            );
+
+            const result = await actions.insertContent('generate introduction');
+
+            expect(result.success).toBe(true);
+            expect(streamSpy).not.toHaveBeenCalled();
+            expect(completionSpy).toHaveBeenCalled();
         });
     });
 

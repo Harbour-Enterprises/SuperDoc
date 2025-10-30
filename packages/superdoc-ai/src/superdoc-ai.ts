@@ -95,7 +95,15 @@ export class SuperDocAI {
 
         const {onReady, onStreamingStart, onStreamingPartialResult, onStreamingEnd, onError, provider, ...config} =
             options;
+        let providerStreamPreference: boolean | undefined;
+        if (isAIProvider(provider)) {
+            providerStreamPreference = provider.streamResults;
+        } else if (typeof (provider as any).streamResults === 'boolean') {
+            providerStreamPreference = (provider as any).streamResults;
+        }
+
         const aiProvider = isAIProvider(provider) ? provider : createAIProvider(provider);
+        const effectiveStreamPreference = providerStreamPreference ?? aiProvider.streamResults;
 
         this.config = {
             systemPrompt: this.getDefaultSystemPrompt(),
@@ -127,7 +135,14 @@ export class SuperDocAI {
             },
         });
 
-        this.actions = new AIActions(this.config.provider, editor, context, this.config.enableLogging);
+        this.actions = new AIActions(
+            this.config.provider,
+            editor,
+            context,
+            this.config.enableLogging,
+            (partial) => this.callbacks.onStreamingPartialResult?.({partialResult: partial}),
+            effectiveStreamPreference,
+        );
 
         this.initializationPromise = this.initialize();
     }
@@ -166,14 +181,14 @@ export class SuperDocAI {
      */
     private async executeActionWithCallbacks<T extends Result>(
         fn: () => Promise<T>
-    ): Promise<Result> {
+    ): Promise<T> {
         const editor = this.getEditor();
         if (!editor) {
             throw new Error('No active SuperDoc editor available for AI actions');
         }
         try {
             this.callbacks.onStreamingStart?.();
-            const result: Result = await fn();
+            const result: T = await fn();
             this.callbacks.onStreamingEnd?.({fullResult: result});
 
             return result;

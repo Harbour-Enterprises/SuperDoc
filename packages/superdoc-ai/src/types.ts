@@ -59,6 +59,8 @@ export type StreamOptions = {
     providerOptions?: Record<string, unknown>;
     /** Document identifier for tracking */
     documentId?: string;
+    /** Force streaming (true) or disable it (false). Defaults to true when supported. */
+    stream?: boolean;
 }
 
 /**
@@ -70,6 +72,8 @@ export type CompletionOptions = StreamOptions;
  * Interface that all AI providers must implement
  */
 export type AIProvider = {
+    /** Indicates whether the provider prefers streaming responses by default */
+    streamResults?: boolean;
     /** Stream completion with incremental results */
     streamCompletion(messages: AIMessage[], options?: StreamOptions): AsyncGenerator<string, void, unknown>;
     /** Get complete response in one call */

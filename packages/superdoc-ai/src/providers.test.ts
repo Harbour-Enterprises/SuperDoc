@@ -86,6 +86,7 @@ describe('providers', () => {
             expect(provider).toBeDefined();
             expect(provider.getCompletion).toBeDefined();
             expect(provider.streamCompletion).toBeDefined();
+            expect(provider.streamResults).toBe(true);
         });
 
         it('should throw for unsupported provider type', () => {
@@ -357,6 +358,7 @@ describe('providers', () => {
             const callArgs = mockFetch.mock.calls[0];
             const body = JSON.parse(callArgs[1].body);
             expect(body.model).toBe('gpt-4-turbo');
+            expect(provider.streamResults).toBe(true);
         });
     });
 
@@ -473,7 +475,7 @@ describe('providers', () => {
             const callArgs = mockFetch.mock.calls[0];
             const body = JSON.parse(callArgs[1].body);
             expect(body.max_tokens).toBe(1024);
+            expect(provider.streamResults).toBe(true);
         });
     });
 });
-

@@ -212,6 +212,7 @@ Generate a summary.
 
 ```typescript
 const result = await ai.action.summarize('create executive summary');
+// onStreamingPartialResult receives partial updates when the provider allows streaming.
 ```
 
 #### `insertContent(instruction)`
@@ -221,6 +222,8 @@ Generate and insert new content.
 ```typescript
 await ai.action.insertContent('write a conclusion paragraph');
 ```
+
+When the provider configuration leaves `streamResults` enabled (default), generated content streams into the document incrementally instead of waiting for the full response.
 
 ## AI Providers
 
@@ -237,6 +240,7 @@ const ai = new SuperDocAI(superdoc, {
     organizationId: 'org-...', // optional
     temperature: 0.7, // optional
     maxTokens: 2000, // optional
+    streamResults: false, // optional (applies to AI insert/summarize actions; default true)
   },
 });
 ```
@@ -254,6 +258,7 @@ const ai = new SuperDocAI(superdoc, {
     baseURL: 'https://api.anthropic.com', // optional
     temperature: 0.7, // optional
     maxTokens: 2000, // optional
+    streamResults: false, // optional (applies to AI insert/summarize actions; default true)
   },
 });
 ```
@@ -272,6 +277,7 @@ const ai = new SuperDocAI(superdoc, {
       'X-Custom-Header': 'value',
     },
     method: 'POST', // default
+    streamResults: true, // optional (used by insertContent/summarize; default true)
     buildRequestBody: (context) => ({
       messages: context.messages,
       stream: context.stream,
@@ -291,6 +297,7 @@ Implement the `AIProvider` interface:
 
 ```typescript
 const customProvider: AIProvider = {
+  streamResults: true,
   async *streamCompletion(messages, options) {
     // Yield chunks
     yield 'chunk1';
