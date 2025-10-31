@@ -31,6 +31,10 @@ const encode = (params, encodedAttrs = {}) => {
   // Text nodes have no children. Only text, and there should only be one child
   let text;
 
+  if (!elements) {
+    return null;
+  }
+
   if (elements.length === 1) {
     text = elements[0].text;
     const xmlSpace = encodedAttrs.xmlSpace ?? elements[0]?.attributes?.['xml:space'];
@@ -55,10 +59,9 @@ const encode = (params, encodedAttrs = {}) => {
 /**
  * Decode a SuperDoc text node back into OOXML <w:t> wrapped in a run.
  * @param {import('@translator').SCDecoderConfig} params
- * @param {import('@translator').DecodedAttributes} [decodedAttrs] - The already decoded attributes
  * @returns {import('@translator').SCDecoderResult}
  */
-const decode = (params, decodedAttrs = {}) => {
+const decode = (params) => {
   const { node, extraParams } = params;
 
   if (!node || !node.type) {

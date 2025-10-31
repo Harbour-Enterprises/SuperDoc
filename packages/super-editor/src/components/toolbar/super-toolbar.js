@@ -11,7 +11,6 @@ import {
   uploadAndInsertImage,
   getFileOpener,
 } from '../../extensions/image/imageHelpers/index.js';
-import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { toolbarTexts } from './toolbarTexts.js';
 import { getQuickFormatList } from '@extensions/linked-styles/index.js';
