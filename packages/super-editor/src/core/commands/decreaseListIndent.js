@@ -1,13 +1,19 @@
 // @ts-check
 import { findParentNode } from '@helpers/index.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import {
+  collectTargetListItemPositions,
+  parseLevel,
+  resolveParentList,
+} from '@core/commands/list-helpers/list-indent-helpers.js';
 
 /**
  * Decreases the indent level of the current list item.
+ * @param {Array} [_targetPositions] - list item positions in selection collected with collectTargetListItemPositions
  * @returns {Function} A ProseMirror command function.
  */
 export const decreaseListIndent =
-  () =>
+  (_targetPositions) =>
   ({ editor, tr }) => {
     const { state } = editor;
 
@@ -15,51 +21,74 @@ export const decreaseListIndent =
     const currentItem =
       (ListHelpers.getCurrentListItem && ListHelpers.getCurrentListItem(state)) ||
       findParentNode((n) => n.type && n.type.name === 'listItem')(state.selection);
-    if (!currentItem) return false;
 
-    // 2) Parent list (ordered OR bullet)
-    const parentOrdered = ListHelpers.getParentOrderedList && ListHelpers.getParentOrderedList(state);
-    const parentBullet = ListHelpers.getParentBulletList && ListHelpers.getParentBulletList(state);
-    const parentList =
-      parentOrdered ||
-      parentBullet ||
-      findParentNode((n) => n.type && (n.type.name === 'orderedList' || n.type.name === 'bulletList'))(state.selection);
-    if (!parentList) return false;
+    const parentOrderedHelper = ListHelpers.getParentOrderedList && ListHelpers.getParentOrderedList(state);
+    const parentBulletHelper = ListHelpers.getParentBulletList && ListHelpers.getParentBulletList(state);
 
-    const attrs = currentItem.node.attrs || {};
-    const currLevel = typeof attrs.level === 'number' ? attrs.level : 0;
+    const targetPositions = _targetPositions || collectTargetListItemPositions(state, currentItem?.pos);
+    if (!targetPositions.length) return false;
 
-    // No-op at level 0 (consume Shift+Tab)
-    if (currLevel <= 0) return true;
+    let parentListsMap = {};
 
-    const newLevel = currLevel - 1;
-
-    // Resolve numId: prefer parent's listId (keeps the current container’s definition),
-    // else keep the item's, else mint a new one.
-    const parentNumId = parentList.node?.attrs?.listId ?? null;
-    let numId = parentNumId ?? attrs.numId ?? null;
-
-    let createdNewId = false;
-    if (numId == null && ListHelpers.getNewListId) {
-      numId = ListHelpers.getNewListId(editor);
-      createdNewId = true;
-    }
-
-    // Only create a definition when we *just* minted the id.
-    // Never re-generate for an existing id (prevents clobbering bullet/ordered mapping).
-    if (createdNewId && numId != null && ListHelpers.generateNewListDefinition) {
-      ListHelpers.generateNewListDefinition({
-        numId,
-        listType: parentList.node.type,
-        editor,
-      });
-    }
-
-    tr.setNodeMarkup(currentItem.pos, null, {
-      ...attrs,
-      level: newLevel,
-      numId,
+    // Map each target position to its node and mapped position
+    const mappedNodes = targetPositions.map((originalPos) => {
+      const mappedPos = tr.mapping ? tr.mapping.map(originalPos) : originalPos;
+      const node =
+        (tr.doc && tr.doc.nodeAt(mappedPos)) ||
+        (currentItem && originalPos === currentItem.pos ? currentItem.node : null);
+      return { originalPos, mappedPos, node };
     });
 
-    return true;
+    // Filter out positions where node is not a valid listItem
+    const validNodes = mappedNodes.filter(({ node }) => node && node.type.name === 'listItem');
+
+    validNodes.forEach(({ mappedPos, node }) => {
+      const attrs = node.attrs || {};
+      const currLevel = parseLevel(attrs.level);
+
+      // No-op at level 0 (consume Shift+Tab)
+      if (currLevel <= 0) {
+        return;
+      }
+
+      const newLevel = currLevel - 1;
+
+      const $pos = tr.doc ? tr.doc.resolve(mappedPos) : null;
+      const parentListNode =
+        resolveParentList($pos) ||
+        parentOrderedHelper?.node ||
+        parentBulletHelper?.node ||
+        parentOrderedHelper ||
+        parentBulletHelper;
+
+      parentListsMap[mappedPos] = parentListNode;
+      if (!parentListNode) {
+        return;
+      }
+
+      const fallbackListId = parentListNode.attrs?.listId ?? null;
+      let numId = fallbackListId ?? attrs.numId ?? null;
+
+      let createdNewId = false;
+      if (numId == null && ListHelpers.getNewListId) {
+        numId = ListHelpers.getNewListId(editor);
+        createdNewId = numId != null;
+      }
+
+      if (createdNewId && numId != null && ListHelpers.generateNewListDefinition) {
+        ListHelpers.generateNewListDefinition({
+          numId,
+          listType: parentListNode.type,
+          editor,
+        });
+      }
+
+      tr.setNodeMarkup(mappedPos, null, {
+        ...attrs,
+        level: newLevel,
+        numId,
+      });
+    });
+
+    return Object.values(parentListsMap).length ? !Object.values(parentListsMap).every((pos) => !pos) : true;
   };
