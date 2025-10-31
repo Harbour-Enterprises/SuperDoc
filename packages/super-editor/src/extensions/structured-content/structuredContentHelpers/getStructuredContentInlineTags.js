@@ -1,9 +1,13 @@
 import { findChildren } from '@core/helpers/findChildren';
 
 /**
- * Gets all structured content inline tags in the state.
- * @param {import('prosemirror-state').EditorState} state Editor state.
- * @returns {Array}
+ * Get all inline structured content tags in the document
+ * @category Helper
+ * @param {import('prosemirror-state').EditorState} state Editor state
+ * @returns {Array<{ node: import('prosemirror-model').Node, pos: number }>} All inline structured content nodes
+ * @example
+ * const inlines = editor.helpers.getStructuredContentInlineTags(editor.state)
+ * console.log(`Found ${inlines.length} inline fields`)
  */
 export function getStructuredContentInlineTags(state) {
   const result = findChildren(state.doc, (node) => node.type.name === 'structuredContent');
