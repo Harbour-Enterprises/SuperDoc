@@ -1,6 +1,11 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMSerializer } from 'prosemirror-model';
+import { unified } from 'unified';
+import rehypeParse from 'rehype-parse';
+import rehypeRemark from 'rehype-remark';
+import remarkStringify from 'remark-stringify';
+import remarkGfm from 'remark-gfm';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -1592,6 +1597,25 @@ export class Editor extends EventEmitter {
       html = unflattenListsInHtml(html);
     }
     return html;
+  }
+
+  /**
+   * Get the editor content as Markdown
+   * @returns {string} Editor content as Markdown
+   */
+  getMarkdown() {
+    const html = this.getHTML();
+    const file = unified()
+      .use(rehypeParse, { fragment: true })
+      .use(rehypeRemark)
+      .use(remarkGfm)
+      .use(remarkStringify, {
+        bullet: '-',
+        fences: true,
+      })
+      .processSync(html);
+
+    return String(file);
   }
 
   /**
