@@ -29,7 +29,7 @@ import { ensureNumberingCache } from './numberingCache.js';
 
 /**
  * @typedef {import()} XmlNode
- * @typedef {{type: string, content: *, marks: *, attrs: {},}} PmNodeJson
+ * @typedef {{type: string, content: *, text: *, marks: *, attrs: {},}} PmNodeJson
  * @typedef {{type: string, attrs: {}}} PmMarkJson
  *
  * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackChange: boolean) => PmNodeJson[]} NodeListHandlerFn
