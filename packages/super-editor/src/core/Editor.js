@@ -744,18 +744,6 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Register a plugin by name if it doesn't already exist
-   * @param {string} name - Plugin name
-   * @returns {string|void}
-   */
-  #registerPluginByNameIfNotExists(name) {
-    const plugin = this.extensionService?.plugins.find((p) => p.key.startsWith(name));
-    const hasPlugin = this.state?.plugins?.find((p) => p.key.startsWith(name));
-    if (plugin && !hasPlugin) this.registerPlugin(plugin);
-    return plugin?.key;
-  }
-
-  /**
    * Set editor options and update state.
    * @param {EditorOptions} options - Editor options
    * @returns {void}
