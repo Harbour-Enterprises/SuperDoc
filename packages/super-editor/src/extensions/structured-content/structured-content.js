@@ -18,7 +18,7 @@ export const structuredContentInnerClass = 'sd-structured-content__content';
  * @category Attributes
  * @property {string} [id] Unique identifier for the structured content field
  * @property {string} [tag] Content control tag (e.g., 'inline_text_sdt')
- * @property {string} [alias='Structured content'] Display name for the field
+ * @property {string} [alias] Display name for the field (falls back to 'Structured content' when omitted)
  * @property {Object} [sdtPr] @internal Internal structured document tag properties
  * @example
  * // Get attributes from a structured content field

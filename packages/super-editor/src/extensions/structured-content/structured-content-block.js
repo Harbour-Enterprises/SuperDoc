@@ -18,7 +18,7 @@ export const structuredContentInnerClass = 'sd-structured-content-block__content
  * @category Attributes
  * @property {string} [id] Unique identifier for the structured content block
  * @property {string} [tag] Content control tag (e.g., 'block_table_sdt')
- * @property {string} [alias='Structured content'] Display name for the block
+ * @property {string} [alias] Display name for the block (falls back to 'Structured content' when omitted)
  * @property {Object} [sdtPr] @internal Internal structured document tag properties
  * @example
  * // Get attributes from a structured content block
