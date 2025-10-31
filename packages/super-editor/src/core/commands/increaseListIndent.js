@@ -9,9 +9,10 @@ import {
 /**
  * Increases the indent level of the current list item.
  * Works for both ordered and bullet lists, including lists toggled from ordered→bullet.
+ * @param {Array} _targetPositions - list item positions in selection collected with collectTargetListItemPositions
  */
 export const increaseListIndent =
-  () =>
+  (_targetPositions) =>
   ({ editor, tr }) => {
     const { state } = editor;
 
@@ -23,7 +24,7 @@ export const increaseListIndent =
     const parentOrderedHelper = ListHelpers.getParentOrderedList && ListHelpers.getParentOrderedList(state);
     const parentBulletHelper = ListHelpers.getParentBulletList && ListHelpers.getParentBulletList(state);
 
-    const targetPositions = collectTargetListItemPositions(state, currentItem?.pos);
+    const targetPositions = _targetPositions || collectTargetListItemPositions(state, currentItem?.pos);
     if (!targetPositions.length) return false;
 
     let parentListsMap = {};

@@ -9,10 +9,11 @@ import {
 
 /**
  * Decreases the indent level of the current list item.
+ * @param {Array} _targetPositions - list item positions in selection collected with collectTargetListItemPositions
  * @returns {Function} A ProseMirror command function.
  */
 export const decreaseListIndent =
-  () =>
+  (_targetPositions) =>
   ({ editor, tr }) => {
     const { state } = editor;
 
@@ -24,7 +25,7 @@ export const decreaseListIndent =
     const parentOrderedHelper = ListHelpers.getParentOrderedList && ListHelpers.getParentOrderedList(state);
     const parentBulletHelper = ListHelpers.getParentBulletList && ListHelpers.getParentBulletList(state);
 
-    const targetPositions = collectTargetListItemPositions(state, currentItem?.pos);
+    const targetPositions = _targetPositions || collectTargetListItemPositions(state, currentItem?.pos);
     if (!targetPositions.length) return false;
 
     let parentListsMap = {};
