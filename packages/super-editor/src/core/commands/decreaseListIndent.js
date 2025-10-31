@@ -9,7 +9,7 @@ import {
 
 /**
  * Decreases the indent level of the current list item.
- * @param {Array} _targetPositions - list item positions in selection collected with collectTargetListItemPositions
+ * @param {Array} [_targetPositions] - list item positions in selection collected with collectTargetListItemPositions
  * @returns {Function} A ProseMirror command function.
  */
 export const decreaseListIndent =
