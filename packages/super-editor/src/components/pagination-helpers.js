@@ -1,9 +1,8 @@
 /**
- * Adjusts pagination breaks based on editor zoom/positioning
+ * Realign pagination break wrappers when the editor is zoomed.
  *
- * @param {HTMLElement} editorElem The editor container element
- * @param {Object} editor The editor instance
- * @returns {void}
+ * @param {import('vue').Ref<HTMLElement | null>} editorElem Vue ref to the editor container element
+ * @param {import('vue').Ref<import('../core/Editor.js').Editor | null>} editor Vue ref holding the SuperEditor instance
  */
 export function adjustPaginationBreaks(editorElem, editor) {
   if (!editorElem.value || !editor?.value?.options?.scale) return;

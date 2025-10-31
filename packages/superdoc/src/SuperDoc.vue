@@ -772,7 +772,6 @@ watch(getFloatingComments, () => {
 
   .super-editor {
     border-radius: 8px;
-    border: 1px solid #d3d3d3;
     box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.05);
   }
 }

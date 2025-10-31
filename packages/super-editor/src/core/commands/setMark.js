@@ -4,8 +4,11 @@ import { isTextSelection } from '../helpers/isTextSelection.js';
 
 function canSetMark(editor, state, tr, newMarkType) {
   let { selection } = tr;
-  if (editor.options.isHeaderOrFooter) {
+  if (editor.options.isHeaderOrFooter && editor.options.lastSelection) {
     selection = editor.options.lastSelection;
+  }
+  if (!selection) {
+    return false;
   }
   let cursor = null;
 
@@ -54,9 +57,10 @@ function canSetMark(editor, state, tr, newMarkType) {
 //prettier-ignore
 export const setMark = (typeOrName, attributes = {}) => ({ tr, state, dispatch, editor }) => {
     let { selection } = tr;
-    if (editor.options.isHeaderOrFooter) {
+    if (editor.options.isHeaderOrFooter && editor.options.lastSelection) {
       selection = editor.options.lastSelection;
     }
+    if (!selection) return false;
     const { empty, ranges } = selection;
     const type = getMarkType(typeOrName, state.schema);
 

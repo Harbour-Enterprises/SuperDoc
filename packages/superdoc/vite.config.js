@@ -15,6 +15,21 @@ const visualizerConfig = {
   brotliSize: true,
   open: true
 }
+const measurementEngineDir = new URL('../measurement-engine/engine/', import.meta.url)
+
+const hoistExportSfc = () => ({
+  name: 'hoist-export-sfc',
+  generateBundle(_, bundle) {
+    const helperPattern = /const _export_sfc = \(sfc, props\) => {\n([\s\S]*?)\n};/;
+    for (const chunk of Object.values(bundle)) {
+      if (chunk.type !== 'chunk') continue;
+      if (!helperPattern.test(chunk.code)) continue;
+      chunk.code = chunk.code.replace(helperPattern, (_, body) => {
+        return `function _export_sfc(sfc, props) {\n${body}\n}\n`;
+      });
+    }
+  },
+});
 
 export const getAliases = (isDev) => {
   const aliases = {
@@ -33,6 +48,7 @@ export const getAliases = (isDev) => {
     '@tests': fileURLToPath(new URL('../super-editor/src/tests', import.meta.url)),
     '@translator': fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
     '@preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
+    '@measurement-engine': fileURLToPath(new URL('src/index.js', measurementEngineDir)),
   };
 
   if (isDev) {
@@ -96,6 +112,9 @@ export default defineConfig(({ mode, command}) => {
       minify: false,
       sourcemap: false,
       rollupOptions: {
+        plugins: [
+          hoistExportSfc(),
+        ],
         input: {
           'superdoc': 'src/index.js',
           'super-editor': 'src/super-editor.js',

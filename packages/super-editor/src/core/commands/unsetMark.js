@@ -10,9 +10,10 @@ import { getMarkType } from '../helpers/getMarkType.js';
 export const unsetMark = (typeOrName, options = {}) => ({ tr, state, dispatch, editor }) => {
   const { extendEmptyMarkRange = false } = options;
   let { selection } = tr;
-  if (editor.options.isHeaderOrFooter) {
+  if (editor.options.isHeaderOrFooter && editor.options.lastSelection) {
     selection = editor.options.lastSelection;
   }
+  if (!selection) return false;
   const type = getMarkType(typeOrName, state.schema);
   const { $from, empty, ranges } = selection;
 

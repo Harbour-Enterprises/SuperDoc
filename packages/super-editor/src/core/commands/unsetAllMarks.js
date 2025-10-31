@@ -4,9 +4,10 @@
 //prettier-ignore
 export const unsetAllMarks = () => ({ tr, dispatch, editor }) => {
   let { selection } = tr;
-  if (editor.options.isHeaderOrFooter) {
+  if (editor.options.isHeaderOrFooter && editor.options.lastSelection) {
     selection = editor.options.lastSelection;
   }
+  if (!selection) return false;
   const { empty, ranges } = selection;
 
   if (empty) return true;
