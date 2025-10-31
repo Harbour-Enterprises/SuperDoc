@@ -36,7 +36,8 @@
     "watch": "npm run watch:es --workspace=packages/superdoc",
     "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build && npm run test",
     "local:publish": "npm version prerelease --preid=local --workspace=superdoc && npm publish --workspace=superdoc --registry http://localhost:4873",
-    "update-preset-geometry": "ROOT=$(pwd) && cd ../superdoc-devtools/preset-geometry && npm run build && cp ./dist/index.js ./dist/index.d.ts \"$ROOT/packages/preset-geometry/\""
+    "update-preset-geometry": "ROOT=$(pwd) && cd ../superdoc-devtools/preset-geometry && npm run build && cp ./dist/index.js ./dist/index.d.ts \"$ROOT/packages/preset-geometry/\"",
+    "test:measurement-engine": "cd packages/measurement-engine/engine && vitest run"
   },
   "lint-staged": {
     "*.{js,jsx}": [
@@ -64,6 +65,7 @@
     "husky": "^9.1.7",
     "jsdom": "^25.0.1",
     "lint-staged": "^16.1.4",
+    "playwright": "^1.56.1",
     "prettier": "3.3.3",
     "semantic-release": "^24.2.7",
     "verdaccio": "^6.1.6",

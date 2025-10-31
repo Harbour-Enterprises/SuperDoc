@@ -518,6 +518,7 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
   overflow: auto;
+  background: #dadada;
 }
 
 .dev-app__view {

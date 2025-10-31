@@ -73,7 +73,12 @@ export const ListItem = Node.create({
   },
 
   addPmPlugins() {
-    return this.editor?.converter?.convertedXml ? [orderedListSync(this.editor)] : [];
+    const hasDocxSource = !!this.editor?.converter?.convertedXml;
+    const isHeaderFooter = this.editor?.options?.isHeaderOrFooter;
+    if (!hasDocxSource || isHeaderFooter) {
+      return [];
+    }
+    return [orderedListSync(this.editor)];
   },
 
   /**

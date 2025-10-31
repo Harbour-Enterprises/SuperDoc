@@ -3,7 +3,7 @@ import { Extension } from '@core/Extension.js';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { removeCommentsById, getHighlightColor } from './comments-helpers.js';
 import { CommentMarkName } from './comments-constants.js';
-import { PaginationPluginKey } from '../pagination/pagination-helpers.js';
+import { PaginationPluginKey } from '../pagination/pagination.js';
 
 // Example tracked-change keys, if needed
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../track-changes/constants.js';

@@ -47,3 +47,6 @@ coverage
 coverage/
 **/coverage
 **/coverage/
+
+debug-tests/
+.claude/

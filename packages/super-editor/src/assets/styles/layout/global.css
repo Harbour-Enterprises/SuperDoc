@@ -18,3 +18,11 @@ a {
 .super-editor a {
   color: initial;
 }
+
+.super-editor-mount {
+  position: relative;
+}
+
+.super-editor-mount__content {
+  position: relative;
+}

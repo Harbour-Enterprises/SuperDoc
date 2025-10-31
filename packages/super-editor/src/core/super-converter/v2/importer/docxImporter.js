@@ -354,9 +354,13 @@ function getDocumentStyles(node, docx, converter, editor) {
     const { name, attributes } = el;
     switch (name) {
       case 'w:pgSz':
+        const widthTwips = attributes['w:w'];
+        const heightTwips = attributes['w:h'];
+        const widthInches = twipsToInches(widthTwips);
+        const heightInches = twipsToInches(heightTwips);
         styles['pageSize'] = {
-          width: twipsToInches(attributes['w:w']),
-          height: twipsToInches(attributes['w:h']),
+          width: widthInches,
+          height: heightInches,
         };
         break;
       case 'w:pgMar':
