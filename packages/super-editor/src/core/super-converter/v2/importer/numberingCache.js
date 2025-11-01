@@ -21,8 +21,8 @@ import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
  */
 
 /**
- * WeakMap that keeps numbering caches associated with their Docx package without
- * mutating the parsed XML payload (which must remain JSON-serializable).
+ * WeakMap fallback for numbering caches (kept for backwards compatibility).
+ * Prefer storing on converter._numberingCache when converter is available.
  */
 const docxNumberingCacheStore = new WeakMap();
 
@@ -126,27 +126,50 @@ export const buildNumberingCache = (docx) => {
 };
 
 /**
- * Retrieve an existing numbering cache from the docx container or build and store a new one.
+ * Retrieve an existing numbering cache from the converter or build and store a new one.
  * @param {DocxPackage | null | undefined} docx
+ * @param {Object} [converter] - The SuperConverter instance (preferred storage location)
  * @returns {NumberingCache}
  */
-export const ensureNumberingCache = (docx) => {
+export const ensureNumberingCache = (docx, converter) => {
   if (!docx || typeof docx !== 'object') return createEmptyCache();
 
+  // First check if we have a converter cache
+  if (converter?.[NUMBERING_CACHE_KEY]) {
+    return converter[NUMBERING_CACHE_KEY];
+  }
+
+  // Secondary: Check WeakMap for backwards compatibility
   const existingCache = docxNumberingCacheStore.get(docx);
-  if (existingCache) return existingCache;
+  if (existingCache) {
+    if (converter) {
+      converter[NUMBERING_CACHE_KEY] = existingCache;
+    }
+    return existingCache;
+  }
 
   const cache = buildNumberingCache(docx);
-  docxNumberingCacheStore.set(docx, cache);
+
+  if (converter) {
+    converter[NUMBERING_CACHE_KEY] = cache;
+  } else {
+    docxNumberingCacheStore.set(docx, cache);
+  }
+
   return cache;
 };
 
 /**
- * Get the numbering cache associated with the provided docx package.
- * @param {DocxPackage | null | undefined} docx
+ * Get the numbering cache associated with the converter or docx package.
+ * @param {Object} converterOrDocx - The SuperConverter instance or docx package
  * @returns {NumberingCache}
  */
-export const getNumberingCache = (docx) => {
-  if (!docx || typeof docx !== 'object') return createEmptyCache();
-  return docxNumberingCacheStore.get(docx) || createEmptyCache();
+export const getNumberingCache = (converterOrDocx) => {
+  if (!converterOrDocx || typeof converterOrDocx !== 'object') return createEmptyCache();
+
+  if (converterOrDocx[NUMBERING_CACHE_KEY]) {
+    return converterOrDocx[NUMBERING_CACHE_KEY];
+  }
+
+  return docxNumberingCacheStore.get(converterOrDocx) || createEmptyCache();
 };

@@ -119,7 +119,8 @@ describe('list-formatting-indents roundtrip', () => {
     const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(docxBuffer, true);
     const { editor } = initTestEditor({ content: docx, media, mediaFiles, fonts });
 
-    const cache = getNumberingCache(editor.converter.convertedXml);
+    // Verify the cache was created and populated during import
+    const cache = getNumberingCache(editor.converter);
     expect(cache.numToDefinition.size).toBeGreaterThan(0);
     expect(cache.abstractById.size).toBeGreaterThan(0);
     expect(cache.numNodesById.size).toBeGreaterThan(0);

@@ -361,12 +361,12 @@ const getListNumIdFromStyleRef = (styleId, docx) => {
   return { numId, ilvl };
 };
 
-export const getAbstractDefinition = (numId, docx) => {
+export const getAbstractDefinition = (numId, docx, converter) => {
   const numberingXml = docx['word/numbering.xml'];
   if (!numberingXml) return {};
   if (numId == null) return undefined;
 
-  const cache = ensureNumberingCache(docx);
+  const cache = ensureNumberingCache(docx, converter);
 
   const numKey = String(numId);
   let listDefinitionForThisNumId = cache.numToDefinition.get(numKey);
