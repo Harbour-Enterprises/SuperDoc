@@ -96,7 +96,6 @@ const encode = (params, encodedAttrs) => {
   encodedAttrs['borders'] = borderData;
 
   // Process each row
-  const tblStyleTag = tblPr?.elements?.find((el) => el.name === 'w:tblStyle'); // used by the legacy table cell handler
   let columnWidths = Array.isArray(encodedAttrs['grid'])
     ? encodedAttrs['grid'].map((item) => twipsToPixels(item.col))
     : [];
@@ -125,10 +124,10 @@ const encode = (params, encodedAttrs) => {
         row,
         table: node,
         rowBorders: borderRowData,
-        styleTag: tblStyleTag,
         columnWidths,
         activeRowSpans: activeRowSpans.slice(),
         rowIndex,
+        _referencedStyles: referencedStyles,
       },
     });
     if (result) {
@@ -309,21 +308,23 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
       tblPr.elements.push(...baseTblPr.elements);
     }
     const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
-    const { borders, rowBorders } = _processTableBorders(tableProperties.borders || {});
+    if (tableProperties) {
+      const { borders, rowBorders } = _processTableBorders(tableProperties.borders || {});
 
-    if (borders) stylesToReturn.borders = borders;
-    if (rowBorders) stylesToReturn.rowBorders = rowBorders;
+      if (borders) stylesToReturn.borders = borders;
+      if (rowBorders) stylesToReturn.rowBorders = rowBorders;
 
-    const cellMargins = {};
-    Object.entries(tableProperties.cellMargins || {}).forEach(([key, attrs]) => {
-      if (attrs?.value != null) {
-        cellMargins[key] = {
-          value: attrs.value,
-          type: attrs.type || 'dxa',
-        };
-      }
-    });
-    if (Object.keys(cellMargins).length) stylesToReturn.cellMargins = cellMargins;
+      const cellMargins = {};
+      Object.entries(tableProperties.cellMargins || {}).forEach(([key, attrs]) => {
+        if (attrs?.value != null) {
+          cellMargins[key] = {
+            value: attrs.value,
+            type: attrs.type || 'dxa',
+          };
+        }
+      });
+      if (Object.keys(cellMargins).length) stylesToReturn.cellMargins = cellMargins;
+    }
   }
 
   return stylesToReturn;

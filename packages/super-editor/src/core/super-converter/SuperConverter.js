@@ -1041,7 +1041,7 @@ class SuperConverter {
     relationships.elements = [...relationships.elements, ...newRels];
   }
 
-  async #exportProcessMediaFiles(media = {}, editor) {
+  async #exportProcessMediaFiles(media = {}) {
     const processedData = {
       ...(this.convertedXml.media || {}),
     };
