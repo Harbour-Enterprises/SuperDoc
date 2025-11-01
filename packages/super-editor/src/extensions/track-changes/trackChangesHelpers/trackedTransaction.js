@@ -82,11 +82,15 @@ export const trackedTransaction = ({ tr, state, user }) => {
   });
 
   if (tr.getMeta('inputType')) {
-    newTr.setMeta(tr.getMeta('inputType'));
+    newTr.setMeta('inputType', tr.getMeta('inputType'));
   }
 
   if (tr.getMeta('uiEvent')) {
-    newTr.setMeta(tr.getMeta('uiEvent'));
+    newTr.setMeta('uiEvent', tr.getMeta('uiEvent'));
+  }
+
+  if (tr.getMeta('addToHistory') !== undefined) {
+    newTr.setMeta('addToHistory', tr.getMeta('addToHistory'));
   }
 
   if (tr.selectionSet) {
