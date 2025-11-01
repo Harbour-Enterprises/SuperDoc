@@ -280,4 +280,53 @@ describe('increaseListIndent', () => {
     expect(updated.attrs.level).toBe(6); // 5 -> 6
     expect(updated.attrs.numId).toBe(42); // preserved
   });
+
+  it('indents every list item covered by the selection', () => {
+    const schema = makeSchema();
+    const firstItem = schema.node('listItem', { level: 0, numId: 55 }, [
+      schema.node('paragraph', null, [schema.text('first')]),
+    ]);
+    const secondItem = schema.node('listItem', { level: 0, numId: 55 }, [
+      schema.node('paragraph', null, [schema.text('second')]),
+    ]);
+    const list = schema.node('orderedList', { listId: 55 }, [firstItem, secondItem]);
+    const doc = schema.node('doc', null, [list]);
+
+    let anchor = 1;
+    let head = 1;
+    doc.descendants((node, pos) => {
+      if (!node.isText) return true;
+      if (node.text === 'first') {
+        anchor = pos + 1; // inside first text node
+      }
+      if (node.text === 'second') {
+        head = pos + node.nodeSize; // end of second text node
+      }
+      return true;
+    });
+
+    const selection = TextSelection.create(doc, anchor, head);
+    const state = EditorState.create({ schema, doc, selection });
+    const editor = { state, schema };
+    const tr = state.tr;
+
+    const cmd = increaseListIndent();
+    const res = cmd({ editor, tr });
+    expect(res).toBe(true);
+
+    const levels = [];
+    const numIds = [];
+    tr.doc.descendants((node) => {
+      if (node.type === schema.nodes.listItem) {
+        levels.push(node.attrs.level);
+        numIds.push(node.attrs.numId);
+        return false;
+      }
+      return true;
+    });
+
+    expect(levels).toEqual([1, 1]);
+    expect(numIds).toEqual([55, 55]);
+    expect(ListHelpers.generateNewListDefinition).not.toHaveBeenCalled();
+  });
 });

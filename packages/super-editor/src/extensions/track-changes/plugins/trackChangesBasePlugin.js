@@ -139,10 +139,12 @@ const getTrackChangesDecorations = (state, onlyOriginalShown, onlyModifiedShown)
           () => {
             const span = document.createElement('span');
             span.classList.add('track-delete-widget');
-            span.contentEditable = false;
             return span;
           },
-          { ignoreSelection: true },
+          {
+            ignoreSelection: true,
+            key: 'stable-key',
+          },
         );
         decorations.push(decorationWidget);
       }

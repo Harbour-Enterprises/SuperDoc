@@ -1,6 +1,11 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMSerializer } from 'prosemirror-model';
+import { unified } from 'unified';
+import rehypeParse from 'rehype-parse';
+import rehypeRemark from 'rehype-remark';
+import remarkStringify from 'remark-stringify';
+import remarkGfm from 'remark-gfm';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -393,7 +398,7 @@ export class Editor extends EventEmitter {
       this.migrateListsToV2();
     }
 
-    this.setDocumentMode(this.options.documentMode);
+    this.setDocumentMode(this.options.documentMode, 'init');
 
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady
@@ -590,8 +595,9 @@ export class Editor extends EventEmitter {
   /**
    * Set the document mode
    * @param {string} documentMode - The document mode ('editing', 'viewing', 'suggesting')
+   * @param {string} caller - Calling context
    */
-  setDocumentMode(documentMode) {
+  setDocumentMode(documentMode, caller) {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
 
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
@@ -606,18 +612,18 @@ export class Editor extends EventEmitter {
       this.commands.toggleTrackChangesShowOriginal();
       this.setEditable(false, false);
       this.setOptions({ documentMode: 'viewing' });
-      toggleHeaderFooterEditMode({
-        editor: this,
-        focusedSectionEditor: null,
-        isEditMode: false,
-        documentMode: cleanedMode,
-      });
+      if (caller !== 'init')
+        toggleHeaderFooterEditMode({
+          editor: this,
+          focusedSectionEditor: null,
+          isEditMode: false,
+          documentMode: cleanedMode,
+        });
       if (pm) pm.classList.add('view-mode');
     }
 
     // Suggesting: Editable, tracked changes plugin enabled, comments
     else if (cleanedMode === 'suggesting') {
-      this.#registerPluginByNameIfNotExists('TrackChangesBase');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.enableTrackChanges();
       this.setOptions({ documentMode: 'suggesting' });
@@ -627,17 +633,17 @@ export class Editor extends EventEmitter {
 
     // Editing: Editable, tracked changes plguin disabled, comments
     else if (cleanedMode === 'editing') {
-      this.#registerPluginByNameIfNotExists('TrackChangesBase');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.disableTrackChanges();
       this.setEditable(true, false);
       this.setOptions({ documentMode: 'editing' });
-      toggleHeaderFooterEditMode({
-        editor: this,
-        focusedSectionEditor: null,
-        isEditMode: false,
-        documentMode: cleanedMode,
-      });
+      if (caller !== 'init')
+        toggleHeaderFooterEditMode({
+          editor: this,
+          focusedSectionEditor: null,
+          isEditMode: false,
+          documentMode: cleanedMode,
+        });
       if (pm) pm.classList.remove('view-mode');
     }
   }
@@ -735,18 +741,6 @@ export class Editor extends EventEmitter {
       this.#initPagination();
       this.#initComments();
     }, 50);
-  }
-
-  /**
-   * Register a plugin by name if it doesn't already exist
-   * @param {string} name - Plugin name
-   * @returns {string|void}
-   */
-  #registerPluginByNameIfNotExists(name) {
-    const plugin = this.extensionService?.plugins.find((p) => p.key.startsWith(name));
-    const hasPlugin = this.state?.plugins?.find((p) => p.key.startsWith(name));
-    if (plugin && !hasPlugin) this.registerPlugin(plugin);
-    return plugin?.key;
   }
 
   /**
@@ -1591,6 +1585,25 @@ export class Editor extends EventEmitter {
       html = unflattenListsInHtml(html);
     }
     return html;
+  }
+
+  /**
+   * Get the editor content as Markdown
+   * @returns {string} Editor content as Markdown
+   */
+  getMarkdown() {
+    const html = this.getHTML();
+    const file = unified()
+      .use(rehypeParse, { fragment: true })
+      .use(rehypeRemark)
+      .use(remarkGfm)
+      .use(remarkStringify, {
+        bullet: '-',
+        fences: true,
+      })
+      .processSync(html);
+
+    return String(file);
   }
 
   /**

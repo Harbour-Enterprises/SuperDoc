@@ -42,6 +42,8 @@ export const ImageRegistrationPlugin = ({ editor }) => {
     },
     appendTransaction: (trs, _oldState, state) => {
       let foundImages = [];
+      if (!trs.some((tr) => tr.docChanged)) return null;
+
       trs.forEach((tr) => {
         if (tr.docChanged) {
           // Check if there are any images in the incoming transaction. If so, we need to register them.
