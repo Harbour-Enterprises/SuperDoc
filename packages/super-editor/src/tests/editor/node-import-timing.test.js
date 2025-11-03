@@ -8,10 +8,9 @@ import { dirname, resolve } from 'node:path';
  * This test verifies that the super-editor can be imported in a Node.js environment
  * WITHOUT requiring browser globals to be set up BEFORE the import.
  *
- * The issue: markdown libraries (unified/rehype/remark) execute code at import time
- * that tries to access `document.createElement()`, which doesn't exist in Node.js.
- *
- * This test should PASS once we lazy-load the markdown dependencies.
+ * The fix: markdown libraries (unified/rehype/remark) are lazy-loaded in getMarkdown()
+ * instead of being imported at the top level, which prevents them from accessing
+ * `document.createElement()` at import time.
  */
 describe('Node.js import timing - document access', () => {
   const ORIGINAL_GLOBALS = {
@@ -54,7 +53,6 @@ describe('Node.js import timing - document access', () => {
     expect(globalThis.window).toBeUndefined();
 
     // This should NOT throw "document is not defined"
-    // Currently this WILL throw because markdown libraries access document at import time
     let importError = null;
     let EditorModule = null;
 
@@ -65,7 +63,7 @@ describe('Node.js import timing - document access', () => {
       importError = error;
     }
 
-    // This assertion will FAIL until we fix the lazy loading issue
+    // This should pass because markdown libraries are lazy-loaded
     expect(importError).toBeNull();
     expect(EditorModule).toBeDefined();
     expect(EditorModule.Editor).toBeDefined();
@@ -112,8 +110,7 @@ describe('Node.js import timing - document access', () => {
       importError = error;
     }
 
-    // This assertion will FAIL until we fix the lazy loading issue
-    // The error will be: "ReferenceError: document is not defined"
+    // This should pass because markdown libraries are lazy-loaded
     expect(importError).toBeNull();
     expect(bundle).toBeDefined();
     expect(bundle.Editor).toBeDefined();
@@ -134,7 +131,8 @@ describe('Node.js import timing - document access', () => {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
 
-    // Import the dist bundle
+    // Import the dist bundle (can now be done without setting up globals first
+    // because markdown libraries are lazy-loaded)
     const distUrl = pathToFileURL(resolve(__dirname, '../../../dist/super-editor.es.js')).href;
     const bundle = await import(distUrl);
 
