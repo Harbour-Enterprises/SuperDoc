@@ -23,13 +23,13 @@ describe('Editor markdown export', () => {
     }
   });
 
-  it('returns markdown string from HTML content', () => {
-    const markdown = editor.getMarkdown();
+  it('returns markdown string from HTML content', async () => {
+    const markdown = await editor.getMarkdown();
 
     expect(typeof markdown).toBe('string');
   });
 
-  it('converts formatted text to markdown syntax', () => {
+  it('converts formatted text to markdown syntax', async () => {
     const { editor: htmlEditor } = initTestEditor({
       content: docx,
       media,
@@ -38,7 +38,7 @@ describe('Editor markdown export', () => {
       html: '<p>Text with <strong>bold</strong> and <em>italic</em>.</p>',
     });
 
-    const markdown = htmlEditor.getMarkdown();
+    const markdown = await htmlEditor.getMarkdown();
 
     expect(markdown).toContain('**bold**');
     expect(markdown).toContain('italic');
