@@ -1,11 +1,6 @@
 import { EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { DOMSerializer } from 'prosemirror-model';
-import { unified } from 'unified';
-import rehypeParse from 'rehype-parse';
-import rehypeRemark from 'rehype-remark';
-import remarkStringify from 'remark-stringify';
-import remarkGfm from 'remark-gfm';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -1589,9 +1584,26 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the editor content as Markdown
-   * @returns {string} Editor content as Markdown
+   * @returns {Promise<string>} Editor content as Markdown
    */
-  getMarkdown() {
+  async getMarkdown() {
+    // Lazy-load markdown libraries to avoid requiring 'document' at import time
+    // These libraries (specifically rehype) execute code that accesses document.createElement()
+    // during module initialization, which breaks Node.js compatibility
+    const [
+      { unified },
+      { default: rehypeParse },
+      { default: rehypeRemark },
+      { default: remarkStringify },
+      { default: remarkGfm },
+    ] = await Promise.all([
+      import('unified'),
+      import('rehype-parse'),
+      import('rehype-remark'),
+      import('remark-stringify'),
+      import('remark-gfm'),
+    ]);
+
     const html = this.getHTML();
     const file = unified()
       .use(rehypeParse, { fragment: true })
