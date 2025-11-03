@@ -23,18 +23,8 @@ export const TrackChangesBasePlugin = () => {
       apply(tr, oldState, prevEditorState, newEditorState) {
         const meta = tr.getMeta(TrackChangesBasePluginKey);
 
-        if (!meta) {
-          return {
-            ...oldState,
-            decorations: getTrackChangesDecorations(
-              newEditorState,
-              oldState.onlyOriginalShown,
-              oldState.onlyModifiedShown,
-            ),
-          };
-        }
-
-        if (meta.type === 'TRACK_CHANGES_ENABLE') {
+        // Handle meta commands that require full recalculation
+        if (meta && meta.type === 'TRACK_CHANGES_ENABLE') {
           return {
             ...oldState,
             isTrackChangesActive: meta.value === true,
@@ -46,7 +36,7 @@ export const TrackChangesBasePlugin = () => {
           };
         }
 
-        if (meta.type === 'SHOW_ONLY_ORIGINAL') {
+        if (meta && meta.type === 'SHOW_ONLY_ORIGINAL') {
           return {
             ...oldState,
             onlyOriginalShown: meta.value === true,
@@ -55,12 +45,43 @@ export const TrackChangesBasePlugin = () => {
           };
         }
 
-        if (meta.type === 'SHOW_ONLY_MODIFIED') {
+        if (meta && meta.type === 'SHOW_ONLY_MODIFIED') {
           return {
             ...oldState,
             onlyOriginalShown: false,
             onlyModifiedShown: meta.value === true,
             decorations: getTrackChangesDecorations(newEditorState, false, meta.value === true),
+          };
+        }
+
+        if (!tr.docChanged) {
+          return oldState;
+        }
+
+        if (!meta) {
+          let mightAffectTrackChanges = false;
+
+          tr.steps.forEach((step) => {
+            if (step.slice || step.from !== step.to) {
+              mightAffectTrackChanges = true;
+            }
+          });
+
+          if (mightAffectTrackChanges) {
+            return {
+              ...oldState,
+              decorations: getTrackChangesDecorations(
+                newEditorState,
+                oldState.onlyOriginalShown,
+                oldState.onlyModifiedShown,
+              ),
+            };
+          }
+
+          // No changes that affect track changes, just map decorations
+          return {
+            ...oldState,
+            decorations: oldState.decorations.map(tr.mapping, tr.doc),
           };
         }
 

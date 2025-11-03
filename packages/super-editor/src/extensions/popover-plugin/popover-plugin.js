@@ -33,13 +33,15 @@ export const PopoverPlugin = Extension.create({
           return {};
         },
         apply: (tr, value) => {
-          let newValue = { ...value };
+          const newValue = { ...value };
 
-          if (tr.docChanged) {
+          // Only update popover when selection or document changes
+          if (tr.docChanged || tr.selectionSet) {
             newValue.shouldUpdate = true;
           } else {
             newValue.shouldUpdate = false;
           }
+
           return newValue;
         },
       },
