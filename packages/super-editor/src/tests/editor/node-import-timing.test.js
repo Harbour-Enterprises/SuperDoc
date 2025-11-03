@@ -1,0 +1,122 @@
+/* @vitest-environment node */
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+/**
+ * This test verifies that the super-editor can be imported in a Node.js environment
+ * WITHOUT requiring browser globals to be set up BEFORE the import.
+ *
+ * The issue: markdown libraries (unified/rehype/remark) execute code at import time
+ * that tries to access `document.createElement()`, which doesn't exist in Node.js.
+ *
+ * This test should PASS once we lazy-load the markdown dependencies.
+ */
+describe('Node.js import timing - document access', () => {
+  const ORIGINAL_GLOBALS = {
+    window: globalThis.window,
+    document: globalThis.document,
+    navigator: globalThis.navigator,
+  };
+
+  beforeEach(() => {
+    // Ensure we start with a clean Node.js environment (no browser globals)
+    delete globalThis.window;
+    delete globalThis.document;
+    delete globalThis.navigator;
+  });
+
+  afterEach(() => {
+    // Restore original globals
+    if (ORIGINAL_GLOBALS.window === undefined) {
+      delete globalThis.window;
+    } else {
+      globalThis.window = ORIGINAL_GLOBALS.window;
+    }
+
+    if (ORIGINAL_GLOBALS.document === undefined) {
+      delete globalThis.document;
+    } else {
+      globalThis.document = ORIGINAL_GLOBALS.document;
+    }
+
+    if (ORIGINAL_GLOBALS.navigator === undefined) {
+      delete globalThis.navigator;
+    } else {
+      globalThis.navigator = ORIGINAL_GLOBALS.navigator;
+    }
+  });
+
+  it('should allow importing Editor in Node.js without document global', async () => {
+    // Verify we're starting with no browser globals
+    expect(globalThis.document).toBeUndefined();
+    expect(globalThis.window).toBeUndefined();
+
+    // This should NOT throw "document is not defined"
+    // Currently this WILL throw because markdown libraries access document at import time
+    let importError = null;
+    let EditorModule = null;
+
+    try {
+      // Dynamic import to ensure we're testing the import after globals are cleared
+      EditorModule = await import('@core/Editor.js');
+    } catch (error) {
+      importError = error;
+    }
+
+    // This assertion will FAIL until we fix the lazy loading issue
+    expect(importError).toBeNull();
+    expect(EditorModule).toBeDefined();
+    expect(EditorModule.Editor).toBeDefined();
+  });
+
+  it('should allow importing getStarterExtensions in Node.js without document global', async () => {
+    // Verify we're starting with no browser globals
+    expect(globalThis.document).toBeUndefined();
+    expect(globalThis.window).toBeUndefined();
+
+    let importError = null;
+    let extensionsModule = null;
+
+    try {
+      // This is how users typically import the library
+      extensionsModule = await import('@extensions/index.js');
+    } catch (error) {
+      importError = error;
+    }
+
+    // This should pass - extensions shouldn't need document at import time
+    expect(importError).toBeNull();
+    expect(extensionsModule).toBeDefined();
+    expect(extensionsModule.getStarterExtensions).toBeDefined();
+  });
+
+  it('should allow importing the built dist bundle in Node.js without document global', async () => {
+    // Verify we're starting with no browser globals
+    expect(globalThis.document).toBeUndefined();
+    expect(globalThis.window).toBeUndefined();
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+    const distUrl = pathToFileURL(resolve(__dirname, '../../../dist/super-editor.es.js')).href;
+
+    let importError = null;
+    let bundle = null;
+
+    try {
+      // This simulates what end users do: import from the built package
+      // WITHOUT setting up JSDOM first
+      bundle = await import(distUrl);
+    } catch (error) {
+      importError = error;
+    }
+
+    // This assertion will FAIL until we fix the lazy loading issue
+    // The error will be: "ReferenceError: document is not defined"
+    expect(importError).toBeNull();
+    expect(bundle).toBeDefined();
+    expect(bundle.Editor).toBeDefined();
+    expect(bundle.getStarterExtensions).toBeDefined();
+  });
+});
