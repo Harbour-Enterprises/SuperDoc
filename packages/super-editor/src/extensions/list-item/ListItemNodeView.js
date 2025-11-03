@@ -2,7 +2,7 @@ import { parseIndentElement, combineIndents } from '@core/super-converter/v2/imp
 import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 import { getListItemStyleDefinitions } from '@helpers/list-numbering-helpers.js';
 import { docxNumberingHelpers } from '@/core/super-converter/v2/importer/listImporter.js';
-import { resolveListItemTypography } from './helpers/listItemTypography.js';
+import { resolveListItemTypography, clearComputedStyleCache } from './helpers/listItemTypography.js';
 
 const MARKER_PADDING = 6;
 const MARKER_OFFSET_RIGHT = 4;
@@ -187,9 +187,21 @@ export class ListItemNodeView {
   };
 
   update(node, decorations) {
+    const prevNode = this.node;
     this.node = node;
     this.decorations = decorations;
     this.invalidateResolvedPos();
+
+    // Check if styling attributes changed - if so, clear the computed style cache
+    const stylingAttrsChanged =
+      !prevNode ||
+      prevNode.attrs.styleId !== node.attrs.styleId ||
+      prevNode.attrs.numId !== node.attrs.numId ||
+      prevNode.attrs.level !== node.attrs.level;
+
+    if (stylingAttrsChanged) {
+      clearComputedStyleCache(this.dom);
+    }
 
     const { fontSize, fontFamily, lineHeight } = resolveListItemTypography({
       node,
@@ -202,13 +214,20 @@ export class ListItemNodeView {
     this.dom.style.fontFamily = fontFamily || 'inherit';
     this.dom.style.lineHeight = lineHeight || '';
 
-    this.refreshIndentStyling();
+    // Only refresh indent styling if relevant attributes changed
+    const attrsChanged = stylingAttrsChanged || prevNode?.attrs.indent !== node.attrs.indent;
+
+    if (attrsChanged) {
+      this.refreshIndentStyling();
+    }
   }
 
   destroy() {
     // Unregister this node view
     activeListItemNodeViews.delete(this);
     this.numberingDOM.removeEventListener('click', this.handleNumberingClick);
+    // Clear computed style cache
+    clearComputedStyleCache(this.dom);
     const caf = typeof globalThis !== 'undefined' ? globalThis.cancelAnimationFrame : undefined;
     if (this._pendingIndentRefresh != null && typeof caf === 'function') {
       caf(this._pendingIndentRefresh);
@@ -281,8 +300,16 @@ function calculateMarkerWidth(dom, numberingDOM, editor, { withPadding = true } 
     // If we're in headless mode, we can't use canvas, so we return 0
     if (editor?.options?.isHeadless) return 0;
 
+    // Skip measurement when the canvas API is not available (e.g., jsdom/SSR environments)
+    if (typeof globalThis.CanvasRenderingContext2D === 'undefined') return 0;
+
     const canvas = document.createElement('canvas');
+
+    // In jsdom or SSR environments, getContext may not exist or may throw
+    if (typeof canvas.getContext !== 'function') return 0;
+
     const context = canvas.getContext('2d');
+    if (!context) return 0;
 
     const fontSizePx = fontSize.includes('pt')
       ? Number.parseFloat(fontSize) * POINT_TO_PIXEL_CONVERSION_FACTOR
