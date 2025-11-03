@@ -14,8 +14,11 @@ export function orderedListSync(editor) {
     appendTransaction(transactions, oldState, newState) {
       if (transactions.every((tr) => tr.getMeta('y-sync$'))) return null;
 
+      // Only refresh node views on initialization or explicit request
       const updateNodeViews = transactions.some((tr) => tr.getMeta('updatedListItemNodeViews'));
-      if (updateNodeViews || !hasInitialized) refreshAllListItemNodeViews();
+      if (updateNodeViews || !hasInitialized) {
+        refreshAllListItemNodeViews();
+      }
 
       const isFromPlugin = transactions.some((tr) => tr.getMeta('orderedListSync'));
       const docChanged = transactions.some((tr) => tr.docChanged) && !oldState.doc.eq(newState.doc);
@@ -29,16 +32,37 @@ export function orderedListSync(editor) {
       const tr = newState.tr;
       tr.setMeta('orderedListSync', true);
 
-      const listMap = new Map(); // numId -> [counts per level]
-      const listInitialized = new Map(); // Track if we've initialized each numId
+      const listMap = new Map();
+      const listInitialized = new Map();
 
+      // Check if transaction affects list items
       const shouldProcess = transactions.some((tr) => {
+        if (tr.getMeta('updateListSync')) return true;
+
         return tr.steps.some((step) => {
           const stepJSON = step.toJSON();
-          const hasUpdateMeta = tr.getMeta('updateListSync');
-          return hasUpdateMeta || (stepJSON && stepJSON.slice && JSON.stringify(stepJSON).includes('"listItem"'));
+
+          if (step.slice?.content) {
+            let hasListItem = false;
+            step.slice.content.descendants((node) => {
+              if (node.type.name === 'listItem') {
+                hasListItem = true;
+                return false;
+              }
+            });
+            if (hasListItem) return true;
+          }
+
+          // Fallback: check step JSON for compatibility
+          if (stepJSON && stepJSON.slice) {
+            const jsonStr = JSON.stringify(stepJSON);
+            if (jsonStr.includes('"listItem"')) return true;
+          }
+
+          return false;
         });
       });
+
       if (!shouldProcess) return null;
 
       newState.doc.descendants((node, pos) => {

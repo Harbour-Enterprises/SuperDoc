@@ -138,4 +138,74 @@ describe('FieldAnnotationPlugin', () => {
     expect(appended).toBe(tr);
     expect(tr.removeMark).toHaveBeenCalled();
   });
+
+  it('removes marks from field annotations inserted via zero-length range (paste/import)', () => {
+    const plugin = createPlugin();
+
+    // Create a field annotation node with marks (bold, italic, etc.)
+    const annotationNode = {
+      type: { name: 'fieldAnnotation' },
+      marks: [{ type: { name: 'bold' } }],
+      eq: () => true,
+      nodeSize: 3,
+    };
+
+    // Create a slice containing the annotated node
+    const slice = {
+      size: 3, // ProseMirror slices have size at the top level
+      content: {
+        size: 3,
+        descendants: (fn) => {
+          fn(annotationNode);
+        },
+      },
+    };
+
+    // Create a step representing a pure insertion (from === to)
+    const insertionStep = {
+      from: 5,
+      to: 5, // Zero-length range indicates pure insertion
+      slice,
+    };
+
+    // Create transaction with the insertion step
+    const transaction = {
+      docChanged: true,
+      steps: [insertionStep],
+    };
+
+    // Mock the new state after insertion
+    const newState = {
+      doc: {
+        content: { size: 20 },
+        eq: () => false,
+        nodesBetween: vi.fn((from, to, callback) => {
+          // Simulate finding the inserted annotation in the range [5, 8]
+          if (from <= 5 && to >= 8) {
+            callback(annotationNode, 5);
+          }
+        }),
+      },
+      tr: {
+        doc: {
+          nodeAt: () => annotationNode,
+        },
+        removeMark: vi.fn(),
+      },
+    };
+
+    const oldState = {
+      doc: {
+        eq: () => false,
+      },
+    };
+
+    // Execute appendTransaction
+    const appended = plugin.spec.appendTransaction([transaction], oldState, newState);
+
+    // Verify marks are removed from the inserted annotation
+    expect(appended).toBe(newState.tr);
+    expect(newState.tr.removeMark).toHaveBeenCalledWith(5, 8, null);
+    expect(newState.doc.nodesBetween).toHaveBeenCalled();
+  });
 });
