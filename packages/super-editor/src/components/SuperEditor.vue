@@ -17,7 +17,14 @@ import { checkNodeSpecificClicks } from './cursor-helpers.js';
 import { getFileObject } from '@harbour-enterprises/common';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
 
-const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
+const emit = defineEmits([
+  'editor-ready',
+  'editor-click',
+  'editor-keydown',
+  'comments-loaded',
+  'selection-update',
+  'add-to-chat',
+]);
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const props = defineProps({
@@ -87,8 +94,13 @@ const addToChatButtonStyle = computed(() => ({
 }));
 
 function handleAddToChatButtonClick() {
-  addToChat.addToChat((text) => {
-    emit('add-to-chat', text);
+  addToChat.addToChat((text, documentText) => {
+    console.log('[SuperEditor] handleAddToChatButtonClick received:', { text, documentText });
+    emit('add-to-chat', text, documentText);
+    if (props.onAddToChat && typeof props.onAddToChat === 'function') {
+      console.log('[SuperEditor] Calling props.onAddToChat with:', { text, documentText });
+      props.onAddToChat(text, documentText);
+    }
     message.success('Text added to chat!');
   });
 }
@@ -252,6 +264,12 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     apiCallFunction: autocompleteApiCall,
   });
 
+  // Expose autocomplete functionality on the editor instance so SuperDoc can access it
+  editor.value.autocompleteEnabled = autocompleteEnabled;
+  editor.value.triggerAutocomplete = () => {
+    autocomplete.triggerImmediateAutocomplete(autocompleteApiCall);
+  };
+
   // --- add-to-chat: initialize composable with editor ---
   addToChat.initializeAddToChat(editor.value);
 
@@ -333,25 +351,6 @@ const handleSuperEditorClick = (event) => {
 onMounted(() => {
   initializeData();
   if (props.options?.suppressSkeletonLoader || !props.options?.collaborationProvider) editorReady.value = true;
-
-  // Listen for autocomplete toggle from toolbar and update state
-  const toolbarElem = document.querySelector('.superdoc-toolbar');
-  if (toolbarElem && toolbarElem.__vue_app__) {
-    const vm = toolbarElem.__vue_app__._instance?.proxy?.$toolbar;
-    if (vm && vm.on) {
-      vm.on('toggle-autocomplete', ({ enabled }) => {
-        autocompleteEnabled.value = enabled;
-        // If disabled, ensure autocomplete is cleaned up right away
-        if (editor.value && !enabled) {
-          autocomplete.cleanup();
-        }
-        // If enabled, re-initialize (if not already set)
-        if (editor.value && enabled) {
-          autocomplete.initializeAutocomplete(editor.value, { enabled: autocompleteEnabled });
-        }
-      });
-    }
-  }
 });
 
 const handleMarginClick = (event) => {

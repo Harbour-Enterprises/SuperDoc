@@ -17,10 +17,12 @@ export function useAutocomplete() {
   const ghostTextTimeout = ref(null);
   const currentCursorPosition = ref(null);
   const ghostTextDecorationId = ref(null);
+  const ghostTextOverflowBox = ref(null);
   const isGhostTextActive = ref(false);
   const ghostTextCursorPosition = ref(null);
   const autocompleteStatus = ref('');
   let activeEditor = null;
+  let latestRequestId = 0; // Track request sequence to identify the latest
 
   const initializeAutocomplete = (editor, options = { apiCallFunction: null, enabled: ref(false) }) => {
     if (!editor) {
@@ -66,11 +68,34 @@ export function useAutocomplete() {
           console.warn('[Autocomplete] Could not remove ghost element:', e);
         }
       });
+
+      // Remove overflow box if it exists
+      if (ghostTextOverflowBox.value) {
+        try {
+          if (ghostTextOverflowBox.value.remove) {
+            ghostTextOverflowBox.value.remove();
+          }
+        } catch (e) {
+          console.warn('[Autocomplete] Could not remove overflow box:', e);
+        }
+        ghostTextOverflowBox.value = null;
+      }
+
+      // Clean up any orphaned overflow boxes
+      const existingOverflowBoxes = document.querySelectorAll('.ghost-text-overflow-box');
+      existingOverflowBoxes.forEach((box) => {
+        try {
+          box.remove();
+        } catch (e) {
+          console.warn('[Autocomplete] Could not remove overflow box element:', e);
+        }
+      });
     } catch (error) {
       console.error('[Autocomplete] Error removing ghost text:', error);
     }
     ghostText.value = '';
     ghostTextDecorationId.value = null;
+    ghostTextOverflowBox.value = null;
     ghostTextCursorPosition.value = null;
     isGhostTextActive.value = false;
     if (ghostTextAutoDismissTimeout.value) {
@@ -97,18 +122,31 @@ export function useAutocomplete() {
         0%, 50% { opacity: 1; }
         51%, 100% { opacity: 0; }
       }
+      @keyframes ghostOverflowPopIn {
+        from { opacity: 0; transform: translateY(-8px) scale(0.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      @keyframes ghostOverflowPopOut {
+        from { opacity: 1; transform: translateY(0) scale(1); }
+        to { opacity: 0; transform: translateY(-8px) scale(0.96); }
+      }
       .ghost-text-overlay { position: absolute; display: inline-flex; align-items: center; gap: 8px; z-index: 1000; pointer-events: auto; animation: ghostTextFadeIn 0.2s ease-out; font-family: inherit; font-size: inherit; line-height: inherit; transform: none; transform-origin: left center; }
       .ghost-text-content { color: #94a3b8; opacity: 0.7; font-style: italic; font-weight: 400; position: relative; white-space: nowrap; letter-spacing: inherit; }
       .ghost-text-content::after { content: ''; display: inline-block; width: 1px; height: 1em; background-color: #94a3b8; margin-left: 2px; animation: cursorBlink 1s ease-in-out infinite; vertical-align: text-top; }
-      .ghost-text-truncated::before { content: '...'; color: #94a3b8; opacity: 0.5; margin-right: 2px; }
       .ghost-text-buttons { display: inline-flex; gap: 4px; align-items: center; }
       .ghost-text-btn { display: inline-flex; align-items: center; justify-content: center; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; cursor: pointer; transition: all 0.12s ease; user-select: none; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; border: 1px solid; min-width: 32px; height: 22px; text-transform: uppercase; letter-spacing: 0.5px; }
       .ghost-text-btn--accept { background: rgba(34, 197, 94, 0.08); color: #059669; border-color: rgba(34, 197, 94, 0.2); }
       .ghost-text-btn--accept:hover { background: rgba(34, 197, 94, 0.15); border-color: rgba(34, 197, 94, 0.4); transform: translateY(-0.5px); box-shadow: 0 2px 4px rgba(34, 197, 94, 0.15); }
       .ghost-text-btn--dismiss { background: rgba(107, 114, 128, 0.08); color: #6b7280; border-color: rgba(107, 114, 128, 0.2); }
       .ghost-text-btn--dismiss:hover { background: rgba(107, 114, 128, 0.15); border-color: rgba(107, 114, 128, 0.4); transform: translateY(-0.5px); box-shadow: 0 2px 4px rgba(107, 114, 128, 0.15); }
-.ghost-text-fadeout { opacity: 0 !important; transition: opacity 0.6s linear; }
       .ghost-text-fadeout { opacity: 0 !important; transition: opacity 0.6s linear; }
+      .ghost-text-overflow-box { position: absolute; width: 320px; height: 180px; background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(148, 163, 184, 0.3); border-radius: 8px; padding: 12px; overflow-y: auto; z-index: 999; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.08); backdrop-filter: blur(8px); animation: ghostOverflowPopIn 0.2s ease-out; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; }
+      .ghost-text-overflow-content { color: #475569; font-style: italic; white-space: pre-wrap; word-wrap: break-word; line-height: 1.6; font-size: 13px; }
+      .ghost-text-overflow-box::-webkit-scrollbar { width: 6px; }
+      .ghost-text-overflow-box::-webkit-scrollbar-track { background: rgba(148, 163, 184, 0.1); border-radius: 3px; }
+      .ghost-text-overflow-box::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.4); border-radius: 3px; }
+      .ghost-text-overflow-box::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.6); }
+      .ghost-text-fadeout.ghost-text-overflow-box { animation: ghostOverflowPopOut 0.3s ease-in forwards; }
     `;
     document.head.appendChild(style);
   };
@@ -145,8 +183,69 @@ export function useAutocomplete() {
     }
   };
 
+  const createOverflowBox = (fullGhostText, coords, editorWrapper) => {
+    const overflowBox = document.createElement('div');
+    overflowBox.className = 'ghost-text-overflow-box';
+
+    const content = document.createElement('div');
+    content.className = 'ghost-text-overflow-content';
+    content.textContent = fullGhostText;
+
+    overflowBox.appendChild(content);
+
+    // Calculate position within editor
+    const BOX_WIDTH = 320;
+    const BOX_HEIGHT = 180;
+    const PADDING = 12;
+    const GAP_FROM_INLINE = 32; // Gap between inline ghost text and box
+
+    // Get editor bounds
+    const editorRect = editorWrapper.getBoundingClientRect();
+
+    // Calculate position relative to editor wrapper
+    let boxLeft = coords.left - editorRect.left;
+    let boxTop = coords.bottom - editorRect.top + GAP_FROM_INLINE;
+
+    // Adjust horizontal position if box would overflow right edge
+    const maxLeft = editorRect.width - BOX_WIDTH - PADDING;
+    if (boxLeft > maxLeft) {
+      boxLeft = maxLeft;
+    }
+
+    // Ensure minimum left padding
+    boxLeft = Math.max(PADDING, boxLeft);
+
+    // Adjust vertical position if box would overflow bottom
+    const editorHeight = editorWrapper.scrollHeight;
+    const maxTop = editorHeight - BOX_HEIGHT - PADDING;
+
+    if (boxTop > maxTop) {
+      // Not enough space below, try positioning above cursor
+      const spaceAbove = coords.top - editorRect.top;
+      const spaceBelow = editorRect.bottom - coords.bottom;
+
+      if (spaceAbove > spaceBelow && spaceAbove > BOX_HEIGHT + PADDING) {
+        // Position above cursor
+        boxTop = coords.top - editorRect.top - BOX_HEIGHT - GAP_FROM_INLINE;
+      } else {
+        // Keep below but clamp to available space
+        boxTop = Math.max(PADDING, maxTop);
+      }
+    }
+
+    // Apply positioning
+    overflowBox.style.left = `${boxLeft}px`;
+    overflowBox.style.top = `${boxTop}px`;
+
+    // Append to editor wrapper
+    editorWrapper.appendChild(overflowBox);
+
+    return overflowBox;
+  };
+
   const displayGhostText = () => {
-    if (!activeEditor || !ghostText.value) {
+    if (!activeEditor || !ghostText.value || !ghostText.value.trim()) {
+      console.warn('[Autocomplete] Cannot display ghost text - no valid text available');
       return;
     }
     const { view } = activeEditor;
@@ -198,12 +297,12 @@ export function useAutocomplete() {
       if (editorWrapper) {
         const containerRect = editorWrapper.getBoundingClientRect();
         baseLeft = coords.left - containerRect.left;
-        baseTop = coords.bottom - containerRect.top + 10;
+        baseTop = coords.bottom - containerRect.top + 8;
         ghostOverlay.style.cssText = `left: ${baseLeft}px; top: ${baseTop}px; font-size: ${computedStyle.fontSize}; font-family: ${computedStyle.fontFamily}; line-height: ${computedStyle.lineHeight}; opacity:0; pointer-events:none; position:absolute;`;
         editorWrapper.appendChild(ghostOverlay);
       } else {
         baseLeft = coords.left;
-        baseTop = coords.bottom + 10;
+        baseTop = coords.bottom + 8;
         ghostOverlay.style.cssText = `left: ${baseLeft}px; top: ${baseTop}px; font-size: ${computedStyle.fontSize}; font-family: ${computedStyle.fontFamily}; line-height: ${computedStyle.lineHeight}; opacity:0; pointer-events:none; position:absolute;`;
         document.body.appendChild(ghostOverlay);
       }
@@ -211,12 +310,20 @@ export function useAutocomplete() {
       ghostOverlay.style.cssText = `left: ${baseLeft}px; top: ${baseTop}px; font-size: ${computedStyle.fontSize}; font-family: ${computedStyle.fontFamily}; line-height: ${computedStyle.lineHeight}; opacity:1; pointer-events:auto; position:absolute;`;
       isGhostTextActive.value = true;
       ghostTextDecorationId.value = ghostOverlay;
+
+      // Create overflow box if text is truncated
+      if (isTruncated && editorWrapper) {
+        const overflowBox = createOverflowBox(ghostText.value, coords, editorWrapper);
+        ghostTextOverflowBox.value = overflowBox;
+      }
+
       // Auto dismiss after 1s
       if (ghostTextAutoDismissTimeout.value) clearTimeout(ghostTextAutoDismissTimeout.value);
       ghostTextAutoDismissTimeout.value = setTimeout(() => {
         // Fade out and cleanup after fade
         if (ghostTextDecorationId.value) {
-          const toRemove = ghostTextDecorationId.value;
+          const inlineOverlay = ghostTextDecorationId.value;
+          const overflowBox = ghostTextOverflowBox.value;
           let removed = false;
           const cleanup = () => {
             if (!removed) {
@@ -224,14 +331,17 @@ export function useAutocomplete() {
               removed = true;
             }
           };
-          toRemove.classList.add('ghost-text-fadeout');
-          toRemove.addEventListener('transitionend', cleanup, { once: true });
+          inlineOverlay.classList.add('ghost-text-fadeout');
+          if (overflowBox) {
+            overflowBox.classList.add('ghost-text-fadeout');
+          }
+          inlineOverlay.addEventListener('transitionend', cleanup, { once: true });
           // Fallback removal in case transitionend doesn't fire (e.g., overlay disappears too soon)
           setTimeout(cleanup, 700);
         } else {
           removeGhostText();
         }
-      }, 5000);
+      }, 60000);
     } catch (error) {
       console.error('[Autocomplete] Error displaying ghost text:', error);
     }
@@ -252,18 +362,33 @@ export function useAutocomplete() {
       // Do not trigger autocomplete if any text in next 3 positions after cursor
       return;
     }
+
     try {
       const inputText = getWordsBeforeCursor(activeEditor);
       if (!inputText.trim()) {
         return;
       }
+
+      // Increment request ID for this new request
+      latestRequestId++;
+      const thisRequestId = latestRequestId;
+
       autocompleteStatus.value = 'Generating suggestion...';
       const completedText = await apiCallFunction(inputText);
-      if (completedText && completedText !== inputText) {
+
+      // Check if a newer request has been made while we were waiting
+      if (thisRequestId !== latestRequestId) {
+        // console.log('[Autocomplete] Newer request exists - ignoring older response');
+        return;
+      }
+
+      // Validate the response is not empty and different from input
+      if (completedText && completedText !== inputText && completedText.trim()) {
         let textToShow = completedText;
         if (completedText.startsWith(inputText)) {
           textToShow = completedText.slice(inputText.length);
         }
+        // Only display if we have actual text to show
         if (textToShow.trim()) {
           ghostText.value = textToShow;
           displayGhostText();
@@ -321,6 +446,7 @@ export function useAutocomplete() {
   const scheduleGhostText = (apiCallFunction, delay = 150) => {
     clearGhostTextTimeout();
     removeGhostText();
+
     if (!apiCallFunction) return;
     ghostTextTimeout.value = setTimeout(() => {
       showGhostText(apiCallFunction);
@@ -408,6 +534,10 @@ export function useAutocomplete() {
   const cleanup = () => {
     clearGhostTextTimeout();
     removeGhostText();
+
+    // Invalidate any pending requests by incrementing the request ID
+    latestRequestId++;
+
     if (activeEditor && activeEditor._autocompleteHandlers) {
       const { keydown, selectionChange } = activeEditor._autocompleteHandlers;
       activeEditor.view.dom.removeEventListener('keydown', keydown, true);
@@ -418,6 +548,12 @@ export function useAutocomplete() {
     activeEditor = null;
   };
 
+  const triggerImmediateAutocomplete = (apiCallFunction) => {
+    if (!activeEditor || !apiCallFunction) return;
+    // Trigger autocomplete immediately with no delay
+    scheduleGhostText(apiCallFunction, 0);
+  };
+
   return {
     ghostText,
     isGhostTextActive,
@@ -426,6 +562,7 @@ export function useAutocomplete() {
     acceptGhostText,
     removeGhostText,
     scheduleGhostText,
+    triggerImmediateAutocomplete,
     cleanup,
     getWordsBeforeCursor,
   };

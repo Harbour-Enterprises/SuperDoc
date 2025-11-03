@@ -7,9 +7,10 @@ import FaddockSuperdocWrapper from './FaddockSuperdocWrapper';
 const PageOne = () => {
   const [highlightedText, setHighlightedText] = useState('');
 
-  const handleAddToChat = (text: string) => {
-    setHighlightedText(text);
-    console.log('AddToChat received:', text);
+  const handleAddToChat = (selectedText: string, documentText: string) => {
+    setHighlightedText(selectedText);
+    console.log('Selected Text:', selectedText);
+    console.log('Full Document Text:', documentText);
   };
 
   return (

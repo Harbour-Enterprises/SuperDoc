@@ -516,6 +516,7 @@ export class SuperDoc extends EventEmitter {
     this.toolbar = new SuperToolbar(config);
 
     this.toolbar.on('superdoc-command', this.onToolbarCommand.bind(this));
+    this.toolbar.on('toggle-autocomplete', this.onToggleAutocomplete.bind(this));
     this.toolbar.on('exception', this.config.onException);
     this.once('editorCreate', () => this.toolbar.updateToolbarState());
   }
@@ -558,6 +559,26 @@ export class SuperDoc extends EventEmitter {
     } else if (item.command === 'setZoom') {
       this.superdocStore.activeZoom = argument;
     }
+  }
+
+  /**
+   * Triggered when the autocomplete toggle is clicked in the toolbar
+   * @param {Object} param0
+   * @param {boolean} param0.enabled Whether autocomplete is enabled
+   */
+  onToggleAutocomplete({ enabled }) {
+    this.#log('🦋 [superdoc] Toggling autocomplete:', enabled);
+    // Update all editors' autocomplete state
+    this.superdocStore.documents.forEach((doc) => {
+      const editor = doc.getEditor();
+      if (editor && editor.autocompleteEnabled) {
+        editor.autocompleteEnabled.value = enabled;
+        // If enabling autocomplete, trigger it immediately from current cursor position
+        if (enabled && editor.triggerAutocomplete) {
+          editor.triggerAutocomplete();
+        }
+      }
+    });
   }
 
   /**

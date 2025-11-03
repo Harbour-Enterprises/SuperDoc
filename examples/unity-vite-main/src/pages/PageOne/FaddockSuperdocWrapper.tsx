@@ -14,7 +14,7 @@ type Document = {
 
 type FaddockSuperdocWrapperProps = {
   documents?: Document[];
-  onAddToChat?: (selectedText: string) => void;
+  onAddToChat?: (selectedText: string, documentText: string) => void;
   [key: string]: unknown;
 };
 
@@ -35,7 +35,7 @@ export default function FaddockSuperdocWrapper({
       toolbar: '#superdoc-toolbar',
       document: null,
       autocompleteApiUrl:
-        'https://magellanbackend.atlas.ir-scc-fusion-dev.awscloud.abbvienet.com/api/v1/autocomplete',
+        'http://localhost:8080/api/v1/autocomplete',
       documentMode: 'editing',
       pagination: true,
       rulers: true,
@@ -43,7 +43,7 @@ export default function FaddockSuperdocWrapper({
       ...rest,
     });
 
-        // Clean up on unmount ONLY
+    // Clean up on unmount ONLY
     return () => {
       if (
         superDocInstance.current &&
@@ -56,14 +56,13 @@ export default function FaddockSuperdocWrapper({
     // empty dependency array: mount once
   }, []);
 
-
   return (
     <div
       style={{
         width: '100%',
+        height: '75vh',
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'stretch',
       }}
     >
       <div id="superdoc-toolbar" style={{ width: '100%' }} />
@@ -73,6 +72,8 @@ export default function FaddockSuperdocWrapper({
           justifyContent: 'center',
           width: '100%',
           flex: 1,
+          overflowY: 'auto',
+          paddingTop: '10px',
         }}
       >
         <div
@@ -82,10 +83,6 @@ export default function FaddockSuperdocWrapper({
           style={{
             width: '100%',
             maxWidth: 900,
-            height: '600px',
-            margin: '0 auto',
-            display: 'block',
-            transformOrigin: 'center',
           }}
         />
       </div>

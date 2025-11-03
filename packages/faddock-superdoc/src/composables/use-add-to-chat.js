@@ -115,11 +115,9 @@ export function useAddToChat(onAddToChat) {
       }
       buttonPosition.value = { left, top };
       showAddToChatFloatingBtn({ left, top, selectedText: text.trim() }, editorWrapper, (txt) => {
-        addToChat((message) => {
-          console.log('[AddToChat] Selected text added to chat:', message);
-          console.log('onAddToChat callback:', onAddToChat);
+        addToChat((message, documentText) => {
           if (typeof onAddToChat === 'function') {
-            onAddToChat(message);
+            onAddToChat(message, documentText);
           }
         });
         showAddToChatBtn.value = false;
@@ -185,11 +183,17 @@ export function useAddToChat(onAddToChat) {
   // Action to trigger when user presses 'add to chat' button
   /**
    * Call to trigger chat action (e.g. button click)
-   * @param {function} cb - callback with selectedText (string)
+   * @param {function} cb - callback with selectedText (string) and documentText (string)
    */
   const addToChat = (cb /*: any */) => {
     if (showAddToChatBtn.value && selectedText.value && typeof cb === 'function') {
-      cb(selectedText.value);
+      let fullDocumentText = '';
+      if (activeEditor && activeEditor.view && activeEditor.view.state) {
+        const { state } = activeEditor.view;
+        const { doc } = state;
+        fullDocumentText = doc.textBetween(0, doc.content.size, '\n', '\n');
+      }
+      cb(selectedText.value, fullDocumentText);
       showAddToChatBtn.value = false;
       selectedText.value = '';
       fadeout.value = false;

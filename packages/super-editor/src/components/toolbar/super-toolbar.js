@@ -260,7 +260,7 @@ export class SuperToolbar extends EventEmitter {
    * @private
    * @type {Object.<string, function(CommandItem): void>}
    */
-  #autocompleteEnabled = false;
+  #autocompleteEnabled = true;
   #interceptedCommands = {
     toggleAutocomplete: ({ item }) => {
       this.#autocompleteEnabled = !this.#autocompleteEnabled;
