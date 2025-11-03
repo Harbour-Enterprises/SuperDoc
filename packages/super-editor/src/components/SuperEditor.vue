@@ -106,16 +106,28 @@ function handleAddToChatButtonClick() {
 }
 
 // Utility: build API call function from env (or prop)
-function buildAutocompleteApiCall(endpoint) {
+function buildAutocompleteApiCall(endpoint, editorRef) {
   return async function (inputText) {
     if (!endpoint) throw new Error('No autocomplete API endpoint set.');
+
+    // Get full document context from the editor
+    let documentContext = '';
+    if (editorRef && editorRef.value && editorRef.value.view && editorRef.value.view.state) {
+      const { state } = editorRef.value.view;
+      const { doc } = state;
+      documentContext = doc.textBetween(0, doc.content.size, '\n', '\n');
+    }
+
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: {
         accept: 'application/json',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text: inputText }),
+      body: JSON.stringify({
+        text: inputText,
+        document_context: documentContext,
+      }),
     });
     if (!res.ok) throw new Error('Autocomplete API error: ' + res.status);
     const data = await res.json();
@@ -257,7 +269,7 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
   if (!autocompleteApiCall) {
     // Accept prop.options.autocompleteEndpoint or .env
     let endpoint = props.options.autocompleteEndpoint || getAutocompleteEndpoint();
-    autocompleteApiCall = buildAutocompleteApiCall(endpoint);
+    autocompleteApiCall = buildAutocompleteApiCall(endpoint, editor);
   }
   autocomplete.initializeAutocomplete(editor.value, {
     enabled: autocompleteEnabled,

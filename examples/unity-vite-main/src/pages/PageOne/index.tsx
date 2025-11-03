@@ -1,30 +1,15 @@
-import { Tab, TabGroup, TabList, TabPanel } from '@abbvie-unity/react';
-import React, { useState } from 'react';
-import Page from 'layouts/PageLayout';
-import CardsExample from './CardsExample';
-import FaddockSuperdocWrapper from './FaddockSuperdocWrapper';
+import { EditorWithChat } from '../../components/UserAttestationModal/EditorWithChat';
 
+/**
+ * PageOne - Demo page for Superdoc editor with AI chat
+ */
 const PageOne = () => {
-  const [highlightedText, setHighlightedText] = useState('');
-
-  const handleAddToChat = (selectedText: string, documentText: string) => {
-    setHighlightedText(selectedText);
-    console.log('Selected Text:', selectedText);
-    console.log('Full Document Text:', documentText);
-  };
-
   return (
-    <div className="h-full w-full flex-1 overflow-hidden">
-      <FaddockSuperdocWrapper
-        onAddToChat={handleAddToChat}
-        documents={[
-          {
-            id: 'demo-doc',
-            type: 'docx',
-            data: null,
-          },
-        ]}
-      />
+    <div className="flex h-full w-full flex-col overflow-hidden">
+      {/* Editor with Chat - Takes remaining space */}
+      <div className="flex flex-1 overflow-hidden" style={{ minHeight: 0 }}>
+        <EditorWithChat initialContent="" documentId="demo-doc" />
+      </div>
     </div>
   );
 };

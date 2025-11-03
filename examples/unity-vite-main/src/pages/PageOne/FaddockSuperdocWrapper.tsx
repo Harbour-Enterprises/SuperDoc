@@ -34,8 +34,7 @@ export default function FaddockSuperdocWrapper({
       selector: '#superdoc',
       toolbar: '#superdoc-toolbar',
       document: null,
-      autocompleteApiUrl:
-        'http://localhost:8080/api/v1/autocomplete',
+      autocompleteApiUrl: 'http://localhost:8080/api/v1/autocomplete',
       documentMode: 'editing',
       pagination: true,
       rulers: true,
