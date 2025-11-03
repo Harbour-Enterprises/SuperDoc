@@ -1,3 +1,9 @@
+## [0.28.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.0...v0.28.1) (2025-11-03)
+
+### Bug Fixes
+
+- markdown libs import order breaking node ([3cd90c6](https://github.com/Harbour-Enterprises/SuperDoc/commit/3cd90c6d990e61f19d8ba3406904c7b31921fdcf))
+
 # [0.28.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.3...v0.28.0) (2025-11-01)
 
 ### Bug Fixes
