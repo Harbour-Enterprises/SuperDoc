@@ -380,6 +380,9 @@ export const Image = Node.create({
         }
         case 'TopAndBottom':
           style += 'display: block; clear: both;';
+          if (!anchorData) {
+            centered = true;
+          }
 
           if (attrs.distTop) margin.top += attrs.distTop;
           if (attrs.distBottom) margin.bottom += attrs.distBottom;
@@ -418,6 +421,10 @@ export const Image = Node.create({
             floatRight = true;
             if (!style.includes('float: right;')) {
               style += 'float: right;';
+            }
+          } else if (anchorData.alignH === 'left') {
+            if (!style.includes('float: left;')) {
+              style += 'float: left;';
             }
           }
           break;

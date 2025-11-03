@@ -148,6 +148,26 @@ describe('Image Extension DOM rendering', () => {
     });
   });
 
+  describe('wrap styling', () => {
+    it('centers TopAndBottom wraps without anchor data', () => {
+      const { style } = renderImageAttributes({ wrap: { type: 'TopAndBottom' } });
+      const styles = parseStyle(style);
+      expect(styles.display).toBe('block');
+      expect(styles.clear).toBe('both');
+      expect(styles['margin-left']).toBe('auto');
+      expect(styles['margin-right']).toBe('auto');
+    });
+
+    it('floats column-anchored images left when alignH is left', () => {
+      const { style } = renderImageAttributes({
+        wrap: { type: 'Square' },
+        anchorData: { hRelativeFrom: 'column', alignH: 'left' },
+      });
+      const styles = parseStyle(style);
+      expect(styles.float).toBe('left');
+    });
+  });
+
   describe('editor integration', () => {
     it('renders anchored rotation margins in the live DOM', () => {
       const {
