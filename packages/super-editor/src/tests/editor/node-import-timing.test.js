@@ -119,4 +119,66 @@ describe('Node.js import timing - document access', () => {
     expect(bundle.Editor).toBeDefined();
     expect(bundle.getStarterExtensions).toBeDefined();
   });
+
+  it('should allow calling getMarkdown() in Node.js with JSDOM setup', async () => {
+    // Import JSDOM
+    const { JSDOM } = await import('jsdom');
+    const { readFile } = await import('node:fs/promises');
+    const { fileURLToPath } = await import('node:url');
+    const { dirname, resolve } = await import('node:path');
+
+    // Verify no browser globals initially
+    expect(globalThis.document).toBeUndefined();
+    expect(globalThis.window).toBeUndefined();
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+
+    // Import the dist bundle
+    const distUrl = pathToFileURL(resolve(__dirname, '../../../dist/super-editor.es.js')).href;
+    const bundle = await import(distUrl);
+
+    // Now set up JSDOM (as users would do)
+    const { window: mockWindow } = new JSDOM('<!doctype html><html><body></body></html>');
+    const mockDocument = mockWindow.document;
+
+    // Load a test document
+    const buffer = await readFile(resolve(__dirname, '../data/blank-doc.docx'));
+    const [content, , mediaFiles, fonts] = await bundle.Editor.loadXmlData(buffer, true);
+
+    // Create editor with mockDocument
+    const editor = new bundle.Editor({
+      isHeadless: true,
+      mockDocument,
+      mockWindow,
+      mode: 'docx',
+      documentId: 'markdown-test',
+      extensions: bundle.getStarterExtensions(),
+      content,
+      mediaFiles,
+      fonts,
+    });
+
+    // Verify global.document was set by Editor
+    expect(globalThis.document).toBe(mockDocument);
+
+    // Now call getMarkdown() - this should work because:
+    // 1. The markdown libraries are lazy-loaded (not at import time)
+    // 2. global.document is now set to the JSDOM document
+    let markdown;
+    let markdownError = null;
+
+    try {
+      markdown = await editor.getMarkdown();
+    } catch (error) {
+      markdownError = error;
+    }
+
+    // This verifies that the dynamically loaded markdown libraries can use the JSDOM document
+    expect(markdownError).toBeNull();
+    expect(markdown).toBeDefined();
+    expect(typeof markdown).toBe('string');
+
+    editor.destroy();
+  });
 });
