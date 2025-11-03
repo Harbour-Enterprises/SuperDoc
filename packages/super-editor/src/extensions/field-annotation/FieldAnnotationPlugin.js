@@ -101,30 +101,168 @@ export const FieldAnnotationPlugin = (options = {}) => {
         return;
       }
 
-      let { tr } = newState;
-      let changed = false;
+      const affectedRanges = [];
+      let hasFieldAnnotationsInSlice = false;
+      let hasSteps = false;
 
-      let annotations = getAllFieldAnnotations(newState);
+      transactions.forEach((transaction) => {
+        if (!transaction.steps) return;
+        hasSteps = true;
 
-      if (!annotations.length) {
-        return;
+        transaction.steps.forEach((step) => {
+          if (step.slice?.content) {
+            step.slice.content.descendants((node) => {
+              if (node.type.name === 'fieldAnnotation') {
+                hasFieldAnnotationsInSlice = true;
+                return false;
+              }
+            });
+          }
+
+          if (typeof step.from === 'number' && typeof step.to === 'number') {
+            const from = step.from;
+            const to = step.from === step.to && step.slice?.size ? step.from + step.slice.size : step.to;
+            affectedRanges.push([from, to]);
+          }
+        });
+      });
+
+      if (hasSteps && !hasFieldAnnotationsInSlice && affectedRanges.length > 0) {
+        const mergedRanges = mergeRanges(affectedRanges);
+        let hasExistingAnnotations = false;
+
+        for (const [start, end] of mergedRanges) {
+          const clampedRange = clampRange(start, end, newState.doc.content.size);
+
+          if (!clampedRange) continue;
+
+          const [validStart, validEnd] = clampedRange;
+
+          try {
+            newState.doc.nodesBetween(validStart, validEnd, (node) => {
+              if (node.type.name === 'fieldAnnotation') {
+                hasExistingAnnotations = true;
+                return false;
+              }
+            });
+          } catch {
+            hasExistingAnnotations = true;
+            break;
+          }
+
+          if (hasExistingAnnotations) break;
+        }
+
+        if (!hasExistingAnnotations) {
+          return;
+        }
       }
 
-      annotations.forEach(({ node, pos }) => {
+      const { tr } = newState;
+      let changed = false;
+
+      const removeMarksFromAnnotation = (node, pos) => {
         let { marks } = node;
         let currentNode = tr.doc.nodeAt(pos);
 
         if (marks.length > 0 && node.eq(currentNode)) {
-          // Unset all marks from annotation.
           tr.removeMark(pos, pos + node.nodeSize, null);
           changed = true;
         }
-      });
+      };
+
+      if (affectedRanges.length > 0) {
+        const mergedRanges = mergeRanges(affectedRanges);
+        let shouldFallbackToFullScan = false;
+
+        for (const [start, end] of mergedRanges) {
+          const clampedRange = clampRange(start, end, newState.doc.content.size);
+
+          if (!clampedRange) continue;
+
+          const [validStart, validEnd] = clampedRange;
+
+          try {
+            newState.doc.nodesBetween(validStart, validEnd, (node, pos) => {
+              if (node.type.name === 'fieldAnnotation') {
+                removeMarksFromAnnotation(node, pos);
+              }
+            });
+          } catch {
+            shouldFallbackToFullScan = true;
+            break;
+          }
+        }
+
+        if (shouldFallbackToFullScan) {
+          const annotations = getAllFieldAnnotations(newState);
+          if (!annotations.length) {
+            return changed ? tr : null;
+          }
+
+          annotations.forEach(({ node, pos }) => {
+            removeMarksFromAnnotation(node, pos);
+          });
+        }
+      } else {
+        const annotations = getAllFieldAnnotations(newState);
+
+        if (!annotations.length) {
+          return;
+        }
+
+        annotations.forEach(({ node, pos }) => {
+          removeMarksFromAnnotation(node, pos);
+        });
+      }
 
       return changed ? tr : null;
     },
     ///
   });
+};
+
+const mergeRanges = (ranges) => {
+  if (!ranges.length) return [];
+
+  const normalized = ranges
+    .filter(([start, end]) => typeof start === 'number' && typeof end === 'number')
+    .map(([start, end]) => [Math.min(start, end), Math.max(start, end)]);
+
+  if (!normalized.length) return [];
+
+  normalized.sort((a, b) => a[0] - b[0]);
+
+  const merged = [normalized[0]];
+
+  for (let i = 1; i < normalized.length; i++) {
+    const [start, end] = normalized[i];
+    const last = merged[merged.length - 1];
+
+    if (start <= last[1]) {
+      last[1] = Math.max(last[1], end);
+    } else {
+      merged.push([start, end]);
+    }
+  }
+
+  return merged;
+};
+
+const clampRange = (start, end, docSize) => {
+  if (typeof start !== 'number' || typeof end !== 'number') return null;
+  if (docSize <= 0) return null;
+
+  const clampedStart = Math.max(0, Math.min(start, docSize));
+  const clampedEnd = Math.max(0, Math.min(end, docSize));
+
+  if (clampedStart === clampedEnd) return null;
+
+  if (clampedStart > clampedEnd) {
+    return [clampedEnd, clampedStart];
+  }
+
+  return [clampedStart, clampedEnd];
 };
 
 function handleDropOutside({ fieldAnnotation, editor, view, event }) {

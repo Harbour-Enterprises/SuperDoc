@@ -44,17 +44,16 @@ describe('styledListMarker plugin', () => {
     expect(decorations).toBeInstanceOf(DecorationSet);
 
     const allDecorations = decorations.find();
-    expect(allDecorations.length).toBeGreaterThanOrEqual(2);
+    expect(allDecorations).toHaveLength(1);
 
-    const fontDecoration = allDecorations.find((dec) => (dec.type?.attrs?.style ?? '').includes('--marker-font-size'));
-    expect(fontDecoration).toBeDefined();
-    expect(fontDecoration.type?.attrs?.style).toContain('--marker-font-size: 11pt');
-    expect(fontDecoration.type?.attrs?.style).toContain('--marker-font-family: Roboto');
+    const markerDecoration = allDecorations[0];
+    expect(markerDecoration).toBeDefined();
 
-    const spacingDecoration = allDecorations.find((dec) => (dec.type?.attrs?.style ?? '').includes('margin-top'));
-    expect(spacingDecoration).toBeDefined();
-    expect(spacingDecoration.type?.attrs?.style).toContain('margin-top: 12px');
-    expect(spacingDecoration.type?.attrs?.style).toContain('margin-bottom: 6px');
+    const style = markerDecoration.type?.attrs?.style ?? '';
+    expect(style).toContain('--marker-font-size: 11pt');
+    expect(style).toContain('--marker-font-family: Roboto');
+    expect(style).toContain('margin-top: 12px');
+    expect(style).toContain('margin-bottom: 6px');
   });
 
   it('returns previous decoration set when ordered list meta is present', () => {
