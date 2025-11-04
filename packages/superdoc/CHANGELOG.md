@@ -1,3 +1,18 @@
+## [0.28.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.1...v0.28.2) (2025-11-04)
+
+### Bug Fixes
+
+- allow top/bottom images to float right and left ([#1203](https://github.com/Harbour-Enterprises/SuperDoc/issues/1203)) ([d3f1e47](https://github.com/Harbour-Enterprises/SuperDoc/commit/d3f1e4742af0982d616382b155056119029a84c3))
+- **images:** restore image TopAndBottom centering and column-left float ([94e02bd](https://github.com/Harbour-Enterprises/SuperDoc/commit/94e02bd54968bc8340c384165a9b63e0249012b4))
+- markdown libs import order breaking node ([#1212](https://github.com/Harbour-Enterprises/SuperDoc/issues/1212)) ([ed2191d](https://github.com/Harbour-Enterprises/SuperDoc/commit/ed2191d6e2ba27103fb3dc2d013e8da2fc38ca15))
+- node js import timing tests ([bf5565a](https://github.com/Harbour-Enterprises/SuperDoc/commit/bf5565a7d7654d1da68dec1aaee5a64277ea4f20))
+- performance improvements for tab plugin and tabDecorations ([#1205](https://github.com/Harbour-Enterprises/SuperDoc/issues/1205)) ([571c725](https://github.com/Harbour-Enterprises/SuperDoc/commit/571c725d30b6994c54e7e40f33b3728d6cc3b7ee))
+- superdoc-ai package.json ([#1215](https://github.com/Harbour-Enterprises/SuperDoc/issues/1215)) ([a295c05](https://github.com/Harbour-Enterprises/SuperDoc/commit/a295c057878f990eddff1af2a9f6fcec840f9eff))
+
+### Performance Improvements
+
+- **editor:** improve large document editing performance 5-10x ([#1214](https://github.com/Harbour-Enterprises/SuperDoc/issues/1214)) ([caaea64](https://github.com/Harbour-Enterprises/SuperDoc/commit/caaea644ff3c881869f2778ae6eaa52be96ec502))
+
 ## [0.28.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.0...v0.28.1) (2025-11-03)
 
 ### Bug Fixes
