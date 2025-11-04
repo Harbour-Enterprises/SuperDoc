@@ -48,9 +48,10 @@ export const Collaboration = Extension.create({
       addImageToCollaboration:
         ({ mediaPath, fileData }) =>
         () => {
-          if (!this.options.ydoc) return;
+          if (!this.options.ydoc || !mediaPath || !fileData) return false;
           const mediaMap = this.options.ydoc.getMap('media');
           mediaMap.set(mediaPath, fileData);
+          return true;
         },
     };
   },
