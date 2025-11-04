@@ -47,9 +47,46 @@ export const createLinkedStylesPlugin = (editor) => {
       apply(tr, prev, oldEditorState, newEditorState) {
         if (!editor.converter || editor.options.mode !== 'docx') return { ...prev };
         let decorations = prev.decorations || DecorationSet.empty;
+
+        // Only regenerate decorations when styles are affected
         if (tr.docChanged) {
-          const styles = LinkedStylesPluginKey.getState(editor.state).styles;
-          decorations = generateDecorations(newEditorState, styles);
+          let mightAffectStyles = false;
+
+          // Style-related mark types that affect linked styles
+          const styleRelatedMarks = new Set(['textStyle', 'bold', 'italic', 'underline', 'strike']);
+
+          tr.steps.forEach((step) => {
+            if (step.slice) {
+              step.slice.content.descendants((node) => {
+                if (node.attrs?.styleId) {
+                  mightAffectStyles = true;
+                  return false;
+                }
+                // Check if any marks are style-related
+                if (node.marks.length > 0) {
+                  const hasStyleMarks = node.marks.some((mark) => styleRelatedMarks.has(mark.type.name));
+                  if (hasStyleMarks) {
+                    mightAffectStyles = true;
+                    return false;
+                  }
+                }
+              });
+            }
+
+            // Only check mark additions/removals for style-related marks
+            if (step.jsonID === 'addMark' || step.jsonID === 'removeMark') {
+              if (step.mark && styleRelatedMarks.has(step.mark.type.name)) {
+                mightAffectStyles = true;
+              }
+            }
+          });
+
+          if (mightAffectStyles) {
+            const styles = LinkedStylesPluginKey.getState(editor.state).styles;
+            decorations = generateDecorations(newEditorState, styles);
+          } else {
+            decorations = decorations.map(tr.mapping, tr.doc);
+          }
         }
 
         return { ...prev, decorations };
