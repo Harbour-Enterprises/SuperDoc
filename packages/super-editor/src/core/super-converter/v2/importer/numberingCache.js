@@ -32,6 +32,25 @@ export const NUMBERING_CACHE_KEY = 'numbering-cache';
 /** Symbol used to memoize level lookups on abstract numbering elements. */
 export const LEVELS_MAP_KEY = Symbol('superdoc.numbering.levels');
 
+/** Symbol used to track which docx package created the converter cache. */
+const NUMBERING_CACHE_DOCX_KEY = Symbol('superdoc.numbering.docx');
+
+const clearConverterCache = (converter) => {
+  if (!converter) return;
+  delete converter[NUMBERING_CACHE_KEY];
+  delete converter[NUMBERING_CACHE_DOCX_KEY];
+};
+
+const setConverterCache = (converter, cache, docx) => {
+  if (!converter) return;
+  converter[NUMBERING_CACHE_KEY] = cache;
+  if (docx && typeof docx === 'object') {
+    converter[NUMBERING_CACHE_DOCX_KEY] = docx;
+  } else {
+    delete converter[NUMBERING_CACHE_DOCX_KEY];
+  }
+};
+
 /** @returns {NumberingCache} */
 const createEmptyCache = () => ({
   numToAbstractId: new Map(),
@@ -132,26 +151,29 @@ export const buildNumberingCache = (docx) => {
  * @returns {NumberingCache}
  */
 export const ensureNumberingCache = (docx, converter) => {
-  if (!docx || typeof docx !== 'object') return createEmptyCache();
-
   // First check if we have a converter cache
   if (converter?.[NUMBERING_CACHE_KEY]) {
-    return converter[NUMBERING_CACHE_KEY];
+    const cachedDocx = converter[NUMBERING_CACHE_DOCX_KEY];
+    if (docx && cachedDocx && cachedDocx !== docx) {
+      clearConverterCache(converter);
+    } else {
+      return converter[NUMBERING_CACHE_KEY];
+    }
   }
+
+  if (!docx || typeof docx !== 'object') return createEmptyCache();
 
   // Secondary: Check WeakMap for backwards compatibility
   const existingCache = docxNumberingCacheStore.get(docx);
   if (existingCache) {
-    if (converter) {
-      converter[NUMBERING_CACHE_KEY] = existingCache;
-    }
+    setConverterCache(converter, existingCache, docx);
     return existingCache;
   }
 
   const cache = buildNumberingCache(docx);
 
   if (converter) {
-    converter[NUMBERING_CACHE_KEY] = cache;
+    setConverterCache(converter, cache, docx);
   } else {
     docxNumberingCacheStore.set(docx, cache);
   }

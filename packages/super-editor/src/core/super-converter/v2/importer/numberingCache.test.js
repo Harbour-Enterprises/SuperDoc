@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { buildNumberingCache, ensureNumberingCache, getNumberingCache, LEVELS_MAP_KEY } from './numberingCache.js';
+import {
+  buildNumberingCache,
+  ensureNumberingCache,
+  getNumberingCache,
+  LEVELS_MAP_KEY,
+  NUMBERING_CACHE_KEY,
+} from './numberingCache.js';
 
 const createDocxPackage = ({ abstractId = '1', templateId = 'tmpl-1', numId = '8', includeLevels = true } = {}) => {
   const abstractElements = [];
@@ -109,5 +115,40 @@ describe('numbering cache helpers', () => {
 
     expect(getNumberingCache(docx)).toBe(cache);
     expectEmptyCache(getNumberingCache(null));
+  });
+
+  it('stores the cache on converter instances so headless consumers can reuse it', () => {
+    const converter = {};
+    const docx = createDocxPackage({ numId: '21', abstractId: '7' });
+    const cache = ensureNumberingCache(docx, converter);
+
+    expect(converter[NUMBERING_CACHE_KEY]).toBe(cache);
+    expect(getNumberingCache(converter)).toBe(cache);
+    expect(cache.numToDefinition.has('21')).toBe(true);
+  });
+
+  it('returns the converter cache when docx input is unavailable', () => {
+    const converter = {};
+    const docx = createDocxPackage({ numId: '11', abstractId: '17' });
+    const cache = ensureNumberingCache(docx, converter);
+
+    const reusedCache = ensureNumberingCache(undefined, converter);
+    expect(reusedCache).toBe(cache);
+    expect(reusedCache.numToDefinition.has('11')).toBe(true);
+  });
+
+  it('rebuilds caches when the converter is reused for a different document', () => {
+    const converter = {};
+    const firstDocx = createDocxPackage({ numId: '1', abstractId: '10' });
+    const secondDocx = createDocxPackage({ numId: '2', abstractId: '20' });
+
+    const firstCache = ensureNumberingCache(firstDocx, converter);
+    expect(firstCache.numToDefinition.has('1')).toBe(true);
+
+    const secondCache = ensureNumberingCache(secondDocx, converter);
+    expect(secondCache).not.toBe(firstCache);
+    expect(secondCache.numToDefinition.has('2')).toBe(true);
+    expect(secondCache.numToDefinition.has('1')).toBe(false);
+    expect(getNumberingCache(converter)).toBe(secondCache);
   });
 });

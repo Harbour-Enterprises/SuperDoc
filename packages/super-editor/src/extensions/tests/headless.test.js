@@ -72,4 +72,41 @@ describe('Headless Mode Optimization', () => {
 
     editor.destroy();
   });
+
+  it('preserves list attributes in headless mode even without node views', async () => {
+    const buffer = await getTestDataAsFileBuffer('simple-ordered-list.docx');
+    const [content, , mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
+
+    const editor = new Editor({
+      isHeadless: true,
+      mode: 'docx',
+      documentId: 'headless-list-attrs',
+      extensions: getStarterExtensions(),
+      content,
+      mediaFiles,
+      fonts,
+    });
+
+    const json = editor.getJSON();
+    const stack = [...(json.content || [])];
+    let listItemNode = null;
+
+    while (stack.length && !listItemNode) {
+      const node = stack.shift();
+      if (node.type === 'listItem') {
+        listItemNode = node;
+        break;
+      }
+      if (Array.isArray(node?.content)) {
+        stack.push(...node.content);
+      }
+    }
+
+    expect(listItemNode).toBeTruthy();
+    expect(listItemNode?.attrs?.listLevel?.length || 0).toBeGreaterThan(0);
+    expect(listItemNode?.attrs?.numId).toBeTruthy();
+    expect(listItemNode?.attrs?.lvlText).toBeTruthy();
+
+    editor.destroy();
+  });
 });
