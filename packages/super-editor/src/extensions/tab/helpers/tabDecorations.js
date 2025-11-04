@@ -20,11 +20,20 @@ export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
     if (!paragraphContext) return;
 
     try {
-      const { tabStops, flattened, startPos } = paragraphContext;
-      const entryIndex = flattened.findIndex((entry) => entry.pos === pos);
-      if (entryIndex === -1) return;
+      const { tabStops, flattened, positionMap, startPos } = paragraphContext;
+      // Use O(1) map lookup instead of O(n) findIndex
+      const entryIndex = positionMap.get(pos);
+      if (entryIndex === undefined) return;
 
-      const indentWidth = getIndentWidth(view, startPos, paragraphContext.indent, coordCache, domPosCache);
+      // Cache paragraph-level computed values (computed once per paragraph, not per tab)
+      if (paragraphContext.indentWidth === undefined) {
+        paragraphContext.indentWidth = getIndentWidth(view, startPos, paragraphContext.indent, coordCache, domPosCache);
+      }
+      if (paragraphContext.tabHeight === undefined) {
+        paragraphContext.tabHeight = calcTabHeight($pos);
+      }
+
+      const indentWidth = paragraphContext.indentWidth;
       const accumulatedTabWidth = paragraphContext.accumulatedTabWidth || 0;
       const currentWidth =
         indentWidth + measureRangeWidth(view, startPos + 1, pos, coordCache, domPosCache) + accumulatedTabWidth;
@@ -75,7 +84,8 @@ export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
         if (tabWidth === 0) tabWidth = defaultTabDistance;
       }
 
-      const tabHeight = calcTabHeight($pos);
+      // Use cached tabHeight (computed once per paragraph)
+      const tabHeight = paragraphContext.tabHeight;
 
       decorations.push(
         Decoration.node(pos, pos + node.nodeSize, {
@@ -107,13 +117,15 @@ export function getParagraphContext($pos, cache, helpers) {
             tabStops = style.definition.styles.tabStops;
           }
         }
+        const { entries, positionMap } = flattenParagraph(node, startPos);
         cache.set(startPos, {
           paragraph: node,
           paragraphDepth: depth,
           startPos,
           indent: node.attrs?.indent || {},
           tabStops: tabStops,
-          flattened: flattenParagraph(node, startPos),
+          flattened: entries,
+          positionMap: positionMap, // Store position map for O(1) lookups
           accumulatedTabWidth: 0,
         });
       }
@@ -125,6 +137,7 @@ export function getParagraphContext($pos, cache, helpers) {
 
 export function flattenParagraph(paragraph, paragraphStartPos) {
   const entries = [];
+  const positionMap = new Map(); // Map from position to index for O(1) lookup
 
   const walk = (node, basePos) => {
     if (!node) return;
@@ -135,7 +148,10 @@ export function flattenParagraph(paragraph, paragraphStartPos) {
       });
       return;
     }
-    entries.push({ node, pos: basePos - 1 });
+    const pos = basePos - 1;
+    const index = entries.length;
+    entries.push({ node, pos });
+    positionMap.set(pos, index); // Store position -> index mapping
   };
 
   paragraph.forEach((child, offset) => {
@@ -143,7 +159,7 @@ export function flattenParagraph(paragraph, paragraphStartPos) {
     walk(child, childPos);
   });
 
-  return entries;
+  return { entries, positionMap };
 }
 
 export function findNextTabIndex(flattened, fromIndex) {

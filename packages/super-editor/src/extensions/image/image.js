@@ -323,7 +323,7 @@ export const Image = Node.create({
           break;
 
         case 'Through':
-        case 'Tight':
+        case 'Tight': {
           style += 'clear: both;';
 
           const pageStylesData = getDataFromPageStyles({
@@ -377,12 +377,15 @@ export const Image = Node.create({
             style += `shape-outside: polygon(${points});`;
           }
           break;
-
+        }
         case 'TopAndBottom':
           style += 'display: block; clear: both;';
+          if (!anchorData) {
+            centered = true;
+          }
+
           if (attrs.distTop) margin.top += attrs.distTop;
           if (attrs.distBottom) margin.bottom += attrs.distBottom;
-          centered = true;
           break;
 
         case 'Inline':
@@ -409,6 +412,20 @@ export const Image = Node.create({
           }
           if (anchorData.alignH === 'left' || anchorData.alignH === 'right') {
             style += `position: absolute; ${anchorData.alignH}: 0;`;
+          }
+          break;
+        case 'column':
+          if (anchorData.alignH === 'center') {
+            centered = true;
+          } else if (anchorData.alignH === 'right') {
+            floatRight = true;
+            if (!style.includes('float: right;')) {
+              style += 'float: right;';
+            }
+          } else if (anchorData.alignH === 'left') {
+            if (!style.includes('float: left;')) {
+              style += 'float: left;';
+            }
           }
           break;
         default:
