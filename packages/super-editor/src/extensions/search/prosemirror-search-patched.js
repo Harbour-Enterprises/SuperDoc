@@ -297,11 +297,15 @@ function mapIndexWithinNode(node, start, index) {
     }
 
     const contribution = innerTextLength + 2;
-    if (index === 1) return childStart;
-    if (index > 1 && index <= contribution - 1) {
-      return mapIndexWithinNode(child, childStart + 1, index - 1);
+    const relativeIndex = index - 1;
+
+    if (relativeIndex < 0) return childStart;
+
+    if (relativeIndex <= innerTextLength) {
+      return mapIndexWithinNode(child, childStart + 1, relativeIndex);
     }
-    if (index === contribution) return childStart + child.nodeSize;
+
+    if (relativeIndex === innerTextLength + 1) return childStart + child.nodeSize;
 
     index -= contribution;
     offset += child.nodeSize;
