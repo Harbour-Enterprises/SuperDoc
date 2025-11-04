@@ -1,6 +1,7 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { AddMarkStep, RemoveMarkStep } from 'prosemirror-transform';
+import { undo } from 'prosemirror-history';
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../constants.js';
 import {
   markInsertion,
@@ -251,6 +252,59 @@ describe('trackChangesHelpers', () => {
     tr.setMeta('custom', true);
     const result = trackedTransaction({ tr, state, user });
     expect(result).toBe(tr);
+  });
+
+  it('trackedTransaction preserves addToHistory meta when inputType is programmatic', () => {
+    // Create initial state with history plugin (editor already has it from basePlugins)
+    let state = createState(createDocWithText('initial'));
+
+    // Step 1: Make a normal change that SHOULD be in history
+    let tr1 = state.tr.insertText('normal', 8);
+    tr1.setMeta('inputType', 'insertText');
+    const tracked1 = trackedTransaction({ tr: tr1, state, user });
+    state = state.apply(tracked1);
+
+    expect(state.doc.textContent).toBe('initialnormal');
+
+    // Step 2: Make a programmatic change that should NOT be in history
+    // This simulates the customer use case
+    let tr2 = state.tr.insertText('programmatic', 15);
+    tr2.setMeta('addToHistory', false);
+    tr2.setMeta('inputType', 'programmatic');
+
+    const tracked2 = trackedTransaction({ tr: tr2, state, user });
+
+    // Verify meta properties are preserved
+    expect(tracked2.getMeta('addToHistory')).toBe(false);
+    expect(tracked2.getMeta('inputType')).toBe('programmatic');
+
+    // Verify track changes were created
+    const meta = tracked2.getMeta(TrackChangesBasePluginKey);
+    expect(meta?.insertedMark?.type.name).toBe(TrackInsertMarkName);
+
+    // Apply the tracked transaction
+    state = state.apply(tracked2);
+
+    // Verify both changes are in the document
+    expect(state.doc.textContent).toBe('initialnormalprogrammatic');
+
+    // Step 3: Undo - this should only undo the "normal" change, NOT the "programmatic" one
+    let undoState = state;
+    undo(undoState, (tr) => {
+      undoState = undoState.apply(tr);
+    });
+
+    // CRITICAL TEST: The programmatic change should still be there after undo
+    // because it was marked with addToHistory: false
+    const finalText = undoState.doc.textContent;
+    expect(finalText).toBe('initialprogrammatic');
+    expect(finalText).not.toContain('normal'); // The normal change was undone
+
+    // Verify the track changes mark is still present
+    const hasInsertMark = documentHelpers
+      .findInlineNodes(undoState.doc)
+      .some(({ node }) => node.marks.some((mark) => mark.type.name === TrackInsertMarkName));
+    expect(hasInsertMark).toBe(true);
   });
 
   it('no-op helpers exist for future implementations', () => {
