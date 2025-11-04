@@ -264,7 +264,7 @@ describe('RectImporter', () => {
       expect(contentBlock.attrs.vmlAttributes.stroked).toBe('t');
 
       // If hr is true, the width should be 100% - to double check
-      expect(contentBlock.attrs.size.width).toBe(266);
+      expect(contentBlock.attrs.size.width).toBe('100%');
     });
 
     it('should handle v:rect with o:hr attribute for full page width', () => {
@@ -287,7 +287,7 @@ describe('RectImporter', () => {
       const result = handleVRectImport({ pict, pNode, params: mockParams });
 
       const contentBlock = result.content[0];
-      expect(contentBlock.attrs.size.width).toBe(133);
+      expect(contentBlock.attrs.size.width).toBe('100%');
       expect(contentBlock.attrs.horizontalRule).toBe(true);
     });
 

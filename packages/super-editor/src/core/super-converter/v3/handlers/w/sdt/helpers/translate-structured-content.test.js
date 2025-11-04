@@ -28,6 +28,7 @@ describe('translateStructuredContent', () => {
 
     const result = translateStructuredContent(params);
 
+    expect(translateChildNodes).toHaveBeenCalledWith({ ...params, node });
     expect(result).toEqual({
       name: 'w:sdt',
       elements: [
@@ -38,5 +39,60 @@ describe('translateStructuredContent', () => {
         },
       ],
     });
+  });
+
+  it('returns runs when exporting structuredContent for final doc', () => {
+    const node = {
+      type: 'structuredContent',
+      content: [{ type: 'text', text: 'Hello' }],
+    };
+    const params = { node, isFinalDoc: true };
+    const childElements = [
+      { name: 'w:r', elements: [{ name: 'w:t', text: 'Hello' }] },
+      { name: 'w:t', text: 'World' },
+    ];
+    translateChildNodes.mockReturnValueOnce(childElements);
+
+    const result = translateStructuredContent(params);
+
+    expect(result).toEqual([
+      childElements[0],
+      {
+        name: 'w:r',
+        type: 'element',
+        elements: [childElements[1]],
+      },
+    ]);
+  });
+
+  it('returns table element for structuredContentBlock in final doc', () => {
+    const node = {
+      type: 'structuredContentBlock',
+      content: [
+        {
+          type: 'table',
+          content: [],
+        },
+      ],
+      attrs: {},
+    };
+    const params = { node, isFinalDoc: true };
+    const childElements = [
+      {
+        name: 'w:tbl',
+        elements: [
+          {
+            name: 'w:tr',
+            elements: [{ name: 'w:tc', elements: [{ name: 'w:p', elements: [{ name: 'w:t', text: 'Cell' }] }] }],
+          },
+        ],
+      },
+    ];
+    translateChildNodes.mockReturnValueOnce(childElements);
+
+    const result = translateStructuredContent(params);
+
+    expect(translateChildNodes).toHaveBeenCalledWith({ ...params, node });
+    expect(result).toEqual(childElements[0]);
   });
 });

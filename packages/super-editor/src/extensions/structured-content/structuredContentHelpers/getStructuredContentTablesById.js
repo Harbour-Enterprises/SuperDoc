@@ -1,10 +1,14 @@
 import { getStructuredContentTagsById } from './getStructuredContentTagsById';
 
 /**
- * Find all tables inside a structured content block identified by id.
- * @param {string} id - Structured content block id
- * @param {import('prosemirror-state').EditorState} state - Editor state
- * @returns {Array<{ node: import('prosemirror-model').Node, pos: number }>} tables with absolute positions
+ * Find all tables inside a structured content block by ID
+ * @category Helper
+ * @param {string} id Structured content block ID
+ * @param {import('prosemirror-state').EditorState} state Editor state
+ * @returns {Array<{ node: import('prosemirror-model').Node, pos: number }>} Tables with absolute positions
+ * @example
+ * const tables = editor.helpers.getStructuredContentTablesById('block-123', editor.state)
+ * console.log(`Block contains ${tables.length} table(s)`)
  */
 export function getStructuredContentTablesById(id, state) {
   if (!id || !state) return [];

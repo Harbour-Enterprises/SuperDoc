@@ -1041,19 +1041,21 @@ class SuperConverter {
     relationships.elements = [...relationships.elements, ...newRels];
   }
 
-  async #exportProcessMediaFiles(media, editor) {
-    const processedData = {};
-    for (const filePath in media) {
-      if (typeof media[filePath] !== 'string') continue;
-      processedData[filePath] = await getArrayBufferFromUrl(media[filePath], editor.options.isHeadless);
+  async #exportProcessMediaFiles(media = {}) {
+    const processedData = {
+      ...(this.convertedXml.media || {}),
+    };
+
+    for (const [filePath, value] of Object.entries(media)) {
+      if (value == null) continue;
+      processedData[filePath] = await getArrayBufferFromUrl(value);
     }
 
-    this.convertedXml.media = {
-      ...this.convertedXml.media,
+    this.convertedXml.media = processedData;
+    this.media = this.convertedXml.media;
+    this.addedMedia = {
       ...processedData,
     };
-    this.media = this.convertedXml.media;
-    this.addedMedia = processedData;
   }
 
   // Deprecated methods for backward compatibility

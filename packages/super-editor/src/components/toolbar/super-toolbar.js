@@ -11,7 +11,6 @@ import {
   uploadAndInsertImage,
   getFileOpener,
 } from '../../extensions/image/imageHelpers/index.js';
-import { findParentNode } from '@helpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { toolbarTexts } from './toolbarTexts.js';
 import { getQuickFormatList } from '@extensions/linked-styles/index.js';
@@ -21,6 +20,7 @@ import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
 import { yUndoPluginKey } from 'y-prosemirror';
 import { isNegatedMark } from './format-negation.js';
 import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
+import { collectTargetListItemPositions } from '@core/commands/list-helpers/list-indent-helpers.js';
 
 /**
  * @typedef {function(CommandItem): void} CommandCallback
@@ -426,12 +426,12 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     increaseTextIndent: ({ item, argument }) => {
-      let command = item.command;
-      let { state } = this.activeEditor;
-      let listItem = findParentNode((node) => node.type.name === 'listItem')(state.selection);
+      const command = item.command;
+      const { state } = this.activeEditor;
+      const listItemsInSelection = collectTargetListItemPositions(state);
 
-      if (listItem) {
-        return this.activeEditor.commands.increaseListIndent();
+      if (listItemsInSelection.length) {
+        return this.activeEditor.commands.increaseListIndent(listItemsInSelection);
       }
 
       if (command in this.activeEditor.commands) {
@@ -449,10 +449,10 @@ export class SuperToolbar extends EventEmitter {
     decreaseTextIndent: ({ item, argument }) => {
       let command = item.command;
       let { state } = this.activeEditor;
-      let listItem = findParentNode((node) => node.type.name === 'listItem')(state.selection);
+      const listItemsInSelection = collectTargetListItemPositions(state);
 
-      if (listItem) {
-        return this.activeEditor.commands.decreaseListIndent();
+      if (listItemsInSelection.length) {
+        return this.activeEditor.commands.decreaseListIndent(listItemsInSelection);
       }
 
       if (command in this.activeEditor.commands) {

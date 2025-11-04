@@ -49,3 +49,5 @@ export * from './deleteNextToList.js';
 
 // Selection
 export * from './restoreSelection.js';
+export * from './setTextSelection.js';
+export * from './getSelectionMarks.js';

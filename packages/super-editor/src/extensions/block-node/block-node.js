@@ -1,6 +1,7 @@
 // @ts-check
 import { Extension } from '@core/Extension.js';
 import { helpers } from '@core/index.js';
+import { mergeRanges, clampRange } from '@core/helpers/rangeUtils.js';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { ReplaceStep } from 'prosemirror-transform';
 import { v4 as uuidv4 } from 'uuid';
@@ -214,39 +215,148 @@ export const BlockNode = Extension.create({
   addPmPlugins() {
     let hasInitialized = false;
 
+    /**
+     * Assigns a new sdBlockId attribute to a block node.
+     * @param {import('prosemirror-state').Transaction} tr - Current transaction being updated.
+     * @param {import('prosemirror-model').Node} node - Node that needs the identifier.
+     * @param {number} pos - Document position of the node.
+     */
+    const assignBlockId = (tr, node, pos) => {
+      tr.setNodeMarkup(
+        pos,
+        undefined,
+        {
+          ...node.attrs,
+          sdBlockId: uuidv4(),
+        },
+        node.marks,
+      );
+    };
+
     return [
       new Plugin({
         key: BlockNodePluginKey,
-        appendTransaction: (transactions, _oldState, newState) => {
-          if (hasInitialized && !transactions.some((tr) => tr.docChanged)) return null;
+        appendTransaction: (transactions, oldState, newState) => {
+          const docChanges = transactions.some((tr) => tr.docChanged) && !oldState.doc.eq(newState.doc);
 
-          // Check for new block nodes and if none found, we don't need to do anything
-          if (hasInitialized && !checkForNewBlockNodesInTrs([...transactions])) return null;
+          if (hasInitialized && !docChanges) {
+            return;
+          }
+
+          if (hasInitialized && !checkForNewBlockNodesInTrs([...transactions])) {
+            return;
+          }
 
           const { tr } = newState;
           let changed = false;
-          newState.doc.descendants((node, pos) => {
-            // Only allow block nodes with a valid sdBlockId attribute
-            if (!nodeAllowsSdBlockIdAttr(node) || !nodeNeedsSdBlockId(node)) return null;
 
-            tr.setNodeMarkup(
-              pos,
-              undefined,
-              {
-                ...node.attrs,
-                sdBlockId: uuidv4(),
-              },
-              node.marks,
-            );
-            changed = true;
-          });
+          if (!hasInitialized) {
+            // Initial pass: assign IDs to all block nodes in document
+            newState.doc.descendants((node, pos) => {
+              if (nodeAllowsSdBlockIdAttr(node) && nodeNeedsSdBlockId(node)) {
+                assignBlockId(tr, node, pos);
+                changed = true;
+              }
+            });
+          } else {
+            // Subsequent updates: only check affected ranges
+            const rangesToCheck = [];
+            let shouldFallbackToFullTraversal = false;
+
+            transactions.forEach((transaction, txIndex) => {
+              transaction.steps.forEach((step, stepIndex) => {
+                if (!(step instanceof ReplaceStep)) return;
+
+                const hasNewBlockNodes = step.slice?.content?.content?.some((node) => nodeAllowsSdBlockIdAttr(node));
+                if (!hasNewBlockNodes) return;
+
+                const stepMap = step.getMap();
+
+                stepMap.forEach((_oldStart, _oldEnd, newStart, newEnd) => {
+                  if (newEnd <= newStart) {
+                    if (process.env.NODE_ENV === 'development') {
+                      console.debug('Block node: invalid range in step map, falling back to full traversal');
+                    }
+                    shouldFallbackToFullTraversal = true;
+                    return;
+                  }
+
+                  let rangeStart = newStart;
+                  let rangeEnd = newEnd;
+
+                  // Map through remaining steps in the current transaction
+                  for (let i = stepIndex + 1; i < transaction.steps.length; i++) {
+                    const laterStepMap = transaction.steps[i].getMap();
+                    rangeStart = laterStepMap.map(rangeStart, -1);
+                    rangeEnd = laterStepMap.map(rangeEnd, 1);
+                  }
+
+                  // Map through later transactions in the appendTransaction batch
+                  for (let i = txIndex + 1; i < transactions.length; i++) {
+                    const laterTx = transactions[i];
+                    rangeStart = laterTx.mapping.map(rangeStart, -1);
+                    rangeEnd = laterTx.mapping.map(rangeEnd, 1);
+                  }
+
+                  if (rangeEnd <= rangeStart) {
+                    if (process.env.NODE_ENV === 'development') {
+                      console.debug('Block node: invalid range after mapping, falling back to full traversal');
+                    }
+                    shouldFallbackToFullTraversal = true;
+                    return;
+                  }
+
+                  rangesToCheck.push([rangeStart, rangeEnd]);
+                });
+              });
+            });
+
+            const mergedRanges = mergeRanges(rangesToCheck);
+
+            for (const [start, end] of mergedRanges) {
+              const docSize = newState.doc.content.size;
+              const clampedRange = clampRange(start, end, docSize);
+
+              if (!clampedRange) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.debug('Block node: invalid range after clamping, falling back to full traversal');
+                }
+                shouldFallbackToFullTraversal = true;
+                break;
+              }
+
+              const [safeStart, safeEnd] = clampedRange;
+
+              try {
+                newState.doc.nodesBetween(safeStart, safeEnd, (node, pos) => {
+                  if (nodeAllowsSdBlockIdAttr(node) && nodeNeedsSdBlockId(node)) {
+                    assignBlockId(tr, node, pos);
+                    changed = true;
+                  }
+                });
+              } catch (error) {
+                console.warn('Block node plugin: nodesBetween failed, falling back to full traversal', error);
+                shouldFallbackToFullTraversal = true;
+                break;
+              }
+            }
+
+            if (shouldFallbackToFullTraversal) {
+              newState.doc.descendants((node, pos) => {
+                if (nodeAllowsSdBlockIdAttr(node) && nodeNeedsSdBlockId(node)) {
+                  assignBlockId(tr, node, pos);
+                  changed = true;
+                }
+              });
+            }
+          }
 
           if (changed && !hasInitialized) {
             hasInitialized = true;
+            tr.setMeta('blockNodeInitialUpdate', true);
           }
 
-          // Restore marks if they exist.
-          // `tr.setNodeMarkup` resets the stored marks.
+          // Restore marks since setNodeMarkup resets them
           tr.setStoredMarks(newState.tr.storedMarks);
 
           return changed ? tr : null;

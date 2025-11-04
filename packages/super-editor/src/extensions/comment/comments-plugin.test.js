@@ -87,7 +87,7 @@ const createEditorEnvironment = (schema, doc) => {
     view,
     emit: vi.fn(),
     options: {
-      user: { name: 'Test User', email: 'test.user@example.com' },
+      user: { name: 'Test User', email: 'test.user@example.com', image: 'https://example.com/avatar.png' },
       documentId: 'doc-1',
       isInternal: true,
     },
@@ -144,6 +144,7 @@ describe('CommentsPlugin commands', () => {
           commentText: '<p>Hello</p>',
           creatorName: 'Test User',
           creatorEmail: 'test.user@example.com',
+          creatorImage: 'https://example.com/avatar.png',
           fileId: 'doc-1',
         }),
         activeCommentId: 'c-1',

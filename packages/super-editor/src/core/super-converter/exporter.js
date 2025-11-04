@@ -1,8 +1,7 @@
 import { SuperConverter } from './SuperConverter.js';
-import { inchesToTwips, linesToTwips, pixelsToEightPoints, pixelsToTwips, rgbToHex } from './helpers.js';
+import { inchesToTwips, linesToTwips, pixelsToTwips, rgbToHex } from './helpers.js';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
-import { TrackDeleteMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
@@ -28,10 +27,11 @@ import {
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
 import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
-import { translator as wDelTranslator } from '@converter/v3/handlers/w/del';
-import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins';
-import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/hyperlink-translator.js';
+import { translateVectorShape } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
+import { translator as wTextTranslator } from '@converter/v3/handlers/w/t';
 import { combineRunProperties, decodeRPrFromMarks } from '@converter/styles.js';
+
+const RUN_LEVEL_WRAPPERS = new Set(['w:hyperlink', 'w:ins', 'w:del']);
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -107,6 +107,59 @@ export const isLineBreakOnlyRun = (node) => {
 };
 
 /**
+ * Convert SDT child elements into Word run elements.
+ * @param {Array<Object>|Object} elements
+ * @returns {Array<Object>}
+ */
+export function convertSdtContentToRuns(elements) {
+  const normalized = Array.isArray(elements) ? elements : [elements];
+  const runs = [];
+
+  normalized.forEach((element) => {
+    if (!element) return;
+
+    if (element.name === 'w:sdtPr') {
+      return;
+    }
+
+    if (element.name === 'w:r') {
+      runs.push(element);
+      return;
+    }
+
+    if (element.name === 'w:sdt') {
+      // Recursively flatten nested SDTs into the surrounding run sequence, skipping property bags.
+      const sdtContent = (element.elements || []).find((child) => child?.name === 'w:sdtContent');
+      if (sdtContent?.elements) {
+        runs.push(...convertSdtContentToRuns(sdtContent.elements));
+      }
+      return;
+    }
+
+    if (RUN_LEVEL_WRAPPERS.has(element.name)) {
+      const wrapperElements = convertSdtContentToRuns(element.elements || []);
+      if (wrapperElements.length) {
+        runs.push({
+          ...element,
+          elements: wrapperElements,
+        });
+      }
+      return;
+    }
+
+    if (element.name) {
+      runs.push({
+        name: 'w:r',
+        type: 'element',
+        elements: element.elements || [element],
+      });
+    }
+  });
+
+  return runs.filter((run) => Array.isArray(run.elements) && run.elements.length > 0);
+}
+
+/**
  * @typedef {Object} ExportParams
  * @property {Object} node JSON node to translate (from PM schema)
  * @property {Object} [bodyNode] The stored body node to restore, if available
@@ -160,7 +213,7 @@ export function exportSchemaToJson(params) {
     heading: translateHeadingNode,
     paragraph: wPNodeTranslator,
     run: wRNodeTranslator,
-    text: translateTextNode,
+    text: wTextTranslator,
     bulletList: translateList,
     orderedList: translateList,
     lineBreak: wBrNodeTranslator,
@@ -179,6 +232,7 @@ export function exportSchemaToJson(params) {
     shapeContainer: pictTranslator,
     shapeTextbox: pictTranslator,
     contentBlock: pictTranslator,
+    vectorShape: translateVectorShape,
     structuredContent: wSdtNodeTranslator,
     structuredContentBlock: wSdtNodeTranslator,
     documentPartObject: wSdtNodeTranslator,
@@ -480,43 +534,6 @@ export function getTextNodeForExport(text, marks, params) {
     name: 'w:r',
     elements: rPrNode ? [rPrNode, ...textNodes] : textNodes,
   };
-}
-
-/**
- * Translate a text node or link node.
- * Link nodes look the same as text nodes but with a link attr.
- * Also, tracked changes are text marks so those need to be separated here.
- * We need to check here and re-route as necessary
- *
- * @param {ExportParams} params The text node to translate
- * @param {SchemaNode} params.node The text node from prose mirror
- * @returns {XmlReadyNode} The translated text node
- */
-function translateTextNode(params) {
-  const { node, extraParams } = params;
-
-  // Separate tracked changes from regular text
-  const trackedMarks = [TrackInsertMarkName, TrackDeleteMarkName];
-  const trackedMark = node.marks?.find((m) => trackedMarks.includes(m.type));
-
-  if (trackedMark) {
-    switch (trackedMark.type) {
-      case 'trackDelete':
-        return wDelTranslator.decode(params);
-      case 'trackInsert':
-        return wInsTranslator.decode(params);
-    }
-  }
-
-  // Separate links from regular text
-  const isLinkNode = node.marks?.some((m) => m.type === 'link');
-  if (isLinkNode && !extraParams?.linkProcessed) {
-    return wHyperlinkTranslator.decode(params);
-  }
-
-  const { text, marks = [] } = node;
-
-  return getTextNodeForExport(text, marks, params);
 }
 
 /**

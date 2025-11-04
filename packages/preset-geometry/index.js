@@ -2108,4 +2108,3 @@ ${l}
 </svg>`;
 }
 export { f as createPresetShape, k as getPresetShapeSvg, a as listPresetNames };
-//# sourceMappingURL=index.js.map
