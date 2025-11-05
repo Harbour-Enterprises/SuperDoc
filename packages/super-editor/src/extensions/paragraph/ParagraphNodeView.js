@@ -209,16 +209,30 @@ export class ParagraphNodeView {
       position: '',
     };
 
+    const calculateBottom = () => {
+      let bottom = '0';
+      const lineBreaks = this.contentDOM.querySelectorAll('br:not(.ProseMirror-trailingBreak)');
+      // If the dom element contains a line break, we need to adjust the marker position
+      if (lineBreaks.length > 0) {
+        const lineBreakHeight = lineBreaks[0].getBoundingClientRect().height;
+        const paragraphTop = this.dom.getBoundingClientRect().top;
+        const lineBreakTop = lineBreaks[0].getBoundingClientRect().top;
+        const offset = lineBreakTop - paragraphTop;
+        bottom = `${lineBreakHeight + offset}px`;
+      }
+      return bottom;
+    };
+
     const markerWidth = this.marker.getBoundingClientRect().width;
     if (justification === 'right') {
       markerStyle.position = 'absolute';
       markerStyle.left = `${-markerWidth}px`;
-      markerStyle.bottom = '0';
+      markerStyle.bottom = calculateBottom();
       domStyle.position = 'relative';
     } else if (justification === 'center') {
       markerStyle.position = 'absolute';
       markerStyle.left = `${-markerWidth / 2}px`;
-      markerStyle.bottom = '0';
+      markerStyle.bottom = calculateBottom();
       domStyle.position = 'relative';
     }
     Object.entries(markerStyle).forEach(([k, v]) => {
