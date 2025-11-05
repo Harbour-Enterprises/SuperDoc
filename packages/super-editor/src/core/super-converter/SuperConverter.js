@@ -11,8 +11,8 @@ import {
   prepareCommentParaIds,
   prepareCommentsXmlFilesForExport,
 } from './v2/exporter/commentsExporter.js';
-import { FOOTER_RELATIONSHIP_TYPE, HEADER_RELATIONSHIP_TYPE, HYPERLINK_RELATIONSHIP_TYPE } from './constants.js';
 import { DocxHelpers } from './docx-helpers/index.js';
+import { mergeRelationshipElements } from './relationship-helpers.js';
 
 const FONT_FAMILY_FALLBACKS = Object.freeze({
   swiss: 'Arial, sans-serif',
@@ -1011,34 +1011,8 @@ class SuperConverter {
   #exportProcessNewRelationships(rels = []) {
     const relsData = this.convertedXml['word/_rels/document.xml.rels'];
     const relationships = relsData.elements.find((x) => x.name === 'Relationships');
-    const newRels = [];
 
-    const regex = /rId|mi/g;
-    let largestId = Math.max(...relationships.elements.map((el) => Number(el.attributes.Id.replace(regex, ''))));
-
-    rels.forEach((rel) => {
-      const existingId = rel.attributes.Id;
-      const existingTarget = relationships.elements.find((el) => el.attributes.Target === rel.attributes.Target);
-      const isNewMedia = rel.attributes.Target?.startsWith('media/') && existingId.length > 6;
-      const isNewHyperlink = rel.attributes.Type === HYPERLINK_RELATIONSHIP_TYPE && existingId.length > 6;
-      const isNewHeadFoot =
-        rel.attributes.Type === (HEADER_RELATIONSHIP_TYPE || rel.attributes.Type === FOOTER_RELATIONSHIP_TYPE) &&
-        existingId.length > 6;
-
-      if (existingTarget && !isNewMedia && !isNewHyperlink && !isNewHeadFoot) {
-        return;
-      }
-
-      // Update the target to escape ampersands
-      rel.attributes.Target = rel.attributes?.Target?.replace(/&/g, '&amp;');
-
-      // Update the ID. If we've assigned a long ID (ie: images, links) we leave it alone
-      rel.attributes.Id = existingId.length > 6 ? existingId : `rId${++largestId}`;
-
-      newRels.push(rel);
-    });
-
-    relationships.elements = [...relationships.elements, ...newRels];
+    relationships.elements = mergeRelationshipElements(relationships.elements, rels);
   }
 
   async #exportProcessMediaFiles(media = {}) {
