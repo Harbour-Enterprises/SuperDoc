@@ -32,7 +32,7 @@ export function flattenListsInHtml(html, editor) {
     NodeInterface = window.Node;
   }
 
-  const doc = parser.parseFromString(html, 'text/html');
+  const doc = removeWhitespaces(parser.parseFromString(html, 'text/html'));
 
   // Keep processing until all lists are flattened
   let foundList;
@@ -150,12 +150,9 @@ function flattenFoundList(listElem, editor, NodeInterface) {
  */
 export function createSingleItemList({ li, tag, rootNumId, level, listLevel, editor, NodeInterface }) {
   const localDoc = li.ownerDocument;
-  const ELEMENT_NODE = NodeInterface.ELEMENT_NODE;
-  const TEXT_NODE = NodeInterface.TEXT_NODE;
 
   // Create new list and list item
-  const newList = localDoc.createElement(tag);
-  const newLi = localDoc.createElement('li');
+  const newItem = localDoc.createElement('p');
 
   // Copy attributes from original li (except the ones we'll set ourselves)
   Array.from(li.attributes).forEach((attr) => {
@@ -164,48 +161,20 @@ export function createSingleItemList({ li, tag, rootNumId, level, listLevel, edi
       !attr.name.startsWith('data-level') &&
       !attr.name.startsWith('data-list-')
     ) {
-      newLi.setAttribute(attr.name, attr.value);
+      newItem.setAttribute(attr.name, attr.value);
     }
   });
 
   // Set list attributes
-  newList.setAttribute('data-list-id', rootNumId);
+  newItem.setAttribute('data-num-id', rootNumId);
+  newItem.setAttribute('data-level', String(level));
 
-  // Set list item attributes
-  newLi.setAttribute('data-num-id', rootNumId);
-  newLi.setAttribute('data-level', String(level));
-
-  // Get numbering info
-  const { listNumberingType, lvlText } = ListHelpers.getListDefinitionDetails({
-    numId: rootNumId,
-    level,
-    editor,
-  });
-
-  newLi.setAttribute('data-num-fmt', listNumberingType);
-  newLi.setAttribute('data-lvl-text', lvlText || '');
-  newLi.setAttribute('data-list-level', JSON.stringify(listLevel || [level + 1]));
-
-  // Copy content from original li
+  // Copy child nodes
   Array.from(li.childNodes).forEach((node) => {
-    if (node.nodeType === ELEMENT_NODE || (node.nodeType === TEXT_NODE && node.textContent.trim())) {
-      newLi.appendChild(node.cloneNode(true));
-    }
+    newItem.appendChild(node.cloneNode(true));
   });
 
-  // Handle case where li only contains text
-  if (newLi.childNodes.length === 0 || (newLi.childNodes.length === 1 && newLi.childNodes[0].nodeType === TEXT_NODE)) {
-    const textContent = newLi.textContent.trim();
-    if (textContent) {
-      newLi.innerHTML = '';
-      const p = localDoc.createElement('p');
-      p.textContent = textContent;
-      newLi.appendChild(p);
-    }
-  }
-
-  newList.appendChild(newLi);
-  return newList;
+  return newItem;
 }
 
 /**

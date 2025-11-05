@@ -5,6 +5,7 @@ import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 import { pixelsToTwips, linesToTwips, twipsToPixels, eighthPointsToPixels } from '@converter/helpers.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { resolveParagraphProperties } from '@converter/styles.js';
 import { splitBlock } from '@core/commands/splitBlock.js';
 import { removeNumberingProperties } from '@core/commands/removeNumberingProperties.js';
 import { isList } from '@core/commands/list-helpers';
@@ -277,13 +278,40 @@ export const Paragraph = OxmlNode.create({
       {
         tag: 'p',
         getAttrs: (node) => {
-          const { styleid, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
-            acc[attr.name] = attr.value;
+          const numberingProperties = {};
+          const { styleid: styleId, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
+            if (attr.name === 'data-num-id') {
+              numberingProperties.numId = parseInt(attr.value);
+            } else if (attr.name === 'data-level') {
+              numberingProperties.ilvl = parseInt(attr.value);
+            } else {
+              acc[attr.name] = attr.value;
+            }
             return acc;
           }, {});
 
+          if (Object.keys(numberingProperties).length > 0) {
+            const resolvedParagraphProperties = resolveParagraphProperties(
+              { docx: this.editor.converter.convertedXml, numbering: this.editor.converter.numbering },
+              { styleId, numberingProperties },
+              false,
+              true,
+            );
+            return {
+              paragraphProperties: {
+                numberingProperties,
+                styleId: styleId || null,
+              },
+              indent: resolvedParagraphProperties.indent,
+              spacing: resolvedParagraphProperties.spacing,
+              numberingProperties,
+              styleId: styleId || null,
+              extraAttrs,
+            };
+          }
+
           return {
-            styleId: styleid || null,
+            styleId: styleId || null,
             extraAttrs,
           };
         },
