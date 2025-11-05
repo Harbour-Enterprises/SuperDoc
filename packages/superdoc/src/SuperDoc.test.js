@@ -2,6 +2,11 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { h, defineComponent, ref, reactive, nextTick } from 'vue';
 import { DOCX } from '@harbour-enterprises/common';
+import { Schema } from 'prosemirror-model';
+import { EditorState, TextSelection } from 'prosemirror-state';
+import { Extension } from '../../super-editor/src/core/Extension.js';
+import { CommentsPlugin, CommentsPluginKey } from '../../super-editor/src/extensions/comment/comments-plugin.js';
+import { CommentMarkName } from '../../super-editor/src/extensions/comment/comments-constants.js';
 
 const isRef = (value) => value && typeof value === 'object' && 'value' in value;
 
@@ -265,6 +270,66 @@ const createSuperdocStub = () => {
   };
 };
 
+const createFloatingCommentsSchema = () =>
+  new Schema({
+    nodes: {
+      doc: { content: 'block+' },
+      paragraph: { content: 'inline*', group: 'block', toDOM: () => ['p', 0], parseDOM: [{ tag: 'p' }] },
+      text: { group: 'inline' },
+    },
+    marks: {
+      [CommentMarkName]: {
+        attrs: { commentId: { default: null }, importedId: { default: null }, internal: { default: true } },
+        inclusive: false,
+        toDOM: (mark) => [CommentMarkName, mark.attrs],
+        parseDOM: [{ tag: CommentMarkName }],
+      },
+    },
+  });
+
+const createImportedCommentDoc = (threadId) => {
+  const schema = createFloatingCommentsSchema();
+  const importedMark = schema.marks[CommentMarkName].create({ importedId: threadId, internal: true });
+  const paragraph = schema.node('paragraph', null, [schema.text('Imported', [importedMark])]);
+  const doc = schema.node('doc', null, [paragraph]);
+
+  return { schema, doc };
+};
+
+const createCommentsPluginEnvironment = ({ schema, doc }) => {
+  const selection = TextSelection.create(doc, 1);
+  let state = EditorState.create({ schema, doc, selection });
+
+  const editor = {
+    options: { documentId: 'doc-1' },
+    emit: vi.fn(),
+    view: null,
+  };
+
+  const extension = Extension.create(CommentsPlugin.config);
+  extension.addCommands = CommentsPlugin.config.addCommands.bind(extension);
+  extension.addPmPlugins = CommentsPlugin.config.addPmPlugins.bind(extension);
+  extension.editor = editor;
+  const [plugin] = extension.addPmPlugins();
+
+  state = EditorState.create({ schema, doc, selection, plugins: [plugin] });
+
+  const view = {
+    state,
+    dispatch: vi.fn((tr) => {
+      state = state.apply(tr);
+      view.state = state;
+    }),
+    focus: vi.fn(),
+    coordsAtPos: vi.fn(),
+  };
+
+  editor.view = view;
+  const pluginView = plugin.spec.view?.(view);
+
+  return { editor, view, pluginView };
+};
+
 describe('SuperDoc.vue', () => {
   beforeEach(() => {
     useSelectionMock.mockClear();
@@ -440,6 +505,9 @@ describe('SuperDoc.vue', () => {
     await nextTick();
 
     const options = wrapper.findComponent(SuperEditorStub).props('options');
+    commentsStoreStub.handleEditorLocationsUpdate.mockImplementation((positions) => {
+      commentsStoreStub.getFloatingComments.value = Object.values(positions);
+    });
     const importedComment = {
       commentId: null,
       importedId: 'import-1',
@@ -451,27 +519,43 @@ describe('SuperDoc.vue', () => {
     options.onCommentsUpdate({ type: 'add', comment: importedComment });
     await nextTick();
 
-    const positionsPayload = {
-      allCommentIds: [],
-      allCommentPositions: {
-        'import-1': {
-          threadId: 'import-1',
-          start: 5,
-          end: 10,
-          bounds: { top: 20, left: 40 },
-        },
-      },
-    };
+    const { schema, doc } = createImportedCommentDoc('import-1');
+    const { view, editor, pluginView } = createCommentsPluginEnvironment({ schema, doc });
+    expect(pluginView).toBeDefined();
 
-    options.onCommentLocationsUpdate(positionsPayload);
+    view.coordsAtPos.mockReturnValue({ top: 20, bottom: 40, left: 10, right: 30 });
+    editor.emit = vi.fn((event, payload) => {
+      if (event === 'comment-positions') {
+        options.onCommentLocationsUpdate({
+          allCommentPositions: payload.allCommentPositions,
+          allCommentIds: Object.keys(payload.allCommentPositions),
+        });
+      }
+    });
+
+    const forceTr = view.state.tr.setMeta(CommentsPluginKey, { type: 'force' });
+    view.dispatch(forceTr);
+    pluginView.update(view);
+
+    expect(editor.emit).toHaveBeenCalledWith(
+      'comment-positions',
+      expect.objectContaining({
+        allCommentPositions: expect.objectContaining({
+          'import-1': expect.objectContaining({
+            bounds: expect.objectContaining({ top: 20, left: 10 }),
+          }),
+        }),
+      }),
+    );
     expect(commentsStoreStub.handleEditorLocationsUpdate).toHaveBeenCalledWith(
-      positionsPayload.allCommentPositions,
-      positionsPayload.allCommentIds,
+      expect.objectContaining({
+        'import-1': expect.objectContaining({ threadId: 'import-1' }),
+      }),
+      expect.arrayContaining(['import-1']),
     );
 
-    superdocStoreStub.isReady.value = true;
     await nextTick();
-    commentsStoreStub.getFloatingComments.value = [{ commentId: null, importedId: 'import-1' }];
+    superdocStoreStub.isReady.value = true;
     await nextTick();
 
     expect(wrapper.vm.showCommentsSidebar).toBe(true);
