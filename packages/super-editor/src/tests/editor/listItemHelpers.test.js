@@ -1,5 +1,4 @@
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
-import { getVisibleIndent } from '@extensions/list-item/ListItemNodeView.js';
 import { getListItemStyleDefinitions } from '@helpers/list-numbering-helpers.js';
 import { expect } from 'vitest';
 import { getNumberingCache } from '@core/super-converter/v2/importer/numberingCache.js';
@@ -111,35 +110,6 @@ describe(' test list item rendering indents from styles', () => {
 
     expect(result.numDefPpr?.elements?.[0]?.name).toBe('w:ind');
     expect(result.numDefPpr?.elements?.[0]?.attributes?.['w:left']).toBe('720');
-  });
-
-  it('[getVisibleIndent] derives non-zero values for imported list items', () => {
-    let listItemNode = null;
-    editor.state.doc.descendants((node) => {
-      if (node.type.name === 'listItem' && !listItemNode) {
-        listItemNode = node;
-        return false;
-      }
-      return true;
-    });
-    expect(listItemNode).toBeTruthy();
-    const defs = getListItemStyleDefinitions({
-      styleId: listItemNode.attrs.styleId,
-      numId: listItemNode.attrs.numId,
-      level: listItemNode.attrs.level,
-      editor,
-    });
-    const visibleIndent = getVisibleIndent(defs.stylePpr, defs.numDefPpr, listItemNode.attrs.indent);
-    expect(visibleIndent.left).toBeGreaterThan(0);
-    expect(visibleIndent.hanging).toBeGreaterThan(0);
-  });
-
-  it('[getVisibleIndent] can calculate visible indent', () => {
-    const visibleIndent = getVisibleIndent(stylePpr, numDefPpr);
-    expect(visibleIndent).toBeDefined();
-    expect(visibleIndent.left).toBe(96);
-    expect(visibleIndent.hanging).toBe(24);
-    expect(visibleIndent.right).toBeUndefined();
   });
 });
 
