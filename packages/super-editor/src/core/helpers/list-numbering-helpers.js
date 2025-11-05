@@ -101,6 +101,20 @@ export const generateNewListDefinition = ({ numId, listType, level, start, text,
   return { abstract: newAbstractDef, definition: newNumDef };
 };
 
+export const hasListDefinition = (editor, numId, ilvl) => {
+  const { definitions, abstracts } = editor.converter.numbering;
+  const numDef = definitions[numId];
+  if (!numDef) return false;
+
+  const abstractId = numDef.elements?.find((item) => item.name === 'w:abstractNumId')?.attributes?.['w:val'];
+  const abstract = abstracts[abstractId];
+  if (!abstract) return false;
+
+  const levelDef = abstract.elements?.find((item) => item.name === 'w:lvl' && item.attributes?.['w:ilvl'] == ilvl);
+
+  return !!levelDef;
+};
+
 /**
  * Change the numId of a list definition and clone the abstract definition.
  * @param {number} numId - The current numId of the list definition.
@@ -639,6 +653,7 @@ export const ListHelpers = {
   generateNewListDefinition,
   getBasicNumIdTag,
   getNewListId,
+  hasListDefinition,
   removeListDefinitions,
   getListItemStyleDefinitions,
 

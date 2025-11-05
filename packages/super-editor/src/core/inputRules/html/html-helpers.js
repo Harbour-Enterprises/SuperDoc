@@ -1,5 +1,21 @@
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
+const removeWhitespaces = (node) => {
+  const children = node.childNodes;
+
+  for (let i = children.length - 1; i >= 0; i -= 1) {
+    const child = children[i];
+
+    if (child.nodeType === 3 && child.nodeValue && /^(\n\s\s|\n)$/.test(child.nodeValue)) {
+      node.removeChild(child);
+    } else if (child.nodeType === 1) {
+      removeWhitespaces(child);
+    }
+  }
+
+  return node;
+};
+
 /**
  * Flattens ALL lists to ensure each list contains exactly ONE list item.
  * Handles both multi-item lists and nested lists.

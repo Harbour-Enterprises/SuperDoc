@@ -46,6 +46,7 @@ export * from './increaseListIndent.js';
 export * from './decreaseListIndent.js';
 export * from './backspaceNextToList.js';
 export * from './deleteNextToList.js';
+export * from './changeListLevel.js';
 
 // Selection
 export * from './restoreSelection.js';
