@@ -98,7 +98,11 @@ export const Paragraph = OxmlNode.create({
           if (!spacing) return {};
           const spacingCopy = { ...spacing };
           if (attrs.lineHeight) delete spacingCopy.line; // we'll get line-height from lineHeight
-          const style = getSpacingStyleString(spacingCopy, marksAttrs ?? []);
+          const style = getSpacingStyleString(
+            spacingCopy,
+            marksAttrs ?? [],
+            Boolean(attrs.paragraphProperties?.numberingProperties),
+          );
           if (style) return { style };
           return {};
         },
