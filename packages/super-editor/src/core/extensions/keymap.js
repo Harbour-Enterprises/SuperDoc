@@ -21,7 +21,6 @@ export const handleBackspace = (editor) => {
     },
     () => commands.deleteSelection(),
     () => commands.removeNumberingProperties(),
-    () => commands.deleteListItem(),
     () => commands.joinBackward(),
     () => commands.selectNodeBackward(),
   ]);
@@ -30,7 +29,6 @@ export const handleBackspace = (editor) => {
 export const handleDelete = (editor) => {
   return editor.commands.first(({ commands }) => [
     () => commands.deleteSelection(),
-    () => commands.handleDeleteNextToList(),
     () => commands.joinForward(),
     () => commands.selectNodeForward(),
   ]);
