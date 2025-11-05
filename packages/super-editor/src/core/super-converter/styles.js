@@ -27,17 +27,6 @@ export const resolveRunProperties = (params, inlineRpr, resolvedPpr, isListNumbe
     runStyleProps = inlineRpr.styleId ? resolveStyleChain(params, inlineRpr.styleId, w_rPrTranslator) : {};
   }
 
-  // Numbering properties
-  let numberingProps = {};
-  if (resolvedPpr?.numberingProperties?.ilvl != null && resolvedPpr?.numberingProperties?.numId != null) {
-    numberingProps = getNumberingProperties(
-      params,
-      resolvedPpr.numberingProperties.ilvl,
-      resolvedPpr.numberingProperties.numId,
-      w_rPrTranslator,
-    );
-  }
-
   let styleChain;
 
   if (isNormalDefault) {
@@ -47,10 +36,20 @@ export const resolveRunProperties = (params, inlineRpr, resolvedPpr, isListNumbe
   }
 
   if (isListNumber) {
-    styleChain.push(numberingProps);
+    // Numbering properties
+    let numberingProps = {};
+    if (resolvedPpr?.numberingProperties?.ilvl != null && resolvedPpr?.numberingProperties?.numId != null) {
+      numberingProps = getNumberingProperties(
+        params,
+        resolvedPpr.numberingProperties.ilvl,
+        resolvedPpr.numberingProperties.numId,
+        w_rPrTranslator,
+      );
+    }
+    styleChain = [...styleChain, paragraphStyleProps, runStyleProps, inlineRpr, numberingProps];
+  } else {
+    styleChain = [...styleChain, paragraphStyleProps, runStyleProps, inlineRpr];
   }
-
-  styleChain = [...styleChain, paragraphStyleProps, runStyleProps, inlineRpr];
 
   const finalProps = combineProperties(styleChain, ['fontFamily', 'color']);
   return finalProps;
