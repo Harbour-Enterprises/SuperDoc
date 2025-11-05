@@ -47,9 +47,10 @@ describe(' test list item rendering indents from styles', () => {
     expect(numDefIndentTag.attributes['w:firstLine']).toBeUndefined();
     expect(numDefIndentTag.attributes['w:right']).toBeUndefined();
 
-    const cache = getNumberingCache(editor.converter.convertedXml);
+    const cache = getNumberingCache(editor.converter);
     expect(cache).toBeDefined();
-    expect(Object.prototype.hasOwnProperty.call(editor.converter.convertedXml, 'numbering-cache')).toBe(false);
+    expect(cache.numToDefinition).toBeDefined();
+    expect(cache.numToDefinition.size).toBeGreaterThan(0);
 
     getListItemStyleDefinitions({
       styleId: 'ListParagraph',
@@ -57,7 +58,7 @@ describe(' test list item rendering indents from styles', () => {
       level,
       editor,
     });
-    expect(getNumberingCache(editor.converter.convertedXml)).toBe(cache);
+    expect(getNumberingCache(editor.converter)).toBe(cache);
   });
 
   it('[getListItemStyleDefinitions] returns empty definitions when numbering data is unavailable', () => {
