@@ -2,6 +2,7 @@ import { PluginKey } from 'prosemirror-state';
 import { Editor as SuperEditor } from '@core/Editor.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
+import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
 
 export const PaginationPluginKey = new PluginKey('paginationPlugin');
 
@@ -61,6 +62,7 @@ const getSectionHeight = async (editor, data) => {
   return new Promise((resolve) => {
     const editorContainer = document.createElement('div');
     editorContainer.className = 'super-editor';
+    applyStyleIsolationClass(editorContainer);
     editorContainer.style.padding = '0';
     editorContainer.style.margin = '0';
 
@@ -91,6 +93,8 @@ export const createHeaderFooterEditor = ({
   const { fontSizePt, typeface, fontFamilyCss } = parentStyles;
   const fontSizeInPixles = fontSizePt * 1.3333;
   const lineHeight = fontSizeInPixles * 1.2;
+
+  applyStyleIsolationClass(editorContainer);
 
   Object.assign(editorContainer.style, {
     padding: '0',
