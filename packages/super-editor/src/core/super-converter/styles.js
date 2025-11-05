@@ -60,30 +60,79 @@ export const resolveRunProperties = (params, inlineRpr, resolvedPpr, isListNumbe
  * @param {import('@translator').SCEncoderConfig} params
  * @param {Object} inlineProps - The inline paragraph properties.
  * @param {boolean} [insideTable=false] - Whether the paragraph is inside a table.
+ * @param {boolean} [overrideInlineStyleId=false] - Whether to override the inline style ID with the one from numbering.
  * @returns {Object} The resolved paragraph properties.
  */
-export function resolveParagraphProperties(params, inlineProps, insideTable = false) {
+export function resolveParagraphProperties(params, inlineProps, insideTable = false, overrideInlineStyleId = false) {
   const defaultProps = getDefaultProperties(params, w_pPrTranslator);
   const { properties: normalProps, isDefault: isNormalDefault } = getStyleProperties(params, 'Normal', w_pPrTranslator);
 
-  const styleProps = inlineProps?.styleId ? resolveStyleChain(params, inlineProps?.styleId, w_pPrTranslator) : {};
+  let styleId = inlineProps?.styleId;
+  let styleProps = inlineProps?.styleId ? resolveStyleChain(params, inlineProps?.styleId, w_pPrTranslator) : {};
 
   // Numbering style
   let numberingProps = {};
   const ilvl = inlineProps?.numberingProperties?.ilvl ?? styleProps?.numberingProperties?.ilvl;
   const numId = inlineProps?.numberingProperties?.numId ?? styleProps?.numberingProperties?.numId;
-  if (ilvl != null && numId != null) {
+  let numberingDefinedInline =
+    inlineProps?.numberingProperties?.ilvl != null && inlineProps?.numberingProperties?.numId != null;
+  const isList = ilvl != null && numId != null;
+  if (isList) {
     numberingProps = getNumberingProperties(params, ilvl, numId, w_pPrTranslator);
+    if (overrideInlineStyleId && numberingProps.styleId) {
+      styleId = numberingProps.styleId;
+      styleProps = resolveStyleChain(params, styleId, w_pPrTranslator);
+      if (inlineProps) {
+        inlineProps.styleId = styleId;
+
+        if (
+          styleProps.numberingProperties?.ilvl === inlineProps.numberingProperties?.ilvl &&
+          styleProps.numberingProperties?.numId === inlineProps.numberingProperties?.numId
+        ) {
+          // Numbering is already defined in style, so remove from inline props
+          delete inlineProps.numberingProperties;
+          numberingDefinedInline = false;
+        }
+      }
+    }
   }
 
-  let propsChain;
+  // Resolve property chain - regular properties are treated differently from indentation
+  //   Chain for regular properties
+  let defaultsChain;
   if (isNormalDefault) {
-    propsChain = [defaultProps, normalProps, numberingProps, styleProps, inlineProps];
+    defaultsChain = [defaultProps, normalProps];
   } else {
-    propsChain = [normalProps, defaultProps, numberingProps, styleProps, inlineProps];
+    defaultsChain = [normalProps, defaultProps];
+  }
+  const propsChain = [...defaultsChain, numberingProps, styleProps, inlineProps];
+
+  //  Chain for indentation properties
+  let indentChain;
+  if (numberingDefinedInline) {
+    // If numbering is defined inline, then numberingProps should override styleProps for indentation
+    indentChain = [...defaultsChain, styleProps, numberingProps, inlineProps];
+  } else {
+    // Otherwise, styleProps should override numberingProps for indentation
+    indentChain = [...defaultsChain, numberingProps, styleProps, inlineProps];
   }
 
   let finalProps = combineProperties(propsChain);
+  let finalIndent = combineProperties(
+    indentChain.map((props) => (props.indent != null ? { indent: props.indent } : {})),
+    [],
+    {
+      firstLine: (target, source) => {
+        // If a higher priority source defines firstLine, remove hanging from the final result
+        if (target.hanging != null && source.firstLine != null) {
+          delete target.hanging;
+        }
+
+        return source.firstLine;
+      },
+    },
+  );
+  finalProps.indent = finalIndent.indent;
 
   if (insideTable && !inlineProps?.spacing && !styleProps.spacing) {
     // Word ignores doc-default spacing inside table cells unless explicitly set,
@@ -91,11 +140,6 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
     finalProps.spacing = undefined;
   }
 
-  // START: Remove this code after re-implementation of lists
-  if (ilvl != null && numId != null) {
-    delete finalProps.indent;
-  }
-  // END: Remove this code after re-implementation of lists
   return finalProps;
 }
 
@@ -208,6 +252,13 @@ export function getNumberingProperties(params, ilvl, numId, translator) {
   const abstractElementPr = levelDefinition?.elements?.find((el) => el.name === translator.xmlName);
   if (!abstractElementPr) return {};
   const abstractProps = translator.encode({ ...params, nodes: [abstractElementPr] }) || {};
+
+  // Find pStyle for this level, if any
+  const pStyleElement = levelDefinition?.elements?.find((el) => el.name === 'w:pStyle');
+  if (pStyleElement) {
+    const pStyleId = pStyleElement?.attributes?.['w:val'];
+    abstractProps.styleId = pStyleId;
+  }
   propertiesChain.push(abstractProps);
 
   // Combine properties
@@ -217,7 +268,7 @@ export function getNumberingProperties(params, ilvl, numId, translator) {
   return result;
 }
 
-export const combineProperties = (propertiesArray, fullOverrideProps = []) => {
+export const combineProperties = (propertiesArray, fullOverrideProps = [], specialHandling = {}) => {
   if (!propertiesArray || propertiesArray.length === 0) {
     return {};
   }
@@ -237,7 +288,12 @@ export const combineProperties = (propertiesArray, fullOverrideProps = []) => {
               output[key] = source[key];
             }
           } else {
-            output[key] = source[key];
+            const handler = specialHandling[key];
+            if (handler && typeof handler === 'function') {
+              output[key] = handler(output, source);
+            } else {
+              output[key] = source[key];
+            }
           }
         }
       }
