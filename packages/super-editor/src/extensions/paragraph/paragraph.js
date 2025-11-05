@@ -4,6 +4,7 @@ import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 import { pixelsToTwips, linesToTwips, twipsToPixels, eighthPointsToPixels } from '@converter/helpers.js';
+import { toggleList } from '@core/commands/index.js';
 import { restartNumbering } from '@core/commands/restartNumbering.js';
 import { ParagraphNodeView } from './ParagraphNodeView.js';
 import { createNumberingPlugin } from './numberingPlugin.js';
@@ -301,6 +302,29 @@ export const Paragraph = OxmlNode.create({
   },
   addCommands() {
     return {
+      /**
+       * Toggle ordered list formatting
+       * @category Command
+       * @example
+       * editor.commands.toggleOrderedList()
+       * @note Converts selection to ordered list or back to paragraphs
+       */
+      toggleOrderedList: () => (params) => {
+        return toggleList('orderedList')(params);
+      },
+
+      /**
+       * Toggle a bullet list at the current selection
+       * @category Command
+       * @example
+       * // Toggle bullet list on selected text
+       * editor.commands.toggleBulletList()
+       * @note Converts selected paragraphs to list items or removes list formatting
+       */
+      toggleBulletList: () => (params) => {
+        return toggleList('bulletList')(params);
+      },
+
       /**
        * Restart numbering for the current list
        * @category Command
