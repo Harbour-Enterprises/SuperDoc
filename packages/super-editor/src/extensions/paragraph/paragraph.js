@@ -95,7 +95,7 @@ export const Paragraph = OxmlNode.create({
         },
         renderDOM: (attrs) => {
           const { spacing, marksAttrs } = attrs;
-          if (!spacing) return {};
+          if (!spacing) return { style: null };
           const spacingCopy = { ...spacing };
           if (attrs.lineHeight) delete spacingCopy.line; // we'll get line-height from lineHeight
           const style = getSpacingStyleString(
@@ -104,7 +104,7 @@ export const Paragraph = OxmlNode.create({
             Boolean(attrs.paragraphProperties?.numberingProperties),
           );
           if (style) return { style };
-          return {};
+          return { style: null };
         },
       },
 
@@ -134,10 +134,10 @@ export const Paragraph = OxmlNode.create({
       indent: {
         default: null,
         renderDOM: ({ indent }) => {
-          if (!indent) return {};
+          if (!indent) return { style: null };
           const { left, right, firstLine, hanging } = indent;
           if (indent && Object.values(indent).every((v) => v === 0)) {
-            return {};
+            return { style: null };
           }
 
           let style = '';
