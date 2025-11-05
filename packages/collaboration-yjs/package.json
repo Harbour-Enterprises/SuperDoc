@@ -32,6 +32,9 @@
   "author": "",
   "license": "AGPL-3.0",
   "description": "A quick-start collaboration server for SuperDoc",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
     "@types/node": "^22.10.2",
     "@typescript-eslint/parser": "^8.46.3",
