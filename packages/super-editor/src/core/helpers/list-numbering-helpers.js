@@ -7,6 +7,7 @@ import {
 } from '@core/super-converter/v2/importer/listImporter.js';
 import { baseBulletList, baseOrderedListDef } from './baseListDefinitions';
 import { findParentNode } from '@helpers/index.js';
+import { updateNumberingProperties } from '@core/commands/changeListLevel';
 
 /**
  * Generate a new list definition for the given list type.
@@ -447,30 +448,23 @@ export const createNewList = ({ listType, tr, editor }) => {
   ListHelpers.generateNewListDefinition({ numId, listType, editor });
 
   const { $from } = tr.selection;
-  const para = $from.parent;
+  const paragraph = $from.parent;
 
   // If we're not in a paragraph, bail (nothing to convert)
-  if (!para || para.type.name !== 'paragraph') return false;
+  if (!paragraph || paragraph.type.name !== 'paragraph') return false;
 
-  const level = 0;
-  const listNode = ListHelpers.createSchemaOrderedListNode({
-    level,
-    numId,
-    listType,
-    editor,
-    listLevel: [1],
-    contentNode: para.toJSON(), // preserve inline content/marks
-  });
-
-  // Replace the paragraph node itself
   const depth = $from.depth;
-  const replaceFrom = $from.before(depth);
-  const replaceTo = $from.after(depth);
-
-  // Do the replacement and force the caret into the new list item (inside same cell/parent)
-  const startBefore = replaceFrom;
-  tr.replaceWith(replaceFrom, replaceTo, listNode);
-  setCaretInsideFirstTextblockOfInsertedAt(tr, startBefore);
+  const paragraphPos = $from.before(depth);
+  updateNumberingProperties(
+    {
+      numId,
+      ilvl: 0,
+    },
+    paragraph,
+    paragraphPos,
+    editor,
+    tr,
+  );
 
   return true;
 };

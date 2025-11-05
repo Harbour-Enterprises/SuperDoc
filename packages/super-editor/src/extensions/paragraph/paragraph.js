@@ -4,12 +4,28 @@ import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 import { pixelsToTwips, linesToTwips, twipsToPixels, eighthPointsToPixels } from '@converter/helpers.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { splitBlock } from '@core/commands/splitBlock.js';
 import { removeNumberingProperties } from '@core/commands/removeNumberingProperties.js';
+import { isList } from '@core/commands/list-helpers';
+import { findParentNode } from '@helpers/index.js';
+import { InputRule } from '@core/InputRule.js';
 import { toggleList } from '@core/commands/index.js';
 import { restartNumbering } from '@core/commands/restartNumbering.js';
 import { ParagraphNodeView } from './ParagraphNodeView.js';
 import { createNumberingPlugin } from './numberingPlugin.js';
+
+/**
+ * Input rule regex that matches a bullet list marker (-, +, or *)
+ * @private
+ */
+const bulletInputRegex = /^\s*([-+*])\s$/;
+
+/**
+ * Input rule regex that matches an ordered list marker (e.g., "1. ")
+ * @private
+ */
+const orderedInputRegex = /^(\d+)\.\s$/;
 
 /**
  * Configuration options for Paragraph
@@ -335,6 +351,36 @@ export const Paragraph = OxmlNode.create({
         return this.editor.commands.first(({ commands }) => [() => commands.decreaseListIndent()]);
       },
     };
+  },
+
+  addInputRules() {
+    return [
+      { regex: orderedInputRegex, type: 'orderedList' },
+      { regex: bulletInputRegex, type: 'bulletList' },
+    ].map(
+      ({ regex, type }) =>
+        new InputRule({
+          match: regex,
+          handler: ({ state, range }) => {
+            // Check if we're currently inside a list item
+            const parentListItem = findParentNode(isList)(state.selection);
+            if (parentListItem) {
+              // Inside a list item, do not create a new list
+              return null;
+            }
+
+            // Not inside a list item, proceed with creating new list
+            const { tr } = state;
+            tr.delete(range.from, range.to);
+
+            ListHelpers.createNewList({
+              listType: type,
+              tr,
+              editor: this.editor,
+            });
+          },
+        }),
+    );
   },
 
   addCommands() {
