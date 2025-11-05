@@ -1,12 +1,6 @@
 // @ts-check
-import { TextSelection } from 'prosemirror-state';
-import {
-  getStyleTagFromStyleId,
-  getAbstractDefinition,
-  getDefinitionForLevel,
-} from '@core/super-converter/v2/importer/listImporter.js';
+import { getStyleTagFromStyleId } from '@core/super-converter/v2/importer/listImporter.js';
 import { baseBulletList, baseOrderedListDef } from './baseListDefinitions';
-import { findParentNode } from '@helpers/index.js';
 import { updateNumberingProperties } from '@core/commands/changeListLevel';
 
 /**
@@ -458,42 +452,6 @@ export const createSchemaOrderedListNode = ({ level, numId, listType, editor, li
 };
 
 /**
- * Set the caret position inside the first textblock of the inserted content.
- * @param {import("prosemirror-state").Transaction} tr
- * @param {number} startBefore
- */
-export function setCaretInsideFirstTextblockOfInsertedAt(tr, startBefore) {
-  // Map the start of the replaced range into the new document inside the insertion
-  const containerStart = tr.mapping.map(startBefore, 1);
-  const $start = tr.doc.resolve(containerStart);
-  const container = $start.nodeAfter;
-
-  if (!container) {
-    // Fallback: place near the boundary
-    const nearPos = Math.max(1, Math.min(containerStart, tr.doc.content.size - 1));
-    tr.setSelection(TextSelection.near(tr.doc.resolve(nearPos), 1));
-    return;
-  }
-
-  // Walk the inserted container to the first textblock and compute absolute position:
-  // absolute = containerStart + 1 (into container content) + p (descendant rel pos) + 1 (into textblock)
-  let found = null;
-  container.descendants((n, p) => {
-    if (n.isTextblock) {
-      found = containerStart + 1 + p + 1;
-      return false;
-    }
-    return true;
-  });
-
-  if (found != null) {
-    tr.setSelection(TextSelection.create(tr.doc, found));
-  } else {
-    tr.setSelection(TextSelection.near(tr.doc.resolve(containerStart + 1), 1));
-  }
-}
-
-/**
  * Create a new list in the editor.
  * @param {Object} param0
  * @param {string|Object} param0.listType - The type of the list to be created (e.g., 'orderedList', 'bulletList').
@@ -530,40 +488,6 @@ export const createNewList = ({ listType, tr, editor }) => {
 };
 
 /**
- * Get the current list item from the editor state.
- * @param {Object} state - The ProseMirror editor state.
- * @returns {import('./findParentNode').ParentNodeInfo|null} The current list item node, or null if not found.
- */
-export const getCurrentListItem = (state) => {
-  return findParentNode((node) => node.type.name === 'listItem')(state.selection);
-};
-
-/**
- * Get the parent ordered list of the current selection.
- * @param {Object} state - The ProseMirror editor state.
- * @returns {import('./findParentNode').ParentNodeInfo|null} The parent ordered list node, or null if not found.
- */
-export const getParentOrderedList = (state) => {
-  return findParentNode((node) => node.type.name === 'orderedList')(state.selection);
-};
-
-/**
- * Set the selection inside a newly created list.
- * @param {Object} tr - The ProseMirror transaction object.
- * @param {number} basePos - The base position where the new list is inserted.
- * @returns {void}
- */
-export const setSelectionInsideNewList = (tr, basePos) => {
-  try {
-    const $pos = tr.doc.resolve(basePos + 3);
-    tr.setSelection(TextSelection.near($pos));
-  } catch {
-    const $fallback = tr.doc.resolve(basePos + 1);
-    tr.setSelection(TextSelection.near($fallback));
-  }
-};
-
-/**
  * Replace a list with a new node in the ProseMirror transaction.
  * @param {Object} param0 - The parameters for the replacement.
  * @param {Object} param0.tr - The ProseMirror transaction object.
@@ -577,132 +501,14 @@ export const replaceListWithNode = ({ tr, from, to, newNode }) => {
 };
 
 /**
- * Convert a list item to a paragraph.
- * @param {Object} param0 - The parameters for the conversion.
- * @param {Object} param0.state - The ProseMirror editor state.
- * @param {import("prosemirror-state").Transaction} param0.tr - The ProseMirror transaction object.
- * @param {{node: import("prosemirror-model").Node, pos: Number}} param0.currentNode - The current list item node to be converted.
- * @param {number} param0.replaceFrom - The starting position of the list item to be replaced.
- * @param {number} param0.replaceTo - The ending position of the list item to be replaced.
- * @returns {boolean} True if the conversion was successful, false otherwise.
- */
-export const convertListItemToParagraph = ({ state, tr, currentNode, replaceFrom, replaceTo }) => {
-  const paragraphContent = currentNode.node.content.firstChild;
-  if (!paragraphContent) return false;
-
-  const paragraphNode = state.schema.nodes.paragraph.create(
-    paragraphContent.attrs,
-    paragraphContent.content,
-    paragraphContent.marks,
-  );
-
-  replaceListWithNode({ tr, from: replaceFrom, to: replaceTo, newNode: paragraphNode });
-
-  const newPos = replaceFrom + 1;
-  const $pos = tr.doc.resolve(newPos);
-  tr.setSelection(TextSelection.near($pos));
-
-  return true;
-};
-
-/**
- * Insert a new list into the ProseMirror transaction.
- * @param {number} replaceFrom - The starting position where the list will be inserted.
- * @param {number} replaceTo - The ending position where the list will be inserted.
- * @param {Node} listNode - The new list node to be inserted.
- * @param {Array} [marks=[]] - Optional array of marks to be applied to the new list item.
- * @returns {Boolean} True if the insertion was successful, false otherwise.
- */
-export const insertNewList = (tr, replaceFrom, replaceTo, listNode, marks = []) => {
-  tr.replaceWith(replaceFrom, replaceTo, listNode);
-  tr.ensureMarks(marks);
-
-  // Find the actual end position of the text content in the list
-  const listStart = replaceFrom;
-  const $paragraphStart = tr.doc.resolve(listStart + 2);
-  const paragraphNode = $paragraphStart.parent;
-  const endPos = $paragraphStart.pos + paragraphNode.content.size;
-
-  const $endPos = tr.doc.resolve(endPos);
-  tr.setSelection(TextSelection.near($endPos));
-
-  return true;
-};
-
-/**
- * Get style definitions for a list item based on its styleId and numId.
- * @param {Object} param0 - The parameters for retrieving the style definitions.
- * @param {string} param0.styleId - The style ID of the list item.
- * @param {number} param0.numId - The numbering ID of the list item.
- * @param {number} param0.level - The level of the list item.
- * @param {import('../Editor').Editor} param0.editor - The editor instance containing the converted XML and numbering definitions.
- * @param {number} [param0.tries] - The number of attempts made to retrieve the style definitions.
- * @returns {Object} An object containing the style properties and numbering definitions.
- */
-export const getListItemStyleDefinitions = ({ styleId, numId, level, editor, tries }) => {
-  if (tries) return {};
-
-  if (typeof numId === 'string') numId = Number(numId);
-  if (typeof level === 'string') level = Number(level);
-
-  const docx = editor?.converter?.convertedXml;
-  const converter = editor?.converter;
-  const numbering = converter?.numbering;
-
-  // We need definitions for the styleId if we have one.
-  const styleDefinition = docx ? getStyleTagFromStyleId(styleId, docx) : null;
-  const stylePpr = styleDefinition?.elements.find((el) => el.name === 'w:pPr');
-
-  // We also check definitions for the numId which can contain styles.
-  let abstractDefinition = docx ? getAbstractDefinition(numId, docx, converter) : null;
-  if (!abstractDefinition) {
-    const listDef = numbering?.definitions?.[numId];
-    const abstractId = listDef?.elements?.find((item) => item.name === 'w:abstractNumId')?.attributes?.['w:val'];
-    abstractDefinition = numbering?.abstracts?.[abstractId];
-  }
-
-  const numDefinition = getDefinitionForLevel(abstractDefinition, level);
-  const numDefPpr = numDefinition?.elements.find((el) => el.name === 'w:pPr');
-  const numLvlJs = numDefinition?.elements.find((el) => el.name === 'w:lvlJc');
-
-  return {
-    stylePpr,
-    numDefPpr,
-    numLvlJs,
-  };
-};
-
-/**
- * Add inline text marks to the current node.
- * It is used to ensure that inline text styles are preserved when manipulating list items.
- * @param {Object} currentNode - The current ProseMirror node being processed.
- * @param {Array} filteredMarks - An array of marks to which the inline text styles will be added.
- * @returns {Array} The updated array of marks including the inline text styles.
- */
-export const addInlineTextMarks = (currentNode, filteredMarks) => {
-  const newMarks = [...filteredMarks];
-  try {
-    const textMarks = currentNode.children[0].children[0].marks;
-    const inlineTextStyleFromSplitBlock = textMarks.find((m) => m.type.name === 'textStyle');
-    inlineTextStyleFromSplitBlock && newMarks.push(inlineTextStyleFromSplitBlock);
-  } catch {}
-  return newMarks;
-};
-
-/**
  * ListHelpers is a collection of utility functions for managing lists in the editor.
  * It includes functions for creating, modifying, and retrieving list items and definitions,
  * as well as handling schema nodes and styles.
  */
 export const ListHelpers = {
-  getCurrentListItem,
-  getParentOrderedList,
-  setSelectionInsideNewList,
   replaceListWithNode,
-  convertListItemToParagraph,
 
   // DOCX helpers
-  insertNewList,
   getListDefinitionDetails,
   getAllListDefinitions,
   generateNewListDefinition,
@@ -710,13 +516,11 @@ export const ListHelpers = {
   getNewListId,
   hasListDefinition,
   removeListDefinitions,
-  getListItemStyleDefinitions,
 
   // Schema helpers
   createNewList,
   createSchemaOrderedListNode,
   createListItemNodeJSON,
-  addInlineTextMarks,
   changeNumIdSameAbstract,
 
   // Base list definitions
