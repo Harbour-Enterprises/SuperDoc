@@ -243,9 +243,10 @@ export const CommentsPlugin = Extension.create({
       },
 
       view() {
-        let prevDoc;
-        let prevActiveThreadId; // Add this to track active thread changes
-        let prevAllCommentPositions = {}; // Cache previous positions
+        let prevDoc = null;
+        let prevActiveThreadId = null;
+        let prevAllCommentPositions = {};
+        let hasEverEmitted = false;
 
         return {
           update(view) {
@@ -259,7 +260,7 @@ export const CommentsPlugin = Extension.create({
               shouldUpdate = true;
             }
 
-            const docChanged = prevDoc && !prevDoc.eq(doc);
+            const docChanged = !prevDoc || !prevDoc.eq(doc);
             if (docChanged) shouldUpdate = true;
 
             const activeThreadChanged = prevActiveThreadId !== currentActiveThreadId;
@@ -268,8 +269,9 @@ export const CommentsPlugin = Extension.create({
               prevActiveThreadId = currentActiveThreadId;
             }
 
-            // If only active thread changed, reuse cached positions
-            const onlyActiveThreadChanged = !docChanged && activeThreadChanged;
+            // If only active thread changed after first render, reuse cached positions
+            const isInitialLoad = prevDoc === null;
+            const onlyActiveThreadChanged = !isInitialLoad && !docChanged && activeThreadChanged;
 
             if (!shouldUpdate) return;
             prevDoc = doc;
@@ -373,9 +375,14 @@ export const CommentsPlugin = Extension.create({
             // Only emit comment-positions if they changed
             if (!onlyActiveThreadChanged) {
               const positionsChanged = hasPositionsChanged(prevAllCommentPositions, allCommentPositions);
+              const hasComments = Object.keys(allCommentPositions).length > 0;
+              // Emit positions if they changed OR if this is the first emission with comments present.
+              // This ensures positions are emitted on initial load even when only the active thread changes.
+              const shouldEmitPositions = positionsChanged || (!hasEverEmitted && hasComments);
 
-              if (positionsChanged) {
+              if (shouldEmitPositions) {
                 prevAllCommentPositions = allCommentPositions;
+                hasEverEmitted = true;
                 editor.emit('comment-positions', { allCommentPositions });
               }
             }
@@ -405,7 +412,11 @@ const hasPositionsChanged = (prevPositions, currPositions) => {
     const prev = prevPositions[key];
     const curr = currPositions[key];
 
-    if (!prev || prev.top !== curr.top || prev.left !== curr.left) {
+    if (!prev || !prev.bounds || !curr.bounds) {
+      return true;
+    }
+
+    if (prev.bounds.top !== curr.bounds.top || prev.bounds.left !== curr.bounds.left) {
       return true;
     }
   }

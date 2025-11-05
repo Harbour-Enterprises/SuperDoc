@@ -433,4 +433,48 @@ describe('SuperDoc.vue', () => {
     expect(superdocStoreStub.activeSelection.value).toBeNull();
     expect(wrapper.find('.superdoc__tools').exists()).toBe(false);
   });
+
+  it('shows floating comments after imported threads and positions load', async () => {
+    const superdocStub = createSuperdocStub();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const importedComment = {
+      commentId: null,
+      importedId: 'import-1',
+      documentId: 'doc-1',
+      commentText: '<p>Imported</p>',
+      createdTime: Date.now(),
+    };
+
+    options.onCommentsUpdate({ type: 'add', comment: importedComment });
+    await nextTick();
+
+    const positionsPayload = {
+      allCommentIds: [],
+      allCommentPositions: {
+        'import-1': {
+          threadId: 'import-1',
+          start: 5,
+          end: 10,
+          bounds: { top: 20, left: 40 },
+        },
+      },
+    };
+
+    options.onCommentLocationsUpdate(positionsPayload);
+    expect(commentsStoreStub.handleEditorLocationsUpdate).toHaveBeenCalledWith(
+      positionsPayload.allCommentPositions,
+      positionsPayload.allCommentIds,
+    );
+
+    superdocStoreStub.isReady.value = true;
+    await nextTick();
+    commentsStoreStub.getFloatingComments.value = [{ commentId: null, importedId: 'import-1' }];
+    await nextTick();
+
+    expect(wrapper.vm.showCommentsSidebar).toBe(true);
+    expect(wrapper.find('.floating-comments').exists()).toBe(true);
+  });
 });
