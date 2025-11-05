@@ -214,16 +214,14 @@ export function getStyleProperties(params, styleId, translator) {
 }
 
 export function getNumberingProperties(params, ilvl, numId, translator) {
-  const { docx } = params;
-  const numberingElements = docx['word/numbering.xml'].elements?.[0]?.elements;
-  if (!numberingElements) return {};
+  const { numbering: allDefinitions } = params;
+  const { definitions, abstracts } = allDefinitions;
 
   const propertiesChain = [];
 
   // Find the num definition for the given numId
-  const abstractDefinitions = numberingElements?.filter((element) => element.name === 'w:abstractNum');
-  const numDefinitions = numberingElements?.filter((element) => element.name === 'w:num');
-  const numDefinition = numDefinitions?.find((element) => element.attributes['w:numId'] == numId);
+  const numDefinition = definitions[numId];
+  if (!numDefinition) return {};
 
   // Find overrides for this level in the num definition
   const lvlOverride = numDefinition?.elements?.find(
@@ -236,13 +234,13 @@ export function getNumberingProperties(params, ilvl, numId, translator) {
   }
 
   // Find corresponding abstractNum definition
-  const abstractNumId = numDefinition?.elements[0].attributes['w:val'];
-  const listDefinitionForThisNumId = abstractDefinitions?.find(
-    (element) => element.attributes['w:abstractNumId'] === abstractNumId,
-  );
+  const abstractNumId = numDefinition.elements?.find((item) => item.name === 'w:abstractNumId')?.attributes?.['w:val'];
+
+  const listDefinitionForThisNumId = abstracts[abstractNumId];
   if (!listDefinitionForThisNumId) return {};
 
   // Find the level definition within the abstractNum
+
   const levelDefinition = listDefinitionForThisNumId?.elements?.find(
     (element) => element.name === 'w:lvl' && element.attributes['w:ilvl'] == ilvl,
   );
