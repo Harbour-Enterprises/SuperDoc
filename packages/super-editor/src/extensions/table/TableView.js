@@ -1,5 +1,5 @@
 import { getColStyleDeclaration } from './tableHelpers/getColStyleDeclaration.js';
-import { twipsToPixels, PIXELS_PER_INCH } from '@core/super-converter/helpers.js';
+import { twipsToPixels, PIXELS_PER_INCH, convertToPixels } from '@core/super-converter/helpers.js';
 import { Attribute } from '@core/Attribute.js';
 
 /**
@@ -66,15 +66,17 @@ export const createTableView = ({ editor }) => {
   };
 };
 
-export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, overrideValue, editor) {
-  const gridColumns =
-    Array.isArray(node.attrs?.grid) && node.attrs.grid.length
-      ? node.attrs.grid.map((col) => twipsToPixels(col.col))
-      : null;
-  const totalColumns = gridColumns?.length ?? null;
+/**
+ * @param {HTMLElement} element
+ * @param {import('@core/Editor.js').Editor} editor
+ *
+ * @return {Number | null}
+ */
+function getAvailableWidth(element, editor) {
+  // TODO: should this actually use the pgSz / pgMar of the document rather than querying editor?
 
-  const pageBody = table.closest('.page__body');
-  const wrapper = table.parentElement;
+  const pageBody = element.closest('.page__body');
+  const wrapper = element.parentElement;
   let availableWidth = pageBody?.getBoundingClientRect?.().width;
   if (!availableWidth && wrapper) {
     availableWidth = wrapper.getBoundingClientRect().width;
@@ -85,6 +87,7 @@ export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, 
     availableWidth = null;
   }
 
+  // TODO: is there a situation where editor?.converter?.pageStyles?.pageSize?.width is undefined/zero? If so, what's the correct value to use for (say) 100% width in a table?
   const pageStyles = editor?.converter?.pageStyles;
   if (pageStyles?.pageSize?.width) {
     const toNumber = (v) => (typeof v === 'number' ? v : parseFloat(v) || 0);
@@ -93,9 +96,26 @@ export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, 
     const marginRight = toNumber(pageStyles.pageMargins?.right);
     const pageAvailableWidthPx = Math.max((pageWidth - marginLeft - marginRight) * PIXELS_PER_INCH, 0);
     if (pageAvailableWidthPx > 0) {
+      // TODO: Why not just use the pageAvailableWidthPx? In what situation do we want to reduce it based on availableWidth?
       availableWidth = availableWidth ? Math.min(availableWidth, pageAvailableWidthPx) : pageAvailableWidthPx;
     }
   }
+
+  return availableWidth;
+}
+
+export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, overrideValue, editor) {
+  const gridColumns =
+    Array.isArray(node.attrs?.grid) && node.attrs.grid.length
+      ? node.attrs.grid.map((col) => twipsToPixels(col.col))
+      : null;
+  const totalColumns = gridColumns?.length ?? null;
+
+  const tableWidth = convertToPixels(
+    node.attrs.tableProperties.tableWidth.value,
+    node.attrs.tableProperties.tableWidth.type,
+    () => getAvailableWidth(table, editor),
+  );
 
   const resolveColumnWidth = (colIndex, colwidthValue) => {
     if (overrideCol === colIndex) return overrideValue;
@@ -136,8 +156,8 @@ export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, 
   const rawTotalWidth = normalizedWidths.reduce((sum, width) => sum + (width != null ? width : cellMinWidth), 0);
 
   let scale = 1;
-  if (availableWidth && rawTotalWidth > 0 && rawTotalWidth > availableWidth) {
-    scale = availableWidth / rawTotalWidth;
+  if (tableWidth && rawTotalWidth > 0 && rawTotalWidth > tableWidth) {
+    scale = tableWidth / rawTotalWidth;
   }
 
   let totalWidth = 0;
@@ -175,15 +195,7 @@ export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, 
     dom = next;
   }
 
-  if (scale < 1 || !hasUndefinedWidth) {
-    const clampedWidth = Math.min(totalWidth, availableWidth || totalWidth);
-    table.style.width = `${clampedWidth}px`;
-    table.style.minWidth = '';
-  } else {
-    table.style.width = '';
-    table.style.minWidth = `${totalWidth}px`;
-  }
-  table.style.maxWidth = '100%';
+  table.style.width = `${tableWidth}px`;
 }
 
 function updateTable(editor, node, table) {
