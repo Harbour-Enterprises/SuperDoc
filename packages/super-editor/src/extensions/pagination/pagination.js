@@ -14,6 +14,7 @@ import { LinkedStylesPluginKey } from '@extensions/linked-styles/index.js';
 import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestToPos.js';
 import { generateDocxRandomId } from '../../core/helpers/index.js';
 import { computePosition, autoUpdate, hide } from '@floating-ui/dom';
+import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
 
 const SEPARATOR_CLASS = 'pagination-separator';
 const SEPARATOR_FLOATING_CLASS = 'pagination-separator-floating';
@@ -386,6 +387,7 @@ const calculatePageBreaks = (view, editor, sectionData) => {
   if (!tempContainer) return [];
 
   tempContainer.className = 'temp-container super-editor';
+  applyStyleIsolationClass(tempContainer);
   const HIDDEN_EDITOR_OFFSET_TOP = 0;
   const HIDDEN_EDITOR_OFFSET_LEFT = 0;
   tempContainer.style.left = HIDDEN_EDITOR_OFFSET_TOP + 'px';
