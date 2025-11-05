@@ -1,9 +1,8 @@
 import { SuperConverter } from './SuperConverter.js';
-import { inchesToTwips, linesToTwips, pixelsToTwips, rgbToHex } from './helpers.js';
+import { inchesToTwips, linesToTwips, rgbToHex } from './helpers.js';
 import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
 import { carbonCopy } from '../utilities/carbonCopy.js';
-import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wHighlightTranslator } from './v3/handlers/w/highlight/highlight-translator.js';
@@ -214,8 +213,6 @@ export function exportSchemaToJson(params) {
     paragraph: wPNodeTranslator,
     run: wRNodeTranslator,
     text: wTextTranslator,
-    bulletList: translateList,
-    orderedList: translateList,
     lineBreak: wBrNodeTranslator,
     table: wTblNodeTranslator,
     tableRow: wTrNodeTranslator,
@@ -661,201 +658,6 @@ export function addNewLinkRelationship(params, link) {
 
   return newId;
 }
-
-/**
- * Translate a list node
- *
- * @param {ExportParams} params
- * @returns {XmlReadyNode} The translated list node
- */
-function translateList(params) {
-  const { node, editor } = params;
-
-  const listItem = node.content[0];
-  const { numId, level } = listItem.attrs;
-  const listType = node.type.name;
-  const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
-  if (!listDef) {
-    ListHelpers.generateNewListDefinition({
-      numId,
-      listType,
-      editor,
-    });
-  }
-
-  // Collapse multiple paragraphs into a single node for this list item
-  // In docx we need a single paragraph, but can include line breaks in a run
-  const collapsedParagraphNode = convertMultipleListItemsIntoSingleNode(listItem);
-
-  let outputNode = exportSchemaToJson({ ...params, node: collapsedParagraphNode });
-
-  /**
-   * MS Word does not allow paragraphs inside lists (which are just paragraphs in OOXML)
-   * So we need to turn paragraphs into runs and add line breaks
-   *
-   * Two cases:
-   *  1. Final doc (keep paragraph field content inside list item)
-   *  2. Not final doc (keep w:sdt node, process its content)
-   */
-  if (Array.isArray(outputNode) && params.isFinalDoc) {
-    const parsedElements = [];
-    outputNode?.forEach((node, index) => {
-      if (node?.elements) {
-        const runs = node.elements?.filter((n) => n.name === 'w:r');
-        parsedElements.push(...runs);
-
-        if (node.name === 'w:p' && index < outputNode.length - 1) {
-          parsedElements.push({
-            name: 'w:br',
-          });
-        }
-      }
-    });
-
-    outputNode = {
-      name: 'w:p',
-      elements: [{ name: 'w:pPr', elements: [] }, ...parsedElements],
-    };
-  }
-
-  /** Case 2: Process w:sdt content */
-  let nodesToFlatten = [];
-  const sdtNodes = outputNode.elements?.filter((n) => n.name === 'w:sdt');
-  if (sdtNodes && sdtNodes.length > 0) {
-    nodesToFlatten = sdtNodes;
-    nodesToFlatten?.forEach((sdtNode) => {
-      const sdtContent = sdtNode.elements.find((n) => n.name === 'w:sdtContent');
-      const foundRun = sdtContent.elements?.find((el) => el.name === 'w:r'); // this is a regular text field.
-      if (sdtContent && sdtContent.elements && !foundRun) {
-        const parsedElements = [];
-        sdtContent.elements.forEach((element, index) => {
-          if (element.name === 'w:rPr' && element.elements?.length) {
-            parsedElements.push(element);
-          }
-
-          const runs = element.elements?.filter((n) => n.name === 'w:r');
-          if (runs && runs.length) {
-            parsedElements.push(...runs);
-          }
-
-          if (element.name === 'w:p' && index < sdtContent.elements.length - 1) {
-            parsedElements.push({
-              name: 'w:br',
-            });
-          }
-        });
-        sdtContent.elements = parsedElements;
-      }
-    });
-  }
-
-  const pPr = outputNode.elements?.find((n) => n.name === 'w:pPr');
-  const hasNumPr = pPr?.elements?.some((e) => e?.name === 'w:numPr');
-  if (pPr && !hasNumPr) {
-    const numPrTag = generateNumPrTag(numId, level);
-    pPr.elements.unshift(numPrTag);
-  }
-  const indentTag = restoreIndent(listItem.attrs.indent);
-  indentTag && pPr?.elements?.push(indentTag);
-
-  if (listItem.attrs.numPrType !== 'inline') {
-    const numPrIndex = pPr?.elements?.findIndex((e) => e?.name === 'w:numPr');
-    if (numPrIndex !== -1) {
-      pPr?.elements?.splice(numPrIndex, 1);
-    }
-  }
-
-  return [outputNode];
-}
-
-/**
- * Convert multiple list items into a single paragraph node
- * This is necessary because in docx, a list item can only have one paragraph,
- * but in PM, a list item can have multiple paragraphs.
- * @param {SchemaNode} listItem The list item node to convert
- * @returns {XmlReadyNode|null} The collapsed paragraph node or null if no content
- */
-const convertMultipleListItemsIntoSingleNode = (listItem) => {
-  const { content } = listItem;
-
-  if (!content || content.length === 0) {
-    return null;
-  }
-
-  const firstParagraph = content[0];
-  const collapsedParagraph = {
-    ...firstParagraph,
-    content: [],
-  };
-
-  // Collapse all paragraphs into a single paragraph node
-  content.forEach((item, index) => {
-    if (item.type === 'paragraph') {
-      if (index > 0) {
-        collapsedParagraph.content.push({
-          type: 'lineBreak',
-          attrs: {},
-          content: [],
-        });
-      }
-
-      // Add all text nodes and other content directly from this paragraph
-      if (item.content && item.content.length > 0) {
-        collapsedParagraph.content.push(...item.content);
-      }
-    } else {
-      // For non-paragraph items, add them directly
-      collapsedParagraph.content.push(item);
-    }
-  });
-
-  // Trim duplicate manual breaks while preserving the single break that Word expects
-  // between a list item paragraph and following block content (e.g. tables).
-  collapsedParagraph.content = collapsedParagraph.content.filter((node, index, nodes) => {
-    if (!isLineBreakOnlyRun(node)) return true;
-    const prevNode = nodes[index - 1];
-    return !(prevNode && isLineBreakOnlyRun(prevNode));
-  });
-
-  return collapsedParagraph;
-};
-
-const restoreIndent = (indent) => {
-  const attributes = {};
-  if (!indent) indent = {};
-  if (indent.left || indent.left === 0) attributes['w:left'] = pixelsToTwips(indent.left);
-  if (indent.right || indent.right === 0) attributes['w:right'] = pixelsToTwips(indent.right);
-  if (indent.firstLine || indent.firstLine === 0) attributes['w:firstLine'] = pixelsToTwips(indent.firstLine);
-  if (indent.hanging || indent.hanging === 0) attributes['w:hanging'] = pixelsToTwips(indent.hanging);
-  if (indent.leftChars || indent.leftChars === 0) attributes['w:leftChars'] = pixelsToTwips(indent.leftChars);
-
-  if (!Object.keys(attributes).length) return;
-
-  return {
-    name: 'w:ind',
-    type: 'element',
-    attributes,
-  };
-};
-
-const generateNumPrTag = (numId, level) => {
-  return {
-    name: 'w:numPr',
-    type: 'element',
-    elements: [
-      {
-        name: 'w:numId',
-        type: 'element',
-        attributes: { 'w:val': numId },
-      },
-      {
-        name: 'w:ilvl',
-        type: 'element',
-        attributes: { 'w:val': level },
-      },
-    ],
-  };
-};
 
 /**
  * Translate a mark to an XML ready attribute
