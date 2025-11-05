@@ -4,6 +4,7 @@ import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 import { pixelsToTwips, linesToTwips, twipsToPixels, eighthPointsToPixels } from '@converter/helpers.js';
+import { createNumberingPlugin } from './numberingPlugin.js';
 
 /**
  * Configuration options for Paragraph
@@ -391,7 +392,8 @@ export const Paragraph = OxmlNode.create({
       },
     });
 
-    return [dropcapPlugin];
+    const numberingPlugin = createNumberingPlugin(this.editor);
+    return [dropcapPlugin, numberingPlugin];
   },
 });
 
