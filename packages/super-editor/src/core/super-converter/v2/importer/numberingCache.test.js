@@ -151,4 +151,68 @@ describe('numbering cache helpers', () => {
     expect(secondCache.numToDefinition.has('1')).toBe(false);
     expect(getNumberingCache(converter)).toBe(secondCache);
   });
+
+  it('returns cached version when docx becomes null after initial cache build', () => {
+    const converter = {};
+    const docx = createDocxPackage({ numId: '5', abstractId: '15' });
+    const initialCache = ensureNumberingCache(docx, converter);
+
+    expect(initialCache.numToDefinition.has('5')).toBe(true);
+
+    // Subsequent call with null should return the cached version
+    const cachedVersion = ensureNumberingCache(null, converter);
+    expect(cachedVersion).toBe(initialCache);
+    expect(cachedVersion.numToDefinition.has('5')).toBe(true);
+  });
+
+  it('does not rebuild cache when same docx is passed multiple times', () => {
+    const converter = {};
+    const docx = createDocxPackage({ numId: '3', abstractId: '13' });
+
+    const firstCall = ensureNumberingCache(docx, converter);
+    const secondCall = ensureNumberingCache(docx, converter);
+    const thirdCall = ensureNumberingCache(docx, converter);
+
+    expect(secondCall).toBe(firstCall);
+    expect(thirdCall).toBe(firstCall);
+    expect(firstCall.numToDefinition.has('3')).toBe(true);
+  });
+
+  it('handles converter reuse with docx → null → different docx sequence', () => {
+    const converter = {};
+    const firstDocx = createDocxPackage({ numId: '7', abstractId: '17' });
+    const secondDocx = createDocxPackage({ numId: '9', abstractId: '19' });
+
+    // Build initial cache
+    const firstCache = ensureNumberingCache(firstDocx, converter);
+    expect(firstCache.numToDefinition.has('7')).toBe(true);
+
+    // Call with null - should return cached version
+    const nullCache = ensureNumberingCache(null, converter);
+    expect(nullCache).toBe(firstCache);
+
+    // Call with different docx - should rebuild
+    const secondCache = ensureNumberingCache(secondDocx, converter);
+    expect(secondCache).not.toBe(firstCache);
+    expect(secondCache.numToDefinition.has('9')).toBe(true);
+    expect(secondCache.numToDefinition.has('7')).toBe(false);
+  });
+
+  it('uses WeakMap fallback when no converter is provided', () => {
+    const docx = createDocxPackage({ numId: '4', abstractId: '14' });
+
+    // Build cache without converter - should use WeakMap
+    const firstCache = ensureNumberingCache(docx);
+    expect(firstCache.numToDefinition.has('4')).toBe(true);
+
+    // Second call without converter should reuse WeakMap-stored cache
+    const secondCache = ensureNumberingCache(docx);
+    expect(secondCache).toBe(firstCache);
+
+    // Now with a converter, it should reuse the WeakMap cache
+    const converter = {};
+    const thirdCache = ensureNumberingCache(docx, converter);
+    expect(thirdCache).toBe(firstCache);
+    expect(getNumberingCache(converter)).toBe(firstCache);
+  });
 });

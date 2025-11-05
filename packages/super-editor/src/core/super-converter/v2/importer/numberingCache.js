@@ -32,15 +32,25 @@ export const NUMBERING_CACHE_KEY = 'numbering-cache';
 /** Symbol used to memoize level lookups on abstract numbering elements. */
 export const LEVELS_MAP_KEY = Symbol('superdoc.numbering.levels');
 
-/** Symbol used to track which docx package created the converter cache. */
+/** Symbol used to track which docx package created the converter cache for invalidation detection. */
 const NUMBERING_CACHE_DOCX_KEY = Symbol('superdoc.numbering.docx');
 
+/**
+ * Clears all numbering cache data from a converter instance.
+ * @param {Object} [converter] - The converter instance to clear
+ */
 const clearConverterCache = (converter) => {
   if (!converter) return;
   delete converter[NUMBERING_CACHE_KEY];
   delete converter[NUMBERING_CACHE_DOCX_KEY];
 };
 
+/**
+ * Stores a numbering cache on a converter instance and tracks the source docx package.
+ * @param {Object} [converter] - The converter instance to store the cache on
+ * @param {NumberingCache} cache - The numbering cache to store
+ * @param {DocxPackage | null | undefined} docx - The docx package that generated this cache
+ */
 const setConverterCache = (converter, cache, docx) => {
   if (!converter) return;
   converter[NUMBERING_CACHE_KEY] = cache;
