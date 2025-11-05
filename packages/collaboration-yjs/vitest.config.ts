@@ -4,13 +4,13 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: true,
-    include: ['src/**/*.test.{js,jsx,ts,tsx}'],
+    include: ['src/**/*.test.ts'],
     exclude: ['node_modules', 'dist', 'examples', 'examples/**'],
-    includeSource: ['src/**/*.{js,jsx,ts,tsx}'],
+    includeSource: ['src/**/*.{ts,tsx}'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov'],
-      include: ['src/**/*.{js,jsx,ts,tsx}'],
+      include: ['src/**/*.{ts,tsx}'],
       exclude: [
         'node_modules/**',
         'dist/**',
@@ -18,9 +18,8 @@ export default defineConfig({
         '**/examples/**',
         '**/*.vue',
         'src/tests/utils/**',
-        '**/types/**',
-        '**/types.js',
-        '**/index.js',
+        'src/types/**',
+        'src/index.ts',
       ],
       cleanOnRerun: true,
     },

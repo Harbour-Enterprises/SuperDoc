@@ -1,16 +1,12 @@
 {
-  "include": ["./src/**/*"],
+  "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "checkJs": true,
-    "allowJs": true,
-    "declaration": true,
-    "emitDeclarationOnly": true,
+    "rootDir": "src",
     "outDir": "dist",
+    "declaration": true,
     "declarationMap": true,
-    "skipLibCheck": true,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true
-  }
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "examples", "examples/**", "dist", "node_modules"]
 }

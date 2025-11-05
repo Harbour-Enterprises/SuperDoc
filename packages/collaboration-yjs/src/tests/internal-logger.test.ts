@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { createLogger } from '../internal-logger/logger.js';
 
 describe('createLogger', () => {
-  let consoleSpy;
+  let consoleSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});

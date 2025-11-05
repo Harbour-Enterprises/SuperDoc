@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import websocketPlugin from '@fastify/websocket';
 import { Doc as YDoc, encodeStateAsUpdate } from 'yjs';
 
-import { CollaborationBuilder } from '@harbour-enterprises/superdoc-yjs-collaboration';
+import { CollaborationBuilder } from '@superdoc-dev/superdoc-yjs-collaboration';
 
 
 /** Create an example server */
