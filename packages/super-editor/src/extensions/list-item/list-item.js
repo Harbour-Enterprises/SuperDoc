@@ -2,6 +2,7 @@ import { Node, Attribute } from '@core/index.js';
 import { ListItemNodeView } from './ListItemNodeView.js';
 import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 import { orderedListSync } from '../ordered-list/helpers/orderedListSyncPlugin.js';
+import { shouldSkipNodeView } from '../../utils/headless-helpers.js';
 
 /**
  * Configuration options for ListItem
@@ -78,9 +79,13 @@ export const ListItem = Node.create({
 
   /**
    * Important: The listItem node uses a custom node view.
-   * @returns {import('@core/NodeView.js').NodeView}
+   * Skip node view in headless mode for performance.
+   * @returns {import('@core/NodeView.js').NodeView|null}
    */
   addNodeView() {
+    // Check headless mode before returning the node view function
+    if (shouldSkipNodeView(this.editor)) return null;
+
     return ({ node, editor, getPos, decorations }) => {
       return new ListItemNodeView(node, getPos, decorations, editor);
     };
