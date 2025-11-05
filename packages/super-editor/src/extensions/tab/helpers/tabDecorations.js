@@ -6,6 +6,8 @@ export const defaultLineLength = 816;
 export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
   const decorations = [];
   const paragraphCache = new Map();
+  const coordCache = new Map();
+  const domPosCache = new Map();
 
   const end = to ?? doc.content.size;
 
@@ -18,13 +20,23 @@ export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
     if (!paragraphContext) return;
 
     try {
-      const { tabStops, flattened, startPos } = paragraphContext;
-      const entryIndex = flattened.findIndex((entry) => entry.pos === pos);
-      if (entryIndex === -1) return;
+      const { tabStops, flattened, positionMap, startPos } = paragraphContext;
+      // Use O(1) map lookup instead of O(n) findIndex
+      const entryIndex = positionMap.get(pos);
+      if (entryIndex === undefined) return;
 
-      const indentWidth = getIndentWidth(view, startPos, paragraphContext.indent);
+      // Cache paragraph-level computed values (computed once per paragraph, not per tab)
+      if (paragraphContext.indentWidth === undefined) {
+        paragraphContext.indentWidth = getIndentWidth(view, startPos, paragraphContext.indent, coordCache, domPosCache);
+      }
+      if (paragraphContext.tabHeight === undefined) {
+        paragraphContext.tabHeight = calcTabHeight($pos);
+      }
+
+      const indentWidth = paragraphContext.indentWidth;
       const accumulatedTabWidth = paragraphContext.accumulatedTabWidth || 0;
-      const currentWidth = indentWidth + measureRangeWidth(view, startPos + 1, pos) + accumulatedTabWidth;
+      const currentWidth =
+        indentWidth + measureRangeWidth(view, startPos + 1, pos, coordCache, domPosCache) + accumulatedTabWidth;
 
       let tabWidth;
       if (tabStops.length) {
@@ -37,14 +49,20 @@ export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
             const segmentStartPos = pos + node.nodeSize;
             const segmentEndPos =
               nextTabIndex === -1 ? startPos + paragraphContext.paragraph.nodeSize - 1 : flattened[nextTabIndex].pos;
-            const segmentWidth = measureRangeWidth(view, segmentStartPos, segmentEndPos);
+            const segmentWidth = measureRangeWidth(view, segmentStartPos, segmentEndPos, coordCache, domPosCache);
             tabWidth -= tabStop.val === 'center' ? segmentWidth / 2 : segmentWidth;
           } else if (tabStop.val === 'decimal' || tabStop.val === 'num') {
             const breakChar = tabStop.decimalChar || '.';
             const decimalPos = findDecimalBreakPos(flattened, entryIndex + 1, breakChar);
             const integralWidth = decimalPos
-              ? measureRangeWidth(view, pos + node.nodeSize, decimalPos)
-              : measureRangeWidth(view, pos + node.nodeSize, startPos + paragraphContext.paragraph.nodeSize - 1);
+              ? measureRangeWidth(view, pos + node.nodeSize, decimalPos, coordCache, domPosCache)
+              : measureRangeWidth(
+                  view,
+                  pos + node.nodeSize,
+                  startPos + paragraphContext.paragraph.nodeSize - 1,
+                  coordCache,
+                  domPosCache,
+                );
             tabWidth -= integralWidth;
           }
 
@@ -66,7 +84,8 @@ export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
         if (tabWidth === 0) tabWidth = defaultTabDistance;
       }
 
-      const tabHeight = calcTabHeight($pos);
+      // Use cached tabHeight (computed once per paragraph)
+      const tabHeight = paragraphContext.tabHeight;
 
       decorations.push(
         Decoration.node(pos, pos + node.nodeSize, {
@@ -98,13 +117,15 @@ export function getParagraphContext($pos, cache, helpers) {
             tabStops = style.definition.styles.tabStops;
           }
         }
+        const { entries, positionMap } = flattenParagraph(node, startPos);
         cache.set(startPos, {
           paragraph: node,
           paragraphDepth: depth,
           startPos,
           indent: node.attrs?.indent || {},
           tabStops: tabStops,
-          flattened: flattenParagraph(node, startPos),
+          flattened: entries,
+          positionMap: positionMap, // Store position map for O(1) lookups
           accumulatedTabWidth: 0,
         });
       }
@@ -116,6 +137,7 @@ export function getParagraphContext($pos, cache, helpers) {
 
 export function flattenParagraph(paragraph, paragraphStartPos) {
   const entries = [];
+  const positionMap = new Map(); // Map from position to index for O(1) lookup
 
   const walk = (node, basePos) => {
     if (!node) return;
@@ -126,7 +148,10 @@ export function flattenParagraph(paragraph, paragraphStartPos) {
       });
       return;
     }
-    entries.push({ node, pos: basePos - 1 });
+    const pos = basePos - 1;
+    const index = entries.length;
+    entries.push({ node, pos });
+    positionMap.set(pos, index); // Store position -> index mapping
   };
 
   paragraph.forEach((child, offset) => {
@@ -134,7 +159,7 @@ export function flattenParagraph(paragraph, paragraphStartPos) {
     walk(child, childPos);
   });
 
-  return entries;
+  return { entries, positionMap };
 }
 
 export function findNextTabIndex(flattened, fromIndex) {
@@ -162,28 +187,28 @@ export function findDecimalBreakPos(flattened, startIndex, breakChar) {
   return null;
 }
 
-export function measureRangeWidth(view, from, to) {
+export function measureRangeWidth(view, from, to, coordCache = null, domPosCache = null) {
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0;
   try {
     const range = document.createRange();
-    const fromRef = view.domAtPos(from);
-    const toRef = view.domAtPos(to);
+    const fromRef = getCachedDomAtPos(view, from, domPosCache);
+    const toRef = getCachedDomAtPos(view, to, domPosCache);
     range.setStart(fromRef.node, fromRef.offset);
     range.setEnd(toRef.node, toRef.offset);
     const rect = range.getBoundingClientRect();
     range.detach?.();
     return rect.width || 0;
   } catch {
-    const startLeft = getLeftCoord(view, from);
-    const endLeft = getLeftCoord(view, to);
+    const startLeft = getLeftCoord(view, from, coordCache, domPosCache);
+    const endLeft = getLeftCoord(view, to, coordCache, domPosCache);
     if (startLeft == null || endLeft == null) return 0;
     return Math.max(0, endLeft - startLeft);
   }
 }
 
-export function getIndentWidth(view, paragraphStartPos, indentAttrs = {}) {
-  const marginLeft = getLeftCoord(view, paragraphStartPos);
-  const lineLeft = getLeftCoord(view, paragraphStartPos + 1);
+export function getIndentWidth(view, paragraphStartPos, indentAttrs = {}, coordCache = null, domPosCache = null) {
+  const marginLeft = getLeftCoord(view, paragraphStartPos, coordCache, domPosCache);
+  const lineLeft = getLeftCoord(view, paragraphStartPos + 1, coordCache, domPosCache);
   if (marginLeft != null && lineLeft != null) {
     const diff = lineLeft - marginLeft;
     if (!Number.isNaN(diff) && Math.abs(diff) > 0.5) {
@@ -219,23 +244,51 @@ export function calculateIndentFallback(indentAttrs = {}) {
   return 0;
 }
 
-export function getLeftCoord(view, pos) {
+export function getLeftCoord(view, pos, coordCache = null, domPosCache = null) {
   if (!Number.isFinite(pos)) return null;
+
+  // Check cache first
+  if (coordCache && coordCache.has(pos)) {
+    return coordCache.get(pos);
+  }
+
+  let result = null;
   try {
-    return view.coordsAtPos(pos).left;
+    result = view.coordsAtPos(pos).left;
   } catch {
     try {
-      const ref = view.domAtPos(pos);
+      const ref = getCachedDomAtPos(view, pos, domPosCache);
       const range = document.createRange();
       range.setStart(ref.node, ref.offset);
       range.setEnd(ref.node, ref.offset);
       const rect = range.getBoundingClientRect();
       range.detach?.();
-      return rect.left;
+      result = rect.left;
     } catch {
-      return null;
+      result = null;
     }
   }
+
+  // Store in cache if available
+  if (coordCache) {
+    coordCache.set(pos, result);
+  }
+
+  return result;
+}
+
+export function getCachedDomAtPos(view, pos, domPosCache = null) {
+  if (domPosCache && domPosCache.has(pos)) {
+    return domPosCache.get(pos);
+  }
+
+  const result = view.domAtPos(pos);
+
+  if (domPosCache) {
+    domPosCache.set(pos, result);
+  }
+
+  return result;
 }
 
 export function calcTabHeight(pos) {

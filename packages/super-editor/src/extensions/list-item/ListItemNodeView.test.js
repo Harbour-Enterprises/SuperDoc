@@ -9,6 +9,7 @@ const hoistedMocks = vi.hoisted(() => {
   const generateOrderedListIndexMock = vi.fn();
   const getListItemStyleDefinitionsMock = vi.fn();
   const resolveListItemTypographyMock = vi.fn();
+  const clearComputedStyleCacheMock = vi.fn();
 
   return {
     parseIndentElementMock,
@@ -17,6 +18,7 @@ const hoistedMocks = vi.hoisted(() => {
     generateOrderedListIndexMock,
     getListItemStyleDefinitionsMock,
     resolveListItemTypographyMock,
+    clearComputedStyleCacheMock,
   };
 });
 
@@ -50,6 +52,7 @@ vi.mock('@helpers/list-numbering-helpers.js', () => ({
 
 vi.mock('./helpers/listItemTypography.js', () => ({
   resolveListItemTypography: (...args) => hoistedMocks.resolveListItemTypographyMock(...args),
+  clearComputedStyleCache: (...args) => hoistedMocks.clearComputedStyleCacheMock(...args),
 }));
 
 import { ListItemNodeView, refreshAllListItemNodeViews, getVisibleIndent } from './ListItemNodeView.js';
@@ -57,6 +60,7 @@ import { ListItemNodeView, refreshAllListItemNodeViews, getVisibleIndent } from 
 const realRAF = globalThis.requestAnimationFrame;
 const realCAF = globalThis.cancelAnimationFrame;
 const nativeCreateElement = document.createElement;
+const realCanvasRenderingContext2D = globalThis.CanvasRenderingContext2D;
 
 const installCanvasMock = (width = 18) => {
   document.createElement = vi.fn((tagName, options) => {
@@ -69,6 +73,7 @@ const installCanvasMock = (width = 18) => {
     }
     return nativeCreateElement.call(document, tagName, options);
   });
+  globalThis.CanvasRenderingContext2D = function CanvasRenderingContext2D() {};
 };
 
 const createDefaultIndentDefinitions = ({ style = {}, numDef = {}, align = 'left' } = {}) => ({
@@ -105,6 +110,8 @@ let cancelAnimationFrameMock;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  globalThis.CanvasRenderingContext2D = realCanvasRenderingContext2D;
+  hoistedMocks.clearComputedStyleCacheMock.mockReset();
   parseIndentElementMock.mockImplementation((tag) => tag?.mockIndent || {});
   combineIndentsMock.mockImplementation((...indents) =>
     Object.assign({}, ...indents.filter((item) => item && Object.keys(item).length > 0)),
@@ -128,6 +135,7 @@ beforeEach(() => {
   globalThis.requestAnimationFrame = requestAnimationFrameMock;
   globalThis.cancelAnimationFrame = cancelAnimationFrameMock;
   document.createElement = nativeCreateElement;
+  globalThis.CanvasRenderingContext2D = realCanvasRenderingContext2D;
 });
 
 afterEach(() => {

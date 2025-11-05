@@ -17,10 +17,11 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
 export const trackedTransaction = ({ tr, state, user }) => {
   const onlyInputTypeMeta = ['inputType', 'uiEvent', 'paste', 'pointer'];
   const notAllowedMeta = ['historyUndo', 'historyRedo', 'acceptReject'];
+  const isProgrammaticInput = tr.getMeta('inputType') === 'programmatic';
 
   if (
     !tr.steps.length ||
-    (tr.meta && !Object.keys(tr.meta).every((meta) => onlyInputTypeMeta.includes(meta))) ||
+    (tr.meta && !Object.keys(tr.meta).every((meta) => onlyInputTypeMeta.includes(meta)) && !isProgrammaticInput) ||
     notAllowedMeta.includes(tr.getMeta('inputType')) ||
     tr.getMeta(CommentsPluginKey) // Skip if it's a comment transaction.
   ) {
@@ -81,11 +82,15 @@ export const trackedTransaction = ({ tr, state, user }) => {
   });
 
   if (tr.getMeta('inputType')) {
-    newTr.setMeta(tr.getMeta('inputType'));
+    newTr.setMeta('inputType', tr.getMeta('inputType'));
   }
 
   if (tr.getMeta('uiEvent')) {
-    newTr.setMeta(tr.getMeta('uiEvent'));
+    newTr.setMeta('uiEvent', tr.getMeta('uiEvent'));
+  }
+
+  if (tr.getMeta('addToHistory') !== undefined) {
+    newTr.setMeta('addToHistory', tr.getMeta('addToHistory'));
   }
 
   if (tr.selectionSet) {

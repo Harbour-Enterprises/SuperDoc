@@ -66,6 +66,29 @@ export const TabNode = Node.create({
 
   addPmPlugins() {
     const { view, helpers } = this.editor;
+
+    // Helper: Merge overlapping ranges to avoid redundant recalculations
+    const mergeRanges = (ranges) => {
+      if (ranges.length === 0) return [];
+
+      const sorted = ranges.slice().sort((a, b) => a[0] - b[0]);
+      const merged = [sorted[0]];
+
+      for (let i = 1; i < sorted.length; i++) {
+        const [start, end] = sorted[i];
+        const last = merged[merged.length - 1];
+
+        if (start <= last[1]) {
+          // Overlapping - extend the last range
+          last[1] = Math.max(last[1], end);
+        } else {
+          merged.push([start, end]);
+        }
+      }
+
+      return merged;
+    };
+
     const tabPlugin = new Plugin({
       name: 'tabPlugin',
       key: new PluginKey('tabPlugin'),
@@ -74,54 +97,88 @@ export const TabNode = Node.create({
           return { decorations: false };
         },
         apply(tr, { decorations }, _oldState, newState) {
+          // Initialize decorations on first call
           if (!decorations) {
             decorations = DecorationSet.create(newState.doc, getTabDecorations(newState.doc, view, helpers));
-          }
-
-          if (!tr.docChanged) {
             return { decorations };
           }
+
+          // Early return for non-document changes
+          if (!tr.docChanged || tr.getMeta('blockNodeInitialUpdate')) {
+            return { decorations };
+          }
+
           decorations = decorations.map(tr.mapping, tr.doc);
 
-          let rangesToRecalculate = [];
+          const rangesToRecalculate = [];
+
+          // Helper: Check if a node tree contains any tabs
+          const containsTab = (node) => node.type.name === 'tab';
+
           tr.steps.forEach((step, index) => {
-            const stepMap = step.getMap();
-            if (step instanceof ReplaceStep || step instanceof ReplaceAroundStep) {
-              const $from = tr.docs[index].resolve(step.from);
-              const $to = tr.docs[index].resolve(step.to);
-              const start = $from.start(Math.min($from.depth, 1)); // start of node at level 1
-              const end = $to.end(Math.min($to.depth, 1)); // end of node at level 1
-              let addRange = false;
-              tr.docs[index].nodesBetween(start, end, (node) => {
-                if (node.type.name === 'tab') {
-                  // Node contains or contained a tab
-                  addRange = true;
+            if (!(step instanceof ReplaceStep || step instanceof ReplaceAroundStep)) {
+              return;
+            }
+
+            let hasTabInRange = false;
+
+            // Fast check: does the inserted content contain tabs?
+            if (step.slice?.content) {
+              step.slice.content.descendants((node) => {
+                if (containsTab(node)) {
+                  hasTabInRange = true;
+                  return false; // Stop early
                 }
               });
-              if (!addRange && step.slice?.content) {
-                step.slice.content.descendants((node) => {
-                  if (node.type.name === 'tab') {
-                    // A tab was added.
-                    addRange = true;
-                  }
-                });
-              }
-              if (addRange) {
-                rangesToRecalculate.push([start, end]);
-              }
             }
-            rangesToRecalculate = rangesToRecalculate.map(([from, to]) => {
-              const mappedFrom = stepMap.map(from, -1);
-              const mappedTo = stepMap.map(to, 1);
-              return [mappedFrom, mappedTo];
-            });
+
+            // If no tabs inserted, check if the affected range had tabs
+            if (!hasTabInRange) {
+              tr.docs[index].nodesBetween(step.from, step.to, (node) => {
+                if (containsTab(node)) {
+                  hasTabInRange = true;
+                  return false; // Stop early
+                }
+              });
+            }
+
+            if (!hasTabInRange) {
+              return;
+            }
+
+            // Map positions from this step to final document
+            let fromPos = step.from;
+            let toPos = step.to;
+
+            for (let i = index; i < tr.steps.length; i++) {
+              const stepMap = tr.steps[i].getMap();
+              fromPos = stepMap.map(fromPos, -1);
+              toPos = stepMap.map(toPos, 1);
+            }
+
+            const $from = newState.doc.resolve(fromPos);
+            const $to = newState.doc.resolve(toPos);
+            const start = $from.start(Math.min($from.depth, 1));
+            const end = $to.end(Math.min($to.depth, 1));
+
+            rangesToRecalculate.push([start, end]);
           });
-          rangesToRecalculate.forEach(([start, end]) => {
+
+          if (rangesToRecalculate.length === 0) {
+            return { decorations };
+          }
+
+          // Merge overlapping ranges
+          const mergedRanges = mergeRanges(rangesToRecalculate);
+
+          // Recalculate decorations for merged ranges
+          mergedRanges.forEach(([start, end]) => {
             const oldDecorations = decorations.find(start, end);
             decorations = decorations.remove(oldDecorations);
             const newDecorations = getTabDecorations(newState.doc, view, helpers, start, end);
             decorations = decorations.add(newState.doc, newDecorations);
           });
+
           return { decorations };
         },
       },
