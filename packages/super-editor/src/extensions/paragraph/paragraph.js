@@ -228,6 +228,16 @@ export const Paragraph = OxmlNode.create({
         },
       },
       tabStops: { rendered: false },
+      listRendering: {
+        keepOnSplit: false,
+        renderDOM: ({ listRendering }) => {
+          return {
+            'data-marker-type': listRendering?.markerText,
+            'data-list-level': listRendering?.path ? JSON.stringify(listRendering.path) : null,
+            'data-list-numbering-type': listRendering?.numberingType,
+          };
+        },
+      },
     };
   },
 
