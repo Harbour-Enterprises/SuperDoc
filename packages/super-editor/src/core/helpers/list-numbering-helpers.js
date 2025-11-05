@@ -306,6 +306,56 @@ export const getListDefinitionDetails = ({ numId, level, listType, editor, tries
 };
 
 /**
+ * Get all list definitions grouped by numId and level.
+ * @param {import('../Editor').Editor} editor - The editor instance containing numbering information.
+ * @returns {Record<string, Record<string, {start: string|null, numFmt: string|null, lvlText: string|null, suffix: string|null, listNumberingType: string|null, customFormat: string|null, abstract: Object|null, abstractId: string|undefined}>>}
+ */
+export const getAllListDefinitions = (editor) => {
+  const numbering = editor?.converter?.numbering;
+  if (!numbering) return {};
+
+  const { definitions = {}, abstracts = {} } = numbering;
+
+  return Object.entries(definitions).reduce((acc, [numId, definition]) => {
+    if (!definition) return acc;
+
+    const abstractId = definition.elements?.find((item) => item.name === 'w:abstractNumId')?.attributes?.['w:val'];
+    const abstract = abstractId != null ? abstracts?.[abstractId] : undefined;
+    const levelDefinitions = abstract?.elements?.filter((item) => item.name === 'w:lvl') || [];
+
+    if (!acc[numId]) acc[numId] = {};
+
+    levelDefinitions.forEach((levelDef) => {
+      const ilvl = levelDef?.attributes?.['w:ilvl'];
+      if (ilvl == null) return;
+
+      const findElement = (name) => levelDef?.elements?.find((item) => item.name === name);
+
+      const startElement = findElement('w:start');
+      const numFmtElement = findElement('w:numFmt');
+      const lvlTextElement = findElement('w:lvlText');
+      const suffixElement = findElement('w:suff');
+
+      const numFmt = numFmtElement?.attributes?.['w:val'] ?? null;
+      const customFormat = numFmt === 'custom' ? (numFmtElement?.attributes?.['w:format'] ?? null) : null;
+
+      acc[numId][ilvl] = {
+        start: startElement?.attributes?.['w:val'] ?? null,
+        numFmt,
+        lvlText: lvlTextElement?.attributes?.['w:val'] ?? null,
+        suffix: suffixElement?.attributes?.['w:val'] ?? null,
+        listNumberingType: numFmt,
+        customFormat,
+        abstract: abstract ?? null,
+        abstractId,
+      };
+    });
+
+    return acc;
+  }, {});
+};
+
+/**
  * Remove list definitions from the editor's numbering.
  * This function deletes the definitions and abstracts for a given list ID from the editor's numbering.
  * It is used to clean up list definitions when they are no longer needed.
@@ -654,6 +704,7 @@ export const ListHelpers = {
   // DOCX helpers
   insertNewList,
   getListDefinitionDetails,
+  getAllListDefinitions,
   generateNewListDefinition,
   getBasicNumIdTag,
   getNewListId,
