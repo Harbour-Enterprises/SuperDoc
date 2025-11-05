@@ -2,6 +2,7 @@ import { createApp } from 'vue';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
 import tippy from 'tippy.js';
+import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
 
 import Mentions from '@/components/popovers/Mentions.vue';
 
@@ -69,6 +70,7 @@ class Popover {
     this.view = view;
     this.popover = document.createElement('div');
     this.popover.className = 'sd-editor-popover';
+    applyStyleIsolationClass(this.popover);
     document.body.appendChild(this.popover);
 
     this.tippyInstance = tippy(this.popover, {
