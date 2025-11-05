@@ -224,6 +224,8 @@ export const getListDefinitionDetails = ({ numId, level, listType, editor, tries
       numFmt: null,
       lvlText: null,
       listNumberingType: null,
+      suffix: null,
+      justification: null,
       customFormat: null,
       abstract: null,
       abstractId,
@@ -262,6 +264,8 @@ export const getListDefinitionDetails = ({ numId, level, listType, editor, tries
       start: null,
       numFmt: null,
       lvlText: null,
+      suffix: null,
+      justification: null,
       listNumberingType: null,
       customFormat: null,
       abstract,
@@ -275,10 +279,14 @@ export const getListDefinitionDetails = ({ numId, level, listType, editor, tries
   const startElement = findElement('w:start');
   const numFmtElement = findElement('w:numFmt');
   const lvlTextElement = findElement('w:lvlText');
+  const suffixElement = findElement('w:suff');
+  const lvlJcElement = findElement('w:lvlJc');
 
   const start = startElement?.attributes?.['w:val'];
   const numFmt = numFmtElement?.attributes?.['w:val'];
   const lvlText = lvlTextElement?.attributes?.['w:val'];
+  const suffix = suffixElement?.attributes?.['w:val'];
+  const justification = lvlJcElement?.attributes?.['w:val'];
   const listNumberingType = numFmt;
 
   // Handle custom format
@@ -288,6 +296,8 @@ export const getListDefinitionDetails = ({ numId, level, listType, editor, tries
     start,
     numFmt,
     lvlText,
+    suffix,
+    justification,
     listNumberingType,
     customFormat,
     abstract,
