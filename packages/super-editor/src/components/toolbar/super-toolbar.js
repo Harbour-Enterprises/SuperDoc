@@ -838,11 +838,15 @@ export class SuperToolbar extends EventEmitter {
       }
 
       // Activate list buttons when selections is inside list
-      const listNumberingType = marks.find((mark) => mark.name === 'listNumberingType')?.attrs?.listNumberingType;
-      if (item.name.value === 'list' && listNumberingType === 'bullet') {
-        item.activate();
-      } else if (item.name.value === 'numberedlist' && listNumberingType && listNumberingType !== 'bullet') {
-        item.activate();
+      const selection = this.activeEditor.state.selection;
+      const listParent = findParentNode(isList)(selection)?.node;
+      if (listParent) {
+        const numberingType = listParent.attrs.listRendering.numberingType;
+        if (item.name.value === 'list' && numberingType === 'bullet') {
+          item.activate();
+        } else if (item.name.value === 'numberedlist' && numberingType !== 'bullet') {
+          item.activate();
+        }
       }
     });
   }
