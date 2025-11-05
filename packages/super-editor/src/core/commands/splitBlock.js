@@ -21,7 +21,7 @@ const ensureMarks = (state, splittableMarks) => {
  * https://github.com/ProseMirror/prosemirror-commands/blob/master/src/commands.ts#L357
  */
 export const splitBlock =
-  ({ keepMarks = true } = {}) =>
+  ({ keepMarks = true, attrsToRemoveOverride = [] } = {}) =>
   (props) => {
     const { tr, state, dispatch, editor } = props;
     const { selection, doc } = tr;
@@ -29,6 +29,9 @@ export const splitBlock =
 
     const extensionAttrs = editor.extensionService.attributes;
     const newAttrs = Attribute.getSplittedAttributes(extensionAttrs, $from.node().type.name, $from.node().attrs);
+
+    // Remove any overridden attributes
+    if (attrsToRemoveOverride.length > 0) deleteAttributes(newAttrs, attrsToRemoveOverride);
 
     if (selection instanceof NodeSelection && selection.node.isBlock) {
       if (!$from.parentOffset || !canSplit(doc, $from.pos)) return false;
@@ -72,3 +75,21 @@ export const splitBlock =
 
     return true;
   };
+
+function deleteAttributes(attrs, attrsToRemove) {
+  const newAttrs = { ...attrs };
+  attrsToRemove.forEach((attrName) => {
+    const parts = attrName.split('.');
+    if (parts.length === 1) {
+      delete newAttrs[attrName];
+    } else {
+      let current = newAttrs;
+      for (let i = 0; i < parts.length - 1; i++) {
+        if (current[parts[i]] == null) return;
+        current = current[parts[i]];
+      }
+      delete current[parts[parts.length - 1]];
+    }
+  });
+  return newAttrs;
+}
