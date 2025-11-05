@@ -192,6 +192,7 @@ export class ParagraphNodeView {
       this.node.attrs.paragraphProperties.runProperties || {},
       this.node.attrs.paragraphProperties,
       true,
+      Boolean(this.node.attrs.paragraphProperties.numberingProperties),
     );
     const style = encodeCSSFromRPr(runProperties, this.editor.converter.convertedXml);
     this.marker.style.cssText = Object.entries(style)

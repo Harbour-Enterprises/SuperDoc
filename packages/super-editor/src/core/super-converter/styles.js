@@ -13,7 +13,13 @@ import { getUnderlineCssString } from '@extensions/linked-styles/underline-css.j
  * @param {Object} resolvedPpr - The resolved paragraph properties.
  * @returns {Object} The resolved run properties.
  */
-export const resolveRunProperties = (params, inlineRpr, resolvedPpr, isListNumber = false) => {
+export const resolveRunProperties = (
+  params,
+  inlineRpr,
+  resolvedPpr,
+  isListNumber = false,
+  numberingDefinedInline = false,
+) => {
   const paragraphStyleId = resolvedPpr?.styleId;
   const paragraphStyleProps = resolveStyleChain(params, paragraphStyleId, w_rPrTranslator);
 
@@ -45,6 +51,11 @@ export const resolveRunProperties = (params, inlineRpr, resolvedPpr, isListNumbe
         resolvedPpr.numberingProperties.numId,
         w_rPrTranslator,
       );
+    }
+
+    if (!numberingDefinedInline) {
+      // If numbering is not defined inline, we need to ignore the inline rPr
+      inlineRpr = {};
     }
     styleChain = [...styleChain, paragraphStyleProps, runStyleProps, inlineRpr, numberingProps];
   } else {
