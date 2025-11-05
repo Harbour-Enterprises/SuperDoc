@@ -27,7 +27,7 @@ const config = {
     [
       '@semantic-release/npm',
       {
-        npmPublish: true,
+        npmPublish: false,
         pkgRoot: 'packages/superdoc'
       }
     ],
