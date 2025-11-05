@@ -4,6 +4,7 @@ import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 import { pixelsToTwips, linesToTwips, twipsToPixels, eighthPointsToPixels } from '@converter/helpers.js';
+import { restartNumbering } from '@core/commands/restartNumbering.js';
 import { ParagraphNodeView } from './ParagraphNodeView.js';
 import { createNumberingPlugin } from './numberingPlugin.js';
 
@@ -298,6 +299,20 @@ export const Paragraph = OxmlNode.create({
       return new ParagraphNodeView(node, editor, getPos, decorations, extensionAttrs);
     };
   },
+  addCommands() {
+    return {
+      /**
+       * Restart numbering for the current list
+       * @category Command
+       * @example
+       * // Restart numbering for the current list item
+       * editor.commands.restartNumbering()
+       * @note Resets list numbering for the current list item and following items
+       */
+      restartNumbering: () => restartNumbering,
+    };
+  },
+
   addPmPlugins() {
     const { view } = this.editor;
     const dropcapWidthCache = new Map();
