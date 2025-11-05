@@ -238,6 +238,15 @@ export const Paragraph = OxmlNode.create({
           };
         },
       },
+      numberingProperties: {
+        keepOnSplit: true,
+        renderDOM: ({ numberingProperties }) => {
+          return {
+            'data-num-id': numberingProperties?.numId,
+            'data-level': numberingProperties?.ilvl,
+          };
+        },
+      },
     };
   },
 
