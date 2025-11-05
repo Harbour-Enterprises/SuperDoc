@@ -4,6 +4,8 @@ import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 import { pixelsToTwips, linesToTwips, twipsToPixels, eighthPointsToPixels } from '@converter/helpers.js';
+import { splitBlock } from '@core/commands/splitBlock.js';
+import { removeNumberingProperties } from '@core/commands/removeNumberingProperties.js';
 import { toggleList } from '@core/commands/index.js';
 import { restartNumbering } from '@core/commands/restartNumbering.js';
 import { ParagraphNodeView } from './ParagraphNodeView.js';
@@ -300,6 +302,41 @@ export const Paragraph = OxmlNode.create({
       return new ParagraphNodeView(node, editor, getPos, decorations, extensionAttrs);
     };
   },
+
+  addShortcuts() {
+    return {
+      'Mod-Shift-7': () => {
+        return this.editor.commands.toggleOrderedList();
+      },
+      'Mod-Shift-8': () => {
+        return this.editor.commands.toggleBulletList();
+      },
+      Enter: (params) => {
+        return removeNumberingProperties({ checkType: 'empty' })({
+          ...params,
+          tr: this.editor.state.tr,
+          state: this.editor.state,
+          dispatch: this.editor.view.dispatch,
+        });
+      },
+
+      'Shift-Enter': () => {
+        return this.editor.commands.first(({ commands }) => [
+          () => commands.createParagraphNear(),
+          splitBlock({ attrsToRemoveOverride: ['paragraphProperties.numberingProperties', 'listRendering'] }),
+        ]);
+      },
+
+      Tab: () => {
+        return this.editor.commands.first(({ commands }) => [() => commands.increaseListIndent()]);
+      },
+
+      'Shift-Tab': () => {
+        return this.editor.commands.first(({ commands }) => [() => commands.decreaseListIndent()]);
+      },
+    };
+  },
+
   addCommands() {
     return {
       /**
