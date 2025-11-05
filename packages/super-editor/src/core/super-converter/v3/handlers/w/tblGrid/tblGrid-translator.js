@@ -15,7 +15,7 @@ const SD_ATTR_KEY = 'grid';
 const cellMinWidth = pixelsToTwips(10);
 
 /**
- * Encode the w:rPr element.
+ * Encode the w:tblGrid element.
  * @param {import('@translator').SCEncoderConfig} params
  * @returns {import('@translator').SCEncoderResult}
  */
@@ -38,7 +38,7 @@ const encode = (params) => {
 };
 
 /**
- * Decode the tableProperties in the table node back into OOXML <w:tblPr>.
+ * Decode the tableProperties in the table node back into OOXML <w:tblGrid>.
  * @param {import('@translator').SCDecoderConfig} params
  * @returns {import('@translator').SCDecoderResult}
  */
