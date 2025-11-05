@@ -25,9 +25,9 @@ import { updateNumberingProperties } from '@core/commands/changeListLevel';
  */
 export const generateNewListDefinition = ({ numId, listType, level, start, text, fmt, editor }) => {
   // Generate a new numId to add to numbering.xml
-  if (typeof listType === 'string') listType = editor.schema.nodes[listType];
+  if (typeof listType !== 'string') listType = listType.name;
 
-  const definition = listType.name === 'orderedList' ? baseOrderedListDef : baseBulletList;
+  const definition = listType === 'orderedList' ? baseOrderedListDef : baseBulletList;
   const numbering = editor.converter.numbering;
   const newNumbering = { ...numbering };
   let skipAddingNewAbstract = false;
