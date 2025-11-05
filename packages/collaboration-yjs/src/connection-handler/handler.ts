@@ -49,6 +49,10 @@ export class ConnectionHandler {
      * If the authentication hook throws an error, we abort the connection
      */
     const userContextResult = await this.#authenticate(this.#socket, this.#request, this.#params);
+    if (userContextResult === false) {
+      throw new Error('Authentication failed for connection');
+    }
+
     const normalizedContext = userContextResult === true ? undefined : userContextResult || undefined;
     const userParams: CollaborationParams =
       normalizedContext !== undefined ? { ...this.#params, userContext: normalizedContext } : { ...this.#params };

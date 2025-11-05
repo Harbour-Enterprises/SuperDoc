@@ -116,10 +116,11 @@ describe('ConnectionHandler', () => {
     const params = { documentId: 'doc-3' };
     const request: SocketRequest = { url: '/collab/doc-3', params: { documentId: 'doc-3' } };
 
-    await handler.handle(socket, request, params);
+    await expect(handler.handle(socket, request, params)).rejects.toThrowError('Authentication failed for connection');
 
     expect(socket.close).toHaveBeenCalledWith(1008, 'Authentication failed');
     expect(loggerSpy).toHaveBeenCalledWith('⛔ Auth rejected for doc-3');
+    expect(documentManager.getDocument).not.toHaveBeenCalled();
   });
 
   test('handle closes socket when authenticate throws', async () => {
@@ -132,10 +133,26 @@ describe('ConnectionHandler', () => {
     const params = { documentId: 'doc-4' };
     const request: SocketRequest = { url: '/collab/doc-4', params: { documentId: 'doc-4' } };
 
-    await handler.handle(socket, request, params);
+    await expect(handler.handle(socket, request, params)).rejects.toThrowError('Authentication failed for connection');
 
     expect(socket.close).toHaveBeenCalledWith(1011, 'Internal auth error');
     expect(loggerSpy).toHaveBeenCalledWith('🛑 Auth hook threw:', error);
+    expect(documentManager.getDocument).not.toHaveBeenCalled();
+  });
+
+  test('handle does not open document when authenticate returns false', async () => {
+    const hooks = {
+      authenticate: vi.fn().mockResolvedValue(false),
+    };
+
+    const handler = new ConnectionHandler({ documentManager, hooks });
+    const params = { documentId: 'doc-5' };
+    const request: SocketRequest = { url: '/collab/doc-5', params: { documentId: 'doc-5' } };
+
+    await expect(handler.handle(socket, request, params)).rejects.toThrowError('Authentication failed for connection');
+
+    expect(documentManager.getDocument).not.toHaveBeenCalled();
+    expect(socket.close).toHaveBeenCalledWith(1008, 'Authentication failed');
   });
 
   test('hangUp logs and closes the socket', () => {
