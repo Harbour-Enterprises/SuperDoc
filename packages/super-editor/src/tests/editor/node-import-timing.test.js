@@ -118,11 +118,8 @@ describe('Node.js import timing - document access', () => {
   });
 
   it('should allow calling getMarkdown() in Node.js with JSDOM setup', async () => {
-    // Import JSDOM
     const { JSDOM } = await import('jsdom');
     const { readFile } = await import('node:fs/promises');
-    const { fileURLToPath } = await import('node:url');
-    const { dirname, resolve } = await import('node:path');
 
     // Verify no browser globals initially
     expect(globalThis.document).toBeUndefined();
