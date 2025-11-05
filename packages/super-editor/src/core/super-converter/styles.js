@@ -4,6 +4,7 @@ import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 import { translator as w_rPrTranslator } from '@converter/v3/handlers/w/rpr';
 import { isValidHexColor, getHexColorFromDocxSystem } from '@converter/helpers';
 import { SuperConverter } from '@converter/SuperConverter.js';
+import { getUnderlineCssString } from '@extensions/linked-styles/underline-css.js';
 
 /**
  * Gets the resolved run properties by merging defaults, styles, and inline properties.
@@ -356,6 +357,177 @@ export function encodeMarksFromRPr(runProperties, docx) {
   return marks;
 }
 
+export function encodeCSSFromRPr(runProperties, docx) {
+  if (!runProperties || typeof runProperties !== 'object') {
+    return {};
+  }
+
+  const css = {};
+  const textDecorationLines = new Set();
+  let hasTextDecorationNone = false;
+  let highlightColor = null;
+  let hasHighlightTag = false;
+
+  Object.keys(runProperties).forEach((key) => {
+    const value = runProperties[key];
+    switch (key) {
+      case 'bold': {
+        const normalized = normalizeToggleValue(value);
+        if (normalized === true) {
+          css['font-weight'] = 'bold';
+        } else if (normalized === false) {
+          css['font-weight'] = 'normal';
+        }
+        break;
+      }
+      case 'italic': {
+        const normalized = normalizeToggleValue(value);
+        if (normalized === true) {
+          css['font-style'] = 'italic';
+        } else if (normalized === false) {
+          css['font-style'] = 'normal';
+        }
+        break;
+      }
+      case 'strike': {
+        const normalized = normalizeToggleValue(value);
+        if (normalized === true) {
+          addTextDecorationEntries(textDecorationLines, 'line-through');
+        } else if (normalized === false) {
+          css['text-decoration'] = 'none';
+          hasTextDecorationNone = true;
+        }
+        break;
+      }
+      case 'textTransform': {
+        if (value != null) {
+          css['text-transform'] = value;
+        }
+        break;
+      }
+      case 'color': {
+        const colorVal = value?.val;
+        if (colorVal == null || colorVal === '') {
+          break;
+        }
+        if (String(colorVal).toLowerCase() === 'auto') {
+          css['color'] = 'auto';
+        } else {
+          css['color'] = `#${String(colorVal).replace('#', '').toUpperCase()}`;
+        }
+        break;
+      }
+      case 'underline': {
+        const underlineType = value?.['w:val'];
+        if (!underlineType) break;
+        let underlineColor = value?.['w:color'];
+        if (
+          underlineColor &&
+          typeof underlineColor === 'string' &&
+          underlineColor.toLowerCase() !== 'auto' &&
+          !underlineColor.startsWith('#')
+        ) {
+          underlineColor = `#${underlineColor}`;
+        }
+
+        const underlineCssString = getUnderlineCssString({ type: underlineType, color: underlineColor });
+        const underlineCss = parseCssDeclarations(underlineCssString);
+
+        Object.entries(underlineCss).forEach(([prop, propValue]) => {
+          if (!propValue) return;
+          if (prop === 'text-decoration') {
+            css[prop] = propValue;
+            if (propValue === 'none') {
+              hasTextDecorationNone = true;
+            }
+            return;
+          }
+          if (prop === 'text-decoration-line') {
+            addTextDecorationEntries(textDecorationLines, propValue);
+            return;
+          }
+          css[prop] = propValue;
+        });
+        break;
+      }
+      case 'fontSize': {
+        if (value == null) break;
+        const points = halfPointToPoints(value);
+        if (Number.isFinite(points)) {
+          css['font-size'] = `${points}pt`;
+        }
+        break;
+      }
+      case 'letterSpacing': {
+        if (value == null) break;
+        const spacing = twipsToPt(value);
+        if (Number.isFinite(spacing)) {
+          css['letter-spacing'] = `${spacing}pt`;
+        }
+        break;
+      }
+      case 'fontFamily': {
+        if (!value) break;
+        const fontFamily = getFontFamilyValue(value, docx);
+        if (fontFamily) {
+          css['font-family'] = fontFamily;
+        }
+        const eastAsiaFamily = value['eastAsia'];
+        if (eastAsiaFamily) {
+          const eastAsiaCss = SuperConverter.toCssFontFamily(eastAsiaFamily, docx);
+          if (eastAsiaCss && (!fontFamily || eastAsiaCss !== fontFamily)) {
+            css['font-family'] = css['font-family'] || eastAsiaCss;
+          }
+        }
+        break;
+      }
+      case 'highlight': {
+        const color = getHighLightValue(value);
+        if (color) {
+          hasHighlightTag = true;
+          highlightColor = color;
+        }
+        break;
+      }
+      case 'shading': {
+        if (hasHighlightTag) {
+          break;
+        }
+        const fill = value?.['fill'];
+        const shdVal = value?.['val'];
+        if (fill && String(fill).toLowerCase() !== 'auto') {
+          highlightColor = `#${String(fill).replace('#', '')}`;
+        } else if (typeof shdVal === 'string') {
+          const normalized = shdVal.toLowerCase();
+          if (normalized === 'clear' || normalized === 'nil' || normalized === 'none') {
+            highlightColor = 'transparent';
+          }
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  });
+
+  if (!hasTextDecorationNone && textDecorationLines.size) {
+    const combined = new Set();
+    addTextDecorationEntries(combined, css['text-decoration-line']);
+    textDecorationLines.forEach((entry) => combined.add(entry));
+    css['text-decoration-line'] = Array.from(combined).join(' ');
+  }
+
+  if (highlightColor) {
+    css['background-color'] = highlightColor;
+    if (!('color' in css)) {
+      // @ts-ignore
+      css['color'] = 'inherit';
+    }
+  }
+
+  return css;
+}
+
 export function decodeRPrFromMarks(marks) {
   const runProperties = {};
   if (!marks) {
@@ -473,4 +645,48 @@ function getHighLightValue(attributes) {
   if (attributes?.['w:val'] === 'none') return 'transparent';
   if (isValidHexColor(attributes?.['w:val'])) return `#${attributes['w:val']}`;
   return getHexColorFromDocxSystem(attributes?.['w:val']) || null;
+}
+
+function normalizeToggleValue(value) {
+  if (value == null) return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    if (normalized === '0' || normalized === 'false' || normalized === 'off') return false;
+    if (normalized === '1' || normalized === 'true' || normalized === 'on') return true;
+  }
+  return Boolean(value);
+}
+
+function parseCssDeclarations(cssString) {
+  if (!cssString || typeof cssString !== 'string') {
+    return {};
+  }
+  return cssString
+    .split(';')
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .reduce((acc, declaration) => {
+      const separatorIndex = declaration.indexOf(':');
+      if (separatorIndex === -1) return acc;
+      const property = declaration.slice(0, separatorIndex).trim();
+      const value = declaration.slice(separatorIndex + 1).trim();
+      if (!property || !value) return acc;
+      acc[property] = value;
+      return acc;
+    }, {});
+}
+
+function addTextDecorationEntries(targetSet, value) {
+  if (!value) return;
+  if (value instanceof Set) {
+    value.forEach((entry) => addTextDecorationEntries(targetSet, entry));
+    return;
+  }
+  String(value)
+    .split(/\s+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .forEach((entry) => targetSet.add(entry));
 }
