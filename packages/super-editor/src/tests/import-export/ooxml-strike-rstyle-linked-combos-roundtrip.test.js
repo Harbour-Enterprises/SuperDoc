@@ -134,10 +134,10 @@ describe('OOXML strike + rStyle + linked combinations round-trip', () => {
     const expectedExport = new Map([
       ['Strikethrough sample', true],
       ['Styled strike', true],
-      ['Strike style overridden off', true],
+      ['Strike style overridden off', false],
       ['No-strike style overridden on', true],
       ['Linked Char style applied', true],
-      ['This part should NOT be struck', true],
+      ['This part should NOT be struck', false],
       ['Struck cell', true],
       ['Should be struck', true],
       ['Double-struck sample', true],

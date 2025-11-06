@@ -100,7 +100,7 @@ class SuperConverter {
     { name: 'w:i', type: 'italic' },
     // { name: 'w:iCs', type: 'italic' },
     { name: 'w:u', type: 'underline', mark: 'underline', property: 'underlineType' },
-    { name: 'w:strike', type: 'strike', mark: 'strike' },
+    { name: 'w:strike', type: 'strike', mark: 'strike', property: 'value' },
     { name: 'w:color', type: 'color', mark: 'textStyle', property: 'color' },
     { name: 'w:sz', type: 'fontSize', mark: 'textStyle', property: 'fontSize' },
     // { name: 'w:szCs', type: 'fontSize', mark: 'textStyle', property: 'fontSize' },

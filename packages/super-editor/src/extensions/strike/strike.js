@@ -32,9 +32,10 @@ export const Strike = Mark.create({
     ];
   },
 
-  renderDOM({ htmlAttributes }) {
+  renderDOM({ mark, htmlAttributes }) {
     const merged = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
-    const { value, ...rest } = merged || {};
+    const { value } = mark.attrs;
+    const { ...rest } = merged || {};
     if (value === '0') {
       return ['span', rest, 0];
     }
