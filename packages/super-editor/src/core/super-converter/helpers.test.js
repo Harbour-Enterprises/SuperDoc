@@ -1,5 +1,11 @@
-import { describe, it, expect } from 'vitest';
-import { polygonToObj, objToPolygon, polygonUnitsToPixels, pixelsToPolygonUnits } from './helpers.js';
+import { describe, it, expect, afterEach, vi } from 'vitest';
+import {
+  polygonToObj,
+  objToPolygon,
+  polygonUnitsToPixels,
+  pixelsToPolygonUnits,
+  getArrayBufferFromUrl,
+} from './helpers.js';
 
 describe('polygonToObj', () => {
   it('should return null for null input', () => {
@@ -286,5 +292,50 @@ describe('polygonToObj and objToPolygon integration', () => {
     const closingPoint = exportedPolygon.elements[4];
     expect(closingPoint.attributes.x).toBe(startPoint.attributes.x);
     expect(closingPoint.attributes.y).toBe(startPoint.attributes.y);
+  });
+});
+
+describe('getArrayBufferFromUrl', () => {
+  const originalFetch = globalThis.fetch;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('fetches remote resources when given an HTTP URL', async () => {
+    const payload = new Uint8Array([1, 2, 3, 4]);
+    const mockResponse = {
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      arrayBuffer: vi.fn().mockResolvedValue(payload.buffer),
+    };
+
+    globalThis.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+    const result = await getArrayBufferFromUrl('https://example.com/image.png');
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('https://example.com/image.png');
+    expect(new Uint8Array(result)).toEqual(payload);
+  });
+
+  it('decodes data URIs into an ArrayBuffer', async () => {
+    const bytes = new Uint8Array([11, 22, 33, 44]);
+    const base64 = Buffer.from(bytes).toString('base64');
+    const dataUri = `data:image/png;base64,${base64}`;
+
+    const result = await getArrayBufferFromUrl(dataUri);
+
+    expect(Array.from(new Uint8Array(result))).toEqual(Array.from(bytes));
+  });
+
+  it('decodes bare base64 strings into an ArrayBuffer', async () => {
+    const bytes = new Uint8Array([55, 66, 77]);
+    const base64 = Buffer.from(bytes).toString('base64');
+
+    const result = await getArrayBufferFromUrl(base64);
+
+    expect(Array.from(new Uint8Array(result))).toEqual(Array.from(bytes));
   });
 });

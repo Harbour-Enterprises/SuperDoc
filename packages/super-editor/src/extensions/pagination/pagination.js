@@ -14,6 +14,7 @@ import { LinkedStylesPluginKey } from '@extensions/linked-styles/index.js';
 import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestToPos.js';
 import { generateDocxRandomId } from '../../core/helpers/index.js';
 import { computePosition, autoUpdate, hide } from '@floating-ui/dom';
+import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
 
 const SEPARATOR_CLASS = 'pagination-separator';
 const SEPARATOR_FLOATING_CLASS = 'pagination-separator-floating';
@@ -82,6 +83,9 @@ export const Pagination = Extension.create({
     let hasInitialized = false;
     let shouldInitialize = false;
 
+    let paginationTimeout = null;
+    const PAGINATION_DEBOUNCE_MS = 150;
+
     const paginationPlugin = new Plugin({
       key: PaginationPluginKey,
       state: {
@@ -113,6 +117,12 @@ export const Pagination = Extension.create({
             if (isDebugging) console.debug('✅ INIT READY');
             shouldUpdate = true;
             shouldInitialize = meta.isReadyToInit;
+          }
+
+          // Allow plugins to explicitly skip pagination updates
+          if (meta && meta.skipPagination) {
+            if (isDebugging) console.debug('🚫 SKIP PAGINATION');
+            return { ...oldState };
           }
 
           const syncMeta = tr.getMeta('y-sync$');
@@ -158,6 +168,24 @@ export const Pagination = Extension.create({
             return { ...oldState };
           }
 
+          // Skip pagination only for mark-only changes (bold, italic, etc.)
+          if (!isForceUpdate && hasInitialized && tr.docChanged) {
+            let isMarkOnlyChange = true;
+
+            tr.steps.forEach((step) => {
+              // If it's not a mark step, it affects pagination
+              if (step.jsonID !== 'addMark' && step.jsonID !== 'removeMark') {
+                isMarkOnlyChange = false;
+              }
+            });
+
+            if (isMarkOnlyChange) {
+              if (isDebugging) console.debug('🚫 SKIP PAGINATION - MARK ONLY CHANGE');
+              shouldUpdate = false;
+              return { ...oldState };
+            }
+          }
+
           // content size
           shouldUpdate = true;
           if (isDebugging) console.debug('🚀 UPDATE DECORATIONS');
@@ -165,7 +193,7 @@ export const Pagination = Extension.create({
 
           return {
             ...oldState,
-            decorations: meta?.decorations?.map(tr.mapping, tr.doc) || DecorationSet.empty,
+            decorations: meta?.decorations?.map(tr.mapping, tr.doc) || oldState.decorations.map(tr.mapping, tr.doc),
             isReadyToInit: shouldInitialize,
           };
         },
@@ -180,18 +208,35 @@ export const Pagination = Extension.create({
             if (!PaginationPluginKey.getState(view.state)?.isEnabled) return;
             if (!shouldUpdate || isUpdating) return;
 
-            isUpdating = true;
-            hasInitialized = true;
-
             /**
-             * Perform the actual update here.
-             * We call calculatePageBreaks which actually generates the decorations
+             * Recalculates pagination decorations if a refresh is pending.
+             * @returns {void}
              */
-            if (isDebugging) console.debug('--- Calling performUpdate ---');
-            performUpdate(editor, view, previousDecorations);
+            const performPaginationUpdate = () => {
+              if (!shouldUpdate) return;
 
-            isUpdating = false;
-            shouldUpdate = false;
+              isUpdating = true;
+              hasInitialized = true;
+
+              if (isDebugging) console.debug('--- Calling performUpdate ---');
+              performUpdate(editor, view, previousDecorations);
+
+              isUpdating = false;
+              shouldUpdate = false;
+            };
+
+            // Don't debounce initial pagination, only subsequent updates
+            if (!hasInitialized) {
+              performPaginationUpdate();
+              return;
+            }
+
+            // Debounce subsequent pagination updates
+            if (paginationTimeout) {
+              clearTimeout(paginationTimeout);
+            }
+
+            paginationTimeout = setTimeout(performPaginationUpdate, PAGINATION_DEBOUNCE_MS);
           },
         };
       },
@@ -342,6 +387,7 @@ const calculatePageBreaks = (view, editor, sectionData) => {
   if (!tempContainer) return [];
 
   tempContainer.className = 'temp-container super-editor';
+  applyStyleIsolationClass(tempContainer);
   const HIDDEN_EDITOR_OFFSET_TOP = 0;
   const HIDDEN_EDITOR_OFFSET_LEFT = 0;
   tempContainer.style.left = HIDDEN_EDITOR_OFFSET_TOP + 'px';

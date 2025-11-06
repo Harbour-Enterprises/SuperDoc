@@ -40,6 +40,7 @@ import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { SuperValidator } from '@core/super-validator/index.js';
 import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js';
 import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
+import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -331,7 +332,14 @@ export class Editor extends EventEmitter {
         options.element.classList.add('sd-super-editor-html');
       }
     }
-    options.element = options.isHeadless ? null : options.element || document.createElement('div');
+
+    if (options.isHeadless) {
+      options.element = null;
+      return;
+    }
+
+    options.element = options.element || document.createElement('div');
+    applyStyleIsolationClass(options.element);
   }
 
   /**
@@ -393,7 +401,7 @@ export class Editor extends EventEmitter {
       this.migrateListsToV2();
     }
 
-    this.setDocumentMode(this.options.documentMode);
+    this.setDocumentMode(this.options.documentMode, 'init');
 
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady
@@ -590,8 +598,9 @@ export class Editor extends EventEmitter {
   /**
    * Set the document mode
    * @param {string} documentMode - The document mode ('editing', 'viewing', 'suggesting')
+   * @param {string} caller - Calling context
    */
-  setDocumentMode(documentMode) {
+  setDocumentMode(documentMode, caller) {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
 
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
@@ -606,18 +615,18 @@ export class Editor extends EventEmitter {
       this.commands.toggleTrackChangesShowOriginal();
       this.setEditable(false, false);
       this.setOptions({ documentMode: 'viewing' });
-      toggleHeaderFooterEditMode({
-        editor: this,
-        focusedSectionEditor: null,
-        isEditMode: false,
-        documentMode: cleanedMode,
-      });
+      if (caller !== 'init')
+        toggleHeaderFooterEditMode({
+          editor: this,
+          focusedSectionEditor: null,
+          isEditMode: false,
+          documentMode: cleanedMode,
+        });
       if (pm) pm.classList.add('view-mode');
     }
 
     // Suggesting: Editable, tracked changes plugin enabled, comments
     else if (cleanedMode === 'suggesting') {
-      this.#registerPluginByNameIfNotExists('TrackChangesBase');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.enableTrackChanges();
       this.setOptions({ documentMode: 'suggesting' });
@@ -627,17 +636,17 @@ export class Editor extends EventEmitter {
 
     // Editing: Editable, tracked changes plguin disabled, comments
     else if (cleanedMode === 'editing') {
-      this.#registerPluginByNameIfNotExists('TrackChangesBase');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.disableTrackChanges();
       this.setEditable(true, false);
       this.setOptions({ documentMode: 'editing' });
-      toggleHeaderFooterEditMode({
-        editor: this,
-        focusedSectionEditor: null,
-        isEditMode: false,
-        documentMode: cleanedMode,
-      });
+      if (caller !== 'init')
+        toggleHeaderFooterEditMode({
+          editor: this,
+          focusedSectionEditor: null,
+          isEditMode: false,
+          documentMode: cleanedMode,
+        });
       if (pm) pm.classList.remove('view-mode');
     }
   }
@@ -735,18 +744,6 @@ export class Editor extends EventEmitter {
       this.#initPagination();
       this.#initComments();
     }, 50);
-  }
-
-  /**
-   * Register a plugin by name if it doesn't already exist
-   * @param {string} name - Plugin name
-   * @returns {string|void}
-   */
-  #registerPluginByNameIfNotExists(name) {
-    const plugin = this.extensionService?.plugins.find((p) => p.key.startsWith(name));
-    const hasPlugin = this.state?.plugins?.find((p) => p.key.startsWith(name));
-    if (plugin && !hasPlugin) this.registerPlugin(plugin);
-    return plugin?.key;
   }
 
   /**
@@ -1591,6 +1588,42 @@ export class Editor extends EventEmitter {
       html = unflattenListsInHtml(html);
     }
     return html;
+  }
+
+  /**
+   * Get the editor content as Markdown
+   * @returns {Promise<string>} Editor content as Markdown
+   */
+  async getMarkdown() {
+    // Lazy-load markdown libraries to avoid requiring 'document' at import time
+    // These libraries (specifically rehype) execute code that accesses document.createElement()
+    // during module initialization, which breaks Node.js compatibility
+    const [
+      { unified },
+      { default: rehypeParse },
+      { default: rehypeRemark },
+      { default: remarkStringify },
+      { default: remarkGfm },
+    ] = await Promise.all([
+      import('unified'),
+      import('rehype-parse'),
+      import('rehype-remark'),
+      import('remark-stringify'),
+      import('remark-gfm'),
+    ]);
+
+    const html = this.getHTML();
+    const file = unified()
+      .use(rehypeParse, { fragment: true })
+      .use(rehypeRemark)
+      .use(remarkGfm)
+      .use(remarkStringify, {
+        bullet: '-',
+        fences: true,
+      })
+      .processSync(html);
+
+    return String(file);
   }
 
   /**

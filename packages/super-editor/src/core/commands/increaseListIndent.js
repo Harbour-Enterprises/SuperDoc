@@ -1,12 +1,18 @@
 import { findParentNode } from '@helpers/index.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import {
+  collectTargetListItemPositions,
+  parseLevel,
+  resolveParentList,
+} from '@core/commands/list-helpers/list-indent-helpers.js';
 
 /**
  * Increases the indent level of the current list item.
  * Works for both ordered and bullet lists, including lists toggled from ordered→bullet.
+ * @param {Array} [_targetPositions] - list item positions in selection collected with collectTargetListItemPositions
  */
 export const increaseListIndent =
-  () =>
+  (_targetPositions) =>
   ({ editor, tr }) => {
     const { state } = editor;
 
@@ -14,43 +20,66 @@ export const increaseListIndent =
     const currentItem =
       (ListHelpers.getCurrentListItem && ListHelpers.getCurrentListItem(state)) ||
       findParentNode((n) => n.type && n.type.name === 'listItem')(state.selection);
-    if (!currentItem) return false;
 
-    // 2) Parent list (ordered OR bullet). Try helpers if available; otherwise generic.
-    const parentOrdered = ListHelpers.getParentOrderedList && ListHelpers.getParentOrderedList(state);
-    const parentBullet = ListHelpers.getParentBulletList && ListHelpers.getParentBulletList(state);
+    const parentOrderedHelper = ListHelpers.getParentOrderedList && ListHelpers.getParentOrderedList(state);
+    const parentBulletHelper = ListHelpers.getParentBulletList && ListHelpers.getParentBulletList(state);
 
-    const parentList =
-      parentOrdered ||
-      parentBullet ||
-      findParentNode((n) => n.type && (n.type.name === 'orderedList' || n.type.name === 'bulletList'))(state.selection);
+    const targetPositions = _targetPositions || collectTargetListItemPositions(state, currentItem?.pos);
+    if (!targetPositions.length) return false;
 
-    if (!parentList) return false; // not inside a list container
+    let parentListsMap = {};
 
-    // 3) Compute new level; preserve numId if present (your bullets carry numId after toggle)
-    const currAttrs = currentItem.node.attrs || {};
-    const newLevel = (typeof currAttrs.level === 'number' ? currAttrs.level : 0) + 1;
-
-    // If numId is missing (edge-case), try to inherit from parent or mint a new one.
-    let numId = currAttrs.numId;
-    if (numId == null) {
-      // Prefer container's listId if present, else generate
-      numId = parentList.node?.attrs?.listId ?? ListHelpers.getNewListId(editor);
-      // Ensure definition exists for this list type/id (safe no-op if already exists)
-      if (ListHelpers.generateNewListDefinition) {
-        const listType =
-          parentList.node.type === editor.schema.nodes.orderedList
-            ? editor.schema.nodes.orderedList
-            : editor.schema.nodes.bulletList;
-        ListHelpers.generateNewListDefinition({ numId, listType, editor });
-      }
-    }
-
-    tr.setNodeMarkup(currentItem.pos, null, {
-      ...currAttrs,
-      level: newLevel,
-      numId,
+    // Map each target position to its node and mapped position
+    const mappedNodes = targetPositions.map((originalPos) => {
+      const mappedPos = tr.mapping ? tr.mapping.map(originalPos) : originalPos;
+      const node =
+        (tr.doc && tr.doc.nodeAt(mappedPos)) ||
+        (currentItem && originalPos === currentItem.pos ? currentItem.node : null);
+      return { originalPos, mappedPos, node };
     });
 
-    return true; // IMPORTANT: consume Tab so we don't indent paragraph text
+    // Filter out positions where node is not a valid listItem
+    const validNodes = mappedNodes.filter(({ node }) => node && node.type.name === 'listItem');
+
+    validNodes.forEach(({ mappedPos, node }) => {
+      const attrs = node.attrs || {};
+      const currentLevel = parseLevel(attrs.level);
+      const newLevel = currentLevel + 1;
+
+      const $pos = tr.doc ? tr.doc.resolve(mappedPos) : null;
+      const parentListNode =
+        resolveParentList($pos) ||
+        parentOrderedHelper?.node ||
+        parentBulletHelper?.node ||
+        parentOrderedHelper ||
+        parentBulletHelper;
+
+      parentListsMap[mappedPos] = parentListNode;
+      if (!parentListNode) {
+        return;
+      }
+
+      let numId = attrs.numId;
+      if (numId == null) {
+        const fallbackListId = parentListNode.attrs?.listId ?? null;
+        numId = fallbackListId ?? (ListHelpers.getNewListId ? ListHelpers.getNewListId(editor) : null);
+
+        if (numId != null && ListHelpers.generateNewListDefinition) {
+          ListHelpers.generateNewListDefinition({
+            numId,
+            listType: parentListNode.type,
+            editor,
+          });
+        }
+      }
+
+      tr.setNodeMarkup(mappedPos, null, {
+        ...attrs,
+        level: newLevel,
+        numId,
+      });
+    });
+
+    // IMPORTANT: consume Tab so we don't indent paragraph text
+    return Object.values(parentListsMap).length ? !Object.values(parentListsMap).every((pos) => !pos) : true;
   };

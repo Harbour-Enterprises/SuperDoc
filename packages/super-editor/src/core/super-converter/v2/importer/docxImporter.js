@@ -29,7 +29,7 @@ import { ensureNumberingCache } from './numberingCache.js';
 
 /**
  * @typedef {import()} XmlNode
- * @typedef {{type: string, content: *, marks: *, attrs: {},}} PmNodeJson
+ * @typedef {{type: string, content: *, text: *, marks: *, attrs: {},}} PmNodeJson
  * @typedef {{type: string, attrs: {}}} PmMarkJson
  *
  * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackChange: boolean) => PmNodeJson[]} NodeListHandlerFn
@@ -143,7 +143,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       comments,
       inlineDocumentFonts,
       linkedStyles: getStyleDefinitions(docx, converter, editor),
-      numbering: getNumberingDefinitions(docx),
+      numbering: getNumberingDefinitions(docx, converter),
     };
   }
   return null;
@@ -676,10 +676,11 @@ export function filterOutRootInlineNodes(content = []) {
  * They will be stored into converter.numbering
  *
  * @param {Object} docx The parsed docx
+ * @param {Object} converter The SuperConverter instance
  * @returns {Object} The numbering definitions
  */
-function getNumberingDefinitions(docx) {
-  const cache = ensureNumberingCache(docx);
+function getNumberingDefinitions(docx, converter) {
+  const cache = ensureNumberingCache(docx, converter);
 
   const abstractDefinitions = {};
   cache.abstractById.forEach((value, key) => {

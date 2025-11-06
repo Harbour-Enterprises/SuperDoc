@@ -3,7 +3,26 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { PaginationPluginKey } from '../../pagination/pagination-helpers.js';
 
+/** @typedef {import('prosemirror-transform').Step} PMStep */
+/** @typedef {import('prosemirror-transform').ReplaceStep} ReplaceStep */
+
+/**
+ * Type guard to narrow ProseMirror steps that carry a slice payload.
+ * @param {PMStep} step
+ * @returns {step is ReplaceStep}
+ */
+const stepHasSlice = (step) => 'slice' in step && Boolean(step.slice);
+
 const ImagePositionPluginKey = new PluginKey('ImagePosition');
+
+/**
+ * Cache for page break DOM positions to avoid forced reflows.
+ * WeakMap ensures automatic garbage collection when DOM nodes are removed.
+ * The cache is automatically invalidated when:
+ * - Pagination changes (page break DOM nodes are recreated)
+ * - DOM nodes are removed (WeakMap automatically garbage collects)
+ */
+const pageBreakPositionCache = new WeakMap();
 
 /**
  * Creates a ProseMirror plugin for managing anchored image positioning
@@ -31,6 +50,29 @@ export const ImagePositionPlugin = ({ editor }) => {
 
       apply(tr, oldDecorationSet, oldState, newState) {
         if (!tr.docChanged && !shouldUpdate) return oldDecorationSet;
+
+        /*
+         * OPTIMIZATION: Check if transaction affects images before regenerating decorations.
+         * This prevents unnecessary decoration updates for transactions that don't involve images.
+         * If no images are affected, we can simply remap existing decorations to new positions.
+         */
+        let affectsImages = false;
+
+        tr.steps.forEach((step) => {
+          if (stepHasSlice(step)) {
+            step.slice.content.descendants((node) => {
+              if (node.type.name === 'image' || node.attrs?.anchorData) {
+                affectsImages = true;
+                return false;
+              }
+            });
+          }
+        });
+
+        if (!affectsImages && !shouldUpdate) {
+          return oldDecorationSet.map(tr.mapping, tr.doc);
+        }
+
         const decorations = getImagePositionDecorations(newState, view);
         shouldUpdate = false;
         return DecorationSet.create(newState.doc, decorations);
@@ -73,15 +115,44 @@ export const ImagePositionPlugin = ({ editor }) => {
  */
 const getImagePositionDecorations = (state, view) => {
   let decorations = [];
+
+  /*
+   * OPTIMIZATION: Early return if no anchored images exist in the document.
+   * This quick check prevents unnecessary DOM operations and calculations
+   * for documents without absolute-positioned images.
+   */
+  let hasAnchoredImages = false;
+  state.doc.descendants((node) => {
+    if (node.attrs?.anchorData) {
+      hasAnchoredImages = true;
+      return false;
+    }
+  });
+
+  if (!hasAnchoredImages) {
+    return decorations;
+  }
+
   state.doc.descendants((node, pos) => {
     if (node.attrs.anchorData) {
       let style = '';
       let className = '';
       const { vRelativeFrom, alignH } = node.attrs.anchorData;
       const { size, padding } = node.attrs;
+
       const pageBreak = findPreviousDomNodeWithClass(view, pos, 'pagination-break-wrapper');
       if (pageBreak && vRelativeFrom === 'margin' && alignH) {
-        const topPos = pageBreak?.offsetTop + pageBreak?.offsetHeight;
+        // Use cached position to avoid forced reflow on every update
+        let pageBreakPos = pageBreakPositionCache.get(pageBreak);
+        if (!pageBreakPos) {
+          pageBreakPos = {
+            top: pageBreak.offsetTop,
+            height: pageBreak.offsetHeight,
+          };
+          pageBreakPositionCache.set(pageBreak, pageBreakPos);
+        }
+
+        const topPos = pageBreakPos.top + pageBreakPos.height;
         let horizontalAlignment = `${alignH}: 0;`;
         if (alignH === 'center') horizontalAlignment = 'left: 50%; transform: translateX(-50%);';
 

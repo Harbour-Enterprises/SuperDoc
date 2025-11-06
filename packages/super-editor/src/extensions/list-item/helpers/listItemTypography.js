@@ -68,6 +68,29 @@ export function parseFontFamilyFromRunProperties(listRunProperties) {
   return ascii || hAnsi || eastAsia || null;
 }
 
+/**
+ * Cache for computed styles to avoid expensive getComputedStyle calls.
+ * Uses WeakMap for automatic garbage collection when DOM nodes are removed.
+ *
+ * Cache invalidation strategy:
+ * - Cache is explicitly cleared when list item NodeView attributes change via clearComputedStyleCache()
+ * - WeakMap ensures that cache entries are automatically cleared when DOM nodes are
+ *   garbage collected, preventing memory leaks.
+ * - If inline styles are present, they take precedence over cached computed styles,
+ *   ensuring the most recent styles are always used.
+ */
+const computedStylesCache = new WeakMap();
+
+/**
+ * Clear the computed style cache for a specific DOM node
+ * @param {HTMLElement} domNode - The DOM node to clear cache for
+ */
+export function clearComputedStyleCache(domNode) {
+  if (domNode) {
+    computedStylesCache.delete(domNode);
+  }
+}
+
 export function readNodeViewStyles(view) {
   const fallback = { fontSize: null, fontFamily: null, lineHeight: null };
   if (!view?.dom) return fallback;
@@ -80,13 +103,31 @@ export function readNodeViewStyles(view) {
 
   if (inline.fontSize && inline.fontFamily && inline.lineHeight) return inline;
 
+  // Check cache to avoid forced layout recalculation from getComputedStyle
+  if (computedStylesCache.has(view.dom)) {
+    const cached = computedStylesCache.get(view.dom);
+    return {
+      fontSize: inline.fontSize || cached.fontSize,
+      fontFamily: inline.fontFamily || cached.fontFamily,
+      lineHeight: inline.lineHeight || cached.lineHeight,
+    };
+  }
+
   const globalWindow = typeof window !== 'undefined' ? window : undefined;
   if (globalWindow?.getComputedStyle) {
     const computed = globalWindow.getComputedStyle(view.dom);
+    const computedStyles = {
+      fontSize: computed.fontSize,
+      fontFamily: computed.fontFamily,
+      lineHeight: computed.lineHeight,
+    };
+
+    computedStylesCache.set(view.dom, computedStyles);
+
     return {
-      fontSize: inline.fontSize || computed.fontSize,
-      fontFamily: inline.fontFamily || computed.fontFamily,
-      lineHeight: inline.lineHeight || computed.lineHeight,
+      fontSize: inline.fontSize || computedStyles.fontSize,
+      fontFamily: inline.fontFamily || computedStyles.fontFamily,
+      lineHeight: inline.lineHeight || computedStyles.lineHeight,
     };
   }
 

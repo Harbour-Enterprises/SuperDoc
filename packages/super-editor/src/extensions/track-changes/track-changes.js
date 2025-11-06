@@ -24,7 +24,8 @@ export const TrackChanges = Extension.create({
           //   to += 1;
           // }
 
-          tr.setMeta('acceptReject', true);
+          // tr.setMeta('acceptReject', true);
+          tr.setMeta('inputType', 'acceptReject');
 
           const map = new Mapping();
 
@@ -76,7 +77,8 @@ export const TrackChanges = Extension.create({
 
           const { tr, doc } = state;
 
-          tr.setMeta('acceptReject', true);
+          // tr.setMeta('acceptReject', true);
+          tr.setMeta('inputType', 'acceptReject');
 
           const map = new Mapping();
 

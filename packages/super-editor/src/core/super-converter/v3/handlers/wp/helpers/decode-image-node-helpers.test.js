@@ -1,10 +1,21 @@
-import { translateImageNode } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers.js';
+import {
+  translateImageNode,
+  translateVectorShape,
+} from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers.js';
 import * as helpers from '@converter/helpers.js';
 import * as annotationHelpers from '@converter/v3/handlers/w/sdt/helpers/translate-field-annotation.js';
 
 vi.mock('@converter/helpers.js', () => ({
   emuToPixels: vi.fn((v) => v / 9525), // 1 emu ≈ 1/9525 px
   pixelsToEmu: vi.fn((v) => v * 9525),
+  getTextIndentExportValue: vi.fn((v) => v),
+  inchesToTwips: vi.fn((v) => v),
+  linesToTwips: vi.fn((v) => v),
+  pixelsToEightPoints: vi.fn((v) => v),
+  pixelsToTwips: vi.fn((v) => v),
+  ptToTwips: vi.fn((v) => v),
+  rgbToHex: vi.fn(() => '#000000'),
+  degreesToRot: vi.fn((v) => v),
 }));
 
 vi.mock('@converter/v3/handlers/w/sdt/helpers/translate-field-annotation.js', () => ({
@@ -30,6 +41,15 @@ describe('translateImageNode', () => {
       },
       relationships: [],
       media: {},
+      converter: {
+        convertedXml: {
+          'word/_rels/document.xml.rels': {
+            elements: [{ name: 'Relationships', elements: [] }],
+          },
+        },
+        addedMedia: {},
+        media: {},
+      },
     };
     vi.clearAllMocks();
   });
@@ -51,6 +71,16 @@ describe('translateImageNode', () => {
 
   it('should reuse given rId if provided', () => {
     baseParams.node.attrs.rId = 'rId999';
+    baseParams.converter.convertedXml['word/_rels/document.xml.rels'].elements[0].elements.push({
+      type: 'element',
+      name: 'Relationship',
+      attributes: {
+        Id: 'rId999',
+        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
+        Target: '',
+      },
+    });
+
     const result = translateImageNode(baseParams);
 
     const blip = result.elements
@@ -68,6 +98,13 @@ describe('translateImageNode', () => {
     expect(baseParams.relationships.length).toBe(1);
     expect(baseParams.relationships[0].attributes.Type).toContain('relationships/image');
     expect(result.elements).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'a:graphic' })]));
+  });
+
+  it('should generate a new relationship if rId is presented but relation is missing', () => {
+    baseParams.node.attrs.rId = 'rId123';
+    translateImageNode(baseParams);
+    expect(baseParams.relationships).toHaveLength(1);
+    expect(baseParams.relationships[0].attributes.Id).toBe('rId123');
   });
 
   it('should call prepareTextAnnotation for fieldAnnotation without type', () => {
@@ -94,5 +131,33 @@ describe('translateImageNode', () => {
 
     const extent = result.elements.find((e) => e.name === 'wp:extent').attributes;
     expect(extent.cx).toBeLessThan(helpers.pixelsToEmu(500));
+  });
+});
+
+describe('translateVectorShape', () => {
+  it('wraps exported vector shapes in a run', () => {
+    const params = {
+      node: {
+        type: 'vectorShape',
+        attrs: {
+          drawingContent: {
+            elements: [{ name: 'wps:wsp' }],
+          },
+        },
+      },
+    };
+
+    const result = translateVectorShape(params);
+
+    expect(result?.name).toBe('w:r');
+    expect(result?.elements?.[0]).toMatchObject({ name: 'mc:AlternateContent' });
+    const choice = result?.elements?.[0]?.elements?.[0];
+    expect(choice).toMatchObject({
+      name: 'mc:Choice',
+      attributes: { Requires: 'wps' },
+    });
+    const drawing = choice?.elements?.[0];
+    expect(drawing?.name).toBe('w:drawing');
+    expect(drawing?.elements).toEqual([{ name: 'wps:wsp' }]);
   });
 });

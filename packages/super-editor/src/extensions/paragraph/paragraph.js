@@ -265,18 +265,94 @@ export const Paragraph = OxmlNode.create({
 
   addPmPlugins() {
     const { view } = this.editor;
+    const dropcapWidthCache = new Map();
+
+    /**
+     * Determines whether the node is a margin dropcap paragraph.
+     * @param {import('prosemirror-model').Node} node - Node to inspect.
+     * @returns {boolean} True when the paragraph uses margin dropcaps.
+     */
+    const hasDropcapParagraph = (node) => node.type.name === 'paragraph' && node.attrs.dropcap?.type === 'margin';
+
+    /**
+     * Removes cached dropcap widths that fall within the affected document range.
+     * @param {number} from - Start position of an updated range.
+     * @param {number} to - End position of an updated range.
+     * @returns {void}
+     */
+    const invalidateCacheForRange = (from, to) => {
+      for (const [pos] of dropcapWidthCache) {
+        if (pos >= from && pos <= to) {
+          dropcapWidthCache.delete(pos);
+        }
+      }
+    };
+
     const dropcapPlugin = new Plugin({
       name: 'dropcapPlugin',
       key: new PluginKey('dropcapPlugin'),
       state: {
         init(_, state) {
-          let decorations = getDropcapDecorations(state, view);
+          const decorations = getDropcapDecorations(state, view, dropcapWidthCache);
           return DecorationSet.create(state.doc, decorations);
         },
 
         apply(tr, oldDecorationSet, oldState, newState) {
           if (!tr.docChanged) return oldDecorationSet;
-          const decorations = getDropcapDecorations(newState, view);
+
+          // Early exit if no dropcaps in document
+          let hasDropcaps = false;
+          newState.doc.descendants((node) => {
+            if (hasDropcapParagraph(node)) {
+              hasDropcaps = true;
+              return false;
+            }
+          });
+
+          if (!hasDropcaps) {
+            dropcapWidthCache.clear();
+            return DecorationSet.empty;
+          }
+
+          // Check if transaction affects dropcap paragraphs
+          let affectsDropcaps = false;
+
+          tr.steps.forEach((step) => {
+            if (step.slice?.content) {
+              step.slice.content.descendants((node) => {
+                if (hasDropcapParagraph(node)) {
+                  affectsDropcaps = true;
+                  return false;
+                }
+              });
+            }
+
+            if (step.jsonID === 'replace' && step.from !== undefined && step.to !== undefined) {
+              try {
+                oldState.doc.nodesBetween(step.from, step.to, (node) => {
+                  if (hasDropcapParagraph(node)) {
+                    affectsDropcaps = true;
+                    return false;
+                  }
+                });
+              } catch {
+                affectsDropcaps = true;
+              }
+            }
+          });
+
+          if (!affectsDropcaps) {
+            return oldDecorationSet.map(tr.mapping, tr.doc);
+          }
+
+          // Invalidate cached widths for affected ranges
+          tr.steps.forEach((step) => {
+            if (step.from !== undefined && step.to !== undefined) {
+              invalidateCacheForRange(step.from, step.to);
+            }
+          });
+
+          const decorations = getDropcapDecorations(newState, view, dropcapWidthCache);
           return DecorationSet.create(newState.doc, decorations);
         },
       },
@@ -291,28 +367,35 @@ export const Paragraph = OxmlNode.create({
   },
 });
 
-const getDropcapDecorations = (state, view) => {
-  let decorations = [];
+const getDropcapDecorations = (state, view, widthCache) => {
+  const decorations = [];
 
   state.doc.descendants((node, pos) => {
     if (node.type.name === 'paragraph') {
       if (node.attrs.dropcap?.type === 'margin') {
-        const width = getDropcapWidth(view, pos);
+        const width = getDropcapWidth(view, pos, widthCache);
         decorations.push(Decoration.inline(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }));
       }
-
-      return false; // no need to descend into a paragraph
+      return false;
     }
   });
+
   return decorations;
 };
 
-function getDropcapWidth(view, pos) {
+function getDropcapWidth(view, pos, widthCache) {
+  if (widthCache.has(pos)) {
+    return widthCache.get(pos);
+  }
+
   const domNode = view.nodeDOM(pos);
   if (domNode) {
     const range = document.createRange();
     range.selectNodeContents(domNode);
-    return range.getBoundingClientRect().width;
+    const width = range.getBoundingClientRect().width;
+    widthCache.set(pos, width);
+    return width;
   }
+
   return 0;
 }
