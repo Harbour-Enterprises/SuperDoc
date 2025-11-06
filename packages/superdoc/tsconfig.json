@@ -1,17 +1,15 @@
 {
+  "extends": "../../tsconfig.base.json",
   "include": ["./src/**/*"],
   "compilerOptions": {
-    // "checkJs": true,
     "allowJs": true,
+    "checkJs": false,
     "declaration": true,
     "emitDeclarationOnly": true,
     "outDir": "dist",
     "declarationMap": true,
     "skipLibCheck": true,
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "typeRoots": ["./node_modules/@types/*"],
-    "target": "ES2019"
+    "typeRoots": ["./node_modules/@types/*"]
   },
   "exclude": ["node_modules", "dist", "**/*.test.js"]
 }
