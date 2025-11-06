@@ -29,7 +29,7 @@ export const insertContent =
         const processedDoc = processContent({
           content: value,
           type: options.contentType,
-          schema: state.schema,
+          editor,
         });
 
         const jsonContent = processedDoc.toJSON();

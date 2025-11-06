@@ -174,7 +174,7 @@ export const getBasicNumIdTag = (numId, abstractId) => {
  * @returns {number} The new list ID.
  */
 export const getNewListId = (editor, grouping = 'definitions') => {
-  const defs = editor.converter.numbering[grouping] || {};
+  const defs = editor.converter?.numbering?.[grouping] || {};
   const intKeys = Object.keys(defs)
     .map((k) => Number(k))
     .filter((n) => Number.isInteger(n));
