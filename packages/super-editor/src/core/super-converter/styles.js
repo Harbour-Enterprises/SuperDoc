@@ -44,10 +44,10 @@ export const resolveRunProperties = (
   if (isListNumber) {
     // Numbering properties
     let numberingProps = {};
-    if (resolvedPpr?.numberingProperties?.ilvl != null && resolvedPpr?.numberingProperties?.numId != null) {
+    if (resolvedPpr?.numberingProperties?.numId != null) {
       numberingProps = getNumberingProperties(
         params,
-        resolvedPpr.numberingProperties.ilvl,
+        resolvedPpr.numberingProperties.ilvl ?? 0,
         resolvedPpr.numberingProperties.numId,
         w_rPrTranslator,
       );
@@ -83,12 +83,12 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
 
   // Numbering style
   let numberingProps = {};
-  const ilvl = inlineProps?.numberingProperties?.ilvl ?? styleProps?.numberingProperties?.ilvl;
+  let ilvl = inlineProps?.numberingProperties?.ilvl ?? styleProps?.numberingProperties?.ilvl;
   const numId = inlineProps?.numberingProperties?.numId ?? styleProps?.numberingProperties?.numId;
-  let numberingDefinedInline =
-    inlineProps?.numberingProperties?.ilvl != null && inlineProps?.numberingProperties?.numId != null;
-  const isList = ilvl != null && numId != null;
+  let numberingDefinedInline = inlineProps?.numberingProperties?.numId != null;
+  const isList = numId != null;
   if (isList) {
+    ilvl = ilvl != null ? ilvl : 0;
     numberingProps = getNumberingProperties(params, ilvl, numId, w_pPrTranslator);
     if (overrideInlineStyleId && numberingProps.styleId) {
       styleId = numberingProps.styleId;
