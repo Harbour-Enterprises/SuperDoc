@@ -1,6 +1,6 @@
 {
   "name": "@superdoc-dev/superdoc-yjs-collaboration",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -11,6 +11,7 @@
   ],
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "require": "./dist/index.cjs",
       "import": "./dist/index.js"
     }
@@ -28,8 +29,7 @@
     "lint": "eslint --no-warn-ignored src/**/*.ts",
     "lint:fix": "eslint --fix --no-warn-ignored src/**/*.ts"
   },
-  "keywords": [],
-  "author": "",
+  "author": "SuperDoc",
   "license": "AGPL-3.0",
   "description": "A quick-start collaboration server for SuperDoc",
   "publishConfig": {
