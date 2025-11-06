@@ -1,3 +1,10 @@
+## [0.28.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.3...v0.28.4) (2025-11-06)
+
+### Bug Fixes
+
+- prettier ([bbc4c6a](https://github.com/Harbour-Enterprises/SuperDoc/commit/bbc4c6a757bcbaca08175dc9bbbe5c533b82e3c4))
+- uploaded image is missing for collaborators ([#1217](https://github.com/Harbour-Enterprises/SuperDoc/issues/1217)) ([090f4e7](https://github.com/Harbour-Enterprises/SuperDoc/commit/090f4e709c560ceae718b34d5a3ee02cc7b2bc86))
+
 ## [0.28.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.2...v0.28.3) (2025-11-05)
 
 ### Bug Fixes
