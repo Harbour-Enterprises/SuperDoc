@@ -57,6 +57,12 @@ export const resolveRunProperties = (
       // If numbering is not defined inline, we need to ignore the inline rPr
       inlineRpr = {};
     }
+
+    // Inline underlines are ignored for list numbers
+    if (inlineRpr?.underline) {
+      delete inlineRpr.underline;
+    }
+
     styleChain = [...styleChain, paragraphStyleProps, runStyleProps, inlineRpr, numberingProps];
   } else {
     styleChain = [...styleChain, paragraphStyleProps, runStyleProps, inlineRpr];
