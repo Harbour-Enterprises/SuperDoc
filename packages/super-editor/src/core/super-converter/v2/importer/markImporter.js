@@ -64,7 +64,7 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
       const { attributes = {} } = element;
       const newMark = { type: m.type };
 
-      const exceptionMarks = ['w:b', 'w:caps'];
+      const exceptionMarks = ['w:b', 'w:caps', 'w:strike', 'w:dstrike'];
       if ((attributes['w:val'] === '0' || attributes['w:val'] === 'none') && !exceptionMarks.includes(m.name)) {
         return;
       }
@@ -248,5 +248,6 @@ export function getStrikeValue(attributes) {
   if (raw === undefined || raw === null) return '1'; // presence implies on
   const value = String(raw).trim().toLowerCase();
   if (value === '1' || value === 'true' || value === 'on') return '1';
-  return null;
+  if (value === '0' || value === 'false' || value === 'off') return '0';
+  return '1'; // Default to enabled for any other value
 }
