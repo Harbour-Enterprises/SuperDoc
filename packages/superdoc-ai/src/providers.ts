@@ -23,6 +23,7 @@ interface ProviderDefaults {
     temperature?: number;
     maxTokens?: number;
     stop?: string[];
+    streamResults?: boolean;
 }
 
 export interface HttpProviderConfig extends ProviderDefaults {
@@ -127,6 +128,7 @@ export function createHttpProvider(config: HttpProviderConfig): AIProvider {
         temperature,
         maxTokens,
         stop,
+        streamResults,
     } = config;
 
     const fetchImpl = resolveFetch(customFetch);
@@ -136,7 +138,7 @@ export function createHttpProvider(config: HttpProviderConfig): AIProvider {
         ((context: ProviderRequestContext) =>
             cleanUndefined({
                 messages: context.messages,
-                stream: context.stream,
+                stream: context.options?.stream ?? context.stream ?? streamResults,
                 temperature: context.options?.temperature ?? temperature,
                 max_tokens: context.options?.maxTokens ?? maxTokens,
                 stop: context.options?.stop ?? stop,
@@ -153,11 +155,18 @@ export function createHttpProvider(config: HttpProviderConfig): AIProvider {
      * @throws Error when the provider responds with a non-ok status.
      */
     async function requestJson(targetUrl: string, context: ProviderRequestContext) {
+        const resolvedStream = context.options?.stream ?? context.stream ?? streamResults;
         const bodyPayload = buildBody(context);
+        const shouldForceStream =
+            Boolean(
+                buildRequestBody && resolvedStream && bodyPayload && typeof bodyPayload === 'object' && !Array.isArray(bodyPayload) &&
+                !('stream' in bodyPayload)
+            );
+        const finalPayload = shouldForceStream ? { ...bodyPayload, stream: true } : bodyPayload;
         const response = await fetchImpl(targetUrl, {
             method,
             headers: ensureContentType(headers),
-            body: JSON.stringify(bodyPayload),
+            body: JSON.stringify(finalPayload),
             signal: context.options?.signal,
         });
 
@@ -170,6 +179,7 @@ export function createHttpProvider(config: HttpProviderConfig): AIProvider {
     }
 
     return {
+        streamResults,
         async *streamCompletion(messages: AIMessage[], options?: StreamOptions) {
             const target = streamUrl ?? url;
 
@@ -188,7 +198,7 @@ export function createHttpProvider(config: HttpProviderConfig): AIProvider {
         async getCompletion(messages: AIMessage[], options?: CompletionOptions): Promise<string> {
             const response = await requestJson(url, { messages, stream: false, options });
             return parseResponsePayload(response, parseCompletion);
-        },
+        }
     };
 }
 
@@ -213,6 +223,7 @@ export function createOpenAIProvider(config: OpenAIProviderConfig): AIProvider {
         temperature,
         maxTokens,
         stop,
+        streamResults,
     } = config;
 
     const url = joinUrl(baseURL, completionPath);
@@ -232,13 +243,14 @@ export function createOpenAIProvider(config: OpenAIProviderConfig): AIProvider {
         temperature,
         maxTokens,
         stop,
-        buildRequestBody: ({ messages, stream, options }) =>
+        streamResults,
+        buildRequestBody: ({ messages, stream: contextStream, options }) =>
             cleanUndefined({
                 model: options?.model ?? model,
                 temperature: options?.temperature ?? temperature,
                 max_tokens: options?.maxTokens ?? maxTokens,
                 stop: options?.stop ?? stop,
-                stream,
+                stream: options?.stream ?? contextStream ?? streamResults,
                 messages,
                 ...requestOptions,
                 ...options?.providerOptions,
@@ -268,6 +280,7 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AIProv
         temperature,
         maxTokens = 1024,
         stop,
+        streamResults,
     } = config;
 
     const url = joinUrl(baseURL, '/v1/messages');
@@ -287,14 +300,15 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AIProv
         temperature,
         maxTokens,
         stop,
-        buildRequestBody: ({ messages, stream, options }) => {
+        streamResults,
+        buildRequestBody: ({ messages, stream: contextStream, options }) => {
             const { system, anthropicMessages } = convertToAnthropicMessages(messages);
             return cleanUndefined({
                 model: options?.model ?? model,
                 temperature: options?.temperature ?? temperature,
                 max_tokens: options?.maxTokens ?? maxTokens,
                 stop_sequences: options?.stop ?? stop,
-                stream,
+                stream: options?.stream ?? contextStream ?? streamResults,
                 system,
                 messages: anthropicMessages,
                 ...requestOptions,

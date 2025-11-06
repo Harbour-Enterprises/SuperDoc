@@ -1,6 +1,6 @@
 {
   "name": "@superdoc-dev/superdoc-ai",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "AI integration package for SuperDoc",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,7 +25,7 @@
     "superdoc": "*"
   },
   "devDependencies": {
-    "superdoc": "^0.26.0",
+    "superdoc": "^0.28.0",
     "@types/node": "^20.0.0",
     "typescript": "^5.0.0",
     "eslint": "^8.0.0",
