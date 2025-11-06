@@ -19,7 +19,7 @@
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts --outDir dist",
     "watch:lib": "tsup src/index.ts --format cjs,esm --dts --outDir dist --watch",
-    "watch:example": "nodemon --watch examples/fastify --ext js --exec \"node examples/fastify/index.js\"",
+    "watch:example": "nodemon --watch examples/fastify --ext ts --exec \"cd examples/fastify && tsx index.ts\"",
     "dev": "concurrently -k -n LIB,SERVER -c yellow,green \"npm run watch:lib\" \"npm run watch:example\"",
     "test": "vitest --config ./vitest.config.ts",
     "test:cov": "vitest run --coverage --config ./vitest.config.ts",
