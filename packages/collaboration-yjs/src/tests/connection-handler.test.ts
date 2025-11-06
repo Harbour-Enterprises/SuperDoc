@@ -11,28 +11,38 @@ vi.mock('../internal-logger/logger.js', () => ({
 import { setupConnection } from '../shared-doc/index.js';
 import { createLogger as createLoggerMock } from '../internal-logger/logger.js';
 import { ConnectionHandler } from '../connection-handler/handler.js';
+import type { CollaborationWebSocket, SocketRequest } from '../types/service-types.js';
+import type { DocumentManager } from '../document-manager/manager.js';
 
 describe('ConnectionHandler', () => {
-  let documentManager;
-  let socket;
-  let socketEvents;
-  let sharedDoc;
-  let docEvents;
-  let loggerSpy;
+  type TestSocket = CollaborationWebSocket & {
+    events: Record<string, (...args: unknown[]) => void>;
+  };
+
+  let documentManager: DocumentManager;
+  let socket: TestSocket;
+  let socketEvents: Record<string, (...args: unknown[]) => void>;
+  let sharedDoc: { name: string; on: ReturnType<typeof vi.fn> };
+  let docEvents: Record<string, (...args: unknown[]) => void>;
+  let loggerSpy: ReturnType<typeof vi.fn>;
+  const createLoggerFn = createLoggerMock as unknown as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     loggerSpy = vi.fn();
-    createLoggerMock.mockReturnValue(loggerSpy);
+    createLoggerFn.mockReturnValue(loggerSpy);
 
     socketEvents = {};
     socket = {
+      readyState: 1,
+      send: vi.fn(),
       close: vi.fn(),
-      on: vi.fn((event, handler) => {
+      on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         socketEvents[event] = handler;
       }),
-    };
+      events: socketEvents,
+    } as TestSocket;
 
     docEvents = {};
     sharedDoc = {
@@ -45,7 +55,7 @@ describe('ConnectionHandler', () => {
     documentManager = {
       getDocument: vi.fn().mockResolvedValue(sharedDoc),
       releaseConnection: vi.fn(),
-    };
+    } as unknown as DocumentManager;
   });
 
   test('handle authenticates, wires hooks, and returns user params', async () => {
@@ -60,7 +70,7 @@ describe('ConnectionHandler', () => {
 
     const handler = new ConnectionHandler({ documentManager, hooks });
     const params = { documentId: 'doc-1', role: 'editor' };
-    const request = { url: '/collab/doc-1' };
+    const request: SocketRequest = { url: '/collab/doc-1', params: { documentId: 'doc-1' } };
 
     const result = await handler.handle(socket, request, params);
 
@@ -79,17 +89,21 @@ describe('ConnectionHandler', () => {
     // simulate socket close to ensure cleanup
     socketEvents.close(1000, Buffer.from('bye'));
     expect(documentManager.releaseConnection).toHaveBeenCalledWith('doc-1', socket);
-    expect(loggerSpy).toHaveBeenCalledWith('🔌 Socket closed, cleaning up connection for', 'doc-1');
+    expect(loggerSpy).toHaveBeenCalledWith(
+      '🔌 Socket closed, cleaning up connection for',
+      'doc-1',
+      expect.objectContaining({ code: 1000 })
+    );
   });
 
   test('handle skips authentication when hook missing', async () => {
     const handler = new ConnectionHandler({ documentManager, hooks: {} });
     const params = { documentId: 'doc-2' };
-    const request = { url: '/collab/doc-2' };
+    const request: SocketRequest = { url: '/collab/doc-2', params: { documentId: 'doc-2' } };
 
     const result = await handler.handle(socket, request, params);
 
-    expect(result.userContext).toBe(true);
+    expect(result.userContext).toBeUndefined();
     expect(documentManager.getDocument).toHaveBeenCalledWith('doc-2', result);
   });
 
@@ -100,12 +114,13 @@ describe('ConnectionHandler', () => {
 
     const handler = new ConnectionHandler({ documentManager, hooks });
     const params = { documentId: 'doc-3' };
-    const request = { url: '/collab/doc-3' };
+    const request: SocketRequest = { url: '/collab/doc-3', params: { documentId: 'doc-3' } };
 
-    await handler.handle(socket, request, params);
+    await expect(handler.handle(socket, request, params)).rejects.toThrowError('Authentication failed for connection');
 
     expect(socket.close).toHaveBeenCalledWith(1008, 'Authentication failed');
     expect(loggerSpy).toHaveBeenCalledWith('⛔ Auth rejected for doc-3');
+    expect(documentManager.getDocument).not.toHaveBeenCalled();
   });
 
   test('handle closes socket when authenticate throws', async () => {
@@ -116,12 +131,28 @@ describe('ConnectionHandler', () => {
 
     const handler = new ConnectionHandler({ documentManager, hooks });
     const params = { documentId: 'doc-4' };
-    const request = { url: '/collab/doc-4' };
+    const request: SocketRequest = { url: '/collab/doc-4', params: { documentId: 'doc-4' } };
 
-    await handler.handle(socket, request, params);
+    await expect(handler.handle(socket, request, params)).rejects.toThrowError('Authentication failed for connection');
 
     expect(socket.close).toHaveBeenCalledWith(1011, 'Internal auth error');
     expect(loggerSpy).toHaveBeenCalledWith('🛑 Auth hook threw:', error);
+    expect(documentManager.getDocument).not.toHaveBeenCalled();
+  });
+
+  test('handle does not open document when authenticate returns false', async () => {
+    const hooks = {
+      authenticate: vi.fn().mockResolvedValue(false),
+    };
+
+    const handler = new ConnectionHandler({ documentManager, hooks });
+    const params = { documentId: 'doc-5' };
+    const request: SocketRequest = { url: '/collab/doc-5', params: { documentId: 'doc-5' } };
+
+    await expect(handler.handle(socket, request, params)).rejects.toThrowError('Authentication failed for connection');
+
+    expect(documentManager.getDocument).not.toHaveBeenCalled();
+    expect(socket.close).toHaveBeenCalledWith(1008, 'Authentication failed');
   });
 
   test('hangUp logs and closes the socket', () => {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
+import type { CollaborationWebSocket, SocketRequest } from '../types/service-types.js';
 
 vi.mock('../internal-logger/logger.js', () => ({
   createLogger: vi.fn(),
@@ -23,8 +24,12 @@ import { generateParams as generateParamsMock } from '../collaboration/helpers.j
 import { SuperDocCollaboration } from '../collaboration/collaboration.js';
 
 describe('SuperDocCollaboration', () => {
-  let handleSpy;
-  let loggerSpy;
+  let handleSpy: ReturnType<typeof vi.fn>;
+  let loggerSpy: ReturnType<typeof vi.fn>;
+  const documentManagerCtor = DocumentManagerMock as unknown as ReturnType<typeof vi.fn>;
+  const connectionHandlerCtor = ConnectionHandlerMock as unknown as ReturnType<typeof vi.fn>;
+  const generateParamsFn = generateParamsMock as unknown as ReturnType<typeof vi.fn>;
+  const createLoggerFn = createLoggerMock as unknown as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -32,20 +37,26 @@ describe('SuperDocCollaboration', () => {
     handleSpy = vi.fn();
     loggerSpy = vi.fn();
 
-    createLoggerMock.mockImplementation(() => loggerSpy);
+    createLoggerFn.mockImplementation(() => loggerSpy);
 
-    DocumentManagerMock.mockImplementation(function DocumentManagerStub(config) {
+    documentManagerCtor.mockImplementation(function DocumentManagerStub(
+      this: {
+        config: unknown;
+        has: ReturnType<typeof vi.fn>;
+      },
+      config: unknown
+    ) {
       this.config = config;
       this.has = vi.fn();
     });
 
-    ConnectionHandlerMock.mockImplementation(({ documentManager, hooks }) => ({
+    connectionHandlerCtor.mockImplementation(({ documentManager, hooks }) => ({
       handle: handleSpy,
       documentManager,
       hooks,
     }));
 
-    generateParamsMock.mockImplementation(() => ({
+    generateParamsFn.mockImplementation(() => ({
       documentId: 'doc-123',
       params: {},
     }));
@@ -60,10 +71,10 @@ describe('SuperDocCollaboration', () => {
     expect(service.config).toBe(config);
     expect(DocumentManagerMock).toHaveBeenCalledWith(config);
     expect(ConnectionHandlerMock).toHaveBeenCalledWith({
-      documentManager: DocumentManagerMock.mock.instances[0],
+      documentManager: documentManagerCtor.mock.instances[0],
       hooks,
     });
-    expect(service.documentManager).toBe(DocumentManagerMock.mock.instances[0]);
+    expect(service.documentManager).toBe(documentManagerCtor.mock.instances[0]);
     expect(createLoggerMock).toHaveBeenCalledWith('SuperDocCollaboration');
   });
 
@@ -79,11 +90,16 @@ describe('SuperDocCollaboration', () => {
   test('welcome logs and delegates to connection handler', async () => {
     const config = { hooks: {} };
     const service = new SuperDocCollaboration(config);
-    const socket = { id: 'socket-1' };
-    const request = { url: '/collab/doc-1', params: { documentId: 'doc-1' } };
+    const socket = {
+      readyState: 1,
+      send: vi.fn(),
+      close: vi.fn(),
+      on: vi.fn(),
+    } as CollaborationWebSocket;
+    const request: SocketRequest = { url: '/collab/doc-1', params: { documentId: 'doc-1' } };
     const params = { documentId: 'doc-999', params: { user: 'alice' } };
 
-    generateParamsMock.mockReturnValueOnce(params);
+    generateParamsFn.mockReturnValueOnce(params);
 
     await service.welcome(socket, request);
 
@@ -94,7 +110,7 @@ describe('SuperDocCollaboration', () => {
 
   test('has proxies to the document manager instance', () => {
     const service = new SuperDocCollaboration({ hooks: {} });
-    const manager = DocumentManagerMock.mock.instances[0];
+    const manager = documentManagerCtor.mock.instances[0] as { has: ReturnType<typeof vi.fn> };
     manager.has.mockReturnValueOnce(true);
 
     expect(service.has('doc-007')).toBe(true);

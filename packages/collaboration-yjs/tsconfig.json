@@ -1,12 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["./src/**/*"],
   "compilerOptions": {
-    "allowJs": true,
-    "checkJs": false,
-    "declaration": true,
-    "emitDeclarationOnly": true,
+    "rootDir": "src",
     "outDir": "dist",
-    "declarationMap": true
-  }
+    "declaration": true,
+    "declarationMap": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.test.ts", "examples", "examples/**", "dist", "node_modules"]
 }
