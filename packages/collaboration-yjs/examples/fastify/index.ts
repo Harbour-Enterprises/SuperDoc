@@ -65,8 +65,8 @@ fastify.get('/', async (request, reply) => 'Hello, SuperDoc!');
 
 /** An example route for websocket collaboration connection */
 fastify.register(async function (fastify) {
-  fastify.get<{ Params: { documentId: string } }>('/collaboration/:documentId', { websocket: true }, (socket: WebSocket, request: FastifyRequest<{ Params: { documentId: string } }>) => {
-    SuperDocCollaboration.welcome(socket as unknown as CollaborationWebSocket, request as unknown as SocketRequest)
+  fastify.get('/collaboration/:documentId', { websocket: true }, (socket, request) => {
+    SuperDocCollaboration.welcome(socket as any, request as any)
   })
 });
 
