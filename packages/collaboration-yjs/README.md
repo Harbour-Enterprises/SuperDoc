@@ -1,6 +1,6 @@
 # SuperDoc Yjs collaboration library
 
-`@harbour-enterprises/superdoc-yjs-collaboration` is a library for integrating Yjs-based real-time collaborative editing into any Node.js WebSocket-enabled server framework. It is designed to work out-of-the-box for **SuperDoc**.
+`@superdoc-dev/superdoc-yjs-collaboration` is a library for integrating Yjs-based real-time collaborative editing into any Node.js WebSocket-enabled server framework. It is designed to work out-of-the-box for **SuperDoc**.
 
 It provides:
 
@@ -30,9 +30,9 @@ Please see a [quick start example here](https://github.com/Harbour-Enterprises/S
 ## Installation
 
 ```bash
-npm install @harbour-enterprises/superdoc-yjs-collaboration
+npm install @superdoc-dev/superdoc-yjs-collaboration
 # or
-yarn add @harbour-enterprises/superdoc-yjs-collaboration
+yarn add @superdoc-dev/superdoc-yjs-collaboration
 ```
 
 For local development, link your built package:
@@ -43,7 +43,7 @@ npm run build
 npm link
 
 # in your project
-npm link @harbour-enterprises/superdoc-yjs-collaboration
+npm link @superdoc-dev/superdoc-yjs-collaboration
 ```
 
 ---
@@ -64,7 +64,7 @@ Below is an example using Fastify, but you can adapt it to any server framework.
 import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import { v4 as uuidv4 } from 'uuid';
-import SuperDocCollaboration from '@harbour-enterprises/superdoc-yjs-collaboration';
+import SuperDocCollaboration from '@superdoc-dev/superdoc-yjs-collaboration';
 
 const app = Fastify();
 app.register(websocket);
