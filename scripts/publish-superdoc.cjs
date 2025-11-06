@@ -130,8 +130,8 @@ module.exports = {
 
     publishPackages({
       distTag,
-      publishUnscoped: false,
-      build: false,
+      publishUnscoped: true,
+      build: true,
       logger
     });
   },

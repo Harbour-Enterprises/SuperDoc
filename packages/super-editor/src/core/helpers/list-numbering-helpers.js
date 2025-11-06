@@ -578,14 +578,15 @@ export const getListItemStyleDefinitions = ({ styleId, numId, level, editor, tri
   if (typeof level === 'string') level = Number(level);
 
   const docx = editor?.converter?.convertedXml;
-  const numbering = editor?.converter?.numbering;
+  const converter = editor?.converter;
+  const numbering = converter?.numbering;
 
   // We need definitions for the styleId if we have one.
   const styleDefinition = docx ? getStyleTagFromStyleId(styleId, docx) : null;
   const stylePpr = styleDefinition?.elements.find((el) => el.name === 'w:pPr');
 
   // We also check definitions for the numId which can contain styles.
-  let abstractDefinition = docx ? getAbstractDefinition(numId, docx) : null;
+  let abstractDefinition = docx ? getAbstractDefinition(numId, docx, converter) : null;
   if (!abstractDefinition) {
     const listDef = numbering?.definitions?.[numId];
     const abstractId = listDef?.elements?.find((item) => item.name === 'w:abstractNumId')?.attributes?.['w:val'];
