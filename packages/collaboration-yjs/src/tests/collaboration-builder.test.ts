@@ -1,15 +1,19 @@
 import { describe, expect, test, vi } from 'vitest';
 
-vi.mock('../collaboration/index.js', () => ({
-  SuperDocCollaboration: class FakeSuperDocCollaboration {
-    constructor(config) {
+vi.mock('../collaboration/index.js', () => {
+  class FakeSuperDocCollaboration {
+    config: unknown;
+
+    constructor(config: unknown) {
       this.config = config;
-      this.__isFake = true;
     }
-  },
-}));
+  }
+
+  return { SuperDocCollaboration: FakeSuperDocCollaboration };
+});
 
 import { CollaborationBuilder } from '../builder.js';
+import { SuperDocCollaboration } from '../collaboration/index.js';
 
 describe('CollaborationBuilder', () => {
   test('throws when name is missing', () => {
@@ -42,7 +46,7 @@ describe('CollaborationBuilder', () => {
       documentExpiryMs: 1000,
     });
     expect(service.config.extensions).toEqual([baseExtension, extraExtension]);
-    expect(service.__isFake).toBe(true);
+    expect(service).toBeInstanceOf(SuperDocCollaboration);
   });
 
   test('collects hook callbacks before building service', () => {

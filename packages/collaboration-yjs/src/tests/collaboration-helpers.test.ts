@@ -9,7 +9,9 @@ describe('generateParams', () => {
       params: { documentId: 'doc-42', user: 'alice' },
       headers: { cookie: 'session=abc123; quoted="%7Bjson%7D"; bad=%E0%A4%; incomplete' },
     };
-    const instance = { name: 'service-instance' };
+    const instance = {
+      name: 'service-instance',
+    } as unknown as import('../collaboration/collaboration.js').SuperDocCollaboration;
 
     const result = generateParams(request, instance);
 
@@ -31,7 +33,7 @@ describe('generateParams', () => {
       params: { documentId: 'doc-99', region: 'us-west' },
     };
 
-    const result = generateParams(request, {});
+    const result = generateParams(request);
 
     expect(result.documentId).toBe('doc-99');
     expect(result.headers).toEqual({});

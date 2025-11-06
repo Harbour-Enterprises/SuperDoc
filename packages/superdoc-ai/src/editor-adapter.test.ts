@@ -257,16 +257,7 @@ describe('EditorAdapter', () => {
 
             await mockAdapter.insertText('New content');
 
-            const expectedPos = mockEditor.state.doc.content.size;
-            const expectedFrom = Math.max(0, expectedPos - 50);
-
-            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({
-                from: expectedFrom,
-                to: expectedPos
-            });
-
-            expect(mockEditor.commands.insertContentAt).toHaveBeenCalledWith(
-                expectedPos,
+            expect(mockEditor.commands.insertContent).toHaveBeenCalledWith(
                 {
                     type: 'text',
                     text: 'New content',
@@ -275,24 +266,12 @@ describe('EditorAdapter', () => {
             );
         });
 
-        it('clamps selection start to zero when document is short', async () => {
-            mockEditor.state.doc.content.size = 20;
-
-            await mockAdapter.insertText('Short doc content');
-
-            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({
-                from: 0,
-                to: 20
-            });
-        });
-
         it('should handle empty marks when inserting', async () => {
             mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue([]);
 
             await mockAdapter.insertText('Plain text');
 
-            expect(mockEditor.commands.insertContentAt).toHaveBeenCalledWith(
-                expect.any(Number),
+            expect(mockEditor.commands.insertContent).toHaveBeenCalledWith(
                 {
                     type: 'text',
                     text: 'Plain text',

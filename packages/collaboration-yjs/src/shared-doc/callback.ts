@@ -1,18 +1,28 @@
-import http from 'http';
+import http from 'node:http';
 import * as number from 'lib0/number';
+import type { SharedSuperDoc } from './shared-doc.js';
+
+type CallbackObjects = Record<string, string>;
+type CallbackPayload = {
+  room: string;
+  data: Record<string, { type: string; content: unknown }>;
+};
 
 const CALLBACK_URL = process.env.CALLBACK_URL ? new URL(process.env.CALLBACK_URL) : null;
 const CALLBACK_TIMEOUT = number.parseInt(process.env.CALLBACK_TIMEOUT || '5000');
-const CALLBACK_OBJECTS = process.env.CALLBACK_OBJECTS ? JSON.parse(process.env.CALLBACK_OBJECTS) : {};
+const CALLBACK_OBJECTS: CallbackObjects = (() => {
+  try {
+    return process.env.CALLBACK_OBJECTS ? JSON.parse(process.env.CALLBACK_OBJECTS) : {};
+  } catch {
+    return {};
+  }
+})();
 
-export const isCallbackSet = !!CALLBACK_URL;
+export const isCallbackSet = Boolean(CALLBACK_URL);
 
-/**
- * @param {import('../types.js').SharedSuperDoc} doc - The SharedSuperDoc instance.
- */
-export const callbackHandler = (doc) => {
+export const callbackHandler = (doc: SharedSuperDoc) => {
   const room = doc.name;
-  const dataToSend = {
+  const dataToSend: CallbackPayload = {
     room,
     data: {},
   };
@@ -24,16 +34,13 @@ export const callbackHandler = (doc) => {
       content: getContent(sharedObjectName, sharedObjectType, doc).toJSON(),
     };
   });
-  CALLBACK_URL && callbackRequest(CALLBACK_URL, CALLBACK_TIMEOUT, dataToSend);
+  if (CALLBACK_URL) {
+    callbackRequest(CALLBACK_URL, CALLBACK_TIMEOUT, dataToSend);
+  }
 };
 
-/**
- * @param {URL} url
- * @param {number} timeout
- * @param {Object} data
- */
-const callbackRequest = (url, timeout, data) => {
-  data = JSON.stringify(data);
+const callbackRequest = (url: URL, timeout: number, data: CallbackPayload) => {
+  const serialized = JSON.stringify(data);
   const options = {
     hostname: url.hostname,
     port: url.port,
@@ -42,7 +49,7 @@ const callbackRequest = (url, timeout, data) => {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Content-Length': Buffer.byteLength(data),
+      'Content-Length': Buffer.byteLength(serialized),
     },
   };
   const req = http.request(options);
@@ -55,16 +62,19 @@ const callbackRequest = (url, timeout, data) => {
     console.error('Callback request error:', sanitizedError);
     req.abort();
   });
-  req.write(data);
+  req.write(serialized);
   req.end();
 };
 
-/**
- * @param {string} objName - The name of the shared object.
- * @param {string} objType - The type of the shared object (e.g., 'Array', 'Map', 'Text', etc.).
- * @param {import('../types.js').SharedSuperDoc} doc - The SharedSuperDoc instance.
- */
-const getContent = (objName, objType, doc) => {
+type SerializableDocContent =
+  | ReturnType<SharedSuperDoc['getArray']>
+  | ReturnType<SharedSuperDoc['getMap']>
+  | ReturnType<SharedSuperDoc['getText']>
+  | ReturnType<SharedSuperDoc['getXmlFragment']>
+  | ReturnType<SharedSuperDoc['getXmlElement']>
+  | Record<string, never>;
+
+const getContent = (objName: string, objType: string, doc: SharedSuperDoc): SerializableDocContent => {
   switch (objType) {
     case 'Array':
       return doc.getArray(objName);

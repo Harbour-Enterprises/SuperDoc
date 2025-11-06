@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SuperDoc AI Quickstart</title>
+  </head>
+  <body>
+    <div class="page">
+      <div class="page-shell">
+        <header class="page-header">
+          <div>
+            <h1>SuperDoc AI Quickstart</h1>
+            <p>Tap an action to see how SuperDoc AI collaborates with your document.</p>
+          </div>
+            <div class="status-pill">
+              <span>Status</span>
+              <strong id="statusText">Waiting for SuperDoc...</strong>
+            </div>
+        </header>
+
+        <main class="editor-area">
+          <div class="action-bar">
+              <button title="insert" id="insertIntro">Intro Draft</button>
+              <button title="summarize" id="summarizeDoc">Doc Summary</button>
+              <button title="highlight" id="highlightTasks">Highlight Tasks</button>
+              <button title="replace" id="rewriteGoals">Change Title</button>
+              <button title="find" id="findLaunchDate">Find Date</button>
+              <button title="insertComment" id="addSingleComment">Add Comment</button>
+          </div>
+          <div id="superdoc"></div>
+        </main>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

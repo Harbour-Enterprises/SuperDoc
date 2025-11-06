@@ -95,6 +95,8 @@ export class SuperDocAI {
 
         const {onReady, onStreamingStart, onStreamingPartialResult, onStreamingEnd, onError, provider, ...config} =
             options;
+        let streamResults = provider.streamResults;
+
         const aiProvider = isAIProvider(provider) ? provider : createAIProvider(provider);
 
         this.config = {
@@ -112,8 +114,6 @@ export class SuperDocAI {
             onError,
         };
 
-        const context = this.getDocumentContext();
-        
         const editor = this.getEditor();
         if (!editor) {
             throw new Error('SuperDocAI requires an active editor before initialization');
@@ -127,7 +127,14 @@ export class SuperDocAI {
             },
         });
 
-        this.actions = new AIActions(this.config.provider, editor, context, this.config.enableLogging);
+        this.actions = new AIActions(
+            this.config.provider,
+            editor,
+            () => this.getDocumentContext(),
+            this.config.enableLogging,
+            (partial) => this.callbacks.onStreamingPartialResult?.({partialResult: partial}),
+            streamResults,
+        );
 
         this.initializationPromise = this.initialize();
     }
@@ -166,14 +173,14 @@ export class SuperDocAI {
      */
     private async executeActionWithCallbacks<T extends Result>(
         fn: () => Promise<T>
-    ): Promise<Result> {
+    ): Promise<T> {
         const editor = this.getEditor();
         if (!editor) {
             throw new Error('No active SuperDoc editor available for AI actions');
         }
         try {
             this.callbacks.onStreamingStart?.();
-            const result: Result = await fn();
+            const result: T = await fn();
             this.callbacks.onStreamingEnd?.({fullResult: result});
 
             return result;

@@ -1,17 +1,28 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { CollaborationWebSocket } from '../types/service-types.js';
+import type { SharedSuperDoc } from '../shared-doc/shared-doc.js';
 
-const requestInstances = [];
+type RequestEventHandler = (...args: unknown[]) => void;
+interface MockedRequest {
+  on: (event: string, handler: RequestEventHandler) => MockedRequest;
+  write: ReturnType<typeof vi.fn>;
+  end: ReturnType<typeof vi.fn>;
+  abort: ReturnType<typeof vi.fn>;
+  trigger: (event: string, ...args: unknown[]) => void;
+}
+
+const requestInstances: Array<{ req: MockedRequest; events: Map<string, RequestEventHandler> }> = [];
 const httpRequestMock = vi.fn(() => {
-  const events = new Map();
-  const req = {
-    on: vi.fn((event, handler) => {
+  const events = new Map<string, RequestEventHandler>();
+  const req: MockedRequest = {
+    on: vi.fn((event: string, handler: RequestEventHandler) => {
       events.set(event, handler);
       return req;
-    }),
+    }) as MockedRequest['on'],
     write: vi.fn(),
     end: vi.fn(),
     abort: vi.fn(),
-    trigger(event, ...args) {
+    trigger: (event: string, ...args: unknown[]) => {
       const handler = events.get(event);
       if (handler) {
         handler(...args);
@@ -23,8 +34,10 @@ const httpRequestMock = vi.fn(() => {
   return req;
 });
 
-const createDebouncerMock = vi.fn((wait, maxWait) => {
-  const debounced = vi.fn((cb) => cb());
+type DebouncedFn = ((cb: () => void) => void) & { wait?: number; maxWait?: number };
+
+const createDebouncerMock = vi.fn((wait: number, maxWait: number) => {
+  const debounced = vi.fn((cb: () => void) => cb()) as DebouncedFn;
   debounced.wait = wait;
   debounced.maxWait = maxWait;
   return debounced;
@@ -69,69 +82,73 @@ const readSyncMessageMock = vi.fn((decoder, encoder, _doc, _conn) => {
 });
 
 class FakeDoc {
+  private _listeners: Map<string, Set<(...args: unknown[]) => void>>;
+
   constructor() {
     this._listeners = new Map();
   }
 
-  on(event, handler) {
+  on(event: string, handler: (...args: unknown[]) => void) {
     if (!this._listeners.has(event)) {
       this._listeners.set(event, new Set());
     }
     this._listeners.get(event)?.add(handler);
   }
 
-  off(event, handler) {
+  off(event: string, handler: (...args: unknown[]) => void) {
     this._listeners.get(event)?.delete(handler);
   }
 
-  emit(event, args) {
+  emit(event: string, args: unknown) {
     const listeners = this._listeners.get(event);
     if (listeners) {
       listeners.forEach((handler) => {
-        handler(...(Array.isArray(args) ? args : [args]));
+        handler(...(Array.isArray(args) ? (args as unknown[]) : [args]));
       });
     }
   }
 
-  getArray(name) {
+  getArray(name: string) {
     return { toJSON: () => [`array:${name}`] };
   }
 
-  getMap(name) {
+  getMap(name: string) {
     return { toJSON: () => ({ map: name }) };
   }
 
-  getText(name) {
+  getText(name: string) {
     return { toJSON: () => `text:${name}` };
   }
 
-  getXmlFragment(name) {
+  getXmlFragment(name: string) {
     return { toJSON: () => ({ fragment: name }) };
   }
 
-  getXmlElement(name) {
+  getXmlElement(name: string) {
     return { toJSON: () => ({ element: name }) };
   }
 }
 
 class FakeAwareness {
+  public localState: unknown = null;
+  private _listeners: Map<string, Set<(...args: unknown[]) => void>>;
+
   constructor() {
-    this.localState = null;
     this._listeners = new Map();
   }
 
-  on(event, handler) {
+  on(event: string, handler: (...args: unknown[]) => void) {
     if (!this._listeners.has(event)) {
       this._listeners.set(event, new Set());
     }
     this._listeners.get(event)?.add(handler);
   }
 
-  emit(event, payload, conn) {
+  emit(event: string, payload: unknown, conn: unknown) {
     this._listeners.get(event)?.forEach((handler) => handler(payload, conn));
   }
 
-  setLocalState(state) {
+  setLocalState(state: unknown) {
     this.localState = state;
   }
 }
@@ -140,7 +157,7 @@ const encodeAwarenessUpdateMock = vi.fn(() => new Uint8Array([5]));
 const removeAwarenessStatesMock = vi.fn();
 const applyAwarenessUpdateMock = vi.fn();
 
-vi.mock('http', () => ({
+vi.mock('node:http', () => ({
   default: {
     request: httpRequestMock,
   },
@@ -186,44 +203,58 @@ vi.mock('y-protocols/sync', () => ({
   writeSyncStep2: writeSyncStep2Mock,
 }));
 
-const createSocket = () => {
-  const listeners = new Map();
-  return {
+interface MockSocket extends CollaborationWebSocket {
+  listeners: Map<string, (...args: unknown[]) => void>;
+  trigger: (event: string, ...args: unknown[]) => void;
+  sendMock: ReturnType<typeof vi.fn>;
+}
+
+const createSocket = (): MockSocket => {
+  const listeners = new Map<string, (...args: unknown[]) => void>();
+  const sendMock = vi.fn((_message: Uint8Array, _opts: unknown, cb?: (err?: Error | null) => void) => cb?.(null));
+  const socket: MockSocket = {
     readyState: 1,
-    send: vi.fn((_message, _opts, cb) => cb && cb(null)),
+    send: sendMock as CollaborationWebSocket['send'],
     close: vi.fn(),
-    on: vi.fn((event, handler) => {
+    on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
       listeners.set(event, handler);
     }),
     listeners,
-    trigger(event, ...args) {
+    trigger: (event: string, ...args: unknown[]) => {
       listeners.get(event)?.(...args);
     },
+    sendMock,
   };
+
+  return socket;
 };
 
 const lastRequest = () => requestInstances.at(-1)?.req;
 
-let callbackHandlerMock;
-let debouncerStub;
+let callbackHandlerMock: ReturnType<typeof vi.fn>;
+let debouncerStub: DebouncedFn;
 let isCallbackEnabled = false;
 
-const mockSharedDocIndex = () => {
+const mockSharedModules = () => {
   callbackHandlerMock = vi.fn();
-  debouncerStub = vi.fn((cb) => cb());
-  vi.doMock('../shared-doc/index.js', () => ({
+  debouncerStub = vi.fn((cb: () => void) => cb()) as DebouncedFn;
+  vi.doMock('../shared-doc/constants.js', () => ({
     messageSync: 0,
     messageAwareness: 1,
     wsReadyStateConnecting: 0,
     wsReadyStateOpen: 1,
+  }));
+  vi.doMock('../shared-doc/callback.js', () => ({
     callbackHandler: callbackHandlerMock,
     isCallbackSet: isCallbackEnabled,
+  }));
+  vi.doMock('../shared-doc/utils.js', () => ({
     debouncer: debouncerStub,
   }));
 };
 
 const loadSharedDocModule = async () => {
-  mockSharedDocIndex();
+  mockSharedModules();
   const mod = await import('../shared-doc/shared-doc.js');
   return mod;
 };
@@ -238,7 +269,9 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.unmock('../shared-doc/index.js');
+  vi.unmock('../shared-doc/constants.js');
+  vi.unmock('../shared-doc/callback.js');
+  vi.unmock('../shared-doc/utils.js');
 });
 
 describe('shared-doc constants and utils', () => {
@@ -270,10 +303,11 @@ describe('callback handler', () => {
     const { isCallbackSet, callbackHandler } = await import('../shared-doc/callback.js');
 
     expect(isCallbackSet).toBe(false);
-    callbackHandler({
+    const doc = {
       name: 'room',
       getArray: () => ({ toJSON: () => [] }),
-    });
+    } as unknown as SharedSuperDoc;
+    callbackHandler(doc);
     expect(httpRequestMock).not.toHaveBeenCalled();
   });
 
@@ -304,13 +338,16 @@ describe('callback handler', () => {
       getText: vi.fn(() => ({ toJSON: () => 'text-data' })),
       getXmlFragment: vi.fn(() => ({ toJSON: () => ({ fragment: true }) })),
       getXmlElement: vi.fn(() => ({ toJSON: () => ({ element: true }) })),
-    };
+    } as unknown as SharedSuperDoc;
 
     callbackHandler(doc);
 
     expect(httpRequestMock).toHaveBeenCalledTimes(1);
     const req = lastRequest();
     expect(req).toBeDefined();
+    if (!req) {
+      throw new Error('Expected HTTP request to be defined');
+    }
     expect(req.write).toHaveBeenCalledTimes(1);
     const payload = JSON.parse(req.write.mock.calls[0][0]);
     expect(payload).toMatchObject({
@@ -351,7 +388,7 @@ describe('callback handler', () => {
     expect(() =>
       callbackHandler({
         name: 'room-456',
-      })
+      } as unknown as SharedSuperDoc)
     ).toThrowError(/toJSON is not a function/);
     expect(httpRequestMock).not.toHaveBeenCalled();
     consoleError.mockRestore();
@@ -369,7 +406,8 @@ describe('SharedSuperDoc', () => {
     const conn = createSocket();
     doc.conns.set(conn, new Set());
 
-    doc.awareness.emit(
+    const awarenessEmitter = doc.awareness as unknown as { emit: (...args: unknown[]) => void };
+    awarenessEmitter.emit(
       'update',
       {
         added: [1, 2],
@@ -382,7 +420,7 @@ describe('SharedSuperDoc', () => {
     expect(encodeAwarenessUpdateMock).toHaveBeenCalled();
     expect(conn.send).toHaveBeenCalledTimes(1);
 
-    doc.awareness.emit(
+    awarenessEmitter.emit(
       'update',
       {
         added: [],
@@ -394,7 +432,7 @@ describe('SharedSuperDoc', () => {
     expect(doc.conns.get(conn)).toEqual(new Set([1]));
     expect(conn.send).toHaveBeenCalledTimes(2);
 
-    doc.awareness.emit(
+    awarenessEmitter.emit(
       'update',
       {
         added: [],
@@ -413,7 +451,7 @@ describe('SharedSuperDoc', () => {
     const doc = new SharedSuperDoc('with-callback');
     const update = new Uint8Array([1]);
 
-    doc.emit('update', [update, null, doc]);
+    doc.emit('update' as any, [update, null, doc] as any);
     expect(debouncerStub).toHaveBeenCalledTimes(1);
     expect(callbackHandlerMock).toHaveBeenCalledWith(doc);
   });
@@ -441,6 +479,10 @@ describe('SharedSuperDoc', () => {
     setupConnection(conn, doc);
 
     const messageHandler = conn.listeners.get('message');
+    expect(messageHandler).toBeDefined();
+    if (!messageHandler) {
+      throw new Error('Expected message handler');
+    }
     readSyncBehavior = 'write';
     messageHandler(new Uint8Array([0]));
 
@@ -457,6 +499,10 @@ describe('SharedSuperDoc', () => {
     setupConnection(conn, doc);
 
     const messageHandler = conn.listeners.get('message');
+    expect(messageHandler).toBeDefined();
+    if (!messageHandler) {
+      throw new Error('Expected message handler');
+    }
     readSyncBehavior = 'empty';
     messageHandler(new Uint8Array([0]));
 
@@ -473,6 +519,10 @@ describe('SharedSuperDoc', () => {
     setupConnection(conn, doc);
 
     const messageHandler = conn.listeners.get('message');
+    expect(messageHandler).toBeDefined();
+    if (!messageHandler) {
+      throw new Error('Expected message handler');
+    }
     messageHandler(new Uint8Array([1, 42]));
 
     expect(applyAwarenessUpdateMock).toHaveBeenCalledWith(doc.awareness, 42, conn);
@@ -489,6 +539,10 @@ describe('SharedSuperDoc', () => {
     setupConnection(conn, doc);
 
     const messageHandler = conn.listeners.get('message');
+    expect(messageHandler).toBeDefined();
+    if (!messageHandler) {
+      throw new Error('Expected message handler');
+    }
     messageHandler(new Uint8Array([99]));
 
     expect(consoleWarn).toHaveBeenCalledWith('Unknown message type:', 99);
@@ -502,12 +556,16 @@ describe('SharedSuperDoc', () => {
 
     const doc = new SharedSuperDoc('demo');
     const errorListener = vi.fn();
-    doc.on('error', errorListener);
+    doc.on('error' as any, errorListener);
 
     const conn = createSocket();
     setupConnection(conn, doc);
 
     const messageHandler = conn.listeners.get('message');
+    expect(messageHandler).toBeDefined();
+    if (!messageHandler) {
+      throw new Error('Expected message handler');
+    }
     readSyncBehavior = 'throw';
     messageHandler(new Uint8Array([0]));
 
@@ -527,7 +585,7 @@ describe('SharedSuperDoc', () => {
     doc.conns.set(connB, new Set());
 
     const update = new Uint8Array([7, 8]);
-    doc.emit('update', [update, null, doc]);
+    doc.emit('update' as any, [update, null, doc] as any);
 
     expect(writeVarUintMock).toHaveBeenCalledWith(expect.any(Object), 0);
     expect(writeUpdateMock).toHaveBeenCalledWith(expect.any(Object), update);
@@ -551,13 +609,13 @@ describe('SharedSuperDoc', () => {
 
     const connWithError = createSocket();
     doc.conns.set(connWithError, new Set());
-    connWithError.send.mockImplementation((_message, _opts, cb) => cb(new Error('fail')));
+    connWithError.sendMock.mockImplementation((_message, _opts, cb) => cb?.(new Error('fail')));
     send(doc, connWithError, new Uint8Array([2]));
     expect(connWithError.close).toHaveBeenCalledTimes(1);
 
     const connThrow = createSocket();
     doc.conns.set(connThrow, new Set());
-    connThrow.send.mockImplementation(() => {
+    connThrow.sendMock.mockImplementation(() => {
       throw new Error('boom');
     });
     send(doc, connThrow, new Uint8Array([3]));

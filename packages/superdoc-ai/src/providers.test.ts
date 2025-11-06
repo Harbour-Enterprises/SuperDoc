@@ -80,12 +80,14 @@ describe('providers', () => {
         it('should create HTTP provider from config', () => {
             const config: HttpProviderConfig = {
                 type: 'http',
-                url: 'https://example.com/api'
+                url: 'https://example.com/api',
+                streamResults: true,
             };
             const provider = createAIProvider(config);
             expect(provider).toBeDefined();
             expect(provider.getCompletion).toBeDefined();
             expect(provider.streamCompletion).toBeDefined();
+            expect(provider.streamResults).toBe(true);
         });
 
         it('should throw for unsupported provider type', () => {
@@ -249,6 +251,59 @@ describe('providers', () => {
                 })
             );
         });
+
+        it('should inject stream flag when using custom buildRequestBody with streaming enabled', async () => {
+            const mockBody = {
+                getReader: () => ({
+                    read: vi.fn()
+                        .mockResolvedValueOnce({
+                            done: false,
+                            value: new TextEncoder().encode('data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n')
+                        })
+                        .mockResolvedValueOnce({
+                            done: false,
+                            value: new TextEncoder().encode('data: [DONE]\n\n')
+                        })
+                        .mockResolvedValueOnce({ done: true }),
+                    releaseLock: vi.fn()
+                })
+            };
+
+            mockFetch.mockResolvedValue({
+                ok: true,
+                body: mockBody,
+                headers: { get: () => null }
+            });
+
+            const customBuilder = vi.fn().mockReturnValue({ custom: 'payload' });
+
+            const config: HttpProviderConfig = {
+                type: 'http',
+                url: 'https://example.com/api',
+                streamUrl: 'https://example.com/stream',
+                buildRequestBody: customBuilder,
+                streamResults: true,
+                fetch: mockFetch
+            };
+
+            const provider = createHttpProvider(config);
+            const chunks: string[] = [];
+
+            for await (const chunk of provider.streamCompletion([{ role: 'user', content: 'test' }])) {
+                chunks.push(chunk);
+            }
+
+            expect(chunks.length).toBeGreaterThan(0);
+            expect(customBuilder).toHaveBeenCalledWith(
+                expect.objectContaining({ stream: true })
+            );
+            expect(mockFetch).toHaveBeenLastCalledWith(
+                'https://example.com/stream',
+                expect.objectContaining({
+                    body: JSON.stringify({ custom: 'payload', stream: true })
+                })
+            );
+        });
     });
 
     describe('createOpenAIProvider', () => {
@@ -348,7 +403,8 @@ describe('providers', () => {
                 type: 'openai',
                 apiKey: 'test-key',
                 model: 'gpt-4-turbo',
-                fetch: mockFetch
+                fetch: mockFetch,
+                streamResults: true,
             };
 
             const provider = createOpenAIProvider(config);
@@ -357,6 +413,7 @@ describe('providers', () => {
             const callArgs = mockFetch.mock.calls[0];
             const body = JSON.parse(callArgs[1].body);
             expect(body.model).toBe('gpt-4-turbo');
+            expect(provider.streamResults).toBe(true);
         });
     });
 
@@ -464,7 +521,8 @@ describe('providers', () => {
                 type: 'anthropic',
                 apiKey: 'test-key',
                 model: 'claude-3-opus-20240229',
-                fetch: mockFetch
+                fetch: mockFetch,
+                streamResults: true
             };
 
             const provider = createAnthropicProvider(config);
@@ -473,7 +531,7 @@ describe('providers', () => {
             const callArgs = mockFetch.mock.calls[0];
             const body = JSON.parse(callArgs[1].body);
             expect(body.max_tokens).toBe(1024);
+            expect(provider.streamResults).toBe(true);
         });
     });
 });
-

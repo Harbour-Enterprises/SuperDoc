@@ -14,15 +14,15 @@ vi.mock('../internal-logger/logger.js', () => ({
 }));
 
 vi.mock('../shared-doc/index.js', () => {
-  const SharedSuperDoc = vi.fn((documentId) => {
+  const SharedSuperDoc = vi.fn((documentId: string) => {
     const doc = {
       name: documentId,
-      conns: new Map(),
-      listeners: {},
-      on: vi.fn((event, handler) => {
+      conns: new Map<CollaborationWebSocket, Set<number>>(),
+      listeners: {} as Record<string, (...args: unknown[]) => void>,
+      on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
         doc.listeners[event] = handler;
       }),
-    };
+    } as unknown as MockSharedDoc;
     return doc;
   });
 
@@ -31,9 +31,22 @@ vi.mock('../shared-doc/index.js', () => {
 
 import { DocumentManager } from '../document-manager/manager.js';
 import { SharedSuperDoc } from '../shared-doc/index.js';
+import type { SharedSuperDoc as SharedSuperDocType } from '../shared-doc/shared-doc.js';
+import type { CollaborationWebSocket } from '../types/service-types.js';
+
+const createSocket = (): CollaborationWebSocket => ({
+  readyState: 1,
+  send: vi.fn(),
+  close: vi.fn(),
+  on: vi.fn(),
+});
+
+type MockSharedDoc = SharedSuperDocType & {
+  listeners: Record<string, (...args: unknown[]) => void>;
+};
 
 describe('DocumentManager', () => {
-  let loggerSpy;
+  let loggerSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.useFakeTimers();
@@ -56,8 +69,8 @@ describe('DocumentManager', () => {
       documentExpiryMs: 100,
     });
 
-    const userParams = { userId: 'alice' };
-    const doc = await manager.getDocument('doc-1', userParams);
+    const userParams = { documentId: 'doc-1', userId: 'alice' };
+    const doc = (await manager.getDocument('doc-1', userParams)) as MockSharedDoc;
 
     expect(SharedSuperDoc).toHaveBeenCalledTimes(1);
     expect(SharedSuperDoc).toHaveBeenCalledWith('doc-1');
@@ -72,7 +85,7 @@ describe('DocumentManager', () => {
     expect(sameDoc).toBe(doc);
 
     // trigger autosave via debounced update
-    doc.listeners.update();
+    doc.listeners.update?.();
     expect(autoSaveMock).not.toHaveBeenCalled();
     vi.advanceTimersByTime(25);
     expect(autoSaveMock).toHaveBeenCalledWith(userParams);
@@ -85,7 +98,7 @@ describe('DocumentManager', () => {
       hooks: { load: loadMock, autoSave: autoSaveMock },
       debounce: 0,
     });
-    const params = { locale: 'en' };
+    const params = { documentId: 'doc-2', locale: 'en' };
 
     await manager.getDocument('doc-2', params);
 
@@ -99,9 +112,9 @@ describe('DocumentManager', () => {
       hooks: {},
       documentExpiryMs: 50,
     });
-    const doc = await manager.getDocument('doc-3', {});
-    const socket = {};
-    doc.conns.set(socket, true);
+    const doc = await manager.getDocument('doc-3', { documentId: 'doc-3' });
+    const socket = createSocket();
+    doc.conns.set(socket, new Set());
 
     manager.releaseConnection('doc-3', socket);
     expect(doc.conns.size).toBe(0);
@@ -116,15 +129,19 @@ describe('DocumentManager', () => {
       hooks: {},
       documentExpiryMs: 75,
     });
-    const doc = await manager.getDocument('doc-keep', {});
-    const socket = {};
-    doc.conns.set(socket, true);
+    const doc = await manager.getDocument('doc-keep', { documentId: 'doc-keep' });
+    const socket = createSocket();
+    doc.conns.set(socket, new Set());
 
     manager.releaseConnection('doc-keep', socket);
-    doc.conns.set({ id: 'new-socket' }, true);
+    doc.conns.set(createSocket(), new Set());
 
     vi.advanceTimersByTime(75);
-    expect(loggerSpy.mock.calls.some(([message]) => message.includes('Cleaning up document'))).toBe(false);
+    const loggedCleanup = loggerSpy.mock.calls.some((call) => {
+      const [message] = call;
+      return typeof message === 'string' && message.includes('Cleaning up document');
+    });
+    expect(loggedCleanup).toBe(false);
     expect(manager.has('doc-keep')).toBe(true);
   });
 
@@ -133,13 +150,13 @@ describe('DocumentManager', () => {
       hooks: {},
     });
 
-    manager.releaseConnection('missing', {});
+    manager.releaseConnection('missing', createSocket());
 
-    const doc = await manager.getDocument('doc-4', {});
-    const socketA = {};
-    const socketB = {};
-    doc.conns.set(socketA, true);
-    doc.conns.set(socketB, true);
+    const doc = await manager.getDocument('doc-4', { documentId: 'doc-4' });
+    const socketA = createSocket();
+    const socketB = createSocket();
+    doc.conns.set(socketA, new Set());
+    doc.conns.set(socketB, new Set());
 
     const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
     manager.releaseConnection('doc-4', socketA);
@@ -154,10 +171,10 @@ describe('DocumentManager', () => {
       hooks: {},
       documentExpiryMs: 100,
     });
-    const userContext = { user: 'retry' };
+    const userContext = { user: 'retry', documentId: 'doc-5' };
     const doc = await manager.getDocument('doc-5', userContext);
-    const socket = {};
-    doc.conns.set(socket, true);
+    const socket = createSocket();
+    doc.conns.set(socket, new Set());
 
     const setTimeoutSpy = vi.spyOn(global, 'setTimeout');
     const clearTimeoutSpy = vi.spyOn(global, 'clearTimeout');

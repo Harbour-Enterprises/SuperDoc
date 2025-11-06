@@ -1,3 +1,9 @@
+## [0.28.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.2...v0.28.3) (2025-11-05)
+
+### Bug Fixes
+
+- floating comments not appearing on first load ([#1221](https://github.com/Harbour-Enterprises/SuperDoc/issues/1221)) ([c8656ca](https://github.com/Harbour-Enterprises/SuperDoc/commit/c8656ca4cdeca1bc484fdaaf9c7ea584915a6c24))
+
 ## [0.28.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.1...v0.28.2) (2025-11-04)
 
 ### Bug Fixes

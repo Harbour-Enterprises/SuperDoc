@@ -1,62 +1,41 @@
 import { applyUpdate } from 'yjs';
 import { createLogger } from '../internal-logger/logger.js';
 import { SharedSuperDoc } from '../shared-doc/index.js';
+import type { CollaborationParams, CollaborationWebSocket, Hooks, ServiceConfig } from '../types/service-types.js';
 
 /**
  * DocumentManager is responsible for managing Yjs documents.
  * It handles document retrieval and debouncing updates.
  */
 export class DocumentManager {
-  /** @type {Map<string, SharedSuperDoc>} */
-  #documents = new Map();
-
-  /** @type {import('../types.js').Hooks} */
-  #hooks;
-
-  /** @type {Map<string, NodeJS.Timeout>} */
-  #timers = new Map();
-
-  /** @type {ReturnType<import('../internal-logger/logger.js').createLogger>} */
+  #documents = new Map<string, SharedSuperDoc>();
+  #hooks: Hooks | undefined;
+  #timers = new Map<string, NodeJS.Timeout>();
   #log = createLogger('DocumentManager');
+  #cleanupTimers = new Map<string, NodeJS.Timeout>();
+  #cacheDocumentsMs = 1000 * 60;
+  debounceMs = 5000;
 
-  /** @type {Map<string, NodeJS.Timeout>} */
-  #cleanupTimers = new Map();
-
-  /** @type {number} */
-  #cacheDocumentsMs = 1000 * 60; // 1 minutes
-
-  /** @type {number} */
-  debounceMs = 5000; // 5 seconds
-
-  /**
-   * @param {import('../types.js').ServiceConfig} config
-   */
-  constructor(config) {
+  constructor(config: ServiceConfig) {
     this.#hooks = config.hooks;
-    this.debounceMs = config.debounce ?? 0;
-    1;
+    this.debounceMs = config.debounce ?? this.debounceMs;
     this.#cacheDocumentsMs = config.documentExpiryMs ?? this.#cacheDocumentsMs;
   }
 
-  get(documentId) {
+  get(documentId: string): SharedSuperDoc | null {
     if (this.#documents.has(documentId)) {
-      return this.#documents.get(documentId);
+      return this.#documents.get(documentId) ?? null;
     }
     return null;
   }
 
-  /**
-   * Retrieves a Yjs document by its ID.
-   * @param {string} documentId The ID of the document to retrieve.
-   * @returns {Promise<SharedSuperDoc>} A promise that resolves to the Yjs document.
-   */
-  async getDocument(documentId, userParams) {
+  async getDocument(documentId: string, userParams: CollaborationParams): Promise<SharedSuperDoc> {
     if (!this.#documents.has(documentId)) {
       const doc = new SharedSuperDoc(documentId);
       this.#log(`Tracking new document: ${documentId}`);
       this.#documents.set(documentId, doc);
 
-      if (this.#hooks.load) {
+      if (this.#hooks?.load) {
         const buffer = await this.#hooks.load(userParams);
         if (buffer) applyUpdate(doc, buffer);
       }
@@ -65,24 +44,22 @@ export class DocumentManager {
     }
 
     clearTimeout(this.#cleanupTimers.get(documentId)); // Clear any pending deletions
-    return this.#documents.get(documentId);
+    const doc = this.#documents.get(documentId);
+    if (!doc) {
+      throw new Error(`Document ${documentId} not found after initialization`);
+    }
+    return doc;
   }
 
-  /**
-   * @param {SharedSuperDoc} doc - The SharedSuperDoc instance.
-   */
-  #setupAutoSave(doc, userParams) {
-    if (this.debounceMs > 0 && this.#hooks.autoSave) {
+  #setupAutoSave(doc: SharedSuperDoc, userParams: CollaborationParams) {
+    if (this.debounceMs > 0 && this.#hooks?.autoSave) {
       doc.on('update', () => this.#scheduleSave(doc, userParams));
-    } else if (this.debounceMs === 0 && this.#hooks.autoSave) {
+    } else if (this.debounceMs === 0 && this.#hooks?.autoSave) {
       this.#scheduleSave(doc, userParams);
     }
   }
 
-  /**
-   * @param {SharedSuperDoc} doc - The SharedSuperDoc instance.
-   */
-  #scheduleSave(doc, userParams) {
+  #scheduleSave(doc: SharedSuperDoc, userParams: CollaborationParams) {
     const documentId = doc.name;
     if (this.debounceMs > 0) {
       clearTimeout(this.#timers.get(documentId));
@@ -90,20 +67,15 @@ export class DocumentManager {
       this.#timers.set(
         documentId,
         setTimeout(() => {
-          this.#hooks.autoSave(userParams);
+          this.#hooks?.autoSave?.(userParams);
         }, this.debounceMs)
       );
     } else {
-      this.#hooks.autoSave(userParams);
+      this.#hooks?.autoSave?.(userParams);
     }
   }
 
-  /**
-   * Public API: let us know this socket is gone for that doc.
-   * @param {string} documentId
-   * @param {WebSocket} socket
-   */
-  releaseConnection(documentId, socket) {
+  releaseConnection(documentId: string, socket: CollaborationWebSocket) {
     const doc = this.#documents.get(documentId);
     if (!doc) return;
 
@@ -115,17 +87,14 @@ export class DocumentManager {
     }
   }
 
-  /**
-   * @param {string} documentId
-   */
-  #scheduleDocCleanup(documentId) {
+  #scheduleDocCleanup(documentId: string) {
     // clear any existing timer
     clearTimeout(this.#cleanupTimers?.get(documentId));
 
     // after X ms (or immediately) remove the doc
     const timeout = setTimeout(() => {
       const doc = this.#documents.get(documentId);
-      if (doc.conns.size === 0) {
+      if (doc && doc.conns.size === 0) {
         this.#log(`🗑️  Cleaning up document "${documentId}" from memory.`);
         this.#documents.delete(documentId);
         this.#cleanupTimers.delete(documentId);
@@ -135,12 +104,7 @@ export class DocumentManager {
     this.#cleanupTimers.set(documentId, timeout);
   }
 
-  /**
-   * Check if a document exists in the manager.
-   * @param {string} documentId
-   * @returns {boolean} True if the document exists, false otherwise.
-   */
-  has(documentId) {
+  has(documentId: string): boolean {
     return this.#documents.has(documentId);
   }
 }
