@@ -150,8 +150,8 @@ jobs:
       - name: Upload SuperDoc package
         uses: actions/upload-artifact@v4
         with:
-          name: superdoc-package
-          path: superdoc/packages/superdoc/superdoc.tgz
+          name: superdoc.tgz
+          path: superdoc-package/superdoc.tgz
           retention-days: 1
 
   run-e2e-tests:
@@ -170,8 +170,8 @@ jobs:
       - name: Download SuperDoc package
         uses: actions/download-artifact@v4
         with:
-          name: superdoc-package
-          path: superdoc-package
+          name: superdoc.tgz
+          path: superdoc-package/superdoc.tgz
 
       - name: Cache npm dependencies
         uses: actions/cache@v4
@@ -183,7 +183,7 @@ jobs:
 
       - name: List all files 
         run: |
-          ls -l ./
+          ls -l ./superdoc-package
         
       - name: Install SuperDoc
         run: cd superdoc/e2e-tests/templates/vue && npm install file:superdoc-package/superdoc.tgz && npm install
