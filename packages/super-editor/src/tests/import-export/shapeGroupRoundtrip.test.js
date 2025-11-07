@@ -3,7 +3,6 @@ import { Editor } from '@core/Editor';
 import { SuperConverter } from '@core/super-converter/SuperConverter.js';
 import { createDocumentJson } from '@core/super-converter/v2/importer/docxImporter.js';
 import { exportSchemaToJson } from '@core/super-converter/exporter.js';
-import DocxZipper from '@core/DocxZipper.js';
 import { getTestDataByFileName } from '../helpers/helpers.js';
 
 describe('Shape Group Round-trip', () => {
