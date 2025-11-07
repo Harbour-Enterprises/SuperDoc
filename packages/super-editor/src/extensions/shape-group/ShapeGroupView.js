@@ -105,7 +105,7 @@ export class ShapeGroupView {
     const transforms = [];
     transforms.push(`translate(${x}, ${y})`);
 
-    if (attrs.rotation != null && attrs.rotation !== 0) {
+    if (attrs.rotation !== 0) {
       transforms.push(`rotate(${attrs.rotation} ${width / 2} ${height / 2})`);
     }
 
