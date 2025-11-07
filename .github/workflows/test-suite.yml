@@ -41,7 +41,7 @@ on:
 
 jobs:
   run-visual-tests-examples:
-    if: inputs.run-visual-tests-examples
+    if: inputs.run-visual-tests-examples == true
     runs-on: ubuntu-latest
     steps:
       - name: Generate token
@@ -96,27 +96,7 @@ jobs:
       - name: Run visual tests
         run: |
           cd examples/tests
-          npm test ${{ inputs.update-screenshots-examples && '-- --update-snapshots' || '' }}
-
-      - name: Create PR with updates
-        if: inputs.update-screenshots-examples == true
-        env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          BRANCH="visual-updates-${{ github.run_id }}"
-          git checkout -b "$BRANCH"
-          git add -A
-          git commit -m "chore: update visual snapshots" || exit 0
-          git push origin "$BRANCH"
-
-          gh pr create \
-            --base ${{ github.ref_name }} \
-            --title "chore: update visual snapshots" \
-            --body "Automated visual test updates" \
-            --label "visual-update"
+          npm test
 
 
   run-e2e-tests:
@@ -163,11 +143,12 @@ jobs:
 
       - name: Run e2e tests
         id: run-e2e-tests
+        if: always() && inputs.run-e2e-tests == true
         run: cd superdoc/e2e-tests && npm test 
   
-      - name: Upload visual test results
+      - name: Upload e2e test results
         id: upload_artifact
-        if: always() && steps.run-e2e-tests.outcome == 'failure'
+        if: always() && inputs.run-e2e-tests == true && steps.run-e2e-tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: e2e-tests
