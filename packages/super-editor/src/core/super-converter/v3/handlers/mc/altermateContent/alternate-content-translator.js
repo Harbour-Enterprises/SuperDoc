@@ -4,6 +4,7 @@ import { carbonCopy } from '@core/utilities/carbonCopy.js';
 /** @type {Set<string>} */
 export const SUPPORTED_ALTERNATE_CONTENT_REQUIRES = new Set([
   'wps',
+  'wpg',
   'wp14',
   'w14',
   'w15',

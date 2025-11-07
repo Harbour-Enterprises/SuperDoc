@@ -4,6 +4,7 @@ import { extractStrokeWidth, extractStrokeColor, extractFillColor } from './vect
 
 const DRAWING_XML_TAG = 'w:drawing';
 const SHAPE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+const GROUP_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
 
 /**
  * Encodes image xml into Editor node
@@ -156,6 +157,15 @@ export function handleImageNode(node, params, isAnchor) {
     return handleShapeDrawing(params, node, graphicData, size, padding, shapeMarginOffset);
   }
 
+  if (!!uri && uri === GROUP_URI) {
+    const shapeMarginOffset = {
+      left: positionHValue,
+      horizontal: positionHValue,
+      top: positionVValue,
+    };
+    return handleShapeGroup(params, node, graphicData, size, padding, shapeMarginOffset);
+  }
+
   const picture = graphicData?.elements.find((el) => el.name === 'pic:pic');
   if (!picture || !picture.elements) return null;
 
@@ -276,6 +286,130 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
   }
 
   return buildShapePlaceholder(node, size, padding, marginOffset, 'textbox');
+};
+
+/**
+ * Handles a shape group (wpg:wgp) within a WordprocessingML graphic node.
+ *
+ * @param {{ nodes: Array }} params - Translator params including the surrounding drawing node.
+ * @param {Object} node - The `wp:drawing` or related shape container node.
+ * @param {Object} graphicData - The `a:graphicData` node containing the group elements.
+ * @param {{ width?: number, height?: number }} size - Group bounding box in pixels.
+ * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Distance attributes converted to pixels.
+ * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Group offsets relative to its anchor.
+ * @returns {Object|null} A shapeGroup node representing the group, or null when no content exists.
+ */
+const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset) => {
+  const wgp = graphicData.elements.find((el) => el.name === 'wpg:wgp');
+  if (!wgp) {
+    return buildShapePlaceholder(node, size, padding, marginOffset, 'group');
+  }
+
+  // Extract group properties
+  const grpSpPr = wgp.elements.find((el) => el.name === 'wpg:grpSpPr');
+  const xfrm = grpSpPr?.elements?.find((el) => el.name === 'a:xfrm');
+
+  // Get group transform data
+  const groupTransform = {};
+  if (xfrm) {
+    const off = xfrm.elements?.find((el) => el.name === 'a:off');
+    const ext = xfrm.elements?.find((el) => el.name === 'a:ext');
+    const chOff = xfrm.elements?.find((el) => el.name === 'a:chOff');
+    const chExt = xfrm.elements?.find((el) => el.name === 'a:chExt');
+
+    if (off) {
+      groupTransform.x = emuToPixels(off.attributes?.['x'] || 0);
+      groupTransform.y = emuToPixels(off.attributes?.['y'] || 0);
+    }
+    if (ext) {
+      groupTransform.width = emuToPixels(ext.attributes?.['cx'] || 0);
+      groupTransform.height = emuToPixels(ext.attributes?.['cy'] || 0);
+    }
+    if (chOff) {
+      groupTransform.childX = emuToPixels(chOff.attributes?.['x'] || 0);
+      groupTransform.childY = emuToPixels(chOff.attributes?.['y'] || 0);
+    }
+    if (chExt) {
+      groupTransform.childWidth = emuToPixels(chExt.attributes?.['cx'] || 0);
+      groupTransform.childHeight = emuToPixels(chExt.attributes?.['cy'] || 0);
+    }
+  }
+
+  // Extract all child shapes
+  const childShapes = wgp.elements.filter((el) => el.name === 'wps:wsp');
+  const shapes = childShapes
+    .map((wsp) => {
+      const spPr = wsp.elements?.find((el) => el.name === 'wps:spPr');
+      if (!spPr) return null;
+
+      // Extract shape kind
+      const prstGeom = spPr.elements?.find((el) => el.name === 'a:prstGeom');
+      const shapeKind = prstGeom?.attributes?.['prst'];
+
+      // Extract size and transformations
+      const shapeXfrm = spPr.elements?.find((el) => el.name === 'a:xfrm');
+      const shapeOff = shapeXfrm?.elements?.find((el) => el.name === 'a:off');
+      const shapeExt = shapeXfrm?.elements?.find((el) => el.name === 'a:ext');
+
+      const x = shapeOff?.attributes?.['x'] ? emuToPixels(shapeOff.attributes['x']) : 0;
+      const y = shapeOff?.attributes?.['y'] ? emuToPixels(shapeOff.attributes['y']) : 0;
+      const width = shapeExt?.attributes?.['cx'] ? emuToPixels(shapeExt.attributes['cx']) : 100;
+      const height = shapeExt?.attributes?.['cy'] ? emuToPixels(shapeExt.attributes['cy']) : 100;
+      const rotation = shapeXfrm?.attributes?.['rot'] ? rotToDegrees(shapeXfrm.attributes['rot']) : 0;
+      const flipH = shapeXfrm?.attributes?.['flipH'] === '1';
+      const flipV = shapeXfrm?.attributes?.['flipV'] === '1';
+
+      // Extract colors
+      const style = wsp.elements?.find((el) => el.name === 'wps:style');
+      const fillColor = extractFillColor(spPr, style);
+      const strokeColor = extractStrokeColor(spPr, style);
+      const strokeWidth = extractStrokeWidth(spPr);
+
+      // Get shape ID and name
+      const cNvPr = wsp.elements?.find((el) => el.name === 'wps:cNvPr');
+      const shapeId = cNvPr?.attributes?.['id'];
+      const shapeName = cNvPr?.attributes?.['name'];
+
+      return {
+        shapeType: 'vectorShape',
+        attrs: {
+          kind: shapeKind,
+          x,
+          y,
+          width,
+          height,
+          rotation,
+          flipH,
+          flipV,
+          fillColor,
+          strokeColor,
+          strokeWidth,
+          shapeId,
+          shapeName,
+        },
+      };
+    })
+    .filter(Boolean);
+
+  const schemaAttrs = {};
+  const drawingNode = params.nodes?.[0];
+  if (drawingNode?.name === DRAWING_XML_TAG) {
+    schemaAttrs.drawingContent = drawingNode;
+  }
+
+  const result = {
+    type: 'shapeGroup',
+    attrs: {
+      ...schemaAttrs,
+      groupTransform,
+      shapes,
+      size,
+      padding,
+      marginOffset,
+    },
+  };
+
+  return result;
 };
 
 /**
