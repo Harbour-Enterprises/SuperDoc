@@ -92,6 +92,8 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
+        // IMPORTANT: @superdoc/common must point to source, not dist
+        '@superdoc/common': fileURLToPath(new URL('../../shared/common', import.meta.url)),
         '@': fileURLToPath(new URL('./src', import.meta.url)),
         '@core': fileURLToPath(new URL('./src/core', import.meta.url)),
         '@extensions': fileURLToPath(new URL('./src/extensions', import.meta.url)),

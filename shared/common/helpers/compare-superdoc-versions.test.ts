@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { compareVersions } from './compare-superdoc-versions.js';
+import { compareVersions } from './compare-superdoc-versions';
 
 describe('compareVersions', () => {
   it('returns 0 when versions are equal', () => {

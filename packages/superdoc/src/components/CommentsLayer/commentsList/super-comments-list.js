@@ -1,7 +1,7 @@
 import EventEmitter from 'eventemitter3';
 import { createApp } from 'vue';
 
-import { vClickOutside } from '@harbour-enterprises/common';
+import { vClickOutside } from '@superdoc/common';
 import CommentsList from './commentsList.vue';
 
 /**

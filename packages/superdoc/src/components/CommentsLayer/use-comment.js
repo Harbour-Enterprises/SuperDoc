@@ -2,7 +2,7 @@ import { ref, reactive } from 'vue';
 import { v4 as uuidv4 } from 'uuid';
 
 import { syncCommentsToClients } from '@superdoc/core/collaboration/helpers.js';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import useSelection from '@superdoc/helpers/use-selection';
 
 /**

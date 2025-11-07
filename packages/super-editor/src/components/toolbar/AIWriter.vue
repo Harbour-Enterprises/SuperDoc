@@ -2,8 +2,8 @@
 import { computed, ref, onMounted, onUnmounted, nextTick } from 'vue';
 import { writeStreaming, rewriteStreaming, formatDocument } from './ai-helpers';
 import { TextSelection } from 'prosemirror-state';
-import edit from '@harbour-enterprises/common/icons/edit-regular.svg?raw';
-import paperPlane from '@harbour-enterprises/common/icons/paper-plane-regular.svg?raw';
+import edit from '@superdoc/common/icons/edit-regular.svg?raw';
+import paperPlane from '@superdoc/common/icons/paper-plane-regular.svg?raw';
 
 const props = defineProps({
   selectedText: {

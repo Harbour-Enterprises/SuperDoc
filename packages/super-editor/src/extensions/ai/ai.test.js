@@ -3,7 +3,7 @@ import { Schema } from 'prosemirror-model';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { DecorationSet } from 'prosemirror-view';
 
-vi.mock('@harbour-enterprises/common/icons/dots-loader.svg', () => ({ default: 'dots-loader.svg' }));
+vi.mock('@superdoc/common/icons/dots-loader.svg', () => ({ default: 'dots-loader.svg' }));
 
 import { AiMarkName, AiAnimationMarkName, AiLoaderNodeName } from './ai-constants.js';
 import { AiMark, AiAnimationMark } from './ai-marks.js';

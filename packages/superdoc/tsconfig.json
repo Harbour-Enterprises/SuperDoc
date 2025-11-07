@@ -9,7 +9,11 @@
     "outDir": "dist",
     "declarationMap": true,
     "skipLibCheck": true,
-    "typeRoots": ["./node_modules/@types/*"]
+    "paths": {
+      "@superdoc/common": ["../../shared/common/index.ts"],
+      "@superdoc/common/*": ["../../shared/common/*"]
+    },
+    "typeRoots": ["./node_modules/@types/*", "../../node_modules/@types/*"]
   },
-  "exclude": ["node_modules", "dist", "**/*.test.js"]
+  "exclude": ["node_modules", "dist", "**/*.test.js", "**/*.test.ts"]
 }

@@ -1,6 +1,6 @@
 import { WebsocketProvider } from 'y-websocket';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import { awarenessStatesToArray } from '@harbour-enterprises/common/collaboration/awareness.js';
+import { awarenessStatesToArray } from '@superdoc/common/collaboration/awareness';
 import { Doc as YDoc } from 'yjs';
 
 /**

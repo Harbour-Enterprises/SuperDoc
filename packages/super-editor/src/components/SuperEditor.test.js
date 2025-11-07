@@ -66,12 +66,12 @@ vi.mock('./toolbar/LinkInput.vue', () => ({
   default: { name: 'LinkInput', render: () => null },
 }));
 
-vi.mock('@harbour-enterprises/common', () => ({
+vi.mock('@superdoc/common', () => ({
   getFileObject: getFileObjectMock,
 }));
 
 vi.mock(
-  '@harbour-enterprises/common/data/blank.docx?url',
+  '@superdoc/common/data/blank.docx?url',
   () => ({
     default: 'blank-docx-url',
   }),

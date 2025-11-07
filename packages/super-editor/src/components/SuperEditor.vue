@@ -11,8 +11,8 @@ import Ruler from './rulers/Ruler.vue';
 import GenericPopover from './popovers/GenericPopover.vue';
 import LinkInput from './toolbar/LinkInput.vue';
 import { checkNodeSpecificClicks } from './cursor-helpers.js';
-import { getFileObject } from '@harbour-enterprises/common';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import { getFileObject } from '@superdoc/common';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 
 const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 

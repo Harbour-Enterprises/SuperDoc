@@ -2,7 +2,7 @@
 import { CustomSelectionPluginKey } from '../custom-selection/custom-selection.js';
 import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 import { findParentNode } from '@helpers/index.js';
-import { kebabCase } from '@harbour-enterprises/common';
+import { kebabCase } from '@superdoc/common';
 import { getUnderlineCssString } from './index.js';
 
 /**

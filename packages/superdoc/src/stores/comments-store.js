@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, reactive, computed } from 'vue';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
 import {

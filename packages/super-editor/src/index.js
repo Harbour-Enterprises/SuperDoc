@@ -13,7 +13,7 @@ import { Extension } from '@core/Extension.js';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Mark } from '@core/Mark.js';
 import SlashMenu from './components/slash-menu/SlashMenu.vue';
-import { BasicUpload } from '@harbour-enterprises/common';
+import BasicUpload from '@superdoc/common/components/BasicUpload.vue';
 
 import SuperEditor from './components/SuperEditor.vue';
 import Toolbar from './components/toolbar/Toolbar.vue';
