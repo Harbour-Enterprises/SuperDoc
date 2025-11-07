@@ -3,7 +3,7 @@ name: Test Suite
 on:
   workflow_dispatch:
     inputs:
-      run-visual-tests-examples:
+      run-examples-visual-tests:
         description: "Run visual tests for examples"
         type: boolean
         default: true
@@ -29,7 +29,7 @@ on:
         required: false
   workflow_call:
     inputs:
-      run-visual-tests-examples:
+      run-examples-visual-tests:
         type: boolean
         default: true
       run-e2e-tests:
@@ -40,8 +40,8 @@ on:
         default: false
 
 jobs:
-  run-visual-tests-examples:
-    if: inputs.run-visual-tests-examples == true
+  run-examples-visual-tests:
+    if: inputs.run-examples-visual-tests == true
     runs-on: ubuntu-latest
     steps:
       - name: Generate token
