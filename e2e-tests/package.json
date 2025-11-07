@@ -6,7 +6,6 @@
   "scripts": {
     "build": "docker build -t playwright .",
     "update-screenshots": "npm run build && docker run -e PLAYWRIGHT_ARGS='--update-snapshots' --rm  -v ./test-results:/app/test-results -v ./tests/visuals:/app/tests/visuals playwright",
-    "update-screenshots:word": "npm run build && docker run --rm -e UPDATE_WORD_SNAPSHOTS=1 -v ./test-results:/app/test-results -v ./tests/visuals:/app/tests/visuals playwright npx playwright test --workers=1 tests/visuals/sd-export-to-word.spec.js",
     "test:local": "docker run --rm --cpus=4 --memory=8gb -v ./test-results:/app/test-results -v ./tests/visuals:/app/tests/visuals playwright",
     "test": "npx playwright test",
     "version": "node helpers/set-superdoc-version.js"
@@ -22,6 +21,7 @@
   "dependencies": {
     "@linear/sdk": "^53.0.0",
     "jszip": "^3.10.1",
+    "patch-package": "^8.0.1",
     "vue": "^3.5.13"
   },
   "devDependencies": {
