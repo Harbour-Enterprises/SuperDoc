@@ -104,6 +104,13 @@ function getAvailableWidth(element, editor) {
   return availableWidth;
 }
 
+/**
+ * @param {import('./table.js').TableNode} node
+ * @param {HTMLTableColElement} colgroup
+ * @param {HTMLTableElement} table
+ * @param {number} cellMinWidth
+ * @param {import('@core/Editor.js').Editor} editor
+ */
 export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, overrideValue, editor) {
   const gridColumns =
     Array.isArray(node.attrs?.grid) && node.attrs.grid.length
