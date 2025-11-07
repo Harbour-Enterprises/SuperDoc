@@ -1,4 +1,5 @@
 // @ts-check
+
 import { Node } from '@core/index.js';
 
 /**
@@ -50,6 +51,7 @@ export const Document = Node.create({
     };
   },
 
+  // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
       /**
