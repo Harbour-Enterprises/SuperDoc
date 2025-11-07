@@ -164,9 +164,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          repository: Harbour-Enterprises/SuperDoc
           ref: ${{ github.head_ref }}
-          path: e2e-tests
+          path: superdoc
 
       - name: Download SuperDoc package
         uses: actions/download-artifact@v4
@@ -185,28 +184,28 @@ jobs:
       - name: Install dependencies
         run: |
           npm config set cache ~/.npm
-          cd e2e-tests/templates/vue && npm install
+          cd superdoc/e2e-tests/templates/vue && npm install
 
       - name: Install SuperDoc
-        run: cd e2e-tests/templates/vue && npm install /__w/e2e-tests/e2e-tests/superdoc-package/superdoc.tgz
+        run: cd superdoc/e2e-tests/templates/vue && npm install /__w/superdoc/superdoc/superdoc-package/superdoc.tgz
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('e2e-tests/package-lock.json') }}
+          key: ${{ runner.os }}-playwright-${{ hashFiles('superdoc/e2e-tests/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-playwright-
 
       - name: Install dependencies
         run: |
           npm config set cache ~/.npm
-          cd e2e-tests && npm ci && npm install @playwright/test
+          cd superdoc/e2e-tests && npm ci && npm install @playwright/test
 
       - name: Install Playwright browsers
         run: |
-          cd e2e-tests
+          cd superdoc/e2e-tests
           if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
             npx playwright install --with-deps
           else
@@ -215,7 +214,7 @@ jobs:
 
       - name: Run visual tests
         id: run-visual-tests
-        run: cd e2e-tests && npm test
+        run: cd superdoc/e2e-tests && npm test
   
       - name: Upload visual test results
         id: upload_artifact
@@ -223,19 +222,19 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: visual-diff-sd
-          path: e2e-tests/test-results
+          path: superdoc/e2e-tests/test-results
           retention-days: 15
 
       - name: Run toolbar tests
         id: run-toolbar-tests
         if: always()
-        run: cd e2e-tests && npm test -- tests/toolbar --retries=0
+        run: cd superdoc/e2e-tests && npm test -- tests/toolbar --retries=0
 
       - name: Extract toolbar results
         id: extract-toolbar-results
         if: always() && steps.run-toolbar-tests.outcome == 'failure'
         run: |
-          cd e2e-tests/helpers
+          cd superdoc/e2e-tests/helpers
           OUTPUT="$(node extract-toolbar-results.js)"
           {
             echo 'result<<EOF'
