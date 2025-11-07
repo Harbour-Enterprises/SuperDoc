@@ -9,7 +9,7 @@ import type {
     SuperDocInstance,
     SuperDoc,
 } from './types';
-import {CommandsEngine} from './commands-engine';
+import {AIActionsService} from './ai-actions-service';
 import {createAIProvider, isAIProvider} from './providers';
 
 /**
@@ -44,42 +44,42 @@ export class AIActions {
     private callbacks: AIActionsCallbacks;
     private isReady = false;
     private initializationPromise: Promise<void> | null = null;
-    private readonly actions: CommandsEngine;
+    private readonly commands: AIActionsService;
 
     public readonly action = {
         find: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.find(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.find(instruction));
         },
         findAll: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.findAll(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.findAll(instruction));
         },
         highlight: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.highlight(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.highlight(instruction));
         },
         replace: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.replace(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.replace(instruction));
         },
         replaceAll: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.replaceAll(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.replaceAll(instruction));
         },
         insertTrackedChange: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.insertTrackedChange(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.insertTrackedChange(instruction));
         },
         insertTrackedChanges: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.insertTrackedChanges(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.insertTrackedChanges(instruction));
         },
         insertComment: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.insertComment(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.insertComment(instruction));
         },
 
         insertComments: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.insertComments(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.insertComments(instruction));
         },
         summarize: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.summarize(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.summarize(instruction));
         },
         insertContent: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.actions.insertContent(instruction));
+            return this.executeActionWithCallbacks(() => this.commands.insertContent(instruction));
         },
     };
 
@@ -127,7 +127,7 @@ export class AIActions {
             },
         });
 
-        this.actions = new CommandsEngine(
+        this.commands = new AIActionsService(
             this.config.provider,
             editor,
             () => this.getDocumentContext(),

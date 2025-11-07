@@ -1,5 +1,5 @@
 export { AIActions } from './ai-actions';
-export { CommandsEngine } from './commands-engine';
+export { AIActionsService } from './ai-actions-service';
 export { EditorAdapter } from './editor-adapter';
 
 export * from './types';
