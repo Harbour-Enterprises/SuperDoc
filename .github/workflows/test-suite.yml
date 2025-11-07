@@ -171,7 +171,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: superdoc-package
-          path: ./superdoc-package
+          path: superdoc-package
 
       - name: Cache npm dependencies
         uses: actions/cache@v4
@@ -181,8 +181,12 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-npm-
 
+      - name: List all files 
+        run: |
+          ls -l ./
+        
       - name: Install SuperDoc
-        run: cd superdoc/e2e-tests/templates/vue && npm install /__w/superdoc/superdoc/superdoc-package/superdoc.tgz && npm install
+        run: cd superdoc/e2e-tests/templates/vue && npm install superdoc-package/superdoc.tgz && npm install
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
