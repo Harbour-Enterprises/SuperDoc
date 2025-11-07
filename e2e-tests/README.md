@@ -39,8 +39,9 @@ At this point, you should probably have them installed, but it's good to know we
 
 To run the tests locally you have to first build the docker image, and then run the tests.
 
-1. `npm run build`
-2. `npm run test:local`
+1. `npm run build:superdoc` - this will build SuperDoc and use it on the test app
+1. `npm run build` - this will build the Docker image where the tests are executed
+1. `npm run test:local` - this executes the tests on docker
 
 ## 📷 Visual diffing
 
