@@ -1,4 +1,5 @@
 // @ts-check
+
 /**
  * Theme color options
  * @typedef { "dark1" | "light1" | "dark2" | "light2" | "accent1" | "accent2" | "accent3" | "accent4" | "accent5" | "accent6" | "hyperlink" | "followedHyperlink" | "none" | "background1" | "text1" | "background2" | "text2" } ThemeColor
@@ -335,6 +336,7 @@ export const Table = Node.create({
       tableIndent: {
         renderDOM: ({ tableIndent }) => {
           if (!tableIndent) return {};
+          // @ts-expect-error - tableIndent is known to be an object at runtime
           const { width } = tableIndent;
           let style = '';
           if (width) style += `margin-left: ${width}px`;
@@ -460,6 +462,7 @@ export const Table = Node.create({
     return table;
   },
 
+  // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
       /**
@@ -1130,9 +1133,13 @@ export const Table = Node.create({
       ...(resizable
         ? [
             columnResizing({
+              // @ts-expect-error - Options types will be fixed in TS migration
               handleWidth: this.options.handleWidth,
+              // @ts-expect-error - Options types will be fixed in TS migration
               cellMinWidth: this.options.cellMinWidth,
+              // @ts-expect-error - Options types will be fixed in TS migration
               defaultCellMinWidth: this.options.cellMinWidth,
+              // @ts-expect-error - Options types will be fixed in TS migration
               lastColumnResizable: this.options.lastColumnResizable,
               View: createTableView({
                 editor: this.editor,
@@ -1142,6 +1149,7 @@ export const Table = Node.create({
         : []),
 
       tableEditing({
+        // @ts-expect-error - Options types will be fixed in TS migration
         allowTableNodeSelection: this.options.allowTableNodeSelection,
       }),
     ];

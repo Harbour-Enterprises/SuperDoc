@@ -1,4 +1,5 @@
 // @ts-check
+
 import { Node, Attribute } from '@core/index.js';
 import { InputRule } from '@core/InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
@@ -113,6 +114,7 @@ export const BulletList = Node.create({
     };
   },
 
+  // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
       /**
@@ -137,6 +139,7 @@ export const BulletList = Node.create({
     };
   },
 
+  // @ts-expect-error - InputRule types will be fixed in TS migration
   addInputRules() {
     return [
       new InputRule({
