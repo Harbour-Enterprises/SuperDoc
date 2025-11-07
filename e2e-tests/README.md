@@ -2,8 +2,6 @@
 
 This repository contains multiple e2e tests for SuperDoc. The test suite here is triggered every time someone opens a pull request in the SuperDoc repo.
 
-Make sure you run `npm run build` when first cloning this repo, or any time a version is updated locally.
-
 ## 📋 Table of Contents
 
 - [📋 Requirements to run locally](#-requirements-to-run-locally)
