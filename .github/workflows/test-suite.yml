@@ -44,18 +44,10 @@ jobs:
     if: inputs.run-examples-visual-tests == true
     runs-on: ubuntu-latest
     steps:
-      - name: Generate token
-        id: generate_token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
-
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.head_ref }}
-          token: ${{ steps.generate_token.outputs.token }}
 
       - uses: actions/setup-node@v4
         with:
