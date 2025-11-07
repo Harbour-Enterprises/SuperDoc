@@ -133,7 +133,7 @@ jobs:
 
       - name: Build SuperDoc
         run: |
-          cd superdoc/packages/superdoc && npm run pack
+          cd superdoc && npm run build && npm run pack
 
       # - name: Cache npm dependencies
       #   uses: actions/cache@v4
