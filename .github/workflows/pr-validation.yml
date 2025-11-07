@@ -1,5 +1,8 @@
 name: PR Validation [auto]
 
+permissions:
+  contents: read
+
 on:
   pull_request:
     branches: [main, 'release/**']
