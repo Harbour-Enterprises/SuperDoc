@@ -4,7 +4,19 @@ import { extractParagraphContext, calculateTabStyle } from '../tab/helpers/tabDe
 import { resolveRunProperties, encodeCSSFromRPr } from '@converter/styles.js';
 import { isList } from '@core/commands/list-helpers';
 
+/**
+ * ProseMirror node view that renders paragraphs, including special handling for
+ * numbered/bulleted lists so marker/separator elements stay in sync with docx
+ * layout expectations.
+ */
 export class ParagraphNodeView {
+  /**
+   * @param {import('prosemirror-model').Node} node Current paragraph node.
+   * @param {import('../../core/Editor').Editor} editor Editor instance providing schema/helpers.
+   * @param {() => number} getPos Position getter provided by ProseMirror.
+   * @param {import('prosemirror-view').Decoration[]} decorations Decorations applied to this node.
+   * @param {Record<string, unknown>} extensionAttrs Extra attributes declared by the paragraph extension.
+   */
   constructor(node, editor, getPos, decorations, extensionAttrs) {
     this.node = node;
     this.editor = editor;
@@ -28,6 +40,10 @@ export class ParagraphNodeView {
     this.#updateHTMLAttributes();
   }
 
+  /**
+   * @param {import('prosemirror-model').Node} node
+   * @param {import('prosemirror-view').Decoration[]} decorations
+   */
   update(node, decorations) {
     this.node = node;
     this.decorations = decorations;
@@ -71,6 +87,9 @@ export class ParagraphNodeView {
     return true;
   }
 
+  /**
+   * @param {MutationRecord} mutation
+   */
   ignoreMutation(mutation) {
     // Ignore mutations to the list marker and separator}
     if (this.marker && (mutation.target === this.marker || this.marker.contains(mutation.target))) {
@@ -86,6 +105,9 @@ export class ParagraphNodeView {
     return false;
   }
 
+  /**
+   * @param {{ markerText: string, suffix?: string }} listRendering
+   */
   #initList(listRendering) {
     this.#createMarker(listRendering.markerText);
     this.#createSeparator(listRendering.suffix);
@@ -95,6 +117,9 @@ export class ParagraphNodeView {
     return isList(this.node);
   }
 
+  /**
+   * @param {string} markerText
+   */
   #createMarker(markerText) {
     if (!this.marker) {
       this.marker = document.createElement('span');
@@ -105,6 +130,9 @@ export class ParagraphNodeView {
     this.marker.textContent = markerText;
   }
 
+  /**
+   * @param {'tab' | 'space' | 'nothing'} [suffix]
+   */
   #createSeparator(suffix) {
     if (suffix === 'tab' || suffix == null) {
       if (this.separator == null || this.separator.tagName?.toLowerCase() !== 'span') {
@@ -147,6 +175,10 @@ export class ParagraphNodeView {
    * For center alignment:
    *   - The tab character extends to the next tab stop
    */
+  /**
+   * @param {'left' | 'right' | 'center'} justification
+   * @param {{ hanging?: number, firstLine?: number } | null} indent
+   */
   #calculateTabSeparatorStyle(justification, indent) {
     const markerWidth = this.marker.getBoundingClientRect().width;
     let tabStyle;
@@ -187,6 +219,9 @@ export class ParagraphNodeView {
    *   - The marker text is centered around the left indent (pulled back by half its width)
    *
    * The left/center/right alignment positioning uses the left indent (+ firstLine if present) as the anchor point.
+   */
+  /**
+   * @param {'left' | 'right' | 'center'} justification
    */
   #calculateMarkerStyle(justification) {
     // START: modify after CSS styles
@@ -266,6 +301,9 @@ export class ParagraphNodeView {
     return paragraphContext;
   }
 
+  /**
+   * @param {() => void} fn
+   */
   #scheduleAnimation(fn) {
     if (typeof globalThis === 'undefined') {
       return;
