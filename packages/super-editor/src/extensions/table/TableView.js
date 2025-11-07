@@ -31,7 +31,7 @@ export const createTableView = ({ editor }) => {
       this.table = this.dom.appendChild(document.createElement('table'));
       this.colgroup = this.table.appendChild(document.createElement('colgroup'));
       updateTable(this.editor, this.node, this.table);
-      updateColumns(node, this.colgroup, this.table, cellMinWidth, undefined, undefined, this.editor);
+      updateColumns(node, this.colgroup, this.table, cellMinWidth, this.editor);
       this.contentDOM = this.table.appendChild(document.createElement('tbody'));
 
       // use `setTimeout` to get cells.
@@ -47,7 +47,7 @@ export const createTableView = ({ editor }) => {
 
       this.node = node;
       updateTable(this.editor, node, this.table);
-      updateColumns(node, this.colgroup, this.table, this.cellMinWidth, undefined, undefined, this.editor);
+      updateColumns(node, this.colgroup, this.table, this.cellMinWidth, this.editor);
       updateTableWrapper(this.dom, this.table);
 
       return true;
@@ -111,7 +111,7 @@ function getAvailableWidth(element, editor) {
  * @param {number} cellMinWidth
  * @param {import('@core/Editor.js').Editor} editor
  */
-export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, overrideValue, editor) {
+export function updateColumns(node, colgroup, table, cellMinWidth, editor) {
   const gridColumns =
     Array.isArray(node.attrs?.grid) && node.attrs.grid.length
       ? node.attrs.grid.map((col) => twipsToPixels(col.col))
@@ -125,7 +125,6 @@ export function updateColumns(node, colgroup, table, cellMinWidth, overrideCol, 
   );
 
   const resolveColumnWidth = (colIndex, colwidthValue) => {
-    if (overrideCol === colIndex) return overrideValue;
     if (colwidthValue != null) return colwidthValue;
     if (gridColumns && gridColumns[colIndex] != null) return gridColumns[colIndex];
     return null;
