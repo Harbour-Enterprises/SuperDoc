@@ -119,8 +119,7 @@ jobs:
             --label "visual-update"
 
   build-superdoc:
-    runs-on:
-      labels: ubuntu-latest-16gb
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout to SuperDoc
         uses: actions/checkout@v4
