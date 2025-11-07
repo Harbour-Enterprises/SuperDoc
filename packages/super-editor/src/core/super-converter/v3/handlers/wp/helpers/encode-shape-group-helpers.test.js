@@ -1,7 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleImageNode } from './encode-image-node-helpers.js';
-import { emuToPixels, rotToDegrees } from '@converter/helpers.js';
-
 vi.mock('@converter/helpers.js', () => ({
   emuToPixels: vi.fn((emu) => emu / 9525),
   rotToDegrees: vi.fn((rot) => rot / 60000),
