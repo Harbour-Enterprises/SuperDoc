@@ -1,5 +1,5 @@
-export { SuperDocAI } from './superdoc-ai';
 export { AIActions } from './ai-actions';
+export { CommandsEngine } from './commands-engine';
 export { EditorAdapter } from './editor-adapter';
 
 export * from './types';

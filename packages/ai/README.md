@@ -1,4 +1,4 @@
-# @superdoc-dev/superdoc-ai
+# @superdoc-dev/ai
 
 > AI integration package for SuperDoc - Add powerful AI capabilities to your document editor
 
@@ -16,16 +16,16 @@
 ## Installation
 
 ```bash
-npm install @superdoc-dev/superdoc-ai
+npm install @superdoc-dev/ai
 ```
 
 ## Quick Start
 
 ```typescript
-import { SuperDocAI } from '@superdoc-dev/superdoc-ai';
+import { AIActions } from '@superdoc-dev/ai';
 
 // Initialize with OpenAI
-const ai = new SuperDocAI(superdoc, {
+const ai = new AIActions(superdoc, {
   user: {
     displayName: 'AI Assistant',
     userId: 'ai-bot-001',
@@ -35,7 +35,7 @@ const ai = new SuperDocAI(superdoc, {
     apiKey: process.env.OPENAI_API_KEY,
     model: 'gpt-4',
   },
-  onReady: ({ superdocAIBot }) => {
+  onReady: ({ aiActions }) => {
     console.log('AI is ready!');
   },
 });
@@ -58,14 +58,14 @@ await ai.action.insertContent('write a conclusion paragraph');
 
 ## API Reference
 
-### SuperDocAI Class
+### AIActions Class
 
 The main class for AI integration.
 
 #### Constructor
 
 ```typescript
-new SuperDocAI(superdoc: SuperDocInstance, options: SuperDocAIOptions)
+new AIActions(superdoc: SuperDocInstance, options: AIActionsOptions)
 ```
 
 **Options:**
@@ -230,7 +230,7 @@ When the provider configuration leaves `streamResults` enabled (default), genera
 ### OpenAI
 
 ```typescript
-const ai = new SuperDocAI(superdoc, {
+const ai = new AIActions(superdoc, {
   user: { displayName: 'AI' },
   provider: {
     type: 'openai',
@@ -248,7 +248,7 @@ const ai = new SuperDocAI(superdoc, {
 ### Anthropic Claude
 
 ```typescript
-const ai = new SuperDocAI(superdoc, {
+const ai = new AIActions(superdoc, {
   user: { displayName: 'AI' },
   provider: {
     type: 'anthropic',
@@ -266,7 +266,7 @@ const ai = new SuperDocAI(superdoc, {
 ### Custom HTTP Provider
 
 ```typescript
-const ai = new SuperDocAI(superdoc, {
+const ai = new AIActions(superdoc, {
   user: { displayName: 'AI' },
   provider: {
     type: 'http',
@@ -309,7 +309,7 @@ const customProvider: AIProvider = {
   },
 };
 
-const ai = new SuperDocAI(superdoc, {
+const ai = new AIActions(superdoc, {
   user: { displayName: 'AI' },
   provider: customProvider,
 });
@@ -320,7 +320,7 @@ const ai = new SuperDocAI(superdoc, {
 ### With Callbacks
 
 ```typescript
-const ai = new SuperDocAI(superdoc, {
+const ai = new AIActions(superdoc, {
   user: { displayName: 'AI' },
   provider: { type: 'openai', apiKey: '...', model: 'gpt-4' },
   enableLogging: true,
@@ -341,7 +341,7 @@ const ai = new SuperDocAI(superdoc, {
 ### Custom System Prompt
 
 ```typescript
-const ai = new SuperDocAI(superdoc, {
+const ai = new AIActions(superdoc, {
   user: { displayName: 'Legal AI' },
   provider: { type: 'openai', apiKey: '...', model: 'gpt-4' },
   systemPrompt: `You are a legal document assistant. 

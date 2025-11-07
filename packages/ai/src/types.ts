@@ -93,9 +93,9 @@ export type AIUser = {
 }
 
 /**
- * Configuration for SuperDocAI
+ * Configuration for the AIActions service
  */
-export type SuperDocAIConfig = {
+export type AIActionsConfig = {
     /** AI provider instance */
     provider: AIProvider;
     /** User/bot information for attributed changes */
@@ -107,11 +107,11 @@ export type SuperDocAIConfig = {
 }
 
 /**
- * Lifecycle callbacks for SuperDocAI events
+ * Lifecycle callbacks for AIActions events
  */
-export type SuperDocAICallbacks = {
+export type AIActionsCallbacks = {
     /** Called when AI is initialized and ready */
-    onReady?: (context: { superdocAIBot: any }) => void;
+    onReady?: (context: { aiActions: any }) => void;
     /** Called when streaming starts */
     onStreamingStart?: () => void;
     /** Called for each streaming chunk */
@@ -123,9 +123,9 @@ export type SuperDocAICallbacks = {
 }
 
 /**
- * Complete options for SuperDocAI constructor
+ * Complete options for AIActions constructor
  */
-export type SuperDocAIOptions = SuperDocAIConfig & SuperDocAICallbacks;
+export type AIActionsOptions = AIActionsConfig & AIActionsCallbacks;
 
 // Re-export SuperDoc class
 export { SuperDoc };

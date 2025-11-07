@@ -1,5 +1,5 @@
 {
-  "name": "@superdoc-dev/superdoc-ai",
+  "name": "@superdoc-dev/ai",
   "version": "0.1.2",
   "description": "AI integration package for SuperDoc",
   "main": "./dist/index.js",

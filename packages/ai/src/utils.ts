@@ -27,7 +27,7 @@ export function parseJSON<T>(response: string, fallback: T, enableLogging: boole
         return JSON.parse(cleaned) as T;
     } catch (error) {
         if (enableLogging) {
-            console.error('[SuperDocAI] Failed to parse JSON:', {
+            console.error('[AIActions] Failed to parse JSON:', {
                 original: response,
                 error: error instanceof Error ? error.message : 'Unknown error'
             });

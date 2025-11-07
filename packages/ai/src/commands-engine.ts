@@ -13,7 +13,7 @@ import {
  * AI-powered document actions
  * All methods are pure - they receive dependencies and return results
  */
-export class AIActions {
+export class CommandsEngine {
     private adapter: EditorAdapter;
 
     constructor(

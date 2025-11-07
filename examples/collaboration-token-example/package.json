@@ -1,5 +1,5 @@
 {
-  "name": "superdoc-ai-quickstart",
+  "name": "token-collaboration-example",
   "private": true,
   "version": "0.0.1",
   "type": "module",
@@ -9,10 +9,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@superdoc-dev/ai": "latest",
-    "superdoc": "0.28.0"
+    "superdoc": "0.20.0-next.13"
   },
   "devDependencies": {
-    "vite": "^6.3.5"
+    "vite": "^4.4.6"
   }
 }

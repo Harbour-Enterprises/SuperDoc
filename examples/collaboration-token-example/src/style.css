@@ -1,0 +1,118 @@
+:root {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: #f5f7fb;
+  color: #1f2933;
+}
+
+body {
+  margin: 0;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) 1fr;
+  height: 100vh;
+}
+
+.config {
+  padding: 1.5rem;
+  border-right: 1px solid rgba(31, 41, 51, 0.1);
+  background: #fff;
+  overflow-y: auto;
+}
+
+.config h1 {
+  font-size: 1.4rem;
+  margin-bottom: 0.5rem;
+}
+
+.hint {
+  font-size: 0.9rem;
+  color: #4b5563;
+  margin-bottom: 1rem;
+}
+
+form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+input {
+  font: inherit;
+  padding: 0.55rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  background: #f9fafb;
+}
+
+input:focus {
+  outline: none;
+  border-color: #4f46e5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.15);
+}
+
+button[type='submit'] {
+  margin-top: 0.5rem;
+  padding: 0.65rem;
+  border: none;
+  border-radius: 6px;
+  background: linear-gradient(135deg, #4f46e5, #6366f1);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+button[type='submit']:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(79, 70, 229, 0.2);
+}
+
+.status {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #f8fafc;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  min-height: 5rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+#superdoc-toolbar {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.1);
+  background: #fff;
+}
+
+#superdoc {
+  flex: 1;
+  overflow: hidden;
+}
+
+@media (max-width: 960px) {
+  .app {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+  }
+
+  .config {
+    border-right: none;
+    border-bottom: 1px solid rgba(31, 41, 51, 0.1);
+  }
+}

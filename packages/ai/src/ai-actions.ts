@@ -3,13 +3,13 @@ import type {
     Editor,
     Result,
     StreamOptions,
-    SuperDocAICallbacks,
-    SuperDocAIConfig,
-    SuperDocAIOptions,
+    AIActionsCallbacks,
+    AIActionsConfig,
+    AIActionsOptions,
     SuperDocInstance,
     SuperDoc,
 } from './types';
-import {AIActions} from './ai-actions';
+import {CommandsEngine} from './commands-engine';
 import {createAIProvider, isAIProvider} from './providers';
 
 /**
@@ -21,7 +21,7 @@ import {createAIProvider, isAIProvider} from './providers';
  * @example
  * ```typescript
  * // With provider config (recommended)
- * const ai = new SuperDocAI(superdoc, {
+ * const ai = new AIActions(superdoc, {
  *   user: { display_name: 'Bot', user_id: 'bot-123' },
  *   provider: {
  *     type: 'openai',
@@ -32,19 +32,19 @@ import {createAIProvider, isAIProvider} from './providers';
  *
  * // With existing provider instance
  * const provider = createAIProvider({ type: 'openai', ... });
- * const ai = new SuperDocAI(superdoc, {
+ * const ai = new AIActions(superdoc, {
  *   user: { display_name: 'Bot' },
  *   provider
  * });
  * ```
  */
-export class SuperDocAI {
+export class AIActions {
     private readonly superdoc: SuperDocInstance;
-    private readonly config: SuperDocAIConfig;
-    private callbacks: SuperDocAICallbacks;
+    private readonly config: AIActionsConfig;
+    private callbacks: AIActionsCallbacks;
     private isReady = false;
     private initializationPromise: Promise<void> | null = null;
-    private readonly actions: AIActions;
+    private readonly actions: CommandsEngine;
 
     public readonly action = {
         find: async (instruction: string) => {
@@ -84,13 +84,13 @@ export class SuperDocAI {
     };
 
     /**
-     * Creates a new SuperDocAI instance.
+     * Creates a new AIActions instance.
      *
      * @param superdoc - SuperDoc instance to wrap
      * @param options - Configuration including provider, user, and callbacks
      * ```
      */
-    constructor(superdoc: SuperDocInstance, options: SuperDocAIOptions) {
+    constructor(superdoc: SuperDocInstance, options: AIActionsOptions) {
         this.superdoc = superdoc;
 
         const {onReady, onStreamingStart, onStreamingPartialResult, onStreamingEnd, onError, provider, ...config} =
@@ -116,7 +116,7 @@ export class SuperDocAI {
 
         const editor = this.getEditor();
         if (!editor) {
-            throw new Error('SuperDocAI requires an active editor before initialization');
+            throw new Error('AIActions requires an active editor before initialization');
         }
 
         editor.setOptions({
@@ -127,7 +127,7 @@ export class SuperDocAI {
             },
         });
 
-        this.actions = new AIActions(
+        this.actions = new CommandsEngine(
             this.config.provider,
             editor,
             () => this.getDocumentContext(),
@@ -147,7 +147,7 @@ export class SuperDocAI {
         try {
             this.isProviderAvailable();
             this.isReady = true;
-            this.callbacks.onReady?.({superdocAIBot: this});
+            this.callbacks.onReady?.({aiActions: this});
         } catch (error) {
             this.handleError(error as Error);
             throw error;
@@ -239,7 +239,7 @@ export class SuperDocAI {
      */
     public async streamCompletion(prompt: string, options?: StreamOptions): Promise<string> {
         if (!this.isReady) {
-            throw new Error('SuperDocAI is not ready yet. Call waitUntilReady() first.');
+            throw new Error('AIActions is not ready yet. Call waitUntilReady() first.');
         }
 
         const documentContext = this.getDocumentContext();
@@ -281,7 +281,7 @@ export class SuperDocAI {
      */
     public async getCompletion(prompt: string, options?: CompletionOptions): Promise<string> {
         if (!this.isReady) {
-            throw new Error('SuperDocAI is not ready yet. Call waitUntilReady() first.');
+            throw new Error('AIActions is not ready yet. Call waitUntilReady() first.');
         }
 
         const documentContext = this.getDocumentContext();
@@ -322,7 +322,7 @@ export class SuperDocAI {
      */
     private handleError(error: Error): void {
         if (this.config.enableLogging) {
-            console.error('[SuperDocAI Error]:', error);
+            console.error('[AIActions Error]:', error);
         }
 
         this.callbacks.onError?.(error);
@@ -337,5 +337,3 @@ export class SuperDocAI {
         return superdoc?.activeEditor ?? null;
     }
 }
-
-export type {AIActions} from './ai-actions';
