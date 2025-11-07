@@ -181,13 +181,8 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-npm-
 
-      - name: Install dependencies
-        run: |
-          npm config set cache ~/.npm
-          cd superdoc/e2e-tests/templates/vue && npm install
-
       - name: Install SuperDoc
-        run: cd superdoc/e2e-tests/templates/vue && npm install /__w/superdoc/superdoc/superdoc-package/superdoc.tgz
+        run: cd superdoc/e2e-tests/templates/vue && npm install /__w/superdoc/superdoc/superdoc-package/superdoc.tgz && npm install
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
