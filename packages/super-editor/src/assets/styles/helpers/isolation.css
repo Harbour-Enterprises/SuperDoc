@@ -2,7 +2,7 @@
 .sd-editor-scoped :where(*),
 .sd-editor-scoped :where(*::before),
 .sd-editor-scoped :where(*::after) {
-  /* all: revert; // affects display of SVGs - paths are not being rendered. */
+  /* all: revert; - affects display of SVGs - paths are not being rendered. */
   box-sizing: border-box;
 }
 
