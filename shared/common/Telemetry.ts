@@ -160,11 +160,36 @@ export type StatisticData =
       [key: string]: unknown;
     };
 
+function getCrypto(): Crypto | undefined {
+  if (typeof globalThis === 'undefined') {
+    return undefined;
+  }
+
+  const cryptoObj: Crypto | undefined =
+    (globalThis as typeof globalThis & { crypto?: Crypto }).crypto ??
+    (globalThis as typeof globalThis & { msCrypto?: Crypto }).msCrypto;
+
+  if (cryptoObj?.getRandomValues) {
+    return cryptoObj;
+  }
+
+  return undefined;
+}
+
 function randomBytes(length: number): Uint8Array {
   const array = new Uint8Array(length);
+  const cryptoObj = getCrypto();
+
+  if (cryptoObj) {
+    cryptoObj.getRandomValues(array);
+    return array;
+  }
+
+  // Final fallback for runtimes without secure entropy (legacy tests, etc.)
   for (let i = 0; i < length; i++) {
     array[i] = Math.floor(Math.random() * 256);
   }
+
   return array;
 }
 
