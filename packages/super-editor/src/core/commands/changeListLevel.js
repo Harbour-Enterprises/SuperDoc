@@ -85,7 +85,6 @@ export function updateNumberingProperties(newNumberingProperties, paragraphNode,
   newAttrs.indent = resolvedParagraphProperties.indent ? { ...resolvedParagraphProperties.indent } : null;
   newAttrs.spacing = resolvedParagraphProperties.spacing ? { ...resolvedParagraphProperties.spacing } : null;
   newAttrs.styleId = resolvedParagraphProperties.styleId || null;
-  console.log('Resolved paragraph properties:', resolvedParagraphProperties);
   // END: remove after CSS styles
 
   tr.setNodeMarkup(pos, null, newAttrs);

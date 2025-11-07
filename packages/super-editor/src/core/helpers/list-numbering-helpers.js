@@ -378,36 +378,28 @@ export const removeListDefinitions = (listId, editor) => {
  * starting number, and content node.
  * @param {Object} param0
  * @param {number} param0.level - The level of the list item.
- * @param {string} param0.lvlText - The text format for the list level.
  * @param {number} param0.numId - The ID of the numbering definition for the list item.
- * @param {string} param0.numFmt - The numbering format (e.g., decimal, lowerRoman).
- * @param {Array} param0.listLevel - The list level array for the item.
  * @param {Object} param0.contentNode - The content node to be included in the list item.
  * @returns {Object} A JSON object representing the list item node.
  */
-export const createListItemNodeJSON = ({ level, lvlText, numId, numFmt, listLevel, contentNode }) => {
-  if (!contentNode) {
-    contentNode = {
-      type: 'paragraph',
-      content: [],
-    };
-  }
-
+export const createListItemNodeJSON = ({ level, numId, contentNode }) => {
   if (!Array.isArray(contentNode)) contentNode = [contentNode];
 
+  const numberingProperties = {
+    numId: Number(numId),
+    ilvl: Number(level),
+  };
   const attrs = {
-    lvlText,
-    listLevel,
-    level,
-    numId,
-    numPrType: 'inline',
-    listNumberingType: numFmt,
+    paragraphProperties: {
+      numberingProperties,
+    },
+    numberingProperties,
   };
 
   const listItem = {
-    type: 'listItem',
+    type: 'paragraph',
     attrs,
-    content: [...contentNode],
+    content: [...(contentNode || [])],
   };
   return listItem;
 };
@@ -419,36 +411,16 @@ export const createListItemNodeJSON = ({ level, lvlText, numId, numFmt, listLeve
  * @param {Object} param0
  * @param {number} param0.level - The level of the ordered list.
  * @param {number} param0.numId - The ID of the numbering definition for the ordered list.
- * @param {import('prosemirror-model').NodeType} param0.listType - The type of the list (e.g., 'orderedList', 'bulletList').
  * @param {import('../Editor').Editor} param0.editor - The editor instance where the list node will be created.
- * @param {Array} param0.listLevel - The list level array for the ordered list.
  * @param {Object} param0.contentNode - The content node to be included in the ordered list.
  * @returns {Object} A ProseMirror node representing the ordered list.
  */
-export const createSchemaOrderedListNode = ({ level, numId, listType, editor, listLevel, contentNode }) => {
+export const createSchemaOrderedListNode = ({ level, numId, editor, contentNode }) => {
   level = Number(level);
   numId = Number(numId);
-  const { lvlText, numFmt } = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
-  const listNodeJSON = createListItemNodeJSON({ level, lvlText, numFmt, numId, listLevel, contentNode });
+  const listNodeJSON = createListItemNodeJSON({ level, numId, contentNode });
 
-  const nodeTypeName = typeof listType === 'string' ? listType : listType?.name;
-  const type = nodeTypeName || 'orderedList';
-  const attrs = {
-    'list-style-type': numFmt,
-    listId: numId,
-  };
-
-  if (type === 'orderedList') {
-    attrs.order = level;
-  }
-
-  const node = {
-    type,
-    attrs,
-    content: [listNodeJSON],
-  };
-
-  return editor.schema.nodeFromJSON(node);
+  return editor.schema.nodeFromJSON(listNodeJSON);
 };
 
 /**
@@ -461,7 +433,6 @@ export const createSchemaOrderedListNode = ({ level, numId, listType, editor, li
  */
 export const createNewList = ({ listType, tr, editor }) => {
   const numId = ListHelpers.getNewListId(editor);
-  if (typeof listType === 'string') listType = editor.schema.nodes[listType];
 
   ListHelpers.generateNewListDefinition({ numId, listType, editor });
 

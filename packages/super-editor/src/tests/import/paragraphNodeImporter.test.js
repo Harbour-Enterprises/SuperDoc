@@ -3,7 +3,6 @@ import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { getExportedResult } from '../export/export-helpers/index';
-import { handleListNode } from '@converter/v2/importer/listImporter.js';
 import { beforeAll, expect } from 'vitest';
 import { pixelsToTwips, linesToTwips } from '@converter/helpers';
 
@@ -169,19 +168,6 @@ describe('paragraph tests to check spacing', () => {
     const { spacing } = attrs;
     expect(spacing.after).toBeCloseTo(pixelsToTwips(5.333), 3);
     expect(spacing.before).toBeCloseTo(pixelsToTwips(21.333), 3);
-  });
-
-  it('correctly gets spacing with lists [list-def-mix]', async () => {
-    const dataName = 'list-def-mix.docx';
-    const docx = await getTestDataByFileName(dataName);
-    const documentXml = docx['word/document.xml'];
-
-    const doc = documentXml.elements[0];
-    const body = doc.elements[0];
-    const content = body.elements;
-
-    const firstListItem = content[0];
-    const { nodes } = handleListNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler(), lists });
   });
 
   it('should return empty result for empty nodes', () => {

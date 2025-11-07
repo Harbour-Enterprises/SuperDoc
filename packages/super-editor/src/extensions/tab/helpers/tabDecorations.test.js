@@ -1,7 +1,7 @@
 // @ts-check
 import { describe, it, expect, vi } from 'vitest';
 import {
-  getParagraphContext,
+  findParagraphContext,
   flattenParagraph,
   findNextTabIndex,
   findDecimalBreakPos,
@@ -10,7 +10,7 @@ import {
 } from './tabDecorations.js';
 import { pixelsToTwips } from '@converter/helpers';
 
-describe('getParagraphContext', () => {
+describe('findParagraphContext', () => {
   const mockHelpers = {
     linkedStyles: {
       getStyleById: vi.fn(),
@@ -23,7 +23,7 @@ describe('getParagraphContext', () => {
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = getParagraphContext($pos, cache, mockHelpers);
+    const context = findParagraphContext($pos, cache, mockHelpers);
 
     expect(context.tabStops).toEqual([{ val: 'left', pos: 720 }]);
     expect(mockHelpers.linkedStyles.getStyleById).not.toHaveBeenCalled();
@@ -39,7 +39,7 @@ describe('getParagraphContext', () => {
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = getParagraphContext($pos, cache, mockHelpers);
+    const context = findParagraphContext($pos, cache, mockHelpers);
 
     expect(context.tabStops).toEqual(tabStops);
     expect(mockHelpers.linkedStyles.getStyleById).toHaveBeenCalledWith('MyStyle');
@@ -51,7 +51,7 @@ describe('getParagraphContext', () => {
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = getParagraphContext($pos, cache, mockHelpers);
+    const context = findParagraphContext($pos, cache, mockHelpers);
 
     expect(context.tabStops).toEqual([]);
   });

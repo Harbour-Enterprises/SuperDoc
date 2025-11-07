@@ -19,6 +19,9 @@ export class ParagraphNodeView {
     if (this.#checkIsList()) {
       this.#initList(node.attrs.listRendering);
       this.#scheduleAnimation(() => {
+        if (!this.#checkIsList()) {
+          return;
+        }
         this.#updateListStyles();
       });
     }

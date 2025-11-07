@@ -49,6 +49,7 @@ describe('NumberingManager', () => {
     it('restarts level 1 numbering when a new level 0 item appears with default restart rules', () => {
       const numberingManager = createNumberingManager();
       numberingManager.setStartSettings('list1', 0, 1, null);
+      numberingManager.setStartSettings('list1', 1, 1, null);
 
       const firstTop = numberingManager.calculateCounter('list1', 0, 10);
       numberingManager.setCounter('list1', 0, 10, firstTop);
@@ -70,6 +71,7 @@ describe('NumberingManager', () => {
 
       const restartedChild = numberingManager.calculateCounter('list1', 1, 16);
       expect(restartedChild).toBe(1);
+      numberingManager.setCounter('list1', 1, 16, restartedChild);
       expect(numberingManager.getAncestorsPath('list1', 1, 16)).toEqual([3]);
       expect(numberingManager.calculatePath('list1', 1, 16)).toEqual([3, 1]);
     });
@@ -127,6 +129,7 @@ describe('NumberingManager', () => {
 
       const grandchild21 = numberingManager.calculateCounter('list1', 2, 21);
       expect(grandchild21).toBe(2);
+      numberingManager.setCounter('list1', 2, 21, grandchild21);
       expect(numberingManager.calculatePath('list1', 2, 21)).toEqual([4, 2, 2]);
     });
 
@@ -159,6 +162,7 @@ describe('NumberingManager', () => {
 
       const grandchild104 = numberingManager.calculateCounter('list2', 2, 104);
       expect(grandchild104).toBe(4);
+      numberingManager.setCounter('list2', 2, 104, grandchild104);
       expect(numberingManager.calculatePath('list2', 2, 104)).toEqual([1, 2, 4]);
     });
 
@@ -213,6 +217,7 @@ describe('NumberingManager', () => {
 
       const level3Third = numberingManager.calculateCounter('list3', 3, 408);
       expect(level3Third).toBe(7);
+      numberingManager.setCounter('list3', 3, 408, level3Third);
       expect(numberingManager.calculatePath('list3', 3, 408)).toEqual([1, 2, 1, 7]);
     });
   });
