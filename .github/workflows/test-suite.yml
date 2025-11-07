@@ -12,31 +12,12 @@ on:
         description: "Run end-to-end tests"
         type: boolean
         default: false
-      update-screenshots-examples:
-        description: "Update visual snapshots"
-        type: boolean
-        default: false
-      branch-to-test:
-        description: "Branch to test (for E2E)"
-        type: string
-        required: false
-      commit-sha:
-        description: "Commit SHA (for E2E)"
-        type: string
-        required: false
-      pr-url:
-        description: "Pull request URL (for E2E)"
-        type: string
-        required: false
   workflow_call:
     inputs:
       run-examples-visual-tests:
         type: boolean
         default: true
       run-e2e-tests:
-        type: boolean
-        default: false
-      update-screenshots-examples:
         type: boolean
         default: false
 
