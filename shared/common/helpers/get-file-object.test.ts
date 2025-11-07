@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
-import { getFileObject } from './get-file-object.js';
+import { getFileObject } from './get-file-object';
 
 const originalFetch = globalThis.fetch;
 const originalFile = globalThis.File;
@@ -7,47 +7,56 @@ const originalFile = globalThis.File;
 beforeAll(() => {
   if (typeof File === 'undefined') {
     class PolyfilledFile extends Blob {
-      constructor(parts, name, options = {}) {
+      name: string;
+      lastModified: number;
+
+      constructor(parts: BlobPart[], name: string, options: FilePropertyBag = {}) {
         super(parts, options);
         this.name = name;
         this.lastModified = options.lastModified ?? Date.now();
-        this.type = options.type ?? '';
+      }
+
+      async text(): Promise<string> {
+        return super.text();
       }
     }
 
-    globalThis.File = PolyfilledFile;
+    (globalThis as any).File = PolyfilledFile;
   }
 });
 
 afterAll(() => {
   if (originalFile) {
-    globalThis.File = originalFile;
+    (globalThis as any).File = originalFile;
   } else {
-    delete globalThis.File;
+    delete (globalThis as any).File;
   }
 });
 
 describe('getFileObject', () => {
-  let mockBlob;
+  let mockBlob: Blob;
 
   it('requires Node.js >= 20 for atob, fetch, and File APIs', () => {
     const version = parseInt(process.version.slice(1).split('.')[0], 10);
     expect(version).toBeGreaterThanOrEqual(20);
-    expect(typeof globalThis.atob).toBe('function');
+    expect(typeof (globalThis as any).atob).toBe('function');
     expect(typeof globalThis.fetch).toBe('function');
   });
 
   beforeEach(() => {
     mockBlob = new Blob(['hello world'], { type: 'text/plain' });
 
-    globalThis.fetch = vi.fn().mockResolvedValue({
+    (globalThis as any).fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
       blob: vi.fn().mockResolvedValue(mockBlob),
     });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    globalThis.fetch = originalFetch;
+    (globalThis as any).fetch = originalFetch;
   });
 
   it('fetches regular URLs and returns a File', async () => {

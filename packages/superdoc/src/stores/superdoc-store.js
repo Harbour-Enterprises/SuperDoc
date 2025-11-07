@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia';
 import { ref, reactive, computed } from 'vue';
 import { useCommentsStore } from './comments-store';
-import { getFileObject } from '@harbour-enterprises/common';
-import { DOCX, PDF } from '@harbour-enterprises/common';
+import { getFileObject } from '@superdoc/common';
+import { DOCX, PDF } from '@superdoc/common';
 import { normalizeDocumentEntry } from '@superdoc/core/helpers/file.js';
 import useDocument from '@superdoc/composables/use-document';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 
 export const useSuperdocStore = defineStore('superdoc', () => {
   const currentConfig = ref(null);

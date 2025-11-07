@@ -3,10 +3,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const distIndexPath = path.resolve(__dirname, '../dist/index.d.ts');
+// TypeScript emits to dist/packages/superdoc/src/index.d.ts when common is included
+const distIndexPath = path.resolve(__dirname, '../dist/packages/superdoc/src/index.d.ts');
 
 if (!fs.existsSync(distIndexPath)) {
-  console.error('[ensure-types] Missing dist/index.d.ts');
+  console.error('[ensure-types] Missing dist/packages/superdoc/src/index.d.ts');
   process.exit(1);
 }
 

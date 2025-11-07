@@ -11,7 +11,7 @@ import { Extension } from '@core/Extension.js';
 import { CommentsPlugin, CommentsPluginKey, __test__ } from './comments-plugin.js';
 import { CommentMarkName } from './comments-constants.js';
 import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import * as CommentHelpers from './comments-helpers.js';
 import { normalizeCommentEventPayload, updatePosition } from './helpers/index.js';
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../track-changes/constants.js';

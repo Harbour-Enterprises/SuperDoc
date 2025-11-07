@@ -1,17 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import vClickOutside from './v-click-outside.js';
+import vClickOutside from './v-click-outside';
 
 describe('v-click-outside directive', () => {
-  let originalDocument;
-  let addEventListenerMock;
-  let removeEventListenerMock;
+  let originalDocument: Document | undefined;
+  let addEventListenerMock: any;
+  let removeEventListenerMock: any;
 
   beforeEach(() => {
     originalDocument = globalThis.document;
     addEventListenerMock = vi.fn();
     removeEventListenerMock = vi.fn();
 
-    globalThis.document = {
+    (globalThis as any).document = {
       addEventListener: addEventListenerMock,
       removeEventListener: removeEventListenerMock,
     };
@@ -20,18 +20,18 @@ describe('v-click-outside directive', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     if (originalDocument === undefined) {
-      delete globalThis.document;
+      delete (globalThis as any).document;
     } else {
-      globalThis.document = originalDocument;
+      (globalThis as any).document = originalDocument;
     }
   });
 
   it('invokes binding when clicks originate outside the element and unregisters on unmount', () => {
     const containsMock = vi.fn().mockReturnValue(false);
     const binding = { value: vi.fn() };
-    const el = { contains: containsMock };
+    const el: any = { contains: containsMock };
 
-    vClickOutside.mounted(el, binding);
+    vClickOutside.mounted(el, binding as any);
 
     expect(addEventListenerMock).toHaveBeenCalledWith('click', expect.any(Function));
     expect(typeof el.__clickOutsideHandler).toBe('function');

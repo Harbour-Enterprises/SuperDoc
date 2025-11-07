@@ -8,7 +8,7 @@ import { CommentsMark } from './comments-marks.js';
 import { CommentMarkName } from './comments-constants.js';
 import * as CommentHelpers from './comments-helpers.js';
 import { CommentsPlugin, CommentsPluginKey } from './comments-plugin.js';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 
 const {
   removeCommentsById,

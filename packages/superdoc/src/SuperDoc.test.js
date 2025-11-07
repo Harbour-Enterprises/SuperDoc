@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { mount } from '@vue/test-utils';
 import { h, defineComponent, ref, reactive, nextTick } from 'vue';
-import { DOCX } from '@harbour-enterprises/common';
+import { DOCX } from '@superdoc/common';
 import { Schema } from 'prosemirror-model';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { Extension } from '../../super-editor/src/core/Extension.js';

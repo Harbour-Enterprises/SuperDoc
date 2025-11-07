@@ -1,6 +1,6 @@
 import './dev/style.css';
 import { createApp } from 'vue';
-import { vClickOutside } from '@harbour-enterprises/common';
+import { vClickOutside } from '@superdoc/common';
 import DeveloperPlayground from './dev/components/DeveloperPlayground.vue';
 
 const app = createApp(DeveloperPlayground);

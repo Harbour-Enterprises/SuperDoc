@@ -9,7 +9,7 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/packages/superdoc/src/index.d.ts",
       "import": "./dist/superdoc.es.js",
       "require": "./dist/superdoc.cjs"
     },
@@ -35,7 +35,7 @@
     },
     "./style.css": "./dist/style.css"
   },
-  "types": "./dist/index.d.ts",
+  "types": "./dist/packages/superdoc/src/index.d.ts",
   "main": "./dist/superdoc.umd.js",
   "module": "./dist/superdoc.es.js",
   "scripts": {
