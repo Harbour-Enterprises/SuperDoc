@@ -3,15 +3,15 @@ name: Test Suite
 on:
   workflow_dispatch:
     inputs:
-      run-visual:
-        description: "Run visual tests"
+      run-visual-tests-examples:
+        description: "Run visual tests for examples"
         type: boolean
         default: true
-      run-e2e:
+      run-e2e-tests:
         description: "Run end-to-end tests"
         type: boolean
         default: false
-      update-screenshots:
+      update-screenshots-examples:
         description: "Update visual snapshots"
         type: boolean
         default: false
@@ -29,13 +29,13 @@ on:
         required: false
   workflow_call:
     inputs:
-      run-visual:
+      run-visual-tests-examples:
         type: boolean
         default: true
-      run-e2e:
+      run-e2e-tests:
         type: boolean
         default: false
-      update-screenshots:
+      update-screenshots-examples:
         type: boolean
         default: false
 
@@ -66,8 +66,8 @@ jobs:
       - name: Unit tests
         run: npm test
 
-  visual-tests:
-    if: inputs.run-visual
+  run-visual-tests-examples:
+    if: inputs.run-visual-tests-examples
     runs-on: ubuntu-latest
     needs: validate
     steps:
@@ -122,10 +122,10 @@ jobs:
       - name: Run visual tests
         run: |
           cd examples/tests
-          npm test ${{ inputs.update-screenshots && '-- --update-snapshots' || '' }}
+          npm test ${{ inputs.update-screenshots-examples && '-- --update-snapshots' || '' }}
 
       - name: Create PR with updates
-        if: inputs.update-screenshots == true
+        if: inputs.update-screenshots-examples == true
         env:
           GH_TOKEN: ${{ steps.generate_token.outputs.token }}
         run: |
@@ -144,23 +144,128 @@ jobs:
             --body "Automated visual test updates" \
             --label "visual-update"
 
-  e2e-tests:
-    if: inputs.run-e2e
-    runs-on: ubuntu-latest
-    needs: validate
+  build-superdoc:
+    runs-on:
+      labels: ubuntu-latest-16gb
     steps:
-      - name: Trigger E2E tests
+      - name: Checkout to SuperDoc
+        uses: actions/checkout@v4
+        with:
+          repository: Harbour-Enterprises/SuperDoc
+          ref: ${{ github.head_ref }}
+          path: superdoc
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-build-${{ hashFiles('superdoc/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install dependencies
         run: |
-          curl -L \
-            -X POST \
-            -H "Accept: application/vnd.github+json" \
-            -H "Authorization: Bearer ${{ secrets.SUPERDOC_PAT }}" \
-            ${{ secrets.SD_TESTS_URL }} \
-            -d '{
-              "ref": "main",
-              "inputs": {
-                "superdoc-branch": "${{ inputs.branch-to-test || github.head_ref }}",
-                "superdoc-sha": "${{ inputs.commit-sha || github.sha }}",
-                "pull-request-url": "${{ inputs.pr-url || github.event.pull_request.html_url }}"
-              }
-            }'
+          npm config set cache ~/.npm
+          cd superdoc && npm ci
+
+      - name: Build SuperDoc
+        run: |
+          cd superdoc
+          npm run build
+          npm run pack
+
+      - name: Upload SuperDoc package
+        uses: actions/upload-artifact@v4
+        with:
+          name: superdoc-package
+          path: superdoc/packages/superdoc/superdoc.tgz
+          retention-days: 1
+
+  run-e2e-tests:
+    needs: build-superdoc
+    runs-on: ubuntu-latest
+    container:
+      image: node:latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          repository: Harbour-Enterprises/SuperDoc
+          ref: ${{ github.head_ref }}
+          path: e2e-tests
+
+      - name: Download SuperDoc package
+        uses: actions/download-artifact@v4
+        with:
+          name: superdoc-package
+          path: ./superdoc-package
+
+      - name: Cache npm dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-npm-e2e-${{ hashFiles('e2e-tests/**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-npm-
+
+      - name: Install dependencies
+        run: |
+          npm config set cache ~/.npm
+          cd e2e-tests/templates/vue && npm install
+
+      - name: Install SuperDoc
+        run: cd e2e-tests/templates/vue && npm install /__w/e2e-tests/e2e-tests/superdoc-package/superdoc.tgz
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('e2e-tests/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install dependencies
+        run: |
+          npm config set cache ~/.npm
+          cd e2e-tests && npm ci && npm install @playwright/test
+
+      - name: Install Playwright browsers
+        run: |
+          cd e2e-tests
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            npx playwright install --with-deps
+          else
+            npx playwright install-deps
+          fi
+
+      - name: Run visual tests
+        id: run-visual-tests
+        run: cd e2e-tests && npm test
+  
+      - name: Upload visual test results
+        id: upload_artifact
+        if: always() && steps.run-visual-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-diff-sd
+          path: e2e-tests/test-results
+          retention-days: 15
+
+      - name: Run toolbar tests
+        id: run-toolbar-tests
+        if: always()
+        run: cd e2e-tests && npm test -- tests/toolbar --retries=0
+
+      - name: Extract toolbar results
+        id: extract-toolbar-results
+        if: always() && steps.run-toolbar-tests.outcome == 'failure'
+        run: |
+          cd e2e-tests/helpers
+          OUTPUT="$(node extract-toolbar-results.js)"
+          {
+            echo 'result<<EOF'
+            echo "$OUTPUT"
+            echo EOF
+          } >> "$GITHUB_OUTPUT"

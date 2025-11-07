@@ -34,6 +34,6 @@ jobs:
   test:
     uses: ./.github/workflows/test-suite.yml
     with:
-      run-visual: true
-      run-e2e: ${{ github.base_ref == 'main' }}
+      run-visual-tests-examples: true
+      run-e2e-tests: ${{ github.base_ref == 'main' }}
     secrets: inherit
