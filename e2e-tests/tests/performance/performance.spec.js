@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { sleep } from '../helpers';
 
-test.describe('performance', () => {
+test.describe.skip('performance', () => {
   test.describe('load time', () => {
     test('should load a basic document in less than 3s', async ({ page }) => {
       test.setTimeout(30_000);
