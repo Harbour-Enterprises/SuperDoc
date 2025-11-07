@@ -186,7 +186,7 @@ jobs:
           ls -l ./
         
       - name: Install SuperDoc
-        run: cd superdoc/e2e-tests/templates/vue && npm install superdoc-package/superdoc.tgz && npm install
+        run: cd superdoc/e2e-tests/templates/vue && npm install file:superdoc-package/superdoc.tgz && npm install
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -200,7 +200,7 @@ jobs:
       - name: Install dependencies
         run: |
           npm config set cache ~/.npm
-          cd superdoc/e2e-tests && npm ci && npm install @playwright/test
+          cd superdoc/e2e-tests && npm ci
 
       - name: Install Playwright browsers
         run: |
