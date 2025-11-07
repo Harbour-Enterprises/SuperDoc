@@ -6,13 +6,13 @@
   "scripts": {
     "build": "docker build -t playwright .",
     "update-screenshots": "npm run build && docker run -e PLAYWRIGHT_ARGS='--update-snapshots' --rm  -v ./test-results:/app/test-results -v ./tests/visuals:/app/tests/visuals playwright",
-    "test:local": "docker run --rm --cpus=4 --memory=8gb -v ./test-results:/app/test-results -v ./tests/visuals:/app/tests/visuals playwright",
+    "test:local": "docker run --rm --cpus=4 --memory=8gb -v ./test-results:/app/test-results -v ./tests:/app/tests playwright",
     "test": "npx playwright test",
-    "version": "node helpers/set-superdoc-version.js"
+    "build:superdoc": "cd ../ && npm run pack && cp ./packages/superdoc/superdoc.tgz ./e2e-tests/superdoc.tgz && cd e2e-tests/templates/vue && npm install file:../../superdoc.tgz"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Harbour-Enterprises/superdoc-tests.git"
+    "url": "git+https://github.com/Harbour-Enterprises/SuperDoc.git"
   },
   "keywords": [],
   "author": "gabriel@superdoc.dev",

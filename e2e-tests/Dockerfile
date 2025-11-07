@@ -1,9 +1,10 @@
 FROM node:latest
 WORKDIR /app
+# Copy only the main package.json first for better layer caching
 COPY package.json .
-# Copy the entire Vue template so locally packed tarball is available during install
-COPY templates/vue/ templates/vue/
 RUN npm install
 RUN npx playwright install  --with-deps chromium
+# Copy the Vue template after npm install to avoid cache invalidation
+COPY templates/vue/ templates/vue/
 COPY . .
 CMD bash -c 'npx playwright test --workers=4 $PLAYWRIGHT_ARGS'
