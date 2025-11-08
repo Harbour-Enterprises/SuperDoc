@@ -3,6 +3,7 @@ import { Editor as SuperEditor } from '@core/Editor.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
 import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
+import { isHeadless } from '@/utils/headless-helpers.js';
 
 export const PaginationPluginKey = new PluginKey('paginationPlugin');
 
@@ -13,7 +14,7 @@ export const PaginationPluginKey = new PluginKey('paginationPlugin');
  * @returns {Object} The data for the headers and footers
  */
 export const initPaginationData = async (editor) => {
-  if (!editor.converter) return;
+  if (isHeadless(editor) || !editor.converter) return;
 
   const sectionData = { headers: {}, footers: {} };
   const headerIds = editor.converter.headerIds.ids;
@@ -177,6 +178,8 @@ export const broadcastEditorEvents = (editor, sectionEditor) => {
 };
 
 export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEditMode, documentMode }) => {
+  if (isHeadless(editor)) return;
+
   editor.converter.headerEditors.forEach((item) => {
     item.editor.setEditable(isEditMode, false);
     item.editor.view.dom.setAttribute('aria-readonly', !isEditMode);
