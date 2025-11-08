@@ -148,7 +148,7 @@ export function handleImageNode(node, params, isAnchor) {
   const graphicData = graphic?.elements.find((el) => el.name === 'a:graphicData');
   const { uri } = graphicData?.attributes || {};
 
-  if (!!uri && uri === SHAPE_URI) {
+  if (uri === SHAPE_URI) {
     const shapeMarginOffset = {
       left: positionHValue,
       horizontal: positionHValue,
@@ -157,7 +157,7 @@ export function handleImageNode(node, params, isAnchor) {
     return handleShapeDrawing(params, node, graphicData, size, padding, shapeMarginOffset);
   }
 
-  if (!!uri && uri === GROUP_URI) {
+  if (uri === GROUP_URI) {
     const shapeMarginOffset = {
       left: positionHValue,
       horizontal: positionHValue,
