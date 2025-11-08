@@ -194,6 +194,8 @@ describe('handleImageNode - Shape Group Support', () => {
       height: expect.any(Number),
       childX: 0,
       childY: 0,
+      childOriginXEmu: 0,
+      childOriginYEmu: 0,
       childWidth: expect.any(Number),
       childHeight: expect.any(Number),
     });

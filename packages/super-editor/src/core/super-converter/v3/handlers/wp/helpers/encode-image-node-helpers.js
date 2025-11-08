@@ -328,6 +328,9 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
     if (chOff) {
       groupTransform.childX = emuToPixels(chOff.attributes?.['x'] || 0);
       groupTransform.childY = emuToPixels(chOff.attributes?.['y'] || 0);
+      // Store raw EMU values for coordinate transformation
+      groupTransform.childOriginXEmu = parseFloat(chOff.attributes?.['x'] || 0);
+      groupTransform.childOriginYEmu = parseFloat(chOff.attributes?.['y'] || 0);
     }
     if (chExt) {
       groupTransform.childWidth = emuToPixels(chExt.attributes?.['cx'] || 0);
@@ -351,10 +354,35 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
       const shapeOff = shapeXfrm?.elements?.find((el) => el.name === 'a:off');
       const shapeExt = shapeXfrm?.elements?.find((el) => el.name === 'a:ext');
 
-      const x = shapeOff?.attributes?.['x'] ? emuToPixels(shapeOff.attributes['x']) : 0;
-      const y = shapeOff?.attributes?.['y'] ? emuToPixels(shapeOff.attributes['y']) : 0;
-      const width = shapeExt?.attributes?.['cx'] ? emuToPixels(shapeExt.attributes['cx']) : 100;
-      const height = shapeExt?.attributes?.['cy'] ? emuToPixels(shapeExt.attributes['cy']) : 100;
+      // Get raw child coordinates in EMU
+      const rawX = shapeOff?.attributes?.['x'] ? parseFloat(shapeOff.attributes['x']) : 0;
+      const rawY = shapeOff?.attributes?.['y'] ? parseFloat(shapeOff.attributes['y']) : 0;
+      const rawWidth = shapeExt?.attributes?.['cx'] ? parseFloat(shapeExt.attributes['cx']) : 914400;
+      const rawHeight = shapeExt?.attributes?.['cy'] ? parseFloat(shapeExt.attributes['cy']) : 914400;
+
+      // Transform from child coordinate space to parent space if group transform exists
+      let x, y, width, height;
+      if (groupTransform.childWidth && groupTransform.childHeight) {
+        // Calculate scale factors
+        const scaleX = groupTransform.width / groupTransform.childWidth;
+        const scaleY = groupTransform.height / groupTransform.childHeight;
+
+        // Get child origin in EMU (default to 0 if not set)
+        const childOriginX = groupTransform.childOriginXEmu || 0;
+        const childOriginY = groupTransform.childOriginYEmu || 0;
+
+        // Transform to parent space: ((childPos - childOrigin) * scale) + groupPos
+        x = groupTransform.x + emuToPixels((rawX - childOriginX) * scaleX);
+        y = groupTransform.y + emuToPixels((rawY - childOriginY) * scaleY);
+        width = emuToPixels(rawWidth * scaleX);
+        height = emuToPixels(rawHeight * scaleY);
+      } else {
+        // Fallback: no transformation
+        x = emuToPixels(rawX);
+        y = emuToPixels(rawY);
+        width = emuToPixels(rawWidth);
+        height = emuToPixels(rawHeight);
+      }
       const rotation = shapeXfrm?.attributes?.['rot'] ? rotToDegrees(shapeXfrm.attributes['rot']) : 0;
       const flipH = shapeXfrm?.attributes?.['flipH'] === '1';
       const flipV = shapeXfrm?.attributes?.['flipV'] === '1';
