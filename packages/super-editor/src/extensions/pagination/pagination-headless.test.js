@@ -118,8 +118,8 @@ describe('Pagination Headless Mode', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      const paginationPlugins = editor.view.state.plugins.filter((plugin) => plugin.key === PaginationPluginKey);
-      expect(paginationPlugins.length).toBe(0);
+      const paginationPlugin = PaginationPluginKey.get(editor.view.state);
+      expect(paginationPlugin).toBeUndefined();
     });
 
     it('should initialize pagination plugin in non-headless mode', async () => {
@@ -142,8 +142,8 @@ describe('Pagination Headless Mode', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 200));
 
-      const paginationPlugins = editor.view.state.plugins.filter((plugin) => plugin.key === PaginationPluginKey);
-      expect(paginationPlugins.length).toBeGreaterThan(0);
+      const paginationPlugin = PaginationPluginKey.get(editor.view.state);
+      expect(paginationPlugin).toBeDefined();
     });
   });
 
@@ -167,8 +167,8 @@ describe('Pagination Headless Mode', () => {
       expect(json.type).toBe('doc');
 
       // Verify pagination plugin is not active (key optimization)
-      const paginationPlugins = editor.view.state.plugins.filter((plugin) => plugin.key === PaginationPluginKey);
-      expect(paginationPlugins.length).toBe(0);
+      const paginationPlugin = PaginationPluginKey.get(editor.view.state);
+      expect(paginationPlugin).toBeUndefined();
 
       // Verify core functionality still works
       expect(editor.commands.insertContent).toBeDefined();
@@ -205,8 +205,8 @@ describe('Pagination Headless Mode', () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // Verify pagination plugin is active
-      const paginationPlugins = editor.view.state.plugins.filter((plugin) => plugin.key === PaginationPluginKey);
-      expect(paginationPlugins.length).toBeGreaterThan(0);
+      const paginationPlugin = PaginationPluginKey.get(editor.view.state);
+      expect(paginationPlugin).toBeDefined();
 
       // Verify pagination commands are available
       expect(editor.commands.insertPageBreak).toBeDefined();
