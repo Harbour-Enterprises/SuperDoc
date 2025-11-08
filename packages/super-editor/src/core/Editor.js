@@ -1316,13 +1316,16 @@ export class Editor extends EventEmitter {
       }, 150);
     };
 
+    // Make sure we are in browser when calling browser APIs
     if ('orientation' in screen && 'addEventListener' in screen.orientation) {
       screen.orientation.addEventListener('change', handleResize);
-    } else {
+    } else if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
       window.matchMedia('(orientation: portrait)').addEventListener('change', handleResize);
     }
 
-    window.addEventListener('resize', () => handleResize);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', () => handleResize);
+    }
   }
 
   /**

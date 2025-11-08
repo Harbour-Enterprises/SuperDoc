@@ -5,7 +5,8 @@
  * while maintaining full document functionality.
  */
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { JSDOM } from 'jsdom';
 import { Editor } from '@core/Editor.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import { PageNumber } from '@extensions/page-number/page-number.js';
@@ -15,6 +16,37 @@ import { initTestEditor, loadTestDataForEditorTests } from '@tests/helpers/helpe
 import { PaginationPluginKey } from './pagination-helpers.js';
 
 describe('Pagination Headless Mode', () => {
+  const ORIGINAL_GLOBALS = {
+    window: globalThis.window,
+    document: globalThis.document,
+  };
+
+  let mockWindow, mockDocument;
+
+  beforeEach(() => {
+    // Set up JSDOM for non-headless tests
+    const dom = new JSDOM('<!doctype html><html><body></body></html>');
+    mockWindow = dom.window;
+    mockDocument = dom.window.document;
+    globalThis.window = mockWindow;
+    globalThis.document = mockDocument;
+  });
+
+  afterEach(() => {
+    // Restore original globals
+    if (ORIGINAL_GLOBALS.window === undefined) {
+      delete globalThis.window;
+    } else {
+      globalThis.window = ORIGINAL_GLOBALS.window;
+    }
+
+    if (ORIGINAL_GLOBALS.document === undefined) {
+      delete globalThis.document;
+    } else {
+      globalThis.document = ORIGINAL_GLOBALS.document;
+    }
+  });
+
   describe('Pagination extension registration', () => {
     it('should not register commands, shortcuts, or plugins in headless mode', () => {
       const editor = { options: { isHeadless: true } };
@@ -91,10 +123,22 @@ describe('Pagination Headless Mode', () => {
     });
 
     it('should initialize pagination plugin in non-headless mode', async () => {
+      const { docx, mediaFiles, fonts } = await loadTestDataForEditorTests('blank-doc.docx');
+
       const { editor } = initTestEditor({
         isHeadless: false,
         pagination: true,
+        content: docx,
+        mediaFiles,
+        fonts,
+        mockDocument,
+        mockWindow,
       });
+
+      // Verify editor options are set correctly
+      expect(editor.options.isHeadless).toBe(false);
+      expect(editor.options.pagination).toBe(true);
+      expect(isHeadless(editor)).toBe(false);
 
       await new Promise((resolve) => setTimeout(resolve, 200));
 
@@ -154,6 +198,8 @@ describe('Pagination Headless Mode', () => {
         mediaFiles,
         fonts,
         pagination: true,
+        mockDocument,
+        mockWindow,
       });
 
       await new Promise((resolve) => setTimeout(resolve, 200));

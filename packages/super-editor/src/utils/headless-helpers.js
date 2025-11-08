@@ -6,7 +6,7 @@
  * @returns {boolean} - Whether the editor is in headless mode.
  */
 export const isHeadless = (editor) => {
-  return editor.options.isHeadless;
+  return editor?.options?.isHeadless ?? false;
 };
 
 /**
