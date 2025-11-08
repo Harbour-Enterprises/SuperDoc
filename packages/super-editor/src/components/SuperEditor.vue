@@ -174,6 +174,7 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
   });
 
   editor.value.on('paginationUpdate', () => {
+    if (isHeadless(editor.value)) return;
     adjustPaginationBreaks(editorElem, editor);
   });
 
