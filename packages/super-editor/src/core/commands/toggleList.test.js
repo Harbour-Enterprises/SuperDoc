@@ -104,7 +104,7 @@ describe('toggleList', () => {
     expect(dispatch).toHaveBeenCalledWith(tr);
   });
 
-  it('reuses existing numbering at level zero when selection mixes list and non-list paragraphs', () => {
+  it('converts only non-list paragraphs when selection already contains matching list items', () => {
     const existingNumbering = { numId: 12, ilvl: 4, start: 7 };
     const paragraphs = [
       createParagraph(
@@ -128,11 +128,16 @@ describe('toggleList', () => {
     const result = handler({ editor, state, tr, dispatch: undefined });
 
     expect(result).toBe(true);
-    expect(updateNumberingProperties).toHaveBeenCalledTimes(paragraphs.length);
-    const expectedNumbering = { numId: 12, ilvl: 0, start: 7 };
-    for (const [index, { node, pos }] of paragraphs.entries()) {
-      expect(updateNumberingProperties).toHaveBeenNthCalledWith(index + 1, expectedNumbering, node, pos, editor, tr);
-    }
+    expect(updateNumberingProperties).toHaveBeenCalledTimes(1);
+    const expectedNumbering = { numId: 12, ilvl: 4, start: 7 };
+    expect(updateNumberingProperties).toHaveBeenNthCalledWith(
+      1,
+      expectedNumbering,
+      paragraphs[1].node,
+      paragraphs[1].pos,
+      editor,
+      tr,
+    );
   });
 
   it('creates a new list definition when no matching list exists in or before the selection', () => {
@@ -181,7 +186,7 @@ describe('toggleList', () => {
     expect(result).toBe(true);
     expect(ListHelpers.getNewListId).not.toHaveBeenCalled();
     expect(ListHelpers.generateNewListDefinition).not.toHaveBeenCalled();
-    const expectedNumbering = { numId: 88, ilvl: 0, restart: true };
+    const expectedNumbering = { numId: 88, ilvl: 3, restart: true };
     for (const [index, { node, pos }] of paragraphs.entries()) {
       expect(updateNumberingProperties).toHaveBeenNthCalledWith(index + 1, expectedNumbering, node, pos, editor, tr);
     }

@@ -45,27 +45,44 @@ export const toggleList =
       }
     }
     // 3. Resolve numbering properties
-    let newNumberingProperties;
+    let mode = null;
+    let sharedNumberingProperties = null;
     if (firstListNode) {
       if (!hasNonListParagraphs) {
         // All paragraphs are already lists of the same type, remove the list formatting
-        newNumberingProperties = null;
+        mode = 'remove';
       } else {
-        // Apply those numbering properties to all paragraphs in selection and make them all level zero
-        newNumberingProperties = { ...firstListNode.attrs.numberingProperties, ilvl: 0 };
+        // Apply numbering properties to new list paragraphs while keeping existing list items untouched
+        mode = 'reuse';
+        const baseNumbering = firstListNode.attrs.numberingProperties || {};
+        sharedNumberingProperties = {
+          ...baseNumbering,
+          ilvl: baseNumbering.ilvl ?? 0,
+        };
       }
     } else {
       // If list paragraph was not found, create a new list definition and apply it to all paragraphs in selection
+      mode = 'create';
       const numId = ListHelpers.getNewListId(editor);
       ListHelpers.generateNewListDefinition({ numId: Number(numId), listType, editor });
-      newNumberingProperties = {
+      sharedNumberingProperties = {
         numId: Number(numId),
         ilvl: 0,
       };
     }
 
     for (const { node, pos } of paragraphsInSelection) {
-      updateNumberingProperties(newNumberingProperties, node, pos, editor, tr);
+      if (mode === 'remove') {
+        updateNumberingProperties(null, node, pos, editor, tr);
+        continue;
+      }
+
+      if (mode === 'reuse' && predicate(node)) {
+        // Keep existing list items (and their level) untouched
+        continue;
+      }
+
+      updateNumberingProperties(sharedNumberingProperties, node, pos, editor, tr);
     }
 
     if (dispatch) dispatch(tr);
