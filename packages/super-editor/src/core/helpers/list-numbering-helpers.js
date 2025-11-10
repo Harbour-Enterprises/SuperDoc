@@ -2,6 +2,7 @@
 import { getStyleTagFromStyleId } from '@core/super-converter/v2/importer/listImporter.js';
 import { baseBulletList, baseOrderedListDef } from './baseListDefinitions';
 import { updateNumberingProperties } from '@core/commands/changeListLevel';
+import { findParentNode } from './findParentNode.js';
 
 /**
  * Generate a new list definition for the given list type.
@@ -436,14 +437,12 @@ export const createNewList = ({ listType, tr, editor }) => {
 
   ListHelpers.generateNewListDefinition({ numId, listType, editor });
 
-  const { $from } = tr.selection;
-  const paragraph = $from.parent;
+  const paragraphInfo = findParentNode((node) => node?.type?.name === 'paragraph')(tr.selection);
 
   // If we're not in a paragraph, bail (nothing to convert)
-  if (!paragraph || paragraph.type.name !== 'paragraph') return false;
+  if (!paragraphInfo) return false;
 
-  const depth = $from.depth;
-  const paragraphPos = $from.before(depth);
+  const { node: paragraph, pos: paragraphPos = 0 } = paragraphInfo;
   updateNumberingProperties(
     {
       numId,
