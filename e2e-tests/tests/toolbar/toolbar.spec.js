@@ -233,6 +233,37 @@ test.describe('toolbar', () => {
       expect(hello).toBeVisible();
       expect(await hello.evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(210, 0, 63)');
     });
+
+    test.use({ viewport: { width: 1920, height: 1080 } });
+    test('should add text with linked style', async ({ page }) => {
+      await page.goto('http://localhost:4173/');
+      await page.waitForSelector('div.super-editor');
+
+      const superEditor = page.locator('div.super-editor').first();
+      await expect(superEditor).toBeVisible({
+        timeout: 1_000,
+      });
+
+      // Find button with data-item="btn-linkedStyles"
+      const styleButton = await page.locator('div[data-item="btn-linkedStyles"]');
+      await styleButton.click();
+
+      // Select "heading 2"
+      await page.locator('div[aria-label="Linked style - Heading2"]').click();
+
+      // Click on the editor
+      await superEditor.click();
+
+      // Type "Hello"
+      await page.keyboard.type('Hello');
+
+      // Ensure the text is Arial
+      const hello = await superEditor.getByText('Hello');
+      expect(hello).toBeVisible();
+
+      const styleAttribute = await hello.getAttribute('styleid');
+      expect(styleAttribute).toBe('Heading2');
+    });
   });
 
   test.describe('select text and apply toolbar item', () => {
@@ -909,6 +940,44 @@ test.describe('toolbar', () => {
       // Ensure the highlight bar is red
       const highlightBar = await highlightButton.locator('div.color-bar');
       expect(await highlightBar.evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(210, 0, 63)');
+    });
+
+    test.use({ viewport: { width: 1920, height: 1080 } });
+    test('should show correct linked style when it is applied', async ({ page }) => {
+      await page.goto('http://localhost:4173/');
+      await page.waitForSelector('div.super-editor');
+
+      const superEditor = page.locator('div.super-editor').first();
+      await expect(superEditor).toBeVisible({
+        timeout: 1_000,
+      });
+
+      await superEditor.click();
+      // Type "Hello"
+      await page.keyboard.type('Hello');
+
+      // Double click on the text "Hello" to select it
+      await superEditor.getByText('Hello').click({
+        clickCount: 2,
+      });
+
+      // Apply linked style
+      const styleButton = await page.locator('div[data-item="btn-linkedStyles"]');
+      await styleButton.click();
+
+      // Select "Heading2" style
+      await page.locator('div[aria-label="Linked style - Heading2"]').click();
+
+      // Wait for the toolbar to update
+      await sleep(500);
+
+      // Click back on the text
+      await superEditor.getByText('Hello').click();
+
+      // Wait for the toolbar to update
+      await sleep(500);
+      const styleButtonText = await styleButton.getByText('heading 2');
+      await expect(styleButtonText).toBeVisible();
     });
   });
 });
