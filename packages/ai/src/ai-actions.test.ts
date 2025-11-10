@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { SuperDocAI } from './superdoc-ai';
-import type { AIProvider, SuperDocAIOptions, SuperDoc, Editor } from './types';
+import { AIActions } from './ai-actions';
+import type { AIProvider, AIActionsOptions, SuperDoc, Editor } from './types';
 
-describe('SuperDocAI', () => {
+describe('AIActions', () => {
     let mockProvider: AIProvider;
     let mockEditor: Editor;
     let mockSuperdoc: SuperDoc;
@@ -53,12 +53,12 @@ describe('SuperDocAI', () => {
 
     describe('constructor', () => {
         it('should initialize with provider config', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             expect(ai.getIsReady()).toBe(true);
@@ -66,30 +66,30 @@ describe('SuperDocAI', () => {
 
         it('should call onReady callback when initialized', async () => {
             const onReady = vi.fn();
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider,
                 onReady
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             expect(onReady).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    superdocAIBot: expect.any(Object)
+                    aiActions: expect.any(Object)
                 })
             );
         });
 
         it('should use custom system prompt if provided', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider,
                 systemPrompt: 'Custom system prompt'
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             // Call a method that uses the provider to verify the prompt
@@ -108,12 +108,12 @@ describe('SuperDocAI', () => {
         });
 
         it('should use default system prompt if not provided', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             const completionSpy = vi.spyOn(mockProvider, 'getCompletion');
@@ -133,12 +133,12 @@ describe('SuperDocAI', () => {
 
     describe('waitUntilReady', () => {
         it('should resolve immediately if already ready', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             const start = Date.now();
@@ -149,12 +149,12 @@ describe('SuperDocAI', () => {
         });
 
         it('should wait for initialization if not ready', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             
             // Should wait for initialization
             await ai.waitUntilReady();
@@ -164,12 +164,12 @@ describe('SuperDocAI', () => {
 
     describe('getCompletion', () => {
         it('should get completion with document context', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             const completionSpy = vi.spyOn(mockProvider, 'getCompletion');
@@ -187,28 +187,28 @@ describe('SuperDocAI', () => {
         });
 
         it('should throw if not ready', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
             // Create AI without waiting for ready
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             
             // Manually set isReady to false to test
             (ai as any).isReady = false;
 
             await expect(ai.getCompletion('test'))
-                .rejects.toThrow('SuperDocAI is not ready yet');
+                .rejects.toThrow('AIActions is not ready yet');
         });
 
         it('should pass options to provider', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             const completionSpy = vi.spyOn(mockProvider, 'getCompletion');
@@ -234,13 +234,13 @@ describe('SuperDocAI', () => {
                 }
             };
 
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: errorProvider,
                 onError
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             await expect(ai.getCompletion('test')).rejects.toThrow('Provider error');
@@ -254,7 +254,7 @@ describe('SuperDocAI', () => {
             const onStreamingPartialResult = vi.fn();
             const onStreamingEnd = vi.fn();
 
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider,
                 onStreamingStart,
@@ -262,7 +262,7 @@ describe('SuperDocAI', () => {
                 onStreamingEnd
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             const result = await ai.streamCompletion('test prompt');
@@ -276,7 +276,7 @@ describe('SuperDocAI', () => {
         it('should accumulate chunks correctly', async () => {
             const partialResults: string[] = [];
             
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider,
                 onStreamingPartialResult: (ctx) => {
@@ -284,7 +284,7 @@ describe('SuperDocAI', () => {
                 }
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             await ai.streamCompletion('test');
@@ -297,16 +297,16 @@ describe('SuperDocAI', () => {
         });
 
         it('should throw if not ready', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             (ai as any).isReady = false;
 
             await expect(ai.streamCompletion('test'))
-                .rejects.toThrow('SuperDocAI is not ready yet');
+                .rejects.toThrow('AIActions is not ready yet');
         });
 
         it('should handle streaming errors', async () => {
@@ -320,13 +320,13 @@ describe('SuperDocAI', () => {
                 }
             };
 
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: errorProvider,
                 onError
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             await expect(ai.streamCompletion('test')).rejects.toThrow('Stream error');
@@ -336,12 +336,12 @@ describe('SuperDocAI', () => {
 
     describe('getDocumentContext', () => {
         it('should return document text content', async () => {
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             const context = ai.getDocumentContext();
@@ -353,13 +353,13 @@ describe('SuperDocAI', () => {
                 activeEditor: null,
             } as any;
 
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider,
             };
 
-            expect(() => new SuperDocAI(noEditorSuperdoc, options)).toThrow(
-                'SuperDocAI requires an active editor before initialization',
+            expect(() => new AIActions(noEditorSuperdoc, options)).toThrow(
+                'AIActions requires an active editor before initialization',
             );
         });
     });
@@ -371,12 +371,12 @@ describe('SuperDocAI', () => {
             );
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 4 }]);
 
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
             };
 
-        const ai = new SuperDocAI(mockSuperdoc, options);
+        const ai = new AIActions(mockSuperdoc, options);
         await ai.waitUntilReady();
 
         const result = await ai.action.find('find test');
@@ -384,12 +384,12 @@ describe('SuperDocAI', () => {
     });
 
     it('rejects action calls when the active editor is missing', async () => {
-        const options: SuperDocAIOptions = {
+        const options: AIActionsOptions = {
             user: { displayName: 'AI Bot' },
             provider: mockProvider,
         };
 
-        const ai = new SuperDocAI(mockSuperdoc, options);
+        const ai = new AIActions(mockSuperdoc, options);
         await ai.waitUntilReady();
 
         mockSuperdoc.activeEditor = null as any;
@@ -408,14 +408,14 @@ describe('SuperDocAI', () => {
             );
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 4 }]);
 
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider,
                 onStreamingStart,
                 onStreamingEnd
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             await ai.action.find('test');
@@ -438,18 +438,18 @@ describe('SuperDocAI', () => {
                 }
             };
 
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: errorProvider,
                 enableLogging: true
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             await expect(ai.getCompletion('test')).rejects.toThrow();
             expect(consoleSpy).toHaveBeenCalledWith(
-                '[SuperDocAI Error]:',
+                '[AIActions Error]:',
                 expect.any(Error)
             );
 
@@ -468,13 +468,13 @@ describe('SuperDocAI', () => {
                 }
             };
 
-            const options: SuperDocAIOptions = {
+            const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: errorProvider,
                 enableLogging: false
             };
 
-            const ai = new SuperDocAI(mockSuperdoc, options);
+            const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
             await expect(ai.getCompletion('test')).rejects.toThrow();

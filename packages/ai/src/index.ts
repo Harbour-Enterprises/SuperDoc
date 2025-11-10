@@ -1,5 +1,5 @@
-export { SuperDocAI } from './superdoc-ai';
 export { AIActions } from './ai-actions';
+export { AIActionsService } from './ai-actions-service';
 export { EditorAdapter } from './editor-adapter';
 
 export * from './types';

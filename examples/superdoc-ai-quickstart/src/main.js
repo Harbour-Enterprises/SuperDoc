@@ -1,5 +1,5 @@
 import { SuperDoc } from 'superdoc';
-import { SuperDocAI } from '@superdoc-dev/superdoc-ai';
+import { AIActions } from '@superdoc-dev/ai';
 import 'superdoc/style.css';
 import './style.css';
 
@@ -86,10 +86,10 @@ function initializeAI(superdoc) {
   statusText.textContent = 'Connecting to OpenAI...';
   setButtonsEnabled(false);
 
-  aiInstance = new SuperDocAI(superdoc, {
+  aiInstance = new AIActions(superdoc, {
     user: {
       displayName: 'SuperDoc AI Assistant',
-      userId: 'superdoc-ai-demo',
+      userId: 'ai-demo',
       // profileUrl: 'your bot url',
     },
     provider: {
