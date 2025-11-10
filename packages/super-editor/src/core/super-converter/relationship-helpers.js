@@ -47,11 +47,14 @@ export const mergeRelationshipElements = (existingRelationships = [], newRelatio
       currentId.length > 6;
     const hasSeenId = currentId && seenIds.has(currentId);
 
-    const shouldSkip = !isNewHyperlink && !isNewHeadFoot && (hasSeenId || existingTarget);
+    // If a relationship with the same Target already exists, skip adding a duplicate
+    if (!isNewHyperlink && !isNewHeadFoot && existingTarget) return;
 
-    if (shouldSkip) return;
+    // Ensure a unique Id. If the provided Id collides or is missing, assign a new one.
+    if (!currentId || hasSeenId) {
+      attributes.Id = `rId${++largestId}`;
+    }
 
-    attributes.Id = currentId.length > 6 || isMedia ? currentId : `rId${++largestId}`;
     seenIds.add(attributes.Id);
 
     additions.push(rel);
