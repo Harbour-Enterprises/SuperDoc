@@ -1,3 +1,9 @@
+## [0.28.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.5...v0.28.6) (2025-11-10)
+
+### Bug Fixes
+
+- additional comments fixes ([#1248](https://github.com/Harbour-Enterprises/SuperDoc/issues/1248)) ([d8d6e52](https://github.com/Harbour-Enterprises/SuperDoc/commit/d8d6e526faa0bd7cd1b7970d3fac5fc8d25f74af))
+
 ## [0.28.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.4...v0.28.5) (2025-11-10)
 
 ### Bug Fixes
