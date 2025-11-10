@@ -1,3 +1,9 @@
+## [0.28.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.4...v0.28.5) (2025-11-10)
+
+### Bug Fixes
+
+- comments not exporting ([e3647a7](https://github.com/Harbour-Enterprises/SuperDoc/commit/e3647a7e3d6a8db7e00f10616b01304e9ca77a39))
+
 ## [0.28.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.3...v0.28.4) (2025-11-06)
 
 ### Bug Fixes
