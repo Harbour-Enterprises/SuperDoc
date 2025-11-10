@@ -233,37 +233,6 @@ test.describe('toolbar', () => {
       expect(hello).toBeVisible();
       expect(await hello.evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(210, 0, 63)');
     });
-
-    test.use({ viewport: { width: 1920, height: 1080 } });
-    test('should add text with linked style', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
-      await page.waitForSelector('div.super-editor');
-
-      const superEditor = page.locator('div.super-editor').first();
-      await expect(superEditor).toBeVisible({
-        timeout: 1_000,
-      });
-
-      // Find button with data-item="btn-linkedStyles"
-      const styleButton = await page.locator('div[data-item="btn-linkedStyles"]');
-      await styleButton.click();
-
-      // Select "heading 2"
-      await page.locator('div[aria-label="Linked style - Heading2"]').click();
-
-      // Click on the editor
-      await superEditor.click();
-
-      // Type "Hello"
-      await page.keyboard.type('Hello');
-
-      // Ensure the text is Arial
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-
-      const styleAttribute = await hello.getAttribute('styleid');
-      expect(styleAttribute).toBe('Heading2');
-    });
   });
 
   test.describe('select text and apply toolbar item', () => {
@@ -941,9 +910,63 @@ test.describe('toolbar', () => {
       const highlightBar = await highlightButton.locator('div.color-bar');
       expect(await highlightBar.evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(210, 0, 63)');
     });
+  });
 
+  test.describe('linked styles button', () => {
     test.use({ viewport: { width: 1920, height: 1080 } });
-    test('should show correct linked style when it is applied', async ({ page }) => {
+
+    test('should add text with linked style', async ({ page }) => {
+      const heading2Styles = {
+        fontFamily: '"Aptos Display", sans-serif',
+        fontSize: '21.3333px', // equal to 16pt in computed styles
+        color: 'rgb(15, 71, 97)',
+      };
+
+      await page.goto('http://localhost:4173/');
+      await page.waitForSelector('div.super-editor');
+
+      const superEditor = page.locator('div.super-editor').first();
+      await expect(superEditor).toBeVisible({
+        timeout: 1_000,
+      });
+
+      // Find button with data-item="btn-linkedStyles"
+      const styleButton = await page.locator('div[data-item="btn-linkedStyles"]');
+      await styleButton.click();
+
+      // Select "heading 2"
+      await page.locator('div[aria-label="Linked style - Heading2"]').click();
+
+      // Click on the editor
+      await superEditor.click();
+
+      // Type "Hello"
+      await page.keyboard.type('Hello');
+      await page.keyboard.press('Enter');
+
+      // Ensure the text is Arial
+      const hello = await superEditor.getByText('Hello');
+      expect(hello).toBeVisible();
+
+      const parentP = hello.locator('..');
+      const styleAttribute = await parentP.getAttribute('styleid');
+      expect(styleAttribute).toBe('Heading2');
+
+      const styles = await hello.evaluate((el) => {
+        const computed = window.getComputedStyle(el);
+        return {
+          color: computed.color,
+          fontSize: computed.fontSize,
+          fontFamily: computed.fontFamily,
+        };
+      });
+
+      expect(styles.color).toBe(heading2Styles.color);
+      expect(styles.fontFamily).toBe(heading2Styles.fontFamily);
+      expect(styles.fontSize).toBe(heading2Styles.fontSize);
+    });
+
+    test('should show correct label when linked style is applied', async ({ page }) => {
       await page.goto('http://localhost:4173/');
       await page.waitForSelector('div.super-editor');
 
