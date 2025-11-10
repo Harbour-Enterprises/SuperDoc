@@ -39,12 +39,12 @@ describe('restartNumbering', () => {
   /** @type {Array<{ node: any, pos: number, shouldStop?: boolean }>} */
   let nodesBetweenSequence;
 
-  const createParagraph = ({ numId, numberingFormat = 'decimal', addParagraphProps = true, ilvl = 0 }) => ({
+  const createParagraph = ({ numId, numberingType = 'decimal', addParagraphProps = true, ilvl = 0 }) => ({
     type: { name: 'paragraph' },
     attrs: {
       numberingProperties: { numId, ilvl },
       paragraphProperties: addParagraphProps ? { numberingProperties: { numId, ilvl } } : undefined,
-      listRendering: { numberingFormat },
+      listRendering: { numberingType },
     },
     nodeSize: 4,
   });
@@ -89,21 +89,21 @@ describe('restartNumbering', () => {
   });
 
   it('restarts numbering for the current ordered list chain', () => {
-    const firstParagraph = createParagraph({ numId: 7, numberingFormat: 'decimal' });
+    const firstParagraph = createParagraph({ numId: 7, numberingType: 'decimal' });
     resolveParent.mockReturnValue({ node: firstParagraph, pos: 5 });
 
     nodesBetweenSequence = [
       {
-        node: createParagraph({ numId: 7, numberingFormat: 'decimal' }),
+        node: createParagraph({ numId: 7, numberingType: 'decimal' }),
         pos: 10,
       },
       {
-        node: createParagraph({ numId: 7, numberingFormat: 'decimal' }),
+        node: createParagraph({ numId: 7, numberingType: 'decimal' }),
         pos: 15,
       },
       // different numId should stop aggregation
       {
-        node: createParagraph({ numId: 99, numberingFormat: 'decimal', addParagraphProps: true }),
+        node: createParagraph({ numId: 99, numberingType: 'decimal', addParagraphProps: true }),
         pos: 20,
         shouldStop: true,
       },
@@ -134,10 +134,10 @@ describe('restartNumbering', () => {
   });
 
   it('applies bullet list type and stops when encountering a non-list node', () => {
-    const firstParagraph = createParagraph({ numId: 3, numberingFormat: 'bullet' });
+    const firstParagraph = createParagraph({ numId: 3, numberingType: 'bullet' });
     resolveParent.mockReturnValue({ node: firstParagraph, pos: 2 });
 
-    const matchingParagraph = createParagraph({ numId: 3, numberingFormat: 'bullet' });
+    const matchingParagraph = createParagraph({ numId: 3, numberingType: 'bullet' });
     const nonListParagraph = {
       type: { name: 'paragraph' },
       attrs: { paragraphProperties: { numberingProperties: { numId: 3 } } },
@@ -146,7 +146,7 @@ describe('restartNumbering', () => {
       { node: matchingParagraph, pos: 6 },
       // simulate a non-list paragraph followed by another matching entry that should be ignored
       { node: nonListParagraph, pos: 12, shouldStop: true },
-      { node: createParagraph({ numId: 3, numberingFormat: 'bullet' }), pos: 18 },
+      { node: createParagraph({ numId: 3, numberingType: 'bullet' }), pos: 18 },
     ];
 
     isList.mockImplementation((node) => {

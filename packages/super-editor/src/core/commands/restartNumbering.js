@@ -28,8 +28,8 @@ export const restartNumbering = ({ editor, tr, state, dispatch }) => {
   });
 
   // 4) Create a new numId for the restarted list and generate its definition
-  const { numberingFormat } = paragraph.attrs.listRendering;
-  const listType = numberingFormat === 'bullet' ? 'bulletList' : 'orderedList';
+  const { numberingType } = paragraph.attrs.listRendering || {};
+  const listType = numberingType === 'bullet' ? 'bulletList' : 'orderedList';
   const numId = ListHelpers.getNewListId(editor);
   ListHelpers.generateNewListDefinition({ numId: Number(numId), listType, editor });
 
