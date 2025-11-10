@@ -51,6 +51,8 @@ describe('numberingPlugin', () => {
         abstracts: {},
       },
     },
+    on: vi.fn(),
+    off: vi.fn(),
   });
 
   const createTransaction = () => {
@@ -103,6 +105,42 @@ describe('numberingPlugin', () => {
     expect(numberingManager.setStartSettings).toHaveBeenCalledWith('12', 0, 3);
     expect(numberingManager.setStartSettings).toHaveBeenCalledWith('12', 1, 2);
     expect(numberingManager.setStartSettings).toHaveBeenCalledWith('20', 0, 1);
+  });
+
+  it('refreshes start settings when list definitions change', () => {
+    ListHelpers.getAllListDefinitions.mockReturnValueOnce({});
+    ListHelpers.getAllListDefinitions.mockReturnValueOnce({
+      42: {
+        0: { start: '5' },
+      },
+    });
+
+    const editor = createEditor();
+    createNumberingPlugin(editor);
+    const listChangeHandler = editor.on.mock.calls.find(([event]) => event === 'list-definitions-change')[1];
+
+    expect(typeof listChangeHandler).toBe('function');
+    numberingManager.setStartSettings.mockClear();
+
+    listChangeHandler();
+
+    expect(numberingManager.setStartSettings).toHaveBeenCalledWith('42', 0, 5);
+  });
+
+  it('unsubscribes the list definition listener on destroy', () => {
+    const editor = createEditor();
+    createNumberingPlugin(editor);
+
+    const listChangeHandler = editor.on.mock.calls.find(([event]) => event === 'list-definitions-change')[1];
+    const destroyHandler = editor.on.mock.calls.find(([event]) => event === 'destroy')[1];
+
+    expect(typeof listChangeHandler).toBe('function');
+    expect(typeof destroyHandler).toBe('function');
+
+    destroyHandler();
+
+    expect(editor.off).toHaveBeenCalledWith('list-definitions-change', listChangeHandler);
+    expect(editor.off).toHaveBeenCalledWith('destroy', destroyHandler);
   });
 
   it('updates list rendering data for ordered lists when the doc changes', () => {

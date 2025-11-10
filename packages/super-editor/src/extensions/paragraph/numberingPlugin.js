@@ -13,13 +13,37 @@ import { docxNumberingHelpers } from '@core/super-converter/v2/importer/listImpo
  */
 export function createNumberingPlugin(editor) {
   const numberingManager = NumberingManager();
-  const allListDefinitions = ListHelpers.getAllListDefinitions(editor);
-  Object.entries(allListDefinitions).forEach(([numId, levels]) => {
-    Object.entries(levels).forEach(([level, def]) => {
-      const start = parseInt(def.start) || 1;
-      numberingManager.setStartSettings(numId, parseInt(level), start);
+
+  // Helpers to initialize and refresh start settings from definitions
+  const applyStartSettingsFromDefinitions = (definitionsMap) => {
+    Object.entries(definitionsMap || {}).forEach(([numId, levels]) => {
+      Object.entries(levels || {}).forEach(([level, def]) => {
+        const start = parseInt(def?.start) || 1;
+        numberingManager.setStartSettings(numId, parseInt(level), start);
+      });
     });
-  });
+  };
+
+  // Callback to refresh start settings when definitions change
+  const refreshStartSettings = () => {
+    const definitions = ListHelpers.getAllListDefinitions(editor);
+    applyStartSettingsFromDefinitions(definitions);
+  };
+
+  // Initial setup
+  refreshStartSettings();
+
+  // Listen for definition changes
+  if (typeof editor?.on === 'function') {
+    editor.on('list-definitions-change', refreshStartSettings);
+    if (typeof editor?.off === 'function') {
+      const cleanupListDefinitionListener = () => {
+        editor.off('list-definitions-change', refreshStartSettings);
+        editor.off?.('destroy', cleanupListDefinitionListener);
+      };
+      editor.on('destroy', cleanupListDefinitionListener);
+    }
+  }
 
   return new Plugin({
     name: 'numberingPlugin',
