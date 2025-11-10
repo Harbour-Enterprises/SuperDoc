@@ -25,6 +25,7 @@ export const removeNumberingProperties =
       if (outdented) {
         tr.scrollIntoView();
       }
+      return outdented;
     } else {
       // Level 0: exit list
       updateNumberingProperties(null, paragraph, pos, editor, tr);

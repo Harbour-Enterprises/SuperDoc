@@ -111,7 +111,7 @@ describe('removeNumberingProperties', () => {
     expect(decreaseHandler).toHaveBeenCalledWith({ tr, state, editor, dispatch });
     expect(tr.scrollIntoView).toHaveBeenCalledTimes(1);
     expect(updateNumberingProperties).not.toHaveBeenCalled();
-    expect(dispatch).toHaveBeenCalledWith(tr);
+    expect(dispatch).not.toHaveBeenCalled();
   });
 
   it('exits the list when the paragraph is at level 0', () => {
