@@ -45,6 +45,19 @@ describe('mergeRelationshipElements', () => {
     expect(added.attributes.Id).toBe('rId2');
   });
 
+  it('preserves provided non-colliding Ids and increments for subsequent auto-assigned Ids within same merge call', () => {
+    const existing = [];
+    const toAdd = [
+      rel('rId1', 'http://schemas.../styles', 'styles.xml'), // keep rId1
+      rel('', 'http://schemas.../comments', 'comments.xml'), // should get rId2
+    ];
+    const merged = mergeRelationshipElements(existing, toAdd);
+    const styles = merged.find((r) => r.attributes.Target === 'styles.xml');
+    const comments = merged.find((r) => r.attributes.Target === 'comments.xml');
+    expect(styles.attributes.Id).toBe('rId1');
+    expect(comments.attributes.Id).toBe('rId2');
+  });
+
   it('allows hyperlinks with long IDs to have duplicate Targets', () => {
     const existing = [rel('rId1234567', HYPERLINK_RELATIONSHIP_TYPE, 'http://example.com')];
     const toAdd = [rel('rId9999999', HYPERLINK_RELATIONSHIP_TYPE, 'http://example.com')];
@@ -183,7 +196,8 @@ describe('mergeRelationshipElements', () => {
 
     expect(merged).toHaveLength(2);
     expect(merged[0].attributes.Id).toBe('rId1');
-    expect(merged[1].attributes.Id).toBe('rId1'); // largestId starts at 0, so first increment is 1
+    // Since rId1 is preserved and updates largestId to 1, the next auto-assigned ID is rId2
+    expect(merged[1].attributes.Id).toBe('rId2');
   });
 
   it('handles empty new relationships array', () => {
