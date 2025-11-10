@@ -367,7 +367,9 @@ export const Paragraph = OxmlNode.create({
       'Shift-Enter': () => {
         return this.editor.commands.first(({ commands }) => [
           () => commands.createParagraphNear(),
-          splitBlock({ attrsToRemoveOverride: ['paragraphProperties.numberingProperties', 'listRendering'] }),
+          splitBlock({
+            attrsToRemoveOverride: ['paragraphProperties.numberingProperties', 'listRendering', 'numberingProperties'],
+          }),
         ]);
       },
 

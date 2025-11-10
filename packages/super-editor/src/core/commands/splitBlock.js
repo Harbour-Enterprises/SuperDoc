@@ -28,10 +28,12 @@ export const splitBlock =
     const { $from, $to } = selection;
 
     const extensionAttrs = editor.extensionService.attributes;
-    const newAttrs = Attribute.getSplittedAttributes(extensionAttrs, $from.node().type.name, $from.node().attrs);
+    let newAttrs = Attribute.getSplittedAttributes(extensionAttrs, $from.node().type.name, $from.node().attrs);
 
     // Remove any overridden attributes
-    if (attrsToRemoveOverride.length > 0) deleteAttributes(newAttrs, attrsToRemoveOverride);
+    if (attrsToRemoveOverride.length > 0) {
+      newAttrs = deleteAttributes(newAttrs, attrsToRemoveOverride);
+    }
 
     if (selection instanceof NodeSelection && selection.node.isBlock) {
       if (!$from.parentOffset || !canSplit(doc, $from.pos)) return false;
