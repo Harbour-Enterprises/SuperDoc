@@ -13,32 +13,91 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
  */
 export const changeListLevel = (delta, editor, tr) => {
   const { state } = editor;
+  const { selection, doc: stateDoc } = state;
 
-  // Guard against non-paragraph nodes
-  const currentItem = findParentNode(isList)(state.selection);
-  if (!currentItem) return false;
+  const listItemsInSelection = [];
+  const seenPositions = new Set();
+  const doc = stateDoc ?? selection?.$from?.node?.(0);
 
-  // Update the ilvl
-  const newLevel = (currentItem.node.attrs.numberingProperties.ilvl ?? 0) + delta;
+  const collectListItem = (node, pos) => {
+    if (isList(node) && !seenPositions.has(pos)) {
+      listItemsInSelection.push({ node, pos });
+      seenPositions.add(pos);
+    }
+  };
 
-  if (newLevel < 0) {
-    return true;
+  const addEdgeNode = ($pos) => {
+    if (!$pos) return;
+    const parentNode = $pos.parent;
+    const pos = typeof $pos.before === 'function' ? $pos.before() : null;
+    if (!parentNode || pos == null) return;
+    collectListItem(parentNode, pos);
+  };
+
+  const ranges =
+    selection?.ranges?.length && Array.isArray(selection.ranges)
+      ? selection.ranges
+      : selection?.$from && selection?.$to
+        ? [{ $from: selection.$from, $to: selection.$to }]
+        : [];
+
+  for (const range of ranges) {
+    if (!range?.$from || !range?.$to) continue;
+
+    if (doc?.nodesBetween) {
+      doc.nodesBetween(range.$from.pos, range.$to.pos, (node, pos) => collectListItem(node, pos));
+    }
+    addEdgeNode(range.$from);
+    addEdgeNode(range.$to);
   }
 
-  if (!ListHelpers.hasListDefinition(editor, currentItem.node.attrs.numberingProperties.numId, newLevel)) {
-    return false; // Prevent invalid levels
+  if (!listItemsInSelection.length && selection) {
+    const currentItem = findParentNode(isList)(selection);
+    if (!currentItem) return false;
+    listItemsInSelection.push({ node: currentItem.node, pos: currentItem.pos });
   }
 
-  updateNumberingProperties(
-    {
-      ...currentItem.node.attrs.numberingProperties,
-      ilvl: newLevel,
-    },
-    currentItem.node,
-    currentItem.pos,
-    editor,
-    tr,
-  );
+  const targets = [];
+  let encounteredNegativeLevel = false;
+
+  for (const item of listItemsInSelection) {
+    const numberingProperties =
+      item.node.attrs.numberingProperties ?? item.node.attrs.paragraphProperties?.numberingProperties;
+
+    if (!numberingProperties) continue;
+
+    const currentLevel = Number.parseInt(numberingProperties.ilvl ?? 0, 10);
+    const normalizedLevel = Number.isNaN(currentLevel) ? 0 : currentLevel;
+    const newLevel = normalizedLevel + delta;
+
+    if (newLevel < 0) {
+      encounteredNegativeLevel = true;
+      continue;
+    }
+
+    if (!ListHelpers.hasListDefinition(editor, numberingProperties.numId, newLevel)) {
+      return false; // Prevent invalid levels
+    }
+
+    targets.push({
+      node: item.node,
+      pos: item.pos,
+      numberingProperties: {
+        ...numberingProperties,
+        ilvl: newLevel,
+      },
+    });
+  }
+
+  if (!targets.length) {
+    return encounteredNegativeLevel ? true : false;
+  }
+
+  targets
+    .sort((a, b) => a.pos - b.pos)
+    .forEach(({ numberingProperties, node, pos }) => {
+      updateNumberingProperties(numberingProperties, node, pos, editor, tr);
+    });
 
   return true; // IMPORTANT: consume Tab so we don't indent paragraph text
 };
@@ -58,7 +117,8 @@ export function updateNumberingProperties(newNumberingProperties, paragraphNode,
     numberingProperties: newNumberingProperties ? { ...newNumberingProperties } : null,
   };
 
-  if (paragraphNode.attrs.styleId === 'ListParagraph') { // Word's default list paragraph style
+  if (paragraphNode.attrs.styleId === 'ListParagraph') {
+    // Word's default list paragraph style
     newProperties.styleId = null;
   }
 

@@ -428,11 +428,9 @@ export class SuperToolbar extends EventEmitter {
      */
     increaseTextIndent: ({ item, argument }) => {
       let command = item.command;
-      let { state } = this.activeEditor;
-      let listItem = findParentNode(isList)(state.selection);
 
-      if (listItem) {
-        return this.activeEditor.commands.increaseListIndent(listItem);
+      if (this.activeEditor.commands.increaseListIndent?.()) {
+        return true;
       }
 
       if (command in this.activeEditor.commands) {
@@ -449,11 +447,9 @@ export class SuperToolbar extends EventEmitter {
      */
     decreaseTextIndent: ({ item, argument }) => {
       let command = item.command;
-      let { state } = this.activeEditor;
-      let listItem = findParentNode(isList)(state.selection);
 
-      if (listItem) {
-        return this.activeEditor.commands.decreaseListIndent(listItem);
+      if (this.activeEditor.commands.decreaseListIndent?.()) {
+        return true;
       }
 
       if (command in this.activeEditor.commands) {

@@ -182,7 +182,7 @@ export class ParagraphNodeView {
   #calculateTabSeparatorStyle(justification, indent) {
     const markerWidth = this.marker.getBoundingClientRect().width;
     let tabStyle;
-    let paragraphContext = this.#getParagraphContext();
+    let { paragraphContext, start } = this.#getParagraphContext();
 
     if (justification === 'right') {
       if (indent?.hanging || (!indent?.hanging && !indent?.firstLine)) {
@@ -202,7 +202,7 @@ export class ParagraphNodeView {
     } else {
       paragraphContext.accumulatedTabWidth = markerWidth;
       const tabNode = this.editor.schema.nodes.tab.create(null);
-      tabStyle = calculateTabStyle(tabNode, this.editor.view, 1, this.node, paragraphContext);
+      tabStyle = calculateTabStyle(tabNode, this.editor.view, start, this.node, paragraphContext);
     }
     this.separator.style.cssText = tabStyle;
   }
@@ -296,9 +296,9 @@ export class ParagraphNodeView {
 
   #getParagraphContext() {
     const $pos = this.editor.state.doc.resolve(this.getPos());
-    const start = $pos.start();
+    const start = $pos.start($pos.depth + 1);
     const paragraphContext = extractParagraphContext(this.node, start, this.editor.helpers);
-    return paragraphContext;
+    return { paragraphContext, start };
   }
 
   /**
