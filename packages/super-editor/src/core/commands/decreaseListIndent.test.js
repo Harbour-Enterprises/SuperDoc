@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { findParentNode } from '../helpers/index.js';
 import { decreaseListIndent } from './decreaseListIndent.js';
+import * as changeListLevelModule from './changeListLevel.js';
 
 vi.mock('../helpers/list-numbering-helpers.js', () => {
   return {
@@ -84,5 +85,30 @@ describe('decreaseListIndent', () => {
       spacing: null,
       styleId: null,
     });
+  });
+
+  it('dispatches the transaction when changeListLevel succeeds', () => {
+    const dispatch = vi.fn();
+    const changeListSpy = vi.spyOn(changeListLevelModule, 'changeListLevel').mockReturnValue(true);
+
+    const result = decreaseListIndent()({ editor, tr, dispatch });
+
+    expect(result).toBe(true);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith(tr);
+
+    changeListSpy.mockRestore();
+  });
+
+  it('does not dispatch when changeListLevel fails', () => {
+    const dispatch = vi.fn();
+    const changeListSpy = vi.spyOn(changeListLevelModule, 'changeListLevel').mockReturnValue(false);
+
+    const result = decreaseListIndent()({ editor, tr, dispatch });
+
+    expect(result).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+
+    changeListSpy.mockRestore();
   });
 });

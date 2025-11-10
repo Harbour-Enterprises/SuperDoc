@@ -36,4 +36,25 @@ describe('increaseListIndent', () => {
 
     expect(result).toBe(false);
   });
+
+  it('dispatches the transaction when changeListLevel succeeds', () => {
+    changeListLevel.mockReturnValue(true);
+    const dispatch = vi.fn();
+
+    const result = increaseListIndent()({ editor, tr, dispatch });
+
+    expect(result).toBe(true);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledWith(tr);
+  });
+
+  it('does not dispatch when changeListLevel fails', () => {
+    changeListLevel.mockReturnValue(false);
+    const dispatch = vi.fn();
+
+    const result = increaseListIndent()({ editor, tr, dispatch });
+
+    expect(result).toBe(false);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
 });

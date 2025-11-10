@@ -6,6 +6,12 @@ import { changeListLevel } from './changeListLevel.js';
  */
 export const increaseListIndent =
   () =>
-  ({ editor, tr }) => {
-    return changeListLevel(1, editor, tr);
+  ({ editor, tr, dispatch }) => {
+    const handled = changeListLevel(1, editor, tr);
+
+    if (handled && dispatch) {
+      dispatch(tr);
+    }
+
+    return handled;
   };
