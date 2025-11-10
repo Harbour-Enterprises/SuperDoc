@@ -117,7 +117,21 @@ describe('ParagraphNodeView', () => {
 
   it('removes list elements when node is not a list during update', () => {
     isList.mockReturnValue(true);
-    const { nodeView } = mountNodeView();
+    const { nodeView } = mountNodeView({
+      attrs: {
+        paragraphProperties: {
+          numberingProperties: {
+            numId: 1,
+            ilvl: 0,
+          },
+        },
+        listRendering: {
+          suffix: 'space',
+          justification: 'left',
+          markerText: '1.',
+        },
+      },
+    });
     nodeView.marker = document.createElement('span');
     nodeView.separator = document.createElement('span');
     nodeView.dom.appendChild(nodeView.marker);
@@ -167,13 +181,13 @@ describe('ParagraphNodeView', () => {
 
   it('falls back to tab helper for center justification', () => {
     isList.mockReturnValue(true);
-    const attrs = {
+    const newAttrs = {
       ...createNode().attrs,
       listRendering: { suffix: 'tab', justification: 'center', markerText: '1.' },
     };
-    const { nodeView } = mountNodeView({ attrs });
+    const { nodeView } = mountNodeView({});
     nodeView.marker.getBoundingClientRect = vi.fn().mockReturnValue({ width: 40 });
-    nodeView.update(nodeView.node, []);
+    nodeView.update({ ...nodeView.node, attrs: newAttrs }, []);
 
     expect(calculateTabStyle).toHaveBeenCalled();
     expect(nodeView.separator.style.cssText).toContain('margin-left: 20');

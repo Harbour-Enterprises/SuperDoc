@@ -45,8 +45,14 @@ export class ParagraphNodeView {
    * @param {import('prosemirror-view').Decoration[]} decorations
    */
   update(node, decorations) {
+    const oldAttrs = this.node.attrs;
+    const newAttrs = node.attrs;
     this.node = node;
     this.decorations = decorations;
+
+    if (JSON.stringify(oldAttrs) === JSON.stringify(newAttrs)) {
+      return true;
+    }
 
     this.#updateHTMLAttributes();
 
