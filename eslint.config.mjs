@@ -28,6 +28,8 @@ export default [
       // Config files (CommonJS/different environments)
       '**/*.config.js',
       '**/commitlint.config.js',
+      // E2E tests
+      'e2e-tests/**',
     ],
   },
   {
@@ -88,10 +90,10 @@ export default [
         __APP_VERSION__: 'readonly',
         version: 'readonly',
         superdoc: 'readonly',
-      }
+      },
     },
     rules: {
-      'no-unused-vars': ['warn', { "varsIgnorePattern": "^_" }], // See warnings but don't block
+      'no-unused-vars': ['warn', { varsIgnorePattern: '^_' }], // See warnings but don't block
 
       // Relax these rules - they're more style than bugs
       'no-empty': ['warn', { allowEmptyCatch: true }], // Allow empty catch blocks
@@ -102,6 +104,6 @@ export default [
       // Keep as warnings to address gradually
       'no-unsafe-optional-chaining': 'warn', // Important but not critical
       'no-unused-private-class-members': 'warn', // Clean up when refactoring
-    }
+    },
   },
 ];
