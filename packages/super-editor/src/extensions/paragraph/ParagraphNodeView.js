@@ -196,19 +196,19 @@ export class ParagraphNodeView {
         tabStyle = `width: ${hanging}px;`;
       } else {
         const tabNode = this.editor.schema.nodes.tab.create(null);
-        tabStyle = calculateTabStyle(tabNode, this.editor.view, 1, this.node, paragraphContext);
+        tabStyle = calculateTabStyle(tabNode.nodeSize, this.editor.view, start, this.node, paragraphContext);
       }
     } else if (justification === 'center') {
       // Half the marker width takes up space in the paragraph
       paragraphContext.accumulatedTabWidth = markerWidth / 2;
       const tabNode = this.editor.schema.nodes.tab.create(null);
-      tabStyle = calculateTabStyle(tabNode, this.editor.view, 1, this.node, paragraphContext);
+      tabStyle = calculateTabStyle(tabNode.nodeSize, this.editor.view, start, this.node, paragraphContext);
       // Since the marker uses absolute position, we need to offset the tab by half the marker width
       tabStyle += `margin-left: ${markerWidth / 2}px;`;
     } else {
       paragraphContext.accumulatedTabWidth = markerWidth;
       const tabNode = this.editor.schema.nodes.tab.create(null);
-      tabStyle = calculateTabStyle(tabNode, this.editor.view, start, this.node, paragraphContext);
+      tabStyle = calculateTabStyle(tabNode.nodeSize, this.editor.view, start, this.node, paragraphContext);
     }
     this.separator.style.cssText = tabStyle;
   }
