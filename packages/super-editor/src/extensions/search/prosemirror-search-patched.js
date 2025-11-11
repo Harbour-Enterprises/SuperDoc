@@ -245,6 +245,7 @@ function validRegExp(source) {
   }
 }
 const TextContentCache = new WeakMap();
+const transparentInlineNodes = new Set(['run', 'bookmarkStart']);
 function textContent(node) {
   let cached = TextContentCache.get(node);
   if (cached) return cached;
@@ -253,18 +254,41 @@ function textContent(node) {
     let child = node.child(i);
     if (child.isText) content += child.text;
     else if (child.isLeaf) content += '\ufffc';
-    else if (child.type && child.type.name === 'run') content += textContent(child);
+    else if (child.type && transparentInlineNodes.has(child.type.name)) content += textContent(child);
     else content += ' ' + textContent(child) + ' ';
   }
   TextContentCache.set(node, content);
   return content;
 }
+/**
+ * Maps a text content index to a ProseMirror document position.
+ * Handles transparent inline nodes (like 'run', 'bookmarkStart') that don't
+ * contribute text boundaries, and block nodes that add space padding.
+ *
+ * @param {Node} node - The ProseMirror node to search within
+ * @param {number} start - The document position where this node starts
+ * @param {number} index - The index within the flattened text content (as returned by textContent())
+ * @returns {number} The corresponding document position
+ */
 function mapIndexToDocPos(node, start, index) {
   if (index <= 0) return start;
   const fullTextLength = textContent(node).length;
   if (index >= fullTextLength) return start + node.content.size;
   return mapIndexWithinNode(node, start, index);
 }
+/**
+ * Recursively maps a text content index to a document position by iterating through child nodes.
+ * This function handles different node types:
+ * - Text nodes: contribute their text length
+ * - Leaf nodes: contribute 1 character (represented as '\ufffc' in textContent)
+ * - Transparent inline nodes: contribute their inner text without boundary padding
+ * - Block nodes: contribute ' ' + innerText + ' ' (2 extra characters for boundaries)
+ *
+ * @param {Node} node - The ProseMirror node to search within
+ * @param {number} start - The document position where this node starts
+ * @param {number} index - The remaining index to map (relative to this node's text content)
+ * @returns {number} The corresponding document position
+ */
 function mapIndexWithinNode(node, start, index) {
   if (index <= 0) return start;
   let offset = start;
@@ -279,8 +303,12 @@ function mapIndexWithinNode(node, start, index) {
       continue;
     }
 
+    // Leaf nodes (e.g., images, hard breaks) contribute 1 character ('\ufffc') in textContent
     if (child.isLeaf) {
+      // If index points within this leaf node's contribution (0 or 1), return the position
+      // Math.min ensures we don't go past the node's size (defensive coding)
       if (index <= 1) return childStart + Math.min(index, 1);
+      // Otherwise, skip past this leaf node
       index -= 1;
       offset += child.nodeSize;
       continue;
@@ -289,30 +317,41 @@ function mapIndexWithinNode(node, start, index) {
     const isTransparentInline = child.inlineContent && child.type && transparentInlineNodes.has(child.type.name);
     const innerTextLength = textContent(child).length;
 
+    // Transparent inline nodes (e.g., 'run', 'bookmarkStart') contribute only their inner text
+    // without adding boundary spaces, making them invisible wrappers for search purposes
     if (isTransparentInline) {
+      // If index is within this transparent node's content, recurse into it
+      // childStart + 1 accounts for the node's opening position
       if (index <= innerTextLength) return mapIndexWithinNode(child, childStart + 1, index);
+      // Otherwise, skip past this transparent node's contribution
       index -= innerTextLength;
       offset += child.nodeSize;
       continue;
     }
 
+    // Block nodes contribute: ' ' (leading) + innerText + ' ' (trailing) = innerTextLength + 2
     const contribution = innerTextLength + 2;
+    // Subtract 1 to account for the leading space that precedes the block node's content
     const relativeIndex = index - 1;
 
+    // If index points to the leading space character, return position before the block node's content
     if (relativeIndex < 0) return childStart;
 
+    // If index is within the block node's inner text, recurse into the child
+    // childStart + 1 skips past the opening boundary of the block node
     if (relativeIndex <= innerTextLength) {
       return mapIndexWithinNode(child, childStart + 1, relativeIndex);
     }
 
+    // If index points to the trailing space (right after the block's inner content)
     if (relativeIndex === innerTextLength + 1) return childStart + child.nodeSize;
 
+    // Index is beyond this block node, subtract its full contribution and continue
     index -= contribution;
     offset += child.nodeSize;
   }
   return start + node.content.size;
 }
-const transparentInlineNodes = new Set(['run']);
 function scanTextblocks(node, from, to, f, nodeStart = 0) {
   const isTransparentInline = node.inlineContent && node.type && transparentInlineNodes.has(node.type.name);
   if (node.inlineContent && !isTransparentInline) {
