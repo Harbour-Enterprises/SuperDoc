@@ -417,11 +417,10 @@ const hasSomeParentWithClass = (element, classname) => {
 /**
  * @param {number | string} value Value (e.g. 5000 or "100%")
  * @param {"dxa" | "pct" | "nil" | "auto" | null} type Units: either "dxa" (or null/undefined) for absolute measurements in twips, "pct" for relative measurements (either as 1/50 of a percent, or as a percentage with a trailing "%"), "nil" (zero width, see 17.18.90 of ECMA-376-1:2016), or "auto" (
- * @param {number | (() => number)} containerSizePx The container's size (or a function returning the same), used for resolving relative values when `type` is "pct"
  *
- * @returns number | null
+ * @returns {string | null} CSS specification for size (e.g. `100%`, `25px`) or `null` if the type is `"auto"`
  */
-function convertToPixels(value, type, containerSizePx) {
+function convertSizeToCSS(value, type) {
   /**
    * NOTE: 17.4.87 of ECMA-376-1:2016 states:
    *     If the value of the type attribute and the actual measurement
@@ -445,10 +444,10 @@ function convertToPixels(value, type, containerSizePx) {
     case 'dxa':
     case null:
     case undefined:
-      return twipsToPixels(value);
+      return `${twipsToPixels(value)}px`;
 
     case 'nil':
-      return 0;
+      return '0';
 
     case 'auto':
       return null;
@@ -465,14 +464,7 @@ function convertToPixels(value, type, containerSizePx) {
         }
       }
 
-      containerSizePx = typeof containerSizePx === 'function' ? containerSizePx() : containerSizePx;
-      const pixels = percent * 0.01 * containerSizePx;
-      if (!isFinite(pixels) || pixels < 0) {
-        // TODO: confirm Word's behavior in cases of NaN or negative values. Currently we fall back on "auto" behavior.
-        return null;
-      }
-
-      return pixels;
+      return `${percent}%`;
 
     default:
       // TODO: confirm Word's behavior in cases of invalid `type`. Currently we fall back on "auto" behavior.
@@ -518,5 +510,5 @@ export {
   getTextIndentExportValue,
   polygonUnitsToPixels,
   pixelsToPolygonUnits,
-  convertToPixels,
+  convertSizeToCSS,
 };
