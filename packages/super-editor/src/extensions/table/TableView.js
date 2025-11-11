@@ -1,5 +1,4 @@
-import { getColStyleDeclaration } from './tableHelpers/getColStyleDeclaration.js';
-import { twipsToPixels, PIXELS_PER_INCH, convertToPixels } from '@core/super-converter/helpers.js';
+import { twipsToPixels, convertSizeToCSS } from '@core/super-converter/helpers.js';
 import { Attribute } from '@core/Attribute.js';
 
 /**
@@ -31,7 +30,7 @@ export const createTableView = ({ editor }) => {
       this.table = this.dom.appendChild(document.createElement('table'));
       this.colgroup = this.table.appendChild(document.createElement('colgroup'));
       updateTable(this.editor, this.node, this.table);
-      updateColumns(node, this.colgroup, this.table, cellMinWidth, this.editor);
+      updateColumns(node, this.colgroup, this.table, cellMinWidth);
       this.contentDOM = this.table.appendChild(document.createElement('tbody'));
 
       // use `setTimeout` to get cells.
@@ -47,7 +46,7 @@ export const createTableView = ({ editor }) => {
 
       this.node = node;
       updateTable(this.editor, node, this.table);
-      updateColumns(node, this.colgroup, this.table, this.cellMinWidth, this.editor);
+      updateColumns(node, this.colgroup, this.table, this.cellMinWidth);
       updateTableWrapper(this.dom, this.table);
 
       return true;
@@ -67,62 +66,17 @@ export const createTableView = ({ editor }) => {
 };
 
 /**
- * @param {HTMLElement} element
- * @param {import('@core/Editor.js').Editor} editor
- *
- * @return {Number | null}
- */
-function getAvailableWidth(element, editor) {
-  // TODO: should this actually use the pgSz / pgMar of the document rather than querying editor?
-
-  const pageBody = element.closest('.page__body');
-  const wrapper = element.parentElement;
-  let availableWidth = pageBody?.getBoundingClientRect?.().width;
-  if (!availableWidth && wrapper) {
-    availableWidth = wrapper.getBoundingClientRect().width;
-  }
-  if (typeof availableWidth === 'number' && !Number.isNaN(availableWidth)) {
-    availableWidth = Math.max(availableWidth - 2, 0);
-  } else {
-    availableWidth = null;
-  }
-
-  // TODO: is there a situation where editor?.converter?.pageStyles?.pageSize?.width is undefined/zero? If so, what's the correct value to use for (say) 100% width in a table?
-  const pageStyles = editor?.converter?.pageStyles;
-  if (pageStyles?.pageSize?.width) {
-    const toNumber = (v) => (typeof v === 'number' ? v : parseFloat(v) || 0);
-    const pageWidth = toNumber(pageStyles.pageSize.width);
-    const marginLeft = toNumber(pageStyles.pageMargins?.left);
-    const marginRight = toNumber(pageStyles.pageMargins?.right);
-    const pageAvailableWidthPx = Math.max((pageWidth - marginLeft - marginRight) * PIXELS_PER_INCH, 0);
-    if (pageAvailableWidthPx > 0) {
-      // TODO: Why not just use the pageAvailableWidthPx? In what situation do we want to reduce it based on availableWidth?
-      availableWidth = availableWidth ? Math.min(availableWidth, pageAvailableWidthPx) : pageAvailableWidthPx;
-    }
-  }
-
-  return availableWidth;
-}
-
-/**
  * @param {import('./table.js').TableNode} node
  * @param {HTMLTableColElement} colgroup
  * @param {HTMLTableElement} table
  * @param {number} cellMinWidth
- * @param {import('@core/Editor.js').Editor} editor
  */
-export function updateColumns(node, colgroup, table, cellMinWidth, editor) {
+export function updateColumns(node, colgroup, table, cellMinWidth) {
   const gridColumns =
     Array.isArray(node.attrs?.grid) && node.attrs.grid.length
       ? node.attrs.grid.map((col) => twipsToPixels(col.col))
       : null;
   const totalColumns = gridColumns?.length ?? null;
-
-  const tableWidth = convertToPixels(
-    node.attrs.tableProperties.tableWidth.value,
-    node.attrs.tableProperties.tableWidth.type,
-    () => getAvailableWidth(table, editor),
-  );
 
   const resolveColumnWidth = (colIndex, colwidthValue) => {
     if (colwidthValue != null) return colwidthValue;
@@ -131,12 +85,12 @@ export function updateColumns(node, colgroup, table, cellMinWidth, editor) {
   };
 
   const widths = [];
-  const row = node.firstChild;
+  const firstRow = node.firstChild;
   let colIndex = 0;
 
-  if (row !== null) {
-    for (let i = 0; i < row.childCount; i++) {
-      const child = row.child(i);
+  if (firstRow !== null) {
+    for (let i = 0; i < firstRow.childCount; i++) {
+      const child = firstRow.child(i);
       const { colspan, colwidth } = child.attrs;
       for (let span = 0; span < colspan; span += 1, colIndex += 1) {
         widths.push(resolveColumnWidth(colIndex, colwidth && colwidth[span]));
@@ -159,49 +113,44 @@ export function updateColumns(node, colgroup, table, cellMinWidth, editor) {
     return numericWidth;
   });
 
-  const rawTotalWidth = normalizedWidths.reduce((sum, width) => sum + (width != null ? width : cellMinWidth), 0);
+  const tableWidthCSS = convertSizeToCSS(
+    node.attrs.tableProperties.tableWidth.value,
+    node.attrs.tableProperties.tableWidth.type,
+  );
 
-  let scale = 1;
-  if (tableWidth && rawTotalWidth > 0 && rawTotalWidth > tableWidth) {
-    scale = tableWidth / rawTotalWidth;
-  }
-
-  let totalWidth = 0;
-  let hasUndefinedWidth = false;
-
-  let dom = colgroup.firstChild;
+  // TODO: there's no guarantee that all children of colgroup are <col> elements. (Note type errors below)
+  // Consider the simpler approach of deleting all children and repopulating; if that proves inefficient, then skip/delete any non-HTMLColElement children
+  let colElement = colgroup.firstChild;
   normalizedWidths.forEach((width) => {
-    let scaledWidth = width;
-    if (scaledWidth != null) {
-      scaledWidth = scaledWidth * scale;
-    }
-
-    const [propKey, propVal] = getColStyleDeclaration(cellMinWidth, scaledWidth);
-
-    if (scaledWidth == null) {
-      totalWidth += cellMinWidth;
-      hasUndefinedWidth = true;
-    } else {
-      totalWidth += scaledWidth;
-    }
-
-    if (!dom) {
-      const colElement = document.createElement('col');
-      colElement.style.setProperty(propKey, propVal);
+    if (!colElement) {
+      colElement = document.createElement('col');
       colgroup.appendChild(colElement);
-    } else {
-      dom.style.setProperty(propKey, propVal);
-      dom = dom.nextSibling;
     }
+
+    colElement.style.minWidth = `${cellMinWidth}px`;
+    colElement.style.width = width !== null && width !== undefined ? `${width}px` : null;
+    colElement = colElement.nextSibling;
   });
 
-  while (dom) {
-    const next = dom.nextSibling;
-    dom.parentNode?.removeChild(dom);
-    dom = next;
+  while (colElement) {
+    const next = colElement.nextSibling;
+    colElement.parentNode?.removeChild(colElement);
+    colElement = next;
   }
 
-  table.style.width = `${tableWidth}px`;
+  // 1. The table is offset to the left by the margin (internal padding) of the first cell
+  // 2. If the table width is relative, it's increased by the left margin of the first cell plus the right margin of the last cell in the first row
+  const firstRowFirstCellPaddingLeftPx = firstRow?.firstChild?.attrs?.cellMargins?.left ?? 0;
+  const firstRowLastCellPaddingRightPx = firstRow?.lastChild?.attrs?.cellMargins?.right ?? 0;
+
+  table.style.marginLeft = `${-firstRowFirstCellPaddingLeftPx}px`;
+
+  if (node.attrs.tableProperties.tableWidth.type === 'pct') {
+    const padding = firstRowFirstCellPaddingLeftPx + firstRowLastCellPaddingRightPx;
+    table.style.maxWidth = table.style.width = `calc(${tableWidthCSS} + ${padding}px)`;
+  } else {
+    table.style.maxWidth = table.style.width = tableWidthCSS;
+  }
 }
 
 function updateTable(editor, node, table) {
