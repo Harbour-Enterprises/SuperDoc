@@ -442,6 +442,7 @@ export const useCommentsStore = defineStore('comments', () => {
         isInternal: false,
         parentCommentId: comment.parentCommentId,
         creatorName,
+        createdTime: comment.createdTime,
         creatorEmail: comment.creatorEmail,
         importedAuthor: {
           name: importedName,
