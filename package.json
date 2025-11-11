@@ -70,5 +70,8 @@
     "typescript": "^5.7.3",
     "verdaccio": "^6.1.6",
     "vitest": "^3.0.8"
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.1.0"
   }
 }
