@@ -197,6 +197,13 @@ export function createSingleItemList({ li, rootNumId, level, listNumberingType }
 
   // Copy child nodes
   Array.from(li.childNodes).forEach((node) => {
+    if (node.tagName === 'P') {
+      // unwrap nested <p> inside <li>
+      Array.from(node.childNodes).forEach((childNode) => {
+        newItem.appendChild(childNode.cloneNode(true));
+      });
+      return;
+    }
     newItem.appendChild(node.cloneNode(true));
   });
 
