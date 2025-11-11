@@ -254,30 +254,29 @@ export class ParagraphNodeView {
       position: '',
     };
 
-    const calculateBottom = () => {
-      let bottom = '0';
-      const lineBreaks = this.contentDOM.querySelectorAll('br:not(.ProseMirror-trailingBreak)');
-      // If the dom element contains a line break, we need to adjust the marker position
-      if (lineBreaks.length > 0) {
-        const lineBreakHeight = lineBreaks[0].getBoundingClientRect().height;
-        const paragraphTop = this.dom.getBoundingClientRect().top;
-        const lineBreakTop = lineBreaks[0].getBoundingClientRect().top;
-        const offset = lineBreakTop - paragraphTop;
-        bottom = `${lineBreakHeight + offset}px`;
+    const calculateTop = () => {
+      let top = '0';
+      if (globalThis) {
+        const computedStyle = globalThis.getComputedStyle(this.dom);
+        const markerComputedStyle = globalThis.getComputedStyle(this.marker);
+        const lineHeight = parseFloat(computedStyle.lineHeight);
+        const markerLineHeight = parseFloat(markerComputedStyle.lineHeight);
+        top = `${lineHeight - markerLineHeight}px`;
       }
-      return bottom;
+      return top;
     };
 
-    const markerWidth = this.marker.getBoundingClientRect().width;
+    const rect = this.marker.getBoundingClientRect();
+    const markerWidth = rect.width;
     if (justification === 'right') {
       markerStyle.position = 'absolute';
       markerStyle.left = `${-markerWidth}px`;
-      markerStyle.bottom = calculateBottom();
+      markerStyle.top = calculateTop();
       domStyle.position = 'relative';
     } else if (justification === 'center') {
       markerStyle.position = 'absolute';
       markerStyle.left = `${-markerWidth / 2}px`;
-      markerStyle.bottom = calculateBottom();
+      markerStyle.top = calculateTop();
       domStyle.position = 'relative';
     }
     Object.entries(markerStyle).forEach(([k, v]) => {
