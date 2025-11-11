@@ -279,11 +279,32 @@ export const Paragraph = OxmlNode.create({
         tag: 'p',
         getAttrs: (node) => {
           const numberingProperties = {};
+          let indent, spacing;
           const { styleid: styleId, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
             if (attr.name === 'data-num-id') {
               numberingProperties.numId = parseInt(attr.value);
             } else if (attr.name === 'data-level') {
               numberingProperties.ilvl = parseInt(attr.value);
+            } else if (attr.name === 'data-indent') {
+              try {
+                indent = JSON.parse(attr.value);
+                // Ensure numeric values
+                Object.keys(indent).forEach((key) => {
+                  indent[key] = Number(indent[key]);
+                });
+              } catch {
+                // ignore invalid indent value
+              }
+            } else if (attr.name === 'data-spacing') {
+              try {
+                spacing = JSON.parse(attr.value);
+                // Ensure numeric values
+                Object.keys(spacing).forEach((key) => {
+                  spacing[key] = Number(spacing[key]);
+                });
+              } catch {
+                // ignore invalid spacing value
+              }
             } else {
               acc[attr.name] = attr.value;
             }
@@ -293,13 +314,15 @@ export const Paragraph = OxmlNode.create({
           if (Object.keys(numberingProperties).length > 0) {
             const resolvedParagraphProperties = resolveParagraphProperties(
               { docx: this.editor.converter.convertedXml, numbering: this.editor.converter.numbering },
-              { styleId, numberingProperties },
+              { styleId, numberingProperties, indent, spacing },
               false,
               true,
             );
             return {
               paragraphProperties: {
                 numberingProperties,
+                indent,
+                spacing,
                 styleId: styleId || null,
               },
               indent: resolvedParagraphProperties.indent,
@@ -312,6 +335,8 @@ export const Paragraph = OxmlNode.create({
 
           return {
             styleId: styleId || null,
+            indent,
+            spacing,
             extraAttrs,
           };
         },
