@@ -84,6 +84,16 @@ function eighthPointsToPixels(eighthPoints) {
   return pixels;
 }
 
+function pointsToTwips(points) {
+  if (points == null) return;
+  return points * 20;
+}
+
+function pointsToLines(points) {
+  if (points == null) return;
+  return twipsToLines(pointsToTwips(points));
+}
+
 function pixelsToEightPoints(pixels) {
   if (pixels == null) return;
   return Math.round(pixels * 6);
@@ -407,6 +417,7 @@ export {
   twipsToPixels,
   pixelsToTwips,
   pixelsToInches,
+  pointsToLines,
   inchesToPixels,
   twipsToLines,
   linesToTwips,
@@ -417,6 +428,7 @@ export {
   halfPointToPoints,
   eighthPointsToPixels,
   pixelsToEightPoints,
+  pointsToTwips,
   rotToDegrees,
   degreesToRot,
   objToPolygon,
