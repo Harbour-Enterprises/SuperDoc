@@ -113,7 +113,7 @@ export const changeListLevel = (delta, editor, tr) => {
  */
 export function updateNumberingProperties(newNumberingProperties, paragraphNode, pos, editor, tr) {
   const newProperties = {
-    ...paragraphNode.attrs.paragraphProperties,
+    ...(paragraphNode.attrs.paragraphProperties || {}),
     numberingProperties: newNumberingProperties ? { ...newNumberingProperties } : null,
   };
 
