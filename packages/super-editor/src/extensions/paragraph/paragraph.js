@@ -15,6 +15,7 @@ import { toggleList } from '@core/commands/index.js';
 import { restartNumbering } from '@core/commands/restartNumbering.js';
 import { ParagraphNodeView } from './ParagraphNodeView.js';
 import { createNumberingPlugin } from './numberingPlugin.js';
+import { shouldSkipNodeView } from '../../utils/headless-helpers.js';
 
 /**
  * Input rule regex that matches a bullet list marker (-, +, or *)
@@ -367,6 +368,7 @@ export const Paragraph = OxmlNode.create({
   },
 
   addNodeView() {
+    if (shouldSkipNodeView(this.editor)) return null;
     return ({ node, editor, getPos, decorations, extensionAttrs }) => {
       return new ParagraphNodeView(node, editor, getPos, decorations, extensionAttrs);
     };
