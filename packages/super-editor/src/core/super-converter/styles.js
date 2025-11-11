@@ -230,7 +230,7 @@ export function getStyleProperties(params, styleId, translator) {
   return { properties: result, isDefault: style?.attributes?.['w:default'] === '1', basedOn };
 }
 
-export function getNumberingProperties(params, ilvl, numId, translator) {
+export function getNumberingProperties(params, ilvl, numId, translator, tries = 0) {
   const { numbering: allDefinitions } = params;
   const { definitions, abstracts } = allDefinitions;
 
@@ -255,6 +255,17 @@ export function getNumberingProperties(params, ilvl, numId, translator) {
 
   const listDefinitionForThisNumId = abstracts[abstractNumId];
   if (!listDefinitionForThisNumId) return {};
+
+  // Handle numStyleLink if present
+  const numStyleLink = listDefinitionForThisNumId.elements?.find((item) => item.name === 'w:numStyleLink');
+  const styleId = numStyleLink?.attributes?.['w:val'];
+
+  if (styleId && tries < 1) {
+    const { properties: styleProps } = getStyleProperties(params, styleId, w_pPrTranslator);
+    if (styleProps?.numberingProperties?.numId) {
+      return getNumberingProperties(params, ilvl, styleProps.numberingProperties.numId, translator, tries + 1);
+    }
+  }
 
   // Find the level definition within the abstractNum
 
