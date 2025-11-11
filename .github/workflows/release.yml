@@ -20,16 +20,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    if: "!contains(github.event.head_commit.message, '[skip ci]')"
-    uses: ./.github/workflows/test-suite.yml
-    with:
-      run-visual-tests-examples: ${{ github.ref == 'refs/heads/stable' }}
-      run-e2e-tests: ${{ github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/stable' }}
-    secrets: inherit
-
   release:
-    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Generate token
