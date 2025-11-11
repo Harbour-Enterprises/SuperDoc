@@ -1,17 +1,17 @@
-import plusIconSvg from '@harbour-enterprises/common/icons/plus-solid.svg?raw';
-import trashIconSvg from '@harbour-enterprises/common/icons/trash-can-solid.svg?raw';
-import wrenchIconSvg from '@harbour-enterprises/common/icons/wrench-solid.svg?raw';
-import borderNoneIconSvg from '@harbour-enterprises/common/icons/border-none-solid.svg?raw';
-import arrowsLeftRightIconSvg from '@harbour-enterprises/common/icons/arrows-left-right-solid.svg?raw';
-import arrowsToDotIconSvg from '@harbour-enterprises/common/icons/arrows-to-dot-solid.svg?raw';
-import magicWandIcon from '@harbour-enterprises/common/icons/magic-wand-solid.svg?raw';
-import linkIconSvg from '@harbour-enterprises/common/icons/link-solid.svg?raw';
-import tableIconSvg from '@harbour-enterprises/common/icons/table-solid.svg?raw';
-import scissorsIconSvg from '@harbour-enterprises/common/icons/scissors-solid.svg?raw';
-import copyIconSvg from '@harbour-enterprises/common/icons/copy-solid.svg?raw';
-import pasteIconSvg from '@harbour-enterprises/common/icons/paste-solid.svg?raw';
-import checkIconSvg from '@harbour-enterprises/common/icons/check-solid.svg?raw';
-import xMarkIconSvg from '@harbour-enterprises/common/icons/xmark-solid.svg?raw';
+import plusIconSvg from '@superdoc/common/icons/plus-solid.svg?raw';
+import trashIconSvg from '@superdoc/common/icons/trash-can-solid.svg?raw';
+import wrenchIconSvg from '@superdoc/common/icons/wrench-solid.svg?raw';
+import borderNoneIconSvg from '@superdoc/common/icons/border-none-solid.svg?raw';
+import arrowsLeftRightIconSvg from '@superdoc/common/icons/arrows-left-right-solid.svg?raw';
+import arrowsToDotIconSvg from '@superdoc/common/icons/arrows-to-dot-solid.svg?raw';
+import magicWandIcon from '@superdoc/common/icons/magic-wand-solid.svg?raw';
+import linkIconSvg from '@superdoc/common/icons/link-solid.svg?raw';
+import tableIconSvg from '@superdoc/common/icons/table-solid.svg?raw';
+import scissorsIconSvg from '@superdoc/common/icons/scissors-solid.svg?raw';
+import copyIconSvg from '@superdoc/common/icons/copy-solid.svg?raw';
+import pasteIconSvg from '@superdoc/common/icons/paste-solid.svg?raw';
+import checkIconSvg from '@superdoc/common/icons/check-solid.svg?raw';
+import xMarkIconSvg from '@superdoc/common/icons/xmark-solid.svg?raw';
 
 export const ICONS = {
   addRowBefore: plusIconSvg,

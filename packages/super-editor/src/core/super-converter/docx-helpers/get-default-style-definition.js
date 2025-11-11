@@ -1,6 +1,6 @@
 import { parseMarks } from '@converter/v2/importer/index.js';
 import { twipsToLines, twipsToPixels } from '@converter/helpers.js';
-import { kebabCase } from '@harbour-enterprises/common';
+import { kebabCase } from '@superdoc/common';
 
 /**
  * Gets the default style definition.

@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { DOCX, PDF } from '@harbour-enterprises/common';
+import { DOCX, PDF } from '@superdoc/common';
 
-const shuffleArrayMock = vi.fn((arr) => [...arr].reverse());
-
-vi.mock('@harbour-enterprises/common/collaboration/awareness.js', () => ({
-  shuffleArray: shuffleArrayMock,
+// Mock must be defined before imports that use it
+vi.mock('@superdoc/common/collaboration/awareness', () => ({
+  shuffleArray: vi.fn((arr) => [...arr].reverse()),
 }));
+
+// Import the mocked module to access the mock
+import { shuffleArray as shuffleArrayMock } from '@superdoc/common/collaboration/awareness';
 
 const uuidMock = vi.fn(() => 'uuid-1234');
 vi.mock('uuid', () => ({

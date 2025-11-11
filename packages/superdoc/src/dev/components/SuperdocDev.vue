@@ -1,13 +1,14 @@
 <script setup>
-import '@harbour-enterprises/common/styles/common-styles.css';
+import '@superdoc/common/styles/common-styles.css';
 import { nextTick, onMounted, provide, ref, shallowRef } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
-import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
-import { BasicUpload, getFileObject } from '@harbour-enterprises/common';
+import { DOCX, PDF, HTML } from '@superdoc/common';
+import { getFileObject } from '@superdoc/common';
+import BasicUpload from '@superdoc/common/components/BasicUpload.vue';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
 import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
 import { getWorkerSrcFromCDN } from '../../components/PdfViewer/pdf/pdf-adapter.js';
@@ -116,6 +117,8 @@ const init = async () => {
   if (currentFile.value.htmlContent) {
     documentConfig.html = currentFile.value.htmlContent;
   }
+
+  let testDocumentId = 'doc_id';
 
   const config = {
     superdocId: 'superdoc-dev',

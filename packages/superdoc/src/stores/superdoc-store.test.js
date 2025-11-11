@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import { useSuperdocStore } from './superdoc-store.js';
-import { DOCX, PDF } from '@harbour-enterprises/common';
+import { DOCX, PDF } from '@superdoc/common';
 
 // Mock getFileObject while keeping the rest of the module's exports intact
-vi.mock('@harbour-enterprises/common', async (importOriginal) => {
+vi.mock('@superdoc/common', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,

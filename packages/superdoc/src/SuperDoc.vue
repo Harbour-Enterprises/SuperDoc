@@ -1,5 +1,5 @@
 <script setup>
-import '@harbour-enterprises/common/styles/common-styles.css';
+import '@superdoc/common/styles/common-styles.css';
 import '@harbour-enterprises/super-editor/style.css';
 
 import { superdocIcons } from './icons.js';
@@ -27,7 +27,7 @@ import useSelection from '@superdoc/helpers/use-selection';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 
-import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
+import { DOCX, PDF, HTML } from '@superdoc/common';
 import { SuperEditor, AIWriter } from '@harbour-enterprises/super-editor';
 import HtmlViewer from './components/HtmlViewer/HtmlViewer.vue';
 import useComment from './components/CommentsLayer/use-comment';

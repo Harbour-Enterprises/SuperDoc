@@ -284,4 +284,170 @@ describe('collaboration extension', () => {
     expect(editor.exportDocx).toHaveBeenCalled();
     expect(data).toBeInstanceOf(Uint8Array);
   });
+
+  describe('image persistence in collaboration', () => {
+    it('persists images in Y.js media map when addImageToCollaboration is called', () => {
+      const ydoc = createYDocStub();
+      const editorState = { doc: {} };
+      const provider = { synced: true, on: vi.fn(), off: vi.fn() };
+      const editor = {
+        options: {
+          isHeadless: false,
+          ydoc,
+          collaborationProvider: provider,
+        },
+        storage: { image: { media: {} } },
+        emit: vi.fn(),
+        view: { state: editorState, dispatch: vi.fn() },
+      };
+
+      const context = { editor, options: {} };
+      Collaboration.config.addPmPlugins.call(context);
+
+      // Get the addImageToCollaboration command
+      const commands = Collaboration.config.addCommands.call(context);
+      const addImageCommand = commands.addImageToCollaboration({
+        mediaPath: 'word/media/test-image.png',
+        fileData: 'base64-encoded-image-data',
+      });
+
+      // Execute the command
+      addImageCommand();
+
+      // Verify the image was added to the Y.js media map
+      expect(ydoc._maps.media.set).toHaveBeenCalledWith('word/media/test-image.png', 'base64-encoded-image-data');
+    });
+
+    it('restores images from Y.js media map on reopening document (simulating close/reopen)', () => {
+      // Simulate a document that was closed and reopened
+      const ydoc = createYDocStub();
+
+      // Pre-populate the media map with an image (as if it was saved earlier)
+      ydoc._maps.media.store.set('word/media/existing-image.png', 'base64-existing-image');
+      ydoc._maps.media.get.mockImplementation((key) => ydoc._maps.media.store.get(key));
+
+      const editorState = { doc: {} };
+      const provider = { synced: false, on: vi.fn(), off: vi.fn() };
+      const editor = {
+        options: {
+          isHeadless: false,
+          ydoc,
+          collaborationProvider: provider,
+        },
+        storage: { image: { media: {} } },
+        emit: vi.fn(),
+        view: { state: editorState, dispatch: vi.fn() },
+      };
+
+      const context = { editor, options: {} };
+
+      // Initialize the collaboration extension (simulating document open)
+      Collaboration.config.addPmPlugins.call(context);
+
+      // Trigger the media observer as if the Y.js map synced
+      const mediaObserver = ydoc._maps.media.observe.mock.calls[0][0];
+      mediaObserver({
+        changes: {
+          keys: new Map([['word/media/existing-image.png', {}]]),
+        },
+      });
+
+      // Verify the image was restored to editor storage
+      expect(editor.storage.image.media['word/media/existing-image.png']).toBe('base64-existing-image');
+    });
+
+    it('syncs images between collaborators (User A uploads, User B receives)', () => {
+      const sharedYdoc = createYDocStub();
+
+      // User A's editor
+      const editorA = {
+        options: {
+          isHeadless: false,
+          ydoc: sharedYdoc,
+          collaborationProvider: { synced: true, on: vi.fn(), off: vi.fn() },
+        },
+        storage: { image: { media: {} } },
+        emit: vi.fn(),
+        view: { state: { doc: {} }, dispatch: vi.fn() },
+      };
+
+      // User B's editor (same ydoc, simulating real-time collaboration)
+      const editorB = {
+        options: {
+          isHeadless: false,
+          ydoc: sharedYdoc,
+          collaborationProvider: { synced: true, on: vi.fn(), off: vi.fn() },
+        },
+        storage: { image: { media: {} } },
+        emit: vi.fn(),
+        view: { state: { doc: {} }, dispatch: vi.fn() },
+      };
+
+      const contextA = { editor: editorA, options: {} };
+      const contextB = { editor: editorB, options: {} };
+
+      // Initialize both editors
+      Collaboration.config.addPmPlugins.call(contextA);
+      Collaboration.config.addPmPlugins.call(contextB);
+
+      // User A uploads an image
+      const commandsA = Collaboration.config.addCommands.call(contextA);
+      const addImageCommandA = commandsA.addImageToCollaboration({
+        mediaPath: 'word/media/user-a-image.png',
+        fileData: 'base64-user-a-image',
+      });
+      addImageCommandA();
+
+      // Verify User A's image is in the shared media map
+      expect(sharedYdoc._maps.media.set).toHaveBeenCalledWith('word/media/user-a-image.png', 'base64-user-a-image');
+
+      // Simulate Y.js propagating the change to User B
+      sharedYdoc._maps.media.get.mockReturnValue('base64-user-a-image');
+      const mediaBObserver = sharedYdoc._maps.media.observe.mock.calls[1][0]; // User B's observer
+      mediaBObserver({
+        changes: {
+          keys: new Map([['word/media/user-a-image.png', {}]]),
+        },
+      });
+
+      // Verify User B received the image in their editor storage
+      expect(editorB.storage.image.media['word/media/user-a-image.png']).toBe('base64-user-a-image');
+    });
+
+    it('does not overwrite existing images in editor storage when syncing', () => {
+      const ydoc = createYDocStub();
+
+      const editor = {
+        options: {
+          isHeadless: false,
+          ydoc,
+          collaborationProvider: { synced: false, on: vi.fn(), off: vi.fn() },
+        },
+        storage: {
+          image: {
+            media: {
+              'word/media/local-image.png': 'base64-local-version',
+            },
+          },
+        },
+        emit: vi.fn(),
+        view: { state: { doc: {} }, dispatch: vi.fn() },
+      };
+
+      const context = { editor, options: {} };
+      Collaboration.config.addPmPlugins.call(context);
+
+      // Simulate Y.js trying to sync the same image
+      ydoc._maps.media.get.mockReturnValue('base64-synced-version');
+      const mediaObserver = ydoc._maps.media.observe.mock.calls[0][0];
+      mediaObserver({
+        changes: {
+          keys: new Map([['word/media/local-image.png', {}]]),
+        },
+      });
+
+      // Verify the local version was NOT overwritten (since it already exists)
+      expect(editor.storage.image.media['word/media/local-image.png']).toBe('base64-local-version');
+    });
+  });
 });

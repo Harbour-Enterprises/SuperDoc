@@ -22,7 +22,7 @@ var MockHocuspocusProvider;
 var websocketInstances = [];
 var hocuspocusInstances = [];
 
-vi.mock('@harbour-enterprises/common/collaboration/awareness.js', () => {
+vi.mock('@superdoc/common/collaboration/awareness', () => {
   awarenessStatesToArrayMock = vi.fn(() => [{ name: 'Remote User' }]);
   return { awarenessStatesToArray: awarenessStatesToArrayMock };
 });

@@ -13,8 +13,8 @@ import {
   AnnotatorHelpers,
   SectionHelpers,
 } from '@harbour-enterprises/super-editor';
-import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@harbour-enterprises/common';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@superdoc/common';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 
 export { SuperDoc } from './core/SuperDoc.js';
 export {

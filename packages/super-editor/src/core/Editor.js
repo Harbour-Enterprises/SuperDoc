@@ -40,6 +40,7 @@ import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { SuperValidator } from '@core/super-validator/index.js';
 import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js';
 import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
+import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 
 /**
  * @typedef {Object} FieldValue
@@ -331,7 +332,14 @@ export class Editor extends EventEmitter {
         options.element.classList.add('sd-super-editor-html');
       }
     }
-    options.element = options.isHeadless ? null : options.element || document.createElement('div');
+
+    if (options.isHeadless) {
+      options.element = null;
+      return;
+    }
+
+    options.element = options.element || document.createElement('div');
+    applyStyleIsolationClass(options.element);
   }
 
   /**

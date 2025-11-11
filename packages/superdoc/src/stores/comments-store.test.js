@@ -79,7 +79,7 @@ vi.mock('@harbour-enterprises/super-editor', () => ({
 
 import { useCommentsStore } from './comments-store.js';
 import { __mockSuperdoc } from './superdoc-store.js';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
 

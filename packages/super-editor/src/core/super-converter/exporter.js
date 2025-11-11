@@ -971,6 +971,9 @@ function translateMark(mark) {
       const translated = wHighlightTranslator.decode({ node: { attrs: { highlight: highlightValue } } });
       return translated || {};
     }
+    case 'strike':
+      if (attrs?.value === '0') markElement.attributes['w:val'] = attrs.value;
+      break;
 
     case 'link':
       return {};

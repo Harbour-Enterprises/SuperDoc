@@ -41,6 +41,15 @@ describe('translateImageNode', () => {
       },
       relationships: [],
       media: {},
+      converter: {
+        convertedXml: {
+          'word/_rels/document.xml.rels': {
+            elements: [{ name: 'Relationships', elements: [] }],
+          },
+        },
+        addedMedia: {},
+        media: {},
+      },
     };
     vi.clearAllMocks();
   });
@@ -62,6 +71,16 @@ describe('translateImageNode', () => {
 
   it('should reuse given rId if provided', () => {
     baseParams.node.attrs.rId = 'rId999';
+    baseParams.converter.convertedXml['word/_rels/document.xml.rels'].elements[0].elements.push({
+      type: 'element',
+      name: 'Relationship',
+      attributes: {
+        Id: 'rId999',
+        Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
+        Target: '',
+      },
+    });
+
     const result = translateImageNode(baseParams);
 
     const blip = result.elements
@@ -79,6 +98,13 @@ describe('translateImageNode', () => {
     expect(baseParams.relationships.length).toBe(1);
     expect(baseParams.relationships[0].attributes.Type).toContain('relationships/image');
     expect(result.elements).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'a:graphic' })]));
+  });
+
+  it('should generate a new relationship if rId is presented but relation is missing', () => {
+    baseParams.node.attrs.rId = 'rId123';
+    translateImageNode(baseParams);
+    expect(baseParams.relationships).toHaveLength(1);
+    expect(baseParams.relationships[0].attributes.Id).toBe('rId123');
   });
 
   it('should call prepareTextAnnotation for fieldAnnotation without type', () => {

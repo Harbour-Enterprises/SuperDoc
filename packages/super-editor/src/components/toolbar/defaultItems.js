@@ -12,7 +12,7 @@ import TableGrid from './TableGrid.vue';
 import TableActions from './TableActions.vue';
 import { scrollToElement } from './scroll-helpers.js';
 
-import checkIconSvg from '@harbour-enterprises/common/icons/check.svg?raw';
+import checkIconSvg from '@superdoc/common/icons/check.svg?raw';
 import SearchInput from './SearchInput.vue';
 import { TOOLBAR_FONTS, TOOLBAR_FONT_SIZES } from './constants.js';
 

@@ -1,0 +1,11 @@
+.sd-editor-scoped,
+.sd-editor-scoped :where(*),
+.sd-editor-scoped :where(*::before),
+.sd-editor-scoped :where(*::after) {
+  all: revert;
+  box-sizing: border-box;
+}
+
+.sd-editor-scoped {
+  display: block;
+}

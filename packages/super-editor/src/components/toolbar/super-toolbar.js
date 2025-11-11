@@ -3,7 +3,7 @@ import { createApp } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { makeDefaultItems } from './defaultItems';
 import { getActiveFormatting } from '@core/helpers/getActiveFormatting.js';
-import { vClickOutside } from '@harbour-enterprises/common';
+import { vClickOutside } from '@superdoc/common';
 import Toolbar from './Toolbar.vue';
 import {
   checkAndProcessImage,
