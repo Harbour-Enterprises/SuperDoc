@@ -11,6 +11,7 @@ import { parseSizeUnit, minMax } from '@core/utilities/index.js';
 import { NodeSelection, Selection } from 'prosemirror-state';
 import { generateDocxRandomId } from '../../core/helpers/index.js';
 import { commands as cleanupCommands } from './cleanup-commands/index.js';
+import { isHeadless } from '@/utils/headless-helpers.js';
 
 export const fieldAnnotationName = 'fieldAnnotation';
 export const annotationClass = 'annotation';
@@ -695,7 +696,8 @@ export const FieldAnnotation = Node.create({
           if (dispatch) {
             commands.updateFieldAnnotationsAttributes([annotation], attrs);
 
-            if (this.editor.options.pagination) {
+            // Don't force update pagination in headless mode
+            if (this.editor.options.pagination && !isHeadless(this.editor)) {
               setTimeout(() => {
                 const newTr = this.editor.view.state.tr;
                 newTr.setMeta('forceUpdatePagination', true);
