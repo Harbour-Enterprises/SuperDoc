@@ -56,61 +56,61 @@ jobs:
       - name: Run unit tests
         run: npm test
 
-  # run-e2e-tests:
-  #   runs-on: ubuntu-latest
-  #   container:
-  #     image: node:latest
+  run-e2e-tests:
+    runs-on: ubuntu-latest
+    container:
+      image: node:latest
 
-  #   steps:
-  #     - name: Checkout
-  #       uses: actions/checkout@v4
-  #       with:
-  #         path: superdoc
-  #         ref: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          path: superdoc
+          ref: ${{ github.event.pull_request.head.sha }}
 
-  #     - name: Build SuperDoc
-  #       run: |
-  #         cd superdoc && npm install && npm run pack
+      - name: Build SuperDoc
+        run: |
+          cd superdoc && npm install && npm run pack
         
-  #     - name: Install SuperDoc
-  #       run: cd superdoc/e2e-tests/templates/vue && npm install ../../../packages/superdoc/superdoc.tgz && npm install
+      - name: Install SuperDoc
+        run: cd superdoc/e2e-tests/templates/vue && npm install ../../../packages/superdoc/superdoc.tgz && npm install
 
-  #     - name: Cache Playwright browsers
-  #       uses: actions/cache@v4
-  #       id: playwright-cache
-  #       with:
-  #         path: ~/.cache/ms-playwright
-  #         key: ${{ runner.os }}-playwright-${{ hashFiles('superdoc/e2e-tests/package-lock.json') }}
-  #         restore-keys: |
-  #           ${{ runner.os }}-playwright-
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('superdoc/e2e-tests/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
 
-  #     - name: Install dependencies
-  #       run: |
-  #         npm config set cache ~/.npm
-  #         cd superdoc/e2e-tests && npm ci
+      - name: Install dependencies
+        run: |
+          npm config set cache ~/.npm
+          cd superdoc/e2e-tests && npm ci
 
-  #     - name: Install Playwright browsers
-  #       run: |
-  #         cd superdoc/e2e-tests
-  #         if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
-  #           npx playwright install --with-deps
-  #         else
-  #           npx playwright install-deps
-  #         fi
+      - name: Install Playwright browsers
+        run: |
+          cd superdoc/e2e-tests
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            npx playwright install --with-deps
+          else
+            npx playwright install-deps
+          fi
 
-  #     - name: Run e2e tests
-  #       id: run-e2e-tests
-  #       if: always()
-  #       run: cd superdoc/e2e-tests && npm test 
+      - name: Run e2e tests
+        id: run-e2e-tests
+        if: always()
+        run: cd superdoc/e2e-tests && npm test 
   
-  #     - name: Upload e2e test results
-  #       id: upload_artifact
-  #       if: always() && steps.run-e2e-tests.outcome == 'failure'
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: e2e-tests
-  #         path: superdoc/e2e-tests/test-results
-  #         retention-days: 15
+      - name: Upload e2e test results
+        id: upload_artifact
+        if: always() && steps.run-e2e-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-tests
+          path: superdoc/e2e-tests/test-results
+          retention-days: 15
 
   run-examples-visual-tests:
     runs-on: ubuntu-latest
