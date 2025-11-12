@@ -36,14 +36,11 @@ describe('ShapeGroup Schema Test', () => {
     expect(doc).toBeDefined();
     expect(doc.type.name).toBe('doc');
 
-    console.log('Document JSON:', JSON.stringify(doc.toJSON(), null, 2));
-
     // Check if shapeGroup is in the document
     let foundShapeGroup = false;
     doc.descendants((node) => {
       if (node.type.name === 'shapeGroup') {
         foundShapeGroup = true;
-        console.log('Found shapeGroup node:', node.toJSON());
       }
     });
 
@@ -78,14 +75,11 @@ describe('ShapeGroup Schema Test', () => {
     const doc = editor.state.doc;
     expect(doc).toBeDefined();
 
-    console.log('Direct paragraph test - Document JSON:', JSON.stringify(doc.toJSON(), null, 2));
-
     // Check if shapeGroup is in the document
     let foundShapeGroup = false;
     doc.descendants((node) => {
       if (node.type.name === 'shapeGroup') {
         foundShapeGroup = true;
-        console.log('Found shapeGroup node in paragraph:', node.toJSON());
       }
     });
 
@@ -139,19 +133,15 @@ describe('ShapeGroup Schema Test', () => {
     // Try to check the document for validation errors
     try {
       doc.check();
-      console.log('Document passed validation check');
     } catch (error) {
       console.error('Document validation error:', error.message);
     }
-
-    console.log('Document JSON:', JSON.stringify(doc.toJSON(), null, 2));
 
     // Check if image is in the document
     let foundImage = false;
     doc.descendants((node) => {
       if (node.type.name === 'image') {
         foundImage = true;
-        console.log('Found image node:', node.toJSON());
       }
     });
 
@@ -178,14 +168,11 @@ describe('ShapeGroup Schema Test', () => {
     const doc = editor.state.doc;
     expect(doc).toBeDefined();
 
-    console.log('Minimal attrs test - Document JSON:', JSON.stringify(doc.toJSON(), null, 2));
-
     // Check if shapeGroup is in the document
     let foundShapeGroup = false;
     doc.descendants((node) => {
       if (node.type.name === 'shapeGroup') {
         foundShapeGroup = true;
-        console.log('Found shapeGroup node with minimal attrs:', node.toJSON());
       }
     });
 
@@ -221,14 +208,11 @@ describe('ShapeGroup Schema Test', () => {
     const doc = editor.state.doc;
     expect(doc).toBeDefined();
 
-    console.log('Explicit content test - Document JSON:', JSON.stringify(doc.toJSON(), null, 2));
-
     // Check if shapeGroup is in the document
     let foundShapeGroup = false;
     doc.descendants((node) => {
       if (node.type.name === 'shapeGroup') {
         foundShapeGroup = true;
-        console.log('Found shapeGroup node with explicit content:', node.toJSON());
       }
     });
 
@@ -249,13 +233,11 @@ describe('ShapeGroup Schema Test', () => {
         drawingContent: null,
       });
 
-      console.log('Created shapeGroup node directly:', shapeGroupNode.toJSON());
       expect(shapeGroupNode).toBeDefined();
       expect(shapeGroupNode.type.name).toBe('shapeGroup');
 
       // Now try to create a paragraph containing it
       const paragraphNode = editor.schema.nodes.paragraph.create(null, [shapeGroupNode]);
-      console.log('Created paragraph with shapeGroup:', paragraphNode.toJSON());
       expect(paragraphNode.childCount).toBe(1);
     } catch (error) {
       console.error('Error creating shapeGroup node:', error.message);
@@ -267,7 +249,6 @@ describe('ShapeGroup Schema Test', () => {
     const { editor } = initTestEditor({});
 
     expect(editor.schema.nodes.shapeGroup).toBeDefined();
-    console.log('ShapeGroup spec:', editor.schema.nodes.shapeGroup.spec);
   });
 
   it('should render shapeGroup with SVG elements in DOM', () => {

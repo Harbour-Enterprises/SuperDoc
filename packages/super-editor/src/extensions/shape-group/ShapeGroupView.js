@@ -88,7 +88,7 @@ export class ShapeGroupView {
     return { element: container };
   }
 
-  createShapeElement(shape, groupTransform) {
+  createShapeElement(shape) {
     const attrs = shape.attrs;
     if (!attrs) return null;
 
