@@ -431,7 +431,12 @@ export const Table = Node.create({
        * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
        */
       tableProperties: {
-        default: null,
+        default: {
+          tableWidth: {
+            value: null,
+            type: 'auto',
+          },
+        },
         rendered: false,
       },
 
