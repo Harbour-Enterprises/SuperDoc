@@ -85,12 +85,12 @@ const encode = (params, encodedAttrs) => {
   }
   // Table borders can be specified in tblPr or inside a referenced style tag
   const borderProps = _processTableBorders(encodedAttrs.tableProperties.borders || {});
-  const referencedStyles = _getReferencedTableStyles(encodedAttrs.tableStyleId, params);
+  const referencedStyles = _getReferencedTableStyles(encodedAttrs.tableStyleId, params) || {};
 
-  const rowBorders = { ...referencedStyles?.rowBorders, ...borderProps.rowBorders };
-  encodedAttrs.borders = { ...referencedStyles?.borders, ...borderProps.borders };
+  const rowBorders = { ...referencedStyles.rowBorders, ...borderProps.rowBorders };
+  encodedAttrs.borders = { ...referencedStyles.borders, ...borderProps.borders };
   encodedAttrs.tableProperties.cellMargins = referencedStyles.cellMargins = {
-    ...referencedStyles?.cellMargins,
+    ...referencedStyles.cellMargins,
     ...encodedAttrs.tableProperties.cellMargins,
   };
 
@@ -119,6 +119,7 @@ const encode = (params, encodedAttrs) => {
   rows.forEach((row, rowIndex) => {
     const result = trTranslator.encode({
       ...params,
+      path: [...(params.path || []), node],
       nodes: [row],
       extraParams: {
         row,
