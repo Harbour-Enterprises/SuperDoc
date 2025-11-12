@@ -127,8 +127,18 @@ export const Pagination = Extension.create({
 
           const syncMeta = tr.getMeta('y-sync$');
           const listSyncMeta = tr.getMeta('orderedListSync');
+          // For collaborative changes, map existing decorations and schedule a recalculation
           if ((syncMeta && syncMeta.isChangeOrigin) || listSyncMeta) {
-            return { ...oldState };
+            // If the document structure changed, we need to recalculate pagination
+            if (tr.docChanged && hasInitialized) {
+              shouldUpdate = true;
+              if (isDebugging) console.debug('🔄 COLLAB CHANGE - SCHEDULING PAGINATION UPDATE');
+            }
+            // Map decorations to new positions even if we don't recalculate immediately
+            return {
+              ...oldState,
+              decorations: oldState.decorations.map(tr.mapping, tr.doc),
+            };
           }
 
           // We need special handling for images / the image placeholder plugin

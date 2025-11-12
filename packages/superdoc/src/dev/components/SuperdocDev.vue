@@ -29,10 +29,28 @@ const commentsPanel = ref(null);
 const showCommentsPanel = ref(true);
 
 const urlParams = new URLSearchParams(window.location.search);
+const randomSuffix = crypto?.randomUUID?.slice(0, 5);
 const isInternal = urlParams.has('internal');
-const testUserEmail = urlParams.get('email') || 'user@superdoc.com';
-const testUserName = urlParams.get('name') || `SuperDoc ${Math.floor(1000 + Math.random() * 9000)}`;
+const testUserEmail = urlParams.get('email') || `guest-${randomSuffix}@example.com`
+const testUserName = urlParams.get('name') || `Guest ${randomSuffix}`;
 const userRole = urlParams.get('role') || 'editor';
+const USER_COLORS = ['#a11134', '#2a7e34', '#b29d11', '#2f4597', '#ab5b22'];
+const color = `${USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]}`;
+
+
+// Collaboration configuration - can be enabled via URL param or env var
+const collaborationEnabled = (() => {
+  if (urlParams.has('collab')) {
+    const value = urlParams.get('collab');
+    return value === 'true' || value === '1' || value === '';
+  }
+  return import.meta.env.VITE_COLLAB_ENABLED === 'true';
+})();
+
+const collabRoom = import.meta.env.VITE_COLLAB_ROOM || 'demo-rooms21';
+const documentId = import.meta.env.VITE_COLLAB_DOCUMENT_ID || 'document-21';
+const collabUrl = import.meta.env.VITE_COLLAB_URL || `ws://localhost:3000/v1/collaborate/${collabRoom}`;
+const collabApiKey = import.meta.env.VITE_COLLAB_API_KEY?.trim();
 
 const user = {
   name: testUserName,
@@ -54,6 +72,29 @@ const commentPermissionResolver = ({ permission, comment, defaultDecision, curre
   // Allow default behaviour for everything else
   return defaultDecision;
 };
+
+async function documentExists() {
+  if (!collaborationEnabled) {
+    return false;
+  }
+  
+  // Convert WebSocket URL to HTTP for status check
+  const httpUrl = collabUrl.replace('ws://', 'http://').replace('wss://', 'https://');
+  const statusUrl = `${httpUrl}/${documentId}/status`;
+  
+  try {
+    const headers = collabApiKey ? { Authorization: `Bearer ${collabApiKey}` } : undefined;
+    const response = await fetch(statusUrl, headers ? { headers } : undefined);
+    if (!response.ok) {
+      return false;
+    }
+    const body = await response.json();
+    return Boolean(body?.exists);
+  } catch (error) {
+    console.warn('Unable to query collaboration status endpoint, defaulting to seeding new document', error);
+    return false;
+  }
+}
 
 const handleNewFile = async (file) => {
   // Generate a file url
@@ -100,25 +141,33 @@ const readFileAsText = (file) => {
 };
 
 const init = async () => {
-  let testId = 'document-123';
-  // const testId = "document_6a9fb1e0725d46989bdbb3f9879e9e1b";
+  const exists = await documentExists();
+  const blankDoc = await getFileObject(BlankDOCX, 'Blank.docx', DOCX);
 
-  // Prepare document config with content if available
-  const documentConfig = {
+  // Prepare document config
+  // For collaboration: use shared document ID and check if it exists
+  // For standalone: use local file with generated ID
+  const documentConfig = collaborationEnabled ? {
+    id: documentId,
+    type: DOCX,
+    name: 'Collaboration Demo.docx',
+    data: blankDoc,  // Both users need the document structure
+    isNewFile: !exists,  // User 1 seeds fragment, User 2 syncs from it
+  } : {
+    id: `local-${Date.now()}`,
     data: currentFile.value,
-    id: testId,
     isNewFile: true,
   };
 
-  // Add markdown/HTML content if present
-  if (currentFile.value.markdownContent) {
-    documentConfig.markdown = currentFile.value.markdownContent;
+  // Add markdown/HTML content only when seeding a new document
+  if (!exists && currentFile.value) {
+    if (currentFile.value.markdownContent) {
+      documentConfig.markdown = currentFile.value.markdownContent;
+    }
+    if (currentFile.value.htmlContent) {
+      documentConfig.html = currentFile.value.htmlContent;
+    }
   }
-  if (currentFile.value.htmlContent) {
-    documentConfig.html = currentFile.value.htmlContent;
-  }
-
-  let testDocumentId = 'doc_id';
 
   const config = {
     superdocId: 'superdoc-dev',
@@ -310,7 +359,12 @@ const init = async () => {
       isCommentsListOpen.value = isRendered;
     },
   };
-
+  if (collaborationEnabled) {
+    config.modules.collaboration = {
+      url: collabUrl,
+      user: user
+    };
+  }
   superdoc.value = new SuperDoc(config);
   superdoc.value?.on('ready', () => {
     superdoc.value.addCommentsList(commentsPanel.value);
