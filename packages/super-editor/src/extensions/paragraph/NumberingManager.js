@@ -28,6 +28,21 @@ export function NumberingManager() {
 
   /*
    * {
+   *   "(ilvl)": {
+   *     "(pos)": count
+   *   }
+   */
+  let abstractCountersMap = {};
+
+  /*
+   * {
+   *   "(numId)": "(abstractId)"
+   * }
+   */
+  let abstractIdMap = {};
+
+  /*
+   * {
    * "(numId)": {
    *   "(ilvl)": {
    *     start: value,
@@ -86,7 +101,8 @@ export function NumberingManager() {
      * @param {number} pos
      * @param {number} value
      */
-    setCounter(numId, level, pos, value) {
+    setCounter(numId, level, pos, value, abstractId) {
+      // Update counters map
       if (!countersMap[numId]) {
         countersMap[numId] = {};
       }
@@ -94,6 +110,17 @@ export function NumberingManager() {
         countersMap[numId][level] = {};
       }
       countersMap[numId][level][pos] = value;
+
+      // Update abstract counters map
+      abstractIdMap[numId] = abstractId;
+      if (!abstractCountersMap[abstractId]) {
+        abstractCountersMap[abstractId] = {};
+      }
+      if (!abstractCountersMap[abstractId][level]) {
+        abstractCountersMap[abstractId][level] = {};
+      }
+      abstractCountersMap[abstractId][level][pos] = value;
+
       if (!cacheEnabled) {
         return;
       }
@@ -128,7 +155,8 @@ export function NumberingManager() {
      * @param {number} pos
      * @returns {number}
      */
-    calculateCounter(numId, level, pos) {
+    calculateCounter(numId, level, pos, abstractId) {
+      abstractIdMap[numId] = abstractId;
       const restartSetting = startsMap?.[numId]?.[level]?.restart;
       const startValue = startsMap?.[numId]?.[level]?.start ?? 1;
       const levelData = countersMap?.[numId]?.[level] || {};
@@ -164,9 +192,10 @@ export function NumberingManager() {
       }
 
       // Figure out what other levels have been used between my position and previous sibling
+      // This considers all levels lower than me that have the same abstractId
       const usedLevels = [];
       for (let lvl = 0; lvl < level; lvl++) {
-        const levelData = countersMap?.[numId]?.[lvl] || {};
+        const levelData = abstractCountersMap?.[abstractId]?.[lvl] || {};
         const hasUsed = Object.keys(levelData)
           .map((p) => parseInt(p))
           .some((p) => p > previousPos && p < pos);
@@ -195,7 +224,8 @@ export function NumberingManager() {
     },
     /**
      * Resolve the counter values for every ancestor level preceding the given
-     * position. Results are cached when cache mode is active.
+     * position. All numbering definitions that have the same abstract id
+     * are considered. Results are cached when cache mode is active.
      *
      * @param {string | number} numId
      * @param {number} level
@@ -207,9 +237,10 @@ export function NumberingManager() {
         return pathCache[numId][level][pos];
       }
       const path = [];
+      const abstractId = abstractIdMap[numId];
       for (let lvl = 0; lvl < level; lvl++) {
         const startCount = startsMap?.[numId]?.[lvl]?.start ?? 1;
-        const levelData = countersMap?.[numId]?.[lvl] || {};
+        const levelData = abstractCountersMap?.[abstractId]?.[lvl] || {};
 
         if (levelData == null) {
           path.push(startCount);
@@ -268,6 +299,8 @@ export function NumberingManager() {
       lastSeenMap = {};
       pathCache = {};
       countersMap = {};
+      abstractCountersMap = {};
+      abstractIdMap = {};
     },
     /**
      * Enable cache-aware logic (used during document scans) and drop stale data.

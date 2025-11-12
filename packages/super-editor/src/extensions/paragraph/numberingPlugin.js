@@ -88,11 +88,11 @@ export function createNumberingPlugin(editor) {
           return;
         }
 
-        let { lvlText, customFormat, listNumberingType, suffix, justification } = definitionDetails;
+        let { lvlText, customFormat, listNumberingType, suffix, justification, abstractId } = definitionDetails;
         // Defining the list marker
         let markerText = '';
-        const count = numberingManager.calculateCounter(numId, level, pos);
-        numberingManager.setCounter(numId, level, pos, count);
+        const count = numberingManager.calculateCounter(numId, level, pos, abstractId);
+        numberingManager.setCounter(numId, level, pos, count, abstractId);
         const path = numberingManager.calculatePath(numId, level, pos);
         if (listNumberingType !== 'bullet') {
           markerText = generateOrderedListIndex({
