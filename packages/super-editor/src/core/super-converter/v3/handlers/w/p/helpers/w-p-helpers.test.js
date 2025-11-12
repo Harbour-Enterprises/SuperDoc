@@ -282,6 +282,106 @@ describe('w-p-helpers', () => {
       const res = getParagraphSpacing(node, docx, '', [], { insideTable: true });
       expect(res).toBeUndefined();
     });
+
+    it('should set 1pt as minimum line height when lineRule is atLeast and default style is "Normal"', () => {
+      const docx = {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  type: 'element',
+                  name: 'w:style',
+                  attributes: {
+                    'w:type': 'paragraph',
+                    'w:default': '1',
+                    'w:styleId': 'Normal',
+                  },
+                  elements: [
+                    {
+                      type: 'element',
+                      name: 'w:name',
+                      attributes: {
+                        'w:val': 'Normal',
+                      },
+                    },
+                    {
+                      type: 'element',
+                      name: 'w:qFormat',
+                    },
+                    {
+                      type: 'element',
+                      name: 'w:pPr',
+                      elements: [
+                        {
+                          type: 'element',
+                          name: 'w:suppressAutoHyphens',
+                        },
+                        {
+                          type: 'element',
+                          name: 'w:spacing',
+                          attributes: {
+                            'w:line': '1',
+                            'w:lineRule': 'atLeast',
+                          },
+                        },
+                        {
+                          type: 'element',
+                          name: 'w:ind',
+                          attributes: {
+                            'w:leftChars': '-1',
+                            'w:left': '-1',
+                            'w:hangingChars': '1',
+                            'w:hanging': '1',
+                          },
+                        },
+                        {
+                          type: 'element',
+                          name: 'w:textDirection',
+                          attributes: {
+                            'w:val': 'btLr',
+                          },
+                        },
+                        {
+                          type: 'element',
+                          name: 'w:textAlignment',
+                          attributes: {
+                            'w:val': 'top',
+                          },
+                        },
+                        {
+                          type: 'element',
+                          name: 'w:outlineLvl',
+                          attributes: {
+                            'w:val': '0',
+                          },
+                        },
+                      ],
+                    },
+                    {
+                      type: 'element',
+                      name: 'w:rPr',
+                      elements: [
+                        {
+                          type: 'element',
+                          name: 'w:position',
+                          attributes: {
+                            'w:val': '-1',
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      };
+      const node = { elements: [{ name: 'w:pPr', elements: [] }] };
+      const res = getParagraphSpacing(node, docx, '');
+      expect(res.line).toBe(1);
+    });
   });
 
   describe('getDefaultParagraphStyle', () => {

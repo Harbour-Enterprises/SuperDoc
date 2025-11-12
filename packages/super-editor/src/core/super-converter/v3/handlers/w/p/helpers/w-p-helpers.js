@@ -137,8 +137,7 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = [], option
   if (lineRule === 'exact' && lineSpacing) {
     spacing.line = `${twipsToPt(lineSpacing)}pt`;
   }
-  if (lineRule === 'atLeast' || lineRule === 'exact') {
-    // Interpret w:line as a pt value
+  if (lineRule === 'atLeast') {
     const ptValue = twipsToPt(lineSpacing);
     // Prevent values less than 1pt to avoid squashed text
     spacing.line = Math.max(ptValue, 1);
