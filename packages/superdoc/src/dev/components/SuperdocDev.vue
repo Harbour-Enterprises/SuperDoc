@@ -29,7 +29,7 @@ const commentsPanel = ref(null);
 const showCommentsPanel = ref(true);
 
 const urlParams = new URLSearchParams(window.location.search);
-const randomSuffix = crypto?.randomUUID?.slice(0, 5);
+const randomSuffix = crypto?.randomUUID()?.slice(0, 5);
 const isInternal = urlParams.has('internal');
 const testUserEmail = urlParams.get('email') || `guest-${randomSuffix}@example.com`
 const testUserName = urlParams.get('name') || `Guest ${randomSuffix}`;
