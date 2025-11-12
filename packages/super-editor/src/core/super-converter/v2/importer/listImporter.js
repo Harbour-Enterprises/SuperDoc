@@ -1,4 +1,3 @@
-import { twipsToPixels } from '../../helpers.js';
 import { ensureNumberingCache, LEVELS_MAP_KEY } from './numberingCache.js';
 
 const getNumIdFromTag = (tag) => {

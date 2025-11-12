@@ -83,7 +83,7 @@ function findListToFlatten(doc) {
  * 2. Splitting multi-item lists into single-item lists
  * 3. Extracting nested lists and processing them recursively
  */
-function flattenFoundList(listElem, editor, NodeInterface) {
+function flattenFoundList(listElem, editor) {
   const localDoc = listElem.ownerDocument;
   const tag = listElem.tagName.toLowerCase();
 
@@ -139,7 +139,7 @@ function flattenFoundList(listElem, editor, NodeInterface) {
       if (details?.listNumberingType) {
         listNumberingType = details.listNumberingType;
       }
-    } catch (error) {
+    } catch {
       // ignore lookup failures; fallback will be used
     }
 
@@ -412,7 +412,7 @@ function parseListLevelAttribute(raw) {
   try {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed.map((value) => Number(value)) : null;
-  } catch (error) {
+  } catch {
     return null;
   }
 }

@@ -53,8 +53,8 @@ export class AIActions {
         findAll: async (instruction: string) => {
             return this.executeActionWithCallbacks(() => this.commands.findAll(instruction));
         },
-        highlight: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.commands.highlight(instruction));
+        highlight: async (instruction: string, color?: string) => {
+            return this.executeActionWithCallbacks(() => this.commands.highlight(instruction, color));
         },
         replace: async (instruction: string) => {
             return this.executeActionWithCallbacks(() => this.commands.replace(instruction));

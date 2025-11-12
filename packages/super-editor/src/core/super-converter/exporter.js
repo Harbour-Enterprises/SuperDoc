@@ -26,7 +26,7 @@ import {
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
 import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
-import { translateVectorShape } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
+import { translateVectorShape, translateShapeGroup } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
 import { translator as wTextTranslator } from '@converter/v3/handlers/w/t';
 import { combineRunProperties, decodeRPrFromMarks } from '@converter/styles.js';
 
@@ -230,6 +230,7 @@ export function exportSchemaToJson(params) {
     shapeTextbox: pictTranslator,
     contentBlock: pictTranslator,
     vectorShape: translateVectorShape,
+    shapeGroup: translateShapeGroup,
     structuredContent: wSdtNodeTranslator,
     structuredContentBlock: wSdtNodeTranslator,
     documentPartObject: wSdtNodeTranslator,
@@ -374,24 +375,6 @@ export function translateParagraphNode(params) {
   };
 
   return result;
-}
-
-/**
- * Normalize line height values
- * This function converts line height values from strings with percentage to a decimal value.
- * For example, "150%" becomes 1.5.
- * If the value is not a valid number, it returns null.
- * @param {string|number} value The line height value to normalize
- * @return {number|null} The normalized line height value or null if invalid
- */
-function normalizeLineHeight(value) {
-  if (typeof value === 'string' && value.trim().endsWith('%')) {
-    const parsed = parseFloat(value);
-    return Number.isFinite(parsed) ? parsed / 100 : null;
-  }
-
-  const parsed = parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : null;
 }
 
 /**

@@ -172,6 +172,7 @@ describe('numberingPlugin', () => {
       listNumberingType: 'decimal',
       suffix: '.',
       justification: 'left',
+      abstractId: 'abstract1',
     });
 
     const result = appendTransaction(transactions, {}, newState);
@@ -179,8 +180,8 @@ describe('numberingPlugin', () => {
     expect(numberingManager.enableCache).toHaveBeenCalled();
     expect(numberingManager.disableCache).toHaveBeenCalled();
     expect(tr.setMeta).toHaveBeenCalledWith('orderedListSync', true);
-    expect(numberingManager.calculateCounter).toHaveBeenCalledWith(1, 0, 5);
-    expect(numberingManager.setCounter).toHaveBeenCalledWith(1, 0, 5, 4);
+    expect(numberingManager.calculateCounter).toHaveBeenCalledWith(1, 0, 5, 'abstract1');
+    expect(numberingManager.setCounter).toHaveBeenCalledWith(1, 0, 5, 4, 'abstract1');
     expect(numberingManager.calculatePath).toHaveBeenCalledWith(1, 0, 5);
     expect(generateOrderedListIndex).toHaveBeenCalledWith({
       listLevel: [2, 4],

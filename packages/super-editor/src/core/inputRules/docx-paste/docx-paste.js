@@ -10,7 +10,7 @@ import {
   resolveStyles,
 } from '@helpers/pasteListHelpers.js';
 import { normalizeLvlTextChar } from '../../super-converter/v2/importer/listImporter.js';
-import { pointsToTwips, pointsToLines } from '@converter/helpers';
+import { pointsToTwips } from '@converter/helpers';
 
 /**
  * Main handler for pasted DOCX content.

@@ -25,7 +25,7 @@ export const splitRun = () => (props) => {
 };
 
 export function splitBlockPatch(state, dispatch) {
-  let { $from, $to } = state.selection;
+  let { $from } = state.selection;
   if (state.selection instanceof NodeSelection && state.selection.node.isBlock) {
     if (!$from.parentOffset || !canSplit(state.doc, $from.pos)) return false;
     if (dispatch) dispatch(state.tr.split($from.pos).scrollIntoView());

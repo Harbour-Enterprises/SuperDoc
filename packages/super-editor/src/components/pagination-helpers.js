@@ -1,3 +1,4 @@
+import { isHeadless } from '@/utils/headless-helpers.js';
 /**
  * Adjusts pagination breaks based on editor zoom/positioning
  *
@@ -6,7 +7,7 @@
  * @returns {void}
  */
 export function adjustPaginationBreaks(editorElem, editor) {
-  if (!editorElem.value || !editor?.value?.options?.scale) return;
+  if (!editorElem.value || !editor?.value?.options?.scale || isHeadless(editor)) return;
 
   const zoom = editor.value.options.scale;
   const bounds = editorElem.value.getBoundingClientRect();

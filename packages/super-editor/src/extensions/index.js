@@ -46,6 +46,7 @@ import {
 import { BlockNode } from './block-node/index.js';
 import { TableOfContents } from './table-of-contents/index.js';
 import { VectorShape } from './vector-shape/index.js';
+import { ShapeGroup } from './shape-group/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -185,6 +186,7 @@ const getStarterExtensions = () => {
     CustomSelection,
     TextTransform,
     VectorShape,
+    ShapeGroup,
   ];
 };
 
@@ -253,4 +255,5 @@ export {
   CustomSelection,
   TextTransform,
   VectorShape,
+  ShapeGroup,
 };
