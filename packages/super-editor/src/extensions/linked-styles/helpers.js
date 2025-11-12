@@ -53,7 +53,7 @@ export const getSpacingStyleString = (spacing, marks) => {
   let { before, after, line, lineRule, beforeAutospacing, afterAutospacing } = spacing;
   line = twipsToLines(line);
   if (lineRule === 'exact' && line) {
-    line = `${twipsToPt(line)}pt`;
+    line = String(line);
   }
 
   const textStyleMark = marks?.find((mark) => mark.type === 'textStyle');
