@@ -114,8 +114,9 @@ export function updateColumns(node, colgroup, table, cellMinWidth) {
   });
 
   const tableWidthCSS = convertSizeToCSS(
-    node.attrs.tableProperties.tableWidth.value,
-    node.attrs.tableProperties.tableWidth.type,
+    // TODO: why is tableWidth undefined in src/tests/import-export/font-default-styles.test.js?
+    node.attrs.tableProperties.tableWidth?.value ?? null,
+    node.attrs.tableProperties.tableWidth?.type ?? 'auto',
   );
 
   // TODO: there's no guarantee that all children of colgroup are <col> elements. (Note type errors below)
