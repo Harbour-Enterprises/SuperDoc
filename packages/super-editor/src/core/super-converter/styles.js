@@ -126,9 +126,15 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
 
   //  Chain for indentation properties
   let indentChain;
-  if (numberingDefinedInline) {
-    // If numbering is defined inline, then numberingProps should override styleProps for indentation
-    indentChain = [...defaultsChain, styleProps, numberingProps, inlineProps];
+  if (isList) {
+    if (numberingDefinedInline) {
+      // If numbering is defined inline, then numberingProps should override styleProps for indentation
+      indentChain = [...defaultsChain, styleProps, numberingProps, inlineProps];
+    } else {
+      // Otherwise, styleProps should override numberingProps for indentation but it should not follow the based-on chain
+      styleProps = resolveStyleChain(params, styleId, w_pPrTranslator, false);
+      indentChain = [...defaultsChain, numberingProps, styleProps, inlineProps];
+    }
   } else {
     // Otherwise, styleProps should override numberingProps for indentation
     indentChain = [...defaultsChain, numberingProps, styleProps, inlineProps];
@@ -160,7 +166,7 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
   return finalProps;
 }
 
-const resolveStyleChain = (params, styleId, translator) => {
+const resolveStyleChain = (params, styleId, translator, followBasedOnChain = true) => {
   let styleProps = {},
     basedOn = null;
   if (styleId && styleId !== 'Normal') {
@@ -170,7 +176,7 @@ const resolveStyleChain = (params, styleId, translator) => {
   let styleChain = [styleProps];
   const seenStyles = new Set();
   let nextBasedOn = basedOn;
-  while (nextBasedOn) {
+  while (followBasedOnChain && nextBasedOn) {
     if (seenStyles.has(basedOn)) {
       break;
     }
