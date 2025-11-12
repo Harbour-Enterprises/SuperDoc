@@ -33,7 +33,7 @@ import {
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
 import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
-import { translateVectorShape } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
+import { translateVectorShape, translateShapeGroup } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
 import { translator as wTextTranslator } from '@converter/v3/handlers/w/t';
 
 const RUN_LEVEL_WRAPPERS = new Set(['w:hyperlink', 'w:ins', 'w:del']);
@@ -238,6 +238,7 @@ export function exportSchemaToJson(params) {
     shapeTextbox: pictTranslator,
     contentBlock: pictTranslator,
     vectorShape: translateVectorShape,
+    shapeGroup: translateShapeGroup,
     structuredContent: wSdtNodeTranslator,
     structuredContentBlock: wSdtNodeTranslator,
     documentPartObject: wSdtNodeTranslator,
