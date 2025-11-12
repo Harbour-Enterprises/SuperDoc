@@ -283,7 +283,7 @@ describe('w-p-helpers', () => {
       expect(res).toBeUndefined();
     });
 
-    it('should set 1pt as minimum line height when lineRule is atLeast and default style is "Normal"', () => {
+    it('should set 1 as minimum line height when lineRule is atLeast and default style is "Normal"', () => {
       const docx = {
         'word/styles.xml': {
           elements: [
