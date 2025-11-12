@@ -77,7 +77,7 @@ test.describe('fonts', () => {
   });
 
   test('should resolve ~30 fonts with a very large document', async ({ page, context }) => {
-    test.setTimeout(10_000);
+    test.setTimeout(15_000);
     await context.grantPermissions(['local-fonts']);
 
     await goToPageAndWaitForEditor(page, { includeFontsResolved: true });

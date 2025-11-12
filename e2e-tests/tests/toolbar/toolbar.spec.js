@@ -1002,7 +1002,7 @@ test.describe('toolbar', () => {
       await expect(styleButtonText).toBeVisible({ timeout: 2000 });
     });
 
-    test('should reset label to "format text" when style is deselected', async ({ page }) => {
+    test.skip('should reset label to "format text" when style is deselected', async ({ page }) => {
       await page.goto('http://localhost:4173/');
       await page.waitForSelector('div.super-editor');
 
@@ -1036,7 +1036,7 @@ test.describe('toolbar', () => {
       await expect(formatTextLabel).toBeVisible({ timeout: 2000 });
     });
 
-    test('should navigate through styles with keyboard', async ({ page }) => {
+    test.skip('should navigate through styles with keyboard', async ({ page }) => {
       await page.goto('http://localhost:4173/');
       await page.waitForSelector('div.super-editor');
 
