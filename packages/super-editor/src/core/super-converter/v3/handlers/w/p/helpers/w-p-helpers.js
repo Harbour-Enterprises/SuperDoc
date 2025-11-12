@@ -129,18 +129,18 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = [], option
   // 2. Default style spacing
   // 3. Default paragraph spacing
   const lineSpacing = inLineSpacing?.['w:line'] || line || pDefaultSpacing?.['w:line'];
-  if (lineSpacing) spacing.line = twipsToLines(lineSpacing);
+  if (lineSpacing) {
+    spacing.line = twipsToLines(lineSpacing);
+    if (spacing.line < 1) {
+      spacing.line = 1;
+    }
+  }
 
   const lineRule = inLineSpacing?.['w:lineRule'] || lineRuleStyle || pDefaultSpacing?.['w:lineRule'];
   if (lineRule) spacing.lineRule = lineRule;
 
   if (lineRule === 'exact' && lineSpacing) {
     spacing.line = `${twipsToPt(lineSpacing)}pt`;
-  }
-  if (lineRule === 'atLeast') {
-    const ptValue = twipsToPt(lineSpacing);
-    // Prevent values less than 1 to avoid squashed text
-    spacing.line = Math.max(ptValue, 1);
   }
 
   const beforeSpacing = inLineSpacing?.['w:before'] || lineSpaceBefore || pDefaultSpacing?.['w:before'];
