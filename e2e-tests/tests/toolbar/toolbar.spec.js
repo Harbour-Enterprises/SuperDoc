@@ -1055,18 +1055,18 @@ test.describe('toolbar', () => {
       await styleButton.click();
 
       // Verify dropdown is open and first item is focused
-      const firstStyle = page.locator('div[aria-label="Linked style - Normal"]');
+      const firstStyle = page.locator('div[aria-label="Linked style - Heading1"]');
       await expect(firstStyle).toBeVisible();
       await expect(firstStyle).toBeFocused({ timeout: 1000 });
 
-      // Navigate down with arrow key
+      // Navigate down again
       await page.keyboard.press('ArrowDown');
-      const secondStyle = page.locator('div[aria-label="Linked style - Heading1"]');
+      const secondStyle = page.locator('div[aria-label="Linked style - Heading2"]');
       await expect(secondStyle).toBeFocused({ timeout: 1000 });
 
       // Navigate down again
       await page.keyboard.press('ArrowDown');
-      const thirdStyle = page.locator('div[aria-label="Linked style - Heading2"]');
+      const thirdStyle = page.locator('div[aria-label="Linked style - Heading3"]');
       await expect(thirdStyle).toBeFocused({ timeout: 1000 });
 
       // Navigate back up
@@ -1078,7 +1078,7 @@ test.describe('toolbar', () => {
 
       // Verify the style was applied
       await superEditor.getByText('Test').click();
-      const styleButtonText = styleButton.getByText('heading 1');
+      const styleButtonText = styleButton.getByText('heading 2');
       await expect(styleButtonText).toBeVisible({ timeout: 2000 });
     });
   });

@@ -1012,7 +1012,9 @@ export const makeDefaultItems = ({
     onActivate: ({ linkedStyleMark }) => {
       const styles = getQuickFormatList(superToolbar.activeEditor);
       const selectedStyle = styles?.find((style) => style.id === linkedStyleMark?.attrs?.styleId);
-      linkedStyles.label.value = selectedStyle ? selectedStyle.definition.attrs.name : toolbarTexts.formatText;
+      // Normal linked style is default one
+      linkedStyles.label.value =
+        selectedStyle && selectedStyle.id !== 'Normal' ? selectedStyle.definition.attrs.name : toolbarTexts.formatText;
       linkedStyles.disabled.value = false;
     },
     onDeactivate: () => {

@@ -65,7 +65,7 @@ onMounted(() => {
       v-for="(style, index) in getQuickFormatList(editor)"
       class="style-item"
       @click="select(style)"
-      @keydown="(event) => handleKeyDown(event, index, style)"
+      @keydown.prevent="(event) => handleKeyDown(event, index, style)"
       :class="{ selected: selectedOption === style.id }"
       :aria-label="`Linked style - ${style.id}`"
       ref="styleRefs"
