@@ -236,7 +236,7 @@ function handleResult(result: CommandResult) {
 ## Questions?
 
 1. Check this guide first
-2. Look at `packages/superdoc-ai` for a fully migrated example
+2. Look at `packages/ai` for a fully migrated example
 3. Ask in team chat
 4. Update this guide with new learnings
 

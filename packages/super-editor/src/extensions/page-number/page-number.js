@@ -1,5 +1,5 @@
 import { Node, Attribute } from '@core/index.js';
-
+import { isHeadless } from '@/utils/headless-helpers.js';
 /**
  * Configuration options for PageNumber
  * @typedef {Object} PageNumberOptions
@@ -90,7 +90,10 @@ export const PageNumber = Node.create({
 
           if (dispatch) {
             tr.replaceSelectionWith(pageNumberNode, false);
-            tr.setMeta('forceUpdatePagination', true);
+            // Only trigger pagination update if not in headless mode
+            if (!isHeadless(editor)) {
+              tr.setMeta('forceUpdatePagination', true);
+            }
           }
           return true;
         },

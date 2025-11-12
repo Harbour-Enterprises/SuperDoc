@@ -15,6 +15,7 @@ import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestT
 import { generateDocxRandomId } from '../../core/helpers/index.js';
 import { computePosition, autoUpdate, hide } from '@floating-ui/dom';
 import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
+import { isHeadless } from '@/utils/headless-helpers.js';
 
 const SEPARATOR_CLASS = 'pagination-separator';
 const SEPARATOR_FLOATING_CLASS = 'pagination-separator-floating';
@@ -35,6 +36,13 @@ export const Pagination = Extension.create({
   },
 
   addCommands() {
+    const editor = this.editor;
+
+    // Don't register commands in headless mode for better performance
+    if (isHeadless(editor)) {
+      return {};
+    }
+
     return {
       insertPageBreak:
         () =>
@@ -63,8 +71,16 @@ export const Pagination = Extension.create({
   },
 
   addShortcuts() {
+    const editor = this.editor;
+
+    if (isHeadless(editor)) {
+      return {};
+    }
+
     return {
-      'Mod-Enter': () => this.editor.commands.insertPageBreak(),
+      'Mod-Enter': () => {
+        return editor.commands.insertPageBreak();
+      },
     };
   },
 
@@ -73,6 +89,11 @@ export const Pagination = Extension.create({
    */
   addPmPlugins() {
     const editor = this.editor;
+
+    // Skip pagination plugin entirely in headless mode
+    if (isHeadless(editor)) {
+      return [];
+    }
 
     let isUpdating = false;
 
@@ -95,7 +116,7 @@ export const Pagination = Extension.create({
             isReadyToInit: false,
             decorations: DecorationSet.empty,
             isDebugging,
-            isEnabled: editor.options.pagination,
+            isEnabled: editor.options.pagination && !isHeadless(editor),
           };
         },
         apply(tr, oldState, prevEditorState, newEditorState) {
@@ -215,6 +236,8 @@ export const Pagination = Extension.create({
 
         return {
           update: (view) => {
+            // Skip pagination updates in headless mode
+            if (isHeadless(editor)) return;
             if (!PaginationPluginKey.getState(view.state)?.isEnabled) return;
             if (!shouldUpdate || isUpdating) return;
 
@@ -252,6 +275,8 @@ export const Pagination = Extension.create({
       },
       props: {
         decorations(state) {
+          // Skip decorations in headless mode
+          if (isHeadless(editor)) return DecorationSet.empty;
           const pluginState = PaginationPluginKey.getState(state);
           return pluginState.isEnabled ? pluginState.decorations : DecorationSet.empty;
         },
@@ -823,7 +848,8 @@ const getHeaderFooterEditorKey = ({ pageNumber, isHeader, isFooter, isFirstHeade
  * @param {Editor} currentFocusedSectionEditor Focused header/footer editor
  */
 const onHeaderFooterDblClick = (editor, currentFocusedSectionEditor) => {
-  if (editor.options.documentMode !== 'editing') return;
+  // Skip header/footer double-click handling in headless mode
+  if (isHeadless(editor) || editor.options.documentMode !== 'editing') return;
 
   editor.setEditable(false, false);
   toggleHeaderFooterEditMode({
@@ -940,6 +966,8 @@ function getActualBreakCoords(view, pos, calculatedThreshold) {
  * @returns {void}
  */
 const onImageLoad = (editor) => {
+  // Skip in headless mode
+  if (isHeadless(editor)) return;
   if (typeof requestAnimationFrame !== 'function') return;
   requestAnimationFrame(() => {
     const newTr = editor.view.state.tr;

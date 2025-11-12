@@ -370,3 +370,41 @@ export function translateVectorShape(params) {
 
   return wrapTextInRun(alternateContent);
 }
+
+/**
+ * Translates a shapeGroup node back to XML.
+ * @param {Object} params - Translation parameters
+ * @returns {Object} XML node
+ */
+export function translateShapeGroup(params) {
+  const { node } = params;
+  const { drawingContent } = node.attrs;
+
+  // If we have stored drawingContent, use it for round-tripping
+  if (drawingContent) {
+    const drawing = {
+      name: 'w:drawing',
+      elements: [...(drawingContent.elements || [])],
+    };
+
+    const choice = {
+      name: 'mc:Choice',
+      attributes: { Requires: 'wpg' },
+      elements: [drawing],
+    };
+
+    const alternateContent = {
+      name: 'mc:AlternateContent',
+      elements: [choice],
+    };
+
+    return wrapTextInRun(alternateContent);
+  }
+
+  // If no stored content, we would need to reconstruct from shapes
+  // For now, return a placeholder
+  return wrapTextInRun({
+    name: 'w:drawing',
+    elements: [],
+  });
+}
