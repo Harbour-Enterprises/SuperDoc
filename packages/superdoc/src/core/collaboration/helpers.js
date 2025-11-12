@@ -65,9 +65,24 @@ export const initSuperdocYdoc = (superdoc) => {
   if (!superdoc.config.superdocId) return;
 
   const documentId = isInternal ? baseName : `${baseName}-external`;
+
+  // Use user from collaboration config if provided, otherwise use top-level user
+  const user = superdoc.config.modules.collaboration?.user || superdoc.config.user;
+
+  // Add user info to params so it's sent to the server
+  const collabConfig = {
+    ...superdoc.config.modules.collaboration,
+    params: {
+      ...superdoc.config.modules.collaboration?.params,
+      name: user?.name,
+      email: user?.email,
+      role: user?.role,
+    },
+  };
+
   const superdocCollaborationOptions = {
-    config: superdoc.config.modules.collaboration,
-    user: superdoc.config.user,
+    config: collabConfig,
+    user: user,
     documentId,
     socket: superdoc.config.socket,
     superdocInstance: superdoc,
@@ -88,10 +103,27 @@ export const initSuperdocYdoc = (superdoc) => {
 export const makeDocumentsCollaborative = (superdoc) => {
   const processedDocuments = [];
   superdoc.config.documents.forEach((doc) => {
-    superdoc.config.user.color = superdoc.colors[0];
+    // Use user from collaboration config if provided, otherwise use top-level user
+    const user = superdoc.config.modules.collaboration?.user || superdoc.config.user;
+
+    if (user && superdoc.colors[0]) {
+      user.color = superdoc.colors[0];
+    }
+
+    // Add user info to params so it's sent to the server
+    const collabConfig = {
+      ...superdoc.config.modules.collaboration,
+      params: {
+        ...superdoc.config.modules.collaboration?.params,
+        name: user?.name,
+        email: user?.email,
+        role: user?.role,
+      },
+    };
+
     const options = {
-      config: superdoc.config.modules.collaboration,
-      user: superdoc.config.user,
+      config: collabConfig,
+      user: user,
       documentId: doc.id,
       socket: superdoc.config.socket,
       superdocInstance: superdoc,

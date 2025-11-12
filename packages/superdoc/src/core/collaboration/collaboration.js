@@ -66,9 +66,7 @@ function createProvider({ config, user, documentId, socket, superdocInstance }) 
 function createSuperDocProvider({ config, user, documentId, superdocInstance }) {
   const ydoc = new YDoc({ gc: false });
   const options = {
-    params: {
-      ...config.params,
-    },
+    params: config.params,
   };
 
   const provider = new WebsocketProvider(config.url, documentId, ydoc, options);
@@ -96,6 +94,7 @@ function createHocuspocusProvider({ config, user, documentId, socket, superdocIn
     name: documentId,
     token: config.token || '',
     preserveConnection: false,
+    parameters: config.params,
     onAuthenticationFailed: () => onAuthenticationFailed(documentId),
     onConnect: () => onConnect(superdocInstance, documentId),
     onDisconnect: () => onDisconnect(superdocInstance, documentId),

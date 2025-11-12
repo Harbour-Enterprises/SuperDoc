@@ -41,7 +41,12 @@ export default function useDocument(params, superdocConfig) {
    */
   function initDocumentType({ type, data }) {
     if (data?.type) return data.type;
-    if (type) return type in documentTypes ? documentTypes[type] : null;
+    if (type) {
+      if (type in documentTypes) return documentTypes[type];
+      const mimeTypes = Object.values(documentTypes);
+      if (mimeTypes.includes(type)) return type;
+      return null;
+    }
 
     throw new Error('Document type not specified for doc:', params);
   }
