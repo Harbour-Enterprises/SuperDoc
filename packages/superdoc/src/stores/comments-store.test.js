@@ -152,7 +152,7 @@ describe('comments-store', () => {
     expect(setActiveCommentSpy).toHaveBeenCalledWith({ commentId: null });
   });
 
-  it.skip('updates tracked change comments and emits events', () => {
+  it('updates tracked change comments and emits events', () => {
     const superdoc = {
       emit: vi.fn(),
     };
