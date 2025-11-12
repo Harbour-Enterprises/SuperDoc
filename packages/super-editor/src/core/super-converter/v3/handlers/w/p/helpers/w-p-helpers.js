@@ -131,6 +131,7 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = [], option
   const lineSpacing = inLineSpacing?.['w:line'] || line || pDefaultSpacing?.['w:line'];
   if (lineSpacing) {
     spacing.line = twipsToLines(lineSpacing);
+    // Prevent values less than 1 to avoid squashed text
     if (spacing.line < 1) {
       spacing.line = 1;
     }
