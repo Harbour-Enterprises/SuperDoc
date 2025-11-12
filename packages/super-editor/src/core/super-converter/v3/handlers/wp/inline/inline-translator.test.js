@@ -19,7 +19,7 @@ describe('wp:inline translator', () => {
 
   it('exposes correct config meta', () => {
     expect(config.xmlName).toBe('wp:inline');
-    expect(config.sdNodeOrKeyName).toEqual(['image']);
+    expect(config.sdNodeOrKeyName).toEqual(['image', 'shapeGroup', 'vectorShape', 'contentBlock']);
     expect(typeof config.encode).toBe('function');
     expect(typeof config.decode).toBe('function');
     expect(config.attributes).toHaveLength(4);
@@ -28,7 +28,7 @@ describe('wp:inline translator', () => {
   it('builds NodeTranslator instance', () => {
     expect(translator).toBeInstanceOf(NodeTranslator);
     expect(translator.xmlName).toBe('wp:inline');
-    expect(translator.sdNodeOrKeyName).toEqual(['image']);
+    expect(translator.sdNodeOrKeyName).toEqual(['image', 'shapeGroup', 'vectorShape', 'contentBlock']);
   });
 
   it('creates attribute handlers for distT/distB/distL/distR', () => {
@@ -50,9 +50,9 @@ describe('wp:inline translator', () => {
     });
 
     it('should call handleInlineNode when node is valid', () => {
+      const params = { extraParams: { node: { name: 'wp:inline' } } };
       handleInlineNode.mockReturnValue({ encoded: true });
 
-      const params = { extraParams: { node: { type: 'element' } } };
       const result = config.encode(params);
 
       expect(handleInlineNode).toHaveBeenCalledWith(params);
