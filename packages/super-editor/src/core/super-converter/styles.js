@@ -162,7 +162,7 @@ export function getStyleProperties(params, styleId, translator) {
   }
   const elementPr = style?.elements?.find((el) => el.name === translator.xmlName);
   if (!elementPr) {
-    return emptyResult;
+    return { ...emptyResult, basedOn };
   }
   const result = translator.encode({ ...params, nodes: [elementPr] }) || {};
 
