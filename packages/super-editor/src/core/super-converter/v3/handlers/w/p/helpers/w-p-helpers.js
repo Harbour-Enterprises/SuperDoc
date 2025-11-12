@@ -137,12 +137,11 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = [], option
   if (lineRule === 'exact' && lineSpacing) {
     spacing.line = `${twipsToPt(lineSpacing)}pt`;
   }
-  if (lineRule === 'atLeast' || lineRule === 'exactly') {
+  if (lineRule === 'atLeast' || lineRule === 'exact') {
     // Interpret w:line as a pt value
-    // See: http://officeopenxml.com/WPspacing.php
-    spacing.line = twipsToPt(lineSpacing);
+    const ptValue = twipsToPt(lineSpacing);
     // Prevent values less than 1pt to avoid squashed text
-    spacing.line = Math.max(spacing.line, 1);
+    spacing.line = Math.max(ptValue, 1);
   }
 
   const beforeSpacing = inLineSpacing?.['w:before'] || lineSpaceBefore || pDefaultSpacing?.['w:before'];
