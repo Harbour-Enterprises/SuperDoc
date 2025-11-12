@@ -131,4 +131,71 @@ describe('Search command', () => {
       editor.destroy();
     }
   });
+
+  it('should report accurate positions for regex matches containing braces around bookmark nodes', () => {
+    const editor = createDocxTestEditor({ isHeadless: true });
+
+    try {
+      const { doc, paragraph, run, bookmarkStart, bookmarkEnd } = editor.schema.nodes;
+      const BRACED_TEXT = '{TotalDue}';
+      const docWithBookmarks = doc.create(null, [
+        paragraph.create(null, [
+          run.create(null, [editor.schema.text('Amount: ')]),
+          bookmarkStart.create({ id: 'bm-1', name: 'fieldBookmark' }),
+          run.create(null, [editor.schema.text(BRACED_TEXT)]),
+          bookmarkEnd.create({ id: 'bm-1' }),
+          run.create(null, [editor.schema.text(' USD')]),
+        ]),
+      ]);
+
+      const baseState = EditorState.create({
+        schema: editor.schema,
+        doc: docWithBookmarks,
+        plugins: editor.state.plugins,
+      });
+      editor.view.updateState(baseState);
+
+      const matches = editor.commands.search(/\{([^}]*)\}/gi);
+      expect(matches).toHaveLength(1);
+      const match = matches[0];
+      expect(match?.text).toBe(BRACED_TEXT);
+      expect(editor.view.state.doc.textBetween(match.from, match.to)).toBe(BRACED_TEXT);
+    } finally {
+      editor.destroy();
+    }
+  });
+
+  it('maps matches inside inline bookmark wrappers without expanding selection', () => {
+    const editor = createDocxTestEditor({ isHeadless: true });
+
+    try {
+      const { doc, paragraph, bookmarkStart, run, bookmarkEnd } = editor.schema.nodes;
+      const WRAPPED_TEXT = '{InsideBookmark}';
+
+      const docWithInlineWrapper = doc.create(null, [
+        paragraph.create(null, [
+          bookmarkStart.create({ id: 'bm-wrap', name: 'wrapper' }, [
+            run.create(null, [editor.schema.text(WRAPPED_TEXT)]),
+          ]),
+          bookmarkEnd.create({ id: 'bm-wrap' }),
+        ]),
+      ]);
+
+      const baseState = EditorState.create({
+        schema: editor.schema,
+        doc: docWithInlineWrapper,
+        plugins: editor.state.plugins,
+      });
+      editor.view.updateState(baseState);
+
+      const matches = editor.commands.search(/\{InsideBookmark\}/gi);
+
+      expect(matches).toHaveLength(1);
+      const match = matches[0];
+      expect(match?.text).toBe(WRAPPED_TEXT);
+      expect(editor.view.state.doc.textBetween(match.from, match.to)).toBe(WRAPPED_TEXT);
+    } finally {
+      editor.destroy();
+    }
+  });
 });

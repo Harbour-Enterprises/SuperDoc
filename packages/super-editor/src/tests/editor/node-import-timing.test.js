@@ -17,6 +17,7 @@ describe('Node.js import timing - document access', () => {
     window: globalThis.window,
     document: globalThis.document,
     navigator: globalThis.navigator,
+    localStorage: globalThis.localStorage,
   };
 
   beforeEach(() => {
@@ -24,6 +25,8 @@ describe('Node.js import timing - document access', () => {
     delete globalThis.window;
     delete globalThis.document;
     delete globalThis.navigator;
+    // localStorage may exist in Node.js but without getItem method, so delete it to use polyfill
+    delete globalThis.localStorage;
   });
 
   afterEach(() => {
@@ -44,6 +47,12 @@ describe('Node.js import timing - document access', () => {
       delete globalThis.navigator;
     } else {
       globalThis.navigator = ORIGINAL_GLOBALS.navigator;
+    }
+
+    if (ORIGINAL_GLOBALS.localStorage === undefined) {
+      delete globalThis.localStorage;
+    } else {
+      globalThis.localStorage = ORIGINAL_GLOBALS.localStorage;
     }
   });
 

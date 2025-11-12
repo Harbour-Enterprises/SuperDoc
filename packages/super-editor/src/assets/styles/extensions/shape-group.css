@@ -1,0 +1,25 @@
+.sd-shape-group {
+  display: inline-block;
+  vertical-align: bottom;
+  position: relative;
+  border: 1px dashed transparent;
+  transition: border-color 0.2s ease;
+}
+
+.sd-shape-group:hover {
+  border-color: rgba(91, 155, 213, 0.3);
+}
+
+.sd-shape-group svg {
+  display: block;
+}
+
+.sd-shape-group[data-selected] {
+  border-color: rgba(91, 155, 213, 0.6);
+  background-color: rgba(91, 155, 213, 0.05);
+}
+
+/* Ensure shapes within the group are properly positioned */
+.sd-shape-group svg g {
+  transform-origin: top left;
+}
