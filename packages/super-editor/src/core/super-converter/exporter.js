@@ -414,7 +414,8 @@ export function generateParagraphProperties(params) {
 
   // Check which properties have changed
   ['borders', 'styleId', 'indent', 'textAlign', 'keepLines', 'keepNext', 'spacing', 'tabStops'].forEach((key) => {
-    if (JSON.stringify(paragraphProperties[key]) !== JSON.stringify(attrs[key])) {
+    let propKey = key === 'textAlign' ? 'justification' : key;
+    if (JSON.stringify(paragraphProperties[propKey]) !== JSON.stringify(attrs[key])) {
       paragraphProperties[key] = attrs[key];
     }
   });
