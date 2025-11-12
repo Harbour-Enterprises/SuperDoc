@@ -140,11 +140,19 @@ export function updateColumns(node, colgroup, table, cellMinWidth) {
   }
 
   // 1. The table is offset to the left by the margin (internal padding) of the first cell
+  // 1b. This seems to be overridden when tableIndent is specified. TODO: identify the exact rules within the spec dictating the interaction between tableIndent and leading margin.
   // 2. If the table width is relative, it's increased by the left margin of the first cell plus the right margin of the last cell in the first row
+  const tableIndent = convertSizeToCSS(
+    node.attrs.tableProperties.tableIndent?.value ?? 0,
+    node.attrs.tableProperties.tableIndent?.type ?? 'dxa',
+  );
   const firstRowFirstCellPaddingLeftPx = firstRow?.firstChild?.attrs?.cellMargins?.left ?? 0;
   const firstRowLastCellPaddingRightPx = firstRow?.lastChild?.attrs?.cellMargins?.right ?? 0;
 
   table.style.marginLeft = `${-firstRowFirstCellPaddingLeftPx}px`;
+  if (tableIndent !== null) {
+    table.style.marginLeft = tableIndent;
+  }
 
   if (node.attrs.tableProperties.tableWidth.type === 'pct') {
     const padding = firstRowFirstCellPaddingLeftPx + firstRowLastCellPaddingRightPx;
