@@ -41,7 +41,7 @@ import { SuperValidator } from '@core/super-validator/index.js';
 import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js';
 import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
-
+import { isHeadless } from '../utils/headless-helpers.js';
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -1098,19 +1098,22 @@ export class Editor extends EventEmitter {
         if (this.options.documentMode !== 'editing') return;
 
         // Deactivates header/footer editing mode when double-click on main editor
-        const isHeader = hasSomeParentWithClass(event.target, 'pagination-section-header');
-        const isFooter = hasSomeParentWithClass(event.target, 'pagination-section-footer');
-        if (isHeader || isFooter) {
-          const eventClone = new event.constructor(event.type);
-          event.target.dispatchEvent(eventClone);
+        // Skip pagination-related double-click handling in headless mode
+        if (!isHeadless(this)) {
+          const isHeader = hasSomeParentWithClass(event.target, 'pagination-section-header');
+          const isFooter = hasSomeParentWithClass(event.target, 'pagination-section-footer');
+          if (isHeader || isFooter) {
+            const eventClone = new event.constructor(event.type);
+            event.target.dispatchEvent(eventClone);
 
-          // Imitate default double click behavior - word selection
-          if (this.options.isHeaderOrFooter && this.options.editable) setWordSelection(view, pos);
-          return;
+            // Imitate default double click behavior - word selection
+            if (this.options.isHeaderOrFooter && this.options.editable) setWordSelection(view, pos);
+            return;
+          }
         }
         event.stopPropagation();
 
-        if (!this.options.editable) {
+        if (!this.options.editable && !isHeadless(this)) {
           // ToDo don't need now but consider to update pagination when recalculate header/footer height
           // this.storage.pagination.sectionData = await initPaginationData(this);
           //
@@ -1313,13 +1316,16 @@ export class Editor extends EventEmitter {
       }, 150);
     };
 
+    // Make sure we are in browser when calling browser APIs
     if ('orientation' in screen && 'addEventListener' in screen.orientation) {
       screen.orientation.addEventListener('change', handleResize);
-    } else {
+    } else if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
       window.matchMedia('(orientation: portrait)').addEventListener('change', handleResize);
     }
 
-    window.addEventListener('resize', () => handleResize);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', () => handleResize);
+    }
   }
 
   /**
@@ -1670,7 +1676,7 @@ export class Editor extends EventEmitter {
       hasMadeUpdate = true;
     }
 
-    if (hasMadeUpdate) {
+    if (hasMadeUpdate && !isHeadless(this)) {
       const newTr = this.view.state.tr;
       newTr.setMeta('forceUpdatePagination', true);
       this.view.dispatch(newTr);
