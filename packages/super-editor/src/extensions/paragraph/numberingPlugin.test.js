@@ -102,9 +102,9 @@ describe('numberingPlugin', () => {
 
     createNumberingPlugin(createEditor());
 
-    expect(numberingManager.setStartSettings).toHaveBeenCalledWith('12', 0, 3);
-    expect(numberingManager.setStartSettings).toHaveBeenCalledWith('12', 1, 2);
-    expect(numberingManager.setStartSettings).toHaveBeenCalledWith('20', 0, 1);
+    expect(numberingManager.setStartSettings).toHaveBeenCalledWith('12', 0, 3, undefined);
+    expect(numberingManager.setStartSettings).toHaveBeenCalledWith('12', 1, 2, undefined);
+    expect(numberingManager.setStartSettings).toHaveBeenCalledWith('20', 0, 1, undefined);
   });
 
   it('refreshes start settings when list definitions change', () => {
@@ -124,7 +124,7 @@ describe('numberingPlugin', () => {
 
     listChangeHandler();
 
-    expect(numberingManager.setStartSettings).toHaveBeenCalledWith('42', 0, 5);
+    expect(numberingManager.setStartSettings).toHaveBeenCalledWith('42', 0, 5, undefined);
   });
 
   it('unsubscribes the list definition listener on destroy', () => {

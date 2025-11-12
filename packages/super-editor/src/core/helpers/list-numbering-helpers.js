@@ -327,6 +327,7 @@ export const getAllListDefinitions = (editor) => {
       const findElement = (name) => levelDef?.elements?.find((item) => item.name === name);
 
       const startElement = findElement('w:start');
+      const lvlRestartElement = findElement('w:lvlRestart');
       const numFmtElement = findElement('w:numFmt');
       const lvlTextElement = findElement('w:lvlText');
       const suffixElement = findElement('w:suff');
@@ -336,6 +337,7 @@ export const getAllListDefinitions = (editor) => {
 
       acc[numId][ilvl] = {
         start: startElement?.attributes?.['w:val'] ?? null,
+        restart: lvlRestartElement?.attributes?.['w:val'] ?? null,
         numFmt,
         lvlText: lvlTextElement?.attributes?.['w:val'] ?? null,
         suffix: suffixElement?.attributes?.['w:val'] ?? null,

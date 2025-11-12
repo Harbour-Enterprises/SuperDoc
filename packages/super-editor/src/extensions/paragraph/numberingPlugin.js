@@ -19,7 +19,11 @@ export function createNumberingPlugin(editor) {
     Object.entries(definitionsMap || {}).forEach(([numId, levels]) => {
       Object.entries(levels || {}).forEach(([level, def]) => {
         const start = parseInt(def?.start) || 1;
-        numberingManager.setStartSettings(numId, parseInt(level), start);
+        let restart = def?.restart;
+        if (restart != null) {
+          restart = parseInt(restart);
+        }
+        numberingManager.setStartSettings(numId, parseInt(level), start, restart);
       });
     });
   };
