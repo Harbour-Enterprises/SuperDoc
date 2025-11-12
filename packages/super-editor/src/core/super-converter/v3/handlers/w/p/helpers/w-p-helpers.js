@@ -139,7 +139,7 @@ export const getParagraphSpacing = (node, docx, styleId = '', marks = [], option
   }
   if (lineRule === 'atLeast') {
     const ptValue = twipsToPt(lineSpacing);
-    // Prevent values less than 1pt to avoid squashed text
+    // Prevent values less than 1 to avoid squashed text
     spacing.line = Math.max(ptValue, 1);
   }
 
