@@ -56,7 +56,7 @@ function halfPointToPixels(halfPoints) {
 
 function halfPointToPoints(halfPoints) {
   if (halfPoints == null) return;
-  return Math.round(halfPoints / 2);
+  return Math.round(halfPoints) / 2;
 }
 
 function emuToPixels(emu) {
