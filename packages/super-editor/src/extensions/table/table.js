@@ -277,8 +277,7 @@ import {
  */
 
 /**
- * @typedef {Object} TableNode
- * @implements Node
+ * @typedef {Node} TableNode
  * @property {TableNodeAttributes} attrs
  */
 
