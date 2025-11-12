@@ -19,7 +19,7 @@ describe('wp:anchor translator', () => {
 
   it('exposes correct config meta', () => {
     expect(config.xmlName).toBe('wp:anchor');
-    expect(config.sdNodeOrKeyName).toEqual(['image']);
+    expect(config.sdNodeOrKeyName).toEqual(['image', 'shapeGroup', 'vectorShape', 'contentBlock']);
     expect(typeof config.encode).toBe('function');
     expect(typeof config.decode).toBe('function');
     expect(config.attributes).toHaveLength(4);
@@ -28,7 +28,7 @@ describe('wp:anchor translator', () => {
   it('builds NodeTranslator instance', () => {
     expect(translator).toBeInstanceOf(NodeTranslator);
     expect(translator.xmlName).toBe('wp:anchor');
-    expect(translator.sdNodeOrKeyName).toEqual(['image']);
+    expect(translator.sdNodeOrKeyName).toEqual(['image', 'shapeGroup', 'vectorShape', 'contentBlock']);
   });
 
   it('creates attribute handlers for distT/distB/distL/distR', () => {
@@ -38,7 +38,7 @@ describe('wp:anchor translator', () => {
 
   describe('encode', () => {
     it('calls handleAnchorNode when node is valid', () => {
-      const params = { extraParams: { node: { type: 'element' } } };
+      const params = { extraParams: { node: { name: 'wp:anchor' } } };
       handleAnchorNode.mockReturnValue({ encoded: true });
 
       const result = translator.encode(params);
@@ -56,7 +56,7 @@ describe('wp:anchor translator', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null when node.type is missing', () => {
+    it('returns null when node.name is missing', () => {
       const params = { extraParams: { node: {} } };
 
       const result = translator.encode(params);

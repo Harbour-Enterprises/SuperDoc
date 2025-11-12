@@ -4,7 +4,7 @@ import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 import { findParentNode } from '@helpers/index.js';
 import { kebabCase } from '@superdoc/common';
 import { getUnderlineCssString } from './index.js';
-import { twipsToLines, twipsToPixels, twipsToPt, halfPointToPixels } from '@converter/helpers.js';
+import { twipsToLines, twipsToPixels, halfPointToPixels } from '@converter/helpers.js';
 
 /**
  * Get the (parsed) linked style from the styles.xml
