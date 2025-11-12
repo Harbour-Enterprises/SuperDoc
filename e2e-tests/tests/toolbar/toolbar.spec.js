@@ -915,12 +915,15 @@ test.describe('toolbar', () => {
   test.describe('linked styles button', () => {
     test.use({ viewport: { width: 1920, height: 1080 } });
 
+    // Constants for Heading2 style properties
+    const HEADING2_STYLES = {
+      fontFamily: '"Aptos Display", sans-serif',
+      fontSize: '21.3333px', // equal to 16pt in computed styles
+      color: 'rgb(15, 71, 97)',
+    };
+
     test('should add text with linked style', async ({ page }) => {
-      const heading2Styles = {
-        fontFamily: '"Aptos Display", sans-serif',
-        fontSize: '21.3333px', // equal to 16pt in computed styles
-        color: 'rgb(15, 71, 97)',
-      };
+      const heading2Styles = HEADING2_STYLES;
 
       await page.goto('http://localhost:4173/');
       await page.waitForSelector('div.super-editor');
@@ -991,16 +994,92 @@ test.describe('toolbar', () => {
       // Select "Heading2" style
       await page.locator('div[aria-label="Linked style - Heading2"]').click();
 
-      // Wait for the toolbar to update
-      await sleep(500);
-
       // Click back on the text
       await superEditor.getByText('Hello').click();
 
-      // Wait for the toolbar to update
-      await sleep(500);
-      const styleButtonText = await styleButton.getByText('heading 2');
-      await expect(styleButtonText).toBeVisible();
+      // Wait for the toolbar button text to update and verify
+      const styleButtonText = styleButton.getByText('heading 2');
+      await expect(styleButtonText).toBeVisible({ timeout: 2000 });
+    });
+
+    test('should reset label to "format text" when style is deselected', async ({ page }) => {
+      await page.goto('http://localhost:4173/');
+      await page.waitForSelector('div.super-editor');
+
+      const superEditor = page.locator('div.super-editor').first();
+      await expect(superEditor).toBeVisible({
+        timeout: 1_000,
+      });
+
+      await superEditor.click();
+      await page.keyboard.type('Hello');
+
+      // Select the text and apply Heading2 style
+      await superEditor.getByText('Hello').click({ clickCount: 2 });
+
+      const styleButton = page.locator('div[data-item="btn-linkedStyles"]');
+      await styleButton.click();
+      await page.locator('div[aria-label="Linked style - Heading2"]').click();
+
+      // Verify heading 2 label is shown
+      await superEditor.getByText('Hello').click();
+      await expect(styleButton.getByText('heading 2')).toBeVisible({ timeout: 2000 });
+
+      // Select the text again and remove the style by applying "Normal"
+      await superEditor.getByText('Hello').click({ clickCount: 2 });
+      await styleButton.click();
+      await page.locator('div[aria-label="Linked style - Normal"]').click();
+
+      // Click on the text and verify label resets
+      await superEditor.getByText('Hello').click();
+      const formatTextLabel = styleButton.getByText('format text', { exact: false });
+      await expect(formatTextLabel).toBeVisible({ timeout: 2000 });
+    });
+
+    test('should navigate through styles with keyboard', async ({ page }) => {
+      await page.goto('http://localhost:4173/');
+      await page.waitForSelector('div.super-editor');
+
+      const superEditor = page.locator('div.super-editor').first();
+      await expect(superEditor).toBeVisible({
+        timeout: 1_000,
+      });
+
+      await superEditor.click();
+      await page.keyboard.type('Test');
+
+      // Select text and open linked styles dropdown
+      await superEditor.getByText('Test').click({ clickCount: 2 });
+
+      const styleButton = page.locator('div[data-item="btn-linkedStyles"]');
+      await styleButton.click();
+
+      // Verify dropdown is open and first item is focused
+      const firstStyle = page.locator('div[aria-label="Linked style - Normal"]');
+      await expect(firstStyle).toBeVisible();
+      await expect(firstStyle).toBeFocused({ timeout: 1000 });
+
+      // Navigate down with arrow key
+      await page.keyboard.press('ArrowDown');
+      const secondStyle = page.locator('div[aria-label="Linked style - Heading1"]');
+      await expect(secondStyle).toBeFocused({ timeout: 1000 });
+
+      // Navigate down again
+      await page.keyboard.press('ArrowDown');
+      const thirdStyle = page.locator('div[aria-label="Linked style - Heading2"]');
+      await expect(thirdStyle).toBeFocused({ timeout: 1000 });
+
+      // Navigate back up
+      await page.keyboard.press('ArrowUp');
+      await expect(secondStyle).toBeFocused({ timeout: 1000 });
+
+      // Select with Enter key
+      await page.keyboard.press('Enter');
+
+      // Verify the style was applied
+      await superEditor.getByText('Test').click();
+      const styleButtonText = styleButton.getByText('heading 1');
+      await expect(styleButtonText).toBeVisible({ timeout: 2000 });
     });
   });
 });
