@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@superdoc-dev/superdoc-ai": "latest",
+    "@superdoc-dev/ai": "latest",
     "superdoc": "0.28.0"
   },
   "devDependencies": {

@@ -7,7 +7,7 @@ import { translateAnchorNode } from '@converter/v3/handlers/wp/anchor/helpers/tr
 const XML_NODE_NAME = 'wp:anchor';
 
 /** @type {import('@translator').SuperDocNodeOrKeyName} */
-const SD_NODE_NAME = ['image'];
+const SD_NODE_NAME = ['image', 'shapeGroup', 'vectorShape', 'contentBlock'];
 
 /** @type {import('@translator').AttrConfig[]} */
 const validXmlAttributes = ['distT', 'distB', 'distL', 'distR'].map((xmlName) => createAttributeHandler(xmlName));
@@ -18,7 +18,7 @@ const validXmlAttributes = ['distT', 'distB', 'distL', 'distR'].map((xmlName) =>
 function encode(params) {
   const { node } = params.extraParams;
 
-  if (!node || !node.type) {
+  if (!node || !node.name) {
     return null;
   }
 

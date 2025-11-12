@@ -1,7 +1,7 @@
 # SuperDoc AI Quickstart
 
 Launch a live SuperDoc editor with AI helpers. This example shows how to wire up
-`@superdoc-dev/superdoc-ai` with a fresh SuperDoc instance, register a few buttons, and stream results back into the
+`@superdoc-dev/ai` with a fresh SuperDoc instance, register a few buttons, and stream results back into the
 document.
 
 ## Prerequisites
@@ -24,7 +24,7 @@ the top of the editor to generate, locate, or revise content while the status pi
 ## What this example covers
 
 - creating a SuperDoc instance with a ready-to-edit document
-- initializing `SuperDocAI` after the editor mounts
+- initializing `AIActions` after the editor mounts
 - streaming UI feedback via the built-in callbacks
 - wiring multiple AI actions (`insertContent`, `insertTrackedChange`, `highlight`, `replace`, `replaceAll`, `find`,
   `findAll`, `insertComment`, `insertComments`) through a shared handler
@@ -42,7 +42,7 @@ OpenAI is used here, but you can swap in another provider by changing the `provi
 `initializeAI()` in `src/main.js`. For example, to call a custom HTTP endpoint:
 
 ```js
-aiInstance = new SuperDocAI(superdoc, {
+aiInstance = new AIActions(superdoc, {
   user: { displayName: 'SuperDoc AI Assistant' },
   provider: {
     type: 'http',
