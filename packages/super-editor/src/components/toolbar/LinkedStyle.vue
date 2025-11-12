@@ -46,7 +46,6 @@ const handleKeyDown = (event, index, style) => {
       moveToPreviousStyle(index);
       break;
     case 'Enter':
-      console.log('style', style);
       select(style);
       break;
     default:
@@ -68,6 +67,7 @@ onMounted(() => {
       @click="select(style)"
       @keydown="(event) => handleKeyDown(event, index, style)"
       :class="{ selected: selectedOption === style.id }"
+      :aria-label="`Linked style - ${style.id}`"
       ref="styleRefs"
     >
       <div
