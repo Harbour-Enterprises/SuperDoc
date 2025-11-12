@@ -234,7 +234,7 @@ export class ParagraphNodeView {
     const runProperties = resolveRunProperties(
       { docx: this.editor.converter.convertedXml, numbering: this.editor.converter.numbering },
       this.node.attrs.paragraphProperties.runProperties || {},
-      this.node.attrs.paragraphProperties,
+      { ...this.node.attrs.paragraphProperties, numberingProperties: this.node.attrs.numberingProperties },
       true,
       Boolean(this.node.attrs.paragraphProperties.numberingProperties),
     );
