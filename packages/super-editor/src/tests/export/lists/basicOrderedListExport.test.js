@@ -110,7 +110,7 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
-    expect(iLvl).toBe(expectedLevel);
+    expect(iLvl).toBe(String(expectedLevel));
 
     const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
     expect(indentTag).toBeUndefined();
@@ -161,7 +161,7 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
-    expect(iLvl).toBe(expectedLevel);
+    expect(iLvl).toBe(String(expectedLevel));
 
     const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
     expect(indentTag).toBeDefined();
@@ -213,7 +213,7 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
-    expect(iLvl).toBe(expectedLevel);
+    expect(iLvl).toBe(String(expectedLevel));
 
     const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
     expect(indentTag).toBeDefined();

@@ -61,6 +61,6 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     expect(wsz).toBeDefined();
     const { attributes } = wsz;
     expect(attributes).toBeDefined();
-    expect(attributes['w:val']).toBe(16);
+    expect(attributes['w:val']).toBe('16');
   });
 });

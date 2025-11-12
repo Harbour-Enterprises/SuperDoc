@@ -34,8 +34,8 @@ export const Italic = Mark.create({
       value: {
         default: null,
         renderDOM: (attrs) => {
-          if (!attrs.value) return {};
-          if (attrs.value === '0') return { style: 'font-style: normal' };
+          if (attrs.value == null) return {};
+          if (attrs.value === '0' || !attrs.value) return { style: 'font-style: normal' };
           return {};
         },
       },

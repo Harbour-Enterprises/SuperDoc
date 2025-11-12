@@ -28,13 +28,47 @@ describe('HyperlinkNodeExporter', async () => {
     );
 
     const rPr = hyperLinkNode.elements[0].elements[0];
-    expect(rPr.elements[0].name).toBe('w:u');
-    expect(rPr.elements[0].attributes['w:val']).toBe('single');
-    expect(rPr.elements[1].name).toBe('w:color');
-    expect(rPr.elements[2].name).toBe('w:rFonts');
-    expect(rPr.elements[2].attributes['w:ascii']).toBe('Arial');
-    expect(rPr.elements[3].name).toBe('w:sz');
-    expect(rPr.elements[3].attributes['w:val']).toBe(20);
+    expect(rPr.elements).toEqual([
+      {
+        name: 'w:rStyle',
+        attributes: {
+          'w:val': 'Hyperlink',
+        },
+      },
+      {
+        name: 'w:rFonts',
+        attributes: {
+          'w:ascii': 'Arial',
+          'w:hAnsi': 'Arial',
+          'w:eastAsia': 'Arial',
+          'w:cs': 'Arial',
+        },
+      },
+      {
+        name: 'w:sz',
+        attributes: {
+          'w:val': '20',
+        },
+      },
+      {
+        name: 'w:szCs',
+        attributes: {
+          'w:val': '20',
+        },
+      },
+      {
+        name: 'w:u',
+        attributes: {
+          'w:val': 'single',
+        },
+      },
+      {
+        name: 'w:color',
+        attributes: {
+          'w:val': '467886',
+        },
+      },
+    ]);
   });
 
   it('exports w:hyperlink linking to bookmark', async () => {
@@ -50,13 +84,32 @@ describe('HyperlinkNodeExporter', async () => {
     expect(hyperLinkNode.elements[0].elements[1].elements[0].text).toBe('link');
 
     const rPr = hyperLinkNode.elements[0].elements[0];
-    expect(rPr.elements[0].name).toBe('w:color');
-    expect(rPr.elements[0].attributes['w:val']).toBe('595959');
-    expect(rPr.elements[1].name).toBe('w:spacing');
-    expect(rPr.elements[2].name).toBe('w:sz');
-    expect(rPr.elements[2].attributes['w:val']).toBe(28);
-    expect(rPr.elements[3].name).toBe('w:rStyle');
-    expect(rPr.elements[3].attributes['w:val']).toBe('SubtitleChar');
+    expect(rPr.elements).toEqual([
+      {
+        name: 'w:rStyle',
+        attributes: {
+          'w:val': 'SubtitleChar',
+        },
+      },
+      {
+        name: 'w:sz',
+        attributes: {
+          'w:val': '28',
+        },
+      },
+      {
+        name: 'w:color',
+        attributes: {
+          'w:val': '595959',
+        },
+      },
+      {
+        name: 'w:spacing',
+        attributes: {
+          'w:val': '15',
+        },
+      },
+    ]);
   });
 
   it('exports hyperlink marks spanning multiple runs as single hyperlink element while preserving formatting', async () => {

@@ -38,7 +38,6 @@ describe('list item tables', () => {
 
     const cellPPr = tableCellParagraph.elements?.find((el) => el.name === 'w:pPr');
     const indent = cellPPr?.elements?.find((el) => el.name === 'w:ind');
-    expect(indent?.attributes?.['w:left']).toBeDefined();
-    expect(Number(indent?.attributes?.['w:left'])).toBe(0);
+    expect(indent).toBeUndefined();
   });
 });
