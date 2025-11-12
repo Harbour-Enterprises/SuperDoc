@@ -56,6 +56,7 @@ export const handleParagraphNode = (params) => {
   schemaNode.attrs.rsidRDefault = node.attributes?.['w:rsidRDefault'];
   schemaNode.attrs.filename = filename;
   schemaNode.attrs.tabStops = resolvedParagraphProperties.tabStops;
+  schemaNode.attrs.numberingProperties = resolvedParagraphProperties.numberingProperties;
 
   // Dropcap settings
   if (resolvedParagraphProperties.framePr && resolvedParagraphProperties.framePr.dropCap) {

@@ -4,6 +4,7 @@ import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 import { translator as w_rPrTranslator } from '@converter/v3/handlers/w/rpr';
 import { isValidHexColor, getHexColorFromDocxSystem } from '@converter/helpers';
 import { SuperConverter } from '@converter/SuperConverter.js';
+import { getUnderlineCssString } from '@extensions/linked-styles/underline-css.js';
 
 /**
  * Gets the resolved run properties by merging defaults, styles, and inline properties.
@@ -12,7 +13,13 @@ import { SuperConverter } from '@converter/SuperConverter.js';
  * @param {Object} resolvedPpr - The resolved paragraph properties.
  * @returns {Object} The resolved run properties.
  */
-export const resolveRunProperties = (params, inlineRpr, resolvedPpr, isListNumber = false) => {
+export const resolveRunProperties = (
+  params,
+  inlineRpr,
+  resolvedPpr,
+  isListNumber = false,
+  numberingDefinedInline = false,
+) => {
   const paragraphStyleId = resolvedPpr?.styleId;
   const paragraphStyleProps = resolveStyleChain(params, paragraphStyleId, w_rPrTranslator);
 
@@ -26,17 +33,6 @@ export const resolveRunProperties = (params, inlineRpr, resolvedPpr, isListNumbe
     runStyleProps = inlineRpr.styleId ? resolveStyleChain(params, inlineRpr.styleId, w_rPrTranslator) : {};
   }
 
-  // Numbering properties
-  let numberingProps = {};
-  if (resolvedPpr?.numberingProperties?.ilvl != null && resolvedPpr?.numberingProperties?.numId != null) {
-    numberingProps = getNumberingProperties(
-      params,
-      resolvedPpr.numberingProperties.ilvl,
-      resolvedPpr.numberingProperties.numId,
-      w_rPrTranslator,
-    );
-  }
-
   let styleChain;
 
   if (isNormalDefault) {
@@ -46,10 +42,31 @@ export const resolveRunProperties = (params, inlineRpr, resolvedPpr, isListNumbe
   }
 
   if (isListNumber) {
-    styleChain.push(numberingProps);
-  }
+    // Numbering properties
+    let numberingProps = {};
+    if (resolvedPpr?.numberingProperties?.numId != null) {
+      numberingProps = getNumberingProperties(
+        params,
+        resolvedPpr.numberingProperties.ilvl ?? 0,
+        resolvedPpr.numberingProperties.numId,
+        w_rPrTranslator,
+      );
+    }
 
-  styleChain = [...styleChain, paragraphStyleProps, runStyleProps, inlineRpr];
+    if (!numberingDefinedInline) {
+      // If numbering is not defined inline, we need to ignore the inline rPr
+      inlineRpr = {};
+    }
+
+    // Inline underlines are ignored for list numbers
+    if (inlineRpr?.underline) {
+      delete inlineRpr.underline;
+    }
+
+    styleChain = [...styleChain, paragraphStyleProps, runStyleProps, inlineRpr, numberingProps];
+  } else {
+    styleChain = [...styleChain, paragraphStyleProps, runStyleProps, inlineRpr];
+  }
 
   const finalProps = combineProperties(styleChain, ['fontFamily', 'color']);
   return finalProps;
@@ -60,30 +77,85 @@ export const resolveRunProperties = (params, inlineRpr, resolvedPpr, isListNumbe
  * @param {import('@translator').SCEncoderConfig} params
  * @param {Object} inlineProps - The inline paragraph properties.
  * @param {boolean} [insideTable=false] - Whether the paragraph is inside a table.
+ * @param {boolean} [overrideInlineStyleId=false] - Whether to override the inline style ID with the one from numbering.
  * @returns {Object} The resolved paragraph properties.
  */
-export function resolveParagraphProperties(params, inlineProps, insideTable = false) {
+export function resolveParagraphProperties(params, inlineProps, insideTable = false, overrideInlineStyleId = false) {
   const defaultProps = getDefaultProperties(params, w_pPrTranslator);
   const { properties: normalProps, isDefault: isNormalDefault } = getStyleProperties(params, 'Normal', w_pPrTranslator);
 
-  const styleProps = inlineProps?.styleId ? resolveStyleChain(params, inlineProps?.styleId, w_pPrTranslator) : {};
+  let styleId = inlineProps?.styleId;
+  let styleProps = inlineProps?.styleId ? resolveStyleChain(params, inlineProps?.styleId, w_pPrTranslator) : {};
 
   // Numbering style
   let numberingProps = {};
-  const ilvl = inlineProps?.numberingProperties?.ilvl ?? styleProps?.numberingProperties?.ilvl;
+  let ilvl = inlineProps?.numberingProperties?.ilvl ?? styleProps?.numberingProperties?.ilvl;
   const numId = inlineProps?.numberingProperties?.numId ?? styleProps?.numberingProperties?.numId;
-  if (ilvl != null && numId != null) {
+  let numberingDefinedInline = inlineProps?.numberingProperties?.numId != null;
+  const isList = numId != null;
+  if (isList) {
+    ilvl = ilvl != null ? ilvl : 0;
     numberingProps = getNumberingProperties(params, ilvl, numId, w_pPrTranslator);
+    if (overrideInlineStyleId && numberingProps.styleId) {
+      styleId = numberingProps.styleId;
+      styleProps = resolveStyleChain(params, styleId, w_pPrTranslator);
+      if (inlineProps) {
+        inlineProps.styleId = styleId;
+
+        if (
+          styleProps.numberingProperties?.ilvl === inlineProps.numberingProperties?.ilvl &&
+          styleProps.numberingProperties?.numId === inlineProps.numberingProperties?.numId
+        ) {
+          // Numbering is already defined in style, so remove from inline props
+          delete inlineProps.numberingProperties;
+          numberingDefinedInline = false;
+        }
+      }
+    }
   }
 
-  let propsChain;
+  // Resolve property chain - regular properties are treated differently from indentation
+  //   Chain for regular properties
+  let defaultsChain;
   if (isNormalDefault) {
-    propsChain = [defaultProps, normalProps, numberingProps, styleProps, inlineProps];
+    defaultsChain = [defaultProps, normalProps];
   } else {
-    propsChain = [normalProps, defaultProps, numberingProps, styleProps, inlineProps];
+    defaultsChain = [normalProps, defaultProps];
+  }
+  const propsChain = [...defaultsChain, numberingProps, styleProps, inlineProps];
+
+  //  Chain for indentation properties
+  let indentChain;
+  if (isList) {
+    if (numberingDefinedInline) {
+      // If numbering is defined inline, then numberingProps should override styleProps for indentation
+      indentChain = [...defaultsChain, styleProps, numberingProps, inlineProps];
+    } else {
+      // Otherwise, styleProps should override numberingProps for indentation but it should not follow the based-on chain
+      styleProps = resolveStyleChain(params, styleId, w_pPrTranslator, false);
+      indentChain = [...defaultsChain, numberingProps, styleProps, inlineProps];
+    }
+  } else {
+    // Otherwise, styleProps should override numberingProps for indentation
+    indentChain = [...defaultsChain, numberingProps, styleProps, inlineProps];
   }
 
   let finalProps = combineProperties(propsChain);
+  let finalIndent = combineProperties(
+    indentChain.map((props) => (props.indent != null ? { indent: props.indent } : {})),
+    [],
+    {
+      firstLine: (target, source) => {
+        // If a higher priority source defines firstLine, remove hanging from the final result
+        if (target.hanging != null && source.firstLine != null) {
+          delete target.hanging;
+        }
+
+        return source.firstLine;
+      },
+    },
+  );
+  finalProps.indent = finalIndent.indent;
 
   if (insideTable && !inlineProps?.spacing && !styleProps.spacing) {
     // Word ignores doc-default spacing inside table cells unless explicitly set,
@@ -91,15 +163,10 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
     finalProps.spacing = undefined;
   }
 
-  // START: Remove this code after re-implementation of lists
-  if (ilvl != null && numId != null) {
-    delete finalProps.indent;
-  }
-  // END: Remove this code after re-implementation of lists
   return finalProps;
 }
 
-const resolveStyleChain = (params, styleId, translator) => {
+const resolveStyleChain = (params, styleId, translator, followBasedOnChain = true) => {
   let styleProps = {},
     basedOn = null;
   if (styleId && styleId !== 'Normal') {
@@ -109,7 +176,7 @@ const resolveStyleChain = (params, styleId, translator) => {
   let styleChain = [styleProps];
   const seenStyles = new Set();
   let nextBasedOn = basedOn;
-  while (nextBasedOn) {
+  while (followBasedOnChain && nextBasedOn) {
     if (seenStyles.has(basedOn)) {
       break;
     }
@@ -169,17 +236,15 @@ export function getStyleProperties(params, styleId, translator) {
   return { properties: result, isDefault: style?.attributes?.['w:default'] === '1', basedOn };
 }
 
-export function getNumberingProperties(params, ilvl, numId, translator) {
-  const { docx } = params;
-  const numberingElements = docx['word/numbering.xml'].elements?.[0]?.elements;
-  if (!numberingElements) return {};
+export function getNumberingProperties(params, ilvl, numId, translator, tries = 0) {
+  const { numbering: allDefinitions } = params;
+  const { definitions, abstracts } = allDefinitions;
 
   const propertiesChain = [];
 
   // Find the num definition for the given numId
-  const abstractDefinitions = numberingElements?.filter((element) => element.name === 'w:abstractNum');
-  const numDefinitions = numberingElements?.filter((element) => element.name === 'w:num');
-  const numDefinition = numDefinitions?.find((element) => element.attributes['w:numId'] == numId);
+  const numDefinition = definitions[numId];
+  if (!numDefinition) return {};
 
   // Find overrides for this level in the num definition
   const lvlOverride = numDefinition?.elements?.find(
@@ -192,13 +257,24 @@ export function getNumberingProperties(params, ilvl, numId, translator) {
   }
 
   // Find corresponding abstractNum definition
-  const abstractNumId = numDefinition?.elements[0].attributes['w:val'];
-  const listDefinitionForThisNumId = abstractDefinitions?.find(
-    (element) => element.attributes['w:abstractNumId'] === abstractNumId,
-  );
+  const abstractNumId = numDefinition.elements?.find((item) => item.name === 'w:abstractNumId')?.attributes?.['w:val'];
+
+  const listDefinitionForThisNumId = abstracts[abstractNumId];
   if (!listDefinitionForThisNumId) return {};
 
+  // Handle numStyleLink if present
+  const numStyleLink = listDefinitionForThisNumId.elements?.find((item) => item.name === 'w:numStyleLink');
+  const styleId = numStyleLink?.attributes?.['w:val'];
+
+  if (styleId && tries < 1) {
+    const { properties: styleProps } = getStyleProperties(params, styleId, w_pPrTranslator);
+    if (styleProps?.numberingProperties?.numId) {
+      return getNumberingProperties(params, ilvl, styleProps.numberingProperties.numId, translator, tries + 1);
+    }
+  }
+
   // Find the level definition within the abstractNum
+
   const levelDefinition = listDefinitionForThisNumId?.elements?.find(
     (element) => element.name === 'w:lvl' && element.attributes['w:ilvl'] == ilvl,
   );
@@ -208,6 +284,13 @@ export function getNumberingProperties(params, ilvl, numId, translator) {
   const abstractElementPr = levelDefinition?.elements?.find((el) => el.name === translator.xmlName);
   if (!abstractElementPr) return {};
   const abstractProps = translator.encode({ ...params, nodes: [abstractElementPr] }) || {};
+
+  // Find pStyle for this level, if any
+  const pStyleElement = levelDefinition?.elements?.find((el) => el.name === 'w:pStyle');
+  if (pStyleElement) {
+    const pStyleId = pStyleElement?.attributes?.['w:val'];
+    abstractProps.styleId = pStyleId;
+  }
   propertiesChain.push(abstractProps);
 
   // Combine properties
@@ -217,7 +300,7 @@ export function getNumberingProperties(params, ilvl, numId, translator) {
   return result;
 }
 
-export const combineProperties = (propertiesArray, fullOverrideProps = []) => {
+export const combineProperties = (propertiesArray, fullOverrideProps = [], specialHandling = {}) => {
   if (!propertiesArray || propertiesArray.length === 0) {
     return {};
   }
@@ -237,7 +320,12 @@ export const combineProperties = (propertiesArray, fullOverrideProps = []) => {
               output[key] = source[key];
             }
           } else {
-            output[key] = source[key];
+            const handler = specialHandling[key];
+            if (handler && typeof handler === 'function') {
+              output[key] = handler(output, source);
+            } else {
+              output[key] = source[key];
+            }
           }
         }
       }
@@ -354,6 +442,177 @@ export function encodeMarksFromRPr(runProperties, docx) {
     marks.push({ type: 'highlight', attrs: { color: highlightColor } });
   }
   return marks;
+}
+
+export function encodeCSSFromRPr(runProperties, docx) {
+  if (!runProperties || typeof runProperties !== 'object') {
+    return {};
+  }
+
+  const css = {};
+  const textDecorationLines = new Set();
+  let hasTextDecorationNone = false;
+  let highlightColor = null;
+  let hasHighlightTag = false;
+
+  Object.keys(runProperties).forEach((key) => {
+    const value = runProperties[key];
+    switch (key) {
+      case 'bold': {
+        const normalized = normalizeToggleValue(value);
+        if (normalized === true) {
+          css['font-weight'] = 'bold';
+        } else if (normalized === false) {
+          css['font-weight'] = 'normal';
+        }
+        break;
+      }
+      case 'italic': {
+        const normalized = normalizeToggleValue(value);
+        if (normalized === true) {
+          css['font-style'] = 'italic';
+        } else if (normalized === false) {
+          css['font-style'] = 'normal';
+        }
+        break;
+      }
+      case 'strike': {
+        const normalized = normalizeToggleValue(value);
+        if (normalized === true) {
+          addTextDecorationEntries(textDecorationLines, 'line-through');
+        } else if (normalized === false) {
+          css['text-decoration'] = 'none';
+          hasTextDecorationNone = true;
+        }
+        break;
+      }
+      case 'textTransform': {
+        if (value != null) {
+          css['text-transform'] = value;
+        }
+        break;
+      }
+      case 'color': {
+        const colorVal = value?.val;
+        if (colorVal == null || colorVal === '') {
+          break;
+        }
+        if (String(colorVal).toLowerCase() === 'auto') {
+          css['color'] = 'auto';
+        } else {
+          css['color'] = `#${String(colorVal).replace('#', '').toUpperCase()}`;
+        }
+        break;
+      }
+      case 'underline': {
+        const underlineType = value?.['w:val'];
+        if (!underlineType) break;
+        let underlineColor = value?.['w:color'];
+        if (
+          underlineColor &&
+          typeof underlineColor === 'string' &&
+          underlineColor.toLowerCase() !== 'auto' &&
+          !underlineColor.startsWith('#')
+        ) {
+          underlineColor = `#${underlineColor}`;
+        }
+
+        const underlineCssString = getUnderlineCssString({ type: underlineType, color: underlineColor });
+        const underlineCss = parseCssDeclarations(underlineCssString);
+
+        Object.entries(underlineCss).forEach(([prop, propValue]) => {
+          if (!propValue) return;
+          if (prop === 'text-decoration') {
+            css[prop] = propValue;
+            if (propValue === 'none') {
+              hasTextDecorationNone = true;
+            }
+            return;
+          }
+          if (prop === 'text-decoration-line') {
+            addTextDecorationEntries(textDecorationLines, propValue);
+            return;
+          }
+          css[prop] = propValue;
+        });
+        break;
+      }
+      case 'fontSize': {
+        if (value == null) break;
+        const points = halfPointToPoints(value);
+        if (Number.isFinite(points)) {
+          css['font-size'] = `${points}pt`;
+        }
+        break;
+      }
+      case 'letterSpacing': {
+        if (value == null) break;
+        const spacing = twipsToPt(value);
+        if (Number.isFinite(spacing)) {
+          css['letter-spacing'] = `${spacing}pt`;
+        }
+        break;
+      }
+      case 'fontFamily': {
+        if (!value) break;
+        const fontFamily = getFontFamilyValue(value, docx);
+        if (fontFamily) {
+          css['font-family'] = fontFamily;
+        }
+        const eastAsiaFamily = value['eastAsia'];
+        if (eastAsiaFamily) {
+          const eastAsiaCss = SuperConverter.toCssFontFamily(eastAsiaFamily, docx);
+          if (eastAsiaCss && (!fontFamily || eastAsiaCss !== fontFamily)) {
+            css['font-family'] = css['font-family'] || eastAsiaCss;
+          }
+        }
+        break;
+      }
+      case 'highlight': {
+        const color = getHighLightValue(value);
+        if (color) {
+          hasHighlightTag = true;
+          highlightColor = color;
+        }
+        break;
+      }
+      case 'shading': {
+        if (hasHighlightTag) {
+          break;
+        }
+        const fill = value?.['fill'];
+        const shdVal = value?.['val'];
+        if (fill && String(fill).toLowerCase() !== 'auto') {
+          highlightColor = `#${String(fill).replace('#', '')}`;
+        } else if (typeof shdVal === 'string') {
+          const normalized = shdVal.toLowerCase();
+          if (normalized === 'clear' || normalized === 'nil' || normalized === 'none') {
+            highlightColor = 'transparent';
+          }
+        }
+        break;
+      }
+      default:
+        break;
+    }
+  });
+
+  if (!hasTextDecorationNone && textDecorationLines.size) {
+    const combined = new Set();
+    addTextDecorationEntries(combined, css['text-decoration-line']);
+    textDecorationLines.forEach((entry) => combined.add(entry));
+    css['text-decoration-line'] = Array.from(combined).join(' ');
+  }
+
+  if (highlightColor) {
+    css['background-color'] = highlightColor;
+    if (!('color' in css)) {
+      // @ts-ignore
+      css['color'] = 'inherit';
+    }
+  }
+
+  return css;
 }
 
 export function decodeRPrFromMarks(marks) {
@@ -473,4 +732,48 @@ function getHighLightValue(attributes) {
   if (attributes?.['w:val'] === 'none') return 'transparent';
   if (isValidHexColor(attributes?.['w:val'])) return `#${attributes['w:val']}`;
   return getHexColorFromDocxSystem(attributes?.['w:val']) || null;
+}
+
+function normalizeToggleValue(value) {
+  if (value == null) return null;
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    if (normalized === '0' || normalized === 'false' || normalized === 'off') return false;
+    if (normalized === '1' || normalized === 'true' || normalized === 'on') return true;
+  }
+  return Boolean(value);
+}
+
+function parseCssDeclarations(cssString) {
+  if (!cssString || typeof cssString !== 'string') {
+    return {};
+  }
+  return cssString
+    .split(';')
+    .map((chunk) => chunk.trim())
+    .filter(Boolean)
+    .reduce((acc, declaration) => {
+      const separatorIndex = declaration.indexOf(':');
+      if (separatorIndex === -1) return acc;
+      const property = declaration.slice(0, separatorIndex).trim();
+      const value = declaration.slice(separatorIndex + 1).trim();
+      if (!property || !value) return acc;
+      acc[property] = value;
+      return acc;
+    }, {});
+}
+
+function addTextDecorationEntries(targetSet, value) {
+  if (!value) return;
+  if (value instanceof Set) {
+    value.forEach((entry) => addTextDecorationEntries(targetSet, entry));
+    return;
+  }
+  String(value)
+    .split(/\s+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .forEach((entry) => targetSet.add(entry));
 }

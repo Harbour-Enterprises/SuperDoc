@@ -14,6 +14,14 @@ vi.mock('@extensions/linked-styles/linked-styles.js', () => ({
   getQuickFormatList: vi.fn(),
 }));
 
+vi.mock(import('@helpers/index.js'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    findParentNode: vi.fn().mockImplementation(() => vi.fn().mockReturnValue(null)),
+  };
+});
+
 vi.mock('@extensions/track-changes/permission-helpers.js', () => ({
   collectTrackedChanges: vi.fn(() => []),
   isTrackedChangeActionAllowed: vi.fn(() => true),

@@ -4,6 +4,30 @@ import { OxmlNode, Attribute } from '@core/index.js';
 import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
 import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
 import { pixelsToTwips, linesToTwips, twipsToPixels, eighthPointsToPixels } from '@converter/helpers.js';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { resolveParagraphProperties } from '@converter/styles.js';
+import { splitBlock } from '@core/commands/splitBlock.js';
+import { removeNumberingProperties } from '@core/commands/removeNumberingProperties.js';
+import { isList } from '@core/commands/list-helpers';
+import { findParentNode } from '@helpers/index.js';
+import { InputRule } from '@core/InputRule.js';
+import { toggleList } from '@core/commands/index.js';
+import { restartNumbering } from '@core/commands/restartNumbering.js';
+import { ParagraphNodeView } from './ParagraphNodeView.js';
+import { createNumberingPlugin } from './numberingPlugin.js';
+import { shouldSkipNodeView } from '../../utils/headless-helpers.js';
+
+/**
+ * Input rule regex that matches a bullet list marker (-, +, or *)
+ * @private
+ */
+const bulletInputRegex = /^\s*([-+*])\s$/;
+
+/**
+ * Input rule regex that matches an ordered list marker (e.g., "1. ")
+ * @private
+ */
+const orderedInputRegex = /^(\d+)\.\s$/;
 
 /**
  * Configuration options for Paragraph
@@ -95,12 +119,16 @@ export const Paragraph = OxmlNode.create({
         },
         renderDOM: (attrs) => {
           const { spacing, marksAttrs } = attrs;
-          if (!spacing) return {};
+          if (!spacing) return { style: null };
           const spacingCopy = { ...spacing };
           if (attrs.lineHeight) delete spacingCopy.line; // we'll get line-height from lineHeight
-          const style = getSpacingStyleString(spacingCopy, marksAttrs ?? []);
+          const style = getSpacingStyleString(
+            spacingCopy,
+            marksAttrs ?? [],
+            Boolean(attrs.paragraphProperties?.numberingProperties),
+          );
           if (style) return { style };
-          return {};
+          return { style: null };
         },
       },
 
@@ -130,10 +158,10 @@ export const Paragraph = OxmlNode.create({
       indent: {
         default: null,
         renderDOM: ({ indent }) => {
-          if (!indent) return {};
+          if (!indent) return { style: null };
           const { left, right, firstLine, hanging } = indent;
           if (indent && Object.values(indent).every((v) => v === 0)) {
-            return {};
+            return { style: null };
           }
 
           let style = '';
@@ -224,6 +252,25 @@ export const Paragraph = OxmlNode.create({
         },
       },
       tabStops: { rendered: false },
+      listRendering: {
+        keepOnSplit: false,
+        renderDOM: ({ listRendering }) => {
+          return {
+            'data-marker-type': listRendering?.markerText,
+            'data-list-level': listRendering?.path ? JSON.stringify(listRendering.path) : null,
+            'data-list-numbering-type': listRendering?.numberingType,
+          };
+        },
+      },
+      numberingProperties: {
+        keepOnSplit: true,
+        renderDOM: ({ numberingProperties }) => {
+          return {
+            'data-num-id': numberingProperties?.numId,
+            'data-level': numberingProperties?.ilvl,
+          };
+        },
+      },
     };
   },
 
@@ -232,13 +279,65 @@ export const Paragraph = OxmlNode.create({
       {
         tag: 'p',
         getAttrs: (node) => {
-          const { styleid, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
-            acc[attr.name] = attr.value;
+          const numberingProperties = {};
+          let indent, spacing;
+          const { styleid: styleId, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
+            if (attr.name === 'data-num-id') {
+              numberingProperties.numId = parseInt(attr.value);
+            } else if (attr.name === 'data-level') {
+              numberingProperties.ilvl = parseInt(attr.value);
+            } else if (attr.name === 'data-indent') {
+              try {
+                indent = JSON.parse(attr.value);
+                // Ensure numeric values
+                Object.keys(indent).forEach((key) => {
+                  indent[key] = Number(indent[key]);
+                });
+              } catch {
+                // ignore invalid indent value
+              }
+            } else if (attr.name === 'data-spacing') {
+              try {
+                spacing = JSON.parse(attr.value);
+                // Ensure numeric values
+                Object.keys(spacing).forEach((key) => {
+                  spacing[key] = Number(spacing[key]);
+                });
+              } catch {
+                // ignore invalid spacing value
+              }
+            } else {
+              acc[attr.name] = attr.value;
+            }
             return acc;
           }, {});
 
+          if (Object.keys(numberingProperties).length > 0) {
+            const resolvedParagraphProperties = resolveParagraphProperties(
+              { docx: this.editor.converter.convertedXml, numbering: this.editor.converter.numbering },
+              { styleId, numberingProperties, indent, spacing },
+              false,
+              true,
+            );
+            return {
+              paragraphProperties: {
+                numberingProperties,
+                indent,
+                spacing,
+                styleId: styleId || null,
+              },
+              indent: resolvedParagraphProperties.indent,
+              spacing: resolvedParagraphProperties.spacing,
+              numberingProperties,
+              styleId: styleId || null,
+              extraAttrs,
+            };
+          }
+
           return {
-            styleId: styleid || null,
+            styleId: styleId || null,
+            indent,
+            spacing,
             extraAttrs,
           };
         },
@@ -266,6 +365,116 @@ export const Paragraph = OxmlNode.create({
 
   renderDOM({ htmlAttributes }) {
     return ['p', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  },
+
+  addNodeView() {
+    if (shouldSkipNodeView(this.editor)) return null;
+    return ({ node, editor, getPos, decorations, extensionAttrs }) => {
+      return new ParagraphNodeView(node, editor, getPos, decorations, extensionAttrs);
+    };
+  },
+
+  addShortcuts() {
+    return {
+      'Mod-Shift-7': () => {
+        return this.editor.commands.toggleOrderedList();
+      },
+      'Mod-Shift-8': () => {
+        return this.editor.commands.toggleBulletList();
+      },
+      Enter: (params) => {
+        return removeNumberingProperties({ checkType: 'empty' })({
+          ...params,
+          tr: this.editor.state.tr,
+          state: this.editor.state,
+          dispatch: this.editor.view.dispatch,
+        });
+      },
+
+      'Shift-Enter': () => {
+        return this.editor.commands.first(({ commands }) => [
+          () => commands.createParagraphNear(),
+          splitBlock({
+            attrsToRemoveOverride: ['paragraphProperties.numberingProperties', 'listRendering', 'numberingProperties'],
+          }),
+        ]);
+      },
+
+      Tab: () => {
+        return this.editor.commands.first(({ commands }) => [() => commands.increaseListIndent()]);
+      },
+
+      'Shift-Tab': () => {
+        return this.editor.commands.first(({ commands }) => [() => commands.decreaseListIndent()]);
+      },
+    };
+  },
+
+  addInputRules() {
+    return [
+      { regex: orderedInputRegex, type: 'orderedList' },
+      { regex: bulletInputRegex, type: 'bulletList' },
+    ].map(
+      ({ regex, type }) =>
+        new InputRule({
+          match: regex,
+          handler: ({ state, range }) => {
+            // Check if we're currently inside a list item
+            const parentListItem = findParentNode(isList)(state.selection);
+            if (parentListItem) {
+              // Inside a list item, do not create a new list
+              return null;
+            }
+
+            // Not inside a list item, proceed with creating new list
+            const { tr } = state;
+            tr.delete(range.from, range.to);
+
+            ListHelpers.createNewList({
+              listType: type,
+              tr,
+              editor: this.editor,
+            });
+          },
+        }),
+    );
+  },
+
+  addCommands() {
+    return {
+      /**
+       * Toggle ordered list formatting
+       * @category Command
+       * @example
+       * editor.commands.toggleOrderedList()
+       * @note Converts selection to ordered list or back to paragraphs
+       */
+      toggleOrderedList: () => (params) => {
+        return toggleList('orderedList')(params);
+      },
+
+      /**
+       * Toggle a bullet list at the current selection
+       * @category Command
+       * @example
+       * // Toggle bullet list on selected text
+       * editor.commands.toggleBulletList()
+       * @note Converts selected paragraphs to list items or removes list formatting
+       */
+      toggleBulletList: () => (params) => {
+        return toggleList('bulletList')(params);
+      },
+
+      /**
+       * Restart numbering for the current list
+       * @category Command
+       * @example
+       * // Restart numbering for the current list item
+       * editor.commands.restartNumbering()
+       * @note Resets list numbering for the current list item and following items
+       */
+      restartNumbering: () => restartNumbering,
+    };
   },
 
   addPmPlugins() {
@@ -368,7 +577,8 @@ export const Paragraph = OxmlNode.create({
       },
     });
 
-    return [dropcapPlugin];
+    const numberingPlugin = createNumberingPlugin(this.editor);
+    return [dropcapPlugin, numberingPlugin];
   },
 });
 

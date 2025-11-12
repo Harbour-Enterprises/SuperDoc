@@ -1,8 +1,16 @@
 import { DOMParser } from 'prosemirror-model';
 import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste } from '../../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
-import { extractListLevelStyles, numDefByTypeMap, numDefMap, startHelperMap } from '@helpers/pasteListHelpers.js';
+import {
+  extractListLevelStyles,
+  extractParagraphStyles,
+  numDefByTypeMap,
+  numDefMap,
+  startHelperMap,
+  resolveStyles,
+} from '@helpers/pasteListHelpers.js';
 import { normalizeLvlTextChar } from '../../super-converter/v2/importer/listImporter.js';
+import { pointsToTwips } from '@converter/helpers';
 
 /**
  * Main handler for pasted DOCX content.
@@ -32,19 +40,25 @@ export const handleDocxPaste = (html, editor, view) => {
     if (item.localName === 'li') {
       type = 'listItem';
     } else {
-      const html = item.innerHTML;
       type = 'p';
-      // Looking only for lists to extract list info
-      if (!html.includes('<!--[if !supportLists]')) return;
     }
 
     const styleAttr = item.getAttribute('style') || '';
     const msoListMatch = styleAttr.match(/mso-list:\s*l(\d+)\s+level(\d+)\s+lfo(\d+)/);
     const css = tempDiv.querySelector('style').innerHTML;
+    const normalStyles = extractParagraphStyles(css, 'MsoNormal');
+    const paragraphStyles = extractParagraphStyles(css, item.getAttribute('class'));
+    let styleChain = { ...normalStyles, ...paragraphStyles };
+    const numberingDefinedInline = !paragraphStyles || !paragraphStyles['mso-list'];
 
     if (msoListMatch) {
       const [, abstractId, level, numId] = msoListMatch;
-      const styles = extractListLevelStyles(css, abstractId, level, numId) || {};
+      const numberingStyles = extractListLevelStyles(css, abstractId, level, numId) || {};
+      if (numberingDefinedInline) {
+        styleChain = { ...normalStyles, ...paragraphStyles, ...numberingStyles };
+      } else {
+        styleChain = { ...normalStyles, ...numberingStyles, ...paragraphStyles };
+      }
       let start, numFmt, lvlText;
 
       if (type === 'listItem') {
@@ -56,10 +70,10 @@ export const handleDocxPaste = (html, editor, view) => {
         lvlText = `%${level}.`;
       } else {
         // Get numbering format from Word styles
-        const msoNumFormat = styles['mso-level-number-format'] || 'decimal';
+        const msoNumFormat = numberingStyles['mso-level-number-format'] || 'decimal';
         numFmt = numDefMap.get(msoNumFormat);
         const punc = item.innerText?.match(/^\s*[a-zA-Z0-9]+([.()])/i)?.[1] || '.';
-        lvlText = numFmt === 'bullet' ? normalizeLvlTextChar(styles['mso-level-text']) : `%${level}${punc}`;
+        lvlText = numFmt === 'bullet' ? normalizeLvlTextChar(numberingStyles['mso-level-text']) : `%${level}${punc}`;
 
         const startGetter = startHelperMap.get(numFmt);
         if (!startMap[numId]) startMap[numId] = startGetter(item.children[0]?.innerText || '1');
@@ -71,10 +85,59 @@ export const handleDocxPaste = (html, editor, view) => {
       item.setAttribute('data-start', start);
       item.setAttribute('data-lvl-text', lvlText);
       item.setAttribute('data-num-fmt', numFmt);
+    }
 
-      const ptToPxRatio = 1.333;
-      const indent = parseInt(styles['margin-left']) * ptToPxRatio || 0;
-      if (indent > 0) item.setAttribute('data-left-indent', indent);
+    // Handle paragraph properties
+    const resolvedStyle = resolveStyles(styleChain, item.getAttribute('style'));
+
+    //   Indentation
+    const left = pointsToTwips(parseInt(resolvedStyle['margin-left'] ?? 0));
+    const hangingFirstLine = pointsToTwips(parseInt(resolvedStyle['text-indent'] ?? 0));
+    let hanging, firstLine;
+    if (hangingFirstLine < 0) {
+      hanging = Math.abs(hangingFirstLine);
+    } else {
+      firstLine = hangingFirstLine;
+    }
+
+    if (left || hanging || firstLine) {
+      const indent = {};
+      if (left != null) indent.left = left;
+      if (hanging != null) indent.hanging = hanging;
+      if (firstLine != null) indent.firstLine = firstLine;
+      item.setAttribute('data-indent', JSON.stringify(indent));
+    }
+
+    //  Spacing
+    const after = pointsToTwips(parseInt(resolvedStyle['margin-bottom'] ?? 0));
+    const before = pointsToTwips(parseInt(resolvedStyle['margin-top'] ?? 0));
+    if (after || before) {
+      const spacing = {};
+      if (after != null) spacing.after = after;
+      if (before != null) spacing.before = before;
+      item.setAttribute('data-spacing', JSON.stringify(spacing));
+    }
+
+    //   Text styles
+    const textStyles = {};
+
+    if (resolvedStyle['font-size']) {
+      textStyles['font-size'] = resolvedStyle['font-size'];
+    }
+    if (resolvedStyle['font-family']) {
+      textStyles['font-family'] = resolvedStyle['font-family'];
+    }
+    if (resolvedStyle['text-transform']) {
+      textStyles['text-transform'] = resolvedStyle['text-transform'];
+    }
+    if (Object.keys(textStyles).length) {
+      Object.keys(textStyles).forEach((key) => {
+        const styleValue = textStyles[key];
+        if (styleValue) {
+          item.style[key] = styleValue;
+        }
+      });
+      item.setAttribute('data-text-styles', JSON.stringify(textStyles));
     }
 
     // Strip literal prefix inside conditional span
@@ -104,7 +167,6 @@ const transformWordLists = (container, editor) => {
     const numFmt = item.getAttribute('data-num-fmt');
     const start = item.getAttribute('data-start');
     const lvlText = item.getAttribute('data-lvl-text');
-    const indent = item.getAttribute('data-left-indent');
 
     // MS Word copy-pasted lists always start with num Id 1 and increment from there.
     // Which way not match the target documents numbering.xml lists
@@ -141,23 +203,31 @@ const transformWordLists = (container, editor) => {
     const path = generateListPath(level, currentListByNumId.levels, start);
     if (!path.length) path.push(currentListByNumId.levels[level]);
 
-    const li = document.createElement('li');
-    li.innerHTML = item.innerHTML;
-    li.setAttribute('data-num-id', id);
-    li.setAttribute('data-list-level', JSON.stringify(path));
-    li.setAttribute('data-level', level);
-    li.setAttribute('data-lvl-text', lvlText);
-    li.setAttribute('data-num-fmt', numFmt);
-    if (indent) li.setAttribute('data-indent', JSON.stringify({ left: indent }));
+    const pElement = document.createElement('p');
+    pElement.innerHTML = item.innerHTML;
+    pElement.setAttribute('data-num-id', id);
+    pElement.setAttribute('data-list-level', JSON.stringify(path));
+    pElement.setAttribute('data-level', level);
+    pElement.setAttribute('data-lvl-text', lvlText);
+    pElement.setAttribute('data-num-fmt', numFmt);
 
-    if (item.hasAttribute('data-font-family')) {
-      li.setAttribute('data-font-family', item.getAttribute('data-font-family'));
+    if (item.hasAttribute('data-indent')) {
+      pElement.setAttribute('data-indent', item.getAttribute('data-indent'));
     }
-    if (item.hasAttribute('data-font-size')) {
-      li.setAttribute('data-font-size', item.getAttribute('data-font-size'));
+    if (item.hasAttribute('data-spacing')) {
+      pElement.setAttribute('data-spacing', item.getAttribute('data-spacing'));
     }
-
+    if (item.hasAttribute('data-text-styles')) {
+      const textStyles = JSON.parse(item.getAttribute('data-text-styles'));
+      Object.keys(textStyles).forEach((key) => {
+        const styleValue = textStyles[key];
+        if (styleValue) {
+          pElement.style[key] = styleValue;
+        }
+      });
+    }
     const parentNode = item.parentNode;
+    parentNode.appendChild(pElement);
 
     let listForLevel;
     const newList = numFmt === 'bullet' ? document.createElement('ul') : document.createElement('ol');
@@ -167,7 +237,7 @@ const transformWordLists = (container, editor) => {
     parentNode.insertBefore(newList, item);
     listForLevel = newList;
 
-    listForLevel.appendChild(li);
+    listForLevel.appendChild(pElement);
     item.remove();
   }
 };

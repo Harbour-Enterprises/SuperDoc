@@ -41,6 +41,21 @@ export const TextStyle = Mark.create({
           return {};
         },
       },
+      {
+        getAttrs: (node) => {
+          const fontFamily = node.style.fontFamily?.replace(/['"]+/g, '');
+          const fontSize = node.style.fontSize;
+          const textTransform = node.style.textTransform;
+          if (fontFamily || fontSize || textTransform) {
+            return {
+              fontFamily: fontFamily || null,
+              fontSize: fontSize || null,
+              textTransform: textTransform || null,
+            };
+          }
+          return false;
+        },
+      },
     ];
   },
 

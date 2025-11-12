@@ -30,13 +30,20 @@ export const getLinkedStyle = (styleId, styles = []) => {
  * @private
  */
 export const getSpacingStyle = (spacing) => {
-  const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
+  const { lineSpaceBefore, lineSpaceAfter, line, lineRule, beforeAutoSpacing, afterAutoSpacing } = spacing;
   const lineHeightResult = getLineHeightValueString(line, '', lineRule, true);
   const lineHeightStyles = typeof lineHeightResult === 'object' && lineHeightResult !== null ? lineHeightResult : {};
 
+  const result = {};
+  if (!beforeAutoSpacing) {
+    result['margin-top'] = lineSpaceBefore + 'px';
+  }
+  if (!afterAutoSpacing) {
+    result['margin-bottom'] = lineSpaceAfter + 'px';
+  }
+
   return {
-    'margin-top': lineSpaceBefore + 'px',
-    'margin-bottom': lineSpaceAfter + 'px',
+    ...result,
     ...lineHeightStyles,
   };
 };
@@ -49,7 +56,7 @@ export const getSpacingStyle = (spacing) => {
  * @returns {string} The CSS style string
  * @private
  */
-export const getSpacingStyleString = (spacing, marks) => {
+export const getSpacingStyleString = (spacing, marks, isListItem) => {
   let { before, after, line, lineRule, beforeAutospacing, afterAutospacing } = spacing;
   line = twipsToLines(line);
   if (lineRule === 'exact' && line) {
@@ -60,13 +67,23 @@ export const getSpacingStyleString = (spacing, marks) => {
   const fontSize = textStyleMark?.attrs?.fontSize;
 
   before = twipsToPixels(before);
-  if (beforeAutospacing && fontSize) {
-    before += halfPointToPixels(parseInt(fontSize) * 0.5);
+  if (beforeAutospacing) {
+    if (fontSize) {
+      before += halfPointToPixels(parseInt(fontSize) * 0.5);
+    }
+    if (isListItem) {
+      before = 0; // Lists do not apply before autospacing
+    }
   }
 
   after = twipsToPixels(after);
-  if (afterAutospacing && fontSize) {
-    after += halfPointToPixels(parseInt(fontSize) * 0.5);
+  if (afterAutospacing) {
+    if (fontSize) {
+      after += halfPointToPixels(parseInt(fontSize) * 0.5);
+    }
+    if (isListItem) {
+      after = 0; // Lists do not apply after autospacing
+    }
   }
 
   return `

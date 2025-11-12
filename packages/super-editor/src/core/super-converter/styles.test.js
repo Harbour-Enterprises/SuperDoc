@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { encodeMarksFromRPr, decodeRPrFromMarks } from './styles.js';
+import { encodeMarksFromRPr, decodeRPrFromMarks, encodeCSSFromRPr } from './styles.js';
 
 beforeAll(() => {
   vi.stubGlobal('SuperConverter', {
@@ -72,6 +72,48 @@ describe('encodeMarksFromRPr', () => {
       type: 'textStyle',
       attrs: { textTransform: 'uppercase' },
     });
+  });
+});
+
+describe('encodeCSSFromRPr', () => {
+  it('should encode basic font toggles', () => {
+    const css = encodeCSSFromRPr({ bold: true, italic: false, strike: true }, {});
+    expect(css).toMatchObject({
+      'font-weight': 'bold',
+      'font-style': 'normal',
+      'text-decoration-line': 'line-through',
+    });
+    expect(css).not.toHaveProperty('text-decoration');
+  });
+
+  it('should encode underline styles and merge strike decorations', () => {
+    const css = encodeCSSFromRPr({ underline: { 'w:val': 'double', 'w:color': 'FF0000' }, strike: true }, {});
+    expect(css).toMatchObject({
+      'text-decoration-style': 'double',
+      'text-decoration-color': '#FF0000',
+    });
+    expect(css['text-decoration-line'].split(' ').sort()).toEqual(['line-through', 'underline'].sort());
+  });
+
+  it('should encode highlight without overriding explicit text color', () => {
+    const css = encodeCSSFromRPr({ color: { val: 'FF0000' }, highlight: { 'w:val': 'yellow' } }, {});
+    expect(css).toMatchObject({
+      color: '#FF0000',
+      'background-color': '#FFFF00',
+    });
+  });
+
+  it('should encode font size and letter spacing', () => {
+    const css = encodeCSSFromRPr({ fontSize: 24, letterSpacing: 240 }, {});
+    expect(css).toMatchObject({
+      'font-size': '12pt',
+      'letter-spacing': '12pt',
+    });
+  });
+
+  it('should encode font family using converter fallbacks', () => {
+    const css = encodeCSSFromRPr({ fontFamily: { 'w:ascii': 'Arial' } }, {});
+    expect(css['font-family']).toBe('Arial, sans-serif');
   });
 });
 

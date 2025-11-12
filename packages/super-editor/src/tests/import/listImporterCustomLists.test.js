@@ -16,12 +16,24 @@ describe('[custom-list1.docx] test import custom lists', () => {
     expect(content.length).toBe(5);
 
     const firstList = content[0];
-    expect(firstList.type).toBe('orderedList');
+    expect(firstList.type).toBe('paragraph');
 
     const { attrs: firstListAttrs } = firstList;
     expect(firstListAttrs).toBeDefined();
-    expect(firstListAttrs.listId).toBe('4');
-    expect(firstListAttrs.order).toBe(1);
+    firstListAttrs.listRendering = {
+      markerText: '1.',
+      justification: 'left',
+      path: [1],
+      numberingType: 'decimal',
+    };
+    firstListAttrs.numberingProperties = {
+      ilvl: 0,
+      numId: 4,
+    };
+    firstListAttrs.paragraphProperties.numberingProperties = {
+      ilvl: 0,
+      numId: 4,
+    };
   });
 
   it('can import the first sub-element (1.1)', () => {
@@ -29,41 +41,38 @@ describe('[custom-list1.docx] test import custom lists', () => {
     const content = state.content;
     expect(content.length).toBe(5);
 
-    const listItem = content[2].content[0];
+    const listItem = content[1];
     const { attrs } = listItem;
-    const lvlText = attrs.lvlText;
-    expect(lvlText).toBe('%1.%2.');
+    const lvlText = attrs.listRendering.markerText;
+    expect(lvlText).toBe('1.1.');
 
-    // We expect the list level to be [1, 1]
-    const listLevel = attrs.listLevel;
-    expect(listLevel).toStrictEqual([1, 2]);
+    const listLevel = attrs.listRendering.path;
+    expect(listLevel).toStrictEqual([1, 1]);
   });
 
   it('can import the second sub-element (1.2)', () => {
     const state = editor.getJSON();
     const content = state.content;
-    const listItem = content[2].content[0];
+    const listItem = content[2];
 
     const { attrs } = listItem;
-    const lvlText = attrs.lvlText;
-    expect(lvlText).toBe('%1.%2.');
+    const lvlText = attrs.listRendering.markerText;
+    expect(lvlText).toBe('1.2.');
 
-    // We expect the list level to be [2, 2]
-    const listLevel = attrs.listLevel;
+    const listLevel = attrs.listRendering.path;
     expect(listLevel).toStrictEqual([1, 2]);
   });
 
   it('can import the sub-sub-element (1.2.1)', () => {
     const state = editor.getJSON();
     const content = state.content;
-    const listItem = content[3].content[0];
+    const listItem = content[3];
 
     const { attrs } = listItem;
-    const lvlText = attrs.lvlText;
-    expect(lvlText).toBe('%1.%2.%3.');
+    const lvlText = attrs.listRendering.markerText;
+    expect(lvlText).toBe('1.2.1.');
 
-    // We expect the list level to be [1, 2, 1]
-    const listLevel = attrs.listLevel;
+    const listLevel = attrs.listRendering.path;
     expect(listLevel).toStrictEqual([1, 2, 1]);
   });
 });
@@ -82,43 +91,48 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
   });
 
   it('can import the first list item', () => {
-    const list = content.content[0];
-    const item = list.content[0];
-    expect(list.type).toBe('orderedList');
-    expect(item.type).toBe('listItem');
-    expect(item.attrs.numId).toBe('5');
-    expect(item.attrs.indent.left).toBe(24);
-    expect(item.attrs.indent.hanging).toBeUndefined();
-    expect(item.attrs.level).toBe(0);
-    expect(item.attrs.listLevel).toStrictEqual([1]);
+    const item = content.content[0];
+    expect(item.type).toBe('paragraph');
 
-    const pNode = item.content[0];
-    expect(pNode.type).toBe('paragraph');
-    expect(extractParagraphText(pNode)).toBe('ONE');
+    expect(item.attrs.listRendering).toEqual({
+      markerText: '1.',
+      justification: 'left',
+      path: [1],
+      numberingType: 'decimal',
+    });
+    expect(item.attrs.numberingProperties).toEqual({
+      ilvl: 0,
+      numId: 5,
+    });
+    expect(item.attrs.indent.left).toBe(360);
+    expect(item.attrs.indent.hanging).toBe(360);
+
+    expect(extractParagraphText(item)).toBe('ONE');
   });
 
   it('can import the first sub item (a) with indent', () => {
-    const list = content.content[2];
-    const item = list.content[0];
-    expect(list.type).toBe('orderedList');
-    expect(item.type).toBe('listItem');
-    expect(item.attrs.numId).toBe('5');
-    expect(item.attrs.indent.left).toBe(24);
+    const item = content.content[2];
+    expect(item.type).toBe('paragraph');
+
+    expect(item.attrs.listRendering).toEqual({
+      markerText: 'a.',
+      justification: 'left',
+      path: [1, 1],
+      numberingType: 'lowerLetter',
+    });
+    expect(item.attrs.numberingProperties).toEqual({
+      ilvl: 1,
+      numId: 5,
+    });
+    expect(item.attrs.indent.left).toBe(360);
     expect(item.attrs.indent.hanging).toBeUndefined();
-    expect(item.attrs.level).toBe(1);
-    expect(item.attrs.listLevel).toStrictEqual([1, 1]);
+    expect(item.attrs.indent.firstLine).toBe(0);
 
-    const pNode = item.content[0];
-    expect(pNode.type).toBe('paragraph');
-
-    expect(extractParagraphText(pNode)).toBe('a');
-
-    const { attrs: pNodeAttrs } = pNode;
-    expect(pNodeAttrs).toBeDefined();
+    expect(extractParagraphText(item)).toBe('a');
 
     // Check spacing
     // The spacing in this document is crucial to showing the indented list in the right place
-    const { spacing } = pNodeAttrs;
+    const { spacing } = item.attrs;
     expect(spacing).toBeDefined();
 
     expect(spacing.before).toBeUndefined();
@@ -151,9 +165,9 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
     const indentLeft = indentTag?.attributes['w:left'];
     const indentHanging = indentTag?.attributes['w:hanging'];
     const indentFirstLine = indentTag?.attributes['w:firstLine'];
-    expect(indentLeft).toBe(360);
+    expect(indentLeft).toBe('360');
     expect(indentHanging).toBeUndefined();
-    expect(indentFirstLine).toBe(0);
+    expect(indentFirstLine).toBe('0');
 
     const spacingTag = pPr?.elements.find((el) => el.name === 'w:spacing');
     expect(spacingTag).toBeDefined();
@@ -168,24 +182,27 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
   });
 
   it('can import the first "c" list item', () => {
-    const list = content.content[6];
-    const item = list.content[0];
-
-    expect(list.type).toBe('orderedList');
-    expect(item.type).toBe('listItem');
-    expect(item.attrs.numId).toBe('5');
-    expect(item.attrs.indent.left).toBe(24);
+    const item = content.content[6];
+    expect(item.type).toBe('paragraph');
+    expect(item.attrs.listRendering).toEqual({
+      markerText: 'c.',
+      justification: 'left',
+      path: [1, 3],
+      numberingType: 'lowerLetter',
+    });
+    expect(item.attrs.numberingProperties).toEqual({
+      ilvl: 1,
+      numId: 5,
+    });
+    expect(item.attrs.indent.left).toBe(360);
     expect(item.attrs.indent.hanging).toBeUndefined();
-    expect(item.attrs.level).toBe(1);
-    expect(item.attrs.listLevel).toStrictEqual([1, 3]);
+    expect(item.attrs.indent.firstLine).toBe(0);
 
-    const pNode = item.content[0];
-    expect(pNode.type).toBe('paragraph');
-    expect(extractParagraphText(pNode)).toBe('c');
+    expect(extractParagraphText(item)).toBe('c');
   });
 });
 
-describe('[brken-list.docx] Test list breaking indentation formatting', () => {
+describe('[broken-list.docx] Test list breaking indentation formatting', () => {
   const filename = 'broken-list.docx';
   let docx, media, mediaFiles, fonts, editor, dispatch, content;
   let exported, body;
@@ -199,17 +216,23 @@ describe('[brken-list.docx] Test list breaking indentation formatting', () => {
   });
 
   it('can import the first list item', () => {
-    const list = content.content[0];
-    const listItem = list.content[0];
+    const listItem = content.content[0];
 
-    expect(list.type).toBe('orderedList');
+    expect(listItem.type).toBe('paragraph');
     const { attrs } = listItem;
-    expect(attrs.numId).toBe('1');
-    expect(attrs.level).toBe(0);
-    expect(attrs.numPrType).toBe('inline');
-    expect(attrs.listLevel).toStrictEqual([1]);
-    expect(attrs.indent.left).toBeUndefined();
+    expect(attrs.listRendering).toEqual({
+      markerText: '1.',
+      justification: 'left',
+      path: [1],
+      numberingType: 'decimal',
+    });
+    expect(attrs.numberingProperties).toEqual({
+      ilvl: 0,
+      numId: 1,
+    });
+    expect(attrs.indent.left).toBe(480);
     expect(attrs.indent.leftChars).toBe(0);
+    expect(attrs.indent.hanging).toBe(480);
   });
 });
 
@@ -228,6 +251,6 @@ describe('[restart-numbering-sub-list.docx] Test sublist restart nubering', () =
 
   it('resets the numbering for the indented list item', () => {
     const sublist1 = content.content[4];
-    expect(sublist1.content[0].attrs.listLevel).toStrictEqual([2, 1]);
+    expect(sublist1.attrs.listRendering.path).toStrictEqual([2, 1]);
   });
 });
