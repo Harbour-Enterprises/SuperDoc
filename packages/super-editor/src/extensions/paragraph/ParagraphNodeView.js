@@ -108,6 +108,22 @@ export class ParagraphNodeView {
     if (mutation.type === 'attributes' && mutation.target === this.dom && mutation.attributeName === 'style') {
       return true;
     }
+    // Ignore addition/removal of marker/separator nodes
+    if (mutation.type === 'childList') {
+      if (this.marker && Array.from(mutation.removedNodes).includes(this.marker)) {
+        return true;
+      }
+
+      if (this.marker && Array.from(mutation.addedNodes).includes(this.marker)) {
+        return true;
+      }
+      if (this.separator && Array.from(mutation.removedNodes).includes(this.separator)) {
+        return true;
+      }
+      if (this.separator && Array.from(mutation.addedNodes).includes(this.separator)) {
+        return true;
+      }
+    }
     return false;
   }
 
@@ -129,10 +145,10 @@ export class ParagraphNodeView {
   #createMarker(markerText) {
     if (!this.marker) {
       this.marker = document.createElement('span');
+      this.dom.insertBefore(this.marker, this.contentDOM);
     }
     this.marker.contentEditable = 'false';
     this.marker.className = 'list-marker';
-    this.dom.insertBefore(this.marker, this.contentDOM);
     this.marker.textContent = markerText;
   }
 
@@ -144,7 +160,7 @@ export class ParagraphNodeView {
       if (this.separator == null || this.separator.tagName?.toLowerCase() !== 'span') {
         this.separator?.parentNode?.removeChild(this.separator);
         this.separator = document.createElement('span');
-        this.dom.insertBefore(this.separator, this.contentDOM);
+        this.marker.after(this.separator);
       }
       this.separator.className = 'sd-editor-tab';
       this.separator.contentEditable = 'false';
@@ -152,14 +168,14 @@ export class ParagraphNodeView {
       if (this.separator == null || this.separator.nodeType !== Node.TEXT_NODE) {
         this.separator?.parentNode?.removeChild(this.separator);
         this.separator = document.createTextNode('\u00A0');
-        this.dom.insertBefore(this.separator, this.contentDOM);
+        this.marker.after(this.separator);
       }
       this.separator.textContent = '\u00A0';
     } else if (suffix === 'nothing') {
       if (this.separator == null || this.separator.nodeType !== Node.TEXT_NODE) {
         this.separator?.parentNode?.removeChild(this.separator);
         this.separator = document.createTextNode('');
-        this.dom.insertBefore(this.separator, this.contentDOM);
+        this.marker.after(this.separator);
       }
       this.separator.textContent = '';
     }
