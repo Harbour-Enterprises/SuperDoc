@@ -126,20 +126,27 @@ describe('calculateIndentFallback', () => {
 
 describe('getTabDecorations', () => {
   // Helper to create a mock view with DOM measurement capabilities
-  const createMockView = (measurements = {}) => ({
-    coordsAtPos: vi.fn((pos) => {
-      if (measurements[pos]?.coords) {
-        return measurements[pos].coords;
-      }
-      return { left: pos * 10, top: 0, right: pos * 10, bottom: 20 };
-    }),
-    domAtPos: vi.fn((pos) => {
-      if (measurements[pos]?.dom) {
-        return measurements[pos].dom;
-      }
-      return { node: document.createTextNode(''), offset: 0 };
-    }),
-  });
+  const createMockView = (measurements = {}) => {
+    const getMeasurement = (pos, key) => measurements[pos]?.[key];
+
+    return {
+      coordsAtPos: vi.fn((pos) => {
+        const coords = getMeasurement(pos, 'coords');
+        if (coords) return coords;
+        return { left: pos * 10, top: 0, right: pos * 10, bottom: 20 };
+      }),
+      domAtPos: vi.fn((pos) => {
+        const dom = getMeasurement(pos, 'dom');
+        if (dom) return dom;
+        return { node: document.createTextNode(''), offset: 0 };
+      }),
+      nodeDOM: vi.fn((pos) => {
+        const nodeDom = getMeasurement(pos, 'nodeDOM');
+        if (nodeDom) return nodeDom;
+        return {};
+      }),
+    };
+  };
 
   // Helper to create a mock paragraph node
   const createParagraphNode = (children = [], attrs = {}) => {
@@ -791,6 +798,7 @@ describe('getTabDecorations', () => {
         domAtPos: vi.fn(() => {
           throw new Error('domAtPos error');
         }),
+        nodeDOM: vi.fn(() => ({})),
       };
 
       // Should not crash even with errors
