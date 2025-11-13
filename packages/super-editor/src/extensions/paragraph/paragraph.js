@@ -220,7 +220,12 @@ export const Paragraph = OxmlNode.create({
           return null;
         },
       },
-      styleId: {},
+      styleId: {
+        renderDOM: (attrs) => {
+          if (!attrs.styleId) return {};
+          return { styleid: attrs.styleId };
+        },
+      },
       sdBlockId: {
         default: null,
         keepOnSplit: false,

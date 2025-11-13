@@ -947,11 +947,12 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
       await page.keyboard.press('Enter');
 
-      // Ensure the text is Arial
+      // Ensure the text is visible
       const hello = await superEditor.getByText('Hello');
       expect(hello).toBeVisible();
 
-      const parentP = hello.locator('..');
+      // Get the <p> element (need to go up to the paragraph, not just the contentDOM span)
+      const parentP = hello.locator('xpath=ancestor::p[1]');
       const styleAttribute = await parentP.getAttribute('styleid');
       expect(styleAttribute).toBe('Heading2');
 
