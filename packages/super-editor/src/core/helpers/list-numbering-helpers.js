@@ -272,7 +272,12 @@ export const getListDefinitionDetails = ({ numId, level, listType, editor, tries
   const findElement = (name) => listDefinition.elements?.find((item) => item.name === name);
 
   const startElement = findElement('w:start');
-  const numFmtElement = findElement('w:numFmt');
+  let numFmtElement = findElement('w:numFmt');
+  if (!numFmtElement) {
+    const mcAlternate = listDefinition.elements?.find((item) => item.name === 'mc:AlternateContent');
+    const choice = mcAlternate?.elements?.find((el) => el.name === 'mc:Choice');
+    numFmtElement = choice?.elements?.find((item) => item.name === 'w:numFmt');
+  }
   const lvlTextElement = findElement('w:lvlText');
   const suffixElement = findElement('w:suff');
   const lvlJcElement = findElement('w:lvlJc');
