@@ -34,10 +34,10 @@ test.describe('comments', () => {
   };
 
   test('should import comments', async ({ page }) => {
-    await goToPageAndWaitForEditor(page);
+    await goToPageAndWaitForEditor(page, { includeComments: true });
     await page
       .locator('input[type="file"]')
-      .setInputFiles(path.join(testDataFolder, 'basic-documents/basic-comments.docx'));
+      .setInputFiles(path.join(testDataFolder, 'comments-documents/basic-comments.docx'));
 
     await page.waitForFunction(() => window.superdoc !== undefined && window.editor !== undefined, null, {
       polling: 100,
