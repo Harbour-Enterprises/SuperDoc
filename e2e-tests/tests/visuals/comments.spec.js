@@ -14,7 +14,7 @@ test.describe('documents with comments', () => {
       test.setTimeout(50_000);
 
       await page.goto('http://localhost:4173/');
-      await page.locator('input[type="file"]').setInputFiles(`./test-data/basic-documents/${fileName}`);
+      await page.locator('input[type="file"]').setInputFiles(`./test-data/comments-documents/${fileName}`);
       await page.waitForSelector('div.super-editor');
       await expect(page.locator('div.super-editor').first()).toBeVisible();
 
