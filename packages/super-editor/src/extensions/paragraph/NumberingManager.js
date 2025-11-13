@@ -159,7 +159,7 @@ export function NumberingManager() {
       abstractIdMap[numId] = abstractId;
       const restartSetting = startsMap?.[numId]?.[level]?.restart;
       const startValue = startsMap?.[numId]?.[level]?.start ?? 1;
-      const levelData = countersMap?.[numId]?.[level] || {};
+      const levelData = abstractCountersMap?.[abstractId]?.[level] || {};
       let previousPos = null;
       let previousCount = startValue - 1;
 
