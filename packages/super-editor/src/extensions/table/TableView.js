@@ -128,7 +128,8 @@ export function updateColumns(node, colgroup, table, cellMinWidth) {
       colgroup.appendChild(colElement);
     }
 
-    colElement.style.minWidth = `${cellMinWidth}px`;
+    // TODO: is there a reason to have a cellMinWidth?
+    // colElement.style.minWidth = `${cellMinWidth}px`;
     colElement.style.width = width !== null && width !== undefined ? `${width}px` : null;
     colElement = colElement.nextSibling;
   });
