@@ -79,7 +79,6 @@ const init = async () => {
 
   nextTick(() => {
     if (!config.modules) config.modules = {};
-    config.modules.comments = false;
     superdoc.value = new SuperDoc(config);
   });
 };
