@@ -45,7 +45,7 @@ test.describe('fonts', () => {
 
     // None of them are supported on the Ubuntu docker image but they must be here
     expect(resolvedFonts).toEqual({
-      documentFonts: ['Aptos', 'Comic Sans MS'].sort(),
+      documentFonts: ['Aptos', 'Arial', 'Comic Sans MS'].sort(),
       unsupportedFonts: ['Aptos', 'Comic Sans MS'].sort(),
     });
   });

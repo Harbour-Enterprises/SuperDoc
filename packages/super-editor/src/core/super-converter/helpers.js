@@ -56,7 +56,7 @@ function halfPointToPixels(halfPoints) {
 
 function halfPointToPoints(halfPoints) {
   if (halfPoints == null) return;
-  return Math.round(halfPoints / 2);
+  return Math.round(halfPoints) / 2;
 }
 
 function emuToPixels(emu) {
@@ -82,6 +82,16 @@ function eighthPointsToPixels(eighthPoints) {
   const points = parseFloat(eighthPoints) / 8;
   const pixels = points * 1.3333;
   return pixels;
+}
+
+function pointsToTwips(points) {
+  if (points == null) return;
+  return points * 20;
+}
+
+function pointsToLines(points) {
+  if (points == null) return;
+  return twipsToLines(pointsToTwips(points));
 }
 
 function pixelsToEightPoints(pixels) {
@@ -407,6 +417,7 @@ export {
   twipsToPixels,
   pixelsToTwips,
   pixelsToInches,
+  pointsToLines,
   inchesToPixels,
   twipsToLines,
   linesToTwips,
@@ -417,6 +428,7 @@ export {
   halfPointToPoints,
   eighthPointsToPixels,
   pixelsToEightPoints,
+  pointsToTwips,
   rotToDegrees,
   degreesToRot,
   objToPolygon,

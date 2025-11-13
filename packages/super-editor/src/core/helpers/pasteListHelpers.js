@@ -17,6 +17,49 @@ export const extractListLevelStyles = (cssText, listId, level, numId) => {
   return styleMap;
 };
 
+export const extractParagraphStyles = (cssText, className) => {
+  const pattern = new RegExp(`\\.(${className})\\s*\\{([^}]+)\\}`, 'i');
+  const match = cssText.match(pattern);
+  if (!match) return null;
+  const rawStyles = match[2]
+    .split(';')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const styleMap = {};
+  for (const style of rawStyles) {
+    const [key, value] = style.split(':').map((s) => s.trim());
+    styleMap[key] = value;
+  }
+  return styleMap;
+};
+
+export function resolveStyles(extractedStyles, inlineStyles) {
+  const inlineStyleMap = {};
+  if (inlineStyles) {
+    const styles = inlineStyles
+      .split(';')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const style of styles) {
+      const [key, value] = style.split(':').map((s) => s.trim());
+      inlineStyleMap[key] = value;
+    }
+  }
+
+  if (inlineStyleMap['mso-text-indent-alt']) {
+    delete inlineStyleMap['text-indent'];
+    inlineStyleMap['text-indent'] = inlineStyleMap['mso-text-indent-alt'];
+    delete inlineStyleMap['mso-text-indent-alt'];
+  }
+
+  if (inlineStyleMap['mso-bidi-font-family']) {
+    delete inlineStyleMap['font-family'];
+    inlineStyleMap['font-family'] = inlineStyleMap['mso-bidi-font-family'];
+    delete inlineStyleMap['mso-bidi-font-family'];
+  }
+  return { ...extractedStyles, ...inlineStyleMap };
+}
+
 export const numDefMap = new Map([
   ['decimal', 'decimal'],
   ['alpha-lower', 'lowerLetter'],

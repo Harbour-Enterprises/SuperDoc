@@ -315,6 +315,9 @@ const init = async () => {
   superdoc.value?.on('ready', () => {
     superdoc.value.addCommentsList(commentsPanel.value);
   });
+  superdoc.value?.on('exception', (error) => {
+    console.error('SuperDoc exception:', error);
+  });
 
   // const ydoc = superdoc.value.ydoc;
   // const metaMap = ydoc.getMap('meta');

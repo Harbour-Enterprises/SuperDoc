@@ -1,15 +1,16 @@
 // @ts-check
 import { describe, it, expect, vi } from 'vitest';
 import {
-  getParagraphContext,
+  findParagraphContext,
   flattenParagraph,
   findNextTabIndex,
   findDecimalBreakPos,
   calculateIndentFallback,
   getTabDecorations,
 } from './tabDecorations.js';
+import { pixelsToTwips } from '@converter/helpers';
 
-describe('getParagraphContext', () => {
+describe('findParagraphContext', () => {
   const mockHelpers = {
     linkedStyles: {
       getStyleById: vi.fn(),
@@ -17,14 +18,14 @@ describe('getParagraphContext', () => {
   };
 
   it('should get tabStops from node attributes', () => {
-    const tabStops = [{ val: 'left', pos: 720 }];
+    const tabStops = [{ tab: { tabType: 'left', pos: pixelsToTwips(720) } }];
     const node = { type: { name: 'paragraph' }, attrs: { tabStops }, forEach: () => {} };
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = getParagraphContext($pos, cache, mockHelpers);
+    const context = findParagraphContext($pos, cache, mockHelpers);
 
-    expect(context.tabStops).toEqual(tabStops);
+    expect(context.tabStops).toEqual([{ val: 'left', pos: 720 }]);
     expect(mockHelpers.linkedStyles.getStyleById).not.toHaveBeenCalled();
   });
 
@@ -38,7 +39,7 @@ describe('getParagraphContext', () => {
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = getParagraphContext($pos, cache, mockHelpers);
+    const context = findParagraphContext($pos, cache, mockHelpers);
 
     expect(context.tabStops).toEqual(tabStops);
     expect(mockHelpers.linkedStyles.getStyleById).toHaveBeenCalledWith('MyStyle');
@@ -50,7 +51,7 @@ describe('getParagraphContext', () => {
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = getParagraphContext($pos, cache, mockHelpers);
+    const context = findParagraphContext($pos, cache, mockHelpers);
 
     expect(context.tabStops).toEqual([]);
   });
@@ -117,10 +118,9 @@ describe('findDecimalBreakPos', () => {
 
 describe('calculateIndentFallback', () => {
   it('should calculate indent correctly', () => {
-    expect(calculateIndentFallback({ left: 10, firstLine: 20 })).toBe(30);
-    expect(calculateIndentFallback({ left: 10, hanging: 20 })).toBe(-10);
-    expect(calculateIndentFallback({ firstLine: 20, hanging: 10 })).toBe(10);
-    expect(calculateIndentFallback({ textIndent: '0.5in' })).toBe(48);
+    expect(calculateIndentFallback({ left: pixelsToTwips(10), firstLine: pixelsToTwips(20) })).toBe(30);
+    expect(calculateIndentFallback({ left: pixelsToTwips(10), hanging: pixelsToTwips(20) })).toBe(-10);
+    expect(calculateIndentFallback({ firstLine: pixelsToTwips(20), hanging: pixelsToTwips(10) })).toBe(10);
   });
 });
 

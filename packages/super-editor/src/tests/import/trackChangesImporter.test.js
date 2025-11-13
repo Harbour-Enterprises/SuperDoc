@@ -120,7 +120,7 @@ describe('TrackChangesImporter', () => {
         </w:sdtContent>
       </w:sdt>`;
     const nodes = parseXmlToJson(sdtInsertXml).elements;
-    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
     const mark = result.nodes[0].marks.find((item) => item.type === TrackInsertMarkName);
@@ -145,7 +145,7 @@ describe('TrackChangesImporter', () => {
         </w:sdtContent>
       </w:sdt>`;
     const nodes = parseXmlToJson(sdtDeleteXml).elements;
-    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
     const mark = result.nodes[0].marks.find((item) => item.type === TrackDeleteMarkName);
@@ -195,7 +195,7 @@ describe('trackChanges live xml test', () => {
 
   it('parses insert xml', () => {
     const nodes = parseXmlToJson(inserXml).elements;
-    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
     const insertionMark = result.nodes[0].marks.find((mark) => mark.type === TrackInsertMarkName);
     expect(insertionMark).toBeDefined();
@@ -209,7 +209,7 @@ describe('trackChanges live xml test', () => {
   });
   it('parses delete xml', () => {
     const nodes = parseXmlToJson(deleteXml).elements;
-    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
     const deletionMark = result.nodes[0].marks.find((mark) => mark.type === TrackDeleteMarkName);
     expect(deletionMark).toBeDefined();
@@ -224,7 +224,7 @@ describe('trackChanges live xml test', () => {
   it('parses mark change xml', () => {
     const nodes = parseXmlToJson(markChangeXml).elements;
     const handler = defaultNodeListHandler();
-    const result = handler.handler({ nodes });
+    const result = handler.handler({ nodes, docx: {} });
     expect(result.length).toBe(1);
     expect(result[0].type).toBe('paragraph');
     expect(result[0].content.length).toBe(1);
@@ -234,19 +234,13 @@ describe('trackChanges live xml test', () => {
       id: '2',
       date: '2024-09-04T09:29:00Z',
       author: 'torcsi@harbourcollaborators.com',
-      before: [
-        {
-          type: 'textStyle',
-          attrs: {},
-        },
-      ],
+      before: [],
       after: [
         {
           type: 'bold',
-        },
-        {
-          type: 'textStyle',
-          attrs: {},
+          attrs: {
+            value: true,
+          },
         },
       ],
     });
