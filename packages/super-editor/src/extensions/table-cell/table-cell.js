@@ -142,13 +142,17 @@ export const TableCell = Node.create({
       },
 
       cellMargins: {
-        renderDOM({ cellMargins }) {
+        renderDOM({ cellMargins, borders }) {
           if (!cellMargins) return {};
           const sides = ['top', 'right', 'bottom', 'left'];
           const style = sides
             .map((side) => {
-              const margin = cellMargins?.[side];
-              if (margin) return `padding-${side}: ${margin}px;`;
+              const margin = cellMargins?.[side] ?? 0;
+              const border = borders?.[side];
+              // TODO: this should include table-level borders as well for the first/last cell in the row
+              const borderSize = border && border.val !== 'none' ? Math.ceil(border.size) : 0;
+
+              if (margin) return `padding-${side}: ${Math.max(0, margin - borderSize)}px;`;
               return '';
             })
             .join(' ');
