@@ -84,10 +84,10 @@ body {
 
 .action-chip {
   display: flex;
+  background: linear-gradient(to right,#775AEC, #A75AEC);
   flex-direction: column;
   gap: 0.5rem;
   width: 100%;
-  background: rgba(148, 163, 184, 0.24);
   border-radius: 14px;
   padding: 0.3rem;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
@@ -103,6 +103,7 @@ body {
   justify-self: center;
   max-width: 420px;
   width: 100%;
+  background: linear-gradient(to right,#775AEC, #A75AEC);
 }
 
 .action-chip__main {
@@ -138,13 +139,12 @@ body {
   border: none;
   background: transparent;
   padding: 0;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: #0f172a;
+  font-size: 1.0rem;
+  font-weight: 500;
+  color: white;
   display: flex;
   align-items: center;
   gap: 0.55rem;
-  min-height: 45px;
   cursor: inherit;
   text-align: left;
 }
