@@ -60,8 +60,21 @@ describe('AIActionsService', () => {
             state: {
                 doc: {
                     textContent: 'Sample document text for testing',
-                    content: { size: 100 }
+                    content: { size: 100 },
+                    resolve: vi.fn((pos) => ({ 
+                        pos, 
+                        parent: { inlineContent: true },
+                        min: vi.fn(() => pos),
+                        max: vi.fn(() => pos)
+                    }))
+                },
+                tr: {
+                    setSelection: vi.fn().mockReturnThis(),
+                    scrollIntoView: vi.fn().mockReturnThis(),
                 }
+            },
+            view: {
+                dispatch: vi.fn()
             },
             exportDocx: vi.fn(),
             options: {
