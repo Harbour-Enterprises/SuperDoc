@@ -155,7 +155,8 @@ export function updateColumns(node, colgroup, table, cellMinWidth) {
     table.style.marginLeft = tableIndent;
   }
 
-  if (node.attrs.tableProperties.tableWidth.type === 'pct') {
+  // TODO: why is tableWidth undefined in src/tests/import-export/font-default-styles.test.js?
+  if (node.attrs.tableProperties.tableWidth?.type === 'pct') {
     const padding = firstRowFirstCellPaddingLeftPx + firstRowLastCellPaddingRightPx;
     table.style.maxWidth = table.style.width = `calc(${tableWidthCSS} + ${padding}px)`;
   } else {
