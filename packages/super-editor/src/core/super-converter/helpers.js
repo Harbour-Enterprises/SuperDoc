@@ -376,6 +376,10 @@ const getLineHeightValueString = (lineHeight, defaultUnit, lineRule = '', isObje
   let [value, unit] = parseSizeUnit(lineHeight);
   if (Number.isNaN(value) || value === 0) return {};
   if (lineRule === 'atLeast' && value < 1) return {};
+  // Prevent values less than 1 to avoid squashed text (unless using explicit units like pt)
+  if (!unit && value < 1) {
+    value = 1;
+  }
   unit = unit ? unit : defaultUnit;
   return isObject ? { ['line-height']: `${value}${unit}` } : `line-height: ${value}${unit}`;
 };
