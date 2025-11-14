@@ -95,6 +95,13 @@ export class AIActionsService {
 
         if (result.success && result.results?.length) {
             result.results = [result.results[0]];
+            
+            // Scroll to the found text
+            const firstMatch = result.results[0];
+            if (firstMatch?.positions && firstMatch.positions.length > 0) {
+                const { from, to } = firstMatch.positions[0];
+                this.adapter.scrollToPosition(from, to);
+            }
         }
 
         return result;

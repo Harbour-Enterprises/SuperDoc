@@ -194,6 +194,12 @@ describe('ExtensionService', () => {
       getPos: 'getPos',
       decorations: 'decorations',
       htmlAttributes: { 'data-test': 'value' },
+      extensionAttrs: [
+        {
+          attrs: 'attrs',
+          type: 'nodeExt',
+        },
+      ],
       extension,
     });
     expect(result).toBe('node-view-result');

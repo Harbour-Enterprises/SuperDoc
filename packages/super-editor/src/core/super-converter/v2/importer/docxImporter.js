@@ -16,7 +16,6 @@ import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
 import { pageReferenceEntity } from './pageReferenceImporter.js';
-import { listHandlerEntity } from './listImporter.js';
 import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
 import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
@@ -106,11 +105,13 @@ export const createDocumentJson = (docx, converter, editor) => {
     const lists = {};
     const inlineDocumentFonts = [];
 
+    const numbering = getNumberingDefinitions(docx);
     let parsedContent = nodeListHandler.handler({
       nodes: content,
       nodeListHandler,
       docx,
       converter,
+      numbering,
       editor,
       inlineDocumentFonts,
       lists,
@@ -139,7 +140,7 @@ export const createDocumentJson = (docx, converter, editor) => {
     return {
       pmDoc: result,
       savedTagsToRestore: node,
-      pageStyles: getDocumentStyles(node, docx, converter, editor),
+      pageStyles: getDocumentStyles(node, docx, converter, editor, numbering),
       comments,
       inlineDocumentFonts,
       linkedStyles: getStyleDefinitions(docx, converter, editor),
@@ -154,7 +155,6 @@ export const defaultNodeListHandler = () => {
     alternateChoiceHandler,
     runNodeHandlerEntity,
     pictNodeHandlerEntity,
-    listHandlerEntity,
     paragraphNodeHandlerEntity,
     textNodeHandlerEntity,
     lineBreakNodeHandlerEntity,
@@ -218,12 +218,14 @@ const createNodeListHandler = (nodeHandlers) => {
     docx,
     insideTrackChange,
     converter,
+    numbering,
     editor,
     filename,
     parentStyleId,
     lists,
     inlineDocumentFonts,
     path = [],
+    extraParams = {},
   }) => {
     if (!elements || !elements.length) return [];
     const filteredElements = pruneIgnoredNodes(elements);
@@ -249,12 +251,14 @@ const createNodeListHandler = (nodeHandlers) => {
                 nodeListHandler: { handler: nodeListHandlerFn, handlerEntities: nodeHandlers },
                 insideTrackChange,
                 converter,
+                numbering,
                 editor,
                 filename,
                 parentStyleId,
                 lists,
                 inlineDocumentFonts,
                 path,
+                extraParams,
               });
             },
             { nodes: [], consumed: 0 },
@@ -346,7 +350,7 @@ const createNodeListHandler = (nodeHandlers) => {
  * @param {Editor} editor instance.
  * @returns {Object} The document styles object
  */
-function getDocumentStyles(node, docx, converter, editor) {
+function getDocumentStyles(node, docx, converter, editor, numbering) {
   const sectPr = node.elements?.find((n) => n.name === 'w:sectPr');
   const styles = {};
 
@@ -389,7 +393,7 @@ function getDocumentStyles(node, docx, converter, editor) {
   });
 
   // Import headers and footers. Stores them in converter.headers and converter.footers
-  importHeadersFooters(docx, converter, editor);
+  importHeadersFooters(docx, converter, editor, numbering);
   styles.alternateHeaders = isAlternatingHeadersOddEven(docx);
   return styles;
 }
@@ -533,6 +537,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
   const relationships = rels?.elements.find((el) => el.name === 'Relationships');
   const { elements } = relationships || { elements: [] };
 
+  const numbering = getNumberingDefinitions(docx);
   const headerType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
   const footerType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
   const headers = elements.filter((el) => el.attributes['Type'] === headerType);
@@ -560,6 +565,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       nodeListHandler,
       docx,
       converter,
+      numbering,
       editor,
       filename: currentFileName,
       path: [],
@@ -590,6 +596,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       nodeListHandler,
       docx,
       converter,
+      numbering,
       editor,
       filename: currentFileName,
       path: [],

@@ -15,28 +15,25 @@ describe('w:rPr translator (attribute aggregator)', () => {
     const params = makeParams([
       { name: 'w:b', attributes: { 'w:val': '1' } },
       { name: 'w:color', attributes: { 'w:val': 'FF0000' } },
-    ]);
-
-    const result = translator.encode(params);
-
-    expect(result?.attributes).toEqual([
-      { xmlName: 'w:b', attributes: {} },
-      { xmlName: 'w:color', attributes: { 'w:val': 'FF0000' } },
-    ]);
-  });
-
-  it('preserves raw entries for supported children without dedicated translators', () => {
-    const params = makeParams([
       { name: 'w:lang', attributes: { 'w:val': 'en-US' } },
       { name: 'w:shd', attributes: { 'w:fill': 'CCCCCC', 'w:val': 'clear' } },
     ]);
 
     const result = translator.encode(params);
 
-    expect(result?.attributes).toEqual([
-      { xmlName: 'w:lang', attributes: { 'w:val': 'en-US' } },
-      { xmlName: 'w:shd', attributes: { 'w:fill': 'CCCCCC', 'w:val': 'clear' } },
-    ]);
+    expect(result).toEqual({
+      bold: true,
+      color: {
+        val: 'FF0000',
+      },
+      lang: {
+        val: 'en-US',
+      },
+      shading: {
+        fill: 'CCCCCC',
+        val: 'clear',
+      },
+    });
   });
 
   it('ignores unsupported children', () => {
@@ -44,6 +41,6 @@ describe('w:rPr translator (attribute aggregator)', () => {
 
     const result = translator.encode(params);
 
-    expect(result?.attributes).toEqual([]);
+    expect(result).toBeUndefined();
   });
 });

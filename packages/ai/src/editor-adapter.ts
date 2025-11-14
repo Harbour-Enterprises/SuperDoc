@@ -1,5 +1,6 @@
 import type { Editor, FoundMatch, MarkType } from './types';
 import {generateId} from "./utils";
+import { TextSelection } from 'prosemirror-state';
 
 /**
  * Adapter for SuperDoc editor operations
@@ -41,6 +42,14 @@ export class EditorAdapter {
     // Highlight operations
     createHighlight(from: number, to: number, inlineColor: string = "#6CA0DC"): void {
         this.editor.chain().setTextSelection({ from, to }).setHighlight(inlineColor).run();
+        this.scrollToPosition(from, to);
+    }
+
+    // Scroll to position
+    scrollToPosition(from: number, to: number): void {
+        const { state, view } = this.editor;
+        const tr = state.tr.setSelection(TextSelection.create(state.doc, from, to)).scrollIntoView();
+        view.dispatch(tr);
     }
 
     // Replace operations

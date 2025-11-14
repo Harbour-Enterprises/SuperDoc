@@ -52,7 +52,7 @@ describe('insertContent', () => {
     expect(contentProcessor.processContent).toHaveBeenCalledWith({
       content: '<p>HTML</p>',
       type: 'html',
-      schema: mockState.schema,
+      editor: mockEditor,
     });
 
     expect(mockCommands.insertContentAt).toHaveBeenCalledWith(
@@ -212,11 +212,11 @@ describe('insertContent (integration) list export', () => {
 
     const first = getNumPrVals(listParas[0]);
     expect(first.numId).toBeDefined();
-    expect(first.ilvl).toBe(0);
+    expect(first.ilvl).toBe('0');
 
     const second = getNumPrVals(listParas[1]);
     expect(second.numId).toBe(first.numId); // same list
-    expect(second.ilvl).toBe(0);
+    expect(second.ilvl).toBe('0');
   });
 
   it('exports unordered list from markdown with numId/ilvl', async () => {
@@ -230,11 +230,11 @@ describe('insertContent (integration) list export', () => {
 
     const first = getNumPrVals(listParas[0]);
     expect(first.numId).toBeDefined();
-    expect(first.ilvl).toBe(0);
+    expect(first.ilvl).toBe('0');
 
     const second = getNumPrVals(listParas[1]);
     expect(second.numId).toBe(first.numId);
-    expect(second.ilvl).toBe(0);
+    expect(second.ilvl).toBe('0');
   });
 
   it('exports ordered list from HTML with numId/ilvl', async () => {
@@ -248,7 +248,7 @@ describe('insertContent (integration) list export', () => {
 
     const first = getNumPrVals(listParas[0]);
     expect(first.numId).toBeDefined();
-    expect(first.ilvl).toBe(0);
+    expect(first.ilvl).toBe('0');
   });
 
   it('exports unordered list from HTML with numId/ilvl', async () => {
@@ -262,6 +262,6 @@ describe('insertContent (integration) list export', () => {
 
     const first = getNumPrVals(listParas[0]);
     expect(first.numId).toBeDefined();
-    expect(first.ilvl).toBe(0);
+    expect(first.ilvl).toBe('0');
   });
 });
