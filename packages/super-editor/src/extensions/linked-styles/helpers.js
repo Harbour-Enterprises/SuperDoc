@@ -59,6 +59,10 @@ export const getSpacingStyle = (spacing) => {
 export const getSpacingStyleString = (spacing, marks, isListItem) => {
   let { before, after, line, lineRule, beforeAutospacing, afterAutospacing } = spacing;
   line = twipsToLines(line);
+  // Prevent values less than 1 to avoid squashed text
+  if (line != null && line < 1) {
+    line = 1;
+  }
   if (lineRule === 'exact' && line) {
     line = String(line);
   }
