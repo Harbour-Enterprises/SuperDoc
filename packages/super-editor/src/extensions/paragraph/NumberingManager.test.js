@@ -220,5 +220,59 @@ describe('NumberingManager', () => {
       numberingManager.setCounter('list3', 3, 408, level3Third);
       expect(numberingManager.calculatePath('list3', 3, 408)).toEqual([1, 2, 1, 7]);
     });
+
+    /*
+     * listA and listB share the same abstract definition but should restart independently.
+     */
+    it('keeps top-level counters isolated per numId even when abstract definitions are shared', () => {
+      const numberingManager = createNumberingManager();
+      numberingManager.setStartSettings('listA', 0, 1, null);
+      numberingManager.setStartSettings('listB', 0, 1, null);
+
+      const sharedAbstractId = 'abstract-shared';
+
+      const firstListA = numberingManager.calculateCounter('listA', 0, 10, sharedAbstractId);
+      expect(firstListA).toBe(1);
+      numberingManager.setCounter('listA', 0, 10, firstListA, sharedAbstractId);
+
+      const secondListA = numberingManager.calculateCounter('listA', 0, 11, sharedAbstractId);
+      expect(secondListA).toBe(2);
+      numberingManager.setCounter('listA', 0, 11, secondListA, sharedAbstractId);
+
+      const firstListB = numberingManager.calculateCounter('listB', 0, 200, sharedAbstractId);
+      expect(firstListB).toBe(1);
+      numberingManager.setCounter('listB', 0, 200, firstListB, sharedAbstractId);
+
+      const secondListB = numberingManager.calculateCounter('listB', 0, 201, sharedAbstractId);
+      expect(secondListB).toBe(2);
+      numberingManager.setCounter('listB', 0, 201, secondListB, sharedAbstractId);
+    });
+
+    /*
+     * listA and listB share the same abstract definition but listB has a custom start override.
+     */
+    it('honors numId-scoped start overrides when multiple numIds reuse the same abstract definition', () => {
+      const numberingManager = createNumberingManager();
+      numberingManager.setStartSettings('listA', 0, 1, null);
+      numberingManager.setStartSettings('listB', 0, 4, null);
+
+      const sharedAbstractId = 'abstract-shared';
+
+      const firstListA = numberingManager.calculateCounter('listA', 0, 10, sharedAbstractId);
+      expect(firstListA).toBe(1);
+      numberingManager.setCounter('listA', 0, 10, firstListA, sharedAbstractId);
+
+      const secondListA = numberingManager.calculateCounter('listA', 0, 11, sharedAbstractId);
+      expect(secondListA).toBe(2);
+      numberingManager.setCounter('listA', 0, 11, secondListA, sharedAbstractId);
+
+      const firstListB = numberingManager.calculateCounter('listB', 0, 200, sharedAbstractId);
+      expect(firstListB).toBe(4);
+      numberingManager.setCounter('listB', 0, 200, firstListB, sharedAbstractId);
+
+      const secondListB = numberingManager.calculateCounter('listB', 0, 201, sharedAbstractId);
+      expect(secondListB).toBe(5);
+      numberingManager.setCounter('listB', 0, 201, secondListB, sharedAbstractId);
+    });
   });
 });

@@ -4,9 +4,9 @@
  *
  * @returns {{
  *   setStartSettings: (numId: string | number, level: number, startValue: number, restartValue?: number) => void,
- *   setCounter: (numId: string | number, level: number, pos: number, value: number) => void,
+ *   setCounter: (numId: string | number, level: number, pos: number, value: number, abstractId: string) => void,
  *   getCounter: (numId: string | number, level: number, pos: number) => number | null,
- *   calculateCounter: (numId: string | number, level: number, pos: number) => number,
+ *   calculateCounter: (numId: string | number, level: number, pos: number, abstractId: string) => number,
  *   getAncestorsPath: (numId: string | number, level: number, pos: number) => number[],
  *   calculatePath: (numId: string | number, level: number, pos: number) => number[],
  *   getCountersMap: () => Record<string, Record<string, Record<string, number>>>,
@@ -100,6 +100,7 @@ export function NumberingManager() {
      * @param {number} level
      * @param {number} pos
      * @param {number} value
+     * @param {string} abstractId
      */
     setCounter(numId, level, pos, value, abstractId) {
       // Update counters map
@@ -153,13 +154,14 @@ export function NumberingManager() {
      * @param {string | number} numId
      * @param {number} level
      * @param {number} pos
+     * @param {string} abstractId
      * @returns {number}
      */
     calculateCounter(numId, level, pos, abstractId) {
       abstractIdMap[numId] = abstractId;
       const restartSetting = startsMap?.[numId]?.[level]?.restart;
       const startValue = startsMap?.[numId]?.[level]?.start ?? 1;
-      const levelData = abstractCountersMap?.[abstractId]?.[level] || {};
+      const numLevelData = countersMap?.[numId]?.[level] || {};
       let previousPos = null;
       let previousCount = startValue - 1;
 
@@ -171,13 +173,13 @@ export function NumberingManager() {
         }
       }
       if (previousPos == null) {
-        const fallbackPos = Object.keys(levelData)
+        const fallbackPos = Object.keys(numLevelData)
           .map((p) => parseInt(p))
           .filter((p) => p < pos)
           .pop();
         if (fallbackPos != null) {
           previousPos = fallbackPos;
-          previousCount = levelData[fallbackPos];
+          previousCount = numLevelData[fallbackPos];
         }
       }
 
@@ -195,8 +197,8 @@ export function NumberingManager() {
       // This considers all levels lower than me that have the same abstractId
       const usedLevels = [];
       for (let lvl = 0; lvl < level; lvl++) {
-        const levelData = abstractCountersMap?.[abstractId]?.[lvl] || {};
-        const hasUsed = Object.keys(levelData)
+        const abstractLevelHistory = abstractCountersMap?.[abstractId]?.[lvl] || {};
+        const hasUsed = Object.keys(abstractLevelHistory)
           .map((p) => parseInt(p))
           .some((p) => p > previousPos && p < pos);
         if (hasUsed) {
