@@ -253,11 +253,16 @@ function _processTableBorders(rawBorders) {
     rowBorders,
   };
 }
+
+/**
+ * @typedef {{borders?: {}, name?: *, justification?: *, fonts?: {}, fontSize?: *, rowBorders?: {}, cellMargins?: {}}} TableStyles
+ */
+
 /**
  *
  * @param {string|null} tableStyleReference
  * @param {import('@translator').SCEncoderConfig} [params]
- * @returns {{borders: {}, name: *, justification: *, fonts: {}, fontSize: *, rowBorders: {}, cellMargins: {}}|null}
+ * @returns {TableStyles|null}
  */
 export function _getReferencedTableStyles(tableStyleReference, params) {
   if (!tableStyleReference) return null;
