@@ -120,8 +120,6 @@ const init = async () => {
     documentConfig.html = currentFile.value.htmlContent;
   }
 
-  let testDocumentId = 'doc_id';
-
   const config = {
     superdocId: 'superdoc-dev',
     selector: '#superdoc',
