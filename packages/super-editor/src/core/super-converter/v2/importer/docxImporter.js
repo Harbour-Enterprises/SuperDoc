@@ -705,14 +705,6 @@ function getNumberingDefinitions(docx, converter) {
     }
   });
 
-  const listDefsEntries = Object.entries(importListDefs);
-  const foundByDurableId = listDefsEntries.filter(([, def]) => def.attributes?.['w16cid:durableId'] === '485517411');
-  if (foundByDurableId.length > 1) {
-    importListDefs = Object.fromEntries(
-      listDefsEntries.filter(([, def]) => def.attributes?.['w16cid:durableId'] !== '485517411'),
-    );
-  }
-
   return {
     abstracts: abstractDefinitions,
     definitions: importListDefs,

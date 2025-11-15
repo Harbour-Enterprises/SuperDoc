@@ -91,6 +91,7 @@ export function createNumberingPlugin(editor) {
         let { lvlText, customFormat, listNumberingType, suffix, justification, abstractId } = definitionDetails;
         // Defining the list marker
         let markerText = '';
+        listNumberingType = listNumberingType || 'decimal';
         const count = numberingManager.calculateCounter(numId, level, pos, abstractId);
         numberingManager.setCounter(numId, level, pos, count, abstractId);
         const path = numberingManager.calculatePath(numId, level, pos);

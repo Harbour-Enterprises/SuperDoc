@@ -53,6 +53,9 @@ export function calculateTabStyle(
     if (paragraphContext.tabHeight === undefined) {
       paragraphContext.tabHeight = calcTabHeight(blockParent);
     }
+    if (paragraphContext.paragraphWidth === undefined) {
+      paragraphContext.paragraphWidth = getBlockNodeWidth(view, startPos);
+    }
 
     const indentWidth = paragraphContext.indentWidth;
     const hanging = twipsToPixels(Number(paragraphContext.indent.hanging) || 0);
@@ -68,7 +71,7 @@ export function calculateTabStyle(
     if (tabStops.length) {
       const tabStop = tabStops.find((stop) => stop.pos > currentWidth && stop.val !== 'clear');
       if (tabStop) {
-        tabWidth = tabStop.pos - currentWidth;
+        tabWidth = Math.min(tabStop.pos, paragraphContext.paragraphWidth) - currentWidth;
         let val = tabStop.val;
         const aliases = { left: 'start', right: 'end' };
         if (aliases[val]) val = aliases[val];
@@ -260,6 +263,24 @@ export function getIndentWidth(view, paragraphStartPos, indentAttrs = {}, coordC
     }
   }
   return calculateIndentFallback(indentAttrs);
+}
+
+export function getBlockNodeWidth(view, blockStartPos) {
+  const blockDom = view.nodeDOM(blockStartPos - 1);
+  // Calculate full width including margins, paddings, borders
+  if (blockDom instanceof HTMLElement) {
+    const styles = window.getComputedStyle(blockDom);
+    const width =
+      blockDom.clientWidth +
+      parseFloat(styles.marginLeft || '0') +
+      parseFloat(styles.marginRight || '0') +
+      parseFloat(styles.borderLeftWidth || '0') +
+      parseFloat(styles.borderRightWidth || '0') +
+      parseFloat(styles.paddingLeft || '0') +
+      parseFloat(styles.paddingRight || '0');
+    return width;
+  }
+  return defaultLineLength;
 }
 
 export function calculateIndentFallback(indentAttrs = {}) {
