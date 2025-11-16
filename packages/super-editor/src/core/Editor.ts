@@ -1,6 +1,21 @@
-import { EditorState } from 'prosemirror-state';
+import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
+import type { EditorView as PmEditorView } from 'prosemirror-view';
+import type { DOMSerializer, Node as PmNode, Schema } from 'prosemirror-model';
+import type { EditorOptions, User, FieldValue, DocxNode, PermissionParams, DocxFileEntry } from './types/EditorConfig.js';
+import type {
+  EditorHelpers,
+  ExtensionStorage,
+  ProseMirrorJSON,
+  PageStyles,
+  TelemetryData,
+  Toolbar,
+} from './types/EditorTypes.js';
+import type { ChainableCommandObject, CanObject, EditorCommands } from './types/ChainedCommands.js';
+import type { EditorEventMap, FontsResolvedPayload, Comment } from './types/EditorEvents.js';
+
+import { EditorState as PmEditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
-import { DOMSerializer } from 'prosemirror-model';
+import { DOMSerializer as PmDOMSerializer } from 'prosemirror-model';
 import { yXmlFragmentToProseMirrorRootNode } from 'y-prosemirror';
 import { helpers } from '@core/index.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -42,160 +57,70 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
 import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 import { isHeadless } from '../utils/headless-helpers.js';
-/**
- * @typedef {Object} FieldValue
- * @property {string} input_id The id of the input field
- * @property {string} input_value The value to insert into the field
- */
 
-/**
- * A map of plugin names to their helper API objects.
- * Each plugin defines its own helper methods.
- *
- * Example:
- * editor.helpers.linkedStyles.getStyles()
- *
- * @typedef {Object<string, Object<string, Function>>} EditorHelpers
- */
-
-/**
- * Editor main class.
- *
- * Expects a config object.
- * @class
- */
-/**
- * @typedef {Object} User The current user of this superdoc
- * @property {string} name The user's name
- * @property {string} email The user's email
- * @property {string | null} image The user's photo
- */
-
-/**
- * @typedef {Object} DocxNode A JSON representation of a docx node
- */
-
-/**
- * @typedef {Object} EditorOptions
- * @property {HTMLElement} [element] - The container element for the editor
- * @property {string} [selector] - CSS selector for the editor container
- * @property {boolean} [isHeadless=false] - Whether the editor is running in headless mode
- * @property {Document} [mockDocument] - Mock document for testing
- * @property {Window} [mockWindow] - Mock window for testing
- * @property {string} [content=''] - XML content
- * @property {User} [user] - Current user information
- * @property {Array.<User>} [users=[]] - List of users for collaboration
- * @property {Object} [media={}] - Media configuration
- * @property {Object} [mediaFiles={}] - Media files
- * @property {Object} [fonts={}] - Font configuration
- * @property {string} [documentMode='editing'] - Document mode ('editing', 'viewing', 'suggesting')
- * @property {string} [mode='docx'] - Editor mode ('docx', 'text', 'html')
- * @property {string} [role='editor'] - User role ('editor', 'viewer', 'suggester')
- * @property {Array} [colors=[]] - Available colors
- * @property {Object} [converter] - Document converter
- * @property {File|Blob|Buffer} [fileSource] - Source of the file (File/Blob in browser, Buffer in Node.js)
- * @property {Object} [initialState] - Initial editor state
- * @property {string} [documentId] - Unique document identifier
- * @property {Array} [extensions=[]] - Editor extensions
- * @property {boolean} [editable=true] - Whether the editor is editable
- * @property {Object} [editorProps={}] - Editor properties
- * @property {Object} [parseOptions={}] - Parsing options
- * @property {Object} [coreExtensionOptions={}] - Core extension options
- * @property {boolean} [enableInputRules=true] - Whether to enable input rules
- * @property {boolean} [isCommentsEnabled=false] - Whether comments are enabled
- * @property {boolean} [isNewFile=false] - Whether this is a new file
- * @property {number} [scale=1] - Editor scale/zoom
- * @property {boolean} [annotations=false] - Whether annotations are enabled
- * @property {boolean} [isInternal=false] - Whether this is an internal editor
- * @property {Array} [externalExtensions=[]] - External extensions
- * @property {Object} [numbering={}] - Numbering configuration
- * @property {boolean} [isHeaderOrFooter=false] - Whether this is a header or footer editor
- * @property {Function} [onBeforeCreate] - Called before editor creation
- * @property {Function} [onCreate] - Called after editor creation
- * @property {Function} [onUpdate] - Called when editor content updates
- * @property {Function} [onSelectionUpdate] - Called when selection updates
- * @property {Function} [onTransaction] - Called when a transaction is processed
- * @property {Function} [onFocus] - Called when editor gets focus
- * @property {Function} [onBlur] - Called when editor loses focus
- * @property {Function} [onDestroy] - Called when editor is destroyed
- * @property {Function} [onContentError] - Called when there's a content error
- * @property {Function} [onTrackedChangesUpdate] - Called when tracked changes update
- * @property {Function} [onCommentsUpdate] - Called when comments update
- * @property {Function} [onCommentsLoaded] - Called when comments are loaded
- * @property {Function} [onCommentClicked] - Called when a comment is clicked
- * @property {Function} [onCommentLocationsUpdate] - Called when comment locations update
- * @property {Function} [onDocumentLocked] - Called when document is locked
- * @property {Function} [onFirstRender] - Called on first render
- * @property {Function} [onCollaborationReady] - Called when collaboration is ready
- * @property {Function} [onPaginationUpdate] - Called when pagination updates
- * @property {Function} [onException] - Called when an exception occurs
- * @property {Function} [onListDefinitionsChange] - Called when list definitions change
- * @property {Function} [onFontsResolved] - Called when all fonts used in the document are determined
- * @property {Function} [handleImageUpload] - Handler for image uploads
- * @property {Object} [telemetry] - Telemetry configuration
- * @property {boolean} [suppressDefaultDocxStyles] - Prevent default styles from being applied in docx mode
- * @property {Object} [jsonOverride] - Provided JSON to override content with
- * @property {string} [html] - HTML content to initialize the editor with
- * @property {string} [markdown] - Markdown content to initialize the editor with
- * @property {boolean} [isDebug=false] - Whether to enable debug mode
- * @property {(params: {
- *   permission: string,
- *   role?: string,
- *   isInternal?: boolean,
- *   comment?: Object | null,
- *   trackedChange?: Object | null,
- }) => boolean | undefined} [permissionResolver] - Host-provided permission hook
- */
+declare const __APP_VERSION__: string;
+declare const version: string | undefined;
 
 /**
  * Main editor class that manages document state, extensions, and user interactions
- * @class
- * @extends EventEmitter
  */
-export class Editor extends EventEmitter {
+export class Editor extends EventEmitter<EditorEventMap> {
   /**
    * Command service for handling editor commands
-   * @type {CommandService}
    */
-  #commandService;
+  #commandService!: CommandService;
 
   /**
    * Service for managing extensions
-   * @type {Object}
    */
-  extensionService;
+  extensionService!: ExtensionService;
 
   /**
    * Storage for extension data
-   * @type {Object}
    */
-  extensionStorage = {};
+  extensionStorage: ExtensionStorage = {};
 
   /**
    * ProseMirror schema for the editor
-   * @type {Object}
    */
-  schema;
+  schema!: Schema;
 
   /**
    * ProseMirror view instance
-   * @type {Object}
    */
-  view;
+  view!: EditorView;
 
   /**
    * Whether the editor currently has focus
-   * @type {boolean}
    */
-  isFocused = false;
+  isFocused: boolean = false;
 
   /**
    * All the embedded fonts that were imported by the Editor
-   * @type {string[]}
    */
-  fontsImported = [];
+  fontsImported: string[] = [];
 
-  options = {
+  /**
+   * The document converter instance
+   */
+  converter!: SuperConverter;
+
+  /**
+   * Toolbar instance (if attached)
+   */
+  toolbar?: Toolbar;
+
+  /**
+   * Original state for preview mode
+   */
+  originalState?: EditorState;
+
+  /**
+   * High contrast mode setter
+   */
+  setHighContrastMode?: (enabled: boolean) => void;
+
+  options: EditorOptions = {
     element: null,
     selector: null,
     isHeadless: false,
@@ -227,11 +152,15 @@ export class Editor extends EventEmitter {
     annotations: false,
     isInternal: false,
     externalExtensions: [],
+    isChildEditor: false,
     numbering: {},
     isHeaderOrFooter: false,
+    pagination: null,
     lastSelection: null,
     suppressDefaultDocxStyles: false,
     jsonOverride: null,
+    loadFromSchema: false,
+    fragment: null,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -240,7 +169,7 @@ export class Editor extends EventEmitter {
     onFocus: () => null,
     onBlur: () => null,
     onDestroy: () => null,
-    onContentError: ({ error }) => {
+    onContentError: ({ error }: { error: Error }) => {
       throw error;
     },
     onTrackedChangesUpdate: () => null,
@@ -266,6 +195,11 @@ export class Editor extends EventEmitter {
 
     isHeaderFooterChanged: false,
     isCustomXmlChanged: false,
+    ydoc: null,
+    collaborationProvider: null,
+    collaborationIsReady: false,
+    shouldLoadComments: false,
+    replacedFile: false,
 
     focusTarget: null,
     permissionResolver: null,
@@ -276,16 +210,16 @@ export class Editor extends EventEmitter {
 
   /**
    * Create a new Editor instance
-   * @param {EditorOptions} options - Editor configuration options
+   * @param options - Editor configuration options
    */
-  constructor(options) {
+  constructor(options: Partial<EditorOptions>) {
     super();
 
     this.#initContainerElement(options);
     this.#checkHeadless(options);
     this.setOptions(options);
 
-    let modes = {
+    const modes: Record<string, () => void> = {
       docx: () => this.#init(),
       text: () => this.#initRichText(),
       html: () => this.#initRichText(),
@@ -294,7 +228,7 @@ export class Editor extends EventEmitter {
       },
     };
 
-    let initMode = modes[this.options.mode] ?? modes.default;
+    const initMode = modes[this.options.mode!] ?? modes.default;
 
     const { setHighContrastMode } = useHighContrastMode();
     this.setHighContrastMode = setHighContrastMode;
@@ -303,32 +237,29 @@ export class Editor extends EventEmitter {
 
   /**
    * Getter which indicates if any changes happen in Editor
-   * @returns {boolean}
    */
-  get docChanged() {
+  get docChanged(): boolean {
     return (
       this.options.isHeaderFooterChanged ||
       this.options.isCustomXmlChanged ||
-      !this.options.initialState.doc.eq(this.state.doc)
+      !this.options.initialState!.doc.eq(this.state.doc)
     );
   }
 
   /**
    * Initialize the container element for the editor
-   * @param {EditorOptions} options - Editor options
-   * @returns {void}
    */
-  #initContainerElement(options) {
+  #initContainerElement(options: Partial<EditorOptions>): void {
     if (!options.element && options.selector) {
       const { selector } = options;
       if (selector.startsWith('#') || selector.startsWith('.')) {
-        options.element = document.querySelector(selector);
+        options.element = document.querySelector(selector) as HTMLElement;
       } else {
         options.element = document.getElementById(selector);
       }
 
       const textModes = ['text', 'html'];
-      if (textModes.includes(options.mode) && options.element) {
+      if (textModes.includes(options.mode!) && options.element) {
         options.element.classList.add('sd-super-editor-html');
       }
     }
@@ -344,9 +275,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize the editor with the given options
-   * @returns {void}
    */
-  #init() {
+  #init(): void {
     this.#createExtensionService();
     this.#createCommandService();
     this.#createSchema();
@@ -357,30 +287,30 @@ export class Editor extends EventEmitter {
       this.#initFonts();
     }
 
-    this.on('beforeCreate', this.options.onBeforeCreate);
+    this.on('beforeCreate', this.options.onBeforeCreate!);
     this.emit('beforeCreate', { editor: this });
-    this.on('contentError', this.options.onContentError);
+    this.on('contentError', this.options.onContentError!);
 
-    this.mount(this.options.element);
+    this.mount(this.options.element!);
 
-    this.on('create', this.options.onCreate);
-    this.on('update', this.options.onUpdate);
-    this.on('selectionUpdate', this.options.onSelectionUpdate);
-    this.on('transaction', this.options.onTransaction);
-    this.on('focus', this.#onFocus);
-    this.on('blur', this.options.onBlur);
-    this.on('destroy', this.options.onDestroy);
-    this.on('trackedChangesUpdate', this.options.onTrackedChangesUpdate);
-    this.on('commentsLoaded', this.options.onCommentsLoaded);
-    this.on('commentClick', this.options.onCommentClicked);
-    this.on('commentsUpdate', this.options.onCommentsUpdate);
-    this.on('locked', this.options.onDocumentLocked);
-    this.on('collaborationReady', this.#onCollaborationReady);
-    this.on('paginationUpdate', this.options.onPaginationUpdate);
-    this.on('comment-positions', this.options.onCommentLocationsUpdate);
-    this.on('list-definitions-change', this.options.onListDefinitionsChange);
-    this.on('fonts-resolved', this.options.onFontsResolved);
-    this.on('exception', this.options.onException);
+    this.on('create', this.options.onCreate!);
+    this.on('update', this.options.onUpdate!);
+    this.on('selectionUpdate', this.options.onSelectionUpdate!);
+    this.on('transaction', this.options.onTransaction!);
+    this.on('focus', this.#onFocus.bind(this));
+    this.on('blur', this.options.onBlur!);
+    this.on('destroy', this.options.onDestroy!);
+    this.on('trackedChangesUpdate', this.options.onTrackedChangesUpdate!);
+    this.on('commentsLoaded', this.options.onCommentsLoaded!);
+    this.on('commentClick', this.options.onCommentClicked!);
+    this.on('commentsUpdate', this.options.onCommentsUpdate!);
+    this.on('locked', this.options.onDocumentLocked!);
+    this.on('collaborationReady', this.#onCollaborationReady.bind(this));
+    this.on('paginationUpdate', this.options.onPaginationUpdate!);
+    this.on('comment-positions', this.options.onCommentLocationsUpdate!);
+    this.on('list-definitions-change', this.options.onListDefinitionsChange!);
+    this.on('fonts-resolved', this.options.onFontsResolved!);
+    this.on('exception', this.options.onException!);
 
     if (!this.options.isHeadless) {
       this.initializeCollaborationData();
@@ -401,7 +331,7 @@ export class Editor extends EventEmitter {
       this.migrateListsToV2();
     }
 
-    this.setDocumentMode(this.options.documentMode, 'init');
+    this.setDocumentMode(this.options.documentMode!, 'init');
 
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady
@@ -420,10 +350,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize the editor in rich text mode
-   * @param {EditorOptions} options - Editor options
-   * @returns {void}
    */
-  #initRichText() {
+  #initRichText(): void {
     if (!this.options.extensions || !this.options.extensions.length) {
       this.options.extensions = getRichTextExtensions();
     }
@@ -432,26 +360,26 @@ export class Editor extends EventEmitter {
     this.#createCommandService();
     this.#createSchema();
 
-    this.on('beforeCreate', this.options.onBeforeCreate);
+    this.on('beforeCreate', this.options.onBeforeCreate!);
     this.emit('beforeCreate', { editor: this });
-    this.on('contentError', this.options.onContentError);
+    this.on('contentError', this.options.onContentError!);
 
-    this.mount(this.options.element);
+    this.mount(this.options.element!);
 
-    this.on('create', this.options.onCreate);
-    this.on('update', this.options.onUpdate);
-    this.on('selectionUpdate', this.options.onSelectionUpdate);
-    this.on('transaction', this.options.onTransaction);
-    this.on('focus', this.#onFocus);
-    this.on('blur', this.options.onBlur);
-    this.on('destroy', this.options.onDestroy);
-    this.on('commentsLoaded', this.options.onCommentsLoaded);
-    this.on('commentClick', this.options.onCommentClicked);
-    this.on('locked', this.options.onDocumentLocked);
-    this.on('list-definitions-change', this.options.onListDefinitionsChange);
+    this.on('create', this.options.onCreate!);
+    this.on('update', this.options.onUpdate!);
+    this.on('selectionUpdate', this.options.onSelectionUpdate!);
+    this.on('transaction', this.options.onTransaction!);
+    this.on('focus', this.#onFocus.bind(this));
+    this.on('blur', this.options.onBlur!);
+    this.on('destroy', this.options.onDestroy!);
+    this.on('commentsLoaded', this.options.onCommentsLoaded!);
+    this.on('commentClick', this.options.onCommentClicked!);
+    this.on('locked', this.options.onDocumentLocked!);
+    this.on('list-definitions-change', this.options.onListDefinitionsChange!);
   }
 
-  mount(el) {
+  mount(el: HTMLElement | null): void {
     this.#createView(el);
 
     window.setTimeout(() => {
@@ -460,147 +388,134 @@ export class Editor extends EventEmitter {
     }, 0);
   }
 
-  unmount() {
+  unmount(): void {
     if (this.view) {
       this.view.destroy();
     }
 
-    this.view = null;
+    this.view = undefined!;
   }
 
   /**
-   *
-   * @param {Object} param0
-   * @param {Object} param0.editor
-   * @param {Object} param0.event
-   * @returns {void}
+   * Handle focus event
    */
-  #onFocus({ editor, event }) {
+  #onFocus({ editor, event }: { editor: Editor; event: FocusEvent }): void {
     this.toolbar?.setActiveEditor(editor);
-    this.options.onFocus({ editor, event });
+    this.options.onFocus!({ editor, event });
   }
 
   /**
    * Set the toolbar for this editor
-   * @param {Object} toolbar - The toolbar instance
-   * @returns {void}
    */
-  setToolbar(toolbar) {
+  setToolbar(toolbar: Toolbar): void {
     this.toolbar = toolbar;
   }
 
   /**
    * Check if the editor should run in headless mode
-   * @param {EditorOptions} options - Editor options
-   * @returns {void}
    */
-  #checkHeadless(options) {
+  #checkHeadless(options: Partial<EditorOptions>): void {
     if (!options.isHeadless) return;
 
+    // Set up minimal navigator for Node.js environments
     if (typeof navigator === 'undefined') {
-      global.navigator = { isHeadless: true };
+      // Create a minimal navigator object with required properties
+      const minimalNavigator = {
+        platform: 'node',
+        userAgent: 'Node.js',
+      };
+      (global as any).navigator = minimalNavigator;
     }
 
     if (options.mockDocument) {
-      global.document = options.mockDocument;
-      global.window = options.mockWindow;
+      (global as typeof globalThis).document = options.mockDocument;
+      (global as typeof globalThis).window = options.mockWindow as Window & typeof globalThis;
     }
   }
 
   /**
    * Focus the editor.
-   * @returns {void}
    */
-  focus() {
+  focus(): void {
     this.view?.focus();
   }
 
   /**
    * Get the editor state
-   * @returns {Object} ProseMirror state
    */
-  get state() {
+  get state(): EditorState {
     return this.view?.state;
   }
 
   /**
    * Get the editor storage.
-   * @returns {Object} Editor storage object
    */
-  get storage() {
+  get storage(): ExtensionStorage {
     return this.extensionStorage;
   }
 
   /**
    * Get object of registered commands.
-   * @returns {import('./commands/types/index.js').EditorCommands} Commands object
    */
-  get commands() {
+  get commands(): EditorCommands {
     return this.#commandService?.commands;
   }
 
   /**
    * Get extension helpers.
-   * @returns {EditorHelpers} Object with helper methods for extensions
    */
-  get helpers() {
+  get helpers(): EditorHelpers {
     return this.extensionService.helpers;
   }
 
   /**
    * Check if the editor is editable.
-   * @returns {boolean}
    */
-  get isEditable() {
+  get isEditable(): boolean {
     return Boolean(this.options.editable && this.view && this.view.editable);
   }
 
   /**
    * Check if editor is destroyed.
-   * @returns {boolean}
    */
-  get isDestroyed() {
+  get isDestroyed(): boolean {
     return this.view?.isDestroyed ?? true;
   }
 
   /**
    * Get the editor element
-   * @returns {HTMLElement} The editor element
    */
-  get element() {
-    return this.options.element;
+  get element(): HTMLElement | null {
+    return this.options.element!;
   }
 
   /**
    * Get possible users of the editor.
-   * @returns {Array.<User>} List of users
    */
-  get users() {
-    return this.options.users;
+  get users(): User[] {
+    return this.options.users!;
   }
 
   /**
    * Create a chain of commands to call multiple commands at once.
-   * @returns {Object} Command chain
    */
-  chain() {
+  chain(): ChainableCommandObject {
     return this.#commandService.chain();
   }
 
   /**
    * Check if a command or a chain of commands can be executed. Without executing it.
-   * @returns {Object} Object with methods to check command availability
    */
-  can() {
+  can(): CanObject {
     return this.#commandService.can();
   }
 
   /**
    * Set the document mode
-   * @param {string} documentMode - The document mode ('editing', 'viewing', 'suggesting')
-   * @param {string} caller - Calling context
+   * @param documentMode - The document mode ('editing', 'viewing', 'suggesting')
+   * @param caller - Calling context
    */
-  setDocumentMode(documentMode, caller) {
+  setDocumentMode(documentMode: string, caller?: string): void {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
 
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
@@ -651,8 +566,8 @@ export class Editor extends EventEmitter {
     }
   }
 
-  #registerCopyHandler() {
-    this.view.dom.addEventListener('copy', (event) => {
+  #registerCopyHandler(): void {
+    this.view.dom.addEventListener('copy', (event: ClipboardEvent) => {
       const clipboardData = event.clipboardData;
       if (!clipboardData) return;
 
@@ -663,7 +578,7 @@ export class Editor extends EventEmitter {
       const fragment = slice.content;
 
       const div = document.createElement('div');
-      const serializer = DOMSerializer.fromSchema(this.view.state.schema);
+      const serializer = PmDOMSerializer.fromSchema(this.view.state.schema);
       div.appendChild(serializer.serializeFragment(fragment));
 
       const html = transformListsInCopiedContent(div.innerHTML);
@@ -674,9 +589,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Export the yjs binary from the current state.
-   * @returns {Promise<Uint8Array>} The exported yjs binary
    */
-  async generateCollaborationUpdate() {
+  async generateCollaborationUpdate(): Promise<Uint8Array> {
     return await generateCollaborationData(this);
   }
 
@@ -684,11 +598,10 @@ export class Editor extends EventEmitter {
    * Initialize data for collaborative editing
    * If we are replacing data and have a valid provider, listen for synced event
    * so that we can initialize the data
-   * @returns {void}
    */
-  initializeCollaborationData() {
+  initializeCollaborationData(): void {
     if (!this.options.isNewFile || !this.options.collaborationProvider) return;
-    const { collaborationProvider: provider } = this.options;
+    const provider = this.options.collaborationProvider;
 
     const postSyncInit = () => {
       provider.off('synced', postSyncInit);
@@ -704,12 +617,11 @@ export class Editor extends EventEmitter {
    * Replace content of editor that was created with loadFromSchema option
    * Used to replace content of other header/footer when one of it was edited
    *
-   * @param {object} content - new editor content json (retrieved from editor.getUpdatedJson)
-   * @returns {void}
+   * @param content - new editor content json (retrieved from editor.getUpdatedJson)
    */
-  replaceContent(content) {
+  replaceContent(content: ProseMirrorJSON): void {
     this.setOptions({
-      content,
+      content: content as any,
     });
 
     this.#createConverter();
@@ -728,11 +640,7 @@ export class Editor extends EventEmitter {
    * Replace the current document with new data. Necessary for initializing a new collaboration file,
    * since we need to insert the data only after the provider has synced.
    */
-  /**
-   * Insert data for a new file
-   * @returns {void}
-   */
-  #insertNewFileData() {
+  #insertNewFileData(): void {
     if (!this.options.isNewFile) return;
     this.options.isNewFile = false;
     const doc = this.#generatePmData();
@@ -748,10 +656,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Set editor options and update state.
-   * @param {EditorOptions} options - Editor options
-   * @returns {void}
    */
-  setOptions(options = {}) {
+  setOptions(options: Partial<EditorOptions> = {}): void {
     this.options = {
       ...this.options,
       ...options,
@@ -774,11 +680,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Set whether the editor is editable
-   * @param {boolean} [editable=true] - Whether the editor is editable
-   * @param {boolean} [emitUpdate=true] - Whether to emit an update event
-   * @returns {void}
    */
-  setEditable(editable = true, emitUpdate = true) {
+  setEditable(editable: boolean = true, emitUpdate: boolean = true): void {
     this.setOptions({ editable });
 
     if (emitUpdate) {
@@ -790,9 +693,8 @@ export class Editor extends EventEmitter {
    * Register PM plugin.
    * @param plugin PM plugin.
    * @param handlePlugins Optional function for handling plugin merge.
-   * @returns {void}
    */
-  registerPlugin(plugin, handlePlugins) {
+  registerPlugin(plugin: Plugin, handlePlugins?: (plugin: Plugin, plugins: Plugin[]) => Plugin[]): void {
     if (!this.state?.plugins) return;
     const plugins =
       typeof handlePlugins === 'function'
@@ -804,17 +706,26 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Unregister a PM plugin
-   * @param {string|Object} nameOrPluginKey - Plugin name or plugin instance
-   * @returns {void}
+   * Safely resolve the plugin key string for a plugin instance.
    */
-  unregisterPlugin(nameOrPluginKey) {
+  #getPluginKeyName(plugin: Plugin): string {
+    const pluginKey = (plugin as Plugin & { key?: { key: string } }).key;
+    return typeof pluginKey?.key === 'string' ? pluginKey.key : '';
+  }
+
+  /**
+   * Unregister a PM plugin
+   */
+  unregisterPlugin(nameOrPluginKey: string | { key?: string }): void {
     if (this.isDestroyed) return;
 
-    const name = typeof nameOrPluginKey === 'string' ? `${nameOrPluginKey}$` : nameOrPluginKey.key;
+    const name =
+      typeof nameOrPluginKey === 'string'
+        ? `${nameOrPluginKey}$`
+        : (nameOrPluginKey?.key as string | undefined) ?? '';
 
     const state = this.state.reconfigure({
-      plugins: this.state.plugins.filter((plugin) => !plugin.key.startsWith(name)),
+      plugins: this.state.plugins.filter((plugin) => !this.#getPluginKeyName(plugin).startsWith(name)),
     });
 
     this.view.updateState(state);
@@ -822,41 +733,36 @@ export class Editor extends EventEmitter {
 
   /**
    * Creates extension service.
-   * @returns {void}
    */
-  #createExtensionService() {
+  #createExtensionService(): void {
     const allowedExtensions = ['extension', 'node', 'mark'];
 
     const coreExtensions = [Editable, Commands, EditorFocus, Keymap];
     const externalExtensions = this.options.externalExtensions || [];
 
-    const allExtensions = [...coreExtensions, ...this.options.extensions].filter((e) =>
-      allowedExtensions.includes(e?.type),
-    );
+    const allExtensions = [...coreExtensions, ...this.options.extensions!].filter((extension) => {
+      const extensionType = typeof extension?.type === 'string' ? extension.type : undefined;
+      return extensionType ? allowedExtensions.includes(extensionType) : false;
+    });
 
     this.extensionService = ExtensionService.create(allExtensions, externalExtensions, this);
   }
 
   /**
    * Creates a command service.
-   * @returns {void}
    */
-  #createCommandService() {
+  #createCommandService(): void {
     this.#commandService = CommandService.create({
       editor: this,
     });
   }
 
   /**
-   * Creates a SuperConverter.
-   */
-  /**
    * Create the document converter as this.converter.
-   * @returns {void}
    */
-  #createConverter() {
+  #createConverter(): void {
     if (this.options.converter) {
-      this.converter = this.options.converter;
+      this.converter = this.options.converter as SuperConverter;
     } else {
       this.converter = new SuperConverter({
         docx: this.options.content,
@@ -872,35 +778,36 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize media.
-   * @returns {void}
    */
-  #initMedia() {
+  #initMedia(): void {
     if (this.options.isChildEditor) return;
-    if (!this.options.ydoc) return (this.storage.image.media = this.options.mediaFiles);
+    if (!this.options.ydoc) {
+      (this.storage.image as any).media = this.options.mediaFiles;
+      return;
+    }
 
     const mediaMap = this.options.ydoc.getMap('media');
 
     // We are creating a new file and need to set the media
     if (this.options.isNewFile) {
-      Object.entries(this.options.mediaFiles).forEach(([key, value]) => {
+      Object.entries(this.options.mediaFiles!).forEach(([key, value]) => {
         mediaMap.set(key, value);
       });
 
       // Set the storage to the imported media files
-      this.storage.image.media = this.options.mediaFiles;
+      (this.storage.image as any).media = this.options.mediaFiles;
     }
 
     // If we are opening an existing file, we need to get the media from the ydoc
     else {
-      this.storage.image.media = Object.fromEntries(mediaMap.entries());
+      (this.storage.image as any).media = Object.fromEntries(mediaMap.entries());
     }
   }
 
   /**
    * Initialize fonts
-   * @returns {void}
    */
-  #initFonts() {
+  #initFonts(): void {
     const results = this.converter.getFontFaceImportString();
 
     if (results?.styleString?.length) {
@@ -914,9 +821,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Determines the fonts used in the document and the unsupported ones and triggers the `onFontsResolved` callback.
-   * @returns {Promise<void>}
    */
-  async #checkFonts() {
+  async #checkFonts(): Promise<void> {
     // We only want to run the algorithm to resolve the fonts if the user has asked for it
     if (!this.options.onFontsResolved || typeof this.options.onFontsResolved !== 'function') {
       return;
@@ -930,10 +836,12 @@ export class Editor extends EventEmitter {
       const fontsUsedInDocument = this.converter.getDocumentFonts();
       const unsupportedFonts = this.#determineUnsupportedFonts(fontsUsedInDocument);
 
-      this.emit('fonts-resolved', {
+      const payload: FontsResolvedPayload = {
         documentFonts: fontsUsedInDocument,
-        unsupportedFonts: unsupportedFonts,
-      });
+        unsupportedFonts,
+      };
+
+      this.emit('fonts-resolved', payload);
     } catch {
       console.warn('[SuperDoc] Could not determine document fonts and unsupported fonts');
     }
@@ -945,10 +853,10 @@ export class Editor extends EventEmitter {
    * Fonts are considered unsupported if they cannot be rendered
    * and are not already imported in the document via @font-face.
    *
-   * @param {string[]} fonts - Array of font family names used in the document.
-   * @returns {string[]} Array of unsupported font family names.
+   * @param fonts - Array of font family names used in the document.
+   * @returns Array of unsupported font family names.
    */
-  #determineUnsupportedFonts(fonts) {
+  #determineUnsupportedFonts(fonts: string[]): string[] {
     const unsupportedFonts = fonts.filter((font) => {
       const canRender = canRenderFont(font);
       const isFontImported = this.fontsImported.includes(font);
@@ -962,17 +870,18 @@ export class Editor extends EventEmitter {
   /**
    * Load the data from DOCX to be used in the schema.
    * Expects a DOCX file.
-   * @static
-   * @async
-   * @param {File|Blob|Buffer} fileSource - The DOCX file to load (File/Blob in browser, Buffer in Node.js)
-   * @param {boolean} [isNode=false] - Whether the method is being called in a Node.js environment
-   * @returns {Promise<Array>} - A promise that resolves to an array containing:
+   * @param fileSource - The DOCX file to load (File/Blob in browser, Buffer in Node.js)
+   * @param isNode - Whether the method is being called in a Node.js environment
+   * @returns A promise that resolves to an array containing:
    *   - [0] xmlFiles - Array of XML files extracted from the DOCX
    *   - [1] mediaFiles - Object containing media files with URLs (browser only)
    *   - [2] mediaFiles - Object containing media files with base64 data
    *   - [3] fonts - Object containing font files from the DOCX
    */
-  static async loadXmlData(fileSource, isNode = false) {
+  static async loadXmlData(
+    fileSource: File | Blob | Buffer,
+    isNode: boolean = false,
+  ): Promise<[DocxFileEntry[], Record<string, unknown>, Record<string, unknown>, Record<string, unknown>] | undefined> {
     if (!fileSource) return;
 
     const zipper = new DocxZipper();
@@ -984,64 +893,53 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the document version
-   * @static
-   * @param {Object} doc - Document object
-   * @returns {string} Document version
    */
-  static getDocumentVersion(doc) {
+  static getDocumentVersion(doc: DocxFileEntry[]): string {
     return SuperConverter.getStoredSuperdocVersion(doc);
   }
 
   /**
    * Set the document version
-   * @static
-   * @param {Object} doc - Document object
-   * @param {string} version - New version
-   * @returns {string} The set version
    */
-  static setDocumentVersion(doc, version) {
+  static setDocumentVersion(doc: DocxFileEntry[], version: string): string {
     return SuperConverter.setStoredSuperdocVersion(doc, version);
   }
 
   /**
    * Get the document GUID
-   * @static
-   * @param {Object} doc - Document object
-   * @returns {string|null} Document GUID
    */
-  static getDocumentGuid(doc) {
+  static getDocumentGuid(doc: DocxFileEntry[]): string | null {
     return SuperConverter.extractDocumentGuid(doc);
   }
 
-  // Deprecated
   /**
    * @deprecated use setDocumentVersion instead
    */
-  static updateDocumentVersion(doc, version) {
+  static updateDocumentVersion(doc: DocxFileEntry[], version: string): string {
     console.warn('updateDocumentVersion is deprecated, use setDocumentVersion instead');
     return Editor.setDocumentVersion(doc, version);
   }
 
   /**
    * Creates document PM schema.
-   * @returns {void}
    */
-  #createSchema() {
+  #createSchema(): void {
     this.schema = this.extensionService.schema;
   }
 
   /**
    * Generate ProseMirror data from file
-   * @returns {Object} ProseMirror data
    */
-  #generatePmData() {
-    let doc;
+  #generatePmData(): PmNode {
+    let doc: PmNode;
 
     try {
-      const { mode, fragment, content, loadFromSchema } = this.options;
+      const { mode, content, fragment, loadFromSchema } = this.options;
+      const hasJsonContent = (value: unknown): value is Record<string, unknown> =>
+        typeof value === 'object' && value !== null && !Array.isArray(value);
 
       if (mode === 'docx') {
-        if (loadFromSchema) {
+        if (loadFromSchema && hasJsonContent(content)) {
           doc = this.schema.nodeFromJSON(content);
           doc = this.#prepareDocumentForImport(doc);
         } else {
@@ -1063,48 +961,49 @@ export class Editor extends EventEmitter {
 
       // If we are in HTML mode, we initialize from either content or html (or blank)
       else if (mode === 'text' || mode === 'html') {
-        if (loadFromSchema) doc = this.schema.nodeFromJSON(content);
-        else if (content) doc = createDocFromHTML(content, this);
-        else doc = this.schema.topNodeType.createAndFill();
+        if (loadFromSchema && hasJsonContent(content)) doc = this.schema.nodeFromJSON(content);
+        else if (typeof content === 'string') doc = createDocFromHTML(content, this);
+        else doc = this.schema.topNodeType.createAndFill()!;
       }
     } catch (err) {
       console.error(err);
-      this.emit('contentError', { editor: this, error: err });
+      const error = err instanceof Error ? err : new Error(String(err));
+      this.emit('contentError', { error });
     }
 
-    return doc;
+    return doc!;
   }
 
   /**
    * Create the PM editor view
-   * @returns {void}
    */
-  #createView(element) {
-    let doc = this.#generatePmData();
+  #createView(element: HTMLElement | null): void {
+    const doc = this.#generatePmData();
 
     // Only initialize the doc if we are not using Yjs/collaboration.
-    const state = { schema: this.schema };
+    const state: { schema: Schema; doc?: PmNode } = { schema: this.schema };
     if (!this.options.ydoc) state.doc = doc;
 
-    this.options.initialState = EditorState.create(state);
+    this.options.initialState = PmEditorState.create(state);
 
     this.view = new EditorView(element, {
       ...this.options.editorProps,
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: this.options.initialState,
       handleClick: this.#handleNodeSelection.bind(this),
-      handleDoubleClick: async (view, pos, event) => {
+      handleDoubleClick: (view: PmEditorView, pos: number, event: MouseEvent) => {
         // Prevent edits if editor is not editable
         if (this.options.documentMode !== 'editing') return;
 
         // Deactivates header/footer editing mode when double-click on main editor
         // Skip pagination-related double-click handling in headless mode
         if (!isHeadless(this)) {
-          const isHeader = hasSomeParentWithClass(event.target, 'pagination-section-header');
-          const isFooter = hasSomeParentWithClass(event.target, 'pagination-section-footer');
+          const isHeader = hasSomeParentWithClass(event.target as HTMLElement, 'pagination-section-header');
+          const isFooter = hasSomeParentWithClass(event.target as HTMLElement, 'pagination-section-footer');
           if (isHeader || isFooter) {
-            const eventClone = new event.constructor(event.type);
-            event.target.dispatchEvent(eventClone);
+            const EventConstructor = event.constructor as new (type: string) => Event;
+            const eventClone = new EventConstructor(event.type);
+            (event.target as HTMLElement).dispatchEvent(eventClone);
 
             // Imitate default double click behavior - word selection
             if (this.options.isHeaderOrFooter && this.options.editable) setWordSelection(view, pos);
@@ -1126,12 +1025,12 @@ export class Editor extends EventEmitter {
             editor: this,
             focusedSectionEditor: null,
             isEditMode: false,
-            documentMode: this.options.documentMode,
+            documentMode: this.options.documentMode!,
           });
           const pm = this.view?.dom || this.options.element?.querySelector?.('.ProseMirror');
           if (pm) {
             pm.classList.remove('header-footer-edit');
-            pm.setAttribute('aria-readonly', false);
+            pm.setAttribute('aria-readonly', 'false');
           }
         }
 
@@ -1148,14 +1047,13 @@ export class Editor extends EventEmitter {
 
     this.createNodeViews();
 
-    this.options.telemetry?.sendReport();
+    (this.options.telemetry as TelemetryData | null)?.trackUsage?.('editor_initialized', {});
   }
 
   /**
    * Creates all node views.
-   * @returns {void}
    */
-  createNodeViews() {
+  createNodeViews(): void {
     this.view.setProps({
       nodeViews: this.extensionService.nodeViews,
     });
@@ -1163,9 +1061,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the maximum content size
-   * @returns {Object} Size object with width and height
    */
-  getMaxContentSize() {
+  getMaxContentSize(): { width?: number; height?: number } {
     if (!this.converter) return {};
     const { pageSize = {}, pageMargins = {} } = this.converter.pageStyles ?? {};
     const { width, height } = pageSize;
@@ -1185,7 +1082,7 @@ export class Editor extends EventEmitter {
   /**
    * Attach styles and attributes to the editor element
    */
-  updateEditorStyles(element, proseMirror, hasPaginationEnabled = true) {
+  updateEditorStyles(element: HTMLElement, proseMirror: HTMLElement, hasPaginationEnabled: boolean = true): void {
     const { pageSize, pageMargins } = this.converter.pageStyles ?? {};
 
     if (!proseMirror || !element) {
@@ -1193,7 +1090,7 @@ export class Editor extends EventEmitter {
     }
 
     proseMirror.setAttribute('role', 'document');
-    proseMirror.setAttribute('aria-multiline', true);
+    proseMirror.setAttribute('aria-multiline', 'true');
     proseMirror.setAttribute('aria-label', 'Main content area, start typing to enter text.');
     proseMirror.setAttribute('aria-description', '');
     proseMirror.classList.remove('view-mode');
@@ -1232,11 +1129,11 @@ export class Editor extends EventEmitter {
     // Mobile styles
     element.style.transformOrigin = 'top left';
     element.style.touchAction = 'auto';
-    element.style.webkitOverflowScrolling = 'touch';
+    (element.style as CSSStyleDeclaration & { webkitOverflowScrolling?: string }).webkitOverflowScrolling = 'touch';
 
     // Calculate line height
     const defaultLineHeight = 1.2;
-    proseMirror.style.lineHeight = defaultLineHeight;
+    proseMirror.style.lineHeight = String(defaultLineHeight);
 
     // If we are not using pagination, we still need to add some padding for header/footer
     if (!hasPaginationEnabled) {
@@ -1253,15 +1150,14 @@ export class Editor extends EventEmitter {
    * Get page size and margins from the converter.
    * Set document default font and font size.
    *
-   * @param {HTMLElement} [element=this.element] - The DOM element to apply styles to
-   * @returns {void}
+   * @param element - The DOM element to apply styles to
    */
-  initDefaultStyles(element = this.element, isPaginationEnabled = true) {
+  initDefaultStyles(element: HTMLElement | null = this.element, isPaginationEnabled: boolean = true): void {
     if (this.options.isHeadless || this.options.suppressDefaultDocxStyles) return;
 
-    const proseMirror = element?.querySelector('.ProseMirror');
+    const proseMirror = element?.querySelector('.ProseMirror') as HTMLElement;
 
-    this.updateEditorStyles(element, proseMirror, isPaginationEnabled);
+    this.updateEditorStyles(element!, proseMirror, isPaginationEnabled);
 
     this.initMobileStyles(element);
   }
@@ -1269,11 +1165,8 @@ export class Editor extends EventEmitter {
   /**
    * Initializes responsive styles for mobile devices.
    * Sets up scaling based on viewport width and handles orientation changes.
-   *
-   * @param {HTMLElement|void} element - The DOM element to apply mobile styles to
-   * @returns {void}
    */
-  initMobileStyles(element) {
+  initMobileStyles(element: HTMLElement | null): void {
     if (!element) {
       return;
     }
@@ -1287,15 +1180,15 @@ export class Editor extends EventEmitter {
 
       this.options.scale = Math.min(1, availableWidth / elementWidth);
 
-      const superEditorElement = element.closest('.super-editor');
-      const superEditorContainer = element.closest('.super-editor-container');
+      const superEditorElement = element.closest('.super-editor') as HTMLElement;
+      const superEditorContainer = element.closest('.super-editor-container') as HTMLElement;
 
       if (!superEditorElement || !superEditorContainer) {
         return;
       }
 
-      if (this.options.scale < 1) {
-        superEditorElement.style.maxWidth = `${elementWidth * this.options.scale}px`;
+      if (this.options.scale! < 1) {
+        superEditorElement.style.maxWidth = `${elementWidth * this.options.scale!}px`;
         superEditorContainer.style.minWidth = '0px';
 
         element.style.transform = `scale(${this.options.scale})`;
@@ -1316,28 +1209,24 @@ export class Editor extends EventEmitter {
       }, 150);
     };
 
-    // Make sure we are in browser when calling browser APIs
     if ('orientation' in screen && 'addEventListener' in screen.orientation) {
       screen.orientation.addEventListener('change', handleResize);
-    } else if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
-      window.matchMedia('(orientation: portrait)').addEventListener('change', handleResize);
+    } else {
+      // jsdom (and some older browsers) don't implement matchMedia; skip listener in that case
+      const mediaQueryList = typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: portrait)') : null;
+      if (mediaQueryList?.addEventListener) {
+        mediaQueryList.addEventListener('change', handleResize);
+      }
     }
 
-    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
-      window.addEventListener('resize', () => handleResize);
-    }
+    window.addEventListener('resize', () => handleResize);
   }
 
   /**
    * Handler called when collaboration is ready.
    * Initializes pagination and comments if not a new file.
-   *
-   * @param {Object} params - Collaboration parameters
-   * @param {Editor} params.editor - The editor instance
-   * @param {Object} params.ydoc - The Yjs document
-   * @returns {void}
    */
-  #onCollaborationReady({ editor, ydoc }) {
+  #onCollaborationReady({ editor, ydoc }: { editor: Editor; ydoc: unknown }): void {
     if (this.options.collaborationIsReady) return;
     console.debug('🔗 [super-editor] Collaboration ready');
 
@@ -1347,7 +1236,7 @@ export class Editor extends EventEmitter {
       this.migrateListsToV2();
     }
 
-    this.options.onCollaborationReady({ editor, ydoc });
+    this.options.onCollaborationReady!({ editor, ydoc });
     this.options.collaborationIsReady = true;
     this.options.initialState = this.state;
 
@@ -1358,20 +1247,23 @@ export class Editor extends EventEmitter {
     if (!this.options.isNewFile) {
       this.#initPagination();
       this.#initComments();
-      updateYdocDocxData(this);
+      updateYdocDocxData(this, this.options.ydoc);
     }
   }
 
   /**
    * Initialize comments plugin
-   * @returns {void}
    */
-  #initComments() {
+  #initComments(): void {
     if (!this.options.isCommentsEnabled) return;
     if (this.options.isHeadless) return;
     if (!this.options.shouldLoadComments) return;
     const replacedFile = this.options.replacedFile;
-    this.emit('commentsLoaded', { editor: this, replacedFile, comments: this.converter.comments || [] });
+    this.emit('commentsLoaded', {
+      editor: this,
+      replacedFile,
+      comments: this.converter.comments || [],
+    });
 
     setTimeout(() => {
       this.options.replacedFile = false;
@@ -1383,18 +1275,16 @@ export class Editor extends EventEmitter {
 
   /**
    * Initialize pagination, if the pagination extension is enabled.
-   * @async
-   * @returns {Promise<void>}
    */
-  async #initPagination() {
+  async #initPagination(): Promise<void> {
     if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
       return;
     }
 
-    const pagination = this.options.extensions.find((e) => e.name === 'pagination');
+    const pagination = this.options.extensions!.find((e) => e.name === 'pagination');
     if (pagination && this.options.pagination) {
       const sectionData = await initPaginationData(this);
-      this.storage.pagination.sectionData = sectionData;
+      (this.storage.pagination as any).sectionData = sectionData;
 
       // Trigger transaction to initialize pagination
       const { state, dispatch } = this.view;
@@ -1405,13 +1295,12 @@ export class Editor extends EventEmitter {
 
   /**
    * Dispatch a transaction to update the editor state
-   * @param {Object} transaction - ProseMirror transaction
    */
-  #dispatchTransaction(transaction) {
+  #dispatchTransaction(transaction: Transaction): void {
     if (this.isDestroyed) return;
     const start = Date.now();
 
-    let state;
+    let state: EditorState;
     try {
       const trackChangesState = TrackChangesBasePluginKey.getState(this.view.state);
       const isTrackChangesActive = trackChangesState?.isTrackChangesActive ?? false;
@@ -1420,7 +1309,7 @@ export class Editor extends EventEmitter {
         ? trackedTransaction({
             tr: transaction,
             state: this.state,
-            user: this.options.user,
+            user: this.options.user!,
           })
         : transaction;
 
@@ -1488,32 +1377,34 @@ export class Editor extends EventEmitter {
 
   /**
    * Get document identifier for telemetry (async - may generate hash)
-   * @returns {Promise<string>} GUID for modified docs, hash for unmodified
    */
-  async getDocumentIdentifier() {
+  async getDocumentIdentifier(): Promise<string | null> {
     return (await this.converter?.getDocumentIdentifier()) || null;
   }
 
   /**
    * Get permanent document GUID (sync - only for modified documents)
-   * @returns {string|null} GUID or null if document hasn't been modified
    */
-  getDocumentGuid() {
+  getDocumentGuid(): string | null {
     return this.converter?.documentGuid || null;
   }
 
   /**
    * Check if document has been modified
-   * @returns {boolean}
    */
-  isDocumentModified() {
+  isDocumentModified(): boolean {
     return this.converter?.documentModified || false;
   }
 
   /**
    * Get telemetry data (async because of lazy hash generation)
    */
-  async getTelemetryData() {
+  async getTelemetryData(): Promise<{
+    documentId: string | null;
+    isModified: boolean;
+    isPermanentId: boolean;
+    version: string | null;
+  }> {
     return {
       documentId: await this.getDocumentIdentifier(),
       isModified: this.isDocumentModified(),
@@ -1522,33 +1413,33 @@ export class Editor extends EventEmitter {
     };
   }
 
-  // Deprecated for backward compatibility
-  getDocumentId() {
+  /**
+   * @deprecated use getDocumentGuid instead
+   */
+  getDocumentId(): string | null {
     console.warn('getDocumentId is deprecated, use getDocumentGuid instead');
     return this.getDocumentGuid();
   }
 
   /**
    * Get attrs of the currently selected node or mark.
-   * @param {String} nameOrType
    * @example
    * editor.getAttributes('textStyle').color
    */
-  getAttributes(nameOrType) {
+  getAttributes(nameOrType: string): Record<string, unknown> {
     return Attribute.getAttributes(this.state, nameOrType);
   }
 
   /**
    * Returns if the currently selected node or mark is active.
-   * @param {String|Object} nameOrAttributes - The name of the node/mark or an attributes object
-   * @param {Object} [attributesOrUndefined] - Optional attributes to check when first parameter is a name
-   * @returns {Boolean} Whether the node or mark is active with the specified attributes
+   * @param nameOrAttributes - The name of the node/mark or an attributes object
+   * @param attributesOrUndefined - Optional attributes to check when first parameter is a name
    * @example
    * editor.isActive('bold')
    * editor.isActive('textStyle', { color: 'purple' })
    * editor.isActive({ textAlign: 'center' })
    */
-  isActive(nameOrAttributes, attributesOrUndefined) {
+  isActive(nameOrAttributes: string | Record<string, unknown>, attributesOrUndefined?: Record<string, unknown>): boolean {
     const name = typeof nameOrAttributes === 'string' ? nameOrAttributes : null;
     const attributes = typeof nameOrAttributes === 'string' ? attributesOrUndefined : nameOrAttributes;
     return isActive(this.state, name, attributes);
@@ -1556,21 +1447,19 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the editor content as JSON
-   * @returns {Object} Editor content as JSON
    */
-  getJSON() {
+  getJSON(): ProseMirrorJSON {
     return this.state.doc.toJSON();
   }
 
   /**
    * Get document metadata including GUID, modification status, and version
-   * @returns {{
-   *   documentGuid: string | null,
-   *   isModified: boolean,
-   *   version: string | null
-   * }} Document metadata
    */
-  getMetadata() {
+  getMetadata(): {
+    documentGuid: string | null;
+    isModified: boolean;
+    version: string | null;
+  } {
     return {
       documentGuid: this.converter?.documentGuid || null,
       isModified: this.isDocumentModified(),
@@ -1580,14 +1469,11 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the editor content as HTML
-   * @param {Object} options - Options for the HTML serializer
-   * @param {boolean} [options.unflattenLists] - Whether to unflatten lists in the HTML
-   * @returns {string} Editor content as HTML
    */
-  getHTML({ unflattenLists = false } = {}) {
+  getHTML({ unflattenLists = false }: { unflattenLists?: boolean } = {}): string {
     const tempDocument = document.implementation.createHTMLDocument();
     const container = tempDocument.createElement('div');
-    const fragment = DOMSerializer.fromSchema(this.schema).serializeFragment(this.state.doc.content);
+    const fragment = PmDOMSerializer.fromSchema(this.schema).serializeFragment(this.state.doc.content);
     container.appendChild(fragment);
     let html = container.innerHTML;
     if (unflattenLists) {
@@ -1598,9 +1484,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the editor content as Markdown
-   * @returns {Promise<string>} Editor content as Markdown
    */
-  async getMarkdown() {
+  async getMarkdown(): Promise<string> {
     // Lazy-load markdown libraries to avoid requiring 'document' at import time
     // These libraries (specifically rehype) execute code that accesses document.createElement()
     // during module initialization, which breaks Node.js compatibility
@@ -1634,9 +1519,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Get the document version from the converter
-   * @returns {string|null} The SuperDoc version stored in the document
    */
-  getDocumentVersion() {
+  getDocumentVersion(): string | null {
     return this.converter?.getSuperdocVersion() || null;
   }
 
@@ -1644,29 +1528,22 @@ export class Editor extends EventEmitter {
    * Create a child editor linked to this editor.
    * This is useful for creating header/footer editors that are linked to the main editor.
    * Or paragraph fields that rely on the same underlying document and list defintions
-   * @param {EditorOptions} options - Options for the child editor
-   * @returns {Editor} A new child editor instance linked to this editor
    */
-  createChildEditor(options) {
+  createChildEditor(options: Partial<EditorOptions>): Editor {
     return createLinkedChildEditor(this, options);
   }
 
   /**
    * Get page styles
-   * @returns {Object} Page styles
    */
-  getPageStyles() {
+  getPageStyles(): PageStyles {
     return this.converter?.pageStyles || {};
   }
 
   /**
    * Update page styles
-   *
-   * @param {Object} param0
-   * @param {Object} param0.pageMargins The new page margins
-   * @returns {void}
    */
-  updatePageStyle({ pageMargins }) {
+  updatePageStyle({ pageMargins }: { pageMargins?: Record<string, unknown> }): void {
     if (!this.converter) return;
 
     let hasMadeUpdate = false;
@@ -1686,7 +1563,7 @@ export class Editor extends EventEmitter {
   /**
    * Handles image node selection for header/footer editor
    */
-  #handleNodeSelection(view, pos) {
+  #handleNodeSelection(view: PmEditorView, pos: number): boolean | void {
     this.setOptions({
       lastSelection: null,
     });
@@ -1699,11 +1576,11 @@ export class Editor extends EventEmitter {
   /**
    * Perform any post conversion pre prosemirror import processing.
    * Comments are processed here.
-   * @param {Object} doc The prosemirror document
-   * @returns {Object} The updated prosemirror document
+   * @param doc The prosemirror document
+   * @returns The updated prosemirror document
    */
-  #prepareDocumentForImport(doc) {
-    const newState = EditorState.create({
+  #prepareDocumentForImport(doc: PmNode): PmNode {
+    const newState = PmEditorState.create({
       schema: this.schema,
       doc,
     });
@@ -1717,7 +1594,7 @@ export class Editor extends EventEmitter {
     return updatedState.doc;
   }
 
-  migrateListsToV2() {
+  migrateListsToV2(): any[] {
     if (this.options.isHeaderOrFooter) return [];
     const replacements = migrateListsToV2IfNecessary(this);
     return replacements;
@@ -1726,10 +1603,10 @@ export class Editor extends EventEmitter {
   /**
    * Prepare the document for export. Any necessary pre-export processing to the state
    * can happen here.
-   * @returns {Object} The updated document in JSON
+   * @returns The updated document in JSON
    */
-  #prepareDocumentForExport(comments = []) {
-    const newState = EditorState.create({
+  #prepareDocumentForExport(comments: Comment[] = []): ProseMirrorJSON {
+    const newState = PmEditorState.create({
       schema: this.schema,
       doc: this.state.doc,
       plugins: this.state.plugins,
@@ -1742,19 +1619,12 @@ export class Editor extends EventEmitter {
     return updatedState.doc.toJSON();
   }
 
-  getUpdatedJson() {
+  getUpdatedJson(): ProseMirrorJSON {
     return this.#prepareDocumentForExport();
   }
 
   /**
    * Export the editor document to DOCX.
-   * @async
-   * @param {Object} options - The export options
-   * @param {boolean} [options.isFinalDoc=false] - Whether this is the final document version
-   * @param {string} [options.commentsType] - The type of comments to include
-   * @param {Array} [options.comments=[]] - Array of comments to include in the document
-   * @param {boolean} [options.getUpdatedDocs=false] - When set to true return only updated docx files
-   * @returns {Promise<Blob|ArrayBuffer|Object>} The exported DOCX file or updated docx files
    */
   async exportDocx({
     isFinalDoc = false,
@@ -1764,7 +1634,15 @@ export class Editor extends EventEmitter {
     comments = [],
     getUpdatedDocs = false,
     fieldsHighlightColor = null,
-  } = {}) {
+  }: {
+    isFinalDoc?: boolean;
+    commentsType?: string;
+    exportJsonOnly?: boolean;
+    exportXmlOnly?: boolean;
+    comments?: Comment[];
+    getUpdatedDocs?: boolean;
+    fieldsHighlightColor?: string | null;
+  } = {}): Promise<Blob | ArrayBuffer | Buffer | Record<string, string> | ProseMirrorJSON | string | undefined> {
     try {
       // Pre-process the document state to prepare for export
       const json = this.#prepareDocumentForExport(comments);
@@ -1774,7 +1652,7 @@ export class Editor extends EventEmitter {
       const documentXml = await this.converter.exportToDocx(
         json,
         this.schema,
-        this.storage.image.media,
+        (this.storage.image as any).media,
         isFinalDoc,
         commentsType,
         comments,
@@ -1796,17 +1674,18 @@ export class Editor extends EventEmitter {
       const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
       const media = this.converter.addedMedia;
 
-      const updatedHeadersFooters = {};
+      const updatedHeadersFooters: Record<string, string> = {};
       Object.entries(this.converter.convertedXml).forEach(([name, json]) => {
         if (name.includes('header') || name.includes('footer')) {
-          const resultXml = this.converter.schemaToXml(json.elements[0]);
+          const jsonObj = json as { elements?: unknown[] };
+          const resultXml = this.converter.schemaToXml(jsonObj.elements?.[0]);
           updatedHeadersFooters[name] = String(resultXml);
         }
       });
 
       const numberingData = this.converter.convertedXml['word/numbering.xml'];
       const numbering = this.converter.schemaToXml(numberingData.elements[0]);
-      const updatedDocs = {
+      const updatedDocs: Record<string, string> = {
         ...this.options.customUpdatedFiles,
         'word/document.xml': String(documentXml),
         'docProps/custom.xml': String(customXml),
@@ -1863,39 +1742,39 @@ export class Editor extends EventEmitter {
         isHeadless: this.options.isHeadless,
       });
 
-      this.options.telemetry?.trackUsage('document_export', {
+      (this.options.telemetry as TelemetryData | null)?.trackUsage?.('document_export', {
         documentType: 'docx',
         timestamp: new Date().toISOString(),
       });
 
       return result;
     } catch (error) {
-      this.emit('exception', { error, editor: this });
-      console.error(error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.emit('exception', { error: err, editor: this });
+      console.error(err);
     }
   }
 
   /**
    * Destroy collaboration provider and ydoc
-   * @returns {void}
    */
-  #endCollaboration() {
+  #endCollaboration(): void {
     if (!this.options.ydoc) return;
     try {
       console.debug('🔗 [super-editor] Ending collaboration');
-      if (this.options.collaborationProvider) this.options.collaborationProvider.disconnect();
-      if (this.options.ydoc) this.options.ydoc.destroy();
+      this.options.collaborationProvider?.disconnect?.();
+      this.options.ydoc.destroy();
     } catch (error) {
-      this.emit('exception', { error, editor: this });
-      console.error(error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.emit('exception', { error: err, editor: this });
+      console.error(err);
     }
   }
 
   /**
    * Destroy the editor and clean up resources
-   * @returns {void}
    */
-  destroy() {
+  destroy(): void {
     this.emit('destroy');
 
     this.unmount();
@@ -1905,32 +1784,30 @@ export class Editor extends EventEmitter {
     this.removeAllListeners();
   }
 
-  destroyHeaderFooterEditors() {
+  destroyHeaderFooterEditors(): void {
     try {
       const headerEditors = this.converter?.headerEditors ?? [];
       const footerEditors = this.converter?.footerEditors ?? [];
       if (!headerEditors.length && !footerEditors.length) return;
 
       const editors = [...headerEditors, ...footerEditors].filter(Boolean);
-      for (let editorData of editors) {
+      for (const editorData of editors) {
         editorData?.editor?.destroy?.();
       }
       if (headerEditors.length) headerEditors.length = 0;
       if (footerEditors.length) footerEditors.length = 0;
     } catch (error) {
-      this.emit('exception', { error, editor: this });
-      console.error(error);
+      const err = error instanceof Error ? error : new Error(String(error));
+      this.emit('exception', { error: err, editor: this });
+      console.error(err);
     }
   }
 
   /**
    * Check if migrations are needed for the data
-   * @static
-   * @param {Object} data - Document data
-   * @returns {boolean} Whether migrations are needed
    */
-  static checkIfMigrationsNeeded() {
-    const dataVersion = version || 'initial';
+  static checkIfMigrationsNeeded(): boolean {
+    const dataVersion = version ?? 'initial';
     const migrations = getNecessaryMigrations(dataVersion) || [];
     console.debug('[checkVersionMigrations] Migrations needed:', dataVersion, migrations.length);
     return migrations.length > 0;
@@ -1938,9 +1815,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Process collaboration migrations
-   * @returns {Object | void} Migration results
    */
-  processCollaborationMigrations() {
+  processCollaborationMigrations(): unknown | void {
     console.debug('[checkVersionMigrations] Current editor version', __APP_VERSION__);
     if (!this.options.ydoc) return;
 
@@ -1951,11 +1827,11 @@ export class Editor extends EventEmitter {
     const migrations = getNecessaryMigrations(docVersion) || [];
 
     const plugins = this.state.plugins;
-    const syncPlugin = plugins.find((p) => p.key.startsWith('y-sync'));
+    const syncPlugin = plugins.find((plugin) => this.#getPluginKeyName(plugin).startsWith('y-sync'));
     if (!syncPlugin) return this.options.ydoc;
 
     let hasRunMigrations = false;
-    for (let migration of migrations) {
+    for (const migration of migrations) {
       console.debug('🏃‍♂️ Running migration', migration.name);
       const result = migration(this);
       if (!result) throw new Error('Migration failed at ' + migration.name);
@@ -1972,13 +1848,10 @@ export class Editor extends EventEmitter {
 
   /**
    * Replace the current file
-   * @async
-   * @param {Object} newFile - New file data
-   * @returns {Promise<void>}
    */
-  async replaceFile(newFile) {
+  async replaceFile(newFile: File | Blob | Buffer): Promise<void> {
     this.setOptions({ annotations: true });
-    const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(newFile);
+    const [docx, media, mediaFiles, fonts] = (await Editor.loadXmlData(newFile))!;
     this.setOptions({
       fileSource: newFile,
       content: docx,
@@ -1986,16 +1859,16 @@ export class Editor extends EventEmitter {
       mediaFiles,
       fonts,
       isNewFile: true,
-      shouldLoadComments: true,
-      replacedFile: true,
     });
+    this.options.shouldLoadComments = true;
+    this.options.replacedFile = true;
 
     this.#createConverter();
     this.#initMedia();
     this.initDefaultStyles();
 
     if (this.options.ydoc && this.options.collaborationProvider) {
-      updateYdocDocxData(this);
+      updateYdocDocxData(this, this.options.ydoc);
       this.initializeCollaborationData();
     } else {
       this.#insertNewFileData();
@@ -2009,11 +1882,10 @@ export class Editor extends EventEmitter {
 
   /**
    * Get internal docx file content
-   * @param {string} name - File name
-   * @param {string} type - type of result (json, string)
-   * @returns {Object|String} - file content
+   * @param name - File name
+   * @param type - type of result (json, string)
    */
-  getInternalXmlFile(name, type = 'json') {
+  getInternalXmlFile(name: string, type: 'json' | 'string' = 'json'): unknown | string | null {
     if (!this.converter.convertedXml[name]) {
       console.warn('Cannot find file in docx');
       return null;
@@ -2027,36 +1899,31 @@ export class Editor extends EventEmitter {
 
   /**
    * Update internal docx file content
-   * @param {string} name - File name
-   * @param {string} updatedContent - new file content
+   * @param name - File name
+   * @param updatedContent - new file content
    */
-  updateInternalXmlFile(name, updatedContent) {
+  updateInternalXmlFile(name: string, updatedContent: string | unknown): void {
     if (typeof updatedContent === 'string') {
-      this.options.customUpdatedFiles[name] = String(updatedContent);
+      this.options.customUpdatedFiles![name] = String(updatedContent);
     } else {
       const internalFileXml = this.converter.schemaToXml(updatedContent);
-      this.options.customUpdatedFiles[name] = String(internalFileXml);
+      this.options.customUpdatedFiles![name] = String(internalFileXml);
     }
     this.options.isCustomXmlChanged = true;
   }
 
   /**
    * Get all nodes of a specific type
-   * @param {string} type - Node type
-   * @returns {Array} Array of nodes
    */
-  getNodesOfType(type) {
+  getNodesOfType(type: string): Array<{ node: PmNode; pos: number }> {
     const { findChildren } = helpers;
     return findChildren(this.state.doc, (node) => node.type.name === type);
   }
 
   /**
    * Replace a node with HTML content
-   * @param {Object} targetNode - The node to replace
-   * @param {string} html - HTML content to replace with
-   * @returns {void}
    */
-  replaceNodeWithHTML(targetNode, html) {
+  replaceNodeWithHTML(targetNode: { node: PmNode; pos: number }, html: string): void {
     const { tr } = this.state;
     const { dispatch } = this.view;
 
@@ -2073,11 +1940,8 @@ export class Editor extends EventEmitter {
    * pre-process the document as needed prior to running in the annotator.
    *
    * Currently this is only used for table generation but additional pre-processing can be done here.
-   *
-   * @param {FieldValue[]} annotationValues
-   * @returns {void}
    */
-  prepareForAnnotations(annotationValues = []) {
+  prepareForAnnotations(annotationValues: FieldValue[] = []): void {
     const { tr } = this.state;
     const newTr = AnnotatorHelpers.processTables({ state: this.state, tr, annotationValues });
     this.view.dispatch(newTr);
@@ -2085,10 +1949,10 @@ export class Editor extends EventEmitter {
 
   /**
    * Migrate paragraph fields to lists V2 structure if necessary.
-   * @param {FieldValue[]} annotationValues - List of field values to migrate.
-   * @returns {Promise<FieldValue[]>} - Returns a promise that resolves to the migrated
+   * @param annotationValues - List of field values to migrate.
+   * @returns Returns a promise that resolves to the migrated values
    */
-  async migrateParagraphFields(annotationValues = []) {
+  async migrateParagraphFields(annotationValues: FieldValue[] = []): Promise<FieldValue[]> {
     if (!Array.isArray(annotationValues) || !annotationValues.length) return annotationValues;
     const result = await migrateParagraphFieldsListsV2(annotationValues, this);
     return result;
@@ -2096,12 +1960,8 @@ export class Editor extends EventEmitter {
 
   /**
    * Annotate the document with the given annotation values.
-   *
-   * @param {FieldValue[]} annotationValues List of field values to apply.
-   * @param {String[]} hiddenIds List of field ids to remove from the document.
-   * @returns {void}
    */
-  annotate(annotationValues = [], hiddenIds = [], removeEmptyFields = false) {
+  annotate(annotationValues: FieldValue[] = [], hiddenIds: string[] = [], removeEmptyFields: boolean = false): void {
     const { state, view, schema } = this;
     let tr = state.tr;
 
@@ -2122,55 +1982,45 @@ export class Editor extends EventEmitter {
   /**
    * Preview annotations in the editor. It stores a copy of the original state.
    * This can be reverted via closePreview()
-   *
-   * @param {Object[]} annotationValues
-   * @param {string[]} hiddenIds
-   * @returns {void}
    */
-  previewAnnotations(annotationValues = [], hiddenIds = []) {
+  previewAnnotations(annotationValues: FieldValue[] = [], hiddenIds: string[] = []): void {
     this.originalState = this.view.state;
     this.annotate(annotationValues, hiddenIds);
   }
 
   /**
    * If there is a preview active, this will revert the editor to the original state.
-   *
-   * @returns {void}
    */
-  closePreview() {
+  closePreview(): void {
     if (!this.originalState) return;
     this.view.updateState(this.originalState);
   }
 
   /**
    * Run the SuperValidator's active document validation to check and fix potential known issues.
-   * @returns {void}
    */
-  #validateDocumentInit() {
+  #validateDocumentInit(): void {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
 
-    /** @type {import('./super-validator/index.js').SuperValidator} */
     const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
     validator.validateActiveDocument();
   }
 
   /**
    * Run the SuperValidator's on document upon export to check and fix potential known issues.
-   * @returns {void}
    */
-  #validateDocumentExport() {
+  #validateDocumentExport(): void {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
 
-    /** @type {import('./super-validator/index.js').SuperValidator} */
     const validator = new SuperValidator({ editor: this, dryRun: false, debug: false });
     validator.validateDocumentExport();
   }
 
-  #initDevTools() {
+  #initDevTools(): void {
     if (this.options.isHeaderOrFooter) return;
 
     if (process.env.NODE_ENV === 'development' || this.options.isDebug) {
-      window.superdocdev = {
+      (window as Window & { superdocdev?: unknown }).superdocdev = {
         converter: this.converter,
         editor: this,
       };
