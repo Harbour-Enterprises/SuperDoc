@@ -84,7 +84,7 @@ export interface EditorEventMap extends DefaultEventMap {
   destroy: [];
 
   /** Called when there's a content error */
-  contentError: [{ error: Error }];
+  contentError: [{ editor: Editor; error: Error }];
 
   /** Called when tracked changes update */
   trackedChangesUpdate: [{ changes: unknown }];

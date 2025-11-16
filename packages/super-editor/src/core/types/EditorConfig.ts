@@ -271,7 +271,7 @@ export interface EditorOptions {
   onDestroy?: () => void;
 
   /** Called when there's a content error */
-  onContentError?: (params: { error: Error }) => void;
+  onContentError?: (params: { editor: Editor; error: Error }) => void;
 
   /** Called when tracked changes update */
   onTrackedChangesUpdate?: (params: { changes: unknown }) => void;

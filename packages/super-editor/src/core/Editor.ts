@@ -169,7 +169,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     onFocus: () => null,
     onBlur: () => null,
     onDestroy: () => null,
-    onContentError: ({ error }: { error: Error }) => {
+    onContentError: ({ error }: { editor: Editor; error: Error }) => {
       throw error;
     },
     onTrackedChangesUpdate: () => null,
@@ -968,7 +968,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     } catch (err) {
       console.error(err);
       const error = err instanceof Error ? err : new Error(String(err));
-      this.emit('contentError', { error });
+      this.emit('contentError', { editor: this, error });
     }
 
     return doc!;
