@@ -127,6 +127,9 @@ export const translateImageNode = (params) => {
   const drawingXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
   const pictureXmlns = 'http://schemas.openxmlformats.org/drawingml/2006/picture';
 
+  // Ensure valid positive docPr/cNvPr IDs
+  const docPrId = attrs.id && Number(attrs.id) > 0 ? attrs.id : parseInt(generateDocxRandomId(), 16);
+
   return {
     attributes: inlineAttrs,
     elements: [
@@ -144,7 +147,7 @@ export const translateImageNode = (params) => {
       {
         name: 'wp:docPr',
         attributes: {
-          id: attrs.id || 0,
+          id: docPrId,
           name: attrs.alt || `Picture ${imageName}`,
         },
       },
@@ -178,7 +181,7 @@ export const translateImageNode = (params) => {
                       {
                         name: 'pic:cNvPr',
                         attributes: {
-                          id: attrs.id || 0,
+                          id: docPrId,
                           name: attrs.title || `Picture ${imageName}`,
                         },
                       },
