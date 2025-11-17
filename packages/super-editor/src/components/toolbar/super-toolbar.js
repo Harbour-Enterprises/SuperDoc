@@ -3,6 +3,7 @@ import { createApp } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { makeDefaultItems } from './defaultItems';
 import { getActiveFormatting } from '@core/helpers/getActiveFormatting.js';
+import { findParentNode } from '@helpers/index.js';
 import { vClickOutside } from '@superdoc/common';
 import Toolbar from './Toolbar.vue';
 import {
@@ -20,7 +21,7 @@ import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
 import { yUndoPluginKey } from 'y-prosemirror';
 import { isNegatedMark } from './format-negation.js';
 import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
-import { collectTargetListItemPositions } from '@core/commands/list-helpers/list-indent-helpers.js';
+import { isList } from '@core/commands/list-helpers';
 
 /**
  * @typedef {function(CommandItem): void} CommandCallback
@@ -426,12 +427,10 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     increaseTextIndent: ({ item, argument }) => {
-      const command = item.command;
-      const { state } = this.activeEditor;
-      const listItemsInSelection = collectTargetListItemPositions(state);
+      let command = item.command;
 
-      if (listItemsInSelection.length) {
-        return this.activeEditor.commands.increaseListIndent(listItemsInSelection);
+      if (this.activeEditor.commands.increaseListIndent?.()) {
+        return true;
       }
 
       if (command in this.activeEditor.commands) {
@@ -448,11 +447,9 @@ export class SuperToolbar extends EventEmitter {
      */
     decreaseTextIndent: ({ item, argument }) => {
       let command = item.command;
-      let { state } = this.activeEditor;
-      const listItemsInSelection = collectTargetListItemPositions(state);
 
-      if (listItemsInSelection.length) {
-        return this.activeEditor.commands.decreaseListIndent(listItemsInSelection);
+      if (this.activeEditor.commands.decreaseListIndent?.()) {
+        return true;
       }
 
       if (command in this.activeEditor.commands) {
@@ -778,10 +775,11 @@ export class SuperToolbar extends EventEmitter {
       // Linked Styles dropdown behaves a bit different from other buttons.
       // We need to disable it manually if there are no linked styles to show
       if (item.name.value === 'linkedStyles') {
+        const linkedStyleMark = marks.find((mark) => mark.name === 'styleId');
         if (this.activeEditor && !getQuickFormatList(this.activeEditor).length) {
           return item.deactivate();
         } else {
-          return item.activate();
+          return item.activate({ linkedStyleMark });
         }
       }
 
@@ -837,11 +835,15 @@ export class SuperToolbar extends EventEmitter {
       }
 
       // Activate list buttons when selections is inside list
-      const listNumberingType = marks.find((mark) => mark.name === 'listNumberingType')?.attrs?.listNumberingType;
-      if (item.name.value === 'list' && listNumberingType === 'bullet') {
-        item.activate();
-      } else if (item.name.value === 'numberedlist' && listNumberingType && listNumberingType !== 'bullet') {
-        item.activate();
+      const selection = this.activeEditor.state.selection;
+      const listParent = findParentNode(isList)(selection)?.node;
+      if (listParent) {
+        const numberingType = listParent.attrs.listRendering.numberingType;
+        if (item.name.value === 'list' && numberingType === 'bullet') {
+          item.activate();
+        } else if (item.name.value === 'numberedlist' && numberingType !== 'bullet') {
+          item.activate();
+        }
       }
     });
   }

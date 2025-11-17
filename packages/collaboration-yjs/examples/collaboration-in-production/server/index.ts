@@ -58,6 +58,10 @@ const SuperDocCollaboration = new CollaborationBuilder()
   }) as AutoSaveFn)
   .build();
 
+/** Health check endpoint */
+fastify.get('/health', async (request, reply) => {
+  return { status: 'ok', timestamp: new Date().toISOString() };
+});
 
 /** An example route for websocket collaboration connection */
 fastify.register(async function (fastify) {

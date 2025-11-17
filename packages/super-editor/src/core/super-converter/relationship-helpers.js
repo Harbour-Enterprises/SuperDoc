@@ -50,7 +50,6 @@ export const mergeRelationshipElements = (existingRelationships = [], newRelatio
 
     const existingTarget = existingRelationships.find((el) => el.attributes.Target === attributes.Target);
     // Images added in collaboration mode may miss relations but have an ID.
-    const isMedia = attributes.Target?.startsWith('media/');
     const isNewHyperlink = attributes.Type === HYPERLINK_RELATIONSHIP_TYPE && currentId.length > 6;
     const isNewHeadFoot =
       (attributes.Type === HEADER_RELATIONSHIP_TYPE || attributes.Type === FOOTER_RELATIONSHIP_TYPE) &&

@@ -36,7 +36,7 @@ export const Strike = Mark.create({
     const merged = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
     const { value } = mark.attrs;
     const { ...rest } = merged || {};
-    if (value === '0') {
+    if (value === '0' || value === false) {
       return ['span', rest, 0];
     }
     return ['s', rest, 0];
@@ -84,8 +84,8 @@ export const Strike = Mark.create({
       value: {
         default: null,
         renderDOM: (attrs) => {
-          if (!attrs.value) return {};
-          if (attrs.value === '0') {
+          if (attrs.value == null) return {};
+          if (attrs.value === '0' || !attrs.value) {
             return { style: 'text-decoration: none' };
           }
           return {};

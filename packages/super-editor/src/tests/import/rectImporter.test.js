@@ -1,10 +1,6 @@
 import { expect, it, describe, beforeEach } from 'vitest';
 import { handlePictNode } from '../../core/super-converter/v2/importer/pictNodeImporter.js';
-import {
-  handleVRectImport,
-  parsePointsToPixels,
-  buildVRectStyles,
-} from '@converter/v3/handlers/w/pict/helpers/handle-v-rect-import.js';
+import { handleVRectImport, parsePointsToPixels } from '@converter/v3/handlers/w/pict/helpers/handle-v-rect-import.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 
 describe('RectImporter', () => {
@@ -156,9 +152,9 @@ describe('RectImporter', () => {
       const node = result.nodes[0];
       expect(node.attrs.rsidRDefault).toBe('test123');
       expect(node.attrs.spacing).toBeDefined();
-      expect(node.attrs.spacing.lineSpaceAfter).toBe(16); // 240 twips = 12px
-      expect(node.attrs.spacing.lineSpaceBefore).toBe(8); // 120 twips = 6px
-      expect(node.attrs.spacing.line).toBe(1.15);
+      expect(node.attrs.spacing.after).toBe(240); // 240 twips = 12px
+      expect(node.attrs.spacing.before).toBe(120); // 120 twips = 6px
+      expect(node.attrs.spacing.line).toBe(276);
       expect(node.attrs.spacing.lineRule).toBe('auto');
     });
 
@@ -250,7 +246,7 @@ describe('RectImporter', () => {
         ],
       };
 
-      const result = handleVRectImport({ pict, pNode });
+      const result = handleVRectImport({ pict, pNode, params: mockParams });
 
       expect(result.type).toBe('paragraph');
       expect(result.content).toHaveLength(1);
@@ -288,7 +284,7 @@ describe('RectImporter', () => {
 
       const pNode = { elements: [] };
 
-      const result = handleVRectImport({ pict, pNode });
+      const result = handleVRectImport({ pict, pNode, params: mockParams });
 
       const contentBlock = result.content[0];
       expect(contentBlock.attrs.size.width).toBe('100%');
@@ -312,7 +308,7 @@ describe('RectImporter', () => {
 
       const pNode = { elements: [] };
 
-      const result = handleVRectImport({ pict, pNode });
+      const result = handleVRectImport({ pict, pNode, params: mockParams });
 
       const contentBlock = result.content[0];
       expect(contentBlock.attrs.style).toBeUndefined();
@@ -338,7 +334,7 @@ describe('RectImporter', () => {
 
       const pNode = { elements: [] };
 
-      const result = handleVRectImport({ pict, pNode });
+      const result = handleVRectImport({ pict, pNode, params: mockParams });
 
       const contentBlock = result.content[0];
       expect(contentBlock.attrs.attributes.id).toBe('rect1');

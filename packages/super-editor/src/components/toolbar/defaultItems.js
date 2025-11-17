@@ -15,6 +15,7 @@ import { scrollToElement } from './scroll-helpers.js';
 import checkIconSvg from '@superdoc/common/icons/check.svg?raw';
 import SearchInput from './SearchInput.vue';
 import { TOOLBAR_FONTS, TOOLBAR_FONT_SIZES } from './constants.js';
+import { getQuickFormatList } from '@extensions/linked-styles/index.js';
 
 const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
@@ -63,6 +64,7 @@ export const makeDefaultItems = ({
     options: fontOptions,
     onActivate: ({ fontFamily }) => {
       if (!fontFamily) return;
+      fontFamily = fontFamily.split(',')[0]; // in case of fonts with fallbacks
       fontButton.label.value = fontFamily;
 
       const defaultFont = fontOptions.find((i) => i.label === fontButton.defaultLabel.value);
@@ -1008,11 +1010,17 @@ export const makeDefaultItems = ({
         },
       },
     ],
-    onActivate: () => {
+    onActivate: ({ linkedStyleMark }) => {
+      const styles = getQuickFormatList(superToolbar.activeEditor);
+      const selectedStyle = styles?.find((style) => style.id === linkedStyleMark?.attrs?.styleId);
+      // Normal linked style is default one
+      linkedStyles.label.value =
+        selectedStyle && selectedStyle.id !== 'Normal' ? selectedStyle.definition.attrs.name : toolbarTexts.formatText;
       linkedStyles.disabled.value = false;
     },
     onDeactivate: () => {
       linkedStyles.disabled.value = true;
+      linkedStyles.label.value = toolbarTexts.formatText;
     },
   });
 
