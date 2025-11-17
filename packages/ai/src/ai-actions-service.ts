@@ -72,7 +72,7 @@ export class AIActionsService {
             throw new Error('Query cannot be empty');
         }
 
-        const context = this.getContext('document');
+        const context = this.getContext();
 
         if (!context.primaryText?.trim()) {
             return {success: false, results: []};
@@ -168,7 +168,7 @@ export class AIActionsService {
         multiple: boolean,
         operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
     ): Promise<FoundMatch[]> {
-        const context = this.getContext('document');
+        const context = this.getContext();
 
         if (!context.primaryText?.trim()) {
             return [];
