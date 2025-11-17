@@ -764,6 +764,14 @@ export class SuperToolbar extends EventEmitter {
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
 
+      if (item.name.value === 'undo') {
+        item.setDisabled(this.undoDepth === 0);
+      }
+
+      if (item.name.value === 'redo') {
+        item.setDisabled(this.redoDepth === 0);
+      }
+
       if (item.name.value === 'acceptTrackedChangeBySelection') {
         item.setDisabled(!canAcceptTrackedChanges);
       }
@@ -865,6 +873,8 @@ export class SuperToolbar extends EventEmitter {
     if (this.role === 'viewer') {
       this.#deactivateAll();
     }
+
+    this.updateToolbarState();
   };
 
   /**
@@ -896,17 +906,6 @@ export class SuperToolbar extends EventEmitter {
     } else {
       this.undoDepth = undoDepth(this.activeEditor.state);
       this.redoDepth = redoDepth(this.activeEditor.state);
-    }
-
-    // Update undo/redo button disabled states directly
-    const undoItem = this.toolbarItems.find((item) => item.name.value === 'undo');
-    const redoItem = this.toolbarItems.find((item) => item.name.value === 'redo');
-
-    if (undoItem) {
-      undoItem.disabled.value = this.undoDepth === 0;
-    }
-    if (redoItem) {
-      redoItem.disabled.value = this.redoDepth === 0;
     }
   }
 
