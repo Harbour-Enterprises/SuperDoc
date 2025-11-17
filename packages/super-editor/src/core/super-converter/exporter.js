@@ -25,6 +25,7 @@ import {
 } from './v3/handlers/w/commentRange/index.js';
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
+import { translator as sdAutoPageNumberTranslator } from '@converter/v3/handlers/sd/autoPageNumber';
 import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
 import { translateVectorShape, translateShapeGroup } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
 import { translator as wTextTranslator } from '@converter/v3/handlers/w/t';
@@ -235,8 +236,8 @@ export function exportSchemaToJson(params) {
     structuredContentBlock: wSdtNodeTranslator,
     documentPartObject: wSdtNodeTranslator,
     documentSection: wSdtNodeTranslator,
-    'page-number': translatePageNumberNode,
     'total-page-number': translateTotalPageNumberNode,
+    'page-number': sdAutoPageNumberTranslator,
     pageReference: sdPageReferenceTranslator,
     tableOfContents: sdTableOfContentsTranslator,
   };
@@ -879,11 +880,6 @@ export class DocxExporter {
     return tags;
   }
 }
-
-const translatePageNumberNode = (params) => {
-  const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
-  return getAutoPageJson('PAGE', outputMarks);
-};
 
 const translateTotalPageNumberNode = (params) => {
   const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
