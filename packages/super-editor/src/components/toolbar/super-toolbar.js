@@ -897,6 +897,17 @@ export class SuperToolbar extends EventEmitter {
       this.undoDepth = undoDepth(this.activeEditor.state);
       this.redoDepth = redoDepth(this.activeEditor.state);
     }
+
+    // Update undo/redo button disabled states directly
+    const undoItem = this.toolbarItems.find((item) => item.name.value === 'undo');
+    const redoItem = this.toolbarItems.find((item) => item.name.value === 'redo');
+
+    if (undoItem) {
+      undoItem.disabled.value = this.undoDepth === 0;
+    }
+    if (redoItem) {
+      redoItem.disabled.value = this.redoDepth === 0;
+    }
   }
 
   #enrichTrackedChanges(trackedChanges = []) {
