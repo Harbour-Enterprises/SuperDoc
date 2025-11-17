@@ -1,19 +1,6 @@
-import type {
-  ContextBlock,
-  ContextScope,
-  ContextWindow,
-  Editor,
-  FoundMatch,
-  MarkType,
-  SelectionContext,
-} from './types';
-import { generateId } from './utils';
+import type { Editor, FoundMatch, MarkType } from './types';
+import {generateId} from "./utils";
 import { TextSelection } from 'prosemirror-state';
-
-type TemplateNode = {
-    marks: MarkType[];
-    length: number;
-};
 
 /**
  * Adapter for SuperDoc editor operations
@@ -23,7 +10,8 @@ export class EditorAdapter {
     constructor(private editor: Editor) {}
 
     // Search for string occurrences and resolve document positions
-    findResults(results: FoundMatch[]): FoundMatch[] {
+    // If selectionBounds is provided, only returns matches within the selected area
+    findResults(results: FoundMatch[], selectionBounds?: { from: number; to: number } | null): FoundMatch[] {
         if (!results?.length) {
             return [];
         }
@@ -33,7 +21,7 @@ export class EditorAdapter {
                 const text = match.originalText;
                 const rawMatches = this.editor.commands?.search?.(text) ?? [];
 
-                const positions = rawMatches
+                let positions = rawMatches
                     .map((match: { from?: number; to?: number}) => {
                         const from = match.from;
                         const to = match.to;
@@ -42,7 +30,16 @@ export class EditorAdapter {
                         }
                         return { from, to };
                     })
-                .filter((value: { from: number; to: number } | null) => value !== null);
+                    .filter((value: { from: number; to: number } | null) => value !== null) as { from: number; to: number }[];
+
+                // Filter positions to only include those within the selection bounds if provided
+                if (selectionBounds) {
+                    positions = positions.filter((pos) => {
+                        // Check if the match overlaps with or is within the selection bounds
+                        // A match is within bounds if it starts at or after selection.from and ends at or before selection.to
+                        return pos.from >= selectionBounds.from && pos.to <= selectionBounds.to;
+                    });
+                }
 
                 return {
                     ...match,
@@ -72,17 +69,13 @@ export class EditorAdapter {
         this.editor.commands.deleteSelection();
         if (marks.length > 0) {
             this.editor.commands.insertContent({
-            type: 'paragraph',
-            content: [{
-              type: 'text',
-              text: suggestedText,
-              marks: marks.map((mark: MarkType) => ({
-                type: mark.type.name,
-                attrs: mark.attrs,
-              })),
-            }],
-          });
-
+                type: 'text',
+                text: suggestedText,
+                marks: marks.map((mark: MarkType) => ({
+                    type: mark.type.name,
+                    attrs: mark.attrs,
+                })),
+            });
         } else {
             this.editor.commands.insertContent(suggestedText);
         }
@@ -150,143 +143,4 @@ export class EditorAdapter {
             })),
         });
     }
-
-
-  getContextWindow(paddingBlocks: number = 1, scopeOverride?: ContextScope): ContextWindow {
-    const state = this.editor?.state;
-    const doc = state?.doc;
-
-    if (!state || !doc) {
-      return {
-        scope: 'document',
-        primaryText: '',
-      };
-    }
-
-    const selection = state.selection;
-    const blocks = this.collectBlocks();
-    const selectionInfo = this.buildSelectionContext(blocks, paddingBlocks);
-    const documentText = doc.textContent?.trim() ?? '';
-
-    const hasSelection = Boolean(selection && !selection.empty && selectionInfo?.text !== undefined);
-    const derivedPrimaryText = hasSelection
-      ? (selectionInfo?.text ?? '')
-      : (selectionInfo?.block?.text ?? documentText);
-    const primaryText = scopeOverride === 'document' ? documentText : derivedPrimaryText;
-
-    const scope: ContextScope = scopeOverride
-      ? scopeOverride
-      : hasSelection
-        ? 'selection'
-        : selectionInfo?.block
-          ? 'block'
-          : 'document';
-
-    const metadata: Record<string, unknown> = {
-      documentId: (this.editor.options as any)?.documentId,
-    };
-
-    return {
-      scope,
-      primaryText: primaryText ?? '',
-      selection: scopeOverride === 'document' ? undefined : (selectionInfo ?? undefined),
-      documentStats: {
-        wordCount: documentText ? documentText.split(/\s+/).filter(Boolean).length : 0,
-        charCount: documentText.length,
-      },
-      metadata,
-    };
-  }
-
-  private collectBlocks(): ContextBlock[] {
-    const {doc} = this.editor.state;
-    const blocks: ContextBlock[] = [];
-    doc.descendants((node: any, pos: any) => {
-      if (!node.isBlock) {
-        return true;
-      }
-
-      const text = node.textContent?.trim() ?? '';
-
-      blocks.push({
-        type: node.type.name,
-        text,
-        from: pos,
-        to: pos + node.nodeSize,
-        attrs: node.attrs,
-        headingLevel: typeof node.attrs?.level === 'number' ? node.attrs.level : undefined,
-        title: typeof node.attrs?.title === 'string' ? node.attrs.title : undefined,
-      });
-
-      return true;
-    });
-
-    return blocks;
-  }
-
-  private buildSelectionContext(
-    blocks: ContextBlock[],
-    paddingBlocks: number
-  ): SelectionContext | null {
-    if (!this.editor.state?.selection) {
-      return null;
-    }
-
-  const selection = this.editor.state.selection;
-  const doc = this.editor.state.doc;
-  const text =
-      selection && !selection.empty ? doc.textBetween(selection.from, selection.to, '\n\n', '\n\n') : '';
-
-    const blockIndex = this.findBlockIndex(blocks, selection.from);
-    const block = blockIndex >= 0 ? blocks[blockIndex] : undefined;
-    const surroundingBlocks = blockIndex >= 0 ? this.getNeighborBlocks(blocks, blockIndex, paddingBlocks) : [];
-    const activeMarks = (this.editor.commands.getSelectionMarks?.() as MarkType[]) || [];
-
-    const metadata: Record<string, unknown> = {};
-    if (block?.title) {
-      metadata.clauseTitle = block.title;
-    }
-    if (typeof block?.headingLevel === 'number') {
-      metadata.headingLevel = block.headingLevel;
-    }
-
-    if (!text && !block) {
-      return null;
-    }
-
-    return {
-      from: selection.from,
-      to: selection.to,
-      text,
-      normalizedText: text?.trim?.(),
-      block,
-      surroundingBlocks,
-      activeMarks: activeMarks.map((mark) => ({
-        type: mark.type.name,
-        attrs: mark.attrs,
-      })),
-      metadata: Object.keys(metadata).length ? metadata : undefined,
-    };
-  }
-
-  private findBlockIndex(blocks: ContextBlock[], position: number): number {
-    return blocks.findIndex((block) => position >= block.from && position < block.to);
-  }
-
-  private getNeighborBlocks(blocks: ContextBlock[], index: number, paddingBlocks: number): ContextBlock[] {
-    if (index < 0) {
-      return [];
-    }
-
-    const neighbors: ContextBlock[] = [];
-    for (let i = Math.max(0, index - paddingBlocks); i <= Math.min(blocks.length - 1, index + paddingBlocks); i++) {
-      if (i === index) {
-        continue;
-      }
-
-      neighbors.push(blocks[i]);
-    }
-
-    return neighbors;
-  }
 }

@@ -1,13 +1,4 @@
-import {
-    AIProvider,
-    Editor,
-    Result,
-    FoundMatch,
-    DocumentPosition,
-    AIMessage,
-    ContextWindow,
-    ContextScope,
-} from './types';
+import {AIProvider, Editor, Result, FoundMatch, DocumentPosition, AIMessage} from './types';
 import {EditorAdapter} from './editor-adapter';
 import {validateInput, parseJSON} from './utils';
 import {
@@ -24,11 +15,13 @@ import {
  */
 export class AIActionsService {
     private adapter: EditorAdapter;
+    private capturedContext: string | null = null;
+    private capturedSelectionBounds: { from: number; to: number } | null = null;
 
     constructor(
         private provider: AIProvider,
         private editor: Editor | null,
-        private contextProvider: (scope?: ContextScope) => ContextWindow,
+        private documentContextProvider: () => string,
         private enableLogging: boolean = false,
         private onStreamChunk?: (partialResult: string) => void,
         private streamPreference?: boolean,
@@ -43,20 +36,43 @@ export class AIActionsService {
         }
     }
 
-    private getContext(scope?: ContextScope): ContextWindow {
-        if (!this.contextProvider) {
-            return {scope: 'document', primaryText: ''};
+    /**
+     * Sets a captured context that will be used instead of calling the provider.
+     * This ensures the context (including selection) is captured before async operations.
+     */
+    public setCapturedContext(context: string | null, selectionBounds?: { from: number; to: number } | null): void {
+        this.capturedContext = context;
+        this.capturedSelectionBounds = selectionBounds || null;
+    }
+
+    /**
+     * Clears the captured context, reverting to using the provider function.
+     */
+    public clearCapturedContext(): void {
+        this.capturedContext = null;
+        this.capturedSelectionBounds = null;
+    }
+
+    private getDocumentContext(): string {
+        // If a context was captured synchronously, use it
+        if (this.capturedContext !== null) {
+            return this.capturedContext;
+        }
+
+        // Otherwise, call the provider function
+        if (!this.documentContextProvider) {
+            return '';
         }
 
         try {
-            return this.contextProvider(scope);
+            return this.documentContextProvider();
         } catch (error) {
             if (this.enableLogging) {
                 console.error(
                     `Failed to retrieve document context: ${error instanceof Error ? error.message : 'Unknown error'}`
                 );
             }
-            return {scope: 'document', primaryText: ''};
+            return '';
         }
     }
 
@@ -72,13 +88,13 @@ export class AIActionsService {
             throw new Error('Query cannot be empty');
         }
 
-        const context = this.getContext();
+        const documentContext = this.getDocumentContext();
 
-        if (!context.primaryText?.trim()) {
+        if (!documentContext) {
             return {success: false, results: []};
         }
 
-        const prompt = buildFindPrompt(query, context, findAll);
+        const prompt = buildFindPrompt(query, documentContext, findAll);
         const response = await this.runCompletion([
             {role: 'system', content: SYSTEM_PROMPTS.SEARCH},
             {role: 'user', content: prompt},
@@ -89,7 +105,7 @@ export class AIActionsService {
         if (!result.success || !result.results) {
             return result;
         }
-        result.results = this.adapter.findResults(result.results);
+        result.results = this.adapter.findResults(result.results, this.capturedSelectionBounds);
 
         return result;
     }
@@ -168,14 +184,14 @@ export class AIActionsService {
         multiple: boolean,
         operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
     ): Promise<FoundMatch[]> {
-        const context = this.getContext();
+        const documentContext = this.getDocumentContext();
 
-        if (!context.primaryText?.trim()) {
+        if (!documentContext) {
             return [];
         }
 
         // Get AI query
-        const prompt = buildReplacePrompt(query, context, multiple);
+        const prompt = buildReplacePrompt(query, documentContext, multiple);
         const response = await this.runCompletion([
             {role: 'system', content: SYSTEM_PROMPTS.EDIT},
             {role: 'user', content: prompt},
@@ -193,7 +209,7 @@ export class AIActionsService {
             return [];
         }
 
-        const searchResults = this.adapter.findResults(replacements);
+        const searchResults = this.adapter.findResults(replacements, this.capturedSelectionBounds);
         const match = searchResults?.[0];
         for (const result of searchResults) {
             try {
@@ -364,12 +380,12 @@ export class AIActionsService {
      * Generates a summary of the document.
      */
     async summarize(query: string): Promise<Result> {
-        const context = this.getContext('document');
+        const documentContext = this.getDocumentContext();
 
-        if (!context.primaryText?.trim()) {
+        if (!documentContext) {
             return {results: [], success: false};
         }
-        const prompt = buildSummaryPrompt(query, context);
+        const prompt = buildSummaryPrompt(query, documentContext);
         const useStreaming = this.streamPreference !== false;
         let streamedLength = 0;
 
@@ -408,8 +424,8 @@ export class AIActionsService {
             return {success: false, results: []};
         }
 
-        const context = this.getContext();
-        const prompt = buildInsertContentPrompt(query, context);
+        const documentContext = this.getDocumentContext();
+        const prompt = buildInsertContentPrompt(query, documentContext);
 
         const useStreaming = this.streamPreference !== false;
         let streamingInsertedLength = 0;

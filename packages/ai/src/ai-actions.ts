@@ -1,8 +1,5 @@
 import type {
     CompletionOptions,
-    ContextScope,
-    ContextWindow,
-    ContextWindowConfig,
     Editor,
     Result,
     StreamOptions,
@@ -14,8 +11,6 @@ import type {
 } from './types';
 import {AIActionsService} from './ai-actions-service';
 import {createAIProvider, isAIProvider} from './providers';
-import {EditorAdapter} from './editor-adapter';
-import {formatContextWindow} from './prompts';
 
 /**
  * Primary entry point for SuperDoc AI capabilities. Wraps a SuperDoc instance,
@@ -50,10 +45,6 @@ export class AIActions {
     private isReady = false;
     private initializationPromise: Promise<void> | null = null;
     private readonly commands: AIActionsService;
-    private readonly contextWindowConfig: {
-        paddingBlocks: number;
-        maxChars: number;
-    };
 
     public readonly action = {
         find: async (instruction: string) => {
@@ -115,12 +106,6 @@ export class AIActions {
             provider: aiProvider,
         };
 
-        const contextWindowDefaults: ContextWindowConfig | undefined = this.config.contextWindow;
-        this.contextWindowConfig = {
-            paddingBlocks: Math.max(0, contextWindowDefaults?.paddingBlocks ?? 1),
-            maxChars: Math.max(200, contextWindowDefaults?.maxChars ?? 2000),
-        };
-
         this.callbacks = {
             onReady,
             onStreamingStart,
@@ -145,7 +130,7 @@ export class AIActions {
         this.commands = new AIActionsService(
             this.config.provider,
             editor,
-            (scope) => this.getContextWindow({scope}),
+            () => this.getDocumentContext(),
             this.config.enableLogging,
             (partial) => this.callbacks.onStreamingPartialResult?.({partialResult: partial}),
             streamResults,
@@ -183,7 +168,35 @@ export class AIActions {
     }
 
     /**
-     * Executes an action with full callback lifecycle support
+     * Gets the current selection bounds if a selection exists.
+     * @private
+     * @returns Selection bounds {from, to} or null if no selection
+     */
+    private getSelectionBounds(): { from: number; to: number } | null {
+        const editor = this.getEditor();
+        if (!editor) {
+            return null;
+        }
+
+        const state = editor.view?.state || editor.state;
+        if (!state || !state.selection) {
+            return null;
+        }
+
+        const { selection } = state;
+        if (selection.empty) {
+            return null;
+        }
+
+        return {
+            from: selection.from,
+            to: selection.to,
+        };
+    }
+
+    /**
+     * Executes an action with full callback lifecycle support.
+     * Captures the document context (including selection) synchronously before any async operations.
      * @private
      */
     private async executeActionWithCallbacks<T extends Result>(
@@ -193,6 +206,13 @@ export class AIActions {
         if (!editor) {
             throw new Error('No active SuperDoc editor available for AI actions');
         }
+        
+        // Capture context synchronously before any async operations
+        // This ensures the selection is locked in at the moment the action is called
+        const capturedContext = this.getDocumentContext();
+        const selectionBounds = this.getSelectionBounds();
+        this.commands.setCapturedContext(capturedContext, selectionBounds);
+        
         try {
             this.callbacks.onStreamingStart?.();
             const result: T = await fn();
@@ -202,6 +222,9 @@ export class AIActions {
         } catch (error: Error | any) {
             this.handleError(error as Error);
             throw error;
+        } finally {
+            // Clear the captured context after the action completes
+            this.commands.clearCapturedContext();
         }
     }
 
@@ -257,11 +280,8 @@ export class AIActions {
             throw new Error('AIActions is not ready yet. Call waitUntilReady() first.');
         }
 
-        const context = this.getContextWindow({
-            scope: options?.contextScope,
-            paddingBlocks: options?.contextPaddingBlocks,
-        });
-        const userContent = this.buildPromptWithContext(prompt, context);
+        const documentContext = this.getDocumentContext();
+        const userContent = documentContext ? `${prompt}\n\nDocument context:\n${documentContext}` : prompt;
 
         const messages = [
             {role: 'system' as const, content: this.config.systemPrompt || ''},
@@ -269,16 +289,11 @@ export class AIActions {
         ];
 
         let accumulated = '';
-        const providerOptions = options ? {...options} : undefined;
-        if (providerOptions) {
-            delete (providerOptions as Partial<StreamOptions>).contextScope;
-            delete (providerOptions as Partial<StreamOptions>).contextPaddingBlocks;
-        }
 
         try {
             this.callbacks.onStreamingStart?.();
 
-            const stream = this.config.provider.streamCompletion(messages, providerOptions);
+            const stream = this.config.provider.streamCompletion(messages, options);
 
             for await (const chunk of stream) {
                 accumulated += chunk;
@@ -307,25 +322,16 @@ export class AIActions {
             throw new Error('AIActions is not ready yet. Call waitUntilReady() first.');
         }
 
-        const context = this.getContextWindow({
-            scope: options?.contextScope,
-            paddingBlocks: options?.contextPaddingBlocks,
-        });
-        const userContent = this.buildPromptWithContext(prompt, context);
+        const documentContext = this.getDocumentContext();
+        const userContent = documentContext ? `${prompt}\n\nDocument context:\n${documentContext}` : prompt;
 
         const messages = [
             {role: 'system' as const, content: this.config.systemPrompt || ''},
             {role: 'user' as const, content: userContent},
         ];
 
-        const providerOptions = options ? {...options} : undefined;
-        if (providerOptions) {
-            delete (providerOptions as Partial<CompletionOptions>).contextScope;
-            delete (providerOptions as Partial<CompletionOptions>).contextPaddingBlocks;
-        }
-
         try {
-            return await this.config.provider.getCompletion(messages, providerOptions);
+            return await this.config.provider.getCompletion(messages, options);
         } catch (error) {
             this.handleError(error as Error);
             throw error;
@@ -334,100 +340,35 @@ export class AIActions {
 
     /**
      * Retrieves the current document context for AI processing.
-     * Combines XML and plain text representations when available.
+     * Returns selected text if available, otherwise returns the full document.
      *
-     * @returns Document context string
+     * @returns Document context string (selected text if available, otherwise full document)
      */
     public getDocumentContext(): string {
-        return this.getContextWindow({scope: 'document'}).primaryText;
-    }
-
-    /**
-     * Returns a scoped context window summarizing the current selection and neighbors.
-     */
-    public getContextWindow(options?: {scope?: ContextScope; paddingBlocks?: number}): ContextWindow {
-        const rawWindow = this.buildContextWindow(options);
-        return this.applyContextConstraints(rawWindow);
-    }
-
-    private buildContextWindow(options?: {scope?: ContextScope; paddingBlocks?: number}): ContextWindow {
         const editor = this.getEditor();
-        const scope = options?.scope;
-
         if (!editor) {
-            return {
-                scope: scope ?? 'document',
-                primaryText: '',
-            };
-        }
-
-        const adapter = new EditorAdapter(editor);
-        const paddingBlocks = this.resolvePaddingBlocks(options?.paddingBlocks);
-
-        return adapter.getContextWindow(paddingBlocks, scope);
-    }
-
-    private resolvePaddingBlocks(padding?: number): number {
-        if (typeof padding === 'number' && padding >= 0) {
-            return padding;
-        }
-
-        return this.contextWindowConfig.paddingBlocks;
-    }
-
-    private applyContextConstraints(context: ContextWindow): ContextWindow {
-        const clamp = (value?: string): string | undefined => {
-            if (!value) {
-                return value;
-            }
-
-            const limit = this.contextWindowConfig.maxChars;
-            if (!limit || value.length <= limit) {
-                return value;
-            }
-
-            return `${value.slice(0, limit)}...`;
-        };
-
-        const selection = context.selection
-            ? {
-                  ...context.selection,
-                  text: clamp(context.selection.text) ?? '',
-                  block: context.selection.block
-                      ? {
-                            ...context.selection.block,
-                            text: clamp(context.selection.block.text) ?? '',
-                        }
-                      : undefined,
-                  surroundingBlocks: (context.selection.surroundingBlocks || []).map((block) => ({
-                      ...block,
-                      text: clamp(block.text) ?? '',
-                  })),
-              }
-            : undefined;
-
-        return {
-            ...context,
-            primaryText: clamp(context.primaryText) ?? '',
-            selection,
-        };
-    }
-
-    private buildPromptWithContext(prompt: string, context: ContextWindow): string {
-        const formattedContext = this.serializeContextWindow(context);
-        if (!formattedContext) {
-            return prompt;
-        }
-
-        return `${prompt}\n\nContext window:\n${formattedContext}`;
-    }
-
-    private serializeContextWindow(context: ContextWindow): string {
-        if (!context.primaryText?.trim()) {
             return '';
         }
 
-        return formatContextWindow(context);
+        // Try to get state from view first (most up-to-date), then fall back to editor.state
+        const state = editor.view?.state || editor.state;
+        if (!state || !state.doc) {
+            return '';
+        }
+
+        const { selection, doc } = state;
+        
+        // If there's a non-empty selection, return the selected text
+        if (selection && !selection.empty) {
+            const selectedText = doc.textBetween(selection.from, selection.to, ' ').trim();
+            // Only return selected text if it's not empty (handles edge cases)
+            if (selectedText) {
+                return selectedText;
+            }
+        }
+
+        // Otherwise, return the full document content
+        return doc.textContent?.trim() || '';
     }
     
     /**

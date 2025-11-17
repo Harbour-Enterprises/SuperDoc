@@ -1,5 +1,3 @@
-import type {ContextBlock, ContextWindow} from './types';
-
 /**
  * AI prompt templates for document operations
  */
@@ -11,50 +9,12 @@ export const SYSTEM_PROMPTS = {
     CONTENT_GENERATION: 'You are a document content generation assistant. Always respond with valid JSON.',
 } as const;
 
-const describeBlock = (block: ContextBlock): string => {
-    const descriptor: string[] = [block.type];
-    if (block.title) {
-        descriptor.push(`"${block.title}"`);
-    }
-    if (typeof block.headingLevel === 'number') {
-        descriptor.push(`(level ${block.headingLevel})`);
-    }
-    return `${descriptor.join(' ')}:\n${block.text}`;
-};
-
-export const formatContextWindow = (context: ContextWindow): string => {
-    const segments: string[] = [`Scope: ${context.scope}`];
-
-    if (context.selection?.text) {
-        segments.push(`Selected text:\n${context.selection.text}`);
-    }
-
-    if (context.selection?.block?.text) {
-        segments.push(`Active block:\n${describeBlock(context.selection.block)}`);
-    }
-
-    if (context.selection?.surroundingBlocks?.length) {
-        const nearby = context.selection.surroundingBlocks.map((block) => describeBlock(block)).join('\n---\n');
-        segments.push(`Surrounding blocks:\n${nearby}`);
-    }
-
-    if (!context.selection?.text && context.primaryText) {
-        segments.push(`Primary text:\n${context.primaryText}`);
-    }
-
-    if (context.metadata?.documentId) {
-        segments.push(`Document ID: ${context.metadata.documentId}`);
-    }
-
-    return segments.filter(Boolean).join('\n\n');
-};
-
-export const buildFindPrompt = (query: string, context: ContextWindow, findAll: boolean): string => {
+export const buildFindPrompt = (query: string, documentContext: string, findAll: boolean): string => {
     const scope = findAll ? 'ALL occurrences' : 'FIRST occurrence ONLY';
 
     return `apply this query for original text return the EXACT text from the doc no title or added text: ${query}, ${scope}
-            Context window:
-            ${formatContextWindow(context)}
+            Document context:
+            ${documentContext}
             
             Respond with JSON:
             {
@@ -66,7 +26,7 @@ export const buildFindPrompt = (query: string, context: ContextWindow, findAll: 
             }`;
 };
 
-export const buildReplacePrompt = (query: string, context: ContextWindow, replaceAll: boolean): string => {
+export const buildReplacePrompt = (query: string, documentContext: string, replaceAll: boolean): string => {
     const scope = replaceAll
         ? 'ALL occurrences'
         : 'FIRST occurrence ONLY';
@@ -74,8 +34,8 @@ export const buildReplacePrompt = (query: string, context: ContextWindow, replac
     const finalQuery = `apply this query: ${query} if find and replace query then Find and replace the EXACT text of ${scope}`;
 
     return `${finalQuery}
-            Context window:
-            ${formatContextWindow(context)}
+            Document context:
+            ${documentContext}
             
             Respond with JSON:
             {
@@ -87,10 +47,10 @@ export const buildReplacePrompt = (query: string, context: ContextWindow, replac
             }`;
 };
 
-export const buildSummaryPrompt = (query: string, context: ContextWindow): string => {
+export const buildSummaryPrompt = (query: string, documentContext: string): string => {
     return `${query}
-            Context window:
-            ${formatContextWindow(context)}
+            Document context:
+            ${documentContext}
             
             Respond with JSON:
             {
@@ -102,10 +62,9 @@ export const buildSummaryPrompt = (query: string, context: ContextWindow): strin
             }`;
 };
 
-export const buildInsertContentPrompt = (query: string, context: ContextWindow): string => {
+export const buildInsertContentPrompt = (query: string, documentContext?: string): string => {
     return `${query}
-            Context window:
-            ${formatContextWindow(context)}
+            ${documentContext ? `Current document:\n${documentContext}\n` : ''}
             Respond with JSON: { 
                 "success": boolean, "results": [ { 
                 "suggestedText": string,
