@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { CollaborationBuilder, LoadFn, AutoSaveFn } from '@superdoc-dev/superdoc-yjs-collaboration';
 import { encodeStateAsUpdate, Doc as YDoc } from 'yjs';
 
-import { saveToPostgres, loadFromPostgres } from './storage.js';
+import { saveDocument, loadDocument } from './storage.js';
 
 const errorHandlers: Record<string, (error: Error, socket: any) => void> = {
   LoadError: (error: Error, socket: any) => {
@@ -30,12 +30,12 @@ const SuperDocCollaboration = new CollaborationBuilder()
   .withDebounce(2000)
   .onLoad((async (params) => {
     try {
-      const state = await loadFromPostgres(params.documentId);
+      const state = await loadDocument(params.documentId);
 
       // Try to load the default document
       if (!state) {
         console.log("Loading default doc")
-        const defaultState = await loadFromPostgres('default');
+        const defaultState = await loadDocument('default');
         if (!defaultState) return null;
         return defaultState;
       }
@@ -49,7 +49,7 @@ const SuperDocCollaboration = new CollaborationBuilder()
   }) as LoadFn)
   .onAutoSave((async (params) => {
     try {
-      await saveToPostgres(params);
+      await saveDocument(params);
     } catch (error) {
       const err = new Error('Failed to save document: ' + error);
       err.name = 'SaveError';
