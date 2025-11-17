@@ -747,9 +747,6 @@ export const makeDefaultItems = ({
     attributes: {
       ariaLabel: 'Undo',
     },
-    onDeactivate: () => {
-      undo.disabled.value = !superToolbar.undoDepth;
-    },
   });
 
   // redo
@@ -763,9 +760,6 @@ export const makeDefaultItems = ({
     group: 'left',
     attributes: {
       ariaLabel: 'Redo',
-    },
-    onDeactivate: () => {
-      redo.disabled.value = !superToolbar.redoDepth;
     },
   });
 
