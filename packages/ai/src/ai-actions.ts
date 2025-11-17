@@ -1,5 +1,8 @@
 import type {
     CompletionOptions,
+    ContextScope,
+    ContextWindow,
+    ContextWindowConfig,
     Editor,
     Result,
     StreamOptions,
@@ -11,6 +14,8 @@ import type {
 } from './types';
 import {AIActionsService} from './ai-actions-service';
 import {createAIProvider, isAIProvider} from './providers';
+import {EditorAdapter} from './editor-adapter';
+import {formatContextWindow} from './prompts';
 
 /**
  * Primary entry point for SuperDoc AI capabilities. Wraps a SuperDoc instance,
@@ -45,6 +50,10 @@ export class AIActions {
     private isReady = false;
     private initializationPromise: Promise<void> | null = null;
     private readonly commands: AIActionsService;
+    private readonly contextWindowConfig: {
+        paddingBlocks: number;
+        maxChars: number;
+    };
 
     public readonly action = {
         find: async (instruction: string) => {
@@ -106,6 +115,12 @@ export class AIActions {
             provider: aiProvider,
         };
 
+        const contextWindowDefaults: ContextWindowConfig | undefined = this.config.contextWindow;
+        this.contextWindowConfig = {
+            paddingBlocks: Math.max(0, contextWindowDefaults?.paddingBlocks ?? 1),
+            maxChars: Math.max(200, contextWindowDefaults?.maxChars ?? 2000),
+        };
+
         this.callbacks = {
             onReady,
             onStreamingStart,
@@ -130,7 +145,7 @@ export class AIActions {
         this.commands = new AIActionsService(
             this.config.provider,
             editor,
-            () => this.getDocumentContext(),
+            (scope) => this.getContextWindow({scope}),
             this.config.enableLogging,
             (partial) => this.callbacks.onStreamingPartialResult?.({partialResult: partial}),
             streamResults,
@@ -242,8 +257,11 @@ export class AIActions {
             throw new Error('AIActions is not ready yet. Call waitUntilReady() first.');
         }
 
-        const documentContext = this.getDocumentContext();
-        const userContent = documentContext ? `${prompt}\n\nDocument context:\n${documentContext}` : prompt;
+        const context = this.getContextWindow({
+            scope: options?.contextScope,
+            paddingBlocks: options?.contextPaddingBlocks,
+        });
+        const userContent = this.buildPromptWithContext(prompt, context);
 
         const messages = [
             {role: 'system' as const, content: this.config.systemPrompt || ''},
@@ -251,11 +269,16 @@ export class AIActions {
         ];
 
         let accumulated = '';
+        const providerOptions = options ? {...options} : undefined;
+        if (providerOptions) {
+            delete (providerOptions as Partial<StreamOptions>).contextScope;
+            delete (providerOptions as Partial<StreamOptions>).contextPaddingBlocks;
+        }
 
         try {
             this.callbacks.onStreamingStart?.();
 
-            const stream = this.config.provider.streamCompletion(messages, options);
+            const stream = this.config.provider.streamCompletion(messages, providerOptions);
 
             for await (const chunk of stream) {
                 accumulated += chunk;
@@ -284,16 +307,25 @@ export class AIActions {
             throw new Error('AIActions is not ready yet. Call waitUntilReady() first.');
         }
 
-        const documentContext = this.getDocumentContext();
-        const userContent = documentContext ? `${prompt}\n\nDocument context:\n${documentContext}` : prompt;
+        const context = this.getContextWindow({
+            scope: options?.contextScope,
+            paddingBlocks: options?.contextPaddingBlocks,
+        });
+        const userContent = this.buildPromptWithContext(prompt, context);
 
         const messages = [
             {role: 'system' as const, content: this.config.systemPrompt || ''},
             {role: 'user' as const, content: userContent},
         ];
 
+        const providerOptions = options ? {...options} : undefined;
+        if (providerOptions) {
+            delete (providerOptions as Partial<CompletionOptions>).contextScope;
+            delete (providerOptions as Partial<CompletionOptions>).contextPaddingBlocks;
+        }
+
         try {
-            return await this.config.provider.getCompletion(messages, options);
+            return await this.config.provider.getCompletion(messages, providerOptions);
         } catch (error) {
             this.handleError(error as Error);
             throw error;
@@ -307,12 +339,95 @@ export class AIActions {
      * @returns Document context string
      */
     public getDocumentContext(): string {
+        return this.getContextWindow({scope: 'document'}).primaryText;
+    }
+
+    /**
+     * Returns a scoped context window summarizing the current selection and neighbors.
+     */
+    public getContextWindow(options?: {scope?: ContextScope; paddingBlocks?: number}): ContextWindow {
+        const rawWindow = this.buildContextWindow(options);
+        return this.applyContextConstraints(rawWindow);
+    }
+
+    private buildContextWindow(options?: {scope?: ContextScope; paddingBlocks?: number}): ContextWindow {
         const editor = this.getEditor();
+        const scope = options?.scope;
+
         if (!editor) {
+            return {
+                scope: scope ?? 'document',
+                primaryText: '',
+            };
+        }
+
+        const adapter = new EditorAdapter(editor);
+        const paddingBlocks = this.resolvePaddingBlocks(options?.paddingBlocks);
+
+        return adapter.getContextWindow(paddingBlocks, scope);
+    }
+
+    private resolvePaddingBlocks(padding?: number): number {
+        if (typeof padding === 'number' && padding >= 0) {
+            return padding;
+        }
+
+        return this.contextWindowConfig.paddingBlocks;
+    }
+
+    private applyContextConstraints(context: ContextWindow): ContextWindow {
+        const clamp = (value?: string): string | undefined => {
+            if (!value) {
+                return value;
+            }
+
+            const limit = this.contextWindowConfig.maxChars;
+            if (!limit || value.length <= limit) {
+                return value;
+            }
+
+            return `${value.slice(0, limit)}...`;
+        };
+
+        const selection = context.selection
+            ? {
+                  ...context.selection,
+                  text: clamp(context.selection.text) ?? '',
+                  block: context.selection.block
+                      ? {
+                            ...context.selection.block,
+                            text: clamp(context.selection.block.text) ?? '',
+                        }
+                      : undefined,
+                  surroundingBlocks: (context.selection.surroundingBlocks || []).map((block) => ({
+                      ...block,
+                      text: clamp(block.text) ?? '',
+                  })),
+              }
+            : undefined;
+
+        return {
+            ...context,
+            primaryText: clamp(context.primaryText) ?? '',
+            selection,
+        };
+    }
+
+    private buildPromptWithContext(prompt: string, context: ContextWindow): string {
+        const formattedContext = this.serializeContextWindow(context);
+        if (!formattedContext) {
+            return prompt;
+        }
+
+        return `${prompt}\n\nContext window:\n${formattedContext}`;
+    }
+
+    private serializeContextWindow(context: ContextWindow): string {
+        if (!context.primaryText?.trim()) {
             return '';
         }
 
-        return editor.state?.doc?.textContent?.trim() || '';
+        return formatContextWindow(context);
     }
     
     /**

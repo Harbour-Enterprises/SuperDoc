@@ -195,14 +195,18 @@ describe('EditorAdapter', () => {
             await mockAdapter.replaceText(0, 5, 'hello');
 
             expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 5 });
+            expect(mockEditor.commands.getSelectionMarks).toHaveBeenCalled();
             expect(mockEditor.commands.deleteSelection).toHaveBeenCalled();
             expect(mockEditor.commands.insertContent).toHaveBeenCalledWith({
-                type: 'text',
-                text: 'hello',
-                marks: [
-                    { type: 'bold', attrs: {} },
-                    { type: 'textStyle', attrs: { fontSize: '14pt' } }
-                ]
+                type: 'paragraph',
+                content: [{
+                    type: 'text',
+                    text: 'hello',
+                    marks: [
+                        { type: 'bold', attrs: {} },
+                        { type: 'textStyle', attrs: { fontSize: '14pt' } }
+                    ]
+                }]
             });
         });
 
@@ -211,19 +215,25 @@ describe('EditorAdapter', () => {
 
             await mockAdapter.replaceText(0, 5, 'hello');
 
+            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 5 });
+            expect(mockEditor.commands.getSelectionMarks).toHaveBeenCalled();
+            expect(mockEditor.commands.deleteSelection).toHaveBeenCalled();
             expect(mockEditor.commands.insertContent).toHaveBeenCalledWith('hello');
         });
     });
 
     describe('createTrackedChange', () => {
-        it('should create tracked change with author', async () => {
-
+        it('should create tracked change without marks', async () => {
             mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue([]);
 
-            const changeId = await mockAdapter.createTrackedChange(0, 5,  'new');
+            const changeId = await mockAdapter.createTrackedChange(0, 5, 'new');
 
             expect(changeId).toMatch(/^tracked-change-/);
             expect(mockEditor.commands.enableTrackChanges).toHaveBeenCalled();
+            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 5 });
+            expect(mockEditor.commands.getSelectionMarks).toHaveBeenCalled();
+            expect(mockEditor.commands.deleteSelection).toHaveBeenCalled();
+            expect(mockEditor.commands.insertContent).toHaveBeenCalledWith('new');
             expect(mockEditor.commands.disableTrackChanges).toHaveBeenCalled();
         });
 
@@ -236,13 +246,17 @@ describe('EditorAdapter', () => {
 
             await mockAdapter.createTrackedChange(0, 5, 'new');
 
+            expect(mockEditor.commands.enableTrackChanges).toHaveBeenCalled();
+            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 5 });
+            expect(mockEditor.commands.getSelectionMarks).toHaveBeenCalled();
+            expect(mockEditor.commands.deleteSelection).toHaveBeenCalled();
             expect(mockEditor.commands.insertContent).toHaveBeenCalledWith({
                 type: 'text',
                 text: 'new',
                 marks: [{ type: 'italic', attrs: {} }]
             });
+            expect(mockEditor.commands.disableTrackChanges).toHaveBeenCalled();
         });
-
     });
 
     describe('createComment', () => {

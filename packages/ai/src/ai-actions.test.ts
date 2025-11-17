@@ -1,13 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import {TextSelection} from 'prosemirror-state';
 import { AIActions } from './ai-actions';
+import {EditorAdapter} from './editor-adapter';
 import type { AIProvider, AIActionsOptions, SuperDoc, Editor } from './types';
 
 describe('AIActions', () => {
     let mockProvider: AIProvider;
     let mockEditor: Editor;
     let mockSuperdoc: SuperDoc;
+    let textSelectionSpy: any;
+    let scrollSpy: any;
 
     beforeEach(() => {
+        textSelectionSpy = vi.spyOn(TextSelection, 'create').mockReturnValue({} as any);
+        scrollSpy = vi.spyOn(EditorAdapter.prototype as any, 'scrollToPosition').mockImplementation(() => {});
         mockProvider = {
             async *streamCompletion(messages, options) {
                 yield 'chunk1';
@@ -21,15 +27,36 @@ describe('AIActions', () => {
 
         mockEditor = {
             state: {
+                selection: {
+                    from: 0,
+                    to: 6,
+                    empty: false,
+                },
                 doc: {
                     textContent: 'Sample document text',
                     content: { size: 100 },
-                    resolve: vi.fn((pos) => ({ 
-                        pos, 
+                    textBetween: vi.fn(() => 'Sample'),
+                    resolve: vi.fn((pos) => ({
+                        pos,
+                        depth: 0,
                         parent: { inlineContent: true },
-                        min: vi.fn(() => pos),
-                        max: vi.fn(() => pos)
-                    }))
+                        nodeAfter: null,
+                        nodeBefore: null,
+                        start: vi.fn(() => pos),
+                        end: vi.fn(() => pos),
+                    })),
+                    descendants: vi.fn((cb) => {
+                        cb(
+                            {
+                                isBlock: true,
+                                textContent: 'Sample paragraph text',
+                                type: {name: 'paragraph'},
+                                attrs: {},
+                                nodeSize: 20,
+                            },
+                            0,
+                        );
+                    }),
                 },
                 tr: {
                     setSelection: vi.fn().mockReturnThis(),
@@ -62,6 +89,11 @@ describe('AIActions', () => {
         mockSuperdoc = {
             activeEditor: mockEditor
         } as any;
+    });
+
+    afterEach(() => {
+        textSelectionSpy?.mockRestore();
+        scrollSpy?.mockRestore();
     });
 
     describe('constructor', () => {
@@ -258,6 +290,56 @@ describe('AIActions', () => {
 
             await expect(ai.getCompletion('test')).rejects.toThrow('Provider error');
             expect(onError).toHaveBeenCalledWith(expect.any(Error));
+        });
+    });
+
+    describe('context window', () => {
+        it('should expose selection-scoped context by default', async () => {
+            const ai = new AIActions(mockSuperdoc, {
+                user: {displayName: 'AI Bot'},
+                provider: mockProvider,
+            });
+            await ai.waitUntilReady();
+
+            const contextWindow = ai.getContextWindow();
+            expect(contextWindow.scope).toBe('selection');
+            expect(contextWindow.primaryText).toBeTruthy();
+        });
+
+        it('should strip internal context options before calling providers', async () => {
+            const ai = new AIActions(mockSuperdoc, {
+                user: {displayName: 'AI Bot'},
+                provider: mockProvider,
+            });
+            await ai.waitUntilReady();
+
+            const streamSpy = vi.spyOn(mockProvider, 'streamCompletion');
+            await ai.streamCompletion('prompt', {contextScope: 'document', contextPaddingBlocks: 2});
+
+            expect(streamSpy).toHaveBeenCalledWith(
+                expect.any(Array),
+                expect.not.objectContaining({
+                    contextScope: expect.anything(),
+                }),
+            );
+        });
+
+        it('should not forward context overrides for non-streaming completions', async () => {
+            const ai = new AIActions(mockSuperdoc, {
+                user: {displayName: 'AI Bot'},
+                provider: mockProvider,
+            });
+            await ai.waitUntilReady();
+
+            const completionSpy = vi.spyOn(mockProvider, 'getCompletion');
+            await ai.getCompletion('prompt', {contextScope: 'document'});
+
+            expect(completionSpy).toHaveBeenCalledWith(
+                expect.any(Array),
+                expect.not.objectContaining({
+                    contextScope: expect.anything(),
+                }),
+            );
         });
     });
 

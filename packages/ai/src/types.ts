@@ -6,6 +6,45 @@ export type NodeType = Node;
 export type Editor = InstanceType<typeof EditorClass>;
 export type SuperDocInstance = typeof SuperDoc | SuperDoc;
 
+export type ContextScope = 'selection' | 'block' | 'document';
+
+export type ContextBlock = {
+    type: string;
+    text: string;
+    from: number;
+    to: number;
+    attrs?: Record<string, any>;
+    headingLevel?: number;
+    title?: string;
+};
+
+export type SelectionContext = {
+    from: number;
+    to: number;
+    text: string;
+    normalizedText?: string;
+    block?: ContextBlock;
+    surroundingBlocks: ContextBlock[];
+    activeMarks?: {type: string; attrs?: Record<string, any>}[];
+    metadata?: Record<string, unknown>;
+};
+
+export type ContextWindow = {
+    scope: ContextScope;
+    primaryText: string;
+    selection?: SelectionContext;
+    documentStats?: {
+        wordCount: number;
+        charCount: number;
+    };
+    metadata?: Record<string, unknown>;
+};
+
+export type ContextWindowConfig = {
+    paddingBlocks?: number;
+    maxChars?: number;
+};
+
 /**
  * Represents a position range in the document
  */
@@ -61,6 +100,10 @@ export type StreamOptions = {
     documentId?: string;
     /** Force streaming (true) or disable it (false). Defaults to true when supported. */
     stream?: boolean;
+    /** Override the context scope used when building prompts */
+    contextScope?: ContextScope;
+    /** Override the number of surrounding blocks included in the context */
+    contextPaddingBlocks?: number;
 }
 
 /**
@@ -104,6 +147,8 @@ export type AIActionsConfig = {
     systemPrompt?: string;
     /** Enable debug logging */
     enableLogging?: boolean;
+    /** Context window configuration */
+    contextWindow?: ContextWindowConfig;
 }
 
 /**

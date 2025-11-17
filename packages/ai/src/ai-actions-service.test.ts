@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AIActionsService } from './ai-actions-service';
-import type { AIProvider, Editor } from './types';
+import type { AIProvider, ContextWindow, Editor } from './types';
 
 const createChain = (commands?: any) => {
     const chainApi = {
@@ -39,6 +39,23 @@ const createChain = (commands?: any) => {
 
     return { chainFn, chainApi };
 };
+
+const createContextProvider =
+    (overrides?: Partial<ContextWindow>) =>
+    () => ({
+        scope: 'document',
+        primaryText: 'Sample document text for testing',
+        selection: undefined,
+        documentStats: {
+            wordCount: 5,
+            charCount: 32,
+        },
+        metadata: {documentId: 'doc-123'},
+        ...overrides,
+    });
+
+const defaultContextProvider = createContextProvider();
+const emptyContextProvider = createContextProvider({primaryText: ''});
 
 describe('AIActionsService', () => {
     let mockProvider: AIProvider;
@@ -117,7 +134,7 @@ describe('AIActionsService', () => {
                 .mockReturnValueOnce([{ from: 0, to: 6 }])
                 .mockReturnValueOnce([{ from: 7, to: 15 }]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.find('find sample');
 
             expect(result.success).toBe(true);
@@ -130,7 +147,7 @@ describe('AIActionsService', () => {
                 JSON.stringify({ success: false, results: [] })
             );
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.find('find nothing');
 
             expect(result.success).toBe(false);
@@ -138,14 +155,14 @@ describe('AIActionsService', () => {
         });
 
         it('should validate input query', async () => {
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             
             await expect(actions.find('')).rejects.toThrow('Query cannot be empty');
             await expect(actions.find('   ')).rejects.toThrow('Query cannot be empty');
         });
 
         it('should return empty when no document context', async () => {
-            const actions = new AIActionsService(mockProvider, mockEditor, () => '', false);
+            const actions = new AIActionsService(mockProvider, mockEditor, emptyContextProvider, false);
             const result = await actions.find('query');
 
             expect(result).toEqual({ success: false, results: [] });
@@ -170,7 +187,7 @@ describe('AIActionsService', () => {
                 { from: 20, to: 24 }
             ]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.findAll('find all test');
 
             expect(result.success).toBe(true);
@@ -188,7 +205,7 @@ describe('AIActionsService', () => {
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 5, to: 17 }]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.highlight('highlight this');
 
             expect(result.success).toBe(true);
@@ -207,7 +224,7 @@ describe('AIActionsService', () => {
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 4 }]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             await actions.highlight('highlight', '#FF0000');
 
             expect(chainApi.setHighlight).toHaveBeenCalledWith('#FF0000');
@@ -222,7 +239,7 @@ describe('AIActionsService', () => {
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
             mockEditor.commands.search = vi.fn().mockReturnValue([]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.highlight('highlight');
 
             expect(result.success).toBe(false);
@@ -242,7 +259,7 @@ describe('AIActionsService', () => {
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 3 }]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.replace('replace old with new');
 
             expect(result.success).toBe(true);
@@ -250,7 +267,7 @@ describe('AIActionsService', () => {
         });
 
         it('should validate input', async () => {
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             
             await expect(actions.replace('')).rejects.toThrow('Query cannot be empty');
         });
@@ -271,7 +288,7 @@ describe('AIActionsService', () => {
                 .mockReturnValueOnce([{ from: 0, to: 3 }])
                 .mockReturnValueOnce([{ from: 10, to: 13 }]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.replaceAll('replace all old with new');
 
             expect(result.success).toBe(true);
@@ -291,7 +308,7 @@ describe('AIActionsService', () => {
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 8 }]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.insertTrackedChange('suggest change');
 
             expect(result.success).toBe(true);
@@ -315,7 +332,7 @@ describe('AIActionsService', () => {
                 .mockReturnValueOnce([{ from: 0, to: 5 }])
                 .mockReturnValueOnce([{ from: 10, to: 16 }]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.insertTrackedChanges('suggest multiple changes');
 
             expect(result.success).toBe(true);
@@ -335,7 +352,7 @@ describe('AIActionsService', () => {
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 4 }]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.insertComment('add comment');
 
             expect(result.success).toBe(true);
@@ -360,7 +377,7 @@ describe('AIActionsService', () => {
                 .mockReturnValueOnce([{ from: 0, to: 5 }])
                 .mockReturnValueOnce([{ from: 10, to: 15 }]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.insertComments('add multiple comments');
 
             expect(result.success).toBe(true);
@@ -378,7 +395,7 @@ describe('AIActionsService', () => {
 
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.summarize('summarize this document');
 
             expect(result.success).toBe(true);
@@ -386,7 +403,7 @@ describe('AIActionsService', () => {
         });
 
         it('should return failure when no document context', async () => {
-            const actions = new AIActionsService(mockProvider, mockEditor, () => '', false);
+            const actions = new AIActionsService(mockProvider, mockEditor, emptyContextProvider, false);
             const result = await actions.summarize('summarize');
 
             expect(result).toEqual({ results: [], success: false });
@@ -409,7 +426,7 @@ describe('AIActionsService', () => {
             const actions = new AIActionsService(
                 mockProvider,
                 mockEditor,
-                () => mockEditor.state.doc.textContent,
+                defaultContextProvider,
                 false,
                 undefined,
                 false
@@ -442,7 +459,7 @@ describe('AIActionsService', () => {
             const actions = new AIActionsService(
                 mockProvider,
                 mockEditor,
-                () => mockEditor.state.doc.textContent,
+                defaultContextProvider,
                 false,
                 onStreamChunk,
                 true
@@ -467,7 +484,7 @@ describe('AIActionsService', () => {
 
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.insertContent('generate introduction');
 
             expect(result.success).toBe(true);
@@ -480,13 +497,13 @@ describe('AIActionsService', () => {
         });
 
         it('should validate input', async () => {
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             
             await expect(actions.insertContent('')).rejects.toThrow('Query cannot be empty');
         });
 
         it('should return failure when no editor', async () => {
-            const actions = new AIActionsService(mockProvider, null, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, null, defaultContextProvider, false);
             const result = await actions.insertContent('insert content');
 
             expect(result).toEqual({ success: false, results: [] });
@@ -500,7 +517,7 @@ describe('AIActionsService', () => {
 
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.insertContent('insert content');
 
             expect(result).toEqual({ success: false, results: [] });
@@ -533,7 +550,7 @@ describe('AIActionsService', () => {
             const actions = new AIActionsService(
                 mockProvider,
                 mockEditor,
-                () => mockEditor.state.doc.textContent,
+                defaultContextProvider,
                 false,
                 undefined,
                 true
@@ -565,7 +582,7 @@ describe('AIActionsService', () => {
             const actions = new AIActionsService(
                 mockProvider,
                 mockEditor,
-                () => mockEditor.state.doc.textContent,
+                defaultContextProvider,
                 false,
                 undefined,
                 false
@@ -587,7 +604,7 @@ describe('AIActionsService', () => {
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 4 }]);
 
             // Test with logging disabled
-            const actions1 = new AIActionsService(mockProvider, mockEditor, () => 'context', false);
+            const actions1 = new AIActionsService(mockProvider, mockEditor, createContextProvider({primaryText: 'context'}), false);
             const response1 = JSON.stringify({
                 success: true,
                 results: [{ originalText: 'test', suggestedText: 'new' }]
@@ -611,7 +628,7 @@ describe('AIActionsService', () => {
             mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
             mockEditor.commands.search = vi.fn().mockReturnValue([]);
 
-            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const actions = new AIActionsService(mockProvider, mockEditor, defaultContextProvider, false);
             const result = await actions.replace('replace text');
 
             expect(result.results).toHaveLength(0);

@@ -1,4 +1,13 @@
-import {AIProvider, Editor, Result, FoundMatch, DocumentPosition, AIMessage} from './types';
+import {
+    AIProvider,
+    Editor,
+    Result,
+    FoundMatch,
+    DocumentPosition,
+    AIMessage,
+    ContextWindow,
+    ContextScope,
+} from './types';
 import {EditorAdapter} from './editor-adapter';
 import {validateInput, parseJSON} from './utils';
 import {
@@ -19,7 +28,7 @@ export class AIActionsService {
     constructor(
         private provider: AIProvider,
         private editor: Editor | null,
-        private documentContextProvider: () => string,
+        private contextProvider: (scope?: ContextScope) => ContextWindow,
         private enableLogging: boolean = false,
         private onStreamChunk?: (partialResult: string) => void,
         private streamPreference?: boolean,
@@ -34,20 +43,20 @@ export class AIActionsService {
         }
     }
 
-    private getDocumentContext(): string {
-        if (!this.documentContextProvider) {
-            return '';
+    private getContext(scope?: ContextScope): ContextWindow {
+        if (!this.contextProvider) {
+            return {scope: 'document', primaryText: ''};
         }
 
         try {
-            return this.documentContextProvider();
+            return this.contextProvider(scope);
         } catch (error) {
             if (this.enableLogging) {
                 console.error(
                     `Failed to retrieve document context: ${error instanceof Error ? error.message : 'Unknown error'}`
                 );
             }
-            return '';
+            return {scope: 'document', primaryText: ''};
         }
     }
 
@@ -63,13 +72,13 @@ export class AIActionsService {
             throw new Error('Query cannot be empty');
         }
 
-        const documentContext = this.getDocumentContext();
+        const context = this.getContext('document');
 
-        if (!documentContext) {
+        if (!context.primaryText?.trim()) {
             return {success: false, results: []};
         }
 
-        const prompt = buildFindPrompt(query, documentContext, findAll);
+        const prompt = buildFindPrompt(query, context, findAll);
         const response = await this.runCompletion([
             {role: 'system', content: SYSTEM_PROMPTS.SEARCH},
             {role: 'user', content: prompt},
@@ -159,14 +168,14 @@ export class AIActionsService {
         multiple: boolean,
         operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
     ): Promise<FoundMatch[]> {
-        const documentContext = this.getDocumentContext();
+        const context = this.getContext('document');
 
-        if (!documentContext) {
+        if (!context.primaryText?.trim()) {
             return [];
         }
 
         // Get AI query
-        const prompt = buildReplacePrompt(query, documentContext, multiple);
+        const prompt = buildReplacePrompt(query, context, multiple);
         const response = await this.runCompletion([
             {role: 'system', content: SYSTEM_PROMPTS.EDIT},
             {role: 'user', content: prompt},
@@ -355,12 +364,12 @@ export class AIActionsService {
      * Generates a summary of the document.
      */
     async summarize(query: string): Promise<Result> {
-        const documentContext = this.getDocumentContext();
+        const context = this.getContext('document');
 
-        if (!documentContext) {
+        if (!context.primaryText?.trim()) {
             return {results: [], success: false};
         }
-        const prompt = buildSummaryPrompt(query, documentContext);
+        const prompt = buildSummaryPrompt(query, context);
         const useStreaming = this.streamPreference !== false;
         let streamedLength = 0;
 
@@ -399,8 +408,8 @@ export class AIActionsService {
             return {success: false, results: []};
         }
 
-        const documentContext = this.getDocumentContext();
-        const prompt = buildInsertContentPrompt(query, documentContext);
+        const context = this.getContext();
+        const prompt = buildInsertContentPrompt(query, context);
 
         const useStreaming = this.streamPreference !== false;
         let streamingInsertedLength = 0;
