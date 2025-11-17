@@ -48,6 +48,9 @@ export class EditorAdapter {
     // Scroll to position
     scrollToPosition(from: number, to: number): void {
         const { state, view } = this.editor;
+        if (!state || !view) {
+            return;
+        }
         const tr = state.tr.setSelection(TextSelection.create(state.doc, from, to)).scrollIntoView();
         view.dispatch(tr);
     }
