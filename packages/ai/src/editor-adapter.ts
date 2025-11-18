@@ -15,12 +15,21 @@ export class EditorAdapter {
             return [];
         }
 
+        // Get current selection if it exists - access through view to ensure latest state
+        const state = this.editor?.view?.state;
+        const selection = state?.selection;
+        const hasSelection = selection && !selection.empty && 
+            typeof selection.from === 'number' && typeof selection.to === 'number';
+        const selectionRange = hasSelection 
+            ? { from: selection.from, to: selection.to }
+            : null;
+
         return results
             .map((match) => {
                 const text = match.originalText;
                 const rawMatches = this.editor.commands?.search?.(text) ?? [];
 
-                const positions = rawMatches
+                let positions = rawMatches
                     .map((match: { from?: number; to?: number}) => {
                         const from = match.from;
                         const to = match.to;
@@ -29,7 +38,14 @@ export class EditorAdapter {
                         }
                         return { from, to };
                     })
-                .filter((value: { from: number; to: number } | null) => value !== null);
+                    .filter((value: { from: number; to: number } | null) => value !== null);
+
+                // Filter positions to only include matches within the selected range
+                if (selectionRange) {
+                    positions = positions.filter((pos: { from: number; to: number }) => {
+                        return pos.from >= selectionRange.from && pos.to <= selectionRange.to;
+                    });
+                }
 
                 return {
                     ...match,
