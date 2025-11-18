@@ -78,15 +78,33 @@ export const ContentBlock = Node.create({
 
       size: {
         default: null,
-        renderDOM: ({ size }) => {
-          if (!size) return {};
+        renderDOM: (attrs) => {
+          if (!attrs.size) return {};
 
           let style = '';
-          if (size.top) style += `top: ${size.top}px; `;
-          if (size.left) style += `left: ${size.left}px; `;
-          if (size.width) style += `width: ${size.width.toString().endsWith('%') ? size.width : `${size.width}px`}; `;
-          if (size.height)
-            style += `height: ${size.height.toString().endsWith('%') ? size.height : `${size.height}px`}; `;
+          if (attrs.size.top) style += `top: ${attrs.size.top}px; `;
+          if (attrs.size.left) style += `left: ${attrs.size.left}px; `;
+          if (attrs.size.width)
+            style += `width: ${attrs.size.width.toString().endsWith('%') ? attrs.size.width : `${attrs.size.width}px`}; `;
+          if (attrs.size.height)
+            style += `height: ${attrs.size.height.toString().endsWith('%') ? attrs.size.height : `${attrs.size.height}px`}; `;
+
+          // Apply positioning and z-index for anchored content blocks
+          if (attrs.marginOffset?.horizontal != null || attrs.marginOffset?.top != null) {
+            style += 'position: absolute; ';
+
+            // Use relativeHeight from OOXML for proper z-ordering of overlapping elements
+            const relativeHeight = attrs.originalAttributes?.relativeHeight;
+            if (relativeHeight != null) {
+              // Scale down the relativeHeight value to a reasonable CSS z-index range
+              // OOXML uses large numbers (e.g., 251659318), we normalize to a smaller range
+              const zIndex = Math.floor(relativeHeight / 1000000);
+              style += `z-index: ${zIndex}; `;
+            } else {
+              style += 'z-index: 1; ';
+            }
+          }
+
           return { style };
         },
       },
@@ -106,6 +124,15 @@ export const ContentBlock = Node.create({
       },
 
       attributes: {
+        rendered: false,
+      },
+
+      originalAttributes: {
+        rendered: false,
+      },
+
+      marginOffset: {
+        default: null,
         rendered: false,
       },
     };

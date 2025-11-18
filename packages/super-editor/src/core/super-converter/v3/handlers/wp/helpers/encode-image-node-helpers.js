@@ -154,7 +154,7 @@ export function handleImageNode(node, params, isAnchor) {
       horizontal: positionHValue,
       top: positionVValue,
     };
-    return handleShapeDrawing(params, node, graphicData, size, padding, shapeMarginOffset);
+    return handleShapeDrawing(params, node, graphicData, size, padding, shapeMarginOffset, anchorData, wrap, isAnchor);
   }
 
   if (uri === GROUP_URI) {
@@ -258,9 +258,12 @@ export function handleImageNode(node, params, isAnchor) {
  * @param {{ width?: number, height?: number }} size - Shape bounding box in pixels.
  * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Distance attributes converted to pixels.
  * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Shape offsets relative to its anchor.
+ * @param {Object|null} anchorData - Anchor positioning data.
+ * @param {Object} wrap - Wrap configuration.
+ * @param {boolean} isAnchor - Whether the shape is anchored.
  * @returns {Object|null} A contentBlock node representing the shape, or null when no content exists.
  */
-const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffset) => {
+const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffset, anchorData, wrap, isAnchor) => {
   const wsp = graphicData.elements.find((el) => el.name === 'wps:wsp');
   const textBox = wsp.elements.find((el) => el.name === 'wps:txbx');
   const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
@@ -273,11 +276,11 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
   const shapeType = prstGeom?.attributes['prst'];
 
   if (shapeType === 'rect' && !textBoxContent) {
-    return getRectangleShape(params, spPr);
+    return getRectangleShape(params, spPr, node);
   }
 
   if (shapeType && !textBoxContent) {
-    const result = getVectorShape({ params, node, graphicData });
+    const result = getVectorShape({ params, node, graphicData, marginOffset, anchorData, wrap, isAnchor });
     if (result) return result;
   }
 
@@ -434,6 +437,7 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
       size,
       padding,
       marginOffset,
+      originalAttributes: node?.attributes,
     },
   };
 
@@ -447,10 +451,10 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
  * @param {Object} node - The `a:spPr` node containing shape properties.
  * @returns {Object} An object of type `contentBlock` with size and optional background color.
  */
-const getRectangleShape = (params, node) => {
+const getRectangleShape = (params, spPr, node) => {
   const schemaAttrs = {};
 
-  const [drawingNode] = params.nodes;
+  const drawingNode = params.nodes?.[0];
 
   if (drawingNode?.name === DRAWING_XML_TAG) {
     schemaAttrs.drawingContent = drawingNode;
@@ -481,7 +485,10 @@ const getRectangleShape = (params, node) => {
 
   return {
     type: 'contentBlock',
-    attrs: schemaAttrs,
+    attrs: {
+      ...schemaAttrs,
+      originalAttributes: node?.attributes,
+    },
   };
 };
 
@@ -558,7 +565,7 @@ const buildShapePlaceholder = (node, size, padding, marginOffset, shapeType) => 
  * @param {Object} options.graphicData - The graphicData node
  * @returns {Object|null} A vectorShape node with extracted attributes
  */
-export function getVectorShape({ params, graphicData }) {
+export function getVectorShape({ params, node, graphicData, marginOffset, anchorData, wrap, isAnchor }) {
   const schemaAttrs = {};
 
   const drawingNode = params.nodes?.[0];
@@ -612,6 +619,11 @@ export function getVectorShape({ params, graphicData }) {
       fillColor,
       strokeColor,
       strokeWidth,
+      marginOffset,
+      anchorData,
+      wrap,
+      isAnchor,
+      originalAttributes: node?.attributes,
     },
   };
 }

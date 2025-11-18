@@ -77,7 +77,14 @@ export function applyColorModifier(hexColor, modifier, value) {
 export function extractStrokeWidth(spPr) {
   const ln = spPr?.elements?.find((el) => el.name === 'a:ln');
   const w = ln?.attributes?.['w'];
-  return w ? emuToPixels(w) : 1;
+  if (!w) return 1;
+
+  // Convert EMUs to pixels for stroke width using 72 DPI to match Word's rendering
+  // Word appears to use 72 DPI for stroke widths rather than the standard 96 DPI
+  // This gives us: 19050 EMUs * 72 / 914400 = 1.5 pixels (renders closer to 1px in browsers)
+  const emu = typeof w === 'string' ? parseFloat(w) : w;
+  const STROKE_DPI = 72;
+  return (emu * STROKE_DPI) / 914400;
 }
 
 /**

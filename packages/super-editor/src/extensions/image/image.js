@@ -283,7 +283,14 @@ export const Image = Node.create({
       switch (type) {
         case 'None':
           style += 'position: absolute;';
-          if (attrs.behindDoc) {
+          // Use relativeHeight from OOXML for proper z-ordering of overlapping elements
+          const relativeHeight = node.attrs.originalAttributes?.relativeHeight;
+          if (relativeHeight != null) {
+            // Scale down the relativeHeight value to a reasonable CSS z-index range
+            // OOXML uses large numbers (e.g., 251659318), we normalize to a smaller range
+            const zIndex = Math.floor(relativeHeight / 1000000);
+            style += `z-index: ${zIndex};`;
+          } else if (attrs.behindDoc) {
             style += 'z-index: -1;';
           } else {
             style += 'z-index: 1;';
@@ -435,6 +442,7 @@ export const Image = Node.create({
 
     if (hasAnchorData || hasMarginOffsets) {
       const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
+      const relativeFromMarginV = anchorData?.vRelativeFrom === 'margin';
       const maxMarginV = 500;
       const baseTop = Math.max(0, marginOffset?.top ?? 0);
       // TODO: Images that go into the margin have negative offsets - often by high values.
@@ -462,7 +470,9 @@ export const Image = Node.create({
         }
       }
 
-      if (top) {
+      // Don't apply vertical offset as margin-top for images positioned relative to margin
+      // as this causes double-counting of the offset
+      if (top && !relativeFromMarginV) {
         if (relativeFromPageV && top >= maxMarginV) margin.top += maxMarginV;
         else margin.top += top;
       }

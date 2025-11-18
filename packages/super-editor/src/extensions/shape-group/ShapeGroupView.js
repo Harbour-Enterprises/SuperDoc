@@ -47,7 +47,7 @@ export class ShapeGroupView {
 
   createElement() {
     const attrs = this.node.attrs;
-    const { groupTransform, shapes, size } = attrs;
+    const { groupTransform, shapes, size, marginOffset, originalAttributes } = attrs;
 
     const container = document.createElement('div');
     container.classList.add('sd-shape-group');
@@ -61,6 +61,22 @@ export class ShapeGroupView {
     container.style.height = `${height}px`;
     container.style.position = 'relative';
     container.style.display = 'inline-block';
+
+    // Apply positioning and z-index if needed
+    if (marginOffset?.horizontal != null || marginOffset?.top != null) {
+      container.style.position = 'absolute';
+
+      // Use relativeHeight from OOXML for proper z-ordering of overlapping elements
+      const relativeHeight = originalAttributes?.relativeHeight;
+      if (relativeHeight != null) {
+        // Scale down the relativeHeight value to a reasonable CSS z-index range
+        // OOXML uses large numbers (e.g., 251659318), we normalize to a smaller range
+        const zIndex = Math.floor(relativeHeight / 1000000);
+        container.style.zIndex = zIndex.toString();
+      } else {
+        container.style.zIndex = '1';
+      }
+    }
 
     // Create SVG container for the group
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
