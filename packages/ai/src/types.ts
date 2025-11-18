@@ -2,6 +2,7 @@ import { SuperDoc, Editor as EditorClass } from 'superdoc';
 import type { Mark, Node } from 'prosemirror-model';
 import type { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
+import type { AIProviderInput } from './providers';
 
 export type MarkType = Mark;
 export type NodeType = Node;
@@ -104,8 +105,8 @@ export type AIUser = {
  * Configuration for the AIActions service
  */
 export type AIActionsConfig = {
-    /** AI provider instance */
-    provider: AIProvider;
+    /** AI provider instance or configuration */
+    provider: AIProviderInput;
     /** User/bot information for attributed changes */
     user: AIUser;
     /** Optional system prompt for AI context */

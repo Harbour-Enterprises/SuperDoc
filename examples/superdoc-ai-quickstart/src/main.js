@@ -153,10 +153,24 @@ function initializeAI(superdoc) {
 
   const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
   const model = import.meta.env.VITE_OPENAI_MODEL || 'gpt-4o-mini';
+  const proxyUrl = import.meta.env.VITE_PROXY_URL;
 
-  if (!apiKey) {
-    statusText.textContent =
-      'Add VITE_OPENAI_API_KEY to .env then restart the dev server to enable AI actions.';
+  let provider;
+  if (proxyUrl) {
+    provider = {
+      type: 'http',
+      url: proxyUrl
+    };
+  } else {
+    provider = {
+      type: 'openai',
+      apiKey,
+      model
+    };
+  }
+
+  if (!apiKey && !proxyUrl) {
+    statusText.textContent = 'Add VITE_OPENAI_API_KEY to .env then restart the dev server to enable AI actions.';
     return null;
   }
 
@@ -169,11 +183,7 @@ function initializeAI(superdoc) {
       userId: 'ai-demo',
       // profileUrl: 'your bot url',
     },
-    provider: {
-      type: 'openai',
-      apiKey,
-      model
-    },
+    provider,
     enableLogging: false,
     onReady: () => {
       statusText.textContent = 'AI is ready. Try one of the quick actions.';
