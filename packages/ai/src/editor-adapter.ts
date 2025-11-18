@@ -56,7 +56,7 @@ export class EditorAdapter {
                 // Filter positions to only include matches within the selected range
                 if (selectionRange) {
                     positions = positions.filter((pos: { from: number; to: number }) => {
-                        return pos.from >= selectionRange.from && pos.to <= selectionRange.to;
+                       return pos.from < selectionRange.to && pos.to > selectionRange.from;
                     });
                 }
 
