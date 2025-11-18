@@ -5,6 +5,7 @@ logs
 .temp
 node_modules
 dist
+dist-electron
 dist-ssr
 *.local
 .env

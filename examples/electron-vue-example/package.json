@@ -1,0 +1,40 @@
+{
+  "name": "electron-vue-superdoc-example",
+  "private": true,
+  "version": "0.0.1",
+  "main": "main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "electron": "electron .",
+    "electron-dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && NODE_ENV=development electron .\"",
+    "electron-build": "npm run build && electron-builder"
+  },
+  "description": "SuperDoc Electron Vue Example App",
+  "author": "SuperDoc Team",
+  "dependencies": {
+    "superdoc": "0.20.0-next.13",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^4.2.3",
+    "vite": "^4.4.6",
+    "concurrently": "^8.2.0",
+    "wait-on": "^7.0.1",
+    "electron-builder": "^24.0.0",
+    "electron": "^30.0.0"
+  },
+  "build": {
+    "appId": "com.superdoc.electron",
+    "productName": "SuperDoc Electron",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "package.json"
+    ]
+  }
+}
