@@ -4,14 +4,12 @@
 
 ## Features
 
-- 🤖 **Multiple AI Providers**: Built-in support for OpenAI, Anthropic Claude, and custom HTTP endpoints
-- 🔍 **Smart Content Finding**: Natural language search across documents
-- ✍️ **Intelligent Editing**: AI-powered content replacement, suggestions, and generation
-- 💬 **Comment Integration**: Automatically insert AI-generated comments
-- 📝 **Track Changes**: AI suggestions with full revision history
-- 🎨 **Content Highlighting**: Smart text highlighting based on queries
-- 🌊 **Streaming Support**: Real-time AI responses with streaming
-- 📦 **TypeScript First**: Full type safety and excellent IDE support
+- **AI Actions**: High-level API for common document operations (find, replace, insert, comment)
+- **AI Builder**: Low-level primitives for custom AI workflows
+- **Anthropic Support**: Built-in Anthropic Claude integration
+- **Comment Integration**: Automatically insert AI-generated comments
+- **Track Changes**: AI suggestions with full revision history
+- **TypeScript First**: Full type safety and excellent IDE support
 
 ## Installation
 
@@ -21,19 +19,21 @@ npm install @superdoc-dev/ai
 
 ## Quick Start
 
+### Using AI Actions (High-Level API)
+
 ```typescript
 import { AIActions } from '@superdoc-dev/ai';
 
-// Initialize with OpenAI
+// Initialize with Anthropic
 const ai = new AIActions(superdoc, {
   user: {
     displayName: 'AI Assistant',
     userId: 'ai-bot-001',
   },
   provider: {
-    type: 'openai',
-    apiKey: process.env.OPENAI_API_KEY,
-    model: 'gpt-4',
+    type: 'anthropic',
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    model: 'claude-sonnet-4-5',
   },
   onReady: ({ aiActions }) => {
     console.log('AI is ready!');
@@ -56,194 +56,58 @@ await ai.action.insertTrackedChange('improve the introduction');
 await ai.action.insertContent('write a conclusion paragraph');
 ```
 
-## API Reference
-
-### AIActions Class
-
-The main class for AI integration.
-
-#### Constructor
+### Using AI Builder (Low-Level API)
 
 ```typescript
-new AIActions(superdoc: SuperDocInstance, options: AIActionsOptions)
-```
+import { executeTool, anthropicTools } from '@superdoc-dev/ai';
+import Anthropic from '@anthropic-ai/sdk';
 
-**Options:**
+// Get tool definitions
+const tools = anthropicTools(editor.extensionManager.extensions);
 
-- `user` (required): User/bot information
-  - `displayName`: Display name for AI-generated changes
-  - `userId?`: Optional user identifier
-  - `profileUrl?`: Optional profile image URL
-- `provider` (required): AI provider configuration or instance
-- `systemPrompt?`: Custom system prompt for AI context
-- `enableLogging?`: Enable debug logging (default: false)
-- Callbacks:
-  - `onReady?`: Called when AI is initialized
-  - `onStreamingStart?`: Called when streaming begins
-  - `onStreamingPartialResult?`: Called for each streaming chunk
-  - `onStreamingEnd?`: Called when streaming completes
-  - `onError?`: Called when an error occurs
-
-#### Methods
-
-##### `waitUntilReady()`
-
-Waits for AI initialization to complete.
-
-```typescript
-await ai.waitUntilReady();
-```
-
-##### `getIsReady()`
-
-Checks if AI is ready.
-
-```typescript
-const ready = ai.getIsReady(); // boolean
-```
-
-##### `getCompletion(prompt, options?)`
-
-Get a complete AI response.
-
-```typescript
-const response = await ai.getCompletion('Summarize this document', {
-  temperature: 0.7,
-  maxTokens: 500,
+// Use with Anthropic SDK
+const anthropic = new Anthropic({ apiKey: '...' });
+const response = await anthropic.beta.messages.create({
+  model: 'claude-sonnet-4-5',
+  betas: ['structured-outputs-2025-11-13'],
+  tools,
+  messages: [{ role: 'user', content: 'Add a paragraph saying hello' }],
 });
+
+// Execute tool calls
+for (const toolUse of response.content.filter((c) => c.type === 'tool_use')) {
+  await executeTool(toolUse.name, toolUse.input, editor);
+}
 ```
 
-##### `streamCompletion(prompt, options?)`
-
-Stream AI responses in real-time.
-
-```typescript
-const result = await ai.streamCompletion('Generate introduction');
-```
-
-##### `getDocumentContext()`
-
-Get current document text.
-
-```typescript
-const context = ai.getDocumentContext();
-```
+## API Overview
 
 ### AI Actions
 
-All actions are available via `ai.action.*`.
+High-level API for common document operations:
 
-#### `find(query)`
+- `find(query)` - Find content matching a query
+- `findAll(query)` - Find all occurrences
+- `highlight(query, color?)` - Find and highlight
+- `replace(instruction)` - Replace first occurrence
+- `replaceAll(instruction)` - Replace all occurrences
+- `insertTrackedChange(instruction)` - Insert single tracked change
+- `insertTrackedChanges(instruction)` - Insert multiple tracked changes
+- `insertComment(instruction)` - Insert single comment
+- `insertComments(instruction)` - Insert multiple comments
+- `summarize(instruction)` - Generate summary
+- `insertContent(instruction)` - Generate and insert content
 
-Find the first occurrence of content matching the query.
+### AI Builder
 
-```typescript
-const result = await ai.action.find('GDPR compliance section');
-// Returns: { success: boolean, results: FoundMatch[] }
-```
+Low-level primitives for custom workflows:
 
-#### `findAll(query)`
+- `anthropicTools(extensions, options?)` - Generate Anthropic tool definitions
+- `executeTool(toolName, params, editor)` - Execute a tool call
+- `generateContentSchema(extensions, options?)` - Generate content schema
+- Core types and utilities
 
-Find all occurrences of content matching the query.
-
-```typescript
-const result = await ai.action.findAll('privacy policy');
-```
-
-#### `highlight(query, color?)`
-
-Find and highlight content.
-
-```typescript
-await ai.action.highlight('important terms', '#FFFF00');
-```
-
-#### `replace(instruction)`
-
-Replace the first occurrence based on instruction.
-
-```typescript
-await ai.action.replace('change "data" to "information" in the first paragraph');
-```
-
-#### `replaceAll(instruction)`
-
-Replace all occurrences based on instruction.
-
-```typescript
-await ai.action.replaceAll('update dates to 2025');
-```
-
-#### `insertTrackedChange(instruction)`
-
-Insert a single tracked change.
-
-```typescript
-await ai.action.insertTrackedChange('improve clarity of terms and conditions');
-```
-
-#### `insertTrackedChanges(instruction)`
-
-Insert multiple tracked changes.
-
-```typescript
-await ai.action.insertTrackedChanges('fix all grammatical errors');
-```
-
-#### `insertComment(instruction)`
-
-Insert a single comment.
-
-```typescript
-await ai.action.insertComment('suggest improvements to introduction');
-```
-
-#### `insertComments(instruction)`
-
-Insert multiple comments.
-
-```typescript
-await ai.action.insertComments('review all legal terms');
-```
-
-#### `summarize(instruction)`
-
-Generate a summary.
-
-```typescript
-const result = await ai.action.summarize('create executive summary');
-// onStreamingPartialResult receives partial updates when the provider allows streaming.
-```
-
-#### `insertContent(instruction)`
-
-Generate and insert new content.
-
-```typescript
-await ai.action.insertContent('write a conclusion paragraph');
-```
-
-When the provider configuration leaves `streamResults` enabled (default), generated content streams into the document incrementally instead of waiting for the full response.
-
-## AI Providers
-
-### OpenAI
-
-```typescript
-const ai = new AIActions(superdoc, {
-  user: { displayName: 'AI' },
-  provider: {
-    type: 'openai',
-    apiKey: 'sk-...',
-    model: 'gpt-4',
-    baseURL: 'https://api.openai.com/v1', // optional
-    organizationId: 'org-...', // optional
-    temperature: 0.7, // optional
-    maxTokens: 2000, // optional
-    streamResults: false, // optional (applies to AI insert/summarize actions; default true)
-  },
-});
-```
+## Provider Configuration
 
 ### Anthropic Claude
 
@@ -253,76 +117,32 @@ const ai = new AIActions(superdoc, {
   provider: {
     type: 'anthropic',
     apiKey: 'sk-ant-...',
-    model: 'claude-3-opus-20240229',
-    apiVersion: '2023-06-01', // optional
-    baseURL: 'https://api.anthropic.com', // optional
+    model: 'claude-sonnet-4-5',
     temperature: 0.7, // optional
     maxTokens: 2000, // optional
-    streamResults: false, // optional (applies to AI insert/summarize actions; default true)
   },
-});
-```
-
-### Custom HTTP Provider
-
-```typescript
-const ai = new AIActions(superdoc, {
-  user: { displayName: 'AI' },
-  provider: {
-    type: 'http',
-    url: 'https://your-ai-api.com/complete',
-    streamUrl: 'https://your-ai-api.com/stream', // optional
-    headers: {
-      Authorization: 'Bearer token',
-      'X-Custom-Header': 'value',
-    },
-    method: 'POST', // default
-    streamResults: true, // optional (used by insertContent/summarize; default true)
-    buildRequestBody: (context) => ({
-      messages: context.messages,
-      stream: context.stream,
-      // custom fields
-    }),
-    parseCompletion: (payload) => {
-      // Extract text from response
-      return payload.result;
-    },
-  },
-});
-```
-
-### Custom Provider Instance
-
-Implement the `AIProvider` interface:
-
-```typescript
-const customProvider: AIProvider = {
-  streamResults: true,
-  async *streamCompletion(messages, options) {
-    // Yield chunks
-    yield 'chunk1';
-    yield 'chunk2';
-  },
-  async getCompletion(messages, options) {
-    // Return complete response
-    return 'response';
-  },
-};
-
-const ai = new AIActions(superdoc, {
-  user: { displayName: 'AI' },
-  provider: customProvider,
 });
 ```
 
 ## Advanced Usage
+
+### Custom System Prompt
+
+```typescript
+const ai = new AIActions(superdoc, {
+  user: { displayName: 'Legal AI' },
+  provider: { type: 'anthropic', apiKey: '...', model: 'claude-sonnet-4-5' },
+  systemPrompt: `You are a legal document assistant.
+    Focus on accuracy, clarity, and compliance.`,
+});
+```
 
 ### With Callbacks
 
 ```typescript
 const ai = new AIActions(superdoc, {
   user: { displayName: 'AI' },
-  provider: { type: 'openai', apiKey: '...', model: 'gpt-4' },
+  provider: { type: 'anthropic', apiKey: '...', model: 'claude-sonnet-4-5' },
   enableLogging: true,
   onReady: () => console.log('Ready!'),
   onStreamingStart: () => console.log('Streaming started'),
@@ -334,48 +154,6 @@ const ai = new AIActions(superdoc, {
   },
   onError: (error) => {
     console.error('Error:', error);
-  },
-});
-```
-
-### Custom System Prompt
-
-```typescript
-const ai = new AIActions(superdoc, {
-  user: { displayName: 'Legal AI' },
-  provider: { type: 'openai', apiKey: '...', model: 'gpt-4' },
-  systemPrompt: `You are a legal document assistant. 
-    Focus on accuracy, clarity, and compliance.
-    Always cite relevant regulations when applicable.`,
-});
-```
-
-### Abort Streaming
-
-```typescript
-const controller = new AbortController();
-
-ai.streamCompletion('Long task', {
-  signal: controller.signal,
-});
-
-// Later...
-controller.abort();
-```
-
-### Provider-Specific Options
-
-```typescript
-await ai.getCompletion('prompt', {
-  temperature: 0.5,
-  maxTokens: 1000,
-  stop: ['\n\n'],
-  providerOptions: {
-    // OpenAI specific
-    top_p: 0.9,
-    frequency_penalty: 0.5,
-    // or Anthropic specific
-    top_k: 40,
   },
 });
 ```
@@ -395,12 +173,6 @@ try {
 }
 ```
 
-## Testing
-
-```bash
-npm test
-```
-
 ## License
 
 AGPL-3.0 - see [LICENSE](../../LICENSE) for details.
@@ -410,7 +182,6 @@ AGPL-3.0 - see [LICENSE](../../LICENSE) for details.
 - 📖 [Documentation](https://superdoc.dev/docs/ai)
 - 💬 [Discord Community](https://discord.gg/superdoc)
 - 🐛 [Issue Tracker](https://github.com/harbour-enterprises/superdoc/issues)
-- 📧 [Email Support](mailto:support@superdoc.dev)
 
 ## Changelog
 
