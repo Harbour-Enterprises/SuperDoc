@@ -7,6 +7,7 @@
     "shared/*"
   ],
   "scripts": {
+    "postinstall": "node scripts/install-rollup-binary.mjs",
     "test": "vitest run",
     "test:debug": "npm run test:debug --workspace=packages/super-editor",
     "test:all": "vitest run",
