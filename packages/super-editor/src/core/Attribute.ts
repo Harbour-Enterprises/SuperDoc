@@ -3,6 +3,84 @@ import { getNodeType } from './helpers/getNodeType.js';
 import { getMarkType } from './helpers/getMarkType.js';
 import { getSchemaTypeNameByName } from './helpers/getSchemaTypeNameByName.js';
 import { getMarksFromSelection } from './helpers/getMarksFromSelection.js';
+import type { Node as PmNode, Mark as PmMark, MarkType, NodeType, ParseRule as PmParseRule } from 'prosemirror-model';
+import type { EditorState } from 'prosemirror-state';
+
+/**
+ * Primitive attribute value types
+ */
+export type AttributePrimitive = string | number | boolean | null | undefined;
+
+/**
+ * Allowed attribute values (recursive to permit nested objects/arrays)
+ */
+export type AttributeValue = AttributePrimitive | AttributeValue[] | { [key: string]: AttributeValue };
+
+/**
+ * Supported attribute default value (raw value or lazy getter)
+ */
+export type AttributeDefault = AttributeValue | (() => AttributeValue);
+
+/**
+ * Attribute specification for extensions.
+ */
+export interface AttributeSpec {
+  /** Default value for the attribute */
+  default: AttributeDefault;
+
+  /** Whether the attribute should be rendered in the DOM */
+  rendered: boolean;
+
+  /** Function to render the attribute to the DOM */
+  renderDOM: ((attrs: Record<string, AttributeValue>) => Record<string, AttributeValue> | null) | null;
+
+  /** Function to parse the attribute from the DOM */
+  parseDOM: ((node: HTMLElement) => AttributeValue) | null;
+
+  /** Whether the attribute should be kept when splitting */
+  keepOnSplit: boolean;
+}
+
+/**
+ * Extension attribute item with type and name.
+ */
+export interface ExtensionAttribute {
+  /** The type (extension name) this attribute belongs to */
+  type: string;
+
+  /** The attribute name */
+  name: string;
+
+  /** The attribute specification */
+  attribute: AttributeSpec;
+}
+
+/**
+ * Global attribute configuration.
+ */
+export interface GlobalAttribute {
+  /** Types this global attribute applies to */
+  types: string[];
+
+  /** Map of attribute names to specs */
+  attributes: Record<string, Partial<AttributeSpec>>;
+}
+
+/**
+ * Extension with type information.
+ */
+export interface ExtensionLike {
+  type: string;
+  name: string;
+  options: Record<string, unknown>;
+  storage: Record<string, unknown>;
+  config: Record<string, any>;
+}
+
+/**
+ * ProseMirror ParseRule type (imported from prosemirror-model)
+ */
+export type ParseRule = PmParseRule;
 
 /**
  * Attribute class is a space that contains
@@ -14,10 +92,10 @@ export class Attribute {
    * @param extensions List of all extensions.
    * @returns Extension attributes.
    */
-  static getAttributesFromExtensions(extensions) {
-    const extensionAttributes = [];
+  static getAttributesFromExtensions(extensions: ExtensionLike[]): ExtensionAttribute[] {
+    const extensionAttributes: ExtensionAttribute[] = [];
 
-    const defaultAttribute = {
+    const defaultAttribute: AttributeSpec = {
       default: null,
       rendered: true,
       renderDOM: null,
@@ -39,10 +117,13 @@ export class Attribute {
    * @param defaultAttribute Default attribute.
    * @returns Global extension attributes.
    */
-  static #getGlobalAttributes(extensions, defaultAttribute) {
-    const extensionAttributes = [];
+  static #getGlobalAttributes(
+    extensions: ExtensionLike[],
+    defaultAttribute: AttributeSpec
+  ): ExtensionAttribute[] {
+    const extensionAttributes: ExtensionAttribute[] = [];
 
-    const collectAttribute = (globalAttr) => {
+    const collectAttribute = (globalAttr: GlobalAttribute) => {
       for (const type of globalAttr.types) {
         const entries = Object.entries(globalAttr.attributes);
         for (const [name, attribute] of entries) {
@@ -65,7 +146,11 @@ export class Attribute {
         storage: extension.storage,
       };
 
-      const addGlobalAttributes = getExtensionConfigField(extension, 'addGlobalAttributes', context);
+      const addGlobalAttributes = getExtensionConfigField<() => GlobalAttribute[]>(
+        extension,
+        'addGlobalAttributes',
+        context
+      );
 
       if (!addGlobalAttributes) continue;
 
@@ -85,8 +170,11 @@ export class Attribute {
    * @param defaultAttribute Default attribute.
    * @returns Node and Mark extension attributes.
    */
-  static #getNodeAndMarksAttributes(extensions, defaultAttribute) {
-    const extensionAttributes = [];
+  static #getNodeAndMarksAttributes(
+    extensions: ExtensionLike[],
+    defaultAttribute: AttributeSpec
+  ): ExtensionAttribute[] {
+    const extensionAttributes: ExtensionAttribute[] = [];
 
     const nodeAndMarkExtensions = extensions.filter((e) => {
       return e.type === 'node' || e.type === 'mark';
@@ -99,17 +187,21 @@ export class Attribute {
         storage: extension.storage,
       };
 
-      const addAttributes = getExtensionConfigField(extension, 'addAttributes', context);
+      const addAttributes = getExtensionConfigField<() => Record<string, Partial<AttributeSpec>>>(
+        extension,
+        'addAttributes',
+        context
+      );
 
       if (!addAttributes) continue;
 
       const attributes = addAttributes();
 
       for (const [name, attribute] of Object.entries(attributes)) {
-        const merged = {
+        const merged: AttributeSpec = {
           ...defaultAttribute,
           ...attribute,
-        };
+        } as AttributeSpec;
 
         if (typeof merged.default === 'function') {
           merged.default = merged.default();
@@ -131,7 +223,10 @@ export class Attribute {
    * @param parseRule PM ParseRule.
    * @param extensionAttrs List of attributes to insert.
    */
-  static insertExtensionAttrsToParseRule(parseRule, extensionAttrs) {
+  static insertExtensionAttrsToParseRule(
+    parseRule: ParseRule,
+    extensionAttrs: ExtensionAttribute[]
+  ): ParseRule {
     if ('style' in parseRule) {
       return parseRule;
     }
@@ -139,11 +234,13 @@ export class Attribute {
     return {
       ...parseRule,
 
-      getAttrs: (node) => {
-        const oldAttrs = parseRule.getAttrs ? parseRule.getAttrs(node) : parseRule.attrs;
+      getAttrs: (node: HTMLElement) => {
+        const oldAttrs = parseRule.getAttrs
+          ? parseRule.getAttrs(node)
+          : parseRule.attrs;
         if (oldAttrs === false) return false;
 
-        const parseFromString = (value) => {
+        const parseFromString = (value: string | AttributeValue): AttributeValue => {
           if (typeof value !== 'string') return value;
           if (value.match(/^[+-]?(\d*\.)?\d+$/)) return Number(value);
           if (value === 'true') return true;
@@ -151,7 +248,7 @@ export class Attribute {
           return value;
         };
 
-        let newAttrs = {};
+        let newAttrs: Record<string, AttributeValue> = {};
         for (const item of extensionAttrs) {
           const value = item.attribute.parseDOM
             ? item.attribute.parseDOM(node)
@@ -170,12 +267,19 @@ export class Attribute {
     };
   }
 
+  static #isElementNode(node: unknown): node is Element {
+    return Boolean(node) && typeof (node as Element).getAttribute === 'function';
+  }
+
   /**
    * Get attributes to render.
    * @param nodeOrMark Node or Mark.
    * @param extensionAttrs Extension attributes.
    */
-  static getAttributesToRender(nodeOrMark, extensionAttrs) {
+  static getAttributesToRender(
+    nodeOrMark: PmNode | PmMark,
+    extensionAttrs: ExtensionAttribute[]
+  ): Record<string, AttributeValue> {
     const attributes = extensionAttrs
       .filter((item) => item.attribute.rendered)
       .map((item) => {
@@ -185,7 +289,7 @@ export class Attribute {
         return item.attribute.renderDOM(nodeOrMark.attrs) || {};
       });
 
-    let mergedAttrs = {};
+    let mergedAttrs: Record<string, AttributeValue> = {};
     for (const attribute of attributes) {
       mergedAttrs = this.mergeAttributes(mergedAttrs, attribute);
     }
@@ -198,13 +302,15 @@ export class Attribute {
    * @param objects Objects with attributes.
    * @returns Object with merged attributes.
    */
-  static mergeAttributes(...objects) {
-    const items = objects.filter((item) => !!item);
+  static mergeAttributes(
+    ...objects: (Record<string, AttributeValue> | null | undefined)[]
+  ): Record<string, AttributeValue> {
+    const items = objects.filter((item) => !!item) as Record<string, AttributeValue>[];
 
-    let attrs = {};
+    let attrs: Record<string, AttributeValue> = {};
 
     for (const item of items) {
-      const mergedAttributes = { ...attrs };
+      const mergedAttributes: Record<string, AttributeValue> = { ...attrs };
 
       for (const [key, value] of Object.entries(item)) {
         const exists = mergedAttributes[key];
@@ -215,9 +321,12 @@ export class Attribute {
         }
 
         if (key === 'class') {
-          const valueClasses = value ? value.split(' ') : [];
-          const existingClasses = mergedAttributes[key] ? mergedAttributes[key].split(' ') : [];
-          const insertClasses = valueClasses.filter((value) => !existingClasses.includes(value));
+          const valueStr = typeof value === 'string' ? value : String(value);
+          const existingStr =
+            typeof mergedAttributes[key] === 'string' ? mergedAttributes[key] : String(mergedAttributes[key] || '');
+          const valueClasses = valueStr ? valueStr.split(' ') : [];
+          const existingClasses = existingStr ? existingStr.split(' ') : [];
+          const insertClasses = valueClasses.filter((value: string) => !existingClasses.includes(value));
           mergedAttributes[key] = [...existingClasses, ...insertClasses].join(' ');
         } else if (key === 'style') {
           mergedAttributes[key] = [mergedAttributes[key], value].join('; ');
@@ -239,7 +348,11 @@ export class Attribute {
    * @param attributes The extension attributes.
    * @returns The splitted attributes.
    */
-  static getSplittedAttributes(extensionAttrs, typeName, attributes) {
+  static getSplittedAttributes(
+    extensionAttrs: ExtensionAttribute[],
+    typeName: string,
+    attributes: Record<string, AttributeValue>
+  ): Record<string, AttributeValue> {
     const entries = Object.entries(attributes).filter(([name]) => {
       const extensionAttr = extensionAttrs.find((item) => {
         return item.type === typeName && item.name === name;
@@ -259,7 +372,10 @@ export class Attribute {
    * @param typeOrName The mark type or name.
    * @returns The mark attrs.
    */
-  static getMarkAttributes(state, typeOrName) {
+  static getMarkAttributes(
+    state: EditorState,
+    typeOrName: string | MarkType
+  ): Record<string, AttributeValue> {
     const type = getMarkType(typeOrName, state.schema);
     const marks = getMarksFromSelection(state);
 
@@ -276,10 +392,13 @@ export class Attribute {
    * @param typeOrName The node type or name.
    * @returns The node attrs.
    */
-  static getNodeAttributes(state, typeOrName) {
+  static getNodeAttributes(
+    state: EditorState,
+    typeOrName: string | NodeType
+  ): Record<string, AttributeValue> {
     const type = getNodeType(typeOrName, state.schema);
     const { from, to } = state.selection;
-    const nodes = [];
+    const nodes: PmNode[] = [];
 
     state.doc.nodesBetween(from, to, (node) => {
       nodes.push(node);
@@ -298,18 +417,21 @@ export class Attribute {
    * @param typeOrName The node/mark type or name.
    * @returns The attrs of the node/mark or an empty object.
    */
-  static getAttributes(state, typeOrName) {
+  static getAttributes(
+    state: EditorState,
+    typeOrName: string | NodeType | MarkType
+  ): Record<string, AttributeValue> {
     const schemaType = getSchemaTypeNameByName(
       typeof typeOrName === 'string' ? typeOrName : typeOrName.name,
-      state.schema,
+      state.schema
     );
 
     if (schemaType === 'node') {
-      return this.getNodeAttributes(state, typeOrName);
+      return this.getNodeAttributes(state, typeOrName as string | NodeType);
     }
 
     if (schemaType === 'mark') {
-      return this.getMarkAttributes(state, typeOrName);
+      return this.getMarkAttributes(state, typeOrName as string | MarkType);
     }
 
     return {};
