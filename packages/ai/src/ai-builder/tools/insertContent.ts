@@ -1,5 +1,6 @@
 import type { Editor } from '../../types';
 import type { SuperDocTool, ToolResult } from '../types';
+import { enrichParagraphNodes } from '../helpers/enrichContent';
 
 /**
  * Params for insertContent tool
@@ -31,6 +32,9 @@ export const insertContent: SuperDocTool = {
                     docChanged: false
                 };
             }
+
+            // Automatically add default spacing attributes to paragraph nodes
+            const enrichedContent = enrichParagraphNodes(content);
 
             const { state } = editor;
             if (!state) {
@@ -64,12 +68,12 @@ export const insertContent: SuperDocTool = {
             // For single nodes, pass directly; for multiple, wrap in an array
             let insertSuccess: boolean;
 
-            if (Array.isArray(content) && content.length === 1) {
+            if (Array.isArray(enrichedContent) && enrichedContent.length === 1) {
                 // Single node: pass directly
-                insertSuccess = editor.commands.insertContentAt(insertPos, content[0]);
+                insertSuccess = editor.commands.insertContentAt(insertPos, enrichedContent[0]);
             } else {
                 // Multiple nodes or array: pass as-is
-                insertSuccess = editor.commands.insertContentAt(insertPos, content);
+                insertSuccess = editor.commands.insertContentAt(insertPos, enrichedContent);
             }
 
             const success = insertSuccess;
@@ -86,7 +90,7 @@ export const insertContent: SuperDocTool = {
                 success: true,
                 data: { insertedAt: insertPos },
                 docChanged: true,
-                message: `Inserted ${content.length} node(s) at ${position}`
+                message: `Inserted ${enrichedContent.length} node(s) at ${position}`
             };
         } catch (error) {
             return {

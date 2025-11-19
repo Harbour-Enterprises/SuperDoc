@@ -1,5 +1,6 @@
 import type { Editor } from '../../types';
 import type { SuperDocTool, ToolResult } from '../types';
+import { enrichParagraphNodes } from '../helpers/enrichContent';
 
 /**
  * Params for replaceContent tool
@@ -50,6 +51,9 @@ export const replaceContent: SuperDocTool = {
                 };
             }
 
+            // Automatically add default spacing attributes to paragraph nodes
+            const enrichedContent = enrichParagraphNodes(content);
+
             const { state } = editor;
             if (!state) {
                 return {
@@ -66,7 +70,7 @@ export const replaceContent: SuperDocTool = {
 
             // For full document replacement, use setContent
             if (validFrom === 0 && validTo === docSize) {
-                const success = editor.commands.setContent({ type: 'doc', content });
+                const success = editor.commands.setContent({ type: 'doc', content: enrichedContent });
 
                 return {
                     success,
@@ -79,7 +83,7 @@ export const replaceContent: SuperDocTool = {
             // For partial replacement, use insertContentAt
             const success = editor.commands.insertContentAt(
                 { from: validFrom, to: validTo },
-                { type: 'doc', content }
+                { type: 'doc', content: enrichedContent }
             );
 
             if (!success) {
