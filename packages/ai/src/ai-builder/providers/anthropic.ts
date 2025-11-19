@@ -42,6 +42,33 @@ export function anthropicTools(
     // Define all available tools
     const allTools: AnthropicTool[] = [
         {
+            name: 'searchDocument',
+            description: 'Search for text or patterns in the document. Returns matches with their positions (from/to character offsets). Use this before replaceContent to find exact positions.',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: 'The text or pattern to search for'
+                    },
+                    caseSensitive: {
+                        type: 'boolean',
+                        description: 'Whether the search should be case-sensitive (default: false)'
+                    },
+                    regex: {
+                        type: 'boolean',
+                        description: 'Whether to treat query as a regular expression (default: false)'
+                    },
+                    findAll: {
+                        type: 'boolean',
+                        description: 'Whether to return all matches or just the first one (default: true)'
+                    }
+                },
+                required: ['query'],
+                additionalProperties: false
+            }
+        },
+        {
             name: 'insertContent',
             description: 'Insert new content into the document. Position can be "selection" (at cursor), "documentStart", or "documentEnd". Content should be an array of paragraph blocks.',
             input_schema: {
