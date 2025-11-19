@@ -4,7 +4,7 @@
  * Usage: npm run test:cov -- [path/glob or flags]
  *
  * Notes:
- * - Aggregates coverage for both packages: super-editor and superdoc.
+ * - Aggregates coverage for core packages: super-editor, superdoc, and ai.
  * - Accepts any Vitest CLI flags and test path globs relative to repo root.
  */
 import { spawn } from 'child_process';
@@ -66,6 +66,7 @@ child.on('close', (code) => {
         const normalize = (p) => p.replaceAll('\\\\', '/');
         const editorRootAbs = normalize(path.join(repoRoot, 'packages', 'super-editor')) + '/';
         const superdocRootAbs = normalize(path.join(repoRoot, 'packages', 'superdoc')) + '/';
+        const aiRootAbs = normalize(path.join(repoRoot, 'packages', 'ai')) + '/';
 
         function getTotals(obj) {
           const s = obj.statements || { total: 0, covered: 0 };
@@ -130,6 +131,11 @@ child.on('close', (code) => {
           relSegment: '/packages/superdoc/',
           relPrefix: 'packages/superdoc/',
         });
+        const aiPackage = aggForPackage({
+          absPrefix: aiRootAbs,
+          relSegment: '/packages/ai/',
+          relPrefix: 'packages/ai/',
+        });
 
         const fmt = (n) => `${n.toFixed(1)} %`;
 
@@ -147,6 +153,11 @@ child.on('close', (code) => {
         console.log(`▌📄 Statements: ${fmt(superDoc.statements)}`);
         console.log(`▌🔧 Functions: ${fmt(superDoc.functions)}`);
         console.log(`▌📏 Lines: ${fmt(superDoc.lines)}`);
+
+        console.log('\nai package:');
+        console.log(`▌📄 Statements: ${fmt(aiPackage.statements)}`);
+        console.log(`▌🔧 Functions: ${fmt(aiPackage.functions)}`);
+        console.log(`▌📏 Lines: ${fmt(aiPackage.lines)}`);
       }
     }
   } catch {}

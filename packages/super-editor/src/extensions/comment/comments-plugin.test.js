@@ -11,7 +11,7 @@ import { Extension } from '@core/Extension.js';
 import { CommentsPlugin, CommentsPluginKey, __test__ } from './comments-plugin.js';
 import { CommentMarkName } from './comments-constants.js';
 import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import * as CommentHelpers from './comments-helpers.js';
 import { normalizeCommentEventPayload, updatePosition } from './helpers/index.js';
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../track-changes/constants.js';
@@ -87,7 +87,7 @@ const createEditorEnvironment = (schema, doc) => {
     view,
     emit: vi.fn(),
     options: {
-      user: { name: 'Test User', email: 'test.user@example.com' },
+      user: { name: 'Test User', email: 'test.user@example.com', image: 'https://example.com/avatar.png' },
       documentId: 'doc-1',
       isInternal: true,
     },
@@ -144,6 +144,7 @@ describe('CommentsPlugin commands', () => {
           commentText: '<p>Hello</p>',
           creatorName: 'Test User',
           creatorEmail: 'test.user@example.com',
+          creatorImage: 'https://example.com/avatar.png',
           fileId: 'doc-1',
         }),
         activeCommentId: 'c-1',
@@ -324,10 +325,10 @@ describe('CommentsPlugin commands', () => {
   });
 });
 
-const createPluginStateEnvironment = () => {
-  const schema = createCommentSchema();
+const createPluginStateEnvironment = ({ schema: providedSchema, doc: providedDoc } = {}) => {
+  const schema = providedSchema ?? createCommentSchema();
   const paragraph = schema.node('paragraph', null, [schema.text('Hello')]);
-  const doc = schema.node('doc', null, [paragraph]);
+  const doc = providedDoc ?? schema.node('doc', null, [paragraph]);
   const selection = TextSelection.create(doc, 1);
 
   let state = EditorState.create({ schema, doc, selection });
@@ -356,9 +357,9 @@ const createPluginStateEnvironment = () => {
   };
 
   editor.view = view;
-  plugin.spec.view?.(view);
+  const pluginView = plugin.spec.view?.(view);
 
-  return { plugin, editor, view, schema };
+  return { plugin, editor, view, schema, pluginView };
 };
 
 describe('CommentsPlugin state', () => {
@@ -417,6 +418,38 @@ describe('CommentsPlugin state', () => {
 
     const pluginState = CommentsPluginKey.getState(view.state);
     expect(pluginState.trackedChanges['change-1']).toBeDefined();
+  });
+
+  // Regression test: ensures comment positions are emitted on initial load even when
+  // the first update only changes the active thread (without document changes).
+  // Previously, positions would not emit until a subsequent document change occurred.
+  it('emits comment positions when the first update only changes the active thread', () => {
+    const schema = createCommentSchema();
+    const commentMark = schema.marks[CommentMarkName].create({ commentId: 'thread-1', internal: true });
+    const paragraph = schema.node('paragraph', null, [schema.text('Hello', [commentMark])]);
+    const doc = schema.node('doc', null, [paragraph]);
+
+    const { view, editor, pluginView } = createPluginStateEnvironment({ schema, doc });
+    expect(pluginView).toBeDefined();
+
+    const forceTr = view.state.tr.setMeta(CommentsPluginKey, { type: 'force' });
+    view.dispatch(forceTr);
+
+    view.coordsAtPos = vi.fn(() => ({ top: 10, left: 20 }));
+
+    pluginView.update(view);
+
+    expect(view.coordsAtPos).toHaveBeenCalled();
+    expect(editor.emit).toHaveBeenCalledWith(
+      'comment-positions',
+      expect.objectContaining({
+        allCommentPositions: expect.objectContaining({
+          'thread-1': expect.objectContaining({
+            bounds: expect.objectContaining({ top: 10, left: 20 }),
+          }),
+        }),
+      }),
+    );
   });
 });
 

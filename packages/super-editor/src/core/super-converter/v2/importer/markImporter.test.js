@@ -261,7 +261,9 @@ describe('getStrikeValue', () => {
     expect(getStrikeValue({ 'w:val': 'true' })).toBe('1');
   });
 
-  it('returns null for falsy values', () => {
-    expect(getStrikeValue({ 'w:val': 'false' })).toBeNull();
+  it('returns "0" for falsy values to preserve strike negation', () => {
+    expect(getStrikeValue({ 'w:val': 'false' })).toBe('0');
+    expect(getStrikeValue({ 'w:val': '0' })).toBe('0');
+    expect(getStrikeValue({ 'w:val': 'off' })).toBe('0');
   });
 });

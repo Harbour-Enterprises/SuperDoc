@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, reactive, computed } from 'vue';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
 import {
@@ -122,6 +122,7 @@ export const useCommentsStore = defineStore('comments', () => {
       trackedChangeType,
       deletedText,
       authorEmail,
+      authorImage,
       date,
       author: authorName,
       importedAuthor,
@@ -139,6 +140,7 @@ export const useCommentsStore = defineStore('comments', () => {
       createdTime: date,
       creatorName: authorName,
       creatorEmail: authorEmail,
+      creatorImage: authorImage,
       isInternal: false,
       importedAuthor,
       selection: {
@@ -305,6 +307,7 @@ export const useCommentsStore = defineStore('comments', () => {
       parentCommentId,
       creatorEmail: superdocStore.user.email,
       creatorName: superdocStore.user.name,
+      creatorImage: superdocStore.user.image,
       commentText: currentCommentText.value,
       selection,
       ...options,
@@ -424,7 +427,7 @@ export const useCommentsStore = defineStore('comments', () => {
     const document = superdocStore.getDocument(documentId);
 
     comments.forEach((comment) => {
-      const htmlContent = getHTmlFromComment(comment.textJson);
+      const htmlContent = getHtmlFromComment(comment.textJson);
 
       if (!htmlContent && !comment.trackedChange) {
         return;
@@ -439,12 +442,13 @@ export const useCommentsStore = defineStore('comments', () => {
         isInternal: false,
         parentCommentId: comment.parentCommentId,
         creatorName,
+        createdTime: comment.createdTime,
         creatorEmail: comment.creatorEmail,
         importedAuthor: {
           name: importedName,
           email: comment.creatorEmail,
         },
-        commentText: getHTmlFromComment(comment.textJson),
+        commentText: getHtmlFromComment(comment.textJson),
         resolvedTime: comment.isDone ? Date.now() : null,
         resolvedByEmail: comment.isDone ? comment.creatorEmail : null,
         resolvedByName: comment.isDone ? importedName : null,
@@ -601,7 +605,7 @@ export const useCommentsStore = defineStore('comments', () => {
     };
   };
 
-  const getHTmlFromComment = (commentTextJson) => {
+  const getHtmlFromComment = (commentTextJson) => {
     // If no content, we can't convert and its not a valid comment
     if (!commentTextJson.content?.length) return;
 

@@ -1,17 +1,17 @@
 <script setup>
 import '@/style.css';
-import '@harbour-enterprises/common/styles/common-styles.css';
+import '@superdoc/common/styles/common-styles.css';
 
 import { ref, shallowRef, computed, onMounted } from 'vue';
 import { NMessageProvider } from 'naive-ui';
 import { SuperEditor } from '@/index.js';
-import { getFileObject } from '@harbour-enterprises/common/helpers/get-file-object';
-import { DOCX } from '@harbour-enterprises/common';
+import { getFileObject } from '@superdoc/common/helpers/get-file-object';
+import { DOCX } from '@superdoc/common';
 import { SuperToolbar } from '@components/toolbar/super-toolbar';
 import { PaginationPluginKey } from '@extensions/pagination/pagination-helpers.js';
 import BasicUpload from './BasicUpload.vue';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
-import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
+import { Telemetry } from '@superdoc/common/Telemetry';
 
 // Import the component the same you would in your app
 let activeEditor;

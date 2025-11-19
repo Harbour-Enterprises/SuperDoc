@@ -26,6 +26,10 @@ export const normalizeCommentEventPayload = ({ conversation, editorOptions, fall
     normalized.creatorEmail = user.email;
   }
 
+  if (!normalized.creatorImage && user?.image) {
+    normalized.creatorImage = user.image;
+  }
+
   if (!normalized.createdTime) {
     normalized.createdTime = Date.now();
   }

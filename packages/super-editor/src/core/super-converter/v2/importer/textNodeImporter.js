@@ -1,4 +1,4 @@
-import { getElementName, parseProperties } from './importerHelpers.js';
+import { translator as wTextTranslator } from '@converter/v3/handlers/w/t';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -9,39 +9,19 @@ export const handleTextNode = (params) => {
     return { nodes: [], consumed: 0 };
   }
   const node = nodes[0];
-  const { type } = node;
 
-  // Parse properties
-  const { attributes, elements, marks = [] } = parseProperties(node);
+  const resultNode = wTextTranslator.encode({
+    ...params,
+    extraParams: {
+      ...(params.extraParams || {}),
+      node,
+    },
+  });
 
-  // Text nodes have no children. Only text, and there should only be one child
-  let text;
-  if (elements.length === 1) {
-    text = elements[0].text;
-    const xmlSpace = node.attributes?.['xml:space'] ?? elements[0]?.attributes?.['xml:space'];
-    if (xmlSpace !== 'preserve' && typeof text === 'string') {
-      text = text.replace(/^\s+/, '').replace(/\s+$/, '');
-    }
-    // Handle the removal of a temporary wrapper that we added to preserve empty spaces
-    text = text.replace(/\[\[sdspace\]\]/g, '');
-  }
-  // Word sometimes will have an empty text node with a space attribute, in that case it should be a space
-  else if (!elements.length && 'attributes' in node && node.attributes['xml:space'] === 'preserve') {
-    text = ' ';
-  }
-
-  // Ignore others - can catch other special cases here if necessary
-  else return { nodes: [], consumed: 0 };
+  if (!resultNode) return { nodes: [], consumed: 0 };
 
   return {
-    nodes: [
-      {
-        type: getElementName(node),
-        text: text,
-        attrs: { type, attributes: attributes || {} },
-        marks,
-      },
-    ],
+    nodes: [resultNode],
     consumed: 1,
   };
 };

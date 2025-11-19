@@ -16,7 +16,7 @@ const collectExpectedFromSource = (doc) => {
       const textEl = find(child, 'w:t');
       const text = textEl?.elements?.find((e) => e.type === 'text')?.text;
       if (!text) return;
-      runs.push({ text, hasColor: !!wColor });
+      runs.push({ text, hasColor: !!wColor?.attributes?.['w:val'], child });
     });
   });
   return runs;
@@ -34,7 +34,7 @@ const collectFromExport = (doc) => {
       const textEl = find(child, 'w:t');
       const text = textEl?.elements?.find((e) => e.type === 'text')?.text;
       if (!text) return;
-      runs.push({ text, hasColor: !!wColor });
+      runs.push({ text, hasColor: !!wColor?.attributes?.['w:val'], child });
     });
   });
   return runs;
@@ -51,13 +51,14 @@ describe('OOXML color + rStyle + linked combinations round-trip', async () => {
   it('preserves inline w:color on export; does not emit for style-only', () => {
     const styleOverrides = new Map([
       ["Styled red text|  - rStyle='SD_ColorRedChar' (red): ", true],
-      ["Styled theme accent2 text|  - rStyle='SD_ColorAccent2Char' (theme accent2): ", true],
-      ["Styled auto color text|  - rStyle='SD_ColorAutoChar' (auto): ", true],
+      ["Styled theme accent2 text|  - rStyle='SD_ColorAccent2Char' (theme accent2): ", false],
+      ["Styled auto color text|  - rStyle='SD_ColorAutoChar' (auto): ", false],
       ["Linked Char style applied|  - rStyle='SD_LinkedColorHeadingChar' => magenta: ", true],
       [
         "  - pStyle='SD_LinkedColorHeading' (accent1) + inline hex 0000FF on a run: |Inline theme overrides char style color",
-        true,
+        false,
       ],
+      ["Styled auto color text|  - rStyle='SD_ColorAutoChar' (auto): ", true],
     ]);
 
     const n = Math.min(sourceRuns.length, exportedRuns.length);

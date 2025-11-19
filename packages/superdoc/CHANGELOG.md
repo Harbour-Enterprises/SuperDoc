@@ -1,3 +1,123 @@
+# [0.29.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.6...v0.29.0) (2025-11-10)
+
+### Bug Fixes
+
+- add streaming to superdoc-ai and demo ([#1211](https://github.com/Harbour-Enterprises/SuperDoc/issues/1211)) ([4362985](https://github.com/Harbour-Enterprises/SuperDoc/commit/43629855d83f61e94c02ff8cd012b417db9008e9))
+- additional comments fixes ([#1248](https://github.com/Harbour-Enterprises/SuperDoc/issues/1248)) ([#1249](https://github.com/Harbour-Enterprises/SuperDoc/issues/1249)) ([911f17c](https://github.com/Harbour-Enterprises/SuperDoc/commit/911f17cdf1df8496b3b93c52398f453aa873e260))
+- comments not exporting ([#1246](https://github.com/Harbour-Enterprises/SuperDoc/issues/1246)) ([d967d5e](https://github.com/Harbour-Enterprises/SuperDoc/commit/d967d5eb88833f1c77f3be667cf831ce0191b067))
+- floating comments not appearing on first load ([#1221](https://github.com/Harbour-Enterprises/SuperDoc/issues/1221)) ([b3e72d0](https://github.com/Harbour-Enterprises/SuperDoc/commit/b3e72d0dbeefaa88a8614d889665668c95269d98))
+- strikethrough is added on export for falsy values ([#1228](https://github.com/Harbour-Enterprises/SuperDoc/issues/1228)) ([184e92b](https://github.com/Harbour-Enterprises/SuperDoc/commit/184e92b0c0f110c5608c37f2027ac06e027e64e7))
+- uploaded image is missing for collaborators ([#1217](https://github.com/Harbour-Enterprises/SuperDoc/issues/1217)) ([91f285f](https://github.com/Harbour-Enterprises/SuperDoc/commit/91f285f8c644c267190abcddbec0ee1b8299a763))
+
+### Features
+
+- improve style scoping in the editor to prevent external styles affecting content ([#1219](https://github.com/Harbour-Enterprises/SuperDoc/issues/1219)) ([0c5ca4e](https://github.com/Harbour-Enterprises/SuperDoc/commit/0c5ca4ea1af097f5f1f4a4308d1ed6234d8e87d0))
+- migrate @harbour-enterprises/common to TypeScript ([#1233](https://github.com/Harbour-Enterprises/SuperDoc/issues/1233)) ([5c93ba5](https://github.com/Harbour-Enterprises/SuperDoc/commit/5c93ba5cbb43a97d541586e56c27ba2f1eab3c78))
+- migrate superdoc-yjs-collaboration library to TS ([#1220](https://github.com/Harbour-Enterprises/SuperDoc/issues/1220)) ([2973866](https://github.com/Harbour-Enterprises/SuperDoc/commit/2973866ef9df371f12824d0a6ccd72d0a87e1a01)), closes [#1225](https://github.com/Harbour-Enterprises/SuperDoc/issues/1225) [#1226](https://github.com/Harbour-Enterprises/SuperDoc/issues/1226)
+- typescript infrastructure for monorepo ([#1157](https://github.com/Harbour-Enterprises/SuperDoc/issues/1157)) ([2b365d7](https://github.com/Harbour-Enterprises/SuperDoc/commit/2b365d78c278551100688d2c7f085cc2c1ed8a6e)), closes [#1171](https://github.com/Harbour-Enterprises/SuperDoc/issues/1171) [#1148](https://github.com/Harbour-Enterprises/SuperDoc/issues/1148) [#1155](https://github.com/Harbour-Enterprises/SuperDoc/issues/1155) [#1168](https://github.com/Harbour-Enterprises/SuperDoc/issues/1168) [#1182](https://github.com/Harbour-Enterprises/SuperDoc/issues/1182) [#1184](https://github.com/Harbour-Enterprises/SuperDoc/issues/1184) [#1187](https://github.com/Harbour-Enterprises/SuperDoc/issues/1187)
+
+### Performance Improvements
+
+- **list-item:** remove list item node view when in headless mode ([#1170](https://github.com/Harbour-Enterprises/SuperDoc/issues/1170)) ([8b04a8b](https://github.com/Harbour-Enterprises/SuperDoc/commit/8b04a8b864d469231d88a893c0fc2a226994ed4e))
+
+## [0.28.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.5...v0.28.6) (2025-11-10)
+
+### Bug Fixes
+
+- additional comments fixes ([#1248](https://github.com/Harbour-Enterprises/SuperDoc/issues/1248)) ([d8d6e52](https://github.com/Harbour-Enterprises/SuperDoc/commit/d8d6e526faa0bd7cd1b7970d3fac5fc8d25f74af))
+
+## [0.28.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.4...v0.28.5) (2025-11-10)
+
+### Bug Fixes
+
+- comments not exporting ([e3647a7](https://github.com/Harbour-Enterprises/SuperDoc/commit/e3647a7e3d6a8db7e00f10616b01304e9ca77a39))
+
+## [0.28.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.3...v0.28.4) (2025-11-06)
+
+### Bug Fixes
+
+- prettier ([bbc4c6a](https://github.com/Harbour-Enterprises/SuperDoc/commit/bbc4c6a757bcbaca08175dc9bbbe5c533b82e3c4))
+- uploaded image is missing for collaborators ([#1217](https://github.com/Harbour-Enterprises/SuperDoc/issues/1217)) ([090f4e7](https://github.com/Harbour-Enterprises/SuperDoc/commit/090f4e709c560ceae718b34d5a3ee02cc7b2bc86))
+
+## [0.28.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.2...v0.28.3) (2025-11-05)
+
+### Bug Fixes
+
+- floating comments not appearing on first load ([#1221](https://github.com/Harbour-Enterprises/SuperDoc/issues/1221)) ([c8656ca](https://github.com/Harbour-Enterprises/SuperDoc/commit/c8656ca4cdeca1bc484fdaaf9c7ea584915a6c24))
+
+## [0.28.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.1...v0.28.2) (2025-11-04)
+
+### Bug Fixes
+
+- allow top/bottom images to float right and left ([#1203](https://github.com/Harbour-Enterprises/SuperDoc/issues/1203)) ([d3f1e47](https://github.com/Harbour-Enterprises/SuperDoc/commit/d3f1e4742af0982d616382b155056119029a84c3))
+- **images:** restore image TopAndBottom centering and column-left float ([94e02bd](https://github.com/Harbour-Enterprises/SuperDoc/commit/94e02bd54968bc8340c384165a9b63e0249012b4))
+- markdown libs import order breaking node ([#1212](https://github.com/Harbour-Enterprises/SuperDoc/issues/1212)) ([ed2191d](https://github.com/Harbour-Enterprises/SuperDoc/commit/ed2191d6e2ba27103fb3dc2d013e8da2fc38ca15))
+- node js import timing tests ([bf5565a](https://github.com/Harbour-Enterprises/SuperDoc/commit/bf5565a7d7654d1da68dec1aaee5a64277ea4f20))
+- performance improvements for tab plugin and tabDecorations ([#1205](https://github.com/Harbour-Enterprises/SuperDoc/issues/1205)) ([571c725](https://github.com/Harbour-Enterprises/SuperDoc/commit/571c725d30b6994c54e7e40f33b3728d6cc3b7ee))
+- superdoc-ai package.json ([#1215](https://github.com/Harbour-Enterprises/SuperDoc/issues/1215)) ([a295c05](https://github.com/Harbour-Enterprises/SuperDoc/commit/a295c057878f990eddff1af2a9f6fcec840f9eff))
+
+### Performance Improvements
+
+- **editor:** improve large document editing performance 5-10x ([#1214](https://github.com/Harbour-Enterprises/SuperDoc/issues/1214)) ([caaea64](https://github.com/Harbour-Enterprises/SuperDoc/commit/caaea644ff3c881869f2778ae6eaa52be96ec502))
+
+## [0.28.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.0...v0.28.1) (2025-11-03)
+
+### Bug Fixes
+
+- markdown libs import order breaking node ([3cd90c6](https://github.com/Harbour-Enterprises/SuperDoc/commit/3cd90c6d990e61f19d8ba3406904c7b31921fdcf))
+
+# [0.28.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.3...v0.28.0) (2025-11-01)
+
+### Bug Fixes
+
+- allow programmatic tracked change skipping undo history ([#1202](https://github.com/Harbour-Enterprises/SuperDoc/issues/1202)) ([826b620](https://github.com/Harbour-Enterprises/SuperDoc/commit/826b6202ee242e004f9302f58ff6f5c06cfe7cd6))
+- delete decoration widget blocks parent list item ([#1200](https://github.com/Harbour-Enterprises/SuperDoc/issues/1200)) ([4b58fd6](https://github.com/Harbour-Enterprises/SuperDoc/commit/4b58fd62471dbef99a36972963fb3403b621b118))
+- force track changes if input type is programmatic ([#1199](https://github.com/Harbour-Enterprises/SuperDoc/issues/1199)) ([c6e2a17](https://github.com/Harbour-Enterprises/SuperDoc/commit/c6e2a173a40624a1d8c6d87cb9cb2007588eacf1))
+- images uploaded are dropped on export ([#1186](https://github.com/Harbour-Enterprises/SuperDoc/issues/1186)) ([#1190](https://github.com/Harbour-Enterprises/SuperDoc/issues/1190)) ([e99daa2](https://github.com/Harbour-Enterprises/SuperDoc/commit/e99daa2b699f76a3ee38a6b593505803ecc7bbd1))
+- improve performance ([#1169](https://github.com/Harbour-Enterprises/SuperDoc/issues/1169)) ([e626e28](https://github.com/Harbour-Enterprises/SuperDoc/commit/e626e283f160b55e2ccacda1273d3d347bbef99b))
+- increase/decrease indent for all selected list items ([#1192](https://github.com/Harbour-Enterprises/SuperDoc/issues/1192)) ([0bcee03](https://github.com/Harbour-Enterprises/SuperDoc/commit/0bcee0315113e9804d7c80d3e50281307143c70e))
+- remove image contain-intrinsic and content-visibility breaking pagination ([12e2dfa](https://github.com/Harbour-Enterprises/SuperDoc/commit/12e2dfab4c8e15fd730565513196db9a580800c6))
+- remove legacy handler from tableCell translator ([#1172](https://github.com/Harbour-Enterprises/SuperDoc/issues/1172)) ([83dda0d](https://github.com/Harbour-Enterprises/SuperDoc/commit/83dda0d18fd30e7d7646b3df95779e93517545db))
+- tests ([e63f0fd](https://github.com/Harbour-Enterprises/SuperDoc/commit/e63f0fda1d140f3ab2088de549d1d30102ca2ecd))
+
+### Features
+
+- add markdown serialization support to the editor ([#1188](https://github.com/Harbour-Enterprises/SuperDoc/issues/1188)) ([26d269b](https://github.com/Harbour-Enterprises/SuperDoc/commit/26d269bbc1f3d295344545cca9914ec3b5d644a2))
+- adding README for local collab server example ([#1194](https://github.com/Harbour-Enterprises/SuperDoc/issues/1194)) ([0cb188b](https://github.com/Harbour-Enterprises/SuperDoc/commit/0cb188b306959551c6065e55a1103b213c842f4b))
+- ai configurable provider ([#1107](https://github.com/Harbour-Enterprises/SuperDoc/issues/1107)) ([edf958d](https://github.com/Harbour-Enterprises/SuperDoc/commit/edf958de7770e0b08bc8e4efd921d9843b5ff49e))
+- implement convertSdtContentToRuns function for structured content conversion ([#1193](https://github.com/Harbour-Enterprises/SuperDoc/issues/1193)) ([cff6535](https://github.com/Harbour-Enterprises/SuperDoc/commit/cff65355dd55ae0fbfa0669ac773942d3cb77c5e))
+
+## [0.27.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.2...v0.27.3) (2025-10-30)
+
+### Bug Fixes
+
+- remove image contain-intrinsic and content-visibility breaking pagination ([cbb8d37](https://github.com/Harbour-Enterprises/SuperDoc/commit/cbb8d37791b6ec0d59376c593c7cb8be4f1b027d))
+- tests ([c58d332](https://github.com/Harbour-Enterprises/SuperDoc/commit/c58d332e554eae49dfa67c7a59b1c83f0d0d6f5e))
+
+## [0.27.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.1...v0.27.2) (2025-10-28)
+
+### Bug Fixes
+
+- images uploaded are dropped on export ([#1186](https://github.com/Harbour-Enterprises/SuperDoc/issues/1186)) ([77922c6](https://github.com/Harbour-Enterprises/SuperDoc/commit/77922c66f2261b8ff9856dd265fe8124fa6717c9))
+
+## [0.27.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.27.0...v0.27.1) (2025-10-28)
+
+### Bug Fixes
+
+- enhance getFileObject to handle data URIs ([#1187](https://github.com/Harbour-Enterprises/SuperDoc/issues/1187)) ([c61cf20](https://github.com/Harbour-Enterprises/SuperDoc/commit/c61cf202b4b139e0631efc73ade01e412e746ff6))
+
+# [0.27.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.26.0...v0.27.0) (2025-10-28)
+
+### Bug Fixes
+
+- images breaking on export ([#1182](https://github.com/Harbour-Enterprises/SuperDoc/issues/1182)) ([82af973](https://github.com/Harbour-Enterprises/SuperDoc/commit/82af973a0388091ad5fbb90cbefc6c9699faadd5))
+- tabs initial loading ([#1168](https://github.com/Harbour-Enterprises/SuperDoc/issues/1168)) ([5f97688](https://github.com/Harbour-Enterprises/SuperDoc/commit/5f9768807f4086159dcd27dd1d7fd5fee4a21e0a))
+
+### Features
+
+- cache tab decoration measurements ([#1155](https://github.com/Harbour-Enterprises/SuperDoc/issues/1155)) ([060092b](https://github.com/Harbour-Enterprises/SuperDoc/commit/060092b238c2cc465f17bf7a586a6df99b02e105))
+- vector shapes ([#1148](https://github.com/Harbour-Enterprises/SuperDoc/issues/1148)) ([e789819](https://github.com/Harbour-Enterprises/SuperDoc/commit/e789819198f576dd4de2486a43eed7413050e323))
+
 # [0.26.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.25.0...v0.26.0) (2025-10-17)
 
 ### Bug Fixes

@@ -18,6 +18,8 @@ const visualizerConfig = {
 
 export const getAliases = (isDev) => {
   const aliases = {
+    // IMPORTANT: @superdoc/common MUST come before @superdoc to avoid partial matching
+    '@superdoc/common': path.resolve(__dirname, '../../shared/common'),
     '@superdoc': fileURLToPath(new URL('./src', import.meta.url)),
     '@stores': fileURLToPath(new URL('./src/stores', import.meta.url)),
     '@packages': fileURLToPath(new URL('../', import.meta.url)),
@@ -116,7 +118,7 @@ export default defineConfig(({ mode, command}) => {
             chunkFileNames: 'chunks/[name]-[hash].es.js',
             manualChunks: {
               'vue': ['vue'],
-              'blank-docx': ['@harbour-enterprises/common/data/blank.docx?url'],
+              'blank-docx': ['@superdoc/common/data/blank.docx?url'],
               'jszip': ['jszip'],
               'eventemitter3': ['eventemitter3'],
               'uuid': ['uuid'],
@@ -129,7 +131,7 @@ export default defineConfig(({ mode, command}) => {
             chunkFileNames: 'chunks/[name]-[hash].cjs',
             manualChunks: {
               'vue': ['vue'],
-              'blank-docx': ['@harbour-enterprises/common/data/blank.docx?url'],
+              'blank-docx': ['@superdoc/common/data/blank.docx?url'],
               'jszip': ['jszip'],
               'eventemitter3': ['eventemitter3'],
               'uuid': ['uuid'],

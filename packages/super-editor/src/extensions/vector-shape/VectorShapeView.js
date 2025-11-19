@@ -1,5 +1,5 @@
 // @ts-ignore
-import { getPresetShapeSvg, listPresetNames } from '@preset-geometry';
+import { getPresetShapeSvg } from '@preset-geometry';
 
 export class VectorShapeView {
   node;
@@ -30,10 +30,10 @@ export class VectorShapeView {
     this.extension = props.extension;
     this.htmlAttributes = props.htmlAttributes;
 
-    this.mount(props);
+    this.mount();
   }
 
-  mount(props) {
+  mount() {
     this.buildView();
   }
 
@@ -99,7 +99,7 @@ export class VectorShapeView {
           strokeWidth: strokeWidth || 0,
         },
       });
-    } catch (error) {
+    } catch {
       return null;
     }
   }

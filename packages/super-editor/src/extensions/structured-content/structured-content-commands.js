@@ -223,12 +223,6 @@ export const StructuredContentCommands = Extension.create({
             }
 
             const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
-            try {
-              updatedNode.check();
-            } catch {
-              console.error('Updated node does not conform to the schema');
-              return false;
-            }
 
             tr.replaceWith(posFrom, posTo, updatedNode);
           }

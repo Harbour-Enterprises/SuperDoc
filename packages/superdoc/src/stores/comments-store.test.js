@@ -24,6 +24,10 @@ vi.mock('./superdoc-store.js', () => {
       user,
       activeSelection,
       selectionPosition,
+      emit: vi.fn(),
+      config: {
+        isInternal: false,
+      },
     },
   };
 });
@@ -79,7 +83,7 @@ vi.mock('@harbour-enterprises/super-editor', () => ({
 
 import { useCommentsStore } from './comments-store.js';
 import { __mockSuperdoc } from './superdoc-store.js';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
 
@@ -197,5 +201,69 @@ describe('comments-store', () => {
         comment: { commentId: 'change-1' },
       }),
     );
+  });
+
+  it('should load comments with correct created time', () => {
+    store.init({
+      readOnly: true,
+      allowResolve: false,
+      comments: [],
+    });
+
+    const now = Date.now();
+    store.processLoadedDocxComments({
+      superdoc: __mockSuperdoc,
+      editor: null,
+      comments: [
+        {
+          commentId: 'c-1',
+          createdTime: now,
+          creatorName: 'Gabriel',
+          textJson: {
+            content: [
+              {
+                type: 'run',
+                content: [],
+                attrs: {
+                  runProperties: [
+                    {
+                      xmlName: 'w:rStyle',
+                      attributes: {
+                        'w:val': 'CommentReference',
+                      },
+                    },
+                  ],
+                },
+              },
+              {
+                type: 'run',
+                content: [
+                  {
+                    type: 'text',
+                    text: 'I am a comment~!',
+                    attrs: {
+                      type: 'element',
+                      attributes: {},
+                    },
+                    marks: [
+                      {
+                        type: 'textStyle',
+                        attrs: {
+                          fontSize: '10pt',
+                          fontSizeCs: '10pt',
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      ],
+      documentId: 'doc-1',
+    });
+
+    expect(store.commentsList[0].createdTime).toBe(now);
   });
 });

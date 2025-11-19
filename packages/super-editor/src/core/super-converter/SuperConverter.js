@@ -11,8 +11,8 @@ import {
   prepareCommentParaIds,
   prepareCommentsXmlFilesForExport,
 } from './v2/exporter/commentsExporter.js';
-import { FOOTER_RELATIONSHIP_TYPE, HEADER_RELATIONSHIP_TYPE, HYPERLINK_RELATIONSHIP_TYPE } from './constants.js';
 import { DocxHelpers } from './docx-helpers/index.js';
+import { mergeRelationshipElements } from './relationship-helpers.js';
 
 const FONT_FAMILY_FALLBACKS = Object.freeze({
   swiss: 'Arial, sans-serif',
@@ -100,7 +100,7 @@ class SuperConverter {
     { name: 'w:i', type: 'italic' },
     // { name: 'w:iCs', type: 'italic' },
     { name: 'w:u', type: 'underline', mark: 'underline', property: 'underlineType' },
-    { name: 'w:strike', type: 'strike', mark: 'strike' },
+    { name: 'w:strike', type: 'strike', mark: 'strike', property: 'value' },
     { name: 'w:color', type: 'color', mark: 'textStyle', property: 'color' },
     { name: 'w:sz', type: 'fontSize', mark: 'textStyle', property: 'fontSize' },
     // { name: 'w:szCs', type: 'fontSize', mark: 'textStyle', property: 'fontSize' },
@@ -701,7 +701,10 @@ class SuperConverter {
     let result;
     try {
       this.getDocumentInternalId();
-      result = createDocumentJson({ ...this.convertedXml, media: this.media }, this, editor);
+      if (!this.convertedXml.media) {
+        this.convertedXml.media = this.media;
+      }
+      result = createDocumentJson(this.convertedXml, this, editor);
     } catch (error) {
       editor?.emit('exception', { error, editor });
     }
@@ -1011,49 +1014,25 @@ class SuperConverter {
   #exportProcessNewRelationships(rels = []) {
     const relsData = this.convertedXml['word/_rels/document.xml.rels'];
     const relationships = relsData.elements.find((x) => x.name === 'Relationships');
-    const newRels = [];
 
-    const regex = /rId|mi/g;
-    let largestId = Math.max(...relationships.elements.map((el) => Number(el.attributes.Id.replace(regex, ''))));
-
-    rels.forEach((rel) => {
-      const existingId = rel.attributes.Id;
-      const existingTarget = relationships.elements.find((el) => el.attributes.Target === rel.attributes.Target);
-      const isNewMedia = rel.attributes.Target?.startsWith('media/') && existingId.length > 6;
-      const isNewHyperlink = rel.attributes.Type === HYPERLINK_RELATIONSHIP_TYPE && existingId.length > 6;
-      const isNewHeadFoot =
-        rel.attributes.Type === (HEADER_RELATIONSHIP_TYPE || rel.attributes.Type === FOOTER_RELATIONSHIP_TYPE) &&
-        existingId.length > 6;
-
-      if (existingTarget && !isNewMedia && !isNewHyperlink && !isNewHeadFoot) {
-        return;
-      }
-
-      // Update the target to escape ampersands
-      rel.attributes.Target = rel.attributes?.Target?.replace(/&/g, '&amp;');
-
-      // Update the ID. If we've assigned a long ID (ie: images, links) we leave it alone
-      rel.attributes.Id = existingId.length > 6 ? existingId : `rId${++largestId}`;
-
-      newRels.push(rel);
-    });
-
-    relationships.elements = [...relationships.elements, ...newRels];
+    relationships.elements = mergeRelationshipElements(relationships.elements, rels);
   }
 
-  async #exportProcessMediaFiles(media, editor) {
-    const processedData = {};
-    for (const filePath in media) {
-      if (typeof media[filePath] !== 'string') continue;
-      processedData[filePath] = await getArrayBufferFromUrl(media[filePath], editor.options.isHeadless);
+  async #exportProcessMediaFiles(media = {}) {
+    const processedData = {
+      ...(this.convertedXml.media || {}),
+    };
+
+    for (const [filePath, value] of Object.entries(media)) {
+      if (value == null) continue;
+      processedData[filePath] = await getArrayBufferFromUrl(value);
     }
 
-    this.convertedXml.media = {
-      ...this.convertedXml.media,
+    this.convertedXml.media = processedData;
+    this.media = this.convertedXml.media;
+    this.addedMedia = {
       ...processedData,
     };
-    this.media = this.convertedXml.media;
-    this.addedMedia = processedData;
   }
 
   // Deprecated methods for backward compatibility

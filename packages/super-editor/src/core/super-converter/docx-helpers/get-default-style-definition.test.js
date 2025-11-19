@@ -12,7 +12,7 @@ vi.mock('@converter/helpers.js', () => ({
   twipsToPixels: (n) => Number(n) / 10,
 }));
 
-vi.mock('@harbour-enterprises/common', () => ({
+vi.mock('@superdoc/common', () => ({
   kebabCase: (s) =>
     s
       .replace(/([a-z0-9])([A-Z])/g, '$1-$2')

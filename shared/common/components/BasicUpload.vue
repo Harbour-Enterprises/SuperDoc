@@ -1,14 +1,22 @@
-<script setup>
-const emit = defineEmits(['file-change']);
+<script setup lang="ts">
+const emit = defineEmits<{
+  'file-change': [file: File];
+}>();
 
-const props = defineProps({
-  accept: {
-    type: String,
-    default: '.docx, .pdf, .html, .md',
+const props = withDefaults(
+  defineProps<{
+    accept?: string;
+  }>(),
+  {
+    accept: '.docx, .pdf, .html, .md',
   },
-});
-const onFileChange = (event) => {
-  emit('file-change', event.target.files[0]);
+);
+
+const onFileChange = (event: Event) => {
+  const target = event.target as HTMLInputElement;
+  if (target.files?.[0]) {
+    emit('file-change', target.files[0]);
+  }
 };
 </script>
 

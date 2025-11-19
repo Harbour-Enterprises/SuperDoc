@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "ESNext",
+    "moduleResolution": "node",
+    "lib": ["ES2020", "DOM"],
+    "allowJs": true,
+    "checkJs": false,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@": ["./packages/super-editor/src/*"],
+      "@core/*": ["./packages/super-editor/src/core/*"],
+      "@extensions/*": ["./packages/super-editor/src/extensions/*"],
+      "@features/*": ["./packages/super-editor/src/features/*"],
+      "@components/*": ["./packages/super-editor/src/components/*"],
+      "@helpers/*": ["./packages/super-editor/src/core/helpers/*"],
+      "@packages/*": ["./packages/*"],
+      "@converter/*": ["./packages/super-editor/src/core/super-converter/*"],
+      "@tests/*": ["./packages/super-editor/src/tests/*"],
+      "@translator": ["./packages/super-editor/src/core/super-converter/v3/node-translator/"],
+      "@superdoc/common": ["./shared/common/index.ts"],
+      "@superdoc/common/*": ["./shared/common/*"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "examples", "e2e-tests", "**/*.test.js", "**/*.test.ts"]
+}

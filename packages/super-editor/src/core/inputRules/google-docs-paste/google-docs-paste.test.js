@@ -1,11 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 let parseResult;
+let parseSpy;
 
 const domParserMock = vi.hoisted(() => ({
-  fromSchema: vi.fn(() => ({
-    parse: vi.fn(() => parseResult),
-  })),
+  fromSchema: vi.fn(),
 }));
 
 vi.mock('prosemirror-model', () => ({
@@ -20,7 +19,7 @@ vi.mock('../../InputRule.js', () => ({
   sanitizeHtml: sanitizeHtmlMock,
 }));
 
-const getNewListIdMock = vi.hoisted(() => vi.fn(() => 300 + getNewListIdMock.mock.calls.length));
+const getNewListIdMock = vi.hoisted(() => vi.fn());
 const generateNewListDefinitionMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@helpers/list-numbering-helpers.js', () => ({
@@ -28,20 +27,6 @@ vi.mock('@helpers/list-numbering-helpers.js', () => ({
     getNewListId: getNewListIdMock,
     generateNewListDefinition: generateNewListDefinitionMock,
   },
-}));
-
-const createSingleItemListMock = vi.hoisted(() =>
-  vi.fn(({ li, tag, rootNumId }) => {
-    const list = li.ownerDocument.createElement(tag);
-    const newLi = li.cloneNode(true);
-    list.setAttribute('data-list-id', rootNumId);
-    list.appendChild(newLi);
-    return list;
-  }),
-);
-
-vi.mock('../html/html-helpers.js', () => ({
-  createSingleItemList: createSingleItemListMock,
 }));
 
 const getLvlTextMock = vi.hoisted(() => vi.fn(() => '%1.'));
@@ -58,13 +43,16 @@ describe('handleGoogleDocsHtml', () => {
   beforeEach(() => {
     parseResult = { type: 'doc' };
     vi.clearAllMocks();
+    parseSpy = vi.fn(() => parseResult);
+    domParserMock.fromSchema.mockReturnValue({ parse: parseSpy });
+    getNewListIdMock.mockImplementation(() => 410);
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('merges and flattens Google Docs lists before dispatching', () => {
+  it('merges, flattens, and annotates Google Docs lists before dispatching', () => {
     const html = `
       <div>
         <ol start="1">
@@ -90,9 +78,18 @@ describe('handleGoogleDocsHtml', () => {
     expect(result).toBe(true);
     expect(convertEmToPtMock).toHaveBeenCalledWith(html);
     expect(sanitizeHtmlMock).toHaveBeenCalled();
-    expect(getNewListIdMock).toHaveBeenCalled();
-    expect(generateNewListDefinitionMock).toHaveBeenCalled();
-    expect(createSingleItemListMock).toHaveBeenCalledTimes(2);
+    expect(getNewListIdMock).toHaveBeenCalledTimes(1);
+    expect(generateNewListDefinitionMock).toHaveBeenCalledTimes(2);
+
+    const parsedNode = parseSpy.mock.calls[0][0];
+    const paragraphs = Array.from(parsedNode.querySelectorAll('p[data-num-id]'));
+    expect(paragraphs).toHaveLength(2);
+    expect(paragraphs[0].getAttribute('data-num-id')).toBe('410');
+    expect(paragraphs[0].getAttribute('data-list-level')).toBe('[1]');
+    expect(paragraphs[1].getAttribute('data-list-level')).toBe('[2]');
+    expect(paragraphs[0].getAttribute('data-num-fmt')).toBe('decimal');
+    expect(paragraphs[0].getAttribute('data-list-numbering-type')).toBe('decimal');
+    expect(paragraphs[0].textContent?.trim()).toBe('Item 1');
 
     expect(DOMParser.fromSchema).toHaveBeenCalledWith(editor.schema);
     expect(replaceSelectionWith).toHaveBeenCalledWith(parseResult, true);

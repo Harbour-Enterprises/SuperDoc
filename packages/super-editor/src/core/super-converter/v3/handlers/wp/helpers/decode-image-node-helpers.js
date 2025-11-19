@@ -64,7 +64,16 @@ export const translateImageNode = (params) => {
     if (w && h) size = { w, h };
   }
 
-  if (params.node.type === 'image' && !imageId) {
+  if (imageId) {
+    const docx = params.converter?.convertedXml || {};
+    const rels = docx['word/_rels/document.xml.rels'];
+    const relsTag = rels?.elements?.find((el) => el.name === 'Relationships');
+    const hasRelation = relsTag?.elements.find((el) => el.attributes.Id === imageId);
+    const path = src?.split('word/')[1];
+    if (!hasRelation) {
+      addImageRelationshipForId(params, imageId, path);
+    }
+  } else if (params.node.type === 'image' && !imageId) {
     const path = src?.split('word/')[1];
     imageId = addNewImageRelationship(params, path);
   } else if (params.node.type === 'fieldAnnotation' && !imageId) {
@@ -315,6 +324,26 @@ function addNewImageRelationship(params, imagePath) {
 }
 
 /**
+ * Create a new image relationship for export from collaborator's editor
+ *
+ * @param {ExportParams} params
+ * @param {string} id The new relationship ID
+ * @param {string} imagePath The path to the image
+ */
+function addImageRelationshipForId(params, id, imagePath) {
+  const newRel = {
+    type: 'element',
+    name: 'Relationship',
+    attributes: {
+      Id: id,
+      Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
+      Target: imagePath,
+    },
+  };
+  params.relationships.push(newRel);
+}
+
+/**
  * Translates a vectorShape node back to XML.
  * @param {Object} params - Translation parameters
  * @returns {Object} XML node
@@ -340,4 +369,42 @@ export function translateVectorShape(params) {
   };
 
   return wrapTextInRun(alternateContent);
+}
+
+/**
+ * Translates a shapeGroup node back to XML.
+ * @param {Object} params - Translation parameters
+ * @returns {Object} XML node
+ */
+export function translateShapeGroup(params) {
+  const { node } = params;
+  const { drawingContent } = node.attrs;
+
+  // If we have stored drawingContent, use it for round-tripping
+  if (drawingContent) {
+    const drawing = {
+      name: 'w:drawing',
+      elements: [...(drawingContent.elements || [])],
+    };
+
+    const choice = {
+      name: 'mc:Choice',
+      attributes: { Requires: 'wpg' },
+      elements: [drawing],
+    };
+
+    const alternateContent = {
+      name: 'mc:AlternateContent',
+      elements: [choice],
+    };
+
+    return wrapTextInRun(alternateContent);
+  }
+
+  // If no stored content, we would need to reconstruct from shapes
+  // For now, return a placeholder
+  return wrapTextInRun({
+    name: 'w:drawing',
+    elements: [],
+  });
 }

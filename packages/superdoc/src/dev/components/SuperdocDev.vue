@@ -1,13 +1,14 @@
 <script setup>
-import '@harbour-enterprises/common/styles/common-styles.css';
+import '@superdoc/common/styles/common-styles.css';
 import { nextTick, onMounted, provide, ref, shallowRef } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
-import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
-import { BasicUpload, getFileObject } from '@harbour-enterprises/common';
+import { DOCX, PDF, HTML } from '@superdoc/common';
+import { getFileObject } from '@superdoc/common';
+import BasicUpload from '@superdoc/common/components/BasicUpload.vue';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
 import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
 import { getWorkerSrcFromCDN } from '../../components/PdfViewer/pdf/pdf-adapter.js';
@@ -100,7 +101,9 @@ const readFileAsText = (file) => {
 
 const init = async () => {
   let testId = 'document-123';
-  // const testId = "document_6a9fb1e0725d46989bdbb3f9879e9e1b";
+
+  // eslint-disable-next-line no-unused-vars
+  const testDocumentId = 'doc123';
 
   // Prepare document config with content if available
   const documentConfig = {
@@ -311,6 +314,9 @@ const init = async () => {
   superdoc.value = new SuperDoc(config);
   superdoc.value?.on('ready', () => {
     superdoc.value.addCommentsList(commentsPanel.value);
+  });
+  superdoc.value?.on('exception', (error) => {
+    console.error('SuperDoc exception:', error);
   });
 
   // const ydoc = superdoc.value.ydoc;

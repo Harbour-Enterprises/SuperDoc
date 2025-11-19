@@ -358,5 +358,42 @@ describe('w:tbl translator', () => {
         marginBottom: undefined,
       });
     });
+
+    it('ignores table properties when translator returns undefined', () => {
+      const docx = {
+        'word/styles.xml': {
+          elements: [
+            {
+              name: 'w:styles',
+              elements: [
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'UnsupportedTableStyle' },
+                  elements: [
+                    { name: 'w:name', attributes: { 'w:val': 'Unsupported Table Style' } },
+                    {
+                      name: 'w:tblPr',
+                      elements: [{ name: 'w:tblStylePr', attributes: { 'w:type': 'firstRow' } }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      };
+
+      /** @type {ReturnType<typeof _getReferencedTableStyles>} */
+      let styles;
+      expect(() => {
+        styles = _getReferencedTableStyles('UnsupportedTableStyle', { docx });
+      }).not.toThrow();
+
+      expect(styles).toBeDefined();
+      expect(styles?.name).toBeDefined();
+      expect(styles?.borders).toBeUndefined();
+      expect(styles?.rowBorders).toBeUndefined();
+      expect(styles?.cellMargins).toBeUndefined();
+    });
   });
 });

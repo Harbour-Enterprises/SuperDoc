@@ -2,6 +2,8 @@ import { PluginKey } from 'prosemirror-state';
 import { Editor as SuperEditor } from '@core/Editor.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
+import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
+import { isHeadless } from '@/utils/headless-helpers.js';
 
 export const PaginationPluginKey = new PluginKey('paginationPlugin');
 
@@ -12,7 +14,7 @@ export const PaginationPluginKey = new PluginKey('paginationPlugin');
  * @returns {Object} The data for the headers and footers
  */
 export const initPaginationData = async (editor) => {
-  if (!editor.converter) return;
+  if (isHeadless(editor) || !editor.converter) return;
 
   const sectionData = { headers: {}, footers: {} };
   const headerIds = editor.converter.headerIds.ids;
@@ -61,6 +63,7 @@ const getSectionHeight = async (editor, data) => {
   return new Promise((resolve) => {
     const editorContainer = document.createElement('div');
     editorContainer.className = 'super-editor';
+    applyStyleIsolationClass(editorContainer);
     editorContainer.style.padding = '0';
     editorContainer.style.margin = '0';
 
@@ -91,6 +94,8 @@ export const createHeaderFooterEditor = ({
   const { fontSizePt, typeface, fontFamilyCss } = parentStyles;
   const fontSizeInPixles = fontSizePt * 1.3333;
   const lineHeight = fontSizeInPixles * 1.2;
+
+  applyStyleIsolationClass(editorContainer);
 
   Object.assign(editorContainer.style, {
     padding: '0',
@@ -173,6 +178,8 @@ export const broadcastEditorEvents = (editor, sectionEditor) => {
 };
 
 export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEditMode, documentMode }) => {
+  if (isHeadless(editor)) return;
+
   editor.converter.headerEditors.forEach((item) => {
     item.editor.setEditable(isEditMode, false);
     item.editor.view.dom.setAttribute('aria-readonly', !isEditMode);

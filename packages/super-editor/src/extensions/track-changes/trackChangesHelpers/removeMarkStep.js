@@ -65,6 +65,7 @@ export const removeMarkStep = ({ state, step, newTr, doc, user, date }) => {
           id: uuidv4(),
           author: user.name,
           authorEmail: user.email,
+          authorImage: user.image,
           date,
           before,
           after,

@@ -1,6 +1,6 @@
 import { ref, shallowRef } from 'vue';
 import { useField } from './use-field';
-import { documentTypes } from '@harbour-enterprises/common';
+import { documentTypes } from '@superdoc/common';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 
 export default function useDocument(params, superdocConfig) {

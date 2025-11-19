@@ -1,4 +1,4 @@
-import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
+import { DOCX, PDF, HTML } from '@superdoc/common';
 
 /**
  * @typedef {Object} UploadWrapper

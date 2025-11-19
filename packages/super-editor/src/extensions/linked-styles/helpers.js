@@ -2,8 +2,9 @@
 import { CustomSelectionPluginKey } from '../custom-selection/custom-selection.js';
 import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 import { findParentNode } from '@helpers/index.js';
-import { kebabCase } from '@harbour-enterprises/common';
+import { kebabCase } from '@superdoc/common';
 import { getUnderlineCssString } from './index.js';
+import { twipsToLines, twipsToPixels, halfPointToPixels } from '@converter/helpers.js';
 
 /**
  * Get the (parsed) linked style from the styles.xml
@@ -29,13 +30,20 @@ export const getLinkedStyle = (styleId, styles = []) => {
  * @private
  */
 export const getSpacingStyle = (spacing) => {
-  const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
+  const { lineSpaceBefore, lineSpaceAfter, line, lineRule, beforeAutoSpacing, afterAutoSpacing } = spacing;
   const lineHeightResult = getLineHeightValueString(line, '', lineRule, true);
   const lineHeightStyles = typeof lineHeightResult === 'object' && lineHeightResult !== null ? lineHeightResult : {};
 
+  const result = {};
+  if (!beforeAutoSpacing) {
+    result['margin-top'] = lineSpaceBefore + 'px';
+  }
+  if (!afterAutoSpacing) {
+    result['margin-bottom'] = lineSpaceAfter + 'px';
+  }
+
   return {
-    'margin-top': lineSpaceBefore + 'px',
-    'margin-bottom': lineSpaceAfter + 'px',
+    ...result,
     ...lineHeightStyles,
   };
 };
@@ -44,14 +52,47 @@ export const getSpacingStyle = (spacing) => {
  * Convert spacing object to a CSS style string
  * @category Helper
  * @param {Object} spacing - The spacing object
+ * @param {Array} marks - The marks array for font size reference
  * @returns {string} The CSS style string
  * @private
  */
-export const getSpacingStyleString = (spacing) => {
-  const { lineSpaceBefore, lineSpaceAfter, line } = spacing;
+export const getSpacingStyleString = (spacing, marks, isListItem) => {
+  let { before, after, line, lineRule, beforeAutospacing, afterAutospacing } = spacing;
+  line = twipsToLines(line);
+  // Prevent values less than 1 to avoid squashed text
+  if (line != null && line < 1) {
+    line = 1;
+  }
+  if (lineRule === 'exact' && line) {
+    line = String(line);
+  }
+
+  const textStyleMark = marks?.find((mark) => mark.type === 'textStyle');
+  const fontSize = textStyleMark?.attrs?.fontSize;
+
+  before = twipsToPixels(before);
+  if (beforeAutospacing) {
+    if (fontSize) {
+      before += halfPointToPixels(parseInt(fontSize) * 0.5);
+    }
+    if (isListItem) {
+      before = 0; // Lists do not apply before autospacing
+    }
+  }
+
+  after = twipsToPixels(after);
+  if (afterAutospacing) {
+    if (fontSize) {
+      after += halfPointToPixels(parseInt(fontSize) * 0.5);
+    }
+    if (isListItem) {
+      after = 0; // Lists do not apply after autospacing
+    }
+  }
+
   return `
-    ${lineSpaceBefore ? `margin-top: ${lineSpaceBefore}px;` : ''}
-    ${lineSpaceAfter ? `margin-bottom: ${lineSpaceAfter}px;` : ''}
+    ${before ? `margin-top: ${before}px;` : ''}
+    ${after ? `margin-bottom: ${after}px;` : ''}
     ${line ? getLineHeightValueString(line, '') : ''}
   `.trim();
 };

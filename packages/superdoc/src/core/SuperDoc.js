@@ -4,12 +4,12 @@ import { EventEmitter } from 'eventemitter3';
 import { v4 as uuidv4 } from 'uuid';
 import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 
-import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
+import { DOCX, PDF, HTML } from '@superdoc/common';
 import { SuperToolbar, createZip } from '@harbour-enterprises/super-editor';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { createSuperdocVueApp } from './create-app.js';
-import { shuffleArray } from '@harbour-enterprises/common/collaboration/awareness.js';
-import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
+import { shuffleArray } from '@superdoc/common/collaboration/awareness';
+import { Telemetry } from '@superdoc/common/Telemetry';
 import { createDownload, cleanName } from './helpers/export.js';
 import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative } from './collaboration/helpers.js';
 import { normalizeDocumentEntry } from './helpers/file.js';

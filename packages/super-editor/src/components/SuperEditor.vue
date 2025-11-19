@@ -1,6 +1,6 @@
 <script setup>
-import 'tippy.js/dist/tippy.css';
 import { NSkeleton, useMessage } from 'naive-ui';
+import 'tippy.js/dist/tippy.css';
 import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw } from 'vue';
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
@@ -11,9 +11,9 @@ import Ruler from './rulers/Ruler.vue';
 import GenericPopover from './popovers/GenericPopover.vue';
 import LinkInput from './toolbar/LinkInput.vue';
 import { checkNodeSpecificClicks } from './cursor-helpers.js';
-import { getFileObject } from '@harbour-enterprises/common';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
-
+import { getFileObject } from '@superdoc/common';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
+import { isHeadless } from '@/utils/headless-helpers.js';
 const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -174,6 +174,7 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
   });
 
   editor.value.on('paginationUpdate', () => {
+    if (isHeadless(editor.value)) return;
     adjustPaginationBreaks(editorElem, editor);
   });
 

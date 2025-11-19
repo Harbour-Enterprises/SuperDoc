@@ -42,6 +42,19 @@ export const Collaboration = Extension.create({
 
     return [syncPlugin];
   },
+
+  addCommands() {
+    return {
+      addImageToCollaboration:
+        ({ mediaPath, fileData }) =>
+        () => {
+          if (!this.options.ydoc || !mediaPath || !fileData) return false;
+          const mediaMap = this.options.ydoc.getMap('media');
+          mediaMap.set(mediaPath, fileData);
+          return true;
+        },
+    };
+  },
 });
 
 export const createSyncPlugin = (ydoc, editor) => {

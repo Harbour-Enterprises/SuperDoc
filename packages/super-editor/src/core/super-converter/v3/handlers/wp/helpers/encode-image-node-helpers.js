@@ -4,6 +4,7 @@ import { extractStrokeWidth, extractStrokeColor, extractFillColor } from './vect
 
 const DRAWING_XML_TAG = 'w:drawing';
 const SHAPE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
+const GROUP_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
 
 /**
  * Encodes image xml into Editor node
@@ -147,13 +148,22 @@ export function handleImageNode(node, params, isAnchor) {
   const graphicData = graphic?.elements.find((el) => el.name === 'a:graphicData');
   const { uri } = graphicData?.attributes || {};
 
-  if (!!uri && uri === SHAPE_URI) {
+  if (uri === SHAPE_URI) {
     const shapeMarginOffset = {
       left: positionHValue,
       horizontal: positionHValue,
       top: positionVValue,
     };
     return handleShapeDrawing(params, node, graphicData, size, padding, shapeMarginOffset);
+  }
+
+  if (uri === GROUP_URI) {
+    const shapeMarginOffset = {
+      left: positionHValue,
+      horizontal: positionHValue,
+      top: positionVValue,
+    };
+    return handleShapeGroup(params, node, graphicData, size, padding, shapeMarginOffset);
   }
 
   const picture = graphicData?.elements.find((el) => el.name === 'pic:pic');
@@ -279,6 +289,158 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
 };
 
 /**
+ * Handles a shape group (wpg:wgp) within a WordprocessingML graphic node.
+ *
+ * @param {{ nodes: Array }} params - Translator params including the surrounding drawing node.
+ * @param {Object} node - The `wp:drawing` or related shape container node.
+ * @param {Object} graphicData - The `a:graphicData` node containing the group elements.
+ * @param {{ width?: number, height?: number }} size - Group bounding box in pixels.
+ * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Distance attributes converted to pixels.
+ * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Group offsets relative to its anchor.
+ * @returns {Object|null} A shapeGroup node representing the group, or null when no content exists.
+ */
+const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset) => {
+  const wgp = graphicData.elements.find((el) => el.name === 'wpg:wgp');
+  if (!wgp) {
+    return buildShapePlaceholder(node, size, padding, marginOffset, 'group');
+  }
+
+  // Extract group properties
+  const grpSpPr = wgp.elements.find((el) => el.name === 'wpg:grpSpPr');
+  const xfrm = grpSpPr?.elements?.find((el) => el.name === 'a:xfrm');
+
+  // Get group transform data
+  const groupTransform = {};
+  if (xfrm) {
+    const off = xfrm.elements?.find((el) => el.name === 'a:off');
+    const ext = xfrm.elements?.find((el) => el.name === 'a:ext');
+    const chOff = xfrm.elements?.find((el) => el.name === 'a:chOff');
+    const chExt = xfrm.elements?.find((el) => el.name === 'a:chExt');
+
+    if (off) {
+      groupTransform.x = emuToPixels(off.attributes?.['x'] || 0);
+      groupTransform.y = emuToPixels(off.attributes?.['y'] || 0);
+    }
+    if (ext) {
+      groupTransform.width = emuToPixels(ext.attributes?.['cx'] || 0);
+      groupTransform.height = emuToPixels(ext.attributes?.['cy'] || 0);
+    }
+    if (chOff) {
+      groupTransform.childX = emuToPixels(chOff.attributes?.['x'] || 0);
+      groupTransform.childY = emuToPixels(chOff.attributes?.['y'] || 0);
+      // Store raw EMU values for coordinate transformation
+      groupTransform.childOriginXEmu = parseFloat(chOff.attributes?.['x'] || 0);
+      groupTransform.childOriginYEmu = parseFloat(chOff.attributes?.['y'] || 0);
+    }
+    if (chExt) {
+      groupTransform.childWidth = emuToPixels(chExt.attributes?.['cx'] || 0);
+      groupTransform.childHeight = emuToPixels(chExt.attributes?.['cy'] || 0);
+    }
+  }
+
+  // Extract all child shapes
+  const childShapes = wgp.elements.filter((el) => el.name === 'wps:wsp');
+  const shapes = childShapes
+    .map((wsp) => {
+      const spPr = wsp.elements?.find((el) => el.name === 'wps:spPr');
+      if (!spPr) return null;
+
+      // Extract shape kind
+      const prstGeom = spPr.elements?.find((el) => el.name === 'a:prstGeom');
+      const shapeKind = prstGeom?.attributes?.['prst'];
+
+      // Extract size and transformations
+      const shapeXfrm = spPr.elements?.find((el) => el.name === 'a:xfrm');
+      const shapeOff = shapeXfrm?.elements?.find((el) => el.name === 'a:off');
+      const shapeExt = shapeXfrm?.elements?.find((el) => el.name === 'a:ext');
+
+      // Get raw child coordinates in EMU
+      const rawX = shapeOff?.attributes?.['x'] ? parseFloat(shapeOff.attributes['x']) : 0;
+      const rawY = shapeOff?.attributes?.['y'] ? parseFloat(shapeOff.attributes['y']) : 0;
+      const rawWidth = shapeExt?.attributes?.['cx'] ? parseFloat(shapeExt.attributes['cx']) : 914400;
+      const rawHeight = shapeExt?.attributes?.['cy'] ? parseFloat(shapeExt.attributes['cy']) : 914400;
+
+      // Transform from child coordinate space to parent space if group transform exists
+      let x, y, width, height;
+      if (groupTransform.childWidth && groupTransform.childHeight) {
+        // Calculate scale factors
+        const scaleX = groupTransform.width / groupTransform.childWidth;
+        const scaleY = groupTransform.height / groupTransform.childHeight;
+
+        // Get child origin in EMU (default to 0 if not set)
+        const childOriginX = groupTransform.childOriginXEmu || 0;
+        const childOriginY = groupTransform.childOriginYEmu || 0;
+
+        // Transform to parent space: ((childPos - childOrigin) * scale) + groupPos
+        x = groupTransform.x + emuToPixels((rawX - childOriginX) * scaleX);
+        y = groupTransform.y + emuToPixels((rawY - childOriginY) * scaleY);
+        width = emuToPixels(rawWidth * scaleX);
+        height = emuToPixels(rawHeight * scaleY);
+      } else {
+        // Fallback: no transformation
+        x = emuToPixels(rawX);
+        y = emuToPixels(rawY);
+        width = emuToPixels(rawWidth);
+        height = emuToPixels(rawHeight);
+      }
+      const rotation = shapeXfrm?.attributes?.['rot'] ? rotToDegrees(shapeXfrm.attributes['rot']) : 0;
+      const flipH = shapeXfrm?.attributes?.['flipH'] === '1';
+      const flipV = shapeXfrm?.attributes?.['flipV'] === '1';
+
+      // Extract colors
+      const style = wsp.elements?.find((el) => el.name === 'wps:style');
+      const fillColor = extractFillColor(spPr, style);
+      const strokeColor = extractStrokeColor(spPr, style);
+      const strokeWidth = extractStrokeWidth(spPr);
+
+      // Get shape ID and name
+      const cNvPr = wsp.elements?.find((el) => el.name === 'wps:cNvPr');
+      const shapeId = cNvPr?.attributes?.['id'];
+      const shapeName = cNvPr?.attributes?.['name'];
+
+      return {
+        shapeType: 'vectorShape',
+        attrs: {
+          kind: shapeKind,
+          x,
+          y,
+          width,
+          height,
+          rotation,
+          flipH,
+          flipV,
+          fillColor,
+          strokeColor,
+          strokeWidth,
+          shapeId,
+          shapeName,
+        },
+      };
+    })
+    .filter(Boolean);
+
+  const schemaAttrs = {};
+  const drawingNode = params.nodes?.[0];
+  if (drawingNode?.name === DRAWING_XML_TAG) {
+    schemaAttrs.drawingContent = drawingNode;
+  }
+
+  const result = {
+    type: 'shapeGroup',
+    attrs: {
+      ...schemaAttrs,
+      groupTransform,
+      shapes,
+      size,
+      padding,
+      marginOffset,
+    },
+  };
+
+  return result;
+};
+
+/**
  * Translates a rectangle shape (`a:prstGeom` with `prst="rect"`) into a contentBlock node.
  *
  * @param {Object} params - Parameters object containing the current nodes.
@@ -393,11 +555,10 @@ const buildShapePlaceholder = (node, size, padding, marginOffset, shapeType) => 
  * Parses shape geometry, transformations, and styling information.
  * @param {Object} options - Options
  * @param {Object} options.params - Translator params
- * @param {Object} options.node - The node
  * @param {Object} options.graphicData - The graphicData node
  * @returns {Object|null} A vectorShape node with extracted attributes
  */
-export function getVectorShape({ params, node, graphicData }) {
+export function getVectorShape({ params, graphicData }) {
   const schemaAttrs = {};
 
   const drawingNode = params.nodes?.[0];

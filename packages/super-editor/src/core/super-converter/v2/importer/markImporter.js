@@ -1,6 +1,8 @@
 import { SuperConverter } from '../../SuperConverter.js';
 import { TrackFormatMarkName } from '@extensions/track-changes/constants.js';
 import { getHexColorFromDocxSystem, isValidHexColor, twipsToInches, twipsToLines, twipsToPt } from '../../helpers.js';
+import { translator as wRPrTranslator } from '../../v3/handlers/w/rpr/index.js';
+import { encodeMarksFromRPr } from '@converter/styles.js';
 
 /**
  *
@@ -64,7 +66,7 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
       const { attributes = {} } = element;
       const newMark = { type: m.type };
 
-      const exceptionMarks = ['w:b', 'w:caps'];
+      const exceptionMarks = ['w:b', 'w:caps', 'w:strike', 'w:dstrike'];
       if ((attributes['w:val'] === '0' || attributes['w:val'] === 'none') && !exceptionMarks.includes(m.name)) {
         return;
       }
@@ -107,6 +109,28 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
     });
   });
   return createImportMarks(marks);
+}
+
+export function handleStyleChangeMarksV2(rPrChange, currentMarks, params) {
+  if (!rPrChange) {
+    return [];
+  }
+
+  const { attributes } = rPrChange;
+  const mappedAttributes = {
+    id: attributes['w:id'],
+    date: attributes['w:date'],
+    author: attributes['w:author'],
+    authorEmail: attributes['w:authorEmail'],
+  };
+  let submarks = [];
+  const rPr = rPrChange.elements?.find((el) => el.name === 'w:rPr');
+  if (rPr) {
+    const runProperties = wRPrTranslator.encode({ ...params, nodes: [rPr] });
+    submarks = encodeMarksFromRPr(runProperties, params?.docx);
+  }
+
+  return [{ type: TrackFormatMarkName, attrs: { ...mappedAttributes, before: submarks, after: [...currentMarks] } }];
 }
 
 /**
@@ -193,8 +217,8 @@ export function getMarkValue(markType, attributes, docx) {
 }
 
 export function getFontFamilyValue(attributes, docx) {
-  const ascii = attributes['w:ascii'];
-  const themeAscii = attributes['w:asciiTheme'];
+  const ascii = attributes['w:ascii'] ?? attributes['ascii'];
+  const themeAscii = attributes['w:asciiTheme'] ?? attributes['asciiTheme'];
 
   let resolved = ascii;
 
@@ -205,8 +229,9 @@ export function getFontFamilyValue(attributes, docx) {
       const { elements } = topElements[0] || {};
       const themeElements = elements?.find((el) => el.name === 'a:themeElements');
       const fontScheme = themeElements?.elements?.find((el) => el.name === 'a:fontScheme');
-      const majorFont = fontScheme?.elements?.find((el) => el.name === 'a:majorFont');
-      const latin = majorFont?.elements?.find((el) => el.name === 'a:latin');
+      const prefix = themeAscii.startsWith('minor') ? 'minor' : 'major';
+      const font = fontScheme?.elements?.find((el) => el.name === `a:${prefix}Font`);
+      const latin = font?.elements?.find((el) => el.name === 'a:latin');
       resolved = latin?.attributes?.typeface || resolved;
     }
   }
@@ -248,5 +273,6 @@ export function getStrikeValue(attributes) {
   if (raw === undefined || raw === null) return '1'; // presence implies on
   const value = String(raw).trim().toLowerCase();
   if (value === '1' || value === 'true' || value === 'on') return '1';
-  return null;
+  if (value === '0' || value === 'false' || value === 'off') return '0';
+  return '1'; // Default to enabled for any other value
 }

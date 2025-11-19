@@ -7,6 +7,7 @@
 export const updateYdocDocxData = async (editor, ydoc) => {
   ydoc = ydoc || editor.options.ydoc;
   if (!ydoc) return;
+  if (!editor || editor.isDestroyed) return;
 
   const metaMap = ydoc.getMap('meta');
   const docxValue = metaMap.get('docx');

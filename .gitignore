@@ -1,6 +1,5 @@
 logs
 *.log
-docs
 .cache
 .DS_Store
 .temp
@@ -48,3 +47,18 @@ coverage
 coverage/
 **/coverage
 **/coverage/
+
+# TypeScript generated declaration files in source (build artifacts)
+**/src/**/*.d.ts
+**/src/**/*.d.ts.map
+# But allow hand-written .d.ts files within packages
+!packages/**/src/*.d.ts
+
+# TypeScript build info files
+*.tsbuildinfo
+
+# Planning and progress tracking documents
+**/plan/progress.md
+
+AGENTS.md
+codex.config.json

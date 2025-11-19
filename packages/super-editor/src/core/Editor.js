@@ -40,7 +40,8 @@ import { unflattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { SuperValidator } from '@core/super-validator/index.js';
 import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js';
 import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
-
+import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
+import { isHeadless } from '../utils/headless-helpers.js';
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -331,7 +332,14 @@ export class Editor extends EventEmitter {
         options.element.classList.add('sd-super-editor-html');
       }
     }
-    options.element = options.isHeadless ? null : options.element || document.createElement('div');
+
+    if (options.isHeadless) {
+      options.element = null;
+      return;
+    }
+
+    options.element = options.element || document.createElement('div');
+    applyStyleIsolationClass(options.element);
   }
 
   /**
@@ -393,7 +401,7 @@ export class Editor extends EventEmitter {
       this.migrateListsToV2();
     }
 
-    this.setDocumentMode(this.options.documentMode);
+    this.setDocumentMode(this.options.documentMode, 'init');
 
     // Init pagination only if we are not in collaborative mode. Otherwise
     // it will be in itialized via this.#onCollaborationReady
@@ -590,8 +598,9 @@ export class Editor extends EventEmitter {
   /**
    * Set the document mode
    * @param {string} documentMode - The document mode ('editing', 'viewing', 'suggesting')
+   * @param {string} caller - Calling context
    */
-  setDocumentMode(documentMode) {
+  setDocumentMode(documentMode, caller) {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
 
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
@@ -606,18 +615,18 @@ export class Editor extends EventEmitter {
       this.commands.toggleTrackChangesShowOriginal();
       this.setEditable(false, false);
       this.setOptions({ documentMode: 'viewing' });
-      toggleHeaderFooterEditMode({
-        editor: this,
-        focusedSectionEditor: null,
-        isEditMode: false,
-        documentMode: cleanedMode,
-      });
+      if (caller !== 'init')
+        toggleHeaderFooterEditMode({
+          editor: this,
+          focusedSectionEditor: null,
+          isEditMode: false,
+          documentMode: cleanedMode,
+        });
       if (pm) pm.classList.add('view-mode');
     }
 
     // Suggesting: Editable, tracked changes plugin enabled, comments
     else if (cleanedMode === 'suggesting') {
-      this.#registerPluginByNameIfNotExists('TrackChangesBase');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.enableTrackChanges();
       this.setOptions({ documentMode: 'suggesting' });
@@ -627,17 +636,17 @@ export class Editor extends EventEmitter {
 
     // Editing: Editable, tracked changes plguin disabled, comments
     else if (cleanedMode === 'editing') {
-      this.#registerPluginByNameIfNotExists('TrackChangesBase');
       this.commands.disableTrackChangesShowOriginal();
       this.commands.disableTrackChanges();
       this.setEditable(true, false);
       this.setOptions({ documentMode: 'editing' });
-      toggleHeaderFooterEditMode({
-        editor: this,
-        focusedSectionEditor: null,
-        isEditMode: false,
-        documentMode: cleanedMode,
-      });
+      if (caller !== 'init')
+        toggleHeaderFooterEditMode({
+          editor: this,
+          focusedSectionEditor: null,
+          isEditMode: false,
+          documentMode: cleanedMode,
+        });
       if (pm) pm.classList.remove('view-mode');
     }
   }
@@ -735,18 +744,6 @@ export class Editor extends EventEmitter {
       this.#initPagination();
       this.#initComments();
     }, 50);
-  }
-
-  /**
-   * Register a plugin by name if it doesn't already exist
-   * @param {string} name - Plugin name
-   * @returns {string|void}
-   */
-  #registerPluginByNameIfNotExists(name) {
-    const plugin = this.extensionService?.plugins.find((p) => p.key.startsWith(name));
-    const hasPlugin = this.state?.plugins?.find((p) => p.key.startsWith(name));
-    if (plugin && !hasPlugin) this.registerPlugin(plugin);
-    return plugin?.key;
   }
 
   /**
@@ -1054,10 +1051,10 @@ export class Editor extends EventEmitter {
 
           // Check for markdown BEFORE html (since markdown gets converted to HTML)
           if (this.options.markdown) {
-            doc = createDocFromMarkdown(this.options.markdown, this.schema, { isImport: true });
+            doc = createDocFromMarkdown(this.options.markdown, this, { isImport: true });
           }
           // If we have a new doc, and have html data, we initialize from html
-          else if (this.options.html) doc = createDocFromHTML(this.options.html, this.schema, { isImport: true });
+          else if (this.options.html) doc = createDocFromHTML(this.options.html, this, { isImport: true });
           else if (this.options.jsonOverride) doc = this.schema.nodeFromJSON(this.options.jsonOverride);
 
           if (fragment) doc = yXmlFragmentToProseMirrorRootNode(fragment, this.schema);
@@ -1067,7 +1064,7 @@ export class Editor extends EventEmitter {
       // If we are in HTML mode, we initialize from either content or html (or blank)
       else if (mode === 'text' || mode === 'html') {
         if (loadFromSchema) doc = this.schema.nodeFromJSON(content);
-        else if (content) doc = createDocFromHTML(content, this.schema);
+        else if (content) doc = createDocFromHTML(content, this);
         else doc = this.schema.topNodeType.createAndFill();
       }
     } catch (err) {
@@ -1101,19 +1098,22 @@ export class Editor extends EventEmitter {
         if (this.options.documentMode !== 'editing') return;
 
         // Deactivates header/footer editing mode when double-click on main editor
-        const isHeader = hasSomeParentWithClass(event.target, 'pagination-section-header');
-        const isFooter = hasSomeParentWithClass(event.target, 'pagination-section-footer');
-        if (isHeader || isFooter) {
-          const eventClone = new event.constructor(event.type);
-          event.target.dispatchEvent(eventClone);
+        // Skip pagination-related double-click handling in headless mode
+        if (!isHeadless(this)) {
+          const isHeader = hasSomeParentWithClass(event.target, 'pagination-section-header');
+          const isFooter = hasSomeParentWithClass(event.target, 'pagination-section-footer');
+          if (isHeader || isFooter) {
+            const eventClone = new event.constructor(event.type);
+            event.target.dispatchEvent(eventClone);
 
-          // Imitate default double click behavior - word selection
-          if (this.options.isHeaderOrFooter && this.options.editable) setWordSelection(view, pos);
-          return;
+            // Imitate default double click behavior - word selection
+            if (this.options.isHeaderOrFooter && this.options.editable) setWordSelection(view, pos);
+            return;
+          }
         }
         event.stopPropagation();
 
-        if (!this.options.editable) {
+        if (!this.options.editable && !isHeadless(this)) {
           // ToDo don't need now but consider to update pagination when recalculate header/footer height
           // this.storage.pagination.sectionData = await initPaginationData(this);
           //
@@ -1316,13 +1316,16 @@ export class Editor extends EventEmitter {
       }, 150);
     };
 
+    // Make sure we are in browser when calling browser APIs
     if ('orientation' in screen && 'addEventListener' in screen.orientation) {
       screen.orientation.addEventListener('change', handleResize);
-    } else {
+    } else if (typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
       window.matchMedia('(orientation: portrait)').addEventListener('change', handleResize);
     }
 
-    window.addEventListener('resize', () => handleResize);
+    if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('resize', () => handleResize);
+    }
   }
 
   /**
@@ -1594,6 +1597,42 @@ export class Editor extends EventEmitter {
   }
 
   /**
+   * Get the editor content as Markdown
+   * @returns {Promise<string>} Editor content as Markdown
+   */
+  async getMarkdown() {
+    // Lazy-load markdown libraries to avoid requiring 'document' at import time
+    // These libraries (specifically rehype) execute code that accesses document.createElement()
+    // during module initialization, which breaks Node.js compatibility
+    const [
+      { unified },
+      { default: rehypeParse },
+      { default: rehypeRemark },
+      { default: remarkStringify },
+      { default: remarkGfm },
+    ] = await Promise.all([
+      import('unified'),
+      import('rehype-parse'),
+      import('rehype-remark'),
+      import('remark-stringify'),
+      import('remark-gfm'),
+    ]);
+
+    const html = this.getHTML();
+    const file = unified()
+      .use(rehypeParse, { fragment: true })
+      .use(rehypeRemark)
+      .use(remarkGfm)
+      .use(remarkStringify, {
+        bullet: '-',
+        fences: true,
+      })
+      .processSync(html);
+
+    return String(file);
+  }
+
+  /**
    * Get the document version from the converter
    * @returns {string|null} The SuperDoc version stored in the document
    */
@@ -1637,7 +1676,7 @@ export class Editor extends EventEmitter {
       hasMadeUpdate = true;
     }
 
-    if (hasMadeUpdate) {
+    if (hasMadeUpdate && !isHeadless(this)) {
       const newTr = this.view.state.tr;
       newTr.setMeta('forceUpdatePagination', true);
       this.view.dispatch(newTr);
@@ -2024,7 +2063,7 @@ export class Editor extends EventEmitter {
     if (!targetNode || !html) return;
     const start = targetNode.pos;
     const end = start + targetNode.node.nodeSize;
-    const htmlNode = createDocFromHTML(html, this.schema);
+    const htmlNode = createDocFromHTML(html, this);
     tr.replaceWith(start, end, htmlNode);
     dispatch(tr);
   }
