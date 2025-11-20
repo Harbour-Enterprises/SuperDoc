@@ -1,7 +1,12 @@
 // @ts-check
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ParagraphNodeView } from './ParagraphNodeView.js';
+import {
+  calculateResolvedParagraphProperties,
+  getResolvedParagraphProperties,
+} from '@extensions/paragraph/resolvedPropertiesCache.js';
 import { Attribute } from '@core/index.js';
+import { resolveParagraphProperties, encodeCSSFromPPr } from '@converter/styles.js';
 import { twipsToPixels } from '@converter/helpers.js';
 import { calculateTabStyle } from '../tab/helpers/tabDecorations.js';
 import { isList } from '@core/commands/list-helpers';
@@ -28,6 +33,10 @@ vi.mock('@converter/styles.js', () => ({
 
 vi.mock('@core/commands/list-helpers', () => ({
   isList: vi.fn(),
+}));
+
+vi.mock('@helpers/index.js', () => ({
+  findParentNodeClosestToPos: vi.fn().mockReturnValue(null),
 }));
 
 const createEditor = () => ({
@@ -212,5 +221,60 @@ describe('ParagraphNodeView', () => {
     const { nodeView } = mountNodeView();
     nodeView.destroy();
     expect(animationMocks.cancelAnimationFrame).toHaveBeenCalled();
+  });
+
+  it('caches resolved paragraph properties', () => {
+    const node = createNode();
+    const editor = createEditor();
+    resolveParagraphProperties.mockReturnValue({ cached: true, numberingProperties: {} });
+
+    const first = calculateResolvedParagraphProperties(editor, node, {});
+    const second = calculateResolvedParagraphProperties(editor, node, {});
+
+    expect(resolveParagraphProperties).toHaveBeenCalledTimes(1);
+    expect(first).toBe(second);
+    expect(getResolvedParagraphProperties(node)).toBe(first);
+  });
+
+  it('applies resolved paragraph attributes and CSS to the DOM', () => {
+    isList.mockReturnValue(true);
+    const resolvedProps = {
+      numberingProperties: { numId: 5, ilvl: 2 },
+      framePr: { dropCap: 'drop' },
+      styleId: 'Heading1',
+    };
+    resolveParagraphProperties.mockReturnValue(resolvedProps);
+    encodeCSSFromPPr.mockReturnValue({ color: 'blue', marginTop: '10px' });
+
+    const { nodeView } = mountNodeView({
+      attrs: {
+        paragraphProperties: resolvedProps,
+        listRendering: { suffix: 'tab', justification: 'left', markerText: '1.' },
+      },
+    });
+
+    expect(encodeCSSFromPPr).toHaveBeenCalledWith(resolvedProps);
+    expect(nodeView.dom.getAttribute('data-num-id')).toBe('5');
+    expect(nodeView.dom.getAttribute('data-level')).toBe('2');
+    expect(nodeView.dom.classList.contains('sd-editor-dropcap')).toBe(true);
+    expect(nodeView.dom.getAttribute('styleid')).toBe('Heading1');
+    expect(nodeView.dom.style.color).toBe('blue');
+    expect(nodeView.dom.style.marginTop).toBe('10px');
+  });
+
+  it('removes list-specific attributes when node is no longer a list', () => {
+    isList.mockReturnValueOnce(true).mockReturnValue(false);
+    resolveParagraphProperties
+      .mockReturnValueOnce({ numberingProperties: { numId: 9, ilvl: 1 } })
+      .mockReturnValueOnce({});
+
+    const { nodeView } = mountNodeView();
+    const nextNode = createNode({ attrs: { paragraphProperties: {}, listRendering: {} } });
+
+    nodeView.update(nextNode, []);
+
+    expect(nodeView.dom.getAttribute('data-num-id')).toBeNull();
+    expect(nodeView.dom.getAttribute('data-level')).toBeNull();
+    expect(nodeView.dom.classList.contains('sd-editor-dropcap')).toBe(false);
   });
 });
