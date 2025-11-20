@@ -25,6 +25,8 @@ import {
 } from './v3/handlers/w/commentRange/index.js';
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
+import { translator as sdAutoPageNumberTranslator } from '@converter/v3/handlers/sd/autoPageNumber';
+import { translator as sdTotalPageNumberTranslator } from '@converter/v3/handlers/sd/totalPageNumber';
 import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
 import { translateVectorShape, translateShapeGroup } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
 import { translator as wTextTranslator } from '@converter/v3/handlers/w/t';
@@ -235,8 +237,8 @@ export function exportSchemaToJson(params) {
     structuredContentBlock: wSdtNodeTranslator,
     documentPartObject: wSdtNodeTranslator,
     documentSection: wSdtNodeTranslator,
-    'page-number': translatePageNumberNode,
-    'total-page-number': translateTotalPageNumberNode,
+    'page-number': sdAutoPageNumberTranslator,
+    'total-page-number': sdTotalPageNumberTranslator,
     pageReference: sdPageReferenceTranslator,
     tableOfContents: sdTableOfContentsTranslator,
   };
@@ -879,82 +881,3 @@ export class DocxExporter {
     return tags;
   }
 }
-
-const translatePageNumberNode = (params) => {
-  const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
-  return getAutoPageJson('PAGE', outputMarks);
-};
-
-const translateTotalPageNumberNode = (params) => {
-  const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
-  return getAutoPageJson('NUMPAGES', outputMarks);
-};
-
-const getAutoPageJson = (type, outputMarks = []) => {
-  return [
-    {
-      name: 'w:r',
-      elements: [
-        {
-          name: 'w:rPr',
-          elements: outputMarks,
-        },
-        {
-          name: 'w:fldChar',
-          attributes: {
-            'w:fldCharType': 'begin',
-          },
-        },
-      ],
-    },
-    {
-      name: 'w:r',
-      elements: [
-        {
-          name: 'w:rPr',
-          elements: outputMarks,
-        },
-        {
-          name: 'w:instrText',
-          attributes: { 'xml:space': 'preserve' },
-          elements: [
-            {
-              type: 'text',
-              text: ` ${type}`,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'w:r',
-      elements: [
-        {
-          name: 'w:rPr',
-          elements: outputMarks,
-        },
-        {
-          name: 'w:fldChar',
-          attributes: {
-            'w:fldCharType': 'separate',
-          },
-        },
-      ],
-    },
-    {
-      name: 'w:r',
-      elements: [
-        {
-          name: 'w:rPr',
-          elements: outputMarks,
-        },
-        {
-          name: 'w:fldChar',
-          attributes: {
-            'w:fldCharType': 'end',
-          },
-        },
-      ],
-    },
-  ];
-};
