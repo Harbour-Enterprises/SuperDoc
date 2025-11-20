@@ -22,6 +22,8 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import { isNegatedMark } from './format-negation.js';
 import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
 import { isList } from '@core/commands/list-helpers';
+import { calculateResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
+import { twipsToLines } from '@converter/helpers';
 
 /**
  * @typedef {function(CommandItem): void} CommandCallback
@@ -760,6 +762,14 @@ export class SuperToolbar extends EventEmitter {
 
     const marks = getActiveFormatting(this.activeEditor);
     const inTable = isInTable(this.activeEditor.state);
+    const paragraphParent = findParentNode((n) => n.type.name === 'paragraph')(selection);
+    const paragraphProps = paragraphParent
+      ? calculateResolvedParagraphProperties(
+          this.activeEditor,
+          paragraphParent.node,
+          state.doc.resolve(paragraphParent.pos),
+        )
+      : null;
 
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
@@ -783,11 +793,10 @@ export class SuperToolbar extends EventEmitter {
       // Linked Styles dropdown behaves a bit different from other buttons.
       // We need to disable it manually if there are no linked styles to show
       if (item.name.value === 'linkedStyles') {
-        const linkedStyleMark = marks.find((mark) => mark.name === 'styleId');
         if (this.activeEditor && !getQuickFormatList(this.activeEditor).length) {
           return item.deactivate();
         } else {
-          return item.activate({ linkedStyleMark });
+          return item.activate({ styleId: paragraphProps?.styleId || null });
         }
       }
 
@@ -808,16 +817,14 @@ export class SuperToolbar extends EventEmitter {
       }
 
       // Activate toolbar items based on linked styles (if there's no active mark to avoid overriding  it)
-      const styleIdMark = marks.find((mark) => mark.name === 'styleId');
-      if (!activeMark && !markNegated && styleIdMark?.attrs.styleId) {
+      if (!activeMark && !markNegated && paragraphParent && paragraphProps?.styleId) {
         const markToStyleMap = {
           fontSize: 'font-size',
           fontFamily: 'font-family',
           bold: 'bold',
-          textAlign: 'textAlign',
         };
         const linkedStyles = this.activeEditor.converter?.linkedStyles.find(
-          (style) => style.id === styleIdMark.attrs.styleId,
+          (style) => style.id === paragraphProps.styleId,
         );
         if (
           linkedStyles &&
@@ -832,10 +839,16 @@ export class SuperToolbar extends EventEmitter {
           item.activate(value);
         }
       }
+      if (item.name.value === 'textAlign' && paragraphProps?.justification) {
+        item.activate({ textAlign: paragraphProps.justification });
+      }
 
-      const spacingAttr = marks.find((mark) => mark.name === 'spacing');
-      if (item.name.value === 'lineHeight' && (activeMark?.attrs?.lineHeight || spacingAttr)) {
-        item.selectedValue.value = activeMark?.attrs?.lineHeight || spacingAttr.attrs?.spacing?.line || '';
+      if (item.name.value === 'lineHeight') {
+        if (paragraphProps?.spacing) {
+          item.selectedValue.value = twipsToLines(paragraphProps.spacing.line);
+        } else {
+          item.selectedValue.value = '';
+        }
       }
 
       if (item.name.value === 'tableActions') {
@@ -843,8 +856,7 @@ export class SuperToolbar extends EventEmitter {
       }
 
       // Activate list buttons when selections is inside list
-      const selection = this.activeEditor.state.selection;
-      const listParent = findParentNode(isList)(selection)?.node;
+      const listParent = isList(paragraphParent?.node) ? paragraphParent.node : null;
       if (listParent) {
         const numberingType = listParent.attrs.listRendering.numberingType;
         if (item.name.value === 'list' && numberingType === 'bullet') {
