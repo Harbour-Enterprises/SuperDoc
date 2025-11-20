@@ -1,96 +1,209 @@
 <script setup>
 import 'superdoc/style.css';
-import * as Y from 'yjs';
-import { WebsocketProvider } from 'y-websocket'
-import { onMounted, shallowRef } from 'vue';
+import { onMounted, onBeforeUnmount, shallowRef, ref } from 'vue';
 import { useRoute } from 'vue-router';
-import { Editor, getStarterExtensions, SuperToolbar } from 'superdoc/super-editor';
+import { SuperDoc } from 'superdoc';
+import { generateUser as generateUserFallback, USER_COLORS } from '../../shared/userGenerator.js';
 
 // Default document
 import sampleDocument from '/sample-document.docx?url';
 
 const route = useRoute();
-const editor = shallowRef(null);
+const superdoc = shallowRef(null);
+const connectedUsers = ref([]);
+const hoveredUser = ref(null);
+const currentUser = ref(null);
 
-const turnUrlToFile = (url) => {
-  const fileName = url.split('/').pop();
-  return fetch(url)
-    .then(response => response.blob())
-    .then(blob => new File([blob], fileName, { type: blob.type }));
+const generateUserInfo = async () => {
+  const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3050';
+  const apiUrl = wsUrl.replace('ws://', 'http://').replace('wss://', 'https://');
+  
+  try {
+    const response = await fetch(`${apiUrl}/user`);
+    return await response.json();
+  } catch (error) {
+    console.error('>>> Failed to get user from backend, using fallback:', error);
+    return generateUserFallback();
+  }
 };
 
-const USER_COLORS = ['#a11134', '#2a7e34', '#b29d11', '#2f4597', '#ab5b22'];
+const onAwarenessUpdate = (users) => {
+  console.log(">>> USERS", users);
+  
+  // Handle removed users
+  if (users.removed && users.removed.length > 0) {
+    users.removed.forEach(clientId => {
+      const index = connectedUsers.value.findIndex(user => user.clientId === clientId);
+      if (index !== -1) {
+        console.log("Removing user:", connectedUsers.value[index]);
+        connectedUsers.value.splice(index, 1);
+      }
+    });
+  }
+
+  // Handle added users
+  if (users.added && users.added.length > 0) {
+    users.added.forEach(clientId => {
+      const userState = users.states.find(user => user.clientId === clientId);
+      if (userState && userState.name && !connectedUsers.value.find(u => u.clientId === clientId)) {
+        console.log("Adding user:", userState);
+        connectedUsers.value.push(userState);
+      }
+    });
+  }
+
+  // Fallback: if no added/removed, update wholesale (initial load)
+  if ((!users.added || users.added.length === 0) && (!users.removed || users.removed.length === 0)) {
+    if (users.states) {
+      connectedUsers.value = users.states.filter(user => user && user.name);
+      console.log("Initial user load:", connectedUsers.value);
+    }
+  }
+};
 
 const init = async () => {
-  // Generate random user for collaboration
-  const userId = Math.random().toString(36).substring(2, 15);
-  const userName = `User-${userId.substring(0, 6)}`;
-
-  // Get documentId from route
   const documentId = route.params.documentId;
-
-  const fileObject = await turnUrlToFile(sampleDocument);
-  const [content, _, mediaFiles, fonts] = await Editor.loadXmlData(fileObject)
-
-  // Start a blank Y.Doc and provider
-  // This is all handled for you in SuperDoc, but with the lower-level Editor we have to create it manually
-  const ydoc = new Y.Doc();
   const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3050';
-  const provider = new WebsocketProvider(
-    `${wsUrl}/doc`,
-    documentId,
-    ydoc
-  );
+  const user = await generateUserInfo();
+  currentUser.value = user;
 
-  const user = {
-    name: userName,
-    color: `${USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)]}`,
-  };
-  provider.awareness.setLocalStateField('user', user);
-
-  // Create editor config
-  const config = {
-    // For collaboration, we need to pass in the Y.Doc and provider
-    ydoc,
-    collaborationProvider: provider,
-    user,
-
-    // Usual editor config below
-    element: document.getElementById('editor'),
-    extensions: getStarterExtensions(),
-    mode: 'docx',
+  superdoc.value = new SuperDoc({
+    selector: '#superdoc',
+    toolbar: '#superdoc-toolbar',
+    document: {
+      id: documentId,
+      type: 'docx',
+      isNewFile: false,
+    },
     pagination: true,
-    documentId,
-
-    content,
-    mediaFiles,
-    fonts,
-  };
-  editor.value = new Editor(config);
-
-  new SuperToolbar({
-    selector: '#toolbar',
-    editor: editor.value,
-    excludeItems: [
-      'documentMode',
-      'image'
-    ]
+    colors: USER_COLORS,
+    user,
+    modules: {
+      collaboration: {
+        url: `${wsUrl}/doc`,
+        token: 'token',
+      },
+    },
+    onAwarenessUpdate,
+    onReady: (event) => {
+      console.log('SuperDoc is ready', event);
+      const editor = event.superdoc.activeEditor;
+      console.log('Active editor:', editor);
+    },
+    onEditorCreate: (event) => {
+      console.log('Editor created:', event.editor);
+    },
+    onContentError: ({ error, documentId, file }) => {
+      console.error('Content loading error:', error);
+      console.log('Failed document:', documentId, file);
+    }
   });
 };
 
 onMounted(() => init());
+
+onBeforeUnmount(() => {
+  if (superdoc.value) {
+    superdoc.value.destroy();
+  }
+});
 </script>
 
 <template>
   <div class="example-container">
-    <div id="toolbar" class="my-custom-toolbar"></div>
-    <div class="editor-container">
-      <div id="editor" class="main-editor"></div>
+    <div class="user-presence">
+      <div class="current-user" v-if="currentUser">
+        Connected as: {{ currentUser.name }}
+      </div>
+      <div class="user-avatars">
+        <div 
+          v-for="user in connectedUsers" 
+          :key="user.name"
+          class="user-avatar"
+          :style="{ backgroundColor: user.color }"
+          @mouseover="() => { console.log('Hovering:', user.name); hoveredUser = user.name; }"
+          @mouseleave="() => { console.log('Left hover'); hoveredUser = null; }"
+        >
+          {{ user.name.split(' ').map(part => part.charAt(0)).join('').toUpperCase() }}
+          <div 
+            v-if="hoveredUser === user.name"
+            class="user-tooltip"
+          >
+            {{ user.name }}
+          </div>
+        </div>
+      </div>
     </div>
+    <div id="superdoc-toolbar"></div>
+    <div id="superdoc"></div>
   </div>
 </template>
 
 <style>
+.user-presence {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  background: #ffffff;
+}
+
+.current-user {
+  font-size: 14px;
+  color: #666;
+  font-weight: 500;
+}
+
+.user-avatars {
+  display: flex;
+  gap: 6px;
+  flex-direction: row-reverse;
+}
+
+.user-avatar {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.user-tooltip {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #333;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1000;
+  font-weight: normal;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.user-tooltip::after {
+  content: '';
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: transparent transparent #333 transparent;
+}
+
 .document-controls {
   display: flex;
   gap: 10px;
@@ -117,9 +230,17 @@ onMounted(() => init());
   transform: translateY(1px);
 }
 
+.my-custom-toolbar {
+  min-height: 60px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px 8px 0 0;
+  background: #ffffff;
+}
+
 .editor-container {
   border: 1px solid #ccc;
-  border-radius: 8px;
+  border-radius: 0 0 8px 8px;
+  border-top: none;
 }
 .fields > div {
   margin-bottom: 10px;

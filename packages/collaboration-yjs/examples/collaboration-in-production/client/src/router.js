@@ -1,7 +1,12 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import DocumentEditor from './DocumentEditor.vue';
+import Health from './Health.vue';
 
 const routes = [
+  {
+    path: '/',
+    redirect: '/random'
+  },
   {
     path: '/doc/:documentId',
     name: 'Document',
@@ -19,6 +24,11 @@ const routes = [
       const randomId = Math.random().toString(36).substring(2, 15);
       return `/doc/${randomId}`;
     }
+  },
+  {
+    path: '/health',
+    name: 'Health',
+    component: Health
   }
 ];
 

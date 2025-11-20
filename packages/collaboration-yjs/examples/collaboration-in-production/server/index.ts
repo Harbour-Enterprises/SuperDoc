@@ -9,6 +9,7 @@ import { CollaborationBuilder, LoadFn, AutoSaveFn } from '@superdoc-dev/superdoc
 import { encodeStateAsUpdate, Doc as YDoc } from 'yjs';
 
 import { saveDocument, loadDocument } from './storage.js';
+import { generateUser } from '../shared/userGenerator.js';
 
 const errorHandlers: Record<string, (error: Error, socket: any) => void> = {
   LoadError: (error: Error, socket: any) => {
@@ -61,6 +62,11 @@ const SuperDocCollaboration = new CollaborationBuilder()
 /** Health check endpoint */
 fastify.get('/health', async (request, reply) => {
   return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
+/** Generate user info endpoint */
+fastify.get('/user', async (request, reply) => {
+  return generateUser();
 });
 
 /** An example route for websocket collaboration connection */

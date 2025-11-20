@@ -43,6 +43,7 @@ h1 {
 }
 
 .example-container {
+  padding: 0 1em;
   display: flex;
   flex-direction: column;
   align-items: center;
