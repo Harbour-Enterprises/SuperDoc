@@ -1004,9 +1004,9 @@ export const makeDefaultItems = ({
         },
       },
     ],
-    onActivate: ({ linkedStyleMark }) => {
+    onActivate: ({ styleId }) => {
       const styles = getQuickFormatList(superToolbar.activeEditor);
-      const selectedStyle = styles?.find((style) => style.id === linkedStyleMark?.attrs?.styleId);
+      const selectedStyle = styles?.find((style) => style.id === styleId);
       // Normal linked style is default one
       linkedStyles.label.value =
         selectedStyle && selectedStyle.id !== 'Normal' ? selectedStyle.definition.attrs.name : toolbarTexts.formatText;
