@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { encodeMarksFromRPr, decodeRPrFromMarks, encodeCSSFromRPr } from './styles.js';
+import { encodeMarksFromRPr, decodeRPrFromMarks, encodeCSSFromRPr, encodeCSSFromPPr } from './styles.js';
 
 beforeAll(() => {
   vi.stubGlobal('SuperConverter', {
@@ -114,6 +114,76 @@ describe('encodeCSSFromRPr', () => {
   it('should encode font family using converter fallbacks', () => {
     const css = encodeCSSFromRPr({ fontFamily: { 'w:ascii': 'Arial' } }, {});
     expect(css['font-family']).toBe('Arial, sans-serif');
+  });
+});
+
+describe('encodeCSSFromPPr', () => {
+  it('converts spacing, indentation, and justification to CSS declarations', () => {
+    const css = encodeCSSFromPPr({
+      spacing: { before: 180, after: 120, line: 480, lineRule: 'auto' },
+      indent: { left: 720, right: 1440, firstLine: 360 },
+      justification: 'both',
+    });
+
+    expect(css).toMatchObject({
+      'margin-top': '12px',
+      'margin-bottom': '8px',
+      'line-height': '2',
+      'margin-left': '48px',
+      'margin-right': '96px',
+      'text-indent': '24px',
+      'text-align': 'justify',
+    });
+  });
+
+  it('forces drop caps to use single-line spacing regardless of provided spacing', () => {
+    const cssWithoutFrame = encodeCSSFromPPr({
+      spacing: { before: 0, after: 0, line: 720, lineRule: 'exact' },
+    });
+    const cssWithFrame = encodeCSSFromPPr({
+      spacing: { before: 0, after: 0, line: 720, lineRule: 'exact' },
+      framePr: { dropCap: 'drop' },
+    });
+
+    expect(cssWithoutFrame['line-height']).toBe('3');
+    expect(cssWithFrame['line-height']).toBe('1');
+  });
+
+  it('keeps autospacing margins unless suppressed for list items', () => {
+    const spacing = {
+      before: 120,
+      after: 120,
+      line: 240,
+      lineRule: 'auto',
+      beforeAutospacing: true,
+      afterAutospacing: true,
+    };
+
+    const css = encodeCSSFromPPr({ spacing });
+    expect(css['margin-top']).toBe('8px');
+    expect(css['margin-bottom']).toBe('8px');
+
+    const listCss = encodeCSSFromPPr({
+      spacing,
+      numberingProperties: { numId: 1, ilvl: 0 },
+    });
+    expect(listCss['margin-top']).toBeUndefined();
+    expect(listCss['margin-bottom']).toBeUndefined();
+  });
+
+  it('translates borders to CSS including padding for bottom space', () => {
+    const css = encodeCSSFromPPr({
+      borders: {
+        top: { val: 'none' },
+        bottom: { val: 'single', size: 8, color: 'FF0000', space: 16 },
+      },
+    });
+
+    expect(css['border-top']).toBe('none');
+    expect(css['border-bottom']).toContain('#FF0000');
+    expect(css['border-bottom']).toContain('solid');
+    expect(parseFloat(css['border-bottom'])).toBeCloseTo(1.333, 3);
+    expect(parseFloat(css['padding-bottom'])).toBeCloseTo(2.6666, 3);
   });
 });
 
