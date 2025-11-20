@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@superdoc-dev/ai": "^0.1.5",
-    "superdoc": "0.28.0"
+    "superdoc": "^0.28.0"
   },
   "devDependencies": {
     "vite": "^6.3.5"

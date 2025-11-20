@@ -1,5 +1,5 @@
 import { translateChildNodes } from '@converter/v2/exporter/helpers/translateChildNodes';
-import { convertSdtContentToRuns } from '@converter/exporter';
+import { convertSdtContentToRuns } from './convert-sdt-content-to-runs.js';
 
 /**
  * @param {Object} params - The parameters for translation.

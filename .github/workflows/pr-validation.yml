@@ -53,6 +53,9 @@ jobs:
       - name: Build SuperDoc
         run: npm run build
 
+      - name: Validate command types
+        run: node scripts/validate-command-types.mjs
+
       - name: Run unit tests
         run: npm test
 

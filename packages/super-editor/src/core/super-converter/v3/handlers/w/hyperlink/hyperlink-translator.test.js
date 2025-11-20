@@ -241,8 +241,8 @@ describe('w:hyperlink translator', () => {
 
       const result = translator.decode(params);
 
-      expect(result.attributes['r:id']).toBe('new-random-id');
-      expect(params.relationships[0].attributes.Id).toBe('new-random-id');
+      expect(result.attributes['r:id']).toBe('rIdnew-random-id');
+      expect(params.relationships[0].attributes.Id).toBe('rIdnew-random-id');
       expect(generateDocxRandomId).toHaveBeenCalled();
     });
 
