@@ -11,7 +11,7 @@ const pool = new Pool({
   ssl: true
 });
 
-export const loadFromPostgres = async (documentId: string): Promise<Uint8Array> => {
+export const loadFromPostgres = async (documentId: string): Promise<Uint8Array | null> => {
   const result = await pool.query(
     `SELECT state FROM documents WHERE document_id = $1`,
     [documentId]

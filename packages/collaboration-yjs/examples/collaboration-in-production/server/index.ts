@@ -9,7 +9,7 @@ import { CollaborationBuilder, LoadFn, AutoSaveFn } from '@superdoc-dev/superdoc
 import { encodeStateAsUpdate, Doc as YDoc } from 'yjs';
 
 import { saveDocument, loadDocument } from './storage.js';
-import { generateUser } from '../shared/userGenerator.js';
+import { generateUser } from './userGenerator.js';
 
 const errorHandlers: Record<string, (error: Error, socket: any) => void> = {
   LoadError: (error: Error, socket: any) => {
