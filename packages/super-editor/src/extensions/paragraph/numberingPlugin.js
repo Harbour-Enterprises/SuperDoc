@@ -3,6 +3,7 @@ import { NumberingManager } from './NumberingManager.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { generateOrderedListIndex } from '@helpers/orderedListUtils.js';
 import { docxNumberingHelpers } from '@core/super-converter/v2/importer/listImporter.js';
+import { calculateResolvedParagraphProperties } from './resolvedPropertiesCache.js';
 
 /**
  * Create a ProseMirror plugin that keeps `listRendering` data in sync with the
@@ -74,12 +75,13 @@ export function createNumberingPlugin(editor) {
       // Generate new list properties
       numberingManager.enableCache();
       newState.doc.descendants((node, pos) => {
-        if (node.type.name !== 'paragraph' || !node.attrs.numberingProperties) {
+        let resolvedProps = calculateResolvedParagraphProperties(editor, node, newState.doc.resolve(pos));
+        if (node.type.name !== 'paragraph' || !resolvedProps.numberingProperties) {
           return;
         }
 
         // Retrieving numbering definition from docx
-        const { numId, ilvl: level = 0 } = node.attrs.numberingProperties;
+        const { numId, ilvl: level = 0 } = resolvedProps.numberingProperties;
         const definitionDetails = ListHelpers.getListDefinitionDetails({ numId, level, editor });
 
         if (!definitionDetails || Object.keys(definitionDetails).length === 0) {
