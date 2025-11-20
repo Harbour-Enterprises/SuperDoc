@@ -1,5 +1,13 @@
 // @ts-check
-import { halfPointToPoints, ptToTwips, twipsToPt } from '@converter/helpers.js';
+import {
+  halfPointToPoints,
+  ptToTwips,
+  twipsToPt,
+  twipsToPixels,
+  twipsToLines,
+  eighthPointsToPixels,
+  linesToTwips,
+} from '@converter/helpers.js';
 import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 import { translator as w_rPrTranslator } from '@converter/v3/handlers/w/rpr';
 import { isValidHexColor, getHexColorFromDocxSystem } from '@converter/helpers';
@@ -454,6 +462,87 @@ export function encodeMarksFromRPr(runProperties, docx) {
   return marks;
 }
 
+export function encodeCSSFromPPr(paragraphProperties) {
+  if (!paragraphProperties || typeof paragraphProperties !== 'object') {
+    return {};
+  }
+
+  let css = {};
+  const { spacing, indent, borders, justification } = paragraphProperties;
+
+  if (spacing) {
+    const isDropCap = Boolean(paragraphProperties.framePr?.dropCap);
+    const spacingCopy = { ...spacing };
+    if (isDropCap) {
+      spacingCopy.line = linesToTwips(1.0);
+      spacingCopy.lineRule = 'auto';
+    }
+    const spacingStyle = getSpacingStyle(spacingCopy, Boolean(paragraphProperties.numberingProperties));
+    css = { ...css, ...spacingStyle };
+  }
+
+  if (indent && typeof indent === 'object') {
+    const hasIndentValue = Object.values(indent).some((value) => value != null && Number(value) !== 0);
+    if (hasIndentValue) {
+      const { left, right, firstLine, hanging } = indent;
+      if (left != null) {
+        css['margin-left'] = `${twipsToPixels(left)}px`;
+      }
+      if (right != null) {
+        css['margin-right'] = `${twipsToPixels(right)}px`;
+      }
+      if (firstLine != null && !hanging) {
+        css['text-indent'] = `${twipsToPixels(firstLine)}px`;
+      }
+      if (firstLine != null && hanging != null) {
+        css['text-indent'] = `${twipsToPixels(firstLine - hanging)}px`;
+      }
+      if (firstLine == null && hanging != null) {
+        css['text-indent'] = `${twipsToPixels(-hanging)}px`;
+      }
+    }
+  }
+
+  if (borders && typeof borders === 'object') {
+    const sideOrder = ['top', 'right', 'bottom', 'left'];
+    const valToCss = {
+      single: 'solid',
+      dashed: 'dashed',
+      dotted: 'dotted',
+      double: 'double',
+    };
+
+    sideOrder.forEach((side) => {
+      const b = borders[side];
+      if (!b) return;
+      if (['nil', 'none', undefined, null].includes(b.val)) {
+        css[`border-${side}`] = 'none';
+        return;
+      }
+
+      const width = b.size != null ? `${eighthPointsToPixels(b.size)}px` : '1px';
+      const cssStyle = valToCss[b.val] || 'solid';
+      const color = !b.color || b.color === 'auto' ? '#000000' : `#${b.color}`;
+
+      css[`border-${side}`] = `${width} ${cssStyle} ${color}`;
+
+      if (b.space != null && side === 'bottom') {
+        css[`padding-bottom`] = `${eighthPointsToPixels(b.space)}px`;
+      }
+    });
+  }
+
+  if (justification) {
+    if (justification === 'both') {
+      css['text-align'] = 'justify';
+    } else {
+      css['text-align'] = justification;
+    }
+  }
+
+  return css;
+}
+
 export function encodeCSSFromRPr(runProperties, docx) {
   if (!runProperties || typeof runProperties !== 'object') {
     return {};
@@ -787,3 +876,53 @@ function addTextDecorationEntries(targetSet, value) {
     .filter(Boolean)
     .forEach((entry) => targetSet.add(entry));
 }
+
+/**
+ * Convert spacing object to a CSS style string
+ * @category Helper
+ * @param {Object} spacing - The spacing object
+ * @returns {Object} The CSS styles
+ * @private
+ */
+export const getSpacingStyle = (spacing, isListItem) => {
+  let { before, after, line, lineRule, beforeAutospacing, afterAutospacing } = spacing;
+  line = twipsToLines(line);
+  // Prevent values less than 1 to avoid squashed text
+  if (line != null && line < 1) {
+    line = 1;
+  }
+  if (lineRule === 'exact' && line) {
+    line = String(line);
+  }
+
+  before = twipsToPixels(before);
+  if (beforeAutospacing) {
+    if (isListItem) {
+      before = 0; // Lists do not apply before autospacing
+    }
+  }
+
+  after = twipsToPixels(after);
+  if (afterAutospacing) {
+    if (isListItem) {
+      after = 0; // Lists do not apply after autospacing
+    }
+  }
+
+  const css = {};
+  if (before) {
+    css['margin-top'] = `${before}px`;
+  }
+  if (after) {
+    css['margin-bottom'] = `${after}px`;
+  }
+  if (line) {
+    if (lineRule !== 'atLeast' || line >= 1) {
+      // Prevent values less than 1 to avoid squashed text (unless using explicit units like pt)
+      line = Math.max(line, 1);
+      css['line-height'] = String(line);
+    }
+  }
+
+  return css;
+};
