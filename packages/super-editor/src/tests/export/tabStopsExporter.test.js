@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { translateParagraphNode } from '@converter/exporter.js';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 
 describe('Tab Stops Export Tests', () => {
   // Create a minimal editor mock that has the required extensions property
@@ -43,7 +43,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -91,7 +91,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -119,7 +119,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -154,7 +154,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -194,7 +194,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -231,7 +231,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });

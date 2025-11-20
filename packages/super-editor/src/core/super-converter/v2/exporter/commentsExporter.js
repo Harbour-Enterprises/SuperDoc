@@ -1,4 +1,4 @@
-import { translateParagraphNode } from '../../exporter.js';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { COMMENT_REF, COMMENTS_XML_DEFINITIONS } from '../../exporter-docx-defs.js';
 import { generateRandom32BitHex } from '../../../helpers/generateDocxRandomId.js';
@@ -26,7 +26,7 @@ export const prepareCommentParaIds = (comment) => {
  * @returns {Object} The w:comment node for the comment
  */
 export const getCommentDefinition = (comment, commentId, allComments, editor) => {
-  const translatedText = translateParagraphNode({ editor, node: comment.commentJSON });
+  const translatedText = wPTranslator.decode({ editor, node: comment.commentJSON });
   const attributes = {
     'w:id': String(commentId),
     'w:author': comment.creatorName || comment.importedAuthor?.name,
