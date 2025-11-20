@@ -5,9 +5,13 @@ import { removeNumberingProperties } from './removeNumberingProperties.js';
 import { decreaseListIndent } from './decreaseListIndent.js';
 import { updateNumberingProperties } from './changeListLevel.js';
 
-vi.mock('@helpers/index.js', () => ({
-  findParentNode: vi.fn(),
-}));
+vi.mock(import('@helpers/index.js'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    findParentNode: vi.fn(),
+  };
+});
 
 vi.mock('@core/commands/list-helpers', () => ({
   isList: vi.fn(),
@@ -19,6 +23,10 @@ vi.mock('./decreaseListIndent.js', () => ({
 
 vi.mock('./changeListLevel.js', () => ({
   updateNumberingProperties: vi.fn(),
+}));
+
+vi.mock('@extensions/paragraph/resolvedPropertiesCache.js', () => ({
+  getResolvedParagraphProperties: vi.fn((node) => node.attrs.paragraphProperties || {}),
 }));
 
 describe('removeNumberingProperties', () => {
@@ -40,9 +48,12 @@ describe('removeNumberingProperties', () => {
    */
   const createParagraph = (opts = {}) => {
     const { text = '', ilvl = 0, nodes = [] } = opts;
+    const numberingProperties = { ilvl };
     return {
       type: { name: 'paragraph' },
-      attrs: { numberingProperties: { ilvl } },
+      attrs: {
+        paragraphProperties: { numberingProperties },
+      },
       textContent: text,
       descendants: (cb) => {
         for (const node of nodes) {

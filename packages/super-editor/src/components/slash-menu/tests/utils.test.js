@@ -23,12 +23,17 @@ vi.mock('@extensions/track-changes/permission-helpers.js', () => ({
   isTrackedChangeActionAllowed: vi.fn(() => true),
 }));
 
+vi.mock('@core/commands/list-helpers', () => ({
+  isList: vi.fn(() => false),
+}));
+
 import {
   getEditorContext,
   getPropsByItemId,
   __getStructureFromResolvedPosForTest,
   __isCollaborationEnabledForTest,
 } from '../utils.js';
+import { isList } from '@core/commands/list-helpers';
 import { readFromClipboard } from '../../../core/utilities/clipboardUtils.js';
 import { selectionHasNodeOrMark } from '../../cursor-helpers.js';
 import { undoDepth, redoDepth } from 'prosemirror-history';
@@ -212,6 +217,7 @@ describe('utils.js', () => {
         nodeAfter: null,
       });
 
+      isList.mockReturnValue(true);
       const context = await getEditorContext(mockEditor, mockEvent);
 
       expect(context.pos).toBe(20);
@@ -421,6 +427,8 @@ describe('utils.js', () => {
     let mockProps;
 
     beforeEach(() => {
+      isList.mockReset();
+      isList.mockReturnValue(false);
       mockProps = {
         editor: mockEditor,
         closePopover: vi.fn(),
