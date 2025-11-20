@@ -34,6 +34,9 @@ export * from './selectTextblockEnd.js';
 export * from './insertContent.js';
 export * from './insertContentAt.js';
 export * from './undoInputRule.js';
+export * from './setBodyHeaderFooter.js';
+export * from './setSectionHeaderFooterAtSelection.js';
+export * from './insertSectionBreakAtSelection.js';
 
 // Lists
 export * from './toggleList.js';

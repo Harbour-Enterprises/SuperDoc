@@ -139,8 +139,6 @@ export function updateNumberingProperties(newNumberingProperties, paragraphNode,
   const resolvedParagraphProperties = resolveParagraphProperties(
     { docx: editor.converter.convertedXml, numbering: editor.converter.numbering },
     newProperties,
-    false,
-    true,
   );
   newAttrs.indent = resolvedParagraphProperties.indent ? { ...resolvedParagraphProperties.indent } : null;
   newAttrs.spacing = resolvedParagraphProperties.spacing ? { ...resolvedParagraphProperties.spacing } : null;

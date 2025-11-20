@@ -9,7 +9,7 @@ import {
   startHelperMap,
   resolveStyles,
 } from '@helpers/pasteListHelpers.js';
-import { normalizeLvlTextChar } from '../../super-converter/v2/importer/listImporter.js';
+import { normalizeLvlTextChar } from '@superdoc/common/list-numbering';
 import { pointsToTwips } from '@converter/helpers';
 
 /**

@@ -13,11 +13,6 @@ import { createDocument } from './helpers/createDocument.js';
 import { isActive } from './helpers/isActive.js';
 import { trackedTransaction } from '@extensions/track-changes/trackChangesHelpers/trackedTransaction.js';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
-import {
-  initPaginationData,
-  PaginationPluginKey,
-  toggleHeaderFooterEditMode,
-} from '@extensions/pagination/pagination-helpers';
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
 import { getRichTextExtensions } from '../extensions/index.js';
@@ -25,10 +20,8 @@ import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
 import { generateCollaborationData } from '@extensions/collaboration/collaboration.js';
-import { hasSomeParentWithClass } from './super-converter/helpers.js';
 import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
-import { setWordSelection } from './helpers/setWordSelection.js';
 import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
 import { canRenderFont } from './helpers/canRenderFont.js';
 import {
@@ -42,6 +35,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
 import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 import { isHeadless } from '../utils/headless-helpers.js';
+
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -82,6 +76,7 @@ import { isHeadless } from '../utils/headless-helpers.js';
  * @property {boolean} [isHeadless=false] - Whether the editor is running in headless mode
  * @property {Document} [mockDocument] - Mock document for testing
  * @property {Window} [mockWindow] - Mock window for testing
+ * @property {Function} [mockCanvas] - Canvas constructor (node-canvas) used to patch mock document in headless mode
  * @property {string} [content=''] - XML content
  * @property {User} [user] - Current user information
  * @property {Array.<User>} [users=[]] - List of users for collaboration
@@ -127,7 +122,6 @@ import { isHeadless } from '../utils/headless-helpers.js';
  * @property {Function} [onDocumentLocked] - Called when document is locked
  * @property {Function} [onFirstRender] - Called on first render
  * @property {Function} [onCollaborationReady] - Called when collaboration is ready
- * @property {Function} [onPaginationUpdate] - Called when pagination updates
  * @property {Function} [onException] - Called when an exception occurs
  * @property {Function} [onListDefinitionsChange] - Called when list definitions change
  * @property {Function} [onFontsResolved] - Called when all fonts used in the document are determined
@@ -138,6 +132,7 @@ import { isHeadless } from '../utils/headless-helpers.js';
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
  * @property {boolean} [isDebug=false] - Whether to enable debug mode
+ * @property {boolean} [disableContextMenu=false] - Whether to disable the custom context menu
  * @property {(params: {
  *   permission: string,
  *   role?: string,
@@ -145,6 +140,7 @@ import { isHeadless } from '../utils/headless-helpers.js';
  *   comment?: Object | null,
  *   trackedChange?: Object | null,
  }) => boolean | undefined} [permissionResolver] - Host-provided permission hook
+ * @property {boolean} [disableContextMenu=false] - Disable the custom context menu
  */
 
 /**
@@ -182,6 +178,13 @@ export class Editor extends EventEmitter {
    * @type {Object}
    */
   view;
+
+  /**
+   * Active PresentationEditor instance when layout mode is enabled.
+   * Set by PresentationEditor constructor to enable renderer-neutral helpers.
+   * @type {import('./PresentationEditor.js').PresentationEditor|null}
+   */
+  presentationEditor = null;
 
   /**
    * Whether the editor currently has focus
@@ -232,6 +235,7 @@ export class Editor extends EventEmitter {
     lastSelection: null,
     suppressDefaultDocxStyles: false,
     jsonOverride: null,
+    skipViewCreation: false,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -251,7 +255,6 @@ export class Editor extends EventEmitter {
     onDocumentLocked: () => null,
     onFirstRender: () => null,
     onCollaborationReady: () => null,
-    onPaginationUpdate: () => null,
     onException: () => null,
     onListDefinitionsChange: () => null,
     onFontsResolved: null,
@@ -376,7 +379,6 @@ export class Editor extends EventEmitter {
     this.on('commentsUpdate', this.options.onCommentsUpdate);
     this.on('locked', this.options.onDocumentLocked);
     this.on('collaborationReady', this.#onCollaborationReady);
-    this.on('paginationUpdate', this.options.onPaginationUpdate);
     this.on('comment-positions', this.options.onCommentLocationsUpdate);
     this.on('list-definitions-change', this.options.onListDefinitionsChange);
     this.on('fonts-resolved', this.options.onFontsResolved);
@@ -403,14 +405,9 @@ export class Editor extends EventEmitter {
 
     this.setDocumentMode(this.options.documentMode, 'init');
 
-    // Init pagination only if we are not in collaborative mode. Otherwise
-    // it will be in itialized via this.#onCollaborationReady
     if (!this.options.ydoc) {
       if (!this.options.isChildEditor) {
-        this.#initPagination();
         this.#initComments();
-
-        this.#validateDocumentInit();
       }
     }
 
@@ -464,7 +461,6 @@ export class Editor extends EventEmitter {
     if (this.view) {
       this.view.destroy();
     }
-
     this.view = null;
   }
 
@@ -505,14 +501,6 @@ export class Editor extends EventEmitter {
       global.document = options.mockDocument;
       global.window = options.mockWindow;
     }
-  }
-
-  /**
-   * Focus the editor.
-   * @returns {void}
-   */
-  focus() {
-    this.view?.focus();
   }
 
   /**
@@ -598,9 +586,8 @@ export class Editor extends EventEmitter {
   /**
    * Set the document mode
    * @param {string} documentMode - The document mode ('editing', 'viewing', 'suggesting')
-   * @param {string} caller - Calling context
    */
-  setDocumentMode(documentMode, caller) {
+  setDocumentMode(documentMode) {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
 
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
@@ -615,13 +602,6 @@ export class Editor extends EventEmitter {
       this.commands.toggleTrackChangesShowOriginal();
       this.setEditable(false, false);
       this.setOptions({ documentMode: 'viewing' });
-      if (caller !== 'init')
-        toggleHeaderFooterEditMode({
-          editor: this,
-          focusedSectionEditor: null,
-          isEditMode: false,
-          documentMode: cleanedMode,
-        });
       if (pm) pm.classList.add('view-mode');
     }
 
@@ -640,19 +620,103 @@ export class Editor extends EventEmitter {
       this.commands.disableTrackChanges();
       this.setEditable(true, false);
       this.setOptions({ documentMode: 'editing' });
-      if (caller !== 'init')
-        toggleHeaderFooterEditMode({
-          editor: this,
-          focusedSectionEditor: null,
-          isEditMode: false,
-          documentMode: cleanedMode,
-        });
       if (pm) pm.classList.remove('view-mode');
     }
   }
 
+  /**
+   * Blur the editor
+   */
+  blur() {
+    if (this.view) {
+      this.view.dom.blur();
+    }
+  }
+
+  /**
+   * Focus the editor
+   */
+  focus() {
+    if (this.view) {
+      this.view.focus();
+    }
+  }
+
+  /**
+   * Check if editor has focus
+   * @returns {boolean}
+   */
+  hasFocus() {
+    if (this.view) {
+      return this.view.hasFocus();
+    }
+    return false;
+  }
+
+  /**
+   * Get viewport coordinates for a document position
+   * @param {number} pos - Document position
+   * @returns {{top: number, bottom: number, left: number, right: number, width: number, height: number} | null}
+   */
+  coordsAtPos(pos) {
+    if (this.view) {
+      return this.view.coordsAtPos(pos);
+    }
+    const layoutRects = this.presentationEditor?.getRangeRects?.(pos, pos);
+    if (Array.isArray(layoutRects) && layoutRects.length > 0) {
+      const rect = layoutRects[0];
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        height: rect.height,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Get position from coordinates
+   * @param {Object} coords - Coordinate object with client-space coordinates
+   * @param {number} [coords.left] - X coordinate (client space)
+   * @param {number} [coords.top] - Y coordinate (client space)
+   * @param {number} [coords.clientX] - X coordinate (client space, alternative property)
+   * @param {number} [coords.clientY] - Y coordinate (client space, alternative property)
+   * @returns {{pos: number, inside: number} | null} Position result or null
+   */
+  posAtCoords(coords) {
+    if (this.view) {
+      return this.view.posAtCoords(coords);
+    }
+    if (typeof this.presentationEditor?.hitTest !== 'function') {
+      return null;
+    }
+    // Use client-space coordinates only (viewport-relative)
+    // Note: We don't use pageX/pageY as they're document-relative and would need conversion
+    const clientX = coords?.clientX ?? coords?.left ?? coords?.x ?? null;
+    const clientY = coords?.clientY ?? coords?.top ?? coords?.y ?? null;
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+      return null;
+    }
+    const hit = this.presentationEditor.hitTest(clientX, clientY);
+    if (!hit) {
+      return null;
+    }
+    return {
+      pos: hit.pos,
+      inside: hit.pos,
+    };
+  }
+
   #registerCopyHandler() {
-    this.view.dom.addEventListener('copy', (event) => {
+    const dom = this.view?.dom;
+    if (!dom) {
+      return;
+    }
+
+    dom.addEventListener('copy', (event) => {
       const clipboardData = event.clipboardData;
       if (!clipboardData) return;
 
@@ -721,7 +785,7 @@ export class Editor extends EventEmitter {
     const doc = this.#generatePmData();
     const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc);
     tr.setMeta('replaceContent', true);
-    this.view.dispatch(tr);
+    this.#dispatchTransaction(tr);
   }
 
   /**
@@ -738,10 +802,9 @@ export class Editor extends EventEmitter {
     const doc = this.#generatePmData();
     // hiding this transaction from history so it doesn't appear in undo stack
     const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc).setMeta('addToHistory', false);
-    this.view.dispatch(tr);
+    this.#dispatchTransaction(tr);
 
     setTimeout(() => {
-      this.#initPagination();
       this.#initComments();
     }, 50);
   }
@@ -1093,51 +1156,6 @@ export class Editor extends EventEmitter {
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: this.options.initialState,
       handleClick: this.#handleNodeSelection.bind(this),
-      handleDoubleClick: async (view, pos, event) => {
-        // Prevent edits if editor is not editable
-        if (this.options.documentMode !== 'editing') return;
-
-        // Deactivates header/footer editing mode when double-click on main editor
-        // Skip pagination-related double-click handling in headless mode
-        if (!isHeadless(this)) {
-          const isHeader = hasSomeParentWithClass(event.target, 'pagination-section-header');
-          const isFooter = hasSomeParentWithClass(event.target, 'pagination-section-footer');
-          if (isHeader || isFooter) {
-            const eventClone = new event.constructor(event.type);
-            event.target.dispatchEvent(eventClone);
-
-            // Imitate default double click behavior - word selection
-            if (this.options.isHeaderOrFooter && this.options.editable) setWordSelection(view, pos);
-            return;
-          }
-        }
-        event.stopPropagation();
-
-        if (!this.options.editable && !isHeadless(this)) {
-          // ToDo don't need now but consider to update pagination when recalculate header/footer height
-          // this.storage.pagination.sectionData = await initPaginationData(this);
-          //
-          // const newTr = this.view.state.tr;
-          // newTr.setMeta('forceUpdatePagination', true);
-          // this.view.dispatch(newTr);
-
-          this.setEditable(true, false);
-          toggleHeaderFooterEditMode({
-            editor: this,
-            focusedSectionEditor: null,
-            isEditMode: false,
-            documentMode: this.options.documentMode,
-          });
-          const pm = this.view?.dom || this.options.element?.querySelector?.('.ProseMirror');
-          if (pm) {
-            pm.classList.remove('header-footer-edit');
-            pm.setAttribute('aria-readonly', false);
-          }
-        }
-
-        // Imitate default double click behavior - word selection
-        setWordSelection(view, pos);
-      },
     });
 
     const newState = this.state.reconfigure({
@@ -1156,6 +1174,9 @@ export class Editor extends EventEmitter {
    * @returns {void}
    */
   createNodeViews() {
+    if (this.options.skipViewCreation || typeof this.view?.setProps !== 'function') {
+      return;
+    }
     this.view.setProps({
       nodeViews: this.extensionService.nodeViews,
     });
@@ -1239,13 +1260,20 @@ export class Editor extends EventEmitter {
     proseMirror.style.lineHeight = defaultLineHeight;
 
     // If we are not using pagination, we still need to add some padding for header/footer
-    if (!hasPaginationEnabled) {
+    // Always pad the body to the page top margin so the body baseline
+    // starts at pageTop + topMargin (Word parity). Pagination decorations
+    // will only reserve header overflow beyond this margin.
+    if (pageMargins?.top != null) {
+      proseMirror.style.paddingTop = `${pageMargins.top}in`;
+    } else if (!hasPaginationEnabled) {
+      // Fallback for missing margins
       proseMirror.style.paddingTop = '1in';
-      proseMirror.style.paddingBottom = '1in';
     } else {
       proseMirror.style.paddingTop = '0';
-      proseMirror.style.paddingBottom = '0';
     }
+
+    // Keep footer padding managed by pagination; set to 0 here.
+    proseMirror.style.paddingBottom = '0';
   }
 
   /**
@@ -1353,10 +1381,9 @@ export class Editor extends EventEmitter {
 
     const { tr } = this.state;
     tr.setMeta('collaborationReady', true);
-    this.view.dispatch(tr);
+    this.#dispatchTransaction(tr);
 
     if (!this.options.isNewFile) {
-      this.#initPagination();
       this.#initComments();
       updateYdocDocxData(this);
     }
@@ -1375,32 +1402,11 @@ export class Editor extends EventEmitter {
 
     setTimeout(() => {
       this.options.replacedFile = false;
-      const { state, dispatch } = this.view;
-      const tr = state.tr.setMeta(CommentsPluginKey, { type: 'force' });
-      dispatch(tr);
+      const st = this.state;
+      if (!st) return;
+      const tr = st.tr.setMeta(CommentsPluginKey, { type: 'force' });
+      this.#dispatchTransaction(tr);
     }, 50);
-  }
-
-  /**
-   * Initialize pagination, if the pagination extension is enabled.
-   * @async
-   * @returns {Promise<void>}
-   */
-  async #initPagination() {
-    if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
-      return;
-    }
-
-    const pagination = this.options.extensions.find((e) => e.name === 'pagination');
-    if (pagination && this.options.pagination) {
-      const sectionData = await initPaginationData(this);
-      this.storage.pagination.sectionData = sectionData;
-
-      // Trigger transaction to initialize pagination
-      const { state, dispatch } = this.view;
-      const tr = state.tr.setMeta(PaginationPluginKey, { isReadyToInit: true });
-      dispatch(tr);
-    }
   }
 
   /**
@@ -1487,6 +1493,16 @@ export class Editor extends EventEmitter {
   }
 
   /**
+   * Public dispatch method for transaction dispatching.
+   * Allows external callers (e.g., SuperDoc stores) to dispatch plugin meta
+   * transactions without accessing editor.view directly.
+   * @param {import('prosemirror-state').Transaction} tr
+   */
+  dispatch(tr) {
+    this.#dispatchTransaction(tr);
+  }
+
+  /**
    * Get document identifier for telemetry (async - may generate hash)
    * @returns {Promise<string>} GUID for modified docs, hash for unmodified
    */
@@ -1559,7 +1575,18 @@ export class Editor extends EventEmitter {
    * @returns {Object} Editor content as JSON
    */
   getJSON() {
-    return this.state.doc.toJSON();
+    const json = this.state.doc.toJSON();
+    try {
+      // Ensure layout-engine can access body-level sectPr (final section properties)
+      const hasBody = json && typeof json === 'object' && json.attrs && json.attrs.bodySectPr;
+      if (!hasBody && this.converter && this.converter.bodySectPr) {
+        json.attrs = json.attrs || {};
+        json.attrs.bodySectPr = this.converter.bodySectPr;
+      }
+    } catch {
+      // Non-fatal: leave json as-is if anything unexpected occurs
+    }
+    return json;
   }
 
   /**
@@ -1665,6 +1692,7 @@ export class Editor extends EventEmitter {
    * @param {Object} param0
    * @param {Object} param0.pageMargins The new page margins
    * @returns {void}
+   * @fires Editor#pageStyleUpdate - Emitted after page style changes with payload: { pageMargins, pageStyles }
    */
   updatePageStyle({ pageMargins }) {
     if (!this.converter) return;
@@ -1676,10 +1704,18 @@ export class Editor extends EventEmitter {
       hasMadeUpdate = true;
     }
 
-    if (hasMadeUpdate && !isHeadless(this)) {
+    if (hasMadeUpdate && this.view && !isHeadless(this)) {
       const newTr = this.view.state.tr;
       newTr.setMeta('forceUpdatePagination', true);
-      this.view.dispatch(newTr);
+      this.#dispatchTransaction(newTr);
+
+      // Emit dedicated event for page style updates
+      // This provides a clearer semantic signal for consumers that need to react
+      // to page style changes (margins, size, orientation) without content modifications
+      this.emit('pageStyleUpdate', {
+        pageMargins,
+        pageStyles: this.converter.pageStyles,
+      });
     }
   }
 
@@ -2002,7 +2038,6 @@ export class Editor extends EventEmitter {
     }
 
     if (!this.options.ydoc) {
-      this.#initPagination();
       this.#initComments();
     }
   }

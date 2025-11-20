@@ -14,7 +14,6 @@ export default defineConfig({
       './shared/common',
       './shared/font-utils',
       './shared/locale-utils',
-      './shared/tab-layout',
       './shared/url-validation',
     ],
     coverage: {
