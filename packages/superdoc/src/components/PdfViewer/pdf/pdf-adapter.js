@@ -120,9 +120,9 @@ export class PDFJSAdapter extends PDFAdapter {
         this.pdfPageViews.push(pdfPageView);
 
         const containerBounds = container.getBoundingClientRect();
-        // @ts-ignore
+        // @ts-expect-error - Adding custom properties to DOMRect for internal use
         containerBounds.originalWidth = width;
-        // @ts-ignore
+        // @ts-expect-error - Adding custom properties to DOMRect for internal use
         containerBounds.originalHeight = height;
 
         pdfPageView.setPdfPage(page);

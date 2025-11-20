@@ -5,6 +5,7 @@ import { nextTick, onMounted, provide, ref, shallowRef } from 'vue';
 import { SuperDoc } from '@superdoc/index.js';
 import { DOCX, PDF, HTML } from '@superdoc/common';
 import { getFileObject } from '@superdoc/common';
+import { createPdfPainter } from '@superdoc/painter-pdf';
 import BasicUpload from '@superdoc/common/components/BasicUpload.vue';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
@@ -376,6 +377,72 @@ const exportDocxBlob = async () => {
   console.debug(blob);
 };
 
+const downloadBlob = (blob, fileName) => {
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const getActiveDocumentEntry = () => {
+  const docsSource = superdoc.value?.superdocStore?.documents;
+  const documents = Array.isArray(docsSource) ? docsSource : docsSource?.value;
+  if (!documents?.length) return null;
+
+  const activeDocId = activeEditor.value?.options?.documentId;
+  if (activeDocId) {
+    const activeDoc = documents.find((doc) => doc.id === activeDocId);
+    if (activeDoc) return activeDoc;
+  }
+
+  return documents[0] ?? null;
+};
+
+const exportPdf = async () => {
+  console.debug('Exporting PDF with layout-engine painter');
+  const docEntry = getActiveDocumentEntry();
+  if (!docEntry) {
+    console.warn('[superdoc-dev] No active document available for PDF export');
+    return;
+  }
+
+  const presentationEditor = docEntry.getPresentationEditor?.();
+  if (!presentationEditor || typeof presentationEditor.getLayoutSnapshot !== 'function') {
+    console.warn('[superdoc-dev] PresentationEditor is not ready for PDF export');
+    return;
+  }
+
+  const snapshot = presentationEditor.getLayoutSnapshot();
+  const layout = snapshot?.layout;
+  const { blocks, measures } = snapshot ?? {};
+  if (!layout || !Array.isArray(blocks) || !Array.isArray(measures) || !blocks.length || !measures.length) {
+    console.warn('[superdoc-dev] Layout snapshot is unavailable for PDF export');
+    return;
+  }
+
+  if (blocks.length !== measures.length) {
+    console.warn('[superdoc-dev] Layout snapshot is out of sync (blocks/measures mismatch)');
+    return;
+  }
+
+  try {
+    const painter = createPdfPainter({
+      blocks,
+      measures,
+    });
+    const pdfBlob = await painter.render(layout);
+    downloadBlob(pdfBlob, `${title.value || 'document'}.pdf`);
+    console.debug('PDF export completed');
+  } catch (error) {
+    console.error('[superdoc-dev] Failed to export PDF', error);
+  }
+};
+
 const onEditorCreate = ({ editor }) => {
   activeEditor.value = editor;
   window.editor = editor;
@@ -431,6 +498,7 @@ onMounted(async () => {
           <button class="dev-app__header-export-btn" @click="exportDocx('clean')">Export clean Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('external')">Export external Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocxBlob()">Export Docx Blob</button>
+          <button class="dev-app__header-export-btn" @click="exportPdf">Export PDF</button>
           <button class="dev-app__header-export-btn" @click="toggleCommentsPanel">Toggle comments panel</button>
         </div>
       </div>
