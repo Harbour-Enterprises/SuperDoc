@@ -4,12 +4,52 @@
  * @param propOrProps Key or array of keys to remove.
  */
 export function deleteProps(obj, propOrProps) {
-  const isString = typeof propOrProps === 'string';
-  const props = isString ? [propOrProps] : propOrProps;
+  const props = typeof propOrProps === 'string' ? [propOrProps] : propOrProps;
 
-  return Object.keys(obj).reduce((newObj, prop) => {
-    const contains = props.includes(prop);
-    if (!contains) newObj[prop] = obj[prop];
-    return newObj;
+  const removeNested = (target, pathParts, index = 0) => {
+    if (!target || typeof target !== 'object') {
+      return false;
+    }
+
+    const key = pathParts[index];
+    const isLast = index === pathParts.length - 1;
+
+    if (!(key in target)) {
+      return Object.keys(target).length === 0;
+    }
+
+    if (isLast) {
+      delete target[key];
+    } else {
+      const shouldDeleteChild = removeNested(target[key], pathParts, index + 1);
+      if (shouldDeleteChild) {
+        delete target[key];
+      }
+    }
+
+    return Object.keys(target).length === 0;
+  };
+
+  const clonedObj = JSON.parse(JSON.stringify(obj));
+  props.forEach((propPath) => {
+    if (!propPath.includes('.')) {
+      delete clonedObj[propPath];
+      return;
+    }
+
+    removeNested(clonedObj, propPath.split('.'));
+  });
+
+  return Object.entries(clonedObj).reduce((acc, [key, value]) => {
+    if (value == null) {
+      return acc;
+    }
+
+    if (typeof value === 'object' && Object.keys(value).length === 0) {
+      return acc;
+    }
+
+    acc[key] = value;
+    return acc;
   }, {});
 }
