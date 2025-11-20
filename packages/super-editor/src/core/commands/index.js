@@ -35,6 +35,8 @@ export * from './insertContent.js';
 export * from './insertContentAt.js';
 export * from './undoInputRule.js';
 
+// Paragraph
+export * from './textIndent.js';
 // Lists
 export * from './toggleList.js';
 export * from './increaseListIndent.js';
