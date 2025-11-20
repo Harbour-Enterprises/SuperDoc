@@ -1,0 +1,29 @@
+{
+  "name": "@superdoc/v1-beta-demo",
+  "version": "0.0.0",
+  "description": "SuperDoc v1 Beta - Simple document editing demo",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@superdoc/contracts": "*",
+    "@superdoc/layout-engine": "*",
+    "@superdoc/measuring-dom": "*",
+    "@superdoc/painter-dom": "*",
+    "@superdoc/painter-pdf": "*",
+    "@superdoc/pm-adapter": "*",
+    "@harbour-enterprises/super-editor": "*",
+    "superdoc": "*",
+    "prosemirror-commands": "^1.6.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.0.3"
+  }
+}
