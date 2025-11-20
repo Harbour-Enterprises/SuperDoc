@@ -163,7 +163,7 @@ export function handleImageNode(node, params, isAnchor) {
       horizontal: positionHValue,
       top: positionVValue,
     };
-    return handleShapeGroup(params, node, graphicData, size, padding, shapeMarginOffset);
+    return handleShapeGroup(params, node, graphicData, size, padding, shapeMarginOffset, anchorData, wrap);
   }
 
   const picture = graphicData?.elements.find((el) => el.name === 'pic:pic');
@@ -302,7 +302,7 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
  * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Group offsets relative to its anchor.
  * @returns {Object|null} A shapeGroup node representing the group, or null when no content exists.
  */
-const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset) => {
+const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset, anchorData, wrap) => {
   const wgp = graphicData.elements.find((el) => el.name === 'wpg:wgp');
   if (!wgp) {
     return buildShapePlaceholder(node, size, padding, marginOffset, 'group');
@@ -401,6 +401,20 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
       const shapeId = cNvPr?.attributes?.['id'];
       const shapeName = cNvPr?.attributes?.['name'];
 
+      // Extract textbox content if present
+      const textBox = wsp.elements?.find((el) => el.name === 'wps:txbx');
+      const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
+      let textContent = null;
+
+      if (textBoxContent) {
+        // Extract text from all paragraphs in the textbox
+        textContent = extractTextFromTextBox(textBoxContent);
+      }
+
+      // Extract body properties for text alignment
+      const bodyPr = wsp.elements?.find((el) => el.name === 'wps:bodyPr');
+      const textAlign = bodyPr?.attributes?.['anchor'] || 'ctr'; // center is default
+
       return {
         shapeType: 'vectorShape',
         attrs: {
@@ -417,6 +431,8 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
           strokeWidth,
           shapeId,
           shapeName,
+          textContent,
+          textAlign,
         },
       };
     })
@@ -437,12 +453,60 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
       size,
       padding,
       marginOffset,
+      anchorData,
+      wrap,
       originalAttributes: node?.attributes,
     },
   };
 
   return result;
 };
+
+/**
+ * Extracts text content from a textbox
+ * @param {Object} textBoxContent - The w:txbxContent element
+ * @returns {Object|null} Text content with formatting information
+ */
+function extractTextFromTextBox(textBoxContent) {
+  if (!textBoxContent || !textBoxContent.elements) return null;
+
+  const paragraphs = textBoxContent.elements.filter((el) => el.name === 'w:p');
+  const textParts = [];
+
+  paragraphs.forEach((paragraph) => {
+    const runs = paragraph.elements?.filter((el) => el.name === 'w:r') || [];
+    runs.forEach((run) => {
+      const textEl = run.elements?.find((el) => el.name === 'w:t');
+      if (textEl && textEl.elements) {
+        const text = textEl.elements.find((el) => el.type === 'text');
+        if (text) {
+          // Extract formatting from run properties
+          const rPr = run.elements?.find((el) => el.name === 'w:rPr');
+          const formatting = {};
+
+          if (rPr) {
+            const bold = rPr.elements?.find((el) => el.name === 'w:b');
+            const italic = rPr.elements?.find((el) => el.name === 'w:i');
+            const color = rPr.elements?.find((el) => el.name === 'w:color');
+            const sz = rPr.elements?.find((el) => el.name === 'w:sz');
+
+            if (bold) formatting.bold = true;
+            if (italic) formatting.italic = true;
+            if (color) formatting.color = color.attributes?.['val'] || color.attributes?.['w:val'];
+            if (sz) formatting.fontSize = parseInt(sz.attributes?.['val'] || sz.attributes?.['w:val'], 10) / 2; // half-points to points
+          }
+
+          textParts.push({
+            text: text.text,
+            formatting,
+          });
+        }
+      }
+    });
+  });
+
+  return textParts.length > 0 ? { parts: textParts } : null;
+}
 
 /**
  * Translates a rectangle shape (`a:prstGeom` with `prst="rect"`) into a contentBlock node.

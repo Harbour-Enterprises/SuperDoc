@@ -116,6 +116,16 @@ export const VectorShape = Node.create({
       originalAttributes: {
         rendered: false,
       },
+
+      textContent: {
+        default: null,
+        rendered: false,
+      },
+
+      textAlign: {
+        default: 'ctr',
+        rendered: false,
+      },
     };
   },
 

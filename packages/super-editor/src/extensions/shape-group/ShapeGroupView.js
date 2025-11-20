@@ -47,7 +47,7 @@ export class ShapeGroupView {
 
   createElement() {
     const attrs = this.node.attrs;
-    const { groupTransform, shapes, size, marginOffset, originalAttributes } = attrs;
+    const { groupTransform, shapes, size, marginOffset, originalAttributes, wrap, anchorData } = attrs;
 
     const container = document.createElement('div');
     container.classList.add('sd-shape-group');
@@ -62,19 +62,73 @@ export class ShapeGroupView {
     container.style.position = 'relative';
     container.style.display = 'inline-block';
 
-    // Apply positioning and z-index if needed
-    if (marginOffset?.horizontal != null || marginOffset?.top != null) {
+    // Handle wrapping and positioning based on wrap type
+    const wrapType = wrap?.type || 'Inline';
+
+    if (wrapType === 'None') {
+      // Absolutely positioned, floats above content
       container.style.position = 'absolute';
+
+      // For paragraph-relative positioning, use margins instead of left/top
+      // to position relative to the paragraph's natural position
+      const isParagraphRelative = anchorData?.vRelativeFrom === 'paragraph';
+
+      if (marginOffset?.horizontal != null) {
+        if (isParagraphRelative) {
+          container.style.marginLeft = `${marginOffset.horizontal}px`;
+        } else {
+          container.style.left = `${marginOffset.horizontal}px`;
+        }
+      }
+      if (marginOffset?.top != null) {
+        if (isParagraphRelative) {
+          container.style.marginTop = `${marginOffset.top}px`;
+        } else {
+          container.style.top = `${marginOffset.top}px`;
+        }
+      }
 
       // Use relativeHeight from OOXML for proper z-ordering of overlapping elements
       const relativeHeight = originalAttributes?.relativeHeight;
       if (relativeHeight != null) {
-        // Scale down the relativeHeight value to a reasonable CSS z-index range
-        // OOXML uses large numbers (e.g., 251659318), we normalize to a smaller range
         const zIndex = Math.floor(relativeHeight / 1000000);
         container.style.zIndex = zIndex.toString();
       } else {
         container.style.zIndex = '1';
+      }
+    } else if (wrapType === 'Square') {
+      // Float element so text wraps around it
+      container.style.float = 'left';
+      container.style.clear = 'both';
+
+      // Apply margins for positioning and spacing
+      if (marginOffset?.horizontal != null) {
+        container.style.marginLeft = `${marginOffset.horizontal}px`;
+      }
+      if (marginOffset?.top != null) {
+        container.style.marginTop = `${marginOffset.top}px`;
+      }
+
+      // Add wrap distance margins if available
+      if (wrap?.attrs?.distLeft) {
+        container.style.marginLeft = `${(marginOffset?.horizontal || 0) + wrap.attrs.distLeft}px`;
+      }
+      if (wrap?.attrs?.distRight) {
+        container.style.marginRight = `${wrap.attrs.distRight}px`;
+      }
+      if (wrap?.attrs?.distTop) {
+        container.style.marginTop = `${(marginOffset?.top || 0) + wrap.attrs.distTop}px`;
+      }
+      if (wrap?.attrs?.distBottom) {
+        container.style.marginBottom = `${wrap.attrs.distBottom}px`;
+      }
+    } else {
+      // Inline or other wrap types - keep in flow
+      if (marginOffset?.horizontal != null) {
+        container.style.marginLeft = `${marginOffset.horizontal}px`;
+      }
+      if (marginOffset?.top != null) {
+        container.style.marginTop = `${marginOffset.top}px`;
       }
     }
 
@@ -87,11 +141,15 @@ export class ShapeGroupView {
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.style.display = 'block';
 
+    // Create defs section for gradients
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svg.appendChild(defs);
+
     // Render each shape in the group
     if (shapes && Array.isArray(shapes)) {
-      shapes.forEach((shape) => {
+      shapes.forEach((shape, index) => {
         if (shape.shapeType === 'vectorShape') {
-          const shapeElement = this.createShapeElement(shape, groupTransform);
+          const shapeElement = this.createShapeElement(shape, groupTransform, defs, index);
           if (shapeElement) {
             svg.appendChild(shapeElement);
           }
@@ -104,7 +162,7 @@ export class ShapeGroupView {
     return { element: container };
   }
 
-  createShapeElement(shape) {
+  createShapeElement(shape, groupTransform, defs, shapeIndex) {
     const attrs = shape.attrs;
     if (!attrs) return null;
 
@@ -143,11 +201,24 @@ export class ShapeGroupView {
     const strokeColor = attrs.strokeColor || '#000000';
     const strokeWidth = attrs.strokeWidth || 1;
 
+    // Handle gradient fills
+    let fillValue = fillColor;
+    let fillOpacity = 1;
+
+    if (fillColor && typeof fillColor === 'object' && fillColor.type === 'gradient') {
+      const gradientId = `gradient-${shapeIndex}-${Date.now()}`;
+      const gradient = this.createGradient(fillColor, gradientId);
+      defs.appendChild(gradient);
+      fillValue = `url(#${gradientId})`;
+    } else if (typeof fillColor === 'string') {
+      fillValue = fillColor;
+    }
+
     try {
       const svgContent = getPresetShapeSvg({
         preset: shapeKind,
         styleOverrides: {
-          fill: fillColor || 'none',
+          fill: fillValue || 'none',
           stroke: strokeColor || 'none',
           strokeWidth: strokeWidth || 0,
         },
@@ -238,7 +309,113 @@ export class ShapeGroupView {
       g.appendChild(rect);
     }
 
+    // Add text content if present
+    if (attrs.textContent && attrs.textContent.parts) {
+      const textGroup = this.createTextElement(attrs.textContent, attrs.textAlign, width, height);
+      if (textGroup) {
+        g.appendChild(textGroup);
+      }
+    }
+
     return g;
+  }
+
+  createTextElement(textContent, textAlign, width, height) {
+    const textGroup = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+
+    // Set text alignment
+    let textAnchor = 'middle';
+    let xPos = width / 2;
+
+    if (textAlign === 'l' || textAlign === 'left') {
+      textAnchor = 'start';
+      xPos = 10; // Small padding from left
+    } else if (textAlign === 'r' || textAlign === 'right') {
+      textAnchor = 'end';
+      xPos = width - 10; // Small padding from right
+    }
+
+    textGroup.setAttribute('x', xPos.toString());
+    textGroup.setAttribute('y', (height / 2).toString());
+    textGroup.setAttribute('text-anchor', textAnchor);
+    textGroup.setAttribute('dominant-baseline', 'middle');
+
+    // Add text content with formatting
+    textContent.parts.forEach((part, index) => {
+      const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspan.textContent = part.text;
+
+      // Apply formatting
+      if (part.formatting) {
+        let style = '';
+        if (part.formatting.bold) {
+          style += 'font-weight: bold; ';
+        }
+        if (part.formatting.italic) {
+          style += 'font-style: italic; ';
+        }
+        if (part.formatting.color) {
+          tspan.setAttribute('fill', `#${part.formatting.color}`);
+        }
+        if (part.formatting.fontSize) {
+          style += `font-size: ${part.formatting.fontSize}px; `;
+        }
+        if (style) {
+          tspan.setAttribute('style', style);
+        }
+      }
+
+      if (index > 0) {
+        tspan.setAttribute('dx', '0');
+      }
+
+      textGroup.appendChild(tspan);
+    });
+
+    return textGroup;
+  }
+
+  createGradient(gradientData, gradientId) {
+    const { gradientType, stops, angle } = gradientData;
+
+    let gradient;
+
+    if (gradientType === 'linear') {
+      gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+      gradient.setAttribute('id', gradientId);
+
+      // Convert angle to x1, y1, x2, y2 coordinates
+      // OOXML angle is in degrees, 0 = left to right, 90 = bottom to top
+      const radians = (angle * Math.PI) / 180;
+      const x1 = 50 - 50 * Math.cos(radians);
+      const y1 = 50 + 50 * Math.sin(radians);
+      const x2 = 50 + 50 * Math.cos(radians);
+      const y2 = 50 - 50 * Math.sin(radians);
+
+      gradient.setAttribute('x1', `${x1}%`);
+      gradient.setAttribute('y1', `${y1}%`);
+      gradient.setAttribute('x2', `${x2}%`);
+      gradient.setAttribute('y2', `${y2}%`);
+    } else {
+      gradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+      gradient.setAttribute('id', gradientId);
+      gradient.setAttribute('cx', '50%');
+      gradient.setAttribute('cy', '50%');
+      gradient.setAttribute('r', '50%');
+    }
+
+    // Add gradient stops
+    stops.forEach((stop) => {
+      const stopElement = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      stopElement.setAttribute('offset', `${stop.position * 100}%`);
+      stopElement.setAttribute('stop-color', stop.color);
+      if (stop.alpha != null && stop.alpha < 1) {
+        stopElement.setAttribute('stop-opacity', stop.alpha.toString());
+      }
+      gradient.appendChild(stopElement);
+    });
+
+    return gradient;
   }
 
   buildView() {

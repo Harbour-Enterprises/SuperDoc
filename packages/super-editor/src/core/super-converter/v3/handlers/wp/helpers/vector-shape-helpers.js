@@ -198,7 +198,7 @@ export function extractFillColor(spPr, style) {
 
   const gradFill = spPr?.elements?.find((el) => el.name === 'a:gradFill');
   if (gradFill) {
-    return '#cccccc'; // placeholder color for now
+    return extractGradientFill(gradFill);
   }
 
   const blipFill = spPr?.elements?.find((el) => el.name === 'a:blipFill');
@@ -229,4 +229,62 @@ export function extractFillColor(spPr, style) {
   });
 
   return color;
+}
+
+/**
+ * Extracts gradient fill information from a:gradFill element
+ * @param {Object} gradFill - The a:gradFill element
+ * @returns {Object} Gradient fill data with type, stops, and angle
+ */
+function extractGradientFill(gradFill) {
+  const gradient = {
+    type: 'gradient',
+    stops: [],
+    angle: 0,
+  };
+
+  // Extract gradient stops
+  const gsLst = gradFill.elements?.find((el) => el.name === 'a:gsLst');
+  if (gsLst) {
+    const stops = gsLst.elements?.filter((el) => el.name === 'a:gs') || [];
+    gradient.stops = stops.map((stop) => {
+      const pos = parseInt(stop.attributes?.['pos'] || '0', 10) / 100000; // Convert from 0-100000 to 0-1
+
+      // Extract color from the stop
+      const srgbClr = stop.elements?.find((el) => el.name === 'a:srgbClr');
+      let color = '#000000';
+      let alpha = 1;
+
+      if (srgbClr) {
+        color = '#' + srgbClr.attributes?.['val'];
+
+        // Extract alpha if present
+        const alphaEl = srgbClr.elements?.find((el) => el.name === 'a:alpha');
+        if (alphaEl) {
+          alpha = parseInt(alphaEl.attributes?.['val'] || '100000', 10) / 100000;
+        }
+      }
+
+      return { position: pos, color, alpha };
+    });
+  }
+
+  // Extract gradient direction (linear angle)
+  const lin = gradFill.elements?.find((el) => el.name === 'a:lin');
+  if (lin) {
+    // Convert from 60000ths of a degree to degrees
+    const ang = parseInt(lin.attributes?.['ang'] || '0', 10) / 60000;
+    gradient.angle = ang;
+  }
+
+  // Check if it's a radial gradient
+  const path = gradFill.elements?.find((el) => el.name === 'a:path');
+  if (path) {
+    gradient.gradientType = 'radial';
+    gradient.path = path.attributes?.['path'] || 'circle';
+  } else {
+    gradient.gradientType = 'linear';
+  }
+
+  return gradient;
 }
