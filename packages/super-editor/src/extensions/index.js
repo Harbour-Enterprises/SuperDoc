@@ -65,7 +65,6 @@ import { CommentsPlugin } from './comment/index.js';
 import { Placeholder } from './placeholder/index.js';
 import { PopoverPlugin } from './popover-plugin/index.js';
 import { TrackChanges } from './track-changes/index.js';
-import { Pagination } from './pagination/index.js';
 import { LinkedStyles } from './linked-styles/linked-styles.js';
 import { Search } from './search/index.js';
 import { NodeResizer } from './noderesizer/index.js';
@@ -163,7 +162,6 @@ const getStarterExtensions = () => {
     TrackDelete,
     TrackFormat,
     CommentsMark,
-    Pagination,
     Highlight,
     LinkedStyles,
     AiPlugin,

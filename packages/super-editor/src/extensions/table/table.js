@@ -352,6 +352,7 @@ export const Table = Node.create({
         default: {},
         renderDOM({ borders }) {
           if (!borders) return {};
+
           const style = Object.entries(borders).reduce((acc, [key, { size, color }]) => {
             return `${acc}border-${key}: ${Math.ceil(size)}px solid ${color || 'black'};`;
           }, '');
@@ -439,6 +440,16 @@ export const Table = Node.create({
        */
       grid: {
         default: null,
+        rendered: false,
+      },
+
+      /**
+       * @category Attribute
+       * @param {boolean} [userEdited] - Flag indicating user has manually resized columns
+       * Used by pm-adapter to prioritize user edits over original OOXML grid
+       */
+      userEdited: {
+        default: false,
         rendered: false,
       },
     };
@@ -1130,7 +1141,10 @@ export const Table = Node.create({
       ...(resizable
         ? [
             columnResizing({
-              handleWidth: this.options.handleWidth,
+              // Disable PM's visual handles (custom overlay handles resizing)
+              // Set to 0 to prevent PM from rendering its own resize handles
+              // while keeping transaction helpers and constraint logic
+              handleWidth: 0,
               cellMinWidth: this.options.cellMinWidth,
               defaultCellMinWidth: this.options.cellMinWidth,
               lastColumnResizable: this.options.lastColumnResizable,
@@ -1182,8 +1196,8 @@ function getCellType({ node, state }) {
  */
 function copyCellAttrs(node) {
   // Exclude colspan, rowspan and colwidth attrs.
-  // eslint-disable-next-line no-unused-vars
-  const { colspan, rowspan, colwidth, ...attrs } = node.attrs;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { colspan: _colspan, rowspan: _rowspan, colwidth: _colwidth, ...attrs } = node.attrs;
   return attrs;
 }
 

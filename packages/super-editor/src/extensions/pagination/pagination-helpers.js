@@ -133,15 +133,27 @@ export const createHeaderFooterEditor = ({
     media: editor.storage.image.media,
     mediaFiles: editor.storage.image.media,
     fonts: editor.options.fonts,
-    isHeaderOrFooter: true,
+    isHeaderOrFooter: true, // This flag prevents pagination from being enabled
     isHeadless: editor.options.isHeadless,
+    pagination: false, // Explicitly disable pagination
     annotations: true,
     currentPageNumber,
-    parentEditor: editor,
+    // Don't set parentEditor to avoid circular reference issues
+    // parentEditor: editor,
     editable: false,
     documentMode: 'viewing',
     onCreate: (evt) => setEditorToolbar(evt, editor),
     onBlur: (evt) => onHeaderFooterDataUpdate(evt, editor, sectionId, type),
+  });
+
+  // Store parent editor reference separately to avoid circular reference in options
+  // This allows access when needed without creating serialization issues
+  Object.defineProperty(headerFooterEditor.options, 'parentEditor', {
+    enumerable: false, // Don't include in serialization
+    configurable: true,
+    get() {
+      return editor;
+    },
   });
   headerFooterEditor.setEditable(false, false);
 
