@@ -4,6 +4,7 @@ import {
   getRichTextExtensions,
   createZip,
   Extensions,
+  registeredHandlers,
 } from '@harbour-enterprises/super-editor';
 import {
   helpers as superEditorHelpers,
@@ -12,10 +13,10 @@ import {
   AnnotatorHelpers,
   SectionHelpers,
 } from '@harbour-enterprises/super-editor';
-import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@harbour-enterprises/common';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@superdoc/common';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 
-export * from './core/index.js';
+export { SuperDoc } from './core/SuperDoc.js';
 export {
   BlankDOCX,
   getFileObject,
@@ -41,4 +42,5 @@ export {
 
   // Custom extensions
   Extensions,
+  registeredHandlers,
 };

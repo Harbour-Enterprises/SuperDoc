@@ -4,6 +4,8 @@ import { Mapping, ReplaceStep, AddMarkStep, RemoveMarkStep } from 'prosemirror-t
 import { TrackDeleteMarkName, TrackInsertMarkName, TrackFormatMarkName } from './constants.js';
 import { TrackChangesBasePlugin, TrackChangesBasePluginKey } from './plugins/index.js';
 import { getTrackChanges } from './trackChangesHelpers/getTrackChanges.js';
+import { collectTrackedChanges, isTrackedChangeActionAllowed } from './permission-helpers.js';
+import { CommentsPluginKey } from '../comment/comments-plugin.js';
 
 export const TrackChanges = Extension.create({
   name: 'trackChanges',
@@ -12,14 +14,18 @@ export const TrackChanges = Extension.create({
     return {
       acceptTrackedChangesBetween:
         (from, to) =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch, editor }) => {
+          const trackedChanges = collectTrackedChanges({ state, from, to });
+          if (!isTrackedChangeActionAllowed({ editor, action: 'accept', trackedChanges })) return false;
+
           let { tr, doc } = state;
 
           // if (from === to) {
           //   to += 1;
           // }
 
-          tr.setMeta('acceptReject', true);
+          // tr.setMeta('acceptReject', true);
+          tr.setMeta('inputType', 'acceptReject');
 
           const map = new Mapping();
 
@@ -65,10 +71,14 @@ export const TrackChanges = Extension.create({
 
       rejectTrackedChangesBetween:
         (from, to) =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch, editor }) => {
+          const trackedChanges = collectTrackedChanges({ state, from, to });
+          if (!isTrackedChangeActionAllowed({ editor, action: 'reject', trackedChanges })) return false;
+
           const { tr, doc } = state;
 
-          tr.setMeta('acceptReject', true);
+          // tr.setMeta('acceptReject', true);
+          tr.setMeta('inputType', 'acceptReject');
 
           const map = new Mapping();
 
@@ -146,6 +156,19 @@ export const TrackChanges = Extension.create({
           return commands.acceptTrackedChangesBetween(from, to);
         },
 
+      acceptTrackedChangeFromToolbar:
+        () =>
+        ({ state, commands }) => {
+          const commentsPluginState = CommentsPluginKey.getState(state);
+          const activeThreadId = commentsPluginState?.activeThreadId;
+
+          if (activeThreadId && commentsPluginState?.trackedChanges?.[activeThreadId]) {
+            return commands.acceptTrackedChangeById(activeThreadId);
+          } else {
+            return commands.acceptTrackedChangeBySelection();
+          }
+        },
+
       acceptTrackedChangeById:
         (id) =>
         ({ state, tr, commands }) => {
@@ -194,6 +217,19 @@ export const TrackChanges = Extension.create({
         ({ state, commands }) => {
           const { from, to } = state.selection;
           return commands.rejectTrackedChangesBetween(from, to);
+        },
+
+      rejectTrackedChangeFromToolbar:
+        () =>
+        ({ state, commands }) => {
+          const commentsPluginState = CommentsPluginKey.getState(state);
+          const activeThreadId = commentsPluginState?.activeThreadId;
+
+          if (activeThreadId && commentsPluginState?.trackedChanges?.[activeThreadId]) {
+            return commands.rejectTrackedChangeById(activeThreadId);
+          } else {
+            return commands.rejectTrackedChangeOnSelection();
+          }
         },
 
       rejectAllTrackedChanges:
@@ -313,15 +349,69 @@ const getChangesByIdToResolve = (state, id) => {
   if (changeIndex === -1) return;
 
   const matchingChange = trackedChanges[changeIndex];
-  const prev = trackedChanges[changeIndex - 1];
-  const next = trackedChanges[changeIndex + 1];
+  const matchingId = matchingChange.mark.attrs.id;
 
-  // Determine the linked change
-  let linkedChange;
-  if (prev && matchingChange.start === prev.end) {
-    linkedChange = prev;
-  } else if (next && matchingChange.end === next.start) {
-    linkedChange = next;
-  }
-  return [matchingChange, linkedChange].filter(Boolean);
+  const getSegmentSize = ({ from, to }) => to - from;
+  const areDirectlyConnected = (left, right) => {
+    if (!left || !right) {
+      return false;
+    }
+
+    if (left.to !== right.from) {
+      return false;
+    }
+
+    const hasContentBetween =
+      state.doc.textBetween(left.from, right.to, '\n').length > getSegmentSize(left) + getSegmentSize(right);
+
+    return !hasContentBetween;
+  };
+
+  const isComplementaryPair = (firstType, secondType) =>
+    (firstType === TrackDeleteMarkName && secondType === TrackInsertMarkName) ||
+    (firstType === TrackInsertMarkName && secondType === TrackDeleteMarkName);
+
+  const linkedBefore = [];
+  const linkedAfter = [];
+
+  const collectDirection = (direction, collection) => {
+    let currentIndex = changeIndex;
+    let currentChange = matchingChange;
+
+    while (true) {
+      const neighborIndex = currentIndex + direction;
+      const neighbor = trackedChanges[neighborIndex];
+
+      if (!neighbor) {
+        break;
+      }
+
+      const [left, right] = direction < 0 ? [neighbor, currentChange] : [currentChange, neighbor];
+
+      if (!areDirectlyConnected(left, right)) {
+        break;
+      }
+
+      const sharesId = neighbor.mark.attrs.id === matchingId;
+      const complementary = isComplementaryPair(currentChange.mark.type.name, neighbor.mark.type.name);
+
+      if (!sharesId && !complementary) {
+        break;
+      }
+
+      collection.push(neighbor);
+
+      currentIndex = neighborIndex;
+      currentChange = neighbor;
+
+      if (!sharesId) {
+        break;
+      }
+    }
+  };
+
+  collectDirection(-1, linkedBefore);
+  collectDirection(1, linkedAfter);
+
+  return [matchingChange, ...linkedAfter, ...linkedBefore];
 };

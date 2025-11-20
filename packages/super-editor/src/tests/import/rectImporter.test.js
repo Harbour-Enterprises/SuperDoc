@@ -1,10 +1,6 @@
 import { expect, it, describe, beforeEach } from 'vitest';
-import {
-  handlePictNode,
-  handleVRectImport,
-  buildVRectStyles,
-  parsePointsToPixels,
-} from '../../core/super-converter/v2/importer/pictNodeImporter.js';
+import { handlePictNode } from '../../core/super-converter/v2/importer/pictNodeImporter.js';
+import { handleVRectImport, parsePointsToPixels } from '@converter/v3/handlers/w/pict/helpers/handle-v-rect-import.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 
 describe('RectImporter', () => {
@@ -156,9 +152,9 @@ describe('RectImporter', () => {
       const node = result.nodes[0];
       expect(node.attrs.rsidRDefault).toBe('test123');
       expect(node.attrs.spacing).toBeDefined();
-      expect(node.attrs.spacing.lineSpaceAfter).toBe(16); // 240 twips = 12px
-      expect(node.attrs.spacing.lineSpaceBefore).toBe(8); // 120 twips = 6px
-      expect(node.attrs.spacing.line).toBe(1.15);
+      expect(node.attrs.spacing.after).toBe(240); // 240 twips = 12px
+      expect(node.attrs.spacing.before).toBe(120); // 120 twips = 6px
+      expect(node.attrs.spacing.line).toBe(276);
       expect(node.attrs.spacing.lineRule).toBe('auto');
     });
 
@@ -188,7 +184,7 @@ describe('RectImporter', () => {
       const result = handlePictNode({ nodes, ...mockParams });
 
       expect(result.nodes).toHaveLength(0);
-      expect(result.consumed).toBe(1);
+      expect(result.consumed).toBe(0);
     });
 
     it('should return empty result for non-pict nodes', () => {
@@ -218,16 +214,23 @@ describe('RectImporter', () => {
 
   describe('handleVRectImport', () => {
     it('should process v:rect with full style attributes', () => {
-      const rect = {
-        attributes: {
-          style: 'width: 200pt; height: 3pt; margin-left: 10pt;',
-          fillcolor: '#333333',
-          'o:hr': 't',
-          'o:hralign': 'left',
-          'o:hrstd': 't',
-          stroked: 't',
-        },
+      const pict = {
+        name: 'w:pict',
+        elements: [
+          {
+            name: 'v:rect',
+            attributes: {
+              style: 'width: 200pt; height: 3pt; margin-left: 10pt;',
+              fillcolor: '#333333',
+              'o:hr': 't',
+              'o:hralign': 'left',
+              'o:hrstd': 't',
+              stroked: 't',
+            },
+          },
+        ],
       };
+      const rect = pict.elements.find((el) => el.name === 'v:rect');
 
       const pNode = {
         elements: [
@@ -243,7 +246,7 @@ describe('RectImporter', () => {
         ],
       };
 
-      const result = handleVRectImport({ rect, pNode });
+      const result = handleVRectImport({ pict, pNode, params: mockParams });
 
       expect(result.type).toBe('paragraph');
       expect(result.content).toHaveLength(1);
@@ -261,37 +264,51 @@ describe('RectImporter', () => {
       expect(contentBlock.attrs.vmlAttributes.stroked).toBe('t');
 
       // If hr is true, the width should be 100% - to double check
-      expect(contentBlock.attrs.size.width).toBe(266);
+      expect(contentBlock.attrs.size.width).toBe('100%');
     });
 
     it('should handle v:rect with o:hr attribute for full page width', () => {
-      const rect = {
-        attributes: {
-          style: 'width: 100pt; height: 2pt;',
-          'o:hr': 't',
-        },
+      const pict = {
+        name: 'w:pict',
+        elements: [
+          {
+            name: 'v:rect',
+            attributes: {
+              style: 'width: 100pt; height: 2pt;',
+              'o:hr': 't',
+            },
+          },
+        ],
       };
+      const rect = pict.elements.find((el) => el.name === 'v:rect');
 
       const pNode = { elements: [] };
 
-      const result = handleVRectImport({ rect, pNode });
+      const result = handleVRectImport({ pict, pNode, params: mockParams });
 
       const contentBlock = result.content[0];
-      expect(contentBlock.attrs.size.width).toBe(133);
+      expect(contentBlock.attrs.size.width).toBe('100%');
       expect(contentBlock.attrs.horizontalRule).toBe(true);
     });
 
     it('should handle v:rect without style attribute', () => {
-      const rect = {
-        attributes: {
-          fillcolor: '#CCCCCC',
-          'o:hrstd': 't',
-        },
+      const pict = {
+        name: 'w:pict',
+        elements: [
+          {
+            name: 'v:rect',
+            attributes: {
+              fillcolor: '#CCCCCC',
+              'o:hrstd': 't',
+            },
+          },
+        ],
       };
+      const rect = pict.elements.find((el) => el.name === 'v:rect');
 
       const pNode = { elements: [] };
 
-      const result = handleVRectImport({ rect, pNode });
+      const result = handleVRectImport({ pict, pNode, params: mockParams });
 
       const contentBlock = result.content[0];
       expect(contentBlock.attrs.style).toBeUndefined();
@@ -301,16 +318,23 @@ describe('RectImporter', () => {
     });
 
     it('should handle v:rect with only basic attributes', () => {
-      const rect = {
-        attributes: {
-          id: 'rect1',
-          fillcolor: '#FF0000',
-        },
+      const pict = {
+        name: 'w:pict',
+        elements: [
+          {
+            name: 'v:rect',
+            attributes: {
+              id: 'rect1',
+              fillcolor: '#FF0000',
+            },
+          },
+        ],
       };
+      const rect = pict.elements.find((el) => el.name === 'v:rect');
 
       const pNode = { elements: [] };
 
-      const result = handleVRectImport({ rect, pNode });
+      const result = handleVRectImport({ pict, pNode, params: mockParams });
 
       const contentBlock = result.content[0];
       expect(contentBlock.attrs.attributes.id).toBe('rect1');

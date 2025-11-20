@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest';
 
-import { handleAnnotationNode, parseAnnotationMarks } from '@converter/v2/importer/annotationImporter.js';
+import {
+  handleAnnotationNode,
+  parseAnnotationMarks,
+} from '@converter/v3/handlers/w/sdt/helpers/handle-annotation-node';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
@@ -20,7 +23,7 @@ describe('annotationImporter', () => {
           nodeListHandler: defaultNodeListHandler(),
           editor: mockEditor,
         });
-        expect(result).toEqual({ nodes: [], consumed: 0 });
+        expect(result).toEqual(null);
       });
 
       it('should return empty result for non sdt node', () => {
@@ -30,7 +33,7 @@ describe('annotationImporter', () => {
           nodeListHandler: defaultNodeListHandler(),
           editor: mockEditor,
         });
-        expect(result).toEqual({ nodes: [], consumed: 0 });
+        expect(result).toEqual(null);
       });
 
       it('should return fieldAnnotation type when annotations is true', async () => {
@@ -54,12 +57,12 @@ describe('annotationImporter', () => {
           editor: mockEditorWithAnnotations,
         });
 
-        expect(result.nodes[0].type).toBe('fieldAnnotation');
-        expect(result.nodes[0].attrs.fieldId).toBe('agreementinput-1741026604177-450029465509');
-        expect(result.nodes[0].attrs.displayLabel).toBe('Enter your full name');
-        expect(result.nodes[0].attrs.type).toBe('text');
-        expect(result.nodes[0].attrs.fieldType).toBe('NAMETEXTINPUT');
-        expect(result.nodes[0].attrs.fieldColor).toBe('#6943d0');
+        expect(result.type).toBe('fieldAnnotation');
+        expect(result.attrs.fieldId).toBe('agreementinput-1741026604177-450029465509');
+        expect(result.attrs.displayLabel).toBe('Enter your full name');
+        expect(result.attrs.type).toBe('text');
+        expect(result.attrs.fieldType).toBe('NAMETEXTINPUT');
+        expect(result.attrs.fieldColor).toBe('#6943d0');
       });
 
       it('should return text type when annotations is false', async () => {
@@ -84,13 +87,13 @@ describe('annotationImporter', () => {
           editor: mockEditorWithoutAnnotations,
         });
 
-        expect(result.nodes[0].type).toBe('text');
-        expect(result.nodes[0].text).toBe('{{Enter company name}}');
-        expect(result.nodes[0].attrs.fieldId).toBe('agreementinput-1741026607449-98007837804');
-        expect(result.nodes[0].attrs.displayLabel).toBe('Enter company name');
-        expect(result.nodes[0].attrs.type).toBe('text');
-        expect(result.nodes[0].attrs.fieldType).toBe('COMPANYNAMETEXTINPUT');
-        expect(result.nodes[0].attrs.fieldColor).toBe('#6943d0');
+        expect(result.type).toBe('text');
+        expect(result.text).toBe('{{Enter company name}}');
+        expect(result.attrs.fieldId).toBe('agreementinput-1741026607449-98007837804');
+        expect(result.attrs.displayLabel).toBe('Enter company name');
+        expect(result.attrs.type).toBe('text');
+        expect(result.attrs.fieldType).toBe('COMPANYNAMETEXTINPUT');
+        expect(result.attrs.fieldColor).toBe('#6943d0');
       });
     });
 
@@ -103,14 +106,14 @@ describe('annotationImporter', () => {
         const body = doc.elements[0];
         const content = body.elements;
         const paragraphWithField = content[0].elements[2];
-        const { nodes } = handleAnnotationNode({
+        const result = handleAnnotationNode({
           nodes: [paragraphWithField],
           docx,
           nodeListHandler: defaultNodeListHandler(),
           editor: mockEditor,
         });
 
-        const node = nodes[0];
+        const node = result;
         expect(node.type).toBe('text');
 
         const { attrs } = node;
@@ -131,19 +134,19 @@ describe('annotationImporter', () => {
         const body = doc.elements[0];
         const content = body.elements;
         const paragraphWithField = content[0].elements[3];
-        const { nodes } = handleAnnotationNode({
+        const result = handleAnnotationNode({
           nodes: [paragraphWithField],
           docx,
           nodeListHandler: defaultNodeListHandler(),
           editor: mockEditor,
         });
 
-        const node = nodes[0];
+        const node = result;
         expect(node.type).toBe('text');
 
         const { attrs } = node;
         const { fontFamily, fontSize, color, bold, italic, underline } = attrs;
-        expect(fontFamily).toBe('Courier New');
+        expect(fontFamily).toBe('Courier New, sans-serif');
         expect(fontSize).toBe('18pt');
         expect(color).toBe(undefined);
         expect(bold).toBe(undefined);
@@ -204,3 +207,80 @@ describe('check annotation import in full docx importer', async () => {
     expect(alias?.attributes['w:val']).toBe('Enter your full name');
   });
 });
+
+describe('fields-test docx import', () => {
+  const fileName = 'fields-test.docx';
+
+  it('creates field annotations when annotations are enabled', async () => {
+    const { docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(fileName);
+    const { editor } = initTestEditor({ content: docx, media, mediaFiles, fonts, annotations: true });
+
+    try {
+      const json = editor.getJSON();
+      const textField = findFieldAnnotationByFieldId(json.content, 'agreementinput-1681225627634-466256831072');
+      expect(textField).toBeDefined();
+      expect(textField.attrs.displayLabel).toBe('Basic text');
+      expect(textField.attrs.defaultDisplayLabel).toBe('Priya Slipknot test');
+
+      const htmlField = findFieldAnnotationByFieldId(json.content, 'agreementinput-1681225719028-752593937875');
+      expect(htmlField).toBeDefined();
+      expect(htmlField.attrs.displayLabel).toBe('html input type');
+      expect(htmlField.attrs.defaultDisplayLabel).toBe('CS - Deliverables');
+    } finally {
+      editor?.destroy?.();
+    }
+  });
+
+  it('creates placeholder text nodes when annotations are disabled', async () => {
+    const { docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(fileName);
+    const { editor } = initTestEditor({ content: docx, media, mediaFiles, fonts, annotations: false });
+
+    try {
+      const json = editor.getJSON();
+      const deliverablesPlaceholder = findTextNode(json.content, (node) => node.text === '{{CS - Deliverables}}');
+      expect(deliverablesPlaceholder).not.toBeNull();
+
+      const textPlaceholder = findTextNode(json.content, (node) => node.text === '{{Priya Slipknot test}}');
+      expect(textPlaceholder).not.toBeNull();
+    } finally {
+      editor?.destroy?.();
+    }
+  });
+});
+
+function findFieldAnnotationByFieldId(nodes = [], fieldId) {
+  if (!nodes) return null;
+
+  for (const node of nodes) {
+    if (!node) continue;
+    if (node.type === 'fieldAnnotation' && node.attrs?.fieldId === fieldId) {
+      return node;
+    }
+
+    if (node.content) {
+      const result = findFieldAnnotationByFieldId(node.content, fieldId);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}
+
+function findTextNode(nodes = [], predicate = () => false) {
+  if (!nodes) return null;
+
+  for (const node of nodes) {
+    if (!node) continue;
+
+    if (node.type === 'text' && predicate(node)) {
+      return node;
+    }
+
+    if (node.content) {
+      const result = findTextNode(node.content, predicate);
+      if (result) return result;
+    }
+  }
+
+  return null;
+}

@@ -1,6 +1,8 @@
 import { SuperConverter } from '../../SuperConverter.js';
 import { TrackFormatMarkName } from '@extensions/track-changes/constants.js';
 import { getHexColorFromDocxSystem, isValidHexColor, twipsToInches, twipsToLines, twipsToPt } from '../../helpers.js';
+import { translator as wRPrTranslator } from '../../v3/handlers/w/rpr/index.js';
+import { encodeMarksFromRPr } from '@converter/styles.js';
 
 /**
  *
@@ -26,7 +28,6 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
         'w:numPr',
         'w:outlineLvl',
         'w:bdr',
-        'w:pBdr',
         'w:noProof',
         'w:contextualSpacing',
         'w:keepNext',
@@ -65,7 +66,7 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
       const { attributes = {} } = element;
       const newMark = { type: m.type };
 
-      const exceptionMarks = ['w:b', 'w:caps'];
+      const exceptionMarks = ['w:b', 'w:caps', 'w:strike', 'w:dstrike'];
       if ((attributes['w:val'] === '0' || attributes['w:val'] === 'none') && !exceptionMarks.includes(m.name)) {
         return;
       }
@@ -108,6 +109,28 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
     });
   });
   return createImportMarks(marks);
+}
+
+export function handleStyleChangeMarksV2(rPrChange, currentMarks, params) {
+  if (!rPrChange) {
+    return [];
+  }
+
+  const { attributes } = rPrChange;
+  const mappedAttributes = {
+    id: attributes['w:id'],
+    date: attributes['w:date'],
+    author: attributes['w:author'],
+    authorEmail: attributes['w:authorEmail'],
+  };
+  let submarks = [];
+  const rPr = rPrChange.elements?.find((el) => el.name === 'w:rPr');
+  if (rPr) {
+    const runProperties = wRPrTranslator.encode({ ...params, nodes: [rPr] });
+    submarks = encodeMarksFromRPr(runProperties, params?.docx);
+  }
+
+  return [{ type: TrackFormatMarkName, attrs: { ...mappedAttributes, before: submarks, after: [...currentMarks] } }];
 }
 
 /**
@@ -164,7 +187,7 @@ export function createImportMarks(marks) {
  * @param attributes
  * @returns {*}
  */
-function getMarkValue(markType, attributes, docx) {
+export function getMarkValue(markType, attributes, docx) {
   if (markType === 'tabs') markType = 'textIndent';
 
   const markValueMapper = {
@@ -193,32 +216,38 @@ function getMarkValue(markType, attributes, docx) {
   }
 }
 
-function getFontFamilyValue(attributes, docx) {
-  const ascii = attributes['w:ascii'];
-  const themeAscii = attributes['w:asciiTheme'];
+export function getFontFamilyValue(attributes, docx) {
+  const ascii = attributes['w:ascii'] ?? attributes['ascii'];
+  const themeAscii = attributes['w:asciiTheme'] ?? attributes['asciiTheme'];
 
-  if (!docx || !themeAscii) return ascii;
-  const theme = docx['word/theme/theme1.xml'];
-  if (!theme) return ascii;
+  let resolved = ascii;
 
-  const { elements: topElements } = theme;
-  const { elements } = topElements[0];
-  const themeElements = elements.find((el) => el.name === 'a:themeElements');
-  const fontScheme = themeElements.elements.find((el) => el.name === 'a:fontScheme');
-  const majorFont = fontScheme.elements.find((el) => el.name === 'a:majorFont');
+  if (docx && themeAscii) {
+    const theme = docx['word/theme/theme1.xml'];
+    if (theme?.elements?.length) {
+      const { elements: topElements } = theme;
+      const { elements } = topElements[0] || {};
+      const themeElements = elements?.find((el) => el.name === 'a:themeElements');
+      const fontScheme = themeElements?.elements?.find((el) => el.name === 'a:fontScheme');
+      const prefix = themeAscii.startsWith('minor') ? 'minor' : 'major';
+      const font = fontScheme?.elements?.find((el) => el.name === `a:${prefix}Font`);
+      const latin = font?.elements?.find((el) => el.name === 'a:latin');
+      resolved = latin?.attributes?.typeface || resolved;
+    }
+  }
 
-  const latin = majorFont.elements.find((el) => el.name === 'a:latin');
-  const typeface = latin.attributes['typeface'];
-  return typeface;
+  if (!resolved) return null;
+
+  return SuperConverter.toCssFontFamily(resolved, docx);
 }
 
-function getIndentValue(attributes) {
+export function getIndentValue(attributes) {
   let value = attributes['w:left'];
   if (!value) return null;
   return `${twipsToInches(value)}in`;
 }
 
-function getLineHeightValue(attributes) {
+export function getLineHeightValue(attributes) {
   const value = attributes['w:line'];
   const lineRule = attributes['w:lineRule'];
 
@@ -232,13 +261,18 @@ function getLineHeightValue(attributes) {
   return `${twipsToLines(value)}`;
 }
 
-function getHighLightValue(attributes) {
+export function getHighLightValue(attributes) {
   const fill = attributes['w:fill'];
   if (fill && fill !== 'auto') return `#${fill}`;
   if (isValidHexColor(attributes?.['w:val'])) return `#${attributes['w:val']}`;
   return getHexColorFromDocxSystem(attributes?.['w:val']) || null;
 }
 
-function getStrikeValue(attributes) {
-  return attributes?.['w:val'] === '1' ? attributes['w:val'] : null;
+export function getStrikeValue(attributes) {
+  const raw = attributes?.['w:val'];
+  if (raw === undefined || raw === null) return '1'; // presence implies on
+  const value = String(raw).trim().toLowerCase();
+  if (value === '1' || value === 'true' || value === 'on') return '1';
+  if (value === '0' || value === 'false' || value === 'off') return '0';
+  return '1'; // Default to enabled for any other value
 }

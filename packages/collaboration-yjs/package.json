@@ -1,6 +1,6 @@
 {
-  "name": "@harbour-enterprises/superdoc-yjs-collaboration",
-  "version": "1.0.0-alpha.1",
+  "name": "@superdoc-dev/superdoc-yjs-collaboration",
+  "version": "1.0.2",
   "type": "module",
   "main": "dist/index.cjs",
   "module": "dist/index.js",
@@ -11,26 +11,41 @@
   ],
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "require": "./dist/index.cjs",
       "import": "./dist/index.js"
     }
   },
   "scripts": {
-    "build": "tsup src/index.js --format cjs,esm --dts --outDir dist",
-    "watch:lib": "tsup src/index.js --format cjs,esm --dts --outDir dist --watch",
-    "watch:example": "nodemon --watch examples/fastify --ext js --exec \"node examples/fastify/index.js\"",
+    "build": "tsup src/index.ts --format cjs,esm --dts --outDir dist",
+    "watch:lib": "tsup src/index.ts --format cjs,esm --dts --outDir dist --watch",
+    "watch:example": "nodemon --watch examples/fastify --ext ts --exec \"cd examples/fastify && tsx index.ts\"",
     "dev": "concurrently -k -n LIB,SERVER -c yellow,green \"npm run watch:lib\" \"npm run watch:example\"",
-    "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx,md}\"",
-    "check-format": "prettier --check \"src/**/*.{js,jsx,ts,tsx,md}\""
+    "test": "vitest --config ./vitest.config.ts",
+    "test:cov": "vitest run --coverage --config ./vitest.config.ts",
+    "typecheck": "tsc --noEmit --project tsconfig.vitest.json",
+    "format": "prettier --write \"src/**/*.{ts,tsx,md}\"",
+    "check-format": "prettier --check \"src/**/*.{ts,tsx,md}\"",
+    "lint": "eslint --no-warn-ignored src/**/*.ts",
+    "lint:fix": "eslint --fix --no-warn-ignored src/**/*.ts"
   },
-  "keywords": [],
-  "author": "",
+  "author": "SuperDoc",
   "license": "AGPL-3.0",
   "description": "A quick-start collaboration server for SuperDoc",
+  "publishConfig": {
+    "access": "public"
+  },
   "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@typescript-eslint/parser": "^8.46.3",
+    "@vitest/coverage-v8": "^2.0.5",
     "concurrently": "^9.1.2",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^9.1.2",
     "nodemon": "^3.1.10",
     "prettier": "^3.5.3",
-    "tsup": "^8.5.0"
+    "tsup": "^8.5.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.0.5"
   }
 }

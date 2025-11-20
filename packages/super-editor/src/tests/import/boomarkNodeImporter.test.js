@@ -1,6 +1,6 @@
 import { SuperConverter } from '@converter/SuperConverter.js';
 import { handleBookmarkNode } from '@converter/v2/importer/bookmarkNodeImporter.js';
-import { createNodeListHandlerMock } from './testUtils.test.js';
+import { createNodeListHandlerMock } from './testUtils.js';
 
 describe('BookmarkNodeImporter', () => {
   it('parses only bookmark nodes', () => {

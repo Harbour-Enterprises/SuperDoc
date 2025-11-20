@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, reactive, computed } from 'vue';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
 import {
@@ -41,6 +41,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const isCommentsListVisible = ref(false);
   const editorCommentIds = ref([]);
   const editorCommentPositions = ref({});
+  const isCommentHighlighted = ref(false);
 
   // Floating comments
   const floatingCommentsOffset = ref(0);
@@ -121,6 +122,7 @@ export const useCommentsStore = defineStore('comments', () => {
       trackedChangeType,
       deletedText,
       authorEmail,
+      authorImage,
       date,
       author: authorName,
       importedAuthor,
@@ -138,6 +140,7 @@ export const useCommentsStore = defineStore('comments', () => {
       createdTime: date,
       creatorName: authorName,
       creatorEmail: authorEmail,
+      creatorImage: authorImage,
       isInternal: false,
       importedAuthor,
       selection: {
@@ -176,7 +179,6 @@ export const useCommentsStore = defineStore('comments', () => {
 
     debounceTimers[commentId] = setTimeout(() => {
       if (superdoc) {
-        if (__IS_DEBUG__) console.debug('[debounceEmit] tracked change update emitting...', event);
         superdoc.emit('comments-update', event);
       }
       delete debounceTimers[commentId];
@@ -185,7 +187,6 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const showAddComment = (superdoc) => {
     const event = { type: COMMENT_EVENTS.PENDING };
-    if (__IS_DEBUG__) console.debug('[showAddComment] emitting...', event);
     superdoc.emit('comments-update', event);
 
     const selection = { ...superdocStore.activeSelection };
@@ -199,7 +200,11 @@ export const useCommentsStore = defineStore('comments', () => {
     if (!superdoc.config.isInternal) pendingComment.value.isInternal = false;
 
     if (superdoc.activeEditor?.commands) {
-      superdoc.activeEditor.commands.insertComment({ ...pendingComment.value.getValues(), commentId: 'pending' });
+      superdoc.activeEditor.commands.insertComment({
+        ...pendingComment.value.getValues(),
+        commentId: 'pending',
+        skipEmit: true,
+      });
     }
 
     if (pendingComment.value.selection.source === 'super-editor' && superdocStore.selectionPosition) {
@@ -302,6 +307,7 @@ export const useCommentsStore = defineStore('comments', () => {
       parentCommentId,
       creatorEmail: superdocStore.user.email,
       creatorName: superdocStore.user.name,
+      creatorImage: superdocStore.user.image,
       commentText: currentCommentText.value,
       selection,
       ...options,
@@ -329,7 +335,7 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {Object} param0.superdoc The SuperDoc instance
    * @returns {void}
    */
-  const addComment = ({ superdoc, comment }) => {
+  const addComment = ({ superdoc, comment, skipEditorUpdate = false }) => {
     let parentComment = commentsList.value.find((c) => c.commentId === activeComment.value);
     if (!parentComment) parentComment = comment;
 
@@ -356,9 +362,9 @@ export const useCommentsStore = defineStore('comments', () => {
 
     // If this is not a tracked change, and it belongs to a Super Editor, and its not a child comment
     // We need to let the editor know about the new comment
-    if (!comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
+    if (!skipEditorUpdate && !comment.trackedChange && superdoc.activeEditor?.commands && !comment.parentCommentId) {
       // Add the comment to the active editor
-      superdoc.activeEditor.commands.insertComment(newComment.getValues());
+      superdoc.activeEditor.commands.insertComment({ ...newComment.getValues(), skipEmit: true });
     }
 
     const event = { type: COMMENT_EVENTS.ADD, comment: newComment.getValues() };
@@ -367,7 +373,6 @@ export const useCommentsStore = defineStore('comments', () => {
     syncCommentsToClients(superdoc, event);
 
     // Emit event for end users
-    if (__IS_DEBUG__) console.debug('[addComment] emitting...', event);
     superdoc.emit('comments-update', event);
   };
 
@@ -394,7 +399,6 @@ export const useCommentsStore = defineStore('comments', () => {
       changes: [{ key: 'deleted', commentId, fileId }],
     };
 
-    if (__IS_DEBUG__) console.debug('[deleteComment] emitting...', event);
     superdoc.emit('comments-update', event);
     syncCommentsToClients(superdoc, event);
   };
@@ -422,10 +426,8 @@ export const useCommentsStore = defineStore('comments', () => {
   const processLoadedDocxComments = async ({ superdoc, editor, comments, documentId }) => {
     const document = superdocStore.getDocument(documentId);
 
-    if (__IS_DEBUG__) console.debug('[processLoadedDocxComments] processing comments...', comments);
-
     comments.forEach((comment) => {
-      const htmlContent = getHTmlFromComment(comment.textJson);
+      const htmlContent = getHtmlFromComment(comment.textJson);
 
       if (!htmlContent && !comment.trackedChange) {
         return;
@@ -440,12 +442,13 @@ export const useCommentsStore = defineStore('comments', () => {
         isInternal: false,
         parentCommentId: comment.parentCommentId,
         creatorName,
+        createdTime: comment.createdTime,
         creatorEmail: comment.creatorEmail,
         importedAuthor: {
           name: importedName,
           email: comment.creatorEmail,
         },
-        commentText: getHTmlFromComment(comment.textJson),
+        commentText: getHtmlFromComment(comment.textJson),
         resolvedTime: comment.isDone ? Date.now() : null,
         resolvedByEmail: comment.isDone ? comment.creatorEmail : null,
         resolvedByName: comment.isDone ? importedName : null,
@@ -472,12 +475,11 @@ export const useCommentsStore = defineStore('comments', () => {
 
     // Create comments for tracked changes
     // that do not have a corresponding comment (created in Word).
+    const { tr } = editor.view.state;
+    const { dispatch } = editor.view;
+
     groupedChanges.forEach(({ insertedMark, deletionMark, formatMark }, index) => {
       console.debug(`Create comment for track change: ${index}`);
-
-      const { dispatch } = editor.view;
-      const { tr } = editor.view.state;
-
       const foundComment = commentsList.value.find(
         (i) =>
           i.commentId === insertedMark?.mark.attrs.id ||
@@ -489,7 +491,6 @@ export const useCommentsStore = defineStore('comments', () => {
       if (foundComment) {
         if (isLastIteration) {
           tr.setMeta(CommentsPluginKey, { type: 'force' });
-          dispatch(tr);
         }
         return;
       }
@@ -504,8 +505,8 @@ export const useCommentsStore = defineStore('comments', () => {
         if (isLastIteration) tr.setMeta(CommentsPluginKey, { type: 'force' });
         tr.setMeta(CommentsPluginKey, { type: 'forceTrackChanges' });
         tr.setMeta(TrackChangesBasePluginKey, trackChangesPayload);
-        dispatch(tr);
       }
+      dispatch(tr);
     });
   };
 
@@ -565,15 +566,57 @@ export const useCommentsStore = defineStore('comments', () => {
    * @param {Object} commentTextJson The comment text JSON
    * @returns {string} The HTML content
    */
-  const getHTmlFromComment = (commentTextJson) => {
+  const normalizeCommentForEditor = (node) => {
+    if (!node || typeof node !== 'object') return node;
+
+    const cloneMarks = (marks) =>
+      Array.isArray(marks)
+        ? marks.filter(Boolean).map((mark) => ({
+            ...mark,
+            attrs: mark?.attrs ? { ...mark.attrs } : undefined,
+          }))
+        : undefined;
+
+    const cloneAttrs = (attrs) => (attrs && typeof attrs === 'object' ? { ...attrs } : undefined);
+
+    if (!Array.isArray(node.content)) {
+      return {
+        type: node.type,
+        ...(node.text !== undefined ? { text: node.text } : {}),
+        ...(node.attrs ? { attrs: cloneAttrs(node.attrs) } : {}),
+        ...(node.marks ? { marks: cloneMarks(node.marks) } : {}),
+      };
+    }
+
+    const normalizedChildren = node.content
+      .map((child) => normalizeCommentForEditor(child))
+      .flat()
+      .filter(Boolean);
+
+    if (node.type === 'run') {
+      return normalizedChildren;
+    }
+
+    return {
+      type: node.type,
+      ...(node.attrs ? { attrs: cloneAttrs(node.attrs) } : {}),
+      ...(node.marks ? { marks: cloneMarks(node.marks) } : {}),
+      content: normalizedChildren,
+    };
+  };
+
+  const getHtmlFromComment = (commentTextJson) => {
     // If no content, we can't convert and its not a valid comment
     if (!commentTextJson.content?.length) return;
 
     try {
+      const normalizedContent = normalizeCommentForEditor(commentTextJson);
+      const schemaContent = Array.isArray(normalizedContent) ? normalizedContent[0] : normalizedContent;
+      if (!schemaContent.content.length) return null;
       const editor = new Editor({
         mode: 'text',
         isHeadless: true,
-        content: commentTextJson,
+        content: schemaContent,
         loadFromSchema: true,
         extensions: getRichTextExtensions(),
       });
@@ -604,6 +647,7 @@ export const useCommentsStore = defineStore('comments', () => {
     commentsParentElement,
     editorCommentPositions,
     hasInitializedLocations,
+    isCommentHighlighted,
 
     // Floating comments
     floatingCommentsOffset,

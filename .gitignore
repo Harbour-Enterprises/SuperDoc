@@ -10,6 +10,7 @@ dist-ssr
 .env
 .npmrc
 .eslintcache
+CLAUDE.md
 
 npm-debug.log*
 yarn-debug.log*
@@ -40,4 +41,24 @@ test-results
 *.tgz
 
 !examples/chrome-extension/dist
-dev/
+
+# Coverage reports
+coverage
+coverage/
+**/coverage
+**/coverage/
+
+# TypeScript generated declaration files in source (build artifacts)
+**/src/**/*.d.ts
+**/src/**/*.d.ts.map
+# But allow hand-written .d.ts files within packages
+!packages/super-editor/src/core/commands/core-command-map.d.ts
+
+# TypeScript build info files
+*.tsbuildinfo
+
+# Planning and progress tracking documents
+**/plan/progress.md
+
+AGENTS.md
+codex.config.json

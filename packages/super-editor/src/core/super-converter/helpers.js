@@ -1,27 +1,42 @@
 import { parseSizeUnit } from '../utilities/index.js';
 
+// CSS pixels per inch; used to convert between Word's inch-based measurements and DOM pixels.
+const PIXELS_PER_INCH = 96;
+
 function inchesToTwips(inches) {
   if (inches == null) return;
   if (typeof inches === 'string') inches = parseFloat(inches);
-  return Math.round(inches * 1440);
+  return Math.round(Number(inches) * 1440);
 }
 
 function twipsToInches(twips) {
   if (twips == null) return;
-  if (typeof twips === 'string') twips = parseInt(twips, 10);
-  return Math.round((twips / 1440) * 100) / 100;
+  const value = Number(twips);
+  if (Number.isNaN(value)) return;
+  return value / 1440;
 }
 
 function twipsToPixels(twips) {
   if (twips == null) return;
-  twips = twipsToInches(twips);
-  return Math.round(twips * 96);
+  const inches = twipsToInches(twips);
+  return inchesToPixels(inches);
 }
 
 function pixelsToTwips(pixels) {
+  const inches = pixelsToInches(pixels);
+  return inchesToTwips(inches);
+}
+
+function inchesToPixels(inches) {
+  if (inches == null) return;
+  const pixels = inches * PIXELS_PER_INCH;
+  return Math.round(pixels * 1000) / 1000;
+}
+
+function pixelsToInches(pixels) {
   if (pixels == null) return;
-  pixels = pixels / 96;
-  return inchesToTwips(pixels);
+  const inches = Number(pixels) / PIXELS_PER_INCH;
+  return inches;
 }
 
 function twipsToLines(twips) {
@@ -36,18 +51,18 @@ function linesToTwips(lines) {
 
 function halfPointToPixels(halfPoints) {
   if (halfPoints == null) return;
-  return Math.round((halfPoints * 96) / 72);
+  return Math.round((halfPoints * PIXELS_PER_INCH) / 72);
 }
 
 function halfPointToPoints(halfPoints) {
   if (halfPoints == null) return;
-  return Math.round(halfPoints / 2);
+  return Math.round(halfPoints) / 2;
 }
 
 function emuToPixels(emu) {
   if (emu == null) return;
   if (typeof emu === 'string') emu = parseFloat(emu);
-  const pixels = (emu * 96) / 914400;
+  const pixels = (emu * PIXELS_PER_INCH) / 914400;
   return Math.round(pixels);
 }
 
@@ -59,14 +74,24 @@ function pixelsToEmu(px) {
 
 function pixelsToHalfPoints(pixels) {
   if (pixels == null) return;
-  return Math.round((pixels * 72) / 96);
+  return Math.round((pixels * 72) / PIXELS_PER_INCH);
 }
 
-function eigthPointsToPixels(eigthPoints) {
-  if (eigthPoints == null) return;
-  const points = parseFloat(eigthPoints) / 8;
+function eighthPointsToPixels(eighthPoints) {
+  if (eighthPoints == null) return;
+  const points = parseFloat(eighthPoints) / 8;
   const pixels = points * 1.3333;
   return pixels;
+}
+
+function pointsToTwips(points) {
+  if (points == null) return;
+  return points * 20;
+}
+
+function pointsToLines(points) {
+  if (points == null) return;
+  return twipsToLines(pointsToTwips(points));
 }
 
 function pixelsToEightPoints(pixels) {
@@ -82,6 +107,111 @@ function twipsToPt(twips) {
 function ptToTwips(pt) {
   if (pt == null) return;
   return pt * 20;
+}
+
+function rotToDegrees(rot) {
+  if (rot == null) return;
+  return rot / 60000;
+}
+
+function degreesToRot(degrees) {
+  if (degrees == null) return;
+  return degrees * 60000;
+}
+
+function pixelsToPolygonUnits(pixels) {
+  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
+  if (pixels == null) return;
+  const pu = pixels * PIXELS_PER_INCH;
+  // Word requires integer ST_Coordinate32 values; fractional values fail OOXML validation.
+  // The previous rounding to 3 decimals produced fractional coordinates and broke anchors.
+  return Math.round(pu);
+}
+
+function polygonUnitsToPixels(pu) {
+  // TODO: Unclear what unit is used here. 1/96 seems to be correct for unscaled images.
+  if (pu == null) return;
+  const pixels = Number(pu) / PIXELS_PER_INCH;
+  return Math.round(pixels * 1000) / 1000;
+}
+
+/**
+ * Converts a DOCX polygon node to an array of pixel coordinates.
+ * Automatically removes duplicate closing points that are the same as the starting point,
+ * since polygons are assumed to be closed shapes.
+ *
+ * @param {Object} polygonNode - The polygon node from DOCX XML with wp:start and wp:lineTo elements
+ * @returns {Array<[number, number]>|null} Array of [x, y] pixel coordinate pairs, or null if invalid input
+ */
+function polygonToObj(polygonNode) {
+  if (!polygonNode) return null;
+  const points = [];
+  polygonNode.elements.forEach((element) => {
+    if (['wp:start', 'wp:lineTo'].includes(element.name)) {
+      const { x, y } = element.attributes;
+      points.push([polygonUnitsToPixels(x), polygonUnitsToPixels(y)]);
+    }
+  });
+
+  // Remove the last point if it's the same as the first point (closed polygon)
+  if (points.length > 1) {
+    const firstPoint = points[0];
+    const lastPoint = points[points.length - 1];
+    if (firstPoint[0] === lastPoint[0] && firstPoint[1] === lastPoint[1]) {
+      points.pop();
+    }
+  }
+
+  return points;
+}
+
+/**
+ * Converts an array of pixel coordinates to a DOCX polygon node.
+ * Automatically adds a closing wp:lineTo element that connects back to the starting point,
+ * ensuring the polygon is properly closed in the DOCX format.
+ *
+ * @param {Array<[number, number]>} points - Array of [x, y] pixel coordinate pairs
+ * @returns {Object|null} DOCX polygon node with wp:start and wp:lineTo elements, or null if invalid input
+ */
+function objToPolygon(points) {
+  if (!points || !Array.isArray(points)) return null;
+  const polygonNode = {
+    name: 'wp:wrapPolygon',
+    type: 'wp:wrapPolygon',
+    attributes: {
+      edited: '0',
+    },
+    elements: [],
+  };
+  points.forEach((point, index) => {
+    const [x, y] = point;
+    const tagName = index === 0 ? 'wp:start' : 'wp:lineTo';
+    const pointNode = {
+      name: tagName,
+      type: tagName,
+      attributes: {
+        x: pixelsToPolygonUnits(x),
+        y: pixelsToPolygonUnits(y),
+      },
+    };
+    polygonNode.elements.push(pointNode);
+  });
+
+  // Add a lineTo back to the starting point to close the polygon
+  if (points.length > 0) {
+    const [startX, startY] = points[0];
+    const closePointNode = {
+      name: 'wp:lineTo',
+      type: 'wp:lineTo',
+      attributes: {
+        x: pixelsToPolygonUnits(startX),
+        y: pixelsToPolygonUnits(startY),
+      },
+    };
+    polygonNode.elements.push(closePointNode);
+  }
+
+  return polygonNode;
 }
 
 /**
@@ -100,23 +230,54 @@ const getTextIndentExportValue = (indent) => {
   return exportValue;
 };
 
-const getArrayBufferFromUrl = async (input, isHeadless) => {
-  // Check if it's a full URL or blob/file/data URI
-  const isLikelyUrl = /^https?:|^blob:|^file:|^data:/i.test(input);
+const REMOTE_RESOURCE_PATTERN = /^https?:|^blob:|^file:/i;
+const DATA_URI_PATTERN = /^data:/i;
 
-  if (isHeadless && isLikelyUrl && typeof fetch === 'function') {
-    // Handle as fetchable resource
-    const res = await fetch(input);
-    if (!res.ok) throw new Error(`Fetch failed: ${res.status} ${res.statusText}`);
-    return await res.arrayBuffer();
+const getArrayBufferFromUrl = async (input) => {
+  if (input == null) {
+    return new ArrayBuffer(0);
   }
 
-  // Otherwise, assume it's a base64 string or Data URI
-  const base64 = input.includes(',') ? input.split(',', 2)[1] : input.trim().replace(/\s/g, '');
+  if (input instanceof ArrayBuffer) {
+    return input;
+  }
+
+  if (ArrayBuffer.isView(input)) {
+    const view = input;
+    return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
+  }
+
+  if (typeof Blob !== 'undefined' && input instanceof Blob) {
+    return await input.arrayBuffer();
+  }
+
+  if (typeof input !== 'string') {
+    throw new TypeError('Unsupported media input type');
+  }
+
+  const trimmed = input.trim();
+  const shouldFetchRemote = REMOTE_RESOURCE_PATTERN.test(trimmed);
+  const isDataUri = DATA_URI_PATTERN.test(trimmed);
+
+  if (shouldFetchRemote) {
+    if (typeof fetch !== 'function') {
+      throw new Error(`Fetch API is not available to retrieve media: ${trimmed}`);
+    }
+
+    const response = await fetch(trimmed);
+    if (!response.ok) {
+      throw new Error(`Fetch failed: ${response.status} ${response.statusText}`);
+    }
+
+    return await response.arrayBuffer();
+  }
+
+  // If this is a data URI we need only the payload portion
+  const base64Payload = isDataUri ? trimmed.split(',', 2)[1] : trimmed.replace(/\s/g, '');
 
   try {
     if (typeof globalThis.atob === 'function') {
-      const binary = globalThis.atob(base64);
+      const binary = globalThis.atob(base64Payload);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i);
@@ -127,7 +288,7 @@ const getArrayBufferFromUrl = async (input, isHeadless) => {
     console.warn('atob failed, falling back to Buffer:', err);
   }
 
-  const buf = Buffer.from(base64, 'base64');
+  const buf = Buffer.from(base64Payload, 'base64');
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
 };
 
@@ -138,26 +299,53 @@ const getContentTypesFromXml = (contentTypesXml) => {
   return Array.from(defaults).map((item) => item.getAttribute('Extension'));
 };
 
-const getHexColorFromDocxSystem = (docxColor) => {
-  const colorMap = new Map([
-    ['yellow', '#ffff00'],
-    ['green', '#00ff00'],
-    ['blue', '#0000FFFF'],
-    ['cyan', '#00ffff'],
-    ['magenta', '#ff00ff'],
-    ['red', '#ff0000'],
-    ['darkYellow', '#808000FF'],
-    ['darkGreen', '#008000FF'],
-    ['darkBlue', '#000080'],
-    ['darkCyan', '#008080FF'],
-    ['darkMagenta', '#800080FF'],
-    ['darkGray', '#808080FF'],
-    ['darkRed', '#800000FF'],
-    ['lightGray', '#C0C0C0FF'],
-    ['black', '#000'],
-  ]);
+const DOCX_HIGHLIGHT_KEYWORD_MAP = new Map([
+  ['yellow', 'FFFF00'],
+  ['green', '00FF00'],
+  ['blue', '0000FF'],
+  ['cyan', '00FFFF'],
+  ['magenta', 'FF00FF'],
+  ['red', 'FF0000'],
+  ['darkYellow', '808000'],
+  ['darkGreen', '008000'],
+  ['darkBlue', '000080'],
+  ['darkCyan', '008080'],
+  ['darkMagenta', '800080'],
+  ['darkGray', '808080'],
+  ['darkRed', '800000'],
+  ['lightGray', 'C0C0C0'],
+  ['black', '000000'],
+  ['white', 'FFFFFF'],
+]);
 
-  return colorMap.get(docxColor) || null;
+const normalizeHexColor = (hex) => {
+  if (!hex) return null;
+  let value = hex.replace('#', '').trim();
+  if (!value) return null;
+  value = value.toUpperCase();
+  if (value.length === 3)
+    value = value
+      .split('')
+      .map((c) => c + c)
+      .join('');
+  if (value.length === 8) value = value.slice(0, 6);
+  return value;
+};
+
+const getHexColorFromDocxSystem = (docxColor) => {
+  const hex = DOCX_HIGHLIGHT_KEYWORD_MAP.get(docxColor);
+  return hex ? `#${hex}` : null;
+};
+
+const getDocxHighlightKeywordFromHex = (hexColor) => {
+  if (!hexColor) return null;
+  if (DOCX_HIGHLIGHT_KEYWORD_MAP.has(hexColor)) return hexColor;
+  const normalized = normalizeHexColor(hexColor);
+  if (!normalized) return null;
+  for (const [keyword, hex] of DOCX_HIGHLIGHT_KEYWORD_MAP.entries()) {
+    if (hex === normalized) return keyword;
+  }
+  return null;
 };
 
 function isValidHexColor(color) {
@@ -188,6 +376,10 @@ const getLineHeightValueString = (lineHeight, defaultUnit, lineRule = '', isObje
   let [value, unit] = parseSizeUnit(lineHeight);
   if (Number.isNaN(value) || value === 0) return {};
   if (lineRule === 'atLeast' && value < 1) return {};
+  // Prevent values less than 1 to avoid squashed text (unless using explicit units like pt)
+  if (!unit && value < 1) {
+    value = 1;
+  }
   unit = unit ? unit : defaultUnit;
   return isObject ? { ['line-height']: `${value}${unit}` } : `line-height: ${value}${unit}`;
 };
@@ -223,10 +415,14 @@ const hasSomeParentWithClass = (element, classname) => {
 };
 
 export {
+  PIXELS_PER_INCH,
   inchesToTwips,
   twipsToInches,
   twipsToPixels,
   pixelsToTwips,
+  pixelsToInches,
+  pointsToLines,
+  inchesToPixels,
   twipsToLines,
   linesToTwips,
   halfPointToPixels,
@@ -234,11 +430,18 @@ export {
   pixelsToEmu,
   pixelsToHalfPoints,
   halfPointToPoints,
-  eigthPointsToPixels,
+  eighthPointsToPixels,
   pixelsToEightPoints,
+  pointsToTwips,
+  rotToDegrees,
+  degreesToRot,
+  objToPolygon,
+  polygonToObj,
   getArrayBufferFromUrl,
   getContentTypesFromXml,
   getHexColorFromDocxSystem,
+  getDocxHighlightKeywordFromHex,
+  normalizeHexColor,
   isValidHexColor,
   rgbToHex,
   ptToTwips,
@@ -247,4 +450,6 @@ export {
   deobfuscateFont,
   hasSomeParentWithClass,
   getTextIndentExportValue,
+  polygonUnitsToPixels,
+  pixelsToPolygonUnits,
 };

@@ -1,6 +1,20 @@
-// @ts-check
+// @ts-nocheck
 import { Mark, Attribute } from '@core/index.js';
 import { annotationClass, annotationContentClass } from '../field-annotation/index.js';
+
+/**
+ * Configuration options for TextStyle
+ * @typedef {Object} TextStyleOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={}] - Custom HTML attributes to apply to text style spans
+ */
+
+/**
+ * Attributes for text style marks
+ * @typedef {Object} TextStyleAttributes
+ * @category Attributes
+ * @property {string} [styleId] - Style identifier for referencing predefined styles
+ */
 
 /**
  * @module TextStyle
@@ -27,6 +41,21 @@ export const TextStyle = Mark.create({
           return {};
         },
       },
+      {
+        getAttrs: (node) => {
+          const fontFamily = node.style.fontFamily?.replace(/['"]+/g, '');
+          const fontSize = node.style.fontSize;
+          const textTransform = node.style.textTransform;
+          if (fontFamily || fontSize || textTransform) {
+            return {
+              fontFamily: fontFamily || null,
+              fontSize: fontSize || null,
+              textTransform: textTransform || null,
+            };
+          }
+          return false;
+        },
+      },
     ];
   },
 
@@ -36,6 +65,10 @@ export const TextStyle = Mark.create({
 
   addAttributes() {
     return {
+      /**
+       * @category Attribute
+       * @param {string} [styleId] - Style identifier for referencing predefined styles
+       */
       styleId: {},
     };
   },
@@ -45,10 +78,10 @@ export const TextStyle = Mark.create({
       /**
        * Remove empty text style marks
        * @category Command
-       * @returns {Function} Command - Removes mark if no attributes present
        * @example
-       * removeEmptyTextStyle()
+       * editor.commands.removeEmptyTextStyle()
        * @note Cleanup utility to prevent empty span elements
+       * @note Automatically checks if any style attributes exist before removal
        */
       removeEmptyTextStyle:
         () =>

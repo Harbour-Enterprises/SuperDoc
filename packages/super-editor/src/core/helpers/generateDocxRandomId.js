@@ -3,15 +3,18 @@
  * @returns {string} - 8 character random string
  */
 export function generateDocxRandomId(length = 8) {
-  const characters = '0123456789abcdef';
+  const max = 0x7fffffff;
+  const value = Math.floor(Math.random() * (max + 1));
+  return value.toString(16).padStart(length, '0').slice(0, length);
+}
 
-  let id = [];
-  for (let i = 0; i < length; i++) {
-    const randomIndex = Math.floor(Math.random() * characters.length);
-    id.push(characters[randomIndex]);
-  }
-
-  return id.join('');
+/**
+ * Generate a random signed 32-bit integer as a string.
+ * @returns {string} A random signed 32-bit integer as a string
+ */
+export function generateRandomSigned32BitIntStrId() {
+  const val = Math.floor(Math.random() * 0x7fffffff);
+  return val.toString();
 }
 
 export function generateRandom32BitHex() {

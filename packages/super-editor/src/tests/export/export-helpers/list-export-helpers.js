@@ -17,11 +17,15 @@ import { getTextFromNode } from './index';
  * @returns {void}
  */
 export const testListNodes = ({ node, expectedLevel, expectedNumPr, text }) => {
-  const numPr = getListAttrFromNumPr('w:ilvl', node);
-  expect(numPr).toBe(expectedLevel);
+  // Word stores numbering attributes as strings, while some fixtures pass numbers.
+  // Normalizing keeps the comparison focused on the logical value rather than the type.
+  const normalize = (value) => (value === undefined ? value : (value?.toString?.() ?? value));
 
   const ilvl = getListAttrFromNumPr('w:ilvl', node);
-  expect(ilvl).toBe(expectedNumPr);
+  expect(normalize(ilvl)).toBe(normalize(expectedLevel));
+
+  const numId = getListAttrFromNumPr('w:numId', node);
+  expect(normalize(numId)).toBe(normalize(expectedNumPr));
 
   if (text) {
     const nodeText = getTextFromNode(node);
@@ -39,7 +43,7 @@ export const testListNodes = ({ node, expectedLevel, expectedNumPr, text }) => {
  */
 export const getListAttrFromNumPr = (attrName, node) => {
   const pPr = node.elements.find((el) => el.name === 'w:pPr');
-  const numPr = pPr.elements.find((el) => el.name === 'w:numPr');
+  const numPr = pPr?.elements?.find((el) => el.name === 'w:numPr');
   const givenNode = numPr?.elements?.find((el) => el.name === attrName);
   return givenNode?.attributes['w:val'];
 };

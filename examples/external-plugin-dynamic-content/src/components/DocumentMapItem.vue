@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, ref, shallowRef, watch, nextTick } from 'vue';
-import { Editor as SuperDocEditor, getRichTextExtensions } from '@harbour-enterprises/superdoc';
+import { Editor as SuperDocEditor, getRichTextExtensions } from 'superdoc';
 
 const emit = defineEmits(['item-click', 'item-drop', 'content-sync', 'blur', 'lock']);
 const props = defineProps({

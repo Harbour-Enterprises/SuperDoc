@@ -1,4 +1,3 @@
-import { undoDepth, redoDepth } from 'prosemirror-history';
 import { h, ref } from 'vue';
 
 import { sanitizeNumber } from './helpers';
@@ -13,9 +12,10 @@ import TableGrid from './TableGrid.vue';
 import TableActions from './TableActions.vue';
 import { scrollToElement } from './scroll-helpers.js';
 
-import checkIconSvg from '@harbour-enterprises/common/icons/check.svg?raw';
+import checkIconSvg from '@superdoc/common/icons/check.svg?raw';
 import SearchInput from './SearchInput.vue';
-import { TOOLBAR_FONTS } from './constants.js';
+import { TOOLBAR_FONTS, TOOLBAR_FONT_SIZES } from './constants.js';
+import { getQuickFormatList } from '@extensions/linked-styles/index.js';
 
 const closeDropdown = (dropdown) => {
   dropdown.expand.value = false;
@@ -44,6 +44,7 @@ export const makeDefaultItems = ({
   });
 
   // font
+  const fontOptions = [...(toolbarFonts ? toolbarFonts : TOOLBAR_FONTS)];
   const fontButton = useToolbarItem({
     type: 'dropdown',
     name: 'fontFamily',
@@ -60,12 +61,28 @@ export const makeDefaultItems = ({
     attributes: {
       ariaLabel: 'Font family',
     },
-    options: [...(toolbarFonts ? toolbarFonts : TOOLBAR_FONTS)],
+    options: fontOptions,
     onActivate: ({ fontFamily }) => {
       if (!fontFamily) return;
+      fontFamily = fontFamily.split(',')[0]; // in case of fonts with fallbacks
       fontButton.label.value = fontFamily;
+
+      const defaultFont = fontOptions.find((i) => i.label === fontButton.defaultLabel.value);
+      const foundFont = fontOptions.find((i) => i.label === fontFamily);
+      if (foundFont) {
+        fontButton.selectedValue.value = foundFont.key;
+      } else if (defaultFont) {
+        fontButton.selectedValue.value = defaultFont.key;
+      } else {
+        fontButton.selectedValue.value = '';
+      }
     },
-    onDeactivate: () => (fontButton.label.value = fontButton.defaultLabel.value),
+    onDeactivate: () => {
+      fontButton.label.value = fontButton.defaultLabel.value;
+      const defaultFont = fontOptions.find((i) => i.label === fontButton.defaultLabel.value);
+      if (defaultFont) fontButton.selectedValue.value = defaultFont.key;
+      else fontButton.selectedValue.value = '';
+    },
   });
 
   // ai button
@@ -118,6 +135,7 @@ export const makeDefaultItems = ({
   });
 
   // font size
+  const fontSizeOptions = TOOLBAR_FONT_SIZES;
   const fontSize = useToolbarItem({
     type: 'dropdown',
     name: 'fontSize',
@@ -136,33 +154,46 @@ export const makeDefaultItems = ({
     attributes: {
       ariaLabel: 'Font size',
     },
-    options: [
-      { label: '8', key: '8pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '9', key: '9pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '10', key: '10pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '11', key: '11pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '12', key: '12pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '14', key: '14pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '18', key: '18pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '24', key: '24pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '30', key: '30pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '36', key: '36pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '48', key: '48pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '60', key: '60pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '72', key: '72pt', props: { 'data-item': 'btn-fontSize-option' } },
-      { label: '96', key: '96pt', props: { 'data-item': 'btn-fontSize-option' } },
-    ],
-    onActivate: ({ fontSize: size }) => {
-      if (!size) return (fontSize.label.value = fontSize.defaultLabel.value);
+    options: fontSizeOptions,
+    onActivate: ({ fontSize: size }, isMultiple = false) => {
+      if (isMultiple) {
+        // if there are multiple sizes in the selection.
+        fontSize.label.value = '';
+        fontSize.selectedValue.value = '';
+        return;
+      }
+
+      const defaultSize = fontSizeOptions.find((i) => i.label === String(fontSize.defaultLabel.value));
+      if (!size) {
+        fontSize.label.value = fontSize.defaultLabel.value;
+        if (defaultSize) fontSize.selectedValue.value = defaultSize.key;
+        else fontSize.selectedValue.value = '';
+        return;
+      }
 
       let sanitizedValue = sanitizeNumber(size, 12);
       if (sanitizedValue < 8) sanitizedValue = 8;
       if (sanitizedValue > 96) sanitizedValue = 96;
+      let sanitizedValueStr = String(sanitizedValue);
+
+      const foundSize = fontSizeOptions.find((i) => {
+        return i.label === sanitizedValueStr || i.key === sanitizedValueStr;
+      });
+      if (foundSize) {
+        fontSize.selectedValue.value = foundSize.key;
+      } else {
+        fontSize.selectedValue.value = '';
+      }
 
       // no units
-      fontSize.label.value = String(sanitizedValue);
+      fontSize.label.value = sanitizedValueStr;
     },
-    onDeactivate: () => (fontSize.label.value = fontSize.defaultLabel.value),
+    onDeactivate: () => {
+      fontSize.label.value = fontSize.defaultLabel.value;
+      const defaultSize = fontSizeOptions.find((i) => i.label === String(fontSize.defaultLabel.value));
+      if (defaultSize) fontSize.selectedValue.value = defaultSize.key;
+      else fontSize.selectedValue.value = '';
+    },
   });
 
   // separator
@@ -411,6 +442,7 @@ export const makeDefaultItems = ({
     type: 'dropdown',
     name: 'tableActions',
     command: 'executeTableCommand',
+    tooltip: toolbarTexts.tableActions,
     icon: toolbarIcons.tableActions,
     hideLabel: true,
     disabled: true,
@@ -715,9 +747,6 @@ export const makeDefaultItems = ({
     attributes: {
       ariaLabel: 'Undo',
     },
-    onDeactivate: () => {
-      undo.disabled.value = !superToolbar.undoDepth;
-    },
   });
 
   // redo
@@ -731,9 +760,6 @@ export const makeDefaultItems = ({
     group: 'left',
     attributes: {
       ariaLabel: 'Redo',
-    },
-    onDeactivate: () => {
-      redo.disabled.value = !superToolbar.redoDepth;
     },
   });
 
@@ -756,7 +782,7 @@ export const makeDefaultItems = ({
     disabled: false,
     name: 'acceptTrackedChangeBySelection',
     tooltip: toolbarTexts.trackChangesAccept,
-    command: 'acceptTrackedChangeBySelection',
+    command: 'acceptTrackedChangeFromToolbar',
     icon: toolbarIcons.trackChangesAccept,
     group: 'left',
     attributes: {
@@ -769,7 +795,7 @@ export const makeDefaultItems = ({
     disabled: false,
     name: 'rejectTrackedChangeOnSelection',
     tooltip: toolbarTexts.trackChangesReject,
-    command: 'rejectTrackedChangeOnSelection',
+    command: 'rejectTrackedChangeFromToolbar',
     icon: toolbarIcons.trackChangesReject,
     group: 'left',
     attributes: {
@@ -978,11 +1004,17 @@ export const makeDefaultItems = ({
         },
       },
     ],
-    onActivate: () => {
+    onActivate: ({ linkedStyleMark }) => {
+      const styles = getQuickFormatList(superToolbar.activeEditor);
+      const selectedStyle = styles?.find((style) => style.id === linkedStyleMark?.attrs?.styleId);
+      // Normal linked style is default one
+      linkedStyles.label.value =
+        selectedStyle && selectedStyle.id !== 'Normal' ? selectedStyle.definition.attrs.name : toolbarTexts.formatText;
       linkedStyles.disabled.value = false;
     },
     onDeactivate: () => {
       linkedStyles.disabled.value = true;
+      linkedStyles.label.value = toolbarTexts.formatText;
     },
   });
 
@@ -1010,37 +1042,37 @@ export const makeDefaultItems = ({
     },
     options: [
       {
-        label: '1,0',
+        label: '1.0',
         key: '1',
         icon: () => renderIcon('1', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '1,15',
+        label: '1.15',
         key: '1.15',
         icon: () => renderIcon('1.15', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '1,5',
+        label: '1.5',
         key: '1.5',
         icon: () => renderIcon('1.5', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '2,0',
+        label: '2.0',
         key: '2',
         icon: () => renderIcon('2', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '2,5',
+        label: '2.5',
         key: '2.5',
         icon: () => renderIcon('2.5', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
       },
       {
-        label: '3,0',
+        label: '3.0',
         key: '3',
         icon: () => renderIcon('3', lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
@@ -1185,16 +1217,3 @@ export const makeDefaultItems = ({
     overflowItems: overflowItems.filter((item) => item.type !== 'separator'),
   };
 };
-
-export const setHistoryButtonStateOnUpdate =
-  (toolbarItemsRef) =>
-  ({ editor }) => {
-    // console.debug('[SuperEditor dev] Document updated', editor);
-    // activeEditor = editor;
-
-    const undo = toolbarItemsRef.value.find((item) => item.name === 'undo');
-    const redo = toolbarItemsRef.value.find((item) => item.name === 'redo');
-
-    undo.disabled = undoDepth(editor.state) <= 0;
-    redo.disabled = redoDepth(editor.state) <= 0;
-  };

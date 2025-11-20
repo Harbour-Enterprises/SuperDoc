@@ -14,88 +14,105 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
   });
 
   it('imports the list correctly', () => {
-    expect(currentState.content[0].type).toBe('orderedList');
-    expect(currentState.content[0].content.length).toBe(1);
+    expect(currentState.content[0].type).toBe('paragraph');
+    expect(currentState.content[0].content.length).toBe(2);
   });
 
   it('first list item imports correctly', () => {
-    const listItem = currentState.content[0].content[0];
+    const listItem = currentState.content[0];
 
-    expect(listItem.type).toBe('listItem');
-    expect(listItem.content.length).toBe(1);
+    expect(listItem.type).toBe('paragraph');
+    expect(listItem.attrs.listRendering).toEqual({
+      markerText: '1.',
+      justification: 'left',
+      path: [1],
+      numberingType: 'decimal',
+    });
+    expect(listItem.attrs.numberingProperties).toEqual({
+      ilvl: 0,
+      numId: 5,
+    });
 
     const sublist = currentState.content[1];
     expect(sublist).toBeDefined();
-    expect(sublist.content.length).toBe(1);
+    expect(sublist.type).toBe('paragraph');
+    expect(sublist.attrs.listRendering).toEqual({
+      markerText: 'a.',
+      justification: 'left',
+      path: [1, 1],
+      numberingType: 'lowerLetter',
+    });
 
-    const subItem1 = currentState.content[3].content[0];
-    expect(subItem1.attrs.listLevel).toStrictEqual([1, 2]);
+    const subItem2 = currentState.content[3];
+    expect(subItem2.attrs.listRendering).toEqual({
+      markerText: 'b.',
+      justification: 'left',
+      path: [1, 2],
+      numberingType: 'lowerLetter',
+    });
 
-    const subItem4 = currentState.content[7].content[0];
-    expect(subItem4.attrs.listLevel).toStrictEqual([1, 4]);
-  });
-
-  it('second list item imports correctly', () => {
-    const listItem = currentState.content[0].content[0];
-    expect(listItem.type).toBe('listItem');
-    expect(listItem.content.length).toBe(1);
-
-    const sublist = currentState.content[3];
-    expect(sublist).toBeDefined();
-    expect(sublist.content.length).toBe(1);
-
-    const subItem1 = sublist.content[0];
-    expect(subItem1.type).toBe('listItem');
-    expect(subItem1.attrs.numId).toBe('5');
-    expect(subItem1.attrs.listLevel).toStrictEqual([1, 2]);
-
-    const subItem2 = currentState.content[5].content[0];
-    expect(subItem2.attrs.listLevel).toStrictEqual([1, 3]);
+    const subItem3 = currentState.content[5];
+    expect(subItem3.attrs.listRendering).toEqual({
+      markerText: 'c.',
+      justification: 'left',
+      path: [1, 3],
+      numberingType: 'lowerLetter',
+    });
+    const subItem4 = currentState.content[7];
+    expect(subItem4.attrs.listRendering).toEqual({
+      markerText: 'd.',
+      justification: 'left',
+      path: [1, 4],
+      numberingType: 'lowerLetter',
+    });
   });
 
   it('third list item with node break imports correctly', () => {
-    const listItem = currentState.content[0].content[0];
-    expect(listItem.type).toBe('listItem');
-    expect(listItem.content.length).toBe(1);
-
-    const sublist = currentState.content[7];
-    expect(sublist).toBeDefined();
-    expect(sublist.content.length).toBe(1);
-
-    const subItem1 = sublist.content[0];
-    expect(subItem1.attrs.listLevel).toStrictEqual([1, 4]);
-    expect(subItem1.content.length).toBe(1);
-
     // The node break
     const nodeBreak = currentState.content[19];
     expect(nodeBreak.type).toBe('paragraph');
     expect(nodeBreak.content.length).toBe(1);
+    expect(nodeBreak.attrs.listRendering).toBeNull();
 
     // Ensure the nodes after the break have the correct listLevel index
     const listAfterBreak = currentState.content[21];
-    expect(listAfterBreak.type).toBe('orderedList');
+    expect(listAfterBreak.type).toBe('paragraph');
 
-    const subItem3 = listAfterBreak.content[0];
-    expect(subItem3.attrs.numId).toBe('5');
-    expect(subItem3.attrs.listLevel).toStrictEqual([3, 2]);
+    expect(listAfterBreak.attrs.listRendering).toEqual({
+      markerText: 'b.',
+      justification: 'left',
+      path: [3, 2],
+      numberingType: 'lowerLetter',
+      suffix: undefined,
+    });
 
-    const subItem4 = currentState.content[23].content[0];
-    expect(subItem4.type).toBe('listItem');
-    expect(subItem4.attrs.numId).toBe('5');
-    expect(subItem4.attrs.listLevel).toStrictEqual([3, 3]);
+    const subItem4 = currentState.content[23];
+    expect(subItem4.type).toBe('paragraph');
+    expect(subItem4.attrs.listRendering).toEqual({
+      markerText: 'c.',
+      justification: 'left',
+      path: [3, 3],
+      numberingType: 'lowerLetter',
+      suffix: undefined,
+    });
   });
 
   it('root list continues correctly after third item with break', () => {
     // Make sure the 'FOUR' list item continues correctly here
-    const listItem = currentState.content[25].content[0];
-    expect(listItem.type).toBe('listItem');
-    expect(listItem.attrs.listLevel).toStrictEqual([4]);
+    const listItem = currentState.content[25];
+    expect(listItem.type).toBe('paragraph');
+    expect(listItem.attrs.listRendering).toEqual({
+      markerText: '4.',
+      justification: 'left',
+      path: [4],
+      numberingType: 'decimal',
+    });
 
-    const contents = listItem.content[0];
-    expect(contents.type).toBe('paragraph');
-    expect(contents.content.length).toBe(1);
+    const runNode = listItem.content[0];
+    expect(runNode.type).toBe('run');
+    expect(runNode.content.length).toBe(1);
 
-    const textNode = contents.content[0];
+    const textNode = runNode.content[0];
     expect(textNode.type).toBe('text');
     expect(textNode.text).toBe('FOUR');
   });
@@ -113,16 +130,19 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
   });
 
   it('correctly imports the list styles on the indented list (expects inline js, ind)', () => {
-    const subList = currentState.content[1];
-    const subItem1 = subList.content[0];
+    const subItem1 = currentState.content[1];
 
     const spacing = subItem1.attrs.spacing;
-    expect(spacing).toBeNull();
+    expect(spacing).toEqual({
+      after: 0,
+      line: 240,
+      lineRule: 'auto',
+    });
 
-    const indent = subItem1.attrs.indent;
-    expect(indent.left).toBe(24);
-    expect(indent.firstLine).toBe(0);
-    expect(indent.hanging).toBeUndefined();
+    expect(subItem1.attrs.indent).toEqual({
+      left: 360,
+      firstLine: 0,
+    });
   });
 });
 
@@ -138,18 +158,25 @@ describe('[custom-list-numbering1.docx] importing complex list (repeated num id 
   });
 
   it('correctly imports list with numbering format SECTION %1.', () => {
-    const listItem = currentState.content[0].content[0];
+    const listItem = currentState.content[0];
     const { attrs } = listItem;
 
-    expect(attrs.lvlText).toBe('SECTION %1.  ');
+    expect(attrs.listRendering).toEqual({
+      markerText: 'SECTION 1.  ',
+      suffix: 'nothing',
+      justification: 'left',
+      path: [1],
+      numberingType: 'decimal',
+    });
   });
 
   it('correctly imports the sublist with numbering (a), (b) etc', () => {
-    const subList = currentState.content[1];
-    const subItem1 = subList.content[0];
-    expect(subItem1.attrs.lvlText).toBe('(%2)');
-
-    const subItem2 = currentState.content[3].content[0];
-    expect(subItem2.attrs.lvlText).toBe('(%2)');
+    const subItem1 = currentState.content[1];
+    expect(subItem1.attrs.listRendering).toEqual({
+      markerText: '(a)',
+      justification: 'left',
+      path: [1, 1],
+      numberingType: 'lowerLetter',
+    });
   });
 });

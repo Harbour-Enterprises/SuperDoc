@@ -1,6 +1,39 @@
 {
-  "name": "@harbour-enterprises/common",
+  "name": "@superdoc/common",
   "private": true,
-  "main": "index.js",
-  "type": "module"
+  "version": "1.0.0",
+  "type": "module",
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./icons/*": "./icons/*",
+    "./data/*": "./data/*",
+    "./styles/*": "./styles/*",
+    "./components/*": "./components/*",
+    "./collaboration/*": "./collaboration/*.ts",
+    "./helpers/*": "./helpers/*.ts",
+    "./*.ts": "./*.ts"
+  },
+  "files": [
+    "*.ts",
+    "icons",
+    "data",
+    "styles",
+    "components",
+    "collaboration",
+    "helpers"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "@vitejs/plugin-vue": "^5.0.4",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.8",
+    "vue": "^3.5.20"
+  }
 }

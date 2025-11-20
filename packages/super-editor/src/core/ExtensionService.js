@@ -224,22 +224,30 @@ export class ExtensionService {
 
         const addNodeView = getExtensionConfigField(extension, 'addNodeView', context);
 
-        if (!addNodeView) return [];
+        if (!addNodeView) return null;
+
+        // Call addNodeView() to get the actual node view function
+        // It may return null in headless mode or other scenarios
+        const nodeViewFunction = addNodeView();
+
+        if (!nodeViewFunction) return null;
 
         const nodeview = (node, _view, getPos, decorations) => {
           const htmlAttributes = Attribute.getAttributesToRender(node, extensionAttrs);
-          return addNodeView()({
+          return nodeViewFunction({
             editor,
             node,
             getPos,
             decorations,
             htmlAttributes,
             extension,
+            extensionAttrs,
           });
         };
 
         return [extension.name, nodeview];
-      });
+      })
+      .filter(Boolean);
 
     return Object.fromEntries(entries);
   }

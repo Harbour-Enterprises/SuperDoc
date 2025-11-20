@@ -1,14 +1,19 @@
+// @ts-check
 import { CustomSelectionPluginKey } from '../custom-selection/custom-selection.js';
 import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 import { findParentNode } from '@helpers/index.js';
-import { kebabCase } from '@harbour-enterprises/common';
+import { kebabCase } from '@superdoc/common';
+import { getUnderlineCssString } from './index.js';
+import { twipsToLines, twipsToPixels, halfPointToPixels } from '@converter/helpers.js';
 
 /**
  * Get the (parsed) linked style from the styles.xml
- *
- * @param {String} styleId The styleId of the linked style
- * @param {Array[Object]} styles The styles array
- * @returns {Object} The linked style
+ * @category Helper
+ * @param {string} styleId - The styleId of the linked style
+ * @param {Array} styles - The styles array
+ * @returns {Object} The linked style and its parent
+ * @example
+ * const { linkedStyle, basedOnStyle } = getLinkedStyle('Heading1', styles);
  */
 export const getLinkedStyle = (styleId, styles = []) => {
   const linkedStyle = styles.find((style) => style.id === styleId);
@@ -17,30 +22,88 @@ export const getLinkedStyle = (styleId, styles = []) => {
   return { linkedStyle, basedOnStyle };
 };
 
+/**
+ * Convert spacing attributes to CSS style object
+ * @category Helper
+ * @param {Object} spacing - The spacing object
+ * @returns {Object} CSS style properties
+ * @private
+ */
 export const getSpacingStyle = (spacing) => {
-  const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
+  const { lineSpaceBefore, lineSpaceAfter, line, lineRule, beforeAutoSpacing, afterAutoSpacing } = spacing;
+  const lineHeightResult = getLineHeightValueString(line, '', lineRule, true);
+  const lineHeightStyles = typeof lineHeightResult === 'object' && lineHeightResult !== null ? lineHeightResult : {};
+
+  const result = {};
+  if (!beforeAutoSpacing) {
+    result['margin-top'] = lineSpaceBefore + 'px';
+  }
+  if (!afterAutoSpacing) {
+    result['margin-bottom'] = lineSpaceAfter + 'px';
+  }
+
   return {
-    'margin-top': lineSpaceBefore + 'px',
-    'margin-bottom': lineSpaceAfter + 'px',
-    ...getLineHeightValueString(line, '', lineRule, true),
+    ...result,
+    ...lineHeightStyles,
   };
 };
 
 /**
- * Convert spacing object to a style string
- *
- * @param {Object} spacing The spacing object
- * @returns {String} The style string
+ * Convert spacing object to a CSS style string
+ * @category Helper
+ * @param {Object} spacing - The spacing object
+ * @param {Array} marks - The marks array for font size reference
+ * @returns {string} The CSS style string
+ * @private
  */
-export const getSpacingStyleString = (spacing) => {
-  const { lineSpaceBefore, lineSpaceAfter, line } = spacing;
+export const getSpacingStyleString = (spacing, marks, isListItem) => {
+  let { before, after, line, lineRule, beforeAutospacing, afterAutospacing } = spacing;
+  line = twipsToLines(line);
+  // Prevent values less than 1 to avoid squashed text
+  if (line != null && line < 1) {
+    line = 1;
+  }
+  if (lineRule === 'exact' && line) {
+    line = String(line);
+  }
+
+  const textStyleMark = marks?.find((mark) => mark.type === 'textStyle');
+  const fontSize = textStyleMark?.attrs?.fontSize;
+
+  before = twipsToPixels(before);
+  if (beforeAutospacing) {
+    if (fontSize) {
+      before += halfPointToPixels(parseInt(fontSize) * 0.5);
+    }
+    if (isListItem) {
+      before = 0; // Lists do not apply before autospacing
+    }
+  }
+
+  after = twipsToPixels(after);
+  if (afterAutospacing) {
+    if (fontSize) {
+      after += halfPointToPixels(parseInt(fontSize) * 0.5);
+    }
+    if (isListItem) {
+      after = 0; // Lists do not apply after autospacing
+    }
+  }
+
   return `
-    ${lineSpaceBefore ? `margin-top: ${lineSpaceBefore}px;` : ''}
-    ${lineSpaceAfter ? `margin-bottom: ${lineSpaceAfter}px;` : ''}
+    ${before ? `margin-top: ${before}px;` : ''}
+    ${after ? `margin-bottom: ${after}px;` : ''}
     ${line ? getLineHeightValueString(line, '') : ''}
   `.trim();
 };
 
+/**
+ * Convert mark attributes to CSS styles
+ * @category Helper
+ * @param {Array} attrs - Array of mark attributes
+ * @returns {string} CSS style string
+ * @private
+ */
 export const getMarksStyle = (attrs) => {
   let styles = '';
   for (const attr of attrs) {
@@ -60,33 +123,45 @@ export const getMarksStyle = (attrs) => {
       case 'textStyle':
         const { fontFamily, fontSize } = attr.attrs;
         styles += `${fontFamily ? `font-family: ${fontFamily};` : ''} ${fontSize ? `font-size: ${fontSize};` : ''}`;
+        break;
     }
   }
 
   return styles.trim();
 };
 
+/**
+ * Get a sorted list of paragraph quick-format styles from the editor
+ * @category Helper
+ * @param {Object} editor - The editor instance
+ * @returns {Array} Sorted list of paragraph styles
+ * @example
+ * const quickStyles = getQuickFormatList(editor);
+ * // Returns paragraph styles sorted by name
+ */
 export const getQuickFormatList = (editor) => {
-  if (!editor?.converter) return [];
-  const styles = editor.converter.linkedStyles || [];
-  return styles
-    .filter((style) => {
-      return style.type === 'paragraph' && style.definition.attrs;
-    })
+  if (!editor?.converter?.linkedStyles) return [];
+
+  return editor.converter.linkedStyles
+    .filter((style) => style.type === 'paragraph' && style.definition?.attrs)
     .sort((a, b) => {
-      return a.definition.attrs?.name.localeCompare(b.definition.attrs?.name);
+      const nameA = a.definition.attrs?.name ?? '';
+      const nameB = b.definition.attrs?.name ?? '';
+      return nameA.localeCompare(nameB);
     });
 };
 
 /**
- * Convert the linked styles and current node marks into a decoration string
- * If the node contains a given mark, we don't override it with the linked style per MS Word behavior
- *
- * @param {Object} linkedStyle The linked style object
- * @param {Object} basedOnStyle The basedOn style object
- * @param {Object} node The current node
- * @param {Object} parent The parent of current
- * @returns {String} The style string
+ * Convert linked styles and current node marks into a CSS decoration string
+ * @category Helper
+ * @param {Object} linkedStyle - The linked style object
+ * @param {Object} basedOnStyle - The basedOn style object
+ * @param {Object} node - The current node
+ * @param {Object} parent - The parent of current node
+ * @param {boolean} includeSpacing - Whether to include spacing styles
+ * @returns {string} The CSS style string for decorations
+ * @note Node marks take precedence over linked style properties per Word behavior
+ * @private
  */
 export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, parent, includeSpacing = true) => {
   if (!linkedStyle?.definition?.styles) return '';
@@ -96,12 +171,22 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
   const basedOnDefinitionStyles = { ...basedOnStyle?.definition?.styles };
   const resultStyles = { ...linkedDefinitionStyles };
 
-  if (!linkedDefinitionStyles['font-size'] && basedOnDefinitionStyles['font-size']) {
-    resultStyles['font-size'] = basedOnDefinitionStyles['font-size'];
-  }
-  if (!linkedDefinitionStyles['text-transform'] && basedOnDefinitionStyles['text-transform']) {
-    resultStyles['text-transform'] = basedOnDefinitionStyles['text-transform'];
-  }
+  const inheritKeys = [
+    'font-size',
+    'font-family',
+    'text-transform',
+    'bold',
+    'italic',
+    'underline',
+    'strike',
+    'color',
+    'highlight',
+  ];
+  inheritKeys.forEach((k) => {
+    if (!linkedDefinitionStyles[k] && basedOnDefinitionStyles[k]) {
+      resultStyles[k] = basedOnDefinitionStyles[k];
+    }
+  });
 
   Object.entries(resultStyles).forEach(([k, value]) => {
     const key = kebabCase(k);
@@ -120,6 +205,12 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
 
       flattenedMarks.push({ key: n.type.name, value: n.attrs[key] });
     });
+
+    // If inline underline explicitly sets 'none', force no underline regardless of style
+    const underlineNone = node?.marks?.some((m) => m.type?.name === 'underline' && m.attrs?.underlineType === 'none');
+    if (underlineNone) {
+      markValue['text-decoration'] = 'none';
+    }
 
     // Check if this node has the expected mark. If yes, we are not overriding it
     const mark = flattenedMarks.find((n) => n.key === key);
@@ -142,9 +233,45 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
         if (rightIndent) markValue['margin-right'] = rightIndent + 'px';
         if (firstLine) markValue['text-indent'] = firstLine + 'px';
       } else if (key === 'bold' && node) {
-        const val = value?.value;
-        if (!listTypes.includes(node.type.name) && val !== '0') {
+        const boldValue = typeof value === 'object' && value !== null ? value.value : value;
+        const hasInlineBoldOff = node.marks?.some((m) => m.type?.name === 'bold' && m.attrs?.value === '0');
+        const hasInlineBoldOn = node.marks?.some((m) => m.type?.name === 'bold' && m.attrs?.value !== '0');
+        if (
+          !listTypes.includes(node.type.name) &&
+          !hasInlineBoldOff &&
+          !hasInlineBoldOn &&
+          boldValue !== '0' &&
+          boldValue !== false
+        ) {
           markValue['font-weight'] = 'bold';
+        }
+      } else if (key === 'italic' && node) {
+        const italicValue = typeof value === 'object' && value !== null ? value.value : value;
+        const hasInlineItalicOff = node.marks?.some((m) => m.type?.name === 'italic' && m.attrs?.value === '0');
+        const hasInlineItalicOn = node.marks?.some((m) => m.type?.name === 'italic' && m.attrs?.value !== '0');
+        if (
+          !listTypes.includes(node.type.name) &&
+          !hasInlineItalicOff &&
+          !hasInlineItalicOn &&
+          italicValue !== '0' &&
+          italicValue !== false
+        ) {
+          markValue['font-style'] = 'italic';
+        }
+      } else if (key === 'strike' && node) {
+        const strikeValue = typeof value === 'object' && value !== null ? value.value : value;
+        const hasInlineStrikeOff = node.marks?.some((m) => m.type?.name === 'strike' && m.attrs?.value === '0');
+        const hasInlineStrikeOn = node.marks?.some(
+          (m) => m.type?.name === 'strike' && (m.attrs?.value === undefined || m.attrs?.value !== '0'),
+        );
+        if (
+          !listTypes.includes(node.type.name) &&
+          !hasInlineStrikeOff &&
+          !hasInlineStrikeOn &&
+          strikeValue !== '0' &&
+          strikeValue !== false
+        ) {
+          markValue['text-decoration'] = 'line-through';
         }
       } else if (key === 'text-transform' && node) {
         if (!listTypes.includes(node.type.name)) {
@@ -154,9 +281,44 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
         if (!listTypes.includes(node.type.name)) {
           markValue[key] = value;
         }
+      } else if (key === 'font-family' && node) {
+        if (!listTypes.includes(node.type.name)) {
+          markValue[key] = value;
+        }
       } else if (key === 'color' && node) {
         if (!listTypes.includes(node.type.name)) {
           markValue[key] = value;
+        }
+      } else if (key === 'highlight' && node) {
+        const hasInlineHighlight = node.marks?.some((m) => m.type?.name === 'highlight');
+        if (!listTypes.includes(node.type.name) && !hasInlineHighlight) {
+          const color = typeof value === 'string' ? value : value?.color;
+          if (color) markValue['background-color'] = color;
+        }
+      } else if (key === 'underline' && node) {
+        const styleValRaw = value?.value ?? value ?? '';
+        const styleVal = styleValRaw.toString().toLowerCase();
+        const hasInlineUnderlineOff = node.marks?.some(
+          (m) => m.type?.name === 'underline' && m.attrs?.underlineType === 'none',
+        );
+        const hasInlineUnderlineOn = node.marks?.some(
+          (m) => m.type?.name === 'underline' && m.attrs?.underlineType && m.attrs.underlineType !== 'none',
+        );
+        if (!listTypes.includes(node.type.name) && !hasInlineUnderlineOff && !hasInlineUnderlineOn) {
+          if (styleVal && styleVal !== 'none' && styleVal !== '0') {
+            const colorVal = value && typeof value === 'object' ? value.color || value.underlineColor || null : null;
+            const css = getUnderlineCssString({ type: styleVal, color: colorVal });
+            // apply css string into markValue map
+            css.split(';').forEach((decl) => {
+              const d = decl.trim();
+              if (!d) return;
+              const idx = d.indexOf(':');
+              if (idx === -1) return;
+              const k = d.slice(0, idx).trim();
+              const v = d.slice(idx + 1).trim();
+              markValue[k] = v;
+            });
+          }
         }
       } else if (typeof value === 'string') {
         markValue[key] = value;
@@ -171,12 +333,16 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
 };
 
 /**
- * Helper function to apply a linked style to a transaction
- *
- * @param {Transaction} tr The transaction to mutate
- * @param {Editor} editor The editor instance
- * @param {object} style The linked style to apply
+ * Apply a linked style to a transaction
+ * @category Helper
+ * @param {Object} tr - The transaction to mutate
+ * @param {Object} editor - The editor instance
+ * @param {Object} style - The linked style to apply
  * @returns {boolean} Whether the transaction was modified
+ * @example
+ * const success = applyLinkedStyleToTransaction(tr, editor, headingStyle);
+ * @note Clears existing formatting marks when applying styles
+ * @note Handles both cursor position and selection ranges
  */
 export const applyLinkedStyleToTransaction = (tr, editor, style) => {
   if (!style) return false;
@@ -186,7 +352,7 @@ export const applyLinkedStyleToTransaction = (tr, editor, style) => {
 
   // Check for preserved selection from custom selection plugin
   const focusState = CustomSelectionPluginKey.getState(state);
-  if (selection.empty && focusState?.preservedSelection) {
+  if (selection.empty && focusState?.preservedSelection && !focusState?.preservedSelection.empty) {
     selection = focusState.preservedSelection;
     tr.setSelection(selection);
   }
@@ -280,4 +446,34 @@ export const applyLinkedStyleToTransaction = (tr, editor, style) => {
   });
 
   return true;
+};
+
+// Detect typing inside any styled paragraph so decorations can be rebuilt
+export const stepInsertsTextIntoStyledParagraph = (tr, oldEditorState, step, stepIndex) => {
+  if (!step.slice || step.slice.size === 0 || typeof step.from !== 'number') {
+    return false;
+  }
+
+  let insertsText = false;
+  step.slice.content.descendants((node) => {
+    if (node.type?.name === 'text' && node.text?.length) {
+      insertsText = true;
+      return false;
+    }
+    return true;
+  });
+
+  if (!insertsText) return false;
+
+  const docBeforeStep = tr.docs?.[stepIndex] || oldEditorState.doc;
+  if (!docBeforeStep) return false;
+  const resolvedPos = Math.min(step.from, docBeforeStep.content.size);
+  const $pos = docBeforeStep.resolve(resolvedPos);
+  for (let depth = $pos.depth; depth >= 0; depth--) {
+    const node = $pos.node(depth);
+    if (node?.type?.name === 'paragraph') {
+      return Boolean(node.attrs?.styleId);
+    }
+  }
+  return false;
 };

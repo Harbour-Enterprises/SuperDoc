@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 import { handleParagraphNode } from '@converter/v2/importer/paragraphNodeImporter.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
-import { translateParagraphNode } from '@converter/exporter.js';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 
 describe('Tab Stops Round Trip Tests', () => {
   // Create a minimal editor mock that has the required extensions property
@@ -68,24 +68,24 @@ describe('Tab Stops Round Trip Tests', () => {
     expect(importedNode.attrs.tabStops.length).toBe(3);
 
     // Verify imported tab stops
-    const firstTab = importedNode.attrs.tabStops[0];
-    expect(firstTab.val).toBe('start');
-    expect(firstTab.pos).toBe(144);
+    const firstTab = importedNode.attrs.tabStops[0].tab;
+    expect(firstTab.tabType).toBe('start');
+    expect(firstTab.pos).toBe(2160);
     expect(firstTab.leader).toBeUndefined();
 
-    const secondTab = importedNode.attrs.tabStops[1];
-    expect(secondTab.val).toBe('center');
-    expect(secondTab.pos).toBe(336);
+    const secondTab = importedNode.attrs.tabStops[1].tab;
+    expect(secondTab.tabType).toBe('center');
+    expect(secondTab.pos).toBe(5040);
     expect(secondTab.leader).toBe('dot');
 
-    const thirdTab = importedNode.attrs.tabStops[2];
-    expect(thirdTab.val).toBe('decimal');
-    expect(thirdTab.pos).toBe(480);
+    const thirdTab = importedNode.attrs.tabStops[2].tab;
+    expect(thirdTab.tabType).toBe('decimal');
+    expect(thirdTab.pos).toBe(7200);
     expect(thirdTab.leader).toBe('underscore');
 
     // Step 2: Export the imported node back to DOCX
     const mockEditor = createMockEditor();
-    const exportedResult = translateParagraphNode({
+    const exportedResult = wPTranslator.decode({
       editor: mockEditor,
       node: importedNode,
     });
@@ -146,7 +146,7 @@ describe('Tab Stops Round Trip Tests', () => {
 
     // Step 2: Export the imported node back to DOCX
     const mockEditor = createMockEditor();
-    const exportedResult = translateParagraphNode({
+    const exportedResult = wPTranslator.decode({
       editor: mockEditor,
       node: importedNode,
     });
@@ -200,14 +200,13 @@ describe('Tab Stops Round Trip Tests', () => {
     expect(importedNode.attrs.tabStops).toBeDefined();
     expect(importedNode.attrs.tabStops.length).toBe(1);
 
-    const tab = importedNode.attrs.tabStops[0];
-    expect(tab.val).toBe('start'); // Should default to 'start'
-    expect(tab.pos).toBe(96);
+    const tab = importedNode.attrs.tabStops[0].tab;
+    expect(tab.pos).toBe(1440);
     expect(tab.leader).toBeUndefined();
 
     // Step 2: Export the imported node back to DOCX
     const mockEditor = createMockEditor();
-    const exportedResult = translateParagraphNode({
+    const exportedResult = wPTranslator.decode({
       editor: mockEditor,
       node: importedNode,
     });
@@ -217,9 +216,54 @@ describe('Tab Stops Round Trip Tests', () => {
     expect(tabs.elements.length).toBe(1);
 
     const exportedTab = tabs.elements[0];
-    expect(exportedTab.attributes['w:val']).toBe('start');
+    expect(exportedTab.attributes['w:val']).toBeUndefined();
     expect(exportedTab.attributes['w:pos']).toBe('1440');
     expect(exportedTab.attributes['w:leader']).toBeUndefined();
+  });
+
+  it('preserves original w:pos values for clearing tab stops', () => {
+    const mockDocxParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:tabs',
+              elements: [
+                {
+                  name: 'w:tab',
+                  attributes: {
+                    'w:val': 'clear',
+                    'w:pos': '1234',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockDocxParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const importedNode = nodes[0];
+    expect(importedNode.attrs.tabStops[0].tab.pos).toBe(1234);
+
+    const mockEditor = createMockEditor();
+    const exportedResult = wPTranslator.decode({
+      editor: mockEditor,
+      node: importedNode,
+    });
+
+    const pPr = exportedResult.elements.find((el) => el.name === 'w:pPr');
+    const tabs = pPr.elements.find((el) => el.name === 'w:tabs');
+    const exportedTab = tabs.elements[0];
+    expect(exportedTab.attributes['w:pos']).toBe('1234');
   });
 
   it('preserves tab stop order in round trip', () => {
@@ -275,7 +319,7 @@ describe('Tab Stops Round Trip Tests', () => {
 
     // Step 2: Export the imported node back to DOCX
     const mockEditor = createMockEditor();
-    const exportedResult = translateParagraphNode({
+    const exportedResult = wPTranslator.decode({
       editor: mockEditor,
       node: importedNode,
     });

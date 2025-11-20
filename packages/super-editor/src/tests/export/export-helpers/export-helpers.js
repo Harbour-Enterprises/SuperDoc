@@ -13,10 +13,23 @@ import { getCommentDefinition } from '@converter/v2/exporter/commentsExporter.js
  * @returns {string} The text from the node
  */
 export const getTextFromNode = (node) => {
-  const listTextNode = node.elements.find((el) => el.name === 'w:r');
-  const textNode = listTextNode?.elements?.find((el) => el.name === 'w:t');
-  const text = textNode?.elements?.find((el) => el.type === 'text')?.text;
-  return text;
+  if (!node?.elements) return '';
+  const textParts = [];
+
+  node.elements.forEach((element) => {
+    if (element.name !== 'w:r') return;
+
+    const textNodes = element.elements?.filter((child) => child.name === 'w:t') || [];
+    textNodes.forEach((textNode) => {
+      const value = textNode.elements
+        ?.filter((child) => child.type === 'text' && typeof child.text === 'string')
+        .map((child) => child.text)
+        .join('');
+      if (value) textParts.push(value);
+    });
+  });
+
+  return textParts.join('');
 };
 
 /**
@@ -96,6 +109,37 @@ export const getExportedResult = async (name, comments = []) => {
   return result;
 };
 
+export const getExportMediaFiles = async (name, comments = []) => {
+  const buffer = await getTestDataAsBuffer(name);
+  const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
+
+  const editor = new Editor({
+    isHeadless: true,
+    extensions: getStarterExtensions(),
+    documentId: 'test-doc',
+    content: docx,
+    mode: 'docx',
+    media,
+    mediaFiles,
+    fonts,
+    annotations: true,
+  });
+
+  const json = editor.getUpdatedJson();
+  await editor.converter.exportToDocx(
+    json,
+    editor.schema,
+    editor.storage.image.media,
+    true,
+    'external',
+    comments,
+    editor,
+    false,
+    null,
+  );
+  return editor.converter.addedMedia;
+};
+
 export const getExportedResultForAnnotations = async (isFinalDoc) => {
   const buffer = await getTestDataAsBuffer('annotations_import.docx');
   const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
@@ -123,4 +167,50 @@ export const getExportedResultForAnnotations = async (isFinalDoc) => {
   });
 
   return { result, params };
+};
+
+/**
+ * Export a result using a base docx (for namespaces/body) but custom document content.
+ * Useful for round-trip tests where we craft specific nodes/attrs.
+ * @param {Array<Object>} content Array of SuperDoc nodes (e.g., paragraphs)
+ * @param {string} [baseName='blank-doc.docx'] Optional base test file name
+ * @returns {Promise<Object>} The exported OOXML result JSON
+ */
+export const getExportedResultWithDocContent = async (content, baseName = 'blank-doc.docx') => {
+  const buffer = await getTestDataAsBuffer(baseName);
+  const [docx, media, mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
+
+  const editor = new Editor({
+    isHeadless: true,
+    extensions: getStarterExtensions(),
+    documentId: 'test-doc',
+    content: docx,
+    mode: 'docx',
+    media,
+    mediaFiles,
+    fonts,
+  });
+
+  // Use the editor's schema root to preserve required root attrs/namespaces.
+  const baseSchema = editor.converter.getSchema(editor);
+  const bodyNode = editor.converter.savedTagsToRestore.find((el) => el.name === 'w:body');
+  const docNode = { ...baseSchema, content };
+
+  const [result] = exportSchemaToJson({
+    editorSchema: editor.schema,
+    node: docNode,
+    bodyNode,
+    relationships: [],
+    documentMedia: {},
+    media: {},
+    isFinalDoc: false,
+    pageStyles: editor.converter.pageStyles,
+    comments: [],
+    exportedComments: [],
+    exportedCommentDefs: [],
+    editor,
+    lists: {},
+  });
+
+  return result;
 };

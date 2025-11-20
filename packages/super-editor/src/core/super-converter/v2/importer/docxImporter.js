@@ -2,36 +2,39 @@ import { getInitialJSON } from '../docxHelper.js';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { twipsToInches } from '../../helpers.js';
 import { DEFAULT_LINKED_STYLES } from '../../exporter-docx-defs.js';
-import { tableNodeHandlerEntity } from './tableImporter.js';
 import { drawingNodeHandlerEntity } from './imageImporter.js';
 import { trackChangeNodeHandlerEntity } from './trackChangesImporter.js';
 import { hyperlinkNodeHandlerEntity } from './hyperlinkImporter.js';
 import { runNodeHandlerEntity } from './runNodeImporter.js';
 import { textNodeHandlerEntity } from './textNodeImporter.js';
 import { paragraphNodeHandlerEntity } from './paragraphNodeImporter.js';
-import { annotationNodeHandlerEntity } from './annotationImporter.js';
-import { sdtNodeHandlerEntity } from './structuredDocumentNodeImporter.js';
+import { sdtNodeHandlerEntity } from './sdtNodeImporter.js';
 import { standardNodeHandlerEntity } from './standardNodeImporter.js';
 import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
-import { bookmarkNodeHandlerEntity } from './bookmarkNodeImporter.js';
+import { bookmarkStartNodeHandlerEntity } from './bookmarkStartImporter.js';
+import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
 import { alternateChoiceHandler } from './alternateChoiceImporter.js';
 import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumberImporter.js';
-import { tabNodeEntityHandler } from './tabImporter.js';
-import { listHandlerEntity } from './listImporter.js';
+import { pageReferenceEntity } from './pageReferenceImporter.js';
 import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
-import { getDefaultStyleDefinition } from './paragraphNodeImporter.js';
-import { baseNumbering } from '../exporter/helpers/base-list.definitions.js';
+import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
+import { pruneIgnoredNodes } from './ignoredNodes.js';
+import { tabNodeEntityHandler } from './tabImporter.js';
+import { tableNodeHandlerEntity } from './tableImporter.js';
+import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
+import { preProcessNodesForFldChar } from '../../field-references';
+import { ensureNumberingCache } from './numberingCache.js';
 
 /**
  * @typedef {import()} XmlNode
- * @typedef {{type: string, content: *, attrs: {}}} PmNodeJson
+ * @typedef {{type: string, content: *, text: *, marks: *, attrs: {},}} PmNodeJson
  * @typedef {{type: string, attrs: {}}} PmMarkJson
  *
- * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackCahange: boolean) => PmNodeJson[]} NodeListHandlerFn
+ * @typedef {(nodes: XmlNode[], docx: ParsedDocx, insideTrackChange: boolean) => PmNodeJson[]} NodeListHandlerFn
  * @typedef {{handler: NodeListHandlerFn, handlerEntities: NodeHandlerEntry[]}} NodeListHandler
  *
- * @typedef {(nodes: XmlNode[], docx: ParsedDocx, nodeListHandler: NodeListHandler, insideTrackCahange: boolean) => {nodes: PmNodeJson[], consumed: number}} NodeHandler
+ * @typedef {(nodes: XmlNode[], docx: ParsedDocx, nodeListHandler: NodeListHandler, insideTrackChange: boolean) => {nodes: PmNodeJson[], consumed: number}} NodeHandler
  * @typedef {{handlerName: string, handler: NodeHandler}} NodeHandlerEntry
  */
 
@@ -57,38 +60,66 @@ export const createDocumentJson = (docx, converter, editor) => {
       };
     });
 
-    converter.telemetry.trackFileStructure(
-      {
-        totalFiles: files.length,
-        maxDepth: Math.max(...files.map((f) => f.fileDepth)),
-        totalNodes: 0,
-        files,
-      },
-      converter.fileSource,
-      converter.documentId,
-      converter.documentInternalId,
-    );
+    const trackStructure = (documentIdentifier = null) =>
+      converter.telemetry.trackFileStructure(
+        {
+          totalFiles: files.length,
+          maxDepth: Math.max(...files.map((f) => f.fileDepth)),
+          totalNodes: 0,
+          files,
+        },
+        converter.fileSource,
+        converter.documentGuid ?? converter.documentId ?? null,
+        documentIdentifier ?? converter.documentId ?? null,
+        converter.documentInternalId,
+      );
+
+    try {
+      const identifierResult = converter.getDocumentIdentifier?.();
+      if (identifierResult && typeof identifierResult.then === 'function') {
+        identifierResult.then(trackStructure).catch(() => trackStructure());
+      } else {
+        trackStructure(identifierResult);
+      }
+    } catch {
+      trackStructure();
+    }
   }
 
   const nodeListHandler = defaultNodeListHandler();
   const bodyNode = json.elements[0].elements.find((el) => el.name === 'w:body');
 
   if (bodyNode) {
+    ensureSectionProperties(bodyNode);
     const node = bodyNode;
-    const ignoreNodes = ['w:sectPr'];
-    const content = node.elements?.filter((n) => !ignoreNodes.includes(n.name)) ?? [];
+
+    // Pre-processing step for replacing fldChar sequences with SD-specific elements
+    const { processedNodes } = preProcessNodesForFldChar(node.elements ?? [], docx);
+    node.elements = processedNodes;
+
+    const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
+    const content = pruneIgnoredNodes(contentElements);
     const comments = importCommentData({ docx, nodeListHandler, converter, editor });
 
     // Track imported lists
     const lists = {};
-    const parsedContent = nodeListHandler.handler({
+    const inlineDocumentFonts = [];
+
+    const numbering = getNumberingDefinitions(docx);
+    let parsedContent = nodeListHandler.handler({
       nodes: content,
       nodeListHandler,
       docx,
       converter,
+      numbering,
       editor,
+      inlineDocumentFonts,
       lists,
+      path: [],
     });
+
+    // Safety: drop any inline-only nodes that accidentally landed at the doc root
+    parsedContent = filterOutRootInlineNodes(parsedContent);
 
     const result = {
       type: 'doc',
@@ -109,10 +140,11 @@ export const createDocumentJson = (docx, converter, editor) => {
     return {
       pmDoc: result,
       savedTagsToRestore: node,
-      pageStyles: getDocumentStyles(node, docx, converter, editor),
+      pageStyles: getDocumentStyles(node, docx, converter, editor, numbering),
       comments,
+      inlineDocumentFonts,
       linkedStyles: getStyleDefinitions(docx, converter, editor),
-      numbering: getNumberingDefinitions(docx),
+      numbering: getNumberingDefinitions(docx, converter),
     };
   }
   return null;
@@ -123,21 +155,22 @@ export const defaultNodeListHandler = () => {
     alternateChoiceHandler,
     runNodeHandlerEntity,
     pictNodeHandlerEntity,
-    listHandlerEntity,
     paragraphNodeHandlerEntity,
     textNodeHandlerEntity,
     lineBreakNodeHandlerEntity,
-    annotationNodeHandlerEntity,
     sdtNodeHandlerEntity,
-    bookmarkNodeHandlerEntity,
+    bookmarkStartNodeHandlerEntity,
+    bookmarkEndNodeHandlerEntity,
     hyperlinkNodeHandlerEntity,
     drawingNodeHandlerEntity,
     trackChangeNodeHandlerEntity,
     tableNodeHandlerEntity,
     tabNodeEntityHandler,
+    tableOfContentsHandlerEntity,
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
-    standardNodeHandlerEntity, // This is the last one as it can handle everything
+    pageReferenceEntity,
+    standardNodeHandlerEntity,
   ];
 
   const handler = createNodeListHandler(entities);
@@ -185,19 +218,25 @@ const createNodeListHandler = (nodeHandlers) => {
     docx,
     insideTrackChange,
     converter,
+    numbering,
     editor,
     filename,
     parentStyleId,
     lists,
+    inlineDocumentFonts,
+    path = [],
+    extraParams = {},
   }) => {
     if (!elements || !elements.length) return [];
+    const filteredElements = pruneIgnoredNodes(elements);
+    if (!filteredElements.length) return [];
 
     const processedElements = [];
 
     try {
-      for (let index = 0; index < elements.length; index++) {
+      for (let index = 0; index < filteredElements.length; index++) {
         try {
-          const nodesToHandle = elements.slice(index);
+          const nodesToHandle = filteredElements.slice(index);
           if (!nodesToHandle || nodesToHandle.length === 0) {
             continue;
           }
@@ -212,17 +251,26 @@ const createNodeListHandler = (nodeHandlers) => {
                 nodeListHandler: { handler: nodeListHandlerFn, handlerEntities: nodeHandlers },
                 insideTrackChange,
                 converter,
+                numbering,
                 editor,
                 filename,
                 parentStyleId,
                 lists,
+                inlineDocumentFonts,
+                path,
+                extraParams,
               });
             },
             { nodes: [], consumed: 0 },
           );
 
           // Only track unhandled nodes that should have been handled
-          const context = getSafeElementContext(elements, index, nodes[0], `/word/${filename || 'document.xml'}`);
+          const context = getSafeElementContext(
+            filteredElements,
+            index,
+            nodes[0],
+            `/word/${filename || 'document.xml'}`,
+          );
           if (unhandled) {
             if (!context.elementName) continue;
 
@@ -262,7 +310,7 @@ const createNodeListHandler = (nodeHandlers) => {
           }
         } catch (error) {
           console.debug('Import error', error);
-          editor?.emit('exception', { error });
+          editor?.emit('exception', { error, editor });
 
           converter?.telemetry?.trackStatistic('error', {
             type: 'processing_error',
@@ -277,7 +325,7 @@ const createNodeListHandler = (nodeHandlers) => {
       return processedElements;
     } catch (error) {
       console.debug('Error during import', error);
-      editor?.emit('exception', { error });
+      editor?.emit('exception', { error, editor });
 
       // Track only catastrophic handler failures
       converter?.telemetry?.trackStatistic('error', {
@@ -302,7 +350,7 @@ const createNodeListHandler = (nodeHandlers) => {
  * @param {Editor} editor instance.
  * @returns {Object} The document styles object
  */
-function getDocumentStyles(node, docx, converter, editor) {
+function getDocumentStyles(node, docx, converter, editor, numbering) {
   const sectPr = node.elements?.find((n) => n.name === 'w:sectPr');
   const styles = {};
 
@@ -345,9 +393,69 @@ function getDocumentStyles(node, docx, converter, editor) {
   });
 
   // Import headers and footers. Stores them in converter.headers and converter.footers
-  importHeadersFooters(docx, converter, editor);
+  importHeadersFooters(docx, converter, editor, numbering);
   styles.alternateHeaders = isAlternatingHeadersOddEven(docx);
   return styles;
+}
+
+const DEFAULT_SECTION_PROPS = Object.freeze({
+  pageSize: Object.freeze({ width: '12240', height: '15840' }),
+  pageMargins: Object.freeze({
+    top: '1440',
+    right: '1440',
+    bottom: '1440',
+    left: '1440',
+    header: '720',
+    footer: '720',
+    gutter: '0',
+  }),
+});
+
+function ensureSectionProperties(bodyNode) {
+  if (!bodyNode.elements) bodyNode.elements = [];
+
+  let sectPr = bodyNode.elements.find((el) => el.name === 'w:sectPr');
+  if (!sectPr) {
+    sectPr = {
+      type: 'element',
+      name: 'w:sectPr',
+      elements: [],
+    };
+    bodyNode.elements.push(sectPr);
+  } else if (!sectPr.elements) {
+    sectPr.elements = [];
+  }
+
+  const ensureChild = (name, factory) => {
+    let child = sectPr.elements.find((el) => el.name === name);
+    if (!child) {
+      child = factory();
+      sectPr.elements.push(child);
+    } else if (!child.attributes) {
+      child.attributes = {};
+    }
+    return child;
+  };
+
+  const pgSz = ensureChild('w:pgSz', () => ({
+    type: 'element',
+    name: 'w:pgSz',
+    attributes: {},
+  }));
+  pgSz.attributes['w:w'] = pgSz.attributes['w:w'] ?? DEFAULT_SECTION_PROPS.pageSize.width;
+  pgSz.attributes['w:h'] = pgSz.attributes['w:h'] ?? DEFAULT_SECTION_PROPS.pageSize.height;
+
+  const pgMar = ensureChild('w:pgMar', () => ({
+    type: 'element',
+    name: 'w:pgMar',
+    attributes: {},
+  }));
+  Object.entries(DEFAULT_SECTION_PROPS.pageMargins).forEach(([key, value]) => {
+    const attrKey = `w:${key}`;
+    if (pgMar.attributes[attrKey] == null) pgMar.attributes[attrKey] = value;
+  });
+
+  return sectPr;
 }
 
 /**
@@ -426,9 +534,10 @@ export function addDefaultStylesIfMissing(styles) {
  */
 const importHeadersFooters = (docx, converter, mainEditor) => {
   const rels = docx['word/_rels/document.xml.rels'];
-  const relationships = rels.elements.find((el) => el.name === 'Relationships');
-  const { elements } = relationships;
+  const relationships = rels?.elements.find((el) => el.name === 'Relationships');
+  const { elements } = relationships || { elements: [] };
 
+  const numbering = getNumberingDefinitions(docx);
   const headerType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/header';
   const footerType = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/footer';
   const headers = elements.filter((el) => el.attributes['Type'] === headerType);
@@ -451,14 +560,19 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     let sectionType = sectPrHeader?.attributes['w:type'];
     if (converter.headerIds[sectionType]) sectionType = null;
     const nodeListHandler = defaultNodeListHandler();
-    const schema = nodeListHandler.handler({
+    let schema = nodeListHandler.handler({
       nodes: referenceFile.elements[0].elements,
       nodeListHandler,
       docx,
       converter,
+      numbering,
       editor,
       filename: currentFileName,
+      path: [],
     });
+
+    // Safety: drop inline-only nodes at the root of header docs
+    schema = filterOutRootInlineNodes(schema);
 
     if (!converter.headerIds.ids) converter.headerIds.ids = [];
     converter.headerIds.ids.push(rId);
@@ -477,14 +591,19 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     const sectionType = sectPrFooter?.attributes['w:type'];
 
     const nodeListHandler = defaultNodeListHandler();
-    const schema = nodeListHandler.handler({
+    let schema = nodeListHandler.handler({
       nodes: referenceFile.elements[0].elements,
       nodeListHandler,
       docx,
       converter,
+      numbering,
       editor,
       filename: currentFileName,
+      path: [],
     });
+
+    // Safety: drop inline-only nodes at the root of footer docs
+    schema = filterOutRootInlineNodes(schema);
 
     if (!converter.footerIds.ids) converter.footerIds.ids = [];
     converter.footerIds.ids.push(rId);
@@ -524,42 +643,67 @@ const getHeaderFooterSectionData = (sectionData, docx) => {
 };
 
 /**
+ * Remove any nodes that belong to the inline group when they appear at the root.
+ * ProseMirror's doc node only accepts block-level content; inline nodes here cause
+ * Invalid content for node doc errors. This is a conservative filter that only
+ * drops clearly inline node types if they somehow escape their paragraph.
+ *
+ * @param {Array<{type: string, content?: any, attrs?: any, marks?: any[]}>} content
+ * @returns {Array}
+ */
+export function filterOutRootInlineNodes(content = []) {
+  if (!Array.isArray(content) || content.length === 0) return content;
+
+  const INLINE_TYPES = new Set([
+    'text',
+    'bookmarkStart',
+    'bookmarkEnd',
+    'lineBreak',
+    'hardBreak',
+    'pageNumber',
+    'totalPageCount',
+    'runItem',
+    'image',
+    'tab',
+    'fieldAnnotation',
+    'mention',
+    'contentBlock',
+    'aiLoaderNode',
+    'commentRangeStart',
+    'commentRangeEnd',
+    'commentReference',
+    'structuredContent',
+  ]);
+
+  return content.filter((node) => node && typeof node.type === 'string' && !INLINE_TYPES.has(node.type));
+}
+
+/**
  * Import this document's numbering.xml definitions
  * They will be stored into converter.numbering
  *
  * @param {Object} docx The parsed docx
+ * @param {Object} converter The SuperConverter instance
  * @returns {Object} The numbering definitions
  */
-function getNumberingDefinitions(docx) {
-  let numbering = docx['word/numbering.xml'];
-  if (!numbering || !numbering.elements?.length || !numbering.elements[0].elements?.length) numbering = baseNumbering;
-
-  const elements = numbering.elements[0].elements;
-  const abstractDefs = elements.filter((el) => el.name === 'w:abstractNum');
-  const definitions = elements.filter((el) => el.name === 'w:num');
+function getNumberingDefinitions(docx, converter) {
+  const cache = ensureNumberingCache(docx, converter);
 
   const abstractDefinitions = {};
-  abstractDefs.forEach((el) => {
-    const abstractId = Number(el.attributes['w:abstractNumId']);
-    abstractDefinitions[abstractId] = el;
-  });
-
-  let importListDefs = {};
-  definitions.forEach((el) => {
-    const numId = Number(el.attributes['w:numId']);
-    if (Number.isInteger(numId)) {
-      importListDefs[numId] = el;
+  cache.abstractById.forEach((value, key) => {
+    const numericKey = Number(key);
+    if (!Number.isNaN(numericKey)) {
+      abstractDefinitions[numericKey] = value;
     }
   });
 
-  const listDefsEntries = Object.entries(importListDefs);
-  const foundByDurableId = listDefsEntries.filter(([, def]) => def.attributes?.['w16cid:durableId'] === '485517411');
-  // To fix corrupted numbering.xml file.
-  if (foundByDurableId.length > 1) {
-    importListDefs = Object.fromEntries(
-      listDefsEntries.filter(([, def]) => def.attributes?.['w16cid:durableId'] !== '485517411'),
-    );
-  }
+  let importListDefs = {};
+  cache.numNodesById.forEach((value, key) => {
+    const numericKey = Number(key);
+    if (Number.isInteger(numericKey)) {
+      importListDefs[numericKey] = value;
+    }
+  });
 
   return {
     abstracts: abstractDefinitions,

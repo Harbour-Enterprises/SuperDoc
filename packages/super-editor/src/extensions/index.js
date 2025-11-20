@@ -13,14 +13,12 @@ import { Collaboration } from './collaboration/index.js';
 import { CollaborationCursor } from './collaboration-cursor/index.js';
 import { AiPlugin, AiMark, AiAnimationMark, AiLoaderNode } from './ai/index.js';
 import { SlashMenu } from './slash-menu';
+import { StructuredContentCommands } from './structured-content/index.js';
 
 // Nodes extensions
 import { Document } from './document/index.js';
 import { Text } from './text/index.js';
-import { RunItem } from './run-item/index.js';
-import { BulletList } from './bullet-list/index.js';
-import { OrderedList } from './ordered-list/index.js';
-import { ListItem } from './list-item/index.js';
+import { Run } from './run/index.js';
 import { Paragraph } from './paragraph/index.js';
 import { Heading } from './heading/index.js';
 import { CommentRangeStart, CommentRangeEnd, CommentReference } from './comment/index.js';
@@ -32,14 +30,23 @@ import { TableRow } from './table-row/index.js';
 import { TableCell } from './table-cell/index.js';
 import { FieldAnnotation, fieldAnnotationHelpers } from './field-annotation/index.js';
 import { Image } from './image/index.js';
-import { BookmarkStart } from './bookmarks/index.js';
+import { BookmarkStart, BookmarkEnd } from './bookmarks/index.js';
 import { Mention } from './mention/index.js';
 import { PageNumber, TotalPageCount } from './page-number/index.js';
+import { PageReference } from './page-reference/index.js';
 import { ShapeContainer } from './shape-container/index.js';
 import { ShapeTextbox } from './shape-textbox/index.js';
 import { ContentBlock } from './content-block/index.js';
-import { StructuredContent, StructuredContentBlock, DocumentSection } from './structured-content/index.js';
+import {
+  StructuredContent,
+  StructuredContentBlock,
+  DocumentSection,
+  DocumentPartObject,
+} from './structured-content/index.js';
 import { BlockNode } from './block-node/index.js';
+import { TableOfContents } from './table-of-contents/index.js';
+import { VectorShape } from './vector-shape/index.js';
+import { ShapeGroup } from './shape-group/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -70,7 +77,6 @@ import { trackChangesHelpers } from './track-changes/index.js';
 const getRichTextExtensions = () => {
   return [
     Bold,
-    BulletList,
     Color,
     Document,
     FontFamily,
@@ -78,10 +84,8 @@ const getRichTextExtensions = () => {
     History,
     Heading,
     Italic,
-    ListItem,
     LineHeight,
     Link,
-    OrderedList,
     Paragraph,
     Strike,
     Text,
@@ -114,7 +118,6 @@ const getStarterExtensions = () => {
   return [
     Bold,
     BlockNode,
-    BulletList,
     Color,
     CommentRangeStart,
     CommentRangeEnd,
@@ -125,17 +128,16 @@ const getStarterExtensions = () => {
     History,
     Heading,
     Italic,
-    ListItem,
     LineHeight,
     Link,
-    OrderedList,
     Paragraph,
     LineBreak,
     HardBreak,
-    RunItem,
+    Run,
     SlashMenu,
     Strike,
     TabNode,
+    TableOfContents,
     Text,
     TextAlign,
     TextIndent,
@@ -152,6 +154,7 @@ const getStarterExtensions = () => {
     DropCursor,
     Image,
     BookmarkStart,
+    BookmarkEnd,
     Mention,
     Collaboration,
     CollaborationCursor,
@@ -169,16 +172,21 @@ const getStarterExtensions = () => {
     AiLoaderNode,
     PageNumber,
     TotalPageCount,
+    PageReference,
     ShapeContainer,
     ShapeTextbox,
     ContentBlock,
     Search,
     StructuredContent,
     StructuredContentBlock,
+    StructuredContentCommands,
     DocumentSection,
+    DocumentPartObject,
     NodeResizer,
     CustomSelection,
     TextTransform,
+    VectorShape,
+    ShapeGroup,
   ];
 };
 
@@ -187,10 +195,7 @@ export {
   Heading,
   Document,
   Text,
-  RunItem,
-  BulletList,
-  OrderedList,
-  ListItem,
+  Run,
   Paragraph,
   CommentRangeStart,
   CommentRangeEnd,
@@ -224,6 +229,7 @@ export {
   fieldAnnotationHelpers,
   Image,
   BookmarkStart,
+  BookmarkEnd,
   PopoverPlugin,
   Mention,
   Collaboration,
@@ -243,8 +249,11 @@ export {
   Search,
   StructuredContent,
   StructuredContentBlock,
+  StructuredContentCommands,
   DocumentSection,
   NodeResizer,
   CustomSelection,
   TextTransform,
+  VectorShape,
+  ShapeGroup,
 };

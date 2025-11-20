@@ -18,6 +18,8 @@ const visualizerConfig = {
 
 export const getAliases = (isDev) => {
   const aliases = {
+    // IMPORTANT: @superdoc/common MUST come before @superdoc to avoid partial matching
+    '@superdoc/common': path.resolve(__dirname, '../../shared/common'),
     '@superdoc': fileURLToPath(new URL('./src', import.meta.url)),
     '@stores': fileURLToPath(new URL('./src/stores', import.meta.url)),
     '@packages': fileURLToPath(new URL('../', import.meta.url)),
@@ -31,6 +33,8 @@ export const getAliases = (isDev) => {
     '@helpers': fileURLToPath(new URL('../super-editor/src/core/helpers', import.meta.url)),
     '@converter': fileURLToPath(new URL('../super-editor/src/core/super-converter', import.meta.url)),
     '@tests': fileURLToPath(new URL('../super-editor/src/tests', import.meta.url)),
+    '@translator': fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
+    '@preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
   };
 
   if (isDev) {
@@ -63,6 +67,9 @@ export default defineConfig(({ mode, command}) => {
   if (mode !== 'test') plugins.push(nodePolyfills());
   const isDev = command === 'serve';
 
+  // Use emoji marker instead of ANSI colors to avoid reporter layout issues
+  const projectLabel = '🦋 @superdoc';
+
   return {
     define: {
       __APP_VERSION__: JSON.stringify(version),
@@ -70,8 +77,12 @@ export default defineConfig(({ mode, command}) => {
     },
     plugins,
     test: {
+      name: projectLabel,
       globals: true,
       environment: 'jsdom',
+      retry: 2,
+      testTimeout: 20000,
+      hookTimeout: 10000,
       exclude: [
         '**/*.spec.js',
       ],
@@ -94,8 +105,11 @@ export default defineConfig(({ mode, command}) => {
         external: [
           'yjs',
           '@hocuspocus/provider',
-          'pdfjs-dist',
           'vite-plugin-node-polyfills',
+          'pdfjs-dist',
+          'pdfjs-dist/build/pdf.mjs',
+          'pdfjs-dist/legacy/build/pdf.mjs',
+          'pdfjs-dist/web/pdf_viewer.mjs',
         ],
         output: [
           {
@@ -104,7 +118,7 @@ export default defineConfig(({ mode, command}) => {
             chunkFileNames: 'chunks/[name]-[hash].es.js',
             manualChunks: {
               'vue': ['vue'],
-              'blank-docx': ['@harbour-enterprises/common/data/blank.docx?url'],
+              'blank-docx': ['@superdoc/common/data/blank.docx?url'],
               'jszip': ['jszip'],
               'eventemitter3': ['eventemitter3'],
               'uuid': ['uuid'],
@@ -117,7 +131,7 @@ export default defineConfig(({ mode, command}) => {
             chunkFileNames: 'chunks/[name]-[hash].cjs',
             manualChunks: {
               'vue': ['vue'],
-              'blank-docx': ['@harbour-enterprises/common/data/blank.docx?url'],
+              'blank-docx': ['@superdoc/common/data/blank.docx?url'],
               'jszip': ['jszip'],
               'eventemitter3': ['eventemitter3'],
               'uuid': ['uuid'],
@@ -128,7 +142,7 @@ export default defineConfig(({ mode, command}) => {
       }
     },
     optimizeDeps: {
-      include: ['pdfjs-dist', 'yjs', '@hocuspocus/provider'],
+      include: ['yjs', '@hocuspocus/provider'],
       esbuildOptions: {
         target: 'es2020',
       },

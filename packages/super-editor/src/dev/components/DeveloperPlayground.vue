@@ -1,16 +1,17 @@
 <script setup>
 import '@/style.css';
-import '@harbour-enterprises/common/styles/common-styles.css';
+import '@superdoc/common/styles/common-styles.css';
 
 import { ref, shallowRef, computed, onMounted } from 'vue';
+import { NMessageProvider } from 'naive-ui';
 import { SuperEditor } from '@/index.js';
-import { getFileObject } from '@harbour-enterprises/common/helpers/get-file-object';
-import { DOCX } from '@harbour-enterprises/common';
+import { getFileObject } from '@superdoc/common/helpers/get-file-object';
+import { DOCX } from '@superdoc/common';
 import { SuperToolbar } from '@components/toolbar/super-toolbar';
 import { PaginationPluginKey } from '@extensions/pagination/pagination-helpers.js';
 import BasicUpload from './BasicUpload.vue';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
-import { Telemetry } from '@harbour-enterprises/common/Telemetry.js';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
+import { Telemetry } from '@superdoc/common/Telemetry';
 
 // Import the component the same you would in your app
 let activeEditor;
@@ -18,6 +19,11 @@ const currentFile = ref(null);
 const pageStyles = ref(null);
 const isDebuggingPagination = ref(false);
 const telemetry = shallowRef(null);
+
+// Content injection variables
+const contentInput = ref('');
+const contentType = ref('html');
+const isInjectingContent = ref(false);
 
 const handleNewFile = async (file) => {
   currentFile.value = null;
@@ -119,6 +125,29 @@ const debugPageStyle = computed(() => {
   };
 });
 
+const injectContent = () => {
+  if (!activeEditor || !contentInput.value.trim()) {
+    console.warn('[Dev] No editor instance or empty content');
+    return;
+  }
+
+  try {
+    isInjectingContent.value = true;
+
+    // Delegate processing to the insertContent command
+    activeEditor.commands.insertContent(contentInput.value, {
+      contentType: contentType.value, // 'html', 'markdown', or 'text'
+    });
+
+    console.debug(`[Dev] ${contentType.value} content injected successfully`);
+    contentInput.value = '';
+  } catch (error) {
+    console.error('[Dev] Failed to inject content:', error);
+  } finally {
+    isInjectingContent.value = false;
+  }
+};
+
 onMounted(async () => {
   // set document to blank
   currentFile.value = await getFileObject(BlankDOCX, 'blank_document.docx', DOCX);
@@ -144,6 +173,28 @@ onMounted(async () => {
           </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">
+          <div class="dev-app__content-injection">
+            <div class="dev-app__content-controls">
+              <select v-model="contentType" class="dev-app__content-type">
+                <option value="html">HTML</option>
+                <option value="markdown">Markdown</option>
+                <option value="text">Text</option>
+              </select>
+              <button
+                class="dev-app__inject-btn"
+                @click="injectContent"
+                :disabled="isInjectingContent || !contentInput.trim()"
+              >
+                {{ isInjectingContent ? 'Injecting...' : 'Inject Content' }}
+              </button>
+            </div>
+            <textarea
+              v-model="contentInput"
+              class="dev-app__content-input"
+              placeholder="Enter content to inject..."
+              rows="3"
+            ></textarea>
+          </div>
           <button class="dev-app__header-export-btn" @click="exportDocx">Export</button>
         </div>
       </div>
@@ -158,7 +209,9 @@ onMounted(async () => {
           </div>
 
           <div class="dev-app__content" v-if="currentFile">
-            <SuperEditor :file-source="currentFile" :options="editorOptions" />
+            <n-message-provider>
+              <SuperEditor :file-source="currentFile" :options="editorOptions" />
+            </n-message-provider>
           </div>
         </div>
       </div>
@@ -189,9 +242,11 @@ onMounted(async () => {
   display: flex;
   justify-content: center;
 }
+
 .page-spacer:nth-child(odd) {
   background-color: #aa000055;
 }
+
 .dev-app {
   --header-height: 154px;
   --toolbar-height: 39px;
@@ -218,9 +273,11 @@ onMounted(async () => {
 .dev-app__header-side {
   display: flex;
 }
+
 .dev-app__header-side--left {
   flex-direction: column;
 }
+
 .dev-app__header-side--right {
   align-items: flex-end;
 }
@@ -261,5 +318,61 @@ onMounted(async () => {
   display: grid;
   overflow-y: auto;
   scrollbar-width: none;
+}
+
+.dev-app__content-injection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-right: 20px;
+  min-width: 300px;
+}
+
+.dev-app__content-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.dev-app__content-type {
+  padding: 4px 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+}
+
+.dev-app__inject-btn {
+  padding: 6px 12px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.dev-app__inject-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
+.dev-app__inject-btn:not(:disabled):hover {
+  background-color: #0056b3;
+}
+
+.dev-app__content-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  resize: vertical;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+}
+
+.dev-app__content-input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
 }
 </style>

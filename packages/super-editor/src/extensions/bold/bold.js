@@ -1,5 +1,20 @@
-// @ts-check
+// @ts-nocheck
 import { Mark, Attribute } from '@core/index.js';
+import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.js';
+
+/**
+ * Configuration options for Bold
+ * @typedef {Object} BoldOptions
+ * @category Options
+ * @property {Object} [htmlAttributes] HTML attributes for the strong element
+ */
+
+/**
+ * Attributes for bold marks
+ * @typedef {Object} BoldAttributes
+ * @category Attributes
+ * @property {string} [value] Bold weight value ('0' renders as normal)
+ */
 
 /**
  * @module Bold
@@ -19,15 +34,11 @@ export const Bold = Mark.create({
 
   addAttributes() {
     return {
-      /**
-       * @category Attribute
-       * @param {string} [value] - Bold weight value ('0' renders as normal)
-       */
       value: {
         default: null,
         renderDOM: (attrs) => {
-          if (!attrs.value) return {};
-          if (attrs.value === '0') {
+          if (attrs.value == null) return {};
+          if (attrs.value === '0' || !attrs.value) {
             return { style: 'font-weight: normal' };
           }
           return {};
@@ -46,47 +57,45 @@ export const Bold = Mark.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    return ['strong', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+    const merged = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
+    const { value, ...rest } = merged || {};
+    if (value === '0') {
+      return ['span', rest, 0];
+    }
+    return ['strong', rest, 0];
   },
 
   addCommands() {
+    const { setBold, unsetBold, toggleBold } = createCascadeToggleCommands({
+      markName: this.name,
+      negationAttrs: { value: '0' },
+    });
+
     return {
       /**
        * Apply bold formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * setBold()
+       * editor.commands.setBold()
        * @note '0' renders as normal weight
        */
-      setBold:
-        () =>
-        ({ commands }) =>
-          commands.setMark(this.name),
+      setBold,
 
       /**
        * Remove bold formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * unsetBold()
+       * editor.commands.unsetBold()
        */
-      unsetBold:
-        () =>
-        ({ commands }) =>
-          commands.unsetMark(this.name),
+      unsetBold,
 
       /**
        * Toggle bold formatting
        * @category Command
-       * @returns {Function} Command
        * @example
-       * toggleBold()
+       * editor.commands.toggleBold()
        */
-      toggleBold:
-        () =>
-        ({ commands }) =>
-          commands.toggleMark(this.name),
+      toggleBold,
     };
   },
 

@@ -54,8 +54,9 @@ const annotateYesNo = (value) => {
 /**
  * Pre-process tables in the document to generate rows from annotations if necessary
  *
- * @param {Object} param0 The editor instance and annotation values
- * @param {Object} param0.editor The editor instance
+ * @param {Object} param0 Options used to drive the table processing.
+ * @param {import('prosemirror-state').EditorState} param0.state The current editor state.
+ * @param {import('prosemirror-state').Transaction} param0.tr Transaction that is mutated with generated rows.
  * @param {Array} param0.annotationValues The annotation values to process
  */
 export const processTables = ({ state, tr, annotationValues }) => {
@@ -267,6 +268,7 @@ const generateTableIfNecessary = ({ tableNode, annotationValues, tr, state }) =>
     const rowEnd = mappedRowStart + rowNode.nodeSize;
 
     tr.replaceWith(mappedRowStart, rowEnd, Fragment.from(newRows));
+    tr.setMeta('tableGeneration', true);
   } catch (error) {
     console.error('Error during row generation:', error);
     throw error;

@@ -14,11 +14,27 @@ export default defineConfig(({ mode }) => {
     plugins,
     // Combined test configuration
     test: {
+      name: '✏️ @super-editor',
       globals: true,
       environment: 'jsdom',
+      retry: 2,
+      testTimeout: 20000,
+      hookTimeout: 10000,
       exclude: [
         '**/*.spec.js',
       ],
+      coverage: {
+        provider: 'v8',
+        exclude: [
+          '**/index.js',
+          '**/v3/**/index.js',
+          '**/examples/**',
+          '**/types.js',
+          '**/main.js',
+          '**/migration_after_0_4_14.js',
+        ],
+        reporter: ['text'],
+      }
     },
     define: {
       __APP_VERSION__: JSON.stringify(superdocVersion),
@@ -76,6 +92,8 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
+        // IMPORTANT: @superdoc/common must point to source, not dist
+        '@superdoc/common': fileURLToPath(new URL('../../shared/common', import.meta.url)),
         '@': fileURLToPath(new URL('./src', import.meta.url)),
         '@core': fileURLToPath(new URL('./src/core', import.meta.url)),
         '@extensions': fileURLToPath(new URL('./src/extensions', import.meta.url)),
@@ -85,7 +103,8 @@ export default defineConfig(({ mode }) => {
         '@packages': fileURLToPath(new URL('../', import.meta.url)),
         '@converter': fileURLToPath(new URL('./src/core/super-converter', import.meta.url)),
         '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
-        '@ooxml-inspector': fileURLToPath(new URL('../../../ooxml-inspector/dist/index.js', import.meta.url))
+        '@translator': fileURLToPath(new URL('./src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
+        '@preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
       },
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
     },

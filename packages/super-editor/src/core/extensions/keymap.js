@@ -4,6 +4,7 @@ import { isMacOS } from '../utilities/isMacOS.js';
 
 export const handleEnter = (editor) => {
   return editor.commands.first(({ commands }) => [
+    () => commands.splitRun(),
     () => commands.newlineInCode(),
     () => commands.createParagraphNear(),
     () => commands.liftEmptyBlock(),
@@ -19,8 +20,7 @@ export const handleBackspace = (editor) => {
       return false;
     },
     () => commands.deleteSelection(),
-    () => commands.handleBackspaceNextToList(),
-    () => commands.deleteListItem(),
+    () => commands.removeNumberingProperties(),
     () => commands.joinBackward(),
     () => commands.selectNodeBackward(),
   ]);
@@ -29,7 +29,6 @@ export const handleBackspace = (editor) => {
 export const handleDelete = (editor) => {
   return editor.commands.first(({ commands }) => [
     () => commands.deleteSelection(),
-    () => commands.handleDeleteNextToList(),
     () => commands.joinForward(),
     () => commands.selectNodeForward(),
   ]);
@@ -45,6 +44,7 @@ export const Keymap = Extension.create({
   addShortcuts() {
     const baseKeymap = {
       Enter: () => handleEnter(this.editor),
+      'Shift-Enter': () => this.editor.commands.insertLineBreak(),
       'Mod-Enter': () => this.editor.commands.exitCode(),
       Backspace: () => handleBackspace(this.editor),
       'Mod-Backspace': () => handleBackspace(this.editor),

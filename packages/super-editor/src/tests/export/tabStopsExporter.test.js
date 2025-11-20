@@ -1,5 +1,5 @@
 import { expect } from 'vitest';
-import { translateParagraphNode } from '@converter/exporter.js';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 
 describe('Tab Stops Export Tests', () => {
   // Create a minimal editor mock that has the required extensions property
@@ -19,25 +19,31 @@ describe('Tab Stops Export Tests', () => {
       attrs: {
         tabStops: [
           {
-            val: 'start',
-            pos: 144,
+            tab: {
+              tabType: 'start',
+              pos: 2160,
+            },
           },
           {
-            val: 'center',
-            pos: 336,
-            leader: 'dot',
+            tab: {
+              tabType: 'center',
+              pos: 5040,
+              leader: 'dot',
+            },
           },
           {
-            val: 'decimal',
-            pos: 480,
-            leader: 'underscore',
+            tab: {
+              tabType: 'decimal',
+              pos: 7200,
+              leader: 'underscore',
+            },
           },
         ],
       },
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -85,7 +91,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -113,7 +119,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -138,15 +144,17 @@ describe('Tab Stops Export Tests', () => {
       attrs: {
         tabStops: [
           {
-            pos: 96,
-            // No val specified, should default to 'start'
+            tab: {
+              pos: 1440,
+              // No val specified, should default to 'start'
+            },
           },
         ],
       },
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -162,7 +170,7 @@ describe('Tab Stops Export Tests', () => {
 
     const tab = tabs.elements[0];
     expect(tab.name).toBe('w:tab');
-    expect(tab.attributes['w:val']).toBe('start');
+    expect(tab.attributes['w:val']).toBeUndefined();
     expect(tab.attributes['w:pos']).toBe('1440');
     expect(tab.attributes['w:leader']).toBeUndefined();
   });
@@ -172,8 +180,10 @@ describe('Tab Stops Export Tests', () => {
     const supportedTypes = ['bar', 'center', 'clear', 'decimal', 'end', 'num', 'start'];
 
     const tabStops = supportedTypes.map((type, index) => ({
-      val: type,
-      pos: (index + 1) * 96, // 1 inch intervals
+      tab: {
+        tabType: type,
+        pos: (index + 1) * 1440, // 1 inch intervals
+      },
     }));
 
     const mockParagraphNode = {
@@ -184,7 +194,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });
@@ -206,9 +216,11 @@ describe('Tab Stops Export Tests', () => {
     const supportedLeaders = ['dot', 'heavy', 'hyphen', 'middleDot', 'none', 'underscore'];
 
     const tabStops = supportedLeaders.map((leader, index) => ({
-      val: 'start',
-      pos: (index + 1) * 96,
-      leader,
+      tab: {
+        tabType: 'start',
+        pos: (index + 1) * 1440,
+        leader,
+      },
     }));
 
     const mockParagraphNode = {
@@ -219,7 +231,7 @@ describe('Tab Stops Export Tests', () => {
       content: [],
     };
 
-    const result = translateParagraphNode({
+    const result = wPTranslator.decode({
       editor: mockEditor,
       node: mockParagraphNode,
     });

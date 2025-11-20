@@ -1,4 +1,4 @@
-import { Extensions } from '@harbour-enterprises/superdoc/super-editor';
+import { Extensions } from 'superdoc/super-editor';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { PluginKey } from 'prosemirror-state';
 import { DOMSerializer } from 'prosemirror-model';

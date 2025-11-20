@@ -1,5 +1,22 @@
-// @ts-check
+// @ts-nocheck
+
 import { Node, Attribute } from '@core/index.js';
+
+/**
+ * Configuration options for TableHeader
+ * @typedef {Object} TableHeaderOptions
+ * @category Options
+ * @property {Object} [htmlAttributes={'aria-label': 'Table head node'}] - HTML attributes for table headers
+ */
+
+/**
+ * Attributes for table header nodes
+ * @typedef {Object} TableHeaderAttributes
+ * @category Attributes
+ * @property {number} [colspan=1] - Number of columns this header spans
+ * @property {number} [rowspan=1] - Number of rows this header spans
+ * @property {number[]} [colwidth] - Column widths array in pixels
+ */
 
 /**
  * @module TableHeader
@@ -25,26 +42,14 @@ export const TableHeader = Node.create({
 
   addAttributes() {
     return {
-      /**
-       * @category Attribute
-       * @param {number} [colspan=1] - Number of columns this header spans
-       */
       colspan: {
         default: 1,
       },
 
-      /**
-       * @category Attribute
-       * @param {number} [rowspan=1] - Number of rows this header spans
-       */
       rowspan: {
         default: 1,
       },
 
-      /**
-       * @category Attribute
-       * @param {number[]} [colwidth] - Column widths array in pixels
-       */
       colwidth: {
         default: null,
         parseDOM: (element) => {
@@ -55,7 +60,22 @@ export const TableHeader = Node.create({
         renderDOM: (attrs) => {
           if (!attrs.colwidth) return {};
           return {
+            // @ts-expect-error - colwidth is known to be an array at runtime
             'data-colwidth': attrs.colwidth.join(','),
+          };
+        },
+      },
+
+      __placeholder: {
+        default: null,
+        parseDOM: (element) => {
+          const value = element.getAttribute('data-placeholder');
+          return value || null;
+        },
+        renderDOM({ __placeholder }) {
+          if (!__placeholder) return {};
+          return {
+            'data-placeholder': __placeholder,
           };
         },
       },

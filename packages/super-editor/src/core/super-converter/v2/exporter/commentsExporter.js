@@ -1,67 +1,7 @@
-import { translateParagraphNode } from '../../exporter.js';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { COMMENT_REF, COMMENTS_XML_DEFINITIONS } from '../../exporter-docx-defs.js';
 import { generateRandom32BitHex } from '../../../helpers/generateDocxRandomId.js';
-
-/**
- * Generate the end node for a comment
- *
- * @param {Object} params The export params
- * @returns {Object} The translated w:commentRangeEnd node for the comment
- */
-export function translateCommentNode(params, type) {
-  const { node, commentsExportType, exportedCommentDefs = [] } = params;
-
-  if (!exportedCommentDefs.length || commentsExportType === 'clean') return;
-
-  const nodeId = node.attrs['w:id'];
-
-  // Check if the comment is resolved
-  const originalComment = params.comments.find((comment) => {
-    return comment.commentId == nodeId;
-  });
-
-  if (!originalComment) return;
-
-  const commentIndex = params.comments?.findIndex((comment) => comment.commentId === originalComment.commentId);
-  const parentId = originalComment.parentCommentId;
-  let parentComment;
-  if (parentId) {
-    parentComment = params.comments.find((c) => c.commentId === parentId || c.importedId === parentId);
-  }
-
-  const isInternal = parentComment?.isInternal || originalComment.isInternal;
-  if (commentsExportType === 'external' && isInternal) return;
-
-  const isResolved = !!originalComment.resolvedTime;
-  if (isResolved) return;
-
-  let commentSchema = getCommentSchema(type, commentIndex);
-  if (type === 'End') {
-    const commentReference = {
-      name: 'w:r',
-      elements: [{ name: 'w:commentReference', attributes: { 'w:id': String(commentIndex) } }],
-    };
-    commentSchema = [commentSchema, commentReference];
-  }
-  return commentSchema;
-}
-
-/**
- * Generate a w:commentRangeStart or w:commentRangeEnd node
- *
- * @param {string} type Must be 'Start' or 'End'
- * @param {string} commentId The comment ID
- * @returns {Object} The comment node
- */
-const getCommentSchema = (type, commentId) => {
-  return {
-    name: `w:commentRange${type}`,
-    attributes: {
-      'w:id': String(commentId),
-    },
-  };
-};
 
 /**
  * Insert w15:paraId into the comments
@@ -86,7 +26,7 @@ export const prepareCommentParaIds = (comment) => {
  * @returns {Object} The w:comment node for the comment
  */
 export const getCommentDefinition = (comment, commentId, allComments, editor) => {
-  const translatedText = translateParagraphNode({ editor, node: comment.commentJSON });
+  const translatedText = wPTranslator.decode({ editor, node: comment.commentJSON });
   const attributes = {
     'w:id': String(commentId),
     'w:author': comment.creatorName || comment.importedAuthor?.name,

@@ -45,6 +45,7 @@ export function importCommentData({ docx, editor, converter }) {
       docx,
       editor,
       converter,
+      path: [el],
     });
 
     const { attrs } = parsedComment[0];
@@ -63,6 +64,7 @@ export function importCommentData({ docx, editor, converter }) {
       trackedChangeText,
       trackedChangeType,
       trackedDeletedText,
+      isDone: false,
     };
   });
 
@@ -80,17 +82,21 @@ export function importCommentData({ docx, editor, converter }) {
  * @returns {Array} The comments with extended details
  */
 const generateCommentsWithExtendedData = ({ docx, comments }) => {
-  const commentsExtended = docx['word/commentsExtended.xml'];
-  if (!commentsExtended) return [];
+  if (!comments?.length) return [];
 
-  const { elements: initialElements } = commentsExtended;
-  const { elements } = initialElements[0];
+  const commentsExtended = docx['word/commentsExtended.xml'];
+  if (!commentsExtended) return comments.map((comment) => ({ ...comment, isDone: comment.isDone ?? false }));
+
+  const { elements: initialElements = [] } = commentsExtended;
+  if (!initialElements?.length) return comments.map((comment) => ({ ...comment, isDone: comment.isDone ?? false }));
+
+  const { elements = [] } = initialElements[0] ?? {};
 
   const commentEx = elements.filter((el) => el.name === 'w15:commentEx');
 
   return comments.map((comment) => {
     const extendedDef = commentEx.find((ce) => ce.attributes['w15:paraId'] === comment.paraId);
-    if (!extendedDef) return { ...comment };
+    if (!extendedDef) return { ...comment, isDone: comment.isDone ?? false };
 
     const { isDone, paraIdParent } = getExtendedDetails(extendedDef);
 
@@ -99,7 +105,7 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
 
     const newComment = {
       ...comment,
-      isDone,
+      isDone: isDone ?? false,
       parentCommentId: parentComment?.commentId,
     };
     return newComment;

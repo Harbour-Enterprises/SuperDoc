@@ -1,0 +1,34 @@
+/* Isolate editor content from external/client CSS by reverting all properties.
+ * IMPORTANT: We exclude SVG elements and their children from this rule because
+ * 'all: revert' breaks SVG rendering (paths don't display, transforms don't work).
+ * SVG has its own rendering model and doesn't need CSS isolation the same way text content does.
+ */
+.sd-editor-scoped,
+.sd-editor-scoped :where(*:not(svg):not(svg *)),
+.sd-editor-scoped :where(*:not(svg):not(svg *)::before),
+.sd-editor-scoped :where(*:not(svg):not(svg *)::after) {
+  all: revert;
+  box-sizing: border-box;
+}
+
+/* Ensure SVG display properties for proper rendering */
+.sd-editor-scoped svg {
+  display: inline-block;
+  overflow: visible;
+}
+
+.sd-editor-scoped {
+  display: block;
+}
+
+/*
+ * Visual Regression Testing:
+ * This CSS isolation is critical for protecting editor content from external stylesheets.
+ * Visual regression tests should be added to the visual testing repository to ensure:
+ * 1. Text content is not affected by aggressive global CSS
+ * 2. SVG shapes (shape groups, vector shapes) render correctly
+ * 3. No visual regressions when client applications have conflicting styles
+ *
+ * Reference: PR #1219 - "improve style scoping in the editor to prevent external styles affecting content"
+ * Reference: PR #1236 - "shape groups" (this fix ensures both isolation AND SVG rendering work)
+ */

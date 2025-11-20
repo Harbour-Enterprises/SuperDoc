@@ -9,11 +9,13 @@ import {
   broadcastEditorEvents,
 } from './pagination-helpers.js';
 import { CollaborationPluginKey } from '@extensions/collaboration/collaboration.js';
-import { ImagePlaceholderPluginKey } from '@extensions/image/imageHelpers/imagePlaceholderPlugin.js';
+import { getImageRegistrationMetaType } from '@extensions/image/imageHelpers/imageRegistrationPlugin.js';
 import { LinkedStylesPluginKey } from '@extensions/linked-styles/index.js';
 import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestToPos.js';
 import { generateDocxRandomId } from '../../core/helpers/index.js';
 import { computePosition, autoUpdate, hide } from '@floating-ui/dom';
+import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
+import { isHeadless } from '@/utils/headless-helpers.js';
 
 const SEPARATOR_CLASS = 'pagination-separator';
 const SEPARATOR_FLOATING_CLASS = 'pagination-separator-floating';
@@ -34,6 +36,13 @@ export const Pagination = Extension.create({
   },
 
   addCommands() {
+    const editor = this.editor;
+
+    // Don't register commands in headless mode for better performance
+    if (isHeadless(editor)) {
+      return {};
+    }
+
     return {
       insertPageBreak:
         () =>
@@ -62,8 +71,16 @@ export const Pagination = Extension.create({
   },
 
   addShortcuts() {
+    const editor = this.editor;
+
+    if (isHeadless(editor)) {
+      return {};
+    }
+
     return {
-      'Mod-Enter': () => this.editor.commands.insertPageBreak(),
+      'Mod-Enter': () => {
+        return editor.commands.insertPageBreak();
+      },
     };
   },
 
@@ -72,6 +89,11 @@ export const Pagination = Extension.create({
    */
   addPmPlugins() {
     const editor = this.editor;
+
+    // Skip pagination plugin entirely in headless mode
+    if (isHeadless(editor)) {
+      return [];
+    }
 
     let isUpdating = false;
 
@@ -82,6 +104,9 @@ export const Pagination = Extension.create({
     let hasInitialized = false;
     let shouldInitialize = false;
 
+    let paginationTimeout = null;
+    const PAGINATION_DEBOUNCE_MS = 150;
+
     const paginationPlugin = new Plugin({
       key: PaginationPluginKey,
       state: {
@@ -91,7 +116,7 @@ export const Pagination = Extension.create({
             isReadyToInit: false,
             decorations: DecorationSet.empty,
             isDebugging,
-            isEnabled: editor.options.pagination,
+            isEnabled: editor.options.pagination && !isHeadless(editor),
           };
         },
         apply(tr, oldState, prevEditorState, newEditorState) {
@@ -115,6 +140,12 @@ export const Pagination = Extension.create({
             shouldInitialize = meta.isReadyToInit;
           }
 
+          // Allow plugins to explicitly skip pagination updates
+          if (meta && meta.skipPagination) {
+            if (isDebugging) console.debug('🚫 SKIP PAGINATION');
+            return { ...oldState };
+          }
+
           const syncMeta = tr.getMeta('y-sync$');
           const listSyncMeta = tr.getMeta('orderedListSync');
           if ((syncMeta && syncMeta.isChangeOrigin) || listSyncMeta) {
@@ -122,9 +153,9 @@ export const Pagination = Extension.create({
           }
 
           // We need special handling for images / the image placeholder plugin
-          const imagePluginTransaction = tr.getMeta(ImagePlaceholderPluginKey);
-          if (imagePluginTransaction) {
-            if (imagePluginTransaction.type === 'remove') {
+          const imageRegistrationMetaType = getImageRegistrationMetaType(tr);
+          if (imageRegistrationMetaType) {
+            if (imageRegistrationMetaType === 'remove') {
               onImageLoad(editor);
             }
             return { ...oldState };
@@ -158,6 +189,24 @@ export const Pagination = Extension.create({
             return { ...oldState };
           }
 
+          // Skip pagination only for mark-only changes (bold, italic, etc.)
+          if (!isForceUpdate && hasInitialized && tr.docChanged) {
+            let isMarkOnlyChange = true;
+
+            tr.steps.forEach((step) => {
+              // If it's not a mark step, it affects pagination
+              if (step.jsonID !== 'addMark' && step.jsonID !== 'removeMark') {
+                isMarkOnlyChange = false;
+              }
+            });
+
+            if (isMarkOnlyChange) {
+              if (isDebugging) console.debug('🚫 SKIP PAGINATION - MARK ONLY CHANGE');
+              shouldUpdate = false;
+              return { ...oldState };
+            }
+          }
+
           // content size
           shouldUpdate = true;
           if (isDebugging) console.debug('🚀 UPDATE DECORATIONS');
@@ -165,7 +214,7 @@ export const Pagination = Extension.create({
 
           return {
             ...oldState,
-            decorations: meta?.decorations?.map(tr.mapping, tr.doc) || DecorationSet.empty,
+            decorations: meta?.decorations?.map(tr.mapping, tr.doc) || oldState.decorations.map(tr.mapping, tr.doc),
             isReadyToInit: shouldInitialize,
           };
         },
@@ -177,26 +226,47 @@ export const Pagination = Extension.create({
 
         return {
           update: (view) => {
+            // Skip pagination updates in headless mode
+            if (isHeadless(editor)) return;
             if (!PaginationPluginKey.getState(view.state)?.isEnabled) return;
             if (!shouldUpdate || isUpdating) return;
 
-            isUpdating = true;
-            hasInitialized = true;
-
             /**
-             * Perform the actual update here.
-             * We call calculatePageBreaks which actually generates the decorations
+             * Recalculates pagination decorations if a refresh is pending.
+             * @returns {void}
              */
-            if (isDebugging) console.debug('--- Calling performUpdate ---');
-            performUpdate(editor, view, previousDecorations);
+            const performPaginationUpdate = () => {
+              if (!shouldUpdate) return;
 
-            isUpdating = false;
-            shouldUpdate = false;
+              isUpdating = true;
+              hasInitialized = true;
+
+              if (isDebugging) console.debug('--- Calling performUpdate ---');
+              performUpdate(editor, view, previousDecorations);
+
+              isUpdating = false;
+              shouldUpdate = false;
+            };
+
+            // Don't debounce initial pagination, only subsequent updates
+            if (!hasInitialized) {
+              performPaginationUpdate();
+              return;
+            }
+
+            // Debounce subsequent pagination updates
+            if (paginationTimeout) {
+              clearTimeout(paginationTimeout);
+            }
+
+            paginationTimeout = setTimeout(performPaginationUpdate, PAGINATION_DEBOUNCE_MS);
           },
         };
       },
       props: {
         decorations(state) {
+          // Skip decorations in headless mode
+          if (isHeadless(editor)) return DecorationSet.empty;
           const pluginState = PaginationPluginKey.getState(state);
           return pluginState.isEnabled ? pluginState.decorations : DecorationSet.empty;
         },
@@ -342,6 +412,7 @@ const calculatePageBreaks = (view, editor, sectionData) => {
   if (!tempContainer) return [];
 
   tempContainer.className = 'temp-container super-editor';
+  applyStyleIsolationClass(tempContainer);
   const HIDDEN_EDITOR_OFFSET_TOP = 0;
   const HIDDEN_EDITOR_OFFSET_LEFT = 0;
   tempContainer.style.left = HIDDEN_EDITOR_OFFSET_TOP + 'px';
@@ -439,6 +510,17 @@ function generateInternalPageBreaks(doc, view, editor, sectionData) {
       currentNode.isBlock && isListItemNode
         ? endCoords && endCoords.bottom > pageHeightThreshold
         : coords.bottom > pageHeightThreshold;
+
+    // handle the w:cantSplit attribute for table rows
+    if (currentNode.type.name === 'tableRow' && currentNode.attrs?.cantSplit) {
+      const rowTop = coords.top;
+      const rowBottom = view.coordsAtPos(currentPos + currentNode.nodeSize).bottom;
+      const remaining = pageHeightThreshold - rowTop;
+
+      if (rowBottom - rowTop > remaining) {
+        shouldAddPageBreak = true;
+      }
+    }
 
     const paragraphSectPrBreak = currentNode.attrs?.pageBreakSource;
     if (paragraphSectPrBreak === 'sectPr') {
@@ -756,7 +838,8 @@ const getHeaderFooterEditorKey = ({ pageNumber, isHeader, isFooter, isFirstHeade
  * @param {Editor} currentFocusedSectionEditor Focused header/footer editor
  */
 const onHeaderFooterDblClick = (editor, currentFocusedSectionEditor) => {
-  if (editor.options.documentMode !== 'editing') return;
+  // Skip header/footer double-click handling in headless mode
+  if (isHeadless(editor) || editor.options.documentMode !== 'editing') return;
 
   editor.setEditable(false, false);
   toggleHeaderFooterEditMode({
@@ -873,6 +956,9 @@ function getActualBreakCoords(view, pos, calculatedThreshold) {
  * @returns {void}
  */
 const onImageLoad = (editor) => {
+  // Skip in headless mode
+  if (isHeadless(editor)) return;
+  if (typeof requestAnimationFrame !== 'function') return;
   requestAnimationFrame(() => {
     const newTr = editor.view.state.tr;
     newTr.setMeta('forceUpdatePagination', true);

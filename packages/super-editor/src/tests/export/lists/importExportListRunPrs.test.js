@@ -1,3 +1,4 @@
+/* @vitest-environment jsdom */
 // prettier-ignore
 import { beforeAll, expect } from 'vitest';
 import { loadTestDataForEditorTests, initTestEditor, getNewTransaction } from '@tests/helpers/helpers.js';
@@ -14,27 +15,25 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
   });
 
   it('correctly imports list with inline run properties', () => {
-    const list = doc.content[0];
-    const item = list.content[0];
-    expect(list.type).toBe('orderedList');
-    expect(item.type).toBe('listItem');
-    expect(item.attrs.indent.left).toBeUndefined();
-    expect(item.attrs.indent.hanging).toBeUndefined();
+    const item = doc.content[0];
+    expect(item.type).toBe('paragraph');
+    expect(item.attrs.indent.left).toBe(720);
+    expect(item.attrs.indent.hanging).toBe(360);
 
-    const content = item.content[0];
-    const text = content.content[0];
-    expect(content.type).toBe('paragraph');
-    expect(text.type).toBe('text');
+    const runNode = item.content.find((node) => node.type === 'run');
+    expect(runNode).toBeDefined();
+
+    const text = runNode.content?.find((child) => child.type === 'text');
+    expect(text).toBeDefined();
     expect(text.text).toBe('APPOINTMENT');
 
-    const textStyleMarks = text.marks;
-    expect(textStyleMarks.length).toBe(2);
-    const textStyleMark = textStyleMarks.find((mark) => mark.type === 'textStyle');
+    const marks = text.marks || [];
+    const textStyleMark = marks.find((mark) => mark.type === 'textStyle');
 
     expect(textStyleMark).toBeDefined();
     expect(textStyleMark.attrs).toBeDefined();
     expect(textStyleMark.attrs.fontSize).toBe('8pt');
-    expect(textStyleMark.attrs.fontFamily).toBe('Times New Roman');
+    expect(textStyleMark.attrs.fontFamily).toBe('Times New Roman, serif');
   });
 
   it('exports list with inline run properties', () => {
@@ -57,6 +56,6 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     expect(wsz).toBeDefined();
     const { attributes } = wsz;
     expect(attributes).toBeDefined();
-    expect(attributes['w:val']).toBe(16);
+    expect(attributes['w:val']).toBe('16');
   });
 });

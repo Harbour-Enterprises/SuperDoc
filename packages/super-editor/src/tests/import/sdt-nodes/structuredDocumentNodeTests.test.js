@@ -29,41 +29,44 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
 
     const sdtNode = p1.content[0];
     expect(sdtNode.type).toBe('structuredContent');
-    expect(sdtNode.content.length).toBe(3);
     expect(sdtNode.attrs.sdtPr).toBeDefined();
 
     const sdtPr = sdtNode.attrs.sdtPr;
     expect(sdtPr.elements.length).toBe(3);
     expect(sdtPr.name).toBe('w:sdtPr');
 
-    const { marks } = sdtNode;
-    expect(marks.length).toBe(2);
+    const runs = sdtNode.content;
+    expect(runs.length).toBe(3);
 
-    const bold = marks.find((mark) => mark.type === 'bold');
-    expect(bold).toBeDefined();
+    const [textRunBefore, commentRun, commentReferenceRun] = runs;
+    expect(textRunBefore?.type).toBe('run');
+    expect(commentRun?.type).toBe('run');
+    expect(commentReferenceRun?.type).toBe('run');
 
-    const textStyle = marks.find((mark) => mark.type === 'textStyle');
-    expect(textStyle).toBeDefined();
+    const textBeforeComment = textRunBefore?.content?.find((child) => child.type === 'text');
+    expect(textBeforeComment?.text).toBe('SDT field with ');
+    const textBeforeMarks = textBeforeComment?.marks || [];
+    expect(textBeforeMarks.some((mark) => mark.type === 'bold')).toBe(true);
+    expect(textBeforeMarks.some((mark) => mark.type === 'textStyle')).toBe(true);
 
-    const textBeforeComment = sdtNode.content[0];
-    expect(textBeforeComment.type).toBe('text');
-    expect(textBeforeComment.text).toBe('SDT field with ');
+    const commentText = commentRun?.content?.find((child) => child.type === 'text');
+    expect(commentText?.text).toBe('text and comment');
+    const commentMarks = commentText?.marks || [];
+    expect(commentMarks.some((mark) => mark.type === 'bold')).toBe(true);
+    expect(commentMarks.some((mark) => mark.type === 'textStyle')).toBe(true);
+    expect(commentMarks.some((mark) => mark.type === 'commentMark')).toBe(true);
 
-    const commentText = sdtNode.content[1];
-    expect(commentText.type).toBe('text');
-    expect(commentText.text).toBe('text and comment');
+    const commentReference = commentReferenceRun?.content?.find((child) => child.type === 'commentReference');
+    expect(commentReference).toBeUndefined();
 
-    const extraTextAfterSdt = p1.content[1];
-    expect(extraTextAfterSdt.type).toBe('text');
-    expect(extraTextAfterSdt.text).toBe(' text');
+    const extraRunAfterSdt = p1.content[1];
+    expect(extraRunAfterSdt.type).toBe('run');
+    const extraTextAfterSdt = extraRunAfterSdt.content.find((child) => child.type === 'text');
+    expect(extraTextAfterSdt?.text).toBe(' text');
 
-    const { marks: extraTextMarks } = extraTextAfterSdt;
-    expect(extraTextMarks.length).toBe(2);
-    const extraBold = extraTextMarks.find((mark) => mark.type === 'bold');
-    expect(extraBold).toBeDefined();
-
-    const extraTextStyle = extraTextMarks.find((mark) => mark.type === 'textStyle');
-    expect(extraTextStyle).toBeDefined();
+    const extraTextMarks = extraTextAfterSdt?.marks || [];
+    expect(extraTextMarks.some((mark) => mark.type === 'bold')).toBe(true);
+    expect(extraTextMarks.some((mark) => mark.type === 'textStyle')).toBe(true);
   });
 
   it('exports the sdt node correctly', () => {
@@ -80,18 +83,21 @@ describe('[sdt-node-comment.docx] Test basic text SDT tag from gdocs', async () 
 
     const sdtContent = sdtNode.elements[1];
     expect(sdtContent.name).toBe('w:sdtContent');
-    expect(sdtContent.elements.length).toBe(2);
+    expect(sdtContent.elements.length).toBe(3);
 
-    const textBeforeComment = sdtContent.elements[0]?.elements.find((el) => el.name === 'w:t');
-    expect(textBeforeComment.name).toBe('w:t');
-    expect(textBeforeComment.elements[0].text).toBe('SDT field with ');
+    const [runBefore, runWithComment, commentReferenceRun] = sdtContent.elements;
+    const textBeforeComment = runBefore?.elements?.find((el) => el.name === 'w:t');
+    expect(textBeforeComment?.elements?.[0]?.text).toBe('SDT field with ');
 
-    const commentText = sdtContent.elements[1]?.elements.find((el) => el.name === 'w:t');
-    expect(commentText.name).toBe('w:t');
-    expect(commentText.elements[0].text).toBe('text and comment');
+    const commentText = runWithComment?.elements?.find((el) => el.name === 'w:t');
+    expect(commentText?.elements?.[0]?.text).toBe('text and comment');
 
-    const extraTextAfterSdt = p1.elements[2]?.elements.find((el) => el.name === 'w:t');
-    expect(extraTextAfterSdt.name).toBe('w:t');
-    expect(extraTextAfterSdt.elements[0].text).toBe(' text');
+    const commentReferenceRunPr = commentReferenceRun?.elements?.find((el) => el.name === 'w:rPr');
+    const commentReferenceStyle = commentReferenceRunPr?.elements?.find((el) => el.name === 'w:rStyle');
+    expect(commentReferenceStyle?.attributes?.['w:val']).toBe('CommentReference');
+
+    const extraRunAfterSdt = p1.elements[2];
+    const extraTextAfterSdt = extraRunAfterSdt?.elements?.find((el) => el.name === 'w:t');
+    expect(extraTextAfterSdt?.elements?.[0]?.text).toBe(' text');
   });
 });

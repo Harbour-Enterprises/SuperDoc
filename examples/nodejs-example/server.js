@@ -5,7 +5,7 @@ import { JSDOM } from 'jsdom';
 import documentBlob from './document.js';
 
 // In Node, we use the Editor class directly from superdoc/super-editor
-import { Editor, getStarterExtensions } from '@harbour-enterprises/superdoc/super-editor';
+import { Editor, getStarterExtensions } from 'superdoc/super-editor';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 

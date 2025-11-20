@@ -1,6 +1,13 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
+import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
+
+/**
+ * Configuration options for NodeResizer
+ * @typedef {Object} NodeResizerOptions
+ * @category Options
+ */
 
 export const NodeResizerKey = new PluginKey('node-resizer');
 
@@ -44,6 +51,11 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
         }
 
         if (typeof document === 'undefined' || editor.options.isHeadless) return oldState;
+
+        // Check if document is in view mode or not editable but allow decorations for header/footer
+        if (!editor.options.isHeaderOrFooter && (editor.options.documentMode === 'viewing' || !editor.isEditable)) {
+          return DecorationSet.empty;
+        }
 
         // If selection is not on a resizable node — keep current decorations
         const { selection } = newState;
@@ -120,7 +132,8 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
 
           if (selection.from !== prevSelection.from || selection.to !== prevSelection.to) {
             setTimeout(() => {
-              const selectedResizableWrapper = document.querySelector('.sd-editor-resizable-wrapper');
+              const searchRoot = editorView?.dom;
+              const selectedResizableWrapper = searchRoot?.querySelector('.sd-editor-resizable-wrapper');
               if (selectedResizableWrapper) {
                 showResizeHandles(view, selectedResizableWrapper);
               } else {
@@ -181,6 +194,7 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     }
 
     // Position the container relative to the resizable element
+    applyStyleIsolationClass(resizeContainer);
     document.body.appendChild(resizeContainer);
     updateHandlePositions(wrapper.firstElementChild);
   }
@@ -330,8 +344,17 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
   }
 };
 
+/**
+ * @module NodeResizer
+ * @sidebarTitle Node Resizer
+ * @snippetPath /snippets/extensions/node-resizer.mdx
+ */
 export const NodeResizer = Extension.create({
   name: 'nodeResizer',
+
+  addOptions() {
+    return {};
+  },
 
   addPmPlugins() {
     const isHeadless = this.editor.options.isHeadless;

@@ -9,12 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@harbour-enterprises/superdoc": "^0.13.3",
+    "superdoc": "^0.26.0",
     "vue": "^3.5.13",
     "yjs": "^13.6.8"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.2",
-    "vite": "^7.0.5"
+    "vite": "^6.0.0"
   }
 }

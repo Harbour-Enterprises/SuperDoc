@@ -83,6 +83,7 @@ export const addMarkStep = ({ state, step, newTr, doc, user, date }) => {
           id: wid,
           author: user.name,
           authorEmail: user.email,
+          authorImage: user.image,
           date,
           before,
           after,

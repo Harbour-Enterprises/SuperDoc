@@ -1,12 +1,41 @@
+// @ts-nocheck
+
 import { Extension } from '@core/Extension.js';
-import { search, SearchQuery, setSearchState, getMatchHighlights } from 'prosemirror-search';
+import { search, SearchQuery, setSearchState, getMatchHighlights } from './prosemirror-search-patched.js';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { v4 as uuidv4 } from 'uuid';
 
+const isRegExp = (value) => Object.prototype.toString.call(value) === '[object RegExp]';
+
+/**
+ * Search match object
+ * @typedef {Object} SearchMatch
+ * @property {string} text - Found text
+ * @property {number} from - From position
+ * @property {number} to - To position
+ * @property {string} id - ID of the search match
+ */
+
+/**
+ * Configuration options for Search
+ * @typedef {Object} SearchOptions
+ * @category Options
+ */
+
+/**
+ * @module Search
+ * @sidebarTitle Search
+ * @snippetPath /snippets/extensions/search.mdx
+ */
 export const Search = Extension.create({
+  // @ts-expect-error - Storage type mismatch will be fixed in TS migration
   addStorage() {
     return {
+      /**
+       * @private
+       * @type {SearchMatch[]|null}
+       */
       searchResults: [],
     };
   },
@@ -40,29 +69,53 @@ export const Search = Extension.create({
 
   addCommands() {
     return {
+      /**
+       * Navigate to the first search match
+       * @category Command
+       * @example
+       * editor.commands.goToFirstMatch()
+       * @note Scrolls editor to the first match from previous search
+       */
       goToFirstMatch:
         () =>
+        /** @returns {boolean} */
         ({ state, editor }) => {
           const highlights = getMatchHighlights(state);
-          if (!highlights || !highlights.children?.length) return;
+          if (!highlights) return false;
 
-          const match = highlights.children.find((item) => item.local);
-          const firstSearchItemPosition = highlights.children[0] + match.local[0].from + 1;
-          editor.view.domAtPos(firstSearchItemPosition)?.node?.scrollIntoView(true);
+          // Fix: DecorationSet uses .find(), not .children
+          const decorations = highlights.find();
+          if (!decorations?.length) return false;
+
+          const firstMatch = decorations[0];
+          const domPos = editor.view.domAtPos(firstMatch.from);
+          domPos?.node?.scrollIntoView(true);
+          return true;
         },
 
+      /**
+       * Search for string matches in editor content
+       * @category Command
+       * @param {String|RegExp} patternInput - Search string or pattern
+       * @example
+       * const matches = editor.commands.search('test string')
+       * const regexMatches = editor.commands.search(/test/i)
+       * @note Returns array of SearchMatch objects with positions and IDs
+       */
       search:
         (patternInput) =>
+        /** @returns {SearchMatch[]} */
         ({ state, dispatch }) => {
           let pattern;
           let caseSensitive = false;
           let regexp = false;
           const wholeWord = false;
 
-          if (patternInput instanceof RegExp) {
+          if (isRegExp(patternInput)) {
+            const regexPattern = /** @type {RegExp} */ (patternInput);
             regexp = true;
-            pattern = patternInput.source;
-            caseSensitive = !patternInput.flags.includes('i');
+            pattern = regexPattern.source;
+            caseSensitive = !regexPattern.flags.includes('i');
           } else if (typeof patternInput === 'string' && /^\/(.+)\/([gimsuy]*)$/.test(patternInput)) {
             const [, body, flags] = patternInput.match(/^\/(.+)\/([gimsuy]*)$/);
             regexp = true;
@@ -98,8 +151,18 @@ export const Search = Extension.create({
           return resultMatches;
         },
 
+      /**
+       * Navigate to a specific search match
+       * @category Command
+       * @param {SearchMatch} match - Match object to navigate to
+       * @example
+       * const searchResults = editor.commands.search('test string')
+       * editor.commands.goToSearchResult(searchResults[3])
+       * @note Scrolls to match and selects it
+       */
       goToSearchResult:
         (match) =>
+        /** @returns {boolean} */
         ({ state, dispatch, editor }) => {
           const { from, to } = match;
 

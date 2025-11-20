@@ -1,5 +1,5 @@
 import { Attribute, Node } from '@core/index.js';
-import dotsLoader from '@harbour-enterprises/common/icons/dots-loader.svg';
+import dotsLoader from '@superdoc/common/icons/dots-loader.svg';
 import { AiLoaderNodeName } from './ai-constants.js';
 
 export const AiLoaderNode = Node.create({

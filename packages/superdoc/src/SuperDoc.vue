@@ -1,5 +1,5 @@
 <script setup>
-import '@harbour-enterprises/common/styles/common-styles.css';
+import '@superdoc/common/styles/common-styles.css';
 import '@harbour-enterprises/super-editor/style.css';
 
 import { superdocIcons } from './icons.js';
@@ -13,11 +13,11 @@ import {
   computed,
   reactive,
   watch,
+  defineAsyncComponent,
 } from 'vue';
 import { NMessageProvider } from 'naive-ui';
 import { storeToRefs } from 'pinia';
 
-import PdfViewer from './components/PdfViewer/PdfViewer.vue';
 import CommentsLayer from './components/CommentsLayer/CommentsLayer.vue';
 import CommentDialog from '@superdoc/components/CommentsLayer/CommentDialog.vue';
 import FloatingComments from '@superdoc/components/CommentsLayer/FloatingComments.vue';
@@ -27,7 +27,7 @@ import useSelection from '@superdoc/helpers/use-selection';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 
-import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
+import { DOCX, PDF, HTML } from '@superdoc/common';
 import { SuperEditor, AIWriter } from '@harbour-enterprises/super-editor';
 import HtmlViewer from './components/HtmlViewer/HtmlViewer.vue';
 import useComment from './components/CommentsLayer/use-comment';
@@ -35,6 +35,9 @@ import AiLayer from './components/AiLayer/AiLayer.vue';
 import { useSelectedText } from './composables/use-selected-text';
 import { useAi } from './composables/use-ai';
 import { useHighContrastMode } from './composables/use-high-contrast-mode';
+
+const PdfViewer = defineAsyncComponent(() => import('./components/PdfViewer/PdfViewer.vue'));
+
 // Stores
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
@@ -67,12 +70,26 @@ const {
   hasSyncedCollaborationComments,
   editorCommentPositions,
   hasInitializedLocations,
+  isCommentHighlighted,
 } = storeToRefs(commentsStore);
-const { showAddComment, handleEditorLocationsUpdate, handleTrackedChangeUpdate } = commentsStore;
+const {
+  showAddComment,
+  handleEditorLocationsUpdate,
+  handleTrackedChangeUpdate,
+  addComment,
+  getComment,
+  COMMENT_EVENTS,
+} = commentsStore;
 const { proxy } = getCurrentInstance();
 commentsStore.proxy = proxy;
 
 const { isHighContrastMode } = useHighContrastMode();
+
+const commentsModuleConfig = computed(() => {
+  const config = modules.comments;
+  if (config === false || config == null) return null;
+  return config;
+});
 
 // Refs
 const layers = ref(null);
@@ -103,6 +120,8 @@ const {
 
 // Hrbr Fields
 const hrbrFieldsLayer = ref(null);
+
+const pdfConfig = proxy.$superdoc.config.modules?.pdf || {};
 
 const handleDocumentReady = (documentId, container) => {
   const doc = getDocument(documentId);
@@ -260,7 +279,14 @@ const onEditorListdefinitionsChange = (params) => {
 };
 
 const editorOptions = (doc) => {
+  // We only want to run the font check if the user has provided a callback
+  // The font check might request extra permissions, and we don't want to run it unless the developer has requested it
+  // So, if the callback is not defined, we won't run the font check
+  const onFontsResolvedFn =
+    proxy.$superdoc.listeners?.('fonts-resolved')?.length > 0 ? proxy.$superdoc.listeners('fonts-resolved')[0] : null;
+
   const options = {
+    isDebug: proxy.$superdoc.config.isDebug || false,
     pagination: proxy.$superdoc.config.pagination,
     documentId: doc.id,
     user: proxy.$superdoc.user,
@@ -273,8 +299,9 @@ const editorOptions = (doc) => {
     rulers: doc.rulers,
     isInternal: proxy.$superdoc.config.isInternal,
     annotations: proxy.$superdoc.config.annotations,
-    isCommentsEnabled: proxy.$superdoc.config.modules?.comments,
+    isCommentsEnabled: Boolean(commentsModuleConfig.value),
     isAiEnabled: proxy.$superdoc.config.modules?.ai,
+    slashMenuConfig: proxy.$superdoc.config.modules?.slashMenu,
     onBeforeCreate: onEditorBeforeCreate,
     onCreate: onEditorCreate,
     onDestroy: onEditorDestroy,
@@ -289,6 +316,7 @@ const editorOptions = (doc) => {
     onCommentsUpdate: onEditorCommentsUpdate,
     onCommentLocationsUpdate: onEditorCommentLocationsUpdate,
     onListDefinitionsChange: onEditorListdefinitionsChange,
+    onFontsResolved: onFontsResolvedFn,
     onTransaction: onEditorTransaction,
     ydoc: doc.ydoc,
     collaborationProvider: doc.provider || null,
@@ -299,6 +327,12 @@ const editorOptions = (doc) => {
     suppressDefaultDocxStyles: proxy.$superdoc.config.suppressDefaultDocxStyles,
     disableContextMenu: proxy.$superdoc.config.disableContextMenu,
     jsonOverride: proxy.$superdoc.config.jsonOverride,
+    permissionResolver: (payload = {}) =>
+      proxy.$superdoc.canPerformPermission({
+        role: proxy.$superdoc.config.role,
+        isInternal: proxy.$superdoc.config.isInternal,
+        ...payload,
+      }),
   };
 
   return options;
@@ -311,13 +345,47 @@ const editorOptions = (doc) => {
  * @returns {void}
  */
 const onEditorCommentLocationsUpdate = ({ allCommentIds: activeThreadId, allCommentPositions }) => {
-  if (!proxy.$superdoc.config.modules?.comments) return;
+  const commentsConfig = proxy.$superdoc.config.modules?.comments;
+  if (!commentsConfig || commentsConfig === false) return;
   handleEditorLocationsUpdate(allCommentPositions, activeThreadId);
 };
 
 const onEditorCommentsUpdate = (params = {}) => {
   // Set the active comment in the store
-  const { activeCommentId, type } = params;
+  let { activeCommentId, type, comment: commentPayload } = params;
+
+  if (COMMENT_EVENTS?.ADD && type === COMMENT_EVENTS.ADD && commentPayload) {
+    if (!commentPayload.commentText && commentPayload.text) {
+      commentPayload.commentText = commentPayload.text;
+    }
+
+    const currentUser = proxy.$superdoc?.user;
+    if (currentUser) {
+      if (!commentPayload.creatorName) commentPayload.creatorName = currentUser.name;
+      if (!commentPayload.creatorEmail) commentPayload.creatorEmail = currentUser.email;
+    }
+
+    if (!commentPayload.createdTime) commentPayload.createdTime = Date.now();
+
+    const primaryDocumentId = commentPayload.documentId || documents.value?.[0]?.id;
+    if (!commentPayload.documentId && primaryDocumentId) {
+      commentPayload.documentId = primaryDocumentId;
+    }
+
+    if (!commentPayload.fileId && primaryDocumentId) {
+      commentPayload.fileId = primaryDocumentId;
+    }
+
+    const id = commentPayload.commentId || commentPayload.importedId;
+    if (id && !getComment(id)) {
+      const commentModel = useComment(commentPayload);
+      addComment({ superdoc: proxy.$superdoc, comment: commentModel, skipEditorUpdate: true });
+    }
+
+    if (!activeCommentId && id) {
+      activeCommentId = id;
+    }
+  }
 
   if (type === 'trackedChange') {
     handleTrackedChangeUpdate({ superdoc: proxy.$superdoc, params });
@@ -326,6 +394,7 @@ const onEditorCommentsUpdate = (params = {}) => {
   nextTick(() => {
     if (pendingComment.value) return;
     commentsStore.setActiveComment(proxy.$superdoc, activeCommentId);
+    isCommentHighlighted.value = true;
   });
 
   // Bubble up the event to the user, if handled
@@ -340,7 +409,7 @@ const onEditorTransaction = ({ editor, transaction, duration }) => {
   }
 };
 
-const isCommentsEnabled = computed(() => 'comments' in modules);
+const isCommentsEnabled = computed(() => Boolean(commentsModuleConfig.value));
 const showCommentsSidebar = computed(() => {
   return (
     pendingComment.value ||
@@ -358,7 +427,7 @@ const showToolsFloatingMenu = computed(() => {
 });
 const showActiveSelection = computed(() => {
   if (!isCommentsEnabled.value) return false;
-  !getConfig?.readOnly && selectionPosition.value;
+  return !getConfig.value?.readOnly && selectionPosition.value;
 });
 
 watch(showCommentsSidebar, (value) => {
@@ -371,7 +440,8 @@ watch(showCommentsSidebar, (value) => {
  * @param {String} commentId The commentId to scroll to
  */
 const scrollToComment = (commentId) => {
-  if (!proxy.$superdoc.config?.modules?.comments) return;
+  const commentsConfig = proxy.$superdoc.config?.modules?.comments;
+  if (!commentsConfig || commentsConfig === false) return;
 
   const element = document.querySelector(`[data-thread-id=${commentId}]`);
   if (element) {
@@ -381,7 +451,8 @@ const scrollToComment = (commentId) => {
 };
 
 onMounted(() => {
-  if (isCommentsEnabled.value && !modules.comments.readOnly) {
+  const config = commentsModuleConfig.value;
+  if (config && !config.readOnly) {
     document.addEventListener('mousedown', handleDocumentMouseDown);
   }
 });
@@ -531,6 +602,7 @@ const handleDragEnd = (e) => {
 
 const shouldShowSelection = computed(() => {
   const config = proxy.$superdoc.config.modules?.comments;
+  if (!config || config === false) return false;
   return !config.readOnly;
 });
 
@@ -622,6 +694,7 @@ watch(getFloatingComments, () => {
           <PdfViewer
             v-if="doc.type === PDF"
             :document-data="doc"
+            :config="pdfConfig"
             @selection-change="handleSelectionChange"
             @ready="handleDocumentReady"
             @page-loaded="handlePageReady"

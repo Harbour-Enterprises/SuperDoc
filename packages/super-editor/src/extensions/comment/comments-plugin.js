@@ -8,8 +8,10 @@ import { PaginationPluginKey } from '../pagination/pagination-helpers.js';
 // Example tracked-change keys, if needed
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../track-changes/constants.js';
 import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import { translateFormatChangesToEnglish } from './comments-helpers.js';
+import { normalizeCommentEventPayload, updatePosition } from './helpers/index.js';
+import { v4 as uuidv4 } from 'uuid';
 
 const TRACK_CHANGE_MARKS = [TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName];
 
@@ -21,23 +23,46 @@ export const CommentsPlugin = Extension.create({
   addCommands() {
     return {
       insertComment:
-        (conversation) =>
+        (conversation = {}) =>
         ({ tr, dispatch }) => {
           const { selection } = tr;
           const { $from, $to } = selection;
-          const { commentId, isInternal } = conversation;
+          const skipEmit = conversation?.skipEmit;
+          const resolvedCommentId = conversation?.commentId ?? uuidv4();
+          const resolvedInternal = conversation?.isInternal ?? false;
 
           tr.setMeta(CommentsPluginKey, { event: 'add' });
           tr.addMark(
             $from.pos,
             $to.pos,
             this.editor.schema.marks[CommentMarkName].create({
-              commentId,
-              internal: isInternal,
+              commentId: resolvedCommentId,
+              internal: resolvedInternal,
             }),
           );
 
-          dispatch(tr);
+          if (dispatch) dispatch(tr);
+
+          const shouldEmit = !skipEmit && resolvedCommentId !== 'pending';
+          if (shouldEmit) {
+            const commentPayload = normalizeCommentEventPayload({
+              conversation,
+              editorOptions: this.editor.options,
+              fallbackCommentId: resolvedCommentId,
+              fallbackInternal: resolvedInternal,
+            });
+
+            const activeCommentId = commentPayload.commentId || commentPayload.importedId || null;
+
+            const event = {
+              type: comments_module_events.ADD,
+              comment: commentPayload,
+              ...(activeCommentId && { activeCommentId }),
+            };
+
+            this.editor.emit('commentsUpdate', event);
+          }
+
           return true;
         },
 
@@ -218,8 +243,10 @@ export const CommentsPlugin = Extension.create({
       },
 
       view() {
-        let prevDoc;
-        let prevActiveThreadId; // Add this to track active thread changes
+        let prevDoc = null;
+        let prevActiveThreadId = null;
+        let prevAllCommentPositions = {};
+        let hasEverEmitted = false;
 
         return {
           update(view) {
@@ -233,21 +260,25 @@ export const CommentsPlugin = Extension.create({
               shouldUpdate = true;
             }
 
-            // Check if document changed
-            if (prevDoc && !prevDoc.eq(doc)) shouldUpdate = true;
+            const docChanged = !prevDoc || !prevDoc.eq(doc);
+            if (docChanged) shouldUpdate = true;
 
-            // Check if active thread changed
-            if (prevActiveThreadId !== currentActiveThreadId) {
+            const activeThreadChanged = prevActiveThreadId !== currentActiveThreadId;
+            if (activeThreadChanged) {
               shouldUpdate = true;
               prevActiveThreadId = currentActiveThreadId;
             }
+
+            // If only active thread changed after first render, reuse cached positions
+            const isInitialLoad = prevDoc === null;
+            const onlyActiveThreadChanged = !isInitialLoad && !docChanged && activeThreadChanged;
 
             if (!shouldUpdate) return;
             prevDoc = doc;
             shouldUpdate = false;
 
             const decorations = [];
-            const allCommentPositions = {};
+            const allCommentPositions = onlyActiveThreadChanged ? prevAllCommentPositions : {};
             doc.descendants((node, pos) => {
               const { marks = [] } = node;
               const commentMarks = marks.filter((mark) => mark.type.name === CommentMarkName);
@@ -257,15 +288,17 @@ export const CommentsPlugin = Extension.create({
                 const { attrs } = commentMark;
                 const threadId = attrs.commentId || attrs.importedId;
 
-                const currentBounds = view.coordsAtPos(pos);
+                if (!onlyActiveThreadChanged) {
+                  const currentBounds = view.coordsAtPos(pos);
 
-                updatePosition({
-                  allCommentPositions,
-                  threadId,
-                  pos,
-                  currentBounds,
-                  node,
-                });
+                  updatePosition({
+                    allCommentPositions,
+                    threadId,
+                    pos,
+                    currentBounds,
+                    node,
+                  });
+                }
 
                 const isInternal = attrs.internal;
                 if (!hasActive) hasActive = currentActiveThreadId === threadId;
@@ -296,21 +329,24 @@ export const CommentsPlugin = Extension.create({
               });
 
               if (trackedChangeMark) {
-                const currentBounds = view.coordsAtPos(pos);
-                const { id } = trackedChangeMark.mark.attrs;
-                updatePosition({
-                  allCommentPositions,
-                  threadId: id,
-                  pos,
-                  currentBounds,
-                  node,
-                });
+                if (!onlyActiveThreadChanged) {
+                  const currentBounds = view.coordsAtPos(pos);
+                  const { id } = trackedChangeMark.mark.attrs;
+                  updatePosition({
+                    allCommentPositions,
+                    threadId: id,
+                    pos,
+                    currentBounds,
+                    node,
+                  });
+                }
+
                 // Add decoration for tracked changes when activated
-                const isActiveTrackedChange = currentActiveThreadId === id;
+                const isActiveTrackedChange = currentActiveThreadId === trackedChangeMark.mark.attrs.id;
                 if (isActiveTrackedChange) {
                   const trackedChangeDeco = Decoration.inline(pos, pos + node.nodeSize, {
                     style: `border-width: 2px;`,
-                    'data-thread-id': id,
+                    'data-thread-id': trackedChangeMark.mark.attrs.id,
                     class: 'sd-editor-tracked-change-highlight',
                   });
 
@@ -336,7 +372,20 @@ export const CommentsPlugin = Extension.create({
               view.dispatch(tr);
             }
 
-            editor.emit('comment-positions', { allCommentPositions });
+            // Only emit comment-positions if they changed
+            if (!onlyActiveThreadChanged) {
+              const positionsChanged = hasPositionsChanged(prevAllCommentPositions, allCommentPositions);
+              const hasComments = Object.keys(allCommentPositions).length > 0;
+              // Emit positions if they changed OR if this is the first emission with comments present.
+              // This ensures positions are emitted on initial load even when only the active thread changes.
+              const shouldEmitPositions = positionsChanged || (!hasEverEmitted && hasComments);
+
+              if (shouldEmitPositions) {
+                prevAllCommentPositions = allCommentPositions;
+                hasEverEmitted = true;
+                editor.emit('comment-positions', { allCommentPositions });
+              }
+            }
           },
         };
       },
@@ -346,35 +395,33 @@ export const CommentsPlugin = Extension.create({
   },
 });
 
-const updatePosition = ({ allCommentPositions, threadId, pos, currentBounds, node }) => {
-  let bounds = {};
+/**
+ * Compares two comment position objects to determine if they have changed.
+ * Uses shallow comparison of position coordinates for efficiency.
+ * @param {Object} prevPositions - Previous comment positions object
+ * @param {Object} currPositions - Current comment positions object
+ * @returns {boolean} True if positions have changed, false otherwise
+ */
+const hasPositionsChanged = (prevPositions, currPositions) => {
+  const prevKeys = Object.keys(prevPositions);
+  const currKeys = Object.keys(currPositions);
 
-  if (currentBounds instanceof DOMRect) {
-    bounds = {
-      top: currentBounds.top,
-      bottom: currentBounds.bottom,
-      left: currentBounds.left,
-      right: currentBounds.right,
-    };
-  } else {
-    bounds = { ...currentBounds };
+  if (prevKeys.length !== currKeys.length) return true;
+
+  for (const key of currKeys) {
+    const prev = prevPositions[key];
+    const curr = currPositions[key];
+
+    if (!prev || !prev.bounds || !curr.bounds) {
+      return true;
+    }
+
+    if (prev.bounds.top !== curr.bounds.top || prev.bounds.left !== curr.bounds.left) {
+      return true;
+    }
   }
 
-  if (!allCommentPositions[threadId]) {
-    allCommentPositions[threadId] = {
-      threadId,
-      start: pos,
-      end: pos + node.nodeSize,
-      bounds,
-    };
-  } else {
-    // Adjust the positional indices
-    const existing = allCommentPositions[threadId];
-    existing.start = Math.min(existing.start, pos);
-    existing.end = Math.max(existing.end, pos + node.nodeSize);
-    existing.bounds.top = Math.min(existing.bounds.top, currentBounds.top);
-    existing.bounds.bottom = Math.max(existing.bounds.bottom, currentBounds.bottom);
-  }
+  return false;
 };
 
 /**
@@ -545,12 +592,16 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
   return newTrackedChanges;
 };
 
-const getTrackedChangeText = ({ state, node, mark, marks, trackedChangeType, isDeletionInsertion }) => {
+const getTrackedChangeText = ({ nodes, mark, trackedChangeType, isDeletionInsertion }) => {
   let trackedChangeText = '';
   let deletionText = '';
 
   if (trackedChangeType === TrackInsertMarkName) {
-    trackedChangeText = node?.text ?? '';
+    trackedChangeText = nodes.reduce((acc, node) => {
+      if (!node.marks.find((nodeMark) => nodeMark.type.name === mark.type.name)) return acc;
+      acc += node?.text || node?.textContent || '';
+      return acc;
+    }, '');
   }
 
   // If this is a format change, let's get the string of what changes were made
@@ -559,19 +610,11 @@ const getTrackedChangeText = ({ state, node, mark, marks, trackedChangeType, isD
   }
 
   if (trackedChangeType === TrackDeleteMarkName || isDeletionInsertion) {
-    deletionText = node?.text ?? '';
-
-    if (isDeletionInsertion) {
-      let { id } = marks.deletionMark.attrs;
-      let deletionNode = findNode(state.doc, (node) => {
-        const { marks = [] } = node;
-        const changeMarks = marks.filter((mark) => TRACK_CHANGE_MARKS.includes(mark.type.name));
-        if (!changeMarks.length) return false;
-        const hasMatchingId = changeMarks.find((mark) => mark.attrs.id === id);
-        if (hasMatchingId) return true;
-      });
-      deletionText = deletionNode?.node.text ?? '';
-    }
+    deletionText = nodes.reduce((acc, node) => {
+      if (!node.marks.find((nodeMark) => nodeMark.type.name === TrackDeleteMarkName)) return acc;
+      acc += node?.text || node?.textContent || '';
+      return acc;
+    }, '');
   }
 
   return {
@@ -585,25 +628,24 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   const { type, attrs } = trackedMark;
 
   const { name: trackedChangeType } = type;
-  const { author, authorEmail, date, importedAuthor } = attrs;
+  const { author, authorEmail, authorImage, date, importedAuthor } = attrs;
   const id = attrs.id;
 
   const node = nodes[0];
   const isDeletionInsertion = !!(marks.insertedMark && marks.deletionMark);
 
-  let existingNode;
+  let nodesWithMark = [];
   newEditorState.doc.descendants((node) => {
     const { marks = [] } = node;
     const changeMarks = marks.filter((mark) => TRACK_CHANGE_MARKS.includes(mark.type.name));
     if (!changeMarks.length) return;
     const hasMatchingId = changeMarks.find((mark) => mark.attrs.id === id);
-    if (hasMatchingId) existingNode = node;
-    if (existingNode) return false;
+    if (hasMatchingId) nodesWithMark.push(node);
   });
 
   const { deletionText, trackedChangeText } = getTrackedChangeText({
     state: newEditorState,
-    node: existingNode || node,
+    nodes: nodesWithMark.length ? nodesWithMark : [node],
     mark: trackedMark,
     marks,
     trackedChangeType,
@@ -625,6 +667,7 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
     deletedText: marks.deletionMark ? deletionText : null,
     author,
     authorEmail,
+    ...(authorImage && { authorImage }),
     date,
     ...(importedAuthor && {
       importedAuthor: {
@@ -638,15 +681,6 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
 
   return params;
 };
-
-function findNode(node, predicate) {
-  let found = null;
-  node.descendants((node, pos) => {
-    if (predicate(node)) found = { node, pos };
-    if (found) return false;
-  });
-  return found;
-}
 
 function findRangeById(doc, id) {
   let from = null,
@@ -667,3 +701,12 @@ function findRangeById(doc, id) {
   });
   return from !== null && to !== null ? { from, to } : null;
 }
+
+export const __test__ = {
+  getActiveCommentId,
+  findTrackedMark,
+  handleTrackedChangeTransaction,
+  getTrackedChangeText,
+  createOrUpdateTrackedChangeComment,
+  findRangeById,
+};

@@ -1,7 +1,7 @@
 <script setup>
-import '@harbour-enterprises/superdoc/super-editor/style.css';
+import 'superdoc/super-editor/style.css';
 import { onMounted } from 'vue';
-import { Editor, SuperToolbar } from '@harbour-enterprises/superdoc/super-editor';
+import { Editor, SuperToolbar } from 'superdoc/super-editor';
 
 const init = () => {
   // Initialize the editor

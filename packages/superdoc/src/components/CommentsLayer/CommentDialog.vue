@@ -6,7 +6,6 @@ import { useCommentsStore } from '@superdoc/stores/comments-store';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { SuperInput } from '@harbour-enterprises/super-editor';
 import { superdocIcons } from '@superdoc/icons.js';
-import { isAllowed, PERMISSIONS } from '@superdoc/core/collaboration/permissions.js';
 import useSelection from '@superdoc/helpers/use-selection';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 import Avatar from '@superdoc/components/general/Avatar.vue';
@@ -49,6 +48,7 @@ const {
   isDebugging,
   editingCommentId,
   editorCommentPositions,
+  isCommentHighlighted,
 } = storeToRefs(commentsStore);
 
 const { activeZoom } = storeToRefs(superdocStore);
@@ -135,7 +135,7 @@ const handleClickOutside = (e) => {
     'track-format-dec',
   ];
 
-  if (excludedClasses.some((className) => e.target.classList.contains(className))) return;
+  if (excludedClasses.some((className) => e.target.classList.contains(className)) || isCommentHighlighted.value) return;
 
   if (activeComment.value === props.comment.commentId) {
     floatingCommentsOffset.value = 0;
@@ -143,6 +143,7 @@ const handleClickOutside = (e) => {
   }
   activeComment.value = null;
   commentsStore.setActiveComment(proxy.$superdoc, activeComment.value);
+  isCommentHighlighted.value = false;
 };
 
 const handleAddComment = () => {

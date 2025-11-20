@@ -2,7 +2,7 @@ import { ref, reactive } from 'vue';
 import { v4 as uuidv4 } from 'uuid';
 
 import { syncCommentsToClients } from '@superdoc/core/collaboration/helpers.js';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events } from '@superdoc/common';
 import useSelection from '@superdoc/helpers/use-selection';
 
 /**
@@ -28,6 +28,7 @@ export default function useComment(params) {
 
   const creatorEmail = params.creatorEmail;
   const creatorName = params.creatorName;
+  const creatorImage = params.creatorImage;
   const createdTime = params.createdTime || Date.now();
   const importedAuthor = ref(params.importedAuthor || null);
 
@@ -196,7 +197,7 @@ export default function useComment(params) {
   const getCommentUser = () => {
     const user = importedAuthor.value
       ? { name: importedAuthor.value.name || '(Imported)', email: importedAuthor.value.email }
-      : { name: creatorName, email: creatorEmail };
+      : { name: creatorName, email: creatorEmail, image: creatorImage };
 
     return user;
   };
@@ -232,6 +233,7 @@ export default function useComment(params) {
       createdAtVersionNumber,
       creatorEmail,
       creatorName,
+      creatorImage,
       createdTime,
       importedAuthor: importedAuthor.value,
       isInternal: isInternal.value,
@@ -259,6 +261,7 @@ export default function useComment(params) {
     isFocused,
     creatorEmail,
     creatorName,
+    creatorImage,
     createdTime,
     isInternal,
     commentText,

@@ -21,9 +21,9 @@ export function ensureValidLinkRID(links, editor, tr, logger) {
   const results = [];
 
   links.forEach(({ mark, from, to }) => {
-    const { rId, href } = mark.attrs;
+    const { rId, href, anchor } = mark.attrs;
 
-    if (!rId && href) {
+    if (!rId && href && !anchor) {
       let newId = editor.converter.docxHelpers.findRelationshipIdFromTarget(href, editor);
       if (newId) logger.debug('Reusing existing rId for link:', newId, 'from pos:', from, 'to pos:', to);
 

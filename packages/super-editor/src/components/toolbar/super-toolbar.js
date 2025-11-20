@@ -3,10 +3,15 @@ import { createApp } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { makeDefaultItems } from './defaultItems';
 import { getActiveFormatting } from '@core/helpers/getActiveFormatting.js';
-import { vClickOutside } from '@harbour-enterprises/common';
-import Toolbar from './Toolbar.vue';
-import { startImageUpload, getFileOpener } from '../../extensions/image/imageHelpers/index.js';
 import { findParentNode } from '@helpers/index.js';
+import { vClickOutside } from '@superdoc/common';
+import Toolbar from './Toolbar.vue';
+import {
+  checkAndProcessImage,
+  replaceSelectionWithImagePlaceholder,
+  uploadAndInsertImage,
+  getFileOpener,
+} from '../../extensions/image/imageHelpers/index.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { toolbarTexts } from './toolbarTexts.js';
 import { getQuickFormatList } from '@extensions/linked-styles/index.js';
@@ -14,6 +19,17 @@ import { getAvailableColorOptions, makeColorOption, renderColorOptions } from '.
 import { isInTable } from '@helpers/isInTable.js';
 import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
 import { yUndoPluginKey } from 'y-prosemirror';
+import { isNegatedMark } from './format-negation.js';
+import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
+import { isList } from '@core/commands/list-helpers';
+
+/**
+ * @typedef {function(CommandItem): void} CommandCallback
+ * A callback function that's executed when a toolbar button is clicked
+ * @param {CommandItem} params - Command parameters
+ * @param {ToolbarItem} params.item - An instance of the useToolbarItem composable
+ * @param {*} [params.argument] - The argument passed to the command
+ */
 
 /**
  * @typedef {Object} ToolbarConfig
@@ -41,7 +57,7 @@ import { yUndoPluginKey } from 'y-prosemirror';
  * @property {string} type - The type of toolbar item (button, options, separator, dropdown, overflow)
  * @property {Object} group - The group the item belongs to
  * @property {string} group.value - The value of the group
- * @property {string} command - The command to execute
+ * @property {string|CommandCallback} command - The command to execute
  * @property {string} [noArgumentCommand] - The command to execute when no argument is provided
  * @property {Object} icon - The icon for the item
  * @property {*} icon.value - The value of the icon
@@ -260,7 +276,8 @@ export class SuperToolbar extends EventEmitter {
       item.onActivate({ zoom: argument });
 
       this.emit('superdoc-command', { item, argument });
-      const layers = document.querySelector(this.superdoc.config.selector)?.querySelector('.layers');
+
+      const layers = this.superdoc.element?.querySelector('.layers');
       if (!layers) return;
 
       const isMobileDevice = typeof screen.orientation !== 'undefined';
@@ -324,10 +341,16 @@ export class SuperToolbar extends EventEmitter {
      * @param {string} params.argument - The color to set
      * @returns {void}
      */
-    setColor: ({ item, argument }) => {
-      this.#runCommandWithArgumentOnly({ item, argument }, () => {
-        this.activeEditor?.commands.setFieldAnnotationsTextColor(argument, true);
-      });
+    setColor: ({ argument }) => {
+      if (!argument || !this.activeEditor) return;
+      const isNone = argument === 'none';
+      const value = isNone ? 'inherit' : argument;
+      // Apply inline color; 'inherit' acts as a cascade-aware negation of style color
+      if (this.activeEditor?.commands?.setColor) this.activeEditor.commands.setColor(value);
+      // Update annotations color, but use null for none
+      const argValue = isNone ? null : argument;
+      this.activeEditor?.commands.setFieldAnnotationsTextColor(argValue, true);
+      this.updateToolbarState();
     },
 
     /**
@@ -337,12 +360,16 @@ export class SuperToolbar extends EventEmitter {
      * @param {string} params.argument - The highlight color to set
      * @returns {void}
      */
-    setHighlight: ({ item, argument }) => {
-      this.#runCommandWithArgumentOnly({ item, argument, noArgumentCallback: true }, () => {
-        let arg = argument !== 'none' ? argument : null;
-        this.activeEditor?.commands.setFieldAnnotationsTextHighlight(arg, true);
-        this.activeEditor?.commands.setCellBackground(arg);
-      });
+    setHighlight: ({ argument }) => {
+      if (!argument || !this.activeEditor) return;
+      // For cascade-aware negation, keep a highlight mark present using 'transparent'
+      const inlineColor = argument !== 'none' ? argument : 'transparent';
+      if (this.activeEditor?.commands?.setHighlight) this.activeEditor.commands.setHighlight(inlineColor);
+      // Update annotations highlight; 'none' -> null
+      const argValue = argument !== 'none' ? argument : null;
+      this.activeEditor?.commands.setFieldAnnotationsTextHighlight(argValue, true);
+      this.activeEditor?.commands.setCellBackground(argValue);
+      this.updateToolbarState();
     },
 
     /**
@@ -366,10 +393,29 @@ export class SuperToolbar extends EventEmitter {
         return;
       }
 
-      startImageUpload({
+      const { size, file } = await checkAndProcessImage({
+        file: result.file,
+        getMaxContentSize: () => this.activeEditor.getMaxContentSize(),
+      });
+
+      if (!file) {
+        return;
+      }
+
+      const id = {};
+
+      replaceSelectionWithImagePlaceholder({
+        view: this.activeEditor.view,
+        editorOptions: this.activeEditor.options,
+        id,
+      });
+
+      await uploadAndInsertImage({
         editor: this.activeEditor,
         view: this.activeEditor.view,
-        file: result.file,
+        file,
+        size,
+        id,
       });
     },
 
@@ -382,11 +428,9 @@ export class SuperToolbar extends EventEmitter {
      */
     increaseTextIndent: ({ item, argument }) => {
       let command = item.command;
-      let { state } = this.activeEditor;
-      let listItem = findParentNode((node) => node.type.name === 'listItem')(state.selection);
 
-      if (listItem) {
-        return this.activeEditor.commands.increaseListIndent();
+      if (this.activeEditor.commands.increaseListIndent?.()) {
+        return true;
       }
 
       if (command in this.activeEditor.commands) {
@@ -403,11 +447,9 @@ export class SuperToolbar extends EventEmitter {
      */
     decreaseTextIndent: ({ item, argument }) => {
       let command = item.command;
-      let { state } = this.activeEditor;
-      let listItem = findParentNode((node) => node.type.name === 'listItem')(state.selection);
 
-      if (listItem) {
-        return this.activeEditor.commands.decreaseListIndent();
+      if (this.activeEditor.commands.decreaseListIndent?.()) {
+        return true;
       }
 
       if (command in this.activeEditor.commands) {
@@ -694,32 +736,80 @@ export class SuperToolbar extends EventEmitter {
       return;
     }
 
+    const { state } = this.activeEditor;
+    const selection = state.selection;
+    const selectionTrackedChanges = this.#enrichTrackedChanges(
+      collectTrackedChanges({ state, from: selection.from, to: selection.to }),
+    );
+    const hasTrackedChanges = selectionTrackedChanges.length > 0;
+    const hasValidSelection = hasTrackedChanges;
+    const canAcceptTrackedChanges =
+      hasValidSelection &&
+      isTrackedChangeActionAllowed({
+        editor: this.activeEditor,
+        action: 'accept',
+        trackedChanges: selectionTrackedChanges,
+      });
+    const canRejectTrackedChanges =
+      hasValidSelection &&
+      isTrackedChangeActionAllowed({
+        editor: this.activeEditor,
+        action: 'reject',
+        trackedChanges: selectionTrackedChanges,
+      });
+
     const marks = getActiveFormatting(this.activeEditor);
     const inTable = isInTable(this.activeEditor.state);
 
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
 
+      if (item.name.value === 'undo') {
+        item.setDisabled(this.undoDepth === 0);
+      }
+
+      if (item.name.value === 'redo') {
+        item.setDisabled(this.redoDepth === 0);
+      }
+
+      if (item.name.value === 'acceptTrackedChangeBySelection') {
+        item.setDisabled(!canAcceptTrackedChanges);
+      }
+
+      if (item.name.value === 'rejectTrackedChangeOnSelection') {
+        item.setDisabled(!canRejectTrackedChanges);
+      }
+
       // Linked Styles dropdown behaves a bit different from other buttons.
       // We need to disable it manually if there are no linked styles to show
       if (item.name.value === 'linkedStyles') {
+        const linkedStyleMark = marks.find((mark) => mark.name === 'styleId');
         if (this.activeEditor && !getQuickFormatList(this.activeEditor).length) {
           return item.deactivate();
         } else {
-          return item.activate();
+          return item.activate({ linkedStyleMark });
         }
       }
 
-      const activeMark = marks.find((mark) => mark.name === item.name.value);
+      const rawActiveMark = marks.find((mark) => mark.name === item.name.value);
+      const markNegated = rawActiveMark ? isNegatedMark(rawActiveMark.name, rawActiveMark.attrs) : false;
+      const activeMark = markNegated ? null : rawActiveMark;
+
       if (activeMark) {
-        item.activate(activeMark.attrs);
+        if (activeMark.name === 'fontSize') {
+          const fontSizes = marks.filter((i) => i.name === 'fontSize').map((i) => i.attrs.fontSize);
+          const isMultiple = [...new Set(fontSizes)].length > 1;
+          item.activate(activeMark.attrs, isMultiple);
+        } else {
+          item.activate(activeMark.attrs);
+        }
       } else {
         item.deactivate();
       }
 
       // Activate toolbar items based on linked styles (if there's no active mark to avoid overriding  it)
       const styleIdMark = marks.find((mark) => mark.name === 'styleId');
-      if (!activeMark && styleIdMark?.attrs.styleId) {
+      if (!activeMark && !markNegated && styleIdMark?.attrs.styleId) {
         const markToStyleMap = {
           fontSize: 'font-size',
           fontFamily: 'font-family',
@@ -753,11 +843,15 @@ export class SuperToolbar extends EventEmitter {
       }
 
       // Activate list buttons when selections is inside list
-      const listNumberingType = marks.find((mark) => mark.name === 'listNumberingType')?.attrs?.listNumberingType;
-      if (item.name.value === 'list' && listNumberingType === 'bullet') {
-        item.activate();
-      } else if (item.name.value === 'numberedlist' && listNumberingType && listNumberingType !== 'bullet') {
-        item.activate();
+      const selection = this.activeEditor.state.selection;
+      const listParent = findParentNode(isList)(selection)?.node;
+      if (listParent) {
+        const numberingType = listParent.attrs.listRendering.numberingType;
+        if (item.name.value === 'list' && numberingType === 'bullet') {
+          item.activate();
+        } else if (item.name.value === 'numberedlist' && numberingType !== 'bullet') {
+          item.activate();
+        }
       }
     });
   }
@@ -779,6 +873,8 @@ export class SuperToolbar extends EventEmitter {
     if (this.role === 'viewer') {
       this.#deactivateAll();
     }
+
+    this.updateToolbarState();
   };
 
   /**
@@ -813,6 +909,21 @@ export class SuperToolbar extends EventEmitter {
     }
   }
 
+  #enrichTrackedChanges(trackedChanges = []) {
+    if (!trackedChanges?.length) return trackedChanges;
+    const store = this.superdoc?.commentsStore;
+    if (!store?.getComment) return trackedChanges;
+
+    return trackedChanges.map((change) => {
+      const commentId = change.id;
+      if (!commentId) return change;
+      const storeComment = store.getComment(commentId);
+      if (!storeComment) return change;
+      const comment = typeof storeComment.getValues === 'function' ? storeComment.getValues() : storeComment;
+      return { ...change, comment };
+    });
+  }
+
   /**
    * React to editor transactions. Might want to debounce this.
    * @param {Object} params - Transaction parameters
@@ -842,8 +953,6 @@ export class SuperToolbar extends EventEmitter {
       return;
     }
 
-    this.log('(emmitCommand) Command:', command, '\n\titem:', item, '\n\targument:', argument, '\n\toption:', option);
-
     // Check if we have a custom or overloaded command defined
     if (command in this.#interceptedCommands) {
       return this.#interceptedCommands[command]({ item, argument });
@@ -860,7 +969,10 @@ export class SuperToolbar extends EventEmitter {
 
     // If we don't know what to do with this command, throw an error
     else {
-      throw new Error(`[super-toolbar 🎨] Command not found: ${command}`);
+      const error = new Error(`[super-toolbar 🎨] Command not found: ${command}`);
+      this.emit('exception', { error, editor: this.activeEditor });
+
+      throw error;
     }
 
     this.updateToolbarState();

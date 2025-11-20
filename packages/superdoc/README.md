@@ -4,7 +4,7 @@
 
 [![Documentation](https://img.shields.io/badge/docs-available-1355ff.svg)](https://docs.superdoc.dev/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-1355ff.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![npm version](https://img.shields.io/npm/v/@harbour-enterprises/superdoc.svg?color=1355ff)](https://www.npmjs.com/package/@harbour-enterprises/superdoc)
+[![npm version](https://img.shields.io/npm/v/superdoc.svg?color=1355ff)](https://www.npmjs.com/package/superdoc)
 [![Discord](https://img.shields.io/badge/discord-join-1355ff)](https://discord.gg/FBeRDqWy)
 
 SuperDoc is a powerful document editor that brings Microsoft Word-level capabilities to your web applications. With real-time collaboration, extensive formatting options, and seamless integration capabilities, SuperDoc makes document editing on the web better for everyone.
@@ -23,14 +23,14 @@ SuperDoc is a powerful document editor that brings Microsoft Word-level capabili
 ### Installation
 
 ```bash
-npm install @harbour-enterprises/superdoc
+npm install superdoc
 ```
 
 ### Basic Usage
 
 ```javascript
-import '@harbour-enterprises/superdoc/style.css';
-import { SuperDoc } from '@harbour-enterprises/superdoc';
+import 'superdoc/style.css';
+import { SuperDoc } from 'superdoc';
 
 const superdoc = new SuperDoc({
   selector: '#superdoc',

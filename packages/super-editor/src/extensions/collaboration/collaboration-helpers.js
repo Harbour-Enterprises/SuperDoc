@@ -7,9 +7,24 @@
 export const updateYdocDocxData = async (editor, ydoc) => {
   ydoc = ydoc || editor.options.ydoc;
   if (!ydoc) return;
+  if (!editor || editor.isDestroyed) return;
 
   const metaMap = ydoc.getMap('meta');
-  const docx = [...metaMap.get('docx')];
+  const docxValue = metaMap.get('docx');
+
+  let docx = [];
+  if (Array.isArray(docxValue)) {
+    docx = [...docxValue];
+  } else if (docxValue && typeof docxValue.toArray === 'function') {
+    docx = docxValue.toArray();
+  } else if (docxValue && typeof docxValue[Symbol.iterator] === 'function') {
+    docx = Array.from(docxValue);
+  }
+
+  if (!docx.length && Array.isArray(editor.options.content)) {
+    docx = [...editor.options.content];
+  }
+
   const newXml = await editor.exportDocx({ getUpdatedDocs: true });
 
   Object.keys(newXml).forEach((key) => {

@@ -9,18 +9,17 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
 
 /**
  * Tracked transaction to track changes.
- * @param {import('prosemirror-state').Transaction} options.tr Transaction.
- * @param {import('prosemirror-state').EditorState} options.state Editor state.
- * @param {object} options.user User object ({ name, email }).
+ * @param {{ tr: import('prosemirror-state').Transaction; state: import('prosemirror-state').EditorState; user: import('@core/types/EditorConfig.js').User }} params
  * @returns {import('prosemirror-state').Transaction} Modified transaction.
  */
 export const trackedTransaction = ({ tr, state, user }) => {
   const onlyInputTypeMeta = ['inputType', 'uiEvent', 'paste', 'pointer'];
   const notAllowedMeta = ['historyUndo', 'historyRedo', 'acceptReject'];
+  const isProgrammaticInput = tr.getMeta('inputType') === 'programmatic';
 
   if (
     !tr.steps.length ||
-    (tr.meta && !Object.keys(tr.meta).every((meta) => onlyInputTypeMeta.includes(meta))) ||
+    (tr.meta && !Object.keys(tr.meta).every((meta) => onlyInputTypeMeta.includes(meta)) && !isProgrammaticInput) ||
     notAllowedMeta.includes(tr.getMeta('inputType')) ||
     tr.getMeta(CommentsPluginKey) // Skip if it's a comment transaction.
   ) {
@@ -53,7 +52,6 @@ export const trackedTransaction = ({ tr, state, user }) => {
         originalStep,
         originalStepIndex,
       });
-      console.debug('[track-changes]: replaceStep');
     } else if (step instanceof AddMarkStep) {
       addMarkStep({
         state,
@@ -65,7 +63,6 @@ export const trackedTransaction = ({ tr, state, user }) => {
         user,
         date,
       });
-      console.debug('[track-changes]: addMarkStep');
     } else if (step instanceof RemoveMarkStep) {
       removeMarkStep({
         state,
@@ -77,19 +74,21 @@ export const trackedTransaction = ({ tr, state, user }) => {
         user,
         date,
       });
-      console.debug('[track-changes]: removeMarkStep');
     } else {
       newTr.step(step);
-      console.log('[track-changes]: otherStep');
     }
   });
 
   if (tr.getMeta('inputType')) {
-    newTr.setMeta(tr.getMeta('inputType'));
+    newTr.setMeta('inputType', tr.getMeta('inputType'));
   }
 
   if (tr.getMeta('uiEvent')) {
-    newTr.setMeta(tr.getMeta('uiEvent'));
+    newTr.setMeta('uiEvent', tr.getMeta('uiEvent'));
+  }
+
+  if (tr.getMeta('addToHistory') !== undefined) {
+    newTr.setMeta('addToHistory', tr.getMeta('addToHistory'));
   }
 
   if (tr.selectionSet) {

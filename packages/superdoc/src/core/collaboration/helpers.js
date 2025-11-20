@@ -37,8 +37,6 @@ export const initCollaborationComments = (superdoc) => {
 
     if (currentUser.name === user.name && currentUser.email === user.email) return;
 
-    if (__IS_DEBUG__) console.debug('[initCollaborationComments] commentsArray.observe', commentsArray.toJSON());
-
     // Update conversations
     const comments = commentsArray.toJSON();
 
@@ -118,7 +116,6 @@ export const makeDocumentsCollaborative = (superdoc) => {
  */
 export const syncCommentsToClients = (superdoc, event) => {
   if (!superdoc.isCollaborative || !superdoc.config.modules.comments) return;
-  if (__IS_DEBUG__) console.debug('[comments] syncCommentsToClients', event);
 
   const yArray = superdoc.ydoc.getArray('comments');
 

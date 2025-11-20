@@ -2,7 +2,7 @@
 import { onMounted, ref } from 'vue';
 const props = defineProps({
   fileSource: {
-    type: File,
+    type: [File, Blob],
     required: true,
   },
   documentId: {

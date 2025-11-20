@@ -1,4 +1,10 @@
 /**
+ * @deprecated This handler is deprecated in favor of v3 bookmark translators.
+ * Kept for reference for custom mark logic that needs migration.
+ * TODO: Migrate custom mark logic to a proper system
+ */
+
+/**
  * @type {import("docxImporter").NodeHandler}
  */
 export const handleBookmarkNode = (params) => {
@@ -34,7 +40,11 @@ export const handleBookmarkNode = (params) => {
       }
     });
 
-    const translatedText = nodeListHandler.handler({ ...params, nodes: textNodes });
+    const translatedText = nodeListHandler.handler({
+      ...params,
+      nodes: textNodes,
+      path: [...(params.path || []), node],
+    });
     translatedText.forEach((n) => {
       n.marks.push({
         type: customMark.name,

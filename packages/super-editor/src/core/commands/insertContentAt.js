@@ -1,25 +1,51 @@
 import { createNodeFromContent } from '../helpers/createNodeFromContent';
 import { selectionToInsertionEnd } from '../helpers/selectionToInsertionEnd';
 
+/**
+ * @typedef {import("prosemirror-model").Node} ProseMirrorNode
+ * @typedef {import("prosemirror-model").Fragment} ProseMirrorFragment
+ */
+
+/**
+ * Checks if the given node or fragment is a ProseMirror Fragment.
+ * @param {ProseMirrorNode|ProseMirrorFragment} nodeOrFragment
+ * @returns {boolean}
+ */
 const isFragment = (nodeOrFragment) => {
   return !('type' in nodeOrFragment);
 };
 
-//prettier-ignore
-export const insertContentAt = (position, value, options) => ({ tr, dispatch, editor }) => {
-  if (dispatch) {
+/**
+ * Inserts content at the specified position.
+ * - Bare strings with newlines → insertText (keeps literal \n)
+ * - HTML-looking strings → parse and replaceWith
+ * - Arrays of strings / {text} objects → insertText
+ *
+ * @param {import("prosemirror-model").ResolvedPos|number|{from:number,to:number}} position
+ * @param {string|Array<string|{text?:string}>|ProseMirrorNode|ProseMirrorFragment} value
+ * @param {Object} options
+ * @returns {boolean}
+ */
+// prettier-ignore
+export const insertContentAt =
+  (position, value, options) =>
+  ({ tr, dispatch, editor }) => {
+    if (!dispatch) return true;
+
     options = {
       parseOptions: {},
       updateSelection: true,
       applyInputRules: false,
       applyPasteRules: false,
+      // optional escape hatch to force literal text insertion
+      asText: false,
       ...options,
     };
 
     let content;
 
     try {
-      content = createNodeFromContent(value, editor.schema, {
+      content = createNodeFromContent(value, editor, {
         parseOptions: {
           preserveWhitespace: 'full',
           ...options.parseOptions,
@@ -38,26 +64,38 @@ export const insertContentAt = (position, value, options) => ({ tr, dispatch, ed
     }
 
     let { from, to } =
-      typeof position === 'number' ? { from: position, to: position } : { from: position.from, to: position.to };
+      typeof position === 'number'
+        ? { from: position, to: position }
+        : { from: position.from, to: position.to };
 
+    // Heuristic:
+    // - Bare strings that LOOK like HTML: let parser handle (replaceWith)
+    // - Bare strings with one or more newlines: force text insertion (insertText)
+    const isBareString = typeof value === 'string';
+    const looksLikeHTML = isBareString && /^\s*<[a-zA-Z][^>]*>.*<\/[a-zA-Z][^>]*>\s*$/s.test(value);
+    const hasNewline = isBareString && /[\r\n]/.test(value);
+    const forceTextInsert =
+      !!options.asText ||
+      (hasNewline && !looksLikeHTML) ||
+      (Array.isArray(value) && value.every((v) => typeof v === 'string' || (v && typeof v.text === 'string'))) ||
+      (!!value && typeof value === 'object' && typeof value.text === 'string');
+
+    // Inspect parsed nodes to decide text vs block replacement
     let isOnlyTextContent = true;
     let isOnlyBlockContent = true;
     const nodes = isFragment(content) ? content : [content];
 
     nodes.forEach((node) => {
-      // check if added node is valid
+      // validate node
       node.check();
 
-      isOnlyTextContent = isOnlyTextContent ? node.isText && node.marks.length === 0 : false;
+      // only-plain-text if every node is an unmarked text node
+      isOnlyTextContent = isOnlyTextContent ? (node.isText && node.marks.length === 0) : false;
 
       isOnlyBlockContent = isOnlyBlockContent ? node.isBlock : false;
     });
 
-    // check if we can replace the wrapping node by
-    // the newly inserted content
-    // example:
-    // replace an empty paragraph by an inserted image
-    // instead of inserting the image below the paragraph
+    // Replace empty textblock wrapper when inserting blocks at a cursor
     if (from === to && isOnlyBlockContent) {
       const { parent } = tr.doc.resolve(from);
       const isEmptyTextBlock = parent.isTextblock && !parent.type.spec.code && !parent.childCount;
@@ -70,23 +108,19 @@ export const insertContentAt = (position, value, options) => ({ tr, dispatch, ed
 
     let newContent;
 
-    // if there is only plain text we have to use `insertText`
-    // because this will keep the current marks
-    if (isOnlyTextContent) {
-      // if value is string, we can use it directly
-      // otherwise if it is an array, we have to join it
+    // Use insertText for pure text OR when explicitly/heuristically forced
+    if (isOnlyTextContent || forceTextInsert) {
       if (Array.isArray(value)) {
-        newContent = value.map((v) => v.text || '').join('');
+        newContent = value.map((v) => (typeof v === 'string' ? v : (v && v.text) || '')).join('');
       } else if (typeof value === 'object' && !!value && !!value.text) {
         newContent = value.text;
       } else {
-        newContent = value;
+        newContent = typeof value === 'string' ? value : '';
       }
 
       tr.insertText(newContent, from, to);
     } else {
       newContent = content;
-
       tr.replaceWith(from, to, newContent);
     }
 
@@ -102,7 +136,6 @@ export const insertContentAt = (position, value, options) => ({ tr, dispatch, ed
     if (options.applyPasteRules) {
       tr.setMeta('applyPasteRules', { from, text: newContent });
     }
-  }
 
-  return true;
-};
+    return true;
+  };

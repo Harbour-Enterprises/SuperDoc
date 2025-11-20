@@ -1,7 +1,7 @@
-import { SuperDoc, Config } from '@harbour-enterprises/superdoc';
-import { Editor } from '@harbour-enterprises/superdoc/super-editor'
+import { SuperDoc, Config } from 'superdoc';
+import { Editor } from 'superdoc/super-editor'
 
-import '@harbour-enterprises/superdoc/style.css';
+import 'superdoc/style.css';
 import { useEffect, useRef } from 'react';
 
 interface Props {

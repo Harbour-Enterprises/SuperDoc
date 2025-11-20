@@ -1,4 +1,4 @@
-import { Extensions } from '@harbour-enterprises/superdoc';
+import { Extensions } from 'superdoc';
 
 // Extensions includes the necessary classes for creating custom nodes
 const { Attribute, Node } = Extensions;

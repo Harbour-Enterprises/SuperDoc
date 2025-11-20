@@ -1,50 +1,77 @@
-import { TrackDeleteMarkName, TrackInsertMarkName } from '@extensions/track-changes/constants.js';
-import { parseProperties } from './importerHelpers.js';
+import { translator as wDelTranslator } from '@converter/v3/handlers/w/del';
+import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins';
+
+const isTrackChangeElement = (node) => node?.name === 'w:del' || node?.name === 'w:ins';
+
+const unwrapTrackChangeNode = (node) => {
+  if (!node) {
+    return null;
+  }
+
+  if (isTrackChangeElement(node)) {
+    return node;
+  }
+
+  if (node.name === 'w:sdt') {
+    const content = node.elements?.find((element) => element.name === 'w:sdtContent');
+    if (!content?.elements?.length) {
+      return null;
+    }
+
+    for (const child of content.elements) {
+      const trackChange = unwrapTrackChangeNode(child);
+      if (trackChange) {
+        return trackChange;
+      }
+    }
+  }
+
+  return null;
+};
 
 /**
  * @type {import("docxImporter").NodeHandler}
  */
 export const handleTrackChangeNode = (params) => {
-  const { nodes, nodeListHandler } = params;
-  if (nodes.length === 0 || !(nodes[0].name === 'w:del' || nodes[0].name === 'w:ins' || nodes[0].name === 'w:sdt')) {
+  const { nodes } = params;
+  if (nodes.length === 0) {
     return { nodes: [], consumed: 0 };
   }
 
-  const mainNode = nodes[0];
-  let node;
-
-  if (['w:ins', 'w:del'].includes(mainNode.name)) {
-    node = mainNode;
-  } else {
-    const sdtContent = mainNode.elements.find((el) => el.name === 'w:sdtContent');
-    const trackedChange = sdtContent?.elements.find((el) => ['w:ins', 'w:del'].includes(el.name));
-    if (trackedChange) node = trackedChange;
-  }
-
-  if (!node) {
+  const mainNode = unwrapTrackChangeNode(nodes[0]);
+  if (!mainNode) {
     return { nodes: [], consumed: 0 };
   }
 
-  const { name } = node;
-  const { attributes, elements } = parseProperties(node);
+  let result;
 
-  const subs = nodeListHandler.handler({ ...params, insideTrackChange: true, nodes: elements });
-  const changeType = name === 'w:del' ? TrackDeleteMarkName : TrackInsertMarkName;
-
-  const mappedAttributes = {
-    id: attributes['w:id'],
-    date: attributes['w:date'],
-    author: attributes['w:author'],
-    authorEmail: attributes['w:authorEmail'],
-    importedAuthor: `${attributes['w:author']} (imported)`,
+  const translatorParams = {
+    ...params,
+    nodes: [mainNode],
   };
 
-  subs.forEach((subElement) => {
-    if (subElement.marks === undefined) subElement.marks = [];
-    subElement.marks.push({ type: changeType, attrs: mappedAttributes });
-  });
+  switch (mainNode.name) {
+    case 'w:del':
+      result = wDelTranslator.encode({
+        ...translatorParams,
+        extraParams: {
+          ...translatorParams.extraParams,
+          node: mainNode,
+        },
+      });
+      break;
+    case 'w:ins':
+      result = wInsTranslator.encode({
+        ...translatorParams,
+        extraParams: {
+          ...translatorParams.extraParams,
+          node: mainNode,
+        },
+      });
+      break;
+  }
 
-  return { nodes: subs, consumed: 1 };
+  return { nodes: result, consumed: 1 };
 };
 
 /**
@@ -53,4 +80,8 @@ export const handleTrackChangeNode = (params) => {
 export const trackChangeNodeHandlerEntity = {
   handlerName: 'trackChangeNodeHandler',
   handler: handleTrackChangeNode,
+};
+
+export const __testables__ = {
+  unwrapTrackChangeNode,
 };

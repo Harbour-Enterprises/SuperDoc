@@ -24,11 +24,16 @@ Paragraph text
   it('creates ProseMirror doc from markdown', () => {
     const mockSchema = { nodes: {} };
     const mockDoc = { type: 'doc' };
+    const mockOptions = { isImport: true };
     createDocFromHTML.mockReturnValue(mockDoc);
 
-    const result = createDocFromMarkdown('# Test', mockSchema);
+    const result = createDocFromMarkdown('# Test', mockSchema, mockOptions);
 
-    expect(createDocFromHTML).toHaveBeenCalledWith(expect.stringContaining('<h1>Test</h1>'), mockSchema);
+    expect(createDocFromHTML).toHaveBeenCalledWith(
+      '<h1>Test</h1>\n', // Exact string that marked.parse returns
+      mockSchema,
+      { isImport: true },
+    );
     expect(result).toBe(mockDoc);
   });
 });

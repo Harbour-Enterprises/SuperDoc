@@ -1,13 +1,23 @@
 <script setup>
-import '@harbour-enterprises/common/styles/common-styles.css';
+import '@superdoc/common/styles/common-styles.css';
 import { nextTick, onMounted, provide, ref, shallowRef } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
-import { DOCX, PDF, HTML } from '@harbour-enterprises/common';
-import { BasicUpload, getFileObject } from '@harbour-enterprises/common';
+import { DOCX, PDF, HTML } from '@superdoc/common';
+import { getFileObject } from '@superdoc/common';
+import BasicUpload from '@superdoc/common/components/BasicUpload.vue';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
-import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import BlankDOCX from '@superdoc/common/data/blank.docx?url';
+import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
+import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
+import { getWorkerSrcFromCDN } from '../../components/PdfViewer/pdf/pdf-adapter.js';
+
+// Or set worker globally outside the component.
+// pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+//   'pdfjs-dist/build/pdf.worker.min.mjs',
+//   import.meta.url,
+// ).toString();
 
 /* For local dev */
 const superdoc = shallowRef(null);
@@ -27,6 +37,22 @@ const userRole = urlParams.get('role') || 'editor';
 const user = {
   name: testUserName,
   email: testUserEmail,
+};
+
+const commentPermissionResolver = ({ permission, comment, defaultDecision, currentUser }) => {
+  if (!comment) return defaultDecision;
+
+  // Example: hide tracked-change buttons for matching author email domain
+  if (
+    comment.trackedChange &&
+    comment.creatorEmail?.endsWith('@example.com') &&
+    ['RESOLVE_OWN', 'REJECT_OWN'].includes(permission)
+  ) {
+    return false;
+  }
+
+  // Allow default behaviour for everything else
+  return defaultDecision;
 };
 
 const handleNewFile = async (file) => {
@@ -75,7 +101,9 @@ const readFileAsText = (file) => {
 
 const init = async () => {
   let testId = 'document-123';
-  // const testId = "document_6a9fb1e0725d46989bdbb3f9879e9e1b";
+
+  // eslint-disable-next-line no-unused-vars
+  const testDocumentId = 'doc123';
 
   // Prepare document config with content if available
   const documentConfig = {
@@ -127,10 +155,11 @@ const init = async () => {
     modules: {
       comments: {
         // comments: sampleComments,
-        overflow: true,
-        selector: 'comments-panel',
+        // overflow: true,
+        // selector: 'comments-panel',
         // useInternalExternalComments: true,
         // suppressInternalExternal: true,
+        permissionResolver: commentPermissionResolver,
       },
       toolbar: {
         selector: 'toolbar',
@@ -145,6 +174,110 @@ const init = async () => {
         excludeItems: [], // ['italic', 'bold'],
         // texts: {},
       },
+      // Test custom slash menu configuration
+      slashMenu: {
+        // includeDefaultItems: true, // Include default items
+        // customItems: [
+        //   {
+        //     id: 'custom-section',
+        //     items: [
+        //       {
+        //         id: 'show-context',
+        //         label: 'Show Context',
+        //         showWhen: (context) => context.trigger === 'click',
+        //         render: (context) => {
+        //           const container = document.createElement('div');
+        //           container.style.display = 'flex';
+        //           container.style.alignItems = 'center';
+        //           container.innerHTML = `
+        //             <span style="margin-right: 8px;">🔍</span>
+        //             <span>Show Context</span>
+        //           `;
+        //           return container;
+        //         },
+        //         action: (editor, context) => {
+        //           console.log('context', context);
+        //         }
+        //       },
+        //       {
+        //         id:'delete table',
+        //         label: 'Delete Table',
+        //         render: (context) => {
+        //           const container = document.createElement('div');
+        //           container.style.display = 'flex';
+        //           container.style.alignItems = 'center';
+        //           container.innerHTML = `
+        //             <span style="margin-right: 8px;">🗑️</span>
+        //             <span>Delete Table</span>
+        //           `;
+        //           return container;
+        //         },
+        //         action: (editor) => {
+        //           editor.commands.deleteTable();
+        //         },
+        //         showWhen: (context) => context.isInTable
+        //       },
+        //       {
+        //         id: 'highlight-text',
+        //         label: 'Highlight Selection',
+        //         showWhen: (context) => ['slash', 'click'].includes(context.trigger),
+        //         render: (context) => {
+        //           const container = document.createElement('div');
+        //           container.style.display = 'flex';
+        //           container.style.alignItems = 'center';
+        //           container.innerHTML = `
+        //             <span style="margin-right: 8px; color: #ffa500;">✨</span>
+        //             <span>Highlight "${context.selectedText || 'text'}"</span>
+        //           `;
+        //           return container;
+        //         },
+        //         action: (editor) => {
+        //           editor.commands.setHighlight('#ffff00');
+        //         },
+        //         showWhen: (context) => context.hasSelection
+        //       },
+        //       {
+        //         id: 'insert-emoji',
+        //         label: 'Insert Emoji',
+        //         showWhen: (context) => (context.trigger === 'click' || context.trigger === 'slash') && context.hasSelection,
+        //         render: (context) => {
+        //           const container = document.createElement('div');
+        //           container.style.display = 'flex';
+        //           container.style.alignItems = 'center';
+        //           container.innerHTML = `
+        //             <span style="margin-right: 8px;">😀</span>
+        //             <span>Insert Emoji</span>
+        //           `;
+        //           return container;
+        //         },
+        //         action: (editor) => {
+        //           editor.commands.insertContent('¯\\_(ツ)_/¯');
+        //         }
+        //       },
+        //     ]
+        //   }
+        // ],
+        // // Alternative: use menuProvider function
+        // // @todo: decide if we want to expose this in the documentation or not for simplicity?
+        // menuProvider: (context, defaultSections) => {
+        //   return [
+        //     ...defaultSections,
+        //     {
+        //       id: 'dynamic-section',
+        //       items: [
+        //         {
+        //           id: 'dynamic-item',
+        //           label: `Custom for ${context.documentMode}`,
+        //           showWhen: (context) => ['slash', 'click'].includes(context.trigger),
+        //           action: (editor) => {
+        //             editor.commands.insertContent(`Mode: ${context.documentMode} `);
+        //           }
+        //         }
+        //       ]
+        //     }
+        //   ];
+        // }
+      },
       // 'hrbr-fields': {},
 
       // To test this dev env with collaboration you must run a local collaboration server here.
@@ -158,6 +291,13 @@ const init = async () => {
         // apiKey: 'test',
         // Optional: Provide a custom endpoint for AI services
         // endpoint: 'https://sd-dev-express-gateway-i6xtm.ondigitalocean.app/insights',
+      },
+      pdf: {
+        pdfLib: pdfjsLib,
+        pdfViewer: pdfjsViewer,
+        setWorker: true,
+        workerSrc: getWorkerSrcFromCDN(pdfjsLib.version),
+        textLayerMode: 1,
       },
     },
     onEditorCreate,
@@ -174,6 +314,9 @@ const init = async () => {
   superdoc.value = new SuperDoc(config);
   superdoc.value?.on('ready', () => {
     superdoc.value.addCommentsList(commentsPanel.value);
+  });
+  superdoc.value?.on('exception', (error) => {
+    console.error('SuperDoc exception:', error);
   });
 
   // const ydoc = superdoc.value.ydoc;
@@ -194,6 +337,33 @@ const onCommentsUpdate = (updateData) => {
 
 const onContentError = ({ editor, error, documentId, file }) => {
   console.debug('Content error on', documentId, error);
+};
+
+const exportHTML = async (commentsType) => {
+  console.debug('Exporting HTML', { commentsType });
+
+  // Get HTML content from SuperDoc
+  const htmlArray = superdoc.value.getHTML();
+  const html = htmlArray.join('');
+
+  // Create a Blob from the HTML
+  const blob = new Blob([html], { type: 'text/html' });
+
+  // Create a download link and trigger the download
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${title.value || 'document'}.html`;
+
+  // Trigger the download
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  // Clean up the URL
+  URL.revokeObjectURL(url);
+
+  console.debug('HTML exported successfully');
 };
 
 const exportDocx = async (commentsType) => {
@@ -256,6 +426,7 @@ onMounted(async () => {
           </div>
         </div>
         <div class="dev-app__header-side dev-app__header-side--right">
+          <button class="dev-app__header-export-btn" @click="exportHTML()">Export HTML</button>
           <button class="dev-app__header-export-btn" @click="exportDocx()">Export Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('clean')">Export clean Docx</button>
           <button class="dev-app__header-export-btn" @click="exportDocx('external')">Export external Docx</button>

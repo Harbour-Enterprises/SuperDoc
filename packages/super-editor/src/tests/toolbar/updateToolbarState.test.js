@@ -6,6 +6,11 @@ vi.mock('@core/helpers/getActiveFormatting.js', () => ({
   getActiveFormatting: vi.fn(),
 }));
 
+vi.mock('prosemirror-history', () => ({
+  undoDepth: vi.fn(),
+  redoDepth: vi.fn(),
+}));
+
 vi.mock('@helpers/isInTable.js', () => ({
   isInTable: vi.fn().mockImplementation(() => false),
 }));
@@ -14,18 +19,35 @@ vi.mock('@extensions/linked-styles/linked-styles.js', () => ({
   getQuickFormatList: vi.fn(),
 }));
 
+vi.mock(import('@helpers/index.js'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    findParentNode: vi.fn().mockImplementation(() => vi.fn().mockReturnValue(null)),
+  };
+});
+
+vi.mock('@extensions/track-changes/permission-helpers.js', () => ({
+  collectTrackedChanges: vi.fn(() => []),
+  isTrackedChangeActionAllowed: vi.fn(() => true),
+}));
+
 describe('updateToolbarState', () => {
   let toolbar;
   let mockEditor;
   let mockGetActiveFormatting;
   let mockIsInTable;
   let mockGetQuickFormatList;
+  let mockCollectTrackedChanges;
+  let mockIsTrackedChangeActionAllowed;
 
   beforeEach(async () => {
     vi.clearAllMocks();
 
     mockEditor = {
-      state: {},
+      state: {
+        selection: { from: 1, to: 1 },
+      },
       commands: {
         setFieldAnnotationsFontSize: vi.fn(),
         setFieldAnnotationsFontFamily: vi.fn(),
@@ -54,10 +76,18 @@ describe('updateToolbarState', () => {
     const { getActiveFormatting } = await import('@core/helpers/getActiveFormatting.js');
     const { isInTable } = await import('@helpers/isInTable.js');
     const { getQuickFormatList } = await import('@extensions/linked-styles/linked-styles.js');
+    const { collectTrackedChanges, isTrackedChangeActionAllowed } = await import(
+      '@extensions/track-changes/permission-helpers.js'
+    );
 
     getActiveFormatting.mockImplementation(mockGetActiveFormatting);
     isInTable.mockImplementation(mockIsInTable);
     getQuickFormatList.mockImplementation(mockGetQuickFormatList);
+    mockCollectTrackedChanges = collectTrackedChanges;
+    mockIsTrackedChangeActionAllowed = isTrackedChangeActionAllowed;
+
+    mockCollectTrackedChanges.mockReturnValue([]);
+    mockIsTrackedChangeActionAllowed.mockReturnValue(true);
 
     toolbar = new SuperToolbar({
       selector: '#test-toolbar',
@@ -76,6 +106,14 @@ describe('updateToolbarState', () => {
       },
       {
         name: { value: 'italic' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      },
+      {
+        name: { value: 'underline' },
         resetDisabled: vi.fn(),
         activate: vi.fn(),
         deactivate: vi.fn(),
@@ -135,6 +173,22 @@ describe('updateToolbarState', () => {
         nestedOptions: { value: [] },
         allowWithoutEditor: { value: false },
       },
+      {
+        name: { value: 'acceptTrackedChangeBySelection' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      },
+      {
+        name: { value: 'rejectTrackedChangeOnSelection' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      },
     ];
 
     toolbar.activeEditor = mockEditor;
@@ -158,6 +212,87 @@ describe('updateToolbarState', () => {
     expect(toolbar.toolbarItems[1].activate).toHaveBeenCalledWith({}); // italic
 
     expect(mockGetActiveFormatting).toHaveBeenCalledWith(mockEditor);
+  });
+
+  it('should keep toggles inactive when negation marks are active', () => {
+    mockGetActiveFormatting.mockReturnValue([
+      { name: 'bold', attrs: { value: '0' } },
+      { name: 'underline', attrs: { underlineType: 'none' } },
+    ]);
+
+    toolbar.updateToolbarState();
+
+    const boldItem = toolbar.toolbarItems.find((item) => item.name.value === 'bold');
+    const underlineItem = toolbar.toolbarItems.find((item) => item.name.value === 'underline');
+
+    expect(boldItem.activate).not.toHaveBeenCalled();
+    expect(boldItem.deactivate).toHaveBeenCalled();
+    expect(underlineItem.activate).not.toHaveBeenCalled();
+    expect(underlineItem.deactivate).toHaveBeenCalled();
+  });
+
+  it('should not reactivate via linked styles when a negation mark is present', () => {
+    mockGetActiveFormatting.mockReturnValue([
+      { name: 'bold', attrs: { value: '0' } },
+      { name: 'styleId', attrs: { styleId: 'style-1' } },
+    ]);
+
+    mockEditor.converter.linkedStyles = [
+      {
+        id: 'style-1',
+        definition: { styles: { bold: { value: true } } },
+      },
+    ];
+
+    toolbar.updateToolbarState();
+
+    const boldItem = toolbar.toolbarItems.find((item) => item.name.value === 'bold');
+    expect(boldItem.activate).not.toHaveBeenCalled();
+    expect(boldItem.deactivate).toHaveBeenCalled();
+  });
+
+  it('disables tracked change buttons when permission resolver denies access', () => {
+    mockGetActiveFormatting.mockReturnValue([]);
+    mockCollectTrackedChanges.mockReturnValue([{ id: 'change-1', attrs: { authorEmail: 'author@example.com' } }]);
+    mockIsTrackedChangeActionAllowed.mockImplementation(({ action }) => action === 'reject');
+
+    toolbar.updateToolbarState();
+
+    expect(mockCollectTrackedChanges).toHaveBeenCalled();
+
+    const acceptItem = toolbar.toolbarItems.find((item) => item.name.value === 'acceptTrackedChangeBySelection');
+    const rejectItem = toolbar.toolbarItems.find((item) => item.name.value === 'rejectTrackedChangeOnSelection');
+
+    expect(acceptItem.setDisabled).toHaveBeenCalledWith(true);
+    expect(rejectItem.setDisabled).toHaveBeenCalledWith(false);
+  });
+
+  it('disables tracked change buttons when there are no tracked changes in selection', () => {
+    mockGetActiveFormatting.mockReturnValue([]);
+    mockCollectTrackedChanges.mockReturnValue([]);
+
+    toolbar.updateToolbarState();
+
+    const acceptItem = toolbar.toolbarItems.find((item) => item.name.value === 'acceptTrackedChangeBySelection');
+    const rejectItem = toolbar.toolbarItems.find((item) => item.name.value === 'rejectTrackedChangeOnSelection');
+
+    expect(acceptItem.setDisabled).toHaveBeenCalledWith(true);
+    expect(rejectItem.setDisabled).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps tracked change buttons enabled for collapsed selection within change', () => {
+    mockEditor.state.selection.from = 5;
+    mockEditor.state.selection.to = 5;
+    mockCollectTrackedChanges.mockReturnValue([{ id: 'change-1', attrs: { authorEmail: 'author@example.com' } }]);
+    mockGetActiveFormatting.mockReturnValue([]);
+
+    toolbar.updateToolbarState();
+
+    const acceptItem = toolbar.toolbarItems.find((item) => item.name.value === 'acceptTrackedChangeBySelection');
+    const rejectItem = toolbar.toolbarItems.find((item) => item.name.value === 'rejectTrackedChangeOnSelection');
+
+    expect(acceptItem.setDisabled).toHaveBeenCalledWith(false);
+    expect(rejectItem.setDisabled).toHaveBeenCalledWith(false);
   });
 
   it('should deactivate toolbar items when no active editor', () => {
@@ -216,7 +351,134 @@ describe('updateToolbarState', () => {
     toolbar.updateToolbarState();
 
     const fontSizeItem = toolbar.toolbarItems.find((item) => item.name.value === 'fontSize');
-    expect(fontSizeItem.activate).toHaveBeenCalledWith({ fontSize: '20pt' });
+    expect(fontSizeItem.activate).toHaveBeenCalledWith({ fontSize: '20pt' }, false);
     expect(fontSizeItem.activate).not.toHaveBeenCalledWith({ fontSize: '14pt' });
+  });
+
+  describe('undo/redo button state', () => {
+    it('should disable undo button when undoDepth is 0', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(0);
+      mockRedoDepth.mockReturnValue(0);
+
+      const undoItem = {
+        name: { value: 'undo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [undoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(undoItem.setDisabled).toHaveBeenCalledWith(true);
+    });
+
+    it('should enable undo button when undoDepth is greater than 0', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(3);
+      mockRedoDepth.mockReturnValue(0);
+
+      const undoItem = {
+        name: { value: 'undo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [undoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(undoItem.setDisabled).toHaveBeenCalledWith(false);
+    });
+
+    it('should disable redo button when redoDepth is 0', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(0);
+      mockRedoDepth.mockReturnValue(0);
+
+      const redoItem = {
+        name: { value: 'redo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [redoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(redoItem.setDisabled).toHaveBeenCalledWith(true);
+    });
+
+    it('should enable redo button when redoDepth is greater than 0', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(0);
+      mockRedoDepth.mockReturnValue(2);
+
+      const redoItem = {
+        name: { value: 'redo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [redoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(redoItem.setDisabled).toHaveBeenCalledWith(false);
+    });
+
+    it('should update both undo and redo buttons correctly', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(5);
+      mockRedoDepth.mockReturnValue(0);
+
+      const undoItem = {
+        name: { value: 'undo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      const redoItem = {
+        name: { value: 'redo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [undoItem, redoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(undoItem.setDisabled).toHaveBeenCalledWith(false);
+      expect(redoItem.setDisabled).toHaveBeenCalledWith(true);
+    });
   });
 });

@@ -3,8 +3,16 @@ import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
 import { getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { getExportedResult } from '../export/export-helpers/index';
-import { handleListNode } from '@converter/v2/importer/listImporter.js';
 import { beforeAll, expect } from 'vitest';
+import { pixelsToTwips, linesToTwips } from '@converter/helpers';
+
+const collectTexts = (paragraphNode) =>
+  paragraphNode.content.flatMap((child) => {
+    if (child.type === 'run' && Array.isArray(child.content)) {
+      return child.content.filter((grand) => grand.type === 'text');
+    }
+    return child.type === 'text' ? [child] : [];
+  });
 
 describe('paragraph tests to check spacing', () => {
   let lists = {};
@@ -33,9 +41,9 @@ describe('paragraph tests to check spacing', () => {
 
     const { attrs } = node;
     const { spacing } = attrs;
-    expect(spacing.line).toBe(1.15);
-    expect(spacing.lineSpaceAfter).toBe(16);
-    expect(spacing.lineSpaceBefore).toBe(16);
+    expect(spacing.line).toBe(linesToTwips(1.15));
+    expect(spacing.after).toBe(pixelsToTwips(16));
+    expect(spacing.before).toBe(pixelsToTwips(16));
   });
 
   it('correctly gets spacing [line_space_table]', async () => {
@@ -66,9 +74,9 @@ describe('paragraph tests to check spacing', () => {
     const { attrs } = node;
     const { spacing } = attrs;
 
-    expect(spacing.line).toBe(1.15);
-    expect(spacing.lineSpaceAfter).toBeUndefined();
-    expect(spacing.lineSpaceBefore).toBeUndefined();
+    expect(spacing.line).toBe(linesToTwips(1.15));
+    expect(spacing.after).toBeUndefined();
+    expect(spacing.before).toBeUndefined();
   });
 
   it('correctly gets spacing around image in p [image_p_spacing]', async () => {
@@ -93,9 +101,9 @@ describe('paragraph tests to check spacing', () => {
 
     const { attrs } = node;
     const { spacing } = attrs;
-    expect(spacing.line).toBe(1.125);
-    expect(spacing.lineSpaceAfter).toBe(16);
-    expect(spacing.lineSpaceBefore).toBe(16);
+    expect(spacing.line).toBe(linesToTwips(1.125));
+    expect(spacing.after).toBe(pixelsToTwips(16));
+    expect(spacing.before).toBe(pixelsToTwips(16));
 
     // Specifically, double check we have this important line rule to prevent image clipping
     // due to line height restriction
@@ -117,15 +125,9 @@ describe('paragraph tests to check spacing', () => {
     expect(node.type).toBe('paragraph');
 
     const { attrs } = node;
-    const { spacing, marksAttrs } = attrs;
-
-    expect(spacing.lineSpaceAfter).toBe(18);
-    expect(spacing.lineSpaceBefore).toBe(18);
-    expect(marksAttrs.length).toBe(2);
-    expect(marksAttrs[0].type).toBe('bold');
-    expect(marksAttrs[1].type).toBe('textStyle');
-    expect(marksAttrs[1].attrs.fontFamily).toBe('Arial');
-    expect(marksAttrs[1].attrs.fontSize).toBe('16pt');
+    const { spacing } = attrs;
+    expect(spacing.after).toBeCloseTo(100, 3);
+    expect(spacing.before).toBeCloseTo(100, 3);
   });
 
   it('correctly gets spaces from paragraph Normal styles', async () => {
@@ -144,8 +146,8 @@ describe('paragraph tests to check spacing', () => {
 
     const { attrs } = node;
     const { spacing } = attrs;
-    expect(spacing.lineSpaceAfter).toBe(11);
-    expect(spacing.lineSpaceBefore).toBeUndefined();
+    expect(spacing.after).toBeCloseTo(pixelsToTwips(10.667), 3);
+    expect(spacing.before).toBeUndefined();
   });
 
   it('correctly gets spacing from styles.xml by related styleId', async () => {
@@ -164,21 +166,8 @@ describe('paragraph tests to check spacing', () => {
 
     const { attrs } = node;
     const { spacing } = attrs;
-    expect(spacing.lineSpaceAfter).toBe(6);
-    expect(spacing.lineSpaceBefore).toBe(21);
-  });
-
-  it('correctly gets spacing with lists [list-def-mix]', async () => {
-    const dataName = 'list-def-mix.docx';
-    const docx = await getTestDataByFileName(dataName);
-    const documentXml = docx['word/document.xml'];
-
-    const doc = documentXml.elements[0];
-    const body = doc.elements[0];
-    const content = body.elements;
-
-    const firstListItem = content[0];
-    const { nodes } = handleListNode({ nodes: [content[0]], docx, nodeListHandler: defaultNodeListHandler(), lists });
+    expect(spacing.after).toBeCloseTo(pixelsToTwips(5.333), 3);
+    expect(spacing.before).toBeCloseTo(pixelsToTwips(21.333), 3);
   });
 
   it('should return empty result for empty nodes', () => {
@@ -258,12 +247,98 @@ describe('paragraph tests to check spacing', () => {
     const node = nodes[0];
     expect(node.type).toBe('paragraph');
     // Keep raw twips values in indent object
-    expect(node.attrs.indent.left).toBe(192);
-    expect(node.attrs.indent.right).toBe(96);
-    expect(node.attrs.indent.firstLine).toBe(48);
-    expect(node.attrs.indent.hanging).toBe(18);
-    // textIndent should be in inches (2880twips - 270twips(hanging))
-    expect(node.attrs.textIndent).toBe('1.81in');
+    expect(node.attrs.indent.left).toBe(pixelsToTwips(192));
+    expect(node.attrs.indent.right).toBe(pixelsToTwips(96));
+    expect(node.attrs.indent.firstLine).toBe(pixelsToTwips(48));
+    expect(node.attrs.indent.hanging).toBe(pixelsToTwips(18));
+  });
+
+  it('correctly parses paragraph borders', () => {
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:pBdr',
+              elements: [
+                {
+                  name: 'w:bottom',
+                  attributes: {
+                    'w:val': 'single',
+                    'w:sz': '8',
+                    'w:space': '0',
+                    'w:color': 'DDDDDD',
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        {
+          name: 'w:r',
+          elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Border text' }] }],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const node = nodes[0];
+    expect(node.type).toBe('paragraph');
+    expect(node.attrs.borders).toBeDefined();
+    expect(node.attrs.borders.bottom).toEqual({
+      val: 'single',
+      size: expect.any(Number),
+      space: expect.any(Number),
+      color: '#DDDDDD',
+    });
+  });
+
+  it('captures all four border sides', () => {
+    const sides = ['top', 'bottom', 'left', 'right'];
+    const borderElements = sides.map((side) => ({
+      name: `w:${side}`,
+      attributes: {
+        'w:val': 'single',
+        'w:sz': '8',
+        'w:color': '0000FF',
+      },
+    }));
+
+    const mockParagraph = {
+      name: 'w:p',
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:pBdr',
+              elements: borderElements,
+            },
+          ],
+        },
+      ],
+    };
+
+    const { nodes } = handleParagraphNode({
+      nodes: [mockParagraph],
+      docx: {},
+      nodeListHandler: defaultNodeListHandler(),
+    });
+
+    const p = nodes[0];
+    expect(p.attrs.borders).toBeDefined();
+    sides.forEach((side) => {
+      expect(p.attrs.borders[side]).toBeDefined();
+      expect(p.attrs.borders[side].val).toBe('single');
+      expect(p.attrs.borders[side].color).toBe('#0000FF');
+    });
   });
 });
 
@@ -285,7 +360,7 @@ describe('paragraph tests to check indentation', () => {
     const { attrs } = node;
     const { indent } = attrs;
 
-    expect(indent.firstLine).toBe(29);
+    expect(indent.firstLine).toBeCloseTo(pixelsToTwips(28.8), 1);
   });
 });
 
@@ -324,9 +399,9 @@ describe('Check that we can import list item with invalid list def with fallback
   it('imports expected list item with fallback', async () => {
     const item = content.content[3];
     expect(item.type).toBe('paragraph');
-    const textNode = item.content[0];
-    expect(textNode.type).toBe('text');
-    expect(textNode.text).toBe('NO VALID DEF');
+    const [textNode] = collectTexts(item);
+    expect(textNode?.type).toBe('text');
+    expect(textNode?.text).toBe('NO VALID DEF');
   });
 
   it('exports first list item correctly', async () => {
@@ -350,8 +425,8 @@ describe('Check that paragraph-level sectPr is retained', () => {
     expect(sectPr).toBeDefined();
     expect(p2.attrs.pageBreakSource).toBe('sectPr');
 
-    const textNode = p2.content.find((el) => el.type === 'text');
-    expect(textNode.text).toBe('TITLE');
+    const [textNode] = collectTexts(p2);
+    expect(textNode?.text).toBe('TITLE');
   });
 
   it('correctly imports the first node alignment', async () => {
@@ -434,14 +509,14 @@ describe('Check that paragraph-level sectPr is retained', () => {
       expect(node.attrs.tabStops).toBeDefined();
       expect(node.attrs.tabStops.length).toBe(2);
 
-      const firstTab = node.attrs.tabStops[0];
-      expect(firstTab.val).toBe('start');
-      expect(firstTab.pos).toBe(144);
+      const firstTab = node.attrs.tabStops[0].tab;
+      expect(firstTab.tabType).toBe('start');
+      expect(firstTab.pos).toBe(2160);
       expect(firstTab.leader).toBeUndefined();
 
-      const secondTab = node.attrs.tabStops[1];
-      expect(secondTab.val).toBe('center');
-      expect(secondTab.pos).toBe(336);
+      const secondTab = node.attrs.tabStops[1].tab;
+      expect(secondTab.tabType).toBe('center');
+      expect(secondTab.pos).toBe(5040);
       expect(secondTab.leader).toBe('dot');
     });
 
@@ -491,7 +566,7 @@ describe('Check that paragraph-level sectPr is retained', () => {
 
       const node = nodes[0];
       expect(node.type).toBe('paragraph');
-      expect(node.attrs.tabStops).toBeUndefined();
+      expect(node.attrs.tabStops).toEqual([]);
     });
 
     it('correctly handles tab with default values', () => {
@@ -529,9 +604,9 @@ describe('Check that paragraph-level sectPr is retained', () => {
       expect(node.attrs.tabStops).toBeDefined();
       expect(node.attrs.tabStops.length).toBe(1);
 
-      const tab = node.attrs.tabStops[0];
-      expect(tab.val).toBe('start');
-      expect(tab.pos).toBe(96);
+      const tab = node.attrs.tabStops[0].tab;
+      expect(tab.tabType).toBeUndefined();
+      expect(tab.pos).toBe(pixelsToTwips(96));
     });
   });
 });

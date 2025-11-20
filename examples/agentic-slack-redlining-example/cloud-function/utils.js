@@ -2,7 +2,7 @@ import { TextSelection, Selection } from 'prosemirror-state';
 import { Storage } from '@google-cloud/storage';
 import { JSDOM } from 'jsdom';
 import https from 'https';
-import { Editor, getStarterExtensions } from '@harbour-enterprises/superdoc/super-editor';
+import { Editor, getStarterExtensions } from 'superdoc/super-editor';
 import dotenv from 'dotenv';
 dotenv.config();
 

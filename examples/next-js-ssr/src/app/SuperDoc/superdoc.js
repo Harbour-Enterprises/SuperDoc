@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useCallback } from 'react';
 import './superdoc.css';
-import '@harbour-enterprises/superdoc/style.css';
+import 'superdoc/style.css';
 
 export default function SuperDocEditor() {
   const superdocContainerRef = useRef(null);
@@ -16,7 +16,7 @@ export default function SuperDocEditor() {
   };
 
   const initSuperDoc = async (fileToLoad = null) => {
-    const { SuperDoc } = await import('@harbour-enterprises/superdoc');
+    const { SuperDoc } = await import('superdoc');
     const config = {
       selector: superdocContainerRef.current,
       modules: { 

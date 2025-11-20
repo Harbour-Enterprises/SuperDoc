@@ -2,12 +2,29 @@ import { createApp } from 'vue';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
 import tippy from 'tippy.js';
+import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
 
 import Mentions from '@/components/popovers/Mentions.vue';
 
+/**
+ * Configuration options for PopoverPlugin
+ * @typedef {Object} PopoverPluginOptions
+ * @category Options
+ */
+
 const popoverPluginKey = new PluginKey('popoverPlugin');
+
+/**
+ * @module PopoverPlugin
+ * @sidebarTitle Popover Plugin
+ * @snippetPath /snippets/extensions/popover-plugin.mdx
+ */
 export const PopoverPlugin = Extension.create({
   name: 'popoverPlugin',
+
+  addOptions() {
+    return {};
+  },
 
   addPmPlugins() {
     const popover = new Plugin({
@@ -17,13 +34,15 @@ export const PopoverPlugin = Extension.create({
           return {};
         },
         apply: (tr, value) => {
-          let newValue = { ...value };
+          const newValue = { ...value };
 
-          if (tr.docChanged) {
+          // Only update popover when selection or document changes
+          if (tr.docChanged || tr.selectionSet) {
             newValue.shouldUpdate = true;
           } else {
             newValue.shouldUpdate = false;
           }
+
           return newValue;
         },
       },
@@ -51,6 +70,7 @@ class Popover {
     this.view = view;
     this.popover = document.createElement('div');
     this.popover.className = 'sd-editor-popover';
+    applyStyleIsolationClass(this.popover);
     document.body.appendChild(this.popover);
 
     this.tippyInstance = tippy(this.popover, {
