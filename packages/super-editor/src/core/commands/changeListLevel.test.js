@@ -7,29 +7,36 @@ vi.mock('@helpers/list-numbering-helpers.js', () => ({
   },
 }));
 
-vi.mock('@helpers/index.js', () => ({
-  findParentNode: vi.fn(),
-}));
+vi.mock(import('@helpers/index.js'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    findParentNode: vi.fn(),
+  };
+});
 
-vi.mock('@converter/styles', () => ({
-  resolveParagraphProperties: vi.fn().mockReturnValue({
-    indent: null,
-    spacing: null,
-    styleId: null,
-  }),
+vi.mock('@extensions/paragraph/resolvedPropertiesCache.js', () => ({
+  getResolvedParagraphProperties: vi.fn((node) => node.attrs.paragraphProperties || {}),
+  calculateResolvedParagraphProperties: vi.fn((_, node, __) => node.attrs.paragraphProperties || {}),
 }));
 
 import { changeListLevel } from './changeListLevel.js';
 import { findParentNode } from '@helpers/index.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
-import { resolveParagraphProperties } from '@converter/styles';
 
-const createResolvedPos = ({ pos = 0, before = pos, parent = null } = {}) => ({
-  pos,
-  parent,
-  depth: parent ? 1 : 0,
-  before: () => before,
-});
+const createResolvedPos = ({ pos = 0, before = pos, parent } = {}) => {
+  const resolvedParent = parent || {
+    type: { name: 'paragraph' },
+    attrs: {},
+  };
+
+  return {
+    pos,
+    parent: resolvedParent,
+    depth: resolvedParent ? 1 : 0,
+    before: () => before,
+  };
+};
 
 const createSelection = (fromConfig = {}, toConfig = {}) => {
   const $from = createResolvedPos(fromConfig);
@@ -79,11 +86,6 @@ describe('changeListLevel', () => {
 
     findParentNode.mockReturnValue(() => null);
     ListHelpers.hasListDefinition.mockReturnValue(true);
-    resolveParagraphProperties.mockReturnValue({
-      indent: null,
-      spacing: null,
-      styleId: null,
-    });
   });
 
   it('returns false when no current list item is found', () => {
@@ -99,7 +101,6 @@ describe('changeListLevel', () => {
     const node = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { ilvl: 0, numId: 5 },
         paragraphProperties: { numberingProperties: { ilvl: 0, numId: 5 } },
         listRendering: {},
       },
@@ -117,7 +118,6 @@ describe('changeListLevel', () => {
     const node = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { ilvl: '0', numId: 42 },
         paragraphProperties: { numberingProperties: { ilvl: '0', numId: 42 } },
         listRendering: {},
       },
@@ -133,7 +133,9 @@ describe('changeListLevel', () => {
       18,
       null,
       expect.objectContaining({
-        numberingProperties: { ilvl: 1, numId: 42 },
+        paragraphProperties: expect.objectContaining({
+          numberingProperties: { ilvl: 1, numId: 42 },
+        }),
       }),
     );
   });
@@ -142,7 +144,6 @@ describe('changeListLevel', () => {
     const node = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { ilvl: 1, numId: 99 },
         paragraphProperties: { numberingProperties: { ilvl: 1, numId: 99 } },
         listRendering: {},
       },
@@ -162,7 +163,6 @@ describe('changeListLevel', () => {
       {
         type: { name: 'paragraph' },
         attrs: {
-          numberingProperties: { ilvl: 1, numId: 123 },
           paragraphProperties: {
             numberingProperties: { ilvl: 1, numId: 123 },
             indent: { left: 720 },
@@ -175,7 +175,6 @@ describe('changeListLevel', () => {
       {
         type: { name: 'paragraph' },
         attrs: {
-          numberingProperties: { ilvl: 2, numId: 123 },
           paragraphProperties: {
             numberingProperties: { ilvl: 2, numId: 123 },
             keepLines: false,
@@ -187,14 +186,6 @@ describe('changeListLevel', () => {
     ];
 
     nodesBetweenSequence.push({ node: nodes[0], pos: 21 }, { node: nodes[1], pos: 30 });
-
-    const resolvedProps = {
-      indent: { left: 1440 },
-      spacing: { before: 120, after: 240 },
-      styleId: 'ListParagraph',
-    };
-
-    resolveParagraphProperties.mockReturnValue(resolvedProps);
 
     const result = changeListLevel(1, editor, tr);
 
@@ -208,27 +199,22 @@ describe('changeListLevel', () => {
 
     expect(firstCall[0]).toBe(21);
     expect(firstCall[1]).toBeNull();
-    expect(firstCall[2].numberingProperties).toEqual({ ilvl: 2, numId: 123 });
     expect(firstCall[2].paragraphProperties).toEqual({
       numberingProperties: { ilvl: 2, numId: 123 },
       keepLines: true,
     });
 
     expect(secondCall[0]).toBe(30);
-    expect(secondCall[2].numberingProperties).toEqual({ ilvl: 3, numId: 123 });
     expect(secondCall[2].paragraphProperties).toEqual({
       numberingProperties: { ilvl: 3, numId: 123 },
       keepLines: false,
     });
-
-    expect(resolveParagraphProperties).toHaveBeenCalledTimes(2);
   });
 
   it('falls back to the current list item when the selection range contributes none', () => {
     const fallbackItem = {
       node: {
         attrs: {
-          numberingProperties: { ilvl: 1, numId: 321 },
           paragraphProperties: { numberingProperties: { ilvl: 1, numId: 321 } },
           listRendering: {},
         },
@@ -249,7 +235,6 @@ describe('changeListLevel', () => {
     const firstNode = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { ilvl: 0, numId: 7 },
         paragraphProperties: { numberingProperties: { ilvl: 0, numId: 7 } },
         listRendering: {},
       },
@@ -257,7 +242,6 @@ describe('changeListLevel', () => {
     const middleNode = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { ilvl: 1, numId: 7 },
         paragraphProperties: { numberingProperties: { ilvl: 1, numId: 7 } },
         listRendering: {},
       },
@@ -265,7 +249,6 @@ describe('changeListLevel', () => {
     const lastNode = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { ilvl: 2, numId: 7 },
         paragraphProperties: { numberingProperties: { ilvl: 2, numId: 7 } },
         listRendering: {},
       },

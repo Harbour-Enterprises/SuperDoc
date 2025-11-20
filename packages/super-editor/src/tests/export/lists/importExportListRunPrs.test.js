@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 // prettier-ignore
 import { beforeAll, expect } from 'vitest';
-import { loadTestDataForEditorTests, initTestEditor, getNewTransaction } from '@tests/helpers/helpers.js';
+import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 
 describe('[exported-list-font.docx] Imports/export list with inline run properties', () => {
   const filename = 'exported-list-font.docx';
@@ -17,8 +17,8 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
   it('correctly imports list with inline run properties', () => {
     const item = doc.content[0];
     expect(item.type).toBe('paragraph');
-    expect(item.attrs.indent.left).toBe(720);
-    expect(item.attrs.indent.hanging).toBe(360);
+    const paragraphProperties = item.attrs.paragraphProperties || {};
+    expect(paragraphProperties.numberingProperties).toEqual({ ilvl: 0, numId: 1 });
 
     const runNode = item.content.find((node) => node.type === 'run');
     expect(runNode).toBeDefined();

@@ -1,5 +1,17 @@
 // @ts-check
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const getResolvedParagraphPropertiesMock = vi.hoisted(() => vi.fn((node) => node.attrs.paragraphProperties || {}));
+
+vi.mock('@extensions/paragraph/resolvedPropertiesCache.js', () => ({
+  getResolvedParagraphProperties: getResolvedParagraphPropertiesMock,
+}));
+
+beforeEach(() => {
+  getResolvedParagraphPropertiesMock.mockReset();
+  getResolvedParagraphPropertiesMock.mockImplementation((node) => node.attrs.paragraphProperties || {});
+});
+
 import {
   findParagraphContext,
   flattenParagraph,
@@ -19,7 +31,7 @@ describe('findParagraphContext', () => {
 
   it('should get tabStops from node attributes', () => {
     const tabStops = [{ tab: { tabType: 'left', pos: pixelsToTwips(720) } }];
-    const node = { type: { name: 'paragraph' }, attrs: { tabStops }, forEach: () => {} };
+    const node = { type: { name: 'paragraph' }, attrs: { paragraphProperties: { tabStops } }, forEach: () => {} };
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
@@ -29,20 +41,22 @@ describe('findParagraphContext', () => {
     expect(mockHelpers.linkedStyles.getStyleById).not.toHaveBeenCalled();
   });
 
-  it('should get tabStops from linked style if not on node', () => {
-    const tabStops = [{ val: 'right', pos: 1440 }];
-    mockHelpers.linkedStyles.getStyleById.mockReturnValue({
-      definition: { styles: { tabStops } },
+  it('retrieves tab stops from resolved paragraph properties', () => {
+    const node = {
+      type: { name: 'paragraph' },
+      attrs: { paragraphProperties: {}, styleId: 'MyStyle' },
+      forEach: () => {},
+    };
+    getResolvedParagraphPropertiesMock.mockReturnValue({
+      tabStops: [{ tab: { tabType: 'center', pos: pixelsToTwips(1440) } }],
     });
-
-    const node = { type: { name: 'paragraph' }, attrs: { styleId: 'MyStyle' }, forEach: () => {} };
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
     const context = findParagraphContext($pos, cache, mockHelpers);
 
-    expect(context.tabStops).toEqual(tabStops);
-    expect(mockHelpers.linkedStyles.getStyleById).toHaveBeenCalledWith('MyStyle');
+    expect(context.tabStops).toEqual([{ val: 'center', pos: 1440 }]);
+    expect(mockHelpers.linkedStyles.getStyleById).not.toHaveBeenCalled();
   });
 
   it('should return empty tabStops if not found', () => {
@@ -149,7 +163,7 @@ describe('getTabDecorations', () => {
   };
 
   // Helper to create a mock paragraph node
-  const createParagraphNode = (children = [], attrs = {}) => {
+  const createParagraphNode = (children = [], paragraphProperties = {}) => {
     const firstChild = children[0] || { marks: [], type: { name: 'text' }, text: '' };
     // Ensure firstChild has marks array
     if (!firstChild.marks) {
@@ -158,7 +172,7 @@ describe('getTabDecorations', () => {
 
     return {
       type: { name: 'paragraph' },
-      attrs: { indent: {}, ...attrs },
+      attrs: { paragraphProperties },
       nodeSize: children.reduce((sum, child) => sum + (child.nodeSize || 1), 2),
       firstChild,
       forEach: (callback) => {

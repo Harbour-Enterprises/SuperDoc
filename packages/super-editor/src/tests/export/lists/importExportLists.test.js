@@ -25,7 +25,7 @@ describe('[blank-doc.docx] import, add node, export', () => {
     const currentState = editor.getJSON();
     expect(currentState.content.length).toBe(1);
     expect(currentState.content[0].type).toBe('paragraph');
-    expect(currentState.content[0].attrs.numberingProperties).toBeDefined();
+    expect(currentState.content[0].attrs.paragraphProperties.numberingProperties).toBeDefined();
   });
 
   it('can export the empty list node', () => {
@@ -69,7 +69,6 @@ describe('[blank-doc.docx] import, add node, export', () => {
     expect(attrs.listRendering.path).toStrictEqual([1]);
     expect(attrs.paragraphProperties.numberingProperties.numId).toBe(3);
     expect(attrs.paragraphProperties.numberingProperties.ilvl).toBe(0);
-    expect(attrs.numberingProperties).toBeDefined();
   });
 
   it('correctly exports after the first list item', () => {
@@ -114,14 +113,18 @@ describe('[blank-doc.docx] import, add node, export', () => {
 
     const firstItem = currentState.content[0];
     expect(firstItem.type).toBe('paragraph');
-    expect(firstItem.attrs.numberingProperties).toBeDefined();
-    expect(firstItem.attrs.numberingProperties.numId).toBeDefined();
-    expect(firstItem.attrs.numberingProperties.ilvl).toBeDefined();
+    expect(firstItem.attrs.paragraphProperties?.numberingProperties).toBeDefined();
+    expect(firstItem.attrs.paragraphProperties?.numberingProperties?.numId).toBeDefined();
+    expect(firstItem.attrs.paragraphProperties?.numberingProperties?.ilvl).toBeDefined();
 
     const secondItem = currentState.content[1];
     expect(secondItem.type).toBe('paragraph');
-    expect(secondItem.attrs.numberingProperties).toBeDefined();
-    expect(secondItem.attrs.numberingProperties.numId).toBe(firstItem.attrs.numberingProperties.numId);
-    expect(secondItem.attrs.numberingProperties.ilvl).toBe(firstItem.attrs.numberingProperties.ilvl);
+    expect(secondItem.attrs.paragraphProperties?.numberingProperties).toBeDefined();
+    expect(secondItem.attrs.paragraphProperties.numberingProperties.numId).toBe(
+      firstItem.attrs.paragraphProperties.numberingProperties.numId,
+    );
+    expect(secondItem.attrs.paragraphProperties.numberingProperties.ilvl).toBe(
+      firstItem.attrs.paragraphProperties.numberingProperties.ilvl,
+    );
   });
 });

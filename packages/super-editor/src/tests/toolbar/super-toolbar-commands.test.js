@@ -52,14 +52,22 @@ describe('SuperToolbar intercepted color commands', () => {
   beforeEach(() => {
     ensureDomApis();
 
+    const mockParagraphNode = { type: { name: 'paragraph' }, attrs: { paragraphProperties: {} } };
+    const mockResolvedPos = {
+      depth: 1,
+      node: () => mockParagraphNode,
+      before: () => 0,
+      start: () => 0,
+    };
+
     mockEditor = {
       focus: vi.fn(),
       options: { isHeaderOrFooter: false, mode: 'docx' },
       state: {
-        selection: { from: 1, to: 1 },
+        selection: { from: 1, to: 1, $from: mockResolvedPos },
         doc: {
           content: { size: 10 },
-          resolve: vi.fn(() => ({ depth: 0, node: () => ({ marks: [] }), marks: () => [] })),
+          resolve: vi.fn(() => mockResolvedPos),
           nodeAt: vi.fn(() => ({ marks: [] })),
           nodesBetween: vi.fn(() => {}),
         },

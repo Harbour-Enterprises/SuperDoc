@@ -1,12 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { isList } from './is-list.js';
+
+vi.mock('@extensions/paragraph/resolvedPropertiesCache.js', () => ({
+  getResolvedParagraphProperties: vi.fn((node) => node?.attrs?.paragraphProperties || {}),
+}));
 
 describe('isList', () => {
   it('returns true for paragraph nodes with numbering & list metadata', () => {
     const node = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { numId: 1, ilvl: 0 },
+        paragraphProperties: { numberingProperties: { numId: 1, ilvl: 0 } },
         listRendering: { numberingType: 'bullet' },
       },
     };
@@ -18,6 +22,7 @@ describe('isList', () => {
     const node = {
       type: { name: 'paragraph' },
       attrs: {
+        paragraphProperties: {},
         listRendering: { numberingType: 'decimal' },
       },
     };
@@ -29,7 +34,7 @@ describe('isList', () => {
     const node = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { numId: 2 },
+        paragraphProperties: { numberingProperties: { numId: 2 } },
       },
     };
 
@@ -40,7 +45,7 @@ describe('isList', () => {
     const node = {
       type: { name: 'orderedList' },
       attrs: {
-        numberingProperties: { numId: 5 },
+        paragraphProperties: { numberingProperties: { numId: 5 } },
         listRendering: { numberingType: 'decimal' },
       },
     };

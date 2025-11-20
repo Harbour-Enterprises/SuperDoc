@@ -151,11 +151,12 @@ describe('RectImporter', () => {
 
       const node = result.nodes[0];
       expect(node.attrs.rsidRDefault).toBe('test123');
-      expect(node.attrs.spacing).toBeDefined();
-      expect(node.attrs.spacing.after).toBe(240); // 240 twips = 12px
-      expect(node.attrs.spacing.before).toBe(120); // 120 twips = 6px
-      expect(node.attrs.spacing.line).toBe(276);
-      expect(node.attrs.spacing.lineRule).toBe('auto');
+      const spacing = node.attrs.paragraphProperties?.spacing;
+      expect(spacing).toBeDefined();
+      expect(spacing.after).toBe(240); // 240 twips = 12px
+      expect(spacing.before).toBe(120); // 120 twips = 6px
+      expect(spacing.line).toBe(276);
+      expect(spacing.lineRule).toBe('auto');
     });
 
     it('should return empty result for non-v:rect pict elements', () => {

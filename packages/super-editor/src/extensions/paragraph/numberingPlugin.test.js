@@ -50,6 +50,11 @@ describe('numberingPlugin', () => {
         definitions: {},
         abstracts: {},
       },
+      convertedXml: {
+        'word/styles.xml': {
+          elements: [{ elements: [] }],
+        },
+      },
     },
     on: vi.fn(),
     off: vi.fn(),
@@ -73,6 +78,16 @@ describe('numberingPlugin', () => {
         cb(node, pos);
       });
     },
+    resolve: vi.fn((pos) => {
+      const match = nodes.find((entry) => entry.pos === pos);
+      const targetNode = match?.node || { type: { name: 'paragraph' }, attrs: { paragraphProperties: {} } };
+      return {
+        depth: 1,
+        node: () => targetNode,
+        before: () => pos,
+        start: () => pos,
+      };
+    }),
   });
 
   beforeEach(() => {
@@ -151,7 +166,9 @@ describe('numberingPlugin', () => {
     const targetParagraph = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { numId: 1, ilvl: 0 },
+        paragraphProperties: {
+          numberingProperties: { numId: 1, ilvl: 0 },
+        },
       },
     };
     const doc = makeDoc([
@@ -207,7 +224,9 @@ describe('numberingPlugin', () => {
     const bulletParagraph = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { numId: 9, ilvl: 2 },
+        paragraphProperties: {
+          numberingProperties: { numId: 9, ilvl: 2 },
+        },
       },
     };
 
@@ -248,7 +267,9 @@ describe('numberingPlugin', () => {
     const paragraph = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: { numId: 2, ilvl: 0 },
+        paragraphProperties: {
+          numberingProperties: { numId: 2, ilvl: 0 },
+        },
       },
     };
 

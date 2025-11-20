@@ -30,7 +30,9 @@ vi.mock('../tab/helpers/tabDecorations.js', () => ({
 
 vi.mock('@converter/styles.js', () => ({
   resolveRunProperties: vi.fn().mockReturnValue({ fontSize: '12pt' }),
+  resolveParagraphProperties: vi.fn((_params, inlineProps) => inlineProps || {}),
   encodeCSSFromRPr: vi.fn().mockReturnValue({ 'font-size': '12pt' }),
+  encodeCSSFromPPr: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('@core/commands/list-helpers', () => ({
@@ -67,10 +69,10 @@ const createEditor = () => ({
 const createNode = (overrides = {}) => ({
   type: { name: 'paragraph' },
   attrs: {
-    indent: { hanging: 720 },
     paragraphProperties: {
       numberingProperties: {},
       runProperties: {},
+      indent: { hanging: 720 },
     },
     listRendering: {
       suffix: 'tab',
@@ -78,7 +80,6 @@ const createNode = (overrides = {}) => ({
       markerText: '1.',
       path: [1],
     },
-    numberingProperties: { ilvl: 0, numId: 1 },
   },
   ...overrides,
 });

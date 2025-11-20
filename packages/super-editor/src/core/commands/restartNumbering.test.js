@@ -6,9 +6,13 @@ import { isList } from '@core/commands/list-helpers';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { updateNumberingProperties } from './changeListLevel.js';
 
-vi.mock('@helpers/index.js', () => ({
-  findParentNode: vi.fn(),
-}));
+vi.mock(import('@helpers/index.js'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    findParentNode: vi.fn(),
+  };
+});
 
 vi.mock('@core/commands/list-helpers', () => ({
   isList: vi.fn(),
@@ -23,6 +27,12 @@ vi.mock('@helpers/list-numbering-helpers.js', () => ({
 
 vi.mock('./changeListLevel.js', () => ({
   updateNumberingProperties: vi.fn(),
+}));
+
+vi.mock('@extensions/paragraph/resolvedPropertiesCache.js', () => ({
+  getResolvedParagraphProperties: vi.fn((node) => {
+    return node?.attrs?.paragraphProperties || { numberingProperties: null };
+  }),
 }));
 
 describe('restartNumbering', () => {
@@ -42,7 +52,6 @@ describe('restartNumbering', () => {
   const createParagraph = ({ numId, numberingType = 'decimal', addParagraphProps = true, ilvl = 0 }) => ({
     type: { name: 'paragraph' },
     attrs: {
-      numberingProperties: { numId, ilvl },
       paragraphProperties: addParagraphProps ? { numberingProperties: { numId, ilvl } } : undefined,
       listRendering: { numberingType },
     },
