@@ -3,6 +3,7 @@ import { findParentNode } from '@helpers/index.js';
 import { isList } from '@core/commands/list-helpers';
 import { decreaseListIndent } from './decreaseListIndent.js';
 import { updateNumberingProperties } from './changeListLevel.js';
+import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 
 export const removeNumberingProperties =
   ({ checkType = 'startParagraph' } = {}) =>
@@ -19,7 +20,7 @@ export const removeNumberingProperties =
     }
 
     // If level > 0, outdent one level first
-    const ilvl = paragraph.attrs.numberingProperties.ilvl;
+    const ilvl = getResolvedParagraphProperties(paragraph).numberingProperties.ilvl;
     if (ilvl > 0) {
       const outdented = decreaseListIndent()(props);
       if (outdented) {
