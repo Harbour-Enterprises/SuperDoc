@@ -22,14 +22,61 @@ const generateUserInfo = async () => {
     const response = await fetch(`${apiUrl}/user`);
     return await response.json();
   } catch (error) {
-    console.error('>>> Failed to get user from backend, using fallback:', error);
     return generateUserFallback();
   }
 };
 
-const onAwarenessUpdate = (users) => {
-  console.log(">>> USERS", users);
+const handleImageUpload = (file) => {
+  return new Promise((resolve, reject) => {
+    let reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target.result;
+      const mediaPath = `word/media/${file.name}`;
+
+      if (superdoc.value?.ydoc) {
+        const mediaMap = superdoc.value.ydoc.getMap('media');
+        mediaMap.set(mediaPath, dataUrl);
+      }
+    
+      resolve(dataUrl);
+    };
+    reader.onerror = reject;
+    setTimeout(() => reader.readAsDataURL(file), 250);
+  });
+};
+
+const setupMediaObserver = (ydoc, editor) => {
+  const mediaMap = ydoc.getMap('media');
+  const imageStorage = editor?.storage?.image;
   
+  // Set up observer for real-time media sync
+  mediaMap.observe((ymapEvent) => {
+    ymapEvent.changes.keys.forEach((change, key) => {
+      if (change.action !== 'add') return;
+      const mediaUrl = mediaMap.get(key);
+
+      // Sync to local editor storage
+      if (imageStorage && mediaUrl) {
+        imageStorage.media[key] = mediaUrl;
+        const { state, view } = editor;
+        if (view && state) {
+          // Create an empty transaction to trigger re-render
+          const tr = state.tr;
+          view.dispatch(tr);
+        }
+      }
+    });
+  });
+  
+  // Initial sync of existing media
+  mediaMap.forEach((mediaUrl, mediaPath) => {
+    if (imageStorage && mediaUrl) {
+      imageStorage.media[mediaPath] = mediaUrl;
+    }
+  });
+};
+
+const onAwarenessUpdate = (users) => {
   // Handle removed users
   if (users.removed && users.removed.length > 0) {
     users.removed.forEach(clientId => {
@@ -64,6 +111,7 @@ const onAwarenessUpdate = (users) => {
 const init = async () => {
   const documentId = route.params.documentId;
   const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3050';
+  const apiUrl = wsUrl.replace('ws://', 'http://').replace('wss://', 'https://');
   const user = await generateUserInfo();
   currentUser.value = user;
 
@@ -84,11 +132,18 @@ const init = async () => {
         token: 'token',
       },
     },
+    handleImageUpload,
     onAwarenessUpdate,
     onReady: (event) => {
       console.log('SuperDoc is ready', event);
       const editor = event.superdoc.activeEditor;
       console.log('Active editor:', editor);
+      
+      // Set up media observer for collaboration
+      const ydoc = event.superdoc.ydoc;
+      if (ydoc && editor) {
+        setupMediaObserver(ydoc, editor);
+      }
     },
     onEditorCreate: (event) => {
       console.log('Editor created:', event.editor);
