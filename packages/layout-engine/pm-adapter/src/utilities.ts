@@ -1,0 +1,1042 @@
+/**
+ * Shared utility functions for PM adapter
+ *
+ * Contains type guards, normalization, conversion, and position mapping utilities
+ * used across multiple adapter modules.
+ */
+
+import type {
+  BoxSpacing,
+  DrawingContentSnapshot,
+  ParagraphIndent,
+  ShapeGroupChild,
+  ShapeGroupTransform,
+  FlowBlock,
+} from '@superdoc/contracts';
+import type { PMNode, PositionMap, BlockIdGenerator } from './types.js';
+import { TWIPS_PER_INCH, PX_PER_INCH, PX_PER_PT, ATOMIC_INLINE_TYPES } from './constants.js';
+
+// ============================================================================
+// Unit Conversion Utilities
+// ============================================================================
+
+/**
+ * Converts a value from twips to pixels.
+ *
+ * Twips (twentieth of a point) are a common unit in document formats like DOCX.
+ * This function converts them to pixels using standard conversion ratios.
+ *
+ * @param value - The value in twips to convert
+ * @returns The equivalent value in pixels
+ *
+ * @example
+ * ```typescript
+ * const pixels = twipsToPx(1440); // 96px (1 inch at 96 DPI)
+ * ```
+ */
+export const twipsToPx = (value: number): number => (value / TWIPS_PER_INCH) * PX_PER_INCH;
+
+/**
+ * Converts a value from points to pixels.
+ *
+ * @param pt - The value in points to convert (optional, nullable)
+ * @returns The equivalent value in pixels, or undefined if input is null/undefined/not finite
+ *
+ * @example
+ * ```typescript
+ * const pixels = ptToPx(12); // 16px (12pt font at 96 DPI)
+ * ptToPx(null); // undefined
+ * ptToPx(NaN); // undefined
+ * ```
+ */
+export const ptToPx = (pt?: number | null): number | undefined => {
+  if (pt == null || !Number.isFinite(pt)) return undefined;
+  return pt * PX_PER_PT;
+};
+
+/**
+ * Converts a value from pixels to points.
+ *
+ * @param px - The value in pixels to convert (optional, nullable)
+ * @returns The equivalent value in points, or undefined if input is null/undefined/not finite
+ *
+ * @example
+ * ```typescript
+ * const points = pxToPt(16); // 12pt (16px at 96 DPI)
+ * pxToPt(null); // undefined
+ * pxToPt(Infinity); // undefined
+ * ```
+ */
+export const pxToPt = (px?: number | null): number | undefined => {
+  if (px == null || !Number.isFinite(px)) return undefined;
+  return px / PX_PER_PT;
+};
+
+/**
+ * Converts paragraph indent values from twips to pixels.
+ *
+ * Takes an indent object with potentially four properties (left, right, firstLine, hanging)
+ * and converts any finite numeric values from twips to pixels.
+ *
+ * @param indent - The paragraph indent object with values in twips (optional, nullable)
+ * @returns A new indent object with values in pixels, or undefined if no valid values exist
+ *
+ * @example
+ * ```typescript
+ * const pxIndent = convertIndentTwipsToPx({ left: 1440, firstLine: 720 });
+ * // { left: 96, firstLine: 48 }
+ *
+ * convertIndentTwipsToPx(null); // undefined
+ * convertIndentTwipsToPx({}); // undefined (no valid properties)
+ * ```
+ */
+export const convertIndentTwipsToPx = (indent?: ParagraphIndent | null): ParagraphIndent | undefined => {
+  if (!indent) return undefined;
+  const result: ParagraphIndent = {};
+  if (isFiniteNumber(indent.left)) result.left = twipsToPx(indent.left);
+  if (isFiniteNumber(indent.right)) result.right = twipsToPx(indent.right);
+  if (isFiniteNumber(indent.firstLine)) result.firstLine = twipsToPx(indent.firstLine);
+  if (isFiniteNumber(indent.hanging)) result.hanging = twipsToPx(indent.hanging);
+  return Object.keys(result).length ? result : undefined;
+};
+
+// ============================================================================
+// Type Guards
+// ============================================================================
+
+/**
+ * Type guard to check if a value is a finite number.
+ *
+ * Ensures the value is of type 'number' and is not NaN, Infinity, or -Infinity.
+ *
+ * @param value - The value to check
+ * @returns True if the value is a finite number, false otherwise
+ *
+ * @example
+ * ```typescript
+ * isFiniteNumber(42); // true
+ * isFiniteNumber(3.14); // true
+ * isFiniteNumber(NaN); // false
+ * isFiniteNumber(Infinity); // false
+ * isFiniteNumber("42"); // false
+ * isFiniteNumber(null); // false
+ * ```
+ */
+export const isFiniteNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
+
+/**
+ * Type guard to check if a value is a plain object.
+ *
+ * A plain object is a non-null, non-array object that can be indexed by string keys.
+ * This includes class instances (like Date, RegExp, etc.) - not just POJOs.
+ *
+ * @param value - The value to check
+ * @returns True if the value is a plain object, false otherwise
+ *
+ * @example
+ * ```typescript
+ * isPlainObject({ key: 'value' }); // true
+ * isPlainObject({}); // true
+ * isPlainObject([]); // false
+ * isPlainObject(null); // false
+ * isPlainObject("string"); // false
+ * isPlainObject(new Date()); // true (class instances are considered objects)
+ * isPlainObject(new Map()); // true (any object that's not an array)
+ * ```
+ */
+export const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+// ============================================================================
+// Normalization / Coercion Functions
+// ============================================================================
+
+/**
+ * Normalizes a prefix string, ensuring it's a valid string.
+ *
+ * @param value - The prefix value to normalize (optional)
+ * @returns Empty string if value is falsy, otherwise the string representation of the value
+ *
+ * @example
+ * ```typescript
+ * normalizePrefix("abc"); // "abc"
+ * normalizePrefix(""); // ""
+ * normalizePrefix(undefined); // ""
+ * normalizePrefix(null); // ""
+ * ```
+ */
+export const normalizePrefix = (value?: string): string => {
+  if (!value) return '';
+  return String(value);
+};
+
+/**
+ * Attempts to extract a numeric value from unknown input.
+ *
+ * If the value is already a finite number, returns it. If it's a string,
+ * attempts to parse it as a float.
+ *
+ * @param value - The value to extract a number from
+ * @returns The numeric value, or undefined if conversion is not possible
+ *
+ * @example
+ * ```typescript
+ * pickNumber(42); // 42
+ * pickNumber("3.14"); // 3.14
+ * pickNumber("invalid"); // undefined (NaN result)
+ * pickNumber(true); // undefined
+ * pickNumber(null); // undefined
+ * ```
+ */
+export const pickNumber = (value: unknown): number | undefined => {
+  if (isFiniteNumber(value)) return value;
+  if (typeof value === 'string') {
+    const parsed = parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+};
+
+/**
+ * Validates and normalizes a decimal separator character.
+ *
+ * Only accepts '.' or ',' as valid decimal separators.
+ *
+ * @param value - The value to validate as a decimal separator
+ * @returns The normalized separator ('.' or ','), or undefined if invalid
+ *
+ * @example
+ * ```typescript
+ * pickDecimalSeparator("."); // "."
+ * pickDecimalSeparator(","); // ","
+ * pickDecimalSeparator(" . "); // "."
+ * pickDecimalSeparator(";"); // undefined
+ * pickDecimalSeparator(123); // undefined
+ * ```
+ */
+export const pickDecimalSeparator = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim();
+  if (normalized === '.' || normalized === ',') return normalized;
+  return undefined;
+};
+
+/**
+ * Extracts and normalizes a language code string.
+ *
+ * Trims whitespace and converts to lowercase. Returns undefined for empty strings.
+ *
+ * @param value - The language code to normalize
+ * @returns The normalized language code, or undefined if invalid or empty
+ *
+ * @example
+ * ```typescript
+ * pickLang("EN-US"); // "en-us"
+ * pickLang("  fr  "); // "fr"
+ * pickLang(""); // undefined
+ * pickLang(123); // undefined
+ * ```
+ */
+export const pickLang = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase();
+  return normalized || undefined;
+};
+
+/**
+ * Normalizes a color string, ensuring it has a leading '#' symbol.
+ *
+ * Filters out special values like 'auto' and 'none'. Prepends '#' if not present.
+ *
+ * @param value - The color value to normalize
+ * @returns The normalized color string with '#' prefix, or undefined if invalid/special
+ *
+ * @example
+ * ```typescript
+ * normalizeColor("FF0000"); // "#FF0000"
+ * normalizeColor("#00FF00"); // "#00FF00"
+ * normalizeColor("auto"); // undefined
+ * normalizeColor("none"); // undefined
+ * normalizeColor(""); // undefined
+ * normalizeColor(123); // undefined
+ * ```
+ */
+export const normalizeColor = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'auto' || trimmed === 'none') return undefined;
+  return trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+};
+
+/**
+ * Normalizes a string by trimming whitespace.
+ *
+ * Returns undefined for non-strings or empty/whitespace-only strings.
+ *
+ * @param value - The string value to normalize
+ * @returns The trimmed string, or undefined if empty or not a string
+ *
+ * @example
+ * ```typescript
+ * normalizeString("  hello  "); // "hello"
+ * normalizeString(""); // undefined
+ * normalizeString("   "); // undefined
+ * normalizeString(123); // undefined
+ * normalizeString(null); // undefined
+ * ```
+ */
+export const normalizeString = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed || undefined;
+};
+
+/**
+ * Coerces a value to a number if possible.
+ *
+ * Accepts numbers and numeric strings. Returns undefined for invalid inputs.
+ *
+ * @param value - The value to coerce to a number
+ * @returns The numeric value, or undefined if coercion fails
+ *
+ * @example
+ * ```typescript
+ * coerceNumber(42); // 42
+ * coerceNumber("3.14"); // 3.14
+ * coerceNumber("  100  "); // 100
+ * coerceNumber("invalid"); // undefined
+ * coerceNumber(""); // undefined
+ * coerceNumber(true); // undefined
+ * coerceNumber(NaN); // undefined
+ * ```
+ */
+export function coerceNumber(value: unknown): number | undefined {
+  if (isFiniteNumber(value)) return Number(value);
+  if (typeof value === 'string' && value.trim() !== '') {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Coerces a value to a positive number, with a fallback.
+ *
+ * Returns the coerced value if it's a positive number, otherwise returns the fallback.
+ * Validates that the fallback itself is a positive number.
+ *
+ * @param value - The value to coerce to a positive number
+ * @param fallback - The fallback value to use if coercion fails (must be positive)
+ * @returns The coerced positive number or the fallback
+ * @throws {Error} If the fallback is not a positive finite number
+ *
+ * @example
+ * ```typescript
+ * coercePositiveNumber(10, 5); // 10
+ * coercePositiveNumber("15", 5); // 15
+ * coercePositiveNumber(0, 5); // 5 (not positive)
+ * coercePositiveNumber(-10, 5); // 5 (not positive)
+ * coercePositiveNumber("invalid", 5); // 5
+ * coercePositiveNumber(10, -5); // throws Error
+ * coercePositiveNumber(10, 0); // throws Error
+ * ```
+ */
+export function coercePositiveNumber(value: unknown, fallback: number): number {
+  if (!isFiniteNumber(fallback) || fallback <= 0) {
+    throw new Error(`coercePositiveNumber: fallback must be a positive number, got ${fallback}`);
+  }
+
+  const numeric = coerceNumber(value);
+  if (numeric != null && numeric > 0) {
+    return numeric;
+  }
+  return fallback;
+}
+
+/**
+ * Coerces a value to a boolean with comprehensive string parsing.
+ *
+ * This is the most comprehensive boolean coercion function, supporting multiple
+ * string formats including 'yes'/'no' and 'on'/'off'. Use this when you need
+ * maximum flexibility in accepting boolean-like values from external sources.
+ *
+ * Recognized truthy strings: 'true', '1', 'yes', 'on'
+ * Recognized falsy strings: 'false', '0', 'no', 'off'
+ *
+ * @param value - The value to coerce to a boolean
+ * @returns Boolean value, or undefined if the value cannot be interpreted as boolean
+ *
+ * @example
+ * ```typescript
+ * coerceBoolean(true); // true
+ * coerceBoolean(1); // true
+ * coerceBoolean("yes"); // true
+ * coerceBoolean("on"); // true
+ * coerceBoolean(false); // false
+ * coerceBoolean(0); // false
+ * coerceBoolean("no"); // false
+ * coerceBoolean("off"); // false
+ * coerceBoolean(2); // undefined
+ * coerceBoolean("maybe"); // undefined
+ * ```
+ */
+export function coerceBoolean(value: unknown): boolean | undefined {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'yes', 'on'].includes(normalized)) return true;
+    if (['false', '0', 'no', 'off'].includes(normalized)) return false;
+  }
+  return undefined;
+}
+
+/**
+ * Coerces a value to a boolean with basic string parsing.
+ *
+ * This is a simpler boolean coercion function that only recognizes 'true'/'false'
+ * and '1'/'0' strings. Use this when you have more controlled input and don't need
+ * to support 'yes'/'no' or 'on'/'off' variations.
+ *
+ * Note: Unlike coerceBoolean, this does NOT support 'yes'/'no' or 'on'/'off'.
+ *
+ * Recognized truthy strings: 'true', '1'
+ * Recognized falsy strings: 'false', '0'
+ *
+ * @param value - The value to coerce to a boolean
+ * @returns Boolean value, or undefined if the value cannot be interpreted as boolean
+ *
+ * @example
+ * ```typescript
+ * toBoolean(true); // true
+ * toBoolean(1); // true
+ * toBoolean("true"); // true
+ * toBoolean("1"); // true
+ * toBoolean(false); // false
+ * toBoolean(0); // false
+ * toBoolean("false"); // false
+ * toBoolean("0"); // false
+ * toBoolean("yes"); // undefined (not supported)
+ * toBoolean("on"); // undefined (not supported)
+ * toBoolean(2); // undefined
+ * ```
+ */
+export const toBoolean = (value: unknown): boolean | undefined => {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const v = value.trim().toLowerCase();
+    if (v === 'true' || v === '1') return true;
+    if (v === 'false' || v === '0') return false;
+  }
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+  return undefined;
+};
+
+/**
+ * Checks if a value is explicitly truthy according to specific patterns.
+ *
+ * Unlike coerceBoolean which returns undefined for unrecognized values, this
+ * function always returns a definite boolean. It returns true ONLY for explicitly
+ * truthy values, and false for everything else (including unrecognized values).
+ *
+ * Use this when you need a definite boolean answer and want to treat unknown
+ * values as false rather than undefined.
+ *
+ * Recognized truthy values: true, 1, 'true', '1', 'on'
+ *
+ * @param value - The value to check for truthiness
+ * @returns True if the value matches truthy patterns, false otherwise
+ *
+ * @example
+ * ```typescript
+ * isTruthy(true); // true
+ * isTruthy(1); // true
+ * isTruthy("true"); // true
+ * isTruthy("on"); // true
+ * isTruthy(false); // false
+ * isTruthy(0); // false
+ * isTruthy("yes"); // false (not in recognized patterns)
+ * isTruthy("maybe"); // false
+ * isTruthy(null); // false
+ * ```
+ */
+export const isTruthy = (value: unknown): boolean => {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    if (normalized === 'true' || normalized === '1' || normalized === 'on') {
+      return true;
+    }
+  }
+  return false;
+};
+
+/**
+ * Checks if a value is explicitly false according to specific patterns.
+ *
+ * Similar to isTruthy, this always returns a definite boolean. It returns true
+ * ONLY when the value explicitly indicates false, not for unrecognized values.
+ *
+ * Recognized falsy values: false, 0, 'false', '0', 'off'
+ *
+ * @param value - The value to check for explicit falseness
+ * @returns True if the value matches explicit false patterns, false otherwise
+ *
+ * @example
+ * ```typescript
+ * isExplicitFalse(false); // true
+ * isExplicitFalse(0); // true
+ * isExplicitFalse("false"); // true
+ * isExplicitFalse("off"); // true
+ * isExplicitFalse(true); // false
+ * isExplicitFalse(1); // false
+ * isExplicitFalse("no"); // false (not in recognized patterns)
+ * isExplicitFalse("maybe"); // false
+ * isExplicitFalse(null); // false
+ * ```
+ */
+export const isExplicitFalse = (value: unknown): boolean => {
+  if (value === false || value === 0) return true;
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    return normalized === 'false' || normalized === '0' || normalized === 'off';
+  }
+  return false;
+};
+
+// ============================================================================
+// Box Spacing Utilities
+// ============================================================================
+
+/**
+ * Converts a spacing object to a BoxSpacing type with validated numeric values.
+ *
+ * Extracts top, right, bottom, and left spacing values, keeping only those that
+ * are finite numbers. Returns undefined if no valid spacing values exist.
+ *
+ * @param spacing - Object potentially containing spacing values
+ * @returns BoxSpacing object with validated numeric values, or undefined if no valid values
+ *
+ * @example
+ * ```typescript
+ * toBoxSpacing({ top: 10, right: 20, bottom: 10, left: 20 });
+ * // { top: 10, right: 20, bottom: 10, left: 20 }
+ *
+ * toBoxSpacing({ top: 10, right: "invalid" });
+ * // { top: 10 }
+ *
+ * toBoxSpacing({ invalid: 10 });
+ * // undefined (no recognized spacing properties)
+ *
+ * toBoxSpacing(null);
+ * // undefined
+ * ```
+ */
+export function toBoxSpacing(spacing?: Record<string, unknown>): BoxSpacing | undefined {
+  if (!spacing) {
+    return undefined;
+  }
+
+  const result: BoxSpacing = {};
+  (['top', 'right', 'bottom', 'left'] as const).forEach((side) => {
+    const value = spacing[side];
+    if (isFiniteNumber(value)) {
+      result[side] = Number(value);
+    }
+  });
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+// ============================================================================
+// Position Map Building
+// ============================================================================
+
+/**
+ * Builds a position map for ProseMirror nodes, tracking start/end positions.
+ *
+ * This function recursively traverses a ProseMirror node tree and calculates the
+ * absolute position (offset from document start) for each node. Text nodes are
+ * sized by character count, atomic inline nodes (like images) take 1 position,
+ * and block nodes add opening/closing positions (except for the root 'doc' node).
+ *
+ * The resulting WeakMap allows O(1) lookup of any node's position range without
+ * storing references that would prevent garbage collection.
+ *
+ * @param root - The root ProseMirror node to build position map from
+ * @returns A WeakMap mapping each node to its { start, end } position range
+ *
+ * @example
+ * ```typescript
+ * const doc = {
+ *   type: 'doc',
+ *   content: [
+ *     { type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }
+ *   ]
+ * };
+ * const map = buildPositionMap(doc);
+ * const paragraph = doc.content[0];
+ * map.get(paragraph); // { start: 0, end: 7 } (1 open + 5 text + 1 close)
+ * ```
+ */
+export const buildPositionMap = (root: PMNode): PositionMap => {
+  const map: PositionMap = new WeakMap();
+
+  const visit = (node: PMNode, pos: number): number => {
+    if (node.type === 'text') {
+      const size = node.text?.length ?? 0;
+      const end = pos + size;
+      map.set(node, { start: pos, end });
+      return end;
+    }
+
+    if (ATOMIC_INLINE_TYPES.has(node.type)) {
+      const end = pos + 1;
+      map.set(node, { start: pos, end });
+      return end;
+    }
+
+    const open = node.type === 'doc' ? 0 : 1;
+    const close = node.type === 'doc' ? 0 : 1;
+    let nextPos = pos + open;
+    const content = Array.isArray(node.content) ? node.content : [];
+    map.set(node, { start: pos, end: pos }); // placeholder, end updated after children
+    content.forEach((child) => {
+      nextPos = visit(child, nextPos);
+    });
+    const end = nextPos + close;
+    map.set(node, { start: pos, end });
+    return end;
+  };
+
+  visit(root, 0);
+  return map;
+};
+
+// ============================================================================
+// Block ID Generation
+// ============================================================================
+
+/**
+ * Creates a block ID generator function with sequential numbering.
+ *
+ * Returns a closure that generates unique block IDs by combining an optional prefix,
+ * an auto-incrementing counter, and a kind identifier. This ensures stable, predictable
+ * IDs during document transformation.
+ *
+ * @param prefix - Optional prefix to prepend to all generated IDs (defaults to empty string)
+ * @returns A generator function that takes a kind string and returns a unique ID
+ *
+ * @example
+ * ```typescript
+ * const genId = createBlockIdGenerator('doc-');
+ * genId('paragraph'); // 'doc-0-paragraph'
+ * genId('paragraph'); // 'doc-1-paragraph'
+ * genId('image'); // 'doc-2-image'
+ *
+ * const genIdNoPrefix = createBlockIdGenerator();
+ * genIdNoPrefix('heading'); // '0-heading'
+ * genIdNoPrefix('heading'); // '1-heading'
+ * ```
+ */
+export const createBlockIdGenerator = (prefix: string = ''): BlockIdGenerator => {
+  let counter = 0;
+  return (kind: string) => `${prefix}${counter++}-${kind}`;
+};
+
+// ============================================================================
+// Drawing/Shape Utilities
+// ============================================================================
+
+/**
+ * Converts an unknown value to a validated DrawingContentSnapshot.
+ *
+ * Validates that the value has a string 'name' property and optionally
+ * includes 'attributes' (as a plain object) and 'elements' (as an array of objects).
+ * Performs validation on array contents to ensure they are objects.
+ *
+ * @param value - The value to convert to a DrawingContentSnapshot
+ * @returns A validated DrawingContentSnapshot, or undefined if validation fails
+ *
+ * @example
+ * ```typescript
+ * toDrawingContentSnapshot({ name: 'rect' });
+ * // { name: 'rect' }
+ *
+ * toDrawingContentSnapshot({
+ *   name: 'group',
+ *   attributes: { fill: 'red' },
+ *   elements: [{ type: 'circle' }]
+ * });
+ * // { name: 'group', attributes: { fill: 'red' }, elements: [{ type: 'circle' }] }
+ *
+ * toDrawingContentSnapshot({ name: 'rect', elements: [null, { valid: true }] });
+ * // { name: 'rect', elements: [{ valid: true }] } (null filtered out)
+ *
+ * toDrawingContentSnapshot('invalid');
+ * // undefined
+ * ```
+ */
+export function toDrawingContentSnapshot(value: unknown): DrawingContentSnapshot | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const raw = value as Record<string, unknown>;
+  const name = raw.name;
+  if (typeof name !== 'string') return undefined;
+
+  const snapshot: DrawingContentSnapshot = { name };
+
+  // Validate attributes is a plain object (not an array)
+  if (raw.attributes && typeof raw.attributes === 'object' && !Array.isArray(raw.attributes)) {
+    snapshot.attributes = { ...(raw.attributes as Record<string, unknown>) };
+  }
+
+  // Validate elements array contents
+  if (Array.isArray(raw.elements)) {
+    const validElements = raw.elements.filter(
+      (el): el is Record<string, unknown> => el != null && typeof el === 'object',
+    );
+    if (validElements.length > 0) {
+      snapshot.elements = validElements;
+    }
+  }
+
+  return snapshot;
+}
+
+/**
+ * Type guard to check if a value is a ShapeGroupTransform.
+ *
+ * A valid ShapeGroupTransform must have at least one finite numeric property
+ * among: x, y, width, height, childWidth, childHeight, childX, childY.
+ *
+ * @param value - The value to check
+ * @returns True if the value has at least one valid transform property
+ *
+ * @example
+ * ```typescript
+ * isShapeGroupTransform({ x: 10, y: 20 }); // true
+ * isShapeGroupTransform({ width: 100 }); // true
+ * isShapeGroupTransform({ childX: 5, childY: 10 }); // true
+ * isShapeGroupTransform({}); // false
+ * isShapeGroupTransform({ invalid: 10 }); // false
+ * isShapeGroupTransform(null); // false
+ * ```
+ */
+export function isShapeGroupTransform(value: unknown): value is ShapeGroupTransform {
+  if (!value || typeof value !== 'object') return false;
+  const maybe = value as Record<string, unknown>;
+  return (
+    isFiniteNumber(maybe.x) ||
+    isFiniteNumber(maybe.y) ||
+    isFiniteNumber(maybe.width) ||
+    isFiniteNumber(maybe.height) ||
+    isFiniteNumber(maybe.childWidth) ||
+    isFiniteNumber(maybe.childHeight) ||
+    isFiniteNumber(maybe.childX) ||
+    isFiniteNumber(maybe.childY)
+  );
+}
+
+/**
+ * Normalizes a shape size object, extracting width and height properties.
+ *
+ * Coerces width and height to numbers if possible. Returns undefined if both
+ * properties are missing or invalid.
+ *
+ * @param value - Object potentially containing width and height
+ * @returns Object with validated width/height, or undefined if none are valid
+ *
+ * @example
+ * ```typescript
+ * normalizeShapeSize({ width: 100, height: 50 });
+ * // { width: 100, height: 50 }
+ *
+ * normalizeShapeSize({ width: "200", height: 100 });
+ * // { width: 200, height: 100 }
+ *
+ * normalizeShapeSize({ width: 100 });
+ * // { width: 100 }
+ *
+ * normalizeShapeSize({ invalid: 100 });
+ * // undefined
+ *
+ * normalizeShapeSize(null);
+ * // undefined
+ * ```
+ */
+export function normalizeShapeSize(value: unknown): { width?: number; height?: number } | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const maybe = value as Record<string, unknown>;
+  const width = coerceNumber(maybe.width);
+  const height = coerceNumber(maybe.height);
+  if (width == null && height == null) {
+    return undefined;
+  }
+  const result: { width?: number; height?: number } = {};
+  if (width != null) result.width = width;
+  if (height != null) result.height = height;
+  return result;
+}
+
+/**
+ * Normalizes and validates shape group children from an array.
+ *
+ * Filters out invalid entries, keeping only objects that have a string 'shapeType' property.
+ * Returns an empty array if input is not an array.
+ *
+ * @param value - Value to extract shape group children from
+ * @returns Array of validated ShapeGroupChild objects (may be empty)
+ *
+ * @example
+ * ```typescript
+ * normalizeShapeGroupChildren([
+ *   { shapeType: 'rect', x: 0, y: 0 },
+ *   { shapeType: 'circle', cx: 50, cy: 50 }
+ * ]);
+ * // [{ shapeType: 'rect', x: 0, y: 0 }, { shapeType: 'circle', cx: 50, cy: 50 }]
+ *
+ * normalizeShapeGroupChildren([
+ *   { shapeType: 'rect' },
+ *   null,
+ *   { invalid: true },
+ *   { shapeType: 'line' }
+ * ]);
+ * // [{ shapeType: 'rect' }, { shapeType: 'line' }]
+ *
+ * normalizeShapeGroupChildren(null);
+ * // []
+ *
+ * normalizeShapeGroupChildren("not an array");
+ * // []
+ * ```
+ */
+export function normalizeShapeGroupChildren(value: unknown): ShapeGroupChild[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((child): child is ShapeGroupChild => {
+    if (!child || typeof child !== 'object') return false;
+    return typeof (child as { shapeType?: unknown }).shapeType === 'string';
+  });
+}
+
+// ============================================================================
+// Media/Image Utilities
+// ============================================================================
+
+/**
+ * Normalizes a media key by removing leading path prefixes and converting to forward slashes.
+ *
+ * Converts backslashes to forward slashes, then removes all leading './' and '/' prefixes.
+ * This ensures consistent path formatting across different file systems and sources.
+ *
+ * @param value - The media key/path to normalize (optional)
+ * @returns The normalized media key, or undefined if no value provided
+ *
+ * @example
+ * ```typescript
+ * normalizeMediaKey('word/media/image1.jpg'); // 'word/media/image1.jpg'
+ * normalizeMediaKey('/media/image1.jpg'); // 'media/image1.jpg'
+ * normalizeMediaKey('./media/image1.jpg'); // 'media/image1.jpg'
+ * normalizeMediaKey('///media/image1.jpg'); // 'media/image1.jpg'
+ * normalizeMediaKey('.////media/image1.jpg'); // 'media/image1.jpg'
+ * normalizeMediaKey('word\\media\\image1.jpg'); // 'word/media/image1.jpg'
+ * normalizeMediaKey('\\\\media\\image1.jpg'); // 'media/image1.jpg'
+ * normalizeMediaKey(undefined); // undefined
+ * ```
+ */
+export function normalizeMediaKey(value?: string): string | undefined {
+  if (!value) return undefined;
+  return value
+    .replace(/\\/g, '/') // Convert backslashes first
+    .replace(/^(\.\/|\/)+/, ''); // Remove all leading ./ and /
+}
+
+/**
+ * Infers the file extension from a file path string.
+ *
+ * Handles edge cases like hidden files (starting with '.'), trailing dots,
+ * and paths with multiple directory separators. Only returns valid extensions
+ * from the filename portion of the path.
+ *
+ * @param value - The file path to extract extension from (optional, nullable)
+ * @returns The lowercase file extension, or undefined if none exists
+ *
+ * @example
+ * ```typescript
+ * inferExtensionFromPath('image.jpg'); // 'jpg'
+ * inferExtensionFromPath('document.PDF'); // 'pdf'
+ * inferExtensionFromPath('path/to/file.png'); // 'png'
+ * inferExtensionFromPath('path\\to\\file.gif'); // 'gif'
+ * inferExtensionFromPath('.gitignore'); // undefined (hidden file)
+ * inferExtensionFromPath('file.'); // undefined (trailing dot)
+ * inferExtensionFromPath('noextension'); // undefined
+ * inferExtensionFromPath('file.tar.gz'); // 'gz'
+ * inferExtensionFromPath(null); // undefined
+ * inferExtensionFromPath(''); // undefined
+ * ```
+ */
+export function inferExtensionFromPath(value?: string | null): string | undefined {
+  if (!value) return undefined;
+
+  // Extract filename only (handle both forward and backward slashes)
+  const fileName = value.split('/').pop()?.split('\\').pop();
+  if (!fileName || fileName.startsWith('.')) return undefined; // Hidden file or no filename
+
+  const parts = fileName.split('.');
+  if (parts.length < 2) return undefined; // No extension
+
+  const ext = parts.at(-1);
+  if (!ext || ext.length === 0) return undefined; // Trailing dot
+
+  return ext.toLowerCase();
+}
+
+/**
+ * Hydrates image blocks by converting file path references to base64 data URLs.
+ *
+ * For each image block, attempts to resolve the image source by checking multiple
+ * candidate paths against the provided media files map. Uses path normalization
+ * and extension inference to maximize match success rate.
+ *
+ * **Candidate Path Search Order:**
+ * 1. Block's `src` property (normalized)
+ * 2. Block's `attrs.src` if present (normalized)
+ * 3. `word/media/{rId}.{ext}` if `attrs.rId` exists
+ * 4. `media/{rId}.{ext}` if `attrs.rId` exists
+ *
+ * Extension is inferred from:
+ * - `attrs.extension` (highest priority)
+ * - Extension from the src path
+ * - Default to 'jpeg' if neither available
+ *
+ * **Image blocks are left unchanged if:**
+ * - No media files are provided
+ * - The src already starts with 'data:' (already a data URL)
+ * - No matching media file is found in any candidate path
+ *
+ * @param blocks - Array of FlowBlocks to process
+ * @param mediaFiles - Map of file paths to base64-encoded image data (without 'data:' prefix)
+ * @returns New array of FlowBlocks with image blocks hydrated to data URLs
+ *
+ * @example
+ * ```typescript
+ * const blocks = [
+ *   { kind: 'image', src: 'word/media/image1.jpg', attrs: { rId: 'rId5' } }
+ * ];
+ * const mediaFiles = { 'word/media/image1.jpg': 'iVBORw0KGgoAAAANS...' };
+ * const hydrated = hydrateImageBlocks(blocks, mediaFiles);
+ * // Result: [{ kind: 'image', src: 'data:image/jpg;base64,iVBORw0KGgoAAAANS...' }]
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Using rId fallback when direct path doesn't match
+ * const blocks = [
+ *   { kind: 'image', src: './image.png', attrs: { rId: 'rId3', extension: 'png' } }
+ * ];
+ * const mediaFiles = { 'word/media/rId3.png': 'base64data...' };
+ * const hydrated = hydrateImageBlocks(blocks, mediaFiles);
+ * // Matches via candidate path: word/media/rId3.png
+ * ```
+ */
+export function hydrateImageBlocks(blocks: FlowBlock[], mediaFiles?: Record<string, string>): FlowBlock[] {
+  if (!mediaFiles || Object.keys(mediaFiles).length === 0) {
+    return blocks;
+  }
+
+  const normalizedMedia = new Map<string, string>();
+  Object.entries(mediaFiles).forEach(([key, value]) => {
+    const normalized = normalizeMediaKey(key);
+    if (normalized) {
+      normalizedMedia.set(normalized, value);
+    }
+  });
+
+  if (normalizedMedia.size === 0) {
+    return blocks;
+  }
+
+  return blocks.map((block) => {
+    if (block.kind !== 'image') {
+      return block;
+    }
+    if (!block.src || block.src.startsWith('data:')) {
+      return block;
+    }
+
+    const attrs = (block.attrs ?? {}) as Record<string, unknown>;
+    const relId = typeof attrs.rId === 'string' ? attrs.rId : undefined;
+    const attrSrc = typeof attrs.src === 'string' ? attrs.src : undefined;
+    const extension = typeof attrs.extension === 'string' ? attrs.extension.toLowerCase() : undefined;
+
+    const candidates = new Set<string>();
+    candidates.add(block.src);
+    if (attrSrc) candidates.add(attrSrc);
+    if (relId) {
+      const inferredExt = extension ?? inferExtensionFromPath(block.src) ?? 'jpeg';
+      candidates.add(`word/media/${relId}.${inferredExt}`);
+      candidates.add(`media/${relId}.${inferredExt}`);
+    }
+
+    for (const candidate of candidates) {
+      const normalized = normalizeMediaKey(candidate);
+      if (!normalized) continue;
+      const base64 = normalizedMedia.get(normalized);
+      if (!base64) continue;
+
+      const finalExt = extension ?? inferExtensionFromPath(normalized) ?? 'jpeg';
+      return {
+        ...block,
+        src: `data:image/${finalExt};base64,${base64}`,
+      };
+    }
+
+    return block;
+  });
+}
+
+// ============================================================================
+// Shallow Object Comparison
+// ============================================================================
+
+/**
+ * Performs a shallow equality comparison between two objects.
+ *
+ * Compares objects by checking if they have the same number of keys and if
+ * all values for matching keys are strictly equal (using ===). Does not perform
+ * deep comparison of nested objects or arrays.
+ *
+ * Both undefined objects are considered equal. If only one is undefined, they are not equal.
+ *
+ * @param x - First object to compare (optional)
+ * @param y - Second object to compare (optional)
+ * @returns True if objects are shallowly equal, false otherwise
+ *
+ * @example
+ * ```typescript
+ * shallowObjectEquals({ a: 1, b: 2 }, { a: 1, b: 2 }); // true
+ * shallowObjectEquals({ a: 1 }, { a: 1, b: 2 }); // false (different keys)
+ * shallowObjectEquals({ a: 1 }, { a: 2 }); // false (different values)
+ * shallowObjectEquals(undefined, undefined); // true
+ * shallowObjectEquals({}, undefined); // false
+ * shallowObjectEquals({ a: { nested: 1 } }, { a: { nested: 1 } }); // false (different references)
+ * shallowObjectEquals({ a: [1, 2] }, { a: [1, 2] }); // false (different array references)
+ *
+ * const arr = [1, 2];
+ * shallowObjectEquals({ a: arr }, { a: arr }); // true (same reference)
+ * ```
+ */
+export function shallowObjectEquals(x?: Record<string, unknown>, y?: Record<string, unknown>): boolean {
+  if (!x && !y) return true;
+  if (!x || !y) return false;
+  const kx = Object.keys(x);
+  const ky = Object.keys(y);
+  if (kx.length !== ky.length) return false;
+  return kx.every((k) => x[k] === y[k]);
+}

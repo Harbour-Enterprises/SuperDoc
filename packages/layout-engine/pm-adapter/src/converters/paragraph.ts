@@ -1,0 +1,685 @@
+/**
+ * Paragraph Converter Module
+ *
+ * Functions for converting ProseMirror paragraph nodes to FlowBlock arrays:
+ * - Paragraph to FlowBlocks conversion (main entry point)
+ * - Run merging optimization
+ * - Tracked changes processing
+ */
+
+import type { FlowBlock, Run, TextRun, ImageBlock, TrackedChangeMeta, SdtMetadata } from '@superdoc/contracts';
+import type {
+  PMNode,
+  PMMark,
+  BlockIdGenerator,
+  PositionMap,
+  StyleContext,
+  ListCounterContext,
+  TrackedChangesConfig,
+  HyperlinkConfig,
+  NodeHandlerContext,
+  ThemeColorPalette,
+} from '../types.js';
+import type { ConverterContext } from '../converter-context.js';
+import { computeParagraphAttrs, cloneParagraphAttrs, hasPageBreakBefore } from '../attributes/index.js';
+import { hydrateParagraphStyleAttrs } from '../attributes/paragraph-styles.js';
+import { resolveNodeSdtMetadata, getNodeInstruction } from '../sdt/index.js';
+import { shouldRequirePageBoundary, hasIntrinsicBoundarySignals, createSectionBreakBlock } from '../sections/index.js';
+import { trackedChangesCompatible, collectTrackedChangeFromMarks, applyMarksToRun } from '../marks/index.js';
+import {
+  shouldHideTrackedNode,
+  annotateBlockWithTrackedChange,
+  applyTrackedChangesModeToRuns,
+} from '../tracked-changes.js';
+import { textNodeToRun, tabNodeToRun, tokenNodeToRun } from './text-run.js';
+import { DEFAULT_HYPERLINK_CONFIG, TOKEN_INLINE_TYPES } from '../constants.js';
+import { createLinkedStyleResolver, applyLinkedStyleToRun, extractRunStyleId } from '../styles/linked-run.js';
+
+/**
+ * Helper to check if a run is a text run (not a tab).
+ */
+const isTextRun = (run: Run): run is TextRun => (run as { kind?: string }).kind !== 'tab';
+
+/**
+ * Merges adjacent text runs with continuous PM positions and compatible styling.
+ * Optimization to reduce run fragmentation after PM operations.
+ *
+ * @param runs - Array of runs to merge
+ * @returns Merged array of runs
+ */
+export function mergeAdjacentRuns(runs: Run[]): Run[] {
+  if (runs.length <= 1) return runs;
+
+  const merged: Run[] = [];
+  let current = runs[0];
+
+  for (let i = 1; i < runs.length; i++) {
+    const next = runs[i];
+
+    // Check if runs can be merged:
+    // 1. Both are text runs (no tokens/special types)
+    // 2. Have continuous PM positions (current.pmEnd === next.pmStart)
+    // 3. Have compatible styling (same font, size, color, bold, italic, etc.)
+    const canMerge =
+      isTextRun(current) &&
+      isTextRun(next) &&
+      !current.token &&
+      !next.token &&
+      current.pmStart != null &&
+      current.pmEnd != null &&
+      next.pmStart != null &&
+      next.pmEnd != null &&
+      current.pmEnd === next.pmStart &&
+      current.fontFamily === next.fontFamily &&
+      current.fontSize === next.fontSize &&
+      current.bold === next.bold &&
+      current.italic === next.italic &&
+      current.underline === next.underline &&
+      current.strike === next.strike &&
+      current.color === next.color &&
+      current.highlight === next.highlight &&
+      (current.letterSpacing ?? 0) === (next.letterSpacing ?? 0) &&
+      trackedChangesCompatible(current, next);
+
+    if (canMerge) {
+      // Merge next into current
+      const currText = (current as TextRun).text ?? '';
+      const nextText = (next as TextRun).text ?? '';
+      current = {
+        ...(current as TextRun),
+        text: currText + nextText,
+        pmEnd: (next as TextRun).pmEnd,
+      } as TextRun;
+    } else {
+      // Can't merge, push current and move to next
+      merged.push(current);
+      current = next;
+    }
+  }
+
+  // Push the last run
+  merged.push(current);
+  return merged;
+}
+
+/**
+ * Converts a paragraph PM node to an array of FlowBlocks.
+ *
+ * This is the main entry point for paragraph conversion. It handles:
+ * - Page breaks (pageBreakBefore)
+ * - Inline content (text, runs, SDTs, tokens)
+ * - Block-level content (images, drawings, tables, hard breaks)
+ * - Tracked changes filtering
+ * - Run merging optimization
+ *
+ * @param para - Paragraph PM node to convert
+ * @param nextBlockId - Block ID generator
+ * @param positions - Position map for PM node tracking
+ * @param defaultFont - Default font family
+ * @param defaultSize - Default font size
+ * @param styleContext - Style resolution context
+ * @param listCounterContext - Optional list counter context
+ * @param trackedChanges - Optional tracked changes configuration
+ * @param bookmarks - Optional bookmark position map
+ * @param hyperlinkConfig - Hyperlink configuration
+ * @returns Array of FlowBlocks (paragraphs, images, drawings, page breaks, etc.)
+ */
+export function paragraphToFlowBlocks(
+  para: PMNode,
+  nextBlockId: BlockIdGenerator,
+  positions: PositionMap,
+  defaultFont: string,
+  defaultSize: number,
+  styleContext: StyleContext,
+  listCounterContext?: ListCounterContext,
+  trackedChanges?: TrackedChangesConfig,
+  bookmarks?: Map<string, number>,
+  hyperlinkConfig: HyperlinkConfig = DEFAULT_HYPERLINK_CONFIG,
+  themeColors?: ThemeColorPalette,
+  // Converter dependencies injected to avoid circular imports
+  converters?: {
+    imageNodeToBlock: (
+      node: PMNode,
+      nextBlockId: BlockIdGenerator,
+      positions: PositionMap,
+      trackedMeta?: TrackedChangeMeta,
+      trackedChanges?: TrackedChangesConfig,
+    ) => ImageBlock | null;
+    vectorShapeNodeToDrawingBlock: (
+      node: PMNode,
+      nextBlockId: BlockIdGenerator,
+      positions: PositionMap,
+    ) => FlowBlock | null;
+    shapeGroupNodeToDrawingBlock: (
+      node: PMNode,
+      nextBlockId: BlockIdGenerator,
+      positions: PositionMap,
+    ) => FlowBlock | null;
+    shapeContainerNodeToDrawingBlock: (
+      node: PMNode,
+      nextBlockId: BlockIdGenerator,
+      positions: PositionMap,
+    ) => FlowBlock | null;
+    shapeTextboxNodeToDrawingBlock: (
+      node: PMNode,
+      nextBlockId: BlockIdGenerator,
+      positions: PositionMap,
+    ) => FlowBlock | null;
+    tableNodeToBlock: (
+      node: PMNode,
+      nextBlockId: BlockIdGenerator,
+      positions: PositionMap,
+      defaultFont: string,
+      defaultSize: number,
+      styleContext: StyleContext,
+      trackedChanges?: TrackedChangesConfig,
+      bookmarks?: Map<string, number>,
+      hyperlinkConfig?: HyperlinkConfig,
+      converterContext?: ConverterContext,
+    ) => FlowBlock | null;
+  },
+  converterContext?: ConverterContext,
+): FlowBlock[] {
+  const baseBlockId = nextBlockId('paragraph');
+  const paragraphStyleId = typeof para.attrs?.styleId === 'string' ? para.attrs.styleId : null;
+  const paragraphHydration = converterContext ? hydrateParagraphStyleAttrs(para, converterContext) : null;
+  const paragraphAttrs = computeParagraphAttrs(
+    para,
+    styleContext,
+    listCounterContext,
+    converterContext,
+    paragraphHydration,
+  );
+  const linkedStyleResolver = createLinkedStyleResolver(converterContext?.linkedStyles);
+  const blocks: FlowBlock[] = [];
+
+  if (hasPageBreakBefore(para)) {
+    blocks.push({
+      kind: 'pageBreak',
+      id: nextBlockId('pageBreak'),
+      attrs: { source: 'pageBreakBefore' },
+    });
+  }
+
+  if (!para.content || para.content.length === 0) {
+    blocks.push({
+      kind: 'paragraph',
+      id: baseBlockId,
+      runs: [
+        {
+          text: '',
+          fontFamily: defaultFont,
+          fontSize: defaultSize,
+        },
+      ],
+      attrs: cloneParagraphAttrs(paragraphAttrs),
+    });
+    return blocks;
+  }
+
+  let currentRuns: Run[] = [];
+  let partIndex = 0;
+  let tabOrdinal = 0;
+
+  const nextId = () => (partIndex === 0 ? baseBlockId : `${baseBlockId}-${partIndex}`);
+
+  const flushParagraph = () => {
+    if (currentRuns.length === 0) {
+      return;
+    }
+    const runs = currentRuns;
+    currentRuns = [];
+    blocks.push({
+      kind: 'paragraph',
+      id: nextId(),
+      runs,
+      attrs: cloneParagraphAttrs(paragraphAttrs),
+    });
+    partIndex += 1;
+  };
+
+  const getInlineStyleId = (marks: PMMark[] = []): string | null => {
+    const mark = marks.find(
+      (m) => m?.type === 'textStyle' && typeof m.attrs?.styleId === 'string' && m.attrs.styleId.trim(),
+    );
+    return mark ? (mark.attrs!.styleId as string) : null;
+  };
+
+  const applyRunStyles = (run: TextRun, inlineStyleId: string | null, runStyleId: string | null) => {
+    if (!linkedStyleResolver) return;
+    applyLinkedStyleToRun(run, {
+      resolver: linkedStyleResolver,
+      paragraphStyleId,
+      inlineStyleId,
+      runStyleId,
+      defaultFont,
+      defaultSize,
+    });
+  };
+
+  const visitNode = (
+    node: PMNode,
+    inheritedMarks: PMMark[] = [],
+    activeSdt?: SdtMetadata,
+    activeRunStyleId: string | null = null,
+  ) => {
+    if (node.type === 'text' && node.text) {
+      const run = textNodeToRun(
+        node,
+        positions,
+        defaultFont,
+        defaultSize,
+        inheritedMarks,
+        activeSdt,
+        hyperlinkConfig,
+        themeColors,
+      );
+      const inlineStyleId = getInlineStyleId(inheritedMarks);
+      applyRunStyles(run, inlineStyleId, activeRunStyleId);
+      currentRuns.push(run);
+      return;
+    }
+
+    if (node.type === 'run' && Array.isArray(node.content)) {
+      const mergedMarks = [...(node.marks ?? []), ...(inheritedMarks ?? [])];
+      const nextRunStyleId = extractRunStyleId(node.attrs?.runProperties) ?? activeRunStyleId;
+      node.content.forEach((child) => visitNode(child, mergedMarks, activeSdt, nextRunStyleId));
+      return;
+    }
+
+    // SDT inline structured content: treat as transparent container
+    if (node.type === 'structuredContent' && Array.isArray(node.content)) {
+      const inlineMetadata = resolveNodeSdtMetadata(node, 'structuredContent');
+      const nextSdt = inlineMetadata ?? activeSdt;
+      node.content.forEach((child) => visitNode(child, inheritedMarks, nextSdt, activeRunStyleId));
+      return;
+    }
+
+    // SDT fieldAnnotation: render its inner content if present; otherwise fallback to displayLabel/default
+    if (node.type === 'fieldAnnotation') {
+      const fieldMetadata = resolveNodeSdtMetadata(node, 'fieldAnnotation');
+      if (Array.isArray(node.content) && node.content.length > 0) {
+        node.content.forEach((child) => visitNode(child, inheritedMarks, fieldMetadata ?? activeSdt, activeRunStyleId));
+      } else {
+        const nodeAttrs =
+          typeof node.attrs === 'object' && node.attrs !== null ? (node.attrs as Record<string, unknown>) : {};
+        const label =
+          (typeof nodeAttrs.displayLabel === 'string' ? nodeAttrs.displayLabel : undefined) ||
+          (typeof nodeAttrs.defaultDisplayLabel === 'string' ? nodeAttrs.defaultDisplayLabel : undefined) ||
+          (typeof nodeAttrs.alias === 'string' ? nodeAttrs.alias : undefined) ||
+          '';
+        if (label && typeof label === 'string') {
+          const run = textNodeToRun(
+            { type: 'text', text: label } as PMNode,
+            positions,
+            defaultFont,
+            defaultSize,
+            inheritedMarks,
+            fieldMetadata ?? activeSdt,
+            hyperlinkConfig,
+            themeColors,
+          );
+          const inlineStyleId = getInlineStyleId(inheritedMarks);
+          applyRunStyles(run, inlineStyleId, activeRunStyleId);
+          currentRuns.push(run);
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'pageReference') {
+      // Create pageReference token run for dynamic resolution
+      const instruction = getNodeInstruction(node) || '';
+      const nodeAttrs =
+        typeof node.attrs === 'object' && node.attrs !== null ? (node.attrs as Record<string, unknown>) : {};
+      const refMarks = Array.isArray(nodeAttrs.marksAsAttrs) ? (nodeAttrs.marksAsAttrs as PMMark[]) : [];
+      const mergedMarks = [...refMarks, ...(inheritedMarks ?? [])];
+
+      // Extract bookmark ID from instruction, handling optional quotes
+      // Examples: "PAGEREF _Toc123 \h" or "PAGEREF "_Toc123" \h"
+      const bookmarkMatch = instruction.match(/PAGEREF\s+"?([^"\s\\]+)"?/i);
+      const bookmarkId = bookmarkMatch ? bookmarkMatch[1] : '';
+
+      // If we have a bookmark ID, create a token run for dynamic resolution
+      if (bookmarkId) {
+        // Check if there's materialized content (pre-baked page number from Word)
+        let fallbackText = '??'; // Default placeholder if resolution fails
+        if (Array.isArray(node.content) && node.content.length > 0) {
+          // Extract text from children as fallback
+          const extractText = (n: PMNode): string => {
+            if (n.type === 'text' && n.text) return n.text;
+            if (Array.isArray(n.content)) {
+              return n.content.map(extractText).join('');
+            }
+            return '';
+          };
+          fallbackText = node.content.map(extractText).join('').trim() || '??';
+        }
+
+        // Create token run with pageReference metadata
+        // Get PM positions from the parent pageReference node (not the synthetic text node)
+        const pageRefPos = positions.get(node);
+        const tokenRun = textNodeToRun(
+          { type: 'text', text: fallbackText } as PMNode,
+          positions,
+          defaultFont,
+          defaultSize,
+          mergedMarks,
+          activeSdt,
+          hyperlinkConfig,
+          themeColors,
+        );
+        const inlineStyleId = getInlineStyleId(mergedMarks);
+        applyRunStyles(tokenRun, inlineStyleId, activeRunStyleId);
+        // Copy PM positions from parent pageReference node
+        if (pageRefPos) {
+          (tokenRun as TextRun).pmStart = pageRefPos.start;
+          (tokenRun as TextRun).pmEnd = pageRefPos.end;
+        }
+        (tokenRun as TextRun).token = 'pageReference';
+        (tokenRun as TextRun).pageRefMetadata = {
+          bookmarkId,
+          instruction,
+        };
+        if (activeSdt) {
+          tokenRun.sdt = activeSdt;
+        }
+        currentRuns.push(tokenRun);
+      } else if (Array.isArray(node.content)) {
+        // No bookmark found, fall back to treating as transparent container
+        node.content.forEach((child) => visitNode(child, mergedMarks, activeSdt));
+      }
+      return;
+    }
+
+    if (node.type === 'bookmarkStart') {
+      // Track bookmark position for cross-reference resolution
+      const nodeAttrs =
+        typeof node.attrs === 'object' && node.attrs !== null ? (node.attrs as Record<string, unknown>) : {};
+      const bookmarkName = typeof nodeAttrs.name === 'string' ? nodeAttrs.name : undefined;
+      if (bookmarkName && bookmarks) {
+        const nodePos = positions.get(node);
+        if (nodePos) {
+          bookmarks.set(bookmarkName, nodePos.start);
+        }
+      }
+      // Process any content inside the bookmark (usually empty)
+      if (Array.isArray(node.content)) {
+        node.content.forEach((child) => visitNode(child, inheritedMarks, activeSdt));
+      }
+      return;
+    }
+
+    if (node.type === 'tab') {
+      const tabRun = tabNodeToRun(node, positions, tabOrdinal, para);
+      tabOrdinal += 1;
+      if (tabRun) {
+        currentRuns.push(tabRun);
+      }
+      return;
+    }
+
+    if (TOKEN_INLINE_TYPES.has(node.type)) {
+      const tokenKind = TOKEN_INLINE_TYPES.get(node.type);
+      if (tokenKind) {
+        const tokenRun = tokenNodeToRun(
+          node,
+          positions,
+          defaultFont,
+          defaultSize,
+          inheritedMarks,
+          tokenKind,
+          hyperlinkConfig,
+          themeColors,
+        );
+        if (activeSdt) {
+          (tokenRun as TextRun).sdt = activeSdt;
+        }
+        const inlineStyleId = getInlineStyleId(inheritedMarks);
+        applyRunStyles(tokenRun as TextRun, inlineStyleId, activeRunStyleId);
+        currentRuns.push(tokenRun);
+      }
+      return;
+    }
+
+    if (node.type === 'image') {
+      flushParagraph();
+      const mergedMarks = [...(node.marks ?? []), ...(inheritedMarks ?? [])];
+      const trackedMeta = trackedChanges?.enabled ? collectTrackedChangeFromMarks(mergedMarks) : undefined;
+      if (shouldHideTrackedNode(trackedMeta, trackedChanges)) {
+        return;
+      }
+      if (converters?.imageNodeToBlock) {
+        const imageBlock = converters.imageNodeToBlock(node, nextBlockId, positions, trackedMeta, trackedChanges);
+        if (imageBlock && imageBlock.kind === 'image') {
+          annotateBlockWithTrackedChange(imageBlock, trackedMeta, trackedChanges);
+          blocks.push(imageBlock);
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'vectorShape') {
+      flushParagraph();
+      if (converters?.vectorShapeNodeToDrawingBlock) {
+        const drawingBlock = converters.vectorShapeNodeToDrawingBlock(node, nextBlockId, positions);
+        if (drawingBlock) {
+          blocks.push(drawingBlock);
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'shapeGroup') {
+      flushParagraph();
+      if (converters?.shapeGroupNodeToDrawingBlock) {
+        const drawingBlock = converters.shapeGroupNodeToDrawingBlock(node, nextBlockId, positions);
+        if (drawingBlock) {
+          blocks.push(drawingBlock);
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'shapeContainer') {
+      flushParagraph();
+      if (converters?.shapeContainerNodeToDrawingBlock) {
+        const drawingBlock = converters.shapeContainerNodeToDrawingBlock(node, nextBlockId, positions);
+        if (drawingBlock) {
+          blocks.push(drawingBlock);
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'shapeTextbox') {
+      flushParagraph();
+      if (converters?.shapeTextboxNodeToDrawingBlock) {
+        const drawingBlock = converters.shapeTextboxNodeToDrawingBlock(node, nextBlockId, positions);
+        if (drawingBlock) {
+          blocks.push(drawingBlock);
+        }
+      }
+      return;
+    }
+
+    // Tables may occasionally appear inline via wrappers; treat as block-level
+    if (node.type === 'table') {
+      flushParagraph();
+      if (converters?.tableNodeToBlock) {
+        const tableBlock = converters.tableNodeToBlock(
+          node,
+          nextBlockId,
+          positions,
+          defaultFont,
+          defaultSize,
+          styleContext,
+          trackedChanges,
+          bookmarks,
+          hyperlinkConfig,
+          converterContext,
+        );
+        if (tableBlock) {
+          blocks.push(tableBlock);
+        }
+      }
+      return;
+    }
+
+    // Hard break (page break from DOCX <w:br w:type="page"/>)
+    // Splits the current paragraph and inserts a pageBreak block that forces
+    // layout to start on a new page
+    if (node.type === 'hardBreak') {
+      flushParagraph();
+      blocks.push({
+        kind: 'pageBreak',
+        id: nextId(),
+        attrs: node.attrs || {},
+      });
+      return;
+    }
+
+    // Line break (soft break or column break from DOCX <w:br w:type="column"/>)
+    if (node.type === 'lineBreak') {
+      const attrs = node.attrs ?? {};
+      if (attrs.lineBreakType === 'column') {
+        // Column break: flush current paragraph and emit column break block
+        flushParagraph();
+        blocks.push({
+          kind: 'columnBreak',
+          id: nextId(),
+          attrs: node.attrs || {},
+        });
+      }
+      // Non-column line breaks are ignored (soft line breaks within paragraphs)
+      return;
+    }
+  };
+
+  para.content.forEach((child) => visitNode(child, [], undefined, null));
+  flushParagraph();
+
+  const hasParagraphBlock = blocks.some((block) => block.kind === 'paragraph');
+  if (!hasParagraphBlock) {
+    blocks.push({
+      kind: 'paragraph',
+      id: baseBlockId,
+      runs: [
+        {
+          text: '',
+          fontFamily: defaultFont,
+          fontSize: defaultSize,
+        },
+      ],
+      attrs: cloneParagraphAttrs(paragraphAttrs),
+    });
+  }
+
+  // Merge adjacent text runs with continuous PM positions
+  // This handles cases where PM keeps text nodes separate after join operations
+  blocks.forEach((block) => {
+    if (block.kind === 'paragraph' && block.runs.length > 1) {
+      block.runs = mergeAdjacentRuns(block.runs);
+      // Silent optimization: no console noise in tests/production
+    }
+  });
+
+  if (!trackedChanges) {
+    return blocks;
+  }
+
+  const processedBlocks: FlowBlock[] = [];
+  blocks.forEach((block) => {
+    if (block.kind !== 'paragraph') {
+      processedBlocks.push(block);
+      return;
+    }
+    const filteredRuns = applyTrackedChangesModeToRuns(
+      block.runs,
+      trackedChanges,
+      hyperlinkConfig,
+      applyMarksToRun,
+      themeColors,
+    );
+    if (trackedChanges.enabled && filteredRuns.length === 0) {
+      return;
+    }
+    block.runs = filteredRuns;
+    block.attrs = {
+      ...(block.attrs ?? {}),
+      trackedChangesMode: trackedChanges.mode,
+      trackedChangesEnabled: trackedChanges.enabled,
+    };
+    processedBlocks.push(block);
+  });
+
+  return processedBlocks;
+}
+
+/**
+ * Handle paragraph nodes.
+ * Special handling: Emits section breaks BEFORE processing the paragraph
+ * if this paragraph starts a new section.
+ *
+ * @param node - Paragraph node to process
+ * @param context - Shared handler context
+ */
+export function handleParagraphNode(node: PMNode, context: NodeHandlerContext): void {
+  const {
+    blocks,
+    recordBlockKind,
+    nextBlockId,
+    positions,
+    defaultFont,
+    defaultSize,
+    styleContext,
+    listCounterContext,
+    trackedChangesConfig,
+    bookmarks,
+    hyperlinkConfig,
+    sectionState,
+    converters,
+  } = context;
+  const { ranges: sectionRanges, currentSectionIndex, currentParagraphIndex } = sectionState;
+
+  // Emit section break BEFORE the first paragraph of the next section
+  if (sectionRanges.length > 0) {
+    const nextSection = sectionRanges[currentSectionIndex + 1];
+    if (nextSection && currentParagraphIndex === nextSection.startParagraphIndex) {
+      const currentSection = sectionRanges[currentSectionIndex];
+      const requiresPageBoundary =
+        shouldRequirePageBoundary(currentSection, nextSection) || hasIntrinsicBoundarySignals(nextSection);
+      const extraAttrs = requiresPageBoundary ? { requirePageBoundary: true } : undefined;
+      const sectionBreak = createSectionBreakBlock(nextSection, nextBlockId, extraAttrs);
+      blocks.push(sectionBreak);
+      recordBlockKind(sectionBreak.kind);
+      sectionState.currentSectionIndex++;
+    }
+  }
+
+  const { getListCounter, incrementListCounter, resetListCounter } = listCounterContext;
+  const paragraphToFlowBlocks = converters?.paragraphToFlowBlocks;
+  if (!paragraphToFlowBlocks) {
+    return;
+  }
+
+  const paragraphBlocks = paragraphToFlowBlocks(
+    node,
+    nextBlockId,
+    positions,
+    defaultFont,
+    defaultSize,
+    styleContext,
+    { getListCounter, incrementListCounter, resetListCounter },
+    trackedChangesConfig,
+    bookmarks,
+    hyperlinkConfig,
+    context.converterContext,
+  );
+  paragraphBlocks.forEach((block) => {
+    blocks.push(block);
+    recordBlockKind(block.kind);
+  });
+
+  sectionState.currentParagraphIndex++;
+}
