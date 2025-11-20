@@ -187,15 +187,24 @@ export const Image = Node.create({
 
       extension: { rendered: false },
 
+      shouldStretch: {
+        default: false,
+        rendered: false,
+      },
+
       size: {
         default: {},
-        renderDOM: ({ size, extension }) => {
+        renderDOM: ({ size, extension, shouldStretch }) => {
           let style = '';
           let { width, height } = size ?? {};
           if (width) style += `width: ${width}px;`;
           if (height && ['emf', 'wmf'].includes(extension))
             style += `height: ${height}px; border: 1px solid black; position: absolute;`;
-          else if (height) style += 'height: auto;';
+          else if (height && shouldStretch) {
+            // When shouldStretch is true (from <a:stretch><a:fillRect/>),
+            // stretch the image to fill both dimensions without preserving aspect ratio
+            style += `height: ${height}px; object-fit: fill;`;
+          } else if (height) style += 'height: auto;';
           return { style };
         },
       },
@@ -432,6 +441,20 @@ export const Image = Node.create({
           } else if (anchorData.alignH === 'left') {
             if (!style.includes('float: left;')) {
               style += 'float: left;';
+            }
+          } else if (!anchorData.alignH && marginOffset?.horizontal != null) {
+            // When positioned relative to column with a posOffset (not alignment),
+            // and the element is absolutely positioned (e.g., wrap type 'None'),
+            // we need to use 'left' positioning to allow negative offsets
+            // This handles cases like full-width images that extend into margins
+            const isAbsolutelyPositioned = style.includes('position: absolute;');
+            if (isAbsolutelyPositioned) {
+              // Don't apply horizontal offset via margins - will use 'left' instead
+              // Set a flag to apply the offset directly as 'left' property
+              style += `left: ${baseHorizontal}px;`;
+              // Override max-width: 100% to allow image to extend beyond container into margins
+              style += 'max-width: none;';
+              baseHorizontal = 0; // Reset to prevent double-application
             }
           }
           break;

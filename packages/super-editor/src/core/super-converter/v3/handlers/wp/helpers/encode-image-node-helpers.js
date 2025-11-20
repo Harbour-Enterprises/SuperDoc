@@ -173,6 +173,11 @@ export function handleImageNode(node, params, isAnchor) {
   const blip = blipFill?.elements.find((el) => el.name === 'a:blip');
   if (!blip) return null;
 
+  // Check for stretch fill mode
+  const stretch = blipFill?.elements.find((el) => el.name === 'a:stretch');
+  const fillRect = stretch?.elements.find((el) => el.name === 'a:fillRect');
+  const shouldStretch = Boolean(stretch && fillRect);
+
   const spPr = picture.elements.find((el) => el.name === 'pic:spPr');
   if (spPr) {
     const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
@@ -237,6 +242,7 @@ export function handleImageNode(node, params, isAnchor) {
           }
         : {}),
       wrapTopAndBottom: wrap.type === 'TopAndBottom',
+      shouldStretch,
       originalPadding: {
         distT: attributes['distT'],
         distB: attributes['distB'],
