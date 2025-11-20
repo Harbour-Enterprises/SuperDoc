@@ -17,15 +17,32 @@ export type CustomMimeType = `${string}/${string}`;
 export type MimeType = KnownMimeType | (CustomMimeType & { readonly __custom?: never });
 
 /**
+ * V8-specific Error constructor with captureStackTrace
+ */
+interface V8ErrorConstructor extends ErrorConstructor {
+  captureStackTrace(targetObject: object, constructorOpt?: new (...args: unknown[]) => unknown): void;
+}
+
+/**
+ * Type guard to check if Error constructor has V8's captureStackTrace
+ */
+function hasV8CaptureStackTrace(error: ErrorConstructor): error is V8ErrorConstructor {
+  return typeof (error as V8ErrorConstructor).captureStackTrace === 'function';
+}
+
+/**
  * Base error class for file object operations
  */
 export class FileObjectError extends Error {
-  constructor(message: string, public readonly cause?: unknown) {
+  constructor(
+    message: string,
+    public readonly cause?: unknown,
+  ) {
     super(message);
     this.name = 'FileObjectError';
     // Maintains proper stack trace for where error was thrown (only available on V8)
-    if (typeof (Error as any).captureStackTrace === 'function') {
-      (Error as any).captureStackTrace(this, FileObjectError);
+    if (hasV8CaptureStackTrace(Error)) {
+      Error.captureStackTrace(this, FileObjectError);
     }
   }
 }
@@ -44,7 +61,10 @@ export class InvalidDataUriError extends FileObjectError {
  * Error thrown when network fetch fails
  */
 export class FetchFailedError extends FileObjectError {
-  constructor(public readonly url: string, cause: unknown) {
+  constructor(
+    public readonly url: string,
+    cause: unknown,
+  ) {
     super(`Failed to fetch file from URL: ${url}`, cause);
     this.name = 'FetchFailedError';
   }
@@ -61,11 +81,7 @@ export class FetchFailedError extends FileObjectError {
  * @throws {FetchFailedError} If network request fails
  * @throws {FileObjectError} For other file creation errors
  */
-export const getFileObject = async (
-  fileUrl: string,
-  name: string,
-  type: MimeType
-): Promise<File> => {
+export const getFileObject = async (fileUrl: string, name: string, type: MimeType): Promise<File> => {
   try {
     // Handle base64 data URIs without fetch (CSP-safe)
     if (fileUrl.startsWith('data:') && fileUrl.includes(';base64,')) {

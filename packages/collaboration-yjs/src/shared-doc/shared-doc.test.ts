@@ -43,36 +43,47 @@ const createDebouncerMock = vi.fn((wait: number, maxWait: number) => {
   return debounced;
 });
 
-const parseIntMock = vi.fn((value) => Number.parseInt(value, 10));
+const parseIntMock = vi.fn((value: string) => Number.parseInt(value, 10));
 
-const createEncoderMock = vi.fn(() => ({ chunks: [] }));
-const writeVarUintMock = vi.fn((encoder, value) => {
+interface MockEncoder {
+  chunks: Array<{ type: string; value?: unknown }>;
+}
+
+const createEncoderMock = vi.fn((): MockEncoder => ({ chunks: [] }));
+const writeVarUintMock = vi.fn((encoder: MockEncoder, value: unknown) => {
   encoder.chunks.push({ type: 'varUint', value });
 });
-const writeVarUint8ArrayMock = vi.fn((encoder, value) => {
+const writeVarUint8ArrayMock = vi.fn((encoder: MockEncoder, value: unknown) => {
   encoder.chunks.push({ type: 'varUint8Array', value });
 });
-const toUint8ArrayMock = vi.fn((encoder) => encoder.chunks);
-const encodingLengthMock = vi.fn((encoder) => encoder.chunks.length);
+const toUint8ArrayMock = vi.fn((encoder: MockEncoder) => encoder.chunks);
+const encodingLengthMock = vi.fn((encoder: MockEncoder) => encoder.chunks.length);
 
-const createDecoderMock = vi.fn((message) => ({
-  data: Array.from(message),
-  index: 0,
-}));
-const readVarUintMock = vi.fn((decoder) => decoder.data[decoder.index++]);
-const readVarUint8ArrayMock = vi.fn((decoder) => decoder.data[decoder.index++]);
+interface MockDecoder {
+  data: unknown[];
+  index: number;
+}
+
+const createDecoderMock = vi.fn(
+  (message: Uint8Array): MockDecoder => ({
+    data: Array.from(message),
+    index: 0,
+  })
+);
+const readVarUintMock = vi.fn((decoder: MockDecoder) => decoder.data[decoder.index++]);
+const readVarUint8ArrayMock = vi.fn((decoder: MockDecoder) => decoder.data[decoder.index++]);
 
 let readSyncBehavior = 'write';
-const writeUpdateMock = vi.fn((encoder, update) => {
+const writeUpdateMock = vi.fn((encoder: MockEncoder, update: unknown) => {
   encoder.chunks.push({ type: 'update', value: update });
 });
-const writeSyncStep1Mock = vi.fn((encoder, _doc) => {
+const writeSyncStep1Mock = vi.fn((encoder: MockEncoder, _doc: unknown) => {
   encoder.chunks.push({ type: 'syncStep1' });
 });
-const writeSyncStep2Mock = vi.fn((encoder, _doc) => {
+const writeSyncStep2Mock = vi.fn((encoder: MockEncoder, _doc: unknown) => {
   encoder.chunks.push({ type: 'syncStep2' });
 });
-const readSyncMessageMock = vi.fn((decoder, encoder, _doc, _conn) => {
+const readSyncMessageMock = vi.fn((decoder: MockDecoder, encoder: MockEncoder, _doc: unknown, _conn: unknown) => {
   if (readSyncBehavior === 'throw') {
     throw new Error('sync failure');
   }
@@ -325,8 +336,12 @@ describe('callback handler', () => {
     );
     vi.stubEnv('CALLBACK_TIMEOUT', '8000');
 
-    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {
+      /* intentionally empty for testing - suppress console output */
+    });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {
+      /* intentionally empty for testing - suppress console output */
+    });
 
     const { isCallbackSet, callbackHandler } = await import('../shared-doc/callback.js');
     expect(isCallbackSet).toBe(true);
@@ -382,7 +397,9 @@ describe('callback handler', () => {
       })
     );
 
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {
+      /* intentionally empty for testing - suppress console output */
+    });
     const { callbackHandler } = await import('../shared-doc/callback.js');
 
     expect(() =>
@@ -451,7 +468,7 @@ describe('SharedSuperDoc', () => {
     const doc = new SharedSuperDoc('with-callback');
     const update = new Uint8Array([1]);
 
-    doc.emit('update' as any, [update, null, doc] as any);
+    doc.emit('update' as const, [update, null, doc] as [Uint8Array, null, FakeDoc]);
     expect(debouncerStub).toHaveBeenCalledTimes(1);
     expect(callbackHandlerMock).toHaveBeenCalledWith(doc);
   });
@@ -532,7 +549,9 @@ describe('SharedSuperDoc', () => {
   it('messageListener logs unknown message types', async () => {
     const sharedDocModule = await loadSharedDocModule();
     const { SharedSuperDoc, setupConnection } = sharedDocModule;
-    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const consoleWarn = vi.spyOn(console, 'warn').mockImplementation(() => {
+      /* intentionally empty for testing - suppress console output */
+    });
 
     const doc = new SharedSuperDoc('demo');
     const conn = createSocket();
@@ -552,11 +571,13 @@ describe('SharedSuperDoc', () => {
   it('messageListener captures errors and emits on doc', async () => {
     const sharedDocModule = await loadSharedDocModule();
     const { SharedSuperDoc, setupConnection } = sharedDocModule;
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {
+      /* intentionally empty for testing - suppress console output */
+    });
 
     const doc = new SharedSuperDoc('demo');
     const errorListener = vi.fn();
-    doc.on('error' as any, errorListener);
+    doc.on('error' as const, errorListener);
 
     const conn = createSocket();
     setupConnection(conn, doc);
@@ -585,7 +606,7 @@ describe('SharedSuperDoc', () => {
     doc.conns.set(connB, new Set());
 
     const update = new Uint8Array([7, 8]);
-    doc.emit('update' as any, [update, null, doc] as any);
+    doc.emit('update' as const, [update, null, doc] as [Uint8Array, null, FakeDoc]);
 
     expect(writeVarUintMock).toHaveBeenCalledWith(expect.any(Object), 0);
     expect(writeUpdateMock).toHaveBeenCalledWith(expect.any(Object), update);

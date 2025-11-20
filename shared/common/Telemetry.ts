@@ -17,7 +17,7 @@ export const TelemetryEventNames = {
 /**
  * Known telemetry event names (provides autocomplete)
  */
-export type KnownTelemetryEvent = typeof TelemetryEventNames[keyof typeof TelemetryEventNames];
+export type KnownTelemetryEvent = (typeof TelemetryEventNames)[keyof typeof TelemetryEventNames];
 
 /**
  * Custom telemetry event name - use for application-specific events
@@ -290,21 +290,12 @@ export class Telemetry {
    * @param data - Statistic data without category
    * @deprecated Use the single-parameter overload with discriminated union instead
    */
-  trackStatistic(
-    category: 'node',
-    data: Omit<Extract<StatisticData, { category: 'node' }>, 'category'>
-  ): void;
-  trackStatistic(
-    category: 'unknown',
-    data: Omit<Extract<StatisticData, { category: 'unknown' }>, 'category'>
-  ): void;
-  trackStatistic(
-    category: 'error',
-    data: Omit<Extract<StatisticData, { category: 'error' }>, 'category'>
-  ): void;
+  trackStatistic(category: 'node', data: Omit<Extract<StatisticData, { category: 'node' }>, 'category'>): void;
+  trackStatistic(category: 'unknown', data: Omit<Extract<StatisticData, { category: 'unknown' }>, 'category'>): void;
+  trackStatistic(category: 'error', data: Omit<Extract<StatisticData, { category: 'error' }>, 'category'>): void;
   trackStatistic(
     categoryOrData: StatisticCategory | StatisticData,
-    legacyData?: Omit<StatisticData, 'category'>
+    legacyData?: Omit<StatisticData, 'category'>,
   ): void {
     // Normalize to new API format
     let data: StatisticData;
@@ -384,7 +375,7 @@ export class Telemetry {
     fileSource: File,
     documentId?: string,
     documentIdentifier?: string,
-    internalId?: string
+    internalId?: string,
   ): Promise<void> {
     this.fileStructure = structure;
     this.documentInfo = await this.processDocument(fileSource, {
@@ -402,7 +393,7 @@ export class Telemetry {
    */
   async processDocument(
     file: File | null,
-    options: { guid?: string; identifier?: string; internalId?: string } = {}
+    options: { guid?: string; identifier?: string; internalId?: string } = {},
   ): Promise<DocumentInfo | null> {
     if (!file) {
       console.warn('Telemetry: missing file source');

@@ -1,12 +1,12 @@
 // packages/superdoc/src/components/PdfViewer/PdfViewer.vue
 const PDF_VIEWER_CLASS = '.superdoc-pdf-viewer';
 
-module.exports = {
+export default {
   plugins: [
-    require('postcss-nested'),
+    (await import('postcss-nested')).default,
     // https://github.com/dbtedman/postcss-prefixwrap
     // This is necessary for pdf.js style scoping.
-    require('postcss-prefixwrap')(PDF_VIEWER_CLASS, {
+    (await import('postcss-prefixwrap')).default(PDF_VIEWER_CLASS, {
       whitelist: ['pdf-viewer.css'],
       ignoredSelectors: [],
       prefixRootTags: false,

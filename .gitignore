@@ -48,11 +48,16 @@ coverage/
 **/coverage
 **/coverage/
 
-# TypeScript generated declaration files in source (build artifacts)
+# TypeScript build artifacts in source directories
+# Compiled files should only exist in dist/, not src/
 **/src/**/*.d.ts
 **/src/**/*.d.ts.map
-# But allow hand-written .d.ts files within packages
+**/src/**/*.js
+**/src/**/*.js.map
+# But allow hand-written .d.ts files at the package src root only
 !packages/**/src/*.d.ts
+# Note: Most packages use TypeScript, so .js files in src/ are build artifacts.
+# If a package has legitimate .js source files, add an exception here.
 
 # TypeScript build info files
 *.tsbuildinfo
@@ -62,3 +67,6 @@ coverage/
 
 AGENTS.md
 codex.config.json
+perf-baseline-results.json
+.claude
+perf-baseline-results.json
