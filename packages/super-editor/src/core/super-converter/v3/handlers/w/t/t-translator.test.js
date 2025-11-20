@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { config, translator } from './t-translator.js';
 import { NodeTranslator } from '@translator';
-import { getTextNodeForExport } from '@converter/exporter.js';
+import { getTextNodeForExport } from '@converter/v3/handlers/w/t/helpers/translate-text-node.js';
 import { translator as wDelTranslator } from '@converter/v3/handlers/w/del/index.js';
 import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins/index.js';
 import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/index.js';
 
 // Mocks
-vi.mock('@converter/exporter.js', () => ({
+vi.mock('@converter/v3/handlers/w/t/helpers/translate-text-node.js', () => ({
   getTextNodeForExport: vi.fn(),
 }));
 
