@@ -1,6 +1,7 @@
 // @ts-check
 import { updateNumberingProperties } from './changeListLevel.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 
 export const toggleList =
   (listType) =>
@@ -8,11 +9,19 @@ export const toggleList =
     // 1. Find first paragraph in selection that is a list of the same type
     let predicate;
     if (listType === 'orderedList') {
-      predicate = (n) =>
-        n.attrs.numberingProperties && n.attrs.listRendering && n.attrs.listRendering.numberingType !== 'bullet';
+      predicate = (n) => {
+        const paraProps = getResolvedParagraphProperties(n);
+        return (
+          paraProps.numberingProperties && n.attrs.listRendering && n.attrs.listRendering.numberingType !== 'bullet'
+        );
+      };
     } else if (listType === 'bulletList') {
-      predicate = (n) =>
-        n.attrs.numberingProperties && n.attrs.listRendering && n.attrs.listRendering.numberingType === 'bullet';
+      predicate = (n) => {
+        const paraProps = getResolvedParagraphProperties(n);
+        return (
+          paraProps.numberingProperties && n.attrs.listRendering && n.attrs.listRendering.numberingType === 'bullet'
+        );
+      };
     } else {
       return false;
     }
@@ -54,7 +63,8 @@ export const toggleList =
       } else {
         // Apply numbering properties to new list paragraphs while keeping existing list items untouched
         mode = 'reuse';
-        const baseNumbering = firstListNode.attrs.numberingProperties || {};
+        const paraProps = getResolvedParagraphProperties(firstListNode);
+        const baseNumbering = paraProps.numberingProperties || {};
         sharedNumberingProperties = {
           ...baseNumbering,
           ilvl: baseNumbering.ilvl ?? 0,
