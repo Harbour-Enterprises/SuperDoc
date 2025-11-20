@@ -111,7 +111,7 @@ test.describe('performance', () => {
       expect(duration).toBeLessThan(4_000);
     });
 
-    test('should load a very large sized document in less than 10s', async ({ page }) => {
+    test('should load a very large sized document in less than 7s', async ({ page }) => {
       test.setTimeout(30_000);
 
       const baseDocumentPath = `./test-data/performance-documents/600-pages.docx`;
@@ -144,7 +144,7 @@ test.describe('performance', () => {
       // Wait for the superdocReady callback to be called
       await superdocReadyPromise;
 
-      expect(duration).toBeLessThan(10_000);
+      expect(duration).toBeLessThan(7_000);
     });
     test('should load 3MB document.docx in less than 4s', async ({ page }) => {
       test.setTimeout(30_000);
