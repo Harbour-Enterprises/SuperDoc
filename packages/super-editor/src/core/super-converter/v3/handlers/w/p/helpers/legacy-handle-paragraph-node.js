@@ -21,8 +21,7 @@ export const handleParagraphNode = (params) => {
   }
 
   // Resolve paragraph properties according to styles hierarchy
-  const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
-  const resolvedParagraphProperties = resolveParagraphProperties(params, inlineParagraphProperties, insideTable);
+  const resolvedParagraphProperties = resolveParagraphProperties(params, inlineParagraphProperties);
 
   // If it is a standard paragraph node, process normally
   const handleStandardNode = nodeListHandler.handlerEntities.find(

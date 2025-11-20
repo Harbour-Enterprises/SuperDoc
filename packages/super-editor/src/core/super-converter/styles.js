@@ -76,11 +76,10 @@ export const resolveRunProperties = (
  * Gets the resolved paragraph properties by merging defaults, styles, and inline properties.
  * @param {import('@translator').SCEncoderConfig} params
  * @param {Object} inlineProps - The inline paragraph properties.
- * @param {boolean} [insideTable=false] - Whether the paragraph is inside a table.
  * @param {boolean} [overrideInlineStyleId=false] - Whether to override the inline style ID with the one from numbering.
  * @returns {Object} The resolved paragraph properties.
  */
-export function resolveParagraphProperties(params, inlineProps, insideTable = false, overrideInlineStyleId = false) {
+export function resolveParagraphProperties(params, inlineProps, overrideInlineStyleId = false) {
   const defaultProps = getDefaultProperties(params, w_pPrTranslator);
   const { properties: normalProps, isDefault: isNormalDefault } = getStyleProperties(params, 'Normal', w_pPrTranslator);
 
@@ -156,12 +155,6 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
     },
   );
   finalProps.indent = finalIndent.indent;
-
-  if (insideTable && !inlineProps?.spacing && !styleProps.spacing) {
-    // Word ignores doc-default spacing inside table cells unless explicitly set,
-    // so drop the derived values when nothing is defined inline or via style.
-    finalProps.spacing = undefined;
-  }
 
   return finalProps;
 }
@@ -607,7 +600,7 @@ export function encodeCSSFromRPr(runProperties, docx) {
   if (highlightColor) {
     css['background-color'] = highlightColor;
     if (!('color' in css)) {
-      // @ts-ignore
+      // @ts-expect-error - CSS object allows string indexing
       css['color'] = 'inherit';
     }
   }

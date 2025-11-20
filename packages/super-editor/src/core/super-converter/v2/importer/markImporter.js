@@ -13,11 +13,6 @@ export function parseMarks(property, unknownMarks = [], docx = null) {
   const marks = [];
   const seen = new Set();
 
-  const lang = property?.elements?.find((el) => el.name === 'w:lang');
-
-  // eslint-disable-next-line no-unused-vars
-  const langAttrs = lang?.attributes || {};
-
   property?.elements?.forEach((element) => {
     const marksForType = SuperConverter.markTypes.filter((mark) => mark.name === element.name);
     if (!marksForType.length) {

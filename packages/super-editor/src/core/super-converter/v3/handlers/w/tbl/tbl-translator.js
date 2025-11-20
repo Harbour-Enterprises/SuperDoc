@@ -50,7 +50,7 @@ const encode = (params, encodedAttrs) => {
     /** @type {(v: any) => any | null} */
     let transform;
     if (Array.isArray(prop)) {
-      // @ts-ignore
+      // @ts-expect-error - Array destructuring with mixed tuple types (string and transform function)
       [key, transform] = prop;
     } else {
       key = prop;
@@ -193,7 +193,7 @@ const encode = (params, encodedAttrs) => {
  * @returns {import('@translator').SCDecoderResult}
  */
 const decode = (params, decodedAttrs) => {
-  // @ts-ignore - helper expects ProseMirror table shape
+  // @ts-expect-error - preProcessVerticalMergeCells expects ProseMirror table shape, but receives SuperDoc node
   params.node = preProcessVerticalMergeCells(params.node, params);
   const { node } = params;
   const elements = translateChildNodes(params);

@@ -120,7 +120,6 @@ function decode(params) {
     } else {
       linkNode.attrs.marksAsAttrs = linkNode.attrs.marksAsAttrs.filter((m) => m.type !== 'link');
     }
-    // @ts-ignore
     const outputNode = exportSchemaToJson({ ...params, node: linkNode });
     if (outputNode) {
       if (outputNode instanceof Array) contentNodes.push(...outputNode);
