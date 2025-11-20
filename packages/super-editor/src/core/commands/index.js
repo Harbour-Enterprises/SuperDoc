@@ -37,6 +37,8 @@ export * from './undoInputRule.js';
 
 // Paragraph
 export * from './textIndent.js';
+export * from './lineHeight.js';
+
 // Lists
 export * from './toggleList.js';
 export * from './increaseListIndent.js';
