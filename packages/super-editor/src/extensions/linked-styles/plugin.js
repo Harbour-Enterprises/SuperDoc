@@ -2,6 +2,10 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { generateLinkedStyleString, getLinkedStyle, stepInsertsTextIntoStyledParagraph } from './helpers.js';
+import {
+  calculateResolvedParagraphProperties,
+  getResolvedParagraphProperties,
+} from '@extensions/paragraph/resolvedPropertiesCache.js';
 
 /**
  * Plugin key for accessing linked styles state
@@ -57,9 +61,16 @@ export const createLinkedStylesPlugin = (editor) => {
 
           tr.steps.forEach((step, index) => {
             if (step.slice) {
-              step.slice.content.descendants((node) => {
-                if (node.attrs?.styleId) {
-                  mightAffectStyles = true;
+              step.slice.content.descendants((node, pos) => {
+                if (node.type.name === 'paragraph') {
+                  const paragraphProps = calculateResolvedParagraphProperties(
+                    editor,
+                    node,
+                    newEditorState.doc.resolve(pos),
+                  );
+                  if (paragraphProps.styleId) {
+                    mightAffectStyles = true;
+                  }
                   return false;
                 }
                 // Check if any marks are style-related
@@ -130,7 +141,10 @@ const generateDecorations = (state, styles) => {
     const $pos = state.doc.resolve(pos);
     for (let d = $pos.depth; d >= 0; d--) {
       const n = $pos.node(d);
-      if (n?.type?.name === 'paragraph') return n.attrs?.styleId || null;
+      if (n?.type?.name === 'paragraph') {
+        const paragraphProps = getResolvedParagraphProperties(n);
+        return paragraphProps.styleId || null;
+      }
     }
     return null;
   };

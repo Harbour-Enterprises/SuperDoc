@@ -214,48 +214,21 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
 
     // Check if this node has the expected mark. If yes, we are not overriding it
     const mark = flattenedMarks.find((n) => n.key === key);
-    const hasParentIndent = Object.keys(parent?.attrs?.indent || {});
-    const hasParentSpacing = Object.keys(parent?.attrs?.spacing || {});
-
-    const listTypes = ['orderedList', 'listItem'];
 
     // If no mark already in the node, we override the style
     if (!mark) {
-      if (key === 'spacing' && includeSpacing && !hasParentSpacing) {
-        const space = getSpacingStyle(value);
-        Object.entries(space).forEach(([k, v]) => {
-          markValue[k] = v;
-        });
-      } else if (key === 'indent' && includeSpacing && !hasParentIndent) {
-        const { leftIndent, rightIndent, firstLine } = value;
-
-        if (leftIndent) markValue['margin-left'] = leftIndent + 'px';
-        if (rightIndent) markValue['margin-right'] = rightIndent + 'px';
-        if (firstLine) markValue['text-indent'] = firstLine + 'px';
-      } else if (key === 'bold' && node) {
+      if (key === 'bold' && node) {
         const boldValue = typeof value === 'object' && value !== null ? value.value : value;
         const hasInlineBoldOff = node.marks?.some((m) => m.type?.name === 'bold' && m.attrs?.value === '0');
         const hasInlineBoldOn = node.marks?.some((m) => m.type?.name === 'bold' && m.attrs?.value !== '0');
-        if (
-          !listTypes.includes(node.type.name) &&
-          !hasInlineBoldOff &&
-          !hasInlineBoldOn &&
-          boldValue !== '0' &&
-          boldValue !== false
-        ) {
+        if (!hasInlineBoldOff && !hasInlineBoldOn && boldValue !== '0' && boldValue !== false) {
           markValue['font-weight'] = 'bold';
         }
       } else if (key === 'italic' && node) {
         const italicValue = typeof value === 'object' && value !== null ? value.value : value;
         const hasInlineItalicOff = node.marks?.some((m) => m.type?.name === 'italic' && m.attrs?.value === '0');
         const hasInlineItalicOn = node.marks?.some((m) => m.type?.name === 'italic' && m.attrs?.value !== '0');
-        if (
-          !listTypes.includes(node.type.name) &&
-          !hasInlineItalicOff &&
-          !hasInlineItalicOn &&
-          italicValue !== '0' &&
-          italicValue !== false
-        ) {
+        if (!hasInlineItalicOff && !hasInlineItalicOn && italicValue !== '0' && italicValue !== false) {
           markValue['font-style'] = 'italic';
         }
       } else if (key === 'strike' && node) {
@@ -264,34 +237,20 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
         const hasInlineStrikeOn = node.marks?.some(
           (m) => m.type?.name === 'strike' && (m.attrs?.value === undefined || m.attrs?.value !== '0'),
         );
-        if (
-          !listTypes.includes(node.type.name) &&
-          !hasInlineStrikeOff &&
-          !hasInlineStrikeOn &&
-          strikeValue !== '0' &&
-          strikeValue !== false
-        ) {
+        if (!hasInlineStrikeOff && !hasInlineStrikeOn && strikeValue !== '0' && strikeValue !== false) {
           markValue['text-decoration'] = 'line-through';
         }
       } else if (key === 'text-transform' && node) {
-        if (!listTypes.includes(node.type.name)) {
-          markValue[key] = value;
-        }
+        markValue[key] = value;
       } else if (key === 'font-size' && node) {
-        if (!listTypes.includes(node.type.name)) {
-          markValue[key] = value;
-        }
+        markValue[key] = value;
       } else if (key === 'font-family' && node) {
-        if (!listTypes.includes(node.type.name)) {
-          markValue[key] = value;
-        }
+        markValue[key] = value;
       } else if (key === 'color' && node) {
-        if (!listTypes.includes(node.type.name)) {
-          markValue[key] = value;
-        }
+        markValue[key] = value;
       } else if (key === 'highlight' && node) {
         const hasInlineHighlight = node.marks?.some((m) => m.type?.name === 'highlight');
-        if (!listTypes.includes(node.type.name) && !hasInlineHighlight) {
+        if (!hasInlineHighlight) {
           const color = typeof value === 'string' ? value : value?.color;
           if (color) markValue['background-color'] = color;
         }
@@ -304,7 +263,7 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
         const hasInlineUnderlineOn = node.marks?.some(
           (m) => m.type?.name === 'underline' && m.attrs?.underlineType && m.attrs.underlineType !== 'none',
         );
-        if (!listTypes.includes(node.type.name) && !hasInlineUnderlineOff && !hasInlineUnderlineOn) {
+        if (!hasInlineUnderlineOff && !hasInlineUnderlineOn) {
           if (styleVal && styleVal !== 'none' && styleVal !== '0') {
             const colorVal = value && typeof value === 'object' ? value.color || value.underlineColor || null : null;
             const css = getUnderlineCssString({ type: styleVal, color: colorVal });
@@ -365,20 +324,14 @@ export const applyLinkedStyleToTransaction = (tr, editor, style) => {
   const { from, to } = selection;
 
   // Function to get clean paragraph attributes (strips existing styles)
-  const getCleanParagraphAttrs = (node) => {
-    const cleanAttrs = {};
-    const preservedAttrs = ['id', 'class'];
-
-    preservedAttrs.forEach((attr) => {
-      if (node.attrs[attr] !== undefined) {
-        cleanAttrs[attr] = node.attrs[attr];
-      }
-    });
-
-    // Apply the new style
-    cleanAttrs.styleId = style.id;
-
-    return cleanAttrs;
+  const getUpdatedParagraphAttrs = (node) => {
+    return {
+      ...node.attrs,
+      paragraphProperties: {
+        ...(node.attrs.paragraphProperties || {}),
+        styleId: style.id,
+      },
+    };
   };
 
   // Function to clear formatting marks from text content
@@ -421,8 +374,8 @@ export const applyLinkedStyleToTransaction = (tr, editor, style) => {
     // Clear formatting marks within the paragraph
     clearFormattingMarks(pos + 1, pos + paragraphNode.nodeSize - 1);
 
-    // Apply clean paragraph attributes
-    tr.setNodeMarkup(pos, undefined, getCleanParagraphAttrs(paragraphNode));
+    // Update paragraph attributes
+    tr.setNodeMarkup(pos, undefined, getUpdatedParagraphAttrs(paragraphNode));
     return true;
   }
 
@@ -442,7 +395,7 @@ export const applyLinkedStyleToTransaction = (tr, editor, style) => {
     clearFormattingMarks(pos + 1, pos + node.nodeSize - 1);
 
     // Apply clean paragraph attributes
-    tr.setNodeMarkup(pos, undefined, getCleanParagraphAttrs(node));
+    tr.setNodeMarkup(pos, undefined, getUpdatedParagraphAttrs(node));
   });
 
   return true;
@@ -472,7 +425,7 @@ export const stepInsertsTextIntoStyledParagraph = (tr, oldEditorState, step, ste
   for (let depth = $pos.depth; depth >= 0; depth--) {
     const node = $pos.node(depth);
     if (node?.type?.name === 'paragraph') {
-      return Boolean(node.attrs?.styleId);
+      return Boolean(node.attrs?.paragraphProperties?.styleId);
     }
   }
   return false;
