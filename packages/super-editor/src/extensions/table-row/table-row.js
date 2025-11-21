@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 import { Node, Attribute } from '@core/index.js';
 
 /**

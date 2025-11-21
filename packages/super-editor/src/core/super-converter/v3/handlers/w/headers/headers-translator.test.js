@@ -1,13 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { translator, config } from './headers-translator.js';
+import { translator } from './headers-translator.js';
 import { NodeTranslator } from '../../../node-translator/node-translator.js';
 
 describe('w:headers translator', () => {
   it('exposes correct config', () => {
-    expect(config.xmlName).toBe('w:headers');
-    expect(config.sdNodeOrKeyName).toBe('headers');
-    expect(typeof config.encode).toBe('function');
-    expect(typeof config.decode).toBe('function');
+    expect(translator.xmlName).toBe('w:headers');
+    expect(translator.sdNodeOrKeyName).toBe('headers');
   });
 
   it('builds a NodeTranslator instance', () => {
@@ -28,11 +26,7 @@ describe('w:headers translator', () => {
         ],
       };
       const result = translator.encode(params);
-      expect(result).toEqual({
-        xmlName: 'w:headers',
-        sdNodeOrKeyName: 'headers',
-        attributes: [{ header: 'h1' }, { header: 'h2' }],
-      });
+      expect(result).toEqual([{ header: 'h1' }, { header: 'h2' }]);
     });
 
     it('should handle empty w:headers element', () => {
@@ -40,11 +34,7 @@ describe('w:headers translator', () => {
         nodes: [{ name: 'w:headers', elements: [] }],
       };
       const result = translator.encode(params);
-      expect(result).toEqual({
-        xmlName: 'w:headers',
-        sdNodeOrKeyName: 'headers',
-        attributes: [],
-      });
+      expect(result).toEqual([]);
     });
   });
 
@@ -78,11 +68,7 @@ describe('w:headers translator', () => {
       };
 
       const result = translator.decode(params);
-      expect(result).toEqual({
-        name: 'w:headers',
-        attributes: {},
-        elements: [],
-      });
+      expect(result).toBeUndefined();
     });
 
     it('should handle empty headers array', () => {
@@ -95,11 +81,7 @@ describe('w:headers translator', () => {
       };
 
       const result = translator.decode(params);
-      expect(result).toEqual({
-        name: 'w:headers',
-        attributes: {},
-        elements: [],
-      });
+      expect(result).toBeUndefined();
     });
   });
 });

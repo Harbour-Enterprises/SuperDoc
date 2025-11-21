@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { Schema, Slice, Fragment } from 'prosemirror-model';
 import {
   getLinkedStyle,
   getSpacingStyle,
@@ -6,6 +7,7 @@ import {
   getMarksStyle,
   getQuickFormatList,
   generateLinkedStyleString,
+  stepInsertsTextIntoStyledParagraph,
 } from './helpers.js';
 import { getUnderlineCssString } from './underline-css.js';
 
@@ -37,10 +39,10 @@ describe('getLinkedStyle', () => {
 });
 
 describe('spacing helpers', () => {
-  const spacing = { lineSpaceBefore: 12, lineSpaceAfter: 8, line: 24, lineRule: 'auto' };
+  const spacing = { before: 180, after: 120, line: 24, lineRule: 'auto' };
 
   it('getSpacingStyle returns CSS property map', () => {
-    const style = getSpacingStyle(spacing);
+    const style = getSpacingStyle({ lineSpaceBefore: 12, lineSpaceAfter: 8, line: 24, lineRule: 'auto' });
     expect(style['margin-top']).toBe('12px');
     expect(style['margin-bottom']).toBe('8px');
   });
@@ -218,5 +220,56 @@ describe('generateLinkedStyleString', () => {
     const css = generateLinkedStyleString(style, null, paragraphNode(), parentNode(), false);
     expect(css).not.toContain('margin-top');
     expect(css).not.toContain('text-indent');
+  });
+});
+
+describe('stepInsertsTextIntoStyledParagraph', () => {
+  const createSchema = () =>
+    new Schema({
+      nodes: {
+        doc: { content: 'paragraph+' },
+        paragraph: {
+          content: 'inline*',
+          group: 'block',
+          attrs: { styleId: { default: null } },
+        },
+        text: { group: 'inline' },
+      },
+      marks: {},
+    });
+
+  const createDoc = (schema, styleId) => {
+    const paragraph = schema.nodes.paragraph.create({ styleId }, schema.text('Existing text'));
+    return schema.nodes.doc.create(null, [paragraph]);
+  };
+
+  const createStep = (schema, text) => {
+    const fragment = typeof text === 'string' ? Fragment.from(schema.text(text)) : Fragment.empty;
+    const slice = new Slice(fragment, 0, 0);
+    return { slice, from: 1 };
+  };
+
+  it('returns true when text is inserted into a styled paragraph', () => {
+    const schema = createSchema();
+    const doc = createDoc(schema, 'Heading1');
+    const step = createStep(schema, 'a');
+    const result = stepInsertsTextIntoStyledParagraph({ docs: [doc] }, { doc }, step, 0);
+    expect(result).toBe(true);
+  });
+
+  it('returns false when paragraph has no styleId', () => {
+    const schema = createSchema();
+    const doc = createDoc(schema, null);
+    const step = createStep(schema, 'a');
+    const result = stepInsertsTextIntoStyledParagraph({ docs: [doc] }, { doc }, step, 0);
+    expect(result).toBe(false);
+  });
+
+  it('returns false when the inserted slice does not contain text', () => {
+    const schema = createSchema();
+    const doc = createDoc(schema, 'Heading1');
+    const step = createStep(schema, null);
+    const result = stepInsertsTextIntoStyledParagraph({ docs: [doc] }, { doc }, step, 0);
+    expect(result).toBe(false);
   });
 });

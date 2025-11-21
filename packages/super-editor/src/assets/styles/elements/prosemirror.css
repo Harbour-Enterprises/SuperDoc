@@ -165,7 +165,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 
   overflow-x: auto;
   scrollbar-width: thin;
-  overflow: hidden;
+  overflow: visible; /* Allow table to extend beyond margins */
 
   /*
   The border width does not need to be multiplied by two,
@@ -176,7 +176,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 .ProseMirror table {
   border-collapse: collapse;
   border-spacing: 0;
-  table-layout: fixed;
+  table-layout: auto;
   margin: 0;
   /* width: 100%; */
 }
@@ -187,7 +187,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 
 .ProseMirror td,
 .ProseMirror th {
-  min-width: 1em;
+  min-width: 0;
   position: relative;
   vertical-align: top;
   box-sizing: border-box;
@@ -257,8 +257,8 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   border-top: 1px dashed #cb0e47;
   border-bottom: 1px dashed #cb0e47;
   background-color: #cb0e4722;
-  text-decoration: line-through;
-  text-decoration-thickness: 2px;
+  text-decoration: line-through !important;
+  text-decoration-thickness: 2px !important;
 }
 
 .ProseMirror .track-format-dec.highlighted {
@@ -356,7 +356,8 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 .ProseMirror div[data-horizontal-rule='true'] {
   position: relative;
   z-index: auto;
-  display: block;
+  display: inline-block;
+  vertical-align: middle;
   margin-top: auto;
   align-self: flex-end;
 }
