@@ -3,7 +3,7 @@ import { goToPageAndWaitForEditor, sleep } from '../helpers.js';
 import { fileURLToPath } from 'url';
 import path from 'path';
 
-test.describe('comments', () => {
+test.describe('comments & tracked changes', () => {
   const __filename = fileURLToPath(import.meta.url);
   const testDataFolder = __filename.split('/tests/')[0] + '/test-data';
 
@@ -17,6 +17,34 @@ test.describe('comments', () => {
       author: 'Gabriel Chittolina (imported)',
       text: 'Hi again',
       date: new Date(1763038222000),
+    },
+  ];
+
+  const documentTrackedChanges = [
+    {
+      author: 'SuperDoc 8083 (imported)',
+      text: ['Added: ', 'such as this one'],
+      date: new Date(1763743800000),
+    },
+    {
+      author: 'SuperDoc 8083 (imported)',
+      text: ['Deleted: ', 'removed'],
+      date: new Date(1763743800000),
+    },
+    {
+      author: 'SuperDoc 8083 (imported)',
+      text: ['Added: ', 'switched', 'Deleted: ', 'replaced'],
+      date: new Date(1763743800000),
+    },
+    {
+      author: 'SuperDoc 8083 (imported)',
+      text: ['Deleted: ', 'rem'],
+      date: new Date(1763743800000),
+    },
+    {
+      author: 'SuperDoc 8083 (imported)',
+      text: ['Added: ', 'add'],
+      date: new Date(1763743800000),
     },
   ];
 
@@ -69,5 +97,51 @@ test.describe('comments', () => {
     expect(secondCommentAuthor).toBeVisible();
     expect(secondCommentText).toBeVisible();
     expect(secondCommentDate).toBeVisible();
+  });
+
+  test('should import all tracked changes', async ({ page }) => {
+    await goToPageAndWaitForEditor(page, { includeComments: true });
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles(path.join(testDataFolder, 'comments-documents/tracked-changes.docx'));
+
+    await page.waitForFunction(() => window.superdoc !== undefined && window.editor !== undefined, null, {
+      polling: 100,
+      timeout: 10_000,
+    });
+
+    await sleep(1000);
+
+    const trackedChanges = page.getByRole('dialog').filter({ hasText: 'SuperDoc 8083 (imported)', visible: true });
+    const trackedChangeCount = await trackedChanges.count();
+    expect(trackedChangeCount).toBe(5);
+  });
+
+  test('should have correct tracked change text', async ({ page }) => {
+    await goToPageAndWaitForEditor(page, { includeComments: true });
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles(path.join(testDataFolder, 'comments-documents/tracked-changes.docx'));
+
+    await page.waitForFunction(() => window.superdoc !== undefined && window.editor !== undefined, null, {
+      polling: 100,
+      timeout: 10_000,
+    });
+
+    await sleep(1000);
+
+    const trackedChanges = page.getByRole('dialog').filter({ hasText: 'SuperDoc 8083 (imported)', visible: true });
+    const trackedChangeCount = await trackedChanges.count();
+
+    for (let i = 0; i < trackedChangeCount; i++) {
+      const trackedChange = await trackedChanges.nth(i);
+      for (let j = 0; j < documentTrackedChanges[i].text.length; j++) {
+        console.log(documentTrackedChanges[i].text[j]);
+        const trackedChangeText = await trackedChange.getByText(documentTrackedChanges[i].text[j], { exact: true });
+        expect(trackedChangeText).toBeVisible();
+      }
+      const trackedChangeDate = await trackedChange.getByText(formatDate(documentTrackedChanges[i].date));
+      expect(trackedChangeDate).toBeVisible();
+    }
   });
 });
