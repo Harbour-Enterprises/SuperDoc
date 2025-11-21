@@ -7,7 +7,17 @@ test.describe('regex search', () => {
     const fileInput = page.locator('input[type="file"]');
     await fileInput.setInputFiles('./test-data/search-documents/regex-search.docx');
 
-    await page.waitForFunction(() => window.editor?.commands?.search, null, { polling: 100, timeout: 10_000 });
+    await page.waitForFunction(
+      () => {
+        try {
+          return Boolean(window.editor?.commands?.search);
+        } catch (err) {
+          return false;
+        }
+      },
+      null,
+      { polling: 100, timeout: 10_000 },
+    );
 
     const { baselineMatch, matches } = await page.evaluate(() => {
       const editor = window.editor;
