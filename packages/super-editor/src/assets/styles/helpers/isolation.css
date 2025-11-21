@@ -9,6 +9,8 @@
 .sd-editor-scoped :where(*:not(svg):not(svg *)::after) {
   all: revert;
   box-sizing: border-box;
+  /* "revert: all" makes the "contenteditable" not editable on Safari devices. So we need to keep this. */
+  -webkit-user-modify: read-write-plaintext-only;
 }
 
 /* Ensure SVG display properties for proper rendering */
