@@ -1,6 +1,5 @@
 import { Node, Attribute } from '@core/index';
 import { StructuredContentInlineView } from './StructuredContentInlineView';
-import * as TagUtils from './structuredContentHelpers/tagUtils.js';
 export const structuredContentClass = 'sd-structured-content';
 export const structuredContentInnerClass = 'sd-structured-content__content';
 
@@ -87,12 +86,6 @@ export const StructuredContent = Node.create({
       sdtPr: {
         rendered: false,
       },
-    };
-  },
-
-  addHelpers() {
-    return {
-      ...TagUtils,
     };
   },
 

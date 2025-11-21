@@ -7,6 +7,7 @@ import { getStructuredContentTagsById } from './structuredContentHelpers/getStru
 import { getStructuredContentByGroup } from './structuredContentHelpers/getStructuredContentByGroup';
 import { createTagObject } from './structuredContentHelpers/tagUtils';
 import * as structuredContentHelpers from './structuredContentHelpers/index';
+import * as TagUtils from './structuredContentHelpers/tagUtils.js';
 
 const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock'];
 
@@ -499,6 +500,7 @@ export const StructuredContentCommands = Extension.create({
   addHelpers() {
     return {
       ...structuredContentHelpers,
+      ...TagUtils,
     };
   },
 });
