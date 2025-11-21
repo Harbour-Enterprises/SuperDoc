@@ -5,7 +5,11 @@ import {
   getStructuredContentInlineTags,
   getStructuredContentTags,
   getStructuredContentTagsById,
-  getStructuredContentTagsByTag,
+  getStructuredContentByGroup,
+  createTagObject,
+  parseTagObject,
+  hasGroup,
+  getGroup,
 } from '@extensions/structured-content/structuredContentHelpers/index';
 
 describe('Structured content tests', () => {
@@ -109,28 +113,60 @@ describe('Structured content tests', () => {
     expect(getStructuredContentTags(editor.state).length).toBe(0);
   });
 
-  it('tests tag-based operations for inline structured content', () => {
-    // Create multiple fields with the same tag
+  it('tests JSON tag utility functions', () => {
+    // Test createTagObject
+    const tag1 = createTagObject({ group: 'customer-info' });
+    expect(tag1).toBe('{"group":"customer-info"}');
+
+    const tag2 = createTagObject({ group: 'terms', style: 'header' });
+    expect(tag2).toBe('{"group":"terms","style":"header"}');
+
+    // Test parseTagObject
+    const parsed1 = parseTagObject('{"group":"customer-info"}');
+    expect(parsed1).toEqual({ group: 'customer-info' });
+
+    const parsed2 = parseTagObject('inline_text_sdt');
+    expect(parsed2).toBe(null);
+
+    // Test hasGroup
+    expect(hasGroup('{"group":"customer-info"}')).toBe(true);
+    expect(hasGroup('inline_text_sdt')).toBe(false);
+    expect(hasGroup('{"style":"header"}')).toBe(false);
+
+    // Test getGroup
+    expect(getGroup('{"group":"customer-info"}')).toBe('customer-info');
+    expect(getGroup('inline_text_sdt')).toBe(null);
+    expect(getGroup('{"style":"header"}')).toBe(null);
+  });
+
+  it('tests group-based operations for inline structured content', () => {
+    // Create multiple fields with the same group
     editor.commands.insertStructuredContentInline({
       text: 'Customer Name 1',
-      attrs: { id: '1', tag: 'customer-info', alias: 'Customer' },
+      attrs: { group: 'customer-info', alias: 'Customer' },
     });
     editor.commands.insertStructuredContentInline({
       text: 'Customer Name 2',
-      attrs: { id: '2', tag: 'customer-info', alias: 'Customer' },
+      attrs: { group: 'customer-info', alias: 'Customer' },
     });
     editor.commands.insertStructuredContentInline({
       text: 'Customer Name 3',
-      attrs: { id: '3', tag: 'customer-info', alias: 'Customer' },
+      attrs: { group: 'customer-info', alias: 'Customer' },
     });
     editor.commands.insertStructuredContentInline({
       text: 'Invoice Number',
-      attrs: { id: '4', tag: 'invoice-info', alias: 'Invoice' },
+      attrs: { group: 'invoice-info', alias: 'Invoice' },
     });
 
-    // Test retrieval by tag
-    const customerFields = getStructuredContentTagsByTag('customer-info', editor.state);
-    const invoiceFields = getStructuredContentTagsByTag('invoice-info', editor.state);
+    // Verify tags are JSON-encoded
+    const allFields = getStructuredContentTags(editor.state);
+    expect(allFields.length).toBe(4);
+    expect(allFields[0].node.attrs.tag).toBe('{"group":"customer-info"}');
+    expect(allFields[3].node.attrs.tag).toBe('{"group":"invoice-info"}');
+
+    // Test retrieval by group
+    const customerFields = getStructuredContentByGroup('customer-info', editor.state);
+    const invoiceFields = getStructuredContentByGroup('invoice-info', editor.state);
 
     expect(customerFields.length).toBe(3);
     expect(invoiceFields.length).toBe(1);
@@ -140,17 +176,17 @@ describe('Structured content tests', () => {
     expect(customerFields[2].node.textContent).toBe('Customer Name 3');
     expect(invoiceFields[0].node.textContent).toBe('Invoice Number');
 
-    // Test retrieval by multiple tags
-    const multipleTagFields = getStructuredContentTagsByTag(['customer-info', 'invoice-info'], editor.state);
-    expect(multipleTagFields.length).toBe(4);
+    // Test retrieval by multiple groups
+    const multipleGroupFields = getStructuredContentByGroup(['customer-info', 'invoice-info'], editor.state);
+    expect(multipleGroupFields.length).toBe(4);
 
-    // Test update all fields by tag
-    editor.commands.updateStructuredContentByTag('customer-info', {
+    // Test update all fields by group
+    editor.commands.updateStructuredContentByGroup('customer-info', {
       text: 'John Doe',
       attrs: { alias: 'Customer Updated' },
     });
 
-    const updatedCustomerFields = getStructuredContentTagsByTag('customer-info', editor.state);
+    const updatedCustomerFields = getStructuredContentByGroup('customer-info', editor.state);
     expect(updatedCustomerFields.length).toBe(3);
     expect(updatedCustomerFields[0].node.textContent).toBe('John Doe');
     expect(updatedCustomerFields[1].node.textContent).toBe('John Doe');
@@ -158,148 +194,107 @@ describe('Structured content tests', () => {
     expect(updatedCustomerFields[0].node.attrs.alias).toBe('Customer Updated');
 
     // Invoice field should remain unchanged
-    const unchangedInvoiceFields = getStructuredContentTagsByTag('invoice-info', editor.state);
+    const unchangedInvoiceFields = getStructuredContentByGroup('invoice-info', editor.state);
     expect(unchangedInvoiceFields[0].node.textContent).toBe('Invoice Number');
 
-    // Test delete by tag
-    editor.commands.deleteStructuredContentByTag('customer-info');
+    // Test delete by group
+    editor.commands.deleteStructuredContentByGroup('customer-info');
 
-    expect(getStructuredContentTagsByTag('customer-info', editor.state).length).toBe(0);
-    expect(getStructuredContentTagsByTag('invoice-info', editor.state).length).toBe(1);
+    expect(getStructuredContentByGroup('customer-info', editor.state).length).toBe(0);
+    expect(getStructuredContentByGroup('invoice-info', editor.state).length).toBe(1);
     expect(getStructuredContentTags(editor.state).length).toBe(1);
 
     // Clean up
-    editor.commands.deleteStructuredContentByTag('invoice-info');
+    editor.commands.deleteStructuredContentByGroup('invoice-info');
     expect(getStructuredContentTags(editor.state).length).toBe(0);
   });
 
-  it('tests tag-based operations for block structured content', () => {
-    // Create multiple blocks with the same tag
+  it('tests group-based operations for block structured content', () => {
+    // Create multiple blocks with the same group
     editor.commands.insertStructuredContentBlock({
       html: '<p>Terms Section 1</p>',
-      attrs: { id: '1', tag: 'terms', alias: 'Terms' },
+      attrs: { group: 'terms', alias: 'Terms' },
     });
     editor.commands.insertStructuredContentBlock({
       html: '<p>Terms Section 2</p>',
-      attrs: { id: '2', tag: 'terms', alias: 'Terms' },
+      attrs: { group: 'terms', alias: 'Terms' },
     });
     editor.commands.insertStructuredContentBlock({
       html: '<p>Privacy Policy</p>',
-      attrs: { id: '3', tag: 'privacy', alias: 'Privacy' },
+      attrs: { group: 'privacy', alias: 'Privacy' },
     });
 
-    // Test retrieval by tag
-    const termsBlocks = getStructuredContentTagsByTag('terms', editor.state);
-    const privacyBlocks = getStructuredContentTagsByTag('privacy', editor.state);
+    // Test retrieval by group
+    const termsBlocks = getStructuredContentByGroup('terms', editor.state);
+    const privacyBlocks = getStructuredContentByGroup('privacy', editor.state);
 
     expect(termsBlocks.length).toBe(2);
     expect(privacyBlocks.length).toBe(1);
 
-    // Test update all blocks by tag
-    editor.commands.updateStructuredContentByTag('terms', {
+    // Test update all blocks by group
+    editor.commands.updateStructuredContentByGroup('terms', {
       html: '<p>Updated Terms Content</p>',
       attrs: { alias: 'Terms Updated' },
     });
 
-    const updatedTermsBlocks = getStructuredContentTagsByTag('terms', editor.state);
+    const updatedTermsBlocks = getStructuredContentByGroup('terms', editor.state);
     expect(updatedTermsBlocks.length).toBe(2);
     expect(updatedTermsBlocks[0].node.textContent).toBe('Updated Terms Content');
     expect(updatedTermsBlocks[1].node.textContent).toBe('Updated Terms Content');
     expect(updatedTermsBlocks[0].node.attrs.alias).toBe('Terms Updated');
 
-    // Test delete multiple tags at once
-    editor.commands.deleteStructuredContentByTag(['terms', 'privacy']);
+    // Test delete multiple groups at once
+    editor.commands.deleteStructuredContentByGroup(['terms', 'privacy']);
     expect(getStructuredContentTags(editor.state).length).toBe(0);
   });
 
-  it('tests mixed operations with tag and id', () => {
-    // Create fields with tags
-    editor.commands.insertStructuredContentInline({
-      text: 'Field 1',
-      attrs: { id: '1', tag: 'group-a' },
-    });
-    editor.commands.insertStructuredContentInline({
-      text: 'Field 2',
-      attrs: { id: '2', tag: 'group-a' },
-    });
-    editor.commands.insertStructuredContentInline({
-      text: 'Field 3',
-      attrs: { id: '3', tag: 'group-b' },
-    });
-
-    // Update by tag
-    editor.commands.updateStructuredContentByTag('group-a', { text: 'Updated by tag' });
-
-    // Update one specific field by id
-    editor.commands.updateStructuredContentById('2', { text: 'Updated by id' });
-
-    const field1 = getStructuredContentTagsById('1', editor.state)[0];
-    const field2 = getStructuredContentTagsById('2', editor.state)[0];
-    const field3 = getStructuredContentTagsById('3', editor.state)[0];
-
-    expect(field1.node.textContent).toBe('Updated by tag');
-    expect(field2.node.textContent).toBe('Updated by id');
-    expect(field3.node.textContent).toBe('Field 3');
-
-    // Delete by id, then by tag
-    editor.commands.deleteStructuredContentById('1');
-    expect(getStructuredContentTagsByTag('group-a', editor.state).length).toBe(1);
-
-    editor.commands.deleteStructuredContentByTag('group-a');
-    expect(getStructuredContentTagsByTag('group-a', editor.state).length).toBe(0);
-    expect(getStructuredContentTags(editor.state).length).toBe(1);
-
-    // Clean up
-    editor.commands.deleteStructuredContentByTag('group-b');
-  });
-
-  it('tests tag operations with mixed inline and block content', () => {
-    // Create mixed content with same tag
+  it('tests group operations with mixed inline and block content', () => {
+    // Create mixed content with same group
     editor.commands.insertStructuredContentInline({
       text: 'Inline Header',
-      attrs: { id: '1', tag: 'header' },
+      attrs: { group: 'header' },
     });
     editor.commands.insertStructuredContentBlock({
       html: '<p>Block Header</p>',
-      attrs: { id: '2', tag: 'header' },
+      attrs: { group: 'header' },
     });
     editor.commands.insertStructuredContentInline({
       text: 'Another Inline Header',
-      attrs: { id: '3', tag: 'header' },
+      attrs: { group: 'header' },
     });
 
-    // Should find all types with the same tag
-    const headerFields = getStructuredContentTagsByTag('header', editor.state);
+    // Should find all types with the same group
+    const headerFields = getStructuredContentByGroup('header', editor.state);
     expect(headerFields.length).toBe(3);
 
-    // Update all by tag
-    editor.commands.updateStructuredContentByTag('header', {
+    // Update all by group
+    editor.commands.updateStructuredContentByGroup('header', {
       attrs: { alias: 'Header Updated' },
     });
 
-    const updatedHeaders = getStructuredContentTagsByTag('header', editor.state);
+    const updatedHeaders = getStructuredContentByGroup('header', editor.state);
     expect(updatedHeaders[0].node.attrs.alias).toBe('Header Updated');
     expect(updatedHeaders[1].node.attrs.alias).toBe('Header Updated');
     expect(updatedHeaders[2].node.attrs.alias).toBe('Header Updated');
 
-    // Delete all by tag
-    editor.commands.deleteStructuredContentByTag('header');
+    // Delete all by group
+    editor.commands.deleteStructuredContentByGroup('header');
     expect(getStructuredContentTags(editor.state).length).toBe(0);
   });
 
-  it('tests tag operations with non-existent tags', () => {
-    // Try to get non-existent tag
-    const nonExistent = getStructuredContentTagsByTag('non-existent', editor.state);
+  it('tests group operations with non-existent groups', () => {
+    // Try to get non-existent group
+    const nonExistent = getStructuredContentByGroup('non-existent', editor.state);
     expect(nonExistent.length).toBe(0);
 
-    // Try to update non-existent tag (should not throw error)
+    // Try to update non-existent group (should not throw error)
     expect(() => {
-      editor.commands.updateStructuredContentByTag('non-existent', { text: 'Test' });
+      editor.commands.updateStructuredContentByGroup('non-existent', { text: 'Test' });
     }).not.toThrow();
 
-    // Try to delete non-existent tag (should not throw error)
+    // Try to delete non-existent group (should not throw error)
     expect(() => {
-      editor.commands.deleteStructuredContentByTag('non-existent');
+      editor.commands.deleteStructuredContentByGroup('non-existent');
     }).not.toThrow();
   });
 });
