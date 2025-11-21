@@ -1,0 +1,19 @@
+.selected[data-v-bcae18cf] {
+  background-color: #dbdbdb;
+}
+.mentions-container[data-v-bcae18cf] {
+  outline: none !important;
+  border: none;
+  max-height: 300px;
+  overflow-y: auto;
+}
+.mentions-container[data-v-bcae18cf]:focus {
+  border: none;
+  outline: none !important;
+}
+.user-row[data-v-bcae18cf] {
+  padding: 10px 15px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}

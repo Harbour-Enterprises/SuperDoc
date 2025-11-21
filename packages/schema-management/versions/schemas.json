@@ -1,0 +1,20 @@
+{
+  "versions": {
+    "1.0.0": {
+      "version": "1.0.0",
+      "entry": "schema.js",
+      "builtAt": "2025-11-21T21:20:55.073Z",
+      "sourceCommit": "98945ac65b82bc12543d2bd14e1dc78efc025629",
+      "hash": "d1ed953d74f845ade98d7589ec5ca2054e012b95cf5c560b934c497c0370d6f8",
+      "path": "./1.0.0/schema.js"
+    },
+    "2.0.0": {
+      "version": "2.0.0",
+      "entry": "schema.js",
+      "builtAt": "2025-11-21T21:42:19.769Z",
+      "sourceCommit": "c7aa32831f76aa64c587a88fcd5faa2304aea222",
+      "hash": "7ef6dd032c6bcaec1cae6d473d0ca4084f9f84779ebbd47647e511e09ad9dd00",
+      "path": "./2.0.0/schema.js"
+    }
+  }
+}

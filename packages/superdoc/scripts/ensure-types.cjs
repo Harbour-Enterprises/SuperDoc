@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-// TypeScript emits to dist/packages/superdoc/src/index.d.ts when common is included
+// TypeScript emits to dist/packages/superdoc/src/index.d.ts in this build.
 const distIndexPath = path.resolve(__dirname, '../dist/packages/superdoc/src/index.d.ts');
 
 if (!fs.existsSync(distIndexPath)) {
@@ -20,4 +20,3 @@ if (!hasSuperDocExport) {
 }
 
 console.log('[ensure-types] ✓ Verified SuperDoc export in dist/index.d.ts');
-
