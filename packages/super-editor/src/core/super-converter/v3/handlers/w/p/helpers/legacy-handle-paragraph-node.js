@@ -3,6 +3,22 @@ import { mergeTextNodes } from '@converter/v2/importer/index.js';
 import { resolveParagraphProperties } from '@converter/styles';
 import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 
+function getTableStyleId(path) {
+  const tbl = path.find((ancestor) => ancestor.name === 'w:tbl');
+  if (!tbl) {
+    return;
+  }
+  const tblPr = tbl.elements?.find((child) => child.name === 'w:tblPr');
+  if (!tblPr) {
+    return;
+  }
+  const tblStyle = tblPr.elements?.find((child) => child.name === 'w:tblStyle');
+  if (!tblStyle) {
+    return;
+  }
+  return tblStyle.attributes?.['w:val'];
+}
+
 /**
  * Paragraph node handler
  * @param {import('@translator').SCEncoderConfig} params
@@ -22,7 +38,14 @@ export const handleParagraphNode = (params) => {
 
   // Resolve paragraph properties according to styles hierarchy
   const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
-  const resolvedParagraphProperties = resolveParagraphProperties(params, inlineParagraphProperties, insideTable);
+  const tableStyleId = getTableStyleId(params.path || []);
+  const resolvedParagraphProperties = resolveParagraphProperties(
+    params,
+    inlineParagraphProperties,
+    insideTable,
+    false,
+    tableStyleId,
+  );
 
   // If it is a standard paragraph node, process normally
   const handleStandardNode = nodeListHandler.handlerEntities.find(

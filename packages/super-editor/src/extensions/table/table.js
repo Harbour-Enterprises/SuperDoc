@@ -117,7 +117,7 @@
  * @property {TableMeasurement} [tableWidth] - Table width
  * @property {FloatingTableProperties} [floatingTableProperties] - Floating table properties
  * @property {TableBorders} [borders] - Table border configuration
- * @proerty {TableCellMargins} [cellMargins] - Cell margin configuration
+ * @property {TableCellMargins} [cellMargins] - Cell margin configuration
  * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
  */
 
@@ -271,6 +271,17 @@ import {
  */
 
 /**
+ * @typedef {Object} TableNodeAttributes
+ * @property {TableProperties} tableProperties
+ * @property {TableGrid} grid
+ */
+
+/**
+ * @typedef {Node} TableNode
+ * @property {TableNodeAttributes} attrs
+ */
+
+/**
  * @module Table
  * @sidebarTitle Table
  * @snippetPath /snippets/extensions/table.mdx
@@ -305,16 +316,6 @@ export const Table = Node.create({
 
   addAttributes() {
     return {
-      /* tableWidth: {
-        renderDOM: ({ tableWidth }) => {
-          if (!tableWidth) return {};
-          const { width, type = 'auto' } = tableWidth;
-          return { 
-            style: `width: ${width}px` 
-          };
-        },
-      }, */
-
       /**
        * @private
        * @category Attribute
@@ -430,7 +431,12 @@ export const Table = Node.create({
        * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
        */
       tableProperties: {
-        default: null,
+        default: {
+          tableWidth: {
+            value: null,
+            type: 'auto',
+          },
+        },
         rendered: false,
       },
 
