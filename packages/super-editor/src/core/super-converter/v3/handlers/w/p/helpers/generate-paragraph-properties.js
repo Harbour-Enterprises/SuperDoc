@@ -1,5 +1,4 @@
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
-import { combineRunProperties, decodeRPrFromMarks } from '@converter/styles.js';
 import { translator as wPPrNodeTranslator } from '../../pPr/pPr-translator.js';
 
 /**
@@ -13,9 +12,16 @@ export function generateParagraphProperties(params) {
   const { attrs = {} } = node;
 
   const paragraphProperties = carbonCopy(attrs.paragraphProperties || {});
-  const pPr = wPPrNodeTranslator.decode({ node: { ...node, attrs: { paragraphProperties } } });
+  let pPr = wPPrNodeTranslator.decode({ node: { ...node, attrs: { paragraphProperties } } });
   const sectPr = node.attrs?.paragraphProperties?.sectPr;
   if (sectPr) {
+    if (!pPr) {
+      pPr = {
+        type: 'element',
+        name: 'w:pPr',
+        elements: [],
+      };
+    }
     pPr.elements.push(sectPr);
   }
   return pPr;
