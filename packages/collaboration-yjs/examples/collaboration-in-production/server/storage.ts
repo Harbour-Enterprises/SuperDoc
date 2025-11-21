@@ -1,35 +1,18 @@
-import { loadFromPostgres, saveToPostgres } from './postgres.js';
-import { loadFromTiptapCloud, saveToTiptapCloud } from './tiptap.js';
-import { loadFromDisk, saveToDisk } from './disk.js';
-import type { CollaborationParams } from '@superdoc-dev/superdoc-yjs-collaboration';
-import type { StorageHandler } from './storage-types.js';
+import type { StorageFunction } from './storage-types.js';
+import { Doc as YDoc, encodeStateAsUpdate } from 'yjs';
 
-// Dynamic storage selection based on STORAGE_TYPE env var
-const storageType = process.env.STORAGE_TYPE || 'postgres';
+const blankDocxYdoc = new YDoc();
+const metaMap = blankDocxYdoc.getMap('meta');
 
+// Add minimal DOCX structure that the client expects
+metaMap.set('docx', []);
 
-
-const storageHandlers: Record<string, StorageHandler> = {
-  tiptap: {
-    save: saveToTiptapCloud,
-    load: loadFromTiptapCloud
-  },
-  postgres: {
-    save: saveToPostgres,
-    load: loadFromPostgres
-  },
-  disk: {
-    save: saveToDisk,
-    load: loadFromDisk
-  }
+export const loadDocument: StorageFunction = async (id: string) => {
+  // Return an empty Y.js document with minimal DOCX structure
+  return encodeStateAsUpdate(blankDocxYdoc);
 };
 
-const handler = storageHandlers[storageType];
-if (!handler) {
-  throw new Error(`Unknown storage type: ${storageType}`);
-}
-
-const loadDocument = handler.load;
-const saveDocument = handler.save;
-
-export { loadDocument, saveDocument };
+export const saveDocument: StorageFunction = async (id: string, file?: Uint8Array) => {
+  // No-op - just return success
+  return true;
+};
