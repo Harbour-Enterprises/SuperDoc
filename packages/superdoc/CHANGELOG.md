@@ -1,3 +1,9 @@
+## [0.31.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.1...v0.31.2) (2025-11-21)
+
+### Reverts
+
+- Revert "fix: import and export tagUtils for enhanced structured content management ([#1300](https://github.com/Harbour-Enterprises/SuperDoc/issues/1300))" ([d937827](https://github.com/Harbour-Enterprises/SuperDoc/commit/d9378272260bc363c165ccc0ac4ba4c10d3991a9))
+
 ## [0.31.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.0...v0.31.1) (2025-11-21)
 
 ### Bug Fixes
