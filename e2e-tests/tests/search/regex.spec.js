@@ -5,7 +5,7 @@ test.describe('regex search', () => {
     await page.goto('http://localhost:4173/');
 
     const fileInput = page.locator('input[type="file"]');
-    await fileInput.setInputFiles('./test-data/basic-documents/regex-search.docx');
+    await fileInput.setInputFiles('./test-data/search-documents/regex-search.docx');
 
     await page.waitForFunction(() => window.editor?.commands?.search, null, { polling: 100, timeout: 10_000 });
 
