@@ -1,3 +1,9 @@
+## [0.29.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.29.0...v0.29.1) (2025-11-21)
+
+### Bug Fixes
+
+- package-lock ([4ab9f23](https://github.com/Harbour-Enterprises/SuperDoc/commit/4ab9f2397b9bf497d07b5b6756336499d1b15913))
+
 # [0.29.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.6...v0.29.0) (2025-11-10)
 
 ### Bug Fixes
