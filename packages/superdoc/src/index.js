@@ -12,7 +12,6 @@ import {
   trackChangesHelpers,
   AnnotatorHelpers,
   SectionHelpers,
-  tagUtils,
 } from '@harbour-enterprises/super-editor';
 import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@superdoc/common';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
@@ -36,7 +35,6 @@ export {
   trackChangesHelpers,
   AnnotatorHelpers,
   SectionHelpers,
-  tagUtils,
 
   // Super Editor
   SuperConverter,

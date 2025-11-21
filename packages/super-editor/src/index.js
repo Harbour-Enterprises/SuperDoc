@@ -27,7 +27,6 @@ import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { SectionHelpers } from '@extensions/structured-content/document-section/index.js';
 import { registeredHandlers } from './core/super-converter/v3/handlers/index.js';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import * as tagUtils from './extensions/structured-content/structuredContentHelpers/tagUtils.js';
 
 const Extensions = {
   Node,
@@ -71,7 +70,6 @@ export {
   trackChangesHelpers,
   AnnotatorHelpers,
   SectionHelpers,
-  tagUtils,
   getMarksFromSelection,
   getActiveFormatting,
   getStarterExtensions,
