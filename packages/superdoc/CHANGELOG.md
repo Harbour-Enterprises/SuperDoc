@@ -1,3 +1,9 @@
+## [0.31.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.0...v0.31.1) (2025-11-21)
+
+### Bug Fixes
+
+- import and export tagUtils for enhanced structured content management ([#1300](https://github.com/Harbour-Enterprises/SuperDoc/issues/1300)) ([7b8551d](https://github.com/Harbour-Enterprises/SuperDoc/commit/7b8551d46cfac7a1b9f77bb448cedf26544392ff))
+
 # [0.31.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.30.0...v0.31.0) (2025-11-21)
 
 ### Features
