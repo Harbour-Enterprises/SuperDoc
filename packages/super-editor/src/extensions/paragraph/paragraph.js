@@ -198,7 +198,7 @@ export const Paragraph = OxmlNode.create({
       },
       ...this.options.headingLevels.map((level) => ({
         tag: `h${level}`,
-        attrs: { level, styleId: `Heading${level}` },
+        attrs: { level, paragraphProperties: { styleId: `Heading${level}` } },
       })),
     ];
   },
