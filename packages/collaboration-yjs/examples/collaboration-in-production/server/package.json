@@ -17,6 +17,7 @@
     "dotenv": "^17.2.3",
     "fastify": "^5.3.3",
     "jsonwebtoken": "^9.0.2",
+    "jszip": "^3.10.1",
     "pg": "^8.16.3",
     "y-protocols": "^1.0.6",
     "y-websocket": "^3.0.0",

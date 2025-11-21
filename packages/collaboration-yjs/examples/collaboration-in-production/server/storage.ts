@@ -1,17 +1,18 @@
-import { loadFromPostgres, saveToPostgres } from './postgres.js';
-import { loadFromTiptapCloud, saveToTiptapCloud } from './tiptap.js';
+import type { StorageFunction } from './storage-types.js';
+import { Doc as YDoc, encodeStateAsUpdate } from 'yjs';
 
-// Dynamic storage selection based on STORAGE_TYPE env var
-const storageType = process.env.STORAGE_TYPE || 'postgres';
+const blankDocxYdoc = new YDoc();
+const metaMap = blankDocxYdoc.getMap('meta');
 
-let loadDocument, saveDocument;
+// Add minimal DOCX structure that the client expects
+metaMap.set('docx', []);
 
-if (storageType === 'tiptap') {
-  loadDocument = loadFromTiptapCloud;
-  saveDocument = saveToTiptapCloud;
-} else { // default to postgres
-  loadDocument = loadFromPostgres;
-  saveDocument = saveToPostgres;
-}
+export const loadDocument: StorageFunction = async (id: string) => {
+  // Return an empty Y.js document with minimal DOCX structure
+  return encodeStateAsUpdate(blankDocxYdoc);
+};
 
-export { loadDocument, saveDocument };
+export const saveDocument: StorageFunction = async (id: string, file?: Uint8Array) => {
+  // No-op - just return success
+  return true;
+};

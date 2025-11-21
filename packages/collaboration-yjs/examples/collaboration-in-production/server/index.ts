@@ -9,7 +9,7 @@ import { CollaborationBuilder, LoadFn, AutoSaveFn } from '@superdoc-dev/superdoc
 import { encodeStateAsUpdate, Doc as YDoc } from 'yjs';
 
 import { saveDocument, loadDocument } from './storage.js';
-import { generateUser } from '../shared/userGenerator.js';
+import { generateUser } from './userGenerator.js';
 
 const errorHandlers: Record<string, (error: Error, socket: any) => void> = {
   LoadError: (error: Error, socket: any) => {
@@ -19,7 +19,11 @@ const errorHandlers: Record<string, (error: Error, socket: any) => void> = {
   SaveError: (error: Error, socket: any) => {
     console.log('Document save failed:', error.message);
     // Don't close connection for save errors, just log
-  }
+  },
+  default: (error: Error, socket: any) => {
+    console.log('Something went wrong:', error.message);
+    socket.close(1011, 'Unknown error');
+  },
 };
 
 const fastify = Fastify({ logger: false });
@@ -32,15 +36,6 @@ const SuperDocCollaboration = new CollaborationBuilder()
   .onLoad((async (params) => {
     try {
       const state = await loadDocument(params.documentId);
-
-      // Try to load the default document
-      if (!state) {
-        console.log("Loading default doc")
-        const defaultState = await loadDocument('default');
-        if (!defaultState) return null;
-        return defaultState;
-      }
-
       return state;
     } catch(error) {
       const err = new Error('Failed to load document: ' + error);
@@ -50,7 +45,13 @@ const SuperDocCollaboration = new CollaborationBuilder()
   }) as LoadFn)
   .onAutoSave((async (params) => {
     try {
-      await saveDocument(params);
+      const { documentId, document } = params;
+      if (!document) throw new Error('No document to save');
+      
+      const state = encodeStateAsUpdate(document);
+      const success = await saveDocument(documentId, state);
+      
+      if (!success) throw new Error('Save returned false');
     } catch (error) {
       const err = new Error('Failed to save document: ' + error);
       err.name = 'SaveError';
