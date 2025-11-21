@@ -52,7 +52,7 @@ coverage/
 **/src/**/*.d.ts
 **/src/**/*.d.ts.map
 # But allow hand-written .d.ts files within packages
-!packages/**/src/*.d.ts
+!packages/super-editor/src/core/commands/core-command-map.d.ts
 
 # TypeScript build info files
 *.tsbuildinfo

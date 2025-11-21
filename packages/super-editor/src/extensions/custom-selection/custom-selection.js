@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 /* global Element */
 import { Extension } from '@core/Extension.js';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';

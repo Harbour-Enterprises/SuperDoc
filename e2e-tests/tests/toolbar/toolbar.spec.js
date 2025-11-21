@@ -945,7 +945,6 @@ test.describe('toolbar', () => {
 
       // Type "Hello"
       await page.keyboard.type('Hello');
-      await page.keyboard.press('Enter');
 
       // Ensure the text is visible
       const hello = await superEditor.getByText('Hello');

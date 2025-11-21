@@ -1,7 +1,7 @@
 import { expect } from 'vitest';
 import { handleParagraphNode } from '@converter/v2/importer/paragraphNodeImporter.js';
 import { defaultNodeListHandler } from '@converter/v2/importer/docxImporter.js';
-import { translateParagraphNode } from '@converter/exporter.js';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 
 describe('Tab Stops Round Trip Tests', () => {
   // Create a minimal editor mock that has the required extensions property
@@ -85,7 +85,7 @@ describe('Tab Stops Round Trip Tests', () => {
 
     // Step 2: Export the imported node back to DOCX
     const mockEditor = createMockEditor();
-    const exportedResult = translateParagraphNode({
+    const exportedResult = wPTranslator.decode({
       editor: mockEditor,
       node: importedNode,
     });
@@ -146,7 +146,7 @@ describe('Tab Stops Round Trip Tests', () => {
 
     // Step 2: Export the imported node back to DOCX
     const mockEditor = createMockEditor();
-    const exportedResult = translateParagraphNode({
+    const exportedResult = wPTranslator.decode({
       editor: mockEditor,
       node: importedNode,
     });
@@ -206,7 +206,7 @@ describe('Tab Stops Round Trip Tests', () => {
 
     // Step 2: Export the imported node back to DOCX
     const mockEditor = createMockEditor();
-    const exportedResult = translateParagraphNode({
+    const exportedResult = wPTranslator.decode({
       editor: mockEditor,
       node: importedNode,
     });
@@ -255,7 +255,7 @@ describe('Tab Stops Round Trip Tests', () => {
     expect(importedNode.attrs.tabStops[0].tab.pos).toBe(1234);
 
     const mockEditor = createMockEditor();
-    const exportedResult = translateParagraphNode({
+    const exportedResult = wPTranslator.decode({
       editor: mockEditor,
       node: importedNode,
     });
@@ -319,7 +319,7 @@ describe('Tab Stops Round Trip Tests', () => {
 
     // Step 2: Export the imported node back to DOCX
     const mockEditor = createMockEditor();
-    const exportedResult = translateParagraphNode({
+    const exportedResult = wPTranslator.decode({
       editor: mockEditor,
       node: importedNode,
     });
