@@ -1,3 +1,9 @@
+# [0.31.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.30.0...v0.31.0) (2025-11-21)
+
+### Features
+
+- add tag-based operations for structured content management ([#1296](https://github.com/Harbour-Enterprises/SuperDoc/issues/1296)) ([af80442](https://github.com/Harbour-Enterprises/SuperDoc/commit/af80442b451739dc1a0a08270edc9c317c53c127))
+
 # [0.30.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.29.0...v0.30.0) (2025-11-19)
 
 ### Bug Fixes
