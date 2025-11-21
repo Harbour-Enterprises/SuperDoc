@@ -221,6 +221,8 @@ export const Paragraph = OxmlNode.create({
         },
       },
       styleId: {
+        default: null,
+        keepOnSplit: false,
         renderDOM: (attrs) => {
           if (!attrs.styleId) return {};
           return { styleid: attrs.styleId };

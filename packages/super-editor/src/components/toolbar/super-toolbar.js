@@ -764,6 +764,14 @@ export class SuperToolbar extends EventEmitter {
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
 
+      if (item.name.value === 'undo') {
+        item.setDisabled(this.undoDepth === 0);
+      }
+
+      if (item.name.value === 'redo') {
+        item.setDisabled(this.redoDepth === 0);
+      }
+
       if (item.name.value === 'acceptTrackedChangeBySelection') {
         item.setDisabled(!canAcceptTrackedChanges);
       }
@@ -865,6 +873,8 @@ export class SuperToolbar extends EventEmitter {
     if (this.role === 'viewer') {
       this.#deactivateAll();
     }
+
+    this.updateToolbarState();
   };
 
   /**
