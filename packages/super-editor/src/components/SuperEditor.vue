@@ -338,6 +338,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .editor-element {
   position: relative;
+  overflow-x: hidden;
 }
 
 .super-editor-container {
