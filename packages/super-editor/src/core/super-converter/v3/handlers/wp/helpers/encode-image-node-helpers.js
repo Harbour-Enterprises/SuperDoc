@@ -347,8 +347,11 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
     }
   }
 
-  // Extract all child shapes
+  // Extract all child shapes and pictures
   const childShapes = wgp.elements.filter((el) => el.name === 'wps:wsp');
+  const childPictures = wgp.elements.filter((el) => el.name === 'pic:pic');
+
+  // Process child shapes (wps:wsp)
   const shapes = childShapes
     .map((wsp) => {
       const spPr = wsp.elements?.find((el) => el.name === 'wps:spPr');
@@ -444,6 +447,92 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
     })
     .filter(Boolean);
 
+  // Process child pictures (pic:pic)
+  const pictures = childPictures
+    .map((pic) => {
+      // Extract picture properties
+      const spPr = pic.elements?.find((el) => el.name === 'pic:spPr');
+      if (!spPr) return null;
+
+      // Extract size and transformations
+      const xfrm = spPr.elements?.find((el) => el.name === 'a:xfrm');
+      const off = xfrm?.elements?.find((el) => el.name === 'a:off');
+      const ext = xfrm?.elements?.find((el) => el.name === 'a:ext');
+
+      // Get raw coordinates in EMU
+      const rawX = off?.attributes?.['x'] ? parseFloat(off.attributes['x']) : 0;
+      const rawY = off?.attributes?.['y'] ? parseFloat(off.attributes['y']) : 0;
+      const rawWidth = ext?.attributes?.['cx'] ? parseFloat(ext.attributes['cx']) : 914400;
+      const rawHeight = ext?.attributes?.['cy'] ? parseFloat(ext.attributes['cy']) : 914400;
+
+      // Transform from child coordinate space to parent space if group transform exists
+      let x, y, width, height;
+      if (groupTransform.childWidth && groupTransform.childHeight) {
+        const scaleX = groupTransform.width / groupTransform.childWidth;
+        const scaleY = groupTransform.height / groupTransform.childHeight;
+        const childOriginX = groupTransform.childOriginXEmu || 0;
+        const childOriginY = groupTransform.childOriginYEmu || 0;
+
+        x = groupTransform.x + emuToPixels((rawX - childOriginX) * scaleX);
+        y = groupTransform.y + emuToPixels((rawY - childOriginY) * scaleY);
+        width = emuToPixels(rawWidth * scaleX);
+        height = emuToPixels(rawHeight * scaleY);
+      } else {
+        x = emuToPixels(rawX);
+        y = emuToPixels(rawY);
+        width = emuToPixels(rawWidth);
+        height = emuToPixels(rawHeight);
+      }
+
+      // Extract image reference from blipFill
+      const blipFill = pic.elements?.find((el) => el.name === 'pic:blipFill');
+      const blip = blipFill?.elements?.find((el) => el.name === 'a:blip');
+      if (!blip) return null;
+
+      const rEmbed = blip.attributes?.['r:embed'];
+      if (!rEmbed) return null;
+
+      // Get the image path from relationships
+      const currentFile = params.filename || 'document.xml';
+      let rels = params.docx[`word/_rels/${currentFile}.rels`];
+      if (!rels) rels = params.docx[`word/_rels/document.xml.rels`];
+
+      const relationships = rels?.elements.find((el) => el.name === 'Relationships');
+      const { elements } = relationships || [];
+      const rel = elements?.find((el) => el.attributes['Id'] === rEmbed);
+      if (!rel) return null;
+
+      const targetPath = rel.attributes?.['Target'];
+      let path = `word/${targetPath}`;
+      if (targetPath.startsWith('/word') || targetPath.startsWith('/media')) {
+        path = targetPath.substring(1);
+      }
+
+      // Extract picture name and ID
+      const nvPicPr = pic.elements?.find((el) => el.name === 'pic:nvPicPr');
+      const cNvPr = nvPicPr?.elements?.find((el) => el.name === 'pic:cNvPr');
+      const picId = cNvPr?.attributes?.['id'];
+      const picName = cNvPr?.attributes?.['name'];
+
+      return {
+        shapeType: 'image',
+        attrs: {
+          x,
+          y,
+          width,
+          height,
+          src: path,
+          imageId: picId,
+          imageName: picName,
+        },
+      };
+    })
+    .filter(Boolean);
+
+  // Combine shapes and pictures - pictures first (bottom layer), then shapes (top layer)
+  // In SVG, elements are rendered in order, so later elements appear on top
+  const allShapes = [...pictures, ...shapes];
+
   const schemaAttrs = {};
   const drawingNode = params.nodes?.[0];
   if (drawingNode?.name === DRAWING_XML_TAG) {
@@ -455,7 +544,7 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
     attrs: {
       ...schemaAttrs,
       groupTransform,
-      shapes,
+      shapes: allShapes,
       size,
       padding,
       marginOffset,
@@ -549,22 +638,25 @@ const getRectangleShape = (params, spPr, node) => {
     schemaAttrs.drawingContent = drawingNode;
   }
 
-  const xfrm = node.elements.find((el) => el.name === 'a:xfrm');
-  const start = xfrm.elements.find((el) => el.name === 'a:off');
-  const size = xfrm.elements.find((el) => el.name === 'a:ext');
-  const solidFill = node.elements.find((el) => el.name === 'a:solidFill');
+  const xfrm = node.elements?.find((el) => el.name === 'a:xfrm');
+  const start = xfrm?.elements?.find((el) => el.name === 'a:off');
+  const size = xfrm?.elements?.find((el) => el.name === 'a:ext');
+  const solidFill = node.elements?.find((el) => el.name === 'a:solidFill');
 
   // TODO: We should handle this
   // eslint-disable-next-line no-unused-vars
-  const outline = node.elements.find((el) => el.name === 'a:ln');
+  const outline = node.elements?.find((el) => el.name === 'a:ln');
 
-  const rectangleSize = {
-    top: emuToPixels(start.attributes['y']),
-    left: emuToPixels(start.attributes['x']),
-    width: emuToPixels(size.attributes['cx']),
-    height: emuToPixels(size.attributes['cy']),
-  };
-  schemaAttrs.size = rectangleSize;
+  // Only create rectangleSize if we have the necessary data
+  if (start && size) {
+    const rectangleSize = {
+      top: emuToPixels(start.attributes?.['y'] || 0),
+      left: emuToPixels(start.attributes?.['x'] || 0),
+      width: emuToPixels(size.attributes?.['cx'] || 0),
+      height: emuToPixels(size.attributes?.['cy'] || 0),
+    };
+    schemaAttrs.size = rectangleSize;
+  }
 
   const background = solidFill?.elements[0]?.attributes['val'];
 

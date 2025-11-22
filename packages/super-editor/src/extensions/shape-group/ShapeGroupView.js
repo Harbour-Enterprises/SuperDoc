@@ -80,6 +80,12 @@ export class ShapeGroupView {
           container.style.left = `${marginOffset.horizontal}px`;
         }
       }
+
+      // For column-relative positioning with posOffset, override max-width to allow extending into margins
+      const isColumnRelative = anchorData?.hRelativeFrom === 'column';
+      if (isColumnRelative && !anchorData?.alignH && marginOffset?.horizontal != null) {
+        container.style.maxWidth = 'none';
+      }
       if (marginOffset?.top != null) {
         if (isParagraphRelative) {
           container.style.marginTop = `${marginOffset.top}px`;
@@ -153,6 +159,11 @@ export class ShapeGroupView {
           if (shapeElement) {
             svg.appendChild(shapeElement);
           }
+        } else if (shape.shapeType === 'image') {
+          const imageElement = this.createImageElement(shape, groupTransform);
+          if (imageElement) {
+            svg.appendChild(imageElement);
+          }
         }
       });
     }
@@ -197,7 +208,8 @@ export class ShapeGroupView {
 
     // Generate the shape based on its kind
     const shapeKind = attrs.kind || 'rect';
-    const fillColor = attrs.fillColor ?? '#5b9bd5';
+    // Preserve null (from <a:noFill/>), but provide default for undefined
+    const fillColor = attrs.fillColor === null ? null : (attrs.fillColor ?? '#5b9bd5');
     // Use null-coalescing to preserve null (from <a:noFill/>), but provide default for undefined
     const strokeColor = attrs.strokeColor === null ? null : (attrs.strokeColor ?? '#000000');
     const strokeWidth = attrs.strokeWidth ?? 1;
@@ -211,6 +223,8 @@ export class ShapeGroupView {
       const gradient = this.createGradient(fillColor, gradientId);
       defs.appendChild(gradient);
       fillValue = `url(#${gradientId})`;
+    } else if (fillColor === null) {
+      fillValue = 'none'; // Transparent
     } else if (typeof fillColor === 'string') {
       fillValue = fillColor;
     }
@@ -304,7 +318,7 @@ export class ShapeGroupView {
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('width', width.toString());
       rect.setAttribute('height', height.toString());
-      rect.setAttribute('fill', typeof fillColor === 'string' ? fillColor : '#cccccc');
+      rect.setAttribute('fill', fillColor === null ? 'none' : typeof fillColor === 'string' ? fillColor : '#cccccc');
       rect.setAttribute('stroke', strokeColor === null ? 'none' : strokeColor);
       rect.setAttribute('stroke-width', strokeColor === null ? '0' : strokeWidth.toString());
       g.appendChild(rect);
@@ -418,6 +432,31 @@ export class ShapeGroupView {
     });
 
     return gradient;
+  }
+
+  createImageElement(shape, groupTransform) {
+    const attrs = shape.attrs;
+    if (!attrs) return null;
+
+    // Get image position and size
+    const x = attrs.x || 0;
+    const y = attrs.y || 0;
+    const width = attrs.width || 100;
+    const height = attrs.height || 100;
+
+    // Create SVG image element
+    const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    image.setAttribute('x', x.toString());
+    image.setAttribute('y', y.toString());
+    image.setAttribute('width', width.toString());
+    image.setAttribute('height', height.toString());
+
+    // Get image source from editor's media storage or use the path directly
+    const src = this.editor?.storage?.image?.media?.[attrs.src] ?? attrs.src;
+    image.setAttribute('href', src);
+    image.setAttribute('preserveAspectRatio', 'none'); // Stretch to fill
+
+    return image;
   }
 
   buildView() {
