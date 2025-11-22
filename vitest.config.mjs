@@ -8,6 +8,7 @@ export default defineConfig({
       './packages/superdoc',
       './packages/ai',
       './packages/collaboration-yjs',
+      './packages/schema-management',
       './shared/common',
     ],
     coverage: {
