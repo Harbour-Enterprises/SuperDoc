@@ -29,19 +29,37 @@ export const TrackChanges = Extension.create({
 
           const map = new Mapping();
 
+          // Collect all unique deletion mark IDs within the range for later processing
+          const deletionMarksInSelection = new Map();
           doc.nodesBetween(from, to, (node, pos) => {
-            if (node.marks && node.marks.find((mark) => mark.type.name === TrackDeleteMarkName)) {
-              const deletionStep = new ReplaceStep(
-                map.map(Math.max(pos, from)),
-                map.map(Math.min(pos + node.nodeSize, to)),
-                Slice.empty,
-              );
+            if (!node.marks) return;
+            const deletionMark = node.marks.find((mark) => mark.type.name === TrackDeleteMarkName);
+            if (!deletionMark) return;
 
-              tr.step(deletionStep);
-              map.appendMap(deletionStep.getMap());
-            } else if (node.marks && node.marks.find((mark) => mark.type.name === TrackInsertMarkName)) {
+            const nodeFrom = pos;
+            const nodeTo = pos + node.nodeSize;
+            const existingRange = deletionMarksInSelection.get(deletionMark.attrs.id);
+
+            if (existingRange) {
+              existingRange.from = Math.min(existingRange.from, nodeFrom);
+              existingRange.to = Math.max(existingRange.to, nodeTo);
+            } else {
+              deletionMarksInSelection.set(deletionMark.attrs.id, { from: nodeFrom, to: nodeTo });
+            }
+          });
+
+          // Process insertions and format changes FIRST (they just remove marks, don't change document structure)
+          // Skip nodes that have deletion marks since those will be handled separately
+          doc.nodesBetween(from, to, (node, pos) => {
+            if (!node.marks) return;
+
+            // Skip nodes with deletion marks - they will be processed in deletion step
+            if (node.marks.find((mark) => mark.type.name === TrackDeleteMarkName)) {
+              return;
+            }
+
+            if (node.marks.find((mark) => mark.type.name === TrackInsertMarkName)) {
               const insertionMark = node.marks.find((mark) => mark.type.name === TrackInsertMarkName);
-
               tr.step(
                 new RemoveMarkStep(
                   map.map(Math.max(pos, from)),
@@ -49,9 +67,8 @@ export const TrackChanges = Extension.create({
                   insertionMark,
                 ),
               );
-            } else if (node.marks && node.marks.find((mark) => mark.type.name === TrackFormatMarkName)) {
+            } else if (node.marks.find((mark) => mark.type.name === TrackFormatMarkName)) {
               const formatChangeMark = node.marks.find((mark) => mark.type.name === TrackFormatMarkName);
-
               tr.step(
                 new RemoveMarkStep(
                   map.map(Math.max(pos, from)),
@@ -61,6 +78,68 @@ export const TrackChanges = Extension.create({
               );
             }
           });
+
+          // Process deletions AFTER insertions/format changes
+          // For each deletion mark ID, find ALL nodes with that ID (not just in the range)
+          // This ensures we capture the full extent of deletions that span multiple nodes
+          const deletionRanges = [];
+          for (const [markId, selectionRange] of deletionMarksInSelection.entries()) {
+            const deletionChanges = getTrackChanges(state, markId)
+              .filter(({ mark }) => mark.type.name === TrackDeleteMarkName)
+              .sort((a, b) => a.from - b.from);
+
+            if (!deletionChanges.length) {
+              continue;
+            }
+
+            // Merge adjacent/overlapping deletion ranges
+            const mergedRanges = [];
+            deletionChanges.forEach(({ from: changeFrom, to: changeTo }) => {
+              const lastRange = mergedRanges[mergedRanges.length - 1];
+              if (!lastRange) {
+                mergedRanges.push({ from: changeFrom, to: changeTo });
+                return;
+              }
+
+              if (changeFrom <= lastRange.to) {
+                // Overlapping or adjacent
+                lastRange.to = Math.max(lastRange.to, changeTo);
+                return;
+              }
+
+              // Check if there's only whitespace between ranges (should merge)
+              const gapText = state.doc.textBetween(lastRange.to, changeFrom, '\n');
+              if (!gapText.trim()) {
+                lastRange.to = Math.max(lastRange.to, changeTo);
+                return;
+              }
+
+              // Separate range
+              mergedRanges.push({ from: changeFrom, to: changeTo });
+            });
+
+            // Filter to only ranges that overlap with the selection
+            const overlappingRanges = mergedRanges.filter(
+              (range) => range.from < selectionRange.to && range.to > selectionRange.from,
+            );
+
+            if (overlappingRanges.length) {
+              overlappingRanges.forEach((range) => deletionRanges.push(range));
+            }
+          }
+
+          // Sort deletion ranges and process them (in reverse order to maintain position accuracy)
+          deletionRanges.sort((a, b) => b.from - a.from);
+
+          for (const range of deletionRanges) {
+            const deleteFrom = map.map(range.from);
+            const deleteTo = map.map(range.to);
+
+            // Delete the entire range in one operation
+            const deletionStep = new ReplaceStep(deleteFrom, deleteTo, Slice.empty);
+            tr.step(deletionStep);
+            map.appendMap(deletionStep.getMap());
+          }
 
           if (tr.steps.length) {
             dispatch(tr);

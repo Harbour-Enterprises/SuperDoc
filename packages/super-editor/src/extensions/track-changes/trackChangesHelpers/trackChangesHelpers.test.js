@@ -246,6 +246,39 @@ describe('trackChangesHelpers', () => {
     expect(hasDeleteMark).toBe(true);
   });
 
+  it('trackedTransaction inserts replacements at the requested position even when selection is elsewhere', () => {
+    const deleteMark = schema.marks[TrackDeleteMarkName].create({
+      id: 'del-floating',
+      author: user.name,
+      authorEmail: user.email,
+      date,
+    });
+
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('Alpha '),
+      schema.text('Beta', [deleteMark]),
+      schema.text(' Gamma'),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const markPosition = documentHelpers.findMarkPosition(doc, 7, TrackDeleteMarkName);
+    const selection = TextSelection.create(doc, markPosition.from, markPosition.to);
+    const state = EditorState.create({
+      schema,
+      doc,
+      selection,
+      plugins: basePlugins,
+    });
+
+    let tr = state.tr.replaceWith(1, 6, schema.text('Omega '));
+    tr.setMeta('inputType', 'programmatic');
+
+    const tracked = trackedTransaction({ tr, state, user });
+    const nextState = state.apply(tracked);
+
+    expect(nextState.doc.textContent).toBe('Omega Beta Gamma');
+    expect(nextState.doc.textBetween(1, 7, '', '')).toBe('Omega ');
+  });
+
   it('trackedTransaction returns original transaction when metadata disallows tracking', () => {
     const state = createState(createDocWithText('abc'));
     const tr = state.tr.insertText('!', 1);

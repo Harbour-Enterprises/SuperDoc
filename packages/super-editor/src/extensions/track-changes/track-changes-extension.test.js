@@ -4,6 +4,7 @@ import { TrackChanges } from './track-changes.js';
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from './constants.js';
 import { TrackChangesBasePlugin, TrackChangesBasePluginKey } from './plugins/trackChangesBasePlugin.js';
 import { initTestEditor } from '@tests/helpers/helpers.js';
+import { getTrackChanges } from './trackChangesHelpers/getTrackChanges.js';
 
 const commands = TrackChanges.config.addCommands();
 
@@ -66,6 +67,61 @@ describe('TrackChanges extension commands', () => {
     commands.acceptTrackedChangesBetween(
       1,
       doc.content.size,
+    )({
+      state,
+      dispatch: (tr) => {
+        nextState = state.apply(tr);
+      },
+    });
+
+    expect(nextState).toBeDefined();
+    expect(nextState.doc.textContent).toBe('');
+  });
+
+  it('acceptTrackedChangesBetween removes a full deletion that spans multiple inline nodes', () => {
+    const deleteMark = schema.marks[TrackDeleteMarkName].create({ id: 'del-date' });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('August 25', [deleteMark]),
+      schema.text(', 2025', [deleteMark]),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const [firstSegment] = getTrackChanges(state, 'del-date');
+    expect(firstSegment).toBeDefined();
+
+    let nextState;
+    commands.acceptTrackedChangesBetween(
+      firstSegment.from,
+      firstSegment.to,
+    )({
+      state,
+      dispatch: (tr) => {
+        nextState = state.apply(tr);
+      },
+    });
+
+    expect(nextState).toBeDefined();
+    expect(nextState.doc.textContent).toBe('');
+  });
+
+  it('acceptTrackedChangesBetween removes tracked deletions that span nodes unable to carry marks', () => {
+    const deleteMark = schema.marks[TrackDeleteMarkName].create({ id: 'del-date-break' });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('August 25', [deleteMark]),
+      schema.nodes.lineBreak.create(),
+      schema.text(', 2025', [deleteMark]),
+    ]);
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const [firstSegment] = getTrackChanges(state, 'del-date-break');
+    expect(firstSegment).toBeDefined();
+
+    let nextState;
+    commands.acceptTrackedChangesBetween(
+      firstSegment.from,
+      firstSegment.to,
     )({
       state,
       dispatch: (tr) => {

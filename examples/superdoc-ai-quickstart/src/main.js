@@ -37,20 +37,53 @@ const allButtons = [
 ].filter((button) => button instanceof HTMLButtonElement);
 
 let aiInstance = null;
+let superdocInstance = null;
 
-const initialDocument = `
-  <h1>SuperDoc AI Actions Overview</h1>
-  <p>
-    SuperDoc AI is the LLM bridge for SuperDoc editors, packaging provider management and document-context enrichment into one consistent API. It sits directly in the collaborative canvas so teams can call AI assistance the moment content is drafted.
-  </p>
-  <p>
-  Launched on November 1st, 2025, this package seamlessly integrates search, rewriting, highlighting, tracked changes, comment insertion, and streaming completions to maintain editorial momentum. It transforms every SuperDoc workspace into an AI-powered collaborator, enabling teams to uncover insights, implement structured edits, and document feedback—all within a single environment. 
-  </p>
-  <p>
-  The next milestone is to create a comprehensive demos and documentation, and proactively communicating changes to customers to ensure adoption feels effortless.
-  </p>
+const headerPrimary = document.querySelector('.page-header > div:first-child');
+const uploadControls = document.createElement('div');
+uploadControls.style.display = 'flex';
+uploadControls.style.flexWrap = 'wrap';
+uploadControls.style.alignItems = 'center';
+uploadControls.style.gap = '0.75rem';
+uploadControls.style.marginTop = '0.75rem';
 
-`;
+const uploadButton = document.createElement('button');
+uploadButton.type = 'button';
+uploadButton.textContent = 'Upload document';
+uploadButton.setAttribute('aria-label', 'Upload a DOCX, PDF, HTML, or text document');
+uploadButton.style.padding = '0.65rem 1.25rem';
+uploadButton.style.borderRadius = '999px';
+uploadButton.style.border = 'none';
+uploadButton.style.background = '#2563eb';
+uploadButton.style.color = '#fff';
+uploadButton.style.fontWeight = '600';
+uploadButton.style.cursor = 'pointer';
+
+const uploadLabel = document.createElement('span');
+uploadLabel.textContent = 'No document uploaded yet.';
+uploadLabel.style.fontSize = '0.9rem';
+uploadLabel.style.color = '#475569';
+
+const uploadInput = document.createElement('input');
+uploadInput.type = 'file';
+uploadInput.accept = '.docx,.doc,.pdf,.html,.htm,.txt,.md,.markdown,.rtf';
+uploadInput.style.display = 'none';
+
+uploadButton.addEventListener('click', () => uploadInput.click());
+
+uploadInput.addEventListener('change', (event) => {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  uploadLabel.textContent = `Loading "${file.name}"...`;
+  createSuperdoc(file);
+  uploadInput.value = '';
+});
+
+uploadControls.append(uploadButton, uploadLabel, uploadInput);
+headerPrimary?.append(uploadControls);
 
 function setButtonsEnabled(enabled) {
   allButtons.forEach((button) => {
@@ -169,6 +202,7 @@ function initializeAI(superdoc) {
       userId: 'ai-demo',
       // profileUrl: 'your bot url',
     },
+    streamResults: false,
     provider: {
       type: 'openai',
       apiKey,
@@ -200,18 +234,50 @@ function initializeAI(superdoc) {
   return aiInstance;
 }
 
-const superdoc = new SuperDoc({
-  selector: '#superdoc',
-  documentMode: 'editing',
-  pagination: true,
-  rulers: true,
-  toolbar: '#superdoc-toolbar',
-  onEditorCreate: ({ editor }) => {
-    editor?.commands?.insertContent?.(initialDocument);
-    statusText.textContent = 'SuperDoc is ready. Initializing AI...';
-    initializeAI(superdoc);
+function createSuperdoc(documentFile = null) {
+  const documentName = documentFile?.name ?? '';
+  if (documentName) {
+    statusText.textContent = `Loading "${documentName}"...`;
+  } else if (!superdocInstance) {
+    statusText.textContent = 'Preparing SuperDoc editor...';
+  } else {
+    statusText.textContent = 'Resetting editor...';
   }
-});
+
+  aiInstance = null;
+  setButtonsEnabled(false);
+
+  if (superdocInstance) {
+    superdocInstance.destroy();
+  }
+
+  const baseConfig = {
+    selector: '#superdoc',
+    documentMode: 'editing',
+    pagination: true,
+    rulers: true,
+    toolbar: '#superdoc-toolbar',
+    ...(documentFile ? { document: documentFile } : {})
+  };
+
+  let nextSuperdoc = null;
+  nextSuperdoc = new SuperDoc({
+    ...baseConfig,
+    onEditorCreate: () => {
+      if (documentName) {
+        uploadLabel.textContent = `Loaded "${documentName}"`;
+        statusText.textContent = `Loaded "${documentName}". Initializing AI...`;
+      } else {
+        uploadLabel.textContent = 'Using a blank canvas. Upload a document to replace it.';
+        statusText.textContent = 'SuperDoc is ready. Initializing AI...';
+      }
+
+      initializeAI(nextSuperdoc);
+    }
+  });
+  superdocInstance = nextSuperdoc;
+  return nextSuperdoc;
+}
 
 const actionConfigs = [
   {
@@ -220,7 +286,7 @@ const actionConfigs = [
     button: insertTrackedChangeButton,
     prompt:
       'Propose a tracked change that clarifies the rollout responsibilities in the opening section.',
-    runner: (ai, prompt) => ai.action.insertTrackedChange(prompt),
+    runner: (ai, prompt) => ai.action.insertTrackedChanges(prompt),
   },
   {
     id: 'insertComment',
@@ -346,4 +412,5 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+createSuperdoc();
 setButtonsEnabled(false);

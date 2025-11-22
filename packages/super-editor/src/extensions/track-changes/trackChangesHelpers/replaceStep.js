@@ -21,8 +21,10 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
  */
 export const replaceStep = ({ state, tr, step, newTr, map, user, date, originalStep, originalStepIndex }) => {
   const deletionMarkSchema = state.schema.marks[TrackDeleteMarkName];
-  const deletionMark = findMark(state, deletionMarkSchema, false);
-  const positionTo = deletionMark ? deletionMark.to : step.to;
+  const deletionMarkRange = findMark(state, deletionMarkSchema, false);
+  const isStepWithinDeletion =
+    deletionMarkRange && step.from >= deletionMarkRange.from && step.from <= deletionMarkRange.to;
+  const positionTo = isStepWithinDeletion ? deletionMarkRange.to : step.to;
 
   const newStep = new ReplaceStep(
     positionTo, // We insert all the same steps, but with "from"/"to" both set to "to" in order not to delete content. Mapped as needed.
