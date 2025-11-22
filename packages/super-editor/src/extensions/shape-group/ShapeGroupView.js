@@ -336,59 +336,67 @@ export class ShapeGroupView {
   }
 
   createTextElement(textContent, textAlign, width, height) {
-    const textGroup = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    // Use foreignObject with HTML for proper text wrapping
+    const foreignObject = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+    foreignObject.setAttribute('x', '0');
+    foreignObject.setAttribute('y', '0');
+    foreignObject.setAttribute('width', width.toString());
+    foreignObject.setAttribute('height', height.toString());
 
-    // Set text alignment - default to left (start)
-    let textAnchor = 'start';
-    let xPos = 10; // Small padding from left
+    // Create HTML div for text content
+    const div = document.createElement('div');
+    div.style.width = '100%';
+    div.style.height = '100%';
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.padding = '10px';
+    div.style.boxSizing = 'border-box';
+    div.style.wordWrap = 'break-word';
+    div.style.overflowWrap = 'break-word';
 
+    // Set text alignment
     if (textAlign === 'center') {
-      textAnchor = 'middle';
-      xPos = width / 2;
+      div.style.textAlign = 'center';
+      div.style.justifyContent = 'center';
     } else if (textAlign === 'right' || textAlign === 'r') {
-      textAnchor = 'end';
-      xPos = width - 10; // Small padding from right
+      div.style.textAlign = 'right';
+      div.style.justifyContent = 'flex-end';
+    } else {
+      div.style.textAlign = 'left';
+      div.style.justifyContent = 'flex-start';
     }
-    // else: default to 'start' (left-aligned)
 
-    textGroup.setAttribute('x', xPos.toString());
-    textGroup.setAttribute('y', (height / 2).toString());
-    textGroup.setAttribute('text-anchor', textAnchor);
-    textGroup.setAttribute('dominant-baseline', 'middle');
+    // Create text container
+    const textContainer = document.createElement('div');
 
     // Add text content with formatting
-    textContent.parts.forEach((part, index) => {
-      const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-      tspan.textContent = part.text;
+    textContent.parts.forEach((part) => {
+      const span = document.createElement('span');
+      span.textContent = part.text;
 
       // Apply formatting
       if (part.formatting) {
-        let style = '';
         if (part.formatting.bold) {
-          style += 'font-weight: bold; ';
+          span.style.fontWeight = 'bold';
         }
         if (part.formatting.italic) {
-          style += 'font-style: italic; ';
+          span.style.fontStyle = 'italic';
         }
         if (part.formatting.color) {
-          tspan.setAttribute('fill', `#${part.formatting.color}`);
+          span.style.color = `#${part.formatting.color}`;
         }
         if (part.formatting.fontSize) {
-          style += `font-size: ${part.formatting.fontSize}px; `;
-        }
-        if (style) {
-          tspan.setAttribute('style', style);
+          span.style.fontSize = `${part.formatting.fontSize}px`;
         }
       }
 
-      if (index > 0) {
-        tspan.setAttribute('dx', '0');
-      }
-
-      textGroup.appendChild(tspan);
+      textContainer.appendChild(span);
     });
 
-    return textGroup;
+    div.appendChild(textContainer);
+    foreignObject.appendChild(div);
+
+    return foreignObject;
   }
 
   createGradient(gradientData, gradientId) {

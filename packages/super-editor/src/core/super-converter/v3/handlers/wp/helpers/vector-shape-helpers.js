@@ -22,6 +22,9 @@ export function getThemeColor(name) {
     text2: '#1f497d',
     background1: '#ffffff',
     background2: '#eeece1',
+    // Office XML shortcuts
+    bg1: '#ffffff',
+    bg2: '#eeece1',
   };
   return colors[name] ?? '#000000';
 }
@@ -174,6 +177,7 @@ export function extractFillColor(spPr, style) {
     if (schemeClr) {
       const themeName = schemeClr.attributes?.['val'];
       let color = getThemeColor(themeName);
+      let alpha = null;
 
       const modifiers = schemeClr.elements || [];
       modifiers.forEach((mod) => {
@@ -185,14 +189,31 @@ export function extractFillColor(spPr, style) {
           color = applyColorModifier(color, 'lumMod', mod.attributes['val']);
         } else if (mod.name === 'a:lumOff') {
           color = applyColorModifier(color, 'lumOff', mod.attributes['val']);
+        } else if (mod.name === 'a:alpha') {
+          alpha = parseInt(mod.attributes['val']) / 100000;
         }
       });
+
+      // Return object with alpha if present, otherwise just the color string
+      if (alpha !== null && alpha < 1) {
+        return { type: 'solidWithAlpha', color, alpha };
+      }
       return color;
     }
 
     const srgbClr = solidFill.elements?.find((el) => el.name === 'a:srgbClr');
     if (srgbClr) {
-      return '#' + srgbClr.attributes?.['val'];
+      let alpha = null;
+      const alphaEl = srgbClr.elements?.find((el) => el.name === 'a:alpha');
+      if (alphaEl) {
+        alpha = parseInt(alphaEl.attributes?.['val'] || '100000', 10) / 100000;
+      }
+
+      const color = '#' + srgbClr.attributes?.['val'];
+      if (alpha !== null && alpha < 1) {
+        return { type: 'solidWithAlpha', color, alpha };
+      }
+      return color;
     }
   }
 

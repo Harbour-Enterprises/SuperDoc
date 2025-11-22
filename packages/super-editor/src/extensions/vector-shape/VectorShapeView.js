@@ -67,36 +67,16 @@ export class VectorShapeView {
       element.style.transform = transforms.join(' ');
     }
 
-    const svgTemplate = this.generateSVG({
-      kind: attrs.kind,
-      fillColor: attrs.fillColor,
-      strokeColor: attrs.strokeColor,
-      strokeWidth: attrs.strokeWidth,
-      width: attrs.width,
-      height: attrs.height,
-    });
-
-    if (svgTemplate) {
-      // Check if fillColor is a gradient
-      if (attrs.fillColor && typeof attrs.fillColor === 'object' && attrs.fillColor.type === 'gradient') {
-        // Parse SVG and add gradient
-        element.innerHTML = svgTemplate;
-        const svg = element.querySelector('svg');
-        if (svg) {
-          this.applyGradientToSVG(svg, attrs.fillColor);
-        }
-      } else {
-        element.innerHTML = svgTemplate;
-      }
+    // Create SVG directly with proper dimensions
+    const svg = this.createSVGElement(attrs);
+    if (svg) {
+      element.appendChild(svg);
 
       // Add text content if present
       if (attrs.textContent && attrs.textContent.parts) {
-        const svg = element.querySelector('svg');
-        if (svg) {
-          const textElement = this.createTextElement(attrs.textContent, attrs.textAlign, attrs.width, attrs.height);
-          if (textElement) {
-            svg.appendChild(textElement);
-          }
+        const textElement = this.createTextElement(attrs.textContent, attrs.textAlign, attrs.width, attrs.height);
+        if (textElement) {
+          svg.appendChild(textElement);
         }
       }
     }
@@ -215,11 +195,172 @@ export class VectorShapeView {
     return transforms;
   }
 
+  createSVGElement(attrs) {
+    const { kind, fillColor, strokeColor, strokeWidth, width, height } = attrs;
+
+    // Create SVG with proper dimensions (no viewBox distortion)
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', width.toString());
+    svg.setAttribute('height', height.toString());
+    svg.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    svg.style.display = 'block';
+
+    // Create defs for gradients if needed
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svg.appendChild(defs);
+
+    // Determine fill value
+    let fill = 'none';
+    let fillOpacity = 1;
+
+    if (fillColor) {
+      if (typeof fillColor === 'object') {
+        if (fillColor.type === 'gradient') {
+          const gradientId = `gradient-${Math.random().toString(36).substr(2, 9)}-${Date.now()}`;
+          const gradient = this.createGradient(fillColor, gradientId);
+          if (gradient) {
+            defs.appendChild(gradient);
+            fill = `url(#${gradientId})`;
+          }
+        } else if (fillColor.type === 'solidWithAlpha') {
+          fill = fillColor.color;
+          fillOpacity = fillColor.alpha;
+        }
+      } else {
+        fill = fillColor;
+      }
+    }
+
+    const stroke = strokeColor === null ? 'none' : strokeColor || 'none';
+    const strokeW = strokeColor === null ? 0 : strokeColor ? strokeWidth || 1 : 0;
+
+    // Create shape element based on kind
+    let shapeElement;
+
+    switch (kind) {
+      case 'rect':
+        shapeElement = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        shapeElement.setAttribute('x', '0');
+        shapeElement.setAttribute('y', '0');
+        shapeElement.setAttribute('width', width.toString());
+        shapeElement.setAttribute('height', height.toString());
+        break;
+
+      case 'roundRect':
+        shapeElement = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        shapeElement.setAttribute('x', '0');
+        shapeElement.setAttribute('y', '0');
+        shapeElement.setAttribute('width', width.toString());
+        shapeElement.setAttribute('height', height.toString());
+        // Use a reasonable corner radius (5% of smallest dimension)
+        const radius = Math.min(width, height) * 0.05;
+        shapeElement.setAttribute('rx', radius.toString());
+        shapeElement.setAttribute('ry', radius.toString());
+        break;
+
+      case 'ellipse':
+        shapeElement = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+        shapeElement.setAttribute('cx', (width / 2).toString());
+        shapeElement.setAttribute('cy', (height / 2).toString());
+        shapeElement.setAttribute('rx', (width / 2).toString());
+        shapeElement.setAttribute('ry', (height / 2).toString());
+        break;
+
+      case 'circle':
+        shapeElement = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse');
+        shapeElement.setAttribute('cx', (width / 2).toString());
+        shapeElement.setAttribute('cy', (height / 2).toString());
+        shapeElement.setAttribute('rx', (width / 2).toString());
+        shapeElement.setAttribute('ry', (height / 2).toString());
+        break;
+
+      default:
+        // For complex shapes, fall back to preset geometry with proper viewBox
+        const svgTemplate = this.generateSVG({ kind, fillColor, strokeColor, strokeWidth, width, height });
+        if (svgTemplate) {
+          const tempDiv = document.createElement('div');
+          tempDiv.innerHTML = svgTemplate;
+          const tempSvg = tempDiv.querySelector('svg');
+          if (tempSvg) {
+            // Fix viewBox to match actual dimensions
+            tempSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            tempSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+            return tempSvg;
+          }
+        }
+        return null;
+    }
+
+    // Apply fill and stroke
+    shapeElement.setAttribute('fill', fill);
+    if (fillOpacity < 1) {
+      shapeElement.setAttribute('fill-opacity', fillOpacity.toString());
+    }
+    shapeElement.setAttribute('stroke', stroke);
+    shapeElement.setAttribute('stroke-width', strokeW.toString());
+
+    svg.appendChild(shapeElement);
+    return svg;
+  }
+
+  createGradient(gradientData, gradientId) {
+    const { gradientType, stops, angle } = gradientData;
+
+    // Ensure we have stops
+    if (!stops || stops.length === 0) {
+      return null;
+    }
+
+    let gradient;
+
+    if (gradientType === 'linear') {
+      gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+      gradient.setAttribute('id', gradientId);
+
+      // Convert angle to x1, y1, x2, y2 coordinates
+      const radians = (angle * Math.PI) / 180;
+      const x1 = 50 - 50 * Math.cos(radians);
+      const y1 = 50 + 50 * Math.sin(radians);
+      const x2 = 50 + 50 * Math.cos(radians);
+      const y2 = 50 - 50 * Math.sin(radians);
+
+      gradient.setAttribute('x1', `${x1}%`);
+      gradient.setAttribute('y1', `${y1}%`);
+      gradient.setAttribute('x2', `${x2}%`);
+      gradient.setAttribute('y2', `${y2}%`);
+    } else {
+      gradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+      gradient.setAttribute('id', gradientId);
+      gradient.setAttribute('cx', '50%');
+      gradient.setAttribute('cy', '50%');
+      gradient.setAttribute('r', '50%');
+    }
+
+    // Add gradient stops
+    stops.forEach((stop) => {
+      const stopElement = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+      stopElement.setAttribute('offset', `${stop.position * 100}%`);
+      stopElement.setAttribute('stop-color', stop.color);
+      if (stop.alpha != null && stop.alpha < 1) {
+        stopElement.setAttribute('stop-opacity', stop.alpha.toString());
+      }
+      gradient.appendChild(stopElement);
+    });
+
+    return gradient;
+  }
+
   generateSVG({ kind, fillColor, strokeColor, strokeWidth, width, height }) {
     try {
-      // For gradients, use a placeholder fill that will be replaced
-      const fill =
-        fillColor && typeof fillColor === 'object' && fillColor.type === 'gradient' ? '#cccccc' : fillColor || 'none';
+      // For complex fill types (gradients, alpha), use a placeholder or extract the color
+      let fill = fillColor || 'none';
+      if (fillColor && typeof fillColor === 'object') {
+        if (fillColor.type === 'gradient') {
+          fill = '#cccccc'; // Placeholder for gradients
+        } else if (fillColor.type === 'solidWithAlpha') {
+          fill = fillColor.color; // Use the actual color, alpha will be applied separately
+        }
+      }
 
       return getPresetShapeSvg({
         preset: kind,
@@ -294,59 +435,79 @@ export class VectorShapeView {
     });
   }
 
+  applyAlphaToSVG(svg, alphaData) {
+    const { color, alpha } = alphaData;
+
+    // Apply color with opacity to all filled elements
+    const filledElements = svg.querySelectorAll('[fill]:not([fill="none"])');
+    filledElements.forEach((el) => {
+      el.setAttribute('fill', color);
+      el.setAttribute('fill-opacity', alpha.toString());
+    });
+  }
+
   createTextElement(textContent, textAlign, width, height) {
-    const textGroup = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+    // Use foreignObject with HTML for proper text wrapping
+    const foreignObject = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+    foreignObject.setAttribute('x', '0');
+    foreignObject.setAttribute('y', '0');
+    foreignObject.setAttribute('width', width.toString());
+    foreignObject.setAttribute('height', height.toString());
+
+    // Create HTML div for text content
+    const div = document.createElement('div');
+    div.style.width = '100%';
+    div.style.height = '100%';
+    div.style.display = 'flex';
+    div.style.alignItems = 'center';
+    div.style.padding = '10px';
+    div.style.boxSizing = 'border-box';
+    div.style.wordWrap = 'break-word';
+    div.style.overflowWrap = 'break-word';
 
     // Set text alignment
-    let textAnchor = 'middle';
-    let xPos = width / 2;
-
-    if (textAlign === 'l' || textAlign === 'left') {
-      textAnchor = 'start';
-      xPos = 10; // Small padding from left
-    } else if (textAlign === 'r' || textAlign === 'right') {
-      textAnchor = 'end';
-      xPos = width - 10; // Small padding from right
+    if (textAlign === 'center') {
+      div.style.textAlign = 'center';
+      div.style.justifyContent = 'center';
+    } else if (textAlign === 'right' || textAlign === 'r') {
+      div.style.textAlign = 'right';
+      div.style.justifyContent = 'flex-end';
+    } else {
+      div.style.textAlign = 'left';
+      div.style.justifyContent = 'flex-start';
     }
 
-    textGroup.setAttribute('x', xPos.toString());
-    textGroup.setAttribute('y', (height / 2).toString());
-    textGroup.setAttribute('text-anchor', textAnchor);
-    textGroup.setAttribute('dominant-baseline', 'middle');
+    // Create text container
+    const textContainer = document.createElement('div');
 
     // Add text content with formatting
-    textContent.parts.forEach((part, index) => {
-      const tspan = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
-      tspan.textContent = part.text;
+    textContent.parts.forEach((part) => {
+      const span = document.createElement('span');
+      span.textContent = part.text;
 
       // Apply formatting
       if (part.formatting) {
-        let style = '';
         if (part.formatting.bold) {
-          style += 'font-weight: bold; ';
+          span.style.fontWeight = 'bold';
         }
         if (part.formatting.italic) {
-          style += 'font-style: italic; ';
+          span.style.fontStyle = 'italic';
         }
         if (part.formatting.color) {
-          tspan.setAttribute('fill', `#${part.formatting.color}`);
+          span.style.color = `#${part.formatting.color}`;
         }
         if (part.formatting.fontSize) {
-          style += `font-size: ${part.formatting.fontSize}px; `;
-        }
-        if (style) {
-          tspan.setAttribute('style', style);
+          span.style.fontSize = `${part.formatting.fontSize}px`;
         }
       }
 
-      if (index > 0) {
-        tspan.setAttribute('dx', '0');
-      }
-
-      textGroup.appendChild(tspan);
+      textContainer.appendChild(span);
     });
 
-    return textGroup;
+    div.appendChild(textContainer);
+    foreignObject.appendChild(div);
+
+    return foreignObject;
   }
 
   buildView() {

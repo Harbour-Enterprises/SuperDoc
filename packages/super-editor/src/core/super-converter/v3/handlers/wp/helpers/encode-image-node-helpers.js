@@ -281,20 +281,23 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
   const prstGeom = spPr?.elements.find((el) => el.name === 'a:prstGeom');
   const shapeType = prstGeom?.attributes['prst'];
 
-  if (shapeType === 'rect' && !textBoxContent) {
+  // Check if shape has gradient fill or other complex fills
+  const hasGradientFill = spPr?.elements?.find((el) => el.name === 'a:gradFill');
+
+  // For plain rectangles without text and without gradients, use the specialized contentBlock handler
+  if (shapeType === 'rect' && !textBoxContent && !hasGradientFill) {
     return getRectangleShape(params, spPr, node);
   }
 
-  if (shapeType && !textBoxContent) {
+  // For all other shapes (with or without text), or shapes with gradients, use the vector shape handler
+  if (shapeType) {
     const result = getVectorShape({ params, node, graphicData, marginOffset, anchorData, wrap, isAnchor });
     if (result) return result;
   }
 
-  if (!textBoxContent) {
-    return buildShapePlaceholder(node, size, padding, marginOffset, 'drawing');
-  }
-
-  return buildShapePlaceholder(node, size, padding, marginOffset, 'textbox');
+  // Fallback to placeholder if no shape type found
+  const fallbackType = textBoxContent ? 'textbox' : 'drawing';
+  return buildShapePlaceholder(node, size, padding, marginOffset, fallbackType);
 };
 
 /**
@@ -638,14 +641,15 @@ const getRectangleShape = (params, spPr, node) => {
     schemaAttrs.drawingContent = drawingNode;
   }
 
-  const xfrm = node.elements?.find((el) => el.name === 'a:xfrm');
+  // Look for shape properties in spPr, not node
+  const xfrm = spPr?.elements?.find((el) => el.name === 'a:xfrm');
   const start = xfrm?.elements?.find((el) => el.name === 'a:off');
   const size = xfrm?.elements?.find((el) => el.name === 'a:ext');
-  const solidFill = node.elements?.find((el) => el.name === 'a:solidFill');
+  const solidFill = spPr?.elements?.find((el) => el.name === 'a:solidFill');
 
   // TODO: We should handle this
   // eslint-disable-next-line no-unused-vars
-  const outline = node.elements?.find((el) => el.name === 'a:ln');
+  const outline = spPr?.elements?.find((el) => el.name === 'a:ln');
 
   // Only create rectangleSize if we have the necessary data
   if (start && size) {
@@ -788,6 +792,17 @@ export function getVectorShape({ params, node, graphicData, marginOffset, anchor
   const strokeColor = extractStrokeColor(spPr, style);
   const strokeWidth = extractStrokeWidth(spPr);
 
+  // Extract textbox content if present
+  const textBox = wsp.elements?.find((el) => el.name === 'wps:txbx');
+  const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
+  let textContent = null;
+  let textAlign = 'left';
+
+  if (textBoxContent) {
+    textContent = extractTextFromTextBox(textBoxContent);
+    textAlign = textContent?.horizontalAlign || 'left';
+  }
+
   return {
     type: 'vectorShape',
     attrs: {
@@ -804,6 +819,8 @@ export function getVectorShape({ params, node, graphicData, marginOffset, anchor
       anchorData,
       wrap,
       isAnchor,
+      textContent,
+      textAlign,
       originalAttributes: node?.attributes,
     },
   };
