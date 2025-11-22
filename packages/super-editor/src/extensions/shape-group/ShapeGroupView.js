@@ -197,9 +197,10 @@ export class ShapeGroupView {
 
     // Generate the shape based on its kind
     const shapeKind = attrs.kind || 'rect';
-    const fillColor = attrs.fillColor || '#5b9bd5';
-    const strokeColor = attrs.strokeColor || '#000000';
-    const strokeWidth = attrs.strokeWidth || 1;
+    const fillColor = attrs.fillColor ?? '#5b9bd5';
+    // Use null-coalescing to preserve null (from <a:noFill/>), but provide default for undefined
+    const strokeColor = attrs.strokeColor === null ? null : (attrs.strokeColor ?? '#000000');
+    const strokeWidth = attrs.strokeWidth ?? 1;
 
     // Handle gradient fills
     let fillValue = fillColor;
@@ -219,8 +220,8 @@ export class ShapeGroupView {
         preset: shapeKind,
         styleOverrides: {
           fill: fillValue || 'none',
-          stroke: strokeColor || 'none',
-          strokeWidth: strokeWidth || 0,
+          stroke: strokeColor === null ? 'none' : strokeColor,
+          strokeWidth: strokeColor === null ? 0 : strokeWidth,
         },
         width,
         height,
@@ -303,9 +304,9 @@ export class ShapeGroupView {
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('width', width.toString());
       rect.setAttribute('height', height.toString());
-      rect.setAttribute('fill', fillColor || '#cccccc');
-      rect.setAttribute('stroke', strokeColor || '#000000');
-      rect.setAttribute('stroke-width', (strokeWidth || 1).toString());
+      rect.setAttribute('fill', typeof fillColor === 'string' ? fillColor : '#cccccc');
+      rect.setAttribute('stroke', strokeColor === null ? 'none' : strokeColor);
+      rect.setAttribute('stroke-width', strokeColor === null ? '0' : strokeWidth.toString());
       g.appendChild(rect);
     }
 
@@ -323,17 +324,18 @@ export class ShapeGroupView {
   createTextElement(textContent, textAlign, width, height) {
     const textGroup = document.createElementNS('http://www.w3.org/2000/svg', 'text');
 
-    // Set text alignment
-    let textAnchor = 'middle';
-    let xPos = width / 2;
+    // Set text alignment - default to left (start)
+    let textAnchor = 'start';
+    let xPos = 10; // Small padding from left
 
-    if (textAlign === 'l' || textAlign === 'left') {
-      textAnchor = 'start';
-      xPos = 10; // Small padding from left
-    } else if (textAlign === 'r' || textAlign === 'right') {
+    if (textAlign === 'center') {
+      textAnchor = 'middle';
+      xPos = width / 2;
+    } else if (textAlign === 'right' || textAlign === 'r') {
       textAnchor = 'end';
       xPos = width - 10; // Small padding from right
     }
+    // else: default to 'start' (left-aligned)
 
     textGroup.setAttribute('x', xPos.toString());
     textGroup.setAttribute('y', (height / 2).toString());

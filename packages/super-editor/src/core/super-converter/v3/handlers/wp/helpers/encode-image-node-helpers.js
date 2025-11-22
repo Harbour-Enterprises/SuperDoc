@@ -417,9 +417,9 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
         textContent = extractTextFromTextBox(textBoxContent);
       }
 
-      // Extract body properties for text alignment
-      const bodyPr = wsp.elements?.find((el) => el.name === 'wps:bodyPr');
-      const textAlign = bodyPr?.attributes?.['anchor'] || 'ctr'; // center is default
+      // Extract horizontal alignment from text content (defaults to 'left' if not specified)
+      // Note: bodyPr 'anchor' attribute is for vertical alignment (t/ctr/b), not horizontal
+      const textAlign = textContent?.horizontalAlign || 'left';
 
       return {
         shapeType: 'vectorShape',
@@ -478,8 +478,22 @@ function extractTextFromTextBox(textBoxContent) {
 
   const paragraphs = textBoxContent.elements.filter((el) => el.name === 'w:p');
   const textParts = [];
+  let horizontalAlign = null; // Extract from first paragraph with alignment
 
   paragraphs.forEach((paragraph) => {
+    // Extract paragraph alignment (w:jc) if not already found
+    if (!horizontalAlign) {
+      const pPr = paragraph.elements?.find((el) => el.name === 'w:pPr');
+      const jc = pPr?.elements?.find((el) => el.name === 'w:jc');
+      if (jc) {
+        const jcVal = jc.attributes?.['val'] || jc.attributes?.['w:val'];
+        // Map Word alignment values to our format
+        if (jcVal === 'left' || jcVal === 'start') horizontalAlign = 'left';
+        else if (jcVal === 'right' || jcVal === 'end') horizontalAlign = 'right';
+        else if (jcVal === 'center') horizontalAlign = 'center';
+      }
+    }
+
     const runs = paragraph.elements?.filter((el) => el.name === 'w:r') || [];
     runs.forEach((run) => {
       const textEl = run.elements?.find((el) => el.name === 'w:t');
@@ -511,7 +525,12 @@ function extractTextFromTextBox(textBoxContent) {
     });
   });
 
-  return textParts.length > 0 ? { parts: textParts } : null;
+  if (textParts.length === 0) return null;
+
+  return {
+    parts: textParts,
+    horizontalAlign: horizontalAlign || 'left', // Default to left if not specified
+  };
 }
 
 /**
