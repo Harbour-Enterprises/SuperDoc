@@ -81,22 +81,33 @@ test.describe('comments & tracked changes', () => {
       .filter({ hasText: 'Gabriel Chittolina (imported)', visible: true });
     const commentCount = await commentsElements.count();
     expect(commentCount).toBe(2);
+  });
 
-    const firstComment = await commentsElements.nth(0);
-    const firstCommentAuthor = await firstComment.getByText(comments[0].author);
-    const firstCommentText = await firstComment.getByText(comments[0].text);
-    const firstCommentDate = await firstComment.getByText(formatDate(comments[0].date));
-    expect(firstCommentAuthor).toBeVisible();
-    expect(firstCommentText).toBeVisible();
-    expect(firstCommentDate).toBeVisible();
+  test('should have correct comment text', async ({ page }) => {
+    await goToPageAndWaitForEditor(page, { includeComments: true });
+    await page
+      .locator('input[type="file"]')
+      .setInputFiles(path.join(testDataFolder, 'comments-documents/basic-comments.docx'));
 
-    const secondComment = await commentsElements.nth(1);
-    const secondCommentAuthor = await secondComment.getByText(comments[1].author);
-    const secondCommentText = await secondComment.getByText(comments[1].text);
-    const secondCommentDate = await secondComment.getByText(formatDate(comments[1].date));
-    expect(secondCommentAuthor).toBeVisible();
-    expect(secondCommentText).toBeVisible();
-    expect(secondCommentDate).toBeVisible();
+    await page.waitForFunction(() => window.superdoc !== undefined && window.editor !== undefined, null, {
+      polling: 100,
+      timeout: 10_000,
+    });
+
+    await sleep(1000);
+
+    const commentsElements = page
+      .getByRole('dialog')
+      .filter({ hasText: 'Gabriel Chittolina (imported)', visible: true });
+    const commentCount = await commentsElements.count();
+
+    for (let i = 0; i < commentCount; i++) {
+      const comment = await commentsElements.nth(i);
+      await expect(comment).toBeVisible();
+      await expect(comment).toContainText(comments[i].author);
+      await expect(comment).toContainText(comments[i].text);
+      await expect(comment).toContainText(formatDate(comments[i].date));
+    }
   });
 
   test('should import all tracked changes', async ({ page }) => {
@@ -135,13 +146,10 @@ test.describe('comments & tracked changes', () => {
 
     for (let i = 0; i < trackedChangeCount; i++) {
       const trackedChange = await trackedChanges.nth(i);
-      for (let j = 0; j < documentTrackedChanges[i].text.length; j++) {
-        console.log(documentTrackedChanges[i].text[j]);
-        const trackedChangeText = await trackedChange.getByText(documentTrackedChanges[i].text[j], { exact: true });
-        expect(trackedChangeText).toBeVisible();
-      }
-      const trackedChangeDate = await trackedChange.getByText(formatDate(documentTrackedChanges[i].date));
-      expect(trackedChangeDate).toBeVisible();
+      await expect(trackedChange).toBeVisible();
+      await expect(trackedChange).toContainText(documentTrackedChanges[i].author);
+      await expect(trackedChange).toContainText(formatDate(documentTrackedChanges[i].date));
+      await expect(trackedChange).toContainText(documentTrackedChanges[i].text.join(''));
     }
   });
 });
