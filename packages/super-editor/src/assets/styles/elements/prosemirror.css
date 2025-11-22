@@ -4,6 +4,8 @@
  */
 .ProseMirror {
   position: relative;
+  /* We use "all: revert" to isolate the editor content from external stylesheets. This makes the "contenteditable" not editable on Safari devices. So we need to keep this. */
+  -webkit-user-modify: read-write-plaintext-only;
 }
 
 .ProseMirror {
@@ -165,7 +167,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 
   overflow-x: auto;
   scrollbar-width: thin;
-  overflow: hidden;
+  overflow: visible; /* Allow table to extend beyond margins */
 
   /*
   The border width does not need to be multiplied by two,
@@ -176,7 +178,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 .ProseMirror table {
   border-collapse: collapse;
   border-spacing: 0;
-  table-layout: fixed;
+  table-layout: auto;
   margin: 0;
   /* width: 100%; */
 }
@@ -187,7 +189,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 
 .ProseMirror td,
 .ProseMirror th {
-  min-width: 1em;
+  min-width: 0;
   position: relative;
   vertical-align: top;
   box-sizing: border-box;

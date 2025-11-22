@@ -54,9 +54,12 @@ export class AIActionsService {
 
     /**
      * Executes a find query and resolves editor positions for matches.
+     *
      * @param query - Natural language description of content to find
      * @param findAll - Whether to find all occurrences or just the first
      * @returns Result with found locations enriched with editor positions
+     * @throws Error if query is empty
+     * @private
      */
     private async executeFindQuery(query: string, findAll: boolean): Promise<Result> {
         if (!validateInput(query, 'Query')) {
@@ -87,8 +90,11 @@ export class AIActionsService {
 
     /**
      * Finds the first occurrence of content matching the query and resolves concrete positions via the editor adapter.
+     * Automatically scrolls to bring the found text into view.
+     *
      * @param query - Natural language description of content to find
      * @returns Result with found locations enriched with editor positions
+     * @throws Error if query is empty
      */
     async find(query: string): Promise<Result> {
         const result = await this.executeFindQuery(query, false);
@@ -109,8 +115,10 @@ export class AIActionsService {
 
     /**
      * Finds all occurrences of content matching the query.
+     *
      * @param query - Natural language description of content to find
      * @returns Result with all found locations
+     * @throws Error if query is empty
      */
     async findAll(query: string): Promise<Result> {
         return this.executeFindQuery(query, true);
@@ -119,9 +127,12 @@ export class AIActionsService {
 
     /**
      * Finds and highlights content in the document.
+     * Automatically scrolls to bring the highlighted content into view.
+     *
      * @param query - Natural language description of content to highlight
-     * @param color - highlight color
+     * @param color - Hex color for the highlight (default: #6CA0DC)
      * @returns Result with highlight ID if successful
+     * @throws Error if query is empty or content not found
      */
     async highlight(query: string, color: string = "#6CA0DC"): Promise<Result> {
         const findResult = await this.find(query);
@@ -148,11 +159,15 @@ export class AIActionsService {
     }
 
     /**
-     * Core logic for all document operations (replace, tracked changes, comments)
-     * @param query - Natural language query
+     * Core logic for all document operations (replace, tracked changes, comments).
+     * Finds matching content and applies the operation function to each match.
+     *
+     * @param query - Natural language query to find content
      * @param multiple - Whether to apply to all occurrences or just the first
-     * @param operationFn - Function to execute the specific operation
-     * @returns Matches and IDs of created items
+     * @param operationFn - Function to execute the specific operation on each match
+     * @returns Array of matches with IDs of created items
+     * @throws Error if query is empty
+     * @private
      */
     private async executeOperation(
         query: string,
@@ -205,9 +220,12 @@ export class AIActionsService {
 
 
     /**
-     * Finds and replaces content with AI-generated alternative.
-     * @param query - Natural language query for replacement
-     * @returns Result with original and suggested text
+     * Finds and replaces the first occurrence of content with AI-generated alternative.
+     * Uses intelligent mark preservation to maintain formatting.
+     *
+     * @param query - Natural language query describing what to replace and how
+     * @returns Result with original and suggested text for the replacement
+     * @throws Error if query is empty
      */
     async replace(query: string): Promise<Result> {
         if (!validateInput(query, 'Query')) {
@@ -217,8 +235,10 @@ export class AIActionsService {
         const matches = await this.executeOperation(
             query,
             false,
-            (adapter, position, replacement) =>
-                adapter.replaceText(position.from, position.to, replacement?.suggestedText || '')
+            (adapter, position, replacement) => {
+                adapter.replaceText(position.from, position.to, replacement?.suggestedText || '');
+                return Promise.resolve();
+            }
         );
 
         return {
@@ -229,8 +249,11 @@ export class AIActionsService {
 
     /**
      * Finds and replaces all occurrences with AI-generated alternatives.
-     * @param query - Natural language query for replacements
+     * Uses intelligent mark preservation to maintain formatting for each replacement.
+     *
+     * @param query - Natural language query describing what to replace and how
      * @returns Result with all replacements made
+     * @throws Error if query is empty
      */
     async replaceAll(query: string): Promise<Result> {
         if (!validateInput(query, 'Query')) {
@@ -240,8 +263,10 @@ export class AIActionsService {
         const matches = await this.executeOperation(
             query,
             true,
-            (adapter, position, replacement) =>
-                adapter.replaceText(position.from, position.to, replacement?.suggestedText || '')
+            (adapter, position, replacement) => {
+                adapter.replaceText(position.from, position.to, replacement?.suggestedText || '');
+                return Promise.resolve();
+            }
         );
 
         return {
@@ -261,12 +286,14 @@ export class AIActionsService {
         const matches = await this.executeOperation(
             query,
             false,
-            (adapter, position, replacement) =>
-                adapter.createTrackedChange(
+            (adapter, position, replacement) => {
+                const changeId = adapter.createTrackedChange(
                     position.from,
                     position.to,
                     replacement.suggestedText || '',
-                )
+                );
+                return Promise.resolve(changeId);
+            }
         );
 
         return {
@@ -286,12 +313,14 @@ export class AIActionsService {
         const matches = await this.executeOperation(
             query,
             true,
-            (adapter, position, replacement) =>
-                adapter.createTrackedChange(
+            (adapter, position, replacement) => {
+                const changeId = adapter.createTrackedChange(
                     position.from,
                     position.to,
                     replacement.suggestedText || '',
-                )
+                );
+                return Promise.resolve(changeId);
+            }
         );
 
         return {

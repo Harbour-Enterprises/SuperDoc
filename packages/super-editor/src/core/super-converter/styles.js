@@ -78,9 +78,16 @@ export const resolveRunProperties = (
  * @param {Object} inlineProps - The inline paragraph properties.
  * @param {boolean} [insideTable=false] - Whether the paragraph is inside a table.
  * @param {boolean} [overrideInlineStyleId=false] - Whether to override the inline style ID with the one from numbering.
+ * @param {string | null} [tableStyleId=null] - styleId for the current table, if any
  * @returns {Object} The resolved paragraph properties.
  */
-export function resolveParagraphProperties(params, inlineProps, insideTable = false, overrideInlineStyleId = false) {
+export function resolveParagraphProperties(
+  params,
+  inlineProps,
+  insideTable = false,
+  overrideInlineStyleId = false,
+  tableStyleId = null,
+) {
   const defaultProps = getDefaultProperties(params, w_pPrTranslator);
   const { properties: normalProps, isDefault: isNormalDefault } = getStyleProperties(params, 'Normal', w_pPrTranslator);
 
@@ -114,6 +121,8 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
     }
   }
 
+  const tableProps = tableStyleId ? resolveStyleChain(params, tableStyleId, w_pPrTranslator) : {};
+
   // Resolve property chain - regular properties are treated differently from indentation
   //   Chain for regular properties
   let defaultsChain;
@@ -122,7 +131,7 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
   } else {
     defaultsChain = [normalProps, defaultProps];
   }
-  const propsChain = [...defaultsChain, numberingProps, styleProps, inlineProps];
+  const propsChain = [...defaultsChain, tableProps, numberingProps, styleProps, inlineProps];
 
   //  Chain for indentation properties
   let indentChain;
@@ -157,6 +166,7 @@ export function resolveParagraphProperties(params, inlineProps, insideTable = fa
   );
   finalProps.indent = finalIndent.indent;
 
+  // TODO: the following likely isn't exactly true --- rather, the doc-default spacing can be overridden by table-level paragraph settings. See 17.7.2 (Style Hierarchy) in the spec.
   if (insideTable && !inlineProps?.spacing && !styleProps.spacing) {
     // Word ignores doc-default spacing inside table cells unless explicitly set,
     // so drop the derived values when nothing is defined inline or via style.
