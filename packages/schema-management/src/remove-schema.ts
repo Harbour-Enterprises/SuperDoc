@@ -5,10 +5,11 @@ import path from 'node:path';
 const packageRoot = path.resolve(new URL('..', import.meta.url).pathname);
 const versionsRoot = path.join(packageRoot, 'versions');
 const manifestPath = path.join(versionsRoot, 'schemas.json');
+const semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 async function main() {
   const version = parseVersion(process.argv.slice(2));
-  if (!version) {
+  if (!version || !semverPattern.test(version)) {
     console.error('Usage: npm run remove -- --version <semver>');
     process.exit(1);
   }
@@ -19,7 +20,12 @@ async function main() {
     process.exit(1);
   }
 
-  const versionDir = path.join(versionsRoot, version);
+  const versionDir = path.resolve(versionsRoot, version);
+  if (!versionDir.startsWith(path.resolve(versionsRoot) + path.sep)) {
+    console.error('Invalid version path.');
+    process.exit(1);
+  }
+
   await fs.rm(versionDir, { recursive: true, force: true });
 
   const updated = { ...manifest };
@@ -41,7 +47,12 @@ function parseVersion(args: string[]): string | null {
 
 async function readManifest(filePath: string) {
   const raw = await fs.readFile(filePath, 'utf8');
-  return JSON.parse(raw);
+  try {
+    return JSON.parse(raw);
+  } catch (error) {
+    console.error(`Failed to parse manifest at ${filePath}:`, error);
+    process.exit(1);
+  }
 }
 
 await main();

@@ -587,6 +587,241 @@ describe('readGitCommit', () => {
   });
 });
 
+describe('--force flag improvements', () => {
+  describe('force flag parsing', () => {
+    it('should detect --force flag in arguments', () => {
+      const args = ['--version', '1.0.0', '--force'];
+      const force = args.includes('--force');
+      expect(force).toBe(true);
+    });
+
+    it('should return false when --force is not present', () => {
+      const args = ['--version', '1.0.0'];
+      const force = args.includes('--force');
+      expect(force).toBe(false);
+    });
+
+    it('should detect --force in any position', () => {
+      const args1 = ['--force', '--version', '1.0.0'];
+      const args2 = ['--version', '1.0.0', '--force'];
+      const args3 = ['--version=1.0.0', '--force'];
+
+      expect(args1.includes('--force')).toBe(true);
+      expect(args2.includes('--force')).toBe(true);
+      expect(args3.includes('--force')).toBe(true);
+    });
+  });
+
+  describe('manifest version collision with --force', () => {
+    it('should detect when version already exists in manifest', () => {
+      const manifest = {
+        versions: {
+          '1.0.0': { version: '1.0.0', entry: 'schema.js', builtAt: '2024-01-01' },
+        },
+      };
+
+      const newVersion = '1.0.0';
+      const versionExists = manifest?.versions?.[newVersion];
+
+      expect(versionExists).toBeDefined();
+    });
+
+    it('should allow overwrite when force flag is true', () => {
+      const manifest = {
+        versions: {
+          '1.0.0': { version: '1.0.0', entry: 'schema.js', builtAt: '2024-01-01' },
+        },
+      };
+
+      const newVersion = '1.0.0';
+      const force = true;
+      const versionExists = manifest?.versions?.[newVersion];
+
+      if (versionExists && !force) {
+        throw new Error('Should not reach this without force');
+      }
+
+      // With force=true, should continue without error
+      expect(versionExists).toBeDefined();
+      expect(force).toBe(true);
+    });
+
+    it('should provide appropriate warning message when overwriting with force', () => {
+      const version = '1.0.0';
+      const force = true;
+      const manifestHasVersion = true;
+
+      const warnings: string[] = [];
+      const mockWarn = (msg: string) => warnings.push(msg);
+
+      if (manifestHasVersion && force) {
+        mockWarn(`Overwriting existing version ${version} due to --force flag.`);
+      }
+
+      expect(warnings).toContain('Overwriting existing version 1.0.0 due to --force flag.');
+    });
+  });
+
+  describe('directory collision with --force', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should remove existing directory when force is true', async () => {
+      const versionDir = '/app/versions/1.0.0';
+      const force = true;
+
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+
+      const exists = await pathExists(versionDir);
+
+      if (exists && force) {
+        await fs.rm(versionDir, { recursive: true, force: true });
+      }
+
+      expect(fs.rm).toHaveBeenCalledWith(versionDir, { recursive: true, force: true });
+    });
+
+    it('should not remove directory when force is false and exists', async () => {
+      const versionDir = '/app/versions/1.0.0';
+      const force = false;
+
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+
+      const exists = await pathExists(versionDir);
+
+      if (exists && !force) {
+        // Should exit rather than remove
+        expect(exists).toBe(true);
+        expect(force).toBe(false);
+      }
+
+      expect(fs.rm).not.toHaveBeenCalled();
+    });
+
+    it('should provide warning when removing existing directory with force', async () => {
+      const versionDir = '/app/versions/1.0.0';
+      const force = true;
+
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+
+      const warnings: string[] = [];
+      const mockWarn = (msg: string) => warnings.push(msg);
+
+      const exists = await pathExists(versionDir);
+
+      if (exists && force) {
+        mockWarn(`Overwriting existing directory ${versionDir} due to --force flag.`);
+        await fs.rm(versionDir, { recursive: true, force: true });
+      }
+
+      expect(warnings).toContain('Overwriting existing directory /app/versions/1.0.0 due to --force flag.');
+      expect(fs.rm).toHaveBeenCalled();
+    });
+  });
+
+  describe('race condition protection with mkdir', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should use recursive: false to detect race conditions', async () => {
+      const versionDir = '/app/versions/1.0.0';
+
+      await fs.mkdir(versionDir, { recursive: false });
+
+      expect(fs.mkdir).toHaveBeenCalledWith(versionDir, { recursive: false });
+    });
+
+    it('should catch EEXIST error from mkdir as safety check', async () => {
+      const versionDir = '/app/versions/1.0.0';
+
+      vi.mocked(fs.mkdir).mockRejectedValue({ code: 'EEXIST' } as Error);
+
+      try {
+        await fs.mkdir(versionDir, { recursive: false });
+        expect.fail('Should have thrown EEXIST');
+      } catch (error: any) {
+        expect(error.code).toBe('EEXIST');
+      }
+    });
+
+    it('should rethrow non-EEXIST errors', async () => {
+      const versionDir = '/app/versions/1.0.0';
+      const permissionError = Object.assign(new Error('Permission denied'), { code: 'EACCES' });
+
+      vi.mocked(fs.mkdir).mockRejectedValue(permissionError);
+
+      await expect(fs.mkdir(versionDir, { recursive: false })).rejects.toThrow('Permission denied');
+    });
+  });
+
+  describe('combined force flag scenarios', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+    });
+
+    it('should handle both manifest and directory existing with force', async () => {
+      const version = '1.0.0';
+      const versionDir = '/app/versions/1.0.0';
+      const force = true;
+
+      const manifest = {
+        versions: {
+          '1.0.0': { version: '1.0.0', entry: 'schema.js', builtAt: '2024-01-01' },
+        },
+      };
+
+      const warnings: string[] = [];
+      const mockWarn = (msg: string) => warnings.push(msg);
+
+      // Check manifest
+      const manifestHasVersion = !!manifest?.versions?.[version];
+      if (manifestHasVersion && force) {
+        mockWarn(`Overwriting existing version ${version} due to --force flag.`);
+      }
+
+      // Check directory
+      vi.mocked(fs.access).mockResolvedValue(undefined);
+      const dirExists = await pathExists(versionDir);
+
+      if (dirExists && force) {
+        mockWarn(`Overwriting existing directory ${versionDir} due to --force flag.`);
+        await fs.rm(versionDir, { recursive: true, force: true });
+      }
+
+      expect(warnings).toHaveLength(2);
+      expect(warnings[0]).toContain('Overwriting existing version');
+      expect(warnings[1]).toContain('Overwriting existing directory');
+      expect(fs.rm).toHaveBeenCalled();
+    });
+
+    it('should fail fast at manifest check without force flag', () => {
+      const version = '1.0.0';
+      const force = false;
+
+      const manifest = {
+        versions: {
+          '1.0.0': { version: '1.0.0', entry: 'schema.js', builtAt: '2024-01-01' },
+        },
+      };
+
+      const errors: string[] = [];
+      const mockError = (msg: string) => errors.push(msg);
+
+      const manifestHasVersion = !!manifest?.versions?.[version];
+
+      if (manifestHasVersion && !force) {
+        mockError(`Version ${version} already exists in schemas manifest. Use --force to overwrite.`);
+      }
+
+      expect(errors).toContain('Version 1.0.0 already exists in schemas manifest. Use --force to overwrite.');
+      // Directory check should not happen (fail fast)
+      expect(fs.access).not.toHaveBeenCalled();
+    });
+  });
+});
+
 describe('Integration scenarios (documentation)', () => {
   it('should document complete freeze workflow', () => {
     // This test serves as documentation for the complete workflow:

@@ -71,11 +71,23 @@ async function main() {
   const versionDir = path.join(versionsRoot, version);
 
   if (await pathExists(versionDir)) {
-    console.error(`Version directory already exists at ${versionDir}. Aborting to avoid overwriting.`);
-    process.exit(1);
+    if (!force) {
+      console.error(`Version directory already exists at ${versionDir}. Aborting to avoid overwriting.`);
+      process.exit(1);
+    }
+    console.warn(`Overwriting existing directory ${versionDir} due to --force flag.`);
+    await fs.rm(versionDir, { recursive: true, force: true });
   }
 
-  await fs.mkdir(versionDir, { recursive: true });
+  try {
+    await fs.mkdir(versionDir, { recursive: false });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      console.error(`Version directory already exists at ${versionDir}. Aborting to avoid overwriting.`);
+      process.exit(1);
+    }
+    throw error;
+  }
 
   const alias = buildAliasMap(superEditorRoot);
   const external = collectExternals(superEditorPkg);
@@ -83,9 +95,6 @@ async function main() {
   console.log(`Freezing schema from ${starterEntry}`);
   console.log(`- Target version: ${version}`);
   console.log(`- Output: ${versionDir}`);
-
-  await fs.rm(versionDir, { recursive: true, force: true });
-  await fs.mkdir(versionDir, { recursive: true });
 
   await build({
     configFile: false,

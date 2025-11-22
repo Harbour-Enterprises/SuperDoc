@@ -126,11 +126,13 @@ async function verifyHash(version: string) {
       throw new Error(`Hash mismatch for version ${version} (manifest vs metadata).`);
     }
 
-    if (expectedHash) {
-      const actual = await computeSchemaHash(version);
-      if (actual !== expectedHash) {
-        throw new Error(`Hash mismatch for version ${version} (expected ${expectedHash}, got ${actual}).`);
-      }
+    if (!expectedHash) {
+      throw new Error(`Missing schema hash for version ${version}; refusing to load unverifiable schema.`);
+    }
+
+    const actual = await computeSchemaHash(version);
+    if (actual !== expectedHash) {
+      throw new Error(`Hash mismatch for version ${version} (expected ${expectedHash}, got ${actual}).`);
     }
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
