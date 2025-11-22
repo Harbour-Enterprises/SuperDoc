@@ -68,6 +68,7 @@ describe('w:del translator', () => {
 
       // Ensure results are annotated correctly
       expect(result).toHaveLength(1);
+      expect(result[0].marks).toEqual([]);
       expect(result[0].content[0].marks).toEqual([
         {
           type: 'trackDelete',
