@@ -36,7 +36,7 @@ describe('w:del translator', () => {
     it('wraps subnodes with trackDelete mark and sets importedAuthor', () => {
       const mockNode = { elements: [{ text: 'deleted text' }] };
 
-      const mockSubNodes = [{ text: 'deleted text' }];
+      const mockSubNodes = [{ content: [{ type: 'text', text: 'deleted text' }] }];
 
       const mockNodeListHandler = {
         handler: vi.fn().mockReturnValue(mockSubNodes),
@@ -68,7 +68,7 @@ describe('w:del translator', () => {
 
       // Ensure results are annotated correctly
       expect(result).toHaveLength(1);
-      expect(result[0].marks).toEqual([
+      expect(result[0].content[0].marks).toEqual([
         {
           type: 'trackDelete',
           attrs: expect.objectContaining({

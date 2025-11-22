@@ -36,12 +36,18 @@ const encode = (params, encodedAttrs = {}) => {
   encodedAttrs.importedAuthor = `${encodedAttrs.author} (imported)`;
 
   subs.forEach((subElement) => {
-    if (subElement?.content?.[0]?.marks === undefined) subElement.content[0].marks = [];
-    if (subElement?.content?.[0]?.type === 'text') {
-      subElement.content[0].marks.push({ type: 'trackInsert', attrs: encodedAttrs });
+    subElement.marks = [];
+    if (subElement?.content?.[0]) {
+      if (subElement.content[0].marks === undefined) {
+        subElement.content[0].marks = [];
+      }
+      if (subElement.content[0].type === 'text') {
+        subElement.content[0].marks.push({ type: 'trackInsert', attrs: encodedAttrs });
+      }
     }
   });
 
+  console.log('subs:', subs);
   return subs;
 };
 
