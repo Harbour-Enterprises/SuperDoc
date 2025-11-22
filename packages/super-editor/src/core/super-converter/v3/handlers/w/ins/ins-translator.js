@@ -33,14 +33,21 @@ const encode = (params, encodedAttrs = {}) => {
     nodes: node.elements,
     path: [...(params.path || []), node],
   });
-
   encodedAttrs.importedAuthor = `${encodedAttrs.author} (imported)`;
 
   subs.forEach((subElement) => {
-    if (subElement.marks === undefined) subElement.marks = [];
-    subElement.marks.push({ type: 'trackInsert', attrs: encodedAttrs });
+    subElement.marks = [];
+    if (subElement?.content?.[0]) {
+      if (subElement.content[0].marks === undefined) {
+        subElement.content[0].marks = [];
+      }
+      if (subElement.content[0].type === 'text') {
+        subElement.content[0].marks.push({ type: 'trackInsert', attrs: encodedAttrs });
+      }
+    }
   });
 
+  console.log('subs:', subs);
   return subs;
 };
 
