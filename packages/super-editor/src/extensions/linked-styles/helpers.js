@@ -352,7 +352,7 @@ export const applyLinkedStyleToTransaction = (tr, editor, style) => {
 
   // Check for preserved selection from custom selection plugin
   const focusState = CustomSelectionPluginKey.getState(state);
-  if (selection.empty && focusState?.preservedSelection) {
+  if (selection.empty && focusState?.preservedSelection && !focusState?.preservedSelection.empty) {
     selection = focusState.preservedSelection;
     tr.setSelection(selection);
   }
@@ -446,4 +446,34 @@ export const applyLinkedStyleToTransaction = (tr, editor, style) => {
   });
 
   return true;
+};
+
+// Detect typing inside any styled paragraph so decorations can be rebuilt
+export const stepInsertsTextIntoStyledParagraph = (tr, oldEditorState, step, stepIndex) => {
+  if (!step.slice || step.slice.size === 0 || typeof step.from !== 'number') {
+    return false;
+  }
+
+  let insertsText = false;
+  step.slice.content.descendants((node) => {
+    if (node.type?.name === 'text' && node.text?.length) {
+      insertsText = true;
+      return false;
+    }
+    return true;
+  });
+
+  if (!insertsText) return false;
+
+  const docBeforeStep = tr.docs?.[stepIndex] || oldEditorState.doc;
+  if (!docBeforeStep) return false;
+  const resolvedPos = Math.min(step.from, docBeforeStep.content.size);
+  const $pos = docBeforeStep.resolve(resolvedPos);
+  for (let depth = $pos.depth; depth >= 0; depth--) {
+    const node = $pos.node(depth);
+    if (node?.type?.name === 'paragraph') {
+      return Boolean(node.attrs?.styleId);
+    }
+  }
+  return false;
 };

@@ -142,7 +142,7 @@ describe('w:tblGrid translator', () => {
       expect(result.elements).toEqual(expectedElements);
     });
 
-    it('prioritizes cell widths over grid properties when different', () => {
+    it('prioritizes grid properties over cell widths when different', () => {
       const params = {
         node: {
           attrs: {
@@ -160,8 +160,8 @@ describe('w:tblGrid translator', () => {
       };
 
       const expectedElements = [
-        { name: 'w:gridCol', attributes: { 'w:w': '1000' } },
-        { name: 'w:gridCol', attributes: { 'w:w': '2500' } },
+        { name: 'w:gridCol', attributes: { 'w:w': '500' } },
+        { name: 'w:gridCol', attributes: { 'w:w': '1250' } },
       ];
 
       const result = translator.decode(params);

@@ -7,6 +7,7 @@
     "shared/*"
   ],
   "scripts": {
+    "postinstall": "node scripts/install-rollup-binary.mjs",
     "test": "vitest run",
     "test:debug": "npm run test:debug --workspace=packages/super-editor",
     "test:all": "vitest run",
@@ -14,6 +15,7 @@
     "test:superdoc": "vitest run --root ./packages/superdoc",
     "test:cov": "node scripts/test-cov.mjs",
     "type-check": "node ./scripts/type-check-all.mjs",
+    "validate:commands": "node scripts/validate-command-types.mjs",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "npm --workspace=superdoc run dev",
     "dev:superdoc": "npm run dev --workspace=packages/superdoc",

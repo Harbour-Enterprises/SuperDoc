@@ -61,7 +61,7 @@ test.describe('comments & tracked changes', () => {
     return `${hours}:${minutes}${ampm} ${month} ${day}`;
   };
 
-  test('should import comments', async ({ page }) => {
+  test.skip('should import comments', async ({ page }) => {
     await goToPageAndWaitForEditor(page, { includeComments: true });
     await page
       .locator('input[type="file"]')

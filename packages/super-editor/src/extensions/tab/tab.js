@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { DecorationSet } from 'prosemirror-view';
 import { ReplaceStep, ReplaceAroundStep } from 'prosemirror-transform';
 import { getTabDecorations } from './helpers/tabDecorations.js';
+import { isHeadless } from '@/utils/headless-helpers.js';
 
 /**
  * Configuration options for TabNode
@@ -65,6 +66,11 @@ export const TabNode = Node.create({
   },
 
   addPmPlugins() {
+    // Skip tab plugin entirely in headless mode
+    if (isHeadless(this.editor)) {
+      return [];
+    }
+
     const { view, helpers } = this.editor;
 
     // Helper: Merge overlapping ranges to avoid redundant recalculations
