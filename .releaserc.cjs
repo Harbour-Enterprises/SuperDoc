@@ -13,10 +13,10 @@ const config = {
       prerelease: 'next',
       channel: 'next',
     },
-    // Maintenance branches - channel defaults to branch name
+    // Maintenance branches - channel transforms to lts/X.Y format
     {
       name: '+([0-9])?(.{+([0-9]),x}).x',
-      // No channel specified - defaults to branch name (0.8.x, 1.2.x, etc)
+      channel: 'lts/${name.replace(/\\.x$/g, "")}' // 0.29.x → lts/0.29
     },
   ],
   tagFormat: 'v${version}',
