@@ -88,12 +88,10 @@ export class EditorAdapter {
      * @param to - End position to scroll to
      */
     scrollToPosition(from: number, to: number): void {
-        const { state, view } = this.editor;
-        if (!state || !view) {
-            return;
-        }
-        const tr = state.tr.setSelection(TextSelection.create(state.doc, from, to)).scrollIntoView();
-        view.dispatch(tr);
+        const { view } = this.editor;
+        const domPos = view.domAtPos(from);
+        domPos?.node?.scrollIntoView(true);
+
     }
 
     /**
@@ -254,6 +252,67 @@ export class EditorAdapter {
     }
 
     /**
+     * Maps a character offset within extracted text to the corresponding document position.
+     * Handles node boundaries where character count doesn't equal position offset.
+     *
+     * @param from - Starting document position
+     * @param to - Ending document position (exclusive)
+     * @param charOffset - Number of characters to advance from the start
+     * @returns Document position corresponding to the character offset
+     * @private
+     */
+    private mapCharOffsetToPosition(from: number, to: number, charOffset: number): number {
+        const { state } = this.editor;
+        if (!state?.doc || charOffset <= 0) {
+            return from;
+        }
+        if (from >= to) {
+            return from;
+        }
+
+        const totalTextLength = state.doc.textBetween(from, to, '', '').length;
+        if (totalTextLength <= 0) {
+            return from;
+        }
+
+        const targetOffset = Math.min(charOffset, totalTextLength);
+        const clampToEnd = targetOffset === totalTextLength;
+
+        let low = from;
+        let high = to;
+
+        while (low < high) {
+            const mid = Math.floor((low + high) / 2);
+            const textLength = state.doc.textBetween(from, mid, '', '').length;
+            
+            if (textLength < targetOffset) {
+                low = mid + 1;
+            } else {
+                high = mid;
+            }
+        }
+        let result = Math.min(low, to);
+
+        if (clampToEnd && result > from) {
+            let resolved = state.doc.resolve(result);
+            let nodeBefore = resolved.nodeBefore;
+
+            while (
+                nodeBefore &&
+                nodeBefore.isInline &&
+                !nodeBefore.isText &&
+                result > from
+            ) {
+                result -= nodeBefore.nodeSize;
+                resolved = state.doc.resolve(result);
+                nodeBefore = resolved.nodeBefore;
+            }
+        }
+
+        return result;
+    }
+
+    /**
      * Computes the range of actual changes between original and suggested text.
      * Uses a diff algorithm to find common prefix and suffix, minimizing the
      * region that needs to be replaced in the document.
@@ -316,9 +375,12 @@ export class EditorAdapter {
             return;
         }
 
-        const changeFrom = from + prefix;
-        const changeTo = to - suffix;
-        const replacementEnd = Math.max(prefix, suggestedText.length - suffix);
+        // Map character offsets to document positions (handles node boundaries correctly)
+        const changeFrom = this.mapCharOffsetToPosition(from, to, prefix);
+        const originalTextLength = originalText.length;
+        const changeTo = this.mapCharOffsetToPosition(from, to, originalTextLength - suffix);
+        
+        const replacementEnd = suggestedText.length - suffix;
         const replacementText = suggestedText.slice(prefix, replacementEnd);
 
         const segments = this.collectTextSegments(changeFrom, changeTo);

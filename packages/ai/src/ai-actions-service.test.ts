@@ -90,7 +90,15 @@ describe('AIActionsService', () => {
                 }
             },
             view: {
-                dispatch: vi.fn()
+                dispatch: vi.fn(),
+                domAtPos: vi.fn((pos: number) => {
+                    return {
+                        node: {
+                            scrollIntoView: vi.fn(),
+                        },
+                        offset: 0,
+                    };
+                }),
             },
             exportDocx: vi.fn(),
             options: {
