@@ -1,6 +1,6 @@
 {
   "name": "@superdoc-dev/ai",
-  "version": "0.1.6-next",
+  "version": "0.1.6-next.1",
   "description": "AI integration package for SuperDoc",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
