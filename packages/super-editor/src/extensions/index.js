@@ -4,8 +4,6 @@ import { Color } from './color/index.js';
 import { FontFamily } from './font-family/index.js';
 import { FontSize } from './font-size/index.js';
 import { TextAlign } from './text-align/index.js';
-import { TextIndent } from './text-indent/index.js';
-import { LineHeight } from './line-height/index.js';
 import { FormatCommands } from './format-commands/index.js';
 import { DropCursor } from './dropcursor/index.js';
 import { Gapcursor } from './gapcursor/index.js';
@@ -84,13 +82,11 @@ const getRichTextExtensions = () => {
     History,
     Heading,
     Italic,
-    LineHeight,
     Link,
     Paragraph,
     Strike,
     Text,
     TextAlign,
-    TextIndent,
     TextStyle,
     Underline,
     Placeholder,
@@ -128,7 +124,6 @@ const getStarterExtensions = () => {
     History,
     Heading,
     Italic,
-    LineHeight,
     Link,
     Paragraph,
     LineBreak,
@@ -140,7 +135,6 @@ const getStarterExtensions = () => {
     TableOfContents,
     Text,
     TextAlign,
-    TextIndent,
     TextStyle,
     Underline,
     FormatCommands,
@@ -212,9 +206,7 @@ export {
   FontFamily,
   FontSize,
   TextAlign,
-  TextIndent,
   TextStyle,
-  LineHeight,
   FormatCommands,
   CommentsPlugin,
   Gapcursor,
