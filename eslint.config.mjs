@@ -25,8 +25,6 @@ export default [
       // Examples (different environments and coding styles)
       'examples/**',
       '**/examples/**',
-      // Frozen schema artifacts
-      'packages/schema-management/versions/**',
       // Config files (CommonJS/different environments)
       '**/*.config.js',
       '**/commitlint.config.js',
@@ -95,7 +93,7 @@ export default [
       },
     },
     rules: {
-      'no-unused-vars': ['warn', { varsIgnorePattern: '^_', argsIgnorePattern: '^_' }], // See warnings but don't block
+      'no-unused-vars': ['warn', { varsIgnorePattern: '^_' }], // See warnings but don't block
 
       // Relax these rules - they're more style than bugs
       'no-empty': ['warn', { allowEmptyCatch: true }], // Allow empty catch blocks
