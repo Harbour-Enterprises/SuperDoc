@@ -1,5 +1,5 @@
 import { findChildren } from '@core/helpers/findChildren';
-import { getGroup, createTagObject } from './tagUtils';
+import { getGroup } from './tagUtils';
 
 /**
  * Get structured content nodes by group identifier.
