@@ -1746,7 +1746,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
         if (name.includes('header') || name.includes('footer')) {
           const jsonObj = json as { elements?: unknown[] };
           const resultXml = this.converter.schemaToXml(jsonObj.elements?.[0]);
-          updatedHeadersFooters[name] = String(resultXml);
+          updatedHeadersFooters[name] = String(resultXml.replace(/\[\[sdspace\]\]/g, ''));
         }
       });
 
