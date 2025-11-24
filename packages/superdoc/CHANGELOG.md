@@ -1,3 +1,9 @@
+## [0.31.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.2...v0.31.3) (2025-11-24)
+
+### Bug Fixes
+
+- content not editable on safari ([#1304](https://github.com/Harbour-Enterprises/SuperDoc/issues/1304)) ([9972b1f](https://github.com/Harbour-Enterprises/SuperDoc/commit/9972b1f9da7a4a7d090488aab159a85fb1c81a96))
+
 ## [0.31.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.1...v0.31.2) (2025-11-21)
 
 ### Reverts
