@@ -651,6 +651,7 @@ const closeExportMenu = () => {
 }
 
 .dev-app {
+  background-color: #b9bfce;
   --header-height: 154px;
   --toolbar-height: 39px;
 
