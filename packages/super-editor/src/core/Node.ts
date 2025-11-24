@@ -3,7 +3,7 @@ import { callOrGet } from './utilities/callOrGet.js';
 import type { MaybeGetter } from './utilities/callOrGet.js';
 import type { NodeType, ParseRule, DOMOutputSpec } from 'prosemirror-model';
 import type { Plugin } from 'prosemirror-state';
-import type { InputRule } from 'prosemirror-inputrules';
+import type { InputRule } from './InputRule.js';
 import type { NodeView } from 'prosemirror-view';
 import type { Editor } from './Editor.js';
 import type { Command } from './types/ChainedCommands.js';

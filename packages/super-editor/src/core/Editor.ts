@@ -12,6 +12,7 @@ import type {
 } from './types/EditorTypes.js';
 import type { ChainableCommandObject, CanObject, EditorCommands } from './types/ChainedCommands.js';
 import type { EditorEventMap, FontsResolvedPayload, Comment } from './types/EditorEvents.js';
+import type { SchemaSummaryJSON } from './types/EditorSchema.js';
 
 import { EditorState as PmEditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
@@ -57,6 +58,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
 import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 import { isHeadless } from '../utils/headless-helpers.js';
+import { buildSchemaSummary } from './schema-summary.js';
 
 declare const __APP_VERSION__: string;
 declare const version: string | undefined;
@@ -918,6 +920,71 @@ export class Editor extends EventEmitter<EditorEventMap> {
   static updateDocumentVersion(doc: DocxFileEntry[], version: string): string {
     console.warn('updateDocumentVersion is deprecated, use setDocumentVersion instead');
     return Editor.setDocumentVersion(doc, version);
+  }
+
+  /**
+   * Generates a schema summary for the current runtime schema.
+   */
+  async getSchemaSummaryJSON(): Promise<SchemaSummaryJSON> {
+    if (!this.schema) {
+      throw new Error('Schema is not initialized.');
+    }
+
+    const schemaVersion = this.converter?.getSuperdocVersion?.() || 'current';
+
+    const suppressedNames = new Set(
+      (this.extensionService?.extensions || [])
+        .filter((ext) => {
+          const config = (ext as any)?.config;
+          const suppressFlag = config?.excludeFromSummaryJSON;
+          return Boolean(suppressFlag);
+        })
+        .map((ext) => ext.name),
+    );
+
+    const summary = buildSchemaSummary(this.schema, schemaVersion);
+
+    if (!suppressedNames.size) {
+      return summary;
+    }
+
+    return {
+      ...summary,
+      nodes: summary.nodes.filter((node) => !suppressedNames.has(node.name)),
+      marks: summary.marks.filter((mark) => !suppressedNames.has(mark.name)),
+    };
+  }
+
+  /**
+   * Validates a ProseMirror JSON document against the current schema.
+   */
+  validateJSON(doc: ProseMirrorJSON | ProseMirrorJSON[]): PmNode {
+    if (!this.schema) {
+      throw new Error('Schema is not initialized.');
+    }
+
+    const topNodeName = this.schema.topNodeType?.name || 'doc';
+    const normalizedDoc =
+      Array.isArray(doc) // array of nodes -> wrap into doc.content
+        ? { type: topNodeName, content: doc }
+        : doc && typeof doc === 'object' && doc.type
+          ? doc.type === topNodeName || doc.type === 'doc'
+            ? doc
+            : { type: topNodeName, content: [doc as ProseMirrorJSON] }
+          : (() => {
+              throw new Error('Invalid document shape: expected a node object or an array of node objects.');
+            })();
+
+    try {
+      return this.schema.nodeFromJSON(normalizedDoc as ProseMirrorJSON);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const validationError = new Error(`Invalid document for current schema: ${detail}`);
+      if (error instanceof Error) {
+        (validationError as Error & { cause?: Error }).cause = error;
+      }
+      throw validationError;
+    }
   }
 
   /**
