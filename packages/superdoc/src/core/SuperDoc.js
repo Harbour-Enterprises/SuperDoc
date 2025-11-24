@@ -108,6 +108,9 @@ export class SuperDoc extends EventEmitter {
 
     // Disable context menus (slash and right-click) globally
     disableContextMenu: false,
+
+    // Internal: toggle layout-engine-powered PresentationEditor in dev shells
+    useLayoutEngine: true,
   };
 
   /**

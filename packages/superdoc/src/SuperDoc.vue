@@ -356,6 +356,7 @@ const editorOptions = (doc) => {
   // So, if the callback is not defined, we won't run the font check
   const onFontsResolvedFn =
     proxy.$superdoc.listeners?.('fonts-resolved')?.length > 0 ? proxy.$superdoc.listeners('fonts-resolved')[0] : null;
+  const useLayoutEngine = proxy.$superdoc.config.useLayoutEngine !== false;
 
   const options = {
     isDebug: proxy.$superdoc.config.isDebug || false,
@@ -373,7 +374,7 @@ const editorOptions = (doc) => {
     isCommentsEnabled: Boolean(commentsModuleConfig.value),
     isAiEnabled: proxy.$superdoc.config.modules?.ai,
     slashMenuConfig: proxy.$superdoc.config.modules?.slashMenu,
-    editorCtor: PresentationEditor,
+    editorCtor: useLayoutEngine ? PresentationEditor : undefined,
     onBeforeCreate: onEditorBeforeCreate,
     onCreate: onEditorCreate,
     onDestroy: onEditorDestroy,
@@ -399,11 +400,13 @@ const editorOptions = (doc) => {
     suppressDefaultDocxStyles: proxy.$superdoc.config.suppressDefaultDocxStyles,
     disableContextMenu: proxy.$superdoc.config.disableContextMenu,
     jsonOverride: proxy.$superdoc.config.jsonOverride,
-    layoutEngineOptions: {
-      ...(proxy.$superdoc.config.layoutEngineOptions || {}),
-      debugLabel: proxy.$superdoc.config.layoutEngineOptions?.debugLabel ?? doc.name ?? doc.id,
-      zoom: (activeZoom.value ?? 100) / 100,
-    },
+    layoutEngineOptions: useLayoutEngine
+      ? {
+          ...(proxy.$superdoc.config.layoutEngineOptions || {}),
+          debugLabel: proxy.$superdoc.config.layoutEngineOptions?.debugLabel ?? doc.name ?? doc.id,
+          zoom: (activeZoom.value ?? 100) / 100,
+        }
+      : undefined,
     permissionResolver: (payload = {}) =>
       proxy.$superdoc.canPerformPermission({
         role: proxy.$superdoc.config.role,
@@ -708,7 +711,9 @@ const handlePdfClick = (e) => {
 watch(
   () => activeZoom.value,
   (zoom) => {
-    PresentationEditor.setGlobalZoom((zoom ?? 100) / 100);
+    if (proxy.$superdoc.config.useLayoutEngine !== false) {
+      PresentationEditor.setGlobalZoom((zoom ?? 100) / 100);
+    }
   },
 );
 
