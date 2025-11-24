@@ -88,10 +88,12 @@ export class EditorAdapter {
      * @param to - End position to scroll to
      */
     scrollToPosition(from: number, to: number): void {
-        const { view } = this.editor;
+        const { state, view } = this.editor;
+        if (!state || !view) {
+            return;
+        }
         const domPos = view.domAtPos(from);
         domPos?.node?.scrollIntoView(true);
-
     }
 
     /**
