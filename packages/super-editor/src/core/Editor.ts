@@ -12,9 +12,6 @@ import type {
 } from './types/EditorTypes.js';
 import type { ChainableCommandObject, CanObject, EditorCommands } from './types/ChainedCommands.js';
 import type { EditorEventMap, FontsResolvedPayload, Comment } from './types/EditorEvents.js';
-import type {
-  SchemaSummaryParams,
-} from './types/EditorSchema.js';
 
 import { EditorState as PmEditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
@@ -60,11 +57,13 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
 import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 import { isHeadless } from '../utils/headless-helpers.js';
-import { buildSchemaSummaryFromFrozen } from './schema-management/schema-summary.js';
 
 declare const __APP_VERSION__: string;
 declare const version: string | undefined;
 
+/**
+ * Main editor class that manages document state, extensions, and user interactions
+ */
 export class Editor extends EventEmitter<EditorEventMap> {
   /**
    * Command service for handling editor commands
@@ -919,90 +918,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
   static updateDocumentVersion(doc: DocxFileEntry[], version: string): string {
     console.warn('updateDocumentVersion is deprecated, use setDocumentVersion instead');
     return Editor.setDocumentVersion(doc, version);
-  }
-
-  /**
-   * Generates a comprehensive schema summary for a frozen schema version.
-   *
-   * Returns a JSON representation of all nodes and marks in the specified frozen schema,
-   * including their attributes, content models, and properties. This is useful for
-   * schema documentation, version comparison, and runtime schema inspection.
-   *
-   * @param schemaVersionOrOptions - Optional version string (e.g., "1.0.0") or options object.
-   *                                 If omitted, uses the latest available frozen schema version.
-   * @returns A promise resolving to the complete schema summary
-   * @throws {Error} If no frozen schemas are available
-   * @throws {Error} If the requested schema version is not found
-   * @throws {Error} If the frozen schema module is invalid or missing required exports
-   *
-   * @example
-   * ```typescript
-   * // Get summary for latest frozen schema
-   * const summary = await editor.getSchemaSummaryJSON();
-   * console.log(summary.nodes); // Array of all node specs
-   * console.log(summary.marks); // Array of all mark specs
-   *
-   * // Get summary for specific version
-   * const v1Summary = await editor.getSchemaSummaryJSON('1.0.0');
-   *
-   * // Get summary with options
-   * const summary = await editor.getSchemaSummaryJSON({ version: '2.0.0' });
-   * ```
-   */
-  async getSchemaSummaryJSON(schemaVersionOrOptions?: string | SchemaSummaryParams) {
-    return buildSchemaSummaryFromFrozen(this, schemaVersionOrOptions);
-  }
-
-  /**
-   * Validates a ProseMirror JSON document against the editor's current schema.
-   *
-   * Attempts to parse the provided JSON document using the editor's schema. If the
-   * document is valid, returns the parsed ProseMirror node tree. If validation fails,
-   * throws an error with details about what is invalid.
-   *
-   * This method is useful for:
-   * - Validating documents before loading them into the editor
-   * - Checking compatibility between documents and schema versions
-   * - Detecting schema violations in programmatically generated content
-   *
-   * @param doc - The ProseMirror JSON document to validate
-   * @returns The parsed ProseMirror node if validation succeeds
-   * @throws {Error} If the schema is not initialized
-   * @throws {Error} If the document is invalid for the current schema, with original error preserved in cause
-   *
-   * @example
-   * ```typescript
-   * const doc = {
-   *   type: 'doc',
-   *   content: [
-   *     { type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }
-   *   ]
-   * };
-   *
-   * try {
-   *   const node = editor.validateJSON(doc);
-   *   console.log('Document is valid:', node);
-   * } catch (error) {
-   *   console.error('Invalid document:', error.message);
-   *   console.error('Original error:', error.cause);
-   * }
-   * ```
-   */
-  validateJSON(doc: ProseMirrorJSON): PmNode {
-    if (!this.schema) {
-      throw new Error('Schema is not initialized.');
-    }
-
-    try {
-      return this.schema.nodeFromJSON(doc);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      const validationError = new Error(`Invalid document for current schema: ${detail}`);
-      if (error instanceof Error) {
-        (validationError as Error & { cause?: Error }).cause = error;
-      }
-      throw validationError;
-    }
   }
 
   /**

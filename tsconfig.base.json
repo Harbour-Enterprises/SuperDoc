@@ -30,13 +30,5 @@
       "@superdoc/common/*": ["./shared/common/*"]
     }
   },
-  "exclude": [
-    "node_modules",
-    "dist",
-    "examples",
-    "e2e-tests/**",
-    "packages/collaboration-yjs/examples/**",
-    "**/*.test.js",
-    "**/*.test.ts"
-  ]
+  "exclude": ["node_modules", "dist", "examples", "e2e-tests", "**/*.test.js", "**/*.test.ts"]
 }

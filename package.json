@@ -25,7 +25,6 @@
     "build:super-editor": "npm run build --workspace=packages/super-editor",
     "build": "npm run build:super-editor && npm run build:superdoc",
     "clean:packages": "rm -rf ./packages/*/dist",
-    "schema:freeze": "npm run freeze --workspace=packages/schema-management --",
     "reset": "npm run clean:packages && rm -rf ./node_modules && rm -rf ./packages/*/node_modules && rm -rf ./package-lock.json && npm install",
     "publish": "node scripts/publish-superdoc.cjs",
     "format": "prettier --write \"**/*.{js,jsx,vue,css,scss,json,md}\"",
