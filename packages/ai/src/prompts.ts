@@ -10,13 +10,12 @@ export const SYSTEM_PROMPTS = {
 } as const;
 
 export const buildFindPrompt = (query: string, documentContext: string, findAll: boolean): string => {
-    const scope = findAll ? 'ALL occurrences' : 'FIRST occurrence ONLY';
+    const scopeInstruction = findAll ? 'ALL occurrences' : 'the FIRST occurrence ONLY';
 
     return `You are a strict document search assistant.
       Task:
-      - In the document context, ${query}
-      - Find the EXACT text of ${scope}
-      - Treat ${scope} as a literal substring to match, not a concept, section, or heading.
+      - In the document context, locate ${scopeInstruction} that match the user request exactly.
+      - User request (treat this as the literal text or exact criteria to match): "${query}"
       - Return ONLY the exact matched text from the document.
       - Do NOT include any surrounding text before or after the match.
       - Do NOT modify, transform, summarize, or interpret the text.
