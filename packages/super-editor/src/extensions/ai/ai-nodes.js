@@ -5,6 +5,8 @@ import { AiLoaderNodeName } from './ai-constants.js';
 export const AiLoaderNode = Node.create({
   name: AiLoaderNodeName,
 
+  excludeFromSummaryJSON: true,
+
   group: 'inline',
 
   inline: true,
