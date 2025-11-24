@@ -75,7 +75,7 @@
     "pdfjs-dist": "4.3.136",
     "postcss-nested": "^6.0.1",
     "postcss-prefixwrap": "^1.56.2",
-    "rollup-plugin-visualizer": "^5.12.0",
+    "rollup-plugin-visualizer": "^6.0.5",
     "typescript": "^5.7.3",
     "vite": "^6.3.5",
     "vite-plugin-node-polyfills": "^0.24.0",
