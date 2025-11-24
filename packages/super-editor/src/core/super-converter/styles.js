@@ -524,22 +524,52 @@ export function encodeMarksFromRPr(runProperties, docx) {
 /**
  * Converts paragraph properties into a CSS declaration map.
  * @param {Object} paragraphProperties - Paragraph properties after resolution.
+ * @param {boolean} hasPreviousParagraph - Whether there is a preceding paragraph.
+ * @param {Object | null} nextParagraphProps - Resolved properties of the next paragraph.
  * @returns {Object} CSS properties keyed by CSS property name.
  */
-export function encodeCSSFromPPr(paragraphProperties) {
+export function encodeCSSFromPPr(paragraphProperties, hasPreviousParagraph, nextParagraphProps) {
   if (!paragraphProperties || typeof paragraphProperties !== 'object') {
     return {};
   }
 
   let css = {};
   const { spacing, indent, borders, justification } = paragraphProperties;
+  const nextStyleId = nextParagraphProps?.styleId;
 
   if (spacing) {
+    const getEffectiveBefore = (nextSpacing, isListItem) => {
+      if (!nextSpacing) return 0;
+      if (nextSpacing.beforeAutospacing && isListItem) {
+        return 0;
+      }
+      return nextSpacing.before || 0;
+    };
+
     const isDropCap = Boolean(paragraphProperties.framePr?.dropCap);
     const spacingCopy = { ...spacing };
+    if (hasPreviousParagraph) {
+      delete spacingCopy.before; // Has already been handled by the previous paragraph
+    }
     if (isDropCap) {
       spacingCopy.line = linesToTwips(1.0);
       spacingCopy.lineRule = 'auto';
+      delete spacingCopy.after;
+    } else {
+      const nextBefore = getEffectiveBefore(
+        nextParagraphProps?.spacing,
+        Boolean(nextParagraphProps?.numberingProperties),
+      );
+      spacingCopy.after = Math.max(spacingCopy.after || 0, nextBefore);
+      if (paragraphProperties.contextualSpacing && nextStyleId != null && nextStyleId === paragraphProperties.styleId) {
+        spacingCopy.after -= paragraphProperties.spacing?.after || 0;
+      }
+
+      if (nextParagraphProps?.contextualSpacing && nextStyleId != null && nextStyleId === paragraphProperties.styleId) {
+        spacingCopy.after -= nextBefore;
+      }
+
+      spacingCopy.after = Math.max(spacingCopy.after, 0);
     }
     const spacingStyle = getSpacingStyle(spacingCopy, Boolean(paragraphProperties.numberingProperties));
     css = { ...css, ...spacingStyle };
