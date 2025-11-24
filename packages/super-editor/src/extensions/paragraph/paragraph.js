@@ -65,6 +65,7 @@ const orderedInputRegex = /^(\d+)\.\s$/;
  * @property {Object} [paragraphProperties] @internal - Internal paragraph properties
  * @property {Object} [dropcap] @internal - Drop cap configuration
  * @property {string} [pageBreakSource] @internal - Page break source
+ * @property {Object} [sectionMargins] @internal - Section-specific header/footer margins in inches
  */
 
 /**
@@ -245,6 +246,7 @@ export const Paragraph = OxmlNode.create({
       paragraphProperties: { rendered: false },
       dropcap: { rendered: false },
       pageBreakSource: { rendered: false },
+      sectionMargins: { rendered: false },
       textAlign: {
         renderDOM: ({ textAlign }) => {
           if (!textAlign) return {};
@@ -323,8 +325,6 @@ export const Paragraph = OxmlNode.create({
             const resolvedParagraphProperties = resolveParagraphProperties(
               { docx: this.editor.converter.convertedXml, numbering: this.editor.converter.numbering },
               { styleId, numberingProperties, indent, spacing },
-              false,
-              true,
             );
             return {
               paragraphProperties: {

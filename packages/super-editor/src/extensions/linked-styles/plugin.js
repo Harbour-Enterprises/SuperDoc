@@ -126,6 +126,9 @@ const generateDecorations = (state, styles) => {
   const decorations = [];
   const doc = state?.doc;
 
+  // Early return if no doc or state
+  if (!doc || !state) return DecorationSet.empty;
+
   const getParagraphStyleId = (pos) => {
     const $pos = state.doc.resolve(pos);
     for (let d = $pos.depth; d >= 0; d--) {

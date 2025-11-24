@@ -69,7 +69,7 @@ export const createTableView = ({ editor }) => {
  * @param {import('./table.js').TableNode} node
  * @param {HTMLTableColElement} colgroup
  * @param {HTMLTableElement} table
- * @param {number} _cellMinWidth
+ * @param {number} _cellMinWidth - Reserved for future use (cell minimum width)
  */
 export function updateColumns(node, colgroup, table, _cellMinWidth) {
   const gridColumns =

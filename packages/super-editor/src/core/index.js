@@ -14,5 +14,6 @@ export * from './schema-management/schema-loader';
 
 // This needs to be last otherwise it causes circular dependencies
 export * from './Editor.js';
+export * from './PresentationEditor.js';
 
 export { default as DocxZipper } from './DocxZipper.js';

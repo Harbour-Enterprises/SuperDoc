@@ -78,7 +78,7 @@ export const resolveRunProperties = (
  * @param {Object} inlineProps - The inline paragraph properties.
  * @param {boolean} [insideTable=false] - Whether the paragraph is inside a table.
  * @param {boolean} [overrideInlineStyleId=false] - Whether to override the inline style ID with the one from numbering.
- * @param {string | null} [tableStyleId=null] - styleId for the current table, if any
+ * @param {string | null} [tableStyleId=null] - styleId for the current table, if any.
  * @returns {Object} The resolved paragraph properties.
  */
 export function resolveParagraphProperties(
@@ -172,7 +172,6 @@ export function resolveParagraphProperties(
     // so drop the derived values when nothing is defined inline or via style.
     finalProps.spacing = undefined;
   }
-
   return finalProps;
 }
 
@@ -617,7 +616,7 @@ export function encodeCSSFromRPr(runProperties, docx) {
   if (highlightColor) {
     css['background-color'] = highlightColor;
     if (!('color' in css)) {
-      // @ts-ignore
+      // @ts-expect-error - CSS object allows string indexing
       css['color'] = 'inherit';
     }
   }

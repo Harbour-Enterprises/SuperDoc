@@ -193,6 +193,7 @@ class SuperConverter {
     // Processed additional content
     this.numbering = null;
     this.pageStyles = null;
+    this.themeColors = null;
 
     // The JSON converted XML before any processing. This is simply the result of xml2json
     this.initialJSON = null;
@@ -716,6 +717,7 @@ class SuperConverter {
       this.comments = result.comments;
       this.linkedStyles = result.linkedStyles;
       this.inlineDocumentFonts = result.inlineDocumentFonts;
+      this.themeColors = result.themeColors ?? null;
 
       return result.pmDoc;
     } else {

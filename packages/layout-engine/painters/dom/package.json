@@ -1,0 +1,23 @@
+{
+  "name": "@superdoc/painter-dom",
+  "version": "0.0.0",
+  "description": "DOM renderer for the SuperDoc layout proof of concept.",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@superdoc/contracts": "*",
+    "@superdoc/preset-geometry": "*",
+    "@superdoc/url-validation": "*"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.8"
+  }
+}

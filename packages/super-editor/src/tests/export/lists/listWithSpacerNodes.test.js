@@ -18,7 +18,6 @@ describe('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
 
   it('export spacer props correctly', () => {
     const spacer = body.elements[1];
-
     expect(spacer.elements.length).toEqual(1);
     expect(spacer.elements[0].name).toEqual('w:pPr');
     expect(spacer.elements[0].elements[0].name).toEqual('w:spacing');

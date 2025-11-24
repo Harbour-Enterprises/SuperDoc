@@ -1,5 +1,5 @@
 import { Decoration } from 'prosemirror-view';
-import { twipsToPixels } from '@converter/helpers.js';
+import { twipsToPixels } from '@superdoc/word-layout';
 
 export const defaultTabDistance = 48;
 export const defaultLineLength = 816;

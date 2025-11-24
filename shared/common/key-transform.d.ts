@@ -10,22 +10,30 @@ type UnknownDict = Record<string, unknown>;
 /**
  * Recursive type to convert snake_case string to camelCase at type level
  */
-export type CamelCase<S extends string> = S extends `${infer P1}_${infer P2}${infer P3}` ? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}` : S extends `${infer P1}-${infer P2}${infer P3}` ? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}` : Lowercase<S>;
+export type CamelCase<S extends string> = S extends `${infer P1}_${infer P2}${infer P3}`
+  ? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}`
+  : S extends `${infer P1}-${infer P2}${infer P3}`
+    ? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}`
+    : Lowercase<S>;
 /**
  * Recursive type to convert camelCase string to snake_case at type level
  */
-export type SnakeCase<S extends string> = S extends `${infer C}${infer T}` ? C extends Lowercase<C> ? `${C}${SnakeCase<T>}` : `_${Lowercase<C>}${SnakeCase<T>}` : S;
+export type SnakeCase<S extends string> = S extends `${infer C}${infer T}`
+  ? C extends Lowercase<C>
+    ? `${C}${SnakeCase<T>}`
+    : `_${Lowercase<C>}${SnakeCase<T>}`
+  : S;
 /**
  * Transform object keys to camelCase while preserving value types
  */
 export type CamelizeKeys<T extends UnknownDict> = {
-    [K in keyof T as CamelCase<K & string>]: T[K];
+  [K in keyof T as CamelCase<K & string>]: T[K];
 };
 /**
  * Transform object keys to snake_case while preserving value types
  */
 export type SnakeCaseKeys<T extends UnknownDict> = {
-    [K in keyof T as SnakeCase<K & string>]: T[K];
+  [K in keyof T as SnakeCase<K & string>]: T[K];
 };
 /**
  * Convert all keys in an array of objects to camelCase

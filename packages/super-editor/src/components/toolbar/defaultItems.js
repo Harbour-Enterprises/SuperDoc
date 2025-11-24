@@ -927,18 +927,6 @@ export const makeDefaultItems = ({
     });
   }
 
-  const pageBreakTool = useToolbarItem({
-    type: 'button',
-    name: 'pageBreakTool',
-    command: 'insertPageBreak',
-    icon: toolbarIcons.pageBreak,
-    active: false,
-    tooltip: toolbarTexts.pageBreak,
-    attributes: {
-      ariaLabel: 'Page break',
-    },
-  });
-
   // define sizes to calculate toolbar overflow items
   const controlSizes = new Map([
     ['separator', 20],
@@ -1131,7 +1119,6 @@ export const makeDefaultItems = ({
     linkedStyles,
     separator,
     ruler,
-    pageBreakTool,
     copyFormat,
     clearFormatting,
     aiButton,
@@ -1146,11 +1133,6 @@ export const makeDefaultItems = ({
   // Hide separators on small screens
   if (availableWidth <= breakpoints.md && hideButtons) {
     toolbarItems = toolbarItems.filter((item) => item.type !== 'separator');
-  }
-
-  // If no pagination, remove the page break tool
-  if (!superToolbar.config.pagination) {
-    toolbarItems = toolbarItems.filter((item) => item.name.value !== 'pageBreakTool');
   }
 
   // Remove docx only items

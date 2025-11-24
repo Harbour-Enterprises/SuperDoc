@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 
 const projects = [
-  'packages/super-editor/tsconfig.json',
+  'packages/super-editor/tsconfig.migrated.json',
   'packages/superdoc/tsconfig.json',
   'packages/ai/tsconfig.json',
   'packages/collaboration-yjs/tsconfig.json',

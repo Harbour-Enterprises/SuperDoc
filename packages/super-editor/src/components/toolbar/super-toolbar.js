@@ -36,7 +36,6 @@ import { isList } from '@core/commands/list-helpers';
  * @property {string} [selector] - CSS selector for the toolbar container
  * @property {string[]} [toolbarGroups=['left', 'center', 'right']] - Groups to organize toolbar items
  * @property {string} [role='editor'] - Role of the toolbar ('editor' or 'viewer')
- * @property {boolean} [pagination=false] - Whether pagination is enabled
  * @property {Object} [icons] - Custom icons for toolbar items
  * @property {Object} [texts] - Custom texts for toolbar items
  * @property {string} [mode='docx'] - Editor mode
@@ -148,7 +147,6 @@ export class SuperToolbar extends EventEmitter {
     selector: null,
     toolbarGroups: ['left', 'center', 'right'],
     role: 'editor',
-    pagination: false,
     icons: { ...toolbarIcons },
     texts: { ...toolbarTexts },
     fonts: null,

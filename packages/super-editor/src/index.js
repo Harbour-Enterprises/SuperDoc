@@ -6,6 +6,7 @@ import { getStarterExtensions, getRichTextExtensions } from './extensions/index.
 import { SuperToolbar } from './components/toolbar/super-toolbar.js';
 import { DocxZipper, helpers } from './core/index.js';
 import { Editor } from './core/Editor.js';
+import { PresentationEditor } from './core/PresentationEditor.js';
 import { createZip } from './core/super-converter/zipper.js';
 import { getAllowedImageDimensions } from './extensions/image/imageHelpers/processUploadedImage.js';
 import { Node, Attribute } from '@core/index.js';
@@ -62,6 +63,7 @@ export {
   DocxZipper,
   SuperToolbar,
   Editor,
+  PresentationEditor,
 
   // Components
   SuperEditor,
