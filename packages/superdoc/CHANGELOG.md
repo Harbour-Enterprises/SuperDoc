@@ -1,3 +1,27 @@
+# [0.32.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.3...v0.32.0) (2025-11-25)
+
+### Features
+
+- control search results highlighting ([#1332](https://github.com/Harbour-Enterprises/SuperDoc/issues/1332)) ([5ac75e6](https://github.com/Harbour-Enterprises/SuperDoc/commit/5ac75e6f6750e45d6fe80c8b73017ae9e0e8cda8))
+
+## [0.31.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.2...v0.31.3) (2025-11-24)
+
+### Bug Fixes
+
+- content not editable on safari ([#1304](https://github.com/Harbour-Enterprises/SuperDoc/issues/1304)) ([9972b1f](https://github.com/Harbour-Enterprises/SuperDoc/commit/9972b1f9da7a4a7d090488aab159a85fb1c81a96))
+
+## [0.31.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.1...v0.31.2) (2025-11-21)
+
+### Reverts
+
+- Revert "fix: import and export tagUtils for enhanced structured content management ([#1300](https://github.com/Harbour-Enterprises/SuperDoc/issues/1300))" ([d937827](https://github.com/Harbour-Enterprises/SuperDoc/commit/d9378272260bc363c165ccc0ac4ba4c10d3991a9))
+
+## [0.31.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.0...v0.31.1) (2025-11-21)
+
+### Bug Fixes
+
+- import and export tagUtils for enhanced structured content management ([#1300](https://github.com/Harbour-Enterprises/SuperDoc/issues/1300)) ([7b8551d](https://github.com/Harbour-Enterprises/SuperDoc/commit/7b8551d46cfac7a1b9f77bb448cedf26544392ff))
+
 # [0.31.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.30.0...v0.31.0) (2025-11-21)
 
 ### Features
