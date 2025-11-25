@@ -907,7 +907,14 @@ export type Layout = {
 
 export interface PainterDOM {
   paint(layout: Layout, mount: HTMLElement): void;
-  setData?(blocks: FlowBlock[], measures: Measure[]): void;
+  setData?(
+    blocks: FlowBlock[],
+    measures: Measure[],
+    headerBlocks?: FlowBlock[],
+    headerMeasures?: Measure[],
+    footerBlocks?: FlowBlock[],
+    footerMeasures?: Measure[],
+  ): void;
 }
 
 export interface PainterPDF {

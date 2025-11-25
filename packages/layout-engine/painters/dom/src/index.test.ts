@@ -895,6 +895,61 @@ describe('DomPainter', () => {
       expect(footerEl?.textContent).toBe('Footer: 3');
     });
 
+    it('bottom-aligns footer content within the footer box', () => {
+      const footerBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'footer-align',
+        runs: [{ text: 'Footer', fontFamily: 'Arial', fontSize: 12 }],
+      };
+      const footerMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 1,
+            toChar: 1,
+            width: 60,
+            ascent: 8,
+            descent: 2,
+            lineHeight: 10,
+          },
+        ],
+        totalHeight: 10,
+      };
+      const footerFragment = {
+        kind: 'para' as const,
+        blockId: 'footer-align',
+        fromLine: 0,
+        toLine: 1,
+        x: 0,
+        y: 0,
+        width: 200,
+      };
+      const footerHeight = 60;
+      const contentHeight = 20;
+      const footerOffset = 400;
+
+      const painter = createDomPainter({
+        blocks: [block, footerBlock],
+        measures: [measure, footerMeasure],
+        footerProvider: () => ({
+          fragments: [footerFragment],
+          height: footerHeight,
+          contentHeight,
+          offset: footerOffset,
+        }),
+      });
+
+      painter.paint({ ...layout, pages: [{ ...layout.pages[0], number: 1 }] }, mount);
+
+      const footerEl = mount.querySelector('.superdoc-page-footer') as HTMLElement;
+      const fragEl = mount.querySelector('.superdoc-page-footer .superdoc-fragment') as HTMLElement;
+      expect(fragEl).toBeTruthy();
+      expect(footerEl.style.top).toBe(`${footerOffset}px`);
+      expect(fragEl.style.top).toBe(`${footerHeight - contentHeight + footerFragment.y}px`);
+    });
+
     it('preserves bold styling on page number tokens in DOM', () => {
       const headerBlock: FlowBlock = {
         kind: 'paragraph',
@@ -3517,6 +3572,516 @@ describe('applyRunDataAttributes', () => {
       expect(element.getAttribute('data-emoji')).toBe('😀🎉');
       expect(element.getAttribute('data-chinese')).toBe('你好');
       expect(element.getAttribute('data-arabic')).toBe('مرحبا');
+    });
+  });
+
+  describe('setData with header/footer blocks', () => {
+    let mount: HTMLElement;
+
+    beforeEach(() => {
+      mount = document.createElement('div');
+      document.body.appendChild(mount);
+    });
+
+    it('should accept header and footer blocks in setData', () => {
+      // Main document block
+      const mainBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'main-block-1',
+        runs: [{ text: 'Main content', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 12 }],
+      };
+
+      const mainMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 12,
+            width: 120,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      // Header block with prefixed ID (matching HeaderFooterLayoutAdapter pattern)
+      const headerBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'hf-header-rId6-0-paragraph',
+        runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 14, pmStart: 0, pmEnd: 11 }],
+      };
+
+      const headerMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 11,
+            width: 100,
+            ascent: 10,
+            descent: 3,
+            lineHeight: 16,
+          },
+        ],
+        totalHeight: 16,
+      };
+
+      // Footer block with prefixed ID
+      const footerBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'hf-footer-rId7-0-paragraph',
+        runs: [{ text: 'Footer text', fontFamily: 'Arial', fontSize: 14, pmStart: 0, pmEnd: 11 }],
+      };
+
+      const footerMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 11,
+            width: 100,
+            ascent: 10,
+            descent: 3,
+            lineHeight: 16,
+          },
+        ],
+        totalHeight: 16,
+      };
+
+      const painter = createDomPainter({
+        blocks: [mainBlock],
+        measures: [mainMeasure],
+      });
+
+      // Call setData with header and footer blocks
+      expect(() => {
+        painter.setData?.([mainBlock], [mainMeasure], [headerBlock], [headerMeasure], [footerBlock], [footerMeasure]);
+      }).not.toThrow();
+    });
+
+    it('should render fragments with header block IDs without errors', () => {
+      const mainBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'main-block-1',
+        runs: [{ text: 'Main content', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 12 }],
+      };
+
+      const mainMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 12,
+            width: 120,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const headerBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'hf-header-rId6-0-paragraph',
+        runs: [{ text: 'Header', fontFamily: 'Arial', fontSize: 14, pmStart: 0, pmEnd: 6 }],
+      };
+
+      const headerMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 6,
+            width: 60,
+            ascent: 10,
+            descent: 3,
+            lineHeight: 16,
+          },
+        ],
+        totalHeight: 16,
+      };
+
+      const layoutWithHeader: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'main-block-1',
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 12,
+              },
+            ],
+          },
+        ],
+      };
+
+      const headerFragment = {
+        kind: 'para' as const,
+        blockId: 'hf-header-rId6-0-paragraph',
+        fromLine: 0,
+        toLine: 1,
+        x: 0,
+        y: 0,
+        width: 200,
+        pmStart: 0,
+        pmEnd: 6,
+      };
+
+      const painter = createDomPainter({
+        blocks: [mainBlock],
+        measures: [mainMeasure],
+        headerProvider: () => ({ fragments: [headerFragment], height: 16 }),
+      });
+
+      // Set data with header blocks
+      painter.setData?.([mainBlock], [mainMeasure], [headerBlock], [headerMeasure]);
+
+      // Paint should not throw errors about missing blocks
+      expect(() => {
+        painter.paint(layoutWithHeader, mount);
+      }).not.toThrow();
+
+      // Verify header was rendered
+      const headerEl = mount.querySelector('.superdoc-page-header');
+      expect(headerEl).toBeTruthy();
+      expect(headerEl?.textContent).toContain('Header');
+    });
+
+    it('should handle multiple header/footer blocks', () => {
+      const mainBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'main-1',
+        runs: [{ text: 'Content', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 7 }],
+      };
+
+      const mainMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 7,
+            width: 70,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const headerBlocks: FlowBlock[] = [
+        {
+          kind: 'paragraph',
+          id: 'hf-header-default-0-paragraph',
+          runs: [{ text: 'Default Header', fontFamily: 'Arial', fontSize: 14, pmStart: 0, pmEnd: 14 }],
+        },
+        {
+          kind: 'paragraph',
+          id: 'hf-header-first-0-paragraph',
+          runs: [{ text: 'First Page Header', fontFamily: 'Arial', fontSize: 14, pmStart: 0, pmEnd: 17 }],
+        },
+      ];
+
+      const headerMeasures: Measure[] = [
+        {
+          kind: 'paragraph',
+          lines: [
+            { fromRun: 0, fromChar: 0, toRun: 0, toChar: 14, width: 100, ascent: 10, descent: 3, lineHeight: 16 },
+          ],
+          totalHeight: 16,
+        },
+        {
+          kind: 'paragraph',
+          lines: [
+            { fromRun: 0, fromChar: 0, toRun: 0, toChar: 17, width: 120, ascent: 10, descent: 3, lineHeight: 16 },
+          ],
+          totalHeight: 16,
+        },
+      ];
+
+      const footerBlocks: FlowBlock[] = [
+        {
+          kind: 'paragraph',
+          id: 'hf-footer-default-0-paragraph',
+          runs: [{ text: 'Footer', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 6 }],
+        },
+      ];
+
+      const footerMeasures: Measure[] = [
+        {
+          kind: 'paragraph',
+          lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 6, width: 50, ascent: 9, descent: 3, lineHeight: 14 }],
+          totalHeight: 14,
+        },
+      ];
+
+      const painter = createDomPainter({
+        blocks: [mainBlock],
+        measures: [mainMeasure],
+      });
+
+      // Should handle multiple header and footer blocks without errors
+      expect(() => {
+        painter.setData?.([mainBlock], [mainMeasure], headerBlocks, headerMeasures, footerBlocks, footerMeasures);
+      }).not.toThrow();
+    });
+
+    it('should handle empty header/footer arrays', () => {
+      const mainBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'main-1',
+        runs: [{ text: 'Content', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 7 }],
+      };
+
+      const mainMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 7,
+            width: 70,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const painter = createDomPainter({
+        blocks: [mainBlock],
+        measures: [mainMeasure],
+      });
+
+      // Should handle empty arrays gracefully
+      expect(() => {
+        painter.setData?.([mainBlock], [mainMeasure], [], [], [], []);
+      }).not.toThrow();
+    });
+
+    it('should handle undefined header/footer parameters', () => {
+      const mainBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'main-1',
+        runs: [{ text: 'Content', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 7 }],
+      };
+
+      const mainMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 7,
+            width: 70,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const painter = createDomPainter({
+        blocks: [mainBlock],
+        measures: [mainMeasure],
+      });
+
+      // Should handle undefined parameters (backward compatibility)
+      expect(() => {
+        painter.setData?.([mainBlock], [mainMeasure], undefined, undefined, undefined, undefined);
+      }).not.toThrow();
+    });
+
+    it('should maintain backward compatibility with original setData signature', () => {
+      const mainBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'main-1',
+        runs: [{ text: 'Content', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 7 }],
+      };
+
+      const mainMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 7,
+            width: 70,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const painter = createDomPainter({
+        blocks: [mainBlock],
+        measures: [mainMeasure],
+      });
+
+      // Should work with just blocks and measures (original signature)
+      expect(() => {
+        painter.setData?.([mainBlock], [mainMeasure]);
+      }).not.toThrow();
+
+      const layoutData: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'main-1',
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 7,
+              },
+            ],
+          },
+        ],
+      };
+
+      expect(() => {
+        painter.paint(layoutData, mount);
+      }).not.toThrow();
+    });
+
+    it('should properly merge header/footer blocks into blockLookup', () => {
+      const mainBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'main-1',
+        runs: [{ text: 'Main', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 4 }],
+      };
+
+      const headerBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'hf-header-rId6-0-paragraph',
+        runs: [{ text: 'Header', fontFamily: 'Arial', fontSize: 14, pmStart: 0, pmEnd: 6 }],
+      };
+
+      const footerBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'hf-footer-rId7-0-paragraph',
+        runs: [{ text: 'Footer', fontFamily: 'Arial', fontSize: 14, pmStart: 0, pmEnd: 6 }],
+      };
+
+      const mainMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 4, width: 40, ascent: 12, descent: 4, lineHeight: 20 }],
+        totalHeight: 20,
+      };
+
+      const headerMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 6, width: 60, ascent: 10, descent: 3, lineHeight: 16 }],
+        totalHeight: 16,
+      };
+
+      const footerMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 6, width: 60, ascent: 10, descent: 3, lineHeight: 16 }],
+        totalHeight: 16,
+      };
+
+      const layoutData: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'main-1',
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 100,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 4,
+              },
+            ],
+          },
+        ],
+      };
+
+      const headerFragment = {
+        kind: 'para' as const,
+        blockId: 'hf-header-rId6-0-paragraph',
+        fromLine: 0,
+        toLine: 1,
+        x: 30,
+        y: 10,
+        width: 300,
+        pmStart: 0,
+        pmEnd: 6,
+      };
+
+      const footerFragment = {
+        kind: 'para' as const,
+        blockId: 'hf-footer-rId7-0-paragraph',
+        fromLine: 0,
+        toLine: 1,
+        x: 30,
+        y: 450,
+        width: 300,
+        pmStart: 0,
+        pmEnd: 6,
+      };
+
+      const painter = createDomPainter({
+        blocks: [mainBlock],
+        measures: [mainMeasure],
+        headerProvider: () => ({ fragments: [headerFragment], height: 20 }),
+        footerProvider: () => ({ fragments: [footerFragment], height: 20 }),
+      });
+
+      painter.setData?.([mainBlock], [mainMeasure], [headerBlock], [headerMeasure], [footerBlock], [footerMeasure]);
+
+      // Paint should successfully render all blocks without errors
+      expect(() => {
+        painter.paint(layoutData, mount);
+      }).not.toThrow();
+
+      // Verify all content is rendered
+      const content = mount.textContent;
+      expect(content).toContain('Main');
+      expect(content).toContain('Header');
+      expect(content).toContain('Footer');
     });
   });
 });

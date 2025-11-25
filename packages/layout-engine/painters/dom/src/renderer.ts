@@ -88,6 +88,8 @@ export type LayoutMode = 'vertical' | 'horizontal' | 'book';
 type PageDecorationPayload = {
   fragments: Fragment[];
   height: number;
+  /** Optional measured content height to aid bottom alignment in footers. */
+  contentHeight?: number;
   offset?: number;
   marginLeft?: number;
   // Optional explicit content width (px) for the decoration container
@@ -597,8 +599,44 @@ export class DomPainter {
     this.footerProvider = footer;
   }
 
-  public setData(blocks: FlowBlock[], measures: Measure[]): void {
+  /**
+   * Updates the painter's block and measure data.
+   *
+   * @param blocks - Main document blocks
+   * @param measures - Measures corresponding to main document blocks
+   * @param headerBlocks - Optional header blocks from header/footer layout results
+   * @param headerMeasures - Optional measures corresponding to header blocks
+   * @param footerBlocks - Optional footer blocks from header/footer layout results
+   * @param footerMeasures - Optional measures corresponding to footer blocks
+   */
+  public setData(
+    blocks: FlowBlock[],
+    measures: Measure[],
+    headerBlocks?: FlowBlock[],
+    headerMeasures?: Measure[],
+    footerBlocks?: FlowBlock[],
+    footerMeasures?: Measure[],
+  ): void {
+    // Build lookup for main document blocks
     const nextLookup = this.buildBlockLookup(blocks, measures);
+
+    // Merge header blocks into the lookup if provided
+    if (headerBlocks && headerMeasures) {
+      const headerLookup = this.buildBlockLookup(headerBlocks, headerMeasures);
+      headerLookup.forEach((entry, id) => {
+        nextLookup.set(id, entry);
+      });
+    }
+
+    // Merge footer blocks into the lookup if provided
+    if (footerBlocks && footerMeasures) {
+      const footerLookup = this.buildBlockLookup(footerBlocks, footerMeasures);
+      footerLookup.forEach((entry, id) => {
+        nextLookup.set(id, entry);
+      });
+    }
+
+    // Track changed blocks
     const changed = new Set<string>();
     nextLookup.forEach((entry, id) => {
       const previous = this.blockLookup.get(id);
@@ -1004,6 +1042,21 @@ export class DomPainter {
     container.style.top = `${Math.max(0, offset)}px`;
     container.style.zIndex = '1';
 
+    // For footers, calculate offset to push content to bottom of container
+    // Fragments are absolutely positioned, so we need to adjust their y values
+    let footerYOffset = 0;
+    if (kind === 'footer' && data.fragments.length > 0) {
+      const contentHeight =
+        typeof data.contentHeight === 'number'
+          ? data.contentHeight
+          : data.fragments.reduce((max, f) => {
+              const fragmentHeight = typeof (f as { height?: number }).height === 'number' ? f.height! : 0;
+              return Math.max(max, f.y + fragmentHeight);
+            }, 0);
+      // Offset to push content to bottom of container
+      footerYOffset = Math.max(0, data.height - contentHeight);
+    }
+
     const context: FragmentRenderContext = {
       pageNumber: page.number,
       totalPages: this.totalPages,
@@ -1013,6 +1066,11 @@ export class DomPainter {
 
     data.fragments.forEach((fragment) => {
       const fragEl = this.renderFragment(fragment, context);
+      // Apply footer offset to push content to bottom
+      if (footerYOffset > 0) {
+        const currentTop = parseFloat(fragEl.style.top) || fragment.y;
+        fragEl.style.top = `${currentTop + footerYOffset}px`;
+      }
       container.appendChild(fragEl);
     });
 

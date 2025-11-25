@@ -2738,7 +2738,35 @@ export class PresentationEditor extends EventEmitter {
     if (typeof painter.setProviders === 'function') {
       painter.setProviders(this.#headerDecorationProvider, this.#footerDecorationProvider);
     }
-    painter.setData?.(blocks, measures);
+
+    // Extract header/footer blocks and measures from layout results
+    const headerBlocks: FlowBlock[] = [];
+    const headerMeasures: Measure[] = [];
+    if (headerLayouts) {
+      for (const headerResult of headerLayouts) {
+        headerBlocks.push(...headerResult.blocks);
+        headerMeasures.push(...headerResult.measures);
+      }
+    }
+
+    const footerBlocks: FlowBlock[] = [];
+    const footerMeasures: Measure[] = [];
+    if (footerLayouts) {
+      for (const footerResult of footerLayouts) {
+        footerBlocks.push(...footerResult.blocks);
+        footerMeasures.push(...footerResult.measures);
+      }
+    }
+
+    // Pass all blocks (main document + headers + footers) to the painter
+    painter.setData?.(
+      blocks,
+      measures,
+      headerBlocks.length > 0 ? headerBlocks : undefined,
+      headerMeasures.length > 0 ? headerMeasures : undefined,
+      footerBlocks.length > 0 ? footerBlocks : undefined,
+      footerMeasures.length > 0 ? footerMeasures : undefined,
+    );
     painter.paint(layout, this.#painterHost);
 
     // Reset error state on successful layout
@@ -2955,7 +2983,8 @@ export class PresentationEditor extends EventEmitter {
       const finalHeaderId = headerId ?? fallbackId ?? undefined;
       return {
         fragments: slotPage.fragments,
-        height: variant.layout.height ?? box.height,
+        height: box.height,
+        contentHeight: variant.layout.height ?? 0,
         offset: box.offset,
         marginLeft: box.x,
         contentWidth: box.width,
@@ -2983,19 +3012,26 @@ export class PresentationEditor extends EventEmitter {
     const left = margins.left ?? DEFAULT_MARGINS.left!;
     const right = margins.right ?? DEFAULT_MARGINS.right!;
     const width = Math.max(pageSize.w - (left + right), 1);
-    const defaultHeight =
-      kind === 'header' ? (margins.top ?? DEFAULT_MARGINS.top) : (margins.bottom ?? DEFAULT_MARGINS.bottom);
-    const { headerSpace, footerSpace } = extractHeaderFooterSpace(margins);
-    const target = kind === 'header' ? headerSpace : footerSpace;
-    const height = Math.max(target || defaultHeight || 1, 1);
     const totalHeight = pageHeight ?? pageSize.h;
-    const offset = kind === 'header' ? 0 : Math.max(0, totalHeight - height);
-    return {
-      x: left,
-      width,
-      height,
-      offset,
-    };
+
+    // MS Word positioning:
+    // - Header: starts at headerMargin from page top, can extend down to topMargin
+    // - Footer: ends at footerMargin from page bottom, can extend up to bottomMargin
+    if (kind === 'header') {
+      const headerMargin = margins.header ?? 0;
+      const topMargin = margins.top ?? DEFAULT_MARGINS.top ?? 0;
+      // Height is the space available for header (between headerMargin and topMargin)
+      const height = Math.max(topMargin - headerMargin, 1);
+      return { x: left, width, height, offset: headerMargin };
+    } else {
+      const footerMargin = margins.footer ?? 0;
+      const bottomMargin = margins.bottom ?? DEFAULT_MARGINS.bottom ?? 0;
+      // Height is the space available for footer (between bottomMargin and footerMargin)
+      const height = Math.max(bottomMargin - footerMargin, 1);
+      // Position so container bottom is at footerMargin from page bottom
+      const offset = Math.max(0, totalHeight - footerMargin - height);
+      return { x: left, width, height, offset };
+    }
   }
 
   #rebuildHeaderFooterRegions(layout: Layout) {

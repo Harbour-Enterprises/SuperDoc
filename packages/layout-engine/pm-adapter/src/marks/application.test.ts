@@ -18,6 +18,7 @@ import {
   TRACK_DELETE_MARK,
   TRACK_FORMAT_MARK,
 } from './application.js';
+import { ptToPx } from '../utilities.js';
 import type { TextRun, PMMark, TrackedChangeMeta } from '../types.js';
 
 describe('mark application', () => {
@@ -555,11 +556,11 @@ describe('mark application', () => {
       expect(run.fontSize).toBe(12);
     });
 
-    it('applies fontSize from string with units', () => {
+    it('converts pt fontSize strings to px', () => {
       const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
       applyTextStyleMark(run, { fontSize: '16pt' });
 
-      expect(run.fontSize).toBe(16);
+      expect(run.fontSize).toBeCloseTo(ptToPx(16)!);
     });
 
     it('applies fontSize from string with px units', () => {
@@ -608,7 +609,7 @@ describe('mark application', () => {
     it('handles fontSize at minimum boundary', () => {
       const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
       applyTextStyleMark(run, { fontSize: '1pt' });
-      expect(run.fontSize).toBe(1);
+      expect(run.fontSize).toBeCloseTo(ptToPx(1)!);
     });
 
     it('handles fontSize at maximum boundary', () => {
@@ -626,13 +627,13 @@ describe('mark application', () => {
     it('handles decimal fontSize with units', () => {
       const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
       applyTextStyleMark(run, { fontSize: '12.5pt' });
-      expect(run.fontSize).toBe(12.5);
+      expect(run.fontSize).toBeCloseTo(ptToPx(12.5)!);
     });
 
     it('handles fontSize string with leading whitespace', () => {
       const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
       applyTextStyleMark(run, { fontSize: '  16pt' });
-      expect(run.fontSize).toBe(16);
+      expect(run.fontSize).toBeCloseTo(ptToPx(16)!);
     });
 
     it('applies letterSpacing to run', () => {

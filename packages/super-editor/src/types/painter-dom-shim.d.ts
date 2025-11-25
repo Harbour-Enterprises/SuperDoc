@@ -6,6 +6,7 @@ declare module '@superdoc/painter-dom' {
   export type PageDecorationPayload = {
     fragments: Fragment[];
     height: number;
+    contentHeight?: number;
     offset?: number;
     marginLeft?: number;
     contentWidth?: number;

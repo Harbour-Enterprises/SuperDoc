@@ -845,8 +845,22 @@ export interface PainterDOM {
   /**
    * Optional hook for incremental pipelines to refresh the underlying block/measures
    * without reinstantiating the painter. Implementations that don't need this can ignore it.
+   *
+   * @param blocks - Main document blocks
+   * @param measures - Measures corresponding to main document blocks
+   * @param headerBlocks - Optional header blocks from header/footer layout results
+   * @param headerMeasures - Optional measures corresponding to header blocks
+   * @param footerBlocks - Optional footer blocks from header/footer layout results
+   * @param footerMeasures - Optional measures corresponding to footer blocks
    */
-  setData?(blocks: FlowBlock[], measures: Measure[]): void;
+  setData?(
+    blocks: FlowBlock[],
+    measures: Measure[],
+    headerBlocks?: FlowBlock[],
+    headerMeasures?: Measure[],
+    footerBlocks?: FlowBlock[],
+    footerMeasures?: Measure[],
+  ): void;
 }
 /**
  * PDF painter interface.

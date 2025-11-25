@@ -316,11 +316,22 @@ export class PdfPainter {
       section: FragmentRenderContext['section'],
     ) => {
       if (!payload) return;
-      const offset = payload.offset ?? (section === 'footer' ? pageHeightPx - payload.height : 0);
+      const baseOffset = payload.offset ?? (section === 'footer' ? pageHeightPx - payload.height : 0);
       const marginLeft = payload.marginLeft ?? 0;
+      let footerYOffset = 0;
+      if (section === 'footer') {
+        const contentHeight =
+          typeof payload.contentHeight === 'number'
+            ? payload.contentHeight
+            : payload.fragments.reduce((max, f) => {
+                const fragmentHeight = typeof (f as { height?: number }).height === 'number' ? f.height! : 0;
+                return Math.max(max, f.y + fragmentHeight);
+              }, 0);
+        footerYOffset = Math.max(0, payload.height - contentHeight);
+      }
       payload.fragments.forEach((fragment) => {
         fragments.push({
-          fragment: translateFragment(fragment, offset, marginLeft),
+          fragment: translateFragment(fragment, baseOffset + footerYOffset, marginLeft),
           context: { pageNumber: page.number, totalPages: this.totalPages, section },
         });
       });
