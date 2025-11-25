@@ -220,6 +220,21 @@ describe('EditorAdapter', () => {
             expect(results[0].positions).toHaveLength(2);
             expect(results[0].positions![0]).toEqual({ from: 0, to: 6 });
             expect(results[0].positions![1]).toEqual({ from: 10, to: 16 });
+            expect(mockEditor.commands.search).toHaveBeenCalledWith('sample', { highlight: false });
+        });
+
+        it('should allow highlighting when requested', () => {
+            const matches: FoundMatch[] = [
+                { originalText: 'sample', suggestedText: 'example' }
+            ];
+
+            mockEditor.commands.search = vi.fn().mockReturnValue([
+                { from: 0, to: 6 }
+            ]);
+
+            mockAdapter.findResults(matches, { highlight: true });
+
+            expect(mockEditor.commands.search).toHaveBeenCalledWith('sample', { highlight: true });
         });
 
         it('should filter out matches without positions', () => {

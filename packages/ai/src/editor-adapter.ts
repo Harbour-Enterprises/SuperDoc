@@ -21,12 +21,16 @@ export class EditorAdapter {
      * Maps abstract search results to concrete editor positions using the search command.
      *
      * @param results - Array of found matches with originalText to search for
+     * @param options - Additional options
+     * @param options.highlight - Whether to apply visual highlights while searching
      * @returns Array of matches enriched with position data, filtered to only matches with positions
      */
-    findResults(results: FoundMatch[]): FoundMatch[] {
+    findResults(results: FoundMatch[], options: { highlight?: boolean } = {}): FoundMatch[] {
         if (!results?.length) {
             return [];
         }
+
+        const highlight = options.highlight ?? false;
 
         // Get current selection if it exists - access through view to ensure latest state
         const state = this.editor?.view?.state;
@@ -40,7 +44,7 @@ export class EditorAdapter {
         return results
             .map((match) => {
                 const text = match.originalText;
-                const rawMatches = this.editor.commands?.search?.(text) ?? [];
+                const rawMatches = this.editor.commands?.search?.(text, { highlight }) ?? [];
 
                 let positions = rawMatches
                     .map((match: { from?: number; to?: number}) => {
