@@ -1,65 +1,17 @@
 /**
- * SuperDoc layout contracts (v0.5.0).
+ * SuperDoc layout contracts.
  * Shared between the PM adapter, measurers, layout engine, and painters.
- *
- * Design Philosophy:
- * - Contracts define the minimal interface for v0.1.0 paragraph-flow pagination
- * - Extension points (Fragment union, Run attrs) are intentionally left open
- * - Each package owns its own implementation details; contracts only define boundaries
- *
- * Version Strategy:
- * - Breaking changes to contract types will bump the version
- * - Packages can check CONTRACTS_VERSION at runtime for compatibility
- *
- * Future Work (out of scope for v0.1.0):
- * - RTL/bidirectional text support (will require CSS direction hints)
- * - Additional fragment types (images, tables, code blocks)
- * - Inline elements with layout implications (inline embeds)
  */
 import type { TabStop } from './engines/tabs.js';
 export type { TabStop };
 /**
- * `CONTRACTS_VERSION` is pinned per release so all consumers can assert compatibility.
- * Bump when breaking changes land.
- *
- * Version History:
- * v1.0.0-alpha.1: Added engine contracts (paragraph, tabs, lists, image-wrap, tables)
- * v1.0.0-alpha.2: Merged keyboard input branch - added pmStart/pmEnd/token to TextRun
- * v1.0.0-alpha.3: Added pageReference token, pageRefMetadata, and TOC metadata (isTocEntry, tocInstruction)
- * v1.0.0-alpha.4: Added tracked-change metadata + mode wiring for layout-engine integration, and containerSdt field for dual metadata preservation
- * v1.0.0-alpha.5: Versioned FlowRunLink schema with extended metadata (target, rel, anchor, docLocation, etc.)
- * v1.0.0: Stable release - contracts are now production-ready
+ * Contracts version for runtime compatibility checks.
  */
 export declare const CONTRACTS_VERSION = '1.0.0';
 /**
  * Unique identifier for a block in the document.
- *
- * Current implementation: opaque string
- * Planned evolution: encode ProseMirror positions as `${pos}-${type}`
- * to support efficient diffing when document changes.
- */
-/**
- * Stable identifier emitted by the PM adapter. Current format `${pos}-${type}` so we
- * can diff against ProseMirror node positions later.
  */
 export type BlockId = string;
-/**
- * A styled text run within a block.
- *
- * Represents a contiguous sequence of text with consistent styling.
- * Multiple runs compose a line or block.
- *
- * Extensibility:
- * - Purely stylistic properties (bold, italic, color) live here
- * - Semantic metadata (links, annotations, inline code) can be added via
- *   custom properties without affecting layout calculations
- * - If inline elements gain layout implications (e.g., inline embeds),
- *   we'll extend this type or add per-character metadata
- */
-/**
- * `Run` carries inline styling and lightweight semantic hints. Extend via optional
- * props (e.g., underline, link metadata) as needed; avoid nested objects.
- */
 export type LeaderType = 'dot' | 'heavy' | 'hyphen' | 'middleDot' | 'underscore';
 export type TrackedChangeKind = 'insert' | 'delete' | 'format';
 export type TrackedChangesMode = 'review' | 'original' | 'final' | 'off';
@@ -337,15 +289,10 @@ export type SectionBreakBlock = {
   id: BlockId;
   /**
    * Section break type determines how the section starts.
-   * Note: For Phase 1, all types apply changes at the next page boundary (page-level semantics).
-   * True continuous (mid-page region changes) is deferred to a future phase.
-   *
-   * - 'continuous': Apply properties from next page (page-level, not mid-page region)
-   * - 'nextPage': Force a page break and apply properties (default Word behavior)
-   * - 'evenPage': Force break to next even page number (insert blank if needed)
-   * - 'oddPage': Force break to next odd page number (insert blank if needed)
-   *
-   * Default if unspecified: 'continuous' (matches Word default)
+   * - 'continuous': Apply properties from next page
+   * - 'nextPage': Force a page break and apply properties
+   * - 'evenPage': Force break to next even page number
+   * - 'oddPage': Force break to next odd page number
    */
   type?: 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
   /**
@@ -367,8 +314,6 @@ export type SectionBreakBlock = {
   orientation?: 'portrait' | 'landscape';
   /**
    * Section-specific margins in pixels.
-   * - header/footer are distances from the page edge.
-   * - top/bottom reserved for future (explicit top/bottom overrides).
    */
   margins: {
     header?: number;
@@ -378,12 +323,6 @@ export type SectionBreakBlock = {
   };
   /**
    * Column configuration for this section.
-   * - count: Number of columns (1 = single column, default)
-   * - gap: Space between columns in pixels
-   * - equalWidth: Reserved for future support of unequal column widths
-   *
-   * When specified, applies from the next page boundary (page-level semantics).
-   * Column changes follow the same active/pending pattern as margins and page size.
    */
   columns?: {
     count: number;
@@ -551,7 +490,6 @@ export type ParagraphAttrs = {
   isTocEntry?: boolean;
   /**
    * The original TOC field instruction (e.g., "TOC \o '1-3'").
-   * Preserved for future TOC regeneration features.
    */
   tocInstruction?: string;
   /**
@@ -807,12 +745,6 @@ export type ImageFragment = {
   isAnchored?: boolean;
   zIndex?: number;
 };
-/**
- * Union of all fragment types supported by the layout engine.
- *
- * v0.1.0: Only ParaFragment is supported
- * Future: Will expand to include ImageFragment, TableFragment, CodeFragment, etc.
- */
 export type ListItemFragment = {
   kind: 'list-item';
   blockId: BlockId;
