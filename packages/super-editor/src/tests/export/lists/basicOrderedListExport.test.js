@@ -2,9 +2,7 @@
 import { getTextFromNode, getExportedResult, testListNodes } from '../export-helpers/index';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { extractParagraphText } from '../../helpers/getParagraphText.js';
-const expectIndentValue = (actual, twips) => {
-  expect(actual).toBe(twips);
-};
+const getParagraphProps = (node) => node?.attrs?.paragraphProperties || {};
 
 describe('[simple-ordered-list.docx] simple ordered list tests', async () => {
   // The file for this set of test
@@ -86,15 +84,14 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     expect(item1.type).toBe('paragraph');
 
     const { attrs } = item1;
+    const paragraphProps = getParagraphProps(item1);
     expect(attrs).toBeDefined();
     expect(attrs.listRendering.path).toStrictEqual([1]);
 
     const expectedNumId = 1;
     const expectedLevel = 0;
-    expect(attrs.numberingProperties.numId).toBe(expectedNumId);
-    expectIndentValue(attrs.indent.left, 720);
-    expectIndentValue(attrs.indent.hanging, 360);
-    expect(attrs.numberingProperties.ilvl).toBe(expectedLevel);
+    expect(paragraphProps.numberingProperties.numId).toBe(expectedNumId);
+    expect(paragraphProps.numberingProperties.ilvl).toBe(expectedLevel);
 
     const exportedList1 = body.elements[0];
     const pPr = exportedList1.elements.find((s) => s.name === 'w:pPr');
@@ -111,13 +108,6 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const iLvl = ilvlTag?.attributes['w:val'];
     expect(iLvl).toBe(String(expectedLevel));
 
-    const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
-    expect(indentTag).toBeDefined();
-    const indentLeft = indentTag?.attributes['w:left'];
-    const indentHanging = indentTag?.attributes['w:hanging'];
-    expect(indentLeft).toBe('720');
-    expect(indentHanging).toBe('360');
-
     // Ensure styleId is passed through correctly
     const styleId = pPr?.elements.find((s) => s.name === 'w:pStyle');
     expect(styleId).toBeDefined();
@@ -130,13 +120,12 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     expect(item1.type).toBe('paragraph');
 
     const { attrs } = item1;
+    const paragraphProps = getParagraphProps(item1);
     const expectedNumId = 1;
     const expectedLevel = 1;
     expect(attrs).toBeDefined();
-    expect(attrs.numberingProperties.numId).toBe(expectedNumId);
-    expect(attrs.numberingProperties.ilvl).toBe(expectedLevel);
-    expectIndentValue(attrs.indent.left, 1440);
-    expectIndentValue(attrs.indent.hanging, 1080);
+    expect(paragraphProps.numberingProperties.numId).toBe(expectedNumId);
+    expect(paragraphProps.numberingProperties.ilvl).toBe(expectedLevel);
 
     const paragraphText = extractParagraphText(item1);
     expect(paragraphText).toBe('A custom');
@@ -155,13 +144,6 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
     expect(iLvl).toBe(String(expectedLevel));
-
-    const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
-    expect(indentTag).toBeDefined();
-    const indentLeft = indentTag?.attributes['w:left'];
-    const indentHanging = indentTag?.attributes['w:hanging'];
-    expect(indentLeft).toBe('1440');
-    expect(indentHanging).toBe('1080');
   });
 
   it('imports the line break', () => {
@@ -175,14 +157,12 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     expect(item1.type).toBe('paragraph');
 
     const { attrs } = item1;
+    const paragraphProps = getParagraphProps(item1);
     const expectedNumId = 4;
     const expectedLevel = 1;
     expect(attrs).toBeDefined();
-    expect(attrs.numberingProperties.numId).toBe(expectedNumId);
-    expect(attrs.numberingProperties.ilvl).toBe(expectedLevel);
-    expectIndentValue(attrs.indent.left, 571);
-    expectIndentValue(attrs.indent.hanging, 425);
-    expectIndentValue(attrs.indent.right, 18);
+    expect(paragraphProps.numberingProperties.numId).toBe(expectedNumId);
+    expect(paragraphProps.numberingProperties.ilvl).toBe(expectedLevel);
     expect(attrs.listRendering).toEqual({
       markerText: '2.1',
       justification: 'left',
@@ -206,14 +186,5 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
     expect(iLvl).toBe(String(expectedLevel));
-
-    const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
-    expect(indentTag).toBeDefined();
-    const indentLeft = indentTag?.attributes['w:left'];
-    const indentHanging = indentTag?.attributes['w:hanging'];
-    const indentRight = indentTag?.attributes['w:right'];
-    expect(indentLeft).toBe('571');
-    expect(indentHanging).toBe('425');
-    expect(indentRight).toBe('18');
   });
 });

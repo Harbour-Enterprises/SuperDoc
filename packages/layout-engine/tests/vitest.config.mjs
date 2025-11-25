@@ -20,6 +20,7 @@ export default defineConfig({
       '@superdoc/common/layout-constants': resolve(__dirname, '../../../shared/common/layout-constants.ts'),
       '@superdoc/common': resolve(__dirname, '../../../shared/common'),
       '@superdoc/common/list-numbering': resolve(__dirname, '../../../shared/common/list-numbering'),
+      '@superdoc/contracts': resolve(__dirname, '../contracts/src/index.ts'),
       '@converter': resolve(__dirname, '../../super-editor/src/core/super-converter'),
       '@core': resolve(__dirname, '../../super-editor/src/core'),
       '@extensions': resolve(__dirname, '../../super-editor/src/extensions'),

@@ -424,7 +424,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
         platform: 'node',
         userAgent: 'Node.js',
       };
-      (global as typeof globalThis & { navigator: Partial<Navigator> }).navigator = minimalNavigator;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (global as any).navigator = minimalNavigator;
     }
 
     if (options.mockDocument) {
@@ -620,7 +621,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       return null;
     }
 
-    const hit = this.presentationEditor.hitTest(clientX, clientY);
+    const hit = this.presentationEditor.hitTest(clientX as number, clientY as number);
     if (!hit) {
       return null;
     }
@@ -1001,12 +1002,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     const suppressedNames = new Set(
       (this.extensionService?.extensions || [])
-        .filter((ext) => {
-          const config = (ext as any)?.config;
+        .filter((ext: { config?: { excludeFromSummaryJSON?: boolean } }) => {
+          const config = (ext as { config?: { excludeFromSummaryJSON?: boolean } })?.config;
           const suppressFlag = config?.excludeFromSummaryJSON;
           return Boolean(suppressFlag);
         })
-        .map((ext) => ext.name),
+        .map((ext: { name: string }) => ext.name),
     );
 
     const summary = buildSchemaSummary(this.schema, schemaVersion);
@@ -1791,7 +1792,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
         if (name.includes('header') || name.includes('footer')) {
           const jsonObj = json as { elements?: unknown[] };
           const resultXml = this.converter.schemaToXml(jsonObj.elements?.[0]);
-          updatedHeadersFooters[name] = String(resultXml);
+          updatedHeadersFooters[name] = String(resultXml.replace(/\[\[sdspace\]\]/g, ''));
         }
       });
 

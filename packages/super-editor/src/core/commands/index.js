@@ -38,6 +38,10 @@ export * from './setBodyHeaderFooter.js';
 export * from './setSectionHeaderFooterAtSelection.js';
 export * from './insertSectionBreakAtSelection.js';
 
+// Paragraph
+export * from './textIndent.js';
+export * from './lineHeight.js';
+
 // Lists
 export * from './toggleList.js';
 export * from './increaseListIndent.js';

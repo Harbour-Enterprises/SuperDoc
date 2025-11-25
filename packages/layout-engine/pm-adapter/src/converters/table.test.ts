@@ -928,7 +928,7 @@ describe('table converter', () => {
       expect(tableBlock.columnWidths).toEqual([100, 150]);
     });
 
-    it('Priority 3: should use original grid when userEdited is false', () => {
+    it('Priority 2/3 interplay: should prefer colwidth when userEdited is false even if grid present', () => {
       const node: PMNode = {
         type: 'table',
         attrs: {
@@ -972,11 +972,10 @@ describe('table converter', () => {
       const tableBlock = result as TableBlock;
 
       // When userEdited is false and both grid and colwidth are present,
-      // grid takes precedence (Priority 3) per the implementation design
+      // colwidth (Priority 2) takes precedence over grid (Priority 3)
       expect(tableBlock.columnWidths).toBeDefined();
       expect(tableBlock.columnWidths).toHaveLength(2);
-      expect(tableBlock.columnWidths![0]).toBeCloseTo(96, 1);
-      expect(tableBlock.columnWidths![1]).toBeCloseTo(192, 1);
+      expect(tableBlock.columnWidths).toEqual([50, 100]);
     });
 
     it('Priority 3: should use grid when no colwidth present', () => {

@@ -1555,8 +1555,8 @@ export class PresentationEditor extends EventEmitter {
     };
     this.#editor.on('update', handleUpdate);
     this.#editor.on('selectionUpdate', handleSelection);
-    this.#editorListeners.push({ event: 'update', handler: handleUpdate });
-    this.#editorListeners.push({ event: 'selectionUpdate', handler: handleSelection });
+    this.#editorListeners.push({ event: 'update', handler: handleUpdate as (...args: unknown[]) => void });
+    this.#editorListeners.push({ event: 'selectionUpdate', handler: handleSelection as (...args: unknown[]) => void });
 
     // Listen for page style changes (e.g., margin adjustments via ruler).
     // These changes don't modify document content (docChanged === false),
@@ -1567,7 +1567,10 @@ export class PresentationEditor extends EventEmitter {
       this.#scheduleRerender();
     };
     this.#editor.on('pageStyleUpdate', handlePageStyleUpdate);
-    this.#editorListeners.push({ event: 'pageStyleUpdate', handler: handlePageStyleUpdate });
+    this.#editorListeners.push({
+      event: 'pageStyleUpdate',
+      handler: handlePageStyleUpdate as (...args: unknown[]) => void,
+    });
 
     const handleCollaborationReady = (payload: unknown) => {
       this.emit('collaborationReady', payload);
@@ -1578,7 +1581,10 @@ export class PresentationEditor extends EventEmitter {
       }
     };
     this.#editor.on('collaborationReady', handleCollaborationReady);
-    this.#editorListeners.push({ event: 'collaborationReady', handler: handleCollaborationReady });
+    this.#editorListeners.push({
+      event: 'collaborationReady',
+      handler: handleCollaborationReady as (...args: unknown[]) => void,
+    });
   }
 
   /**

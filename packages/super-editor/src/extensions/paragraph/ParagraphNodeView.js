@@ -1,8 +1,9 @@
 import { Attribute } from '@core/index.js';
 import { twipsToPixels } from '@converter/helpers.js';
 import { extractParagraphContext, calculateTabStyle } from '../tab/helpers/tabDecorations.js';
-import { resolveRunProperties, encodeCSSFromRPr } from '@converter/styles.js';
+import { resolveRunProperties, encodeCSSFromRPr, encodeCSSFromPPr } from '@converter/styles.js';
 import { isList } from '@core/commands/list-helpers';
+import { getResolvedParagraphProperties, calculateResolvedParagraphProperties } from './resolvedPropertiesCache.js';
 
 /**
  * ProseMirror node view that renders paragraphs, including special handling for
@@ -25,6 +26,8 @@ export class ParagraphNodeView {
     this.extensionAttrs = extensionAttrs;
     this._animationFrameRequest = null;
 
+    calculateResolvedParagraphProperties(this.editor, this.node, this.editor.state.doc.resolve(this.getPos()));
+
     this.dom = document.createElement('p');
     this.contentDOM = document.createElement('span');
     this.dom.appendChild(this.contentDOM);
@@ -38,6 +41,7 @@ export class ParagraphNodeView {
       });
     }
     this.#updateHTMLAttributes();
+    this.#updateDOMStyles();
   }
 
   /**
@@ -54,7 +58,10 @@ export class ParagraphNodeView {
       return true;
     }
 
+    calculateResolvedParagraphProperties(this.editor, this.node, this.editor.state.doc.resolve(this.getPos()));
+
     this.#updateHTMLAttributes();
+    this.#updateDOMStyles();
 
     if (!this.#checkIsList()) {
       this.#removeList();
@@ -78,6 +85,32 @@ export class ParagraphNodeView {
       }
       this.dom.setAttribute(key, value);
     }
+    const paragraphProperties = getResolvedParagraphProperties(this.node);
+    if (this.#checkIsList()) {
+      this.dom.setAttribute('data-num-id', paragraphProperties.numberingProperties.numId);
+      this.dom.setAttribute('data-level', paragraphProperties.numberingProperties.ilvl);
+    } else {
+      this.dom.removeAttribute('data-num-id');
+      this.dom.removeAttribute('data-level');
+    }
+    if (paragraphProperties.framePr?.dropCap) {
+      this.dom.classList.add('sd-editor-dropcap');
+    } else {
+      this.dom.classList.remove('sd-editor-dropcap');
+    }
+
+    if (paragraphProperties.styleId) {
+      this.dom.setAttribute('styleid', paragraphProperties.styleId);
+    }
+  }
+
+  #updateDOMStyles() {
+    this.dom.style.cssText = '';
+    const paragraphProperties = getResolvedParagraphProperties(this.node);
+    const style = encodeCSSFromPPr(paragraphProperties);
+    Object.entries(style).forEach(([k, v]) => {
+      this.dom.style[k] = v;
+    });
   }
 
   #updateListStyles() {
@@ -85,7 +118,8 @@ export class ParagraphNodeView {
     suffix = suffix ?? 'tab';
     this.#calculateMarkerStyle(justification);
     if (suffix === 'tab') {
-      this.#calculateTabSeparatorStyle(justification, this.node.attrs.indent);
+      const paragraphProperties = getResolvedParagraphProperties(this.node);
+      this.#calculateTabSeparatorStyle(justification, paragraphProperties.indent);
     } else {
       this.separator.textContent = suffix === 'space' ? '\u00A0' : '';
     }
@@ -247,10 +281,11 @@ export class ParagraphNodeView {
    */
   #calculateMarkerStyle(justification) {
     // START: modify after CSS styles
+    const paragraphProperties = getResolvedParagraphProperties(this.node);
     const runProperties = resolveRunProperties(
       { docx: this.editor.converter.convertedXml, numbering: this.editor.converter.numbering },
-      this.node.attrs.paragraphProperties.runProperties || {},
-      { ...this.node.attrs.paragraphProperties, numberingProperties: this.node.attrs.numberingProperties },
+      paragraphProperties.runProperties || {},
+      paragraphProperties,
       true,
       Boolean(this.node.attrs.paragraphProperties.numberingProperties),
     );

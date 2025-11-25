@@ -1069,6 +1069,16 @@ describe('PresentationEditor', () => {
   });
 
   describe('Error handling and recovery', () => {
+    let consoleErrorSpy: ReturnType<typeof vi.spyOn> | undefined;
+
+    beforeEach(() => {
+      consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleErrorSpy?.mockRestore();
+    });
+
     describe('Layout error state tracking', () => {
       it('should start in healthy state', () => {
         editor = new PresentationEditor({

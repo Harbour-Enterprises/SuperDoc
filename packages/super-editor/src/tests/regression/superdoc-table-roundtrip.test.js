@@ -32,13 +32,7 @@ describe('superdoc_table_tester import/export', () => {
 
     const paragraph = firstCell.content.find((child) => child.type === 'paragraph');
     expect(paragraph).toBeDefined();
-    // With linked styles enabled, spacing is hydrated from the paragraph style (Normal)
-    // This is the correct Word behavior - styles apply to table paragraphs
-    expect(paragraph.attrs.spacing).toMatchObject({
-      line: 276,
-      lineRule: 'auto',
-      after: 200,
-    });
+    expect(paragraph.attrs.paragraphProperties?.spacing).toBeUndefined();
   });
 
   it('round-trips table margins and preserves spacing from style when exporting', async () => {
@@ -70,12 +64,7 @@ describe('superdoc_table_tester import/export', () => {
     const firstParagraph = firstTc?.elements?.find((el) => el.name === 'w:p');
     const pPr = firstParagraph?.elements?.find((el) => el.name === 'w:pPr');
     const spacing = pPr?.elements?.find((el) => el.name === 'w:spacing');
-    // With linked styles, spacing from the paragraph style is preserved on export
-    expect(spacing).toBeDefined();
-    expect(spacing.attributes).toEqual({
-      'w:after': '200',
-      'w:line': '276',
-      'w:lineRule': 'auto',
-    });
+    // Inside table cells we now drop doc-default spacing unless explicitly set
+    expect(spacing).toBeUndefined();
   });
 });

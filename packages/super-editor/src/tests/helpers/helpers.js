@@ -99,7 +99,7 @@ export const loadTestDataForEditorTests = async (filename) => {
  * @returns {Promise<{editor: Editor, dispatch: Function}>} A promise that resolves with the initialized editor
  */
 export const initTestEditor = (options = {}) => {
-  const { onCreate: userOnCreate, element: providedElement, ...restOptions } = options;
+  const { onCreate: userOnCreate, element: providedElement, useImmediateSetTimeout = true, ...restOptions } = options;
 
   const hasWindow = typeof window !== 'undefined' && window?.setTimeout;
   const originalSetTimeout = hasWindow ? window.setTimeout : null;
@@ -107,7 +107,7 @@ export const initTestEditor = (options = {}) => {
     cb(...cbArgs);
     return 0;
   };
-  if (hasWindow) {
+  if (hasWindow && useImmediateSetTimeout) {
     window.setTimeout = immediateSetTimeout;
   }
 
@@ -128,7 +128,7 @@ export const initTestEditor = (options = {}) => {
     ...restOptions,
   });
 
-  if (hasWindow && originalSetTimeout) {
+  if (hasWindow && originalSetTimeout && useImmediateSetTimeout) {
     window.setTimeout = originalSetTimeout;
   }
 

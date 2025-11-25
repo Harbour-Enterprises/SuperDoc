@@ -14,7 +14,6 @@
  * @param {unknown} _context
  * @returns {TableStyleProps}
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const _getReferencedTableStyles = (_styleId, _context) => ({
   borders: null,
   cellMargins: null,

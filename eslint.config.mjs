@@ -101,7 +101,7 @@ export default [
       },
     },
     rules: {
-      'no-unused-vars': ['warn', { varsIgnorePattern: '^_' }], // See warnings but don't block
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }], // See warnings but don't block
 
       // Relax these rules - they're more style than bugs
       'no-empty': ['warn', { allowEmptyCatch: true }], // Allow empty catch blocks
@@ -134,17 +134,27 @@ export default [
       '@typescript-eslint/no-empty-function': 'warn', // Allow for test mocks
     },
   },
+  // Mock files configuration (JavaScript files in __mocks__ directories)
+  {
+    files: ['**/__mocks__/**/*.js'],
+    rules: {
+      // Disable TypeScript rule for JavaScript mock files
+      '@typescript-eslint/no-unused-vars': 'off',
+      // JavaScript rule with underscore pattern already applied
+    },
+  },
   {
     files: ['packages/super-editor/src/extensions/**/*.js'],
     rules: {
       '@typescript-eslint/ban-ts-comment': 'off',
-      '@typescript-eslint/no-unused-vars': [
+      'no-unused-vars': [
         'warn',
         {
           argsIgnorePattern: '^_',
           varsIgnorePattern: '^_',
         },
       ],
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
   {

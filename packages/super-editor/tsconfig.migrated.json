@@ -49,8 +49,6 @@
     "src/core/commands/core-command-map.d.ts",
     "src/core/helpers/getExtensionConfigField.ts",
     "src/core/header-footer/HeaderFooterRegistry.ts",
-    "src/core/schema-management/schema-loader.ts",
-    "src/core/schema-management/schema-summary.ts",
     "src/core/types/**/*.ts",
     "src/core/utilities/callOrGet.ts",
     "src/extensions/types/**/*.ts"

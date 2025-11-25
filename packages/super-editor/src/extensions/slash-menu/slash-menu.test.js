@@ -1,8 +1,11 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { schema, doc, p } from 'prosemirror-test-builder';
-import { initTestEditor } from '@tests/helpers/helpers.js';
+import { initTestEditor, loadTestDataForEditorTests } from '@tests/helpers/helpers.js';
 import { SlashMenu, SlashMenuPluginKey } from './slash-menu.js';
+vi.mock('@core/commands/list-helpers', () => ({
+  isList: () => false,
+}));
 
 vi.mock('../../core/helpers/editorSurface.js', () => ({
   getSurfaceRelativePoint: vi.fn(() => ({ left: 20, top: 30 })),
@@ -18,10 +21,13 @@ describe('SlashMenu extension', () => {
     expect(headless).toEqual([]);
   });
 
-  it('creates a plugin when enabled', () => {
+  it('creates a plugin when enabled', async () => {
+    const { docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests('paragraph_spacing_missing.docx');
     const { editor } = initTestEditor({
-      mode: 'text',
-      content: '<p></p>',
+      content: docx,
+      media,
+      mediaFiles,
+      fonts,
       isHeadless: false,
       disableContextMenu: false,
     });

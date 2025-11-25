@@ -93,7 +93,7 @@ describe('Headless Mode Optimization', () => {
 
     while (stack.length && !listItemNode) {
       const node = stack.shift();
-      if (node.type === 'paragraph' && node.attrs?.numberingProperties != null) {
+      if (node.type === 'paragraph' && node.attrs?.paragraphProperties?.numberingProperties != null) {
         listItemNode = node;
         break;
       }
@@ -104,8 +104,8 @@ describe('Headless Mode Optimization', () => {
 
     expect(listItemNode).toBeTruthy();
     expect(listItemNode.attrs.listRendering.path.length).toBeGreaterThan(0);
-    expect(listItemNode?.attrs.numberingProperties.numId).toBe(1);
-    expect(listItemNode?.attrs.numberingProperties.ilvl).toBe(0);
+    expect(listItemNode?.attrs.paragraphProperties?.numberingProperties?.numId).toBe(1);
+    expect(listItemNode?.attrs.paragraphProperties?.numberingProperties?.ilvl).toBe(0);
 
     editor.destroy();
   });

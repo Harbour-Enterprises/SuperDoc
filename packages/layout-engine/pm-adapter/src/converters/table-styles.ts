@@ -57,18 +57,13 @@ export const hydrateTableStyleAttrs = (tableNode: PMNode, context?: ConverterCon
         hydration.justification = referenced.justification;
       }
     } else {
-      debugTable('style-resolver-empty', { tableStyleId: styleId });
     }
-  } else if (styleId && !hasTableStyleContext(context)) {
-    debugTable('missing-context', { tableStyleId: styleId });
   }
 
   if (Object.keys(hydration).length > 0) {
-    debugTable('hydrated', { tableStyleId: styleId, props: Object.keys(hydration) });
     return hydration;
   }
 
-  debugTable('hydration-empty', { tableStyleId: styleId });
   return null;
 };
 
@@ -120,8 +115,4 @@ const normalizeTableWidth = (value: unknown): { width?: number; type?: string } 
     return { width: twipsToPx(raw), type: 'px' };
   }
   return { width: raw, type: measurement.type };
-};
-
-const debugTable = (event: string, payload: Record<string, unknown>) => {
-  console.debug('[style:table]', event, payload);
 };

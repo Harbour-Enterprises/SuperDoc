@@ -8,7 +8,6 @@ export default defineConfig({
       './packages/superdoc',
       './packages/ai',
       './packages/collaboration-yjs',
-      './packages/schema-management',
       './packages/layout-engine/layout-bridge',
       './packages/layout-engine/pm-adapter',
       './packages/layout-engine/tests',

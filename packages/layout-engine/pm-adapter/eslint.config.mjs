@@ -7,10 +7,29 @@ export default [
   ...tseslint.configs.recommended,
   prettierConfig,
   {
+    files: ['**/*.js', '**/*.jsx'],
+    rules: {
+      // Disable TypeScript rule for JavaScript files
+      '@typescript-eslint/no-unused-vars': 'off',
+
+      // Warn on unused vars, allow underscore prefix for intentionally unused
+      'no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+        },
+      ],
+    },
+  },
+  {
     files: ['**/*.ts', '**/*.tsx'],
     rules: {
       // Warn on 'any' usage - we want to gradually remove them
       '@typescript-eslint/no-explicit-any': 'warn',
+
+      // Disable base rule for TypeScript files
+      'no-unused-vars': 'off',
 
       // Warn on unused vars, allow underscore prefix for intentionally unused
       '@typescript-eslint/no-unused-vars': [

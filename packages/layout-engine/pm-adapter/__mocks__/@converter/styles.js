@@ -19,7 +19,6 @@
  * @param {unknown} _inlineProps
  * @returns {ResolvedParagraphPropertiesExtended}
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const resolveParagraphProperties = (_docxContext, _inlineProps) => ({
   spacing: null,
   indent: null,
@@ -32,5 +31,4 @@ export const resolveParagraphProperties = (_docxContext, _inlineProps) => ({
   numberingProperties: null,
 });
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export const resolveRunProperties = (_styleId, _context) => ({});

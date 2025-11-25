@@ -8,6 +8,7 @@
  * @property {boolean} insideTrackChange - Indicates if the processing is inside a track change.
  * @property {NodeListHandler} nodeListHandler - The node list handler.
  * @property {Object} converter - The converter object.
+ * @property {Object} numbering - The numbering object containing numbering definitions.
  * @property {import('../../../../Editor').Editor} editor - The editor object.
  * @property {string} [filename] - The name of the file being processed.
  * @property {string} [parentStyleId] - The ID of the parent style.

@@ -1,5 +1,6 @@
 import { Decoration } from 'prosemirror-view';
 import { twipsToPixels } from '@superdoc/word-layout';
+import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 
 export const defaultTabDistance = 48;
 export const defaultLineLength = 816;
@@ -150,9 +151,10 @@ export function findParagraphContext($pos, cache, helpers) {
 }
 
 export function extractParagraphContext(node, startPos, helpers, depth = 0) {
+  const paragraphProperties = getResolvedParagraphProperties(node);
   let tabStops = [];
-  if (Array.isArray(node.attrs?.tabStops)) {
-    tabStops = node.attrs.tabStops
+  if (Array.isArray(paragraphProperties.tabStops)) {
+    tabStops = paragraphProperties.tabStops
       .map((stop) => {
         const ref = stop?.tab;
         if (!ref) return stop || null;
@@ -163,18 +165,13 @@ export function extractParagraphContext(node, startPos, helpers, depth = 0) {
         };
       })
       .filter(Boolean);
-  } else {
-    const style = helpers.linkedStyles.getStyleById(node.attrs?.styleId);
-    if (Array.isArray(style?.definition?.styles?.tabStops)) {
-      tabStops = style.definition.styles.tabStops;
-    }
   }
   const { entries, positionMap } = flattenParagraph(node, startPos);
   return {
     paragraph: node,
     paragraphDepth: depth,
     startPos,
-    indent: node.attrs?.indent || {},
+    indent: paragraphProperties.indent || {},
     tabStops: tabStops,
     flattened: entries,
     positionMap: positionMap, // Store position map for O(1) lookups

@@ -115,7 +115,7 @@ describe('[list-spacer1.docx] correctly imports invalid list (no abstract) as pa
   it('correctly imports the list styles', () => {
     const importedParagraph = content.content[2];
     expect(importedParagraph.type).toEqual('paragraph');
-    expect(importedParagraph.attrs.styleId).toEqual('StandardL1');
+    expect(importedParagraph.attrs.paragraphProperties?.styleId).toEqual('StandardL1');
 
     const paragraph = body.elements[2];
     const pPr = paragraph.elements.find((el) => el.name === 'w:pPr');
