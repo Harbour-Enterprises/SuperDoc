@@ -1,4 +1,6 @@
 type NumKey = string;
+const RESERVED_NUM_ID_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const NO_ABSTRACT_ID_KEY = '__no_abstract__';
 
 /**
  * Converts a string or number value into a normalized string key for internal storage.
@@ -21,8 +23,14 @@ const toKey = (value: string | number): NumKey => String(value);
  * @throws {Error} If numId is an empty string or NaN
  */
 const validateNumId = (numId: string | number): void => {
-  if (typeof numId === 'string' && numId.trim() === '') {
-    throw new Error('Invalid numId: empty string. NumId must be a non-empty string or number.');
+  if (typeof numId === 'string') {
+    const trimmed = numId.trim();
+    if (trimmed === '') {
+      throw new Error('Invalid numId: empty string. NumId must be a non-empty string or number.');
+    }
+    if (RESERVED_NUM_ID_KEYS.has(trimmed)) {
+      throw new Error(`Invalid numId: reserved property name "${trimmed}". NumId cannot be a prototype-polluting key.`);
+    }
   }
   if (typeof numId === 'number' && !Number.isFinite(numId)) {
     throw new Error(`Invalid numId: ${numId}. NumId must be a finite number.`);
@@ -143,7 +151,13 @@ export const createNumberingManager = (): NumberingManager => {
    * manager.setStartSettings('list1', 1, 1, 0); // Level 1 starts at 1, never restarts
    * ```
    */
-  const setStartSettings = (numId: string | number, level: number, startValue: number, restartValue?: number) => {
+  const setStartSettings = (
+    numId: string | number,
+    level: number,
+    startValue: number,
+    restartValue?: number | null,
+  ) => {
+    const normalizedRestart = restartValue == null ? undefined : restartValue;
     validateNumId(numId);
     if (level < 0 || !Number.isFinite(level)) {
       throw new Error(`Invalid level: ${level}. Level must be a non-negative finite number.`);
@@ -151,7 +165,7 @@ export const createNumberingManager = (): NumberingManager => {
     if (!Number.isFinite(startValue)) {
       throw new Error(`Invalid startValue: ${startValue}. Start value must be a finite number.`);
     }
-    if (restartValue !== undefined && !Number.isFinite(restartValue)) {
+    if (normalizedRestart !== undefined && !Number.isFinite(normalizedRestart)) {
       throw new Error(`Invalid restartValue: ${restartValue}. Restart value must be a finite number.`);
     }
 
@@ -163,7 +177,7 @@ export const createNumberingManager = (): NumberingManager => {
       startsMap[key][level] = {};
     }
     startsMap[key][level].start = startValue;
-    startsMap[key][level].restart = restartValue;
+    startsMap[key][level].restart = normalizedRestart;
   };
 
   /**
@@ -227,17 +241,13 @@ export const createNumberingManager = (): NumberingManager => {
     }
 
     const numKey = toKey(numId);
+    const resolvedAbstractId = abstractId != null ? toKey(abstractId) : NO_ABSTRACT_ID_KEY;
     ensureCounters(countersMap, numKey, level);
     countersMap[numKey][level][pos] = value;
 
-    if (abstractId != null) {
-      abstractIdMap[numKey] = toKey(abstractId);
-    }
-    const resolvedAbstractId = abstractIdMap[numKey];
-    if (resolvedAbstractId) {
-      ensureCounters(abstractCountersMap, resolvedAbstractId, level);
-      abstractCountersMap[resolvedAbstractId][level][pos] = value;
-    }
+    abstractIdMap[numKey] = resolvedAbstractId;
+    ensureCounters(abstractCountersMap, resolvedAbstractId, level);
+    abstractCountersMap[resolvedAbstractId][level][pos] = value;
 
     if (!cacheEnabled) {
       return;
@@ -372,17 +382,12 @@ export const createNumberingManager = (): NumberingManager => {
    * ```
    */
   const shouldRestartCounter = (
-    abstractIdKey: NumKey | null | undefined,
+    abstractIdKey: NumKey,
     level: number,
     previousPos: number,
     pos: number,
     restartSetting?: number,
   ): boolean => {
-    // If no abstract ID key, cannot determine restart behavior - default to no restart
-    if (abstractIdKey == null) {
-      return false;
-    }
-
     const usedLevels: number[] = [];
     for (let lvl = 0; lvl < level; lvl++) {
       const levelDataMap = abstractCountersMap?.[abstractIdKey]?.[lvl] || {};
@@ -446,9 +451,8 @@ export const createNumberingManager = (): NumberingManager => {
     }
 
     const numKey = toKey(numId);
-    if (abstractId != null) {
-      abstractIdMap[numKey] = toKey(abstractId);
-    }
+    const resolvedAbstractId = abstractId != null ? toKey(abstractId) : NO_ABSTRACT_ID_KEY;
+    abstractIdMap[numKey] = resolvedAbstractId;
 
     const restartSetting = startsMap?.[numKey]?.[level]?.restart;
     const levelData = countersMap?.[numKey]?.[level] || {};
@@ -526,7 +530,7 @@ export const createNumberingManager = (): NumberingManager => {
       return pathCache[numKey][level][pos];
     }
     const path: number[] = [];
-    const abstractId = abstractIdMap[numKey];
+    const abstractId = abstractIdMap[numKey] ?? NO_ABSTRACT_ID_KEY;
     for (let lvl = 0; lvl < level; lvl++) {
       const startCount = startsMap?.[numKey]?.[lvl]?.start ?? 1;
       const levelData = abstractCountersMap?.[abstractId]?.[lvl] || {};

@@ -391,6 +391,149 @@ describe('NumberingManager - calculateCounter error handling', () => {
   });
 });
 
+describe('NumberingManager - super-editor parity scenarios (no abstractId)', () => {
+  it('restarts level 1 when a new level 0 item appears with default restart rules', () => {
+    const manager = createNumberingManager();
+    manager.setStartSettings('list1', 0, 1);
+    manager.setStartSettings('list1', 1, 1);
+
+    const top10 = manager.calculateCounter('list1', 0, 10);
+    manager.setCounter('list1', 0, 10, top10);
+
+    const top11 = manager.calculateCounter('list1', 0, 11);
+    manager.setCounter('list1', 0, 11, top11);
+
+    const child13 = manager.calculateCounter('list1', 1, 13);
+    expect(child13).toBe(1);
+    manager.setCounter('list1', 1, 13, child13);
+
+    const child14 = manager.calculateCounter('list1', 1, 14);
+    expect(child14).toBe(2);
+    manager.setCounter('list1', 1, 14, child14);
+
+    const top15 = manager.calculateCounter('list1', 0, 15);
+    expect(top15).toBe(3);
+    manager.setCounter('list1', 0, 15, top15);
+
+    const restartedChild = manager.calculateCounter('list1', 1, 16);
+    expect(restartedChild).toBe(1);
+    manager.setCounter('list1', 1, 16, restartedChild);
+    expect(manager.getAncestorsPath('list1', 1, 16)).toEqual([3]);
+    expect(manager.calculatePath('list1', 1, 16)).toEqual([3, 1]);
+  });
+
+  it('continues level 2 when restart setting is zero despite lower-level usage', () => {
+    const manager = createNumberingManager();
+    manager.setStartSettings('list1', 0, 1);
+    manager.setStartSettings('list1', 2, 1, 0);
+
+    const top10 = manager.calculateCounter('list1', 0, 10);
+    manager.setCounter('list1', 0, 10, top10);
+
+    const top11 = manager.calculateCounter('list1', 0, 11);
+    manager.setCounter('list1', 0, 11, top11);
+
+    const child13 = manager.calculateCounter('list1', 1, 13);
+    manager.setCounter('list1', 1, 13, child13);
+
+    const child14 = manager.calculateCounter('list1', 1, 14);
+    manager.setCounter('list1', 1, 14, child14);
+
+    const top15 = manager.calculateCounter('list1', 0, 15);
+    manager.setCounter('list1', 0, 15, top15);
+
+    const child16 = manager.calculateCounter('list1', 1, 16);
+    expect(child16).toBe(1);
+    manager.setCounter('list1', 1, 16, child16);
+
+    const grandchild17 = manager.calculateCounter('list1', 2, 17);
+    expect(grandchild17).toBe(1);
+    manager.setCounter('list1', 2, 17, grandchild17);
+
+    const top18 = manager.calculateCounter('list1', 0, 18);
+    manager.setCounter('list1', 0, 18, top18);
+
+    const child19 = manager.calculateCounter('list1', 1, 19);
+    manager.setCounter('list1', 1, 19, child19);
+
+    const child20 = manager.calculateCounter('list1', 1, 20);
+    manager.setCounter('list1', 1, 20, child20);
+
+    const grandchild21 = manager.calculateCounter('list1', 2, 21);
+    expect(grandchild21).toBe(2);
+    manager.setCounter('list1', 2, 21, grandchild21);
+    expect(manager.calculatePath('list1', 2, 21)).toEqual([4, 2, 2]);
+  });
+
+  it('restarts level 2 numbering when restart threshold is met', () => {
+    const manager = createNumberingManager();
+    manager.setStartSettings('list2', 0, 1);
+    manager.setStartSettings('list2', 2, 4, 1);
+
+    const top100 = manager.calculateCounter('list2', 0, 100);
+    manager.setCounter('list2', 0, 100, top100);
+
+    const child101 = manager.calculateCounter('list2', 1, 101);
+    manager.setCounter('list2', 1, 101, child101);
+
+    const grandchild102 = manager.calculateCounter('list2', 2, 102);
+    expect(grandchild102).toBe(4);
+    manager.setCounter('list2', 2, 102, grandchild102);
+
+    const child103 = manager.calculateCounter('list2', 1, 103);
+    expect(child103).toBe(2);
+    manager.setCounter('list2', 1, 103, child103);
+
+    const grandchild104 = manager.calculateCounter('list2', 2, 104);
+    expect(grandchild104).toBe(4);
+    manager.setCounter('list2', 2, 104, grandchild104);
+    expect(manager.calculatePath('list2', 2, 104)).toEqual([1, 2, 4]);
+  });
+
+  it('restarts when the restart threshold is two levels below the current level after intermediate siblings', () => {
+    const manager = createNumberingManager();
+    manager.setStartSettings('list3', 0, 1);
+    manager.setStartSettings('list3', 3, 7, 1);
+
+    const top400 = manager.calculateCounter('list3', 0, 400);
+    expect(top400).toBe(1);
+    manager.setCounter('list3', 0, 400, top400);
+
+    const child401 = manager.calculateCounter('list3', 1, 401);
+    expect(child401).toBe(1);
+    manager.setCounter('list3', 1, 401, child401);
+
+    const grand402 = manager.calculateCounter('list3', 2, 402);
+    expect(grand402).toBe(1);
+    manager.setCounter('list3', 2, 402, grand402);
+
+    const level3First = manager.calculateCounter('list3', 3, 403);
+    expect(level3First).toBe(7);
+    manager.setCounter('list3', 3, 403, level3First);
+
+    const grand404 = manager.calculateCounter('list3', 2, 404);
+    expect(grand404).toBe(2);
+    manager.setCounter('list3', 2, 404, grand404);
+
+    const level3Second = manager.calculateCounter('list3', 3, 405);
+    expect(level3Second).toBe(8);
+    manager.setCounter('list3', 3, 405, level3Second);
+
+    const child406 = manager.calculateCounter('list3', 1, 406);
+    expect(child406).toBe(2);
+    manager.setCounter('list3', 1, 406, child406);
+
+    const grand407 = manager.calculateCounter('list3', 2, 407);
+    expect(grand407).toBe(1);
+    manager.setCounter('list3', 2, 407, grand407);
+
+    const level3Third = manager.calculateCounter('list3', 3, 408);
+    expect(level3Third).toBe(7);
+    manager.setCounter('list3', 3, 408, level3Third);
+    expect(manager.calculatePath('list3', 3, 408)).toEqual([1, 2, 1, 7]);
+  });
+});
+
 describe('NumberingManager - abstract ID mapping edge cases', () => {
   it('handles changing abstractId for same numId', () => {
     const manager = createNumberingManager();
@@ -733,7 +876,7 @@ describe('NumberingManager - comprehensive restart logic', () => {
     expect(deep3).toBe(1); // Should restart because level 0 was used
   });
 
-  it('handles restart logic with no abstractId (should not restart)', () => {
+  it('handles restart logic with no abstractId by using a fallback bucket', () => {
     const manager = createNumberingManager();
     manager.setStartSettings('num', 0, 1);
     manager.setStartSettings('num', 1, 1);
@@ -747,7 +890,7 @@ describe('NumberingManager - comprehensive restart logic', () => {
     const second = manager.calculateCounter('num', 1, 15); // No abstractId
 
     expect(first).toBe(1);
-    expect(second).toBe(2); // Should NOT restart without abstractId for restart logic
+    expect(second).toBe(1); // Uses fallback bucket, so restart occurs because parent level was used
   });
 });
 
