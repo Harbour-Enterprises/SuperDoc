@@ -79,19 +79,21 @@ export function signaturesEqual(a: SectionSignature, b: SectionSignature): boole
 
   const pageSizeEq =
     (!a.pageSizePx && !b.pageSizePx) ||
-    (a.pageSizePx && b.pageSizePx && a.pageSizePx.w === b.pageSizePx.w && a.pageSizePx.h === b.pageSizePx.h);
+    !!(a.pageSizePx && b.pageSizePx && a.pageSizePx.w === b.pageSizePx.w && a.pageSizePx.h === b.pageSizePx.h);
 
   const columnsEq =
     (!a.columnsPx && !b.columnsPx) ||
-    (a.columnsPx && b.columnsPx && a.columnsPx.count === b.columnsPx.count && a.columnsPx.gap === b.columnsPx.gap);
+    !!(a.columnsPx && b.columnsPx && a.columnsPx.count === b.columnsPx.count && a.columnsPx.gap === b.columnsPx.gap);
 
   const numberingEq =
     (!a?.numbering && !b?.numbering) ||
-    ((a?.numbering?.format ?? null) === (b?.numbering?.format ?? null) &&
+    (Boolean(a?.numbering) &&
+      Boolean(b?.numbering) &&
+      (a?.numbering?.format ?? null) === (b?.numbering?.format ?? null) &&
       (a?.numbering?.start ?? null) === (b?.numbering?.start ?? null));
 
   return (
-    a.titlePg === b.titlePg &&
+    (a.titlePg ?? false) === (b.titlePg ?? false) &&
     a.headerPx === b.headerPx &&
     a.footerPx === b.footerPx &&
     pageSizeEq &&

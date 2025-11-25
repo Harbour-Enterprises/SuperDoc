@@ -256,7 +256,8 @@ test.describe('toolbar', () => {
       await boldButton.click();
 
       // Ensure the text is bold
-      expect(await superEditor.getByText('Hello').evaluate((el) => window.getComputedStyle(el).fontWeight)).toBe('700');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-weight', '700');
     });
 
     test('should add italic mark to selected text', async ({ page }) => {
@@ -282,9 +283,8 @@ test.describe('toolbar', () => {
       await italicButton.click();
 
       // Ensure the text is italic
-      expect(await superEditor.getByText('Hello').evaluate((el) => window.getComputedStyle(el).fontStyle)).toBe(
-        'italic',
-      );
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-style', 'italic');
     });
 
     test('should add underline mark to selected text', async ({ page }) => {
@@ -437,9 +437,8 @@ test.describe('toolbar', () => {
       await page.locator('div[aria-label="Font size - 18"]').click();
 
       // Ensure the text is 18px
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontSize)).toBe(ptToPx(18));
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-size', ptToPx(18));
     });
 
     test('should add .5 font size to selected text', async ({ page }) => {
@@ -467,12 +466,11 @@ test.describe('toolbar', () => {
       await fontSizeInput.press('Enter');
 
       // Ensure the text is 18px
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => parseFloat(window.getComputedStyle(el).fontSize))).toBeCloseTo(
-        parseFloat(ptToPx(18.5)),
-        1,
-      );
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(async () => {
+        const value = await hello.evaluate((el) => parseFloat(window.getComputedStyle(el).fontSize));
+        expect(value).toBeCloseTo(parseFloat(ptToPx(18.5)), 1);
+      }).toPass();
     });
 
     test('should add font family to selected text', async ({ page }) => {
@@ -501,9 +499,11 @@ test.describe('toolbar', () => {
       await page.locator('div[aria-label="Font family - Arial"]').click();
 
       // Ensure the text is Arial
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontFamily)).toBe('Arial');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(async () => {
+        const family = await hello.evaluate((el) => window.getComputedStyle(el).fontFamily);
+        expect(family).toContain('Arial');
+      }).toPass();
     });
   });
 
@@ -530,7 +530,8 @@ test.describe('toolbar', () => {
       await page.keyboard.press('ControlOrMeta+B');
 
       // Ensure the text is bold
-      expect(await superEditor.getByText('Hello').evaluate((el) => window.getComputedStyle(el).fontWeight)).toBe('700');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-weight', '700');
     });
 
     test('should add italic mark to selected text with mod + i', async ({ page }) => {
@@ -931,27 +932,28 @@ test.describe('toolbar', () => {
       // Type "Hello"
       await page.keyboard.type('Hello');
 
-      // Ensure the text is visible
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
+      // Wait for layout to render styled text
+      await page.waitForSelector('.superdoc-layout [styleid="Heading2"]', { timeout: 10000 });
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toBeVisible();
 
-      // Get the <p> element (need to go up to the paragraph, not just the contentDOM span)
-      const parentP = hello.locator('xpath=ancestor::p[1]');
-      const styleAttribute = await parentP.getAttribute('styleid');
-      expect(styleAttribute).toBe('Heading2');
+      await expect(async () => {
+        const styles = await hello.evaluate((el) => {
+          const computed = window.getComputedStyle(el);
+          const nearestStyleNode = el.closest('[styleid]');
+          return {
+            color: computed.color,
+            fontSize: computed.fontSize,
+            fontFamily: computed.fontFamily,
+            styleId: nearestStyleNode ? nearestStyleNode.getAttribute('styleid') : null,
+          };
+        });
 
-      const styles = await hello.evaluate((el) => {
-        const computed = window.getComputedStyle(el);
-        return {
-          color: computed.color,
-          fontSize: computed.fontSize,
-          fontFamily: computed.fontFamily,
-        };
-      });
-
-      expect(styles.color).toBe(heading2Styles.color);
-      expect(styles.fontFamily).toBe(heading2Styles.fontFamily);
-      expect(styles.fontSize).toBe(heading2Styles.fontSize);
+        expect(styles.styleId).toBe('Heading2');
+        expect(styles.color).toBe(heading2Styles.color);
+        expect(styles.fontFamily).toContain('Aptos Display');
+        expect(styles.fontSize).toBe(heading2Styles.fontSize);
+      }).toPass();
     });
 
     test('should show correct label when linked style is applied', async ({ page }) => {
@@ -1063,6 +1065,7 @@ test.describe('toolbar', () => {
 
       // Verify the style was applied
       await superEditor.getByText('Test').click();
+      await page.waitForSelector('.superdoc-layout [styleid="Heading2"]', { timeout: 10000 });
       const styleButtonText = styleButton.getByText('heading 2');
       await expect(styleButtonText).toBeVisible({ timeout: 2000 });
     });

@@ -21,6 +21,7 @@ import type {
   FlowBlock,
   Layout,
   Measure,
+  Page,
   SectionMetadata,
   Line,
   TrackedChangesMode,
@@ -970,7 +971,7 @@ export class PresentationEditor extends EventEmitter {
     // to correctly map coordinates for selection highlighting
     const pageHeight = this.#session.mode === 'body' ? this.#getBodyPageHeight() : this.#getHeaderFooterPageHeight();
     return rawRects
-      .map((rect) => {
+      .map((rect: LayoutRect) => {
         const pageLocalY = rect.y - rect.pageIndex * pageHeight;
         const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
         if (!coords) return null;
@@ -990,7 +991,7 @@ export class PresentationEditor extends EventEmitter {
           height,
         };
       })
-      .filter((rect): rect is RangeRect => Boolean(rect));
+      .filter((rect: RangeRect | null): rect is RangeRect => Boolean(rect));
   }
 
   /**
@@ -2059,7 +2060,7 @@ export class PresentationEditor extends EventEmitter {
     // Performance guardrail: max rects per user to prevent DOM explosion
     const limitedRects = rects.slice(0, MAX_SELECTION_RECTS_PER_USER);
 
-    limitedRects.forEach((rect) => {
+    limitedRects.forEach((rect: LayoutRect) => {
       // Calculate page-local Y (rect.y is absolute from top of all pages)
       const pageLocalY = rect.y - rect.pageIndex * pageHeight;
 
@@ -2702,7 +2703,7 @@ export class PresentationEditor extends EventEmitter {
         previousLayout,
         blocks,
         layoutOptions,
-        (block, constraints) => measureBlock(block, constraints),
+        (block: FlowBlock, constraints: { maxWidth: number; maxHeight: number }) => measureBlock(block, constraints),
         headerFooterInput ?? undefined,
       );
 
@@ -2966,7 +2967,7 @@ export class PresentationEditor extends EventEmitter {
         return null;
       }
       const slotPage =
-        variant.layout.pages.find((candidate) => candidate.number === pageNumber) ?? variant.layout.pages[0];
+        variant.layout.pages.find((candidate: Page) => candidate.number === pageNumber) ?? variant.layout.pages[0];
       if (!slotPage) {
         return null;
       }
@@ -2975,9 +2976,9 @@ export class PresentationEditor extends EventEmitter {
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
       const headerId =
         page?.sectionRefs && kind === 'header'
-          ? (page.sectionRefs.headerRefs?.[headerFooterType] ?? undefined)
+          ? (page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs] ?? undefined)
           : page?.sectionRefs && kind === 'footer'
-            ? (page.sectionRefs.footerRefs?.[headerFooterType] ?? undefined)
+            ? (page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs] ?? undefined)
             : undefined;
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = headerId ?? fallbackId ?? undefined;
@@ -3408,7 +3409,7 @@ export class PresentationEditor extends EventEmitter {
     const pageHeight = Math.max(1, variant.layout.height ?? region.height ?? 1);
     const layoutLike: Layout = {
       pageSize: { w: pageWidth, h: pageHeight },
-      pages: variant.layout.pages.map((page) => ({
+      pages: variant.layout.pages.map((page: Page) => ({
         number: page.number,
         numberText: page.numberText,
         fragments: page.fragments,
@@ -3437,7 +3438,7 @@ export class PresentationEditor extends EventEmitter {
     const rects = selectionToRects(context.layout, context.blocks, context.measures, from, to) ?? [];
     const headerPageHeight = context.layout.pageSize?.h ?? context.region.height ?? 1;
     const bodyPageHeight = this.#getBodyPageHeight();
-    return rects.map((rect) => {
+    return rects.map((rect: LayoutRect) => {
       const headerLocalY = rect.y - rect.pageIndex * headerPageHeight;
       return {
         pageIndex: context.region.pageIndex,

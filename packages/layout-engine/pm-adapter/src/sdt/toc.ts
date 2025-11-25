@@ -103,7 +103,7 @@ export function processTocChildren(
   },
   outputArrays: {
     blocks: FlowBlock[];
-    recordBlockKind: (kind: string) => void;
+    recordBlockKind: (kind: FlowBlock['kind']) => void;
   },
   paragraphConverter: (
     para: PMNode,

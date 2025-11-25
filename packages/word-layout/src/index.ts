@@ -37,6 +37,7 @@ export {
 } from './unit-conversions.js';
 
 export { buildFontCss, LIST_MARKER_GAP, DEFAULT_LIST_HANGING_PX } from './marker-utils.js';
+export type { NumberingFormat } from './marker-utils.js';
 
 /**
  * Computes the complete layout properties for a Word paragraph, including indentation,

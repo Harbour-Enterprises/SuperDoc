@@ -4,7 +4,7 @@
  * Handles conversion of ProseMirror image nodes to ImageBlocks
  */
 
-import type { ImageBlock, BoxSpacing } from '@superdoc/contracts';
+import type { ImageBlock, BoxSpacing, ImageAnchor } from '@superdoc/contracts';
 import type { PMNode, BlockIdGenerator, PositionMap, NodeHandlerContext, TrackedChangesConfig } from '../types.js';
 import { collectTrackedChangeFromMarks } from '../marks/index.js';
 import { shouldHideTrackedNode, annotateBlockWithTrackedChange } from '../tracked-changes.js';
@@ -148,29 +148,29 @@ const normalizeAnchorData = (
   value: unknown,
   attrs: Record<string, unknown>,
   wrapBehindDoc?: boolean,
-): ImageBlock['anchor'] | undefined => {
+): ImageAnchor | undefined => {
   const raw = isPlainObject(value) ? value : undefined;
   const marginOffset = isPlainObject(attrs.marginOffset) ? attrs.marginOffset : undefined;
   const simplePos = isPlainObject(attrs.simplePos) ? attrs.simplePos : undefined;
   const originalAttrs = isPlainObject(attrs.originalAttributes) ? attrs.originalAttributes : undefined;
   const isAnchored = attrs.isAnchor === true || Boolean(raw);
 
-  const anchor: ImageBlock['anchor'] = {};
+  const anchor: ImageAnchor = {};
   if (isAnchored) {
     anchor.isAnchored = true;
   }
 
   const hRelative = normalizeAnchorRelative(raw?.hRelativeFrom, H_RELATIVE_VALUES);
-  if (hRelative) anchor.hRelativeFrom = hRelative as ImageBlock['anchor']['hRelativeFrom'];
+  if (hRelative) anchor.hRelativeFrom = hRelative as ImageAnchor['hRelativeFrom'];
 
   const vRelative = normalizeAnchorRelative(raw?.vRelativeFrom, V_RELATIVE_VALUES);
-  if (vRelative) anchor.vRelativeFrom = vRelative as ImageBlock['anchor']['vRelativeFrom'];
+  if (vRelative) anchor.vRelativeFrom = vRelative as ImageAnchor['vRelativeFrom'];
 
   const alignH = normalizeAnchorAlign(raw?.alignH, H_ALIGN_VALUES);
-  if (alignH) anchor.alignH = alignH as ImageBlock['anchor']['alignH'];
+  if (alignH) anchor.alignH = alignH as ImageAnchor['alignH'];
 
   const alignV = normalizeAnchorAlign(raw?.alignV, V_ALIGN_VALUES);
-  if (alignV) anchor.alignV = alignV as ImageBlock['anchor']['alignV'];
+  if (alignV) anchor.alignV = alignV as ImageAnchor['alignV'];
 
   const offsetH = pickNumber(marginOffset?.horizontal ?? marginOffset?.left ?? raw?.offsetH ?? simplePos?.x);
   if (offsetH != null) anchor.offsetH = offsetH;
