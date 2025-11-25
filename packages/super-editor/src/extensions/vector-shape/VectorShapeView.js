@@ -1,6 +1,13 @@
 // @ts-ignore
 import { getPresetShapeSvg } from '@preset-geometry';
 import { inchesToPixels } from '@converter/helpers.js';
+import {
+  createGradient,
+  createTextElement,
+  applyGradientToSVG,
+  applyAlphaToSVG,
+  generateTransforms,
+} from '../shared/svg-utils.js';
 
 export class VectorShapeView {
   node;
@@ -181,18 +188,7 @@ export class VectorShapeView {
   }
 
   generateTransform() {
-    const attrs = this.node.attrs;
-    const transforms = [];
-    if (attrs.rotation != null) {
-      transforms.push(`rotate(${attrs.rotation}deg)`);
-    }
-    if (attrs.flipH) {
-      transforms.push(`scaleX(-1)`);
-    }
-    if (attrs.flipV) {
-      transforms.push(`scaleY(-1)`);
-    }
-    return transforms;
+    return generateTransforms(this.node.attrs);
   }
 
   createSVGElement(attrs) {
@@ -304,50 +300,7 @@ export class VectorShapeView {
   }
 
   createGradient(gradientData, gradientId) {
-    const { gradientType, stops, angle } = gradientData;
-
-    // Ensure we have stops
-    if (!stops || stops.length === 0) {
-      return null;
-    }
-
-    let gradient;
-
-    if (gradientType === 'linear') {
-      gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-      gradient.setAttribute('id', gradientId);
-
-      // Convert angle to x1, y1, x2, y2 coordinates
-      const radians = (angle * Math.PI) / 180;
-      const x1 = 50 - 50 * Math.cos(radians);
-      const y1 = 50 + 50 * Math.sin(radians);
-      const x2 = 50 + 50 * Math.cos(radians);
-      const y2 = 50 - 50 * Math.sin(radians);
-
-      gradient.setAttribute('x1', `${x1}%`);
-      gradient.setAttribute('y1', `${y1}%`);
-      gradient.setAttribute('x2', `${x2}%`);
-      gradient.setAttribute('y2', `${y2}%`);
-    } else {
-      gradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-      gradient.setAttribute('id', gradientId);
-      gradient.setAttribute('cx', '50%');
-      gradient.setAttribute('cy', '50%');
-      gradient.setAttribute('r', '50%');
-    }
-
-    // Add gradient stops
-    stops.forEach((stop) => {
-      const stopElement = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-      stopElement.setAttribute('offset', `${stop.position * 100}%`);
-      stopElement.setAttribute('stop-color', stop.color);
-      if (stop.alpha != null && stop.alpha < 1) {
-        stopElement.setAttribute('stop-opacity', stop.alpha.toString());
-      }
-      gradient.appendChild(stopElement);
-    });
-
-    return gradient;
+    return createGradient(gradientData, gradientId);
   }
 
   generateSVG({ kind, fillColor, strokeColor, strokeWidth, width, height }) {
@@ -378,136 +331,15 @@ export class VectorShapeView {
   }
 
   applyGradientToSVG(svg, gradientData) {
-    const { gradientType, stops, angle } = gradientData;
-    const gradientId = `gradient-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
-
-    // Create defs if it doesn't exist
-    let defs = svg.querySelector('defs');
-    if (!defs) {
-      defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
-      svg.insertBefore(defs, svg.firstChild);
-    }
-
-    // Create gradient element
-    let gradient;
-
-    if (gradientType === 'linear') {
-      gradient = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
-      gradient.setAttribute('id', gradientId);
-
-      // Convert angle to x1, y1, x2, y2 coordinates
-      // OOXML angle is in degrees, 0 = left to right, 90 = bottom to top
-      const radians = (angle * Math.PI) / 180;
-      const x1 = 50 - 50 * Math.cos(radians);
-      const y1 = 50 + 50 * Math.sin(radians);
-      const x2 = 50 + 50 * Math.cos(radians);
-      const y2 = 50 - 50 * Math.sin(radians);
-
-      gradient.setAttribute('x1', `${x1}%`);
-      gradient.setAttribute('y1', `${y1}%`);
-      gradient.setAttribute('x2', `${x2}%`);
-      gradient.setAttribute('y2', `${y2}%`);
-    } else {
-      gradient = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
-      gradient.setAttribute('id', gradientId);
-      gradient.setAttribute('cx', '50%');
-      gradient.setAttribute('cy', '50%');
-      gradient.setAttribute('r', '50%');
-    }
-
-    // Add gradient stops
-    stops.forEach((stop) => {
-      const stopElement = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
-      stopElement.setAttribute('offset', `${stop.position * 100}%`);
-      stopElement.setAttribute('stop-color', stop.color);
-      if (stop.alpha != null && stop.alpha < 1) {
-        stopElement.setAttribute('stop-opacity', stop.alpha.toString());
-      }
-      gradient.appendChild(stopElement);
-    });
-
-    defs.appendChild(gradient);
-
-    // Apply gradient to all filled elements
-    const filledElements = svg.querySelectorAll('[fill]:not([fill="none"])');
-    filledElements.forEach((el) => {
-      el.setAttribute('fill', `url(#${gradientId})`);
-    });
+    applyGradientToSVG(svg, gradientData);
   }
 
   applyAlphaToSVG(svg, alphaData) {
-    const { color, alpha } = alphaData;
-
-    // Apply color with opacity to all filled elements
-    const filledElements = svg.querySelectorAll('[fill]:not([fill="none"])');
-    filledElements.forEach((el) => {
-      el.setAttribute('fill', color);
-      el.setAttribute('fill-opacity', alpha.toString());
-    });
+    applyAlphaToSVG(svg, alphaData);
   }
 
   createTextElement(textContent, textAlign, width, height) {
-    // Use foreignObject with HTML for proper text wrapping
-    const foreignObject = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
-    foreignObject.setAttribute('x', '0');
-    foreignObject.setAttribute('y', '0');
-    foreignObject.setAttribute('width', width.toString());
-    foreignObject.setAttribute('height', height.toString());
-
-    // Create HTML div for text content
-    const div = document.createElement('div');
-    div.style.width = '100%';
-    div.style.height = '100%';
-    div.style.display = 'flex';
-    div.style.alignItems = 'center';
-    div.style.padding = '10px';
-    div.style.boxSizing = 'border-box';
-    div.style.wordWrap = 'break-word';
-    div.style.overflowWrap = 'break-word';
-
-    // Set text alignment
-    if (textAlign === 'center') {
-      div.style.textAlign = 'center';
-      div.style.justifyContent = 'center';
-    } else if (textAlign === 'right' || textAlign === 'r') {
-      div.style.textAlign = 'right';
-      div.style.justifyContent = 'flex-end';
-    } else {
-      div.style.textAlign = 'left';
-      div.style.justifyContent = 'flex-start';
-    }
-
-    // Create text container
-    const textContainer = document.createElement('div');
-
-    // Add text content with formatting
-    textContent.parts.forEach((part) => {
-      const span = document.createElement('span');
-      span.textContent = part.text;
-
-      // Apply formatting
-      if (part.formatting) {
-        if (part.formatting.bold) {
-          span.style.fontWeight = 'bold';
-        }
-        if (part.formatting.italic) {
-          span.style.fontStyle = 'italic';
-        }
-        if (part.formatting.color) {
-          span.style.color = `#${part.formatting.color}`;
-        }
-        if (part.formatting.fontSize) {
-          span.style.fontSize = `${part.formatting.fontSize}px`;
-        }
-      }
-
-      textContainer.appendChild(span);
-    });
-
-    div.appendChild(textContainer);
-    foreignObject.appendChild(div);
-
-    return foreignObject;
+    return createTextElement(textContent, textAlign, width, height);
   }
 
   buildView() {
