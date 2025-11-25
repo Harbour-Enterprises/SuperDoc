@@ -286,7 +286,7 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
 
   // For plain rectangles without text and without gradients, use the specialized contentBlock handler
   if (shapeType === 'rect' && !textBoxContent && !hasGradientFill) {
-    return getRectangleShape(params, spPr, node);
+    return getRectangleShape(params, spPr, node, marginOffset, anchorData, wrap, isAnchor);
   }
 
   // For all other shapes (with or without text), or shapes with gradients, use the vector shape handler
@@ -629,10 +629,15 @@ function extractTextFromTextBox(textBoxContent) {
  * Translates a rectangle shape (`a:prstGeom` with `prst="rect"`) into a contentBlock node.
  *
  * @param {Object} params - Parameters object containing the current nodes.
- * @param {Object} node - The `a:spPr` node containing shape properties.
- * @returns {Object} An object of type `contentBlock` with size and optional background color.
+ * @param {Object} spPr - The shape properties element.
+ * @param {Object} node - The drawing node containing attributes.
+ * @param {Object} marginOffset - Positioning offsets for anchored shapes (horizontal, top).
+ * @param {Object} anchorData - Anchor positioning data.
+ * @param {Object} wrap - Text wrapping configuration.
+ * @param {boolean} isAnchor - Whether the shape is anchored.
+ * @returns {Object} An object of type `contentBlock` with size, positioning, and optional background color.
  */
-const getRectangleShape = (params, spPr, node) => {
+const getRectangleShape = (params, spPr, node, marginOffset, anchorData, wrap, isAnchor) => {
   const schemaAttrs = {};
 
   const drawingNode = params.nodes?.[0];
@@ -672,6 +677,10 @@ const getRectangleShape = (params, spPr, node) => {
     type: 'contentBlock',
     attrs: {
       ...schemaAttrs,
+      marginOffset,
+      anchorData,
+      wrap,
+      isAnchor,
       originalAttributes: node?.attributes,
     },
   };
