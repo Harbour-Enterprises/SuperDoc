@@ -43,4 +43,3 @@ export declare function layoutHeaderFooter(
   constraints: HeaderFooterConstraints,
 ): HeaderFooterLayout;
 export { buildAnchorMap, resolvePageRefTokens, getTocBlocksForRemeasurement } from './resolvePageRefs.js';
-//# sourceMappingURL=index.d.ts.map

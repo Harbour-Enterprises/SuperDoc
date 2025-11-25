@@ -120,4 +120,3 @@ export declare const H_ALIGN_VALUES: Set<string>;
  * Valid vertical alignment values
  */
 export declare const V_ALIGN_VALUES: Set<string>;
-//# sourceMappingURL=constants.d.ts.map

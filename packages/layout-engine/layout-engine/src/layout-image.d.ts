@@ -28,4 +28,3 @@ export declare function layoutImageBlock({
   advanceColumn,
   columnX,
 }: ImageLayoutContext): void;
-//# sourceMappingURL=layout-image.d.ts.map

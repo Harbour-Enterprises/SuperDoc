@@ -62,4 +62,3 @@ export declare function createPaginator(opts: PaginatorOptions): {
     gap: number;
   };
 };
-//# sourceMappingURL=paginator.d.ts.map

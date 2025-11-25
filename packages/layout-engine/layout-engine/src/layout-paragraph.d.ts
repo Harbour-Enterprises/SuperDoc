@@ -35,4 +35,3 @@ export type ParagraphAnchorsContext = {
   placedAnchoredIds: Set<string>;
 };
 export declare function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: ParagraphAnchorsContext): void;
-//# sourceMappingURL=layout-paragraph.d.ts.map

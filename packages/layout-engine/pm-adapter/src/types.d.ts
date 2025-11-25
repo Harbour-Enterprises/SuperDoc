@@ -319,4 +319,3 @@ export type UnderlineStyle = NonNullable<import('@superdoc/contracts').TextRun['
 export type NumberingLevelEngine = Engines.NumberingLevel;
 export type EngineParagraphSpacing = Engines.ParagraphSpacing;
 export type EngineParagraphIndent = Engines.ParagraphIndent;
-//# sourceMappingURL=types.d.ts.map

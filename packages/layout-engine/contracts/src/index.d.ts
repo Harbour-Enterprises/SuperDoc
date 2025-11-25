@@ -928,4 +928,3 @@ export declare const extractHeaderFooterSpace: (margins?: PageMargins | null) =>
  * Re-exported from ./engines/ for convenience.
  */
 export * as Engines from './engines/index.js';
-//# sourceMappingURL=index.d.ts.map

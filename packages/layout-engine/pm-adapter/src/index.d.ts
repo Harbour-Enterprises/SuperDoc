@@ -32,4 +32,3 @@ export type {
 } from './types.js';
 export { SectionType } from './types.js';
 export { toFlowBlocks, toFlowBlocksMap } from './internal.js';
-//# sourceMappingURL=index.d.ts.map

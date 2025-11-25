@@ -81,4 +81,3 @@ export declare function computeAnchorX(
   pageWidth?: number,
 ): number;
 export {};
-//# sourceMappingURL=floating-objects.d.ts.map

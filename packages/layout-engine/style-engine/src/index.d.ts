@@ -285,4 +285,3 @@ export declare function resolveTableCellStyle(
  * ```
  */
 export declare function resolveSdtMetadata(input?: ResolveSdtMetadataInput | null): SdtMetadata | undefined;
-//# sourceMappingURL=index.d.ts.map

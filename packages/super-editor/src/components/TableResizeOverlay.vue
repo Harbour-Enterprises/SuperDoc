@@ -90,7 +90,7 @@ const overlayStyle = computed(() => {
     overlayWidth = Math.max(rect.width + 1000, 2000);
   }
 
-  const style = {
+  return {
     position: 'absolute',
     left: `${props.tableElement.offsetLeft}px`,
     top: `${props.tableElement.offsetTop}px`,
@@ -99,10 +99,6 @@ const overlayStyle = computed(() => {
     pointerEvents: dragState.value ? 'auto' : 'none',
     zIndex: 10,
   };
-
-  // Overlay positioning (hover logs removed for clarity)
-
-  return style;
 });
 
 /**
@@ -251,7 +247,7 @@ function parseTableMetadata() {
 }
 
 /**
- * Handle mouse down on resize handle (Phase A: onDragStart)
+ * Handle mouse down on resize handle
  * @param {MouseEvent} event - Mouse event
  * @param {number} boundaryIndex - Index in the resizableBoundaries array
  */
@@ -357,18 +353,9 @@ const mouseMoveThrottle = throttle((event) => {
 
     if (pageEl) {
       const pageRect = pageEl.getBoundingClientRect();
-
-      // Calculate right margin from page layout
-      // Note: This currently assumes symmetric margins (uses left margin for right margin)
-      // TODO: Query actual right margin from page metadata for asymmetric layouts
-      // Proper implementation would check pageEl.dataset.rightMargin or similar metadata
       const tableLeftInPage = tableRect.left - pageRect.left;
-      const rightMargin = tableLeftInPage; // Symmetric margin assumption
-
-      // Calculate max right position (page right edge minus right margin)
+      const rightMargin = tableLeftInPage; // Assumes symmetric margins
       const maxRightPosition = pageRect.right - rightMargin;
-
-      // Available space is the difference between max position and current table right edge
       const availableSpace = maxRightPosition - tableRect.right;
       maxDelta = Math.max(0, availableSpace);
     } else {
@@ -391,14 +378,11 @@ const mouseMoveThrottle = throttle((event) => {
   });
 }, 16);
 
-/**
- * Handle mouse move during drag (Phase B: onDragMove)
- * Throttled to 16ms for 60fps
- */
+/** Handle mouse move during drag (throttled to 16ms for 60fps) */
 const onDocumentMouseMove = mouseMoveThrottle.throttled;
 
 /**
- * Handle mouse up to end drag (Phase C: onDragEnd)
+ * Handle mouse up to end drag
  * @param {MouseEvent} event - Mouse event
  */
 function onDocumentMouseUp(event) {

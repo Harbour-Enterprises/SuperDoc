@@ -55,4 +55,3 @@ export declare function toFlowBlocksMap(
   documents: PMDocumentMap,
   options?: BatchAdapterOptions,
 ): Record<string, FlowBlock[]>;
-//# sourceMappingURL=internal.d.ts.map

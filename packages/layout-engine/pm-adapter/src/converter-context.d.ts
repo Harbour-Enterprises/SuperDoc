@@ -43,4 +43,3 @@ export declare const hasParagraphStyleContext: (context?: ConverterContext) => c
 export declare const hasTableStyleContext: (context?: ConverterContext) => context is ConverterContext & {
   docx: Record<string, unknown>;
 };
-//# sourceMappingURL=converter-context.d.ts.map

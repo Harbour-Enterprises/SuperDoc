@@ -19,4 +19,3 @@ export declare const computeFragmentPmRange: (
   toLine: number,
 ) => LinePmRange;
 export declare const computeLinePmRange: (block: ParagraphBlock, line: Line) => LinePmRange;
-//# sourceMappingURL=layout-utils.d.ts.map

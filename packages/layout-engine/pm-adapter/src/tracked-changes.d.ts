@@ -202,4 +202,3 @@ export declare const applyTrackedChangesModeToRuns: (
   applyMarksToRun: (run: TextRun, marks: PMMark[], config: HyperlinkConfig, themeColors?: ThemeColorPalette) => void,
   themeColors?: ThemeColorPalette,
 ) => Run[];
-//# sourceMappingURL=tracked-changes.d.ts.map

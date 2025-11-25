@@ -23,4 +23,3 @@ export declare function layoutTableBlock({
   advanceColumn,
   columnX,
 }: TableLayoutContext): void;
-//# sourceMappingURL=layout-table.d.ts.map
