@@ -16,6 +16,7 @@ import {
 import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@superdoc/common';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 
+// Beta channel note: keep this file touched so CI can publish prereleases.
 export { SuperDoc } from './core/SuperDoc.js';
 export {
   BlankDOCX,
