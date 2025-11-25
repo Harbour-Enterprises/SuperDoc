@@ -10,7 +10,7 @@
 
 import type { TextRun, RunMark, TrackedChangeMeta, TrackedChangeKind } from '@superdoc/contracts';
 import type { UnderlineStyle, PMMark, HyperlinkConfig, ThemeColorPalette } from '../types.js';
-import { normalizeColor, isFiniteNumber } from '../utilities.js';
+import { normalizeColor, isFiniteNumber, pickNumber } from '../utilities.js';
 import { buildFlowRunLink, migrateLegacyLink } from './links.js';
 import { sanitizeHref } from '@superdoc/url-validation';
 
@@ -581,7 +581,14 @@ const sanitizeFontFamily = (fontFamily: string): string | undefined => {
  * Properties are applied with bounds checking and sanitization to prevent invalid values.
  *
  * @param run - The text run to apply styles to (mutated in place)
- * @param attrs - Mark attributes containing style properties (color, fontFamily, fontSize, letterSpacing)
+ * @param attrs - Mark attributes containing style properties:
+ *   - color: Hex color string (e.g., "FF0000" or "#FF0000")
+ *   - fontFamily: Font name string (sanitized for CSS injection)
+ *   - fontSize: Numeric value or string with units (e.g., 12, "12pt", "24px").
+ *     Strings are parsed via parseFloat, extracting the leading numeric value.
+ *     Valid range: 1-1000. Values outside this range are ignored.
+ *   - letterSpacing: Numeric spacing value in pixels. Range: -100 to 100.
+ * @param themeColors - Optional theme color palette for color resolution
  */
 export const applyTextStyleMark = (
   run: TextRun,
@@ -598,12 +605,10 @@ export const applyTextStyleMark = (
       run.fontFamily = sanitized;
     }
   }
-  if (isFiniteNumber(attrs.fontSize)) {
-    const size = Number(attrs.fontSize);
-    // Apply reasonable bounds (1-1000px) to prevent invalid/extreme values
-    if (size >= 1 && size <= 1000) {
-      run.fontSize = size;
-    }
+  // Use pickNumber to handle both numeric values and strings with units (e.g., "12pt")
+  const fontSizeValue = pickNumber(attrs.fontSize);
+  if (fontSizeValue !== undefined && fontSizeValue >= 1 && fontSizeValue <= 1000) {
+    run.fontSize = fontSizeValue;
   }
   if (isFiniteNumber(attrs.letterSpacing)) {
     const spacing = Number(attrs.letterSpacing);
