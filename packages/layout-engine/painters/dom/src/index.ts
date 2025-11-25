@@ -9,6 +9,8 @@ export type LayoutMode = 'vertical' | 'horizontal' | 'book';
 export type PageDecorationPayload = {
   fragments: Fragment[];
   height: number;
+  /** Optional measured content height; when provided, footer content will be bottom-aligned within its box. */
+  contentHeight?: number;
   offset?: number;
   marginLeft?: number;
   contentWidth?: number;
@@ -69,8 +71,15 @@ export const createDomPainter = (
     paint(layout: Layout, mount: HTMLElement) {
       painter.paint(layout, mount);
     },
-    setData(blocks: FlowBlock[], measures: Measure[]) {
-      painter.setData(blocks, measures);
+    setData(
+      blocks: FlowBlock[],
+      measures: Measure[],
+      headerBlocks?: FlowBlock[],
+      headerMeasures?: Measure[],
+      footerBlocks?: FlowBlock[],
+      footerMeasures?: Measure[],
+    ) {
+      painter.setData(blocks, measures, headerBlocks, headerMeasures, footerBlocks, footerMeasures);
     },
     // Non-standard extension for demo app to avoid re-instantiating on provider changes
     setProviders(header?: PageDecorationProvider, footer?: PageDecorationProvider) {

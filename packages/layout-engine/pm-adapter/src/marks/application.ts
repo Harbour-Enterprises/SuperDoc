@@ -10,7 +10,7 @@
 
 import type { TextRun, RunMark, TrackedChangeMeta, TrackedChangeKind } from '@superdoc/contracts';
 import type { UnderlineStyle, PMMark, HyperlinkConfig, ThemeColorPalette } from '../types.js';
-import { normalizeColor, isFiniteNumber, pickNumber } from '../utilities.js';
+import { normalizeColor, isFiniteNumber, ptToPx } from '../utilities.js';
 import { buildFlowRunLink, migrateLegacyLink } from './links.js';
 import { sanitizeHref } from '@superdoc/url-validation';
 
@@ -576,6 +576,33 @@ const sanitizeFontFamily = (fontFamily: string): string | undefined => {
 };
 
 /**
+ * Converts a font size value to pixels.
+ *
+ * - Numbers are treated as pixel values
+ * - Strings ending with "pt" are converted to px (96 DPI)
+ * - Strings ending with "px" or without a unit are treated as px
+ * - Unknown units fall back to the numeric value (px) for backward compatibility
+ */
+const normalizeFontSizePx = (value: unknown): number | undefined => {
+  if (isFiniteNumber(value)) return value;
+  if (typeof value !== 'string') return undefined;
+
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  const numeric = Number.parseFloat(trimmed);
+  if (!Number.isFinite(numeric)) return undefined;
+
+  const unit = trimmed.match(/[a-zA-Z%]+$/)?.[0]?.toLowerCase();
+  if (unit === 'pt') {
+    return ptToPx(numeric);
+  }
+
+  // Default: treat px, unitless, and unknown units as pixel values
+  return numeric;
+};
+
+/**
  * Applies text style mark attributes to a text run.
  * Handles color, fontFamily, fontSize, and letterSpacing with validation and normalization.
  * Properties are applied with bounds checking and sanitization to prevent invalid values.
@@ -584,9 +611,9 @@ const sanitizeFontFamily = (fontFamily: string): string | undefined => {
  * @param attrs - Mark attributes containing style properties:
  *   - color: Hex color string (e.g., "FF0000" or "#FF0000")
  *   - fontFamily: Font name string (sanitized for CSS injection)
- *   - fontSize: Numeric value or string with units (e.g., 12, "12pt", "24px").
- *     Strings are parsed via parseFloat, extracting the leading numeric value.
- *     Valid range: 1-1000. Values outside this range are ignored.
+ *   - fontSize: Numeric pixel value or string with units (e.g., 12, "12pt", "24px").
+ *     Point values are converted to pixels (96 DPI); unitless/px values are treated as pixels.
+ *     Valid range after conversion: 1-1000px. Values outside this range are ignored.
  *   - letterSpacing: Numeric spacing value in pixels. Range: -100 to 100.
  * @param themeColors - Optional theme color palette for color resolution
  */
@@ -605,10 +632,9 @@ export const applyTextStyleMark = (
       run.fontFamily = sanitized;
     }
   }
-  // Use pickNumber to handle both numeric values and strings with units (e.g., "12pt")
-  const fontSizeValue = pickNumber(attrs.fontSize);
-  if (fontSizeValue !== undefined && fontSizeValue >= 1 && fontSizeValue <= 1000) {
-    run.fontSize = fontSizeValue;
+  const fontSizePx = normalizeFontSizePx(attrs.fontSize);
+  if (fontSizePx !== undefined && fontSizePx >= 1 && fontSizePx <= 1000) {
+    run.fontSize = fontSizePx;
   }
   if (isFiniteNumber(attrs.letterSpacing)) {
     const spacing = Number(attrs.letterSpacing);
