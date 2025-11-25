@@ -254,38 +254,119 @@ export class EditorAdapter {
     }
 
     /**
+     * Resolves positions that land on transparent inline node boundaries by
+     * walking into the node content until a text node is reached.
+     *
+     * This is needed because search results frequently point to inline wrapper
+     * nodes (e.g. tracked change spans) rather than directly to their text.
+     * Attempting to apply ProseMirror transactions at those boundaries causes
+     * the delete/insert operations to no-op.
+     *
+     * @param position - The document position to resolve
+     * @param direction - Direction to walk the boundary ('forward' for starts, 'backward' for ends)
+     * @returns Position that points inside actual text content when possible
+     * @private
+     */
+    private resolveInlineTextPosition(position: number, direction: 'forward' | 'backward'): number {
+        const { state } = this.editor;
+        const doc = state?.doc;
+        if (!doc) {
+            return position;
+        }
+
+        const docSize = doc.content.size;
+        if (position < 0 || position > docSize) {
+            return position;
+        }
+
+        const step = direction === 'forward' ? 1 : -1;
+        let current = position;
+        let iterations = 0;
+        
+        while (iterations < 8) {
+            iterations++;
+            const resolved = doc.resolve(current);
+            const boundaryNode = direction === 'forward' ? resolved.nodeAfter : resolved.nodeBefore;
+
+            if (!boundaryNode) {
+                break;
+            }
+
+            if (boundaryNode.isText) {
+                break;
+            }
+
+            if (!boundaryNode.isInline || boundaryNode.isAtom || boundaryNode.content.size === 0) {
+                break;
+            }
+
+            const next = current + step;
+            if (next < 0 || next > docSize) {
+                break;
+            }
+
+            current = next;
+
+            const adjacent = doc.resolve(current);
+            const checkNode = direction === 'forward' ? adjacent.nodeAfter : adjacent.nodeBefore;
+            if (checkNode && checkNode.isText) {
+                break;
+            }
+        }
+
+        return current;
+    }
+
+    /**
      * Maps a character offset within extracted text to the corresponding document position.
-     * Handles node boundaries where character count doesn't equal position offset.
+     * Also handles edge cases where positions point to node boundaries instead of text content.
+     * 
+     * This unified method:
+     * - Resolves positions at transparent inline node boundaries (when charOffset is 0)
+     * - Maps character offsets to document positions using binary search (when charOffset > 0)
+     * - Handles node boundaries where character count doesn't equal position offset
      *
      * @param from - Starting document position
      * @param to - Ending document position (exclusive)
-     * @param charOffset - Number of characters to advance from the start
-     * @returns Document position corresponding to the character offset
+     * @param charOffset - Number of characters to advance from the start (0 = resolve position only)
+     * @returns Document position corresponding to the character offset, resolved to point to text content
      * @private
      */
     private mapCharOffsetToPosition(from: number, to: number, charOffset: number): number {
         const { state } = this.editor;
-        if (!state?.doc || charOffset <= 0) {
-            return from;
-        }
-        if (from >= to) {
+        if (!state?.doc) {
             return from;
         }
 
-        const totalTextLength = state.doc.textBetween(from, to, '', '').length;
-        if (totalTextLength <= 0) {
+        const docSize = state.doc.content.size;
+        if (from < 0 || from >= docSize || from >= to) {
             return from;
+        }
+
+        // Resolve position to ensure it points to actual text content, not a node boundary.
+        // This handles edge cases where search returns positions at transparent inline node boundaries.
+        const resolvedFrom = this.resolveInlineTextPosition(from, 'forward');
+
+        // If charOffset is 0 or negative, just return the resolved position
+        if (charOffset <= 0) {
+            return resolvedFrom;
+        }
+
+        // Map character offset to document position using binary search
+        const totalTextLength = state.doc.textBetween(resolvedFrom, to, '', '').length;
+        if (totalTextLength <= 0) {
+            return resolvedFrom;
         }
 
         const targetOffset = Math.min(charOffset, totalTextLength);
-        const clampToEnd = targetOffset === totalTextLength;
 
-        let low = from;
+        // Binary search to find the position corresponding to the character offset
+        let low = resolvedFrom;
         let high = to;
 
         while (low < high) {
             const mid = Math.floor((low + high) / 2);
-            const textLength = state.doc.textBetween(from, mid, '', '').length;
+            const textLength = state.doc.textBetween(resolvedFrom, mid, '', '').length;
             
             if (textLength < targetOffset) {
                 low = mid + 1;
@@ -293,25 +374,10 @@ export class EditorAdapter {
                 high = mid;
             }
         }
-        let result = Math.min(low, to);
 
-        if (clampToEnd && result > from) {
-            let resolved = state.doc.resolve(result);
-            let nodeBefore = resolved.nodeBefore;
-
-            while (
-                nodeBefore &&
-                nodeBefore.isInline &&
-                !nodeBefore.isText &&
-                result > from
-            ) {
-                result -= nodeBefore.nodeSize;
-                resolved = state.doc.resolve(result);
-                nodeBefore = resolved.nodeBefore;
-            }
-        }
-
-        return result;
+        const mappedPosition = Math.min(low, to);
+        const direction = targetOffset === totalTextLength ? 'backward' : 'forward';
+        return this.resolveInlineTextPosition(mappedPosition, direction);
     }
 
     /**
@@ -377,10 +443,22 @@ export class EditorAdapter {
             return;
         }
 
-        // Map character offsets to document positions (handles node boundaries correctly)
-        const changeFrom = this.mapCharOffsetToPosition(from, to, prefix);
-        const originalTextLength = originalText.length;
-        const changeTo = this.mapCharOffsetToPosition(from, to, originalTextLength - suffix);
+        // If replacing the entire range (no prefix or suffix), use original positions directly
+        // Otherwise, map character offsets to document positions (handles node boundaries correctly)
+        let changeFrom: number;
+        let changeTo: number;
+        
+        if (prefix === 0 && suffix === 0) {
+            // Full replacement - resolve position to ensure it points to actual text content
+            // This handles edge cases where search returns positions at node boundaries
+            changeFrom = this.mapCharOffsetToPosition(from, to, 0);
+            changeTo = to;
+        } else {
+            // Partial replacement - map character offsets to positions
+            changeFrom = this.mapCharOffsetToPosition(from, to, prefix);
+            const originalTextLength = originalText.length;
+            changeTo = this.mapCharOffsetToPosition(from, to, originalTextLength - suffix);
+        }
         
         const replacementEnd = suggestedText.length - suffix;
         const replacementText = suggestedText.slice(prefix, replacementEnd);

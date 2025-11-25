@@ -296,10 +296,6 @@ export class AIActionsService {
                     continue;
                 }
                 
-                if (this.enableLogging) {
-                    console.debug(`Processing position ${position.from}-${position.to} for "${result.originalText}"`);
-                }
-                
                 await operationFn(this.adapter, { from: position.from, to: position.to }, result);
                 processedRanges.push({ from: position.from, to: position.to });
                 if (!processedResults.includes(result)) {
