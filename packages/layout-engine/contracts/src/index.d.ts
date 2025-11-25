@@ -53,6 +53,10 @@ export type TextRun = {
   text: string;
   fontFamily: string;
   fontSize: number;
+  /**
+   * Custom data attributes propagated from ProseMirror marks (keys must be data-*).
+   */
+  dataAttrs?: Record<string, string>;
   bold?: boolean;
   italic?: boolean;
   letterSpacing?: number;

@@ -57,6 +57,7 @@ export const hydrateTableStyleAttrs = (tableNode: PMNode, context?: ConverterCon
         hydration.justification = referenced.justification;
       }
     } else {
+      // No referenced table styles found, continue with existing hydration
     }
   }
 

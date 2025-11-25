@@ -184,6 +184,99 @@ const resolveColorFromAttributes = (
 };
 
 /**
+ * Maximum number of data-* attributes allowed per mark.
+ * Prevents DoS attacks from malicious payloads with excessive attributes.
+ */
+const MAX_DATA_ATTR_COUNT = 50;
+
+/**
+ * Maximum length for data-* attribute values.
+ * Prevents memory exhaustion from extremely long attribute values.
+ */
+const MAX_DATA_ATTR_VALUE_LENGTH = 1000;
+
+/**
+ * Maximum length for data-* attribute names.
+ * Prevents memory exhaustion from extremely long attribute names.
+ */
+const MAX_DATA_ATTR_NAME_LENGTH = 100;
+
+/**
+ * Extracts data-* attributes from a mark's attrs and normalizes values to strings.
+ * Only forwards primitive/stringifiable values to avoid bloating run payloads.
+ * Applies security limits to prevent DoS attacks from malicious payloads.
+ *
+ * @param attrs - Mark attributes object that may contain data-* attributes
+ * @returns Record of data-* attributes with string values, or undefined if no valid attributes found
+ *
+ * @example
+ * ```typescript
+ * extractDataAttributes({ 'data-id': '123', 'data-name': 'test' });
+ * // Returns: { 'data-id': '123', 'data-name': 'test' }
+ *
+ * extractDataAttributes({ 'data-id': 123, 'data-active': true });
+ * // Returns: { 'data-id': '123', 'data-active': 'true' }
+ *
+ * extractDataAttributes({ color: 'red', 'data-id': '123' });
+ * // Returns: { 'data-id': '123' } (non-data attributes filtered out)
+ * ```
+ */
+export const extractDataAttributes = (
+  attrs: Record<string, unknown> | undefined,
+): Record<string, string> | undefined => {
+  if (!attrs) return undefined;
+  const result: Record<string, string> = {};
+  let attrCount = 0;
+
+  for (const [key, value] of Object.entries(attrs)) {
+    if (typeof key !== 'string' || !key.toLowerCase().startsWith('data-')) {
+      continue;
+    }
+
+    // Enforce maximum number of data attributes
+    if (attrCount >= MAX_DATA_ATTR_COUNT) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[PM-Adapter] Rejecting data attributes exceeding ${MAX_DATA_ATTR_COUNT} limit`);
+      }
+      break;
+    }
+
+    // Enforce maximum attribute name length
+    if (key.length > MAX_DATA_ATTR_NAME_LENGTH) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(
+          `[PM-Adapter] Rejecting data attribute name exceeding ${MAX_DATA_ATTR_NAME_LENGTH} chars: ${key.substring(0, 50)}...`,
+        );
+      }
+      continue;
+    }
+
+    if (value == null) {
+      continue;
+    }
+
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+      const stringValue = String(value);
+
+      // Enforce maximum value length
+      if (stringValue.length > MAX_DATA_ATTR_VALUE_LENGTH) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[PM-Adapter] Rejecting data attribute value exceeding ${MAX_DATA_ATTR_VALUE_LENGTH} chars for key: ${key}`,
+          );
+        }
+        continue;
+      }
+
+      result[key] = stringValue;
+      attrCount++;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+};
+
+/**
  * Normalizes and validates run mark lists from trackFormat metadata.
  * Applies security limits to prevent DoS attacks from malicious payloads.
  *
@@ -546,6 +639,7 @@ export const applyMarksToRun = (
   themeColors?: ThemeColorPalette,
 ): void => {
   marks.forEach((mark) => {
+    const forwardedDataAttrs = extractDataAttributes(mark.attrs as Record<string, unknown> | undefined);
     try {
       switch (mark.type) {
         case TRACK_INSERT_MARK:
@@ -642,6 +736,10 @@ export const applyMarksToRun = (
         console.warn(`[PM-Adapter] Failed to apply mark ${mark.type}:`, error);
       }
       // Continue processing other marks
+    }
+
+    if (forwardedDataAttrs) {
+      run.dataAttrs = { ...(run.dataAttrs ?? {}), ...forwardedDataAttrs };
     }
   });
 };

@@ -1993,6 +1993,7 @@ export class DomPainter {
     applyRunStyles(elem as HTMLElement, run, isActiveLink);
     // Ensure text renders above tab leaders (leaders are z-index: 0)
     elem.style.zIndex = '1';
+    applyRunDataAttributes(elem as HTMLElement, (run as TextRun).dataAttrs);
     if (run.pmStart != null) elem.dataset.pmStart = String(run.pmStart);
     if (run.pmEnd != null) elem.dataset.pmEnd = String(run.pmEnd);
     if (trackedConfig) {
@@ -2555,6 +2556,36 @@ const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void =>
   if (decorations.length > 0) {
     element.style.textDecorationLine = decorations.join(' ');
   }
+};
+
+/**
+ * Applies data-* attributes from a text run to a DOM element.
+ * Validates attribute names and safely sets them on the element.
+ * Invalid or unsafe attributes are skipped with development-mode logging.
+ *
+ * @param element - The HTML element to apply attributes to
+ * @param dataAttrs - Record of data-* attribute key-value pairs from the text run
+ *
+ * @example
+ * ```typescript
+ * const span = document.createElement('span');
+ * applyRunDataAttributes(span, { 'data-id': '123', 'data-name': 'test' });
+ * // span now has: <span data-id="123" data-name="test"></span>
+ * ```
+ */
+export const applyRunDataAttributes = (element: HTMLElement, dataAttrs?: Record<string, string>): void => {
+  if (!dataAttrs) return;
+  Object.entries(dataAttrs).forEach(([key, value]) => {
+    if (typeof key !== 'string' || !key.toLowerCase().startsWith('data-')) return;
+    if (typeof value !== 'string') return;
+    try {
+      element.setAttribute(key, value);
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[DomPainter] Failed to set data attribute "${key}":`, error);
+      }
+    }
+  });
 };
 
 const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs): void => {
