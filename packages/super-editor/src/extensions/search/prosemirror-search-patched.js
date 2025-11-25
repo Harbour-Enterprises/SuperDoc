@@ -388,7 +388,19 @@ function checkWordBoundary(state, pos) {
   return !/\p{L}$/u.test(before.text) || !/^\p{L}/u.test(after.text);
 }
 
+/**
+ * Represents the state of the search plugin, including the active query,
+ * search range, highlight setting, and decoration set for rendering matches.
+ */
 class SearchState {
+  /**
+   * Create a new SearchState instance.
+   *
+   * @param {SearchQuery} query - The search query to execute
+   * @param {{from: number, to: number}|null} range - Optional range to restrict search to, or null for entire document
+   * @param {boolean} highlight - Whether to apply CSS classes for visual highlighting of matches
+   * @param {DecorationSet} deco - The decoration set containing match highlights
+   */
   constructor(query, range, highlight, deco) {
     this.query = query;
     this.range = range;
@@ -396,6 +408,21 @@ class SearchState {
     this.deco = deco;
   }
 }
+
+/**
+ * Builds a decoration set for all search matches in the document or range.
+ *
+ * This function finds all occurrences of the search query and creates inline
+ * decorations for each match. When highlighting is enabled, decorations include
+ * CSS classes for visual styling. When disabled, decorations are created without
+ * attributes (allowing match tracking without visual styling).
+ *
+ * @param {EditorState} state - The current ProseMirror editor state
+ * @param {SearchQuery} query - The search query to find matches for
+ * @param {{from: number, to: number}|null} range - Optional range to restrict search, or null for entire document
+ * @param {boolean} [highlight=true] - Whether to apply CSS classes for visual highlighting
+ * @returns {DecorationSet} A decoration set containing all match decorations
+ */
 function buildMatchDeco(state, query, range, highlight = true) {
   if (!query.valid) return DecorationSet.empty;
   let deco = [];
@@ -405,6 +432,7 @@ function buildMatchDeco(state, query, range, highlight = true) {
     if (!next) break;
     let cls =
       next.from == sel.from && next.to == sel.to ? 'ProseMirror-active-search-match' : 'ProseMirror-search-match';
+    // When highlight is false, create decorations with empty attributes to track matches without visual styling
     const attrs = highlight ? { class: cls } : {};
     deco.push(Decoration.inline(next.from, next.to, attrs));
     pos = next.to;
@@ -429,7 +457,8 @@ function search(options = {}) {
       apply(tr, search, _oldState, state) {
         let set = tr.getMeta(searchKey);
         if (set) {
-          const highlight = set.highlight ?? true;
+          // Validate and normalize highlight value from transaction metadata
+          const highlight = typeof set.highlight === 'boolean' ? set.highlight : true;
           return new SearchState(
             set.query,
             set.range,
@@ -444,11 +473,13 @@ function search(options = {}) {
             let to = tr.mapping.map(range.to, -1);
             range = from < to ? { from, to } : null;
           }
+          // Validate and preserve highlight setting from existing state with nullish coalescing fallback
+          const highlight = typeof search.highlight === 'boolean' ? search.highlight : true;
           search = new SearchState(
             search.query,
             range,
-            search.highlight,
-            buildMatchDeco(state, search.query, range, search.highlight),
+            highlight,
+            buildMatchDeco(state, search.query, range, highlight),
           );
         }
         return search;
@@ -474,12 +505,35 @@ function getMatchHighlights(state) {
   let search = searchKey.getState(state);
   return search ? search.deco : DecorationSet.empty;
 }
+
 /**
-Add metadata to a transaction that updates the active search query
-and searched range, when dispatched.
-*/
+ * Options for setSearchState function.
+ * @typedef {Object} SetSearchStateOptions
+ * @property {boolean} [highlight=true] - Whether to apply CSS classes for visual highlighting of search matches.
+ *   When true, matches are decorated with 'ProseMirror-search-match' or 'ProseMirror-active-search-match' classes.
+ *   When false, matches are tracked in decorations without visual styling classes.
+ */
+
+/**
+ * Add metadata to a transaction that updates the active search query
+ * and searched range, when dispatched.
+ *
+ * @param {Transaction} tr - The transaction to add metadata to
+ * @param {SearchQuery} query - The search query to set
+ * @param {{from: number, to: number}|null} [range=null] - Optional range to restrict search, or null for entire document
+ * @param {SetSearchStateOptions} [options={}] - Additional options for search behavior
+ * @returns {Transaction} The transaction with search metadata added
+ * @throws {TypeError} If options is not null/undefined and not an object
+ */
 function setSearchState(tr, query, range = null, options = {}) {
-  const highlight = options.highlight ?? true;
+  // Validate options parameter - must be an object if provided
+  if (options != null && (typeof options !== 'object' || Array.isArray(options))) {
+    throw new TypeError('setSearchState options must be an object');
+  }
+
+  // Extract and validate highlight option with nullish coalescing fallback
+  const highlight = typeof options?.highlight === 'boolean' ? options.highlight : true;
+
   return tr.setMeta(searchKey, { query, range, highlight });
 }
 function nextMatch(search, state, wrap, curFrom, curTo) {
