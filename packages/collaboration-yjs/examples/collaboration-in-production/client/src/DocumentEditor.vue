@@ -4,14 +4,15 @@ import { onMounted, onBeforeUnmount, shallowRef, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { SuperDoc } from 'superdoc';
 
-// Default document
-import sampleDocument from '/sample-document.docx?url';
+// Default documents
+import defaultDocument from '/default.docx?url';
 
 const route = useRoute();
 const superdoc = shallowRef(null);
 const connectedUsers = ref([]);
 const hoveredUser = ref(null);
 const currentUser = ref(null);
+const showToolbar = ref(true);
 
 const generateUserInfo = async () => {
   const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3050';
@@ -110,9 +111,12 @@ const init = async () => {
   const user = await generateUserInfo();
   currentUser.value = user;
 
-  superdoc.value = new SuperDoc({
+  // Check if hide-toolbar query param is present
+  const hideToolbar = route.query['hide-toolbar'] === 'true';
+  showToolbar.value = !hideToolbar;
+
+  const config = {
     selector: '#superdoc',
-    toolbar: '#superdoc-toolbar',
     document: {
       id: documentId,
       type: 'docx',
@@ -140,14 +144,40 @@ const init = async () => {
         setupMediaObserver(ydoc, editor);
       }
     },
-    onEditorCreate: (event) => {
-      console.log('Editor created:', event.editor);
+    onEditorCreate: async (event) => {
+      // load default doc if current doc is blank
+      const { editor } = event;
+
+      if (!editor?.state) return;
+      const textContent = editor.state.doc.textContent;
+
+      // Check if document is empty (no content or only whitespace)
+      const isEmpty = !textContent || textContent.trim().length === 0;
+      if (!isEmpty) return;
+
+      try {
+        // Fetch and load default.docx
+        const response = await fetch(defaultDocument);
+        const blob = await response.blob();
+        const file = new File([blob], 'default.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+
+        await editor.replaceFile(file);
+      } catch (error) {
+        console.error('Error loading default content:', error);
+      }
     },
     onContentError: ({ error, documentId, file }) => {
       console.error('Content loading error:', error);
       console.log('Failed document:', documentId, file);
     }
-  });
+  };
+
+  // Conditionally add toolbar if not hidden
+  if (!hideToolbar) {
+    config.toolbar = '#superdoc-toolbar';
+  }
+
+  superdoc.value = new SuperDoc(config);
 };
 
 onMounted(() => init());
@@ -184,7 +214,7 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </div>
-    <div id="superdoc-toolbar"></div>
+    <div v-if="showToolbar" id="superdoc-toolbar"></div>
     <div id="superdoc"></div>
   </div>
 </template>
