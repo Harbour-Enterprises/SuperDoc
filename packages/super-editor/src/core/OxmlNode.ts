@@ -6,7 +6,7 @@ import type { NodeConfig } from './Node.js';
  */
 export interface OxmlNodeConfig<
   Options extends Record<string, unknown> = Record<string, never>,
-  Storage extends Record<string, unknown> = Record<string, never>
+  Storage extends Record<string, unknown> = Record<string, never>,
 > extends NodeConfig<Options, Storage> {
   /** The OXML element name */
   oXmlName: string;
@@ -22,7 +22,7 @@ export interface OxmlNodeConfig<
  */
 export class OxmlNode<
   Options extends Record<string, unknown> = Record<string, never>,
-  Storage extends Record<string, unknown> = Record<string, never>
+  Storage extends Record<string, unknown> = Record<string, never>,
 > extends Node<Options, Storage> {
   oXmlName: string;
 
@@ -36,9 +36,10 @@ export class OxmlNode<
    * @param config - The OXML node configuration.
    * @returns A new OxmlNode instance.
    */
-  static create<O extends Record<string, unknown> = Record<string, never>, S extends Record<string, unknown> = Record<string, never>>(
-    config: OxmlNodeConfig<O, S>
-  ): OxmlNode<O, S> {
+  static create<
+    O extends Record<string, unknown> = Record<string, never>,
+    S extends Record<string, unknown> = Record<string, never>,
+  >(config: OxmlNodeConfig<O, S>): OxmlNode<O, S> {
     return new OxmlNode<O, S>(config);
   }
 }

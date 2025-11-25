@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { createDomPainter, sanitizeUrl, linkMetrics } from './index.js';
+import { createDomPainter, sanitizeUrl, linkMetrics, applyRunDataAttributes } from './index.js';
 import type { FlowBlock, Measure, Layout, ParagraphMeasure, FlowRunLink } from '@superdoc/contracts';
 
 const block: FlowBlock = {
@@ -3288,5 +3288,235 @@ describe('Link rendering metrics', () => {
     const metrics = linkMetrics.getMetrics();
     expect(metrics['hyperlink.sanitized.count']).toBe(2);
     expect(metrics['hyperlink.blocked.count']).toBe(1);
+  });
+});
+
+describe('applyRunDataAttributes', () => {
+  let element: HTMLElement;
+
+  beforeEach(() => {
+    element = document.createElement('span');
+  });
+
+  describe('Happy path', () => {
+    it('applies valid data attributes to element', () => {
+      const dataAttrs = {
+        'data-id': '123',
+        'data-name': 'test',
+        'data-category': 'example',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('data-id')).toBe('123');
+      expect(element.getAttribute('data-name')).toBe('test');
+      expect(element.getAttribute('data-category')).toBe('example');
+    });
+
+    it('applies single data attribute', () => {
+      const dataAttrs = {
+        'data-id': '456',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('data-id')).toBe('456');
+    });
+
+    it('applies attributes with special characters in values', () => {
+      const dataAttrs = {
+        'data-text': 'hello world',
+        'data-url': 'https://example.com/page?param=value',
+        'data-json': '{"key":"value"}',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('data-text')).toBe('hello world');
+      expect(element.getAttribute('data-url')).toBe('https://example.com/page?param=value');
+      expect(element.getAttribute('data-json')).toBe('{"key":"value"}');
+    });
+  });
+
+  describe('Edge cases', () => {
+    it('handles undefined dataAttrs gracefully', () => {
+      applyRunDataAttributes(element, undefined);
+
+      // Should not have any data attributes
+      expect(element.attributes.length).toBe(0);
+    });
+
+    it('handles empty object', () => {
+      applyRunDataAttributes(element, {});
+
+      // Should not have any data attributes
+      expect(element.attributes.length).toBe(0);
+    });
+
+    it('filters out non-data-* attributes at runtime', () => {
+      const dataAttrs = {
+        'data-id': '123',
+        id: 'invalid',
+        class: 'invalid',
+        'data-valid': 'test',
+      } as Record<string, string>;
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      // Only data-* attributes should be set
+      expect(element.getAttribute('data-id')).toBe('123');
+      expect(element.getAttribute('data-valid')).toBe('test');
+      expect(element.getAttribute('id')).toBeNull();
+      expect(element.getAttribute('class')).toBeNull();
+    });
+
+    it('filters out non-string values at runtime', () => {
+      const dataAttrs = {
+        'data-id': '123',
+        'data-invalid': 456,
+        'data-also-invalid': true,
+      } as unknown as Record<string, string>;
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      // Only string values should be set
+      expect(element.getAttribute('data-id')).toBe('123');
+      expect(element.getAttribute('data-invalid')).toBeNull();
+      expect(element.getAttribute('data-also-invalid')).toBeNull();
+    });
+
+    it('handles case-insensitive data- prefix matching', () => {
+      const dataAttrs = {
+        'DATA-ID': '123',
+        'Data-Name': 'test',
+        'dAtA-MiXeD': 'value',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('DATA-ID')).toBe('123');
+      expect(element.getAttribute('Data-Name')).toBe('test');
+      expect(element.getAttribute('dAtA-MiXeD')).toBe('value');
+    });
+
+    it('handles empty string values', () => {
+      const dataAttrs = {
+        'data-empty': '',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('data-empty')).toBe('');
+    });
+
+    it('overwrites existing attributes with same name', () => {
+      element.setAttribute('data-id', 'old-value');
+
+      const dataAttrs = {
+        'data-id': 'new-value',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('data-id')).toBe('new-value');
+    });
+
+    it('preserves existing non-data attributes', () => {
+      element.setAttribute('class', 'my-class');
+      element.setAttribute('id', 'my-id');
+
+      const dataAttrs = {
+        'data-custom': 'value',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('class')).toBe('my-class');
+      expect(element.getAttribute('id')).toBe('my-id');
+      expect(element.getAttribute('data-custom')).toBe('value');
+    });
+
+    it('handles attributes with numeric suffixes', () => {
+      const dataAttrs = {
+        'data-attr-1': 'value1',
+        'data-attr-2': 'value2',
+        'data-attr-999': 'value999',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('data-attr-1')).toBe('value1');
+      expect(element.getAttribute('data-attr-2')).toBe('value2');
+      expect(element.getAttribute('data-attr-999')).toBe('value999');
+    });
+
+    it('handles attributes with hyphens and underscores', () => {
+      const dataAttrs = {
+        'data-kebab-case': 'value1',
+        'data-snake_case': 'value2',
+        'data-mixed-kebab_snake': 'value3',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('data-kebab-case')).toBe('value1');
+      expect(element.getAttribute('data-snake_case')).toBe('value2');
+      expect(element.getAttribute('data-mixed-kebab_snake')).toBe('value3');
+    });
+  });
+
+  describe('Security and safety', () => {
+    it('does not execute JavaScript in attribute values', () => {
+      const dataAttrs = {
+        'data-script': 'javascript:alert(1)',
+        'data-onclick': 'alert(1)',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      // Attributes should be set as plain text, not executed
+      expect(element.getAttribute('data-script')).toBe('javascript:alert(1)');
+      expect(element.getAttribute('data-onclick')).toBe('alert(1)');
+      // Element should not have onclick handler
+      expect(element.onclick).toBeNull();
+    });
+
+    it('handles HTML entities in values', () => {
+      const dataAttrs = {
+        'data-html': '<script>alert(1)</script>',
+        'data-entities': '&lt;div&gt;',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      // Should store as plain text
+      expect(element.getAttribute('data-html')).toBe('<script>alert(1)</script>');
+      expect(element.getAttribute('data-entities')).toBe('&lt;div&gt;');
+    });
+
+    it('handles very long attribute values', () => {
+      const longValue = 'a'.repeat(10000);
+      const dataAttrs = {
+        'data-long': longValue,
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('data-long')).toBe(longValue);
+    });
+
+    it('handles special Unicode characters', () => {
+      const dataAttrs = {
+        'data-emoji': '😀🎉',
+        'data-chinese': '你好',
+        'data-arabic': 'مرحبا',
+      };
+
+      applyRunDataAttributes(element, dataAttrs);
+
+      expect(element.getAttribute('data-emoji')).toBe('😀🎉');
+      expect(element.getAttribute('data-chinese')).toBe('你好');
+      expect(element.getAttribute('data-arabic')).toBe('مرحبا');
+    });
   });
 });

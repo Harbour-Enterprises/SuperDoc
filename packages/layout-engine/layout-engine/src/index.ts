@@ -6,7 +6,6 @@ import type {
   ImageBlock,
   ImageMeasure,
   Layout,
-  ListBlock,
   ListMeasure,
   Measure,
   Page,

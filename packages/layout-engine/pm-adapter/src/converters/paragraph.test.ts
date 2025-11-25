@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { paragraphToFlowBlocks, mergeAdjacentRuns } from './paragraph.js';
+import { paragraphToFlowBlocks, mergeAdjacentRuns, dataAttrsCompatible } from './paragraph.js';
 import type {
   PMNode,
   BlockIdGenerator,
@@ -2092,6 +2092,196 @@ describe('paragraph converters', () => {
         // Should be called once per paragraph block (2 blocks in this case)
         expect(vi.mocked(cloneParagraphAttrs)).toHaveBeenCalledTimes(paraBlocks.length);
       });
+    });
+  });
+
+  describe('dataAttrsCompatible', () => {
+    it('returns true when both runs have no dataAttrs', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+      };
+
+      expect(dataAttrsCompatible(runA, runB)).toBe(true);
+    });
+
+    it('returns true when both runs have identical dataAttrs', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+          'data-name': 'test',
+        },
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+          'data-name': 'test',
+        },
+      };
+
+      expect(dataAttrsCompatible(runA, runB)).toBe(true);
+    });
+
+    it('returns false when one run has dataAttrs and other does not', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+        },
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+      };
+
+      expect(dataAttrsCompatible(runA, runB)).toBe(false);
+      expect(dataAttrsCompatible(runB, runA)).toBe(false);
+    });
+
+    it('returns false when both have dataAttrs but different keys', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+        },
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-name': 'test',
+        },
+      };
+
+      expect(dataAttrsCompatible(runA, runB)).toBe(false);
+    });
+
+    it('returns false when both have dataAttrs but different values', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+        },
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '456',
+        },
+      };
+
+      expect(dataAttrsCompatible(runA, runB)).toBe(false);
+    });
+
+    it('returns false when attribute counts differ', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+          'data-name': 'test',
+        },
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+        },
+      };
+
+      expect(dataAttrsCompatible(runA, runB)).toBe(false);
+    });
+
+    it('returns true when both have empty dataAttrs objects', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {},
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {},
+      };
+
+      expect(dataAttrsCompatible(runA, runB)).toBe(true);
+    });
+
+    it('returns true when both have multiple identical attributes in different order', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+          'data-name': 'test',
+          'data-category': 'example',
+        },
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-category': 'example',
+          'data-id': '123',
+          'data-name': 'test',
+        },
+      };
+
+      expect(dataAttrsCompatible(runA, runB)).toBe(true);
+    });
+
+    it('returns false when one value differs among many matching attributes', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+          'data-name': 'test',
+          'data-category': 'example',
+        },
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        dataAttrs: {
+          'data-id': '123',
+          'data-name': 'different',
+          'data-category': 'example',
+        },
+      };
+
+      expect(dataAttrsCompatible(runA, runB)).toBe(false);
     });
   });
 });

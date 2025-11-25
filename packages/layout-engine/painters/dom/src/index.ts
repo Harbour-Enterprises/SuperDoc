@@ -3,7 +3,7 @@ import { DomPainter } from './renderer.js';
 import type { PageStyles } from './styles.js';
 
 // Re-export utility functions for testing
-export { sanitizeUrl, linkMetrics } from './renderer.js';
+export { sanitizeUrl, linkMetrics, applyRunDataAttributes } from './renderer.js';
 
 export type LayoutMode = 'vertical' | 'horizontal' | 'book';
 export type PageDecorationPayload = {

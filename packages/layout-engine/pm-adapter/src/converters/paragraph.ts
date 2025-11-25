@@ -41,6 +41,42 @@ import { createLinkedStyleResolver, applyLinkedStyleToRun, extractRunStyleId } f
 const isTextRun = (run: Run): run is TextRun => (run as { kind?: string }).kind !== 'tab';
 
 /**
+ * Checks if two text runs have compatible data attributes for merging.
+ * Runs are compatible if they have identical data-* attributes or both have none.
+ *
+ * @param a - First text run
+ * @param b - Second text run
+ * @returns true if data attributes are compatible for merging, false otherwise
+ */
+export const dataAttrsCompatible = (a: TextRun, b: TextRun): boolean => {
+  const aAttrs = a.dataAttrs;
+  const bAttrs = b.dataAttrs;
+
+  // Both have no data attributes - compatible
+  if (!aAttrs && !bAttrs) return true;
+
+  // One has data attributes, the other doesn't - incompatible
+  if (!aAttrs || !bAttrs) return false;
+
+  // Both have data attributes - check if they're identical
+  const aKeys = Object.keys(aAttrs).sort();
+  const bKeys = Object.keys(bAttrs).sort();
+
+  // Different number of keys - incompatible
+  if (aKeys.length !== bKeys.length) return false;
+
+  // Check all keys and values match
+  for (let i = 0; i < aKeys.length; i++) {
+    const key = aKeys[i];
+    if (key !== bKeys[i] || aAttrs[key] !== bAttrs[key]) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+/**
  * Merges adjacent text runs with continuous PM positions and compatible styling.
  * Optimization to reduce run fragmentation after PM operations.
  *
@@ -60,6 +96,7 @@ export function mergeAdjacentRuns(runs: Run[]): Run[] {
     // 1. Both are text runs (no tokens/special types)
     // 2. Have continuous PM positions (current.pmEnd === next.pmStart)
     // 3. Have compatible styling (same font, size, color, bold, italic, etc.)
+    // 4. Have compatible data attributes
     const canMerge =
       isTextRun(current) &&
       isTextRun(next) &&
@@ -79,7 +116,8 @@ export function mergeAdjacentRuns(runs: Run[]): Run[] {
       current.color === next.color &&
       current.highlight === next.highlight &&
       (current.letterSpacing ?? 0) === (next.letterSpacing ?? 0) &&
-      trackedChangesCompatible(current, next);
+      trackedChangesCompatible(current, next) &&
+      dataAttrsCompatible(current, next);
 
     if (canMerge) {
       // Merge next into current
