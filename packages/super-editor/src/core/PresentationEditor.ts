@@ -3252,7 +3252,7 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #renderSelectionRects(rects: LayoutRect[]) {
-    if (!this.#selectionOverlay) {
+    if (!this.#localSelectionLayer) {
       return;
     }
     const pageHeight = this.#getBodyPageHeight();
@@ -3263,7 +3263,7 @@ export class PresentationEditor extends EventEmitter {
       if (!coords) {
         return;
       }
-      const highlight = this.#selectionOverlay.ownerDocument?.createElement('div');
+      const highlight = this.#localSelectionLayer.ownerDocument?.createElement('div');
       if (!highlight) {
         return;
       }
@@ -3276,7 +3276,7 @@ export class PresentationEditor extends EventEmitter {
       highlight.style.backgroundColor = 'rgba(51, 132, 255, 0.35)';
       highlight.style.borderRadius = '2px';
       highlight.style.pointerEvents = 'none';
-      this.#selectionOverlay.appendChild(highlight);
+      this.#localSelectionLayer.appendChild(highlight);
     });
   }
 
@@ -3780,6 +3780,7 @@ class PresentationInputBridge {
   #onTargetChanged?: (target: HTMLElement | null) => void;
   #listeners: Array<{ type: string; handler: EventListener; target: EventTarget }>;
   #currentTarget: HTMLElement | null = null;
+  #destroyed = false;
 
   constructor(
     windowRoot: Window,
@@ -3825,9 +3826,13 @@ class PresentationInputBridge {
     });
     this.#listeners = [];
     this.#currentTarget = null;
+    this.#destroyed = true;
   }
 
   notifyTargetChanged() {
+    if (this.#destroyed) {
+      return;
+    }
     const nextTarget = this.#getTargetDom();
     if (nextTarget === this.#currentTarget) {
       return;
@@ -3863,12 +3868,21 @@ class PresentationInputBridge {
   }
 
   #dispatchToTarget(originalEvent: Event, synthetic: Event) {
+    if (this.#destroyed) return;
     const target = this.#getTargetDom();
     this.#currentTarget = target;
     if (!target) return;
-    const canceled = !target.dispatchEvent(synthetic) || synthetic.defaultPrevented;
-    if (canceled) {
-      originalEvent.preventDefault();
+    const isConnected = (target as { isConnected?: boolean }).isConnected;
+    if (isConnected === false) return;
+    try {
+      const canceled = !target.dispatchEvent(synthetic) || synthetic.defaultPrevented;
+      if (canceled) {
+        originalEvent.preventDefault();
+      }
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] Failed to dispatch event to target:', error);
+      }
     }
   }
 

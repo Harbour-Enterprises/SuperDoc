@@ -13,6 +13,7 @@ import {
   normalizeUnderlineStyle,
   applyTextStyleMark,
   applyMarksToRun,
+  extractDataAttributes,
   TRACK_INSERT_MARK,
   TRACK_DELETE_MARK,
   TRACK_FORMAT_MARK,
@@ -744,6 +745,264 @@ describe('mark application', () => {
       expect(run.fontFamily).toBe('Arial');
       expect(run.fontSize).toBe(12);
       expect(run.italic).toBe(true);
+    });
+  });
+
+  describe('extractDataAttributes', () => {
+    describe('Happy path', () => {
+      it('extracts valid data-* attributes with string values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-name': 'test',
+          'data-category': 'example',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+          'data-category': 'example',
+        });
+      });
+
+      it('converts number values to strings', () => {
+        const attrs = {
+          'data-id': 123,
+          'data-count': 456,
+          'data-score': 3.14,
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-count': '456',
+          'data-score': '3.14',
+        });
+      });
+
+      it('converts boolean values to strings', () => {
+        const attrs = {
+          'data-active': true,
+          'data-disabled': false,
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-active': 'true',
+          'data-disabled': 'false',
+        });
+      });
+    });
+
+    describe('Edge cases', () => {
+      it('returns undefined for undefined input', () => {
+        const result = extractDataAttributes(undefined);
+        expect(result).toBeUndefined();
+      });
+
+      it('returns undefined for empty object', () => {
+        const result = extractDataAttributes({});
+        expect(result).toBeUndefined();
+      });
+
+      it('returns undefined when no data-* attributes exist', () => {
+        const attrs = {
+          id: '123',
+          class: 'test',
+          style: 'color: red',
+        };
+
+        const result = extractDataAttributes(attrs);
+        expect(result).toBeUndefined();
+      });
+
+      it('filters out non-data-* attributes', () => {
+        const attrs = {
+          id: '123',
+          class: 'test',
+          'data-id': 'valid',
+          style: 'color: red',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': 'valid',
+        });
+      });
+
+      it('filters out null values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-null': null,
+          'data-name': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+        });
+      });
+
+      it('filters out undefined values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-undefined': undefined,
+          'data-name': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+        });
+      });
+
+      it('filters out object values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-object': { nested: 'value' },
+          'data-name': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+        });
+      });
+
+      it('filters out array values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-array': [1, 2, 3],
+          'data-name': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+        });
+      });
+
+      it('handles case-insensitive data- prefix matching', () => {
+        const attrs = {
+          'DATA-ID': '123',
+          'Data-Name': 'test',
+          'dAtA-MiXeD': 'value',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'DATA-ID': '123',
+          'Data-Name': 'test',
+          'dAtA-MiXeD': 'value',
+        });
+      });
+    });
+
+    describe('Security limits (DoS protection)', () => {
+      it('enforces MAX_DATA_ATTR_COUNT limit (50)', () => {
+        const attrs: Record<string, unknown> = {};
+        // Create 60 data attributes (exceeds limit of 50)
+        for (let i = 0; i < 60; i++) {
+          attrs[`data-attr-${i}`] = `value-${i}`;
+        }
+
+        const result = extractDataAttributes(attrs);
+
+        // Should stop at 50 attributes
+        expect(Object.keys(result!).length).toBe(50);
+      });
+
+      it('enforces MAX_DATA_ATTR_VALUE_LENGTH limit (1000)', () => {
+        const longValue = 'a'.repeat(1001);
+        const attrs = {
+          'data-long': longValue,
+          'data-valid': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        // Long value should be filtered out
+        expect(result).toEqual({
+          'data-valid': 'test',
+        });
+      });
+
+      it('enforces MAX_DATA_ATTR_NAME_LENGTH limit (100)', () => {
+        const longKey = 'data-' + 'a'.repeat(100);
+        const attrs: Record<string, unknown> = {
+          [longKey]: 'value',
+          'data-valid': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        // Long key should be filtered out
+        expect(result).toEqual({
+          'data-valid': 'test',
+        });
+      });
+
+      it('accepts value at exactly MAX_DATA_ATTR_VALUE_LENGTH', () => {
+        const exactLengthValue = 'a'.repeat(1000);
+        const attrs = {
+          'data-exact': exactLengthValue,
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-exact': exactLengthValue,
+        });
+      });
+
+      it('accepts name at exactly MAX_DATA_ATTR_NAME_LENGTH', () => {
+        // 100 characters including 'data-' prefix
+        const exactLengthKey = 'data-' + 'a'.repeat(95);
+        const attrs: Record<string, unknown> = {
+          [exactLengthKey]: 'value',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          [exactLengthKey]: 'value',
+        });
+      });
+
+      it('handles mixed valid and invalid attributes with limits', () => {
+        const longValue = 'a'.repeat(1001);
+        const longKey = 'data-' + 'b'.repeat(100);
+        const attrs: Record<string, unknown> = {
+          'data-valid1': 'value1',
+          'data-long-value': longValue,
+          [longKey]: 'value',
+          'data-valid2': 'value2',
+          'data-null': null,
+          'data-object': { nested: true },
+          'data-valid3': 'value3',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-valid1': 'value1',
+          'data-valid2': 'value2',
+          'data-valid3': 'value3',
+        });
+      });
     });
   });
 });
