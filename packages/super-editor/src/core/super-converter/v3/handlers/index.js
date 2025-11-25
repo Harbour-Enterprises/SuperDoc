@@ -2,30 +2,67 @@
 import { translator as mc_AlternateContent_translator } from './mc/altermateContent/alternate-content-translator.js';
 import { translator as sd_pageReference_translator } from './sd/pageReference/pageReference-translator.js';
 import { translator as sd_tableOfContents_translator } from './sd/tableOfContents/tableOfContents-translator.js';
+import { translator as sd_autoPageNumber_translator } from './sd/autoPageNumber/autoPageNumber-translator.js';
+import { translator as sd_totalPageNumber_translator } from './sd/autoPageNumber/autoPageNumber-translator.js';
+import { translator as w_adjustRightInd_translator } from './w/adjustRightInd/adjustRightInd-translator.js';
+import { translator as w_autoSpaceDE_translator } from './w/autoSpaceDE/autoSpaceDE-translator.js';
+import { translator as w_autoSpaceDN_translator } from './w/autoSpaceDN/autoSpaceDN-translator.js';
 import { translator as w_b_translator } from './w/b/b-translator.js';
+import { translator as w_bar_translator } from './w/bar/bar-translator.js';
+import { translator as w_bCs_translator } from './w/bCs/bCs-translator.js';
 import { translator as w_bidiVisual_translator } from './w/bidiVisual/bidiVisual-translator.js';
 import { translator as w_bookmarkEnd_translator } from './w/bookmark-end/bookmark-end-translator.js';
 import { translator as w_bookmarkStart_translator } from './w/bookmark-start/bookmark-start-translator.js';
 import { translator as w_bottom_translator } from './w/bottom/bottom-translator.js';
 import { translator as w_br_translator } from './w/br/br-translator.js';
 import { translator as w_cantSplit_translator } from './w/cantSplit/cantSplit-translator.js';
+import { translator as w_caps_translator } from './w/caps/caps-translator.js';
 import { translator as w_cnfStyle_translator } from './w/cnfStyle/cnfStyle-translator.js';
 import { translator as w_color_translator } from './w/color/color-translator.js';
+import {
+  commentRangeStartTranslator as w_commentRangeStart_translator,
+  commentRangeEndTranslator as w_commentRangeEnd_translator,
+} from './w/commentRange/comment-range-translator.js';
+import { translator as w_contextualSpacing } from './w/contextualSpacing/contextualSpacing-translator.js';
+import { translator as w_del_translator } from './w/del/del-translator.js';
 import { translator as w_divId_translator } from './w/divId/divId-translator.js';
 import { translator as w_drawing_translator } from './w/drawing/drawing-translator.js';
+import { translator as w_dstrike_translator } from './w/dstrike/dstrike-translator.js';
 import { translator as w_end_translator } from './w/end/end-translator.js';
+import { translator as w_framePr_translator } from './w/framePr/framePr-translator.js';
 import { translator as w_gridAfter_translator } from './w/gridAfter/gridAfter-translator.js';
 import { translator as w_gridBefore_translator } from './w/gridBefore/gridBefore-translator.js';
 import { translator as w_gridCol_translator } from './w/gridCol/gridCol-translator.js';
+import { translator as w_gridSpan_translator } from './w/gridSpan/gridSpan-translator.js';
+import { translator as w_header_translator } from './w/header/header-translator.js';
+import { translator as w_headers_translator } from './w/headers/headers-translator.js';
 import { translator as w_hidden_translator } from './w/hidden/hidden-translator.js';
+import { translator as w_hideMark_translator } from './w/hideMark/hideMark-translator.js';
 import { translator as w_highlight_translator } from './w/highlight/highlight-translator.js';
 import { translator as w_hyperlink_translator } from './w/hyperlink/hyperlink-translator.js';
 import { translator as w_i_translator } from './w/i/i-translator.js';
+import { translator as w_ilvl_translator } from './w/ilvl/ilvl-translator.js';
+import { translator as w_ind_translator } from './w/ind/ind-translator.js';
+import { translator as w_ins_translator } from './w/ins/ins-translator.js';
 import { translator as w_insideH_translator } from './w/insideH/insideH-translator.js';
 import { translator as w_insideV_translator } from './w/insideV/insideV-translator.js';
 import { translator as w_jc_translator } from './w/jc/jc-translator.js';
+import { translator as w_keepLines_translator } from './w/keepLines/keepLines-translator.js';
+import { translator as w_keepNext_translator } from './w/keepNext/keepNext-translator.js';
+import { translator as w_kinsoku_translator } from './w/kinsoku/kinsoku-translator.js';
+import { translator as w_lang_translator } from './w/lang/lang-translator.js';
+import { translator as w_mirrorIndents_translator } from './w/mirrorIndents/mirrorIndents-translator.js';
 import { translator as w_left_translator } from './w/left/left-translator.js';
+import { translator as w_noWrap_translator } from './w/noWrap/noWrap-translator.js';
+import { translator as w_numId_translator } from './w/numId/numId-translator.js';
+import { translator as w_numPr_translator } from './w/numPr/numPr-translator.js';
+import { translator as w_outlineLvl_translator } from './w/outlineLvl/outlineLvl-translator.js';
+import { translator as w_overflowPunct } from './w/overflowPunct/overflowPunct-translator.js';
 import { translator as w_p_translator } from './w/p/p-translator.js';
+import { translator as w_pageBreakBefore_translator } from './w/pageBreakBefore/pageBreakBefore-translator.js';
+import { translator as w_pBdr_translator } from './w/pBdr/pBdr-translator.js';
+import { translator as w_pPr_translator } from './w/pPr/pPr-translator.js';
+import { translator as w_pStyle_translator } from './w/pStyle/pStyle-translator.js';
 import { translator as w_r_translator } from './w/r/r-translator.js';
 import { translator as w_rFonts_translator } from './w/rFonts/rFonts-translator.js';
 import { translator as w_rPr_translator } from './w/rpr/rpr-translator.js';
@@ -33,11 +70,18 @@ import { translator as w_rStyle_translator } from './w/rStyle/rstyle-translator.
 import { translator as w_right_translator } from './w/right/right-translator.js';
 import { translator as w_sdt_translator } from './w/sdt/sdt-translator.js';
 import { translator as w_shd_translator } from './w/shd/shd-translator.js';
+import { translator as w_snapToGrid_translator } from './w/snapToGrid/snapToGrid-translator.js';
 import { translator as w_start_translator } from './w/start/start-translator.js';
 import { translator as w_strike_translator } from './w/strike/strike-translator.js';
+import { translator as w_spacing_translator } from './w/spacing/spacing-translator.js';
+import { translator as w_suppressAutoHyphens_translator } from './w/suppressAutoHyphens/suppressAutoHyphens-translator.js';
+import { translator as w_suppressLineNumbers_translator } from './w/suppressLineNumbers/suppressLineNumbers-translator.js';
+import { translator as w_suppressOverlap_translator } from './w/suppressOverlap/suppressOverlap-translator.js';
 import { translator as w_sz_translator } from './w/sz/sz-translator.js';
 import { translator as w_szCs_translator } from './w/szcs/szcs-translator.js';
+import { translator as w_t_translator } from './w/t/t-translator.js';
 import { translator as w_tab_translator } from './w/tab/tab-translator.js';
+import { translator as w_tabs_translator } from './w/tabs/tabs-translator.js';
 import { translator as w_tbl_translator } from './w/tbl/tbl-translator.js';
 import { translator as w_tblBorders_translator } from './w/tblBorders/tblBorders-translator.js';
 import { translator as w_tblCaption_translator } from './w/tblCaption/tblCaption-translator.js';
@@ -64,123 +108,165 @@ import { translator as w_trPr_translator } from './w/trPr/trPr-translator.js';
 import { translator as w_u_translator } from './w/u/u-translator.js';
 import { translator as w_wAfter_translator } from './w/wAfter/wAfter-translator.js';
 import { translator as w_wBefore_translator } from './w/wBefore/wBefore-translator.js';
-import { translator as w_caps_translator } from './w/caps/caps-translator.js';
-import { translator as w_bCs_translator } from './w/bCs/bCs-translator.js';
-import {
-  commentRangeStartTranslator as w_commentRangeStart_translator,
-  commentRangeEndTranslator as w_commentRangeEnd_translator,
-} from './w/commentRange/comment-range-translator.js';
-import { translator as wp_anchor_translator } from './wp/anchor/anchor-translator.js';
-import { translator as wp_inline_translator } from './wp/inline/inline-translator.js';
 import { translator as w_vMerge_translator } from './w/vMerge/vMerge-translator.js';
-import { translator as w_gridSpan_translator } from './w/gridSpan/gridSpan-translator.js';
 import { translator as w_vAlign_translator } from './w/vAlign/vAlign-translator.js';
-import { translator as w_noWrap_translator } from './w/noWrap/noWrap-translator.js';
 import { translator as w_tcFitText_translator } from './w/tcFitText/tcFitText-translator.js';
 import { translator as w_tcW_translator } from './w/tcW/tcW-translator.js';
-import { translator as w_hideMark_translator } from './w/hideMark/hideMark-translator.js';
 import { translator as w_textDirection_translator } from './w/textDirection/textDirection-translator.js';
 import { translator as w_tl2br_translator } from './w/tl2br/tl2br-translator.js';
 import { translator as w_tr2bl_translator } from './w/tr2bl/tr2bl-translator.js';
-import { translator as w_header_translator } from './w/header/header-translator.js';
-import { translator as w_headers_translator } from './w/headers/headers-translator.js';
 import { translator as w_tcBorders_translator } from './w/tcBorders/tcBorders-translator.js';
 import { translator as w_tcMar_translator } from './w/tcMar/tcMar-translator.js';
 import { translator as w_tcPr_translator } from './w/tcPr/tcPr-translator.js';
+import { translator as w_textAlignment_translator } from './w/textAlignment/textAlignment-translator.js';
+import { translator as w_textBoxTightWrap_translator } from './w/textboxTightWrap/textboxTightWrap-translator.js';
+import { translator as w_topLinePunct_translator } from './w/topLinePunct/topLinePunct-translator.js';
+import { translator as w_widowControl_translator } from './w/widowControl/widowControl-translator.js';
+import { translator as w_wordWrap_translator } from './w/wordWrap/wordWrap-translator.js';
+import { translator as wp_anchor_translator } from './wp/anchor/anchor-translator.js';
+import { translator as wp_inline_translator } from './wp/inline/inline-translator.js';
 
 /**
  * @typedef {Object} RegisteredHandlers
  */
 
-// Additional translator registrations keyed by OOXML element name.
-const additionalHandlers = Object.freeze({
-  'mc:AlternateContent': mc_AlternateContent_translator,
-  'sd:pageReference': sd_pageReference_translator,
-  'sd:tableOfContents': sd_tableOfContents_translator,
-  'w:b': w_b_translator,
-  'w:bCs': w_bCs_translator,
-  'w:bidiVisual': w_bidiVisual_translator,
-  'w:bookmarkEnd': w_bookmarkEnd_translator,
-  'w:bookmarkStart': w_bookmarkStart_translator,
-  'w:bottom': w_bottom_translator,
-  'w:br': w_br_translator,
-  'w:cantSplit': w_cantSplit_translator,
-  'w:caps': w_caps_translator,
-  'w:cnfStyle': w_cnfStyle_translator,
-  'w:color': w_color_translator,
-  'w:divId': w_divId_translator,
-  'w:drawing': w_drawing_translator,
-  'w:end': w_end_translator,
-  'w:gridAfter': w_gridAfter_translator,
-  'w:gridBefore': w_gridBefore_translator,
-  'w:gridCol': w_gridCol_translator,
-  'w:hidden': w_hidden_translator,
-  'w:highlight': w_highlight_translator,
-  'w:hyperlink': w_hyperlink_translator,
-  'w:i': w_i_translator,
-  'w:insideH': w_insideH_translator,
-  'w:insideV': w_insideV_translator,
-  'w:jc': w_jc_translator,
-  'w:left': w_left_translator,
-  'w:p': w_p_translator,
-  'w:r': w_r_translator,
-  'w:rFonts': w_rFonts_translator,
-  'w:rPr': w_rPr_translator,
-  'w:rStyle': w_rStyle_translator,
-  'w:right': w_right_translator,
-  'w:sdt': w_sdt_translator,
-  'w:shd': w_shd_translator,
-  'w:start': w_start_translator,
-  'w:strike': w_strike_translator,
-  'w:sz': w_sz_translator,
-  'w:szCs': w_szCs_translator,
-  'w:tab': w_tab_translator,
-  'w:tbl': w_tbl_translator,
-  'w:tblBorders': w_tblBorders_translator,
-  'w:tblCaption': w_tblCaption_translator,
-  'w:tblCellMar': w_tblCellMar_translator,
-  'w:tblCellSpacing': w_tblCellSpacing_translator,
-  'w:tblDescription': w_tblDescription_translator,
-  'w:tblGrid': w_tblGrid_translator,
-  'w:tblHeader': w_tblHeader_translator,
-  'w:tblInd': w_tblInd_translator,
-  'w:tblLayout': w_tblLayout_translator,
-  'w:tblLook': w_tblLook_translator,
-  'w:tblOverlap': w_tblOverlap_translator,
-  'w:tblPr': w_tblPr_translator,
-  'w:tblStyle': w_tblStyle_translator,
-  'w:tblStyleColBandSize': w_tblStyleColBandSize_translator,
-  'w:tblStyleRowBandSize': w_tblStyleRowBandSize_translator,
-  'w:tblW': w_tblW_translator,
-  'w:tblpPr': w_tblpPr_translator,
-  'w:tc': w_tc_translator,
-  'w:top': w_top_translator,
-  'w:tr': w_tr_translator,
-  'w:trHeight': w_trHeight_translator,
-  'w:trPr': w_trPr_translator,
-  'w:u': w_u_translator,
-  'w:wAfter': w_wAfter_translator,
-  'w:wBefore': w_wBefore_translator,
-  'wp:anchor': wp_anchor_translator,
-  'wp:inline': wp_inline_translator,
-  'w:commentRangeStart': w_commentRangeStart_translator,
-  'w:commentRangeEnd': w_commentRangeEnd_translator,
-  'w:vMerge': w_vMerge_translator,
-  'w:gridSpan': w_gridSpan_translator,
-  'w:vAlign': w_vAlign_translator,
-  'w:noWrap': w_noWrap_translator,
-  'w:tcFitText': w_tcFitText_translator,
-  'w:tcW': w_tcW_translator,
-  'w:hideMark': w_hideMark_translator,
-  'w:textDirection': w_textDirection_translator,
-  'w:tl2br': w_tl2br_translator,
-  'w:tr2bl': w_tr2bl_translator,
-  'w:header': w_header_translator,
-  'w:headers': w_headers_translator,
-  'w:tcBorders': w_tcBorders_translator,
-  'w:tcMar': w_tcMar_translator,
-  'w:tcPr': w_tcPr_translator,
-});
+const translatorList = Array.from(
+  new Set([
+    mc_AlternateContent_translator,
+    sd_pageReference_translator,
+    sd_tableOfContents_translator,
+    sd_autoPageNumber_translator,
+    sd_totalPageNumber_translator,
+    w_adjustRightInd_translator,
+    w_autoSpaceDE_translator,
+    w_autoSpaceDN_translator,
+    w_b_translator,
+    w_bar_translator,
+    w_bCs_translator,
+    w_bidiVisual_translator,
+    w_bookmarkEnd_translator,
+    w_bookmarkStart_translator,
+    w_bottom_translator,
+    w_br_translator,
+    w_cantSplit_translator,
+    w_caps_translator,
+    w_cnfStyle_translator,
+    w_color_translator,
+    w_contextualSpacing,
+    w_del_translator,
+    w_divId_translator,
+    w_drawing_translator,
+    w_dstrike_translator,
+    w_end_translator,
+    w_framePr_translator,
+    w_gridAfter_translator,
+    w_gridBefore_translator,
+    w_gridCol_translator,
+    w_gridSpan_translator,
+    w_header_translator,
+    w_headers_translator,
+    w_hidden_translator,
+    w_hideMark_translator,
+    w_highlight_translator,
+    w_hyperlink_translator,
+    w_i_translator,
+    w_ilvl_translator,
+    w_ind_translator,
+    w_ins_translator,
+    w_insideH_translator,
+    w_insideV_translator,
+    w_jc_translator,
+    w_keepLines_translator,
+    w_keepNext_translator,
+    w_kinsoku_translator,
+    w_lang_translator,
+    w_left_translator,
+    w_mirrorIndents_translator,
+    w_noWrap_translator,
+    w_numId_translator,
+    w_numPr_translator,
+    w_outlineLvl_translator,
+    w_overflowPunct,
+    w_p_translator,
+    w_pageBreakBefore_translator,
+    w_pBdr_translator,
+    w_pPr_translator,
+    w_pStyle_translator,
+    w_r_translator,
+    w_rFonts_translator,
+    w_rPr_translator,
+    w_rStyle_translator,
+    w_right_translator,
+    w_sdt_translator,
+    w_shd_translator,
+    w_snapToGrid_translator,
+    w_spacing_translator,
+    w_suppressAutoHyphens_translator,
+    w_suppressLineNumbers_translator,
+    w_suppressOverlap_translator,
+    w_start_translator,
+    w_strike_translator,
+    w_sz_translator,
+    w_szCs_translator,
+    w_t_translator,
+    w_tab_translator,
+    w_tabs_translator,
+    w_tbl_translator,
+    w_tblBorders_translator,
+    w_tblCaption_translator,
+    w_tblCellMar_translator,
+    w_tblCellSpacing_translator,
+    w_tblDescription_translator,
+    w_tblGrid_translator,
+    w_tblHeader_translator,
+    w_tblInd_translator,
+    w_tblLayout_translator,
+    w_tblLook_translator,
+    w_tblOverlap_translator,
+    w_tblPr_translator,
+    w_tblStyle_translator,
+    w_tblStyleColBandSize_translator,
+    w_tblStyleRowBandSize_translator,
+    w_tblW_translator,
+    w_tblpPr_translator,
+    w_tc_translator,
+    w_tcBorders_translator,
+    w_tcFitText_translator,
+    w_tcMar_translator,
+    w_tcPr_translator,
+    w_tcW_translator,
+    w_textDirection_translator,
+    w_tl2br_translator,
+    w_tr_translator,
+    w_tr2bl_translator,
+    w_trHeight_translator,
+    w_trPr_translator,
+    w_textAlignment_translator,
+    w_textBoxTightWrap_translator,
+    w_topLinePunct_translator,
+    w_top_translator,
+    w_u_translator,
+    w_vAlign_translator,
+    w_vMerge_translator,
+    w_wAfter_translator,
+    w_wBefore_translator,
+    w_widowControl_translator,
+    w_wordWrap_translator,
+    wp_anchor_translator,
+    wp_inline_translator,
+    w_commentRangeStart_translator,
+    w_commentRangeEnd_translator,
+  ]),
+);
+
+const additionalHandlers = Object.freeze(
+  translatorList.reduce((acc, translator) => {
+    const key = translator?.xmlName;
+    if (!key) return acc;
+    acc[key] = translator;
+    return acc;
+  }, {}),
+);
 
 const baseHandlers = {
   ...additionalHandlers,

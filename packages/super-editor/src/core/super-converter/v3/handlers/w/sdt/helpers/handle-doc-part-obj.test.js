@@ -1,6 +1,34 @@
-// @ts-check
-import { describe, it, expect, vi } from 'vitest';
-import { handleDocPartObj, tableOfContentsHandler } from './handle-doc-part-obj.js';
+import { describe, it, expect } from 'vitest';
+import { normalizeDocPartContent, handleDocPartObj, tableOfContentsHandler } from './handle-doc-part-obj.js';
+
+describe('normalizeDocPartContent', () => {
+  it('wraps inline bookmark nodes in paragraphs', () => {
+    const nodes = [
+      { type: 'bookmarkStart', attrs: { name: 'bm1' } },
+      { type: 'bookmarkEnd', attrs: { name: 'bm1' } },
+    ];
+    const normalized = normalizeDocPartContent(nodes);
+    expect(normalized).toEqual([
+      { type: 'paragraph', content: [nodes[0]] },
+      { type: 'paragraph', content: [nodes[1]] },
+    ]);
+  });
+
+  it('leaves existing block nodes untouched', () => {
+    const nodes = [{ type: 'paragraph', content: [{ type: 'text', text: 'hello' }] }];
+    const normalized = normalizeDocPartContent(nodes);
+    expect(normalized).toEqual(nodes);
+  });
+
+  it('mixes block nodes and wrapped inline nodes', () => {
+    const nodes = [
+      { type: 'paragraph', content: [{ type: 'text', text: 'before' }] },
+      { type: 'bookmarkStart', attrs: { name: 'bm1' } },
+    ];
+    const normalized = normalizeDocPartContent(nodes);
+    expect(normalized).toEqual([nodes[0], { type: 'paragraph', content: [nodes[1]] }]);
+  });
+});
 
 describe('handleDocPartObj', () => {
   const mockNodeListHandler = {
