@@ -32,15 +32,10 @@ describe('superdoc_table_tester import/export', () => {
 
     const paragraph = firstCell.content.find((child) => child.type === 'paragraph');
     expect(paragraph).toBeDefined();
-    expect(paragraph.attrs.spacing).toEqual({
-      line: null,
-      lineRule: 'auto',
-      after: null,
-      before: null,
-    });
+    expect(paragraph.attrs.paragraphProperties?.spacing).toBeUndefined();
   });
 
-  it('round-trips table margins and omits spacing when exporting', async () => {
+  it('round-trips table margins and preserves spacing from style when exporting', async () => {
     const exportResult = await getExportedResult(TEST_DOC);
     const body = exportResult.elements.find((el) => el.name === 'w:body');
     const tbl = body?.elements?.find((el) => el.name === 'w:tbl');
@@ -69,6 +64,7 @@ describe('superdoc_table_tester import/export', () => {
     const firstParagraph = firstTc?.elements?.find((el) => el.name === 'w:p');
     const pPr = firstParagraph?.elements?.find((el) => el.name === 'w:pPr');
     const spacing = pPr?.elements?.find((el) => el.name === 'w:spacing');
+    // Inside table cells we now drop doc-default spacing unless explicitly set
     expect(spacing).toBeUndefined();
   });
 });

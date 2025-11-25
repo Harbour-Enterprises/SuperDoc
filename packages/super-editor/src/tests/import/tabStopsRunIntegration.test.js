@@ -129,7 +129,7 @@ describe('tab stop import with run translator', () => {
 
     const firstChildTypes = node.content.map((child) => child.content?.[0]?.type);
     expect(firstChildTypes).toEqual(['text', 'tab', 'text', 'tab', 'text']);
-    expect(node.attrs.tabStops).toEqual([
+    expect(node.attrs.paragraphProperties?.tabStops).toEqual([
       { tab: { tabType: 'left', pos: 1440 } },
       { tab: { tabType: 'center', pos: 2880 } },
     ]);

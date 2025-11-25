@@ -68,6 +68,7 @@ export class Schema {
         code: callOrGet(getExtensionConfigField(extension, 'code', context)),
         defining: callOrGet(getExtensionConfigField(extension, 'defining', context)),
         isolating: callOrGet(getExtensionConfigField(extension, 'isolating', context)),
+        summary: getExtensionConfigField(extension, 'summary', context),
         attrs,
         ...additionalNodeFields,
       });

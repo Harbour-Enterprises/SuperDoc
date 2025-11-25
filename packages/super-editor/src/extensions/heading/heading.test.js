@@ -34,7 +34,7 @@ describe('Heading Extension', () => {
         const result = editor.commands.setHeading({ level: 1 });
 
         expect(result).toBe(true);
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe('Heading1');
+        expect(editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId).toBe('Heading1');
       });
 
       it('should not set heading style for an invalid level', () => {
@@ -42,7 +42,8 @@ describe('Heading Extension', () => {
         const result = editor.commands.setHeading({ level: 7 });
 
         expect(result).toBe(false);
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe(null);
+        const styleId = editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId ?? null;
+        expect(styleId).toBeNull();
       });
 
       it('should set heading style for another valid level', () => {
@@ -50,7 +51,7 @@ describe('Heading Extension', () => {
         const result = editor.commands.setHeading({ level: 2 });
 
         expect(result).toBe(true);
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe('Heading2');
+        expect(editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId).toBe('Heading2');
       });
     });
 
@@ -60,7 +61,8 @@ describe('Heading Extension', () => {
         const result = editor.commands.toggleHeading({ level: 1 });
 
         expect(result).toBe(false);
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe(null);
+        const styleId = editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId ?? null;
+        expect(styleId).toBeNull();
       });
 
       it('should toggle heading on for a paragraph', () => {
@@ -68,21 +70,22 @@ describe('Heading Extension', () => {
         const result = editor.commands.toggleHeading({ level: 1 });
 
         expect(result).toBe(true);
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe('Heading1');
+        expect(editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId).toBe('Heading1');
       });
 
       it('should toggle heading off for a heading', () => {
         // First, set it to a heading
         editor.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, 1, 16))); // Select "First paragraph"
         editor.commands.setHeading({ level: 1 });
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe('Heading1');
+        expect(editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId).toBe('Heading1');
 
         // Then toggle it
         editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.tr.doc, 1, 16))); // Re-select
         const result = editor.commands.toggleHeading({ level: 1 });
 
         expect(result).toBe(true);
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe(null);
+        const styleId = editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId ?? null;
+        expect(styleId).toBeNull();
       });
 
       it('should not toggle heading for an invalid level', () => {
@@ -90,21 +93,22 @@ describe('Heading Extension', () => {
         const result = editor.commands.toggleHeading({ level: 7 });
 
         expect(result).toBe(false);
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe(null);
+        const styleId = editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId ?? null;
+        expect(styleId).toBeNull();
       });
 
       it('should switch to a different heading level when another heading is active', () => {
         // First, set it to a heading
         editor.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, 1, 16))); // Select "First paragraph"
         editor.commands.setHeading({ level: 1 });
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe('Heading1');
+        expect(editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId).toBe('Heading1');
 
         // Then toggle to another heading level
         editor.view.dispatch(editor.view.state.tr.setSelection(TextSelection.create(editor.view.state.tr.doc, 1, 16))); // Re-select
         const result = editor.commands.toggleHeading({ level: 2 });
 
         expect(result).toBe(true);
-        expect(editor.state.doc.content.content[0].attrs.styleId).toBe('Heading2');
+        expect(editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId).toBe('Heading2');
       });
     });
   });
@@ -119,7 +123,7 @@ describe('Heading Extension', () => {
     it('should toggle heading when shortcut is triggered', () => {
       editor.view.dispatch(tr.setSelection(TextSelection.create(tr.doc, 1, 16))); // Select "First paragraph"
       keymaps['Mod-Alt-1']();
-      expect(editor.state.doc.content.content[0].attrs.styleId).toBe('Heading1');
+      expect(editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId).toBe('Heading1');
     });
   });
 });

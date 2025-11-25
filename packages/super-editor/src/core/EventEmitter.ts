@@ -1,11 +1,16 @@
 /**
  * Default event map with string keys and any arguments.
+ * Using `any[]` is necessary here to allow flexible event argument types
+ * while maintaining type safety through generic constraints in EventEmitter.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type DefaultEventMap = Record<string, any[]>;
 
 /**
  * Event callback function type.
+ * Using `any[]` default is necessary for variance and compatibility with event handlers.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type EventCallback<Args extends any[] = any[]> = (...args: Args) => void;
 
 /**
@@ -52,10 +57,7 @@ export class EventEmitter<EventMap extends DefaultEventMap = DefaultEventMap> {
     const callbacks = this.#events.get(name);
     if (!callbacks) return;
     if (fn) {
-      this.#events.set(
-        name,
-        callbacks.filter((cb) => cb !== fn) as EventCallback[]
-      );
+      this.#events.set(name, callbacks.filter((cb) => cb !== fn) as EventCallback[]);
     } else {
       this.#events.delete(name);
     }

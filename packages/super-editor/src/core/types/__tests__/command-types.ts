@@ -1,17 +1,13 @@
 import type { ExtensionCommandMap } from '@core/types/ChainedCommands.js';
 
 type ExpectTrue<T extends true> = T;
-type Equal<A, B> = (<U>() => U extends A ? 1 : 2) extends (<U>() => U extends B ? 1 : 2) ? true : false;
+type Equal<A, B> = (<U>() => U extends A ? 1 : 2) extends <U>() => U extends B ? 1 : 2 ? true : false;
 
 type SearchReturn = ReturnType<ExtensionCommandMap['search']>;
-type AssertSearchReturn = ExpectTrue<
-  Equal<SearchReturn, { id: string; from: number; to: number; text: string }[]>
->;
+type AssertSearchReturn = ExpectTrue<Equal<SearchReturn, { id: string; from: number; to: number; text: string }[]>>;
 
 type InsertBookmarkArgs = Parameters<ExtensionCommandMap['insertBookmark']>[0];
-type AssertBookmarkArgs = ExpectTrue<
-  Equal<InsertBookmarkArgs, { name: string; id?: string | null }>
->;
+type AssertBookmarkArgs = ExpectTrue<Equal<InsertBookmarkArgs, { name: string; id?: string | null }>>;
 
 type SetHeadingArgs = Parameters<ExtensionCommandMap['setHeading']>[0];
 type AssertHeadingArgs = ExpectTrue<Equal<SetHeadingArgs, { level: number }>>;
@@ -32,9 +28,8 @@ type AssertStructuredTableArgs = ExpectTrue<
   >
 >;
 
-type SearchResultCheck = SearchReturn extends Array<{ id: string; from: number; to: number; text: string }>
-  ? true
-  : false;
+type SearchResultCheck =
+  SearchReturn extends Array<{ id: string; from: number; to: number; text: string }> ? true : false;
 type AssertSearchShape = ExpectTrue<SearchResultCheck>;
 
 void (0 as unknown as AssertSearchReturn);

@@ -2,6 +2,7 @@
 import { Mark, Attribute } from '@core/index.js';
 import { getMarkRange } from '@core/helpers/getMarkRange.js';
 import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
+import { sanitizeHref, encodeTooltip, UrlValidationConstants } from '@superdoc/url-validation';
 
 /**
  * Target frame options
@@ -72,10 +73,10 @@ export const Link = Mark.create({
   },
 
   renderDOM({ htmlAttributes }) {
-    if (!isAllowedUri(htmlAttributes.href, this.options.protocols)) {
-      return ['a', Attribute.mergeAttributes(this.options.htmlAttributes, { ...htmlAttributes, href: '' }), 0];
-    }
-    return ['a', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+    const sanitizedHref = sanitizeLinkHref(htmlAttributes.href, this.options.protocols);
+    const attrs = { ...htmlAttributes };
+    attrs.href = sanitizedHref ? sanitizedHref.href : '';
+    return ['a', Attribute.mergeAttributes(this.options.htmlAttributes, attrs), 0];
   },
 
   addAttributes() {
@@ -87,8 +88,9 @@ export const Link = Mark.create({
       href: {
         default: null,
         renderDOM: ({ href, name }) => {
-          if (href && isAllowedUri(href, this.options.protocols)) return { href };
-          else if (name) return { href: `#${name}` };
+          const sanitized = sanitizeLinkHref(href, this.options.protocols);
+          if (sanitized) return { href: sanitized.href };
+          if (name) return { href: `#${name}` };
           return {};
         },
       },
@@ -100,7 +102,8 @@ export const Link = Mark.create({
         default: this.options.htmlAttributes.target,
         renderDOM: ({ target, href }) => {
           if (target) return { target };
-          else if (href && !href.startsWith('#')) return { target: '_blank' };
+          const sanitized = sanitizeLinkHref(href, this.options.protocols);
+          if (sanitized && sanitized.isExternal) return { target: '_blank' };
           return {};
         },
       },
@@ -147,7 +150,15 @@ export const Link = Mark.create({
       tooltip: {
         default: null,
         renderDOM: ({ tooltip }) => {
-          if (tooltip) return { title: tooltip };
+          const result = encodeTooltip(tooltip);
+          if (result) {
+            // Use raw text - browser will escape when setting attribute
+            const attrs = { title: result.text };
+            if (result.wasTruncated) {
+              attrs['data-link-tooltip-truncated'] = 'true';
+            }
+            return attrs;
+          }
           return {};
         },
       },
@@ -175,6 +186,11 @@ export const Link = Mark.create({
           const linkMarkType = editor.schema.marks.link;
           const underlineMarkType = editor.schema.marks.underline;
 
+          const sanitizedHref = href ? sanitizeLinkHref(href, this.options.protocols) : null;
+          if (href && !sanitizedHref) {
+            return false;
+          }
+
           let from = selection.from;
           let to = selection.to;
 
@@ -200,7 +216,8 @@ export const Link = Mark.create({
 
           const currentText = state.doc.textBetween(from, to);
           const computedText = text ?? currentText;
-          const finalText = computedText && computedText.length > 0 ? computedText : href || '';
+          const fallbackHref = sanitizedHref?.href ?? '';
+          const finalText = computedText && computedText.length > 0 ? computedText : fallbackHref;
           let tr = state.tr;
 
           if (finalText && currentText !== finalText) {
@@ -219,7 +236,12 @@ export const Link = Mark.create({
             if (id) rId = id;
           }
 
-          const newLinkMarkType = linkMarkType.create({ href, text: finalText, rId });
+          const linkAttrs = { text: finalText, rId };
+          if (sanitizedHref?.href) {
+            linkAttrs.href = sanitizedHref.href;
+          }
+
+          const newLinkMarkType = linkMarkType.create(linkAttrs);
           tr = tr.addMark(from, to, newLinkMarkType);
 
           dispatch(tr.scrollIntoView());
@@ -262,31 +284,54 @@ export const Link = Mark.create({
 });
 
 /**
- * Validate URI against allowed protocols
+ * Normalize protocol values into a consistent array format.
+ *
+ * Converts protocol configuration (string or object format) into a normalized
+ * array of lowercase protocol strings, filtering out invalid entries.
+ *
  * @private
- * @param {string} uri - URI to validate
- * @param {string[]} protocols - Allowed protocols
- * @returns {boolean} Whether URI is allowed
+ * @param {Array<string | {scheme: string}>} [protocols=[]] - Protocol configurations
+ * @returns {string[]} Array of normalized lowercase protocol strings
+ * @example
+ * normalizeProtocols(['HTTP', { scheme: 'FTP' }]) // Returns: ['http', 'ftp']
  */
-const ATTR_WHITESPACE = /[\u0000-\u0020\u00A0\u1680\u180E\u2000-\u2029\u205F\u3000]/g;
-function isAllowedUri(uri, protocols) {
-  const allowedProtocols = ['http', 'https', 'mailto'];
+function normalizeProtocols(protocols = []) {
+  const result = [];
+  protocols.forEach((protocol) => {
+    if (!protocol) return;
+    if (typeof protocol === 'string' && protocol.trim()) {
+      result.push(protocol.trim().toLowerCase());
+    } else if (typeof protocol === 'object' && typeof protocol.scheme === 'string' && protocol.scheme.trim()) {
+      result.push(protocol.scheme.trim().toLowerCase());
+    }
+  });
+  return result;
+}
 
-  if (protocols) {
-    protocols.forEach((protocol) => {
-      const nextProtocol = typeof protocol === 'string' ? protocol : protocol.scheme;
-      if (nextProtocol) {
-        allowedProtocols.push(nextProtocol);
-      }
-    });
-  }
+/**
+ * Sanitize a link href using the url-validation package.
+ *
+ * Wraps the external sanitizeHref function with protocol merging logic,
+ * combining default allowed protocols with custom protocols from configuration.
+ *
+ * @private
+ * @param {string | null | undefined} href - URL string to sanitize
+ * @param {Array<string | {scheme: string}>} [protocols] - Additional protocols to allow
+ * @returns {import('@superdoc/url-validation').SanitizedLink | null} Sanitized link object or null
+ * @example
+ * sanitizeLinkHref('https://example.com', ['ftp'])
+ * // Returns: { href: 'https://example.com', protocol: 'https', isExternal: true }
+ */
+function sanitizeLinkHref(href, protocols) {
+  if (!href) return null;
 
-  return (
-    !uri ||
-    uri
-      .replace(ATTR_WHITESPACE, '')
-      .match(new RegExp(`^(?:(?:${allowedProtocols.join('|')}):|[^a-z]|[a-z+.-]+(?:[^a-z+.-:]|$))`, 'i'))
+  // Validate protocols is array-like before processing
+  const normalizedProtocols = Array.isArray(protocols) ? normalizeProtocols(protocols) : [];
+
+  const allowedProtocols = Array.from(
+    new Set([...UrlValidationConstants.DEFAULT_ALLOWED_PROTOCOLS, ...normalizedProtocols]),
   );
+  return sanitizeHref(href, { allowedProtocols });
 }
 
 /**

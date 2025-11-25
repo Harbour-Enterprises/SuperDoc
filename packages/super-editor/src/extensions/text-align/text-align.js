@@ -5,16 +5,8 @@ import { Extension } from '@core/index.js';
  * Configuration options for TextAlign
  * @typedef {Object} TextAlignOptions
  * @category Options
- * @property {string[]} [types=['heading', 'paragraph']] - Node types to apply alignment to
  * @property {string[]} [alignments=['left', 'center', 'right', 'justify']] - Available alignment options
  * @property {string} [defaultAlignment='left'] - Default text alignment
- */
-
-/**
- * Attributes for text alignment
- * @typedef {Object} TextAlignAttributes
- * @category Attributes
- * @property {string} [textAlign='left'] - Text alignment value (left, center, right, justify)
  */
 
 /**
@@ -31,37 +23,8 @@ export const TextAlign = Extension.create({
 
   addOptions() {
     return {
-      types: ['heading', 'paragraph'],
       alignments: ['left', 'center', 'right', 'justify'],
     };
-  },
-
-  addGlobalAttributes() {
-    return [
-      {
-        types: this.options.types,
-        attributes: {
-          /**
-           * @category Attribute
-           * @param {string} [textAlign='left'] - Text alignment value (left, center, right, justify)
-           */
-          textAlign: {
-            default: this.options.defaultAlignment,
-            parseDOM: (el) => {
-              const alignment = el.style.textAlign || this.options.defaultAlignment;
-              const containsAlignment = this.options.alignments.includes(alignment);
-              return containsAlignment ? alignment : this.options.defaultAlignment;
-            },
-            renderDOM: (attrs) => {
-              if (attrs.textAlign === this.options.defaultAlignment) return {};
-              const textAlign = attrs.textAlign === 'both' ? 'justify' : attrs.textAlign;
-              if (!textAlign) return {};
-              return { style: `text-align: ${textAlign}` };
-            },
-          },
-        },
-      },
-    ];
   },
 
   addCommands() {
@@ -73,7 +36,6 @@ export const TextAlign = Extension.create({
        * @example
        * editor.commands.setTextAlign('center')
        * editor.commands.setTextAlign('justify')
-       * @note Applies to all configured node types (heading, paragraph by default)
        */
       setTextAlign:
         (alignment) =>
@@ -81,9 +43,7 @@ export const TextAlign = Extension.create({
           const containsAlignment = this.options.alignments.includes(alignment);
           if (!containsAlignment) return false;
 
-          return this.options.types
-            .map((type) => commands.updateAttributes(type, { textAlign: alignment }))
-            .every((result) => result);
+          return commands.updateAttributes('paragraph', { 'paragraphProperties.justification': alignment });
         },
 
       /**
@@ -95,11 +55,8 @@ export const TextAlign = Extension.create({
        */
       unsetTextAlign:
         () =>
-        ({ commands }) => {
-          return this.options.types
-            .map((type) => commands.resetAttributes(type, 'textAlign'))
-            .every((result) => result);
-        },
+        ({ commands }) =>
+          commands.resetAttributes('paragraph', 'paragraphProperties.justification'),
     };
   },
 

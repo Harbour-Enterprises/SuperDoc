@@ -231,7 +231,9 @@ describe('stepInsertsTextIntoStyledParagraph', () => {
         paragraph: {
           content: 'inline*',
           group: 'block',
-          attrs: { styleId: { default: null } },
+          attrs: {
+            paragraphProperties: { default: {} },
+          },
         },
         text: { group: 'inline' },
       },
@@ -239,7 +241,10 @@ describe('stepInsertsTextIntoStyledParagraph', () => {
     });
 
   const createDoc = (schema, styleId) => {
-    const paragraph = schema.nodes.paragraph.create({ styleId }, schema.text('Existing text'));
+    const paragraph = schema.nodes.paragraph.create(
+      { paragraphProperties: styleId ? { styleId } : {} },
+      schema.text('Existing text'),
+    );
     return schema.nodes.doc.create(null, [paragraph]);
   };
 

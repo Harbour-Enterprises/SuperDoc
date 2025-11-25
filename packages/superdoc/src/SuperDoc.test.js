@@ -10,6 +10,9 @@ import { CommentMarkName } from '../../super-editor/src/extensions/comment/comme
 
 const isRef = (value) => value && typeof value === 'object' && 'value' in value;
 
+// Mock state for PresentationEditor
+const mockState = { instances: new Map() };
+
 vi.mock('pinia', async () => {
   const actual = await vi.importActual('pinia');
   return {
@@ -98,9 +101,21 @@ const AiLayerStub = stubComponent('AiLayer');
 const PdfViewerStub = stubComponent('PdfViewer');
 const HtmlViewerStub = stubComponent('HtmlViewer');
 
+// Mock @harbour-enterprises/super-editor with stubs and PresentationEditor class
 vi.mock('@harbour-enterprises/super-editor', () => ({
   SuperEditor: SuperEditorStub,
   AIWriter: AIWriterStub,
+  PresentationEditor: class PresentationEditorMock {
+    static getInstance(documentId) {
+      return mockState.instances.get(documentId);
+    }
+
+    static setGlobalZoom(zoom) {
+      mockState.instances.forEach((instance) => {
+        instance?.setZoom?.(zoom);
+      });
+    }
+  },
 }));
 
 vi.mock('./components/PdfViewer/PdfViewer.vue', () => ({
@@ -248,12 +263,12 @@ const createSuperdocStub = () => {
   return {
     config: {
       modules: { comments: {}, ai: {}, toolbar: {}, pdf: {} },
-      pagination: false,
       isDebug: false,
       documentMode: 'editing',
       role: 'editor',
       suppressDefaultDocxStyles: false,
       disableContextMenu: false,
+      layoutEngineOptions: {},
     },
     activeEditor: null,
     toolbar,
@@ -267,6 +282,8 @@ const createSuperdocStub = () => {
     lockSuperdoc: vi.fn(),
     emit: vi.fn(),
     listeners: vi.fn(),
+    captureLayoutPipelineEvent: vi.fn(),
+    canPerformPermission: vi.fn(() => true),
   };
 };
 
@@ -335,6 +352,19 @@ describe('SuperDoc.vue', () => {
     useSelectionMock.mockClear();
     useAiMock.mockClear();
     useSelectedTextMock.mockClear();
+    mockState.instances.clear();
+
+    // Set up default mock presentation editor instances for common document IDs
+    const mockPresentationEditor = {
+      getSelectionBounds: vi.fn(() => null),
+      getCommentBounds: vi.fn((positions) => positions),
+      getRangeRects: vi.fn(() => []),
+      getPages: vi.fn(() => []),
+      getLayoutError: vi.fn(() => null),
+      setZoom: vi.fn(),
+    };
+    mockState.instances.set('doc-1', mockPresentationEditor);
+
     if (!window.matchMedia) {
       window.matchMedia = vi.fn().mockReturnValue({
         matches: false,
@@ -561,4 +591,8 @@ describe('SuperDoc.vue', () => {
     expect(wrapper.vm.showCommentsSidebar).toBe(true);
     expect(wrapper.find('.floating-comments').exists()).toBe(true);
   });
+
+  // Note: The handlePresentationEditorReady test was removed because that function
+  // no longer exists. PresentationEditor now registers itself automatically in the
+  // constructor and manages zoom/layout data internally.
 });

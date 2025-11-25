@@ -1,3 +1,5 @@
+import type { Editor } from '../Editor.js';
+
 /**
  * A map of plugin names to their helper API objects.
  * Each plugin defines its own helper methods.
@@ -67,17 +69,14 @@ export interface TelemetryData {
  * Toolbar configuration
  */
 export interface Toolbar {
-  setActiveEditor?: (editor: any) => void;
+  setActiveEditor?: (editor: Editor) => void;
   [key: string]: unknown;
 }
 
 /**
  * Re-export commonly used types
  */
-export type {
-  OxmlNodeConfig,
-  OxmlNode,
-} from '../OxmlNode.js';
+export type { OxmlNodeConfig, OxmlNode } from '../OxmlNode.js';
 
 export type {
   User,

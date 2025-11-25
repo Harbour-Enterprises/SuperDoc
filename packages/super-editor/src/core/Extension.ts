@@ -7,7 +7,7 @@ import type { MaybeGetter } from './utilities/callOrGet.js';
  */
 export interface ExtensionConfig<
   Options extends Record<string, unknown> = Record<string, never>,
-  Storage extends Record<string, unknown> = Record<string, never>
+  Storage extends Record<string, unknown> = Record<string, never>,
 > {
   /** The unique name of the extension */
   name: string;
@@ -29,7 +29,7 @@ export interface ExtensionConfig<
  */
 export class Extension<
   Options extends Record<string, unknown> = Record<string, never>,
-  Storage extends Record<string, unknown> = Record<string, never>
+  Storage extends Record<string, unknown> = Record<string, never>,
 > {
   type = 'extension' as const;
 
@@ -43,8 +43,8 @@ export class Extension<
 
   constructor(config: ExtensionConfig<Options, Storage>) {
     this.config = {
-      name: this.name,
       ...config,
+      name: config.name || this.name,
     };
 
     this.name = this.config.name;
@@ -53,19 +53,18 @@ export class Extension<
       this.options = (callOrGet(
         getExtensionConfigField(this, 'addOptions', {
           name: this.name,
-        })
+        }),
       ) || {}) as Options;
     } else {
       this.options = {} as Options;
     }
 
-    this.storage =
-      (callOrGet(
-        getExtensionConfigField(this, 'addStorage', {
-          name: this.name,
-          options: this.options,
-        })
-      ) || {}) as Storage;
+    this.storage = (callOrGet(
+      getExtensionConfigField(this, 'addStorage', {
+        name: this.name,
+        options: this.options,
+      }),
+    ) || {}) as Storage;
   }
 
   /**
@@ -74,7 +73,7 @@ export class Extension<
    */
   static create<
     O extends Record<string, unknown> = Record<string, never>,
-    S extends Record<string, unknown> = Record<string, never>
+    S extends Record<string, unknown> = Record<string, never>,
   >(config: ExtensionConfig<O, S>): Extension<O, S> {
     return new Extension<O, S>(config);
   }

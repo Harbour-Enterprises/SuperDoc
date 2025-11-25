@@ -14,7 +14,7 @@ export const handleImageUpload = (file) => {
   return new Promise((resolve, reject) => {
     let reader = new FileReader();
     reader.onload = (event) => {
-      // @ts-ignore - readAsDataURL always returns string, not ArrayBuffer
+      // @ts-expect-error - readAsDataURL always returns string, not ArrayBuffer
       resolve(event.target.result);
     };
     reader.onerror = reject;

@@ -3,7 +3,6 @@ import 'superdoc/style.css';
 import { onMounted, onBeforeUnmount, shallowRef, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { SuperDoc } from 'superdoc';
-import { generateUser as generateUserFallback, USER_COLORS } from '../../shared/userGenerator.js';
 
 // Default document
 import sampleDocument from '/sample-document.docx?url';
@@ -17,13 +16,9 @@ const currentUser = ref(null);
 const generateUserInfo = async () => {
   const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3050';
   const apiUrl = wsUrl.replace('ws://', 'http://').replace('wss://', 'https://');
-  
-  try {
-    const response = await fetch(`${apiUrl}/user`);
-    return await response.json();
-  } catch (error) {
-    return generateUserFallback();
-  }
+
+  const response = await fetch(`${apiUrl}/user`);
+  return await response.json();
 };
 
 const handleImageUpload = (file) => {
@@ -124,7 +119,7 @@ const init = async () => {
       isNewFile: false,
     },
     pagination: true,
-    colors: USER_COLORS,
+    colors: ['#a11134', '#2a7e34', '#b29d11', '#2f4597', '#ab5b22'],
     user,
     modules: {
       collaboration: {

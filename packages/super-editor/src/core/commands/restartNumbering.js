@@ -2,6 +2,7 @@ import { findParentNode } from '@helpers/index.js';
 import { isList } from '@core/commands/list-helpers';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { updateNumberingProperties } from './changeListLevel.js';
+import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 
 export const restartNumbering = ({ editor, tr, state, dispatch }) => {
   // 1) Find the current list item
@@ -13,11 +14,12 @@ export const restartNumbering = ({ editor, tr, state, dispatch }) => {
   // 3) Find all consecutive list items of the same type following the current one
   const allParagraphs = [{ node: paragraph, pos }];
   const startPos = pos + paragraph.nodeSize;
-  const myNumId = paragraph.attrs.numberingProperties.numId;
+  const myNumId = getResolvedParagraphProperties(paragraph).numberingProperties.numId;
   let stop = false;
   state.doc.nodesBetween(startPos, state.doc.content.size, (node, nodePos) => {
     if (node.type.name === 'paragraph') {
-      if (isList(node) && node.attrs.paragraphProperties?.numberingProperties?.numId === myNumId) {
+      const paraProps = getResolvedParagraphProperties(node);
+      if (isList(node) && paraProps.numberingProperties?.numId === myNumId) {
         allParagraphs.push({ node, pos: nodePos });
       } else {
         stop = true;
@@ -35,9 +37,10 @@ export const restartNumbering = ({ editor, tr, state, dispatch }) => {
 
   // 5) Update numbering properties for all found paragraphs
   allParagraphs.forEach(({ node, pos }) => {
+    const paragraphProps = getResolvedParagraphProperties(node);
     updateNumberingProperties(
       {
-        ...node.attrs.numberingProperties,
+        ...(paragraphProps.numberingProperties || {}),
         numId: Number(numId),
       },
       node,

@@ -3,9 +3,13 @@ import { getItems } from '../menuItems.js';
 import { createMockEditor, createMockContext, assertMenuSectionsStructure, SlashMenuConfigs } from './testHelpers.js';
 import { TRIGGERS } from '../constants.js';
 
-vi.mock('../../cursor-helpers.js', () => ({
-  selectionHasNodeOrMark: vi.fn(),
-}));
+vi.mock('../../cursor-helpers.js', async () => {
+  const actual = await vi.importActual('../../cursor-helpers.js');
+  return {
+    ...actual,
+    selectionHasNodeOrMark: vi.fn(),
+  };
+});
 
 vi.mock('../constants.js', () => ({
   TEXTS: {
@@ -166,17 +170,24 @@ describe('menuItems.js', () => {
       expect(selectionBasedItems.length).toBeGreaterThanOrEqual(0);
     });
 
-    it('should filter clipboard items based on clipboard content', () => {
+    it('should always show paste item to avoid clipboard permission prompts', () => {
+      // After clipboard refactor, paste is always shown to avoid triggering
+      // browser permission prompts when menu opens. Clipboard reading is
+      // deferred to when user actually clicks the paste action.
       mockContext.clipboardContent.hasContent = false;
       const sections = getItems(mockContext);
 
       const clipboardSection = sections.find((s) => s.id === 'clipboard');
       const pasteItem = clipboardSection?.items.find((item) => item.id === 'paste');
 
-      expect(pasteItem).toBeUndefined();
+      // Paste is shown optimistically - actual clipboard state checked on click
+      expect(pasteItem).toBeDefined();
+      expect(pasteItem.id).toBe('paste');
     });
 
-    it('should include paste item when clipboard has content', () => {
+    it('should show paste item regardless of clipboard content state', () => {
+      // Paste shown for both empty and populated clipboard states
+      // to maintain consistent UX and avoid permission prompts
       mockContext.clipboardContent = {
         html: '<p>content</p>',
         text: 'content',
@@ -188,6 +199,7 @@ describe('menuItems.js', () => {
       const pasteItem = clipboardSection?.items.find((item) => item.id === 'paste');
 
       expect(pasteItem).toBeDefined();
+      expect(pasteItem.id).toBe('paste');
     });
 
     it('should keep paste item visible when clipboard is a ProseMirror slice', () => {

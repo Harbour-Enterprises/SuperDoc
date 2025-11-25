@@ -74,14 +74,24 @@ describe('TrackChangesImporter', () => {
       {
         name: 'w:del',
         attributes: { 'w:id': '1', 'w:date': '2023-10-01', 'w:author': 'Author' },
-        elements: [{ name: 'w:t', attributes: {}, elements: [{ text: 'This is a test text!' }] }],
+        elements: [
+          {
+            name: 'w:r',
+            attributes: {},
+            elements: [
+              { name: 'w:delText', attributes: {}, elements: [{ type: 'text', text: 'This is a test text!' }] },
+            ],
+          },
+        ],
       },
     ];
-    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+
+    const result = handleTrackChangeNode({ docx: {}, nodes, nodeListHandler: defaultNodeListHandler() });
+    console.log('result:', result.nodes[0].content[0]);
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
-    expect(result.nodes[0].marks[0].type).toBe(TrackDeleteMarkName);
-    expect(result.nodes[0].marks[0].attrs).toEqual({
+    expect(result.nodes[0].content[0].marks[0].type).toBe(TrackDeleteMarkName);
+    expect(result.nodes[0].content[0].marks[0].attrs).toEqual({
       id: '1',
       date: '2023-10-01',
       author: 'Author',
@@ -94,14 +104,20 @@ describe('TrackChangesImporter', () => {
       {
         name: 'w:ins',
         attributes: { 'w:id': '1', 'w:date': '2023-10-01', 'w:author': 'Author' },
-        elements: [{ name: 'w:t', attributes: {}, elements: [{ text: 'This is a test text!' }] }],
+        elements: [
+          {
+            name: 'w:r',
+            attributes: {},
+            elements: [{ name: 'w:t', attributes: {}, elements: [{ text: 'This is a test text!' }] }],
+          },
+        ],
       },
     ];
-    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+    const result = handleTrackChangeNode({ docx: {}, nodes, nodeListHandler: defaultNodeListHandler() });
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
-    expect(result.nodes[0].marks[0].type).toBe(TrackInsertMarkName);
-    expect(result.nodes[0].marks[0].attrs).toEqual({
+    expect(result.nodes[0].content[0].marks[0].type).toBe(TrackInsertMarkName);
+    expect(result.nodes[0].content[0].marks[0].attrs).toEqual({
       id: '1',
       date: '2023-10-01',
       author: 'Author',
@@ -123,7 +139,7 @@ describe('TrackChangesImporter', () => {
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
-    const mark = result.nodes[0].marks.find((item) => item.type === TrackInsertMarkName);
+    const mark = result.nodes[0].content[0].marks.find((item) => item.type === TrackInsertMarkName);
     expect(mark).toBeDefined();
     expect(mark.attrs).toEqual({
       id: '3',
@@ -148,9 +164,9 @@ describe('TrackChangesImporter', () => {
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
-    const mark = result.nodes[0].marks.find((item) => item.type === TrackDeleteMarkName);
+    const mark = result.nodes[0].content[0].marks.find((item) => item.type === TrackDeleteMarkName);
     expect(mark).toBeDefined();
-    expect(mark.attrs).toEqual({
+    expect(result.nodes[0].content[0].marks[0].attrs).toEqual({
       id: '4',
       date: '2024-09-05T11:12:00Z',
       author: 'Nested Author',
@@ -197,7 +213,7 @@ describe('trackChanges live xml test', () => {
     const nodes = parseXmlToJson(inserXml).elements;
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
-    const insertionMark = result.nodes[0].marks.find((mark) => mark.type === TrackInsertMarkName);
+    const insertionMark = result.nodes[0].content[0].marks.find((mark) => mark.type === TrackInsertMarkName);
     expect(insertionMark).toBeDefined();
     expect(insertionMark.attrs).toEqual({
       id: '0',
@@ -211,7 +227,7 @@ describe('trackChanges live xml test', () => {
     const nodes = parseXmlToJson(deleteXml).elements;
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
-    const deletionMark = result.nodes[0].marks.find((mark) => mark.type === TrackDeleteMarkName);
+    const deletionMark = result.nodes[0].content[0].marks.find((mark) => mark.type === TrackDeleteMarkName);
     expect(deletionMark).toBeDefined();
     expect(deletionMark.attrs).toEqual({
       id: '1',

@@ -1,16 +1,18 @@
 <script setup>
 import { NSkeleton, useMessage } from 'naive-ui';
 import 'tippy.js/dist/tippy.css';
-import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw } from 'vue';
+import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw, computed, watch } from 'vue';
 import { Editor } from '@/index.js';
+import { PresentationEditor } from '@/core/PresentationEditor.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import SlashMenu from './slash-menu/SlashMenu.vue';
-import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
 import Ruler from './rulers/Ruler.vue';
 import GenericPopover from './popovers/GenericPopover.vue';
 import LinkInput from './toolbar/LinkInput.vue';
+import TableResizeOverlay from './TableResizeOverlay.vue';
 import { checkNodeSpecificClicks } from './cursor-helpers.js';
+import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { getFileObject } from '@superdoc/common';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 import { isHeadless } from '@/utils/headless-helpers.js';
@@ -43,6 +45,17 @@ const props = defineProps({
 
 const editorReady = ref(false);
 const editor = shallowRef(null);
+const activeEditor = computed(() => {
+  if (editor.value && 'editor' in editor.value && editor.value.editor) {
+    return editor.value.editor;
+  }
+  return editor.value;
+});
+
+const contextMenuDisabled = computed(() => {
+  const active = activeEditor.value;
+  return active?.options ? Boolean(active.options.disableContextMenu) : Boolean(props.options.disableContextMenu);
+});
 const message = useMessage();
 
 const editorWrapper = ref(null);
@@ -64,7 +77,7 @@ const closePopover = () => {
   popoverControls.visible = false;
   popoverControls.component = null;
   popoverControls.props = {};
-  editor.value.view.focus();
+  activeEditor.value?.view?.focus();
 };
 
 const openPopover = (component, props, position) => {
@@ -72,6 +85,51 @@ const openPopover = (component, props, position) => {
   popoverControls.props = props;
   popoverControls.position = position;
   popoverControls.visible = true;
+};
+
+/**
+ * Table resize overlay state management
+ */
+const tableResizeState = reactive({
+  visible: false,
+  tableElement: null,
+});
+
+/**
+ * Update table resize overlay visibility based on mouse position
+ * Shows overlay when hovering over tables with data-table-boundaries attribute
+ */
+const updateTableResizeOverlay = (event) => {
+  if (!editorElem.value) return;
+
+  let target = event.target;
+  // Walk up DOM tree to find table fragment or overlay
+  while (target && target !== editorElem.value) {
+    // Check if we're over the table resize overlay itself
+    if (target.classList?.contains('superdoc-table-resize-overlay')) {
+      // Keep overlay visible, don't change tableElement
+      return;
+    }
+
+    if (target.classList?.contains('superdoc-table-fragment') && target.hasAttribute('data-table-boundaries')) {
+      tableResizeState.visible = true;
+      tableResizeState.tableElement = target;
+      return;
+    }
+    target = target.parentElement;
+  }
+
+  // No table or overlay found - hide overlay
+  tableResizeState.visible = false;
+  tableResizeState.tableElement = null;
+};
+
+/**
+ * Hide table resize overlay (on mouse leave)
+ */
+const hideTableResizeOverlay = () => {
+  tableResizeState.visible = false;
+  tableResizeState.tableElement = null;
 };
 
 let dataPollTimeout;
@@ -89,8 +147,7 @@ const pollForMetaMapData = (ydoc, retries = 10, interval = 500) => {
       stopPolling();
       initEditor({ content: docx });
     } else if (retries > 0) {
-      console.debug(`Waiting for 'docx' data... retries left: ${retries}`);
-      dataPollTimeout = setTimeout(checkData, interval); // Retry after the interval
+      dataPollTimeout = setTimeout(checkData, interval);
       retries--;
     } else {
       console.warn('Failed to load docx data from meta map.');
@@ -150,32 +207,34 @@ const initializeData = async () => {
   }
 };
 
-const getExtensions = () => {
-  const extensions = getStarterExtensions();
-  if (!props.options.pagination) {
-    return extensions.filter((ext) => ext.name !== 'pagination');
-  }
-  return extensions;
-};
+const getExtensions = () => getStarterExtensions();
 
 const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } = {}) => {
-  editor.value = new Editor({
+  const { editorCtor, ...editorOptions } = props.options || {};
+  const EditorCtor = editorCtor ?? Editor;
+  editor.value = new EditorCtor({
     mode: 'docx',
     element: editorElem.value,
     fileSource: fileSource.value,
     extensions: getExtensions(),
-    externalExtensions: props.options.externalExtensions,
     documentId: props.documentId,
     content,
     media,
     mediaFiles,
     fonts,
-    ...props.options,
+    ...editorOptions,
+  });
+
+  emit('editor-ready', {
+    editor: activeEditor.value,
+    presentationEditor: editor.value instanceof PresentationEditor ? editor.value : null,
   });
 
   editor.value.on('paginationUpdate', () => {
-    if (isHeadless(editor.value)) return;
-    adjustPaginationBreaks(editorElem, editor);
+    const base = activeEditor.value;
+    if (isHeadless(base)) return;
+    const paginationTarget = editor.value?.editor ? { value: base } : editor;
+    adjustPaginationBreaks(editorElem, paginationTarget);
   });
 
   editor.value.on('collaborationReady', () => {
@@ -206,9 +265,10 @@ const handleSuperEditorKeydown = (event) => {
   ) {
     event.preventDefault();
 
-    if (!editor.value) return;
+    const base = activeEditor.value;
+    if (!base) return;
 
-    const view = editor.value.view;
+    const view = base.view;
     const { state } = view;
 
     // Compute cursor position relative to the super-editor container
@@ -224,29 +284,30 @@ const handleSuperEditorKeydown = (event) => {
     openPopover(markRaw(LinkInput), {}, { left, top });
   }
 
-  emit('editor-keydown', { editor: editor.value });
+  emit('editor-keydown', { editor: activeEditor.value });
 };
 
 const handleSuperEditorClick = (event) => {
-  emit('editor-click', { editor: editor.value });
+  emit('editor-click', { editor: activeEditor.value });
   let pmElement = editorElem.value?.querySelector('.ProseMirror');
 
-  if (!pmElement || !editor.value) {
+  const base = activeEditor.value;
+  if (!pmElement || !base) {
     return;
   }
 
   let isInsideEditor = pmElement.contains(event.target);
 
-  if (!isInsideEditor && editor.value.isEditable) {
-    editor.value.view?.focus();
+  if (!isInsideEditor && base.isEditable) {
+    base.view?.focus();
   }
 
-  // Add logic here to handle a click in the editor
-  // Get the node at the click position and check if it has a node in the parent tree
-  // example: hasParentNode(node, 'p')
-  if (isInsideEditor && editor.value.isEditable) {
-    checkNodeSpecificClicks(editor.value, event, popoverControls);
+  if (isInsideEditor && base.isEditable) {
+    checkNodeSpecificClicks(base, event, popoverControls);
   }
+
+  // Update table resize overlay on click
+  updateTableResizeOverlay(event);
 };
 
 onMounted(() => {
@@ -257,7 +318,7 @@ onMounted(() => {
 const handleMarginClick = (event) => {
   if (event.target.classList.contains('ProseMirror')) return;
 
-  onMarginClickCursorChange(event, editor.value);
+  onMarginClickCursorChange(event, activeEditor.value);
 };
 
 /**
@@ -269,12 +330,13 @@ const handleMarginClick = (event) => {
  * @returns {void}
  */
 const handleMarginChange = ({ side, value }) => {
-  if (!editor.value) return;
+  const base = activeEditor.value;
+  if (!base) return;
 
-  const pageStyles = editor.value.getPageStyles();
+  const pageStyles = base.getPageStyles();
   const { pageMargins } = pageStyles;
   const update = { ...pageMargins, [side]: value };
-  editor.value?.updatePageStyle({ pageMargins: update });
+  base?.updatePageStyle({ pageMargins: update });
 };
 
 onBeforeUnmount(() => {
@@ -286,7 +348,12 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="super-editor-container">
-    <Ruler class="ruler" v-if="options.rulers && !!editor" :editor="editor" @margin-change="handleMarginChange" />
+    <Ruler
+      class="ruler"
+      v-if="options.rulers && !!activeEditor"
+      :editor="activeEditor"
+      @margin-change="handleMarginChange"
+    />
 
     <div
       class="super-editor"
@@ -294,14 +361,24 @@ onBeforeUnmount(() => {
       @keydown="handleSuperEditorKeydown"
       @click="handleSuperEditorClick"
       @mousedown="handleMarginClick"
+      @mousemove="updateTableResizeOverlay"
+      @mouseleave="hideTableResizeOverlay"
     >
       <div ref="editorElem" class="editor-element super-editor__element" role="presentation"></div>
+      <!-- Single SlashMenu component, no Teleport needed -->
       <SlashMenu
-        v-if="!props.options.disableContextMenu && editorReady && editor"
-        :editor="editor"
+        v-if="!contextMenuDisabled && editorReady && activeEditor"
+        :editor="activeEditor"
         :popoverControls="popoverControls"
         :openPopover="openPopover"
         :closePopover="closePopover"
+      />
+      <!-- Table resize overlay for interactive column resizing -->
+      <TableResizeOverlay
+        v-if="editorReady && activeEditor"
+        :editor="activeEditor"
+        :visible="tableResizeState.visible"
+        :tableElement="tableResizeState.tableElement"
       />
     </div>
 
@@ -324,13 +401,16 @@ onBeforeUnmount(() => {
     </div>
 
     <GenericPopover
-      v-if="editor"
-      :editor="editor"
+      v-if="activeEditor"
+      :editor="activeEditor"
       :visible="popoverControls.visible"
       :position="popoverControls.position"
       @close="closePopover"
     >
-      <component :is="popoverControls.component" v-bind="{ ...popoverControls.props, editor, closePopover }" />
+      <component
+        :is="popoverControls.component"
+        v-bind="{ ...popoverControls.props, editor: activeEditor, closePopover }"
+      />
     </GenericPopover>
   </div>
 </template>

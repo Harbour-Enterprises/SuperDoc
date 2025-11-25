@@ -52,13 +52,26 @@ describe('OOXML color + rStyle + linked combinations round-trip', async () => {
     const styleOverrides = new Map([
       ["Styled red text|  - rStyle='SD_ColorRedChar' (red): ", true],
       ["Styled theme accent2 text|  - rStyle='SD_ColorAccent2Char' (theme accent2): ", false],
-      ["Styled auto color text|  - rStyle='SD_ColorAutoChar' (auto): ", false],
+      ["Styled auto color text|  - rStyle='SD_ColorAutoChar' (auto): ", true],
       ["Linked Char style applied|  - rStyle='SD_LinkedColorHeadingChar' => magenta: ", true],
       [
         "  - pStyle='SD_LinkedColorHeading' (accent1) + inline hex 0000FF on a run: |Inline theme overrides char style color",
         false,
       ],
-      ["Styled auto color text|  - rStyle='SD_ColorAutoChar' (auto): ", true],
+      ['Color sample text|  - w:color theme accent1: ', true],
+      ['Color sample text|  - w:color theme accent1 + tint 99: ', true],
+      ['Color sample text|  - w:color theme accent1 + shade 33: ', true],
+      ['Color sample text|  - w:color theme accent2: ', true],
+      ['Color sample text|  - w:color theme accent3: ', true],
+      ['Color sample text|  - w:color theme accent4: ', true],
+      ['Color sample text|  - w:color theme accent5: ', true],
+      ['Color sample text|  - w:color theme accent6: ', true],
+      ['Color sample text|  - w:color theme dark1: ', true],
+      ['Color sample text|  - w:color theme dark2: ', true],
+      ['Color sample text|  - w:color theme light1: ', true],
+      ['Color sample text|  - w:color theme light2: ', true],
+      ['Color sample text|  - w:color theme followedHyperlink: ', true],
+      ['Color sample text|  - w:color theme hyperlink: ', true],
     ]);
 
     const n = Math.min(sourceRuns.length, exportedRuns.length);
