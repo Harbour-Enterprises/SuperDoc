@@ -6,20 +6,6 @@ export const createNodeListHandlerMock = () => {
   return {
     handlerEntities: [
       {
-        handlerName: 'standardNodeHandler',
-        handler: () => ({
-          nodes: [
-            {
-              type: 'standardNodeHandler',
-              content: {},
-              attrs: {},
-              marks: [],
-            },
-          ],
-          consumed: 1,
-        }),
-      },
-      {
         handlerName: 'textNodeHandler',
         handler: () => ({
           nodes: [

@@ -9,7 +9,7 @@ import { runNodeHandlerEntity } from './runNodeImporter.js';
 import { textNodeHandlerEntity } from './textNodeImporter.js';
 import { paragraphNodeHandlerEntity } from './paragraphNodeImporter.js';
 import { sdtNodeHandlerEntity } from './sdtNodeImporter.js';
-import { standardNodeHandlerEntity } from './standardNodeImporter.js';
+import { passthroughNodeHandlerEntity } from './passthroughNodeImporter.js';
 import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
 import { bookmarkStartNodeHandlerEntity } from './bookmarkStartImporter.js';
 import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
@@ -25,6 +25,7 @@ import { tableNodeHandlerEntity } from './tableImporter.js';
 import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
 import { preProcessNodesForFldChar } from '../../field-references';
 import { ensureNumberingCache } from './numberingCache.js';
+import { commentRangeStartHandlerEntity, commentRangeEndHandlerEntity } from './commentRangeImporter.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -168,6 +169,8 @@ export const defaultNodeListHandler = () => {
     bookmarkStartNodeHandlerEntity,
     bookmarkEndNodeHandlerEntity,
     hyperlinkNodeHandlerEntity,
+    commentRangeStartHandlerEntity,
+    commentRangeEndHandlerEntity,
     drawingNodeHandlerEntity,
     trackChangeNodeHandlerEntity,
     tableNodeHandlerEntity,
@@ -176,7 +179,7 @@ export const defaultNodeListHandler = () => {
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
     pageReferenceEntity,
-    standardNodeHandlerEntity,
+    passthroughNodeHandlerEntity,
   ];
 
   const handler = createNodeListHandler(entities);
