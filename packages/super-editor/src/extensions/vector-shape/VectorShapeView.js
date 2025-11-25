@@ -379,7 +379,7 @@ export class VectorShapeView {
 
   applyGradientToSVG(svg, gradientData) {
     const { gradientType, stops, angle } = gradientData;
-    const gradientId = `gradient-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const gradientId = `gradient-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
 
     // Create defs if it doesn't exist
     let defs = svg.querySelector('defs');
