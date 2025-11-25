@@ -77,9 +77,8 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is 16px
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontSize)).toBe(ptToPx(18));
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-size', ptToPx(18));
     });
 
     test('should add text with bold mark', async ({ page }) => {
@@ -102,8 +101,8 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is bold
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontWeight)).toBe('700');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-weight', '700');
     });
 
     test('should add text with italic mark', async ({ page }) => {
@@ -126,8 +125,8 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is italic
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontStyle)).toBe('italic');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-style', 'italic');
     });
 
     test('should add text with underline mark', async ({ page }) => {
@@ -150,9 +149,9 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is underlined
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe('underline');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe('solid');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'underline');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
     test('should add text with strikethrough mark', async ({ page }) => {
@@ -175,9 +174,9 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is underlined
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe('line-through');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe('solid');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'line-through');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
     test('should add text with selected color', async ({ page }) => {
@@ -201,9 +200,8 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is red
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).color)).toBe('rgb(210, 0, 63)');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('color', 'rgb(210, 0, 63)');
     });
 
     test('should add text with selected highlight color', async ({ page }) => {
@@ -229,9 +227,8 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is highlighted
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(210, 0, 63)');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('background-color', 'rgb(210, 0, 63)');
     });
   });
 
@@ -314,11 +311,9 @@ test.describe('toolbar', () => {
       await underlineButton.click();
 
       // Ensure the text is underlined
-      const hello = await superEditor.locator('u').first();
-      expect(hello).toBeVisible();
-      expect(await hello.innerText()).toEqual('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe('underline');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe('solid');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'underline');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
     test('should add strikethrough mark to selected text', async ({ page }) => {
@@ -345,11 +340,9 @@ test.describe('toolbar', () => {
       await strikethroughButton.click();
 
       // Ensure the text is strikethrough
-      const hello = await superEditor.locator('s').first();
-      expect(hello).toBeVisible();
-      expect(await hello.innerText()).toEqual('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe('line-through');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe('solid');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'line-through');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
     test('should add color to selected text', async ({ page }) => {
@@ -590,13 +583,9 @@ test.describe('toolbar', () => {
       await page.keyboard.press('ControlOrMeta+U');
 
       // Ensure the text is underlined
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.getByText('Hello').evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe(
-        'underline',
-      );
-      expect(await hello.getByText('Hello').evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe(
-        'solid',
-      );
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'underline');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
     test('should add strikethrough mark to selected text with mod + s', async ({ page }) => {
@@ -622,13 +611,9 @@ test.describe('toolbar', () => {
       await page.keyboard.press('ControlOrMeta+Shift+S');
 
       // Ensure the text is strikethrough (computed style)
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.getByText('Hello').evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe(
-        'line-through',
-      );
-      expect(await hello.getByText('Hello').evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe(
-        'solid',
-      );
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'line-through');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
   });
 

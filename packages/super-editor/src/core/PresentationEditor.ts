@@ -3256,6 +3256,7 @@ export class PresentationEditor extends EventEmitter {
     if (!localSelectionLayer) {
       return;
     }
+    const selectionLayer = this.#localSelectionLayer;
     const pageHeight = this.#getBodyPageHeight();
     const zoom = this.#layoutOptions.zoom ?? 1;
     rects.forEach((rect, _index) => {
