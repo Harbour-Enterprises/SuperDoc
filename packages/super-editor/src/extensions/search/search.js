@@ -95,13 +95,15 @@ export const Search = Extension.create({
        * Search for string matches in editor content
        * @category Command
        * @param {String|RegExp} patternInput - Search string or pattern
+       * @param {Object} [options]
+       * @param {boolean} [options.highlight=true] - Disable to skip adding highlight classes
        * @example
        * const matches = editor.commands.search('test string')
        * const regexMatches = editor.commands.search(/test/i)
        * @note Returns array of SearchMatch objects with positions and IDs
        */
       search:
-        (patternInput) =>
+        (patternInput, { highlight = true } = {}) =>
         /** @returns {SearchMatch[]} */
         ({ state, dispatch }) => {
           let pattern;
@@ -129,7 +131,7 @@ export const Search = Extension.create({
             regexp,
             wholeWord,
           });
-          const tr = setSearchState(state.tr, query);
+          const tr = setSearchState(state.tr, query, null, { highlight });
           dispatch(tr);
 
           const newState = state.apply(tr);
