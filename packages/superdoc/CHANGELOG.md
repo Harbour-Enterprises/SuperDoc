@@ -1,3 +1,9 @@
+# [0.32.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.3...v0.32.0) (2025-11-25)
+
+### Features
+
+- control search results highlighting ([#1332](https://github.com/Harbour-Enterprises/SuperDoc/issues/1332)) ([5ac75e6](https://github.com/Harbour-Enterprises/SuperDoc/commit/5ac75e6f6750e45d6fe80c8b73017ae9e0e8cda8))
+
 ## [0.31.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.2...v0.31.3) (2025-11-24)
 
 ### Bug Fixes
