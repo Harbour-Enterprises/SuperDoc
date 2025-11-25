@@ -18,7 +18,7 @@
       "@converter/*": ["./src/core/super-converter/*"],
       "@tests/*": ["./src/tests/*"],
       "@translator": ["./src/core/super-converter/v3/node-translator/"],
-      "@superdoc/painter-dom": ["./src/types/painter-dom-shim.d.ts"],
+      "@superdoc/painter-dom": ["../layout-engine/painters/dom/src"],
       "@superdoc/pm-adapter": ["./src/types/pm-adapter-shim.d.ts"],
       "@superdoc/layout-bridge": ["../layout-engine/layout-bridge/src"],
       "@superdoc/contracts": ["../layout-engine/contracts/src"],

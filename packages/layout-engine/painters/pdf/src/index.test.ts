@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type {
   FlowBlock,
   Layout,
@@ -10,6 +10,7 @@ import type {
   DrawingMeasure,
 } from '@superdoc/contracts';
 import { createPdfPainter } from './index.js';
+import { PdfPainter } from './renderer.js';
 
 const block: FlowBlock = {
   kind: 'paragraph',
@@ -470,6 +471,70 @@ describe('PDF Painter', () => {
       const text = await blob.text();
       expect(text).toContain('(Footer: ) Tj');
       expect(text).toContain('(1) Tj');
+    });
+
+    it('bottom-aligns footer fragments using measured height when fragment height is missing', async () => {
+      const pageHeight = 500;
+      const footerHeight = 50;
+
+      const footerBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'footer-block-measured',
+        runs: [{ text: 'Footer', fontFamily: 'Arial', fontSize: 12 }],
+      };
+
+      const footerMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 6,
+            width: 80,
+            ascent: 9,
+            descent: 3,
+            lineHeight: 16,
+          },
+        ],
+        totalHeight: 16,
+      };
+
+      const footerFragment = {
+        kind: 'para' as const,
+        blockId: 'footer-block-measured',
+        fromLine: 0,
+        toLine: 1,
+        x: 20,
+        y: 2,
+        width: 200,
+      };
+
+      const painter = new PdfPainter([footerBlock], [footerMeasure], {
+        footerProvider: () => ({ fragments: [footerFragment], height: footerHeight }),
+      });
+
+      const renderSpy = vi.spyOn(
+        painter as unknown as Record<string, (...args: unknown[]) => unknown>,
+        'renderParagraphFragment',
+      );
+
+      await painter.render({
+        pageSize: { w: 400, h: pageHeight },
+        pages: [{ number: 1, fragments: [] }],
+      });
+
+      expect(renderSpy).toHaveBeenCalled();
+      const translatedFragment = (renderSpy.mock.calls[0][0] ?? null) as typeof footerFragment | null;
+      expect(translatedFragment).not.toBeNull();
+
+      // Expected Y: baseOffset (pageHeight - footerHeight) + fragment.y + (footerHeight - (fragment.y + contentHeight))
+      const expectedYOffset = pageHeight - footerHeight; // default footer offset when none provided
+      const expectedContentHeight = footerFragment.y + footerMeasure.totalHeight; // uses measure when fragment.height missing
+      const expectedFooterYOffset = Math.max(0, footerHeight - expectedContentHeight);
+      const expectedY = footerFragment.y + expectedYOffset + expectedFooterYOffset;
+
+      expect(translatedFragment?.y).toBeCloseTo(expectedY);
     });
 
     it('resolves different page numbers across multi-page PDF', async () => {

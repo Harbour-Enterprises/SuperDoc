@@ -11,6 +11,8 @@ export type PdfPainterOptions = {
 export type PageDecorationPayload = {
   fragments: Fragment[];
   height: number;
+  /** Optional measured content height to aid bottom alignment in footers. */
+  contentHeight?: number;
   offset?: number;
   marginLeft?: number;
 };
