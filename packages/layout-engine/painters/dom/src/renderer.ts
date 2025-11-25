@@ -2232,7 +2232,7 @@ export class DomPainter {
         leaderEl.style.zIndex = '0'; // Same layer as line, text will be z-index: 1
 
         // Map leader styles to CSS
-        if (ld.style === 'dot') {
+        if (ld.style === 'dot' || ld.style === 'middleDot') {
           leaderEl.style.borderBottom = '1px dotted currentColor';
         } else if (ld.style === 'hyphen') {
           leaderEl.style.borderBottom = '1px dashed currentColor';

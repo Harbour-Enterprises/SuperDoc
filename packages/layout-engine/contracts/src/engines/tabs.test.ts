@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { computeTabStops, layoutWithTabs } from '../tabs.js';
+import { calculateTabWidth, computeTabStops, layoutWithTabs } from './tabs.js';
 
 describe('engines-tabs computeTabStops', () => {
   it('merges explicit and default stops and filters by indent', () => {
@@ -284,5 +284,74 @@ describe('engines-tabs layoutWithTabs', () => {
     const veryWideRun = positioned.find((entry) => entry.run === 'VeryWide');
     // Would be 30 - 100 = -70, but clamped to 0
     expect(veryWideRun?.x).toBe(0);
+  });
+});
+
+describe('calculateTabWidth', () => {
+  const baseParams = {
+    paragraphWidth: 200,
+    defaultTabDistance: 48,
+    defaultLineLength: 816,
+    tabStops: [{ val: 'start', pos: 100, leader: 'none' } as const],
+  };
+
+  it('uses next tab stop for start alignment', () => {
+    const result = calculateTabWidth({
+      ...baseParams,
+      currentX: 40,
+      followingText: 'after',
+    });
+    expect(result.width).toBe(60);
+    expect(result.alignment).toBe('start');
+    expect(result.tabStopPosUsed).toBe(100);
+  });
+
+  it('falls back to default grid when no stop', () => {
+    const result = calculateTabWidth({
+      ...baseParams,
+      tabStops: [],
+      currentX: 50,
+    });
+    expect(result.alignment).toBe('default');
+    expect(result.tabStopPosUsed).toBe('default');
+    expect(result.width).toBeGreaterThan(0);
+  });
+
+  it('applies center alignment offset', () => {
+    const result = calculateTabWidth({
+      ...baseParams,
+      tabStops: [{ val: 'center', pos: 150, leader: 'dot' }],
+      currentX: 50,
+      followingText: 'abcd',
+      measureText: (text) => text.length * 5,
+    });
+    // base width = 100, adjust by half of followingText (4*5/2 = 10)
+    expect(Math.round(result.width)).toBe(90);
+    expect(result.alignment).toBe('center');
+    expect(result.leader).toBe('dot');
+  });
+
+  it('applies decimal alignment with custom separator', () => {
+    const result = calculateTabWidth({
+      ...baseParams,
+      tabStops: [{ val: 'decimal', pos: 160 }],
+      currentX: 40,
+      followingText: '12,34',
+      decimalSeparator: ',',
+      measureText: (text) => text.length * 4,
+    });
+    // base width = 120; before decimal "12" = 8px; width should subtract 8
+    expect(result.width).toBe(112);
+    expect(result.alignment).toBe('decimal');
+  });
+
+  it('returns zero width for bar tabs', () => {
+    const result = calculateTabWidth({
+      ...baseParams,
+      tabStops: [{ val: 'bar', pos: 120 }],
+      currentX: 60,
+    });
+    expect(result.width).toBe(0);
+    expect(result.alignment).toBe('bar');
   });
 });

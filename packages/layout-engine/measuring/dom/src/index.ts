@@ -128,6 +128,7 @@ const pxToTwips = (px: number): number => Math.round(px * TWIPS_PER_PX);
 const DEFAULT_TAB_INTERVAL_PX = twipsToPx(DEFAULT_TAB_INTERVAL_TWIPS);
 const TAB_EPSILON = 0.1;
 const DEFAULT_DECIMAL_SEPARATOR = '.';
+const ALLOWED_TAB_VALS = new Set<TabStop['val']>(['start', 'center', 'end', 'decimal', 'bar', 'clear']);
 
 /**
  * Tab stop in pixel coordinates for measurement.
@@ -408,6 +409,19 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   // Remember the last applied tab alignment so we can clamp end-aligned
   // segments to the exact target after measuring to avoid 1px drift.
   let lastAppliedTabAlign: { target: number; val: TabStop['val'] } | null = null;
+  const warnedTabVals = new Set<string>();
+
+  /**
+   * Validate and track tab stop val to ensure it's normalized.
+   * Returns true if validation passed, false if val is invalid (treated as 'start').
+   */
+  const validateTabStopVal = (stop: TabStopPx): boolean => {
+    if (!ALLOWED_TAB_VALS.has(stop.val) && !warnedTabVals.has(stop.val)) {
+      warnedTabVals.add(stop.val);
+      return false;
+    }
+    return true;
+  };
 
   const alignSegmentAtTab = (segmentText: string, font: string, runContext: Run): void => {
     if (!pendingTabAlignment || !currentLine) return;
@@ -467,11 +481,16 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       currentLine.maxFontSize = Math.max(currentLine.maxFontSize, 12);
       currentLine.toRun = runIndex;
       currentLine.toChar = 1; // tab is a single character
-      pendingTabAlignment = stop ? { target, val: stop.val } : null;
+      if (stop) {
+        validateTabStopVal(stop);
+        pendingTabAlignment = { target, val: stop.val };
+      } else {
+        pendingTabAlignment = null;
+      }
 
       // Emit leader decoration if requested
-      if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
-        const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' = stop.leader;
+      if (stop && stop.leader && stop.leader !== 'none') {
+        const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' = stop.leader;
         const from = Math.min(originX, target);
         const to = Math.max(originX, target);
         if (!currentLine.leaders) currentLine.leaders = [];
@@ -649,7 +668,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         currentLine.toRun = runIndex;
         currentLine.toChar = charPosInRun;
         charPosInRun += 1;
-        pendingTabAlignment = stop ? { target, val: stop.val } : null;
+        if (stop) {
+          validateTabStopVal(stop);
+          pendingTabAlignment = { target, val: stop.val };
+        } else {
+          pendingTabAlignment = null;
+        }
 
         // Emit leader decoration if requested
         if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
@@ -813,10 +837,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       markerTextWidth: glyphWidth,
       indentLeft: wordLayout.indentLeftPx ?? 0,
     };
-    console.log(
-      '[measure] Marker:',
-      JSON.stringify({ text: markerText, width: markerInfo.markerWidth, indent: markerInfo.indentLeft }),
-    );
   }
 
   return {

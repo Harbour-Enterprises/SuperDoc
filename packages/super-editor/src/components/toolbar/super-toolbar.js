@@ -979,15 +979,21 @@ export class SuperToolbar extends EventEmitter {
    * @returns {void}
    */
   #updateToolbarHistory() {
-    if (!this.activeEditor) return;
+    if (!this.activeEditor?.state) return;
 
-    if (this.activeEditor.options.ydoc) {
-      const undoManager = yUndoPluginKey.getState(this.activeEditor.state)?.undoManager;
-      this.undoDepth = undoManager?.undoStack.length || 0;
-      this.redoDepth = undoManager?.redoStack.length || 0;
-    } else {
-      this.undoDepth = undoDepth(this.activeEditor.state);
-      this.redoDepth = redoDepth(this.activeEditor.state);
+    try {
+      if (this.activeEditor.options.ydoc) {
+        const undoManager = yUndoPluginKey.getState(this.activeEditor.state)?.undoManager;
+        this.undoDepth = undoManager?.undoStack.length || 0;
+        this.redoDepth = undoManager?.redoStack.length || 0;
+      } else {
+        this.undoDepth = undoDepth(this.activeEditor.state);
+        this.redoDepth = redoDepth(this.activeEditor.state);
+      }
+    } catch {
+      // History plugin may not be registered yet during initialization
+      this.undoDepth = 0;
+      this.redoDepth = 0;
     }
   }
 
