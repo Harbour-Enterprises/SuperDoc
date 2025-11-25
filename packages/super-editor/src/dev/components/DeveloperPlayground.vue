@@ -183,7 +183,7 @@ const toggleLayoutEngine = () => {
           <div class="dev-app__header-layout-toggle">
             <span class="badge">Layout Engine: {{ useLayoutEngine ? 'ON' : 'OFF' }}</span>
             <button class="dev-app__header-export-btn" @click="toggleLayoutEngine">
-              Switch to {{ useLayoutEngine ? 'Plain Editor' : 'Layout Engine' }} (reloads)
+              Turn Layout Engine {{ useLayoutEngine ? 'off' : 'on' }} (reloads)
             </button>
           </div>
           <div class="dev-app__header-upload">
