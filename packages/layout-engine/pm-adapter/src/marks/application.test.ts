@@ -555,6 +555,86 @@ describe('mark application', () => {
       expect(run.fontSize).toBe(12);
     });
 
+    it('applies fontSize from string with units', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '16pt' });
+
+      expect(run.fontSize).toBe(16);
+    });
+
+    it('applies fontSize from string with px units', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '24px' });
+
+      expect(run.fontSize).toBe(24);
+    });
+
+    it('handles empty string fontSize', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles whitespace-only string fontSize', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '   ' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles string with unit prefix', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: 'pt12' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles negative fontSize strings', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '-5pt' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles zero fontSize string', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '0pt' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles fontSize below minimum boundary', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '0.5px' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles fontSize at minimum boundary', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '1pt' });
+      expect(run.fontSize).toBe(1);
+    });
+
+    it('handles fontSize at maximum boundary', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '1000px' });
+      expect(run.fontSize).toBe(1000);
+    });
+
+    it('handles fontSize above maximum boundary', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '1001pt' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles decimal fontSize with units', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '12.5pt' });
+      expect(run.fontSize).toBe(12.5);
+    });
+
+    it('handles fontSize string with leading whitespace', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '  16pt' });
+      expect(run.fontSize).toBe(16);
+    });
+
     it('applies letterSpacing to run', () => {
       const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
       applyTextStyleMark(run, { letterSpacing: 2 });

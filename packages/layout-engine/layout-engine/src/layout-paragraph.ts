@@ -110,7 +110,9 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   let lines = normalizeLines(measure);
   let fromLine = 0;
   const spacing = (block.attrs?.spacing ?? {}) as Record<string, unknown>;
-  const spacingBefore = Math.max(0, Number(spacing.before ?? spacing.lineSpaceBefore ?? 0));
+  const styleId = (block.attrs as Record<string, unknown>)?.styleId as string | undefined;
+  const contextualSpacing = Boolean((block.attrs as Record<string, unknown>)?.contextualSpacing);
+  let spacingBefore = Math.max(0, Number(spacing.before ?? spacing.lineSpaceBefore ?? 0));
   const spacingAfter = Math.max(0, Number(spacing.after ?? spacing.lineSpaceAfter ?? 0));
   let appliedSpacingBefore = spacingBefore === 0;
   let lastState: PageState | null = null;
@@ -127,6 +129,15 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   while (fromLine < lines.length) {
     let state = ensurePage();
     if (state.trailingSpacing == null) state.trailingSpacing = 0;
+    if (contextualSpacing) {
+      const prevStyle = state.lastParagraphStyleId;
+      if (styleId && prevStyle && prevStyle === styleId) {
+        spacingBefore = 0;
+      }
+    }
+    if (contextualSpacing && state.lastParagraphStyleId && styleId && state.lastParagraphStyleId === styleId) {
+      spacingBefore = 0;
+    }
 
     if (!appliedSpacingBefore && spacingBefore > 0) {
       while (!appliedSpacingBefore) {
@@ -309,5 +320,6 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     } else {
       lastState.trailingSpacing = 0;
     }
+    lastState.lastParagraphStyleId = styleId;
   }
 }

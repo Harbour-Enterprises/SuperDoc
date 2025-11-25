@@ -547,6 +547,8 @@ export type ParagraphSpacing = {
   after?: number;
   line?: number;
   lineRule?: 'auto' | 'exact' | 'atLeast';
+  beforeAutospacing?: boolean;
+  afterAutospacing?: boolean;
 };
 
 export type ParagraphIndent = {
@@ -583,8 +585,10 @@ export type ParagraphShading = {
 };
 
 export type ParagraphAttrs = {
+  styleId?: string;
   alignment?: 'left' | 'center' | 'right' | 'justify';
   spacing?: ParagraphSpacing;
+  contextualSpacing?: boolean;
   indent?: ParagraphIndent;
   numberingProperties?: Record<string, unknown>;
   borders?: ParagraphBorders;
@@ -592,6 +596,8 @@ export type ParagraphAttrs = {
   tabs?: TabStop[];
   decimalSeparator?: string;
   tabIntervalTwips?: number;
+  keepNext?: boolean;
+  keepLines?: boolean;
   trackedChangesMode?: TrackedChangesMode;
   trackedChangesEnabled?: boolean;
   direction?: 'ltr' | 'rtl';

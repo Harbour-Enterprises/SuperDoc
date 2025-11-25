@@ -90,7 +90,7 @@ describe('SuperToolbar intercepted color commands', () => {
     toolbar.emitCommand({ item, argument });
   };
 
-  it('setColor applies inline color and annotation updates', () => {
+  it('setColor applies inline color (#123456) and updates field annotations with the same color', () => {
     emitCommand('setColor', '#123456');
 
     expect(mockEditor.focus).toHaveBeenCalled();
@@ -99,7 +99,7 @@ describe('SuperToolbar intercepted color commands', () => {
     expect(toolbar.updateToolbarState).toHaveBeenCalledTimes(1);
   });
 
-  it('setColor treats none as inherit and clears annotations', () => {
+  it('setColor treats "none" argument as "inherit" for inline color and null for annotations', () => {
     emitCommand('setColor', 'none');
 
     expect(mockEditor.commands.setColor).toHaveBeenCalledWith('inherit');
@@ -115,7 +115,31 @@ describe('SuperToolbar intercepted color commands', () => {
     expect(toolbar.updateToolbarState).not.toHaveBeenCalled();
   });
 
-  it('setHighlight applies inline highlight and annotation updates', () => {
+  it('setColor skips work when argument is undefined', () => {
+    emitCommand('setColor', undefined);
+
+    expect(mockEditor.commands.setColor).not.toHaveBeenCalled();
+    expect(mockEditor.commands.setFieldAnnotationsTextColor).not.toHaveBeenCalled();
+    expect(toolbar.updateToolbarState).not.toHaveBeenCalled();
+  });
+
+  it('setColor skips work when argument is empty string', () => {
+    emitCommand('setColor', '');
+
+    expect(mockEditor.commands.setColor).not.toHaveBeenCalled();
+    expect(mockEditor.commands.setFieldAnnotationsTextColor).not.toHaveBeenCalled();
+    expect(toolbar.updateToolbarState).not.toHaveBeenCalled();
+  });
+
+  it('setColor applies color value even with potentially invalid format (browser handles validation)', () => {
+    emitCommand('setColor', 'invalid-color-format');
+
+    expect(mockEditor.commands.setColor).toHaveBeenCalledWith('invalid-color-format');
+    expect(mockEditor.commands.setFieldAnnotationsTextColor).toHaveBeenCalledWith('invalid-color-format', true);
+    expect(toolbar.updateToolbarState).toHaveBeenCalledTimes(1);
+  });
+
+  it('setHighlight applies highlight color (#fedcba) to inline marks, field annotations, and table cell background', () => {
     emitCommand('setHighlight', '#fedcba');
 
     expect(mockEditor.commands.setHighlight).toHaveBeenCalledWith('#fedcba');
@@ -124,7 +148,7 @@ describe('SuperToolbar intercepted color commands', () => {
     expect(toolbar.updateToolbarState).toHaveBeenCalledTimes(1);
   });
 
-  it('setHighlight keeps transparent mark when clearing highlight', () => {
+  it('setHighlight with "none" argument sets transparent inline mark for cascade-aware negation while clearing annotations', () => {
     emitCommand('setHighlight', 'none');
 
     expect(mockEditor.commands.setHighlight).toHaveBeenCalledWith('transparent');
@@ -142,7 +166,7 @@ describe('SuperToolbar intercepted color commands', () => {
     expect(toolbar.updateToolbarState).not.toHaveBeenCalled();
   });
 
-  it('does nothing when active editor is unavailable', () => {
+  it('setColor and setHighlight do not execute any commands when activeEditor is null', () => {
     toolbar.activeEditor = null;
 
     emitCommand('setColor', '#abcdef');
@@ -154,5 +178,189 @@ describe('SuperToolbar intercepted color commands', () => {
     expect(mockEditor.commands.setFieldAnnotationsTextHighlight).not.toHaveBeenCalled();
     expect(mockEditor.commands.setCellBackground).not.toHaveBeenCalled();
     expect(toolbar.updateToolbarState).not.toHaveBeenCalled();
+  });
+});
+
+describe('SuperToolbar sticky mark persistence', () => {
+  let toolbar;
+  let mockEditor;
+  let mockTransaction;
+
+  beforeEach(() => {
+    ensureDomApis();
+
+    mockTransaction = {
+      setStoredMarks: vi.fn(() => ({ storedMarksSet: true })),
+    };
+
+    mockEditor = {
+      focus: vi.fn(),
+      view: {
+        hasFocus: vi.fn(() => false),
+        dispatch: vi.fn(),
+      },
+      options: { isHeaderOrFooter: false, mode: 'docx' },
+      state: {
+        selection: { empty: true },
+        storedMarks: null,
+        tr: mockTransaction,
+      },
+      commands: {
+        toggleBold: vi.fn(() => {
+          mockEditor.state.storedMarks = [{ type: 'bold' }];
+        }),
+        toggleFieldAnnotationsFormat: vi.fn(),
+      },
+    };
+
+    toolbar = new SuperToolbar({ hideButtons: false });
+    toolbar.activeEditor = mockEditor;
+    toolbar.updateToolbarState = vi.fn();
+  });
+
+  it('restores sticky stored marks when selection updates to empty position with no formatting after pending mark commands execute', () => {
+    const item = { command: 'toggleBold', name: { value: 'bold' }, activate: vi.fn() };
+
+    toolbar.emitCommand({ item });
+
+    expect(toolbar.pendingMarkCommands).toHaveLength(1);
+
+    // Execute pending mark command when selection updates
+    toolbar.onEditorSelectionUpdate();
+    expect(mockEditor.commands.toggleBold).toHaveBeenCalled();
+    expect(toolbar.pendingMarkCommands).toHaveLength(0);
+    expect(toolbar.updateToolbarState).toHaveBeenCalledTimes(2);
+
+    // Simulate moving the caret to an empty area that has no marks
+    mockEditor.state.storedMarks = null;
+    toolbar.onEditorSelectionUpdate();
+
+    expect(mockTransaction.setStoredMarks).toHaveBeenCalledWith([{ type: 'bold' }]);
+    expect(mockEditor.view.dispatch).toHaveBeenCalledWith({ storedMarksSet: true });
+    expect(toolbar.updateToolbarState).toHaveBeenCalledTimes(3);
+  });
+
+  it('clears sticky stored marks and does not restore them when user toggles formatting off on empty selection', () => {
+    mockEditor.view.hasFocus = vi.fn(() => true);
+    const item = { command: 'toggleBold', name: { value: 'bold' }, activate: vi.fn() };
+
+    // Toggle on and capture sticky marks
+    toolbar.emitCommand({ item });
+    expect(toolbar.stickyStoredMarks).toEqual([{ type: 'bold' }]);
+
+    // Toggle off and ensure sticky marks are cleared
+    mockEditor.commands.toggleBold.mockImplementation(() => {
+      mockEditor.state.storedMarks = null;
+    });
+    toolbar.emitCommand({ item });
+    expect(toolbar.stickyStoredMarks).toBeNull();
+
+    toolbar.onEditorSelectionUpdate();
+    expect(mockEditor.view.dispatch).not.toHaveBeenCalled();
+    expect(toolbar.updateToolbarState).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses intercepted command implementation (setFontSize) instead of direct editor command when replaying pending mark commands', () => {
+    const throwingSetFontSize = vi.fn(() => {
+      throw new Error('should not be called directly');
+    });
+
+    mockEditor.commands.setFontSize = throwingSetFontSize;
+    mockEditor.commands.setFieldAnnotationsFontSize = vi.fn();
+    mockEditor.view.hasFocus = vi.fn(() => false);
+
+    const item = { command: 'setFontSize', name: { value: 'fontSize' }, activate: vi.fn() };
+
+    toolbar.emitCommand({ item });
+
+    expect(toolbar.pendingMarkCommands).toHaveLength(1);
+
+    // Should use intercepted command, so the direct command never runs
+    expect(() => toolbar.onEditorSelectionUpdate()).not.toThrow();
+    expect(throwingSetFontSize).not.toHaveBeenCalled();
+    expect(toolbar.pendingMarkCommands).toHaveLength(0);
+  });
+});
+
+describe('SuperToolbar error handling for command failures', () => {
+  let toolbar;
+  let mockEditor;
+
+  beforeEach(() => {
+    ensureDomApis();
+
+    const mockParagraphNode = { type: { name: 'paragraph' }, attrs: { paragraphProperties: {} } };
+    const mockResolvedPos = {
+      depth: 1,
+      node: () => mockParagraphNode,
+      before: () => 0,
+      start: () => 0,
+    };
+
+    mockEditor = {
+      focus: vi.fn(),
+      options: { isHeaderOrFooter: false, mode: 'docx' },
+      state: {
+        selection: { from: 1, to: 1, $from: mockResolvedPos },
+        doc: {
+          content: { size: 10 },
+          resolve: vi.fn(() => mockResolvedPos),
+          nodeAt: vi.fn(() => ({ marks: [] })),
+          nodesBetween: vi.fn(() => {}),
+        },
+      },
+      commands: {
+        someCommand: vi.fn(),
+      },
+    };
+
+    toolbar = new SuperToolbar({ editor: mockEditor, hideButtons: false });
+    toolbar.updateToolbarState = vi.fn();
+  });
+
+  it('emits exception event when command is not found in editor.commands or interceptedCommands', () => {
+    const exceptionListener = vi.fn();
+    toolbar.on('exception', exceptionListener);
+
+    const item = { command: 'nonExistentCommand' };
+    expect(() => {
+      toolbar.emitCommand({ item });
+    }).toThrow('[super-toolbar 🎨] Command not found: nonExistentCommand');
+
+    expect(exceptionListener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.any(Error),
+        editor: mockEditor,
+      }),
+    );
+  });
+
+  it('emits exception event when pending mark command execution fails', () => {
+    const exceptionListener = vi.fn();
+    toolbar.on('exception', exceptionListener);
+
+    // Setup: Make the command throw an error
+    mockEditor.commands.toggleBold = vi.fn(() => {
+      throw new Error('Test error during command execution');
+    });
+    mockEditor.view = { hasFocus: () => false };
+
+    // Queue a pending command (when editor not focused)
+    const item = { command: 'toggleBold', name: { value: 'bold' }, activate: vi.fn() };
+    toolbar.emitCommand({ item });
+
+    expect(toolbar.pendingMarkCommands).toHaveLength(1);
+
+    // Execute pending command - should catch error and emit exception
+    toolbar.onEditorSelectionUpdate();
+
+    expect(exceptionListener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        error: expect.any(Error),
+        editor: mockEditor,
+        originalError: expect.any(Error),
+      }),
+    );
+    expect(toolbar.pendingMarkCommands).toHaveLength(0);
   });
 });

@@ -69,8 +69,20 @@ export function tabNodeToRun(node: PMNode, positions: PositionMap, tabIndex: num
   const pos = positions.get(node);
   if (!pos) return null;
   const paragraphAttrs = paragraph.attrs ?? {};
-  const tabStops = Array.isArray(paragraphAttrs.tabStops) ? (paragraphAttrs.tabStops as TabStop[]) : undefined;
-  const indent = paragraphAttrs.indent as ParagraphIndent | undefined;
+  const paragraphProps =
+    typeof paragraphAttrs.paragraphProperties === 'object' && paragraphAttrs.paragraphProperties !== null
+      ? (paragraphAttrs.paragraphProperties as Record<string, unknown>)
+      : {};
+  const tabStops =
+    Array.isArray(paragraphAttrs.tabStops) && paragraphAttrs.tabStops.length
+      ? (paragraphAttrs.tabStops as TabStop[])
+      : Array.isArray(paragraphProps.tabStops)
+        ? (paragraphProps.tabStops as TabStop[])
+        : undefined;
+  const indent =
+    (paragraphAttrs.indent as ParagraphIndent | undefined) ??
+    (paragraphProps.indent as ParagraphIndent | undefined) ??
+    undefined;
   return {
     kind: 'tab',
     text: '\t',

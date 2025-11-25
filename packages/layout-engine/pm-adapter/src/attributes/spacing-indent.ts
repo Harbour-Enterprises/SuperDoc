@@ -207,6 +207,9 @@ export const normalizeParagraphSpacing = (value: unknown): ParagraphSpacing | un
   const afterRaw = pickNumber(source.after);
   const lineRaw = pickNumber(source.line);
   const lineRule = normalizeLineRule(source.lineRule);
+  const beforeAutospacing = toBooleanFlag(source.beforeAutospacing ?? source.beforeAutoSpacing);
+  const afterAutospacing = toBooleanFlag(source.afterAutospacing ?? source.afterAutoSpacing);
+  const contextualSpacing = toBooleanFlag(source.contextualSpacing);
 
   const before = beforeRaw != null ? twipsToPx(beforeRaw) : pickNumber(source.lineSpaceBefore);
   const after = afterRaw != null ? twipsToPx(afterRaw) : pickNumber(source.lineSpaceAfter);
@@ -216,8 +219,25 @@ export const normalizeParagraphSpacing = (value: unknown): ParagraphSpacing | un
   if (after != null) spacing.after = after;
   if (line != null) spacing.line = line;
   if (lineRule) spacing.lineRule = lineRule;
+  if (beforeAutospacing != null) spacing.beforeAutospacing = beforeAutospacing;
+  if (afterAutospacing != null) spacing.afterAutospacing = afterAutospacing;
+  if (contextualSpacing != null) spacing.contextualSpacing = contextualSpacing;
 
   return Object.keys(spacing).length > 0 ? spacing : undefined;
+};
+
+const toBooleanFlag = (value: unknown): boolean | undefined => {
+  if (value === true || value === false) return value;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (['true', '1', 'on', 'yes'].includes(normalized)) return true;
+    if (['false', '0', 'off', 'no'].includes(normalized)) return false;
+  }
+  if (typeof value === 'number') {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+  return undefined;
 };
 
 const normalizeLineValue = (
