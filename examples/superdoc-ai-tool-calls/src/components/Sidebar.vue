@@ -1,5 +1,9 @@
 <template>
-  <div class="sidebar">
+  <div class="sidebar" :class="{ 'collapsed': isCollapsed }">
+    <button class="collapse-toggle" @click="$emit('toggle-collapse')" :aria-label="isCollapsed ? 'Show sidebar' : 'Hide sidebar'">
+      <span class="chevron">{{ isCollapsed ? '‹' : '›' }}</span>
+    </button>
+    <div class="sidebar-content" v-show="!isCollapsed">
     <div class="history-section">
       <div class="section-header">
         <span>Tool Usage</span>
@@ -97,6 +101,7 @@
         </div>
       </div>
     </div>
+    </div>
   </div>
 </template>
 
@@ -110,7 +115,8 @@ const props = defineProps({
   availableToolsCount: Number,
   filteredActions: Array,
   buttonsEnabled: Boolean,
-  prompt: String
+  prompt: String,
+  isCollapsed: Boolean
 })
 
 const emit = defineEmits([
@@ -118,7 +124,8 @@ const emit = defineEmits([
   'update:isDropdownOpen', 
   'update:selectedAction',
   'update:prompt',
-  'executeAction'
+  'executeAction',
+  'toggle-collapse'
 ])
 
 function isProcessing(status) {

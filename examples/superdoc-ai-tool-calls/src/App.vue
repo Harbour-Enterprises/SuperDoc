@@ -15,6 +15,7 @@ const superdocInstance = ref(null)
 const prompt = ref('')
 const isDropdownOpen = ref(false)
 const mode = ref('prompt') // 'prompt' or 'tool'
+const isSidebarCollapsed = ref(false)
 let actionHandler = null
 let logger = null
 
@@ -48,12 +49,14 @@ function initializeAI(superdoc) {
 
   let provider
   if (proxyUrl) {
+    console.log("Open prompt enabled.");
     provider = {
       type: 'http',
       url: proxyUrl,
       streamResults: true
     }
   } else {
+    console.error("Open prompt disabled.");
     provider = {
       type: 'openai',
       apiKey,
@@ -76,7 +79,7 @@ function initializeAI(superdoc) {
       userId: 'ai-demo',
     },
     provider,
-    enableLogging: false,
+    enableLogging: true,
     onReady: () => {
       statusText.value = 'AI is ready. Select an action and enter a prompt.'
       buttonsEnabled.value = true
@@ -272,11 +275,13 @@ onUnmounted(() => {
               :filtered-actions="filteredActions"
               :buttons-enabled="buttonsEnabled"
               :prompt="prompt"
+              :is-collapsed="isSidebarCollapsed"
               @update:mode="handleModeUpdate"
               @update:is-dropdown-open="isDropdownOpen = $event"
               @update:selected-action="selectedAction = $event"
               @update:prompt="prompt = $event"
               @execute-action="executeAction"
+              @toggle-collapse="isSidebarCollapsed = !isSidebarCollapsed"
             />
           </div>
         </div>

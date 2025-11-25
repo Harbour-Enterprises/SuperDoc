@@ -70,6 +70,46 @@ body {
 .sidebar {
   width: 400px;
   flex-shrink: 0;
+  position: relative;
+}
+
+.sidebar.collapsed {
+  width: 30px;
+  overflow: hidden;
+}
+
+.collapse-toggle {
+  position: absolute;
+  left: -30px;
+  top: 80px;
+  width: 30px;
+  height: 60px;
+  background: white;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-right: none;
+  border-radius: 5px 0 0 5px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.sidebar.collapsed .collapse-toggle {
+  left: 0;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 5px;
+}
+
+.collapse-toggle:hover {
+  background-color: #f9fafb;
+}
+
+.collapse-toggle .chevron {
+  color: #25282d;
+  font-size: 24px;
+  font-weight: bold;
+  line-height: 1;
 }
 
 .history-section {

@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@superdoc-dev/ai": "^0.1.5",
+    "@superdoc-dev/ai": "0.1.6-next.1 ",
     "@vitejs/plugin-vue": "^6.0.2",
     "superdoc": "0.28.0",
     "vue": "^3.5.24"
