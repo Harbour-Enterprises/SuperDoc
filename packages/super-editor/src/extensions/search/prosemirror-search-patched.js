@@ -389,13 +389,14 @@ function checkWordBoundary(state, pos) {
 }
 
 class SearchState {
-  constructor(query, range, deco) {
+  constructor(query, range, highlight, deco) {
     this.query = query;
     this.range = range;
+    this.highlight = highlight;
     this.deco = deco;
   }
 }
-function buildMatchDeco(state, query, range) {
+function buildMatchDeco(state, query, range, highlight = true) {
   if (!query.valid) return DecorationSet.empty;
   let deco = [];
   let sel = state.selection;
@@ -404,7 +405,8 @@ function buildMatchDeco(state, query, range) {
     if (!next) break;
     let cls =
       next.from == sel.from && next.to == sel.to ? 'ProseMirror-active-search-match' : 'ProseMirror-search-match';
-    deco.push(Decoration.inline(next.from, next.to, { class: cls }));
+    const attrs = highlight ? { class: cls } : {};
+    deco.push(Decoration.inline(next.from, next.to, attrs));
     pos = next.to;
   }
   return DecorationSet.create(state.doc, deco);
@@ -421,11 +423,20 @@ function search(options = {}) {
       init(_config, state) {
         let query = options.initialQuery || new SearchQuery({ search: '' });
         let range = options.initialRange || null;
-        return new SearchState(query, range, buildMatchDeco(state, query, range));
+        const highlight = options.initialHighlight ?? true;
+        return new SearchState(query, range, highlight, buildMatchDeco(state, query, range, highlight));
       },
       apply(tr, search, _oldState, state) {
         let set = tr.getMeta(searchKey);
-        if (set) return new SearchState(set.query, set.range, buildMatchDeco(state, set.query, set.range));
+        if (set) {
+          const highlight = set.highlight ?? true;
+          return new SearchState(
+            set.query,
+            set.range,
+            highlight,
+            buildMatchDeco(state, set.query, set.range, highlight),
+          );
+        }
         if (tr.docChanged || tr.selectionSet) {
           let range = search.range;
           if (range) {
@@ -433,7 +444,12 @@ function search(options = {}) {
             let to = tr.mapping.map(range.to, -1);
             range = from < to ? { from, to } : null;
           }
-          search = new SearchState(search.query, range, buildMatchDeco(state, search.query, range));
+          search = new SearchState(
+            search.query,
+            range,
+            search.highlight,
+            buildMatchDeco(state, search.query, range, search.highlight),
+          );
         }
         return search;
       },
@@ -462,8 +478,9 @@ function getMatchHighlights(state) {
 Add metadata to a transaction that updates the active search query
 and searched range, when dispatched.
 */
-function setSearchState(tr, query, range = null) {
-  return tr.setMeta(searchKey, { query, range });
+function setSearchState(tr, query, range = null, options = {}) {
+  const highlight = options.highlight ?? true;
+  return tr.setMeta(searchKey, { query, range, highlight });
 }
 function nextMatch(search, state, wrap, curFrom, curTo) {
   let range = search.range || { from: 0, to: state.doc.content.size };
