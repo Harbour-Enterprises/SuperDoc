@@ -432,6 +432,8 @@ export type ParagraphSpacing = {
   after?: number;
   line?: number;
   lineRule?: 'auto' | 'exact' | 'atLeast';
+  beforeAutospacing?: boolean;
+  afterAutospacing?: boolean;
 };
 export type ParagraphIndent = {
   left?: number;
@@ -471,9 +473,12 @@ export type ParagraphShading = {
  * - Conversion to pixels happens at measurement boundary only
  */
 export type ParagraphAttrs = {
+  styleId?: string;
   alignment?: 'left' | 'center' | 'right' | 'justify';
   spacing?: ParagraphSpacing;
+  contextualSpacing?: boolean;
   indent?: ParagraphIndent;
+  numberingProperties?: Record<string, unknown>;
   borders?: ParagraphBorders;
   shading?: ParagraphShading;
   tabs?: TabStop[];
@@ -485,6 +490,8 @@ export type ParagraphAttrs = {
    */
   trackedChangesMode?: TrackedChangesMode;
   trackedChangesEnabled?: boolean;
+  keepNext?: boolean;
+  keepLines?: boolean;
   direction?: 'ltr' | 'rtl';
   rtl?: boolean;
   /**
@@ -511,6 +518,9 @@ export type ParagraphAttrs = {
    * the paragraph. `floatAlignment` controls where the paragraph block itself is positioned.
    */
   floatAlignment?: 'left' | 'right' | 'center';
+  wordLayout?: unknown;
+  sdt?: SdtMetadata;
+  containerSdt?: SdtMetadata;
 };
 export type ListMarker = {
   kind: 'bullet' | 'number';

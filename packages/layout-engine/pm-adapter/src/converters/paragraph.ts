@@ -21,7 +21,15 @@ import type {
   ThemeColorPalette,
 } from '../types.js';
 import type { ConverterContext } from '../converter-context.js';
-import { computeParagraphAttrs, cloneParagraphAttrs, hasPageBreakBefore } from '../attributes/index.js';
+import {
+  computeParagraphAttrs,
+  cloneParagraphAttrs,
+  hasPageBreakBefore,
+  buildStyleNodeFromAttrs,
+  normalizeParagraphSpacing,
+  normalizeParagraphIndent,
+  normalizePxIndent,
+} from '../attributes/index.js';
 import { hydrateParagraphStyleAttrs } from '../attributes/paragraph-styles.js';
 import { resolveNodeSdtMetadata, getNodeInstruction } from '../sdt/index.js';
 import { shouldRequirePageBoundary, hasIntrinsicBoundarySignals, createSectionBreakBlock } from '../sections/index.js';
@@ -34,6 +42,8 @@ import {
 import { textNodeToRun, tabNodeToRun, tokenNodeToRun } from './text-run.js';
 import { DEFAULT_HYPERLINK_CONFIG, TOKEN_INLINE_TYPES } from '../constants.js';
 import { createLinkedStyleResolver, applyLinkedStyleToRun, extractRunStyleId } from '../styles/linked-run.js';
+import { ptToPx } from '../utilities.js';
+import { resolveStyle } from '@superdoc/style-engine';
 
 /**
  * Helper to check if a run is a text run (not a tab).
@@ -140,6 +150,46 @@ export function mergeAdjacentRuns(runs: Run[]): Run[] {
   return merged;
 }
 
+type RunDefaults = {
+  fontFamily?: string;
+  fontSizePx?: number;
+  color?: string;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: TextRun['underline'];
+  letterSpacing?: number;
+};
+
+const applyBaseRunDefaults = (
+  run: TextRun,
+  defaults: RunDefaults,
+  fallbackFont: string,
+  fallbackSize: number,
+): void => {
+  if (!run) return;
+  if (defaults.fontFamily && run.fontFamily === fallbackFont) {
+    run.fontFamily = defaults.fontFamily;
+  }
+  if (defaults.fontSizePx != null && run.fontSize === fallbackSize) {
+    run.fontSize = defaults.fontSizePx;
+  }
+  if (defaults.color && !run.color) {
+    run.color = defaults.color;
+  }
+  if (defaults.letterSpacing != null && run.letterSpacing == null) {
+    run.letterSpacing = defaults.letterSpacing;
+  }
+  if (defaults.bold && run.bold === undefined) {
+    run.bold = true;
+  }
+  if (defaults.italic && run.italic === undefined) {
+    run.italic = true;
+  }
+  if (defaults.underline && !run.underline) {
+    run.underline = defaults.underline;
+  }
+};
+
 /**
  * Converts a paragraph PM node to an array of FlowBlocks.
  *
@@ -219,8 +269,55 @@ export function paragraphToFlowBlocks(
   converterContext?: ConverterContext,
 ): FlowBlock[] {
   const baseBlockId = nextBlockId('paragraph');
-  const paragraphStyleId = typeof para.attrs?.styleId === 'string' ? para.attrs.styleId : null;
+  const paragraphProps =
+    typeof para.attrs?.paragraphProperties === 'object' && para.attrs.paragraphProperties !== null
+      ? (para.attrs.paragraphProperties as Record<string, unknown>)
+      : {};
+  const paragraphStyleId =
+    typeof para.attrs?.styleId === 'string' && para.attrs.styleId.trim()
+      ? para.attrs.styleId
+      : typeof paragraphProps.styleId === 'string' && paragraphProps.styleId.trim()
+        ? (paragraphProps.styleId as string)
+        : null;
   const paragraphHydration = converterContext ? hydrateParagraphStyleAttrs(para, converterContext) : null;
+  let baseRunDefaults: RunDefaults = {};
+  try {
+    const spacingSource =
+      para.attrs?.spacing !== undefined
+        ? para.attrs.spacing
+        : paragraphProps.spacing !== undefined
+          ? paragraphProps.spacing
+          : paragraphHydration?.spacing;
+    const indentSource = para.attrs?.indent ?? paragraphProps.indent ?? paragraphHydration?.indent;
+    const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
+    const normalizedIndent =
+      normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? para.attrs?.textIndent);
+    const styleNodeAttrs =
+      paragraphHydration?.tabStops && !para.attrs?.tabStops && !para.attrs?.tabs
+        ? { ...(para.attrs ?? {}), tabStops: paragraphHydration.tabStops }
+        : (para.attrs ?? {});
+    const styleNode = buildStyleNodeFromAttrs(styleNodeAttrs, normalizedSpacing, normalizedIndent);
+    if (styleNodeAttrs.styleId == null && paragraphProps.styleId) {
+      styleNode.styleId = paragraphProps.styleId as string;
+    }
+    const resolved = resolveStyle(styleNode, styleContext);
+    baseRunDefaults = {
+      fontFamily: resolved.character.font?.family,
+      fontSizePx: ptToPx(resolved.character.font?.size),
+      color: resolved.character.color,
+      bold: resolved.character.font?.weight != null ? resolved.character.font.weight >= 600 : undefined,
+      italic: resolved.character.font?.italic,
+      underline: resolved.character.underline
+        ? {
+            style: resolved.character.underline.style,
+            color: resolved.character.underline.color,
+          }
+        : undefined,
+      letterSpacing: ptToPx(resolved.character.letterSpacing),
+    };
+  } catch {
+    baseRunDefaults = {};
+  }
   const paragraphAttrs = computeParagraphAttrs(
     para,
     styleContext,
@@ -228,6 +325,18 @@ export function paragraphToFlowBlocks(
     converterContext,
     paragraphHydration,
   );
+  if (paragraphAttrs?.spacing) {
+    const spacing = { ...(paragraphAttrs.spacing as Record<string, unknown>) };
+    const effectiveFontSize = baseRunDefaults.fontSizePx ?? defaultSize;
+    const isList = Boolean(paragraphAttrs.numberingProperties);
+    if (spacing.beforeAutospacing) {
+      spacing.before = isList ? 0 : Math.max(0, Number(spacing.before ?? 0) + effectiveFontSize * 0.5);
+    }
+    if (spacing.afterAutospacing) {
+      spacing.after = isList ? 0 : Math.max(0, Number(spacing.after ?? 0) + effectiveFontSize * 0.5);
+    }
+    paragraphAttrs.spacing = spacing as ParagraphAttrs['spacing'];
+  }
   const linkedStyleResolver = createLinkedStyleResolver(converterContext?.linkedStyles);
   const blocks: FlowBlock[] = [];
 
@@ -321,6 +430,7 @@ export function paragraphToFlowBlocks(
       );
       const inlineStyleId = getInlineStyleId(inheritedMarks);
       applyRunStyles(run, inlineStyleId, activeRunStyleId);
+      applyBaseRunDefaults(run, baseRunDefaults, defaultFont, defaultSize);
       currentRuns.push(run);
       return;
     }
@@ -366,6 +476,7 @@ export function paragraphToFlowBlocks(
           );
           const inlineStyleId = getInlineStyleId(inheritedMarks);
           applyRunStyles(run, inlineStyleId, activeRunStyleId);
+          applyBaseRunDefaults(run, baseRunDefaults, defaultFont, defaultSize);
           currentRuns.push(run);
         }
       }
@@ -416,6 +527,7 @@ export function paragraphToFlowBlocks(
         );
         const inlineStyleId = getInlineStyleId(mergedMarks);
         applyRunStyles(tokenRun, inlineStyleId, activeRunStyleId);
+        applyBaseRunDefaults(tokenRun, baseRunDefaults, defaultFont, defaultSize);
         // Copy PM positions from parent pageReference node
         if (pageRefPos) {
           (tokenRun as TextRun).pmStart = pageRefPos.start;
@@ -482,6 +594,7 @@ export function paragraphToFlowBlocks(
         }
         const inlineStyleId = getInlineStyleId(inheritedMarks);
         applyRunStyles(tokenRun as TextRun, inlineStyleId, activeRunStyleId);
+        applyBaseRunDefaults(tokenRun as TextRun, baseRunDefaults, defaultFont, defaultSize);
         currentRuns.push(tokenRun);
       }
       return;

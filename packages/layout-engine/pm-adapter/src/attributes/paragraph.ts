@@ -404,16 +404,32 @@ export const computeParagraphAttrs = (
   hydrationOverride?: ParagraphStyleHydration | null,
 ): ParagraphAttrs | undefined => {
   const attrs = para.attrs ?? {};
+  const paragraphProps =
+    typeof attrs.paragraphProperties === 'object' && attrs.paragraphProperties !== null
+      ? (attrs.paragraphProperties as Record<string, unknown>)
+      : {};
   const hydrated = hydrationOverride ?? hydrateParagraphStyleAttrs(para, converterContext);
   // Prefer explicit spacing from attrs even if it's null/empty - don't fall back to hydrated
-  const spacingSource = attrs.spacing !== undefined ? attrs.spacing : hydrated?.spacing;
+  const spacingSource =
+    attrs.spacing !== undefined
+      ? attrs.spacing
+      : paragraphProps.spacing !== undefined
+        ? paragraphProps.spacing
+        : hydrated?.spacing;
   const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
-  const indentSource = attrs.indent ?? hydrated?.indent;
+  const indentSource = attrs.indent ?? paragraphProps.indent ?? hydrated?.indent;
   const normalizedIndent =
     normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? attrs.textIndent);
   const styleNodeAttrs =
-    hydrated?.tabStops && !attrs.tabStops && !attrs.tabs ? { ...attrs, tabStops: hydrated.tabStops } : attrs;
+    hydrated?.tabStops && !attrs.tabStops && !attrs.tabs
+      ? { ...attrs, tabStops: hydrated.tabStops }
+      : !attrs.tabStops && paragraphProps.tabStops
+        ? { ...attrs, tabStops: paragraphProps.tabStops }
+        : attrs;
   const styleNode = buildStyleNodeFromAttrs(styleNodeAttrs, normalizedSpacing, normalizedIndent);
+  if (styleNodeAttrs.styleId == null && paragraphProps.styleId) {
+    styleNode.styleId = paragraphProps.styleId as string;
+  }
   const computed = resolveStyle(styleNode, styleContext);
   const { spacing, indent } = resolveSpacingIndent(computed.paragraph, computed.numbering);
 
@@ -443,6 +459,18 @@ export const computeParagraphAttrs = (
 
   const spacingPx = spacingPtToPx(spacing, normalizedSpacing);
   if (spacingPx) paragraphAttrs.spacing = spacingPx;
+  if (normalizedSpacing?.beforeAutospacing != null || normalizedSpacing?.afterAutospacing != null) {
+    paragraphAttrs.spacing = paragraphAttrs.spacing ?? {};
+    if (normalizedSpacing?.beforeAutospacing != null) {
+      (paragraphAttrs.spacing as Record<string, unknown>).beforeAutospacing = normalizedSpacing.beforeAutospacing;
+    }
+    if (normalizedSpacing?.afterAutospacing != null) {
+      (paragraphAttrs.spacing as Record<string, unknown>).afterAutospacing = normalizedSpacing.afterAutospacing;
+    }
+  }
+  if (normalizedSpacing?.contextualSpacing != null) {
+    paragraphAttrs.contextualSpacing = normalizedSpacing.contextualSpacing;
+  }
 
   const hasExplicitIndent = Boolean(normalizedIndent);
   const hasNumberingIndent = Boolean(computed.numbering?.indent?.left || computed.numbering?.indent?.hanging);
@@ -466,9 +494,20 @@ export const computeParagraphAttrs = (
   const shading = normalizeParagraphShading(attrs.shading ?? hydrated?.shading);
   if (shading) paragraphAttrs.shading = shading;
 
+  const keepNext = paragraphProps.keepNext ?? hydrated?.keepNext ?? attrs.keepNext;
+  if (keepNext === true) paragraphAttrs.keepNext = true;
+  const keepLines = paragraphProps.keepLines ?? hydrated?.keepLines ?? attrs.keepLines;
+  if (keepLines === true) paragraphAttrs.keepLines = true;
+
   const paragraphDecimalSeparator = styleContext.defaults?.decimalSeparator ?? DEFAULT_DECIMAL_SEPARATOR;
   if (paragraphDecimalSeparator !== DEFAULT_DECIMAL_SEPARATOR) {
     paragraphAttrs.decimalSeparator = paragraphDecimalSeparator;
+  }
+  const styleIdAttr = typeof attrs.styleId === 'string' ? attrs.styleId : undefined;
+  if (styleIdAttr) {
+    paragraphAttrs.styleId = styleIdAttr;
+  } else if (paragraphProps.styleId) {
+    paragraphAttrs.styleId = paragraphProps.styleId as string;
   }
 
   // Per‑paragraph tab interval override (px or twips)
@@ -520,7 +559,8 @@ export const computeParagraphAttrs = (
   }
 
   // Track B: Compute wordLayout for paragraphs with numberingProperties
-  const numberingSource = attrs.numberingProperties ?? hydrated?.numberingProperties;
+  const numberingSource =
+    attrs.numberingProperties ?? paragraphProps.numberingProperties ?? hydrated?.numberingProperties;
   const rawNumberingProps = toAdapterNumberingProps(numberingSource);
   if (rawNumberingProps) {
     const numberingProps = rawNumberingProps;

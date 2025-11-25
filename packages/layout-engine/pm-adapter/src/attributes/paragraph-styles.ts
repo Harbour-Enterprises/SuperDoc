@@ -36,16 +36,21 @@ export const hydrateParagraphStyleAttrs = (
     return null;
   }
   const attrs = para.attrs ?? {};
-  const styleId = typeof attrs.styleId === 'string' && attrs.styleId.trim() ? attrs.styleId : null;
+  const paragraphProps =
+    typeof attrs.paragraphProperties === 'object' && attrs.paragraphProperties !== null
+      ? (attrs.paragraphProperties as Record<string, unknown>)
+      : {};
+  const styleIdSource = attrs.styleId ?? paragraphProps.styleId;
+  const styleId = typeof styleIdSource === 'string' && styleIdSource.trim() ? styleIdSource : null;
   if (!styleId) {
     return null;
   }
 
   const inlineProps = {
     styleId,
-    numberingProperties: cloneIfObject(attrs.numberingProperties),
-    indent: cloneIfObject(attrs.indent),
-    spacing: cloneIfObject(attrs.spacing),
+    numberingProperties: cloneIfObject(attrs.numberingProperties ?? paragraphProps.numberingProperties),
+    indent: cloneIfObject(attrs.indent ?? paragraphProps.indent),
+    spacing: cloneIfObject(attrs.spacing ?? paragraphProps.spacing),
   };
 
   const resolverParams = {

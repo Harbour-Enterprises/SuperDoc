@@ -3252,7 +3252,8 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #renderSelectionRects(rects: LayoutRect[]) {
-    if (!this.#localSelectionLayer) {
+    const localSelectionLayer = this.#localSelectionLayer;
+    if (!localSelectionLayer) {
       return;
     }
     const pageHeight = this.#getBodyPageHeight();
@@ -3263,7 +3264,7 @@ export class PresentationEditor extends EventEmitter {
       if (!coords) {
         return;
       }
-      const highlight = this.#localSelectionLayer.ownerDocument?.createElement('div');
+      const highlight = localSelectionLayer.ownerDocument?.createElement('div');
       if (!highlight) {
         return;
       }
@@ -3276,7 +3277,7 @@ export class PresentationEditor extends EventEmitter {
       highlight.style.backgroundColor = 'rgba(51, 132, 255, 0.35)';
       highlight.style.borderRadius = '2px';
       highlight.style.pointerEvents = 'none';
-      this.#localSelectionLayer.appendChild(highlight);
+      localSelectionLayer.appendChild(highlight);
     });
   }
 
