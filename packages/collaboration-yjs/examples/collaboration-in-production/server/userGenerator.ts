@@ -1,5 +1,3 @@
-const USER_COLORS = ['#a11134', '#2a7e34', '#b29d11', '#2f4597', '#ab5b22'];
-
 const ADJECTIVES = [
   'Happy', 'Clever', 'Brave', 'Swift', 'Bright', 'Calm', 'Bold', 'Quick', 
   'Wise', 'Cool', 'Kind', 'Smart', 'Wild', 'Free', 'Pure', 'Strong',
@@ -20,9 +18,8 @@ function generateUser() {
   
   return {
     name: fullName,
-    email: `${adjective.toLowerCase()}.${animal.toLowerCase()}${userId}@example.com`,
-    color: USER_COLORS[Math.floor(Math.random() * USER_COLORS.length)],
+    email: `${adjective.toLowerCase()}.${animal.toLowerCase()}${userId}@example.com`
   };
 }
 
-export { USER_COLORS, ADJECTIVES, ANIMALS, generateUser };
+export { ADJECTIVES, ANIMALS, generateUser };
