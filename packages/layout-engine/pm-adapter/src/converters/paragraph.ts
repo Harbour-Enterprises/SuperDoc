@@ -685,7 +685,7 @@ export function paragraphToFlowBlocks(
           bookmarks,
           hyperlinkConfig,
           themeColors,
-          converterContext,
+          ...(converterContext !== undefined ? [converterContext] : []),
         );
         if (tableBlock) {
           blocks.push(tableBlock);

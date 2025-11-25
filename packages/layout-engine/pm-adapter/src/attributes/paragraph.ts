@@ -341,6 +341,10 @@ export const computeWordLayoutForParagraph = (
   numberingProps: AdapterNumberingProps | undefined,
   styleContext: StyleContext,
 ): WordParagraphLayoutOutput | null => {
+  if (numberingProps === null) {
+    return null;
+  }
+
   try {
     // Merge paragraph indent with level-specific indent from numbering definition
     let effectiveIndent = paragraphAttrs.indent;
