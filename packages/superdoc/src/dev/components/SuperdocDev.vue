@@ -1,6 +1,6 @@
 <script setup>
 import '@superdoc/common/styles/common-styles.css';
-import { nextTick, onMounted, provide, ref, shallowRef, computed } from 'vue';
+import { nextTick, onMounted, onBeforeUnmount, provide, ref, shallowRef, computed } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
 import { DOCX, PDF, HTML } from '@superdoc/common';
@@ -485,6 +485,13 @@ const toggleCommentsPanel = () => {
 onMounted(async () => {
   const blankFile = await getFileObject(BlankDOCX, 'test.docx', DOCX);
   handleNewFile(blankFile);
+});
+
+onBeforeUnmount(() => {
+  // Ensure SuperDoc tears down global listeners (e.g., PresentationEditor input bridge)
+  superdoc.value?.destroy?.();
+  superdoc.value = null;
+  activeEditor.value = null;
 });
 
 const toggleLayoutEngine = () => {
