@@ -123,7 +123,7 @@ export const VectorShape = Node.create({
       },
 
       textAlign: {
-        default: 'ctr',
+        default: 'center',
         rendered: false,
       },
     };
