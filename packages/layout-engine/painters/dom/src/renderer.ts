@@ -77,6 +77,13 @@ type MinimalWordLayout = {
   marker?: WordLayoutMarker;
 };
 
+/**
+ * Layout mode for document rendering.
+ * @typedef {('vertical'|'horizontal'|'book')} LayoutMode
+ * - 'vertical': Standard page-by-page vertical layout (default)
+ * - 'horizontal': Pages arranged horizontally side-by-side
+ * - 'book': Book-style layout with facing pages
+ */
 export type LayoutMode = 'vertical' | 'horizontal' | 'book';
 type PageDecorationPayload = {
   fragments: Fragment[];
@@ -90,6 +97,16 @@ type PageDecorationPayload = {
   box?: { x: number; y: number; width: number; height: number };
   hitRegion?: { x: number; y: number; width: number; height: number };
 };
+
+/**
+ * Provider function for page decorations (headers and footers).
+ * Called for each page to generate header or footer content.
+ *
+ * @param {number} pageNumber - The page number (1-indexed)
+ * @param {PageMargins} [pageMargins] - Page margin configuration
+ * @param {Page} [page] - Full page object from the layout
+ * @returns {PageDecorationPayload | null} Decoration payload containing fragments and layout info, or null if no decoration
+ */
 export type PageDecorationProvider = (
   pageNumber: number,
   pageMargins?: PageMargins,
@@ -116,6 +133,13 @@ type BlockLookupEntry = {
   version: string;
 };
 
+/**
+ * Map of block IDs to their corresponding block data and measurements.
+ * Used by the renderer to efficiently look up block information during fragment rendering.
+ * Each entry contains the block definition, its layout measurements, and a version string for cache invalidation.
+ *
+ * @typedef {Map<string, BlockLookupEntry>} BlockLookup
+ */
 export type BlockLookup = Map<string, BlockLookupEntry>;
 
 type FragmentDomState = {
@@ -131,6 +155,16 @@ type PageDomState = {
   fragments: FragmentDomState[];
 };
 
+/**
+ * Rendering context passed to fragment renderers containing page metadata.
+ * Provides information about the current page position and section for dynamic content like page numbers.
+ *
+ * @typedef {Object} FragmentRenderContext
+ * @property {number} pageNumber - Current page number (1-indexed)
+ * @property {number} totalPages - Total number of pages in the document
+ * @property {'body'|'header'|'footer'} section - Document section being rendered
+ * @property {string} [pageNumberText] - Optional formatted page number text (e.g., "Page 1 of 10")
+ */
 export type FragmentRenderContext = {
   pageNumber: number;
   totalPages: number;
@@ -473,6 +507,31 @@ const applyLinkDataset = (element: HTMLElement, dataset?: Record<string, string>
   });
 };
 
+/**
+ * DOM-based document painter that renders layout fragments to HTML elements.
+ * Manages page rendering, virtualization, headers/footers, and incremental updates.
+ *
+ * @class DomPainter
+ *
+ * @remarks
+ * The DomPainter is responsible for:
+ * - Rendering layout fragments (paragraphs, lists, images, tables, drawings) to DOM elements
+ * - Managing page-level DOM structure and styling
+ * - Providing virtualization for large documents (vertical mode only)
+ * - Handling headers and footers via PageDecorationProvider
+ * - Incremental re-rendering when only specific blocks change
+ * - Hyperlink rendering with security sanitization and accessibility
+ *
+ * @example
+ * ```typescript
+ * const painter = new DomPainter(blocks, measures, {
+ *   layoutMode: 'vertical',
+ *   pageStyles: { width: '8.5in', height: '11in' }
+ * });
+ * painter.mount(document.getElementById('editor-container'));
+ * painter.render(layout);
+ * ```
+ */
 export class DomPainter {
   private blockLookup: BlockLookup;
   private readonly options: PainterOptions;
@@ -486,7 +545,14 @@ export class DomPainter {
   private footerProvider?: PageDecorationProvider;
   private totalPages = 0;
   private linkIdCounter = 0; // Counter for generating unique link IDs
-  private pendingTooltips = new WeakMap<HTMLElement, string>(); // Store tooltip data for links before DOM insertion
+
+  /**
+   * WeakMap storing tooltip data for hyperlink elements before DOM insertion.
+   * Uses WeakMap to prevent memory leaks - entries are automatically garbage collected
+   * when the corresponding element is removed from memory.
+   * @private
+   */
+  private pendingTooltips = new WeakMap<HTMLElement, string>();
   // Virtualization state (vertical mode only)
   private virtualEnabled = false;
   private virtualWindow = 5;
@@ -1280,179 +1346,196 @@ export class DomPainter {
   }
 
   private renderListItemFragment(fragment: ListItemFragment, context: FragmentRenderContext): HTMLElement {
-    const lookup = this.blockLookup.get(fragment.blockId);
-    if (!lookup || lookup.block.kind !== 'list' || lookup.measure.kind !== 'list') {
-      throw new Error(`DomPainter: missing list data for fragment ${fragment.blockId}`);
-    }
-
-    if (!this.doc) {
-      throw new Error('DomPainter: document is not available');
-    }
-
-    const block = lookup.block as ListBlock;
-    const measure = lookup.measure as ListMeasure;
-    const item = block.items.find((entry) => entry.id === fragment.itemId);
-    const itemMeasure = measure.items.find((entry) => entry.itemId === fragment.itemId);
-    if (!item || !itemMeasure) {
-      throw new Error(`DomPainter: missing list item ${fragment.itemId}`);
-    }
-
-    const fragmentEl = this.doc.createElement('div');
-    fragmentEl.classList.add(CLASS_NAMES.fragment, `${CLASS_NAMES.fragment}-list-item`);
-    applyStyles(fragmentEl, fragmentStyles);
-    fragmentEl.style.left = `${fragment.x - fragment.markerWidth}px`;
-    fragmentEl.style.top = `${fragment.y}px`;
-    fragmentEl.style.width = `${fragment.markerWidth + fragment.width}px`;
-    fragmentEl.dataset.blockId = fragment.blockId;
-    fragmentEl.dataset.itemId = fragment.itemId;
-
-    const paragraphMetadata = item.paragraph.attrs?.sdt;
-    this.applySdtDataset(fragmentEl, paragraphMetadata);
-
-    if (fragment.continuesFromPrev) {
-      fragmentEl.dataset.continuesFromPrev = 'true';
-    }
-    if (fragment.continuesOnNext) {
-      fragmentEl.dataset.continuesOnNext = 'true';
-    }
-
-    const markerEl = this.doc.createElement('span');
-    markerEl.classList.add('superdoc-list-marker');
-
-    // Track B: Use marker styling from wordLayout if available
-    const wordLayout: MinimalWordLayout | undefined = item.paragraph.attrs?.wordLayout as MinimalWordLayout | undefined;
-    if (wordLayout?.marker) {
-      const marker = (wordLayout as MinimalWordLayout).marker;
-      markerEl.textContent = marker.markerText;
-      markerEl.style.display = 'inline-block';
-      markerEl.style.width = `${Math.max(0, fragment.markerWidth - LIST_MARKER_GAP)}px`;
-      markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
-      markerEl.style.textAlign = marker.justification;
-
-      // Apply marker run styling
-      markerEl.style.fontFamily = marker.run.fontFamily;
-      markerEl.style.fontSize = `${marker.run.fontSize}px`;
-      if (marker.run.bold) markerEl.style.fontWeight = 'bold';
-      if (marker.run.italic) markerEl.style.fontStyle = 'italic';
-      if (marker.run.color) markerEl.style.color = marker.run.color;
-      if (marker.run.letterSpacing) markerEl.style.letterSpacing = `${marker.run.letterSpacing}px`;
-    } else {
-      // Fallback: legacy behavior
-      markerEl.textContent = item.marker.text;
-      markerEl.style.display = 'inline-block';
-      markerEl.style.width = `${Math.max(0, fragment.markerWidth - LIST_MARKER_GAP)}px`;
-      markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
-      if (item.marker.align) {
-        markerEl.style.textAlign = item.marker.align;
+    try {
+      const lookup = this.blockLookup.get(fragment.blockId);
+      if (!lookup || lookup.block.kind !== 'list' || lookup.measure.kind !== 'list') {
+        throw new Error(`DomPainter: missing list data for fragment ${fragment.blockId}`);
       }
+
+      if (!this.doc) {
+        throw new Error('DomPainter: document is not available');
+      }
+
+      const block = lookup.block as ListBlock;
+      const measure = lookup.measure as ListMeasure;
+      const item = block.items.find((entry) => entry.id === fragment.itemId);
+      const itemMeasure = measure.items.find((entry) => entry.itemId === fragment.itemId);
+      if (!item || !itemMeasure) {
+        throw new Error(`DomPainter: missing list item ${fragment.itemId}`);
+      }
+
+      const fragmentEl = this.doc.createElement('div');
+      fragmentEl.classList.add(CLASS_NAMES.fragment, `${CLASS_NAMES.fragment}-list-item`);
+      applyStyles(fragmentEl, fragmentStyles);
+      fragmentEl.style.left = `${fragment.x - fragment.markerWidth}px`;
+      fragmentEl.style.top = `${fragment.y}px`;
+      fragmentEl.style.width = `${fragment.markerWidth + fragment.width}px`;
+      fragmentEl.dataset.blockId = fragment.blockId;
+      fragmentEl.dataset.itemId = fragment.itemId;
+
+      const paragraphMetadata = item.paragraph.attrs?.sdt;
+      this.applySdtDataset(fragmentEl, paragraphMetadata);
+
+      if (fragment.continuesFromPrev) {
+        fragmentEl.dataset.continuesFromPrev = 'true';
+      }
+      if (fragment.continuesOnNext) {
+        fragmentEl.dataset.continuesOnNext = 'true';
+      }
+
+      const markerEl = this.doc.createElement('span');
+      markerEl.classList.add('superdoc-list-marker');
+
+      // Track B: Use marker styling from wordLayout if available
+      const wordLayout: MinimalWordLayout | undefined = item.paragraph.attrs?.wordLayout as
+        | MinimalWordLayout
+        | undefined;
+      if (wordLayout?.marker) {
+        const marker = (wordLayout as MinimalWordLayout).marker;
+        markerEl.textContent = marker.markerText;
+        markerEl.style.display = 'inline-block';
+        markerEl.style.width = `${Math.max(0, fragment.markerWidth - LIST_MARKER_GAP)}px`;
+        markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
+        markerEl.style.textAlign = marker.justification;
+
+        // Apply marker run styling
+        markerEl.style.fontFamily = marker.run.fontFamily;
+        markerEl.style.fontSize = `${marker.run.fontSize}px`;
+        if (marker.run.bold) markerEl.style.fontWeight = 'bold';
+        if (marker.run.italic) markerEl.style.fontStyle = 'italic';
+        if (marker.run.color) markerEl.style.color = marker.run.color;
+        if (marker.run.letterSpacing) markerEl.style.letterSpacing = `${marker.run.letterSpacing}px`;
+      } else {
+        // Fallback: legacy behavior
+        markerEl.textContent = item.marker.text;
+        markerEl.style.display = 'inline-block';
+        markerEl.style.width = `${Math.max(0, fragment.markerWidth - LIST_MARKER_GAP)}px`;
+        markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
+        if (item.marker.align) {
+          markerEl.style.textAlign = item.marker.align;
+        }
+      }
+      fragmentEl.appendChild(markerEl);
+
+      const contentEl = this.doc.createElement('div');
+      contentEl.classList.add('superdoc-list-content');
+      this.applySdtDataset(contentEl, paragraphMetadata);
+      contentEl.style.display = 'inline-block';
+      contentEl.style.width = `${fragment.width}px`;
+      const lines = itemMeasure.paragraph.lines.slice(fragment.fromLine, fragment.toLine);
+      // Track B: preserve indent for wordLayout-based lists to show hierarchy
+      const contentAttrs = wordLayout ? item.paragraph.attrs : stripListIndent(item.paragraph.attrs);
+      applyParagraphBlockStyles(contentEl, contentAttrs);
+      lines.forEach((line) => {
+        const lineEl = this.renderLine(item.paragraph, line, context);
+        contentEl.appendChild(lineEl);
+      });
+      fragmentEl.appendChild(contentEl);
+
+      return fragmentEl;
+    } catch (error) {
+      console.error('[DomPainter] List item fragment rendering failed:', { fragment, error });
+      return this.createErrorPlaceholder(fragment.blockId, error);
     }
-    fragmentEl.appendChild(markerEl);
-
-    const contentEl = this.doc.createElement('div');
-    contentEl.classList.add('superdoc-list-content');
-    this.applySdtDataset(contentEl, paragraphMetadata);
-    contentEl.style.display = 'inline-block';
-    contentEl.style.width = `${fragment.width}px`;
-    const lines = itemMeasure.paragraph.lines.slice(fragment.fromLine, fragment.toLine);
-    // Track B: preserve indent for wordLayout-based lists to show hierarchy
-    const contentAttrs = wordLayout ? item.paragraph.attrs : stripListIndent(item.paragraph.attrs);
-    applyParagraphBlockStyles(contentEl, contentAttrs);
-    lines.forEach((line) => {
-      const lineEl = this.renderLine(item.paragraph, line, context);
-      contentEl.appendChild(lineEl);
-    });
-    fragmentEl.appendChild(contentEl);
-
-    return fragmentEl;
   }
 
   private renderImageFragment(fragment: ImageFragment): HTMLElement {
-    const lookup = this.blockLookup.get(fragment.blockId);
-    if (!lookup || lookup.block.kind !== 'image' || lookup.measure.kind !== 'image') {
-      throw new Error(`DomPainter: missing image block for fragment ${fragment.blockId}`);
+    try {
+      const lookup = this.blockLookup.get(fragment.blockId);
+      if (!lookup || lookup.block.kind !== 'image' || lookup.measure.kind !== 'image') {
+        throw new Error(`DomPainter: missing image block for fragment ${fragment.blockId}`);
+      }
+
+      if (!this.doc) {
+        throw new Error('DomPainter: document is not available');
+      }
+
+      const block = lookup.block as ImageBlock;
+
+      const fragmentEl = this.doc.createElement('div');
+      fragmentEl.classList.add(CLASS_NAMES.fragment);
+      applyStyles(fragmentEl, fragmentStyles);
+      this.applyFragmentFrame(fragmentEl, fragment);
+      fragmentEl.style.height = `${fragment.height}px`;
+      this.applySdtDataset(fragmentEl, block.attrs?.sdt);
+      this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
+
+      // Apply z-index for anchored images
+      if (fragment.isAnchored && fragment.zIndex != null) {
+        fragmentEl.style.zIndex = String(fragment.zIndex);
+      }
+
+      // behindDoc images are supported via z-index; suppress noisy debug logs
+
+      const img = this.doc.createElement('img');
+      if (block.src) {
+        img.src = block.src;
+      }
+      img.alt = block.alt ?? '';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = block.objectFit ?? 'contain';
+      img.style.display = block.display === 'inline' ? 'inline-block' : 'block';
+      fragmentEl.appendChild(img);
+
+      return fragmentEl;
+    } catch (error) {
+      console.error('[DomPainter] Image fragment rendering failed:', { fragment, error });
+      return this.createErrorPlaceholder(fragment.blockId, error);
     }
-
-    if (!this.doc) {
-      throw new Error('DomPainter: document is not available');
-    }
-
-    const block = lookup.block as ImageBlock;
-
-    const fragmentEl = this.doc.createElement('div');
-    fragmentEl.classList.add(CLASS_NAMES.fragment);
-    applyStyles(fragmentEl, fragmentStyles);
-    this.applyFragmentFrame(fragmentEl, fragment);
-    fragmentEl.style.height = `${fragment.height}px`;
-    this.applySdtDataset(fragmentEl, block.attrs?.sdt);
-    this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
-
-    // Apply z-index for anchored images
-    if (fragment.isAnchored && fragment.zIndex != null) {
-      fragmentEl.style.zIndex = String(fragment.zIndex);
-    }
-
-    // behindDoc images are supported via z-index; suppress noisy debug logs
-
-    const img = this.doc.createElement('img');
-    if (block.src) {
-      img.src = block.src;
-    }
-    img.alt = block.alt ?? '';
-    img.style.width = '100%';
-    img.style.height = '100%';
-    img.style.objectFit = block.objectFit ?? 'contain';
-    img.style.display = block.display === 'inline' ? 'inline-block' : 'block';
-    fragmentEl.appendChild(img);
-
-    return fragmentEl;
   }
 
   private renderDrawingFragment(fragment: DrawingFragment): HTMLElement {
-    const lookup = this.blockLookup.get(fragment.blockId);
-    if (!lookup || lookup.block.kind !== 'drawing' || lookup.measure.kind !== 'drawing') {
-      throw new Error(`DomPainter: missing drawing block for fragment ${fragment.blockId}`);
+    try {
+      const lookup = this.blockLookup.get(fragment.blockId);
+      if (!lookup || lookup.block.kind !== 'drawing' || lookup.measure.kind !== 'drawing') {
+        throw new Error(`DomPainter: missing drawing block for fragment ${fragment.blockId}`);
+      }
+      if (!this.doc) {
+        throw new Error('DomPainter: document is not available');
+      }
+
+      const block = lookup.block as DrawingBlock;
+      const isVectorShapeBlock = block.kind === 'drawing' && block.drawingKind === 'vectorShape';
+
+      const fragmentEl = this.doc.createElement('div');
+      fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-drawing-fragment');
+      applyStyles(fragmentEl, fragmentStyles);
+      this.applyFragmentFrame(fragmentEl, fragment);
+      fragmentEl.style.height = `${fragment.height}px`;
+      fragmentEl.style.position = 'absolute';
+
+      if (fragment.isAnchored && fragment.zIndex != null) {
+        fragmentEl.style.zIndex = String(fragment.zIndex);
+      }
+
+      const innerWrapper = this.doc.createElement('div');
+      innerWrapper.classList.add('superdoc-drawing-inner');
+      innerWrapper.style.position = 'absolute';
+      innerWrapper.style.left = '50%';
+      innerWrapper.style.top = '50%';
+      innerWrapper.style.width = `${fragment.geometry.width}px`;
+      innerWrapper.style.height = `${fragment.geometry.height}px`;
+      innerWrapper.style.transformOrigin = 'center';
+
+      const scale = fragment.scale ?? 1;
+      const transforms: string[] = ['translate(-50%, -50%)'];
+      if (!isVectorShapeBlock) {
+        transforms.push(`rotate(${fragment.geometry.rotation ?? 0}deg)`);
+        transforms.push(`scaleX(${fragment.geometry.flipH ? -1 : 1})`);
+        transforms.push(`scaleY(${fragment.geometry.flipV ? -1 : 1})`);
+      }
+      transforms.push(`scale(${scale})`);
+      innerWrapper.style.transform = transforms.join(' ');
+
+      innerWrapper.appendChild(this.renderDrawingContent(block, fragment));
+      fragmentEl.appendChild(innerWrapper);
+
+      return fragmentEl;
+    } catch (error) {
+      console.error('[DomPainter] Drawing fragment rendering failed:', { fragment, error });
+      return this.createErrorPlaceholder(fragment.blockId, error);
     }
-    if (!this.doc) {
-      throw new Error('DomPainter: document is not available');
-    }
-
-    const block = lookup.block as DrawingBlock;
-    const isVectorShapeBlock = block.kind === 'drawing' && block.drawingKind === 'vectorShape';
-
-    const fragmentEl = this.doc.createElement('div');
-    fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-drawing-fragment');
-    applyStyles(fragmentEl, fragmentStyles);
-    this.applyFragmentFrame(fragmentEl, fragment);
-    fragmentEl.style.height = `${fragment.height}px`;
-    fragmentEl.style.position = 'absolute';
-
-    if (fragment.isAnchored && fragment.zIndex != null) {
-      fragmentEl.style.zIndex = String(fragment.zIndex);
-    }
-
-    const innerWrapper = this.doc.createElement('div');
-    innerWrapper.classList.add('superdoc-drawing-inner');
-    innerWrapper.style.position = 'absolute';
-    innerWrapper.style.left = '50%';
-    innerWrapper.style.top = '50%';
-    innerWrapper.style.width = `${fragment.geometry.width}px`;
-    innerWrapper.style.height = `${fragment.geometry.height}px`;
-    innerWrapper.style.transformOrigin = 'center';
-
-    const scale = fragment.scale ?? 1;
-    const transforms: string[] = ['translate(-50%, -50%)'];
-    if (!isVectorShapeBlock) {
-      transforms.push(`rotate(${fragment.geometry.rotation ?? 0}deg)`);
-      transforms.push(`scaleX(${fragment.geometry.flipH ? -1 : 1})`);
-      transforms.push(`scaleY(${fragment.geometry.flipV ? -1 : 1})`);
-    }
-    transforms.push(`scale(${scale})`);
-    innerWrapper.style.transform = transforms.join(' ');
-
-    innerWrapper.appendChild(this.renderDrawingContent(block, fragment));
-    fragmentEl.appendChild(innerWrapper);
-
-    return fragmentEl;
   }
 
   private renderDrawingContent(block: DrawingBlock, fragment: DrawingFragment): HTMLElement {
@@ -2431,6 +2514,24 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
   return base;
 };
 
+/**
+ * Derives a version string for a flow block based on its content and styling properties.
+ *
+ * This version string is used for cache invalidation - when any visual property of the block
+ * changes, the version string changes, triggering a DOM rebuild instead of reusing cached elements.
+ *
+ * The version includes all properties that affect visual rendering:
+ * - Text content
+ * - Font properties (family, size, bold, italic)
+ * - Text decorations (underline style/color, strike, highlight)
+ * - Spacing (letterSpacing)
+ * - Position markers (pmStart, pmEnd)
+ * - Special tokens (page numbers, etc.)
+ *
+ * @param block - The flow block to generate a version string for
+ * @returns A pipe-delimited string representing all visual properties of the block.
+ *          Changes to any included property will change the version string.
+ */
 const deriveBlockVersion = (block: FlowBlock): string => {
   if (block.kind === 'paragraph') {
     return block.runs
@@ -2442,6 +2543,12 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           run.kind !== 'tab' && run.bold ? 1 : 0,
           run.kind !== 'tab' && run.italic ? 1 : 0,
           run.kind !== 'tab' ? (run.color ?? '') : '',
+          // Text decorations - ensures DOM updates when decoration properties change.
+          run.kind !== 'tab' ? (run.underline?.style ?? '') : '',
+          run.kind !== 'tab' ? (run.underline?.color ?? '') : '',
+          run.kind !== 'tab' && run.strike ? 1 : 0,
+          run.kind !== 'tab' ? (run.highlight ?? '') : '',
+          run.kind !== 'tab' && run.letterSpacing != null ? run.letterSpacing : '',
           run.pmStart ?? '',
           run.pmEnd ?? '',
           run.kind !== 'tab' ? (run.token ?? '') : '',
@@ -2660,6 +2767,27 @@ const applyParagraphShadingStyles = (element: HTMLElement, shading?: ParagraphAt
   element.style.backgroundColor = shading.fill;
 };
 
+/**
+ * Extracts and slices text runs that belong to a specific line within a paragraph block.
+ * Handles partial runs at line boundaries by creating sliced copies with correct character ranges.
+ *
+ * @param {ParagraphBlock} block - The paragraph block containing runs
+ * @param {Line} line - The line definition with fromRun/toRun and fromChar/toChar ranges
+ * @returns {Run[]} Array of runs (or sliced run portions) that comprise the line
+ *
+ * @remarks
+ * - Preserves run styling and metadata (pmStart, pmEnd positions) in sliced runs
+ * - Tab runs are only included if the slice contains the actual tab character
+ * - Text runs are sliced to match exact character boundaries of the line
+ * - Returns empty array if no valid runs are found within the line range
+ *
+ * @example
+ * ```typescript
+ * const line = { fromRun: 0, toRun: 2, fromChar: 5, toChar: 10 };
+ * const runs = sliceRunsForLine(paragraphBlock, line);
+ * // Returns runs or run slices that fall within the specified character range
+ * ```
+ */
 export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
   const result: Run[] = [];
 

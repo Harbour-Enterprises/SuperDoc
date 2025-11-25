@@ -17,6 +17,8 @@ export type PageState = {
   contentBottom: number;
   constraintBoundaries: ConstraintBoundary[];
   activeConstraintIndex: number;
+  trailingSpacing: number;
+  lastParagraphStyleId?: string;
 };
 export type PaginatorOptions = {
   margins: {

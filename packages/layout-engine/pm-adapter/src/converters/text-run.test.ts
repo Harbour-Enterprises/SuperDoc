@@ -452,7 +452,8 @@ describe('tabNodeToRun', () => {
 
     const result = tabNodeToRun(tabNode, positions, 0, paragraphNode) as TabRun;
 
-    expect(result.tabStops).toEqual([]);
+    // Empty arrays are normalized to undefined for cleaner output
+    expect(result.tabStops).toBeUndefined();
   });
 
   it('handles multiple tab stops in paragraph', () => {

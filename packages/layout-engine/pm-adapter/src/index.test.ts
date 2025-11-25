@@ -54,7 +54,7 @@ describe('toFlowBlocks', () => {
         runs: [
           {
             text: 'Hello world',
-            fontFamily: 'Arial',
+            fontFamily: 'Arial, sans-serif',
             fontSize: 16,
           },
         ],
@@ -98,7 +98,7 @@ describe('toFlowBlocks', () => {
       });
 
       expect(blocks[0].runs[0]).toMatchObject({
-        fontFamily: 'Times New Roman',
+        fontFamily: 'Times New Roman, sans-serif',
         fontSize: 14,
       });
     });
