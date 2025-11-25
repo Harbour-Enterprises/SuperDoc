@@ -169,9 +169,9 @@ function getCrypto(): Crypto | undefined {
     (globalThis as typeof globalThis & { crypto?: Crypto }).crypto ??
     (globalThis as typeof globalThis & { msCrypto?: Crypto }).msCrypto;
 
-  // if (cryptoObj?.getRandomValues) {
-  //   return cryptoObj;
-  // }
+  if (cryptoObj?.getRandomValues) {
+    return cryptoObj;
+  }
 
   return undefined;
 }
