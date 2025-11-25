@@ -1,8 +1,27 @@
 /**
+ * Context object passed to extension config functions.
+ * This represents the runtime context available to extension configuration.
+ */
+export interface ExtensionContext {
+  /** The name of the extension */
+  name: string;
+  /** Extension-specific options */
+  options?: Record<string, unknown>;
+  /** Extension-specific storage */
+  storage?: Record<string, unknown>;
+  /** The editor instance (when available) */
+  editor?: unknown;
+  /** The schema type for this extension (when available) */
+  type?: unknown;
+  /** Additional context properties that may be passed */
+  [key: string]: unknown;
+}
+
+/**
  * Base interface for extensions with a config object.
  */
 export interface ExtensionLike {
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 }
 
 /**
@@ -12,11 +31,12 @@ export interface ExtensionLike {
  * @param field The config field name.
  * @param context The context object to bind to function.
  * @returns The config field value or bound function.
+ * @template T The expected return type of the config field.
  */
-export function getExtensionConfigField<T = any>(
+export function getExtensionConfigField<T = unknown>(
   extension: ExtensionLike,
   field: string,
-  context: Record<string, any> = {}
+  context: ExtensionContext = { name: '' },
 ): T {
   const fieldValue = extension.config[field];
 

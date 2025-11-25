@@ -152,6 +152,7 @@ const decode = (params, decodedAttrs) => {
   const sanitizedCells = trimmedSlice.map((cell) => {
     if (cell?.attrs && '__placeholder' in cell.attrs) {
       const { __placeholder, ...rest } = cell.attrs;
+      void __placeholder; // Explicitly mark as intentionally unused
       return { ...cell, attrs: rest };
     }
     return cell;

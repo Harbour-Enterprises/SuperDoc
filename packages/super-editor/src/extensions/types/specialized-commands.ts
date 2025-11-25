@@ -57,34 +57,34 @@ type StructuredContentTableAppendOptions = {
 };
 
 export interface SpecializedCommandAugmentations {
-    // Bookmarks
-    insertBookmark: (config: BookmarkConfig) => boolean;
-    goToBookmark: (name: string) => boolean;
-    insertBookmarkEnd: (id: string) => boolean;
+  // Bookmarks
+  insertBookmark: (config: BookmarkConfig) => boolean;
+  goToBookmark: (name: string) => boolean;
+  insertBookmarkEnd: (id: string) => boolean;
 
-    // Search
-    goToFirstMatch: () => boolean;
-    search: (pattern: string | RegExp) => SearchMatch[];
-    goToSearchResult: (match: SearchMatch) => boolean;
+  // Search
+  goToFirstMatch: () => boolean;
+  search: (pattern: string | RegExp) => SearchMatch[];
+  goToSearchResult: (match: SearchMatch) => boolean;
 
-    // Custom selection
-    restorePreservedSelection: () => boolean;
+  // Custom selection
+  restorePreservedSelection: () => boolean;
 
-    // Document sections
-    createDocumentSection: (options?: DocumentSectionCreateOptions) => boolean;
-    removeSectionAtSelection: () => boolean;
-    removeSectionById: (id: number) => boolean;
-    lockSectionById: (id: number) => boolean;
-    updateSectionById: (options: DocumentSectionUpdateOptions) => boolean;
+  // Document sections
+  createDocumentSection: (options?: DocumentSectionCreateOptions) => boolean;
+  removeSectionAtSelection: () => boolean;
+  removeSectionById: (id: number) => boolean;
+  lockSectionById: (id: number) => boolean;
+  updateSectionById: (options: DocumentSectionUpdateOptions) => boolean;
 
-    // Structured content fields/blocks
-    insertStructuredContentInline: (options?: StructuredContentInlineInsert) => boolean;
-    insertStructuredContentBlock: (options?: StructuredContentBlockInsert) => boolean;
-    updateStructuredContentById: (id: string, options?: StructuredContentUpdateOptions) => boolean;
-    deleteStructuredContent: (entries: Array<{ node: ProseMirrorNode; pos: number }>) => boolean;
-    deleteStructuredContentById: (idOrIds: string | string[]) => boolean;
-    deleteStructuredContentAtSelection: () => boolean;
-    appendRowsToStructuredContentTable: (options: StructuredContentTableAppendOptions) => boolean;
+  // Structured content fields/blocks
+  insertStructuredContentInline: (options?: StructuredContentInlineInsert) => boolean;
+  insertStructuredContentBlock: (options?: StructuredContentBlockInsert) => boolean;
+  updateStructuredContentById: (id: string, options?: StructuredContentUpdateOptions) => boolean;
+  deleteStructuredContent: (entries: Array<{ node: ProseMirrorNode; pos: number }>) => boolean;
+  deleteStructuredContentById: (idOrIds: string | string[]) => boolean;
+  deleteStructuredContentAtSelection: () => boolean;
+  appendRowsToStructuredContentTable: (options: StructuredContentTableAppendOptions) => boolean;
 }
 
 declare module '@core/types/ChainedCommands.js' {

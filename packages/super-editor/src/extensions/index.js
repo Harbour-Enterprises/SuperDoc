@@ -4,8 +4,6 @@ import { Color } from './color/index.js';
 import { FontFamily } from './font-family/index.js';
 import { FontSize } from './font-size/index.js';
 import { TextAlign } from './text-align/index.js';
-import { TextIndent } from './text-indent/index.js';
-import { LineHeight } from './line-height/index.js';
 import { FormatCommands } from './format-commands/index.js';
 import { DropCursor } from './dropcursor/index.js';
 import { Gapcursor } from './gapcursor/index.js';
@@ -65,7 +63,6 @@ import { CommentsPlugin } from './comment/index.js';
 import { Placeholder } from './placeholder/index.js';
 import { PopoverPlugin } from './popover-plugin/index.js';
 import { TrackChanges } from './track-changes/index.js';
-import { Pagination } from './pagination/index.js';
 import { LinkedStyles } from './linked-styles/linked-styles.js';
 import { Search } from './search/index.js';
 import { NodeResizer } from './noderesizer/index.js';
@@ -84,13 +81,11 @@ const getRichTextExtensions = () => {
     History,
     Heading,
     Italic,
-    LineHeight,
     Link,
     Paragraph,
     Strike,
     Text,
     TextAlign,
-    TextIndent,
     TextStyle,
     Underline,
     Placeholder,
@@ -128,7 +123,6 @@ const getStarterExtensions = () => {
     History,
     Heading,
     Italic,
-    LineHeight,
     Link,
     Paragraph,
     LineBreak,
@@ -140,7 +134,6 @@ const getStarterExtensions = () => {
     TableOfContents,
     Text,
     TextAlign,
-    TextIndent,
     TextStyle,
     Underline,
     FormatCommands,
@@ -163,7 +156,6 @@ const getStarterExtensions = () => {
     TrackDelete,
     TrackFormat,
     CommentsMark,
-    Pagination,
     Highlight,
     LinkedStyles,
     AiPlugin,
@@ -212,9 +204,7 @@ export {
   FontFamily,
   FontSize,
   TextAlign,
-  TextIndent,
   TextStyle,
-  LineHeight,
   FormatCommands,
   CommentsPlugin,
   Gapcursor,

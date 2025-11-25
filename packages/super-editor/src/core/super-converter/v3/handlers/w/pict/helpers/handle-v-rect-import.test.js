@@ -197,7 +197,7 @@ describe('handleVRectImport', () => {
 
     const result = handleVRectImport(options);
 
-    expect(result.attrs.spacing).toEqual({
+    expect(result.attrs.paragraphProperties.spacing).toEqual({
       after: 200,
       before: 100,
       line: 240,
@@ -225,7 +225,7 @@ describe('handleVRectImport', () => {
 
     const result = handleVRectImport(options);
 
-    expect(result.attrs.indent).toEqual({
+    expect(result.attrs.paragraphProperties.indent).toEqual({
       left: 400,
       right: 200,
     });

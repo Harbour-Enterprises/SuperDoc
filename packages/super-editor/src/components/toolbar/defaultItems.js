@@ -927,18 +927,6 @@ export const makeDefaultItems = ({
     });
   }
 
-  const pageBreakTool = useToolbarItem({
-    type: 'button',
-    name: 'pageBreakTool',
-    command: 'insertPageBreak',
-    icon: toolbarIcons.pageBreak,
-    active: false,
-    tooltip: toolbarTexts.pageBreak,
-    attributes: {
-      ariaLabel: 'Page break',
-    },
-  });
-
   // define sizes to calculate toolbar overflow items
   const controlSizes = new Map([
     ['separator', 20],
@@ -1004,9 +992,9 @@ export const makeDefaultItems = ({
         },
       },
     ],
-    onActivate: ({ linkedStyleMark }) => {
+    onActivate: ({ styleId }) => {
       const styles = getQuickFormatList(superToolbar.activeEditor);
-      const selectedStyle = styles?.find((style) => style.id === linkedStyleMark?.attrs?.styleId);
+      const selectedStyle = styles?.find((style) => style.id === styleId);
       // Normal linked style is default one
       linkedStyles.label.value =
         selectedStyle && selectedStyle.id !== 'Normal' ? selectedStyle.definition.attrs.name : toolbarTexts.formatText;
@@ -1019,7 +1007,7 @@ export const makeDefaultItems = ({
   });
 
   const renderIcon = (value, selectedValue) => {
-    if (selectedValue.value.toString() !== value) return;
+    if (selectedValue.value != value) return;
     return h('div', { innerHTML: checkIconSvg, class: 'dropdown-select-icon' });
   };
 
@@ -1040,44 +1028,14 @@ export const makeDefaultItems = ({
     attributes: {
       ariaLabel: 'Line height',
     },
-    options: [
-      {
-        label: '1.0',
-        key: '1',
-        icon: () => renderIcon('1', lineHeight.selectedValue),
+    options: [1, 1.15, 1.5, 2, 2.5, 3].map((lineHeightValue) => {
+      return {
+        label: lineHeightValue.toFixed(2),
+        key: lineHeightValue,
+        icon: () => renderIcon(lineHeightValue, lineHeight.selectedValue),
         props: { 'data-item': 'btn-lineHeight-option' },
-      },
-      {
-        label: '1.15',
-        key: '1.15',
-        icon: () => renderIcon('1.15', lineHeight.selectedValue),
-        props: { 'data-item': 'btn-lineHeight-option' },
-      },
-      {
-        label: '1.5',
-        key: '1.5',
-        icon: () => renderIcon('1.5', lineHeight.selectedValue),
-        props: { 'data-item': 'btn-lineHeight-option' },
-      },
-      {
-        label: '2.0',
-        key: '2',
-        icon: () => renderIcon('2', lineHeight.selectedValue),
-        props: { 'data-item': 'btn-lineHeight-option' },
-      },
-      {
-        label: '2.5',
-        key: '2.5',
-        icon: () => renderIcon('2.5', lineHeight.selectedValue),
-        props: { 'data-item': 'btn-lineHeight-option' },
-      },
-      {
-        label: '3.0',
-        key: '3',
-        icon: () => renderIcon('3', lineHeight.selectedValue),
-        props: { 'data-item': 'btn-lineHeight-option' },
-      },
-    ],
+      };
+    }),
   });
 
   // Responsive toolbar calculations
@@ -1131,7 +1089,6 @@ export const makeDefaultItems = ({
     linkedStyles,
     separator,
     ruler,
-    pageBreakTool,
     copyFormat,
     clearFormatting,
     aiButton,
@@ -1146,11 +1103,6 @@ export const makeDefaultItems = ({
   // Hide separators on small screens
   if (availableWidth <= breakpoints.md && hideButtons) {
     toolbarItems = toolbarItems.filter((item) => item.type !== 'separator');
-  }
-
-  // If no pagination, remove the page break tool
-  if (!superToolbar.config.pagination) {
-    toolbarItems = toolbarItems.filter((item) => item.name.value !== 'pageBreakTool');
   }
 
   // Remove docx only items

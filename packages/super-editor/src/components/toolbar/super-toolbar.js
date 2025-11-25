@@ -22,6 +22,9 @@ import { yUndoPluginKey } from 'y-prosemirror';
 import { isNegatedMark } from './format-negation.js';
 import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
 import { isList } from '@core/commands/list-helpers';
+import { calculateResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
+import { twipsToLines } from '@converter/helpers';
+import { parseSizeUnit } from '@core/utilities';
 
 /**
  * @typedef {function(CommandItem): void} CommandCallback
@@ -36,7 +39,6 @@ import { isList } from '@core/commands/list-helpers';
  * @property {string} [selector] - CSS selector for the toolbar container
  * @property {string[]} [toolbarGroups=['left', 'center', 'right']] - Groups to organize toolbar items
  * @property {string} [role='editor'] - Role of the toolbar ('editor' or 'viewer')
- * @property {boolean} [pagination=false] - Whether pagination is enabled
  * @property {Object} [icons] - Custom icons for toolbar items
  * @property {Object} [texts] - Custom texts for toolbar items
  * @property {string} [mode='docx'] - Editor mode
@@ -141,6 +143,23 @@ import { isList } from '@core/commands/list-helpers';
  */
 export class SuperToolbar extends EventEmitter {
   /**
+   * Mark toggle names used to identify mark commands that need special handling
+   * when the editor is not focused.
+   * @type {Set<string>}
+   * @private
+   */
+  static #MARK_TOGGLE_NAMES = new Set([
+    'bold',
+    'italic',
+    'underline',
+    'strike',
+    'highlight',
+    'color',
+    'fontSize',
+    'fontFamily',
+  ]);
+
+  /**
    * Default configuration for the toolbar
    * @type {ToolbarConfig}
    */
@@ -148,7 +167,6 @@ export class SuperToolbar extends EventEmitter {
     selector: null,
     toolbarGroups: ['left', 'center', 'right'],
     role: 'editor',
-    pagination: false,
     icons: { ...toolbarIcons },
     texts: { ...toolbarTexts },
     fonts: null,
@@ -196,6 +214,31 @@ export class SuperToolbar extends EventEmitter {
 
     this.config.hideButtons = config.hideButtons ?? true;
     this.config.responsiveToContainer = config.responsiveToContainer ?? false;
+
+    /**
+     * Queue of mark commands to execute when editor regains focus.
+     * @type {Array<{command: string, argument: *, item: ToolbarItem}>}
+     * @private
+     */
+    this.pendingMarkCommands = [];
+
+    /**
+     * Persisted stored marks to re-apply when the selection is empty and has no formatting.
+     * @type {import('prosemirror-model').Mark[]|null}
+     * @private
+     */
+    this.stickyStoredMarks = null;
+
+    /**
+     * Bound event handlers stored for proper cleanup when switching editors.
+     * @type {{transaction: Function|null, selectionUpdate: Function|null, focus: Function|null}}
+     * @private
+     */
+    this._boundEditorHandlers = {
+      transaction: null,
+      selectionUpdate: null,
+      focus: null,
+    };
 
     // Move legacy 'element' to 'selector'
     if (!this.config.selector && this.config.element) {
@@ -287,12 +330,12 @@ export class SuperToolbar extends EventEmitter {
       // Zoom property doesn't work correctly when testing on mobile devices
       if (isMobileDevice && isSmallScreen) {
         layers.style.transformOrigin = '0 0';
-        layers.style.transform = `scale(${parseInt(argument) / 100})`;
+        layers.style.transform = `scale(${parseInt(argument, 10) / 100})`;
       } else {
-        layers.style.zoom = parseInt(argument) / 100;
+        layers.style.zoom = parseInt(argument, 10) / 100;
       }
 
-      this.superdoc.superdocStore.activeZoom = parseInt(argument);
+      this.superdoc.superdocStore.activeZoom = parseInt(argument, 10);
     },
 
     /**
@@ -386,37 +429,43 @@ export class SuperToolbar extends EventEmitter {
      * @returns {Promise<void>}
      */
     startImageUpload: async () => {
-      let open = getFileOpener();
-      let result = await open();
+      try {
+        let open = getFileOpener();
+        let result = await open();
 
-      if (!result?.file) {
-        return;
+        if (!result?.file) {
+          return;
+        }
+
+        const { size, file } = await checkAndProcessImage({
+          file: result.file,
+          getMaxContentSize: () => this.activeEditor.getMaxContentSize(),
+        });
+
+        if (!file) {
+          return;
+        }
+
+        const id = {};
+
+        replaceSelectionWithImagePlaceholder({
+          view: this.activeEditor.view,
+          editorOptions: this.activeEditor.options,
+          id,
+        });
+
+        await uploadAndInsertImage({
+          editor: this.activeEditor,
+          view: this.activeEditor.view,
+          file,
+          size,
+          id,
+        });
+      } catch (error) {
+        const err = new Error('[super-toolbar 🎨] Image upload failed');
+        this.emit('exception', { error: err, editor: this.activeEditor, originalError: error });
+        console.error(err, error);
       }
-
-      const { size, file } = await checkAndProcessImage({
-        file: result.file,
-        getMaxContentSize: () => this.activeEditor.getMaxContentSize(),
-      });
-
-      if (!file) {
-        return;
-      }
-
-      const id = {};
-
-      replaceSelectionWithImagePlaceholder({
-        view: this.activeEditor.view,
-        editorOptions: this.activeEditor.options,
-        id,
-      });
-
-      await uploadAndInsertImage({
-        editor: this.activeEditor,
-        view: this.activeEditor.view,
-        file,
-        size,
-        id,
-      });
     },
 
     /**
@@ -599,12 +648,35 @@ export class SuperToolbar extends EventEmitter {
 
   /**
    * The toolbar expects an active Super Editor instance.
-   * @param {Object} editor - The editor instance to attach to the toolbar
+   * Removes listeners from the previous editor (if any) before attaching to the new one.
+   * @param {Object|null} editor - The editor instance to attach to the toolbar, or null to detach
    * @returns {void}
    */
   setActiveEditor(editor) {
+    // Remove listeners from previous editor to prevent memory leaks
+    if (this.activeEditor && this._boundEditorHandlers.transaction) {
+      this.activeEditor.off('transaction', this._boundEditorHandlers.transaction);
+      this.activeEditor.off('selectionUpdate', this._boundEditorHandlers.selectionUpdate);
+      this.activeEditor.off('focus', this._boundEditorHandlers.focus);
+      // Clear bound handlers when removing editor
+      this._boundEditorHandlers.transaction = null;
+      this._boundEditorHandlers.selectionUpdate = null;
+      this._boundEditorHandlers.focus = null;
+    }
+
     this.activeEditor = editor;
-    this.activeEditor.on('transaction', this.onEditorTransaction.bind(this));
+
+    // Only attach listeners if editor is not null
+    if (editor) {
+      // Create and store bound handlers for later cleanup
+      this._boundEditorHandlers.transaction = this.onEditorTransaction.bind(this);
+      this._boundEditorHandlers.selectionUpdate = this.onEditorSelectionUpdate.bind(this);
+      this._boundEditorHandlers.focus = this.onEditorFocus.bind(this);
+
+      this.activeEditor.on('transaction', this._boundEditorHandlers.transaction);
+      this.activeEditor.on('selectionUpdate', this._boundEditorHandlers.selectionUpdate);
+      this.activeEditor.on('focus', this._boundEditorHandlers.focus);
+    }
   }
 
   /**
@@ -760,6 +832,14 @@ export class SuperToolbar extends EventEmitter {
 
     const marks = getActiveFormatting(this.activeEditor);
     const inTable = isInTable(this.activeEditor.state);
+    const paragraphParent = findParentNode((n) => n.type.name === 'paragraph')(selection);
+    const paragraphProps = paragraphParent
+      ? calculateResolvedParagraphProperties(
+          this.activeEditor,
+          paragraphParent.node,
+          state.doc.resolve(paragraphParent.pos),
+        )
+      : null;
 
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
@@ -783,11 +863,10 @@ export class SuperToolbar extends EventEmitter {
       // Linked Styles dropdown behaves a bit different from other buttons.
       // We need to disable it manually if there are no linked styles to show
       if (item.name.value === 'linkedStyles') {
-        const linkedStyleMark = marks.find((mark) => mark.name === 'styleId');
         if (this.activeEditor && !getQuickFormatList(this.activeEditor).length) {
           return item.deactivate();
         } else {
-          return item.activate({ linkedStyleMark });
+          return item.activate({ styleId: paragraphProps?.styleId || null });
         }
       }
 
@@ -808,16 +887,14 @@ export class SuperToolbar extends EventEmitter {
       }
 
       // Activate toolbar items based on linked styles (if there's no active mark to avoid overriding  it)
-      const styleIdMark = marks.find((mark) => mark.name === 'styleId');
-      if (!activeMark && !markNegated && styleIdMark?.attrs.styleId) {
+      if (!activeMark && !markNegated && paragraphParent && paragraphProps?.styleId) {
         const markToStyleMap = {
           fontSize: 'font-size',
           fontFamily: 'font-family',
           bold: 'bold',
-          textAlign: 'textAlign',
         };
         const linkedStyles = this.activeEditor.converter?.linkedStyles.find(
-          (style) => style.id === styleIdMark.attrs.styleId,
+          (style) => style.id === paragraphProps.styleId,
         );
         if (
           linkedStyles &&
@@ -832,10 +909,16 @@ export class SuperToolbar extends EventEmitter {
           item.activate(value);
         }
       }
+      if (item.name.value === 'textAlign' && paragraphProps?.justification) {
+        item.activate({ textAlign: paragraphProps.justification });
+      }
 
-      const spacingAttr = marks.find((mark) => mark.name === 'spacing');
-      if (item.name.value === 'lineHeight' && (activeMark?.attrs?.lineHeight || spacingAttr)) {
-        item.selectedValue.value = activeMark?.attrs?.lineHeight || spacingAttr.attrs?.spacing?.line || '';
+      if (item.name.value === 'lineHeight') {
+        if (paragraphProps?.spacing) {
+          item.selectedValue.value = twipsToLines(paragraphProps.spacing.line);
+        } else {
+          item.selectedValue.value = '';
+        }
       }
 
       if (item.name.value === 'tableActions') {
@@ -843,8 +926,7 @@ export class SuperToolbar extends EventEmitter {
       }
 
       // Activate list buttons when selections is inside list
-      const selection = this.activeEditor.state.selection;
-      const listParent = findParentNode(isList)(selection)?.node;
+      const listParent = isList(paragraphParent?.node) ? paragraphParent.node : null;
       if (listParent) {
         const numberingType = listParent.attrs.listRendering.numberingType;
         if (item.name.value === 'list' && numberingType === 'bullet') {
@@ -943,11 +1025,25 @@ export class SuperToolbar extends EventEmitter {
    * @returns {*} The result of the executed command, undefined if no result is returned
    */
   emitCommand({ item, argument, option }) {
+    const hasFocusFn = this.activeEditor?.view?.hasFocus;
+    const wasFocused = Boolean(typeof hasFocusFn === 'function' && hasFocusFn.call(this.activeEditor.view));
+    const { command } = item;
+    const isMarkToggle = this.isMarkToggle(item);
+
+    // If the editor wasn't focused and this is a mark toggle, queue it and keep the button active
+    // until the next selection update (after the user clicks into the editor).
+    if (!wasFocused && isMarkToggle) {
+      this.pendingMarkCommands.push({ command, argument, item });
+      item?.activate?.();
+      if (this.activeEditor && !this.activeEditor.options.isHeaderOrFooter) {
+        this.activeEditor.focus();
+      }
+      return;
+    }
+
     if (this.activeEditor && !this.activeEditor.options.isHeaderOrFooter) {
       this.activeEditor.focus();
     }
-
-    const { command } = item;
 
     if (!command) {
       return;
@@ -955,7 +1051,9 @@ export class SuperToolbar extends EventEmitter {
 
     // Check if we have a custom or overloaded command defined
     if (command in this.#interceptedCommands) {
-      return this.#interceptedCommands[command]({ item, argument });
+      const result = this.#interceptedCommands[command]({ item, argument });
+      if (isMarkToggle) this.#syncStickyMarksFromState();
+      return result;
     }
 
     if (this.activeEditor && this.activeEditor.commands && command in this.activeEditor.commands) {
@@ -975,7 +1073,73 @@ export class SuperToolbar extends EventEmitter {
       throw error;
     }
 
+    if (isMarkToggle) this.#syncStickyMarksFromState();
     this.updateToolbarState();
+  }
+
+  /**
+   * Processes and executes pending mark commands when editor selection updates.
+   * This is triggered by the editor's 'selectionUpdate' event after focus is restored.
+   * Clears the pending queue after execution.
+   * @returns {void}
+   */
+  onEditorSelectionUpdate() {
+    if (!this.activeEditor) return;
+
+    if (this.pendingMarkCommands.length) {
+      const pending = this.pendingMarkCommands;
+      this.pendingMarkCommands = [];
+
+      pending.forEach(({ command, argument, item }) => {
+        if (!command) return;
+
+        try {
+          if (command in this.#interceptedCommands) {
+            this.#interceptedCommands[command]({ item, argument });
+          } else if (this.activeEditor.commands && command in this.activeEditor.commands) {
+            this.activeEditor.commands[command](argument);
+          }
+          this.#ensureStoredMarksForMarkToggle({ command, argument });
+        } catch (error) {
+          const err = new Error(`[super-toolbar 🎨] Failed to execute pending command: ${command}`);
+          this.emit('exception', { error: err, editor: this.activeEditor, originalError: error });
+          console.error(err, error);
+        }
+      });
+
+      this.#syncStickyMarksFromState();
+      this.updateToolbarState();
+      return;
+    }
+
+    const restored = this.#restoreStickyMarksIfNeeded();
+    if (restored) this.updateToolbarState();
+  }
+
+  /**
+   * Handles editor focus events by flushing any pending mark commands.
+   * This is triggered by the editor's 'focus' event.
+   * @returns {void}
+   */
+  onEditorFocus() {
+    if (this.pendingMarkCommands.length) {
+      this.onEditorSelectionUpdate();
+      return;
+    }
+
+    const restored = this.#restoreStickyMarksIfNeeded();
+    if (restored) this.updateToolbarState();
+  }
+
+  /**
+   * Determines if a toolbar item represents a mark toggle command.
+   * Mark toggles include text formatting commands like bold, italic, underline, etc.
+   * @param {ToolbarItem} item - The toolbar item to check
+   * @returns {boolean} True if the item is a mark toggle, false otherwise
+   */
+  isMarkToggle(item) {
+    const name = item?.name?.value;
+    return SuperToolbar.#MARK_TOGGLE_NAMES.has(name);
   }
 
   /**
@@ -1011,5 +1175,78 @@ export class SuperToolbar extends EventEmitter {
       if (typeof callback === 'function') callback(argument);
       this.updateToolbarState();
     }
+  }
+
+  /**
+   * Capture stored marks when a mark toggle is used on an empty selection
+   * so they can be re-applied after focus/selection changes.
+   * @private
+   * @returns {void}
+   */
+  #syncStickyMarksFromState() {
+    if (!this.activeEditor) return;
+    const { selection, storedMarks } = this.activeEditor.state || {};
+
+    if (!selection?.empty) return;
+    this.stickyStoredMarks = storedMarks?.length ? [...storedMarks] : null;
+  }
+
+  /**
+   * Re-apply stored marks captured from toolbar toggles when the current
+   * selection is empty and unformatted.
+   * @private
+   * @returns {boolean} True if marks were restored
+   */
+  #restoreStickyMarksIfNeeded() {
+    if (!this.activeEditor) return false;
+    if (!this.stickyStoredMarks?.length) return false;
+
+    const { state, view } = this.activeEditor;
+    const { selection, storedMarks } = state || {};
+
+    if (!selection?.empty) return false;
+    if (storedMarks?.length) return false;
+    if (!view?.dispatch || !state?.tr) return false;
+
+    const hasActiveMarkToggle = getActiveFormatting(this.activeEditor).some((mark) =>
+      SuperToolbar.#MARK_TOGGLE_NAMES.has(mark.name),
+    );
+    if (hasActiveMarkToggle) return false;
+
+    const tr = state.tr.setStoredMarks(this.stickyStoredMarks);
+    view.dispatch(tr);
+    return true;
+  }
+
+  /**
+   * Fallback to ensure stored marks exist for mark toggles when executed off-focus.
+   * Helps cases where a command doesn't set storedMarks (e.g., font size from toolbar before focus).
+   * @private
+   * @param {Object} params
+   * @param {string} params.command
+   * @param {*} params.argument
+   * @returns {void}
+   */
+  #ensureStoredMarksForMarkToggle({ command, argument }) {
+    if (!this.activeEditor) return;
+    if (!this.activeEditor.state?.selection?.empty) return;
+    if (this.activeEditor.state?.storedMarks?.length) return;
+
+    // Currently only required for fontSize; extend as needed for other toggles.
+    if (command !== 'setFontSize') return;
+
+    const { state, view } = this.activeEditor;
+    const textStyleMark = state.schema?.marks?.textStyle;
+    if (!textStyleMark || !view?.dispatch || !state?.tr) return;
+
+    const [value, unit] = parseSizeUnit(argument ?? '');
+    if (Number.isNaN(value)) return;
+
+    const clamped = Math.min(96, Math.max(8, Number(value)));
+    const resolvedUnit = unit || 'pt';
+    const mark = textStyleMark.create({ fontSize: `${clamped}${resolvedUnit}` });
+
+    const tr = state.tr.setStoredMarks([mark]);
+    view.dispatch(tr);
   }
 }

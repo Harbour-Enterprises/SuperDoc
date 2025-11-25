@@ -1,14 +1,13 @@
 import { getExtensionConfigField } from './helpers/getExtensionConfigField.js';
 import { callOrGet } from './utilities/callOrGet.js';
 import type { MaybeGetter } from './utilities/callOrGet.js';
-import type { MarkType } from 'prosemirror-model';
 
 /**
  * Configuration for Mark extensions.
  */
 export interface MarkConfig<
   Options extends Record<string, unknown> = Record<string, never>,
-  Storage extends Record<string, unknown> = Record<string, never>
+  Storage extends Record<string, unknown> = Record<string, never>,
 > {
   /** The unique name of the mark */
   name: string;
@@ -33,7 +32,7 @@ export interface MarkConfig<
  */
 export class Mark<
   Options extends Record<string, unknown> = Record<string, never>,
-  Storage extends Record<string, unknown> = Record<string, never>
+  Storage extends Record<string, unknown> = Record<string, never>,
 > {
   type = 'mark' as const;
 
@@ -49,8 +48,8 @@ export class Mark<
 
   constructor(config: MarkConfig<Options, Storage>) {
     this.config = {
-      name: this.name,
       ...config,
+      name: config.name || this.name,
     };
 
     this.name = this.config.name;
@@ -61,19 +60,18 @@ export class Mark<
       this.options = (callOrGet(
         getExtensionConfigField(this, 'addOptions', {
           name: this.name,
-        })
+        }),
       ) || {}) as Options;
     } else {
       this.options = {} as Options;
     }
 
-    this.storage =
-      (callOrGet(
-        getExtensionConfigField(this, 'addStorage', {
-          name: this.name,
-          options: this.options,
-        })
-      ) || {}) as Storage;
+    this.storage = (callOrGet(
+      getExtensionConfigField(this, 'addStorage', {
+        name: this.name,
+        options: this.options,
+      }),
+    ) || {}) as Storage;
   }
 
   /**
@@ -82,7 +80,7 @@ export class Mark<
    */
   static create<
     O extends Record<string, unknown> = Record<string, never>,
-    S extends Record<string, unknown> = Record<string, never>
+    S extends Record<string, unknown> = Record<string, never>,
   >(config: MarkConfig<O, S>): Mark<O, S> {
     return new Mark<O, S>(config);
   }

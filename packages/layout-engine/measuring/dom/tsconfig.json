@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "lib": ["DOM", "ES2021"]
+  },
+  "include": ["src/**/*.ts", "../../geometry-utils/src/**/*.ts"],
+  "references": [{ "path": "../../contracts" }]
+}
