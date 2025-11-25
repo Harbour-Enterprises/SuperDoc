@@ -7,4 +7,3 @@ export declare function collectAnchoredDrawings(
   blocks: FlowBlock[],
   measures: Measure[],
 ): Map<number, AnchoredDrawing[]>;
-//# sourceMappingURL=anchors.d.ts.map

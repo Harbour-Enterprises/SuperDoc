@@ -7,4 +7,3 @@ export declare const documentTypes: {
   readonly html: 'text/html';
 };
 export type DocumentType = typeof DOCX | typeof PDF | typeof HTML;
-//# sourceMappingURL=document-types.d.ts.map

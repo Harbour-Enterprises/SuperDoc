@@ -49,4 +49,3 @@ export declare const camelizeKeys: <T extends UnknownDict>(linkComments: T[]) =>
 export declare const snakeCaseKeys: <T extends UnknownDict>(comments: T[]) => SnakeCaseKeys<T>[];
 export declare const toKebabCase: (str: string) => string;
 export {};
-//# sourceMappingURL=key-transform.d.ts.map

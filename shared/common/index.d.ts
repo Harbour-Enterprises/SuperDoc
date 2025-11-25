@@ -25,4 +25,3 @@ export type {
   StatisticData,
 } from './Telemetry';
 export * from './collaboration/awareness';
-//# sourceMappingURL=index.d.ts.map

@@ -39,4 +39,3 @@ export declare function getTocBlocksForRemeasurement(
   blocks: FlowBlock[],
   affectedBlockIds: Set<string>,
 ): ParagraphBlock[];
-//# sourceMappingURL=resolvePageRefs.d.ts.map

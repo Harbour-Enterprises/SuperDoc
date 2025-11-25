@@ -15,7 +15,6 @@ import type {
 import { computeFragmentPmRange, normalizeLines, sliceLines, extractBlockPmRange } from './layout-utils.js';
 import { computeAnchorX } from './floating-objects.js';
 
-// Temporary: keep spacing logging always on to diagnose paragraph spacing issues.
 const spacingDebugEnabled = true;
 
 const spacingDebugLog = (..._args: unknown[]): void => {
@@ -50,7 +49,6 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   const { block, measure, columnWidth, ensurePage, advanceColumn, columnX, floatManager } = ctx;
   const remeasureParagraph = ctx.remeasureParagraph;
 
-  // Register and place anchored images tied to this paragraph (pre-pass outcome)
   if (anchors?.anchoredDrawings?.length) {
     for (const entry of anchors.anchoredDrawings) {
       if (anchors.placedAnchoredIds.has(entry.block.id)) continue;
@@ -111,7 +109,6 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
 
   let lines = normalizeLines(measure);
   let fromLine = 0;
-  // Paragraph spacing (in px). Support both legacy keys and lineSpace* keys.
   const spacing = (block.attrs?.spacing ?? {}) as Record<string, unknown>;
   const spacingBefore = Math.max(0, Number(spacing.before ?? spacing.lineSpaceBefore ?? 0));
   const spacingAfter = Math.max(0, Number(spacing.after ?? spacing.lineSpaceAfter ?? 0));
@@ -206,7 +203,6 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       state = advanceColumn(state);
     }
 
-    // Optional Phase 4B: float-aware re-measurement at reduced width
     let effectiveColumnWidth = columnWidth;
     let offsetX = 0;
     if (!didRemeasureForFloats && typeof remeasureParagraph === 'function') {
@@ -259,11 +255,8 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     if (fromLine > 0) fragment.continuesFromPrev = true;
     if (slice.toLine < lines.length) fragment.continuesOnNext = true;
 
-    // Apply floating alignment (from OOXML w:framePr/@w:xAlign)
-    // Used for positioned paragraphs like right-aligned page numbers in headers/footers
     const floatAlignment = block.attrs?.floatAlignment;
     if (floatAlignment && (floatAlignment === 'right' || floatAlignment === 'center')) {
-      // Find the maximum line width in this fragment to determine actual content width
       let maxLineWidth = 0;
       for (let i = fromLine; i < slice.toLine; i++) {
         if (lines[i].width > maxLineWidth) {
@@ -271,12 +264,9 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
         }
       }
 
-      // Adjust horizontal position based on alignment
       if (floatAlignment === 'right') {
-        // Right-align: position so the right edge of content aligns with column boundary
         fragment.x = columnX(state.columnIndex) + offsetX + (effectiveColumnWidth - maxLineWidth);
       } else if (floatAlignment === 'center') {
-        // Center: position so content is centered within the column
         fragment.x = columnX(state.columnIndex) + offsetX + (effectiveColumnWidth - maxLineWidth) / 2;
       }
     }

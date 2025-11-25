@@ -1,6 +1,6 @@
 # @superdoc/painter-dom
 
-Read-only DOM renderer for the SuperDoc layout proof of concept.
+Read-only DOM renderer for the SuperDoc layout engine.
 
 ## Responsibilities
 

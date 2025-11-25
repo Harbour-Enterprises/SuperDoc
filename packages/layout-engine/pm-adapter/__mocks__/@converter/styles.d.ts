@@ -17,4 +17,3 @@ export type ResolvedParagraphPropertiesExtended = {
   keepNext: boolean;
   numberingProperties: unknown;
 };
-//# sourceMappingURL=styles.d.ts.map

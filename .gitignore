@@ -48,9 +48,6 @@ coverage/
 **/coverage
 **/coverage/
 
-# TypeScript build artifacts in source directories
-# Compiled files should only exist in dist/, not src/
-**/src/**/*.d.ts
 **/src/**/*.d.ts.map
 **/src/**/*.js.map
 

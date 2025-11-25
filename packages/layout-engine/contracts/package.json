@@ -1,7 +1,7 @@
 {
   "name": "@superdoc/contracts",
   "version": "1.0.0",
-  "description": "Shared layout contracts & engine interfaces for the SuperDoc pagination pipeline.",
+  "description": "Shared layout contracts & engine interfaces for the SuperDoc layout engine pipeline.",
   "type": "module",
   "private": true,
   "main": "./dist/index.js",

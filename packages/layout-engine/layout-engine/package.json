@@ -1,7 +1,7 @@
 {
   "name": "@superdoc/layout-engine",
   "version": "0.0.0",
-  "description": "Pagination core for the SuperDoc layout proof of concept.",
+  "description": "Pagination core for the SuperDoc layout engine.",
   "type": "module",
   "private": true,
   "main": "./src/index.ts",

@@ -49,4 +49,3 @@ export declare class FetchFailedError extends FileObjectError {
  * @throws {FileObjectError} For other file creation errors
  */
 export declare const getFileObject: (fileUrl: string, name: string, type: MimeType) => Promise<File>;
-//# sourceMappingURL=get-file-object.d.ts.map

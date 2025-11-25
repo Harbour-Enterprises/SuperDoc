@@ -11,4 +11,3 @@ export declare const comments_module_events: {
   readonly CHANGE_REJECTED: 'change-rejected';
 };
 export type CommentEvent = (typeof comments_module_events)[keyof typeof comments_module_events];
-//# sourceMappingURL=event-types.d.ts.map

@@ -2155,6 +2155,32 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     if (!this.#layoutState.layout) {
+      // Layout not ready yet, but still focus the editor and set cursor to start
+      // so the user can immediately begin typing
+      event.preventDefault();
+
+      // Blur any currently focused element
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+
+      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+      if (!editorDom) {
+        return;
+      }
+
+      // Set cursor to start of document (position 0)
+      const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, 0));
+      try {
+        this.#editor.view?.dispatch(tr);
+      } catch {
+        // Error dispatching selection
+      }
+
+      // Focus the hidden editor
+      editorDom.focus();
+      this.#editor.view?.focus();
+
       return;
     }
 

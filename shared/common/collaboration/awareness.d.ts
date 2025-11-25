@@ -39,4 +39,3 @@ export declare const awarenessStatesToArray: (
  */
 export declare const shuffleArray: (array: HexColor[]) => HexColor[];
 export {};
-//# sourceMappingURL=awareness.d.ts.map

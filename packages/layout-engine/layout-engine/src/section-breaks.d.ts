@@ -52,4 +52,3 @@ export declare function scheduleSectionBreak(
  * Apply pending margins/pageSize/columns to active values at a page boundary and clear pending.
  */
 export declare function applyPendingToActive(state: SectionState): SectionState;
-//# sourceMappingURL=section-breaks.d.ts.map

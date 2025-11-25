@@ -1,7 +1,7 @@
 {
   "name": "@superdoc/painter-pdf",
   "version": "0.0.0",
-  "description": "PDF renderer (pdf-lib) for the SuperDoc layout proof of concept.",
+  "description": "PDF renderer (pdf-lib) for the SuperDoc layout engine.",
   "type": "module",
   "private": true,
   "main": "./src/index.ts",

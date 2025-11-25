@@ -1,6 +1,6 @@
 # @superdoc/painter-pdf
 
-PDF export implementation for the SuperDoc layout proof of concept, targeting pdf-lib in the browser.
+PDF export implementation for the SuperDoc layout engine, targeting pdf-lib in the browser.
 
 ## Responsibilities
 
@@ -8,4 +8,4 @@ PDF export implementation for the SuperDoc layout proof of concept, targeting pd
 - Generate a browser-downloadable PDF blob.
 - Align coordinate system (px ↔ pt assumptions) with the layout engine.
 
-Implementation pending. Determine font embedding approach alongside the DOM painter.
+Implementation is partial only for the moment.

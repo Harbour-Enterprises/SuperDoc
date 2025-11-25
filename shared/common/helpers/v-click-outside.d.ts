@@ -8,4 +8,3 @@ declare const _default: {
   unmounted(el: ClickOutsideElement): void;
 };
 export default _default;
-//# sourceMappingURL=v-click-outside.d.ts.map

@@ -7,4 +7,3 @@ export type TableStyleProps = {
   cellMargins: unknown;
   justification: unknown;
 };
-//# sourceMappingURL=tbl-translator.d.ts.map

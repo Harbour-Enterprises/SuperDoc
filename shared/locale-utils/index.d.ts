@@ -7,4 +7,3 @@ export function defaultDecimalSeparatorFor(locale: string | null | undefined): '
  * Convenience: returns true if the default for this locale is ','.
  */
 export function isCommaLocale(locale: string | null | undefined): boolean;
-//# sourceMappingURL=index.d.ts.map

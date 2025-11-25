@@ -31,7 +31,6 @@ import {
 import { layoutParagraphBlock } from './layout-paragraph.js';
 import { layoutImageBlock } from './layout-image.js';
 import { layoutDrawingBlock } from './layout-drawing.js';
-import { layoutListBlock } from './layout-list.js';
 import { layoutTableBlock } from './layout-table.js';
 import { collectAnchoredDrawings } from './anchors.js';
 import { createPaginator, type PageState, type ConstraintBoundary } from './paginator.js';
@@ -927,22 +926,6 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         block: block as DrawingBlock,
         measure: measure as DrawingMeasure,
         columns: getCurrentColumns(),
-        ensurePage: paginator.ensurePage,
-        advanceColumn: paginator.advanceColumn,
-        columnX,
-      });
-      continue;
-    }
-    if (block.kind === 'list') {
-      if (measure.kind !== 'list') {
-        throw new Error(`layoutDocument: expected list measure for block ${block.id}`);
-      }
-      const state = paginator.ensurePage();
-      layoutListBlock({
-        block: block as ListBlock,
-        measure: measure as ListMeasure,
-        columnWidth: getCurrentColumns().width,
-        contentBottom: state.contentBottom,
         ensurePage: paginator.ensurePage,
         advanceColumn: paginator.advanceColumn,
         columnX,

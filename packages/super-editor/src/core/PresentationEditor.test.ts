@@ -134,12 +134,28 @@ vi.mock('./Editor', () => {
       isEditable: true,
       state: {
         selection: { from: 0, to: 0 },
+        doc: {
+          nodeSize: 100,
+          resolve: vi.fn((pos: number) => ({
+            pos,
+            depth: 0,
+            parent: { inlineContent: true },
+            node: vi.fn(),
+            min: vi.fn((other: { pos: number }) => Math.min(pos, other.pos)),
+            max: vi.fn((other: { pos: number }) => Math.max(pos, other.pos)),
+          })),
+        },
+        tr: {
+          setSelection: vi.fn().mockReturnThis(),
+        },
       },
       view: {
         dom: {
           dispatchEvent: vi.fn(() => true),
+          focus: vi.fn(),
         },
         focus: vi.fn(),
+        dispatch: vi.fn(),
       },
       options: {
         documentId: 'test-doc',
@@ -537,6 +553,221 @@ describe('PresentationEditor', () => {
 
       expect(typeof editableFunction).toBe('function');
       expect(editableFunction()).toBe(true); // editing mode is editable
+    });
+  });
+
+  describe('click-to-type behavior', () => {
+    it('should focus editor and set cursor to position 0 when clicking before layout is ready', () => {
+      // Mock layout not ready (null)
+      mockIncrementalLayout.mockResolvedValue({ layout: null, measures: [] });
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+
+      const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      expect(viewport).toBeDefined();
+
+      const focusSpy = mockEditorInstance.view.focus as Mock;
+      const domFocusSpy = mockEditorInstance.view.dom.focus as Mock;
+
+      // Simulate pointer event before layout is ready
+      // Note: Using MouseEvent as PointerEvent may not be available in test environment
+      const clickEvent = new MouseEvent('pointerdown', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 100,
+        button: 0,
+      });
+
+      const preventDefaultSpy = vi.spyOn(clickEvent, 'preventDefault');
+
+      // Should not throw error
+      expect(() => viewport.dispatchEvent(clickEvent)).not.toThrow();
+
+      // Verify preventDefault was called
+      expect(preventDefaultSpy).toHaveBeenCalled();
+
+      // Verify editor DOM was focused
+      expect(domFocusSpy).toHaveBeenCalled();
+      expect(focusSpy).toHaveBeenCalled();
+    });
+
+    it('should ignore non-left-button clicks when layout is not ready', () => {
+      mockIncrementalLayout.mockResolvedValue({ layout: null, measures: [] });
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+
+      const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      const focusSpy = mockEditorInstance.view.focus as Mock;
+
+      // Simulate right-click (button 2)
+      const rightClickEvent = new MouseEvent('pointerdown', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 100,
+        button: 2,
+      });
+
+      viewport.dispatchEvent(rightClickEvent);
+
+      // Verify focus was NOT called for non-left clicks
+      expect(focusSpy).not.toHaveBeenCalled();
+    });
+
+    it('should blur active element before focusing editor when layout is not ready', () => {
+      mockIncrementalLayout.mockResolvedValue({ layout: null, measures: [] });
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+
+      // Create and focus a dummy element
+      const dummyInput = document.createElement('input');
+      container.appendChild(dummyInput);
+      dummyInput.focus();
+
+      const blurSpy = vi.spyOn(dummyInput, 'blur');
+
+      const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+
+      const clickEvent = new MouseEvent('pointerdown', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 100,
+        button: 0,
+      });
+
+      viewport.dispatchEvent(clickEvent);
+
+      // Verify the previously focused element was blurred
+      expect(blurSpy).toHaveBeenCalled();
+
+      container.removeChild(dummyInput);
+    });
+
+    it('should use normal click-to-position flow when layout is ready', async () => {
+      const layoutResult = {
+        layout: {
+          pageSize: { w: 612, h: 792 },
+          pages: [
+            {
+              number: 1,
+              numberText: '1',
+              size: { w: 612, h: 792 },
+              fragments: [],
+              margins: { top: 72, bottom: 72, left: 72, right: 72, header: 36, footer: 36 },
+              sectionRefs: {
+                headerRefs: { default: 'rId-header-default' },
+                footerRefs: { default: 'rId-footer-default' },
+              },
+            },
+          ],
+        },
+        measures: [],
+        blocks: [],
+      };
+
+      mockIncrementalLayout.mockResolvedValue(layoutResult);
+
+      // Mock clickToPosition to return a position hit
+      const mockHit = { pos: 42 };
+      mockClickToPosition.mockReturnValue(mockHit);
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+
+      // Wait for layout to complete
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 1000,
+        right: 800,
+        bottom: 1000,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+
+      // Clear mock to track fresh calls
+      mockClickToPosition.mockClear();
+
+      const clickEvent = new MouseEvent('pointerdown', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 100,
+        button: 0,
+      });
+
+      viewport.dispatchEvent(clickEvent);
+
+      // Verify clickToPosition was called (normal flow)
+      expect(mockClickToPosition).toHaveBeenCalled();
+    });
+
+    it('should handle case where editor view DOM is not available when layout is not ready', () => {
+      mockIncrementalLayout.mockResolvedValue({ layout: null, measures: [] });
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+
+      // Temporarily remove dom
+      const originalDom = mockEditorInstance.view.dom;
+      mockEditorInstance.view.dom = undefined;
+
+      const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+
+      const clickEvent = new MouseEvent('pointerdown', {
+        bubbles: true,
+        clientX: 100,
+        clientY: 100,
+        button: 0,
+      });
+
+      const preventDefaultSpy = vi.spyOn(clickEvent, 'preventDefault');
+
+      // Should not throw error
+      expect(() => viewport.dispatchEvent(clickEvent)).not.toThrow();
+
+      // Should still prevent default
+      expect(preventDefaultSpy).toHaveBeenCalled();
+
+      // Restore dom
+      mockEditorInstance.view.dom = originalDom;
     });
   });
 
