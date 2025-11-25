@@ -155,6 +155,8 @@ type PdfImageResource = {
 type PageDecorationPayload = {
   fragments: Fragment[];
   height: number;
+  /** Optional measured content height to aid bottom alignment in footers. */
+  contentHeight?: number;
   offset?: number;
   marginLeft?: number;
 };
@@ -316,11 +318,23 @@ export class PdfPainter {
       section: FragmentRenderContext['section'],
     ) => {
       if (!payload) return;
-      const offset = payload.offset ?? (section === 'footer' ? pageHeightPx - payload.height : 0);
+      const baseOffset = payload.offset ?? (section === 'footer' ? pageHeightPx - payload.height : 0);
       const marginLeft = payload.marginLeft ?? 0;
+      let footerYOffset = 0;
+      if (section === 'footer') {
+        const contentHeight =
+          typeof payload.contentHeight === 'number'
+            ? payload.contentHeight
+            : payload.fragments.reduce((max, f) => {
+                const fragmentHeight =
+                  'height' in f && typeof f.height === 'number' ? f.height : this.estimateFragmentHeight(f);
+                return Math.max(max, f.y + Math.max(0, fragmentHeight));
+              }, 0);
+        footerYOffset = Math.max(0, payload.height - contentHeight);
+      }
       payload.fragments.forEach((fragment) => {
         fragments.push({
-          fragment: translateFragment(fragment, offset, marginLeft),
+          fragment: translateFragment(fragment, baseOffset + footerYOffset, marginLeft),
           context: { pageNumber: page.number, totalPages: this.totalPages, section },
         });
       });
@@ -352,6 +366,39 @@ export class PdfPainter {
       return this.renderDrawingFragment(fragment, pageHeightPx);
     }
     return '';
+  }
+
+  /**
+   * Estimates the height of a fragment when explicit height is not available.
+   *
+   * This method provides fallback height calculations for footer bottom-alignment
+   * by consulting measure data for paragraphs and list items, or using the
+   * fragment's height property for tables, images, and drawings.
+   *
+   * @param fragment - The fragment to estimate height for
+   * @returns Estimated height in pixels, or 0 if height cannot be determined
+   */
+  private estimateFragmentHeight(fragment: Fragment): number {
+    const entry = this.lookup.get(fragment.blockId);
+    const measure = entry?.measure;
+
+    if (fragment.kind === 'para' && measure?.kind === 'paragraph') {
+      return measure.totalHeight;
+    }
+
+    if (fragment.kind === 'list-item' && measure?.kind === 'list') {
+      return measure.totalHeight;
+    }
+
+    if (fragment.kind === 'table') {
+      return fragment.height;
+    }
+
+    if (fragment.kind === 'image' || fragment.kind === 'drawing') {
+      return fragment.height;
+    }
+
+    return 0;
   }
 
   private renderParagraphFragment(

@@ -861,7 +861,8 @@ describe('PresentationEditor', () => {
       editor.on('headerFooterModeChanged', modeSpy);
       editor.on('headerFooterEditingContext', contextSpy);
 
-      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 120, clientY: 10, button: 0 }));
+      // Click inside the header hitbox (y between header margin 36 and top margin 72)
+      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 120, clientY: 50, button: 0 }));
 
       await vi.waitFor(() => expect(modeSpy).toHaveBeenCalled());
 
@@ -910,7 +911,7 @@ describe('PresentationEditor', () => {
       const modeSpy = vi.fn();
       editor.on('headerFooterModeChanged', modeSpy);
 
-      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 120, clientY: 10, button: 0 }));
+      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 120, clientY: 50, button: 0 }));
       await vi.waitFor(() => expect(modeSpy).toHaveBeenCalledTimes(1));
 
       container.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
