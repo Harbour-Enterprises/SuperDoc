@@ -51,6 +51,7 @@ const orderedInputRegex = /^(\d+)\.\s$/;
  * @property {Object} [paragraphProperties] @internal - Internal paragraph properties
  * @property {Object} [dropcap] @internal - Drop cap configuration
  * @property {string} [pageBreakSource] @internal - Page break source
+ * @property {Object} [sectionMargins] @internal - Section-specific header/footer margins in inches
  */
 
 /**
@@ -116,6 +117,7 @@ export const Paragraph = OxmlNode.create({
       filename: { rendered: false },
       paragraphProperties: { rendered: false },
       pageBreakSource: { rendered: false },
+      sectionMargins: { rendered: false },
       listRendering: {
         keepOnSplit: false,
         renderDOM: ({ listRendering }) => {

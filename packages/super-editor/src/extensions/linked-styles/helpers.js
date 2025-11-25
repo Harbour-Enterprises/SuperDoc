@@ -163,7 +163,7 @@ export const getQuickFormatList = (editor) => {
  * @note Node marks take precedence over linked style properties per Word behavior
  * @private
  */
-export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, parent, includeSpacing = true) => {
+export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, parent, _includeSpacing = true) => {
   if (!linkedStyle?.definition?.styles) return '';
   const markValue = {};
 

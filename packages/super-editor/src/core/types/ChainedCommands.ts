@@ -32,14 +32,13 @@ type AnyCommand = (...args: unknown[]) => unknown;
 type RegisteredCommands = CoreCommandMap & ExtensionCommandMap;
 type KnownCommandKey = keyof RegisteredCommands;
 
-type UntypedCommandFallback<K extends PropertyKey> = /** @deprecated Add "${string & K}" to ExtensionCommandMap to type this command */ (
-  ...args: unknown[]
-) => boolean;
+type UntypedCommandFallback<_K extends PropertyKey> =
+  /** @deprecated Add command to ExtensionCommandMap to type this command */ (...args: unknown[]) => boolean;
 
-type ExtractCommand<K extends PropertyKey> = K extends KnownCommandKey ? RegisteredCommands[K] : UntypedCommandFallback<K>;
-type NormalizeCommand<F> = F extends (...args: infer A) => (props: CommandProps) => infer R
-  ? (...args: A) => R
-  : F;
+type ExtractCommand<K extends PropertyKey> = K extends KnownCommandKey
+  ? RegisteredCommands[K]
+  : UntypedCommandFallback<K>;
+type NormalizeCommand<F> = F extends (...args: infer A) => (props: CommandProps) => infer R ? (...args: A) => R : F;
 type CommandForKey<K extends PropertyKey> = NormalizeCommand<ExtractCommand<K>>;
 type CommandArgs<K extends PropertyKey> = Parameters<CommandForKey<K>>;
 type CommandResult<K extends PropertyKey> = ReturnType<CommandForKey<K>>;

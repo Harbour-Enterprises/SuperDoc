@@ -97,6 +97,9 @@ export const createDocumentJson = (docx, converter, editor) => {
     const { processedNodes } = preProcessNodesForFldChar(node.elements ?? [], docx);
     node.elements = processedNodes;
 
+    // Extract body-level sectPr before filtering it out from content
+    const bodySectPr = node.elements?.find((n) => n.name === 'w:sectPr');
+
     const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
     const content = pruneIgnoredNodes(contentElements);
     const comments = importCommentData({ docx, nodeListHandler, converter, editor });
@@ -126,6 +129,8 @@ export const createDocumentJson = (docx, converter, editor) => {
       content: parsedContent,
       attrs: {
         attributes: json.elements[0].attributes,
+        // Attach body-level sectPr if it exists
+        ...(bodySectPr ? { bodySectPr } : {}),
       },
     };
 
@@ -145,6 +150,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       inlineDocumentFonts,
       linkedStyles: getStyleDefinitions(docx, converter, editor),
       numbering: getNumberingDefinitions(docx, converter),
+      themeColors: getThemeColorPalette(docx),
     };
   }
   return null;
@@ -577,7 +583,9 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     if (!converter.headerIds.ids) converter.headerIds.ids = [];
     converter.headerIds.ids.push(rId);
     converter.headers[rId] = { type: 'doc', content: [...schema] };
-    sectionType && (converter.headerIds[sectionType] = rId);
+    if (sectionType) {
+      converter.headerIds[sectionType] = rId;
+    }
   });
 
   const titlePg = allSectPrElements?.find((el) => el.name === 'w:titlePg');
@@ -608,7 +616,9 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     if (!converter.footerIds.ids) converter.footerIds.ids = [];
     converter.footerIds.ids.push(rId);
     converter.footers[rId] = { type: 'doc', content: [...schema] };
-    converter.footerIds[sectionType] = rId;
+    if (sectionType) {
+      converter.footerIds[sectionType] = rId;
+    }
   });
 };
 
@@ -676,6 +686,37 @@ export function filterOutRootInlineNodes(content = []) {
   ]);
 
   return content.filter((node) => node && typeof node.type === 'string' && !INLINE_TYPES.has(node.type));
+}
+
+/**
+ * Extracts the document theme color palette from a parsed theme XML part.
+ * Returns a map like { accent1: '#4F81BD', hyperlink: '#0000FF', ... }.
+ */
+function getThemeColorPalette(docx) {
+  const themePart = docx?.['word/theme/theme1.xml'];
+  if (!themePart || !Array.isArray(themePart.elements)) return undefined;
+  const themeNode = themePart.elements.find((el) => el.name === 'a:theme');
+  const themeElements = themeNode?.elements?.find((el) => el.name === 'a:themeElements');
+  const clrScheme = themeElements?.elements?.find((el) => el.name === 'a:clrScheme');
+  if (!clrScheme || !Array.isArray(clrScheme.elements)) return undefined;
+
+  const palette = {};
+  clrScheme.elements.forEach((colorNode) => {
+    const rawName = colorNode?.name;
+    if (!rawName) return;
+    const colorName = rawName.replace(/^a:/, '');
+    if (!colorName) return;
+    const valueNode = Array.isArray(colorNode.elements)
+      ? colorNode.elements.find((el) => el.attributes && (el.attributes.val || el.attributes.lastClr))
+      : undefined;
+    const colorValue = valueNode?.attributes?.val || valueNode?.attributes?.lastClr;
+    if (!colorValue) return;
+    const normalized = String(colorValue).trim();
+    if (!normalized) return;
+    palette[colorName] = `#${normalized.toUpperCase()}`;
+  });
+
+  return Object.keys(palette).length ? palette : undefined;
 }
 
 /**

@@ -23,7 +23,7 @@ vi.mock('../../InputRule.js', () => ({
 
 const normalizeLvlTextCharMock = vi.hoisted(() => vi.fn((value) => value || '%1.'));
 
-vi.mock('../../super-converter/v2/importer/listImporter.js', () => ({
+vi.mock('@superdoc/common/list-numbering', () => ({
   normalizeLvlTextChar: normalizeLvlTextCharMock,
 }));
 

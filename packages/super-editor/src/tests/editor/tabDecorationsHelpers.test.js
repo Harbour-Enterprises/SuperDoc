@@ -40,6 +40,17 @@ describe('tab decoration helpers', () => {
       expect(findDecimalBreakPos(flattened, 0, '.')).toBe(13); // pos 10 + index 2 + 1
       expect(findDecimalBreakPos(flattened, 2, '.')).toBeNull();
     });
+
+    it('supports comma decimal separators', () => {
+      const flattened = [
+        { pos: 5, node: { type: { name: 'text' }, text: 'abc' } },
+        { pos: 10, node: { type: { name: 'text' }, text: '12,34' } },
+        { pos: 20, node: { type: { name: 'tab' } } },
+      ];
+
+      // pos 10 + index 2 + 1
+      expect(findDecimalBreakPos(flattened, 0, ',')).toBe(13);
+    });
   });
 
   describe('measureRangeWidth', () => {

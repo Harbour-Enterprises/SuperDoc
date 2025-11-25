@@ -20,7 +20,7 @@ export function createDocFromHTML(content, editor, options = {}) {
 
     // Mark as import if needed
     if (isImport) {
-      // @ts-ignore
+      // @ts-expect-error - dataset property may not exist on all node types
       tempDiv.dataset.superdocImport = 'true';
     }
 
