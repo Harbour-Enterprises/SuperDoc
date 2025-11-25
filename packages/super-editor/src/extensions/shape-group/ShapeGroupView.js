@@ -219,7 +219,7 @@ export class ShapeGroupView {
     let fillOpacity = 1;
 
     if (fillColor && typeof fillColor === 'object' && fillColor.type === 'gradient') {
-      const gradientId = `gradient-${shapeIndex}-${Date.now()}`;
+      const gradientId = `gradient-${shapeIndex}-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
       const gradient = this.createGradient(fillColor, gradientId);
       defs.appendChild(gradient);
       fillValue = `url(#${gradientId})`;
