@@ -73,7 +73,7 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
   beforeAll(async () => {
     ({ docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(filename));
-    ({ editor, dispatch } = initTestEditor({ content: docx, media, mediaFiles, fonts }));
+    ({ editor, dispatch } = await initTestEditor({ content: docx, media, mediaFiles, fonts }));
     content = editor.getJSON();
     exported = await getExportedResult(filename);
     body = exported.elements?.find((el) => el.name === 'w:body');

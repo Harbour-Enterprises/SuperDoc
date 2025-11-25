@@ -69,9 +69,9 @@ export const createTableView = ({ editor }) => {
  * @param {import('./table.js').TableNode} node
  * @param {HTMLTableColElement} colgroup
  * @param {HTMLTableElement} table
- * @param {number} cellMinWidth
+ * @param {number} _cellMinWidth - Reserved for future use (cell minimum width)
  */
-export function updateColumns(node, colgroup, table, cellMinWidth) {
+export function updateColumns(node, colgroup, table, _cellMinWidth) {
   const gridColumns =
     Array.isArray(node.attrs?.grid) && node.attrs.grid.length
       ? node.attrs.grid.map((col) => twipsToPixels(col.col))

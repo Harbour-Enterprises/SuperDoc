@@ -1,11 +1,13 @@
 <script setup>
 import '@superdoc/common/styles/common-styles.css';
-import { nextTick, onMounted, provide, ref, shallowRef } from 'vue';
+import { nextTick, onMounted, provide, ref, shallowRef, computed } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
 import { DOCX, PDF, HTML } from '@superdoc/common';
 import { getFileObject } from '@superdoc/common';
+import { createPdfPainter } from '@superdoc/painter-pdf';
 import BasicUpload from '@superdoc/common/components/BasicUpload.vue';
+import SuperdocLogo from '../../../../layout-engine/v1-beta-demo/src/assets/superdoc-logo.webp?url';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
@@ -33,6 +35,10 @@ const isInternal = urlParams.has('internal');
 const testUserEmail = urlParams.get('email') || 'user@superdoc.com';
 const testUserName = urlParams.get('name') || `SuperDoc ${Math.floor(1000 + Math.random() * 9000)}`;
 const userRole = urlParams.get('role') || 'editor';
+const useLayoutEngine = ref(urlParams.get('layout') !== '0');
+const superdocLogo = SuperdocLogo;
+const uploadedFileName = ref('');
+const uploadDisplayName = computed(() => uploadedFileName.value || 'No file chosen');
 
 const user = {
   name: testUserName,
@@ -56,6 +62,7 @@ const commentPermissionResolver = ({ permission, comment, defaultDecision, curre
 };
 
 const handleNewFile = async (file) => {
+  uploadedFileName.value = file?.name || '';
   // Generate a file url
   const url = URL.createObjectURL(file);
 
@@ -128,7 +135,7 @@ const init = async () => {
     role: userRole,
     documentMode: 'editing',
     toolbarGroups: ['left', 'center', 'right'],
-    pagination: true,
+    pagination: useLayoutEngine.value,
     rulers: false,
     annotations: true,
     isInternal,
@@ -152,6 +159,7 @@ const init = async () => {
     //   },
     // ],
     // cspNonce: 'testnonce123',
+    useLayoutEngine: useLayoutEngine.value,
     modules: {
       comments: {
         // comments: sampleComments,
@@ -376,6 +384,73 @@ const exportDocxBlob = async () => {
   console.debug(blob);
 };
 
+const downloadBlob = (blob, fileName) => {
+  if (!blob) return;
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
+const getActiveDocumentEntry = () => {
+  const docsSource = superdoc.value?.superdocStore?.documents;
+  const documents = Array.isArray(docsSource) ? docsSource : docsSource?.value;
+  if (!documents?.length) return null;
+
+  const activeDocId = activeEditor.value?.options?.documentId;
+  if (activeDocId) {
+    const activeDoc = documents.find((doc) => doc.id === activeDocId);
+    if (activeDoc) return activeDoc;
+  }
+
+  return documents[0] ?? null;
+};
+
+const exportPdf = async () => {
+  if (!useLayoutEngine.value) return;
+  console.debug('Exporting PDF with layout-engine painter');
+  const docEntry = getActiveDocumentEntry();
+  if (!docEntry) {
+    console.warn('[superdoc-dev] No active document available for PDF export');
+    return;
+  }
+
+  const presentationEditor = docEntry.getPresentationEditor?.();
+  if (!presentationEditor || typeof presentationEditor.getLayoutSnapshot !== 'function') {
+    console.warn('[superdoc-dev] PresentationEditor is not ready for PDF export');
+    return;
+  }
+
+  const snapshot = presentationEditor.getLayoutSnapshot();
+  const layout = snapshot?.layout;
+  const { blocks, measures } = snapshot ?? {};
+  if (!layout || !Array.isArray(blocks) || !Array.isArray(measures) || !blocks.length || !measures.length) {
+    console.warn('[superdoc-dev] Layout snapshot is unavailable for PDF export');
+    return;
+  }
+
+  if (blocks.length !== measures.length) {
+    console.warn('[superdoc-dev] Layout snapshot is out of sync (blocks/measures mismatch)');
+    return;
+  }
+
+  try {
+    const painter = createPdfPainter({
+      blocks,
+      measures,
+    });
+    const pdfBlob = await painter.render(layout);
+    downloadBlob(pdfBlob, `${title.value || 'document'}.pdf`);
+    console.debug('PDF export completed');
+  } catch (error) {
+    console.error('[superdoc-dev] Failed to export PDF', error);
+  }
+};
+
 const onEditorCreate = ({ editor }) => {
   activeEditor.value = editor;
   window.editor = editor;
@@ -408,30 +483,121 @@ const toggleCommentsPanel = () => {
 };
 
 onMounted(async () => {
-  handleNewFile(await getFileObject(BlankDOCX, 'test.docx', DOCX));
+  const blankFile = await getFileObject(BlankDOCX, 'test.docx', DOCX);
+  handleNewFile(blankFile);
 });
+
+const toggleLayoutEngine = () => {
+  const nextValue = !useLayoutEngine.value;
+  const url = new URL(window.location.href);
+  url.searchParams.set('layout', nextValue ? '1' : '0');
+  window.location.href = url.toString();
+};
+
+const showExportMenu = ref(false);
+const closeExportMenu = () => {
+  showExportMenu.value = false;
+};
 </script>
 
 <template>
   <div class="dev-app">
     <div class="dev-app__layout">
       <div class="dev-app__header">
-        <div class="dev-app__header-side dev-app__header-side--left">
-          <div class="dev-app__header-title">
-            <h2>🦋 SuperDoc Dev</h2>
+        <div class="dev-app__brand">
+          <div class="dev-app__logo">
+            <img :src="superdocLogo" alt="SuperDoc logo" />
           </div>
-          <div class="dev-app__header-upload">
-            Upload docx, pdf, html or markdown
-            <BasicUpload @file-change="handleNewFile" />
+          <div class="dev-app__brand-meta">
+            <div class="dev-app__meta-row">
+              <span class="dev-app__pill">SUPERDOC LABS</span>
+              <span class="badge">Layout Engine: {{ useLayoutEngine ? 'ON' : 'OFF' }}</span>
+            </div>
+            <h2 class="dev-app__title">SuperDoc Dev</h2>
+            <div class="dev-app__header-layout-toggle">
+              <div class="dev-app__upload-control">
+                <div class="dev-app__upload-button">
+                  <span class="dev-app__upload-btn">Upload file</span>
+                  <BasicUpload class="dev-app__upload-input" @file-change="handleNewFile" />
+                </div>
+                <span class="dev-app__upload-filename">{{ uploadDisplayName }}</span>
+              </div>
+            </div>
           </div>
         </div>
-        <div class="dev-app__header-side dev-app__header-side--right">
-          <button class="dev-app__header-export-btn" @click="exportHTML()">Export HTML</button>
-          <button class="dev-app__header-export-btn" @click="exportDocx()">Export Docx</button>
-          <button class="dev-app__header-export-btn" @click="exportDocx('clean')">Export clean Docx</button>
-          <button class="dev-app__header-export-btn" @click="exportDocx('external')">Export external Docx</button>
-          <button class="dev-app__header-export-btn" @click="exportDocxBlob()">Export Docx Blob</button>
-          <button class="dev-app__header-export-btn" @click="toggleCommentsPanel">Toggle comments panel</button>
+        <div class="dev-app__header-actions">
+          <div class="dev-app__header-buttons">
+            <div class="dev-app__dropdown" @mouseleave="closeExportMenu">
+              <button
+                class="dev-app__header-export-btn dev-app__dropdown-trigger"
+                :class="{ 'is-open': showExportMenu }"
+                @click="showExportMenu = !showExportMenu"
+              >
+                <span>Export</span>
+                <span class="caret">▾</span>
+              </button>
+              <div v-if="showExportMenu" class="dev-app__dropdown-menu">
+                <button
+                  class="dev-app__dropdown-item"
+                  @click="
+                    exportHTML();
+                    closeExportMenu();
+                  "
+                >
+                  Export HTML
+                </button>
+                <button
+                  class="dev-app__dropdown-item"
+                  @click="
+                    exportDocx();
+                    closeExportMenu();
+                  "
+                >
+                  Export Docx
+                </button>
+                <button
+                  class="dev-app__dropdown-item"
+                  @click="
+                    exportDocx('clean');
+                    closeExportMenu();
+                  "
+                >
+                  Export clean Docx
+                </button>
+                <button
+                  class="dev-app__dropdown-item"
+                  @click="
+                    exportDocx('external');
+                    closeExportMenu();
+                  "
+                >
+                  Export external Docx
+                </button>
+                <button
+                  class="dev-app__dropdown-item"
+                  @click="
+                    exportDocxBlob();
+                    closeExportMenu();
+                  "
+                >
+                  Export Docx Blob
+                </button>
+                <button
+                  class="dev-app__dropdown-item"
+                  v-if="useLayoutEngine"
+                  @click="
+                    exportPdf();
+                    closeExportMenu();
+                  "
+                >
+                  Export PDF
+                </button>
+              </div>
+            </div>
+            <button class="dev-app__header-export-btn" @click="toggleLayoutEngine">
+              Turn Layout Engine {{ useLayoutEngine ? 'off' : 'on' }} (reloads)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -486,6 +652,7 @@ onMounted(async () => {
 }
 
 .dev-app {
+  background-color: #b9bfce;
   --header-height: 154px;
   --toolbar-height: 39px;
 
@@ -503,21 +670,292 @@ onMounted(async () => {
 .dev-app__header {
   display: flex;
   justify-content: space-between;
-  background-color: rgb(222, 237, 243);
-  padding: 20px;
+  align-items: center;
+  gap: 24px;
+  background-color: #0f172a;
+  color: #e2e8f0;
+  padding: 24px;
   box-sizing: border-box;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: relative;
 }
 
-.dev-app__header-side {
+.dev-app__header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 12px;
+  background: linear-gradient(180deg, rgba(15, 23, 42, 0.7), rgba(15, 23, 42, 0));
+  pointer-events: none;
+}
+
+.dev-app__brand {
   display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1 1 auto;
 }
 
-.dev-app__header-side--left {
+.dev-app__logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  overflow: hidden;
+  background: radial-gradient(circle at 30% 30%, #38bdf8, #6366f1);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+
+.dev-app__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 14px;
+}
+
+.dev-app__brand-meta {
+  display: flex;
   flex-direction: column;
+  gap: 6px;
 }
 
-.dev-app__header-side--right {
+.dev-app__pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  color: #cbd5e1;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  font-size: 10px;
+  width: fit-content;
+}
+
+.dev-app__meta-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dev-app__title {
+  margin: 0;
+  color: #f8fafc;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.dev-app__subtitle {
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+.dev-app__header-layout-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(59, 130, 246, 0.15);
+  border-radius: 10px;
+  font-weight: 700;
+  color: #bfdbfe;
+  letter-spacing: 0.02em;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.dev-app__upload-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.dev-app__upload-label {
+  color: #cbd5e1;
+  font-size: 13px;
+}
+
+.dev-app__upload-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dev-app__upload-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dev-app__upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(59, 130, 246, 0.2);
+  color: #e2e8f0;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.4);
+}
+
+.dev-app__upload-btn:hover {
+  background: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.5);
+}
+
+.dev-app__upload-input {
+  position: absolute;
+  inset: 0;
+}
+
+:deep(.dev-app__upload-input input[type='file']) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: transparent;
+  z-index: 2;
+}
+
+.dev-app__upload-hint {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.dev-app__header-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   align-items: flex-end;
+}
+
+.dev-app__header-upload {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dev-app__upload-label {
+  color: #cbd5e1;
+  font-size: 14px;
+}
+
+.dev-app__header-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.dev-app__header-export-btn {
+  background: rgba(148, 163, 184, 0.12);
+  color: #e2e8f0;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 8px 12px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.25);
+}
+
+.dev-app__header-export-btn:hover {
+  background: rgba(148, 163, 184, 0.2);
+  border-color: rgba(148, 163, 184, 0.35);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.28);
+}
+
+.dev-app__header-export-btn:active {
+  transform: translateY(1px);
+  background: rgba(148, 163, 184, 0.28);
+}
+
+.dev-app__dropdown {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dev-app__dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dev-app__dropdown-trigger .caret {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+
+.dev-app__dropdown-trigger.is-open .caret {
+  transform: rotate(180deg);
+}
+
+.dev-app__dropdown-menu {
+  position: absolute;
+  top: 105%;
+  right: 0;
+  min-width: 180px;
+  background: #0b1221;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  padding: 6px;
+  z-index: 5;
+  display: grid;
+  gap: 4px;
+}
+
+.dev-app__dropdown-item {
+  background: transparent;
+  color: #e2e8f0;
+  border: 1px solid transparent;
+  padding: 8px 10px;
+  border-radius: 8px;
+  text-align: left;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.dev-app__dropdown-item:hover {
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.25);
 }
 
 .dev-app__main {

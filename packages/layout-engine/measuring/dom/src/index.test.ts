@@ -1,0 +1,1547 @@
+import { describe, it, expect, beforeAll } from 'vitest';
+import { measureBlock } from './index.js';
+import type {
+  FlowBlock,
+  ParagraphMeasure,
+  ImageMeasure,
+  Measure,
+  DrawingMeasure,
+  DrawingBlock,
+} from '@superdoc/contracts';
+
+const expectParagraphMeasure = (measure: Measure): ParagraphMeasure => {
+  expect(measure.kind).toBe('paragraph');
+  return measure as ParagraphMeasure;
+};
+
+const expectImageMeasure = (measure: Measure): ImageMeasure => {
+  expect(measure.kind).toBe('image');
+  return measure as ImageMeasure;
+};
+
+const expectDrawingMeasure = (measure: Measure): DrawingMeasure => {
+  expect(measure.kind).toBe('drawing');
+  return measure as DrawingMeasure;
+};
+
+describe('measureBlock', () => {
+  // Ensure we're in a jsdom environment
+  beforeAll(() => {
+    expect(typeof document).toBe('object');
+    expect(typeof document.createElement).toBe('function');
+  });
+
+  describe('basic measurement', () => {
+    it('measures a simple single-line block', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Hello',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      expect(measure.lines[0]).toMatchObject({
+        fromRun: 0,
+        fromChar: 0,
+        toRun: 0,
+      });
+      expect(measure.lines[0].width).toBeGreaterThan(0);
+      expect(measure.lines[0].ascent).toBe(16 * 0.8);
+      expect(measure.lines[0].descent).toBe(16 * 0.2);
+      expect(measure.lines[0].lineHeight).toBe(16);
+      expect(measure.totalHeight).toBe(16);
+    });
+
+    it('breaks lines when text exceeds maxWidth', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'This is a long paragraph that should break into multiple lines',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use a narrow width to force line breaks
+      const measure = expectParagraphMeasure(await measureBlock(block, 100));
+
+      expect(measure.lines.length).toBeGreaterThan(1);
+      expect(measure.totalHeight).toBe(measure.lines.length * 16);
+
+      // All lines except maybe the last should be near maxWidth
+      for (let i = 0; i < measure.lines.length - 1; i++) {
+        expect(measure.lines[i].width).toBeLessThanOrEqual(100);
+      }
+    });
+
+    it('measures empty block correctly', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: '',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 200));
+
+      expect(measure.lines).toHaveLength(1);
+      expect(measure.lines[0].width).toBeGreaterThanOrEqual(0);
+      expect(measure.totalHeight).toBeGreaterThan(0);
+    });
+  });
+
+  describe('multi-run blocks', () => {
+    it('measures blocks with multiple runs', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Hello ',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            text: 'world',
+            fontFamily: 'Arial',
+            fontSize: 16,
+            bold: true,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      expect(measure.lines[0].fromRun).toBe(0);
+      expect(measure.lines[0].toRun).toBeGreaterThanOrEqual(0);
+      expect(measure.totalHeight).toBeGreaterThan(0);
+    });
+
+    it('breaks across multiple runs correctly', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'This is ',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            text: 'a very long text ',
+            fontFamily: 'Arial',
+            fontSize: 16,
+            bold: true,
+          },
+          {
+            text: 'that spans multiple runs',
+            fontFamily: 'Arial',
+            fontSize: 16,
+            italic: true,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 150));
+
+      expect(measure.lines.length).toBeGreaterThan(1);
+      // Lines should reference the correct run indices
+      measure.lines.forEach((line) => {
+        expect(line.fromRun).toBeGreaterThanOrEqual(0);
+        expect(line.toRun).toBeLessThanOrEqual(2);
+        expect(line.toRun).toBeGreaterThanOrEqual(line.fromRun);
+      });
+    });
+  });
+
+  describe('advanced styling', () => {
+    it('accounts for letter spacing in measured width', async () => {
+      const baseBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'letters',
+        runs: [{ text: 'Spacing test', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {},
+      };
+
+      const spacedBlock: FlowBlock = {
+        ...baseBlock,
+        id: 'letters-spaced',
+        runs: [{ ...baseBlock.runs[0], letterSpacing: 2 }],
+      };
+
+      const baseMeasure = expectParagraphMeasure(await measureBlock(baseBlock, 400));
+      const spacedMeasure = expectParagraphMeasure(await measureBlock(spacedBlock, 400));
+
+      expect(spacedMeasure.lines[0].width).toBeGreaterThan(baseMeasure.lines[0].width);
+    });
+
+    it('reduces available width when paragraph indent is set', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'indented',
+        runs: [
+          {
+            text: 'This is a long paragraph that should wrap to multiple lines when indented.',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          indent: { left: 40, right: 20, firstLine: 30 },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      const effectiveWidth = 400 - 40 - 20 - 30;
+      expect(measure.lines[0].width).toBeLessThanOrEqual(effectiveWidth + 5);
+    });
+
+    it('aligns runs using decimal tab stops when defined', async () => {
+      const decimalBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'decimal-tab',
+        runs: [
+          {
+            text: 'Price:\t12.99',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          tabs: [{ pos: 72, align: 'decimal' }],
+        },
+      };
+
+      const leftBlock: FlowBlock = {
+        ...decimalBlock,
+        id: 'left-tab',
+        attrs: {
+          tabs: [{ pos: 72, align: 'left' }],
+        },
+      };
+
+      const decimalMeasure = expectParagraphMeasure(await measureBlock(decimalBlock, 400));
+      const leftMeasure = expectParagraphMeasure(await measureBlock(leftBlock, 400));
+
+      expect(decimalMeasure.lines[0].width).toBeLessThanOrEqual(leftMeasure.lines[0].width);
+    });
+
+    it('respects locale-specific decimal separators', async () => {
+      const decimalBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'decimal-tab-comma',
+        runs: [
+          {
+            text: 'Total:	12,75',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          tabs: [{ pos: 72, align: 'decimal' }],
+          decimalSeparator: ',',
+        },
+      };
+
+      const controlBlock: FlowBlock = {
+        ...decimalBlock,
+        id: 'decimal-tab-left-control',
+        attrs: {
+          tabs: [{ pos: 72, align: 'left' }],
+        },
+      };
+
+      const decimalMeasure = expectParagraphMeasure(await measureBlock(decimalBlock, 400));
+      const controlMeasure = expectParagraphMeasure(await measureBlock(controlBlock, 400));
+
+      expect(decimalMeasure.lines[0].width).toBeLessThanOrEqual(controlMeasure.lines[0].width);
+    });
+
+    it('centers the segment after a center tab stop', async () => {
+      const centerBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'center-tab',
+        runs: [{ text: 'Title\tCentered', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          // Using legacy shape for brevity; engine path normalizes internally
+          tabs: [{ pos: 100, align: 'center' }],
+        },
+      };
+
+      const leftBlock: FlowBlock = {
+        ...centerBlock,
+        id: 'center-tab-left',
+        attrs: { tabs: [{ pos: 100, align: 'left' }] },
+      };
+
+      const centerMeasure = expectParagraphMeasure(await measureBlock(centerBlock, 400));
+      const leftMeasure = expectParagraphMeasure(await measureBlock(leftBlock, 400));
+
+      // Center alignment should not exceed left-aligned width for the same stop
+      expect(centerMeasure.lines[0].width).toBeLessThanOrEqual(leftMeasure.lines[0].width);
+      expect(centerMeasure.lines[0].width).toBeGreaterThan(0);
+    });
+
+    it('right-aligns the segment after an end tab stop', async () => {
+      const endBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'end-tab',
+        runs: [{ text: 'Total\t123.45', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          tabs: [{ pos: 120, align: 'right' }],
+        },
+      };
+
+      const leftBlock: FlowBlock = {
+        ...endBlock,
+        id: 'end-tab-left',
+        attrs: { tabs: [{ pos: 120, align: 'left' }] },
+      };
+
+      const endMeasure = expectParagraphMeasure(await measureBlock(endBlock, 400));
+      const leftMeasure = expectParagraphMeasure(await measureBlock(leftBlock, 400));
+
+      // End alignment places text so its right edge hits the stop; width should be reasonable
+      expect(endMeasure.lines[0].width).toBeLessThanOrEqual(leftMeasure.lines[0].width);
+      expect(endMeasure.lines[0].width).toBeGreaterThan(0);
+    });
+
+    it('defaults to period (.) when decimalSeparator not specified', async () => {
+      const decimalBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'decimal-tab-default',
+        runs: [
+          {
+            text: 'Price:	99.99',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          tabs: [{ pos: 72, align: 'decimal' }],
+          // decimalSeparator not specified - should default to '.'
+        },
+      };
+
+      const controlBlock: FlowBlock = {
+        ...decimalBlock,
+        id: 'decimal-tab-left-control',
+        attrs: {
+          tabs: [{ pos: 72, align: 'left' }],
+        },
+      };
+
+      const decimalMeasure = expectParagraphMeasure(await measureBlock(decimalBlock, 400));
+      const controlMeasure = expectParagraphMeasure(await measureBlock(controlBlock, 400));
+
+      // With decimal alignment on '.', the text should align properly
+      expect(decimalMeasure.lines[0].width).toBeLessThanOrEqual(controlMeasure.lines[0].width);
+      expect(decimalMeasure.lines[0].width).toBeGreaterThan(0);
+    });
+
+    it('falls back to tab position when decimal separator is absent', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'decimal-missing',
+        runs: [
+          {
+            text: 'Total:\tValue',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          tabs: [{ pos: 60, align: 'decimal' }],
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      expect(measure.lines[0].width).toBeGreaterThan(0);
+    });
+
+    it('converts spacing multipliers using the baseline line height', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'spaced',
+        runs: [
+          {
+            text: 'Line height test',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          spacing: { line: 1.5, lineRule: 'auto' },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      const base = 16;
+      expect(measure.lines[0].lineHeight).toBeCloseTo(1.5 * base, 3);
+    });
+
+    it('applies higher auto multipliers to the baseline line height', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'double-spaced',
+        runs: [
+          {
+            text: 'Double spaced text',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          spacing: { line: 2, lineRule: 'auto' },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      const base = 16;
+      expect(measure.lines[0].lineHeight).toBeCloseTo(2 * base, 3);
+    });
+
+    it('treats large auto values as absolute pixel heights', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'absolute-spacing',
+        runs: [
+          {
+            text: 'Absolute spacing',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          spacing: { line: 42, lineRule: 'auto' },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      expect(measure.lines[0].lineHeight).toBeCloseTo(42, 3);
+    });
+
+    it('measures list blocks and returns marker widths and indents', async () => {
+      const listBlock: FlowBlock = {
+        kind: 'list',
+        id: 'list-1',
+        listType: 'number',
+        items: [
+          {
+            id: 'item-1',
+            marker: { kind: 'number', text: '1.', level: 0, order: 1 },
+            paragraph: {
+              kind: 'paragraph',
+              id: 'para-1',
+              runs: [{ text: 'First', fontFamily: 'Arial', fontSize: 16 }],
+              attrs: { indent: { left: 24, hanging: 18 } },
+            },
+          },
+          {
+            id: 'item-2',
+            marker: { kind: 'number', text: '2.', level: 0, order: 2 },
+            paragraph: {
+              kind: 'paragraph',
+              id: 'para-2',
+              runs: [{ text: 'Second', fontFamily: 'Arial', fontSize: 16 }],
+              attrs: { indent: { left: 24, hanging: 18 } },
+            },
+          },
+        ],
+      };
+
+      const measure = await measureBlock(listBlock, 400);
+      expect(measure.kind).toBe('list');
+      if (measure.kind !== 'list') throw new Error('expected list measure');
+      expect(measure.items).toHaveLength(2);
+      expect(measure.items[0].markerWidth).toBeGreaterThan(0);
+      expect(measure.items[0].markerTextWidth).toBeGreaterThan(0);
+      expect(measure.items[0].indentLeft).toBe(24);
+      expect(measure.totalHeight).toBeGreaterThan(0);
+    });
+  });
+
+  describe('typography metrics', () => {
+    it('calculates correct metrics for standard font size', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Test',
+            fontFamily: 'Arial',
+            fontSize: 20,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines[0].ascent).toBe(20 * 0.8); // 16
+      expect(measure.lines[0].descent).toBe(20 * 0.2); // 4
+      expect(measure.lines[0].lineHeight).toBe(20); // Base clamps to font size
+    });
+
+    it('uses the largest fontSize in a line for metrics', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Small ',
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+          {
+            text: 'Large',
+            fontFamily: 'Arial',
+            fontSize: 24,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      // Should use the larger font size (24) for line metrics
+      expect(measure.lines[0].lineHeight).toBe(24);
+      expect(measure.lines[0].ascent).toBe(24 * 0.8);
+    });
+  });
+
+  describe('styling variations', () => {
+    it('measures bold text correctly', async () => {
+      const plainBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Hello world',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const boldBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: '1-paragraph',
+        runs: [
+          {
+            text: 'Hello world',
+            fontFamily: 'Arial',
+            fontSize: 16,
+            bold: true,
+          },
+        ],
+        attrs: {},
+      };
+
+      const plainMeasure = expectParagraphMeasure(await measureBlock(plainBlock, 1000));
+      const boldMeasure = expectParagraphMeasure(await measureBlock(boldBlock, 1000));
+
+      // Bold text should generally be wider
+      expect(boldMeasure.lines[0].width).toBeGreaterThan(plainMeasure.lines[0].width);
+    });
+
+    it('measures italic text correctly', async () => {
+      const plainBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Hello world',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const italicBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: '1-paragraph',
+        runs: [
+          {
+            text: 'Hello world',
+            fontFamily: 'Arial',
+            fontSize: 16,
+            italic: true,
+          },
+        ],
+        attrs: {},
+      };
+
+      const plainMeasure = expectParagraphMeasure(await measureBlock(plainBlock, 1000));
+      const italicMeasure = expectParagraphMeasure(await measureBlock(italicBlock, 1000));
+
+      // Both should have width > 0
+      expect(italicMeasure.lines[0].width).toBeGreaterThan(0);
+      expect(plainMeasure.lines[0].width).toBeGreaterThan(0);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles block with empty runs array', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 200));
+
+      expect(measure.lines).toHaveLength(1);
+      expect(measure.lines[0].width).toBe(0);
+      expect(measure.totalHeight).toBeGreaterThan(0);
+    });
+
+    it('handles very narrow maxWidth', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Test',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Even with narrow width, should produce valid measure
+      const measure = expectParagraphMeasure(await measureBlock(block, 10));
+
+      expect(measure.lines.length).toBeGreaterThanOrEqual(1);
+      expect(measure.totalHeight).toBeGreaterThan(0);
+    });
+
+    it('handles single long word exceeding maxWidth', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Supercalifragilisticexpialidocious',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 100));
+
+      // Should keep the word on a single line even if it exceeds maxWidth
+      expect(measure.lines).toHaveLength(1);
+      expect(measure.lines[0].width).toBeGreaterThan(100);
+    });
+  });
+
+  describe('deterministic behavior', () => {
+    it('produces consistent results for the same input', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Consistent measurement test',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure1 = expectParagraphMeasure(await measureBlock(block, 200));
+      const measure2 = expectParagraphMeasure(await measureBlock(block, 200));
+
+      expect(measure1.lines.length).toBe(measure2.lines.length);
+      expect(measure1.totalHeight).toBe(measure2.totalHeight);
+      expect(measure1.lines[0].width).toBe(measure2.lines[0].width);
+    });
+  });
+
+  describe('tab measurement', () => {
+    it('measures a simple tab with default tab stops', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Before',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            pmStart: 6,
+            pmEnd: 7,
+          },
+          {
+            text: 'After',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      // Tab run should have computed width
+      const tabRun = block.runs[1];
+      expect(tabRun.kind).toBe('tab');
+      if (tabRun.kind === 'tab') {
+        expect(tabRun.width).toBeGreaterThan(0);
+      }
+    });
+
+    it('measures tab with explicit tab stops', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Name',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 200, val: 'left' }],
+            tabIndex: 0,
+            pmStart: 4,
+            pmEnd: 5,
+          },
+          {
+            text: 'Value',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      const tabRun = block.runs[1];
+      if (tabRun.kind === 'tab') {
+        expect(tabRun.width).toBeGreaterThan(0);
+        // Width should move text to position near 200px
+        expect(tabRun.width).toBeLessThan(200);
+      }
+    });
+
+    it('handles multiple tabs in a row', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'A',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            pmStart: 1,
+            pmEnd: 2,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            pmStart: 2,
+            pmEnd: 3,
+          },
+          {
+            text: 'B',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      // Both tabs should have computed widths
+      const tab1 = block.runs[1];
+      const tab2 = block.runs[2];
+      if (tab1.kind === 'tab' && tab2.kind === 'tab') {
+        expect(tab1.width).toBeGreaterThan(0);
+        expect(tab2.width).toBeGreaterThan(0);
+      }
+    });
+
+    it('breaks line before tab if it would exceed maxWidth', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'This is a long text',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 200, val: 'left' }],
+            pmStart: 19,
+            pmEnd: 20,
+          },
+          {
+            text: 'After tab',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use narrow width to force line break
+      const measure = expectParagraphMeasure(await measureBlock(block, 150));
+
+      // Should break into multiple lines
+      expect(measure.lines.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('keeps tab on same line when it fits', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'A',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            pmStart: 1,
+            pmEnd: 2,
+          },
+          {
+            text: 'B',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      // Should fit on one line
+      expect(measure.lines).toHaveLength(1);
+      expect(measure.lines[0].fromRun).toBe(0);
+      expect(measure.lines[0].toRun).toBeGreaterThanOrEqual(2);
+    });
+
+    it('handles tab with leader style', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Chapter 1',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 300, val: 'right', leader: 'dot' }],
+            leader: 'dot',
+            pmStart: 9,
+            pmEnd: 10,
+          },
+          {
+            text: '42',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      const tabRun = block.runs[1];
+      if (tabRun.kind === 'tab') {
+        expect(tabRun.width).toBeGreaterThan(0);
+        expect(tabRun.leader).toBe('dot');
+      }
+    });
+  });
+
+  describe('letter spacing', () => {
+    it('includes letterSpacing in width calculations', async () => {
+      const blockNoSpacing: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Hello',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const blockWithSpacing: FlowBlock = {
+        kind: 'paragraph',
+        id: '1-paragraph',
+        runs: [
+          {
+            text: 'Hello',
+            fontFamily: 'Arial',
+            fontSize: 16,
+            letterSpacing: 2,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measureNoSpacing = expectParagraphMeasure(await measureBlock(blockNoSpacing, 1000));
+      const measureWithSpacing = expectParagraphMeasure(await measureBlock(blockWithSpacing, 1000));
+
+      // "Hello" has 5 characters = 4 gaps × 2px = 8px extra width
+      const expectedExtraWidth = 8;
+      expect(measureWithSpacing.lines[0].width).toBeCloseTo(
+        measureNoSpacing.lines[0].width + expectedExtraWidth,
+        0, // Allow 1px tolerance for floating-point precision
+      );
+    });
+
+    it('includes boundary spacing when appending to non-empty line', async () => {
+      // Test that "Hello World" with letterSpacing = 2 includes all gaps:
+      // - 4 gaps in "Hello" = 8px
+      // - 1 boundary gap between "o" and " " = 2px
+      // - 5 gaps in " World" = 10px
+      // Total: 20px of letter spacing
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Hello World',
+            fontFamily: 'Arial',
+            fontSize: 16,
+            letterSpacing: 2,
+          },
+        ],
+        attrs: {},
+      };
+
+      const blockNoSpacing: FlowBlock = {
+        kind: 'paragraph',
+        id: '1-paragraph',
+        runs: [
+          {
+            text: 'Hello World',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measureSpacing = expectParagraphMeasure(await measureBlock(block, 1000));
+      const measureNoSpacing = expectParagraphMeasure(await measureBlock(blockNoSpacing, 1000));
+
+      // "Hello World" has 11 characters = 10 gaps × 2px = 20px extra
+      const expectedExtraWidth = 20;
+      expect(measureSpacing.lines[0].width).toBeCloseTo(
+        measureNoSpacing.lines[0].width + expectedExtraWidth,
+        0, // Allow 1px tolerance for floating-point precision
+      );
+    });
+
+    it('causes earlier line breaks when letterSpacing increases width', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'This is a long paragraph that should break',
+            fontFamily: 'Arial',
+            fontSize: 16,
+            letterSpacing: 3,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 150));
+
+      // With letter spacing, should break into more lines
+      expect(measure.lines.length).toBeGreaterThan(1);
+    });
+
+    it('handles letterSpacing with single character correctly', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'A',
+            fontFamily: 'Arial',
+            fontSize: 16,
+            letterSpacing: 5,
+          },
+        ],
+        attrs: {},
+      };
+
+      const blockNoSpacing: FlowBlock = {
+        kind: 'paragraph',
+        id: '1-paragraph',
+        runs: [
+          {
+            text: 'A',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measureSpacing = expectParagraphMeasure(await measureBlock(block, 1000));
+      const measureNoSpacing = expectParagraphMeasure(await measureBlock(blockNoSpacing, 1000));
+
+      // Single character has 0 gaps, so letterSpacing adds nothing
+      expect(measureSpacing.lines[0].width).toBeCloseTo(measureNoSpacing.lines[0].width, 1);
+    });
+  });
+
+  describe('overflow protection', () => {
+    it('prevents line width from exceeding maxWidth after appending segment with trailing space', async () => {
+      // This test verifies the post-append overflow guard
+      // Scenario: Word fits without space, but word+space exceeds maxWidth
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'WWWWW XXXXX', // Wide characters to trigger overflow
+            fontFamily: 'Arial',
+            fontSize: 20,
+            bold: true,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Measure first word to get its width
+      const firstWordBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: '1-paragraph',
+        runs: [
+          {
+            text: 'WWWWW',
+            fontFamily: 'Arial',
+            fontSize: 20,
+            bold: true,
+          },
+        ],
+        attrs: {},
+      };
+
+      const firstWordMeasure = expectParagraphMeasure(await measureBlock(firstWordBlock, 1000));
+      const firstWordWidth = firstWordMeasure.lines[0].width;
+
+      // Set maxWidth just barely larger than first word (without space)
+      // The post-append guard should prevent overflow when space is added
+      const measure = expectParagraphMeasure(await measureBlock(block, firstWordWidth + 3));
+
+      // All lines must respect maxWidth
+      for (const line of measure.lines) {
+        expect(line.width).toBeLessThanOrEqual(firstWordWidth + 3);
+      }
+
+      // Should have wrapped to multiple lines
+      expect(measure.lines.length).toBeGreaterThan(1);
+    });
+
+    it('handles bounding box width for italic text with overhang', async () => {
+      // Italic text can have glyphs that extend beyond advance width
+      // Bounding box measurement should account for this
+      const italicBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'flying', // 'f' and 'y' have overhang in italic
+            fontFamily: 'Arial',
+            fontSize: 16,
+            italic: true,
+          },
+        ],
+        attrs: {},
+      };
+
+      const normalBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: '1-paragraph',
+        runs: [
+          {
+            text: 'flying',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const italicMeasure = expectParagraphMeasure(await measureBlock(italicBlock, 1000));
+      const normalMeasure = expectParagraphMeasure(await measureBlock(normalBlock, 1000));
+
+      // Italic should have measurable width (may be wider or similar to normal)
+      expect(italicMeasure.lines[0].width).toBeGreaterThan(0);
+      expect(normalMeasure.lines[0].width).toBeGreaterThan(0);
+
+      // The key is that bounding box prevents clipping
+      // Both should fit within their measured widths without visual overflow
+      expect(italicMeasure.lines[0].width).toBeGreaterThanOrEqual(normalMeasure.lines[0].width * 0.8);
+    });
+  });
+
+  describe('trailing space behavior', () => {
+    it('does not count trailing space toward maxWidth fit check', async () => {
+      // Create a scenario where a word + space would exceed maxWidth,
+      // but the word alone fits exactly
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Word1 Word2 Word3',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Measure to find the width of "Word1"
+      const word1Block: FlowBlock = {
+        kind: 'paragraph',
+        id: '1-paragraph',
+        runs: [
+          {
+            text: 'Word1',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const word1Measure = expectParagraphMeasure(await measureBlock(word1Block, 1000));
+      const word1Width = word1Measure.lines[0].width;
+
+      // Set maxWidth slightly larger than word1Width
+      // "Word1 " should fit on first line even though it includes a space,
+      // because trailing spaces don't count in the fit check
+      const measure = expectParagraphMeasure(await measureBlock(block, word1Width + 2));
+
+      // Should have multiple lines since "Word2" won't fit on the first line
+      expect(measure.lines.length).toBeGreaterThan(1);
+
+      // First line should end after "Word1" (5 characters)
+      // Note: Trailing space is trimmed from line width
+      expect(measure.lines[0].toChar).toBe(5);
+    });
+
+    it('includes space width when mid-line', async () => {
+      const blockNoSpace: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'HelloWorld',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const blockWithSpace: FlowBlock = {
+        kind: 'paragraph',
+        id: '1-paragraph',
+        runs: [
+          {
+            text: 'Hello World',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measureNoSpace = expectParagraphMeasure(await measureBlock(blockNoSpace, 1000));
+      const measureWithSpace = expectParagraphMeasure(await measureBlock(blockWithSpace, 1000));
+
+      // "Hello World" should be wider than "HelloWorld" due to space
+      expect(measureWithSpace.lines[0].width).toBeGreaterThan(measureNoSpace.lines[0].width);
+    });
+  });
+
+  describe('image measurement', () => {
+    it('reports intrinsic size when within constraints', async () => {
+      const block: FlowBlock = {
+        kind: 'image',
+        id: 'img-0',
+        src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+        width: 200,
+        height: 100,
+      };
+
+      const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 400 }));
+      expect(measure.width).toBe(200);
+      expect(measure.height).toBe(100);
+    });
+
+    it('scales width proportionally when exceeding maxWidth', async () => {
+      const block: FlowBlock = {
+        kind: 'image',
+        id: 'img-1',
+        src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+        width: 800,
+        height: 400,
+      };
+
+      const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400 }));
+      expect(measure.width).toBe(400);
+      expect(measure.height).toBe(200);
+    });
+
+    it('respects maxHeight constraints', async () => {
+      const block: FlowBlock = {
+        kind: 'image',
+        id: 'img-2',
+        src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+        width: 400,
+        height: 800,
+      };
+
+      const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 600, maxHeight: 300 }));
+      expect(Math.round(measure.height)).toBe(300);
+      expect(measure.width).toBeCloseTo(150);
+    });
+  });
+
+  describe('drawing measurement', () => {
+    it('honors rotated geometry', async () => {
+      const block: DrawingBlock = {
+        kind: 'drawing',
+        id: 'drawing-0',
+        drawingKind: 'vectorShape',
+        geometry: {
+          width: 120,
+          height: 60,
+          rotation: 90,
+        },
+      };
+
+      const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500 }));
+      expect(measure.width).toBeCloseTo(60);
+      expect(measure.height).toBeCloseTo(120);
+      expect(measure.scale).toBe(1);
+    });
+
+    it('scales proportionally when exceeding constraints', async () => {
+      const block: DrawingBlock = {
+        kind: 'drawing',
+        id: 'drawing-1',
+        drawingKind: 'vectorShape',
+        geometry: {
+          width: 400,
+          height: 200,
+          rotation: 0,
+        },
+      };
+
+      const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 200, maxHeight: 150 }));
+      expect(measure.width).toBeCloseTo(200);
+      expect(measure.height).toBeCloseTo(100);
+      expect(measure.scale).toBeCloseTo(0.5);
+    });
+
+    it('normalizes rotation within geometry', async () => {
+      const block: DrawingBlock = {
+        kind: 'drawing',
+        id: 'drawing-rot',
+        drawingKind: 'vectorShape',
+        geometry: {
+          width: 50,
+          height: 20,
+          rotation: -450,
+        },
+      };
+
+      const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 200 }));
+      expect(measure.geometry.rotation).toBe(270);
+    });
+  });
+
+  describe('table measurement with column widths', () => {
+    it('uses provided column widths from w:tblGrid', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'table-0',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+              {
+                id: 'cell-0-1',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-1',
+                  runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+              {
+                id: 'cell-0-2',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-2',
+                  runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+            ],
+          },
+        ],
+        columnWidths: [100, 150, 200], // Specific widths from OOXML
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+      expect(measure.columnWidths).toEqual([100, 150, 200]);
+      expect(measure.totalWidth).toBe(450);
+    });
+
+    it('scales column widths proportionally when exceeding available width', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'table-1',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+              {
+                id: 'cell-0-1',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-1',
+                  runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+            ],
+          },
+        ],
+        columnWidths: [400, 400], // Total 800px
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+      // Should scale: 400 * (600/800) = 300
+      expect(measure.columnWidths[0]).toBe(300);
+      expect(measure.columnWidths[1]).toBe(300);
+      expect(measure.totalWidth).toBe(600);
+    });
+
+    it('falls back to equal distribution without columnWidths', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'table-2',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+              {
+                id: 'cell-0-1',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-1',
+                  runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+              {
+                id: 'cell-0-2',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-2',
+                  runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+            ],
+          },
+        ],
+        // No columnWidths provided
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+      // Should distribute equally: 600 / 3 = 200
+      expect(measure.columnWidths).toEqual([200, 200, 200]);
+      expect(measure.totalWidth).toBe(600);
+    });
+
+    it('pads missing column widths with equal distribution', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'table-3',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+              {
+                id: 'cell-0-1',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-1',
+                  runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+              {
+                id: 'cell-0-2',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-2',
+                  runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+            ],
+          },
+        ],
+        columnWidths: [100, 150], // Only 2 widths, but 3 columns
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+      expect(measure.columnWidths).toHaveLength(3);
+      expect(measure.columnWidths[0]).toBe(100);
+      expect(measure.columnWidths[1]).toBe(150);
+      // Remaining space: 600 - 250 = 350, divided by 1 missing column
+      expect(measure.columnWidths[2]).toBe(350);
+    });
+
+    it('truncates extra column widths', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'table-4',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+              {
+                id: 'cell-0-1',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-1',
+                  runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+            ],
+          },
+        ],
+        columnWidths: [100, 150, 200, 250], // 4 widths, but only 2 columns
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+      expect(measure.columnWidths).toHaveLength(2);
+      expect(measure.columnWidths).toEqual([100, 150]);
+    });
+  });
+});

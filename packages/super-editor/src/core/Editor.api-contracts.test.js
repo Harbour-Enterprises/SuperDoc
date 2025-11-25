@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { initTestEditor } from '@tests/helpers/helpers.js';
 
 /**
@@ -15,6 +15,11 @@ import { initTestEditor } from '@tests/helpers/helpers.js';
 describe('Editor - API Contracts (Regression Prevention)', () => {
   let editor;
 
+  // Ensure real timers in case a previous suite left fake timers on
+  beforeEach(() => {
+    vi.useRealTimers();
+  });
+
   afterEach(() => {
     if (editor && !editor.isDestroyed) {
       editor.destroy();
@@ -29,6 +34,7 @@ describe('Editor - API Contracts (Regression Prevention)', () => {
       ({ editor } = initTestEditor({
         mode: 'text',
         content: '<p>Test</p>',
+        useImmediateSetTimeout: false,
         onBeforeCreate: (payload) => {
           beforeCreatePayload = payload;
         },
@@ -46,6 +52,7 @@ describe('Editor - API Contracts (Regression Prevention)', () => {
       ({ editor } = initTestEditor({
         mode: 'text',
         content: '<p>Test</p>',
+        useImmediateSetTimeout: false,
         onCreate: (payload) => {
           createPayload = payload;
         },
@@ -94,6 +101,7 @@ describe('Editor - API Contracts (Regression Prevention)', () => {
       ({ editor } = initTestEditor({
         mode: 'text',
         markdown: '# Test Heading\n\nParagraph text',
+        useImmediateSetTimeout: false,
         onCreate: () => {
           initCompleted = true;
         },
@@ -115,6 +123,7 @@ describe('Editor - API Contracts (Regression Prevention)', () => {
       ({ editor } = initTestEditor({
         mode: 'text',
         html: '<p>Test paragraph</p>',
+        useImmediateSetTimeout: false,
         onCreate: () => {
           initCompleted = true;
         },
@@ -136,6 +145,7 @@ describe('Editor - API Contracts (Regression Prevention)', () => {
       ({ editor } = initTestEditor({
         mode: 'html',
         content: '<p>Test content</p>',
+        useImmediateSetTimeout: false,
         onCreate: () => {
           initCompleted = true;
         },

@@ -1,3 +1,4 @@
+import { normalizeLvlTextChar } from '@superdoc/common/list-numbering';
 import { ensureNumberingCache, LEVELS_MAP_KEY } from './numberingCache.js';
 
 const getNumIdFromTag = (tag) => {
@@ -168,22 +169,6 @@ export const getListLevelDefinitionTag = (numId, level, pStyleId, docx) => {
   return { start, numFmt, lvlText, lvlJc, pPr, rPr, customFormat };
 };
 
-/**
- * Normalize the level text character to a standard format
- * @param {string} lvlText The level text to normalize
- * @returns {string} The normalized level text
- */
-export function normalizeLvlTextChar(lvlText) {
-  const normalizeChars = ['', '', '○', 'o', '■', '□'];
-  if (!lvlText || !normalizeChars.includes(lvlText)) return lvlText;
-
-  if (lvlText === '') lvlText = '•';
-  if (lvlText === '○' || lvlText === 'o') lvlText = '◦';
-  if (lvlText === '■' || lvlText === '') lvlText = '▪';
-  if (lvlText === '□') lvlText = '◯';
-  return lvlText;
-}
-
 export function getDefinitionForLevel(data, level) {
   if (!data) return undefined;
   const parsedLevel = Number(level);
@@ -201,3 +186,5 @@ export const docxNumberingHelpers = {
   generateListPath,
   normalizeLvlTextChar,
 };
+
+export { normalizeLvlTextChar };

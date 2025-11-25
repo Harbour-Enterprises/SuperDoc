@@ -6,21 +6,9 @@ declare const __APP_VERSION__: string | undefined;
 declare const version: string | undefined;
 
 const summaryVersion =
-  (typeof __APP_VERSION__ === 'string' && __APP_VERSION__) ||
-  (typeof version === 'string' && version) ||
-  '0.0.0';
+  (typeof __APP_VERSION__ === 'string' && __APP_VERSION__) || (typeof version === 'string' && version) || '0.0.0';
 
-const nodeKeys = [
-  'group',
-  'content',
-  'marks',
-  'inline',
-  'atom',
-  'defining',
-  'code',
-  'tableRole',
-  'summary',
-] as const;
+const nodeKeys = ['group', 'content', 'marks', 'inline', 'atom', 'defining', 'code', 'tableRole', 'summary'] as const;
 
 const markKeys = ['group', 'inclusive', 'excludes', 'spanning', 'code'] as const;
 
