@@ -19,44 +19,37 @@ vi.mock('@core/helpers/index.js', async () => {
   };
 });
 
-const createListNode = ({
-  fieldIds = ['field-1'],
-  hasOtherContent = false,
-  attrs = {
-    numberingProperties: { numId: 1, ilvl: 0 },
-    listRendering: { markerText: '•', path: [1], numberingType: 'bullet' },
-  },
-} = {}) => ({
-  type: { name: 'paragraph' },
-  attrs,
-  nodeSize: 6,
-  descendants(callback) {
-    fieldIds.forEach((id) => {
-      callback({ type: { name: 'fieldAnnotation' }, attrs: { fieldId: id } }, 0, this);
-    });
-
-    if (hasOtherContent) {
-      callback({ isText: true, text: 'other content' }, 0, this);
-    }
-  },
-});
-
-const createAnnotation = (fieldId, pos = 10) => ({
-  node: { attrs: { fieldId } },
-  pos,
-});
-
 describe('cleanUpListsWithAnnotations', () => {
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it('deletes paragraph-based list entries when only targeted fields remain', () => {
-    fieldHelpers.getAllFieldAnnotations.mockReturnValue([createAnnotation('field-1')]);
+  const createListItemNode = (hasOtherContent = false) => ({
+    type: { name: 'listItem' },
+    nodeSize: 6,
+    descendants(callback) {
+      callback({ type: { name: 'fieldAnnotation' } }, 0);
+    },
+    children: [
+      {
+        type: { name: 'paragraph' },
+        children: hasOtherContent
+          ? [
+              { type: { name: 'text' }, attrs: {} },
+              { type: { name: 'fieldAnnotation' }, attrs: { fieldId: 'field-1' } },
+            ]
+          : [{ type: { name: 'fieldAnnotation' }, attrs: { fieldId: 'field-1' } }],
+      },
+    ],
+  });
+
+  it('deletes list items that only contain removed annotations', () => {
+    fieldHelpers.getAllFieldAnnotations.mockReturnValue([{ node: { attrs: { fieldId: 'field-1' } }, pos: 10 }]);
+
     coreHelpers.findParentNodeClosestToPos.mockReturnValue({
-      pos: 40,
+      pos: 20,
       depth: 0,
-      node: createListNode(),
+      node: createListItemNode(false),
     });
 
     const tr = { delete: vi.fn(), setMeta: vi.fn() };
@@ -65,18 +58,17 @@ describe('cleanUpListsWithAnnotations', () => {
     const result = cleanUpListsWithAnnotations(['field-1'])({ dispatch: vi.fn(), tr, state });
 
     expect(result).toBe(true);
-    expect(tr.delete).toHaveBeenCalledWith(40, 46);
+    expect(tr.delete).toHaveBeenCalledWith(20, 26);
     expect(tr.setMeta).toHaveBeenCalledWith('updateListSync', true);
   });
 
-  it('keeps paragraph-based list entries when other fields remain', () => {
-    fieldHelpers.getAllFieldAnnotations.mockReturnValue([createAnnotation('field-1')]);
+  it('keeps list items that still have other annotations or content', () => {
+    fieldHelpers.getAllFieldAnnotations.mockReturnValue([{ node: { attrs: { fieldId: 'field-1' } }, pos: 10 }]);
+
     coreHelpers.findParentNodeClosestToPos.mockReturnValue({
-      pos: 50,
+      pos: 30,
       depth: 0,
-      node: createListNode({
-        fieldIds: ['field-1', 'field-2'],
-      }),
+      node: createListItemNode(true),
     });
 
     const tr = { delete: vi.fn(), setMeta: vi.fn() };

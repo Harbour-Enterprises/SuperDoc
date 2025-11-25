@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 import { Mark, Attribute } from '@core/index.js';
 import { annotationClass, annotationContentClass } from '../field-annotation/index.js';
 
@@ -39,21 +39,6 @@ export const TextStyle = Mark.create({
           const isAnnotation = el.classList.contains(annotationClass) || el.classList.contains(annotationContentClass);
           if (!hasStyles || isAnnotation) return false;
           return {};
-        },
-      },
-      {
-        getAttrs: (node) => {
-          const fontFamily = node.style.fontFamily?.replace(/['"]+/g, '');
-          const fontSize = node.style.fontSize;
-          const textTransform = node.style.textTransform;
-          if (fontFamily || fontSize || textTransform) {
-            return {
-              fontFamily: fontFamily || null,
-              fontSize: fontSize || null,
-              textTransform: textTransform || null,
-            };
-          }
-          return false;
         },
       },
     ];

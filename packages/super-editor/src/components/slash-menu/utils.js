@@ -8,7 +8,6 @@ import {
   collectTrackedChanges,
   collectTrackedChangesForContext,
 } from '@extensions/track-changes/permission-helpers.js';
-import { isList } from '@core/commands/list-helpers';
 /**
  * Get props by item id
  *
@@ -144,7 +143,10 @@ export async function getEditorContext(editor, event) {
   const structureFromResolvedPos = pos !== null ? getStructureFromResolvedPos(state, pos) : null;
   const isInTable =
     structureFromResolvedPos?.isInTable ?? selectionHasNodeOrMark(state, 'table', { requireEnds: true });
-  const isInList = structureFromResolvedPos?.isInList ?? selectionIncludesListParagraph(state);
+  const isInList =
+    structureFromResolvedPos?.isInList ??
+    (selectionHasNodeOrMark(state, 'bulletList', { requireEnds: false }) ||
+      selectionHasNodeOrMark(state, 'orderedList', { requireEnds: false }));
   const isInSectionNode =
     structureFromResolvedPos?.isInSectionNode ??
     selectionHasNodeOrMark(state, 'documentSection', { requireEnds: true });
@@ -313,61 +315,22 @@ function isCollaborationEnabled(editor) {
   return Boolean(editor?.options?.collaborationProvider && editor?.options?.ydoc);
 }
 
-function selectionIncludesListParagraph(state) {
-  const { $from, $to, from, to } = state.selection;
-
-  const hasListInResolvedPos = ($pos) => {
-    for (let depth = $pos.depth; depth > 0; depth--) {
-      if (isList($pos.node(depth))) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  if (hasListInResolvedPos($from) || hasListInResolvedPos($to)) {
-    return true;
-  }
-
-  let found = false;
-  state.doc.nodesBetween(from, to, (node) => {
-    if (isList(node)) {
-      found = true;
-      return false;
-    }
-    return true;
-  });
-
-  return found;
-}
-
 function getStructureFromResolvedPos(state, pos) {
   try {
     const $pos = state.doc.resolve(pos);
-    let isInList = false;
-    let isInTable = false;
-    let isInSectionNode = false;
+    const ancestors = new Set();
 
     for (let depth = $pos.depth; depth > 0; depth--) {
-      const node = $pos.node(depth);
-      const name = node.type.name;
-
-      if (!isInList && isList(node)) {
-        isInList = true;
-      }
-
-      if (!isInTable && (name === 'table' || name === 'tableRow' || name === 'tableCell' || name === 'tableHeader')) {
-        isInTable = true;
-      }
-
-      if (!isInSectionNode && name === 'documentSection') {
-        isInSectionNode = true;
-      }
-
-      if (isInList && isInTable && isInSectionNode) {
-        break;
-      }
+      ancestors.add($pos.node(depth).type.name);
     }
+
+    const isInList = ancestors.has('bulletList') || ancestors.has('orderedList');
+
+    // ProseMirror table structure typically includes tableRow/tableCell, so check those too
+    const isInTable =
+      ancestors.has('table') || ancestors.has('tableRow') || ancestors.has('tableCell') || ancestors.has('tableHeader');
+
+    const isInSectionNode = ancestors.has('documentSection');
 
     return {
       isInTable,

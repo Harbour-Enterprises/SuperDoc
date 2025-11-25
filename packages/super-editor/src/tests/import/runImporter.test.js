@@ -169,11 +169,7 @@ describe('runImporter', () => {
       const result = handleRunNode({
         nodes: [mockRunNode],
         nodeListHandler: mockNodeListHandler,
-        extraParams: {
-          paragraphProperties: {
-            styleId: 'ParagraphStyle',
-          },
-        },
+        parentStyleId: 'ParagraphStyle',
         docx: mockDocx,
       });
 
@@ -210,11 +206,7 @@ describe('runImporter', () => {
       const result = handleRunNode({
         nodes: [mockRunNode],
         nodeListHandler: mockNodeListHandler,
-        extraParams: {
-          paragraphProperties: {
-            styleId: 'ParagraphStyle',
-          },
-        },
+        parentStyleId: 'ParagraphStyle',
         docx: mockDocx,
       });
 
@@ -338,11 +330,7 @@ describe('runImporter', () => {
       const result = handleRunNode({
         nodes: [mockRunNode],
         nodeListHandler: mockNodeListHandler,
-        extraParams: {
-          paragraphProperties: {
-            styleId: 'Heading1',
-          },
-        },
+        parentStyleId: 'Heading1',
         docx: mockDocx,
       });
 

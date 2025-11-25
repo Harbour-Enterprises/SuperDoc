@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { getTestDataByFileName } from '../../../../../../tests/helpers/helpers.js';
 import { defaultNodeListHandler } from '../../../../v2/importer/docxImporter.js';
+import { collectRunProperties, collectStyleMarks, mergeTextStyleAttrs } from './helpers/helpers.js';
+import { splitRunProperties } from './helpers/split-run-properties.js';
 import { translator as r_translator } from './r-translator.js';
 
 const isBoldVal = (raw) => {
@@ -66,5 +68,74 @@ describe('r-translator integration with w:b (marks-only import, bold inline)', a
       if (boldExpected) expect(wBOut).toBeTruthy();
       else expect(wBOut).toBeUndefined();
     });
+  });
+});
+
+describe('r-translator prefers paragraph latin font over eastAsia run overrides', async () => {
+  const fileName = 'heading-font.docx';
+  const xmlMap = await getTestDataByFileName(fileName);
+  const documentXml = xmlMap['word/document.xml'];
+  const body = documentXml.elements[0].elements.find((el) => el.name === 'w:body');
+  const paragraphs = body?.elements?.filter((n) => n.name === 'w:p') || [];
+
+  const targetRun = (() => {
+    for (const p of paragraphs) {
+      const runs = p.elements?.filter((el) => el.name === 'w:r') || [];
+      for (const run of runs) {
+        const textNode = run.elements?.find((el) => el.name === 'w:t');
+        const textContent = textNode?.elements?.find((el) => el.type === 'text')?.text?.trim();
+        if (textContent === 'CONFIDENTIALITY AND NON-DISCLOSURE AGREEMENT') return run;
+      }
+    }
+    return null;
+  })();
+
+  it('encodes Helvetica for latin heading text even when w:eastAsia is Times New Roman', () => {
+    expect(targetRun).toBeTruthy();
+
+    const handler = defaultNodeListHandler();
+    const styleMarks = collectStyleMarks('Heading1', xmlMap);
+    expect(styleMarks.textStyleAttrs?.fontFamily).toBe('Helvetica, sans-serif');
+
+    const rPrNode = targetRun.elements?.find((el) => el.name === 'w:rPr');
+    const { entries } = collectRunProperties({ nodes: [targetRun], docx: xmlMap }, rPrNode);
+    const { textStyleAttrs, runStyleId } = splitRunProperties(entries, xmlMap);
+    expect(textStyleAttrs).toEqual({ eastAsiaFontFamily: 'Times New Roman, serif' });
+
+    const mergedTextStyleAttrs = mergeTextStyleAttrs(styleMarks.textStyleAttrs, textStyleAttrs);
+    expect(mergedTextStyleAttrs).toEqual({
+      fontSize: '24pt',
+      fontFamily: 'Helvetica, sans-serif',
+      eastAsiaFontFamily: 'Times New Roman, serif',
+    });
+    expect(runStyleId).toBe('Strong');
+
+    const encoded = r_translator.encode({
+      nodes: [targetRun],
+      nodeListHandler: handler,
+      docx: xmlMap,
+      parentStyleId: 'Heading1',
+    });
+
+    expect(encoded?.type).toBe('run');
+
+    const textChild = encoded.content?.find((child) => child?.type === 'text');
+    expect(textChild).toBeTruthy();
+
+    const textStyle = textChild?.marks?.find((mark) => mark.type === 'textStyle');
+    expect(textStyle?.attrs?.fontFamily).toBe('Helvetica, sans-serif');
+    expect(textStyle?.attrs?.styleId).toBe('Strong');
+
+    const runProps = Array.isArray(encoded.attrs?.runProperties) ? encoded.attrs.runProperties : [];
+    const hasRunFontEntries = runProps.some((entry) => entry?.xmlName === 'w:rFonts');
+    expect(hasRunFontEntries).toBe(false);
+
+    const decoded = r_translator.decode({ node: encoded });
+    expect(decoded?.name).toBe('w:r');
+    const rPrOut = decoded.elements?.find((el) => el.name === 'w:rPr');
+    const rFontsOut = rPrOut?.elements?.find((el) => el.name === 'w:rFonts');
+    expect(rFontsOut).toBeTruthy();
+    expect(rFontsOut.attributes?.['w:ascii']).toBe('Helvetica');
+    expect(rFontsOut.attributes?.['w:eastAsia']).toBe('Helvetica');
   });
 });

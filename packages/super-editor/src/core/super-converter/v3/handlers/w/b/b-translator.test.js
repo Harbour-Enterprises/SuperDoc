@@ -1,13 +1,15 @@
 import { describe, it, expect } from 'vitest';
 
-import { translator } from './b-translator.js';
+import { config, translator } from './b-translator.js';
 import { NodeTranslator } from '../../../node-translator/node-translator.js';
 
 describe('w:b translator (attribute)', () => {
-  it('exposes correct translator meta', () => {
-    expect(translator.xmlName).toBe('w:b');
-    expect(translator.sdNodeOrKeyName).toBe('bold');
-    expect(typeof translator.encode).toBe('function');
+  it('exposes correct config meta', () => {
+    expect(config.xmlName).toBe('w:b');
+    expect(config.sdNodeOrKeyName).toBe('bold');
+    expect(typeof config.encode).toBe('function');
+    // attribute translators generally omit decode
+    expect(config.type).toBe(NodeTranslator.translatorTypes.ATTRIBUTE);
   });
 
   it('builds NodeTranslator instance', () => {
@@ -19,14 +21,24 @@ describe('w:b translator (attribute)', () => {
   describe('encode', () => {
     it('encodes with provided w:val as-is', () => {
       const params = { nodes: [{ attributes: { 'w:val': '1' } }] };
-      const out = translator.encode(params);
-      expect(out).toBe(true);
+      const out = config.encode(params);
+      expect(out).toEqual({
+        type: 'attr',
+        xmlName: 'w:b',
+        sdNodeOrKeyName: 'bold',
+        attributes: { 'w:val': '1' },
+      });
     });
 
     it('passes through raw attributes when missing encoded boolean', () => {
       const params = { nodes: [{ attributes: {} }] };
-      const out = translator.encode(params);
-      expect(out).toBe(true);
+      const out = config.encode(params);
+      expect(out).toEqual({
+        type: 'attr',
+        xmlName: 'w:b',
+        sdNodeOrKeyName: 'bold',
+        attributes: {},
+      });
     });
   });
 });

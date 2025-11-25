@@ -45,7 +45,7 @@ test.describe('fonts', () => {
 
     // None of them are supported on the Ubuntu docker image but they must be here
     expect(resolvedFonts).toEqual({
-      documentFonts: ['Aptos', 'Arial', 'Comic Sans MS'].sort(),
+      documentFonts: ['Aptos', 'Comic Sans MS'].sort(),
       unsupportedFonts: ['Aptos', 'Comic Sans MS'].sort(),
     });
   });
@@ -77,7 +77,7 @@ test.describe('fonts', () => {
   });
 
   test('should resolve ~30 fonts with a very large document', async ({ page, context }) => {
-    test.setTimeout(15_000);
+    test.setTimeout(10_000);
     await context.grantPermissions(['local-fonts']);
 
     await goToPageAndWaitForEditor(page, { includeFontsResolved: true });

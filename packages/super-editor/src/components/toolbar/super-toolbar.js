@@ -3,7 +3,6 @@ import { createApp } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { makeDefaultItems } from './defaultItems';
 import { getActiveFormatting } from '@core/helpers/getActiveFormatting.js';
-import { findParentNode } from '@helpers/index.js';
 import { vClickOutside } from '@superdoc/common';
 import Toolbar from './Toolbar.vue';
 import {
@@ -21,7 +20,7 @@ import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
 import { yUndoPluginKey } from 'y-prosemirror';
 import { isNegatedMark } from './format-negation.js';
 import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
-import { isList } from '@core/commands/list-helpers';
+import { collectTargetListItemPositions } from '@core/commands/list-helpers/list-indent-helpers.js';
 
 /**
  * @typedef {function(CommandItem): void} CommandCallback
@@ -427,10 +426,12 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     increaseTextIndent: ({ item, argument }) => {
-      let command = item.command;
+      const command = item.command;
+      const { state } = this.activeEditor;
+      const listItemsInSelection = collectTargetListItemPositions(state);
 
-      if (this.activeEditor.commands.increaseListIndent?.()) {
-        return true;
+      if (listItemsInSelection.length) {
+        return this.activeEditor.commands.increaseListIndent(listItemsInSelection);
       }
 
       if (command in this.activeEditor.commands) {
@@ -447,9 +448,11 @@ export class SuperToolbar extends EventEmitter {
      */
     decreaseTextIndent: ({ item, argument }) => {
       let command = item.command;
+      let { state } = this.activeEditor;
+      const listItemsInSelection = collectTargetListItemPositions(state);
 
-      if (this.activeEditor.commands.decreaseListIndent?.()) {
-        return true;
+      if (listItemsInSelection.length) {
+        return this.activeEditor.commands.decreaseListIndent(listItemsInSelection);
       }
 
       if (command in this.activeEditor.commands) {
@@ -764,14 +767,6 @@ export class SuperToolbar extends EventEmitter {
     this.toolbarItems.forEach((item) => {
       item.resetDisabled();
 
-      if (item.name.value === 'undo') {
-        item.setDisabled(this.undoDepth === 0);
-      }
-
-      if (item.name.value === 'redo') {
-        item.setDisabled(this.redoDepth === 0);
-      }
-
       if (item.name.value === 'acceptTrackedChangeBySelection') {
         item.setDisabled(!canAcceptTrackedChanges);
       }
@@ -843,15 +838,11 @@ export class SuperToolbar extends EventEmitter {
       }
 
       // Activate list buttons when selections is inside list
-      const selection = this.activeEditor.state.selection;
-      const listParent = findParentNode(isList)(selection)?.node;
-      if (listParent) {
-        const numberingType = listParent.attrs.listRendering.numberingType;
-        if (item.name.value === 'list' && numberingType === 'bullet') {
-          item.activate();
-        } else if (item.name.value === 'numberedlist' && numberingType !== 'bullet') {
-          item.activate();
-        }
+      const listNumberingType = marks.find((mark) => mark.name === 'listNumberingType')?.attrs?.listNumberingType;
+      if (item.name.value === 'list' && listNumberingType === 'bullet') {
+        item.activate();
+      } else if (item.name.value === 'numberedlist' && listNumberingType && listNumberingType !== 'bullet') {
+        item.activate();
       }
     });
   }
@@ -873,8 +864,6 @@ export class SuperToolbar extends EventEmitter {
     if (this.role === 'viewer') {
       this.#deactivateAll();
     }
-
-    this.updateToolbarState();
   };
 
   /**

@@ -33,10 +33,10 @@ describe('superdoc_table_tester import/export', () => {
     const paragraph = firstCell.content.find((child) => child.type === 'paragraph');
     expect(paragraph).toBeDefined();
     expect(paragraph.attrs.spacing).toEqual({
-      line: null,
-      lineRule: 'auto',
-      after: null,
-      before: null,
+      line: 0,
+      lineRule: null,
+      lineSpaceAfter: 0,
+      lineSpaceBefore: 0,
     });
   });
 

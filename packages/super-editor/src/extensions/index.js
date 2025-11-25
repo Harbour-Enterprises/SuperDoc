@@ -19,6 +19,9 @@ import { StructuredContentCommands } from './structured-content/index.js';
 import { Document } from './document/index.js';
 import { Text } from './text/index.js';
 import { Run } from './run/index.js';
+import { BulletList } from './bullet-list/index.js';
+import { OrderedList } from './ordered-list/index.js';
+import { ListItem } from './list-item/index.js';
 import { Paragraph } from './paragraph/index.js';
 import { Heading } from './heading/index.js';
 import { CommentRangeStart, CommentRangeEnd, CommentReference } from './comment/index.js';
@@ -77,6 +80,7 @@ import { trackChangesHelpers } from './track-changes/index.js';
 const getRichTextExtensions = () => {
   return [
     Bold,
+    BulletList,
     Color,
     Document,
     FontFamily,
@@ -84,8 +88,10 @@ const getRichTextExtensions = () => {
     History,
     Heading,
     Italic,
+    ListItem,
     LineHeight,
     Link,
+    OrderedList,
     Paragraph,
     Strike,
     Text,
@@ -118,6 +124,7 @@ const getStarterExtensions = () => {
   return [
     Bold,
     BlockNode,
+    BulletList,
     Color,
     CommentRangeStart,
     CommentRangeEnd,
@@ -128,8 +135,10 @@ const getStarterExtensions = () => {
     History,
     Heading,
     Italic,
+    ListItem,
     LineHeight,
     Link,
+    OrderedList,
     Paragraph,
     LineBreak,
     HardBreak,
@@ -196,6 +205,9 @@ export {
   Document,
   Text,
   Run,
+  BulletList,
+  OrderedList,
+  ListItem,
   Paragraph,
   CommentRangeStart,
   CommentRangeEnd,

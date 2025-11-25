@@ -24,8 +24,13 @@ describe('[blank-doc.docx] import, add node, export', () => {
 
     const currentState = editor.getJSON();
     expect(currentState.content.length).toBe(1);
-    expect(currentState.content[0].type).toBe('paragraph');
-    expect(currentState.content[0].attrs.numberingProperties).toBeDefined();
+    expect(currentState.content[0].type).toBe('orderedList');
+    expect(currentState.content[0].content.length).toBe(1);
+    expect(currentState.content[0].content[0].type).toBe('listItem');
+    expect(currentState.content[0].content[0].content.length).toBe(1);
+    expect(currentState.content[0].content[0].content[0].type).toBe('paragraph');
+    expect(currentState.content[0].content[0].content[0].content).toBeUndefined();
+    expect(currentState.content[0].content[0].attrs.indent).toBeDefined();
   });
 
   it('can export the empty list node', () => {
@@ -50,26 +55,34 @@ describe('[blank-doc.docx] import, add node, export', () => {
 
   it('can add text to the first list item', () => {
     const tr = getNewTransaction(editor);
-    const listPosition = 1;
+    const listPosition = 3;
 
     tr.insertText('hello world', listPosition);
     dispatch(tr);
 
     const currentState = editor.getJSON();
-    expect(currentState.content[0].content[0].text).toBe('hello world');
+    expect(currentState.content[0].content[0].content[0].content[0].text).toBe('hello world');
+
+    // Insert text will automatically generate the next list item here too
+    expect(currentState.content[0].content.length).toBe(1); // Expect two list items
+
+    // We expect to see 2 separate ordered list nodes
     const content = currentState.content;
-    expect(content[0].type).toBe('paragraph');
-    const firstListItem = content[0];
-    expect(firstListItem.type).toBe('paragraph');
+    expect(content[0].type).toBe('orderedList');
+
+    const firstListContent = content[0].content;
+    expect(firstListContent.length).toBe(1);
+
+    const firstListItem = firstListContent[0];
+    expect(firstListItem.type).toBe('listItem');
+    expect(firstListItem.content[0].type).toBe('paragraph');
 
     const { attrs } = firstListItem;
-    expect(attrs.listRendering.numberingType).toBe('decimal');
-    expect(attrs.listRendering.markerText).toBe('1.');
-    expect(attrs.listRendering.justification).toBe('left');
-    expect(attrs.listRendering.path).toStrictEqual([1]);
-    expect(attrs.paragraphProperties.numberingProperties.numId).toBe(3);
-    expect(attrs.paragraphProperties.numberingProperties.ilvl).toBe(0);
-    expect(attrs.numberingProperties).toBeDefined();
+    expect(attrs.listNumberingType).toBe('decimal');
+    expect(attrs.numId).toBe(3);
+    expect(attrs.level).toBe(0);
+    expect(attrs.numPrType).toBe('inline');
+    expect(attrs.listLevel).toStrictEqual([1]);
   });
 
   it('correctly exports after the first list item', () => {
@@ -90,11 +103,11 @@ describe('[blank-doc.docx] import, add node, export', () => {
 
     const numIdTag = numPr.elements.find((el) => el.name === 'w:numId');
     const numId = numIdTag.attributes['w:val'];
-    expect(numId).toBe('3');
+    expect(numId).toBe(3);
 
     const lvl = numPr.elements.find((el) => el.name === 'w:ilvl');
     const lvlText = lvl.attributes['w:val'];
-    expect(lvlText).toBe('0');
+    expect(lvlText).toBe(0);
 
     const runNode = listItem.elements.find((el) => el.name === 'w:r');
     const runText = runNode.elements[0].elements[0].text;
@@ -103,25 +116,25 @@ describe('[blank-doc.docx] import, add node, export', () => {
 
   it('can add a second list item by splitting the first', () => {
     const tr = getNewTransaction(editor);
-    const $pos = tr.doc.resolve(1 + 'hello world'.length);
+    const $pos = tr.doc.resolve(9);
     tr.setSelection(TextSelection.near($pos));
     dispatch(tr);
 
-    editor.commands.splitBlock();
+    editor.commands.splitListItem();
 
     const currentState = editor.getJSON();
     expect(currentState.content.length).toBe(2);
 
-    const firstItem = currentState.content[0];
-    expect(firstItem.type).toBe('paragraph');
-    expect(firstItem.attrs.numberingProperties).toBeDefined();
-    expect(firstItem.attrs.numberingProperties.numId).toBeDefined();
-    expect(firstItem.attrs.numberingProperties.ilvl).toBeDefined();
-
-    const secondItem = currentState.content[1];
-    expect(secondItem.type).toBe('paragraph');
-    expect(secondItem.attrs.numberingProperties).toBeDefined();
-    expect(secondItem.attrs.numberingProperties.numId).toBe(firstItem.attrs.numberingProperties.numId);
-    expect(secondItem.attrs.numberingProperties.ilvl).toBe(firstItem.attrs.numberingProperties.ilvl);
+    const secondList = currentState.content[1];
+    const secondListItem = secondList.content[0];
+    expect(secondList.type).toBe('orderedList');
+    expect(secondListItem.type).toBe('listItem');
+    expect(secondListItem.content[0].type).toBe('paragraph');
+    expect(secondListItem.content[0].content[0].text).toBe('world');
+    expect(secondListItem.attrs.listNumberingType).toBe('decimal');
+    expect(secondListItem.attrs.numId).toBe(3);
+    expect(secondListItem.attrs.level).toBe(0);
+    expect(secondListItem.attrs.numPrType).toBe('inline');
+    expect(secondListItem.attrs.listLevel).toStrictEqual([2]);
   });
 });

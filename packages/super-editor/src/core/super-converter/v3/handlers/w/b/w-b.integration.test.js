@@ -27,8 +27,13 @@ describe('w:b translator integration (import/export across all w:val forms)', as
 
   it('wraps existing nodes in attribute translator results without altering raw attributes', () => {
     const encoded = boldNodes.map((node) => w_b_translator.encode({ nodes: [node] }));
-    encoded.forEach((result) => {
-      expect(result).toBe(true);
+    encoded.forEach((result, idx) => {
+      expect(result).toEqual({
+        type: 'attr',
+        xmlName: 'w:b',
+        sdNodeOrKeyName: 'bold',
+        attributes: boldNodes[idx].attributes || {},
+      });
     });
   });
 
@@ -47,19 +52,19 @@ describe('w:b translator integration (import/export across all w:val forms)', as
     ];
 
     cases.forEach(({ raw, expected }) => {
-      const result = w_b_translator.encode({ nodes: [{ attributes: { 'w:val': raw } }] });
-      expect(result).toBe(expected);
+      const encodedAttrs = w_b_translator.encodeAttributes({ nodes: [{ attributes: { 'w:val': raw } }] });
+      expect(encodedAttrs.bold).toBe(expected);
     });
   });
 
   it('emits w:val="0" only when bold is explicitly false during decode', () => {
-    const falseAttrs = w_b_translator.decode({ node: { attrs: { bold: false } } });
-    expect(falseAttrs).toEqual({ attributes: { 'w:val': '0' } });
+    const falseAttrs = w_b_translator.decodeAttributes({ node: { attrs: { bold: false } } });
+    expect(falseAttrs).toEqual({ 'w:val': '0' });
 
-    const trueAttrs = w_b_translator.decode({ node: { attrs: { bold: true } } });
-    expect(trueAttrs).toEqual({ attributes: {} });
+    const trueAttrs = w_b_translator.decodeAttributes({ node: { attrs: { bold: true } } });
+    expect(trueAttrs).toEqual({});
 
-    const missingAttrs = w_b_translator.decode({ node: { attrs: {} } });
-    expect(missingAttrs).toBeUndefined();
+    const missingAttrs = w_b_translator.decodeAttributes({ node: { attrs: {} } });
+    expect(missingAttrs).toEqual({});
   });
 });

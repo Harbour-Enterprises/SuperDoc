@@ -44,14 +44,15 @@ const ordinalFormatter = (level) => {
 };
 
 const generateFromCustom = (path, lvlText, customFormat) => {
-  if (customFormat.match(/(?:[0]+\d,\s){3}\.{3}/) == null) return generateNumbering(path, lvlText, String);
+  if (customFormat !== '001, 002, 003, ...') return generateNumbering(path, lvlText, String);
 
   const match = customFormat.match(/(\d+)/);
   if (!match) throw new Error('Invalid format string: no numeric pattern found');
 
   const sample = match[1];
   const digitCount = sample.length;
-  return generateNumbering(path, lvlText, (p) => String(p).padStart(digitCount, '0'));
+  const index = path.pop();
+  return String(index).padStart(digitCount, '0');
 };
 
 /**

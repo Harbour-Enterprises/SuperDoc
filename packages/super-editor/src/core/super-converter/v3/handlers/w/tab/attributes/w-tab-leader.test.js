@@ -29,7 +29,7 @@ describe('leader decoder', () => {
   });
 
   it('ignores unrelated attributes', () => {
-    expect(decode({ tabType: 'left' })).toBeUndefined();
+    expect(decode({ tabSize: '96' })).toBeUndefined();
   });
 });
 

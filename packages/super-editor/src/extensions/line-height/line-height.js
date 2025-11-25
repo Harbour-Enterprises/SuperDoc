@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 import { Extension } from '@core/index.js';
 import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 

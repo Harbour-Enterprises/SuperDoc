@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 import { history, redo as originalRedo, undo as originalUndo } from 'prosemirror-history';
 import { undo as yUndo, redo as yRedo, yUndoPlugin } from 'y-prosemirror';
 import { Extension } from '@core/Extension.js';

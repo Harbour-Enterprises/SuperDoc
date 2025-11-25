@@ -1,9 +1,39 @@
-import { createSingleIntegerPropertyHandler } from '@converter/v3/handlers/utils.js';
+// @ts-check
 import { NodeTranslator } from '@translator';
+import validXmlAttributes from './attributes/index.js';
+
+/** @type {import('@translator').XmlNodeName} */
+const XML_NODE_NAME = 'w:szCs';
+
+/** @type {import('@translator').SuperDocNodeOrKeyName} */
+const SD_ATTR_KEY = 'fontSizeCs';
 
 /**
- * The NodeTranslator instance for the jc element.
- * @type {import('@translator').NodeTranslator}
- * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 314
+ * Encode the w:szCs element (complex script font size, half-points).
+ * @param {import('@translator').SCEncoderConfig} params
+ * @returns {import('@translator').SCEncoderResult}
  */
-export const translator = NodeTranslator.from(createSingleIntegerPropertyHandler('w:szCs', 'fontSizeCs'));
+const encode = (params, encodedAttrs = {}) => {
+  const { nodes } = params;
+  const node = nodes?.[0];
+  const value = encodedAttrs.fontSizeCs ?? node?.attributes?.['w:val'];
+
+  return {
+    type: 'attr',
+    xmlName: XML_NODE_NAME,
+    sdNodeOrKeyName: SD_ATTR_KEY,
+    attributes: { 'w:val': value ?? null },
+  };
+};
+
+/** @type {import('@translator').NodeTranslatorConfig} */
+export const config = {
+  xmlName: XML_NODE_NAME,
+  sdNodeOrKeyName: SD_ATTR_KEY,
+  type: NodeTranslator.translatorTypes.ATTRIBUTE,
+  encode,
+  attributes: validXmlAttributes,
+};
+
+/** @type {import('@translator').NodeTranslator} */
+export const translator = NodeTranslator.from(config);

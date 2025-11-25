@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 import { Extension } from '@core/Extension.js';
 import { applyLinkedStyleToTransaction, generateLinkedStyleString } from './helpers.js';
 import { createLinkedStylesPlugin, LinkedStylesPluginKey } from './plugin.js';

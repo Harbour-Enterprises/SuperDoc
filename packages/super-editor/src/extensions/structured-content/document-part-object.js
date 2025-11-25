@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 import { Node, Attribute } from '@core/index.js';
 
 export const DocumentPartObject = Node.create({

@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+// @ts-check
 import { Node, Attribute } from '@core/index.js';
 
 /**
@@ -60,7 +59,6 @@ export const TableHeader = Node.create({
         renderDOM: (attrs) => {
           if (!attrs.colwidth) return {};
           return {
-            // @ts-expect-error - colwidth is known to be an array at runtime
             'data-colwidth': attrs.colwidth.join(','),
           };
         },

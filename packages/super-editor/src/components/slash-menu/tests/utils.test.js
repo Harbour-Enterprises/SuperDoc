@@ -185,14 +185,7 @@ describe('utils.js', () => {
         node: (depth) => {
           const map = {
             0: { type: { name: 'doc' }, marks: [] },
-            1: {
-              type: { name: 'paragraph' },
-              marks: [],
-              attrs: {
-                numberingProperties: { numId: 1, ilvl: 0 },
-                listRendering: { numberingType: 'bullet' },
-              },
-            },
+            1: { type: { name: 'paragraph' }, marks: [] },
             2: { type: { name: 'orderedList' }, marks: [] },
             3: { type: { name: 'tableCell' }, marks: [] },
             4: { type: { name: 'tableRow' }, marks: [] },

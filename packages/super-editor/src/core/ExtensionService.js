@@ -241,7 +241,6 @@ export class ExtensionService {
             decorations,
             htmlAttributes,
             extension,
-            extensionAttrs,
           });
         };
 

@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 import { Mark, Attribute } from '@core/index.js';
 import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.js';
 
@@ -36,7 +36,7 @@ export const Strike = Mark.create({
     const merged = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
     const { value } = mark.attrs;
     const { ...rest } = merged || {};
-    if (value === '0' || value === false) {
+    if (value === '0') {
       return ['span', rest, 0];
     }
     return ['s', rest, 0];
@@ -84,8 +84,8 @@ export const Strike = Mark.create({
       value: {
         default: null,
         renderDOM: (attrs) => {
-          if (attrs.value == null) return {};
-          if (attrs.value === '0' || !attrs.value) {
+          if (!attrs.value) return {};
+          if (attrs.value === '0') {
             return { style: 'text-decoration: none' };
           }
           return {};

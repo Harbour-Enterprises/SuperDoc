@@ -427,7 +427,7 @@ export const useCommentsStore = defineStore('comments', () => {
     const document = superdocStore.getDocument(documentId);
 
     comments.forEach((comment) => {
-      const htmlContent = getHtmlFromComment(comment.textJson);
+      const htmlContent = getHTmlFromComment(comment.textJson);
 
       if (!htmlContent && !comment.trackedChange) {
         return;
@@ -442,13 +442,12 @@ export const useCommentsStore = defineStore('comments', () => {
         isInternal: false,
         parentCommentId: comment.parentCommentId,
         creatorName,
-        createdTime: comment.createdTime,
         creatorEmail: comment.creatorEmail,
         importedAuthor: {
           name: importedName,
           email: comment.creatorEmail,
         },
-        commentText: getHtmlFromComment(comment.textJson),
+        commentText: getHTmlFromComment(comment.textJson),
         resolvedTime: comment.isDone ? Date.now() : null,
         resolvedByEmail: comment.isDone ? comment.creatorEmail : null,
         resolvedByName: comment.isDone ? importedName : null,
@@ -605,7 +604,7 @@ export const useCommentsStore = defineStore('comments', () => {
     };
   };
 
-  const getHtmlFromComment = (commentTextJson) => {
+  const getHTmlFromComment = (commentTextJson) => {
     // If no content, we can't convert and its not a valid comment
     if (!commentTextJson.content?.length) return;
 

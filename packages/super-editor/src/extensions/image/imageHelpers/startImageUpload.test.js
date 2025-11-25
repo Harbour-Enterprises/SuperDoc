@@ -294,8 +294,6 @@ describe('uploadAndInsertImage collaboration branch (isolated)', () => {
 
     vi.doMock('@core/super-converter/docx-helpers/document-rels.js', () => ({
       insertNewRelationship: vi.fn(() => 'rId100'),
-      findRelationshipIdFromTarget: vi.fn(),
-      getNewRelationshipId: vi.fn(),
     }));
 
     const { uploadAndInsertImage } = await import('./startImageUpload.js');
@@ -364,8 +362,6 @@ describe('uploadAndInsertImage collaboration branch (isolated)', () => {
 
     vi.doMock('@core/super-converter/docx-helpers/document-rels.js', () => ({
       insertNewRelationship: vi.fn(() => 'rId200'),
-      findRelationshipIdFromTarget: vi.fn(),
-      getNewRelationshipId: vi.fn(),
     }));
 
     const OriginalFile = globalThis.File;
@@ -479,8 +475,6 @@ describe('uploadAndInsertImage collaboration branch (isolated)', () => {
     const relationshipSpy = vi.fn(() => 'rId500');
     vi.doMock('@core/super-converter/docx-helpers/document-rels.js', () => ({
       insertNewRelationship: relationshipSpy,
-      findRelationshipIdFromTarget: vi.fn(),
-      getNewRelationshipId: vi.fn(),
     }));
     const randomSpy = vi.fn().mockReturnValueOnce('0000007b').mockReturnValueOnce('0000007c');
     vi.doMock('@core/helpers/index.js', () => ({

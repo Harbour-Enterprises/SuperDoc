@@ -29,8 +29,6 @@ const encode = (params, encodedAttrs) => {
   if (tblPr) {
     const encodedProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
     encodedAttrs['tableProperties'] = encodedProperties || {};
-  } else {
-    encodedAttrs['tableProperties'] ||= {};
   }
 
   // Table grid
@@ -59,7 +57,7 @@ const encode = (params, encodedAttrs) => {
       transform = (v) => v;
     }
 
-    if (encodedAttrs.tableProperties[key]) {
+    if (encodedAttrs.tableProperties && encodedAttrs.tableProperties[key]) {
       encodedAttrs[key] = transform(encodedAttrs.tableProperties[key]);
     }
   });
@@ -68,7 +66,7 @@ const encode = (params, encodedAttrs) => {
     encodedAttrs['borderCollapse'] = 'separate';
   }
 
-  if (encodedAttrs.tableProperties.tableWidth) {
+  if (encodedAttrs.tableProperties?.tableWidth) {
     const tableWidthMeasurement = encodedAttrs.tableProperties.tableWidth;
     const widthPx = twipsToPixels(tableWidthMeasurement.value);
     if (widthPx != null) {
@@ -84,18 +82,20 @@ const encode = (params, encodedAttrs) => {
     }
   }
   // Table borders can be specified in tblPr or inside a referenced style tag
-  const borderProps = _processTableBorders(encodedAttrs.tableProperties.borders || {});
-  const referencedStyles = _getReferencedTableStyles(encodedAttrs.tableStyleId, params) || {};
-
-  const rowBorders = { ...referencedStyles.rowBorders, ...borderProps.rowBorders };
-  encodedAttrs.borders = { ...referencedStyles.borders, ...borderProps.borders };
-  encodedAttrs.tableProperties.cellMargins = referencedStyles.cellMargins = {
-    ...referencedStyles.cellMargins,
-    ...encodedAttrs.tableProperties.cellMargins,
-  };
+  const { borders, rowBorders } = _processTableBorders(encodedAttrs.tableProperties?.borders || {});
+  const referencedStyles = _getReferencedTableStyles(encodedAttrs.tableStyleId, params);
+  if (referencedStyles?.cellMargins && !encodedAttrs.tableProperties?.cellMargins) {
+    encodedAttrs.tableProperties = {
+      ...(encodedAttrs.tableProperties || {}),
+      cellMargins: referencedStyles.cellMargins,
+    };
+  }
+  const rows = node.elements.filter((el) => el.name === 'w:tr');
+  const borderData = Object.assign({}, referencedStyles?.borders || {}, borders || {});
+  const borderRowData = Object.assign({}, referencedStyles?.rowBorders || {}, rowBorders || {});
+  encodedAttrs['borders'] = borderData;
 
   // Process each row
-  const rows = node.elements.filter((el) => el.name === 'w:tr');
   let columnWidths = Array.isArray(encodedAttrs['grid'])
     ? encodedAttrs['grid'].map((item) => twipsToPixels(item.col))
     : [];
@@ -105,7 +105,7 @@ const encode = (params, encodedAttrs) => {
       params,
       rows,
       tableWidth: encodedAttrs.tableWidth,
-      tableWidthMeasurement: encodedAttrs.tableProperties.tableWidth,
+      tableWidthMeasurement: encodedAttrs.tableProperties?.tableWidth,
     });
     if (fallback) {
       encodedAttrs.grid = fallback.grid;
@@ -119,12 +119,11 @@ const encode = (params, encodedAttrs) => {
   rows.forEach((row, rowIndex) => {
     const result = trTranslator.encode({
       ...params,
-      path: [...(params.path || []), node],
       nodes: [row],
       extraParams: {
         row,
         table: node,
-        rowBorders,
+        rowBorders: borderRowData,
         columnWidths,
         activeRowSpans: activeRowSpans.slice(),
         rowIndex,
@@ -231,11 +230,11 @@ const decode = (params, decodedAttrs) => {
 /**
  * Process the table borders
  * @param {Object[]} [rawBorders] The raw border properties from the `tableProperties` attribute
- * @returns {Record<"borders"|"rowBorders", Record<string,unknown>>}
+ * @returns
  */
 function _processTableBorders(rawBorders) {
-  const /** @type {Record<string,unknown>} */ borders = {};
-  const /** @type {Record<string,unknown>} */ rowBorders = {};
+  const borders = {};
+  const rowBorders = {};
   Object.entries(rawBorders).forEach(([name, attributes]) => {
     const attrs = {};
     const color = attributes.color;
@@ -253,16 +252,11 @@ function _processTableBorders(rawBorders) {
     rowBorders,
   };
 }
-
-/**
- * @typedef {{borders?: {}, name?: *, justification?: *, fonts?: {}, fontSize?: *, rowBorders?: {}, cellMargins?: {}}} TableStyles
- */
-
 /**
  *
  * @param {string|null} tableStyleReference
  * @param {import('@translator').SCEncoderConfig} [params]
- * @returns {TableStyles|null}
+ * @returns {{borders: {}, name: *, justification: *, fonts: {}, fontSize: *, rowBorders: {}, cellMargins: {}}|null}
  */
 export function _getReferencedTableStyles(tableStyleReference, params) {
   if (!tableStyleReference) return null;

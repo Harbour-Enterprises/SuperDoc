@@ -1,23 +1,7 @@
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
-import { mergeTextNodes } from '@converter/v2/importer/index.js';
-import { resolveParagraphProperties } from '@converter/styles';
-import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
-
-function getTableStyleId(path) {
-  const tbl = path.find((ancestor) => ancestor.name === 'w:tbl');
-  if (!tbl) {
-    return;
-  }
-  const tblPr = tbl.elements?.find((child) => child.name === 'w:tblPr');
-  if (!tblPr) {
-    return;
-  }
-  const tblStyle = tblPr.elements?.find((child) => child.name === 'w:tblStyle');
-  if (!tblStyle) {
-    return;
-  }
-  return tblStyle.attributes?.['w:val'];
-}
+import { mergeTextNodes, parseMarks } from '@converter/v2/importer/index.js';
+import { twipsToPixels } from '@converter/helpers.js';
+import { getParagraphIndent, getParagraphSpacing, getDefaultParagraphStyle, parseParagraphBorders } from './index.js';
 
 /**
  * Paragraph node handler
@@ -25,27 +9,10 @@ function getTableStyleId(path) {
  * @returns {Object} Handler result
  */
 export const handleParagraphNode = (params) => {
-  const { nodes, nodeListHandler, filename } = params;
+  const { nodes, docx, nodeListHandler, filename } = params;
 
   const node = carbonCopy(nodes[0]);
   let schemaNode;
-
-  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
-  let inlineParagraphProperties = {};
-  if (pPr) {
-    inlineParagraphProperties = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
-  }
-
-  // Resolve paragraph properties according to styles hierarchy
-  const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
-  const tableStyleId = getTableStyleId(params.path || []);
-  const resolvedParagraphProperties = resolveParagraphProperties(
-    params,
-    inlineParagraphProperties,
-    insideTable,
-    false,
-    tableStyleId,
-  );
 
   // If it is a standard paragraph node, process normally
   const handleStandardNode = nodeListHandler.handlerEntities.find(
@@ -56,38 +23,149 @@ export const handleParagraphNode = (params) => {
     return null;
   }
 
-  const updatedParams = {
-    ...params,
-    nodes: [node],
-    extraParams: { ...params.extraParams, paragraphProperties: resolvedParagraphProperties },
-  };
+  const updatedParams = { ...params, nodes: [node] };
   const result = handleStandardNode(updatedParams);
   if (result.nodes.length === 1) {
     schemaNode = result.nodes[0];
   }
-  schemaNode.type = 'paragraph';
 
-  // Pull out some commonly used properties to top-level attrs
-  schemaNode.attrs.paragraphProperties = inlineParagraphProperties;
-  schemaNode.attrs.borders = resolvedParagraphProperties.borders;
-  schemaNode.attrs.styleId = resolvedParagraphProperties.styleId;
-  schemaNode.attrs.indent = resolvedParagraphProperties.indent;
-  schemaNode.attrs.textAlign = resolvedParagraphProperties.justification;
-  schemaNode.attrs.keepLines = resolvedParagraphProperties.keepLines;
-  schemaNode.attrs.keepNext = resolvedParagraphProperties.keepNext;
-  schemaNode.attrs.spacing = resolvedParagraphProperties.spacing;
-  schemaNode.attrs.rsidRDefault = node.attributes?.['w:rsidRDefault'];
-  schemaNode.attrs.filename = filename;
-  schemaNode.attrs.tabStops = resolvedParagraphProperties.tabStops;
-  schemaNode.attrs.numberingProperties = resolvedParagraphProperties.numberingProperties;
+  const pPr = node.elements?.find((el) => el.name === 'w:pPr');
+  // Extract paragraph borders if present
+  const pBdr = pPr?.elements?.find((el) => el.name === 'w:pBdr');
+  if (pBdr) {
+    const borders = parseParagraphBorders(pBdr);
+    if (Object.keys(borders).length) {
+      schemaNode.attrs.borders = borders;
+    }
+  }
+  const styleTag = pPr?.elements?.find((el) => el.name === 'w:pStyle');
+  const nestedRPr = pPr?.elements?.find((el) => el.name === 'w:rPr');
+  const framePr = pPr?.elements?.find((el) => el.name === 'w:framePr');
 
-  // Dropcap settings
-  if (resolvedParagraphProperties.framePr && resolvedParagraphProperties.framePr.dropCap) {
+  if (nestedRPr) {
+    let marks = parseMarks(nestedRPr, []);
+
+    if (!schemaNode.content?.length) {
+      let highlightIndex = marks?.findIndex((i) => i.type === 'highlight');
+      if (highlightIndex !== -1) {
+        marks.splice(highlightIndex, 1);
+      }
+    }
+
+    schemaNode.attrs.marksAttrs = marks;
+  }
+
+  let styleId;
+  if (styleTag) {
+    styleId = styleTag.attributes['w:val'];
+    schemaNode.attrs['styleId'] = styleId;
+  }
+
+  if (docx) {
+    const indent = getParagraphIndent(node, docx, styleId);
+
+    if (!schemaNode.attrs.indent) {
+      schemaNode.attrs.indent = {};
+    }
+
+    if (indent.left || indent.left === 0) {
+      schemaNode.attrs.indent.left = indent.left;
+    }
+    if (indent.right || indent.right === 0) {
+      schemaNode.attrs.indent.right = indent.right;
+    }
+    if (indent.firstLine || indent.firstLine === 0) {
+      schemaNode.attrs.indent.firstLine = indent.firstLine;
+    }
+    if (indent.hanging || indent.hanging === 0) {
+      schemaNode.attrs.indent.hanging = indent.hanging;
+    }
+    if (indent.textIndent || indent.textIndent === 0) {
+      schemaNode.attrs.textIndent = `${indent.textIndent}in`;
+    }
+  }
+
+  const justify = pPr?.elements?.find((el) => el.name === 'w:jc');
+  if (justify && justify.attributes) {
+    schemaNode.attrs['textAlign'] = justify.attributes['w:val'];
+  }
+
+  const keepLines = pPr?.elements?.find((el) => el.name === 'w:keepLines');
+  if (keepLines && keepLines.attributes) {
+    schemaNode.attrs['keepLines'] = keepLines.attributes['w:val'];
+  }
+
+  const keepNext = pPr?.elements?.find((el) => el.name === 'w:keepNext');
+  if (keepNext && keepNext.attributes) {
+    schemaNode.attrs['keepNext'] = keepNext.attributes['w:val'];
+  }
+
+  if (docx) {
+    const defaultStyleId = node.attributes?.['w:rsidRDefault'];
+    const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
+    const spacing = getParagraphSpacing(node, docx, styleId, schemaNode.attrs.marksAttrs, {
+      insideTable,
+    });
+    if (spacing) {
+      schemaNode.attrs['spacing'] = spacing;
+    }
+    schemaNode.attrs['rsidRDefault'] = defaultStyleId;
+  }
+
+  if (docx) {
+    const { justify } = getDefaultParagraphStyle(docx, styleId);
+    if (justify) {
+      schemaNode.attrs.justify = {
+        val: justify['w:val'],
+      };
+    }
+  }
+
+  if (framePr && framePr.attributes['w:dropCap']) {
     schemaNode.attrs.dropcap = {
-      ...resolvedParagraphProperties.framePr,
-      type: resolvedParagraphProperties.framePr.dropCap,
+      type: framePr.attributes['w:dropCap'],
+      lines: framePr.attributes['w:lines'],
+      wrap: framePr.attributes['w:wrap'],
+      hAnchor: framePr.attributes['w:hAnchor'],
+      vAnchor: framePr.attributes['w:vAnchor'],
     };
-    delete schemaNode.attrs.dropcap.dropCap;
+  }
+
+  schemaNode.attrs['filename'] = filename;
+
+  // Parse tab stops
+  const tabs = pPr?.elements?.find((el) => el.name === 'w:tabs');
+  if (tabs && tabs.elements) {
+    const tabStops = tabs.elements
+      .filter((el) => el.name === 'w:tab')
+      .map((tab) => {
+        let val = tab.attributes['w:val'] || 'start';
+        // Test files continue to contain "left" and "right" rather than "start" and "end"
+        if (val == 'left') {
+          val = 'start';
+        } else if (val == 'right') {
+          val = 'end';
+        }
+        const rawPos = tab.attributes['w:pos'];
+        const tabStop = {
+          val,
+          pos: twipsToPixels(rawPos),
+        };
+        if (rawPos !== undefined) {
+          tabStop.originalPos = rawPos;
+        }
+
+        // Add leader if present
+        if (tab.attributes['w:leader']) {
+          tabStop.leader = tab.attributes['w:leader'];
+        }
+
+        return tabStop;
+      });
+
+    if (tabStops.length > 0) {
+      schemaNode.attrs.tabStops = tabStops;
+    }
   }
 
   // Normalize text nodes.
@@ -101,6 +179,7 @@ export const handleParagraphNode = (params) => {
   // Pass through this paragraph's sectPr, if any
   const sectPr = pPr?.elements?.find((el) => el.name === 'w:sectPr');
   if (sectPr) {
+    if (!schemaNode.attrs.paragraphProperties) schemaNode.attrs.paragraphProperties = {};
     schemaNode.attrs.paragraphProperties.sectPr = sectPr;
     schemaNode.attrs.pageBreakSource = 'sectPr';
   }

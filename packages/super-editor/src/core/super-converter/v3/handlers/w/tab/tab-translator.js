@@ -30,19 +30,12 @@ const encode = (_, encodedAttrs = {}) => {
  * @param {import('@translator').DecodedAttributes} [decodedAttrs] - The already decoded attributes
  * @returns {import('@translator').SCDecoderResult}
  */
-function decode(params, decodedAttrs = {}) {
+const decode = (params, decodedAttrs = {}) => {
   const { node } = params || {};
   if (!node) return;
 
-  const wTab = { name: 'w:tab', elements: [] };
-  if (node.attrs?.['tab']) {
-    decodedAttrs = this.decodeAttributes({ ...params, node: { ...node, attrs: node.attrs['tab'] } }, decodedAttrs);
-  }
-  wTab.attributes = { ...decodedAttrs };
-
-  if (params.extraParams?.skipRun) {
-    return wTab;
-  }
+  const wTab = { name: 'w:tab' };
+  if (decodedAttrs) wTab.attributes = { ...decodedAttrs };
 
   const translated = {
     name: 'w:r',
@@ -58,7 +51,7 @@ function decode(params, decodedAttrs = {}) {
   }
 
   return translated;
-}
+};
 
 /** @type {import('@translator').NodeTranslatorConfig} */
 export const config = {

@@ -1,18 +1,25 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
 import { translateChildNodes } from '../../../../v2/exporter/helpers/index.js';
-import { cloneMark, cloneXmlNode, applyRunPropertiesTemplate, resolveFontFamily } from './helpers/helpers.js';
+import { generateRunProps, processOutputMarks } from '../../../../exporter.js';
+import {
+  collectRunProperties,
+  buildRunAttrs,
+  applyRunMarks,
+  deriveStyleMarks,
+  mergeInlineMarkSets,
+  mergeTextStyleAttrs,
+  cloneMark,
+  cloneRunAttrs,
+  createRunPropertiesElement,
+  cloneXmlNode,
+  applyRunPropertiesTemplate,
+} from './helpers/helpers.js';
+import { splitRunProperties } from './helpers/split-run-properties.js';
 import { ensureTrackedWrapper, prepareRunTrackingContext } from './helpers/track-change-helpers.js';
 import { translator as wHyperlinkTranslator } from '../hyperlink/hyperlink-translator.js';
-import { translator as wRPrTranslator } from '../rpr';
 import validXmlAttributes from './attributes/index.js';
-import { handleStyleChangeMarksV2 } from '../../../../v2/importer/markImporter.js';
-import {
-  resolveRunProperties,
-  encodeMarksFromRPr,
-  decodeRPrFromMarks,
-  combineRunProperties,
-} from '@converter/styles.js';
+
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:r';
 
@@ -29,74 +36,59 @@ const encode = (params, encodedAttrs = {}) => {
   if (!runNode) return undefined;
 
   const elements = Array.isArray(runNode.elements) ? runNode.elements : [];
-
-  // Parsing run properties
   const rPrNode = elements.find((child) => child?.name === 'w:rPr');
-  const runProperties = rPrNode ? wRPrTranslator.encode({ ...params, nodes: [rPrNode] }) : {};
+  const contentElements = rPrNode ? elements.filter((el) => el !== rPrNode) : elements;
 
-  // Resolving run properties following style hierarchy
-  const paragraphProperties = params?.extraParams?.paragraphProperties || {};
-  const resolvedRunProperties = resolveRunProperties(params, runProperties ?? {}, paragraphProperties);
+  const { entries: runPropEntries, hadRPr, styleChangeMarks } = collectRunProperties(params, rPrNode);
+  const { remainingProps, inlineMarks, textStyleAttrs, runStyleId } = splitRunProperties(runPropEntries, params?.docx);
 
-  // Parsing marks from run properties
-  const marks = encodeMarksFromRPr(resolvedRunProperties, params?.docx) || [];
-  const rPrChange = rPrNode?.elements?.find((el) => el.name === 'w:rPrChange');
-  const styleChangeMarks = handleStyleChangeMarksV2(rPrChange, marks, params) || [];
+  const styleMarks = deriveStyleMarks({
+    docx: params?.docx,
+    paragraphStyleId: params?.parentStyleId,
+    runStyleId,
+  });
 
-  // Handling direct marks on the run node
+  const mergedInlineMarks = mergeInlineMarkSets(styleMarks.inlineMarks, inlineMarks);
+  let mergedTextStyleAttrs = mergeTextStyleAttrs(styleMarks.textStyleAttrs, textStyleAttrs);
+  if (runStyleId) {
+    mergedTextStyleAttrs = mergedTextStyleAttrs
+      ? { ...mergedTextStyleAttrs, styleId: runStyleId }
+      : { styleId: runStyleId };
+  }
+
+  const runAttrs = buildRunAttrs(encodedAttrs, hadRPr, remainingProps);
   let runLevelMarks = Array.isArray(runNode.marks) ? runNode.marks.map((mark) => cloneMark(mark)) : [];
   if (styleChangeMarks?.length) {
     runLevelMarks = [...runLevelMarks, ...styleChangeMarks.map((mark) => cloneMark(mark))];
   }
 
-  // Encoding child nodes within the run
-  const contentElements = rPrNode ? elements.filter((el) => el !== rPrNode) : elements;
   const childParams = { ...params, nodes: contentElements };
   const content = nodeListHandler?.handler(childParams) || [];
 
-  // Applying marks to child nodes
   const contentWithRunMarks = content.map((child) => {
     if (!child || typeof child !== 'object') return child;
-
-    // Preserve existing marks on child nodes
-    const baseMarks = Array.isArray(child.marks) ? child.marks : [];
-
-    let childMarks = [...marks, ...baseMarks, ...runLevelMarks].map((mark) => cloneMark(mark));
-
-    // De-duplicate marks by type, preserving order (later marks override earlier ones)
-    const seenTypes = new Set();
-    let textStyleMark;
-    childMarks = childMarks.filter((mark) => {
-      if (!mark || !mark.type) return false;
-      if (seenTypes.has(mark.type)) {
-        if (mark.type === 'textStyle') {
-          // Merge textStyle attributes
-          textStyleMark.attrs = { ...(textStyleMark.attrs || {}), ...(mark.attrs || {}) };
-          textStyleMark.attrs = resolveFontFamily(textStyleMark.attrs, child?.text);
-        }
-        return false;
-      }
-      if (mark.type === 'textStyle') {
-        textStyleMark = mark;
-      }
-      seenTypes.add(mark.type);
-      return true;
-    });
-
-    // Apply marks to child nodes
-    return { ...child, marks: childMarks };
+    const baseMarks = Array.isArray(child.marks) ? child.marks.map((mark) => cloneMark(mark)) : [];
+    if (!runLevelMarks.length) return child;
+    return { ...child, marks: [...baseMarks, ...runLevelMarks.map((mark) => cloneMark(mark))] };
   });
 
-  const filtered = contentWithRunMarks.filter(Boolean);
+  const marked = contentWithRunMarks.map((child) => applyRunMarks(child, mergedInlineMarks, mergedTextStyleAttrs));
+
+  const filtered = marked.filter(Boolean);
 
   const runNodeResult = {
     type: SD_KEY_NAME,
     content: filtered,
-    attrs: { ...encodedAttrs, runProperties },
   };
 
+  const attrs = cloneRunAttrs(runAttrs);
+  if (attrs && Object.keys(attrs).length) {
+    if (attrs.runProperties == null) delete attrs.runProperties;
+    if (Object.keys(attrs).length) runNodeResult.attrs = attrs;
+  }
+
   if (runLevelMarks.length) {
-    runNodeResult.marks = runLevelMarks;
+    runNodeResult.marks = runLevelMarks.map((mark) => cloneMark(mark));
   }
 
   return runNodeResult;
@@ -116,31 +108,35 @@ const decode = (params, decodedAttrs = {}) => {
     return wHyperlinkTranslator.decode({ ...params, extraParams });
   }
 
-  // Separate out tracking marks
   const { runNode: runNodeForExport, trackingMarksByType } = prepareRunTrackingContext(node);
 
   const runAttrs = runNodeForExport.attrs || {};
-  const runProperties = runAttrs.runProperties || {};
-  const marksProperties = decodeRPrFromMarks(runNodeForExport.marks || []);
-  const finalRunProperties = combineRunProperties([runProperties, marksProperties]);
-
-  // Decode child nodes within the run
-  const exportParams = {
-    ...params,
-    node: runNodeForExport,
-    extraParams: { ...params?.extraParams, runProperties: finalRunProperties },
-  };
+  const runProperties = Array.isArray(runAttrs.runProperties) ? runAttrs.runProperties : [];
+  const exportParams = { ...params, node: runNodeForExport };
   if (!exportParams.editor) {
     exportParams.editor = { extensionService: { extensions: [] } };
   }
+
   const childElements = translateChildNodes(exportParams) || [];
 
-  // Parse marks back into run properties
-  // and combine with any direct run properties
-  let runPropertiesElement = wRPrTranslator.decode({
-    ...params,
-    node: { attrs: { runProperties: finalRunProperties } },
-  });
+  let runPropertiesElement = createRunPropertiesElement(runProperties);
+
+  const markElements = processOutputMarks(Array.isArray(runNodeForExport.marks) ? runNodeForExport.marks : []);
+  if (markElements.length) {
+    if (!runPropertiesElement) {
+      runPropertiesElement = generateRunProps(markElements);
+    } else {
+      if (!Array.isArray(runPropertiesElement.elements)) runPropertiesElement.elements = [];
+      const existingNames = new Set(
+        runPropertiesElement.elements.map((el) => el?.name).filter((name) => typeof name === 'string'),
+      );
+      markElements.forEach((element) => {
+        if (!element || !element.name || existingNames.has(element.name)) return;
+        runPropertiesElement.elements.push({ ...element, attributes: { ...(element.attributes || {}) } });
+        existingNames.add(element.name);
+      });
+    }
+  }
 
   const runPropsTemplate = runPropertiesElement ? cloneXmlNode(runPropertiesElement) : null;
   const applyBaseRunProps = (runNode) => applyRunPropertiesTemplate(runNode, runPropsTemplate);

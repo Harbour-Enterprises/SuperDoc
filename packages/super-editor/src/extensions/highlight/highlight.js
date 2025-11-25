@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 import { Mark, Attribute } from '@core/index.js';
 
 /**

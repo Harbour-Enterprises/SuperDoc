@@ -27,4 +27,3 @@ src/tests/data
 src/tests/data/**
 tests/data
 tests/data/**
-packages/schema-management/versions/*

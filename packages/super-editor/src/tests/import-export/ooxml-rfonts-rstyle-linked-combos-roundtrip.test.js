@@ -142,13 +142,7 @@ describe('OOXML rFonts + rStyle + linked combinations round-trip', () => {
       const actualFonts = exportedRuns[i].fonts;
 
       if (!expectedFonts) {
-        expect(actualFonts ?? null).toEqual({
-          'w:ascii': 'Cambria',
-          'w:eastAsia': 'Cambria',
-          'w:hAnsi': 'Cambria',
-          'w:cs': 'Cambria',
-          'w:val': 'Cambria',
-        });
+        expect(actualFonts ?? null).toBeNull();
         continue;
       }
 

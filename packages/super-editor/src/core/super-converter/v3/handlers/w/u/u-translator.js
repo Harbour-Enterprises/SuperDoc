@@ -40,12 +40,12 @@ const encode = (params, encodedAttrs = {}) => {
 };
 
 const decode = (params) => {
-  const attrs = params?.node?.attrs?.underline || params?.node?.attrs || {};
-  const underlineType = attrs.underlineType ?? attrs.underline ?? attrs['w:val'] ?? null;
-  const color = attrs.underlineColor ?? attrs.color ?? attrs['w:color'] ?? null;
-  const themeColor = attrs.underlineThemeColor ?? attrs.themeColor ?? attrs['w:themeColor'] ?? null;
-  const themeTint = attrs.underlineThemeTint ?? attrs.themeTint ?? attrs['w:themeTint'] ?? null;
-  const themeShade = attrs.underlineThemeShade ?? attrs.themeShade ?? attrs['w:themeShade'] ?? null;
+  const attrs = params?.node?.attrs || {};
+  const underlineType = attrs.underlineType ?? attrs.underline ?? null;
+  const color = attrs.underlineColor ?? attrs.color ?? null;
+  const themeColor = attrs.underlineThemeColor ?? attrs.themeColor ?? null;
+  const themeTint = attrs.underlineThemeTint ?? attrs.themeTint ?? null;
+  const themeShade = attrs.underlineThemeShade ?? attrs.themeShade ?? null;
 
   if (!underlineType && !color && !themeColor && !themeTint && !themeShade) return undefined;
 

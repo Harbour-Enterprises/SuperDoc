@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { convertSdtContentToRuns } from '@converter/v3/handlers/w/sdt/helpers/convert-sdt-content-to-runs.js';
+import { convertSdtContentToRuns } from '@converter/exporter.js';
 
 describe('convertSdtContentToRuns', () => {
   it('returns existing runs unchanged', () => {

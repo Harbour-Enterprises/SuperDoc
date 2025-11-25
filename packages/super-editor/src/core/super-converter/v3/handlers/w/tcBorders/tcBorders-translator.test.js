@@ -143,7 +143,7 @@ describe('w:tcBorders translator', () => {
       ]);
     });
 
-    it('returns undefined for an empty borders object', () => {
+    it('returns a <w:tcBorders> element with empty elements for an empty borders object', () => {
       const params = {
         node: {
           attrs: {
@@ -152,7 +152,8 @@ describe('w:tcBorders translator', () => {
         },
       };
       const result = translator.decode(params);
-      expect(result).toBeUndefined();
+      expect(result.name).toBe('w:tcBorders');
+      expect(result.elements).toEqual([]);
     });
 
     it('handles a missing borders attribute gracefully', () => {
@@ -162,7 +163,8 @@ describe('w:tcBorders translator', () => {
         },
       };
       const result = translator.decode(params);
-      expect(result).toBeUndefined();
+      expect(result.name).toBe('w:tcBorders');
+      expect(result.elements).toEqual([]);
     });
   });
 });

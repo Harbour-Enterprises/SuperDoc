@@ -11,6 +11,7 @@ dist-ssr
 .npmrc
 .eslintcache
 CLAUDE.md
+dev/
 
 npm-debug.log*
 yarn-debug.log*
@@ -51,14 +52,5 @@ coverage/
 # TypeScript generated declaration files in source (build artifacts)
 **/src/**/*.d.ts
 **/src/**/*.d.ts.map
-# But allow hand-written .d.ts files within packages
-!packages/super-editor/src/core/commands/core-command-map.d.ts
-
-# TypeScript build info files
-*.tsbuildinfo
-
-# Planning and progress tracking documents
-**/plan/progress.md
-
-AGENTS.md
-codex.config.json
+# But allow hand-written .d.ts files in root of packages
+!packages/*/src/*.d.ts

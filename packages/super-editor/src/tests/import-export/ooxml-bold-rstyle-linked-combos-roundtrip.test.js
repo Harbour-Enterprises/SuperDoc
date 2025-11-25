@@ -33,7 +33,7 @@ const collectExpectedFromSource = (doc) => {
       let bold;
       if (wB) bold = stOnOff(wB.attributes?.['w:val']);
       else bold = BOLD_STYLES.has(rStyle?.attributes?.['w:val']);
-      runs.push({ text, bold, child });
+      runs.push({ text, bold });
     });
   });
   return runs;
@@ -47,12 +47,11 @@ const collectBoldFromExport = (doc) => {
     (p.elements || []).forEach((child) => {
       if (child.name !== 'w:r') return;
       const rPr = find(child, 'w:rPr');
-      const wB = find(rPr, 'w:b');
-      const hasB = !!wB && wB?.['w:val'] !== '0';
+      const hasB = !!find(rPr, 'w:b');
       const textEl = find(child, 'w:t');
       const text = textEl?.elements?.find((e) => e.type === 'text')?.text;
       if (!text) return;
-      runs.push({ text, bold: hasB, child });
+      runs.push({ text, bold: hasB });
     });
   });
   return runs;

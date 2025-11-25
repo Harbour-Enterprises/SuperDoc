@@ -36,11 +36,16 @@ export * from './insertContentAt.js';
 export * from './undoInputRule.js';
 
 // Lists
+export * from './wrapInList.js';
 export * from './toggleList.js';
+export * from './splitListItem.js';
+export * from './sinkListItem.js';
+export * from './liftListItem.js';
+export * from './deleteListItem.js';
 export * from './increaseListIndent.js';
 export * from './decreaseListIndent.js';
-export * from './changeListLevel.js';
-export * from './removeNumberingProperties.js';
+export * from './backspaceNextToList.js';
+export * from './deleteNextToList.js';
 
 // Selection
 export * from './restoreSelection.js';

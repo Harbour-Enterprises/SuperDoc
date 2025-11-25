@@ -1,50 +1,67 @@
 /**
- * These typedefs are provided for JS consumers and point at the canonical
- * TypeScript definitions in `core/types/ChainedCommands.ts`.
+ * @typedef {Object} CommandServiceOptions
+ * @property {import('../../Editor.js').Editor} editor - The editor instance
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').CommandServiceOptions} CommandServiceOptions
+ * Core editor commands available on all instances
+ * @typedef {Object} CoreCommands
+ * @property {() => boolean} focus - Focus the editor
+ * @property {() => boolean} blur - Blur the editor
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').CoreCommands} CoreCommands
+ * Commands added by extensions - will be populated by individual extensions
+ * @typedef {Object} ExtensionCommands
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').ExtensionCommands} ExtensionCommands
+ * All available editor commands
+ * @typedef {CoreCommands & ExtensionCommands} EditorCommands
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').EditorCommands} EditorCommands
+ * A chainable version of an editor command.
+ * @callback ChainedCommand
+ * @param {...any} args - Arguments for the command
+ * @returns {ChainableCommandObject}
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').ChainedCommand} ChainedCommand
+ * Chainable command object returned by `createChain`.
+ * Has dynamic keys (one per command) and a `run()` method.
+ * @typedef {{ run: () => boolean } & Record<string, ChainedCommand>} ChainableCommandObject
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').ChainableCommandObject} ChainableCommandObject
+ * @typedef {(...args:any[]) => boolean} CanCommand
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').CanCommand} CanCommand
+ * @typedef {Object<string, CanCommand>} CanCommands
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').CanCommands} CanCommands
+ * Object returned by `createCan`: dynamic boolean commands + a `chain()` helper.
+ * @typedef {Record<string, CanCommand> & { chain: () => ChainableCommandObject }} CanObject
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').CanObject} CanObject
+ * Command props made available to every command handler.
+ * @typedef {Object} CommandProps
+ * @property {import('../../Editor.js').Editor} editor - The editor instance
+ * @property {import('prosemirror-state').Transaction} tr - The ProseMirror transaction
+ * @property {import('prosemirror-state').EditorState} state - The current editor state
+ * @property {import('prosemirror-view').EditorView} view - The active editor view
+ * @property {(tr: import('prosemirror-state').Transaction) => void} [dispatch] - Optional dispatcher
+ * @property {() => ChainableCommandObject} chain - Helper to build command chains
+ * @property {() => CanObject} can - Helper to check command availability
+ * @property {EditorCommands} commands - Lazy command map bound to current props
  */
 
 /**
- * @typedef {import('../../types/ChainedCommands.js').CommandProps} CommandProps
- */
-
-/**
- * @typedef {import('../../types/ChainedCommands.js').Command} Command
+ * A command handler invoked by the command service.
+ * @typedef {(props: CommandProps) => boolean} Command
  */
 
 export {};

@@ -79,19 +79,23 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
   });
 
   it('imports/exports the first item', () => {
-    const item1 = content.content[0];
-    expect(item1.type).toBe('paragraph');
+    const list1 = content.content[0];
+    expect(list1.type).toBe('orderedList');
+
+    const item1 = list1.content[0];
+    expect(item1.type).toBe('listItem');
 
     const { attrs } = item1;
     expect(attrs).toBeDefined();
-    expect(attrs.listRendering.path).toStrictEqual([1]);
+    expect(attrs.listLevel).toStrictEqual([1]);
 
-    const expectedNumId = 1;
+    const expectedNumId = '1';
     const expectedLevel = 0;
-    expect(attrs.numberingProperties.numId).toBe(expectedNumId);
-    expect(attrs.indent.left).toBe(720);
-    expect(attrs.indent.hanging).toBe(360);
-    expect(attrs.numberingProperties.ilvl).toBe(expectedLevel);
+    expect(attrs.numId).toBe(expectedNumId);
+    expect(attrs.indent.left).toBeUndefined();
+    expect(attrs.indent.hanging).toBeUndefined();
+    expect(attrs.level).toBe(expectedLevel);
+    // expect(attrs.styleId).toBe('ListParagraph');
 
     const exportedList1 = body.elements[0];
     const pPr = exportedList1.elements.find((s) => s.name === 'w:pPr');
@@ -102,18 +106,18 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
     const numIdTag = numPr.elements.find((s) => s.name === 'w:numId');
     const numId = numIdTag?.attributes['w:val'];
-    expect(numId).toBe(String(expectedNumId));
+    expect(numId).toBe(expectedNumId);
 
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
-    expect(iLvl).toBe(String(expectedLevel));
+    expect(iLvl).toBe(expectedLevel);
 
     const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
-    expect(indentTag).toBeDefined();
+    expect(indentTag).toBeUndefined();
     const indentLeft = indentTag?.attributes['w:left'];
     const indentHanging = indentTag?.attributes['w:hanging'];
-    expect(indentLeft).toBe('720');
-    expect(indentHanging).toBe('360');
+    expect(indentLeft).toBeUndefined();
+    expect(indentHanging).toBeUndefined();
 
     // Ensure styleId is passed through correctly
     const styleId = pPr?.elements.find((s) => s.name === 'w:pStyle');
@@ -123,19 +127,25 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
   });
 
   it('imports/exports the second item (custom indent)', () => {
-    const item1 = content.content[1];
-    expect(item1.type).toBe('paragraph');
+    const list1 = content.content[1];
+    expect(list1.type).toBe('orderedList');
+
+    const item1 = list1.content[0];
+    expect(item1.type).toBe('listItem');
 
     const { attrs } = item1;
-    const expectedNumId = 1;
+    const expectedNumId = '1';
     const expectedLevel = 1;
     expect(attrs).toBeDefined();
-    expect(attrs.numberingProperties.numId).toBe(expectedNumId);
-    expect(attrs.numberingProperties.ilvl).toBe(expectedLevel);
-    expect(attrs.indent.left).toBe(1440);
-    expect(attrs.indent.hanging).toBe(1080);
+    expect(attrs.numId).toBe(expectedNumId);
+    expect(attrs.level).toBe(expectedLevel);
+    expect(attrs.indent.left).toBeUndefined();
+    expect(attrs.indent.hanging).toBe(72);
 
-    const paragraphText = extractParagraphText(item1);
+    const paragraphNode = item1.content[0];
+    expect(paragraphNode.type).toBe('paragraph');
+
+    const paragraphText = extractParagraphText(paragraphNode);
     expect(paragraphText).toBe('A custom');
 
     const exportedList1 = body.elements[1];
@@ -147,18 +157,18 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
     const numIdTag = numPr.elements.find((s) => s.name === 'w:numId');
     const numId = numIdTag?.attributes['w:val'];
-    expect(numId).toBe(String(expectedNumId));
+    expect(numId).toBe(expectedNumId);
 
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
-    expect(iLvl).toBe(String(expectedLevel));
+    expect(iLvl).toBe(expectedLevel);
 
     const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
     expect(indentTag).toBeDefined();
     const indentLeft = indentTag?.attributes['w:left'];
     const indentHanging = indentTag?.attributes['w:hanging'];
-    expect(indentLeft).toBe('1440');
-    expect(indentHanging).toBe('1080');
+    expect(indentLeft).toBeUndefined();
+    expect(indentHanging).toBe(1080);
   });
 
   it('imports the line break', () => {
@@ -168,25 +178,26 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
   });
 
   it('imports the first item in the second (custom) list', () => {
-    const item1 = content.content[4];
-    expect(item1.type).toBe('paragraph');
+    const list1 = content.content[4];
+    expect(list1.type).toBe('orderedList');
+
+    const item1 = list1.content[0];
+    expect(item1.type).toBe('listItem');
 
     const { attrs } = item1;
-    const expectedNumId = 4;
+    const expectedNumId = '4';
     const expectedLevel = 1;
     expect(attrs).toBeDefined();
-    expect(attrs.numberingProperties.numId).toBe(expectedNumId);
-    expect(attrs.numberingProperties.ilvl).toBe(expectedLevel);
-    expect(attrs.indent.left).toBe(571);
-    expect(attrs.indent.hanging).toBe(425);
-    expect(attrs.indent.right).toBe(18);
-    expect(attrs.listRendering).toEqual({
-      markerText: '2.1',
-      justification: 'left',
-      path: [2, 1],
-      numberingType: 'decimal',
-    });
-    const paragraphText = extractParagraphText(item1);
+    expect(attrs.numId).toBe(expectedNumId);
+    expect(attrs.level).toBe(expectedLevel);
+    expect(attrs.indent.left).toBeUndefined();
+    expect(attrs.indent.hanging).toBeUndefined();
+    expect(attrs.indent.right).toBeCloseTo(1.2, 1);
+
+    const paragraphNode = item1.content[0];
+    expect(paragraphNode.type).toBe('paragraph');
+
+    const paragraphText = extractParagraphText(paragraphNode);
     expect(paragraphText).toBe('2.1');
 
     const exportedList1 = body.elements[4];
@@ -198,19 +209,19 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
 
     const numIdTag = numPr.elements.find((s) => s.name === 'w:numId');
     const numId = numIdTag?.attributes['w:val'];
-    expect(numId).toBe(String(expectedNumId));
+    expect(numId).toBe(expectedNumId);
 
     const ilvlTag = numPr.elements.find((s) => s.name === 'w:ilvl');
     const iLvl = ilvlTag?.attributes['w:val'];
-    expect(iLvl).toBe(String(expectedLevel));
+    expect(iLvl).toBe(expectedLevel);
 
     const indentTag = pPr?.elements.find((s) => s.name === 'w:ind');
     expect(indentTag).toBeDefined();
     const indentLeft = indentTag?.attributes['w:left'];
     const indentHanging = indentTag?.attributes['w:hanging'];
     const indentRight = indentTag?.attributes['w:right'];
-    expect(indentLeft).toBe('571');
-    expect(indentHanging).toBe('425');
-    expect(indentRight).toBe('18');
+    expect(indentLeft).toBeUndefined();
+    expect(indentHanging).toBeUndefined();
+    expect(indentRight).toBe(18);
   });
 });

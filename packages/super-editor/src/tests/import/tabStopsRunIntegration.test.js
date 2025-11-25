@@ -123,15 +123,15 @@ describe('tab stop import with run translator', () => {
       console.log(JSON.stringify(node, null, 2));
     }
     expect(node.type).toBe('paragraph');
-    expect(node.attrs.indent).toBeUndefined();
+    expect(node.attrs.indent).toMatchObject({ left: 0, right: 0, firstLine: 0, hanging: 0 });
     const runTypes = node.content.map((child) => child.type);
     expect(runTypes).toEqual(['run', 'run', 'run', 'run', 'run']);
 
     const firstChildTypes = node.content.map((child) => child.content?.[0]?.type);
     expect(firstChildTypes).toEqual(['text', 'tab', 'text', 'tab', 'text']);
     expect(node.attrs.tabStops).toEqual([
-      { tab: { tabType: 'left', pos: 1440 } },
-      { tab: { tabType: 'center', pos: 2880 } },
+      { val: 'start', pos: 96, originalPos: '1440' },
+      { val: 'center', pos: 192, originalPos: '2880' },
     ]);
 
     const [leftRun, firstTabRun, middleRun] = node.content;

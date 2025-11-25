@@ -1,5 +1,4 @@
-// @ts-nocheck
-
+// @ts-check
 import { Node, Attribute } from '@core/index.js';
 
 /**
@@ -67,7 +66,6 @@ export const BookmarkEnd = Node.create({
     return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
   },
 
-  // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
       /**

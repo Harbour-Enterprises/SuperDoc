@@ -143,7 +143,6 @@ describe('w:tbl translator', () => {
         },
         tableLayout: 'fixed',
         tableStyleId: 'TableGrid',
-        cellMargins: {},
       });
       expect(result.attrs.grid).toEqual([{ col: 2000 }]);
       expect(result.attrs.tableStyleId).toBe('TableGrid');
@@ -175,7 +174,7 @@ describe('w:tbl translator', () => {
 
       expect(result.type).toBe('table');
       expect(result.content).toEqual([]);
-      expect(result.attrs.tableProperties).toEqual({ cellMargins: {} });
+      expect(result.attrs.tableProperties).toEqual({});
       expect(trTranslator.encode).not.toHaveBeenCalled();
     });
   });

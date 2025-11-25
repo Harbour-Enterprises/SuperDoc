@@ -37,31 +37,9 @@ At this point, you should probably have them installed, but it's good to know we
 
 To run the tests locally you have to first build the docker image, and then run the tests.
 
-### Quick Start (Recommended)
-
-If you've made changes to SuperDoc code and want to rebuild everything:
-
-```bash
-npm run rebuild
-npm run test:local
-```
-
-The `rebuild` command will:
-
-- Build and pack SuperDoc (including super-editor)
-- Copy the package to e2e-tests
-- Install it in the test template
-- Rebuild the Docker image with no cache
-
-### Step-by-Step
-
-Alternatively, you can run each step individually:
-
 1. `npm run build:superdoc` - this will build SuperDoc and use it on the test app
-2. `npm run build` - this will build the Docker image where the tests are executed
-3. `npm run test:local` - this executes the tests on docker
-
-> **Note:** If tests fail after making code changes, use `npm run rebuild` instead of just `npm run build` to ensure Docker doesn't use cached layers with old code.
+1. `npm run build` - this will build the Docker image where the tests are executed
+1. `npm run test:local` - this executes the tests on docker
 
 ## 📷 Visual diffing
 

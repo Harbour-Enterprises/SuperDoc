@@ -4,7 +4,7 @@ import { createAttributeHandler } from '@converter/v3/handlers/utils.js';
 import { translator as wDelTranslator } from '@converter/v3/handlers/w/del/index.js';
 import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins/index.js';
 import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/index.js';
-import { getTextNodeForExport } from '@converter/v3/handlers/w/t/helpers/translate-text-node.js';
+import { getTextNodeForExport } from '@converter/exporter.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:t';

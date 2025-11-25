@@ -121,7 +121,7 @@ describe('w:tblCellMar translator', () => {
       expect(result.elements).toEqual([{ name: 'w:top' }, { name: 'w:right' }, { name: 'w:bottom' }]);
     });
 
-    it('returns undefined for an empty cellMargins object', () => {
+    it('returns a <w:tblCellMar> element with empty elements for an empty cellMargins object', () => {
       const params = {
         node: {
           attrs: {
@@ -130,7 +130,8 @@ describe('w:tblCellMar translator', () => {
         },
       };
       const result = translator.decode(params);
-      expect(result).toBeUndefined();
+      expect(result.name).toBe('w:tblCellMar');
+      expect(result.elements).toEqual([]);
     });
 
     it('handles a missing cellMargins attribute gracefully', () => {
@@ -140,7 +141,8 @@ describe('w:tblCellMar translator', () => {
         },
       };
       const result = translator.decode(params);
-      expect(result).toBeUndefined();
+      expect(result.name).toBe('w:tblCellMar');
+      expect(result.elements).toEqual([]);
     });
   });
 });

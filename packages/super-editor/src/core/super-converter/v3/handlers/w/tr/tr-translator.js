@@ -87,7 +87,6 @@ const encode = (params, encodedAttrs) => {
 
     const result = tcTranslator.encode({
       ...params,
-      path: [...(params.path || []), node],
       extraParams: {
         ...params.extraParams,
         node,

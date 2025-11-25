@@ -4,42 +4,28 @@ import 'superdoc/style.css';
 import './style.css';
 
 const statusText = document.getElementById('statusText');
-const insertTrackedChangeButton = document.getElementById('insertTrackedChange');
-const insertCommentButton = document.getElementById('insertComment');
-const rewriteIntroButton = document.getElementById('rewriteIntro');
-const highlightClauseButton = document.getElementById('highlightClause');
-const addClauseButton = document.getElementById('addClause');
-const findContractDatesButton = document.getElementById('findContractDates');
-const configButtons = Array.from(document.querySelectorAll('[data-config-target]'));
-const promptPanels = new Map();
-
-function resetConfigButtonState() {
-  configButtons.forEach((button) => button.setAttribute('aria-expanded', 'false'));
-}
-
-function setConfigButtonExpanded(actionId, expanded) {
-  configButtons.forEach((button) => {
-    if (button.dataset.configTarget === actionId) {
-      button.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    }
-  });
-}
-
-resetConfigButtonState();
+const insertIntroButton = document.getElementById('insertIntro');
+const summarizeDocButton = document.getElementById('summarizeDoc');
+const highlightTasksButton = document.getElementById('highlightTasks');
+const rewriteGoalsButton = document.getElementById('rewriteGoals');
+const findLaunchDateButton = document.getElementById('findLaunchDate');
+const refineLaunchTasksButton = document.getElementById('refineLaunchTasks');
+const addSingleCommentButton = document.getElementById('addSingleComment');
 
 const allButtons = [
-  insertTrackedChangeButton,
-  insertCommentButton,
-  rewriteIntroButton,
-  highlightClauseButton,
-  addClauseButton,
-  findContractDatesButton,
+  insertIntroButton,
+  summarizeDocButton,
+  highlightTasksButton,
+  rewriteGoalsButton,
+  findLaunchDateButton,
+  refineLaunchTasksButton,
+  addSingleCommentButton,
 ].filter((button) => button instanceof HTMLButtonElement);
 
 let aiInstance = null;
 
 const initialDocument = `
-  <h1>SuperDoc AI Actions Overview</h1>
+  <h1>SuperDoc AI Overview</h1>
   <p>
     SuperDoc AI is the LLM bridge for SuperDoc editors, packaging provider management and document-context enrichment into one consistent API. It sits directly in the collaborative canvas so teams can call AI assistance the moment content is drafted.
   </p>
@@ -55,8 +41,6 @@ const initialDocument = `
 function setButtonsEnabled(enabled) {
   allButtons.forEach((button) => {
     button.disabled = !enabled;
-    const chipMain = button.closest('.action-chip__main');
-    chipMain?.classList.toggle('is-disabled', !enabled);
   });
 }
 
@@ -83,67 +67,6 @@ function handleAction(button, action) {
       setButtonsEnabled(true);
     }
   });
-}
-
-let editingActionId = null;
-
-function openPromptEditor(actionId) {
-  closeAllPromptEditors();
-  editingActionId = actionId;
-  const entry = promptPanels.get(actionId);
-  const panel = entry?.panel;
-  const textarea = entry?.textarea;
-
-  if (!panel) {
-    editingActionId = null;
-    return;
-  }
-
-  panel.hidden = false;
-  setConfigButtonExpanded(actionId, true);
-
-  panel.classList.add('is-visible');
-  panel.setAttribute('aria-hidden', 'false');
-
-  if (textarea) {
-    textarea.value = actionPrompts[actionId] ?? '';
-    requestAnimationFrame(() => {
-      textarea.focus();
-      const length = textarea.value.length;
-      textarea.setSelectionRange(length, length);
-    });
-  }
-}
-
-function closePromptEditor(actionId = editingActionId) {
-  if (!actionId) {
-    editingActionId = null;
-    return;
-  }
-
-  const entry = promptPanels.get(actionId);
-  if (!entry?.panel) {
-    editingActionId = null;
-    return;
-  }
-
-  setConfigButtonExpanded(actionId, false);
-  entry.panel.hidden = true;
-  entry.panel.classList.remove('is-visible');
-  entry.panel.setAttribute('aria-hidden', 'true');
-  editingActionId = null;
-}
-
-function closeAllPromptEditors() {
-  promptPanels.forEach(({panel}) => {
-    if (panel) {
-      panel.hidden = true;
-      panel.classList.remove('is-visible');
-      panel.setAttribute('aria-hidden', 'true');
-    }
-  });
-  editingActionId = null;
-  resetConfigButtonState();
 }
 
 function initializeAI(superdoc) {
@@ -213,137 +136,46 @@ const superdoc = new SuperDoc({
   }
 });
 
-const actionConfigs = [
+
+const actionBindings = [
   {
-    id: 'insertTrackedChange',
-    label: 'Insert AI tracked change',
-    button: insertTrackedChangeButton,
-    prompt:
-      'Propose a tracked change that clarifies the rollout responsibilities in the opening section.',
-    runner: (ai, prompt) => ai.action.insertTrackedChange(prompt),
+    button: insertIntroButton,
+    run: (ai) =>
+      ai.action.insertContent(
+        'Add a concise paragraph that lists two immediate next steps for preparing the SuperDoc AI public preview.'
+      ),
   },
   {
-    id: 'insertComment',
-    label: 'Insert AI comment',
-    button: insertCommentButton,
-    prompt: 'Ask reviewers to confirm the next milestones and flag any blockers.',
-    runner: (ai, prompt) => ai.action.insertComment(prompt),
+    button: summarizeDocButton,
+    run: (ai) =>
+      ai.action.insertTrackedChange(
+        'Suggest an improved language for the first paragraph of the document.'
+      ),
   },
   {
-    id: 'rewriteIntro',
-    label: 'Rewrite intro paragraph',
-    button: rewriteIntroButton,
-    prompt: 'Rewrite the first paragraph so it reads like the introduction of a formal partnership agreement.',
-    runner: (ai, prompt) => ai.action.replace(prompt),
+    button: highlightTasksButton,
+    run: (ai) =>
+      ai.action.highlight('Highlight the next milestone.'),
   },
   {
-    id: 'highlightClause',
-    label: 'Find and highlight clause',
-    button: highlightClauseButton,
-    prompt: 'Find the clause that discusses customer rights after launch.',
-    runner: (ai, prompt) => ai.action.highlight(prompt),
+    button: rewriteGoalsButton,
+    run: (ai) =>
+      ai.action.replace(
+        'Rename the document title to a descriptive title.'
+      ),
   },
   {
-    id: 'addClause',
-    label: 'Add new clause',
-    button: addClauseButton,
-    prompt: 'Add a new clause that defines who owns post-launch support and success tracking.',
-    runner: (ai, prompt) => ai.action.insertContent(prompt),
+    button: findLaunchDateButton,
+    run: (ai) =>
+      ai.action.find('Find the sentence that includes the release date.'),
   },
   {
-    id: 'findContractDates',
-    label: 'Find key contract dates',
-    button: findContractDatesButton,
-    prompt: 'Locate the sentences that mention key dates or milestones in this agreement.',
-    runner: (ai, prompt) => ai.action.find(prompt),
+    button: addSingleCommentButton,
+    run: (ai) =>
+      ai.action.insertComment('Add a comment asking stakeholders to add any missing details.'),
   },
 ];
 
-const actionLabels = {};
-let actionPrompts = {};
-
-actionConfigs.forEach(({id, label, prompt}) => {
-  actionPrompts[id] = prompt;
-  actionLabels[id] = label;
-});
-
-function syncPromptFields() {
-  promptPanels.forEach(({textarea}, actionId) => {
-    if (textarea) {
-      textarea.value = actionPrompts[actionId] ?? '';
-    }
-  });
-}
-
-actionConfigs.forEach(({button, id, runner}) => {
-  handleAction(button, (ai) => runner(ai, actionPrompts[id]));
-});
-
-document.querySelectorAll('[data-inline-panel]').forEach((panel) => {
-  const actionId = panel.dataset.inlinePanel;
-  if (!actionId) {
-    return;
-  }
-
-  const textarea = panel.querySelector('textarea');
-  const sendButton = panel.querySelector(`[data-send-prompt="${actionId}"]`);
-
-  promptPanels.set(actionId, {panel, textarea, sendButton});
-
-  if (textarea) {
-    const label = actionLabels[actionId] ?? actionId;
-    textarea.setAttribute('aria-label', `${label} prompt`);
-  }
-
-  textarea?.addEventListener('input', () => {
-    actionPrompts[actionId] = textarea.value;
-  });
-
-  sendButton?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    const latestValue = textarea?.value ?? actionPrompts[actionId];
-    actionPrompts[actionId] = latestValue;
-    closePromptEditor(actionId);
-    document.getElementById(actionId)?.click();
-  });
-});
-
-syncPromptFields();
-
-configButtons.forEach((configButton) => {
-  configButton.addEventListener('click', (event) => {
-    event.stopPropagation();
-    const actionId = configButton.dataset.configTarget;
-    if (!actionId) {
-      return;
-    }
-
-    if (editingActionId === actionId) {
-      closePromptEditor(actionId);
-    } else {
-      openPromptEditor(actionId);
-    }
-  });
-});
-
-document.addEventListener('click', (event) => {
-  if (!editingActionId) {
-    return;
-  }
-
-  const entry = promptPanels.get(editingActionId);
-  const clickedInsidePanel = entry?.panel?.contains(event.target);
-  const clickedConfigButton = configButtons.some((button) => button.contains(event.target));
-
-  if (!clickedInsidePanel && !clickedConfigButton) {
-    closePromptEditor();
-  }
-});
-
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape' && editingActionId) {
-    closePromptEditor();
-  }
-});
+actionBindings.forEach(({button, run}) => handleAction(button, run));
 
 setButtonsEnabled(false);

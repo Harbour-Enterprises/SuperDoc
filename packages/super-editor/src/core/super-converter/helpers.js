@@ -56,7 +56,7 @@ function halfPointToPixels(halfPoints) {
 
 function halfPointToPoints(halfPoints) {
   if (halfPoints == null) return;
-  return Math.round(halfPoints) / 2;
+  return Math.round(halfPoints / 2);
 }
 
 function emuToPixels(emu) {
@@ -82,16 +82,6 @@ function eighthPointsToPixels(eighthPoints) {
   const points = parseFloat(eighthPoints) / 8;
   const pixels = points * 1.3333;
   return pixels;
-}
-
-function pointsToTwips(points) {
-  if (points == null) return;
-  return points * 20;
-}
-
-function pointsToLines(points) {
-  if (points == null) return;
-  return twipsToLines(pointsToTwips(points));
 }
 
 function pixelsToEightPoints(pixels) {
@@ -376,10 +366,6 @@ const getLineHeightValueString = (lineHeight, defaultUnit, lineRule = '', isObje
   let [value, unit] = parseSizeUnit(lineHeight);
   if (Number.isNaN(value) || value === 0) return {};
   if (lineRule === 'atLeast' && value < 1) return {};
-  // Prevent values less than 1 to avoid squashed text (unless using explicit units like pt)
-  if (!unit && value < 1) {
-    value = 1;
-  }
   unit = unit ? unit : defaultUnit;
   return isObject ? { ['line-height']: `${value}${unit}` } : `line-height: ${value}${unit}`;
 };
@@ -414,64 +400,6 @@ const hasSomeParentWithClass = (element, classname) => {
   return element.parentNode && hasSomeParentWithClass(element.parentNode, classname);
 };
 
-/**
- * @param {number | string} value Value (e.g. 5000 or "100%")
- * @param {"dxa" | "pct" | "nil" | "auto" | null} type Units: either "dxa" (or null/undefined) for absolute measurements in twips, "pct" for relative measurements (either as 1/50 of a percent, or as a percentage with a trailing "%"), "nil" (zero width, see 17.18.90 of ECMA-376-1:2016), or "auto" (
- *
- * @returns {string | null} CSS specification for size (e.g. `100%`, `25px`) or `null` if the type is `"auto"`
- */
-function convertSizeToCSS(value, type) {
-  /**
-   * NOTE: 17.4.87 of ECMA-376-1:2016 states:
-   *     If the value of the type attribute and the actual measurement
-   *     specified by the w attribute are contradictory, the type specified by
-   *     the type attribute shall be ignored.
-   * so we may need to override `type` based on the `value.
-   */
-  if (typeof value === 'string' && value.endsWith('%')) {
-    type = 'pct';
-  }
-
-  /**
-   * From 17.4.87:
-   *     If this attribute is omitted, then its value shall be assumed to be 0.
-   */
-  if (value === null || value === undefined) {
-    value = 0;
-  }
-
-  switch (type) {
-    case 'dxa':
-    case null:
-    case undefined:
-      return `${twipsToPixels(value)}px`;
-
-    case 'nil':
-      return '0';
-
-    case 'auto':
-      return null;
-
-    case 'pct':
-      let percent;
-      if (typeof value === 'number') {
-        percent = value * 0.02;
-      } else {
-        if (value.endsWith('%')) {
-          percent = parseFloat(value.slice(0, -1));
-        } else {
-          percent = parseFloat(value) * 0.02;
-        }
-      }
-
-      return `${percent}%`;
-
-    default:
-      // TODO: confirm Word's behavior in cases of invalid `type`. Currently we fall back on "auto" behavior.
-      return null;
-  }
-}
-
 export {
   PIXELS_PER_INCH,
   inchesToTwips,
@@ -479,7 +407,6 @@ export {
   twipsToPixels,
   pixelsToTwips,
   pixelsToInches,
-  pointsToLines,
   inchesToPixels,
   twipsToLines,
   linesToTwips,
@@ -490,7 +417,6 @@ export {
   halfPointToPoints,
   eighthPointsToPixels,
   pixelsToEightPoints,
-  pointsToTwips,
   rotToDegrees,
   degreesToRot,
   objToPolygon,
@@ -510,5 +436,4 @@ export {
   getTextIndentExportValue,
   polygonUnitsToPixels,
   pixelsToPolygonUnits,
-  convertSizeToCSS,
 };

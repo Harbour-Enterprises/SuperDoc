@@ -1,16 +1,15 @@
 // @ts-check
 import { describe, it, expect, vi } from 'vitest';
 import {
-  findParagraphContext,
+  getParagraphContext,
   flattenParagraph,
   findNextTabIndex,
   findDecimalBreakPos,
   calculateIndentFallback,
   getTabDecorations,
 } from './tabDecorations.js';
-import { pixelsToTwips } from '@converter/helpers';
 
-describe('findParagraphContext', () => {
+describe('getParagraphContext', () => {
   const mockHelpers = {
     linkedStyles: {
       getStyleById: vi.fn(),
@@ -18,14 +17,14 @@ describe('findParagraphContext', () => {
   };
 
   it('should get tabStops from node attributes', () => {
-    const tabStops = [{ tab: { tabType: 'left', pos: pixelsToTwips(720) } }];
+    const tabStops = [{ val: 'left', pos: 720 }];
     const node = { type: { name: 'paragraph' }, attrs: { tabStops }, forEach: () => {} };
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = findParagraphContext($pos, cache, mockHelpers);
+    const context = getParagraphContext($pos, cache, mockHelpers);
 
-    expect(context.tabStops).toEqual([{ val: 'left', pos: 720 }]);
+    expect(context.tabStops).toEqual(tabStops);
     expect(mockHelpers.linkedStyles.getStyleById).not.toHaveBeenCalled();
   });
 
@@ -39,7 +38,7 @@ describe('findParagraphContext', () => {
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = findParagraphContext($pos, cache, mockHelpers);
+    const context = getParagraphContext($pos, cache, mockHelpers);
 
     expect(context.tabStops).toEqual(tabStops);
     expect(mockHelpers.linkedStyles.getStyleById).toHaveBeenCalledWith('MyStyle');
@@ -51,7 +50,7 @@ describe('findParagraphContext', () => {
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = findParagraphContext($pos, cache, mockHelpers);
+    const context = getParagraphContext($pos, cache, mockHelpers);
 
     expect(context.tabStops).toEqual([]);
   });
@@ -118,35 +117,29 @@ describe('findDecimalBreakPos', () => {
 
 describe('calculateIndentFallback', () => {
   it('should calculate indent correctly', () => {
-    expect(calculateIndentFallback({ left: pixelsToTwips(10), firstLine: pixelsToTwips(20) })).toBe(30);
-    expect(calculateIndentFallback({ left: pixelsToTwips(10), hanging: pixelsToTwips(20) })).toBe(-10);
-    expect(calculateIndentFallback({ firstLine: pixelsToTwips(20), hanging: pixelsToTwips(10) })).toBe(10);
+    expect(calculateIndentFallback({ left: 10, firstLine: 20 })).toBe(30);
+    expect(calculateIndentFallback({ left: 10, hanging: 20 })).toBe(-10);
+    expect(calculateIndentFallback({ firstLine: 20, hanging: 10 })).toBe(10);
+    expect(calculateIndentFallback({ textIndent: '0.5in' })).toBe(48);
   });
 });
 
 describe('getTabDecorations', () => {
   // Helper to create a mock view with DOM measurement capabilities
-  const createMockView = (measurements = {}) => {
-    const getMeasurement = (pos, key) => measurements[pos]?.[key];
-
-    return {
-      coordsAtPos: vi.fn((pos) => {
-        const coords = getMeasurement(pos, 'coords');
-        if (coords) return coords;
-        return { left: pos * 10, top: 0, right: pos * 10, bottom: 20 };
-      }),
-      domAtPos: vi.fn((pos) => {
-        const dom = getMeasurement(pos, 'dom');
-        if (dom) return dom;
-        return { node: document.createTextNode(''), offset: 0 };
-      }),
-      nodeDOM: vi.fn((pos) => {
-        const nodeDom = getMeasurement(pos, 'nodeDOM');
-        if (nodeDom) return nodeDom;
-        return {};
-      }),
-    };
-  };
+  const createMockView = (measurements = {}) => ({
+    coordsAtPos: vi.fn((pos) => {
+      if (measurements[pos]?.coords) {
+        return measurements[pos].coords;
+      }
+      return { left: pos * 10, top: 0, right: pos * 10, bottom: 20 };
+    }),
+    domAtPos: vi.fn((pos) => {
+      if (measurements[pos]?.dom) {
+        return measurements[pos].dom;
+      }
+      return { node: document.createTextNode(''), offset: 0 };
+    }),
+  });
 
   // Helper to create a mock paragraph node
   const createParagraphNode = (children = [], attrs = {}) => {
@@ -798,7 +791,6 @@ describe('getTabDecorations', () => {
         domAtPos: vi.fn(() => {
           throw new Error('domAtPos error');
         }),
-        nodeDOM: vi.fn(() => ({})),
       };
 
       // Should not crash even with errors

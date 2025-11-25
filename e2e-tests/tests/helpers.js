@@ -2,16 +2,12 @@ import { expect } from '@playwright/test';
 
 export const goToPageAndWaitForEditor = async (
   page,
-  { includeFontsResolved = false, includeComments = false } = { includeFontsResolved: false, includeComments: false },
+  { includeFontsResolved = false } = { includeFontsResolved: false },
 ) => {
   let url = 'http://localhost:4173/';
   if (includeFontsResolved) {
     url += '?includeFontsResolved=true';
   }
-  if (includeComments) {
-    url += '?includeComments=true';
-  }
-
   await page.goto(url);
   await page.waitForSelector('div.super-editor');
   const superEditor = page.locator('div.super-editor').first();

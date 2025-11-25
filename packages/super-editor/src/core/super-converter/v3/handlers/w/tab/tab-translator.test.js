@@ -20,7 +20,7 @@ describe('w:tab translator config', () => {
     });
 
     it('passes through provided encodedAttrs as attrs', () => {
-      const encoded = { tabType: 'left', pos: '720', leader: 'dot' };
+      const encoded = { tabSize: '96', pos: '720', leader: 'dot' };
       const res = config.encode({}, encoded);
       expect(res.type).toBe('tab');
       expect(res.attrs).toEqual(encoded);
@@ -32,9 +32,9 @@ describe('w:tab translator config', () => {
     });
 
     it('keeps falsy-but-valid values from encodedAttrs (0, "", false)', () => {
-      const encoded = { tabType: 'left', pos: '', leader: false };
+      const encoded = { tabSize: 0, pos: '', leader: false };
       const res = config.encode({}, encoded);
-      expect(res.attrs).toEqual({ tabType: 'left', pos: '', leader: false });
+      expect(res.attrs).toEqual({ tabSize: 0, pos: '', leader: false });
     });
   });
 
@@ -45,18 +45,18 @@ describe('w:tab translator config', () => {
       expect(res.name).toBe('w:r');
       expect(Array.isArray(res.elements)).toBe(true);
       // decode(_, decodedAttrs = {}) sets attributes: {} because {} is truthy
-      expect(res.elements[0]).toEqual({ name: 'w:tab', attributes: {}, elements: [] });
+      expect(res.elements[0]).toEqual({ name: 'w:tab', attributes: {} });
     });
 
     it('copies decodedAttrs to <w:tab>.attributes verbatim', () => {
-      const decoded = { 'w:val': 'left', 'w:pos': '720', 'w:leader': 'dot', 'w:custom': 'foo' };
+      const decoded = { 'w:val': '96', 'w:pos': '720', 'w:leader': 'dot', 'w:custom': 'foo' };
       const res = config.decode({ node: { type: 'tab' } }, decoded);
       expect(res.name).toBe('w:r');
-      expect(res.elements[0]).toEqual({ name: 'w:tab', attributes: decoded, elements: [] });
+      expect(res.elements[0]).toEqual({ name: 'w:tab', attributes: decoded });
     });
 
     it('returns undefined when params.node is missing', () => {
-      const res = config.decode({}, { 'w:val': 'left' });
+      const res = config.decode({}, { 'w:val': '96' });
       expect(res).toBeUndefined();
     });
   });
@@ -88,7 +88,7 @@ describe('w:tab translator config', () => {
       expect(Array.isArray(res.elements)).toBe(true);
 
       expect(res.elements[0]).toEqual(rPrNode); // run props first
-      expect(res.elements[1]).toEqual({ name: 'w:tab', attributes: {}, elements: [] });
+      expect(res.elements[1]).toEqual({ name: 'w:tab', attributes: {} });
     });
 
     it('does not add run props when processOutputMarks returns an empty array', () => {
@@ -101,7 +101,7 @@ describe('w:tab translator config', () => {
       expect(generateRunProps).not.toHaveBeenCalled();
 
       expect(res.name).toBe('w:r');
-      expect(res.elements).toEqual([{ name: 'w:tab', attributes: {}, elements: [] }]);
+      expect(res.elements).toEqual([{ name: 'w:tab', attributes: {} }]);
     });
 
     it('still places run props before <w:tab> when decodedAttrs are present', () => {
@@ -109,15 +109,14 @@ describe('w:tab translator config', () => {
       generateRunProps.mockReturnValue({ name: 'w:rPr', elements: [{ name: 'w:b' }] });
 
       const params = { node: { type: 'tab', marks: [{ type: 'bold' }] } };
-      const decoded = { 'w:val': 'left', 'w:custom': 'foo' };
+      const decoded = { 'w:val': '96', 'w:custom': 'foo' };
       const res = config.decode(params, decoded);
 
       expect(res.name).toBe('w:r');
       expect(res.elements[0]).toEqual({ name: 'w:rPr', elements: [{ name: 'w:b' }] });
       expect(res.elements[1]).toEqual({
         name: 'w:tab',
-        attributes: { 'w:val': 'left', 'w:custom': 'foo' },
-        elements: [],
+        attributes: { 'w:val': '96', 'w:custom': 'foo' },
       });
     });
 
@@ -128,7 +127,7 @@ describe('w:tab translator config', () => {
 
       expect(processOutputMarks).toHaveBeenCalledTimes(1);
       expect(processOutputMarks).toHaveBeenCalledWith([]);
-      expect(res.elements).toEqual([{ name: 'w:tab', attributes: {}, elements: [] }]);
+      expect(res.elements).toEqual([{ name: 'w:tab', attributes: {} }]);
     });
   });
 });

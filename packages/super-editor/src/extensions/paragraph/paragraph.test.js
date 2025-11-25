@@ -32,8 +32,6 @@ describe('Paragraph Node', () => {
     expect(paragraph.elements).toEqual([
       {
         name: 'w:pPr',
-        type: 'element',
-        attributes: {},
         elements: [
           {
             name: 'w:pStyle',
@@ -44,6 +42,8 @@ describe('Paragraph Node', () => {
           {
             name: 'w:spacing',
             attributes: {
+              'w:before': 0,
+              'w:after': 0,
               'w:lineRule': 'auto',
             },
           },

@@ -9,8 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@superdoc-dev/ai": "^0.1.6-next.4",
-    "superdoc": "^0.31.3"
+    "@superdoc-dev/ai": "latest",
+    "superdoc": "0.28.0"
   },
   "devDependencies": {
     "vite": "^6.3.5"

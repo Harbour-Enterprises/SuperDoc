@@ -641,7 +641,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 .ProseMirror table {
   border-collapse: collapse;
   border-spacing: 0;
-  table-layout: auto;
+  table-layout: fixed;
   margin: 0;
   /* width: 100%; */
 }

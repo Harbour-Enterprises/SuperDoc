@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-check
 
 /**
  * Conditional formatting properties
@@ -119,7 +119,6 @@ export const TableCell = Node.create({
         renderDOM: (attrs) => {
           if (!attrs.colwidth) return {};
           return {
-            // @ts-expect-error - colwidth is known to be an array at runtime
             'data-colwidth': attrs.colwidth.join(','),
           };
         },
@@ -128,7 +127,6 @@ export const TableCell = Node.create({
       background: {
         renderDOM({ background }) {
           if (!background) return {};
-          // @ts-expect-error - background is known to be an object at runtime
           const { color } = background || {};
           const style = `background-color: ${color ? `#${color}` : 'transparent'}`;
           return { style };
@@ -144,17 +142,13 @@ export const TableCell = Node.create({
       },
 
       cellMargins: {
-        renderDOM({ cellMargins, borders }) {
+        renderDOM({ cellMargins }) {
           if (!cellMargins) return {};
           const sides = ['top', 'right', 'bottom', 'left'];
           const style = sides
             .map((side) => {
-              const margin = cellMargins?.[side] ?? 0;
-              const border = borders?.[side];
-              // TODO: this should include table-level borders as well for the first/last cell in the row
-              const borderSize = border && border.val !== 'none' ? Math.ceil(border.size) : 0;
-
-              if (margin) return `padding-${side}: ${Math.max(0, margin - borderSize)}px;`;
+              const margin = cellMargins?.[side];
+              if (margin) return `padding-${side}: ${margin}px;`;
               return '';
             })
             .join(' ');

@@ -3,16 +3,16 @@ import { encode, decode, attrConfig } from './w-tab-pos.js';
 
 describe('w:tab w:pos (pos) encoder', () => {
   it('returns the value when present', () => {
-    expect(encode({ 'w:pos': '720' })).toBe(720);
-    expect(encode({ 'w:pos': '1080' })).toBe(1080);
+    expect(encode({ 'w:pos': '720' })).toBe('720');
+    expect(encode({ 'w:pos': '1080' })).toBe('1080');
   });
 
   it('returns undefined when attribute is missing', () => {
-    expect(encode({})).toBeNull();
+    expect(encode({})).toBeUndefined();
   });
 
   it('ignores unrelated attributes', () => {
-    expect(encode({ 'w:val': '96' })).toBeNull();
+    expect(encode({ 'w:val': '96' })).toBeUndefined();
   });
 });
 
@@ -27,7 +27,7 @@ describe('pos decoder', () => {
   });
 
   it('ignores unrelated attributes', () => {
-    expect(decode({ tabType: 'left' })).toBeUndefined();
+    expect(decode({ tabSize: '96' })).toBeUndefined();
   });
 });
 
@@ -37,7 +37,7 @@ describe('round-trip consistency', () => {
   for (const val of values) {
     it(`encodes and decodes '${val}' consistently`, () => {
       const encoded = encode({ 'w:pos': val });
-      expect(encoded).toBe(parseInt(val));
+      expect(encoded).toBe(val);
 
       const decoded = decode({ pos: encoded });
       expect(decoded).toBe(val);

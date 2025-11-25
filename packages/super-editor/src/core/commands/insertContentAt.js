@@ -45,7 +45,7 @@ export const insertContentAt =
     let content;
 
     try {
-      content = createNodeFromContent(value, editor, {
+      content = createNodeFromContent(value, editor.schema, {
         parseOptions: {
           preserveWhitespace: 'full',
           ...options.parseOptions,

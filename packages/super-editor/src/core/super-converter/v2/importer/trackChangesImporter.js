@@ -53,20 +53,18 @@ export const handleTrackChangeNode = (params) => {
   switch (mainNode.name) {
     case 'w:del':
       result = wDelTranslator.encode({
-        ...translatorParams,
         extraParams: {
-          ...translatorParams.extraParams,
           node: mainNode,
         },
+        ...translatorParams,
       });
       break;
     case 'w:ins':
       result = wInsTranslator.encode({
-        ...translatorParams,
         extraParams: {
-          ...translatorParams.extraParams,
           node: mainNode,
         },
+        ...translatorParams,
       });
       break;
   }

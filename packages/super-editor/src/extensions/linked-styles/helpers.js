@@ -4,7 +4,6 @@ import { getLineHeightValueString } from '@core/super-converter/helpers.js';
 import { findParentNode } from '@helpers/index.js';
 import { kebabCase } from '@superdoc/common';
 import { getUnderlineCssString } from './index.js';
-import { twipsToLines, twipsToPixels, halfPointToPixels } from '@converter/helpers.js';
 
 /**
  * Get the (parsed) linked style from the styles.xml
@@ -30,20 +29,13 @@ export const getLinkedStyle = (styleId, styles = []) => {
  * @private
  */
 export const getSpacingStyle = (spacing) => {
-  const { lineSpaceBefore, lineSpaceAfter, line, lineRule, beforeAutoSpacing, afterAutoSpacing } = spacing;
+  const { lineSpaceBefore, lineSpaceAfter, line, lineRule } = spacing;
   const lineHeightResult = getLineHeightValueString(line, '', lineRule, true);
   const lineHeightStyles = typeof lineHeightResult === 'object' && lineHeightResult !== null ? lineHeightResult : {};
 
-  const result = {};
-  if (!beforeAutoSpacing) {
-    result['margin-top'] = lineSpaceBefore + 'px';
-  }
-  if (!afterAutoSpacing) {
-    result['margin-bottom'] = lineSpaceAfter + 'px';
-  }
-
   return {
-    ...result,
+    'margin-top': lineSpaceBefore + 'px',
+    'margin-bottom': lineSpaceAfter + 'px',
     ...lineHeightStyles,
   };
 };
@@ -52,47 +44,14 @@ export const getSpacingStyle = (spacing) => {
  * Convert spacing object to a CSS style string
  * @category Helper
  * @param {Object} spacing - The spacing object
- * @param {Array} marks - The marks array for font size reference
  * @returns {string} The CSS style string
  * @private
  */
-export const getSpacingStyleString = (spacing, marks, isListItem) => {
-  let { before, after, line, lineRule, beforeAutospacing, afterAutospacing } = spacing;
-  line = twipsToLines(line);
-  // Prevent values less than 1 to avoid squashed text
-  if (line != null && line < 1) {
-    line = 1;
-  }
-  if (lineRule === 'exact' && line) {
-    line = String(line);
-  }
-
-  const textStyleMark = marks?.find((mark) => mark.type === 'textStyle');
-  const fontSize = textStyleMark?.attrs?.fontSize;
-
-  before = twipsToPixels(before);
-  if (beforeAutospacing) {
-    if (fontSize) {
-      before += halfPointToPixels(parseInt(fontSize) * 0.5);
-    }
-    if (isListItem) {
-      before = 0; // Lists do not apply before autospacing
-    }
-  }
-
-  after = twipsToPixels(after);
-  if (afterAutospacing) {
-    if (fontSize) {
-      after += halfPointToPixels(parseInt(fontSize) * 0.5);
-    }
-    if (isListItem) {
-      after = 0; // Lists do not apply after autospacing
-    }
-  }
-
+export const getSpacingStyleString = (spacing) => {
+  const { lineSpaceBefore, lineSpaceAfter, line } = spacing;
   return `
-    ${before ? `margin-top: ${before}px;` : ''}
-    ${after ? `margin-bottom: ${after}px;` : ''}
+    ${lineSpaceBefore ? `margin-top: ${lineSpaceBefore}px;` : ''}
+    ${lineSpaceAfter ? `margin-bottom: ${lineSpaceAfter}px;` : ''}
     ${line ? getLineHeightValueString(line, '') : ''}
   `.trim();
 };
@@ -352,7 +311,7 @@ export const applyLinkedStyleToTransaction = (tr, editor, style) => {
 
   // Check for preserved selection from custom selection plugin
   const focusState = CustomSelectionPluginKey.getState(state);
-  if (selection.empty && focusState?.preservedSelection && !focusState?.preservedSelection.empty) {
+  if (selection.empty && focusState?.preservedSelection) {
     selection = focusState.preservedSelection;
     tr.setSelection(selection);
   }
@@ -446,34 +405,4 @@ export const applyLinkedStyleToTransaction = (tr, editor, style) => {
   });
 
   return true;
-};
-
-// Detect typing inside any styled paragraph so decorations can be rebuilt
-export const stepInsertsTextIntoStyledParagraph = (tr, oldEditorState, step, stepIndex) => {
-  if (!step.slice || step.slice.size === 0 || typeof step.from !== 'number') {
-    return false;
-  }
-
-  let insertsText = false;
-  step.slice.content.descendants((node) => {
-    if (node.type?.name === 'text' && node.text?.length) {
-      insertsText = true;
-      return false;
-    }
-    return true;
-  });
-
-  if (!insertsText) return false;
-
-  const docBeforeStep = tr.docs?.[stepIndex] || oldEditorState.doc;
-  if (!docBeforeStep) return false;
-  const resolvedPos = Math.min(step.from, docBeforeStep.content.size);
-  const $pos = docBeforeStep.resolve(resolvedPos);
-  for (let depth = $pos.depth; depth >= 0; depth--) {
-    const node = $pos.node(depth);
-    if (node?.type?.name === 'paragraph') {
-      return Boolean(node.attrs?.styleId);
-    }
-  }
-  return false;
 };

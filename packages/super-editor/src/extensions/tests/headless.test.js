@@ -29,7 +29,7 @@ describe('Headless Mode Optimization', () => {
     const activeNodeViewNames = Object.keys(nodeViews);
 
     // Optimized node views that shouldn't be present in headless mode
-    const optimizedNodeViews = ['paragraph'];
+    const optimizedNodeViews = ['listItem'];
 
     optimizedNodeViews.forEach((name) => {
       expect(activeNodeViewNames).not.toContain(name);
@@ -93,7 +93,7 @@ describe('Headless Mode Optimization', () => {
 
     while (stack.length && !listItemNode) {
       const node = stack.shift();
-      if (node.type === 'paragraph' && node.attrs?.numberingProperties != null) {
+      if (node.type === 'listItem') {
         listItemNode = node;
         break;
       }
@@ -103,9 +103,9 @@ describe('Headless Mode Optimization', () => {
     }
 
     expect(listItemNode).toBeTruthy();
-    expect(listItemNode.attrs.listRendering.path.length).toBeGreaterThan(0);
-    expect(listItemNode?.attrs.numberingProperties.numId).toBe(1);
-    expect(listItemNode?.attrs.numberingProperties.ilvl).toBe(0);
+    expect(listItemNode?.attrs?.listLevel?.length || 0).toBeGreaterThan(0);
+    expect(listItemNode?.attrs?.numId).toBeTruthy();
+    expect(listItemNode?.attrs?.lvlText).toBeTruthy();
 
     editor.destroy();
   });

@@ -64,7 +64,6 @@ export const makeDefaultItems = ({
     options: fontOptions,
     onActivate: ({ fontFamily }) => {
       if (!fontFamily) return;
-      fontFamily = fontFamily.split(',')[0]; // in case of fonts with fallbacks
       fontButton.label.value = fontFamily;
 
       const defaultFont = fontOptions.find((i) => i.label === fontButton.defaultLabel.value);
@@ -747,6 +746,9 @@ export const makeDefaultItems = ({
     attributes: {
       ariaLabel: 'Undo',
     },
+    onDeactivate: () => {
+      undo.disabled.value = !superToolbar.undoDepth;
+    },
   });
 
   // redo
@@ -760,6 +762,9 @@ export const makeDefaultItems = ({
     group: 'left',
     attributes: {
       ariaLabel: 'Redo',
+    },
+    onDeactivate: () => {
+      redo.disabled.value = !superToolbar.redoDepth;
     },
   });
 
@@ -1007,9 +1012,7 @@ export const makeDefaultItems = ({
     onActivate: ({ linkedStyleMark }) => {
       const styles = getQuickFormatList(superToolbar.activeEditor);
       const selectedStyle = styles?.find((style) => style.id === linkedStyleMark?.attrs?.styleId);
-      // Normal linked style is default one
-      linkedStyles.label.value =
-        selectedStyle && selectedStyle.id !== 'Normal' ? selectedStyle.definition.attrs.name : toolbarTexts.formatText;
+      linkedStyles.label.value = selectedStyle ? selectedStyle.definition.attrs.name : toolbarTexts.formatText;
       linkedStyles.disabled.value = false;
     },
     onDeactivate: () => {

@@ -19,7 +19,6 @@ describe('w:r r-translator (node)', () => {
     const params = {
       nodes: [runNode],
       nodeListHandler: { handler: vi.fn(() => [fakeChild]) },
-      docx: {},
     };
     const out = translator.encode(params);
 
@@ -28,7 +27,7 @@ describe('w:r r-translator (node)', () => {
     expect(out.content[0]).toMatchObject({ type: 'text', text: 'Hello' });
   });
 
-  it('converts w:b run property into a bold mark', () => {
+  it('converts w:b run property into a bold mark and omits it from runProperties', () => {
     const boldRun = {
       name: 'w:r',
       elements: [
@@ -50,13 +49,13 @@ describe('w:r r-translator (node)', () => {
             .filter(Boolean),
         ),
       },
-      docx: {},
     };
 
     const node = translator.encode(params);
     expect(node.type).toBe('run');
     const child = node.content[0];
     expect(child.marks?.some((mark) => mark.type === 'bold')).toBe(true);
+    expect(node.attrs?.runProperties).toBeUndefined();
   });
 
   it('collects font and size info into a textStyle mark', () => {
@@ -86,7 +85,6 @@ describe('w:r r-translator (node)', () => {
             .filter(Boolean),
         ),
       },
-      docx: {},
     };
 
     const node = translator.encode(params);
@@ -115,7 +113,6 @@ describe('w:r r-translator (node)', () => {
           { type: 'text', text: 'Right', marks: [] },
         ]),
       },
-      docx: {},
     };
 
     const result = translator.encode(params);

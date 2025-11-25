@@ -945,13 +945,13 @@ test.describe('toolbar', () => {
 
       // Type "Hello"
       await page.keyboard.type('Hello');
+      await page.keyboard.press('Enter');
 
-      // Ensure the text is visible
+      // Ensure the text is Arial
       const hello = await superEditor.getByText('Hello');
       expect(hello).toBeVisible();
 
-      // Get the <p> element (need to go up to the paragraph, not just the contentDOM span)
-      const parentP = hello.locator('xpath=ancestor::p[1]');
+      const parentP = hello.locator('..');
       const styleAttribute = await parentP.getAttribute('styleid');
       expect(styleAttribute).toBe('Heading2');
 
@@ -1055,18 +1055,18 @@ test.describe('toolbar', () => {
       await styleButton.click();
 
       // Verify dropdown is open and first item is focused
-      const firstStyle = page.locator('div[aria-label="Linked style - Heading1"]');
+      const firstStyle = page.locator('div[aria-label="Linked style - Normal"]');
       await expect(firstStyle).toBeVisible();
       await expect(firstStyle).toBeFocused({ timeout: 1000 });
 
-      // Navigate down again
+      // Navigate down with arrow key
       await page.keyboard.press('ArrowDown');
-      const secondStyle = page.locator('div[aria-label="Linked style - Heading2"]');
+      const secondStyle = page.locator('div[aria-label="Linked style - Heading1"]');
       await expect(secondStyle).toBeFocused({ timeout: 1000 });
 
       // Navigate down again
       await page.keyboard.press('ArrowDown');
-      const thirdStyle = page.locator('div[aria-label="Linked style - Heading3"]');
+      const thirdStyle = page.locator('div[aria-label="Linked style - Heading2"]');
       await expect(thirdStyle).toBeFocused({ timeout: 1000 });
 
       // Navigate back up
@@ -1078,7 +1078,7 @@ test.describe('toolbar', () => {
 
       // Verify the style was applied
       await superEditor.getByText('Test').click();
-      const styleButtonText = styleButton.getByText('heading 2');
+      const styleButtonText = styleButton.getByText('heading 1');
       await expect(styleButtonText).toBeVisible({ timeout: 2000 });
     });
   });

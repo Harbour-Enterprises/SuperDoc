@@ -101,9 +101,7 @@ const readFileAsText = (file) => {
 
 const init = async () => {
   let testId = 'document-123';
-
-  // eslint-disable-next-line no-unused-vars
-  const testDocumentId = 'doc123';
+  // const testId = "document_6a9fb1e0725d46989bdbb3f9879e9e1b";
 
   // Prepare document config with content if available
   const documentConfig = {
@@ -119,6 +117,8 @@ const init = async () => {
   if (currentFile.value.htmlContent) {
     documentConfig.html = currentFile.value.htmlContent;
   }
+
+  let testDocumentId = 'doc_id';
 
   const config = {
     superdocId: 'superdoc-dev',
@@ -314,9 +314,6 @@ const init = async () => {
   superdoc.value = new SuperDoc(config);
   superdoc.value?.on('ready', () => {
     superdoc.value.addCommentsList(commentsPanel.value);
-  });
-  superdoc.value?.on('exception', (error) => {
-    console.error('SuperDoc exception:', error);
   });
 
   // const ydoc = superdoc.value.ydoc;

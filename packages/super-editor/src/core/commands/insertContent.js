@@ -16,7 +16,7 @@ import { processContent } from '../helpers/contentProcessor.js';
  */
 export const insertContent =
   (value, options = {}) =>
-  ({ tr, commands, editor }) => {
+  ({ tr, state, commands, editor }) => {
     // If contentType is specified, use the new processor
     if (options.contentType) {
       const validTypes = ['html', 'markdown', 'text', 'schema'];
@@ -29,7 +29,7 @@ export const insertContent =
         const processedDoc = processContent({
           content: value,
           type: options.contentType,
-          editor,
+          schema: state.schema,
         });
 
         const jsonContent = processedDoc.toJSON();

@@ -46,7 +46,6 @@ const handleKeyDown = (event, index, style) => {
       moveToPreviousStyle(index);
       break;
     case 'Enter':
-      event.preventDefault();
       select(style);
       break;
     default:

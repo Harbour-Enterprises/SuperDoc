@@ -1,7 +1,7 @@
 // @ts-check
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { generateLinkedStyleString, getLinkedStyle, stepInsertsTextIntoStyledParagraph } from './helpers.js';
+import { generateLinkedStyleString, getLinkedStyle } from './helpers.js';
 
 /**
  * Plugin key for accessing linked styles state
@@ -55,7 +55,7 @@ export const createLinkedStylesPlugin = (editor) => {
           // Style-related mark types that affect linked styles
           const styleRelatedMarks = new Set(['textStyle', 'bold', 'italic', 'underline', 'strike']);
 
-          tr.steps.forEach((step, index) => {
+          tr.steps.forEach((step) => {
             if (step.slice) {
               step.slice.content.descendants((node) => {
                 if (node.attrs?.styleId) {
@@ -78,10 +78,6 @@ export const createLinkedStylesPlugin = (editor) => {
               if (step.mark && styleRelatedMarks.has(step.mark.type.name)) {
                 mightAffectStyles = true;
               }
-            }
-
-            if (!mightAffectStyles && stepInsertsTextIntoStyledParagraph(tr, oldEditorState, step, index)) {
-              mightAffectStyles = true;
             }
           });
 

@@ -1,5 +1,4 @@
 import { DOMParser, Schema, Fragment } from 'prosemirror-model';
-import { htmlHandler } from '../InputRule.js';
 
 const removeWhitespaces = (node) => {
   const children = node.childNodes;
@@ -17,16 +16,14 @@ const removeWhitespaces = (node) => {
   return node;
 };
 
-export function elementFromString(value, editor) {
+export function elementFromString(value) {
   // add a wrapper to preserve leading and trailing whitespace
   const wrappedValue = `<body>${value}</body>`;
-  const html = htmlHandler(wrappedValue, editor);
-
+  const html = new window.DOMParser().parseFromString(wrappedValue, 'text/html').body;
   return removeWhitespaces(html);
 }
 
-export function createNodeFromContent(content, editor, options) {
-  const schema = editor.schema;
+export function createNodeFromContent(content, schema, options) {
   options = {
     slice: true,
     parseOptions: {},
@@ -59,7 +56,7 @@ export function createNodeFromContent(content, editor, options) {
 
       console.warn('[super-editor warn]: Invalid content.', 'Passed value:', content, 'Error:', error);
 
-      return createNodeFromContent('', editor, options);
+      return createNodeFromContent('', schema, options);
     }
   }
 
@@ -96,9 +93,9 @@ export function createNodeFromContent(content, editor, options) {
       });
 
       if (options.slice) {
-        DOMParser.fromSchema(contentCheckSchema).parseSlice(elementFromString(content, editor), options.parseOptions);
+        DOMParser.fromSchema(contentCheckSchema).parseSlice(elementFromString(content), options.parseOptions);
       } else {
-        DOMParser.fromSchema(contentCheckSchema).parse(elementFromString(content, editor), options.parseOptions);
+        DOMParser.fromSchema(contentCheckSchema).parse(elementFromString(content), options.parseOptions);
       }
 
       if (options.errorOnInvalidContent && hasInvalidContent) {
@@ -111,11 +108,11 @@ export function createNodeFromContent(content, editor, options) {
     const parser = DOMParser.fromSchema(schema);
 
     if (options.slice) {
-      return parser.parseSlice(elementFromString(content, editor), options.parseOptions).content;
+      return parser.parseSlice(elementFromString(content), options.parseOptions).content;
     }
 
-    return parser.parse(elementFromString(content, editor), options.parseOptions);
+    return parser.parse(elementFromString(content), options.parseOptions);
   }
 
-  return createNodeFromContent('', editor, options);
+  return createNodeFromContent('', schema, options);
 }

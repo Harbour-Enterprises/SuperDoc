@@ -8,6 +8,14 @@ describe('w:rFonts translator (attribute)', () => {
     expect(translator).toBeInstanceOf(NodeTranslator);
     expect(translator.xmlName).toBe('w:rFonts');
     expect(translator.sdNodeOrKeyName).toBe('fontFamily');
+    expect(typeof translator.encode).toBe('function');
+    expect(translator.attributes?.map((attr) => attr.xmlName)).toEqual([
+      'w:eastAsia',
+      'w:ascii',
+      'w:hAnsi',
+      'w:cs',
+      'w:val',
+    ]);
   });
 
   describe('encode', () => {
@@ -21,43 +29,45 @@ describe('w:rFonts translator (attribute)', () => {
       };
       const out = translator.encode(params);
       expect(out).toEqual({
-        eastAsia: 'Arial',
-        ascii: 'Calibri',
-        hAnsi: 'Calibri',
-        cs: 'Noto Sans',
-      });
-    });
-  });
-
-  describe('decode', () => {
-    it('maps all provided font attributes under fontFamily key', () => {
-      const params = {
-        node: {
-          attrs: {
-            fontFamily: {
-              eastAsia: 'Arial',
-              ascii: 'Calibri',
-              hAnsi: 'Calibri',
-              cs: 'Noto Sans',
-            },
-          },
-        },
-      };
-      const out = translator.decode(params);
-      expect(out).toEqual({
+        type: 'attr',
+        xmlName: 'w:rFonts',
+        sdNodeOrKeyName: 'fontFamily',
         attributes: {
-          'w:ascii': 'Calibri',
-          'w:cs': 'Noto Sans',
           'w:eastAsia': 'Arial',
+          'w:ascii': 'Calibri',
           'w:hAnsi': 'Calibri',
+          'w:cs': 'Noto Sans',
+          'w:val': 'Arial',
         },
       });
     });
 
-    it('returns undefined when no font attributes are present', () => {
-      const params = { node: { name: 'w:rFonts', attrs: {} } };
-      const out = translator.decode(params);
-      expect(out).toBeUndefined();
+    it('omits w:val when eastAsia is missing or falsy, but still preserves other attributes', () => {
+      const paramsMissing = { nodes: [{ attributes: { 'w:ascii': 'Calibri' } }] };
+      const outMissing = translator.encode(paramsMissing, { eastAsia: undefined });
+      expect(outMissing.attributes['w:val']).toBeUndefined();
+      expect(outMissing.attributes['w:ascii']).toBe('Calibri');
+
+      const paramsEmpty = { nodes: [{ attributes: { 'w:eastAsia': '' } }] };
+      const outEmpty = translator.encode(paramsEmpty);
+      expect(outEmpty.attributes['w:val']).toBeUndefined();
+      expect(outEmpty.attributes['w:eastAsia']).toBe('');
+    });
+
+    it('prefers sanitized attributes returned by attribute handlers', () => {
+      const params = {
+        nodes: [
+          {
+            attributes: { 'w:eastAsia': 'Arial', 'w:ascii': 'Calibri' },
+          },
+        ],
+      };
+
+      const out = translator.encodeFn(params, { eastAsia: 'Noto Sans', value: 'Custom' });
+
+      expect(out.attributes['w:eastAsia']).toBe('Noto Sans');
+      expect(out.attributes['w:val']).toBe('Custom');
+      expect(out.attributes['w:ascii']).toBe('Calibri');
     });
   });
 });

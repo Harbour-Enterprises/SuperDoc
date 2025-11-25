@@ -1,8 +1,41 @@
+// @ts-check
 import { NodeTranslator } from '@translator';
-import { createSingleBooleanPropertyHandler } from '@converter/v3/handlers/utils.js';
+/** @type {import('@translator').XmlNodeName} */
+const XML_NODE_NAME = 'w:i';
+
+/** @type {import('@translator').SuperDocNodeOrKeyName} */
+const SD_ATTR_KEY = 'italic';
+
+/**
+ * Encode the w:i element.
+ * @param {import('@translator').SCEncoderConfig} params
+ * @returns {import('@translator').SCEncoderResult}
+ */
+const encode = (params) => {
+  const { nodes } = params;
+  const node = nodes?.[0];
+  if (!node) return undefined;
+
+  return {
+    type: 'attr',
+    xmlName: XML_NODE_NAME,
+    sdNodeOrKeyName: SD_ATTR_KEY,
+    attributes: {
+      'w:val': node.attributes?.['w:val'] ?? null,
+    },
+  };
+};
+
+/** @type {import('@translator').NodeTranslatorConfig} */
+export const config = {
+  xmlName: XML_NODE_NAME,
+  sdNodeOrKeyName: SD_ATTR_KEY,
+  type: NodeTranslator.translatorTypes.ATTRIBUTE,
+  encode,
+};
+
 /**
  * The NodeTranslator instance for the w:i element.
  * @type {import('@translator').NodeTranslator}
- * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 282
  */
-export const translator = NodeTranslator.from(createSingleBooleanPropertyHandler('w:i', 'italic'));
+export const translator = NodeTranslator.from(config);

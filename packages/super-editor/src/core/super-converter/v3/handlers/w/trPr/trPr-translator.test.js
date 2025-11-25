@@ -167,7 +167,8 @@ describe('w:trPr translator', () => {
       };
 
       const result = translator.decode(params);
-      expect(result).toBeUndefined();
+      expect(result.name).toBe('w:trPr');
+      expect(result.elements).toEqual([]);
     });
 
     it('handles empty tableRowProperties object', () => {
@@ -179,7 +180,8 @@ describe('w:trPr translator', () => {
         },
       };
       const result = translator.decode(params);
-      expect(result).toBeUndefined();
+      expect(result.name).toBe('w:trPr');
+      expect(result.elements).toEqual([]);
     });
 
     it('handles missing tableRowProperties object', () => {
@@ -189,7 +191,8 @@ describe('w:trPr translator', () => {
         },
       };
       const result = translator.decode(params);
-      expect(result).toBeUndefined();
+      expect(result.name).toBe('w:trPr');
+      expect(result.elements).toEqual([]);
     });
 
     it('handles NaN values for numeric properties', () => {
@@ -206,7 +209,7 @@ describe('w:trPr translator', () => {
         },
       };
       const result = translator.decode(params);
-      expect(result).toBeUndefined();
+      expect(result.elements).toEqual([]);
     });
   });
 
