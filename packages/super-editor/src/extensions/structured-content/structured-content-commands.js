@@ -4,6 +4,8 @@ import { htmlHandler } from '@core/InputRule';
 import { findParentNode } from '@helpers/findParentNode';
 import { generateRandomSigned32BitIntStrId } from '@core/helpers/generateDocxRandomId.js';
 import { getStructuredContentTagsById } from './structuredContentHelpers/getStructuredContentTagsById';
+import { getStructuredContentByGroup } from './structuredContentHelpers/getStructuredContentByGroup';
+import { createTagObject } from './structuredContentHelpers/tagUtils';
 import * as structuredContentHelpers from './structuredContentHelpers/index';
 
 const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock'];
@@ -13,6 +15,7 @@ const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock']
  * @property {string} [text] - Text content to insert
  * @property {Object} [json] - ProseMirror JSON
  * @property {Object} [attrs] - Node attributes
+ * @property {string} [attrs.group] - Group identifier for linking multiple fields (auto-encoded to JSON tag)
  */
 
 /**
@@ -20,6 +23,7 @@ const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock']
  * @property {string} [html] - HTML content to insert
  * @property {Object} [json] - ProseMirror JSON
  * @property {Object} [attrs] - Node attributes
+ * @property {string} [attrs.group] - Group identifier for linking multiple fields (auto-encoded to JSON tag)
  */
 
 /**
@@ -48,6 +52,16 @@ export const StructuredContentCommands = Extension.create({
        * @category Command
        * @param {StructuredContentInlineInsert} options
        * @example
+       * // With group for linking multiple fields
+       * editor.commands.insertStructuredContentInline({
+       *  attrs: {
+       *   group: 'customer-info',
+       *   alias: 'Customer Name',
+       *  },
+       *  text: 'John Doe',
+       * });
+       *
+       * // No group
        * editor.commands.insertStructuredContentInline({
        *  attrs: {
        *   id: '123',
@@ -85,12 +99,21 @@ export const StructuredContentCommands = Extension.create({
               content = schema.text(' ');
             }
 
+            // Handle group parameter: convert to JSON tag
+            let tag = options.attrs?.tag || 'inline_text_sdt';
+            if (options.attrs?.group) {
+              tag = createTagObject({ group: options.attrs.group });
+            }
+
             const attrs = {
-              ...options.attrs,
               id: options.attrs?.id || generateRandomSigned32BitIntStrId(),
-              tag: 'inline_text_sdt',
+              tag,
               alias: options.attrs?.alias || 'Structured content',
+              ...options.attrs,
             };
+            // Remove group from attrs to avoid storing it separately
+            delete attrs.group;
+
             const node = schema.nodes.structuredContent.create(attrs, content, null);
 
             const parent = findParentNode((node) => node.type.name === 'structuredContent')(state.selection);
@@ -110,14 +133,22 @@ export const StructuredContentCommands = Extension.create({
        * @category Command
        * @param {StructuredContentBlockInsert} options
        * @example
+       * // With group for linking multiple fields
+       * editor.commands.insertStructuredContentBlock({
+       *  attrs: {
+       *    group: 'terms-section',
+       *    alias: 'Terms & Conditions',
+       *  },
+       *  html: '<p>Legal content...</p>',
+       * });
+       *
+       * // No group
        * editor.commands.insertStructuredContentBlock({
        *  attrs: {
        *    id: '456',
        *    alias: 'Terms & Conditions',
        *  },
        *  json: { type: 'paragraph', content: [{ type: 'text', text: 'Legal content...' }] }
-       *  // or
-       *  html: '<p>Legal content...</p>',
        * });
        */
       insertStructuredContentBlock:
@@ -149,12 +180,21 @@ export const StructuredContentCommands = Extension.create({
               content = schema.nodeFromJSON({ type: 'paragraph', content: [] });
             }
 
+            // Handle group parameter: convert to JSON tag
+            let tag = options.attrs?.tag || 'block_table_sdt';
+            if (options.attrs?.group) {
+              tag = createTagObject({ group: options.attrs.group });
+            }
+
             const attrs = {
-              ...options.attrs,
               id: options.attrs?.id || generateRandomSigned32BitIntStrId(),
-              tag: 'block_table_sdt',
+              tag,
               alias: options.attrs?.alias || 'Structured content',
+              ...options.attrs,
             };
+            // Remove group from attrs to avoid storing it separately
+            delete attrs.group;
+
             const node = schema.nodes.structuredContentBlock.create(attrs, content, null);
 
             const parent = findParentNode((node) => node.type.name === 'structuredContentBlock')(state.selection);
@@ -314,6 +354,105 @@ export const StructuredContentCommands = Extension.create({
             const posTo = posFrom + node.nodeSize;
             const content = node.content;
             tr.replaceWith(posFrom, posTo, content);
+          }
+
+          return true;
+        },
+
+      /**
+       * Updates all structured content fields that share the same group identifier.
+       * Groups allow linking multiple fields together for batch operations.
+       * @category Command
+       * @param {string} group - Group identifier shared by multiple fields
+       * @param {StructuredContentUpdate} options
+       * @example
+       * // Update all fields in the customer-info group
+       * editor.commands.updateStructuredContentByGroup('customer-info', { text: 'Jane Doe' });
+       *
+       * // Update block content in a group
+       * editor.commands.updateStructuredContentByGroup('terms-section', {
+       *  html: '<p>Updated terms...</p>'
+       * });
+       */
+      updateStructuredContentByGroup:
+        (group, options = {}) =>
+        ({ editor, dispatch, state, tr }) => {
+          const structuredContentTags = getStructuredContentByGroup(group, state);
+
+          if (!structuredContentTags.length) {
+            return true;
+          }
+
+          const { schema } = editor;
+
+          if (dispatch) {
+            structuredContentTags.forEach((structuredContent) => {
+              const { pos, node } = structuredContent;
+              const posFrom = tr.mapping.map(pos);
+              const posTo = tr.mapping.map(pos + node.nodeSize);
+
+              let content = null;
+
+              if (options.text) {
+                content = schema.text(options.text);
+              }
+
+              if (options.html) {
+                const html = htmlHandler(options.html, editor);
+                const doc = PMDOMParser.fromSchema(schema).parse(html);
+                content = doc.content;
+              }
+
+              if (options.json) {
+                content = schema.nodeFromJSON(options.json);
+              }
+
+              if (!content) {
+                content = node.content;
+              }
+
+              const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
+
+              const currentNode = tr.doc.nodeAt(posFrom);
+              if (currentNode && node.eq(currentNode)) {
+                tr.replaceWith(posFrom, posTo, updatedNode);
+              }
+            });
+          }
+
+          return true;
+        },
+
+      /**
+       * Removes all structured content fields that share the same group identifier.
+       * @category Command
+       * @param {string | string[]} groupOrGroups - Single group or array of groups
+       * @example
+       * // Delete all fields in a group
+       * editor.commands.deleteStructuredContentByGroup('customer-info');
+       *
+       * // Delete multiple groups
+       * editor.commands.deleteStructuredContentByGroup(['header', 'footer']);
+       */
+      deleteStructuredContentByGroup:
+        (groupOrGroups) =>
+        ({ dispatch, state, tr }) => {
+          const structuredContentTags = getStructuredContentByGroup(groupOrGroups, state);
+
+          if (!structuredContentTags.length) {
+            return true;
+          }
+
+          if (dispatch) {
+            structuredContentTags.forEach((structuredContent) => {
+              const { pos, node } = structuredContent;
+              const posFrom = tr.mapping.map(pos);
+              const posTo = tr.mapping.map(pos + node.nodeSize);
+              const currentNode = tr.doc.nodeAt(posFrom);
+              if (currentNode && node.eq(currentNode)) {
+                tr.delete(posFrom, posTo);
+              }
+            });
           }
 
           return true;

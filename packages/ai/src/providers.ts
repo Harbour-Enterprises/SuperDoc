@@ -14,51 +14,63 @@ import type { AIMessage, AIProvider, CompletionOptions, StreamOptions } from './
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 interface ProviderRequestContext {
-    messages: AIMessage[];
-    options?: CompletionOptions;
-    stream: boolean;
+  messages: AIMessage[];
+  options?: CompletionOptions;
+  stream: boolean;
 }
 
 interface ProviderDefaults {
-    temperature?: number;
-    maxTokens?: number;
-    stop?: string[];
-    streamResults?: boolean;
+  temperature?: number;
+  maxTokens?: number;
+  stop?: string[];
+  streamResults?: boolean;
 }
 
+/**
+ * Generic JSON value type for provider payloads
+ */
+type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
+type JsonObject = { [key: string]: JsonValue };
+type JsonArray = JsonValue[];
+
+/**
+ * Type for provider response payloads (parsed JSON or raw data)
+ */
+type ProviderPayload = JsonValue | unknown;
+
 export interface HttpProviderConfig extends ProviderDefaults {
-    type: 'http';
-    url: string;
-    streamUrl?: string;
-    headers?: Record<string, string>;
-    method?: string;
-    fetch?: FetchLike;
-    buildRequestBody?: (context: ProviderRequestContext) => Record<string, any>;
-    parseCompletion?: (payload: any) => string;
-    parseStreamChunk?: (payload: any) => string | undefined;
+  type: 'http';
+  url: string;
+  streamUrl?: string;
+  headers?: Record<string, string>;
+  method?: string;
+  fetch?: FetchLike;
+  buildRequestBody?: (context: ProviderRequestContext) => Record<string, JsonValue>;
+  parseCompletion?: (payload: ProviderPayload) => string;
+  parseStreamChunk?: (payload: ProviderPayload) => string | undefined;
 }
 
 export interface OpenAIProviderConfig extends ProviderDefaults {
-    type: 'openai';
-    apiKey: string;
-    model: string;
-    baseURL?: string;
-    organizationId?: string;
-    headers?: Record<string, string>;
-    completionPath?: string;
-    requestOptions?: Record<string, any>;
-    fetch?: FetchLike;
+  type: 'openai';
+  apiKey: string;
+  model: string;
+  baseURL?: string;
+  organizationId?: string;
+  headers?: Record<string, string>;
+  completionPath?: string;
+  requestOptions?: Record<string, JsonValue>;
+  fetch?: FetchLike;
 }
 
 export interface AnthropicProviderConfig extends ProviderDefaults {
-    type: 'anthropic';
-    apiKey: string;
-    model: string;
-    baseURL?: string;
-    apiVersion?: string;
-    headers?: Record<string, string>;
-    requestOptions?: Record<string, any>;
-    fetch?: FetchLike;
+  type: 'anthropic';
+  apiKey: string;
+  model: string;
+  baseURL?: string;
+  apiVersion?: string;
+  headers?: Record<string, string>;
+  requestOptions?: Record<string, JsonValue>;
+  fetch?: FetchLike;
 }
 
 export type AIProviderInput = AIProvider | OpenAIProviderConfig | AnthropicProviderConfig | HttpProviderConfig;
@@ -70,13 +82,13 @@ export type AIProviderInput = AIProvider | OpenAIProviderConfig | AnthropicProvi
  * @param value - Candidate object to validate.
  * @returns True if the value satisfies the provider interface.
  */
-export function isAIProvider(value: any): value is AIProvider {
-    if (!value || typeof value !== 'object') {
-        return false;
-    }
+export function isAIProvider(value: unknown): value is AIProvider {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
 
-    const provider = value as AIProvider;
-    return typeof provider.getCompletion === 'function' && typeof provider.streamCompletion === 'function';
+  const provider = value as AIProvider;
+  return typeof provider.getCompletion === 'function' && typeof provider.streamCompletion === 'function';
 }
 
 /**
@@ -90,20 +102,20 @@ export function isAIProvider(value: any): value is AIProvider {
  * @throws Error when an unsupported provider type is supplied.
  */
 export function createAIProvider(config: AIProviderInput): AIProvider {
-    if (isAIProvider(config)) {
-        return config;
-    }
+  if (isAIProvider(config)) {
+    return config;
+  }
 
-    switch (config.type) {
-        case 'openai':
-            return createOpenAIProvider(config);
-        case 'anthropic':
-            return createAnthropicProvider(config);
-        case 'http':
-            return createHttpProvider(config);
-        default:
-            throw new Error('Unsupported AI provider type');
-    }
+  switch (config.type) {
+    case 'openai':
+      return createOpenAIProvider(config);
+    case 'anthropic':
+      return createAnthropicProvider(config);
+    case 'http':
+      return createHttpProvider(config);
+    default:
+      throw new Error('Unsupported AI provider type');
+  }
 }
 
 /**
@@ -116,90 +128,95 @@ export function createAIProvider(config: AIProviderInput): AIProvider {
  * @returns An `AIProvider` backed by the specified HTTP endpoint.
  */
 export function createHttpProvider(config: HttpProviderConfig): AIProvider {
-    const {
-        url,
-        streamUrl,
-        headers = {},
-        method = 'POST',
-        fetch: customFetch,
-        buildRequestBody,
-        parseCompletion = defaultParseCompletion,
-        parseStreamChunk = defaultParseStreamChunk,
-        temperature,
-        maxTokens,
-        stop,
-        streamResults,
-    } = config;
+  const {
+    url,
+    streamUrl,
+    headers = {},
+    method = 'POST',
+    fetch: customFetch,
+    buildRequestBody,
+    parseCompletion = defaultParseCompletion,
+    parseStreamChunk = defaultParseStreamChunk,
+    temperature,
+    maxTokens,
+    stop,
+    streamResults,
+  } = config;
 
-    const fetchImpl = resolveFetch(customFetch);
+  const fetchImpl = resolveFetch(customFetch);
 
-    const buildBody =
-        buildRequestBody ??
-        ((context: ProviderRequestContext) =>
-            cleanUndefined({
-                messages: context.messages,
-                stream: context.options?.stream ?? context.stream ?? streamResults,
-                temperature: context.options?.temperature ?? temperature,
-                max_tokens: context.options?.maxTokens ?? maxTokens,
-                stop: context.options?.stop ?? stop,
-                model: context.options?.model,
-                ...context.options?.providerOptions,
-            }));
+  const buildBody =
+    buildRequestBody ??
+    ((context: ProviderRequestContext) =>
+      cleanUndefined({
+        messages: context.messages,
+        stream: context.options?.stream ?? context.stream ?? streamResults,
+        temperature: context.options?.temperature ?? temperature,
+        max_tokens: context.options?.maxTokens ?? maxTokens,
+        stop: context.options?.stop ?? stop,
+        model: context.options?.model,
+        ...context.options?.providerOptions,
+      }));
 
-    /**
-     * Internal helper to execute an HTTP request against the configured provider.
-     *
-     * @param targetUrl - URL that should receive the JSON payload.
-     * @param context - Context containing the chat messages and invocation options.
-     * @returns The raw `Response` instance from fetch.
-     * @throws Error when the provider responds with a non-ok status.
-     */
-    async function requestJson(targetUrl: string, context: ProviderRequestContext) {
-        const resolvedStream = context.options?.stream ?? context.stream ?? streamResults;
-        const bodyPayload = buildBody(context);
-        const shouldForceStream =
-            Boolean(
-                buildRequestBody && resolvedStream && bodyPayload && typeof bodyPayload === 'object' && !Array.isArray(bodyPayload) &&
-                !('stream' in bodyPayload)
-            );
-        const finalPayload = shouldForceStream ? { ...bodyPayload, stream: true } : bodyPayload;
-        const response = await fetchImpl(targetUrl, {
-            method,
-            headers: ensureContentType(headers),
-            body: JSON.stringify(finalPayload),
-            signal: context.options?.signal,
-        });
+  /**
+   * Internal helper to execute an HTTP request against the configured provider.
+   *
+   * @param targetUrl - URL that should receive the JSON payload.
+   * @param context - Context containing the chat messages and invocation options.
+   * @returns The raw `Response` instance from fetch.
+   * @throws Error when the provider responds with a non-ok status.
+   */
+  async function requestJson(targetUrl: string, context: ProviderRequestContext) {
+    const resolvedStream = context.options?.stream ?? context.stream ?? streamResults;
+    const bodyPayload = buildBody(context);
+    const shouldForceStream = Boolean(
+      buildRequestBody &&
+        resolvedStream &&
+        bodyPayload &&
+        typeof bodyPayload === 'object' &&
+        !Array.isArray(bodyPayload) &&
+        !('stream' in bodyPayload),
+    );
+    const finalPayload = shouldForceStream ? { ...bodyPayload, stream: true } : bodyPayload;
+    const response = await fetchImpl(targetUrl, {
+      method,
+      headers: ensureContentType(headers),
+      body: JSON.stringify(finalPayload),
+      signal: context.options?.signal,
+    });
 
-        if (!response.ok) {
-            const errorText = await safeReadText(response);
-            throw new Error(`AI provider request failed with status ${response.status} (${response.statusText}): ${errorText}`);
-        }
-
-        return response;
+    if (!response.ok) {
+      const errorText = await safeReadText(response);
+      throw new Error(
+        `AI provider request failed with status ${response.status} (${response.statusText}): ${errorText}`,
+      );
     }
 
-    return {
-        streamResults,
-        async *streamCompletion(messages: AIMessage[], options?: StreamOptions) {
-            const target = streamUrl ?? url;
+    return response;
+  }
 
-            if (!target) {
-                const fullResult = await this.getCompletion(messages, options);
-                if (fullResult) {
-                    yield fullResult;
-                }
-                return;
-            }
+  return {
+    streamResults,
+    async *streamCompletion(messages: AIMessage[], options?: StreamOptions) {
+      const target = streamUrl ?? url;
 
-            const response = await requestJson(target, { messages, stream: true, options });
-            yield* readStreamResponse(response, parseStreamChunk, parseCompletion);
-        },
-
-        async getCompletion(messages: AIMessage[], options?: CompletionOptions): Promise<string> {
-            const response = await requestJson(url, { messages, stream: false, options });
-            return parseResponsePayload(response, parseCompletion);
+      if (!target) {
+        const fullResult = await this.getCompletion(messages, options);
+        if (fullResult) {
+          yield fullResult;
         }
-    };
+        return;
+      }
+
+      const response = await requestJson(target, { messages, stream: true, options });
+      yield* readStreamResponse(response, parseStreamChunk, parseCompletion);
+    },
+
+    async getCompletion(messages: AIMessage[], options?: CompletionOptions): Promise<string> {
+      const response = await requestJson(url, { messages, stream: false, options });
+      return parseResponsePayload(response, parseCompletion);
+    },
+  };
 }
 
 /**
@@ -211,53 +228,53 @@ export function createHttpProvider(config: HttpProviderConfig): AIProvider {
  * @returns An `AIProvider` targeting OpenAI's chat completions endpoint.
  */
 export function createOpenAIProvider(config: OpenAIProviderConfig): AIProvider {
-    const {
-        apiKey,
-        baseURL = 'https://api.openai.com/v1',
-        model,
-        organizationId,
-        headers,
-        completionPath = '/chat/completions',
-        requestOptions,
-        fetch: customFetch,
-        temperature,
-        maxTokens,
-        stop,
-        streamResults,
-    } = config;
+  const {
+    apiKey,
+    baseURL = 'https://api.openai.com/v1',
+    model,
+    organizationId,
+    headers,
+    completionPath = '/chat/completions',
+    requestOptions,
+    fetch: customFetch,
+    temperature,
+    maxTokens,
+    stop,
+    streamResults,
+  } = config;
 
-    const url = joinUrl(baseURL, completionPath);
-    const baseHeaders = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${apiKey}`,
-        ...(organizationId ? { 'OpenAI-Organization': organizationId } : {}),
-        ...headers,
-    };
+  const url = joinUrl(baseURL, completionPath);
+  const baseHeaders = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+    ...(organizationId ? { 'OpenAI-Organization': organizationId } : {}),
+    ...headers,
+  };
 
-    return createHttpProvider({
-        type: 'http',
-        url,
-        streamUrl: url,
-        headers: baseHeaders,
-        fetch: customFetch,
-        temperature,
-        maxTokens,
-        stop,
-        streamResults,
-        buildRequestBody: ({ messages, stream: contextStream, options }) =>
-            cleanUndefined({
-                model: options?.model ?? model,
-                temperature: options?.temperature ?? temperature,
-                max_tokens: options?.maxTokens ?? maxTokens,
-                stop: options?.stop ?? stop,
-                stream: options?.stream ?? contextStream ?? streamResults,
-                messages,
-                ...requestOptions,
-                ...options?.providerOptions,
-            }),
-        parseCompletion: parseOpenAICompletion,
-        parseStreamChunk: parseOpenAIStreamChunk,
-    });
+  return createHttpProvider({
+    type: 'http',
+    url,
+    streamUrl: url,
+    headers: baseHeaders,
+    fetch: customFetch,
+    temperature,
+    maxTokens,
+    stop,
+    streamResults,
+    buildRequestBody: ({ messages, stream: contextStream, options }) =>
+      cleanUndefined({
+        model: options?.model ?? model,
+        temperature: options?.temperature ?? temperature,
+        max_tokens: options?.maxTokens ?? maxTokens,
+        stop: options?.stop ?? stop,
+        stream: options?.stream ?? contextStream ?? streamResults,
+        messages,
+        ...requestOptions,
+        ...options?.providerOptions,
+      }),
+    parseCompletion: parseOpenAICompletion,
+    parseStreamChunk: parseOpenAIStreamChunk,
+  });
 }
 
 /**
@@ -269,55 +286,55 @@ export function createOpenAIProvider(config: OpenAIProviderConfig): AIProvider {
  * @returns An `AIProvider` targeting Anthropic's messages endpoint.
  */
 export function createAnthropicProvider(config: AnthropicProviderConfig): AIProvider {
-    const {
-        apiKey,
-        baseURL = 'https://api.anthropic.com',
-        apiVersion = '2023-06-01',
-        model,
-        headers,
-        requestOptions,
-        fetch: customFetch,
-        temperature,
-        maxTokens = 1024,
-        stop,
-        streamResults,
-    } = config;
+  const {
+    apiKey,
+    baseURL = 'https://api.anthropic.com',
+    apiVersion = '2023-06-01',
+    model,
+    headers,
+    requestOptions,
+    fetch: customFetch,
+    temperature,
+    maxTokens = 1024,
+    stop,
+    streamResults,
+  } = config;
 
-    const url = joinUrl(baseURL, '/v1/messages');
-    const baseHeaders = {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': apiVersion,
-        ...headers,
-    };
+  const url = joinUrl(baseURL, '/v1/messages');
+  const baseHeaders = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': apiVersion,
+    ...headers,
+  };
 
-    return createHttpProvider({
-        type: 'http',
-        url,
-        streamUrl: url,
-        headers: baseHeaders,
-        fetch: customFetch,
-        temperature,
-        maxTokens,
-        stop,
-        streamResults,
-        buildRequestBody: ({ messages, stream: contextStream, options }) => {
-            const { system, anthropicMessages } = convertToAnthropicMessages(messages);
-            return cleanUndefined({
-                model: options?.model ?? model,
-                temperature: options?.temperature ?? temperature,
-                max_tokens: options?.maxTokens ?? maxTokens,
-                stop_sequences: options?.stop ?? stop,
-                stream: options?.stream ?? contextStream ?? streamResults,
-                system,
-                messages: anthropicMessages,
-                ...requestOptions,
-                ...options?.providerOptions,
-            });
-        },
-        parseCompletion: parseAnthropicCompletion,
-        parseStreamChunk: parseAnthropicStreamChunk,
-    });
+  return createHttpProvider({
+    type: 'http',
+    url,
+    streamUrl: url,
+    headers: baseHeaders,
+    fetch: customFetch,
+    temperature,
+    maxTokens,
+    stop,
+    streamResults,
+    buildRequestBody: ({ messages, stream: contextStream, options }) => {
+      const { system, anthropicMessages } = convertToAnthropicMessages(messages);
+      return cleanUndefined({
+        model: options?.model ?? model,
+        temperature: options?.temperature ?? temperature,
+        max_tokens: options?.maxTokens ?? maxTokens,
+        stop_sequences: options?.stop ?? stop,
+        stream: options?.stream ?? contextStream ?? streamResults,
+        system,
+        messages: anthropicMessages,
+        ...requestOptions,
+        ...options?.providerOptions,
+      });
+    },
+    parseCompletion: parseAnthropicCompletion,
+    parseStreamChunk: parseAnthropicStreamChunk,
+  });
 }
 
 /**
@@ -331,46 +348,46 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AIProv
  * @throws Error when the response status indicates failure.
  */
 async function* readStreamResponse(
-    response: Response,
-    parseStreamChunk: (payload: any) => string | undefined,
-    fallbackParser: (payload: any) => string,
+  response: Response,
+  parseStreamChunk: (payload: ProviderPayload) => string | undefined,
+  fallbackParser: (payload: ProviderPayload) => string,
 ) {
-    if (!response.ok) {
-        throw new Error(`AI provider stream failed with status ${response.status}: ${await safeReadText(response)}`);
+  if (!response.ok) {
+    throw new Error(`AI provider stream failed with status ${response.status}: ${await safeReadText(response)}`);
+  }
+
+  // Handle non-streaming response
+  if (!response.body) {
+    const text = await safeReadText(response);
+    if (text) yield* processEventSegments(text, parseStreamChunk, fallbackParser);
+    return;
+  }
+
+  // Handle streaming response
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const parts = buffer.split('\n\n');
+      buffer = parts.pop() || '';
+
+      for (const part of parts) {
+        yield* processEventSegments(part, parseStreamChunk, fallbackParser);
+      }
     }
 
-    // Handle non-streaming response
-    if (!response.body) {
-        const text = await safeReadText(response);
-        if (text) yield* processEventSegments(text, parseStreamChunk, fallbackParser);
-        return;
+    if (buffer.trim()) {
+      yield* processEventSegments(buffer, parseStreamChunk, fallbackParser);
     }
-
-    // Handle streaming response
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-            const parts = buffer.split('\n\n');
-            buffer = parts.pop() || '';
-
-            for (const part of parts) {
-                yield* processEventSegments(part, parseStreamChunk, fallbackParser);
-            }
-        }
-
-        if (buffer.trim()) {
-            yield* processEventSegments(buffer, parseStreamChunk, fallbackParser);
-        }
-    } finally {
-        reader.releaseLock();
-    }
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 /**
@@ -382,27 +399,27 @@ async function* readStreamResponse(
  * @returns Generator yielding parsed string chunks.
  */
 function* processEventSegments(
-    event: string,
-    parseStreamChunk: (payload: any) => string | undefined,
-    fallbackParser: (payload: any) => string,
-): Generator<string, void, any> {
-    for (const segment of extractEventSegments(event)) {
-        if (segment === '[DONE]') {
-            return;
-        }
-
-        let payload: any = segment;
-        try {
-            payload = JSON.parse(segment);
-        } catch {
-            // Keep payload as string if JSON parsing fails
-        }
-
-        const chunk = parseStreamChunk(payload) ?? (typeof payload === 'string' ? payload : fallbackParser(payload));
-        if (chunk) {
-            yield chunk;
-        }
+  event: string,
+  parseStreamChunk: (payload: ProviderPayload) => string | undefined,
+  fallbackParser: (payload: ProviderPayload) => string,
+): Generator<string, void, unknown> {
+  for (const segment of extractEventSegments(event)) {
+    if (segment === '[DONE]') {
+      return;
     }
+
+    let payload: ProviderPayload = segment;
+    try {
+      payload = JSON.parse(segment) as JsonValue;
+    } catch {
+      // Keep payload as string if JSON parsing fails
+    }
+
+    const chunk = parseStreamChunk(payload) ?? (typeof payload === 'string' ? payload : fallbackParser(payload));
+    if (chunk) {
+      yield chunk;
+    }
+  }
 }
 
 /**
@@ -412,11 +429,11 @@ function* processEventSegments(
  * @returns Response text or an empty string when reading fails.
  */
 async function safeReadText(response: Response): Promise<string> {
-    try {
-        return await response.text();
-    } catch {
-        return '';
-    }
+  try {
+    return await response.text();
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -426,22 +443,22 @@ async function safeReadText(response: Response): Promise<string> {
  * @returns Array of cleaned event payload strings.
  */
 function extractEventSegments(eventChunk: string) {
-    const dataLines = eventChunk
-        .split('\n')
-        .map((line) => line.trim())
-        .filter(Boolean);
+  const dataLines = eventChunk
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
 
-    const dataSegments: string[] = [];
+  const dataSegments: string[] = [];
 
-    for (const line of dataLines) {
-        if (line.startsWith('data:')) {
-            dataSegments.push(line.slice(5).trim());
-        } else {
-            dataSegments.push(line);
-        }
+  for (const line of dataLines) {
+    if (line.startsWith('data:')) {
+      dataSegments.push(line.slice(5).trim());
+    } else {
+      dataSegments.push(line);
     }
+  }
 
-    return dataSegments;
+  return dataSegments;
 }
 
 /**
@@ -452,31 +469,51 @@ function extractEventSegments(eventChunk: string) {
  * @param parser - Function that extracts a string from the JSON payload.
  * @returns Parsed string derived from the response.
  */
-async function parseResponsePayload(response: Response, parser: (payload: any) => string): Promise<string> {
-    const contentType = response.headers.get('content-type') ?? '';
+async function parseResponsePayload(response: Response, parser: (payload: ProviderPayload) => string): Promise<string> {
+  const contentType = response.headers.get('content-type') ?? '';
 
-    if (contentType.includes('application/json')) {
-        const json = await response.json();
-        const parsed = parser(json);
-        if (parsed.length > 0) {
-            return parsed;
-        }
-        return JSON.stringify(json);
+  if (contentType.includes('application/json')) {
+    const json = await response.json();
+    const parsed = parser(json);
+    if (parsed.length > 0) {
+      return parsed;
     }
+    return JSON.stringify(json);
+  }
 
-    return await response.text();
+  return await response.text();
 }
 
-function extractTextFromBlock(block: any): string[] {
-    if (block?.text) return [String(block.text)];
+/**
+ * Type guard to check if a value is a record object
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 
-    if (Array.isArray(block?.content)) {
-        return block.content
-            .map((part: any) => typeof part === 'string' ? part : String(part?.text || ''))
-            .filter(Boolean);
-    }
+/**
+ * Extracts text from a content block that may have various shapes
+ */
+function extractTextFromBlock(block: unknown): string[] {
+  if (!isRecord(block)) return [];
 
-    return [];
+  if ('text' in block && block.text != null) {
+    return [String(block.text)];
+  }
+
+  if ('content' in block && Array.isArray(block.content)) {
+    return block.content
+      .map((part: unknown) => {
+        if (typeof part === 'string') return part;
+        if (isRecord(part) && 'text' in part && part.text != null) {
+          return String(part.text);
+        }
+        return '';
+      })
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 /**
@@ -486,27 +523,33 @@ function extractTextFromBlock(block: any): string[] {
  * @param payload - Provider response payload.
  * @returns Extracted text content suitable for callers.
  */
-function defaultParseCompletion(payload: any): string {
-    if (typeof payload === 'string') return payload;
-    if (!payload || typeof payload !== 'object') return '';
+function defaultParseCompletion(payload: ProviderPayload): string {
+  if (typeof payload === 'string') return payload;
+  if (!isRecord(payload)) return '';
 
-    // OpenAI format: choices[0].message.content or choices[0].text
-    const choice = payload.choices?.[0];
-    if (choice) {
-        if (choice.message?.content) return choice.message.content;
-        if (choice.text) return choice.text;
+  // OpenAI format: choices[0].message.content or choices[0].text
+  if ('choices' in payload && Array.isArray(payload.choices) && payload.choices.length > 0) {
+    const choice = payload.choices[0];
+    if (isRecord(choice)) {
+      if ('message' in choice && isRecord(choice.message) && 'content' in choice.message) {
+        return String(choice.message.content || '');
+      }
+      if ('text' in choice) {
+        return String(choice.text || '');
+      }
     }
+  }
 
-    // Anthropic format: content (string or array)
+  // Anthropic format: content (string or array)
+  if ('content' in payload) {
     const { content } = payload;
     if (typeof content === 'string') return content;
     if (Array.isArray(content)) {
-        return content
-            .flatMap(block => extractTextFromBlock(block))
-            .join('');
+      return content.flatMap((block) => extractTextFromBlock(block)).join('');
     }
+  }
 
-    return JSON.stringify(payload);
+  return JSON.stringify(payload);
 }
 
 /**
@@ -515,8 +558,14 @@ function defaultParseCompletion(payload: any): string {
  * @param payload - Raw OpenAI JSON payload.
  * @returns Message content or the default parsing result.
  */
-function parseOpenAICompletion(payload: any): string {
-    return payload?.choices?.[0]?.message?.content || defaultParseCompletion(payload);
+function parseOpenAICompletion(payload: ProviderPayload): string {
+  if (isRecord(payload) && 'choices' in payload && Array.isArray(payload.choices) && payload.choices.length > 0) {
+    const choice = payload.choices[0];
+    if (isRecord(choice) && 'message' in choice && isRecord(choice.message) && 'content' in choice.message) {
+      return String(choice.message.content || '');
+    }
+  }
+  return defaultParseCompletion(payload);
 }
 
 /**
@@ -525,20 +574,26 @@ function parseOpenAICompletion(payload: any): string {
  * @param payload - Stream event payload.
  * @returns Concatenated chunk text or undefined when no content is present.
  */
-function parseOpenAIStreamChunk(payload: any): string | undefined {
-    if (!payload || typeof payload !== 'object') {
-        return undefined;
-    }
-
-    if ('choices' in payload && Array.isArray(payload?.choices)) {
-        const choices = payload?.choices;
-        return choices.map((choice: any) => {
-            const delta = choice.delta;
-            return delta?.content ?? delta?.text ?? '';
-        }).join('');
-    }
-
+function parseOpenAIStreamChunk(payload: ProviderPayload): string | undefined {
+  if (!isRecord(payload)) {
     return undefined;
+  }
+
+  if ('choices' in payload && Array.isArray(payload.choices)) {
+    return payload.choices
+      .map((choice: unknown) => {
+        if (!isRecord(choice) || !('delta' in choice)) return '';
+        const delta = choice.delta;
+        if (!isRecord(delta)) return '';
+
+        if ('content' in delta) return String(delta.content || '');
+        if ('text' in delta) return String(delta.text || '');
+        return '';
+      })
+      .join('');
+  }
+
+  return undefined;
 }
 
 /**
@@ -549,24 +604,24 @@ function parseOpenAIStreamChunk(payload: any): string | undefined {
  * @returns Object containing an optional system string and Anthropic-formatted messages.
  */
 function convertToAnthropicMessages(messages: AIMessage[]) {
-    const anthropicMessages = [];
-    const systemMessages: string[] = [];
+  const anthropicMessages = [];
+  const systemMessages: string[] = [];
 
-    for (const message of messages) {
-        if (message.role === 'system') {
-            systemMessages.push(message.content);
-            continue;
-        }
-        anthropicMessages.push({
-            role: message.role,
-            content: [{type: 'text', text: message.content}],
-        });
+  for (const message of messages) {
+    if (message.role === 'system') {
+      systemMessages.push(message.content);
+      continue;
     }
+    anthropicMessages.push({
+      role: message.role,
+      content: [{ type: 'text', text: message.content }],
+    });
+  }
 
-    return {
-        system: systemMessages.length ? systemMessages.join('\n') : undefined,
-        anthropicMessages,
-    };
+  return {
+    system: systemMessages.length ? systemMessages.join('\n') : undefined,
+    anthropicMessages,
+  };
 }
 
 /**
@@ -575,15 +630,12 @@ function convertToAnthropicMessages(messages: AIMessage[]) {
  * @param payload - Raw Anthropic JSON payload.
  * @returns Parsed text content, falling back to the default parser when needed.
  */
-function parseAnthropicCompletion(payload: any): string {
-    if (!Array.isArray(payload?.content)) {
-        return defaultParseCompletion(payload);
-    }
+function parseAnthropicCompletion(payload: ProviderPayload): string {
+  if (!isRecord(payload) || !('content' in payload) || !Array.isArray(payload.content)) {
+    return defaultParseCompletion(payload);
+  }
 
-    return payload.content
-        .flatMap((block: any) => extractTextFromBlock(block))
-        .join('');
-
+  return payload.content.flatMap((block: unknown) => extractTextFromBlock(block)).join('');
 }
 
 /**
@@ -592,20 +644,22 @@ function parseAnthropicCompletion(payload: any): string {
  * @param payload - Stream event payload emitted by Anthropic.
  * @returns Text chunk when available, otherwise undefined.
  */
-function parseAnthropicStreamChunk(payload: any): string | undefined {
-    if (!payload || typeof payload !== 'object') {
-        return undefined;
-    }
-
-    if ((payload.type === 'content_block_delta' || payload.type === 'message_delta') && payload.delta?.text) {
-        return payload.delta.text;
-    }
-
-    if (payload.type === 'message_start' && payload.message) {
-        return parseAnthropicCompletion(payload.message);
-    }
-
+function parseAnthropicStreamChunk(payload: ProviderPayload): string | undefined {
+  if (!isRecord(payload)) {
     return undefined;
+  }
+
+  if ('type' in payload && (payload.type === 'content_block_delta' || payload.type === 'message_delta')) {
+    if ('delta' in payload && isRecord(payload.delta) && 'text' in payload.delta) {
+      return String(payload.delta.text);
+    }
+  }
+
+  if ('type' in payload && payload.type === 'message_start' && 'message' in payload) {
+    return parseAnthropicCompletion(payload.message);
+  }
+
+  return undefined;
 }
 
 /**
@@ -616,11 +670,11 @@ function parseAnthropicStreamChunk(payload: any): string | undefined {
  * @returns Parsed chunk text or undefined when nothing could be extracted.
  */
 function defaultParseStreamChunk(payload: unknown): string | undefined {
-    if (!payload || typeof payload !== 'object') {
-        return undefined;
-    }
+  if (!payload || typeof payload !== 'object') {
+    return undefined;
+  }
 
-    return parseOpenAIStreamChunk(payload) ?? parseAnthropicStreamChunk(payload);
+  return parseOpenAIStreamChunk(payload) ?? parseAnthropicStreamChunk(payload);
 }
 
 /**
@@ -632,9 +686,9 @@ function defaultParseStreamChunk(payload: unknown): string | undefined {
  * @throws Error when no fetch implementation can be determined.
  */
 function resolveFetch(customFetch?: FetchLike): FetchLike {
-    if (customFetch) return customFetch;
-    if (!globalThis?.fetch) throw new Error('No fetch available. Provide fetch in provider config.');
-    return globalThis.fetch.bind(globalThis);
+  if (customFetch) return customFetch;
+  if (!globalThis?.fetch) throw new Error('No fetch available. Provide fetch in provider config.');
+  return globalThis.fetch.bind(globalThis);
 }
 
 /**
@@ -645,13 +699,13 @@ function resolveFetch(customFetch?: FetchLike): FetchLike {
  * @returns Headers object guaranteed to include `Content-Type`.
  */
 function ensureContentType(headers: Record<string, string>) {
-    if (Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
-        return headers;
-    }
-    return {
-        ...headers,
-        'Content-Type': 'application/json',
-    };
+  if (Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+    return headers;
+  }
+  return {
+    ...headers,
+    'Content-Type': 'application/json',
+  };
 }
 
 /**
@@ -661,10 +715,10 @@ function ensureContentType(headers: Record<string, string>) {
  * @param object - Source object to clean.
  * @returns New object without undefined values.
  */
-function cleanUndefined(object: Record<string, any>) {
-    return Object.fromEntries(
-        Object.entries(object).filter(([, v]) => v !== undefined)
-    );
+function cleanUndefined(object: Record<string, JsonValue | undefined>): Record<string, JsonValue> {
+  return Object.fromEntries(
+    Object.entries(object).filter((entry): entry is [string, JsonValue] => entry[1] !== undefined),
+  );
 }
 
 /**
@@ -675,12 +729,12 @@ function cleanUndefined(object: Record<string, any>) {
  * @returns Normalized URL string.
  */
 function joinUrl(base: string, path: string): string {
-    let normalizedBase = base;
-    while (normalizedBase.endsWith('/')) {
-        normalizedBase = normalizedBase.slice(0, -1);
-    }
+  let normalizedBase = base;
+  while (normalizedBase.endsWith('/')) {
+    normalizedBase = normalizedBase.slice(0, -1);
+  }
 
-    return `${normalizedBase}${path.startsWith('/') ? path : `/${path}`}`;
+  return `${normalizedBase}${path.startsWith('/') ? path : `/${path}`}`;
 }
 
 export type { FetchLike, ProviderRequestContext };

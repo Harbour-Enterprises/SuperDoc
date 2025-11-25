@@ -265,9 +265,6 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
   const textBox = wsp.elements.find((el) => el.name === 'wps:txbx');
   const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
 
-  // eslint-disable-next-line no-unused-vars
-  const isGraphicContainer = node.elements.find((el) => el.name === 'wp:docPr');
-
   const spPr = wsp.elements.find((el) => el.name === 'wps:spPr');
   const prstGeom = spPr?.elements.find((el) => el.name === 'a:prstGeom');
   const shapeType = prstGeom?.attributes['prst'];
@@ -461,9 +458,7 @@ const getRectangleShape = (params, node) => {
   const size = xfrm.elements.find((el) => el.name === 'a:ext');
   const solidFill = node.elements.find((el) => el.name === 'a:solidFill');
 
-  // TODO: We should handle this
-  // eslint-disable-next-line no-unused-vars
-  const outline = node.elements.find((el) => el.name === 'a:ln');
+  // TODO: We should handle outline (a:ln element)
 
   const rectangleSize = {
     top: emuToPixels(start.attributes['y']),

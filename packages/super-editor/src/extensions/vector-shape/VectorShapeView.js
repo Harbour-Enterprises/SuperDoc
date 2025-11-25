@@ -1,5 +1,5 @@
-// @ts-ignore
-import { getPresetShapeSvg } from '@preset-geometry';
+// @ts-expect-error - preset-geometry package may not have type definitions
+import { getPresetShapeSvg } from '@superdoc/preset-geometry';
 
 export class VectorShapeView {
   node;

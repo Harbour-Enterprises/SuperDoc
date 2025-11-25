@@ -8,6 +8,8 @@ export const AiMark = Mark.create({
 
   inclusive: false,
 
+  excludeFromSummaryJSON: true,
+
   addOptions() {
     return {
       htmlAttributes: { class: 'sd-ai-highlight' },
@@ -40,6 +42,8 @@ export const AiAnimationMark = Mark.create({
   inclusive: false,
   spanning: false,
   excludes: AiAnimationMarkName,
+
+  excludeFromSummaryJSON: true,
 
   addOptions() {
     return {

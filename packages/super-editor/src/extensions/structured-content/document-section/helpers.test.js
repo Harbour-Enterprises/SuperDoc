@@ -9,8 +9,8 @@ describe('document section helpers', () => {
   let editor;
   let schema;
 
-  beforeEach(() => {
-    ({ editor } = initTestEditor({ mode: 'text', content: '<p>base</p>' }));
+  beforeEach(async () => {
+    ({ editor } = await initTestEditor({ mode: 'text', content: '<p>base</p>' }));
     schema = editor.schema;
   });
 

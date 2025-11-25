@@ -76,7 +76,7 @@ export const useToolbarItem = (options) => {
   }
 
   // Activation & Deactivation
-  const activate = (attrs, ...args) => {
+  const activate = (attrs = {}, ...args) => {
     onActivate(attrs, ...args);
 
     if (suppressActiveHighlight.value) return;

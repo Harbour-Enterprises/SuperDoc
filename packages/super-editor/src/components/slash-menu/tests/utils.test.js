@@ -3,7 +3,13 @@ import { createMockEditor, createBeforeEachSetup } from './testHelpers.js';
 
 // Mock the modules first
 vi.mock('../../../core/utilities/clipboardUtils.js');
-vi.mock('../../cursor-helpers.js');
+vi.mock('../../cursor-helpers.js', async () => {
+  const actual = await vi.importActual('../../cursor-helpers.js');
+  return {
+    ...actual,
+    selectionHasNodeOrMark: vi.fn(),
+  };
+});
 vi.mock('../constants.js', () => ({
   tableActionsOptions: [{ label: 'Add Row', command: 'addRow', icon: '<svg>add-row</svg>' }],
 }));
@@ -23,12 +29,17 @@ vi.mock('@extensions/track-changes/permission-helpers.js', () => ({
   isTrackedChangeActionAllowed: vi.fn(() => true),
 }));
 
+vi.mock('@core/commands/list-helpers', () => ({
+  isList: vi.fn(() => false),
+}));
+
 import {
   getEditorContext,
   getPropsByItemId,
   __getStructureFromResolvedPosForTest,
   __isCollaborationEnabledForTest,
 } from '../utils.js';
+import { isList } from '@core/commands/list-helpers';
 import { readFromClipboard } from '../../../core/utilities/clipboardUtils.js';
 import { selectionHasNodeOrMark } from '../../cursor-helpers.js';
 import { undoDepth, redoDepth } from 'prosemirror-history';
@@ -74,12 +85,8 @@ describe('utils.js', () => {
 
   describe('getEditorContext', () => {
     it('should return comprehensive editor context', async () => {
-      // Mock returns object with html/text properties (not ProseMirror content)
-      mockReadFromClipboard.mockResolvedValue({
-        html: '<p>clipboard html</p>',
-        text: 'clipboard text',
-      });
-
+      // Note: getEditorContext() no longer reads clipboard proactively.
+      // Clipboard reading is deferred to paste action to avoid permission prompts.
       mockSelectionHasNodeOrMark.mockReturnValue(false);
 
       const context = await getEditorContext(mockEditor);
@@ -108,15 +115,12 @@ describe('utils.js', () => {
         canRedo: true,
         isEditable: true,
 
-        // Clipboard
+        // Clipboard - stubbed to avoid permission prompts
         clipboardContent: {
-          html: '<p>clipboard html</p>',
-          text: 'clipboard text',
-          hasContent: true,
-          raw: {
-            html: '<p>clipboard html</p>',
-            text: 'clipboard text',
-          },
+          html: null,
+          text: null,
+          hasContent: true, // Optimistic assumption
+          raw: null,
         },
 
         // Position and trigger info
@@ -128,6 +132,9 @@ describe('utils.js', () => {
         // Editor reference
         editor: mockEditor,
       });
+
+      // Verify clipboard is not read during context gathering
+      expect(mockReadFromClipboard).not.toHaveBeenCalled();
     });
 
     it('should handle empty selection', async () => {
@@ -212,6 +219,7 @@ describe('utils.js', () => {
         nodeAfter: null,
       });
 
+      isList.mockReturnValue(true);
       const context = await getEditorContext(mockEditor, mockEvent);
 
       expect(context.pos).toBe(20);
@@ -366,7 +374,28 @@ describe('utils.js', () => {
       expect(context.canRedo).toBe(false);
     });
 
-    it('should handle clipboard content variations', async () => {
+    it('should return stubbed clipboard content to avoid permission prompts', async () => {
+      // getEditorContext() no longer reads clipboard proactively to avoid
+      // triggering browser permission prompts when slash menu opens.
+      // Clipboard is read lazily when user actually clicks the paste action.
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+
+      const context = await getEditorContext(mockEditor);
+
+      expect(context.clipboardContent).toEqual({
+        html: null,
+        text: null,
+        hasContent: true, // Optimistic assumption - clipboard might have content
+        raw: null,
+      });
+
+      // Verify we don't trigger permission prompts by reading clipboard
+      expect(mockReadFromClipboard).not.toHaveBeenCalled();
+    });
+
+    it('should provide consistent clipboard stub regardless of actual clipboard state', async () => {
+      // Even if clipboard utility is mocked with data, getEditorContext() should
+      // not call it during context gathering to maintain UX improvement
       mockReadFromClipboard.mockResolvedValue({
         html: '<p>rich content</p>',
         text: 'plain content',
@@ -376,44 +405,34 @@ describe('utils.js', () => {
       const context = await getEditorContext(mockEditor);
 
       expect(context.clipboardContent).toEqual({
-        html: '<p>rich content</p>',
-        text: 'plain content',
+        html: null,
+        text: null,
         hasContent: true,
-        raw: {
-          html: '<p>rich content</p>',
-          text: 'plain content',
-        },
+        raw: null,
       });
+
+      // Clipboard should not be read during context gathering
+      expect(mockReadFromClipboard).not.toHaveBeenCalled();
     });
 
-    it('should detect clipboard content from ProseMirror slices', async () => {
-      const slice = { size: 3 };
-      mockReadFromClipboard.mockResolvedValue(slice);
+    it('should defer clipboard reading to paste action handler', async () => {
+      // This test documents the architectural decision: clipboard reading
+      // was moved from eager (context gathering) to lazy (paste action).
+      // Actual paste functionality is tested in SlashMenu.test.js
       mockSelectionHasNodeOrMark.mockReturnValue(false);
 
       const context = await getEditorContext(mockEditor);
 
-      expect(context.clipboardContent).toEqual({
-        html: null,
-        text: null,
-        hasContent: true,
-        raw: slice,
-      });
-    });
+      // Context provides clipboard stub
+      expect(context.clipboardContent.hasContent).toBe(true);
 
-    it('should detect clipboard content from nested slice structure', async () => {
-      const slice = { content: { size: 2 } };
-      mockReadFromClipboard.mockResolvedValue(slice);
-      mockSelectionHasNodeOrMark.mockReturnValue(false);
+      // But actual clipboard data is null until paste is invoked
+      expect(context.clipboardContent.html).toBeNull();
+      expect(context.clipboardContent.text).toBeNull();
+      expect(context.clipboardContent.raw).toBeNull();
 
-      const context = await getEditorContext(mockEditor);
-
-      expect(context.clipboardContent).toEqual({
-        html: null,
-        text: null,
-        hasContent: true,
-        raw: slice,
-      });
+      // No clipboard read during context gathering
+      expect(mockReadFromClipboard).not.toHaveBeenCalled();
     });
   });
 
@@ -421,6 +440,8 @@ describe('utils.js', () => {
     let mockProps;
 
     beforeEach(() => {
+      isList.mockReset();
+      isList.mockReturnValue(false);
       mockProps = {
         editor: mockEditor,
         closePopover: vi.fn(),

@@ -1,5 +1,4 @@
-import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
-import type { Node as PmNode } from 'prosemirror-model';
+import type { EditorState, Transaction } from 'prosemirror-state';
 import type { Doc as YDoc, XmlFragment as YXmlFragment } from 'yjs';
 import type { Editor } from '../Editor.js';
 import type { Extension } from '../Extension.js';
@@ -10,7 +9,6 @@ import type {
   Comment,
   CommentsPayload,
   CommentLocationsPayload,
-  PaginationPayload,
   ListDefinitionsPayload,
 } from './EditorEvents.js';
 import type { ProseMirrorJSON, TelemetryData } from './EditorTypes.js';
@@ -70,7 +68,10 @@ export interface CollaborationProvider {
 /**
  * Any extension supported by the editor (node, mark, or extension)
  */
-export type EditorExtension = Extension<any, any> | EditorNode<any, any> | EditorMark<any, any>;
+export type EditorExtension =
+  | Extension<Record<string, unknown>, Record<string, unknown>>
+  | EditorNode<Record<string, unknown>, Record<string, unknown>>
+  | EditorMark<Record<string, unknown>, Record<string, unknown>>;
 
 /**
  * Permission resolver parameters
@@ -186,6 +187,9 @@ export interface EditorOptions {
   /** Whether the document content was generated from schema */
   loadFromSchema?: boolean;
 
+  /** Whether to skip creating the ProseMirror view (layout mode) */
+  skipViewCreation?: boolean;
+
   /** Numbering configuration */
   numbering?: Record<string, unknown>;
 
@@ -193,9 +197,6 @@ export interface EditorOptions {
   isHeaderOrFooter?: boolean;
 
   /** Optional pagination metadata */
-  pagination?: Record<string, unknown> | null;
-
-  /** Last selection state */
   lastSelection?: unknown | null;
 
   /** Prevent default styles from being applied in docx mode */
@@ -212,6 +213,9 @@ export interface EditorOptions {
 
   /** Whether to enable debug mode */
   isDebug?: boolean;
+
+  /** Whether to disable the context menu (slash menu and right-click menu) */
+  disableContextMenu?: boolean;
 
   /** Docx xml updated by User */
   customUpdatedFiles?: Record<string, string>;
@@ -296,9 +300,6 @@ export interface EditorOptions {
 
   /** Called when collaboration is ready */
   onCollaborationReady?: (params: { editor: Editor; ydoc: unknown }) => void;
-
-  /** Called when pagination updates */
-  onPaginationUpdate?: (params: PaginationPayload) => void;
 
   /** Called when an exception occurs */
   onException?: (params: { error: Error; editor: Editor }) => void;

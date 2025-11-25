@@ -1,14 +1,12 @@
 /**
  * Convert a string to snake_case
  */
-export const snakeCase = (str: string): string =>
-  str.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`);
+export const snakeCase = (str: string): string => str.replace(/[A-Z]/g, (match) => `_${match.toLowerCase()}`);
 
 /**
  * Convert a string to kebab-case
  */
-export const kebabCase = (str: string): string =>
-  str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
+export const kebabCase = (str: string): string => str.replace(/[A-Z]/g, (match) => `-${match.toLowerCase()}`);
 
 /**
  * Convert a string to camelCase
@@ -27,8 +25,8 @@ type UnknownDict = Record<string, unknown>;
 export type CamelCase<S extends string> = S extends `${infer P1}_${infer P2}${infer P3}`
   ? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}`
   : S extends `${infer P1}-${infer P2}${infer P3}`
-  ? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}`
-  : Lowercase<S>;
+    ? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}`
+    : Lowercase<S>;
 
 /**
  * Recursive type to convert camelCase string to snake_case at type level
@@ -58,9 +56,7 @@ export type SnakeCaseKeys<T extends UnknownDict> = {
  * @param linkComments - Array of objects with snake_case or kebab-case keys
  * @returns Array of objects with camelCase keys, preserving value types
  */
-export const camelizeKeys = <T extends UnknownDict>(
-  linkComments: T[]
-): CamelizeKeys<T>[] => {
+export const camelizeKeys = <T extends UnknownDict>(linkComments: T[]): CamelizeKeys<T>[] => {
   return linkComments.map((comment) =>
     Object.keys(comment).reduce((camelized, key) => {
       (camelized as UnknownDict)[camelize(key)] = comment[key];
@@ -74,9 +70,7 @@ export const camelizeKeys = <T extends UnknownDict>(
  * @param comments - Array of objects with camelCase keys
  * @returns Array of objects with snake_case keys, preserving value types
  */
-export const snakeCaseKeys = <T extends UnknownDict>(
-  comments: T[]
-): SnakeCaseKeys<T>[] => {
+export const snakeCaseKeys = <T extends UnknownDict>(comments: T[]): SnakeCaseKeys<T>[] => {
   return comments.map((comment) =>
     Object.keys(comment).reduce((snaked, key) => {
       (snaked as UnknownDict)[snakeCase(key)] = comment[key];

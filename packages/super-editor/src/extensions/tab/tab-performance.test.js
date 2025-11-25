@@ -52,7 +52,7 @@ describe('tab plugin performance', () => {
 
     return {
       type: 'paragraph',
-      attrs: { tabStops },
+      attrs: { paragraphProperties: { tabStops } },
       content,
     };
   };

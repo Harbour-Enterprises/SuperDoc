@@ -29,6 +29,8 @@ export const Mention = Node.create({
 
   selectable: false,
 
+  excludeFromSummaryJSON: true,
+
   atom: true,
 
   addOptions() {

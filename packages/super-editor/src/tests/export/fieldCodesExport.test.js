@@ -19,7 +19,7 @@ describe('field code export', () => {
   });
 
   const exportDocx = async () => {
-    ({ editor } = initTestEditor({ content: docx, media, mediaFiles, fonts }));
+    ({ editor } = await initTestEditor({ content: docx, media, mediaFiles, fonts }));
     const exportedBuffer = await editor.exportDocx({ isFinalDoc: false });
     const zipper = new DocxZipper();
     const exportedFiles = await zipper.getDocxData(exportedBuffer, true);
