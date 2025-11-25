@@ -12,14 +12,12 @@ export const SYSTEM_PROMPTS = {
 export const buildFindPrompt = (query: string, documentContext: string, findAll: boolean): string => {
     const scopeInstruction = findAll ? 'ALL occurrences' : 'the FIRST occurrence ONLY';
 
-    return `You are a document search assistant.
+    return `You are a strict document search assistant.
       Task:
-      - In the document context, locate ${scopeInstruction} that best match the user request.
-      - Interpret the user request as a description of the desired text (term, clause, or definition); it might not be an exact character-for-character match.
-      - Treat punctuation, capitalization, smart quotes vs. straight quotes, and minor wording differences as equivalent when identifying the match.
-      - If the request references a defined term or section, return the entire relevant sentence/definition from the document.
-      - Always copy the matched text exactly as it appears in the document when returning it.
-      - Do NOT include any surrounding text before or after the match beyond what is necessary to satisfy the request.
+      - In the document context, locate ${scopeInstruction} that match the user request exactly.
+      - User request (treat this as the literal text or exact criteria to match): "${query}"
+      - Return ONLY the exact matched text from the document.
+      - Do NOT include any surrounding text before or after the match.
       - Do NOT modify, transform, summarize, or interpret the text.
       - Do NOT add explanations or metadata.
       
@@ -40,67 +38,41 @@ export const buildReplacePrompt = (query: string, documentContext: string, repla
         ? 'ALL occurrences'
         : 'FIRST occurrence ONLY';
 
-    return `You are a document-editing engine. Read the user request and identify what text to find and what action to perform.
-
-            OPERATION TYPES:
-            
-            1. FIND & REPLACE TEXT
-               - When user says: "replace X with Y", "change X to Y", "update X", "delete X"
-               - Find EXACT match: ${scope} of the text to replace
-               - originalText: the exact text found in document
-               - suggestedText: the replacement text
+    return `You are a document-editing engine. Read the user request in ${query} and perform ONE of the following operation types:
+            1. FIND & REPLACE (if the request involves replacing, deleting, inserting, or redlining text)
+               - Search for EXACT matches of: ${scope}
+               - Replace ONLY the matched text (no surrounding text).
+               - Use minimal spans for originalText and suggestedText.
                - Case, spacing, punctuation must match exactly.
+               - If no exact match found → success = false.
             
-            2. FIND & ADD COMMENT
-               - When user says: "add comment to X", "comment on X", "note about X", "review X"
-               - Find EXACT match: ${scope} of the text to comment on
-               - originalText: the exact text found in document (the text to attach comment to)
-               - suggestedText: the comment text to add (NOT a replacement - the original text stays unchanged)
-               - Example: "Add comment to clause 4.2(b)" → find "clause 4.2(b)", suggestedText is the comment
+            2. SUMMARIZE / CLARIFY / REWRITE (if the request involves summarizing or improving text)
+               - Ignore find/replace logic.
+               - Preserve meaning.
             
-            3. FIND & HIGHLIGHT / MARK
-               - When user says: "highlight X", "mark X", "emphasize X"
-               - Find EXACT match: ${scope} of the text
-               - originalText: the exact text found
-               - suggestedText: same as originalText (no replacement needed)
-            
-            4. FIND & SUGGEST IMPROVEMENTS (Tracked Changes)
-               - When user says: "improve X", "suggest changes to X", "redline X"
-               - Find EXACT match: ${scope} of the text
-               - originalText: the exact text found
-               - suggestedText: the improved/modified version
-            
-            5. SUMMARIZE / CLARIFY / REWRITE
-               - When user says: "summarize X", "clarify X", "rewrite X"
-               - Find the relevant text section
-               - originalText: the text to summarize/clarify
-               - suggestedText: the summarized/clarified version
-            
-            CRITICAL RULES:
-            - ALWAYS find the EXACT text mentioned in the user request from the document
-            - For "add comment to X" or "comment on X": originalText = X (found text), suggestedText = comment content
-            - For "replace X with Y": originalText = X, suggestedText = Y
-            - Use minimal, precise spans - match exactly what's in the document
-            - If the exact text cannot be found → success = false
-            - For ${scope}: return all matches or just the first match accordingly
+            3. GENERAL EDITING / REDLINING
+               - Trigger when the user request asks for improvements requiring redlines.
+               - Provide improved text with inline redlines.
+               - Keep edits minimal and precise.
             
             ---------------------
-            RESPONSE FORMAT (always valid JSON):
+            RESPONSE FORMAT (always):
             {
               "success": boolean,
               "results": [
                 {
-                  "originalText": "exact text from document",
-                  "suggestedText": "replacement/comment/improvement text"
+                  "originalText": "string",
+                  "suggestedText": "string"
                 }
               ]
             }
             
-            - For multiple operations, add multiple entries in results array
+            Rules:
+            - For multiple replacements, add multiple entries.
             - No explanations. No extra text outside JSON.
             ---------------------
             
-            Document context:
+            Document:
             ${documentContext}
             
             User Request:

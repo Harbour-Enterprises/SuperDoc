@@ -290,9 +290,6 @@ export class AIActionsService {
             try {
                 // Check if this position overlaps with any already processed range
                 if (this.hasOverlap(position, processedRanges)) {
-                    if (this.enableLogging) {
-                        console.debug(`Skipping overlapping position ${position.from}-${position.to} for "${result.originalText}"`);
-                    }
                     continue;
                 }
                 
