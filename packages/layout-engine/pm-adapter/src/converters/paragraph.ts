@@ -202,16 +202,23 @@ export function paragraphToFlowBlocks(
   }
 
   if (!para.content || para.content.length === 0) {
+    // Get the PM position of the empty paragraph for caret rendering
+    const paraPos = positions.get(para);
+    const emptyRun: TextRun = {
+      text: '',
+      fontFamily: defaultFont,
+      fontSize: defaultSize,
+    };
+    // For empty paragraphs, the cursor position is inside the paragraph (start + 1)
+    // The range spans from the opening to closing position of the paragraph
+    if (paraPos) {
+      emptyRun.pmStart = paraPos.start + 1;
+      emptyRun.pmEnd = paraPos.start + 1;
+    }
     blocks.push({
       kind: 'paragraph',
       id: baseBlockId,
-      runs: [
-        {
-          text: '',
-          fontFamily: defaultFont,
-          fontSize: defaultSize,
-        },
-      ],
+      runs: [emptyRun],
       attrs: cloneParagraphAttrs(paragraphAttrs),
     });
     return blocks;

@@ -466,6 +466,9 @@ export class PresentationEditor extends EventEmitter {
     this.#viewportHost.className = 'presentation-editor__viewport';
     this.#viewportHost.style.position = 'relative';
     this.#viewportHost.style.width = '100%';
+    // Set min-height to at least one page so the viewport is clickable before layout renders
+    const pageHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    this.#viewportHost.style.minHeight = `${pageHeight}px`;
     this.#visibleHost.appendChild(this.#viewportHost);
 
     this.#painterHost = doc.createElement('div');
@@ -2169,17 +2172,27 @@ export class PresentationEditor extends EventEmitter {
         return;
       }
 
-      // Set cursor to start of document (position 0)
-      const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, 0));
-      try {
-        this.#editor.view?.dispatch(tr);
-      } catch {
-        // Error dispatching selection
+      // Find the first valid text position in the document
+      const validPos = this.#getFirstTextPosition();
+      const doc = this.#editor?.state?.doc;
+
+      if (doc) {
+        try {
+          const tr = this.#editor.state.tr.setSelection(TextSelection.create(doc, validPos));
+          this.#editor.view?.dispatch(tr);
+        } catch (error) {
+          // Error dispatching selection - this can happen if the document is in an invalid state
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[PresentationEditor] Failed to set selection to first text position:', error);
+          }
+        }
       }
 
       // Focus the hidden editor
       editorDom.focus();
       this.#editor.view?.focus();
+      // Force selection update to render the caret
+      this.#scheduleSelectionUpdate();
 
       return;
     }
@@ -2219,10 +2232,40 @@ export class PresentationEditor extends EventEmitter {
       event.clientX,
       event.clientY,
     );
+    event.preventDefault();
+
+    // Even if clickToPosition returns null (clicked outside text content),
+    // we still want to focus the editor so the user can start typing
     if (!hit) {
+      // Blur any currently focused element
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+
+      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+      if (editorDom) {
+        // Find the first valid text position in the document
+        const validPos = this.#getFirstTextPosition();
+        const doc = this.#editor?.state?.doc;
+
+        if (doc) {
+          try {
+            const tr = this.#editor.state.tr.setSelection(TextSelection.create(doc, validPos));
+            this.#editor.view?.dispatch(tr);
+          } catch (error) {
+            // Error dispatching selection - this can happen if the document is in an invalid state
+            if (process.env.NODE_ENV === 'development') {
+              console.warn('[PresentationEditor] Failed to set selection to first text position:', error);
+            }
+          }
+        }
+        editorDom.focus();
+        this.#editor.view?.focus();
+        // Force selection update to render the caret
+        this.#scheduleSelectionUpdate();
+      }
       return;
     }
-    event.preventDefault();
     const clickDepth = this.#registerPointerClick(event);
     let handledByDepth = false;
     if (this.#session.mode === 'body') {
@@ -2237,8 +2280,11 @@ export class PresentationEditor extends EventEmitter {
       const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, hit.pos));
       try {
         this.#editor.view?.dispatch(tr);
-      } catch {
-        // Error dispatching selection
+      } catch (error) {
+        // Error dispatching selection - this can happen if the position is invalid
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to dispatch selection at position:', hit.pos, error);
+        }
       }
     }
 
@@ -2262,6 +2308,35 @@ export class PresentationEditor extends EventEmitter {
     editorDom.focus();
     this.#editor.view?.focus();
   };
+
+  /**
+   * Finds the first valid text position in the document.
+   *
+   * Traverses the document tree to locate the first textblock node (paragraph, heading, etc.)
+   * and returns a position inside it. This is used when focusing the editor but no specific
+   * position is available (e.g., clicking outside text content or before layout is ready).
+   *
+   * @returns The position inside the first textblock, or 1 if no textblock is found
+   * @private
+   */
+  #getFirstTextPosition(): number {
+    const doc = this.#editor?.state?.doc;
+    if (!doc || !doc.content) {
+      return 1; // Fallback to position 1 if doc is not available
+    }
+
+    let validPos = 1; // Default to position 1 (after doc open tag)
+
+    doc.nodesBetween(0, doc.content.size, (node, pos) => {
+      if (node.isTextblock) {
+        validPos = pos + 1; // Position inside the textblock
+        return false; // Stop iteration
+      }
+      return true; // Continue searching
+    });
+
+    return validPos;
+  }
 
   /**
    * Registers a pointer click event and tracks multi-click sequences (double, triple).
@@ -2370,7 +2445,10 @@ export class PresentationEditor extends EventEmitter {
     try {
       this.#editor.view?.dispatch(tr);
       return true;
-    } catch {
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] Failed to select word:', error);
+      }
       return false;
     }
   }
@@ -2425,7 +2503,10 @@ export class PresentationEditor extends EventEmitter {
     try {
       this.#editor.view?.dispatch(tr);
       return true;
-    } catch {
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] Failed to select paragraph:', error);
+      }
       return false;
     }
   }
@@ -3405,7 +3486,11 @@ export class PresentationEditor extends EventEmitter {
     try {
       const pluginState = TrackChangesBasePluginKey.getState(state);
       return pluginState ?? null;
-    } catch {
+    } catch (error) {
+      // Plugin may not be loaded or state may be invalid
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] Failed to get track changes plugin state:', error);
+      }
       return null;
     }
   }
@@ -3760,8 +3845,11 @@ class PresentationInputBridge {
       }
       try {
         this.#currentTarget.dispatchEvent(synthetic);
-      } catch {
-        // ignore dispatch failures
+      } catch (error) {
+        // Ignore dispatch failures - can happen if target was removed from DOM
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to dispatch composition event:', error);
+        }
       }
     }
     this.#currentTarget = nextTarget;

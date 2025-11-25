@@ -483,7 +483,8 @@ const toggleCommentsPanel = () => {
 };
 
 onMounted(async () => {
-  handleNewFile(await getFileObject(BlankDOCX, 'test.docx', DOCX));
+  const blankFile = await getFileObject(BlankDOCX, 'test.docx', DOCX);
+  handleNewFile(blankFile);
 });
 
 const toggleLayoutEngine = () => {
