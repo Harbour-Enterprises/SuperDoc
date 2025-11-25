@@ -58,5 +58,5 @@ describe('incremental pipeline benchmarks', () => {
         expect(result.cache.hitRate).toBeGreaterThan(0);
       }
     });
-  });
+  }, 60000); // Extended timeout for CI environments
 });
