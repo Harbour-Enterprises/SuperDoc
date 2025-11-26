@@ -3,7 +3,7 @@ import { translator as mc_AlternateContent_translator } from './mc/altermateCont
 import { translator as sd_pageReference_translator } from './sd/pageReference/pageReference-translator.js';
 import { translator as sd_tableOfContents_translator } from './sd/tableOfContents/tableOfContents-translator.js';
 import { translator as sd_autoPageNumber_translator } from './sd/autoPageNumber/autoPageNumber-translator.js';
-import { translator as sd_totalPageNumber_translator } from './sd/autoPageNumber/autoPageNumber-translator.js';
+import { translator as sd_totalPageNumber_translator } from './sd/totalPageNumber/totalPageNumber-translator.js';
 import { translator as w_adjustRightInd_translator } from './w/adjustRightInd/adjustRightInd-translator.js';
 import { translator as w_autoSpaceDE_translator } from './w/autoSpaceDE/autoSpaceDE-translator.js';
 import { translator as w_autoSpaceDN_translator } from './w/autoSpaceDN/autoSpaceDN-translator.js';
