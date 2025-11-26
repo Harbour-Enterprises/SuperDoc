@@ -13,6 +13,6 @@ export async function createZip(blobs, fileNames) {
     zip.file(fileNames[index], blob);
   });
 
-  const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const zipBlob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
   return zipBlob;
 }
