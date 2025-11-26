@@ -10,7 +10,9 @@ import {
   calcTabHeight,
   getBlockNodeWidth,
   getIndentWidth,
+  extractParagraphContext,
 } from './tabDecorations.js';
+import { getParagraphContext } from './paragraphContextCache.js';
 
 const leaderStyles = {
   dot: 'border-bottom: 1px dotted black;',
@@ -43,6 +45,10 @@ export function createLayoutRequest(doc, paragraphPos, view, helpers, revision, 
   const paragraphId = paragraphIdFromPos(paragraphContext.startPos);
 
   const paragraphNode = paragraphContext.paragraph;
+  const cachedContext = getParagraphContext(paragraphNode, paragraphContext.startPos, helpers, revision, () =>
+    extractParagraphContext(paragraphNode, paragraphContext.startPos, helpers, paragraphContext.paragraphDepth),
+  );
+  const effectiveContext = cachedContext || paragraphContext;
   const { entries } = flattenParagraph(paragraphNode, paragraphContext.startPos);
 
   const spans = [];
@@ -74,18 +80,18 @@ export function createLayoutRequest(doc, paragraphPos, view, helpers, revision, 
   });
 
   // Convert tab stops (twips → px) and add implicit hanging indent stop if needed
-  const tabStops = Array.isArray(paragraphContext.tabStops) ? [...paragraphContext.tabStops] : [];
+  const tabStops = Array.isArray(effectiveContext.tabStops) ? [...effectiveContext.tabStops] : [];
 
-  const hangingPx = twipsToPixels(Number(paragraphContext.indent?.hanging) || 0);
-  if (hangingPx > 0 && paragraphContext.indentWidth != null) {
-    tabStops.unshift({ val: 'start', pos: paragraphContext.indentWidth + hangingPx, leader: 'none' });
+  const hangingPx = twipsToPixels(Number(effectiveContext.indent?.hanging) || 0);
+  if (hangingPx > 0 && effectiveContext.indentWidth != null) {
+    tabStops.unshift({ val: 'start', pos: effectiveContext.indentWidth + hangingPx, leader: 'none' });
   }
 
   const paragraphWidth =
-    paragraphWidthOverride ?? getBlockNodeWidth(view, paragraphContext.startPos) ?? defaultLineLength;
+    paragraphWidthOverride ?? getBlockNodeWidth(view, effectiveContext.startPos) ?? defaultLineLength;
 
   const indentWidth =
-    paragraphContext.indentWidth ?? getIndentWidth(view, paragraphContext.startPos, paragraphContext.indent);
+    effectiveContext.indentWidth ?? getIndentWidth(view, effectiveContext.startPos, effectiveContext.indent);
 
   return {
     paragraphId,
@@ -94,9 +100,9 @@ export function createLayoutRequest(doc, paragraphPos, view, helpers, revision, 
     defaultTabDistance,
     defaultLineLength,
     indents: {
-      left: twipsToPixels(Number(paragraphContext.indent?.left) || 0),
-      right: twipsToPixels(Number(paragraphContext.indent?.right) || 0),
-      firstLine: twipsToPixels(Number(paragraphContext.indent?.firstLine) || 0),
+      left: twipsToPixels(Number(effectiveContext.indent?.left) || 0),
+      right: twipsToPixels(Number(effectiveContext.indent?.right) || 0),
+      firstLine: twipsToPixels(Number(effectiveContext.indent?.firstLine) || 0),
       hanging: hangingPx,
     },
     tabStops,

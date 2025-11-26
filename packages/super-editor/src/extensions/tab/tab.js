@@ -3,6 +3,7 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import { DecorationSet } from 'prosemirror-view';
 import { isHeadless } from '@/utils/headless-helpers.js';
 import { createLayoutRequest, calculateTabLayout, applyLayoutResult } from './helpers/tabAdapter.js';
+import { clearAllParagraphContexts } from './helpers/paragraphContextCache.js';
 
 /**
  * Configuration options for TabNode
@@ -77,24 +78,47 @@ export const TabNode = Node.create({
       key: new PluginKey('tabPlugin'),
       state: {
         init() {
-          return { decorations: false, revision: 0 };
+          const initialDecorations = buildInitialDecorations(view.state.doc, view, helpers, 0);
+          return { decorations: initialDecorations, revision: 0 };
         },
         apply(tr, { decorations, revision }, _oldState, newState) {
-          // Initialize decorations on first call
-          if (!decorations) {
-            const newDecorations = buildDecorations(newState.doc, view, helpers, 0);
-            return { decorations: newDecorations, revision: 0 };
-          }
+          const currentDecorations =
+            decorations && decorations.map ? decorations.map(tr.mapping, tr.doc) : DecorationSet.empty;
 
           // Early return for non-document changes
           if (!tr.docChanged || tr.getMeta('blockNodeInitialUpdate')) {
-            return { decorations, revision };
+            return { decorations: currentDecorations, revision };
           }
 
-          // Recompute decorations for the document (coarse-grained; can be optimized later)
-          const nextRevision = revision + 1;
-          const newDecorations = buildDecorations(newState.doc, view, helpers, nextRevision);
-          return { decorations: newDecorations, revision: nextRevision };
+          const affectedParagraphs = getAffectedParagraphStarts(tr, newState);
+          if (affectedParagraphs.size === 0) {
+            return { decorations: currentDecorations, revision };
+          }
+
+          let nextDecorations = currentDecorations;
+          affectedParagraphs.forEach((pos) => {
+            const paragraph = newState.doc.nodeAt(pos);
+            if (!paragraph || paragraph.type.name !== 'paragraph') return;
+
+            const from = pos;
+            const to = pos + paragraph.nodeSize;
+            const existing = nextDecorations.find(from, to);
+            if (existing?.length) {
+              nextDecorations = nextDecorations.remove(existing);
+            }
+
+            const paragraphDecorations = buildParagraphDecorations(
+              newState.doc,
+              pos + 1,
+              paragraph,
+              view,
+              helpers,
+              revision + 1,
+            );
+            nextDecorations = nextDecorations.add(newState.doc, paragraphDecorations);
+          });
+
+          return { decorations: nextDecorations, revision: revision + 1 };
         },
       },
       props: {
@@ -102,12 +126,20 @@ export const TabNode = Node.create({
           return this.getState(state).decorations;
         },
       },
+      view() {
+        return {
+          destroy() {
+            // Clear paragraph context cache on plugin destruction to prevent memory leaks
+            clearAllParagraphContexts();
+          },
+        };
+      },
     });
     return [tabPlugin];
   },
 });
 
-function buildDecorations(doc, view, helpers, revision) {
+function buildInitialDecorations(doc, view, helpers, revision) {
   const decorations = [];
   doc.descendants((node, pos) => {
     if (node.type.name !== 'paragraph') return;
@@ -128,4 +160,57 @@ function buildDecorations(doc, view, helpers, revision) {
     decorations.push(...paragraphDecorations);
   });
   return DecorationSet.create(doc, decorations);
+}
+
+function buildParagraphDecorations(doc, paragraphContentPos, paragraphNode, view, helpers, revision) {
+  const request = createLayoutRequest(doc, paragraphContentPos, view, helpers, revision);
+  if (!request) return [];
+  const result = calculateTabLayout(request, undefined, view);
+  return applyLayoutResult(result, paragraphNode, paragraphContentPos - 1);
+}
+
+/**
+ * Identifies paragraphs affected by transaction steps.
+ * Recomputes all paragraphs in the affected range, relying on paragraph context caching
+ * to make this efficient. Checks mapped positions for validity to avoid invalid additions.
+ *
+ * @param {import('prosemirror-state').Transaction} tr - The transaction
+ * @param {import('prosemirror-state').EditorState} newState - The new editor state
+ * @returns {Set<number>} Set of paragraph start positions
+ */
+function getAffectedParagraphStarts(tr, newState) {
+  const affected = new Set();
+
+  tr.steps.forEach((step, index) => {
+    // Only consider steps that touch the document
+    if (step.from == null && step.to == null) return;
+
+    // Map positions through subsequent step mappings to get final positions
+    let fromPos = step.from;
+    let toPos = step.to;
+    if (typeof fromPos !== 'number' || typeof toPos !== 'number') return;
+
+    for (let i = index; i < tr.steps.length; i++) {
+      const stepMap = tr.steps[i].getMap();
+      fromPos = stepMap.map(fromPos, -1);
+      toPos = stepMap.map(toPos, 1);
+    }
+
+    // Check for invalid mapped positions (-1 indicates deleted positions)
+    if (fromPos < 0 || toPos < 0 || fromPos > newState.doc.content.size || toPos > newState.doc.content.size) {
+      return;
+    }
+
+    // Find all paragraphs in the affected range
+    // Caching makes this efficient even without tab presence checking
+    newState.doc.nodesBetween(fromPos, toPos, (node, pos) => {
+      if (node.type.name === 'paragraph') {
+        affected.add(pos);
+        return false;
+      }
+      return true;
+    });
+  });
+
+  return affected;
 }

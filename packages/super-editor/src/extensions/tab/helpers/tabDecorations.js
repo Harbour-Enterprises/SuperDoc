@@ -130,7 +130,7 @@ export function calculateTabStyle(
 
     paragraphContext.accumulatedTabWidth = accumulatedTabWidth + tabWidth;
     return `width: ${tabWidth}px; height: ${tabHeight}; ${extraStyles}`;
-  } catch (error) {
+  } catch {
     return null;
   }
 }
