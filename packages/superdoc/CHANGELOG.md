@@ -1,3 +1,9 @@
+# [0.33.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.32.0...v0.33.0) (2025-11-26)
+
+### Features
+
+- compress docx file on export ([#1344](https://github.com/Harbour-Enterprises/SuperDoc/issues/1344)) ([4c223a3](https://github.com/Harbour-Enterprises/SuperDoc/commit/4c223a3470c198624a895b5cc354201f573c7be9))
+
 # [0.32.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.3...v0.32.0) (2025-11-25)
 
 ### Features
