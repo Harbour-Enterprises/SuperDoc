@@ -856,7 +856,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
 async function measureTableBlock(block: TableBlock, constraints: MeasureConstraints): Promise<TableMeasure> {
   const maxWidth = typeof constraints === 'number' ? constraints : constraints.maxWidth;
-  const gridColumnCount = block.columnWidths?.length ?? 0;
 
   let columnWidths: number[];
 
@@ -878,6 +877,9 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
     const columnWidth = Math.max(1, Math.floor(maxWidth / maxCellCount));
     columnWidths = Array.from({ length: maxCellCount }, () => columnWidth);
   }
+
+  // Derive grid column count from computed columnWidths (handles both explicit tblGrid and fallback cases)
+  const gridColumnCount = columnWidths.length;
 
   /**
    * Calculate the width for a cell by summing the grid column widths it spans.
