@@ -455,7 +455,7 @@ describe('PresentationEditor', () => {
       expect(mockEditorInstance.setOptions).toHaveBeenCalledWith({ disableContextMenu: true });
     });
 
-    it('forwards keyboard events to the hidden editor via the input bridge', () => {
+    it('forwards keyboard events to the hidden editor via the input bridge', async () => {
       editor = new PresentationEditor({
         element: container,
         documentId: 'test-doc',
@@ -466,10 +466,199 @@ describe('PresentationEditor', () => {
       ].value;
       const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
 
-      const event = new KeyboardEvent('keydown', { key: '/' });
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
       container.dispatchEvent(event);
+      await Promise.resolve();
 
       expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'keydown' }));
+    });
+
+    it('does not forward keyboard events when default is prevented', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      const preventHandler = vi.fn((e) => e.preventDefault());
+      container.addEventListener('keydown', preventHandler, { capture: true });
+
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+      container.dispatchEvent(event);
+      await Promise.resolve();
+      container.removeEventListener('keydown', preventHandler, { capture: true });
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not forward keyboard events from registered UI surfaces', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      const uiSurface = document.createElement('div');
+      uiSurface.setAttribute('data-editor-ui-surface', '');
+      container.appendChild(uiSurface);
+
+      const event = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true });
+      uiSurface.dispatchEvent(event);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not forward keyboard events with keyCode 229 (IME)', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Create keyboard event with keyCode 229 (IME composition)
+      const event = new KeyboardEvent('keydown', {
+        key: 'Process',
+        keyCode: 229,
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(event);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not forward keyboard events during composition (isComposing)', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Create keyboard event with isComposing flag
+      const event = new KeyboardEvent('keydown', {
+        key: 'a',
+        bubbles: true,
+        cancelable: true,
+      });
+      // Manually set isComposing property (some browsers don't support it in the init dict)
+      Object.defineProperty(event, 'isComposing', { value: true, writable: false });
+
+      container.dispatchEvent(event);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not forward plain character keys without modifiers', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Plain character keys should be handled by beforeinput, not forwarded via keydown
+      const event = new KeyboardEvent('keydown', {
+        key: 'a',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(event);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('forwards keyboard shortcuts with modifiers like Ctrl+B', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Keyboard shortcuts with modifiers should be forwarded
+      const event = new KeyboardEvent('keydown', {
+        key: 'b',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(event);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'keydown' }));
+    });
+
+    it('does not forward shift+character combinations (uppercase letters)', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Shift+A produces uppercase 'A' - should be filtered as plain character
+      const event = new KeyboardEvent('keydown', {
+        key: 'A',
+        shiftKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(event);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('forwards special keys like Enter, Tab, Escape without modifiers', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Enter key should be forwarded (key.length > 1)
+      const enterEvent = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(enterEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'keydown', key: 'Enter' }));
     });
 
     it('forwards contextmenu events to the hidden editor via the input bridge', () => {
@@ -489,7 +678,7 @@ describe('PresentationEditor', () => {
       expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'contextmenu' }));
     });
 
-    it('forwards beforeinput events to the hidden editor via the input bridge', () => {
+    it('forwards beforeinput events to the hidden editor via the input bridge', async () => {
       editor = new PresentationEditor({
         element: container,
         documentId: 'test-doc',
@@ -502,6 +691,7 @@ describe('PresentationEditor', () => {
 
       const event = new InputEvent('beforeinput', { data: 'a', inputType: 'insertText', bubbles: true });
       container.dispatchEvent(event);
+      await Promise.resolve();
 
       expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'beforeinput' }));
     });

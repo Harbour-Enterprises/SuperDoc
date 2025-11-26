@@ -37,6 +37,7 @@ import {
   HeaderFooterLayoutAdapter,
   type HeaderFooterDescriptor,
 } from './header-footer/HeaderFooterRegistry.js';
+import { isInRegisteredSurface } from './uiSurfaceRegistry.js';
 
 export type PageSize = {
   w: number;
@@ -3813,54 +3814,59 @@ export class PresentationEditor extends EventEmitter {
 
 class PresentationInputBridge {
   #windowRoot: Window;
-  #visibleHost: HTMLElement;
+  #layoutSurfaces: Set<EventTarget>;
   #getTargetDom: () => HTMLElement | null;
   #onTargetChanged?: (target: HTMLElement | null) => void;
-  #listeners: Array<{ type: string; handler: EventListener; target: EventTarget }>;
+  #listeners: Array<{ type: string; handler: EventListener; target: EventTarget; useCapture: boolean }>;
   #currentTarget: HTMLElement | null = null;
   #destroyed = false;
+  #useWindowFallback: boolean;
 
   constructor(
     windowRoot: Window,
-    visibleHost: HTMLElement,
+    layoutSurface: HTMLElement,
     getTargetDom: () => HTMLElement | null,
     onTargetChanged?: (target: HTMLElement | null) => void,
+    options?: { useWindowFallback?: boolean },
   ) {
     this.#windowRoot = windowRoot;
-    this.#visibleHost = visibleHost;
+    this.#layoutSurfaces = new Set<EventTarget>([layoutSurface]);
     this.#getTargetDom = getTargetDom;
     this.#onTargetChanged = onTargetChanged;
     this.#listeners = [];
+    this.#useWindowFallback = options?.useWindowFallback ?? false;
   }
 
   bind() {
-    // Keyboard events bubble to window - listen there so we always capture shortcuts even when focus drifts.
-    this.#addListener('keydown', this.#forwardKeyboardEvent, this.#windowRoot);
-    this.#addListener('keypress', this.#forwardKeyboardEvent, this.#windowRoot);
-    this.#addListener('keyup', this.#forwardKeyboardEvent, this.#windowRoot);
+    const keyboardTargets = this.#getListenerTargets();
+    keyboardTargets.forEach((target) => {
+      this.#addListener('keydown', this.#forwardKeyboardEvent, target);
+      this.#addListener('keyup', this.#forwardKeyboardEvent, target);
+    });
 
-    // Composition events (IME) also bubble to window.
-    this.#addListener('compositionstart', this.#forwardCompositionEvent, this.#windowRoot);
-    this.#addListener('compositionupdate', this.#forwardCompositionEvent, this.#windowRoot);
-    this.#addListener('compositionend', this.#forwardCompositionEvent, this.#windowRoot);
+    const compositionTargets = this.#getListenerTargets();
+    compositionTargets.forEach((target) => {
+      this.#addListener('compositionstart', this.#forwardCompositionEvent, target);
+      this.#addListener('compositionupdate', this.#forwardCompositionEvent, target);
+      this.#addListener('compositionend', this.#forwardCompositionEvent, target);
+    });
 
-    // Context menu events bubble to window.
-    this.#addListener('contextmenu', this.#forwardContextMenu, this.#windowRoot);
+    const textTargets = this.#getListenerTargets();
+    textTargets.forEach((target) => {
+      this.#addListener('beforeinput', this.#forwardTextEvent, target);
+      this.#addListener('input', this.#forwardTextEvent, target);
+      this.#addListener('textInput', this.#forwardTextEvent, target);
+    });
 
-    // BeforeInput/input/textInput events only fire on whatever element currently owns focus.
-    // Capture them on both the visible host (layout container) and window so we can remap to
-    // the hidden editor regardless of where the browser delivered the event.
-    this.#addListener('beforeinput', this.#forwardTextEvent, this.#visibleHost);
-    this.#addListener('input', this.#forwardTextEvent, this.#visibleHost);
-    this.#addListener('textInput', this.#forwardTextEvent, this.#visibleHost);
-    this.#addListener('beforeinput', this.#forwardTextEvent, this.#windowRoot);
-    this.#addListener('input', this.#forwardTextEvent, this.#windowRoot);
-    this.#addListener('textInput', this.#forwardTextEvent, this.#windowRoot);
+    const contextTargets = this.#getListenerTargets();
+    contextTargets.forEach((target) => {
+      this.#addListener('contextmenu', this.#forwardContextMenu, target);
+    });
   }
 
   destroy() {
-    this.#listeners.forEach(({ type, handler, target }) => {
-      target.removeEventListener(type, handler, true);
+    this.#listeners.forEach(({ type, handler, target, useCapture }) => {
+      target.removeEventListener(type, handler, useCapture);
     });
     this.#listeners = [];
     this.#currentTarget = null;
@@ -3899,10 +3905,10 @@ class PresentationInputBridge {
     this.#onTargetChanged?.(nextTarget ?? null);
   }
 
-  #addListener<T extends Event>(type: string, handler: (event: T) => void, target: EventTarget) {
+  #addListener<T extends Event>(type: string, handler: (event: T) => void, target: EventTarget, useCapture = false) {
     const bound = handler.bind(this) as EventListener;
-    this.#listeners.push({ type, handler: bound, target });
-    target.addEventListener(type, bound, true);
+    this.#listeners.push({ type, handler: bound, target, useCapture });
+    target.addEventListener(type, bound, useCapture);
   }
 
   #dispatchToTarget(originalEvent: Event, synthetic: Event) {
@@ -3924,49 +3930,99 @@ class PresentationInputBridge {
     }
   }
 
+  /**
+   * Forwards keyboard events to the hidden editor, skipping IME composition events
+   * and plain character keys (which are handled by beforeinput instead).
+   * Uses microtask deferral to allow other handlers to preventDefault first.
+   *
+   * @param event - The keyboard event from the layout surface
+   */
   #forwardKeyboardEvent(event: KeyboardEvent) {
-    if (this.#isEventOnActiveTarget(event)) {
+    if (this.#shouldSkipSurface(event)) {
+      return;
+    }
+    if (event.defaultPrevented) {
+      return;
+    }
+    if (event.isComposing || event.keyCode === 229) {
+      return;
+    }
+    if (this.#isPlainCharacterKey(event)) {
       return;
     }
 
-    const synthetic = new KeyboardEvent(event.type, {
-      key: event.key,
-      code: event.code,
-      location: event.location,
-      repeat: event.repeat,
-      ctrlKey: event.ctrlKey,
-      shiftKey: event.shiftKey,
-      altKey: event.altKey,
-      metaKey: event.metaKey,
-      bubbles: true,
-      cancelable: true,
-    });
-    this.#dispatchToTarget(event, synthetic);
-  }
-
-  #forwardTextEvent(event: InputEvent | TextEvent) {
-    if (this.#isEventOnActiveTarget(event)) {
-      return;
-    }
-
-    let synthetic: Event;
-    if (typeof InputEvent !== 'undefined') {
-      synthetic = new InputEvent(event.type, {
-        data: (event as InputEvent).data ?? (event as TextEvent).data ?? null,
-        inputType: (event as InputEvent).inputType ?? 'insertText',
-        dataTransfer: (event as InputEvent).dataTransfer ?? null,
-        isComposing: (event as InputEvent).isComposing ?? false,
+    queueMicrotask(() => {
+      // Only re-check mutable state - surface check was already done
+      if (event.defaultPrevented) {
+        return;
+      }
+      const synthetic = new KeyboardEvent(event.type, {
+        key: event.key,
+        code: event.code,
+        location: event.location,
+        repeat: event.repeat,
+        ctrlKey: event.ctrlKey,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey,
         bubbles: true,
         cancelable: true,
       });
-    } else {
-      synthetic = new Event(event.type, { bubbles: true, cancelable: true });
-    }
-    this.#dispatchToTarget(event, synthetic);
+      this.#dispatchToTarget(event, synthetic);
+    });
   }
 
+  /**
+   * Forwards text input events (beforeinput) to the hidden editor.
+   * Skips composition events and uses microtask deferral for cooperative handling.
+   *
+   * @param event - The input event from the layout surface
+   */
+  #forwardTextEvent(event: InputEvent | TextEvent) {
+    if (this.#shouldSkipSurface(event)) {
+      return;
+    }
+    if (event.defaultPrevented) {
+      return;
+    }
+    if ((event as InputEvent).isComposing) {
+      return;
+    }
+
+    queueMicrotask(() => {
+      // Only re-check mutable state - surface check was already done
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      let synthetic: Event;
+      if (typeof InputEvent !== 'undefined') {
+        synthetic = new InputEvent(event.type, {
+          data: (event as InputEvent).data ?? (event as TextEvent).data ?? null,
+          inputType: (event as InputEvent).inputType ?? 'insertText',
+          dataTransfer: (event as InputEvent).dataTransfer ?? null,
+          isComposing: (event as InputEvent).isComposing ?? false,
+          bubbles: true,
+          cancelable: true,
+        });
+      } else {
+        synthetic = new Event(event.type, { bubbles: true, cancelable: true });
+      }
+      this.#dispatchToTarget(event, synthetic);
+    });
+  }
+
+  /**
+   * Forwards composition events (compositionstart, compositionupdate, compositionend)
+   * to the hidden editor for IME input handling.
+   *
+   * @param event - The composition event from the layout surface
+   */
   #forwardCompositionEvent(event: CompositionEvent) {
-    if (this.#isEventOnActiveTarget(event)) {
+    if (this.#shouldSkipSurface(event)) {
+      return;
+    }
+    if (event.defaultPrevented) {
       return;
     }
 
@@ -3983,11 +4039,18 @@ class PresentationInputBridge {
     this.#dispatchToTarget(event, synthetic);
   }
 
+  /**
+   * Forwards context menu events to the hidden editor.
+   *
+   * @param event - The context menu event from the layout surface
+   */
   #forwardContextMenu(event: MouseEvent) {
-    if (this.#isEventOnActiveTarget(event)) {
+    if (this.#shouldSkipSurface(event)) {
       return;
     }
-
+    if (event.defaultPrevented) {
+      return;
+    }
     const synthetic = new MouseEvent('contextmenu', {
       bubbles: true,
       cancelable: true,
@@ -4022,5 +4085,77 @@ class PresentationInputBridge {
       return containsFn.call(targetNode, origin);
     }
     return false;
+  }
+
+  /**
+   * Determines if an event originated from a UI surface that should be excluded
+   * from keyboard forwarding (e.g., toolbars, dropdowns).
+   *
+   * Checks three conditions in order:
+   * 1. Event is already on the active target (hidden editor) - skip to prevent loops
+   * 2. Event is not in a layout surface - skip non-editor events
+   * 3. Event is in a registered UI surface - skip toolbar/dropdown events
+   *
+   * @param event - The event to check
+   * @returns true if the event should be skipped, false if it should be forwarded
+   */
+  #shouldSkipSurface(event: Event): boolean {
+    if (this.#isEventOnActiveTarget(event)) {
+      return true;
+    }
+    if (!this.#isInLayoutSurface(event)) {
+      return true;
+    }
+    if (isInRegisteredSurface(event)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Checks if an event originated within a layout surface by walking the
+   * event's composed path. Falls back to checking event.target directly
+   * if composedPath is unavailable.
+   *
+   * @param event - The event to check
+   * @returns true if event originated in a layout surface
+   */
+  #isInLayoutSurface(event: Event): boolean {
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+    if (path.length) {
+      return path.some((node) => this.#layoutSurfaces.has(node as EventTarget));
+    }
+    const origin = event.target as EventTarget | null;
+    return origin ? this.#layoutSurfaces.has(origin) : false;
+  }
+
+  /**
+   * Returns the set of event targets to attach listeners to.
+   * Includes registered layout surfaces and optionally the window for fallback.
+   *
+   * @returns Set of EventTargets for listener attachment
+   */
+  #getListenerTargets(): EventTarget[] {
+    const targets = new Set<EventTarget>(this.#layoutSurfaces);
+    if (this.#useWindowFallback) {
+      targets.add(this.#windowRoot);
+    }
+    return Array.from(targets);
+  }
+
+  /**
+   * Determines if a keyboard event represents a plain character key without
+   * modifiers. Plain character keys are filtered out because they should be
+   * handled by the beforeinput event instead to avoid double-handling.
+   *
+   * Note: Shift is intentionally not considered a modifier here since
+   * Shift+character produces a different character (e.g., uppercase) that
+   * should still go through beforeinput.
+   *
+   * @param event - The keyboard event to check
+   * @returns true if event is a single character without Ctrl/Meta/Alt modifiers
+   */
+  #isPlainCharacterKey(event: KeyboardEvent): boolean {
+    return event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
   }
 }
