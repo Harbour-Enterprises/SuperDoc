@@ -15,6 +15,7 @@ import type {
   NumberingProperties,
   ResolvedRunProperties,
   ResolvedTabStop,
+  NumberingFormat,
 } from '@superdoc/word-layout';
 import { computeWordParagraphLayout } from '@superdoc/word-layout';
 import { Engines } from '@superdoc/contracts';
@@ -340,6 +341,10 @@ export const computeWordLayoutForParagraph = (
   numberingProps: AdapterNumberingProps | undefined,
   styleContext: StyleContext,
 ): WordParagraphLayoutOutput | null => {
+  if (numberingProps === null) {
+    return null;
+  }
+
   try {
     // Merge paragraph indent with level-specific indent from numbering definition
     let effectiveIndent = paragraphAttrs.indent;
@@ -383,7 +388,7 @@ export const computeWordLayoutForParagraph = (
     return computeWordParagraphLayout({
       paragraph: resolvedParagraph,
       numbering: numberingProps,
-      markerRun: numberingProps.resolvedMarkerRpr, // Use cached if available
+      markerRun: numberingProps?.resolvedMarkerRpr, // Use cached if available
       docDefaults,
     });
   } catch {
@@ -595,7 +600,7 @@ export const computeParagraphAttrs = (
     };
 
     if (listRendering?.numberingType && enrichedNumberingProps.format == null) {
-      enrichedNumberingProps.format = listRendering.numberingType;
+      enrichedNumberingProps.format = listRendering.numberingType as NumberingFormat;
     }
     if (listRendering?.markerText && enrichedNumberingProps.markerText == null) {
       enrichedNumberingProps.markerText = listRendering.markerText;

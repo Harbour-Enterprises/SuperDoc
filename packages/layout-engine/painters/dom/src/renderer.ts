@@ -1497,7 +1497,7 @@ export class DomPainter {
         markerEl.style.display = 'inline-block';
         markerEl.style.width = `${Math.max(0, fragment.markerWidth - LIST_MARKER_GAP)}px`;
         markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
-        markerEl.style.textAlign = marker.justification ?? '';
+        markerEl.style.textAlign = marker.justification ?? 'left';
 
         // Apply marker run styling
         markerEl.style.fontFamily = marker.run.fontFamily;
@@ -1947,7 +1947,7 @@ export class DomPainter {
   private buildLinkRenderData(link: FlowRunLink): LinkRenderData | null {
     const dataset = buildLinkDataset(link);
     const sanitized = typeof link.href === 'string' ? sanitizeHref(link.href) : null;
-    const anchorHref = normalizeAnchor(link.anchor ?? link.name ?? null);
+    const anchorHref = normalizeAnchor(link.anchor ?? link.name ?? '');
     let href: string | null = sanitized?.href ?? anchorHref;
     if (link.version === 2) {
       href = appendDocLocation(href, link.docLocation ?? null);
@@ -2196,6 +2196,10 @@ export class DomPainter {
     const el = this.doc.createElement('div');
     el.classList.add(CLASS_NAMES.line);
     applyStyles(el, lineStyles(line.lineHeight));
+    const styleId = (block.attrs as ParagraphAttrs | undefined)?.styleId;
+    if (styleId) {
+      el.setAttribute('styleid', styleId);
+    }
 
     const lineRange = computeLinePmRange(block, line);
 
@@ -2282,6 +2286,9 @@ export class DomPainter {
 
         const elem = this.renderRun(segmentRun, context, trackedConfig);
         if (elem) {
+          if (styleId) {
+            elem.setAttribute('styleid', styleId);
+          }
           // Determine X position for this segment
           let xPos: number;
           if (segment.x !== undefined) {
@@ -2315,6 +2322,9 @@ export class DomPainter {
       runs.forEach((run) => {
         const elem = this.renderRun(run, context, trackedConfig);
         if (elem) {
+          if (styleId) {
+            elem.setAttribute('styleid', styleId);
+          }
           el.appendChild(elem);
         }
       });
@@ -2831,6 +2841,9 @@ export const applyRunDataAttributes = (element: HTMLElement, dataAttrs?: Record<
 
 const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs): void => {
   if (!attrs) return;
+  if (attrs.styleId) {
+    element.setAttribute('styleid', attrs.styleId);
+  }
   if (attrs.alignment) {
     element.style.textAlign = attrs.alignment;
   }

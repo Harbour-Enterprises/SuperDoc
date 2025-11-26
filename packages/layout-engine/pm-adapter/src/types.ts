@@ -250,7 +250,7 @@ export type FlowBlocksResult = {
 export interface NodeHandlerContext {
   // Block accumulation
   blocks: FlowBlock[];
-  recordBlockKind: (kind: string) => void;
+  recordBlockKind: (kind: FlowBlock['kind']) => void;
 
   // ID generation & positions
   nextBlockId: BlockIdGenerator;
@@ -292,6 +292,7 @@ export interface NodeHandlerContext {
       trackedChanges?: TrackedChangesConfig,
       bookmarks?: Map<string, number>,
       hyperlinkConfig?: HyperlinkConfig,
+      themeColors?: ThemeColorPalette,
       converterContext?: ConverterContext,
     ) => FlowBlock[];
     tableNodeToBlock?: (
@@ -304,6 +305,7 @@ export interface NodeHandlerContext {
       trackedChanges?: TrackedChangesConfig,
       bookmarks?: Map<string, number>,
       hyperlinkConfig?: HyperlinkConfig,
+      themeColors?: ThemeColorPalette,
       converterContext?: ConverterContext,
     ) => FlowBlock | null;
     imageNodeToBlock?: (

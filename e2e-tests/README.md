@@ -53,6 +53,12 @@ The `rebuild` command will:
 - Install it in the test template
 - Rebuild the Docker image with no cache
 
+If you only need to refresh the Vue test app with the latest SuperDoc build (no Docker rebuild), run:
+
+```bash
+npm run reinstall
+```
+
 ### Step-by-Step
 
 Alternatively, you can run each step individually:
