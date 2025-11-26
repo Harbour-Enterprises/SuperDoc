@@ -48,7 +48,6 @@ import {
   ensureTrackChangeStyles,
   type PageStyles,
 } from './styles.js';
-import { calculateMarkerLeftPosition } from './marker-utils.js';
 import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
 
