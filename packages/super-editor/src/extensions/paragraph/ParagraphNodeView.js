@@ -6,6 +6,12 @@ import { isList } from '@core/commands/list-helpers';
 import { getResolvedParagraphProperties, calculateResolvedParagraphProperties } from './resolvedPropertiesCache.js';
 
 /**
+ * A map to keep track of paragraph node views for quick access.
+ * @type {WeakMap<import('prosemirror-model').Node, ParagraphNodeView>}
+ */
+const nodeViewMap = new WeakMap();
+
+/**
  * ProseMirror node view that renders paragraphs, including special handling for
  * numbered/bulleted lists so marker/separator elements stay in sync with docx
  * layout expectations.
@@ -25,6 +31,8 @@ export class ParagraphNodeView {
     this.decorations = decorations;
     this.extensionAttrs = extensionAttrs;
     this._animationFrameRequest = null;
+    this.surroundingContext = {};
+    nodeViewMap.set(this.node, this);
 
     calculateResolvedParagraphProperties(this.editor, this.node, this.editor.state.doc.resolve(this.getPos()));
 
@@ -47,21 +55,30 @@ export class ParagraphNodeView {
   /**
    * @param {import('prosemirror-model').Node} node
    * @param {import('prosemirror-view').Decoration[]} decorations
+   * @param {import('prosemirror-view').Decoration[]} innerDecorations
+   * @param {boolean} [forceUpdate=false]
+   * @returns {boolean}
    */
-  update(node, decorations) {
+  update(node, decorations, innerDecorations, forceUpdate = false) {
+    // Remove cached reference for old node
+    if (nodeViewMap.get(this.node) === this) {
+      nodeViewMap.delete(this.node);
+    }
+    const oldProps = getResolvedParagraphProperties(this.node);
     const oldAttrs = this.node.attrs;
-    const newAttrs = node.attrs;
     this.node = node;
     this.decorations = decorations;
+    this.innerDecorations = innerDecorations;
+    nodeViewMap.set(this.node, this);
 
-    if (JSON.stringify(oldAttrs) === JSON.stringify(newAttrs)) {
+    if (!forceUpdate && !this.#checkShouldUpdate(oldProps, oldAttrs, this.surroundingContext)) {
       return true;
     }
 
     calculateResolvedParagraphProperties(this.editor, this.node, this.editor.state.doc.resolve(this.getPos()));
 
     this.#updateHTMLAttributes();
-    this.#updateDOMStyles();
+    this.#updateDOMStyles(oldProps);
 
     if (!this.#checkIsList()) {
       this.#removeList();
@@ -75,6 +92,25 @@ export class ParagraphNodeView {
     return true;
   }
 
+  /**
+   * Checks whether the node view should update based on changes to props, attrs, or surrounding context.
+   * @param {Record<string, unknown>} oldProps
+   * @param {Record<string, unknown>} oldAttrs
+   * @param {Record<string, unknown>} oldSurroundingContext
+   * @returns {boolean}
+   */
+  #checkShouldUpdate(oldProps, oldAttrs, oldSurroundingContext) {
+    this.#resolveNeighborParagraphProperties();
+    return (
+      JSON.stringify(oldAttrs) !== JSON.stringify(this.node.attrs) ||
+      JSON.stringify(oldProps) !== JSON.stringify(getResolvedParagraphProperties(this.node)) ||
+      JSON.stringify(oldSurroundingContext) !== JSON.stringify(this.surroundingContext)
+    );
+  }
+
+  /**
+   * Updates the HTML attributes of the paragraph DOM element based on node attributes and properties.
+   */
   #updateHTMLAttributes() {
     const htmlAttributes = Attribute.getAttributesToRender(this.node, this.extensionAttrs);
     htmlAttributes.style = htmlAttributes.style || '';
@@ -104,15 +140,88 @@ export class ParagraphNodeView {
     }
   }
 
-  #updateDOMStyles() {
+  /**
+   * Updates the CSS styles of the paragraph DOM element based on resolved paragraph properties.
+   * @param {Record<string, unknown> | null} oldParagraphProperties
+   */
+  #updateDOMStyles(oldParagraphProperties = null) {
     this.dom.style.cssText = '';
     const paragraphProperties = getResolvedParagraphProperties(this.node);
-    const style = encodeCSSFromPPr(paragraphProperties);
+    this.#resolveNeighborParagraphProperties();
+
+    const style = encodeCSSFromPPr(
+      paragraphProperties,
+      this.surroundingContext.hasPreviousParagraph,
+      this.surroundingContext.nextParagraphProps,
+    );
     Object.entries(style).forEach(([k, v]) => {
       this.dom.style[k] = v;
     });
+
+    // Check if spacing-related props changed and if so, trigger update on previous paragraph so it can adjust its bottom spacing
+    if (
+      JSON.stringify(paragraphProperties.spacing) !== JSON.stringify(oldParagraphProperties?.spacing) ||
+      paragraphProperties.styleId !== oldParagraphProperties?.styleId ||
+      paragraphProperties.contextualSpacing !== oldParagraphProperties?.contextualSpacing
+    ) {
+      const previousNodeView = this.surroundingContext.previousParagraph
+        ? nodeViewMap.get(this.surroundingContext.previousParagraph)
+        : null;
+      if (previousNodeView) {
+        // Check if the previous node view is still valid
+        try {
+          previousNodeView.getPos();
+        } catch {
+          return;
+        }
+        previousNodeView.update(
+          previousNodeView.node,
+          previousNodeView.decorations,
+          previousNodeView.innerDecorations,
+          true,
+        );
+      }
+    }
   }
 
+  /**
+   * Resolves properties of neighboring paragraphs to determine surrounding context.
+   */
+  #resolveNeighborParagraphProperties() {
+    const $pos = this.editor.state.doc.resolve(this.getPos());
+    const parent = $pos.parent;
+    const index = $pos.index();
+    let hasPreviousParagraph = false;
+    let previousParagraph = null;
+    let nextParagraphProps = null;
+    if (index > 0) {
+      const previousNode = parent.child(index - 1);
+      hasPreviousParagraph =
+        previousNode.type.name === 'paragraph' && !getResolvedParagraphProperties(previousNode)?.framePr?.dropCap;
+      if (hasPreviousParagraph) {
+        previousParagraph = previousNode;
+      }
+    }
+    if (parent) {
+      if (index < parent.childCount - 1) {
+        const nextNode = parent.child(index + 1);
+        if (nextNode.type.name === 'paragraph') {
+          nextParagraphProps = getResolvedParagraphProperties(nextNode);
+        }
+      }
+    }
+
+    this.surroundingContext = {
+      hasPreviousParagraph,
+      previousParagraph,
+      nextParagraphProps,
+    };
+  }
+
+  /**
+   * Updates the styles of the list marker and separator based on current node attributes.
+   * @returns {boolean}
+   */
   #updateListStyles() {
     let { suffix, justification } = this.node.attrs.listRendering;
     suffix = suffix ?? 'tab';
@@ -383,5 +492,8 @@ export class ParagraphNodeView {
 
   destroy() {
     this.#cancelScheduledAnimation();
+    if (nodeViewMap.get(this.node) === this) {
+      nodeViewMap.delete(this.node);
+    }
   }
 }
