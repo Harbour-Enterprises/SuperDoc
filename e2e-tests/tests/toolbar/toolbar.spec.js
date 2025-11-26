@@ -4,7 +4,7 @@ import { ptToPx, sleep } from '../helpers.js';
 test.describe('toolbar', () => {
   test.describe('custom buttons', () => {
     test('should work with custom buttons', async ({ page }) => {
-      await page.goto('http://localhost:4173/?includeCustomButton=true');
+      await page.goto('http://localhost:4173/?includeCustomButton=true&layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -55,7 +55,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add text with selected font size', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -82,7 +82,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add text with bold mark', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -106,7 +106,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add text with italic mark', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -130,7 +130,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add text with underline mark', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -155,7 +155,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add text with strikethrough mark', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -180,7 +180,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add text with selected color', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -205,7 +205,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add text with selected highlight color', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -234,7 +234,7 @@ test.describe('toolbar', () => {
 
   test.describe('select text and apply toolbar item', () => {
     test('should add bold mark to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -261,7 +261,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add italic mark to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -288,7 +288,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add underline mark to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -317,7 +317,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add strikethrough mark to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -346,7 +346,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add color to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -377,7 +377,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add highlight color to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -412,7 +412,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add font size to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -442,7 +442,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add .5 font size to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -474,7 +474,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add font family to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -509,7 +509,7 @@ test.describe('toolbar', () => {
 
   test.describe('shortcuts', () => {
     test('should add bold mark to selected text with mod + b', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -535,7 +535,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add italic mark to selected text with mod + i', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -562,7 +562,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add underline mark to selected text with mod + u', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -590,7 +590,7 @@ test.describe('toolbar', () => {
     });
 
     test('should add strikethrough mark to selected text with mod + s', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -620,7 +620,7 @@ test.describe('toolbar', () => {
 
   test.describe('toolbar state', () => {
     test('should show correct font family when font family is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -657,7 +657,7 @@ test.describe('toolbar', () => {
     });
 
     test('should show correct font size when font size is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -695,7 +695,7 @@ test.describe('toolbar', () => {
     });
 
     test('should be highlighted when bold mark is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -730,7 +730,7 @@ test.describe('toolbar', () => {
     });
 
     test('should be highlighted when italic mark is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -766,7 +766,7 @@ test.describe('toolbar', () => {
     });
 
     test('should be highlighted when underline mark is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -802,7 +802,7 @@ test.describe('toolbar', () => {
     });
 
     test('should be highlighted when strikethrough mark is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -838,7 +838,7 @@ test.describe('toolbar', () => {
     });
 
     test('should show the correct color when color is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -868,7 +868,7 @@ test.describe('toolbar', () => {
     });
 
     test('should show the correct color when highlight is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -911,7 +911,7 @@ test.describe('toolbar', () => {
     test('should add text with linked style', async ({ page }) => {
       const heading2Styles = HEADING2_STYLES;
 
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -957,7 +957,7 @@ test.describe('toolbar', () => {
     });
 
     test('should show correct label when linked style is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -990,7 +990,7 @@ test.describe('toolbar', () => {
     });
 
     test('should reset label to "format text" when style is deselected', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -1024,7 +1024,7 @@ test.describe('toolbar', () => {
     });
 
     test('should navigate through styles with keyboard', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
