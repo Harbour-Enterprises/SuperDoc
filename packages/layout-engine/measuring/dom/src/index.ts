@@ -64,6 +64,7 @@ import {
 } from '@superdoc/common/layout-constants';
 import { calculateRotatedBounds, normalizeRotation } from '@superdoc/geometry-utils';
 export { installNodeCanvasPolyfill } from './setup.js';
+import { clearMeasurementCache, getMeasuredTextWidth, setCacheSize } from './measurementCache.js';
 
 const { computeTabStops } = Engines;
 
@@ -75,6 +76,7 @@ type MeasurementConfig = {
     deterministicFamily: string;
     fallbackStack: string[];
   };
+  cacheSize: number;
 };
 
 const measurementConfig: MeasurementConfig = {
@@ -83,6 +85,7 @@ const measurementConfig: MeasurementConfig = {
     deterministicFamily: 'Noto Sans',
     fallbackStack: ['Noto Sans', 'Arial', 'sans-serif'],
   },
+  cacheSize: 5000,
 };
 
 export function configureMeasurement(options: Partial<MeasurementConfig>): void {
@@ -95,7 +98,13 @@ export function configureMeasurement(options: Partial<MeasurementConfig>): void 
       ...options.fonts,
     };
   }
+  if (typeof options.cacheSize === 'number' && Number.isFinite(options.cacheSize) && options.cacheSize > 0) {
+    measurementConfig.cacheSize = options.cacheSize;
+    setCacheSize(options.cacheSize);
+  }
 }
+
+export { clearMeasurementCache };
 
 /**
  * Future: Font-specific calibration factors could be added here if Canvas measurements
@@ -230,14 +239,12 @@ function measureText(
   _fontFamily?: string,
   _letterSpacing?: number,
 ): number {
+  // Deprecated direct measurement; kept for backward compatibility in case of direct calls.
   ctx.font = font;
   const metrics = ctx.measureText(text);
-  // Use maximum of advance and painted width to account for glyph overhang
   const advanceWidth = metrics.width;
   const paintedWidth = (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0);
-  const baseWidth = Math.max(advanceWidth, paintedWidth);
-  // Letter-spacing is handled by callers (measureRunWidth)
-  return baseWidth;
+  return Math.max(advanceWidth, paintedWidth);
 }
 
 /**
@@ -1120,13 +1127,9 @@ const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
 };
 
 const measureRunWidth = (text: string, font: string, ctx: CanvasRenderingContext2D, run: Run): number => {
-  const baseWidth = measureText(text, font, ctx);
-  const letterSpacing = run.kind !== 'tab' ? run.letterSpacing : undefined;
-  if (!letterSpacing) {
-    return baseWidth;
-  }
-  const extra = Math.max(0, text.length - 1) * letterSpacing;
-  return roundValue(baseWidth + extra);
+  const letterSpacing = run.kind !== 'tab' ? run.letterSpacing || 0 : 0;
+  const width = getMeasuredTextWidth(text, font, letterSpacing, ctx);
+  return roundValue(width);
 };
 
 const appendSegment = (
