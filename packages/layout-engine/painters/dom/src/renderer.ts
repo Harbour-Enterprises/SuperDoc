@@ -59,6 +59,8 @@ import { renderTableFragment as renderTableFragmentElement } from './table/rende
 type WordLayoutMarker = {
   markerText?: string;
   justification?: 'left' | 'right' | 'center';
+  gutterWidthPx?: number;
+  suffix?: 'tab' | 'space' | 'nothing';
   run: {
     fontFamily: string;
     fontSize: number;
@@ -1373,41 +1375,60 @@ export class DomPainter {
 
       const lines = measure.lines.slice(fragment.fromLine, fragment.toLine);
 
-      // Render paragraph list marker (Track B paragraph pipeline)
-      if (!fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker) {
-        const markerEl = this.doc.createElement('span');
-        markerEl.classList.add('superdoc-paragraph-marker');
-        markerEl.textContent = wordLayout.marker.markerText ?? '';
-        markerEl.style.position = 'absolute';
-
-        // Position marker so it ends where the first line text begins
-        const markerLeftPos = calculateMarkerLeftPosition(block.attrs?.indent, fragment.markerWidth);
-        markerEl.style.left = `${markerLeftPos}px`;
-        markerEl.style.width = `${fragment.markerWidth}px`;
-        markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
-        markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
-        markerEl.style.pointerEvents = 'none';
-
-        // Apply marker run styling
-        markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
-        markerEl.style.fontSize = `${wordLayout.marker.run.fontSize}px`;
-        markerEl.style.fontWeight = wordLayout.marker.run.bold ? 'bold' : '';
-        markerEl.style.fontStyle = wordLayout.marker.run.italic ? 'italic' : '';
-        if (wordLayout.marker.run.color) {
-          markerEl.style.color = wordLayout.marker.run.color;
-        }
-        if (wordLayout.marker.run.letterSpacing != null) {
-          markerEl.style.letterSpacing = `${wordLayout.marker.run.letterSpacing}px`;
-        }
-
-        fragmentEl.appendChild(markerEl);
-      }
-
       applyParagraphBlockStyles(fragmentEl, block.attrs);
+      if (block.attrs?.styleId) {
+        fragmentEl.dataset.styleId = block.attrs.styleId;
+        fragmentEl.setAttribute('styleid', block.attrs.styleId);
+      }
       this.applySdtDataset(fragmentEl, block.attrs?.sdt);
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
-      lines.forEach((line) => {
+
+      lines.forEach((line, index) => {
         const lineEl = this.renderLine(block, line, context);
+        if (index === 0 && !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker) {
+          const markerContainer = this.doc!.createElement('span');
+          markerContainer.style.display = 'inline-block';
+
+          const markerEl = this.doc!.createElement('span');
+          markerEl.classList.add('superdoc-paragraph-marker');
+          markerEl.textContent = wordLayout.marker.markerText ?? '';
+          markerEl.style.width = `${fragment.markerWidth}px`;
+          markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
+          markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
+          markerEl.style.pointerEvents = 'none';
+
+          // Apply marker run styling
+          markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
+          markerEl.style.fontSize = `${wordLayout.marker.run.fontSize}px`;
+          markerEl.style.fontWeight = wordLayout.marker.run.bold ? 'bold' : '';
+          markerEl.style.fontStyle = wordLayout.marker.run.italic ? 'italic' : '';
+          if (wordLayout.marker.run.color) {
+            markerEl.style.color = wordLayout.marker.run.color;
+          }
+          if (wordLayout.marker.run.letterSpacing != null) {
+            markerEl.style.letterSpacing = `${wordLayout.marker.run.letterSpacing}px`;
+          }
+          markerContainer.appendChild(markerEl);
+
+          const suffix = wordLayout.marker.suffix ?? 'tab';
+          if (suffix === 'tab') {
+            const tabEl = this.doc!.createElement('span');
+            tabEl.className = 'superdoc-tab';
+            tabEl.innerHTML = '&nbsp;';
+            const gutterWidth =
+              typeof wordLayout.marker.gutterWidthPx === 'number' &&
+              isFinite(wordLayout.marker.gutterWidthPx) &&
+              wordLayout.marker.gutterWidthPx > 0
+                ? wordLayout.marker.gutterWidthPx
+                : LIST_MARKER_GAP;
+            tabEl.style.display = 'inline-block';
+            tabEl.style.width = `${gutterWidth}px`;
+            markerContainer.appendChild(tabEl);
+          } else if (suffix === 'space') {
+            markerContainer.appendChild(this.doc!.createTextNode('\u00A0'));
+          }
+          lineEl.prepend(markerContainer);
+        }
         fragmentEl.appendChild(lineEl);
       });
 
@@ -2846,6 +2867,9 @@ const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs)
   }
   if (attrs.alignment) {
     element.style.textAlign = attrs.alignment;
+  }
+  if ((attrs as Record<string, unknown>).dropCap) {
+    element.classList.add('sd-editor-dropcap');
   }
   const indent = attrs.indent;
   if (indent) {
