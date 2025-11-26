@@ -1,4 +1,5 @@
 import type { TabStop } from './engines/tabs.js';
+export { computeTabStops, layoutWithTabs, calculateTabWidth } from './engines/tabs.js';
 
 // Re-export TabStop for external consumers
 export type { TabStop };
@@ -681,7 +682,7 @@ export type LineSegment = {
 export type LeaderDecoration = {
   from: number;
   to: number;
-  style: 'dot' | 'hyphen' | 'underscore' | 'heavy';
+  style: 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 };
 
 export type BarDecoration = {
