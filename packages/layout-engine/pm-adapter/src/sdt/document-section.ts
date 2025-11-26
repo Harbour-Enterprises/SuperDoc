@@ -88,7 +88,7 @@ interface ProcessingContext {
  */
 interface ProcessingOutput {
   blocks: FlowBlock[];
-  recordBlockKind: (kind: string) => void;
+  recordBlockKind: (kind: FlowBlock['kind']) => void;
 }
 
 /**
@@ -225,7 +225,7 @@ function processNestedStructuredContent(
   const { getListCounter, incrementListCounter, resetListCounter } = context.listCounterContext;
   // Nested structured content block inside section - unwrap and chain metadata
   const nestedMetadata = resolveNodeSdtMetadata(child, 'structuredContentBlock');
-  child.content.forEach((grandchild) => {
+  child.content?.forEach((grandchild) => {
     if (grandchild.type === 'paragraph') {
       const paragraphBlocks = converters.paragraphToFlowBlocks(
         grandchild,
@@ -299,7 +299,7 @@ function processDocumentPartObject(
     const blocksBeforeToc = output.blocks.length;
 
     processTocChildren(
-      Array.from(child.content),
+      Array.from(child.content ?? []),
       { docPartGallery, docPartObjectId, tocInstruction, sdtMetadata: docPartSdtMetadata },
       {
         nextBlockId: context.nextBlockId,

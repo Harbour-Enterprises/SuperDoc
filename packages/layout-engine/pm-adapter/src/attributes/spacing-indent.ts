@@ -198,10 +198,12 @@ export const normalizeAlignment = (value: unknown): ParagraphAttrs['alignment'] 
  * // { before: 16, line: 32, lineRule: 'exact' } (line converted from twips)
  * ```
  */
-export const normalizeParagraphSpacing = (value: unknown): ParagraphSpacing | undefined => {
+type ExtendedParagraphSpacing = ParagraphSpacing & { contextualSpacing?: boolean };
+
+export const normalizeParagraphSpacing = (value: unknown): ExtendedParagraphSpacing | undefined => {
   if (!value || typeof value !== 'object') return undefined;
   const source = value as Record<string, unknown>;
-  const spacing: ParagraphSpacing = {};
+  const spacing: ExtendedParagraphSpacing = {};
 
   const beforeRaw = pickNumber(source.before);
   const afterRaw = pickNumber(source.after);

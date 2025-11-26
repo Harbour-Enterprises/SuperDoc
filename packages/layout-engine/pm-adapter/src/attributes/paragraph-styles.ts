@@ -56,9 +56,10 @@ export const hydrateParagraphStyleAttrs = (
   const resolverParams = {
     docx: context.docx,
     numbering: context.numbering,
-  } as Parameters<typeof resolveParagraphProperties>[0];
+  };
 
-  const resolved = preResolved ?? resolveParagraphProperties(resolverParams, inlineProps);
+  // Cast to bypass JSDoc type mismatch - the JS function actually accepts { docx, numbering }
+  const resolved = preResolved ?? resolveParagraphProperties(resolverParams as never, inlineProps);
   if (!resolved) {
     return null;
   }
@@ -75,17 +76,18 @@ export const hydrateParagraphStyleAttrs = (
     keepNext?: boolean;
   };
   const resolvedExtended = resolved as ExtendedResolvedProps;
+  const resolvedAsRecord = resolved as Record<string, unknown>;
   const hydrated: ParagraphStyleHydration = {
     resolved,
-    spacing: cloneIfObject(resolved.spacing),
-    indent: cloneIfObject(resolved.indent),
-    borders: cloneIfObject(resolvedExtended.borders),
-    shading: cloneIfObject(resolvedExtended.shading),
+    spacing: cloneIfObject(resolvedAsRecord.spacing) as ParagraphSpacing | undefined,
+    indent: cloneIfObject(resolvedAsRecord.indent) as ParagraphIndent | undefined,
+    borders: cloneIfObject(resolvedExtended.borders) as ParagraphAttrs['borders'],
+    shading: cloneIfObject(resolvedExtended.shading) as ParagraphAttrs['shading'],
     alignment: resolvedExtended.justification as ParagraphAttrs['alignment'],
     tabStops: cloneIfObject(resolvedExtended.tabStops),
     keepLines: resolvedExtended.keepLines,
     keepNext: resolvedExtended.keepNext,
-    numberingProperties: cloneIfObject(resolved.numberingProperties),
+    numberingProperties: cloneIfObject(resolvedAsRecord.numberingProperties) as Record<string, unknown> | undefined,
   };
   return hydrated;
 };

@@ -243,6 +243,8 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
     trackedChanges?: TrackedChangesConfig,
     bookmarks?: Map<string, number>,
     hyperlinkConfig?: HyperlinkConfig,
+    themeColorsParam?: ThemeColorPalette,
+    converterCtx?: ConverterContext,
   ): FlowBlock | null =>
     tableNodeToBlock(
       node,
@@ -254,8 +256,8 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
       trackedChanges,
       bookmarks,
       hyperlinkConfig,
-      themeColors,
-      converterContext,
+      themeColorsParam ?? themeColors,
+      converterCtx ?? converterContext,
     );
 
   // Build handler context for node processing

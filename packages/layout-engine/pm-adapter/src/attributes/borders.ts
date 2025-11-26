@@ -255,10 +255,11 @@ export function extractTableBorders(bordersInput: Record<string, unknown> | unde
 export function extractCellBorders(cellAttrs: Record<string, unknown>): CellBorders | undefined {
   if (!cellAttrs?.borders) return undefined;
 
+  const bordersData = cellAttrs.borders as Record<string, unknown>;
   const borders: CellBorders = {};
 
   for (const side of ['top', 'right', 'bottom', 'left'] as const) {
-    const spec = convertBorderSpec(cellAttrs.borders[side]);
+    const spec = convertBorderSpec(bordersData[side]);
     if (spec) {
       borders[side] = spec;
     }

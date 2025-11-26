@@ -7,7 +7,15 @@
  * - Tracked changes processing
  */
 
-import type { FlowBlock, Run, TextRun, ImageBlock, TrackedChangeMeta, SdtMetadata } from '@superdoc/contracts';
+import type {
+  FlowBlock,
+  Run,
+  TextRun,
+  ImageBlock,
+  TrackedChangeMeta,
+  SdtMetadata,
+  ParagraphAttrs,
+} from '@superdoc/contracts';
 import type {
   PMNode,
   PMMark,
@@ -263,6 +271,7 @@ export function paragraphToFlowBlocks(
       trackedChanges?: TrackedChangesConfig,
       bookmarks?: Map<string, number>,
       hyperlinkConfig?: HyperlinkConfig,
+      themeColors?: ThemeColorPalette,
       converterContext?: ConverterContext,
     ) => FlowBlock | null;
   },
@@ -675,7 +684,8 @@ export function paragraphToFlowBlocks(
           trackedChanges,
           bookmarks,
           hyperlinkConfig,
-          converterContext,
+          themeColors,
+          ...(converterContext !== undefined ? [converterContext] : []),
         );
         if (tableBlock) {
           blocks.push(tableBlock);
@@ -832,6 +842,7 @@ export function handleParagraphNode(node: PMNode, context: NodeHandlerContext): 
     trackedChangesConfig,
     bookmarks,
     hyperlinkConfig,
+    undefined, // themeColors - not available in NodeHandlerContext
     context.converterContext,
   );
   paragraphBlocks.forEach((block) => {

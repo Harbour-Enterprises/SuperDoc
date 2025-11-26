@@ -24,6 +24,7 @@ import type {
   HyperlinkConfig,
   ThemeColorPalette,
   ConverterContext,
+  ListCounterContext,
 } from '../types.js';
 import { extractTableBorders, extractCellBorders, extractCellPadding } from '../attributes/index.js';
 import { pickNumber } from '../utilities.js';
@@ -36,7 +37,7 @@ type ParagraphConverter = (
   defaultFont: string,
   defaultSize: number,
   styleContext: StyleContext,
-  listCounterContext?: unknown,
+  listCounterContext?: ListCounterContext,
   trackedChanges?: TrackedChangesConfig,
   bookmarks?: Map<string, number>,
   hyperlinkConfig?: HyperlinkConfig,
@@ -111,10 +112,11 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
 
   const cellAttrs: TableCellAttrs = {};
 
-  const borders = extractCellBorders(cellNode.attrs);
+  const borders = extractCellBorders(cellNode.attrs ?? {});
   if (borders) cellAttrs.borders = borders;
 
-  const padding = extractCellPadding(cellNode.attrs) ?? (defaultCellPadding ? { ...defaultCellPadding } : undefined);
+  const padding =
+    extractCellPadding(cellNode.attrs ?? {}) ?? (defaultCellPadding ? { ...defaultCellPadding } : undefined);
   if (padding) cellAttrs.padding = padding;
 
   const verticalAlign = cellNode.attrs?.verticalAlign;
@@ -215,7 +217,7 @@ export function tableNodeToBlock(
     defaultFont: string,
     defaultSize: number,
     styleContext: StyleContext,
-    listCounterContext?: unknown,
+    listCounterContext?: ListCounterContext,
     trackedChanges?: TrackedChangesConfig,
     bookmarks?: Map<string, number>,
     hyperlinkConfig?: HyperlinkConfig,
@@ -321,7 +323,7 @@ export function tableNodeToBlock(
     node.attrs?.userEdited === true && Array.isArray(node.attrs?.grid) && node.attrs.grid.length > 0;
 
   if (hasUserEditedGrid) {
-    columnWidths = (node.attrs.grid as Array<{ col?: number } | null | undefined>)
+    columnWidths = (node.attrs!.grid as Array<{ col?: number } | null | undefined>)
       .filter((col): col is { col?: number } => col != null && typeof col === 'object')
       .map((col) => {
         const twips = typeof col.col === 'number' ? col.col : 0;
