@@ -24,15 +24,15 @@ export type ConverterContext = {
   linkedStyles?: ConverterLinkedStyle[];
 };
 /**
- * Guard that checks whether the converter context includes DOCX + numbering
- * data required for paragraph style hydration.
+ * Guard that checks whether the converter context includes DOCX data
+ * required for paragraph style hydration.
  *
- * Paragraph hydration needs both structures so it can follow style and
- * numbering inheritance chains via resolveParagraphProperties.
+ * Paragraph hydration needs DOCX structures so it can follow style
+ * inheritance chains via resolveParagraphProperties. Numbering is optional
+ * since documents without lists should still get docDefaults spacing.
  */
 export declare const hasParagraphStyleContext: (context?: ConverterContext) => context is ConverterContext & {
   docx: Record<string, unknown>;
-  numbering: ConverterNumberingContext;
 };
 /**
  * Guard that checks whether DOCX data is available for table style lookups.
