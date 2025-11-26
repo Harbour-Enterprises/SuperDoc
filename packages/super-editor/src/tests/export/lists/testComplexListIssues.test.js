@@ -28,7 +28,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
       path: [1],
       numberingType: 'decimal',
     });
-    expect(listItem.attrs.numberingProperties).toEqual({
+    expect(listItem.attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 0,
       numId: 5,
     });
@@ -132,14 +132,14 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
   it('correctly imports the list styles on the indented list (expects inline js, ind)', () => {
     const subItem1 = currentState.content[1];
 
-    const spacing = subItem1.attrs.spacing;
+    const spacing = subItem1.attrs.paragraphProperties?.spacing;
     expect(spacing).toEqual({
       after: 0,
       line: 240,
       lineRule: 'auto',
     });
 
-    expect(subItem1.attrs.indent).toEqual({
+    expect(subItem1.attrs.paragraphProperties?.indent).toEqual({
       left: 360,
       firstLine: 0,
     });

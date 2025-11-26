@@ -21,7 +21,6 @@ vi.mock('@converter/helpers.js', () => ({
 
 import { handleParagraphNode } from './legacy-handle-paragraph-node.js';
 import { parseMarks, mergeTextNodes } from '@converter/v2/importer/index.js';
-import { getParagraphSpacing, getDefaultParagraphStyle, parseParagraphBorders } from './index.js';
 
 const makeParams = (overrides = {}) => ({
   filename: 'source.docx',
@@ -81,11 +80,10 @@ describe('legacy-handle-paragraph-node', () => {
     // Assert
     expect(out.type).toBe('paragraph');
     expect(out.attrs.filename).toBe('source.docx');
-    expect(out.attrs.textAlign).toBe('right');
-    // styleId is taken from w:pStyle
-    expect(out.attrs.styleId).toBe('BodyText');
+    expect(out.attrs.paragraphProperties.justification).toBe('right');
+    expect(out.attrs.paragraphProperties.styleId).toBe('BodyText');
     // spacing and rsid default
-    expect(out.attrs.spacing).toEqual({ after: 120, line: 240, lineRule: 'auto' });
+    expect(out.attrs.paragraphProperties.spacing).toEqual({ after: 120, line: 240, lineRule: 'auto' });
     expect(out.attrs.rsidRDefault).toBe('ABCDEF');
     // marks: highlight removed due to empty content
   });
@@ -123,12 +121,18 @@ describe('legacy-handle-paragraph-node', () => {
 
     const out = handleParagraphNode(params);
 
-    expect(out.attrs.indent).toMatchObject({ left: 200, right: 100, firstLine: 40, hanging: 0 });
-    expect(out.attrs.borders).toEqual({ top: { size: 4, val: 'single' } });
-    expect(out.attrs.keepLines).toBe(true);
-    expect(out.attrs.keepNext).toBe(true);
-    expect(out.attrs.textAlign).toEqual('center');
-    expect(out.attrs.dropcap).toEqual({ type: 'drop', lines: 3, wrap: 'around', hAnchor: 'margin', vAnchor: 'text' });
+    expect(out.attrs.paragraphProperties.indent).toMatchObject({ left: 200, right: 100, firstLine: 40, hanging: 0 });
+    expect(out.attrs.paragraphProperties.borders).toEqual({ top: { size: 4, val: 'single' } });
+    expect(out.attrs.paragraphProperties.keepLines).toBe(true);
+    expect(out.attrs.paragraphProperties.keepNext).toBe(true);
+    expect(out.attrs.paragraphProperties.justification).toEqual('center');
+    expect(out.attrs.paragraphProperties.framePr).toEqual({
+      dropCap: 'drop',
+      lines: 3,
+      wrap: 'around',
+      hAnchor: 'margin',
+      vAnchor: 'text',
+    });
     expect(out.attrs.paragraphProperties).toBeDefined();
     expect(out.attrs.pageBreakSource).toBe('sectPr');
   });
@@ -162,7 +166,7 @@ describe('legacy-handle-paragraph-node', () => {
 
     expect(mergeTextNodes).toHaveBeenCalled();
     expect(out.content).toEqual([{ type: 'text', text: 'merged' }]);
-    expect(out.attrs.tabStops).toEqual([
+    expect(out.attrs.paragraphProperties.tabStops).toEqual([
       { tab: { tabType: 'left', pos: 200, leader: 'dot' } },
       { tab: { tabType: 'right', pos: 400 } },
       { tab: { tabType: 'center', pos: undefined } },

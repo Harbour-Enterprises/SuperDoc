@@ -9,9 +9,7 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
 
 /**
  * Tracked transaction to track changes.
- * @param {import('prosemirror-state').Transaction} options.tr Transaction.
- * @param {import('prosemirror-state').EditorState} options.state Editor state.
- * @param {object} options.user User object ({ name, email }).
+ * @param {{ tr: import('prosemirror-state').Transaction; state: import('prosemirror-state').EditorState; user: import('@core/types/EditorConfig.js').User }} params
  * @returns {import('prosemirror-state').Transaction} Modified transaction.
  */
 export const trackedTransaction = ({ tr, state, user }) => {

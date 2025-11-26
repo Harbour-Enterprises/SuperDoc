@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isLineBreakOnlyRun, generateParagraphProperties, processOutputMarks } from '@converter/exporter.js';
+import { isLineBreakOnlyRun, processOutputMarks } from '@converter/exporter.js';
 
 describe('isLineBreakOnlyRun', () => {
   it('returns true for a run containing only line break nodes', () => {
@@ -43,34 +43,5 @@ describe('processOutputMarks', () => {
         attributes: { 'w:val': 'auto' },
       },
     ]);
-  });
-});
-
-describe('generateParagraphProperties', () => {
-  it('includes zero-value indents when explicitly provided', () => {
-    const node = {
-      type: 'paragraph',
-      attrs: {
-        indent: {
-          left: 0,
-          right: 0,
-          firstLine: 0,
-          hanging: 0,
-          explicitLeft: true,
-          explicitRight: true,
-          explicitFirstLine: true,
-          explicitHanging: true,
-        },
-      },
-    };
-
-    const result = generateParagraphProperties({ node });
-    const indentElement = result.elements.find((el) => el.name === 'w:ind');
-
-    expect(indentElement).toBeDefined();
-    expect(indentElement.attributes['w:left']).toBe('0');
-    expect(indentElement.attributes['w:right']).toBe('0');
-    expect(indentElement.attributes['w:firstLine']).toBe('0');
-    expect(indentElement.attributes['w:hanging']).toBe('0');
   });
 });

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach, beforeAll, afterAll } from 'vitest';
 import { getFileObject } from './get-file-object';
 
+// Type-safe interface for globalThis augmentation in tests
+interface GlobalThisWithOptionalAPIs {
+  fetch: typeof globalThis.fetch;
+  File: typeof File;
+  atob: typeof globalThis.atob;
+}
+
 const originalFetch = globalThis.fetch;
 const originalFile = globalThis.File;
 
@@ -21,15 +28,15 @@ beforeAll(() => {
       }
     }
 
-    (globalThis as any).File = PolyfilledFile;
+    (globalThis as unknown as GlobalThisWithOptionalAPIs).File = PolyfilledFile as unknown as typeof File;
   }
 });
 
 afterAll(() => {
   if (originalFile) {
-    (globalThis as any).File = originalFile;
+    (globalThis as unknown as GlobalThisWithOptionalAPIs).File = originalFile;
   } else {
-    delete (globalThis as any).File;
+    delete (globalThis as unknown as GlobalThisWithOptionalAPIs).File;
   }
 });
 
@@ -39,24 +46,24 @@ describe('getFileObject', () => {
   it('requires Node.js >= 20 for atob, fetch, and File APIs', () => {
     const version = parseInt(process.version.slice(1).split('.')[0], 10);
     expect(version).toBeGreaterThanOrEqual(20);
-    expect(typeof (globalThis as any).atob).toBe('function');
+    expect(typeof (globalThis as unknown as GlobalThisWithOptionalAPIs).atob).toBe('function');
     expect(typeof globalThis.fetch).toBe('function');
   });
 
   beforeEach(() => {
     mockBlob = new Blob(['hello world'], { type: 'text/plain' });
 
-    (globalThis as any).fetch = vi.fn().mockResolvedValue({
+    (globalThis as unknown as GlobalThisWithOptionalAPIs).fetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       statusText: 'OK',
       blob: vi.fn().mockResolvedValue(mockBlob),
-    });
+    }) as unknown as typeof globalThis.fetch;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
-    (globalThis as any).fetch = originalFetch;
+    (globalThis as unknown as GlobalThisWithOptionalAPIs).fetch = originalFetch;
   });
 
   it('fetches regular URLs and returns a File', async () => {

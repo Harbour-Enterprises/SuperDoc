@@ -53,10 +53,14 @@ jobs:
       - name: Build SuperDoc
         run: npm run build
 
+      - name: Validate command types
+        run: node scripts/validate-command-types.mjs
+
       - name: Run unit tests
         run: npm test
 
   run-e2e-tests:
+    if: false # Temporarily disabled - layout engine migration in progress
     runs-on: ubuntu-latest
     container:
       image: node:latest

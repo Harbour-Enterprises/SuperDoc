@@ -1,0 +1,1794 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Testing attribute paraId",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w:paraId": "00A1B2C3",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Testing attribute textId",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w:textId": "00A1B2C3",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Testing attribute rsidR",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w:rsidR": "00A1B2C3",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        },
+        "rsidR": "00A1B2C3"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Testing attribute rsidRPr",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w:rsidRPr": "00A1B2C3",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        },
+        "rsidRPr": "00A1B2C3"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Testing attribute rsidP",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w:rsidP": "00A1B2C3",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        },
+        "rsidP": "00A1B2C3"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Testing attribute rsidRDefault",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w:rsidRDefault": "00A1B2C3",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        },
+        "rsidRDefault": "00A1B2C3"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Testing attribute rsidDel",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w:rsidDel": "00A1B2C3",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        },
+        "rsidDel": "00A1B2C3"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Testing attribute rsidMove",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w:rsidMove": "00A1B2C3",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: ind left=720, firstLine=360",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "textIndent": "0.0006944444444444445in"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {
+                "textIndent": "0.0006944444444444445in"
+              }
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:ind",
+              "attributes": {
+                "w:left": "1",
+                "w:firstLine": "1"
+              }
+            }
+          ]
+        },
+        "textIndent": "0.0006944444444444445in",
+        "indent": {
+          "left": 0.067,
+          "right": 0,
+          "firstLine": 0.067,
+          "hanging": 0
+        },
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: ind right=720, hanging=360",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:ind",
+              "attributes": {
+                "w:right": "1",
+                "w:hanging": "1"
+              }
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0.067,
+          "firstLine": 0,
+          "hanging": 0.067
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: alignment=center",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "textAlign": "center"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {
+                "textAlign": "center"
+              }
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:jc",
+              "attributes": {
+                "w:val": "center"
+              }
+            }
+          ]
+        },
+        "textAlign": "center",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: alignment=right",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "textAlign": "right"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {
+                "textAlign": "right"
+              }
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:jc",
+              "attributes": {
+                "w:val": "right"
+              }
+            }
+          ]
+        },
+        "textAlign": "right",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: alignment=both (justified)",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "textAlign": "both"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {
+                "textAlign": "both"
+              }
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:jc",
+              "attributes": {
+                "w:val": "both"
+              }
+            }
+          ]
+        },
+        "textAlign": "both",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: spacing before=240, after=360, line=480 (2x)",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "lineHeight": "2"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {
+                "lineHeight": "2"
+              }
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:spacing",
+              "attributes": {
+                "w:before": "240",
+                "w:after": "360",
+                "w:line": "480",
+                "w:lineRule": "auto"
+              }
+            }
+          ]
+        },
+        "lineHeight": "2",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 2,
+          "lineRule": "auto",
+          "lineSpaceBefore": 16,
+          "lineSpaceAfter": 24
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: spacing single line, no space before/after",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "lineHeight": "1"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {
+                "lineHeight": "1"
+              }
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:spacing",
+              "attributes": {
+                "w:line": "240",
+                "w:lineRule": "auto"
+              }
+            }
+          ]
+        },
+        "lineHeight": "1",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: pBdr all sides single line",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:pBdr",
+              "elements": [
+                {
+                  "type": "element",
+                  "name": "w:top",
+                  "attributes": {
+                    "w:val": "single",
+                    "w:sz": "8",
+                    "w:space": "1",
+                    "w:color": "auto"
+                  }
+                },
+                {
+                  "type": "element",
+                  "name": "w:bottom",
+                  "attributes": {
+                    "w:val": "single",
+                    "w:sz": "8",
+                    "w:space": "1",
+                    "w:color": "auto"
+                  }
+                },
+                {
+                  "type": "element",
+                  "name": "w:left",
+                  "attributes": {
+                    "w:val": "single",
+                    "w:sz": "8",
+                    "w:space": "1",
+                    "w:color": "auto"
+                  }
+                },
+                {
+                  "type": "element",
+                  "name": "w:right",
+                  "attributes": {
+                    "w:val": "single",
+                    "w:sz": "8",
+                    "w:space": "1",
+                    "w:color": "auto"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "borders": {
+          "top": {
+            "val": "single",
+            "size": 1.3333,
+            "space": 0.1666625,
+            "color": "#auto"
+          },
+          "bottom": {
+            "val": "single",
+            "size": 1.3333,
+            "space": 0.1666625,
+            "color": "#auto"
+          },
+          "left": {
+            "val": "single",
+            "size": 1.3333,
+            "space": 0.1666625,
+            "color": "#auto"
+          },
+          "right": {
+            "val": "single",
+            "size": 1.3333,
+            "space": 0.1666625,
+            "color": "#auto"
+          }
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: shd fill=DDDDDD",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                },
+                {
+                  "type": "highlight",
+                  "attrs": {
+                    "color": "#DDDDDD"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "highlight",
+              "attrs": {
+                "color": "#DDDDDD"
+              }
+            },
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:shd",
+              "attributes": {
+                "w:val": "clear",
+                "w:color": "auto",
+                "w:fill": "DDDDDD"
+              }
+            }
+          ]
+        },
+        "color": "#DDDDDD",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: tabs - left tab at 1 inch, right tab at 4 inches",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:tabs",
+              "elements": [
+                {
+                  "type": "element",
+                  "name": "w:tab",
+                  "attributes": {
+                    "w:val": "left",
+                    "w:pos": "1440"
+                  }
+                },
+                {
+                  "type": "element",
+                  "name": "w:tab",
+                  "attributes": {
+                    "w:val": "right",
+                    "w:pos": "5760"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        },
+        "tabStops": [
+          {
+            "val": "start",
+            "pos": 96,
+            "originalPos": "1440"
+          },
+          {
+            "val": "end",
+            "pos": 384,
+            "originalPos": "5760"
+          }
+        ]
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: keepNext and keepLines",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:keepNext"
+            },
+            {
+              "type": "element",
+              "name": "w:keepLines"
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: pageBreakBefore",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:pageBreakBefore"
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: widowControl=0 (disabled)",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:widowControl",
+              "attributes": {
+                "w:val": "0"
+              }
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: bidi + adjustRightInd",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:bidi",
+              "attributes": {
+                "w:val": "1"
+              }
+            },
+            {
+              "type": "element",
+              "name": "w:adjustRightInd",
+              "attributes": {
+                "w:val": "1"
+              }
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: contextualSpacing + mirrorIndents",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:contextualSpacing"
+            },
+            {
+              "type": "element",
+              "name": "w:mirrorIndents"
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: outlineLvl=1",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:outlineLvl",
+              "attributes": {
+                "w:val": "1"
+              }
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: suppressLineNumbers + suppressAutoHyphens",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:suppressLineNumbers"
+            },
+            {
+              "type": "element",
+              "name": "w:suppressAutoHyphens"
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: snapToGrid=0 + textAlignment=center",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:snapToGrid",
+              "attributes": {
+                "w:val": "0"
+              }
+            },
+            {
+              "type": "element",
+              "name": "w:textAlignment",
+              "attributes": {
+                "w:val": "center"
+              }
+            }
+          ]
+        },
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "pPr: rPr defaults - bold, italic, color=FF0000, sz=28",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto",
+          "lineSpaceAfter": 13.333
+        }
+      },
+      "marks": []
+    }
+  ],
+  "attrs": {
+    "attributes": {
+      "xmlns:wpc": "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas",
+      "xmlns:mo": "http://schemas.microsoft.com/office/mac/office/2008/main",
+      "xmlns:mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+      "xmlns:mv": "urn:schemas-microsoft-com:mac:vml",
+      "xmlns:o": "urn:schemas-microsoft-com:office:office",
+      "xmlns:r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+      "xmlns:m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+      "xmlns:v": "urn:schemas-microsoft-com:vml",
+      "xmlns:wp14": "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
+      "xmlns:wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+      "xmlns:w10": "urn:schemas-microsoft-com:office:word",
+      "xmlns:w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      "xmlns:w14": "http://schemas.microsoft.com/office/word/2010/wordml",
+      "xmlns:wpg": "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+      "xmlns:wpi": "http://schemas.microsoft.com/office/word/2010/wordprocessingInk",
+      "xmlns:wne": "http://schemas.microsoft.com/office/word/2006/wordml",
+      "xmlns:wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+      "mc:Ignorable": "w14 wp14"
+    },
+    "bodySectPr": {
+      "type": "element",
+      "name": "w:sectPr",
+      "attributes": {
+        "w:rsidR": "00FC693F",
+        "w:rsidRPr": "0006063C",
+        "w:rsidSect": "00034616"
+      },
+      "elements": [
+        {
+          "type": "element",
+          "name": "w:pgSz",
+          "attributes": {
+            "w:w": "12240",
+            "w:h": "15840"
+          }
+        },
+        {
+          "type": "element",
+          "name": "w:pgMar",
+          "attributes": {
+            "w:top": "1440",
+            "w:right": "1800",
+            "w:bottom": "1440",
+            "w:left": "1800",
+            "w:header": "720",
+            "w:footer": "720",
+            "w:gutter": "0"
+          }
+        },
+        {
+          "type": "element",
+          "name": "w:cols",
+          "attributes": {
+            "w:space": "720"
+          }
+        },
+        {
+          "type": "element",
+          "name": "w:docGrid",
+          "attributes": {
+            "w:linePitch": "360"
+          }
+        }
+      ]
+    }
+  }
+}

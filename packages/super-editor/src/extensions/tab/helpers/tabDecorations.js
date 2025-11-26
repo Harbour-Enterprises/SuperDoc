@@ -1,5 +1,6 @@
 import { Decoration } from 'prosemirror-view';
-import { twipsToPixels } from '@converter/helpers.js';
+import { twipsToPixels } from '@superdoc/word-layout';
+import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 
 export const defaultTabDistance = 48;
 export const defaultLineLength = 816;
@@ -129,8 +130,8 @@ export function calculateTabStyle(
 
     paragraphContext.accumulatedTabWidth = accumulatedTabWidth + tabWidth;
     return `width: ${tabWidth}px; height: ${tabHeight}; ${extraStyles}`;
-  } catch (error) {
-    console.error('tab decoration error', error);
+  } catch {
+    return null;
   }
 }
 
@@ -150,31 +151,33 @@ export function findParagraphContext($pos, cache, helpers) {
 }
 
 export function extractParagraphContext(node, startPos, helpers, depth = 0) {
+  const paragraphProperties = getResolvedParagraphProperties(node);
+  // Map OOXML alignment values to internal values (for RTL support)
+  const alignmentAliases = { left: 'start', right: 'end' };
   let tabStops = [];
-  if (Array.isArray(node.attrs?.tabStops)) {
-    tabStops = node.attrs.tabStops
+
+  if (Array.isArray(paragraphProperties.tabStops)) {
+    tabStops = paragraphProperties.tabStops
       .map((stop) => {
         const ref = stop?.tab;
         if (!ref) return stop || null;
+        const rawType = ref.tabType || 'start';
+        const mappedVal = alignmentAliases[rawType] || rawType;
         return {
-          val: ref.tabType || 'start',
+          val: mappedVal,
           pos: twipsToPixels(Number(ref.pos) || 0),
           leader: ref.leader,
         };
       })
       .filter(Boolean);
-  } else {
-    const style = helpers.linkedStyles.getStyleById(node.attrs?.styleId);
-    if (Array.isArray(style?.definition?.styles?.tabStops)) {
-      tabStops = style.definition.styles.tabStops;
-    }
   }
+
   const { entries, positionMap } = flattenParagraph(node, startPos);
   return {
     paragraph: node,
     paragraphDepth: depth,
     startPos,
-    indent: node.attrs?.indent || {},
+    indent: paragraphProperties.indent || {},
     tabStops: tabStops,
     flattened: entries,
     positionMap: positionMap, // Store position map for O(1) lookups

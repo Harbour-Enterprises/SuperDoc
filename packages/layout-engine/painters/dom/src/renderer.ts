@@ -1,0 +1,3081 @@
+import type {
+  FlowBlock,
+  Fragment,
+  Layout,
+  Measure,
+  Page,
+  PageMargins,
+  ParaFragment,
+  ImageFragment,
+  DrawingFragment,
+  Run,
+  TextRun,
+  Line,
+  ParagraphBlock,
+  ParagraphMeasure,
+  ImageBlock,
+  ImageDrawing,
+  ParagraphAttrs,
+  ParagraphBorder,
+  ListItemFragment,
+  ListBlock,
+  ListMeasure,
+  TableBlock,
+  TableFragment,
+  TrackedChangeKind,
+  TrackedChangesMode,
+  SdtMetadata,
+  DrawingBlock,
+  VectorShapeDrawing,
+  ShapeGroupDrawing,
+  ShapeGroupChild,
+  DrawingGeometry,
+  PositionedDrawingGeometry,
+  VectorShapeStyle,
+  FlowRunLink,
+} from '@superdoc/contracts';
+import { getPresetShapeSvg } from '@superdoc/preset-geometry';
+import {
+  CLASS_NAMES,
+  containerStyles,
+  containerStylesHorizontal,
+  spreadStyles,
+  fragmentStyles,
+  lineStyles,
+  pageStyles,
+  ensurePrintStyles,
+  ensureLinkStyles,
+  ensureTrackChangeStyles,
+  type PageStyles,
+} from './styles.js';
+import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
+import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
+
+/**
+ * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
+ * Extracted to avoid dependency on @superdoc/word-layout package.
+ */
+type WordLayoutMarker = {
+  markerText?: string;
+  justification?: 'left' | 'right' | 'center';
+  gutterWidthPx?: number;
+  suffix?: 'tab' | 'space' | 'nothing';
+  run: {
+    fontFamily: string;
+    fontSize: number;
+    bold?: boolean;
+    italic?: boolean;
+    color?: string;
+    letterSpacing?: number;
+  };
+};
+
+/**
+ * Minimal type for wordLayout property used in this renderer.
+ * Full type is WordParagraphLayoutOutput from @superdoc/word-layout.
+ */
+type MinimalWordLayout = {
+  marker?: WordLayoutMarker;
+};
+
+/**
+ * Layout mode for document rendering.
+ * @typedef {('vertical'|'horizontal'|'book')} LayoutMode
+ * - 'vertical': Standard page-by-page vertical layout (default)
+ * - 'horizontal': Pages arranged horizontally side-by-side
+ * - 'book': Book-style layout with facing pages
+ */
+export type LayoutMode = 'vertical' | 'horizontal' | 'book';
+type PageDecorationPayload = {
+  fragments: Fragment[];
+  height: number;
+  /** Optional measured content height to aid bottom alignment in footers. */
+  contentHeight?: number;
+  offset?: number;
+  marginLeft?: number;
+  // Optional explicit content width (px) for the decoration container
+  contentWidth?: number;
+  headerId?: string;
+  sectionType?: string;
+  box?: { x: number; y: number; width: number; height: number };
+  hitRegion?: { x: number; y: number; width: number; height: number };
+};
+
+/**
+ * Provider function for page decorations (headers and footers).
+ * Called for each page to generate header or footer content.
+ *
+ * @param {number} pageNumber - The page number (1-indexed)
+ * @param {PageMargins} [pageMargins] - Page margin configuration
+ * @param {Page} [page] - Full page object from the layout
+ * @returns {PageDecorationPayload | null} Decoration payload containing fragments and layout info, or null if no decoration
+ */
+export type PageDecorationProvider = (
+  pageNumber: number,
+  pageMargins?: PageMargins,
+  page?: Page,
+) => PageDecorationPayload | null;
+
+type PainterOptions = {
+  pageStyles?: PageStyles;
+  layoutMode?: LayoutMode;
+  headerProvider?: PageDecorationProvider;
+  footerProvider?: PageDecorationProvider;
+  virtualization?: {
+    enabled?: boolean;
+    window?: number;
+    overscan?: number;
+    gap?: number;
+    paddingTop?: number;
+  };
+};
+
+type BlockLookupEntry = {
+  block: FlowBlock;
+  measure: Measure;
+  version: string;
+};
+
+/**
+ * Map of block IDs to their corresponding block data and measurements.
+ * Used by the renderer to efficiently look up block information during fragment rendering.
+ * Each entry contains the block definition, its layout measurements, and a version string for cache invalidation.
+ *
+ * @typedef {Map<string, BlockLookupEntry>} BlockLookup
+ */
+export type BlockLookup = Map<string, BlockLookupEntry>;
+
+type FragmentDomState = {
+  key: string;
+  signature: string;
+  fragment: Fragment;
+  element: HTMLElement;
+  context: FragmentRenderContext;
+};
+
+type PageDomState = {
+  element: HTMLElement;
+  fragments: FragmentDomState[];
+};
+
+/**
+ * Rendering context passed to fragment renderers containing page metadata.
+ * Provides information about the current page position and section for dynamic content like page numbers.
+ *
+ * @typedef {Object} FragmentRenderContext
+ * @property {number} pageNumber - Current page number (1-indexed)
+ * @property {number} totalPages - Total number of pages in the document
+ * @property {'body'|'header'|'footer'} section - Document section being rendered
+ * @property {string} [pageNumberText] - Optional formatted page number text (e.g., "Page 1 of 10")
+ */
+export type FragmentRenderContext = {
+  pageNumber: number;
+  totalPages: number;
+  section: 'body' | 'header' | 'footer';
+  pageNumberText?: string;
+};
+
+const LIST_MARKER_GAP = 8;
+
+type LinkRenderData = {
+  href?: string;
+  target?: string;
+  rel?: string;
+  tooltip?: string | null;
+  dataset?: Record<string, string>;
+  blocked: boolean;
+};
+
+const LINK_DATASET_KEYS = {
+  blocked: 'linkBlocked',
+  docLocation: 'linkDocLocation',
+  history: 'linkHistory',
+  rId: 'linkRid',
+  truncated: 'linkTooltipTruncated',
+} as const;
+
+const MAX_HREF_LENGTH = 2048;
+
+const SAFE_ANCHOR_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Pattern to detect ambiguous link text that doesn't convey destination (WCAG 2.4.4).
+ * Matches common generic phrases like "click here", "read more", etc.
+ */
+const AMBIGUOUS_LINK_PATTERNS = /^(click here|read more|more|link|here|this|download|view)$/i;
+
+/**
+ * Hyperlink rendering metrics for observability.
+ * Tracks sanitization, blocking, and security-related events.
+ */
+const linkMetrics = {
+  sanitized: 0,
+  blocked: 0,
+  invalidProtocol: 0,
+  homographWarnings: 0,
+
+  reset() {
+    this.sanitized = 0;
+    this.blocked = 0;
+    this.invalidProtocol = 0;
+    this.homographWarnings = 0;
+  },
+
+  getMetrics() {
+    return {
+      'hyperlink.sanitized.count': this.sanitized,
+      'hyperlink.blocked.count': this.blocked,
+      'hyperlink.invalid_protocol.count': this.invalidProtocol,
+      'hyperlink.homograph_warnings.count': this.homographWarnings,
+    };
+  },
+};
+
+// Export for testing/monitoring
+export { linkMetrics };
+
+const TRACK_CHANGE_BASE_CLASS: Record<TrackedChangeKind, string> = {
+  insert: 'track-insert-dec',
+  delete: 'track-delete-dec',
+  format: 'track-format-dec',
+};
+
+const TRACK_CHANGE_MODIFIER_CLASS: Record<TrackedChangeKind, Record<TrackedChangesMode, string | undefined>> = {
+  insert: {
+    review: 'highlighted',
+    original: 'hidden',
+    final: 'normal',
+    off: undefined,
+  },
+  delete: {
+    review: 'highlighted',
+    original: 'normal',
+    final: 'hidden',
+    off: undefined,
+  },
+  format: {
+    review: 'highlighted',
+    original: 'before',
+    final: 'normal',
+    off: undefined,
+  },
+};
+
+type TrackedChangesRenderConfig = {
+  mode: TrackedChangesMode;
+  enabled: boolean;
+};
+
+/**
+ * Sanitize a URL to prevent XSS attacks.
+ * Only allows http, https, mailto, tel, and internal anchors.
+ *
+ * @param href - The URL to sanitize
+ * @returns Sanitized URL or null if blocked
+ */
+export function sanitizeUrl(href: string): string | null {
+  if (typeof href !== 'string') return null;
+  const sanitized = sanitizeHref(href);
+  return sanitized?.href ?? null;
+}
+
+const LINK_TARGET_SET = new Set(['_blank', '_self', '_parent', '_top']);
+
+/**
+ * Normalize and validate an anchor fragment identifier for use in hyperlinks.
+ * Strips leading '#' if present and validates against safe character pattern.
+ *
+ * @param value - Raw anchor string (with or without leading '#')
+ * @returns Normalized anchor with leading '#' (e.g., '#section-1'), or null if invalid
+ *
+ * @remarks
+ * SECURITY: Only allows safe characters (A-Z, a-z, 0-9, ., _, -) to prevent HTML attribute injection.
+ * Rejects characters like quotes, angle brackets, colons, and spaces that could break HTML structure
+ * or enable XSS attacks when used in href attributes.
+ *
+ * @example
+ * normalizeAnchor('section-1') // Returns: '#section-1'
+ * normalizeAnchor('#bookmark') // Returns: '#bookmark'
+ * normalizeAnchor('unsafe<script>') // Returns: null
+ * normalizeAnchor('  whitespace  ') // Returns: null
+ */
+const normalizeAnchor = (value: string | null | undefined): string | null => {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  // Remove leading # if present, then validate
+  const anchor = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+
+  // SECURITY: Only allow safe characters to prevent attribute injection
+  // Rejects characters like quotes, angle brackets, spaces that could break HTML
+  if (!SAFE_ANCHOR_PATTERN.test(anchor)) {
+    return null;
+  }
+
+  return `#${anchor}`;
+};
+
+/**
+ * Check if a fragment string contains only safe anchor characters.
+ * Safe characters are alphanumeric, dots, underscores, and hyphens.
+ *
+ * @param {string} fragment - Fragment to validate
+ * @returns {boolean} True if fragment matches safe pattern
+ * @private
+ */
+const isValidSafeFragment = (fragment: string): boolean => {
+  return SAFE_ANCHOR_PATTERN.test(fragment);
+};
+
+/**
+ * URL-encode a fragment string for use in a URL hash.
+ * Returns null if encoding fails (rare edge case).
+ *
+ * @param {string} fragment - Fragment to encode
+ * @returns {string | null} Encoded fragment or null if encoding fails
+ * @private
+ */
+const encodeFragment = (fragment: string): string | null => {
+  try {
+    return encodeURIComponent(fragment);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Append a document location fragment to an href.
+ * CRITICAL FIX: URL-encode unsafe characters instead of destroying the entire href.
+ *
+ * @param href - Base URL or null
+ * @param docLocation - Fragment identifier to append
+ * @returns Combined URL with fragment, or original href if fragment is invalid
+ */
+const appendDocLocation = (href: string | null, docLocation?: string | null): string | null => {
+  if (!docLocation?.trim()) return href;
+
+  const fragment = docLocation.trim();
+  if (href?.includes('#')) return href;
+
+  const encoded = isValidSafeFragment(fragment) ? fragment : encodeFragment(fragment);
+
+  if (!encoded) return href;
+  return href ? `${href}#${encoded}` : `#${encoded}`;
+};
+
+/**
+ * Build HTML data-* attributes object from hyperlink metadata for version 2 links.
+ * Extracts relationship ID, document location fragment, and history preferences from link object.
+ *
+ * @param link - Flow run link object containing hyperlink metadata
+ * @returns Record of data attribute keys and string values to be applied to anchor element
+ *
+ * @remarks
+ * Only processes version 2 links (Office Open XML format). Version 1 links return empty object.
+ * All dataset values are converted to strings for DOM compatibility.
+ *
+ * @example
+ * buildLinkDataset({
+ *   version: 2,
+ *   rId: 'rId5',
+ *   docLocation: 'bookmark1',
+ *   history: true
+ * })
+ * // Returns: { rId: 'rId5', docLocation: 'bookmark1', history: 'true' }
+ */
+const buildLinkDataset = (link: FlowRunLink): Record<string, string> => {
+  const dataset: Record<string, string> = {};
+  if (link.version === 2) {
+    if (link.rId) dataset[LINK_DATASET_KEYS.rId] = link.rId;
+    if (link.docLocation) dataset[LINK_DATASET_KEYS.docLocation] = link.docLocation;
+    if (typeof link.history === 'boolean') dataset[LINK_DATASET_KEYS.history] = String(link.history);
+  }
+  return dataset;
+};
+
+/**
+ * Resolve the appropriate target attribute for a hyperlink anchor element.
+ * Validates user-specified targets and auto-sets '_blank' for external HTTP(S) links.
+ *
+ * @param link - Flow run link object potentially containing target preference
+ * @param sanitized - Sanitized URL metadata containing protocol information, or null if sanitization failed
+ * @returns Valid target string ('_blank', '_self', '_parent', '_top') or undefined if not applicable
+ *
+ * @remarks
+ * Target resolution follows this priority:
+ * 1. If link.target is specified and valid (in LINK_TARGET_SET), use it
+ * 2. If URL is external (http/https protocol), default to '_blank' for security
+ * 3. Otherwise, return undefined (browser default behavior)
+ *
+ * @example
+ * resolveLinkTarget(
+ *   { target: '_self' },
+ *   { protocol: 'https', href: 'https://example.com', isExternal: true }
+ * ) // Returns: '_self' (user preference honored)
+ *
+ * resolveLinkTarget(
+ *   {},
+ *   { protocol: 'https', href: 'https://example.com', isExternal: true }
+ * ) // Returns: '_blank' (external link default)
+ */
+const resolveLinkTarget = (
+  link: FlowRunLink,
+  sanitized?: ReturnType<typeof sanitizeHref> | null,
+): string | undefined => {
+  if (link.target && LINK_TARGET_SET.has(link.target)) {
+    return link.target;
+  }
+  if (sanitized && (sanitized.protocol === 'http' || sanitized.protocol === 'https')) {
+    return '_blank';
+  }
+  return undefined;
+};
+
+/**
+ * Resolve the rel attribute value for a hyperlink, combining user-specified relationships
+ * with security-critical values for external links.
+ *
+ * @param link - Flow run link object potentially containing rel preference (space-separated string)
+ * @param target - Resolved target attribute value (e.g., '_blank', '_self')
+ * @returns Space-separated rel values, or undefined if no rel values apply
+ *
+ * @remarks
+ * SECURITY: Automatically adds 'noopener noreferrer' for target='_blank' links to prevent:
+ * - Tabnabbing attacks (window.opener access)
+ * - Referrer leakage to external sites
+ *
+ * User-specified rel values are parsed from link.rel (whitespace-separated string),
+ * deduplicated, and merged with security values.
+ *
+ * @example
+ * resolveLinkRel(
+ *   { rel: 'nofollow external' },
+ *   '_blank'
+ * ) // Returns: 'nofollow external noopener noreferrer'
+ *
+ * resolveLinkRel(
+ *   { rel: 'nofollow  noopener  ' },
+ *   '_blank'
+ * ) // Returns: 'nofollow noopener noreferrer' (deduplicated)
+ *
+ * resolveLinkRel({}, '_self') // Returns: undefined
+ */
+const resolveLinkRel = (link: FlowRunLink, target?: string): string | undefined => {
+  const relValues = new Set<string>();
+  if (typeof link.rel === 'string' && link.rel.trim()) {
+    link.rel
+      .trim()
+      .split(/\s+/)
+      .forEach((value) => {
+        if (value) relValues.add(value);
+      });
+  }
+  if (target === '_blank') {
+    relValues.add('noopener');
+    relValues.add('noreferrer');
+  }
+  if (relValues.size === 0) {
+    return undefined;
+  }
+  return Array.from(relValues).join(' ');
+};
+
+/**
+ * Apply data-* attributes to an HTML element from a dataset object.
+ * Safely assigns dataset properties while filtering out null/undefined values.
+ *
+ * @param element - Target HTML element to receive data attributes
+ * @param dataset - Object mapping data attribute keys to string values
+ *
+ * @remarks
+ * Uses the element.dataset API which automatically prefixes keys with 'data-'.
+ * Only assigns non-null, non-undefined values to prevent empty attributes.
+ *
+ * @example
+ * const anchor = document.createElement('a');
+ * applyLinkDataset(anchor, {
+ *   rId: 'rId5',
+ *   docLocation: 'bookmark1',
+ *   history: 'true'
+ * });
+ * // Resulting HTML: <a data-r-id="rId5" data-doc-location="bookmark1" data-history="true"></a>
+ */
+const applyLinkDataset = (element: HTMLElement, dataset?: Record<string, string>): void => {
+  if (!dataset) return;
+  Object.entries(dataset).forEach(([key, value]) => {
+    if (value != null) {
+      element.dataset[key] = value;
+    }
+  });
+};
+
+/**
+ * DOM-based document painter that renders layout fragments to HTML elements.
+ * Manages page rendering, virtualization, headers/footers, and incremental updates.
+ *
+ * @class DomPainter
+ *
+ * @remarks
+ * The DomPainter is responsible for:
+ * - Rendering layout fragments (paragraphs, lists, images, tables, drawings) to DOM elements
+ * - Managing page-level DOM structure and styling
+ * - Providing virtualization for large documents (vertical mode only)
+ * - Handling headers and footers via PageDecorationProvider
+ * - Incremental re-rendering when only specific blocks change
+ * - Hyperlink rendering with security sanitization and accessibility
+ *
+ * @example
+ * ```typescript
+ * const painter = new DomPainter(blocks, measures, {
+ *   layoutMode: 'vertical',
+ *   pageStyles: { width: '8.5in', height: '11in' }
+ * });
+ * painter.mount(document.getElementById('editor-container'));
+ * painter.render(layout);
+ * ```
+ */
+export class DomPainter {
+  private blockLookup: BlockLookup;
+  private readonly options: PainterOptions;
+  private mount: HTMLElement | null = null;
+  private doc: Document | null = null;
+  private pageStates: PageDomState[] = [];
+  private currentLayout: Layout | null = null;
+  private changedBlocks = new Set<string>();
+  private readonly layoutMode: LayoutMode;
+  private headerProvider?: PageDecorationProvider;
+  private footerProvider?: PageDecorationProvider;
+  private totalPages = 0;
+  private linkIdCounter = 0; // Counter for generating unique link IDs
+
+  /**
+   * WeakMap storing tooltip data for hyperlink elements before DOM insertion.
+   * Uses WeakMap to prevent memory leaks - entries are automatically garbage collected
+   * when the corresponding element is removed from memory.
+   * @private
+   */
+  private pendingTooltips = new WeakMap<HTMLElement, string>();
+  // Virtualization state (vertical mode only)
+  private virtualEnabled = false;
+  private virtualWindow = 5;
+  private virtualOverscan = 0;
+  private virtualGap = 72; // px, approximates prior margin + gap look
+  private virtualPaddingTop: number | null = null; // px; computed from mount if not provided
+  private topSpacerEl: HTMLElement | null = null;
+  private bottomSpacerEl: HTMLElement | null = null;
+  private pageIndexToState: Map<number, PageDomState> = new Map();
+  private virtualHeights: number[] = [];
+  private virtualOffsets: number[] = [];
+  private virtualStart = 0;
+  private virtualEnd = -1;
+  private layoutVersion = 0;
+  private processedLayoutVersion = -1;
+  private onScrollHandler: ((e: Event) => void) | null = null;
+  private onWindowScrollHandler: ((e: Event) => void) | null = null;
+  private onResizeHandler: ((e: Event) => void) | null = null;
+
+  constructor(blocks: FlowBlock[], measures: Measure[], options: PainterOptions = {}) {
+    this.options = options;
+    this.layoutMode = options.layoutMode ?? 'vertical';
+    this.blockLookup = this.buildBlockLookup(blocks, measures);
+    this.headerProvider = options.headerProvider;
+    this.footerProvider = options.footerProvider;
+    // Initialize virtualization config (feature-flagged)
+    if (this.layoutMode === 'vertical' && options.virtualization?.enabled) {
+      this.virtualEnabled = true;
+      this.virtualWindow = Math.max(1, options.virtualization.window ?? 5);
+      this.virtualOverscan = Math.max(0, options.virtualization.overscan ?? 0);
+      if (typeof options.virtualization.gap === 'number' && Number.isFinite(options.virtualization.gap)) {
+        this.virtualGap = Math.max(0, options.virtualization.gap);
+      }
+      if (typeof options.virtualization.paddingTop === 'number' && Number.isFinite(options.virtualization.paddingTop)) {
+        this.virtualPaddingTop = Math.max(0, options.virtualization.paddingTop);
+      }
+    }
+  }
+
+  public setProviders(header?: PageDecorationProvider, footer?: PageDecorationProvider): void {
+    this.headerProvider = header;
+    this.footerProvider = footer;
+  }
+
+  /**
+   * Updates the painter's block and measure data.
+   *
+   * @param blocks - Main document blocks
+   * @param measures - Measures corresponding to main document blocks
+   * @param headerBlocks - Optional header blocks from header/footer layout results
+   * @param headerMeasures - Optional measures corresponding to header blocks
+   * @param footerBlocks - Optional footer blocks from header/footer layout results
+   * @param footerMeasures - Optional measures corresponding to footer blocks
+   */
+  public setData(
+    blocks: FlowBlock[],
+    measures: Measure[],
+    headerBlocks?: FlowBlock[],
+    headerMeasures?: Measure[],
+    footerBlocks?: FlowBlock[],
+    footerMeasures?: Measure[],
+  ): void {
+    // Validate main blocks and measures arrays
+    if (blocks.length !== measures.length) {
+      throw new Error(
+        `setData: blocks and measures arrays must have the same length. ` +
+          `Got blocks.length=${blocks.length}, measures.length=${measures.length}`,
+      );
+    }
+
+    // Validate header blocks and measures
+    const hasHeaderBlocks = headerBlocks !== undefined;
+    const hasHeaderMeasures = headerMeasures !== undefined;
+    if (hasHeaderBlocks !== hasHeaderMeasures) {
+      throw new Error(
+        `setData: headerBlocks and headerMeasures must both be provided or both be omitted. ` +
+          `Got headerBlocks=${hasHeaderBlocks ? 'provided' : 'omitted'}, ` +
+          `headerMeasures=${hasHeaderMeasures ? 'provided' : 'omitted'}`,
+      );
+    }
+    if (hasHeaderBlocks && hasHeaderMeasures && headerBlocks!.length !== headerMeasures!.length) {
+      throw new Error(
+        `setData: headerBlocks and headerMeasures arrays must have the same length. ` +
+          `Got headerBlocks.length=${headerBlocks!.length}, headerMeasures.length=${headerMeasures!.length}`,
+      );
+    }
+
+    // Validate footer blocks and measures
+    const hasFooterBlocks = footerBlocks !== undefined;
+    const hasFooterMeasures = footerMeasures !== undefined;
+    if (hasFooterBlocks !== hasFooterMeasures) {
+      throw new Error(
+        `setData: footerBlocks and footerMeasures must both be provided or both be omitted. ` +
+          `Got footerBlocks=${hasFooterBlocks ? 'provided' : 'omitted'}, ` +
+          `footerMeasures=${hasFooterMeasures ? 'provided' : 'omitted'}`,
+      );
+    }
+    if (hasFooterBlocks && hasFooterMeasures && footerBlocks!.length !== footerMeasures!.length) {
+      throw new Error(
+        `setData: footerBlocks and footerMeasures arrays must have the same length. ` +
+          `Got footerBlocks.length=${footerBlocks!.length}, footerMeasures.length=${footerMeasures!.length}`,
+      );
+    }
+
+    // Build lookup for main document blocks
+    const nextLookup = this.buildBlockLookup(blocks, measures);
+
+    // Merge header blocks into the lookup if provided
+    if (headerBlocks && headerMeasures) {
+      const headerLookup = this.buildBlockLookup(headerBlocks, headerMeasures);
+      headerLookup.forEach((entry, id) => {
+        nextLookup.set(id, entry);
+      });
+    }
+
+    // Merge footer blocks into the lookup if provided
+    if (footerBlocks && footerMeasures) {
+      const footerLookup = this.buildBlockLookup(footerBlocks, footerMeasures);
+      footerLookup.forEach((entry, id) => {
+        nextLookup.set(id, entry);
+      });
+    }
+
+    // Track changed blocks
+    const changed = new Set<string>();
+    nextLookup.forEach((entry, id) => {
+      const previous = this.blockLookup.get(id);
+      if (!previous || previous.version !== entry.version) {
+        changed.add(id);
+      }
+    });
+    this.blockLookup = nextLookup;
+    this.changedBlocks = changed;
+  }
+
+  public paint(layout: Layout, mount: HTMLElement): void {
+    if (!(mount instanceof HTMLElement)) {
+      throw new Error('DomPainter.paint requires a valid HTMLElement mount');
+    }
+
+    const doc = mount.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+    if (!doc) {
+      throw new Error('DomPainter.paint requires a DOM-like document');
+    }
+    this.doc = doc;
+
+    ensurePrintStyles(doc);
+    ensureLinkStyles(doc);
+    ensureTrackChangeStyles(doc);
+    mount.classList.add(CLASS_NAMES.container);
+
+    if (this.mount && this.mount !== mount) {
+      this.resetState();
+    }
+    this.layoutVersion += 1;
+    this.mount = mount;
+
+    this.totalPages = layout.pages.length;
+    const mode = this.layoutMode;
+    if (mode === 'horizontal') {
+      applyStyles(mount, containerStylesHorizontal);
+      this.renderHorizontal(layout, mount);
+      this.currentLayout = layout;
+      this.pageStates = [];
+      this.changedBlocks.clear();
+      return;
+    }
+    if (mode === 'book') {
+      applyStyles(mount, containerStyles);
+      this.renderBookMode(layout, mount);
+      this.currentLayout = layout;
+      this.pageStates = [];
+      this.changedBlocks.clear();
+      return;
+    }
+
+    // Vertical mode
+    applyStyles(mount, containerStyles);
+
+    if (this.virtualEnabled) {
+      // Override container gap for consistent spacer math
+      mount.style.gap = `${this.virtualGap}px`;
+      this.renderVirtualized(layout, mount);
+      this.currentLayout = layout;
+      this.changedBlocks.clear();
+      return;
+    }
+
+    if (!this.currentLayout || this.pageStates.length === 0) {
+      this.fullRender(layout);
+    } else {
+      this.patchLayout(layout);
+    }
+
+    this.currentLayout = layout;
+    this.changedBlocks.clear();
+  }
+
+  // ----------------
+  // Virtualized path
+  // ----------------
+  private renderVirtualized(layout: Layout, mount: HTMLElement): void {
+    if (!this.doc) return;
+    // Always keep the latest layout reference for handlers
+    this.currentLayout = layout;
+
+    // First-time init or mount changed
+    const needsInit = !this.topSpacerEl || !this.bottomSpacerEl || this.mount !== mount;
+    if (needsInit) {
+      this.ensureVirtualizationSetup(mount);
+    }
+
+    this.computeVirtualMetrics();
+    this.updateVirtualWindow();
+  }
+
+  private ensureVirtualizationSetup(mount: HTMLElement): void {
+    if (!this.doc) return;
+
+    // Reset any prior non-virtual state
+    mount.innerHTML = '';
+    this.pageStates = [];
+    this.pageIndexToState.clear();
+
+    // Create and configure spacer elements
+    this.topSpacerEl = this.doc.createElement('div');
+    this.bottomSpacerEl = this.doc.createElement('div');
+    this.configureSpacerElement(this.topSpacerEl, 'top');
+    this.configureSpacerElement(this.bottomSpacerEl, 'bottom');
+
+    mount.appendChild(this.topSpacerEl);
+    mount.appendChild(this.bottomSpacerEl);
+
+    // Bind scroll and resize handlers
+    this.bindVirtualizationHandlers(mount);
+  }
+
+  private configureSpacerElement(element: HTMLElement, type: 'top' | 'bottom'): void {
+    element.style.width = '1px';
+    element.style.height = '0px';
+    element.style.flex = '0 0 auto';
+    element.setAttribute('data-virtual-spacer', type);
+  }
+
+  private bindVirtualizationHandlers(mount: HTMLElement): void {
+    // Bind scroll handler for container
+    if (this.onScrollHandler) {
+      mount.removeEventListener('scroll', this.onScrollHandler);
+    }
+    this.onScrollHandler = () => {
+      this.updateVirtualWindow();
+    };
+    mount.addEventListener('scroll', this.onScrollHandler);
+
+    // Bind window scroll/resize for cases where the page scrolls the window
+    const win = this.doc?.defaultView;
+    if (win) {
+      if (this.onWindowScrollHandler) {
+        win.removeEventListener('scroll', this.onWindowScrollHandler);
+      }
+      this.onWindowScrollHandler = () => {
+        this.updateVirtualWindow();
+      };
+      // passive to avoid blocking scrolling
+      win.addEventListener('scroll', this.onWindowScrollHandler, { passive: true });
+
+      if (this.onResizeHandler) {
+        win.removeEventListener('resize', this.onResizeHandler);
+      }
+      this.onResizeHandler = () => {
+        this.updateVirtualWindow();
+      };
+      win.addEventListener('resize', this.onResizeHandler);
+    }
+  }
+
+  private computeVirtualMetrics(): void {
+    if (!this.currentLayout) return;
+    const N = this.currentLayout.pages.length;
+    if (N !== this.virtualHeights.length) {
+      this.virtualHeights = this.currentLayout.pages.map((p) => p.size?.h ?? this.currentLayout!.pageSize.h);
+    }
+    // Build offsets where offsets[i] = sum_{k < i} (height[k] + gap)
+    const offsets: number[] = new Array(this.virtualHeights.length + 1);
+    offsets[0] = 0;
+    for (let i = 0; i < this.virtualHeights.length; i += 1) {
+      offsets[i + 1] = offsets[i] + this.virtualHeights[i] + this.virtualGap;
+    }
+    this.virtualOffsets = offsets;
+  }
+
+  private topOfIndex(i: number): number {
+    // Offset to the top of page i (0 for first). Includes gaps before page i.
+    if (i <= 0) return 0;
+    return this.virtualOffsets[i];
+  }
+
+  private contentTotalHeight(): number {
+    // Total content height without trailing gap after last page
+    const n = this.virtualHeights.length;
+    if (n <= 0) return 0;
+    return this.virtualOffsets[n] - this.virtualGap;
+  }
+
+  private getMountPaddingTopPx(): number {
+    if (this.virtualPaddingTop != null) return this.virtualPaddingTop;
+    if (!this.mount || !this.doc) return 0;
+    const win = this.doc.defaultView;
+    if (!win) return 0;
+    const style = win.getComputedStyle(this.mount);
+    const pt = style?.paddingTop ?? '0';
+    const val = Number.parseFloat(pt.replace('px', ''));
+    if (Number.isFinite(val)) return Math.max(0, val);
+    return 0;
+  }
+
+  private updateVirtualWindow(): void {
+    if (!this.mount || !this.topSpacerEl || !this.bottomSpacerEl || !this.currentLayout) return;
+    const layout = this.currentLayout;
+    const N = layout.pages.length;
+    if (N === 0) {
+      this.mount.innerHTML = '';
+      this.processedLayoutVersion = this.layoutVersion;
+      return;
+    }
+
+    // Map scrollTop -> anchor page index via prefix sums
+    const paddingTop = this.getMountPaddingTopPx();
+    let scrollY: number;
+    const isContainerScrollable = this.mount.scrollHeight > this.mount.clientHeight + 1;
+    if (isContainerScrollable) {
+      scrollY = Math.max(0, this.mount.scrollTop - paddingTop);
+    } else {
+      const rect = this.mount.getBoundingClientRect();
+      // Translate viewport scroll to content-space scroll offset
+      scrollY = Math.max(0, -rect.top - paddingTop);
+    }
+
+    // Binary search for anchor index such that topOfIndex(i) <= scrollY < topOfIndex(i+1)
+    let lo = 0;
+    let hi = N; // exclusive
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (this.topOfIndex(mid) <= scrollY) lo = mid + 1;
+      else hi = mid;
+    }
+    const anchor = Math.max(0, lo - 1);
+
+    // Compute window centered around anchor (approximately), with overscan
+    const baseWindow = this.virtualWindow;
+    const overscan = this.virtualOverscan;
+    let start = anchor - Math.floor(baseWindow / 2) - overscan;
+    start = Math.max(0, Math.min(start, Math.max(0, N - baseWindow)));
+    const end = Math.min(N - 1, start + baseWindow - 1 + overscan * 2);
+    // Adjust start if we overshot end due to trailing clamp
+    start = Math.max(0, Math.min(start, end - baseWindow + 1));
+
+    // No-op if window unchanged and nothing changed
+    const alreadyProcessedLayout = this.processedLayoutVersion === this.layoutVersion;
+    if (
+      start === this.virtualStart &&
+      end === this.virtualEnd &&
+      this.changedBlocks.size === 0 &&
+      alreadyProcessedLayout
+    ) {
+      // Still ensure spacer heights are correct if sizes changed
+      this.updateSpacers(start, end);
+      return;
+    }
+    this.virtualStart = start;
+    this.virtualEnd = end;
+
+    // Update spacers
+    this.updateSpacers(start, end);
+
+    // Mount/patch visible pages
+    const needed = new Set<number>();
+    for (let i = start; i <= end; i += 1) needed.add(i);
+
+    // Remove pages that are no longer needed
+    for (const [idx, state] of this.pageIndexToState.entries()) {
+      if (!needed.has(idx)) {
+        state.element.remove();
+        this.pageIndexToState.delete(idx);
+      }
+    }
+
+    // Insert or patch needed pages in order
+    for (let i = start; i <= end; i += 1) {
+      const page = layout.pages[i];
+      const pageSize = page.size ?? layout.pageSize;
+      const existing = this.pageIndexToState.get(i);
+      if (!existing) {
+        const newState = this.createPageState(page, pageSize);
+        newState.element.dataset.pageNumber = String(page.number);
+        newState.element.dataset.pageIndex = String(i);
+        // Ensure virtualization uses page margin 0
+        applyStyles(newState.element, pageStyles(pageSize.w, pageSize.h, this.getEffectivePageStyles()));
+        this.mount.insertBefore(newState.element, this.bottomSpacerEl);
+        this.pageIndexToState.set(i, newState);
+      } else {
+        // Patch in place
+        this.patchPage(existing, page, pageSize);
+      }
+    }
+
+    // Ensure pages are ordered from start..end by reinserting before bottom spacer
+    for (let i = start; i <= end; i += 1) {
+      const state = this.pageIndexToState.get(i)!;
+      this.mount.insertBefore(state.element, this.bottomSpacerEl);
+    }
+
+    // Clear changed blocks now that current visible pages are patched
+    this.changedBlocks.clear();
+    this.processedLayoutVersion = this.layoutVersion;
+  }
+
+  private updateSpacers(start: number, end: number): void {
+    if (!this.topSpacerEl || !this.bottomSpacerEl) return;
+    const top = this.topOfIndex(start);
+    const bottom = this.contentTotalHeight() - this.topOfIndex(end + 1);
+    this.topSpacerEl.style.height = `${Math.max(0, Math.floor(top))}px`;
+    this.bottomSpacerEl.style.height = `${Math.max(0, Math.floor(bottom))}px`;
+  }
+
+  private renderHorizontal(layout: Layout, mount: HTMLElement): void {
+    if (!this.doc) return;
+    mount.innerHTML = '';
+    layout.pages.forEach((page, pageIndex) => {
+      const pageSize = page.size ?? layout.pageSize;
+      const pageEl = this.renderPage(pageSize.w, pageSize.h, page);
+      pageEl.dataset.pageNumber = String(page.number);
+      pageEl.dataset.pageIndex = String(pageIndex);
+      mount.appendChild(pageEl);
+    });
+  }
+
+  private renderBookMode(layout: Layout, mount: HTMLElement): void {
+    if (!this.doc) return;
+    mount.innerHTML = '';
+    const pages = layout.pages;
+    if (pages.length === 0) return;
+
+    const firstPageSize = pages[0].size ?? layout.pageSize;
+    const firstPageEl = this.renderPage(firstPageSize.w, firstPageSize.h, pages[0]);
+    firstPageEl.dataset.pageNumber = String(pages[0].number);
+    firstPageEl.dataset.pageIndex = '0';
+    mount.appendChild(firstPageEl);
+
+    for (let i = 1; i < pages.length; i += 2) {
+      const spreadEl = this.doc!.createElement('div');
+      spreadEl.classList.add(CLASS_NAMES.spread);
+      applyStyles(spreadEl, spreadStyles);
+
+      const leftPage = pages[i];
+      const leftPageSize = leftPage.size ?? layout.pageSize;
+      const leftPageEl = this.renderPage(leftPageSize.w, leftPageSize.h, leftPage);
+      leftPageEl.dataset.pageNumber = String(leftPage.number);
+      leftPageEl.dataset.pageIndex = String(i);
+      spreadEl.appendChild(leftPageEl);
+
+      if (i + 1 < pages.length) {
+        const rightPage = pages[i + 1];
+        const rightPageSize = rightPage.size ?? layout.pageSize;
+        const rightPageEl = this.renderPage(rightPageSize.w, rightPageSize.h, rightPage);
+        rightPageEl.dataset.pageNumber = String(rightPage.number);
+        rightPageEl.dataset.pageIndex = String(i + 1);
+        spreadEl.appendChild(rightPageEl);
+      }
+
+      mount.appendChild(spreadEl);
+    }
+  }
+
+  private renderPage(width: number, height: number, page: Page): HTMLElement {
+    if (!this.doc) {
+      throw new Error('DomPainter: document is not available');
+    }
+    const el = this.doc.createElement('div');
+    el.classList.add(CLASS_NAMES.page);
+    applyStyles(el, pageStyles(width, height, this.getEffectivePageStyles()));
+    const contextBase: FragmentRenderContext = {
+      pageNumber: page.number,
+      totalPages: this.totalPages,
+      section: 'body',
+      pageNumberText: page.numberText,
+    };
+    page.fragments.forEach((fragment) => {
+      el.appendChild(this.renderFragment(fragment, contextBase));
+    });
+    this.renderDecorationsForPage(el, page);
+    return el;
+  }
+
+  private renderDecorationsForPage(pageEl: HTMLElement, page: Page): void {
+    this.renderDecorationSection(pageEl, page, 'header');
+    this.renderDecorationSection(pageEl, page, 'footer');
+  }
+
+  private renderDecorationSection(pageEl: HTMLElement, page: Page, kind: 'header' | 'footer'): void {
+    if (!this.doc) return;
+    const provider = kind === 'header' ? this.headerProvider : this.footerProvider;
+    const className = kind === 'header' ? CLASS_NAMES.pageHeader : CLASS_NAMES.pageFooter;
+    const existing = pageEl.querySelector(`.${className}`);
+    const data = provider ? provider(page.number, page.margins, page) : null;
+
+    if (!data || data.fragments.length === 0) {
+      existing?.remove();
+      return;
+    }
+
+    const container = (existing as HTMLElement) ?? this.doc.createElement('div');
+    container.className = className;
+    container.innerHTML = '';
+    const offset = data.offset ?? (kind === 'footer' ? pageEl.clientHeight - data.height : 0);
+    const marginLeft = data.marginLeft ?? 0;
+    const marginRight = page.margins?.right ?? 0;
+    container.style.position = 'absolute';
+    container.style.left = `${marginLeft}px`;
+    if (typeof data.contentWidth === 'number') {
+      container.style.width = `${Math.max(0, data.contentWidth)}px`;
+    } else {
+      container.style.width = `calc(100% - ${marginLeft + marginRight}px)`;
+    }
+    container.style.pointerEvents = 'none';
+    container.style.height = `${data.height}px`;
+    container.style.top = `${Math.max(0, offset)}px`;
+    container.style.zIndex = '1';
+
+    // For footers, calculate offset to push content to bottom of container
+    // Fragments are absolutely positioned, so we need to adjust their y values
+    let footerYOffset = 0;
+    if (kind === 'footer' && data.fragments.length > 0) {
+      const contentHeight =
+        typeof data.contentHeight === 'number'
+          ? data.contentHeight
+          : data.fragments.reduce((max, f) => {
+              const fragHeight =
+                'height' in f && typeof f.height === 'number' ? f.height : this.estimateFragmentHeight(f);
+              return Math.max(max, f.y + Math.max(0, fragHeight));
+            }, 0);
+      // Offset to push content to bottom of container
+      footerYOffset = Math.max(0, data.height - contentHeight);
+    }
+
+    const context: FragmentRenderContext = {
+      pageNumber: page.number,
+      totalPages: this.totalPages,
+      section: kind,
+      pageNumberText: page.numberText,
+    };
+
+    data.fragments.forEach((fragment) => {
+      const fragEl = this.renderFragment(fragment, context);
+      // Apply footer offset to push content to bottom
+      if (footerYOffset > 0) {
+        const currentTop = parseFloat(fragEl.style.top) || fragment.y;
+        fragEl.style.top = `${currentTop + footerYOffset}px`;
+      }
+      container.appendChild(fragEl);
+    });
+
+    if (!existing) {
+      pageEl.appendChild(container);
+    }
+  }
+
+  private resetState(): void {
+    if (this.mount) {
+      if (this.onScrollHandler) {
+        try {
+          this.mount.removeEventListener('scroll', this.onScrollHandler);
+        } catch {}
+      }
+      if (this.onWindowScrollHandler && this.doc?.defaultView) {
+        try {
+          this.doc.defaultView.removeEventListener('scroll', this.onWindowScrollHandler);
+        } catch {}
+      }
+      if (this.onResizeHandler && this.doc?.defaultView) {
+        try {
+          this.doc.defaultView.removeEventListener('resize', this.onResizeHandler);
+        } catch {}
+      }
+      this.mount.innerHTML = '';
+    }
+    this.pageStates = [];
+    this.currentLayout = null;
+    this.pageIndexToState.clear();
+    this.topSpacerEl = null;
+    this.bottomSpacerEl = null;
+    this.onScrollHandler = null;
+    this.onWindowScrollHandler = null;
+    this.onResizeHandler = null;
+    this.layoutVersion = 0;
+    this.processedLayoutVersion = -1;
+  }
+
+  private fullRender(layout: Layout): void {
+    if (!this.mount || !this.doc) return;
+    this.mount.innerHTML = '';
+    this.pageStates = [];
+
+    layout.pages.forEach((page, pageIndex) => {
+      const pageSize = page.size ?? layout.pageSize;
+      const pageState = this.createPageState(page, pageSize);
+      pageState.element.dataset.pageNumber = String(page.number);
+      pageState.element.dataset.pageIndex = String(pageIndex);
+      this.mount!.appendChild(pageState.element);
+      this.pageStates.push(pageState);
+    });
+  }
+
+  private patchLayout(layout: Layout): void {
+    if (!this.mount || !this.doc) return;
+
+    const nextStates: PageDomState[] = [];
+
+    layout.pages.forEach((page, index) => {
+      const pageSize = page.size ?? layout.pageSize;
+      const prevState = this.pageStates[index];
+      if (!prevState) {
+        const newState = this.createPageState(page, pageSize);
+        newState.element.dataset.pageNumber = String(page.number);
+        newState.element.dataset.pageIndex = String(index);
+        this.mount!.insertBefore(newState.element, this.mount!.children[index] ?? null);
+        nextStates.push(newState);
+        return;
+      }
+      this.patchPage(prevState, page, pageSize);
+      nextStates.push(prevState);
+    });
+
+    if (this.pageStates.length > layout.pages.length) {
+      for (let i = layout.pages.length; i < this.pageStates.length; i += 1) {
+        this.pageStates[i]?.element.remove();
+      }
+    }
+
+    this.pageStates = nextStates;
+  }
+
+  private patchPage(state: PageDomState, page: Page, pageSize: { w: number; h: number }): void {
+    const pageEl = state.element;
+    applyStyles(pageEl, pageStyles(pageSize.w, pageSize.h, this.getEffectivePageStyles()));
+    pageEl.dataset.pageNumber = String(page.number);
+    // pageIndex is already set during creation and doesn't change during patch
+
+    const existing = new Map(state.fragments.map((frag) => [frag.key, frag]));
+    const nextFragments: FragmentDomState[] = [];
+
+    const contextBase: FragmentRenderContext = {
+      pageNumber: page.number,
+      totalPages: this.totalPages,
+      section: 'body',
+      pageNumberText: page.numberText,
+    };
+
+    page.fragments.forEach((fragment, index) => {
+      const key = fragmentKey(fragment);
+      const current = existing.get(key);
+
+      if (current) {
+        existing.delete(key);
+        const needsRebuild =
+          this.changedBlocks.has(fragment.blockId) ||
+          current.signature !== fragmentSignature(fragment, this.blockLookup);
+
+        if (needsRebuild) {
+          const replacement = this.renderFragment(fragment, contextBase);
+          pageEl.replaceChild(replacement, current.element);
+          current.element = replacement;
+          current.signature = fragmentSignature(fragment, this.blockLookup);
+        }
+
+        this.updateFragmentElement(current.element, fragment);
+        current.fragment = fragment;
+        current.key = key;
+        current.context = contextBase;
+        nextFragments.push(current);
+
+        return;
+      }
+
+      const fresh = this.renderFragment(fragment, contextBase);
+      pageEl.insertBefore(fresh, pageEl.children[index] ?? null);
+      nextFragments.push({
+        key,
+        fragment,
+        element: fresh,
+        signature: fragmentSignature(fragment, this.blockLookup),
+        context: contextBase,
+      });
+    });
+
+    existing.forEach((state) => state.element.remove());
+
+    nextFragments.forEach((fragmentState, index) => {
+      const desiredChild = pageEl.children[index];
+      if (fragmentState.element !== desiredChild) {
+        pageEl.insertBefore(fragmentState.element, desiredChild ?? null);
+      }
+    });
+
+    state.fragments = nextFragments;
+    this.renderDecorationsForPage(pageEl, page);
+  }
+
+  private createPageState(page: Page, pageSize: { w: number; h: number }): PageDomState {
+    if (!this.doc) {
+      throw new Error('DomPainter.createPageState requires a document');
+    }
+    const el = this.doc.createElement('div');
+    el.classList.add(CLASS_NAMES.page);
+    applyStyles(el, pageStyles(pageSize.w, pageSize.h, this.getEffectivePageStyles()));
+
+    const contextBase: FragmentRenderContext = {
+      pageNumber: page.number,
+      totalPages: this.totalPages,
+      section: 'body',
+    };
+
+    const fragments: FragmentDomState[] = page.fragments.map((fragment) => {
+      const fragmentEl = this.renderFragment(fragment, contextBase);
+      el.appendChild(fragmentEl);
+      return {
+        key: fragmentKey(fragment),
+        signature: fragmentSignature(fragment, this.blockLookup),
+        fragment,
+        element: fragmentEl,
+        context: contextBase,
+      };
+    });
+
+    this.renderDecorationsForPage(el, page);
+    return { element: el, fragments };
+  }
+
+  private getEffectivePageStyles(): PageStyles | undefined {
+    if (this.virtualEnabled && this.layoutMode === 'vertical') {
+      // Remove top/bottom margins to avoid double-counting with container gap during virtualization
+      const base = this.options.pageStyles ?? {};
+      return { ...base, margin: '0 auto' };
+    }
+    return this.options.pageStyles;
+  }
+
+  private renderFragment(fragment: Fragment, context: FragmentRenderContext): HTMLElement {
+    if (fragment.kind === 'para') {
+      return this.renderParagraphFragment(fragment, context);
+    }
+    if (fragment.kind === 'list-item') {
+      return this.renderListItemFragment(fragment, context);
+    }
+    if (fragment.kind === 'image') {
+      return this.renderImageFragment(fragment);
+    }
+    if (fragment.kind === 'drawing') {
+      return this.renderDrawingFragment(fragment);
+    }
+    if (fragment.kind === 'table') {
+      return this.renderTableFragment(fragment, context);
+    }
+    throw new Error(`DomPainter: unsupported fragment kind ${(fragment as Fragment).kind}`);
+  }
+
+  /**
+   * Renders a paragraph fragment with defensive error handling.
+   * Falls back to error placeholder on rendering errors to prevent full paint failure.
+   *
+   * @param fragment - The paragraph fragment to render
+   * @param context - Rendering context with page and column information
+   * @returns HTMLElement containing the rendered fragment or error placeholder
+   */
+  private renderParagraphFragment(fragment: ParaFragment, context: FragmentRenderContext): HTMLElement {
+    try {
+      const lookup = this.blockLookup.get(fragment.blockId);
+      if (!lookup || lookup.block.kind !== 'paragraph' || lookup.measure.kind !== 'paragraph') {
+        throw new Error(`DomPainter: missing block/measure for fragment ${fragment.blockId}`);
+      }
+
+      if (!this.doc) {
+        throw new Error('DomPainter: document is not available');
+      }
+
+      const block = lookup.block as ParagraphBlock;
+      const measure = lookup.measure as ParagraphMeasure;
+      const wordLayout = block.attrs?.wordLayout as MinimalWordLayout | undefined;
+
+      const fragmentEl = this.doc.createElement('div');
+      fragmentEl.classList.add(CLASS_NAMES.fragment);
+
+      // For TOC entries, override white-space to prevent wrapping
+      const isTocEntry = block.attrs?.isTocEntry;
+      // For fragments with markers, allow overflow to show markers positioned at negative left
+      const hasMarker = !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker;
+      const styles = isTocEntry
+        ? { ...fragmentStyles, whiteSpace: 'nowrap' }
+        : hasMarker
+          ? { ...fragmentStyles, overflow: 'visible' }
+          : fragmentStyles;
+      applyStyles(fragmentEl, styles);
+      this.applyFragmentFrame(fragmentEl, fragment);
+
+      // Add TOC-specific styling class
+      if (isTocEntry) {
+        fragmentEl.classList.add('superdoc-toc-entry');
+      }
+
+      if (fragment.continuesFromPrev) {
+        fragmentEl.dataset.continuesFromPrev = 'true';
+      }
+      if (fragment.continuesOnNext) {
+        fragmentEl.dataset.continuesOnNext = 'true';
+      }
+
+      const lines = measure.lines.slice(fragment.fromLine, fragment.toLine);
+
+      applyParagraphBlockStyles(fragmentEl, block.attrs);
+      if (block.attrs?.styleId) {
+        fragmentEl.dataset.styleId = block.attrs.styleId;
+        fragmentEl.setAttribute('styleid', block.attrs.styleId);
+      }
+      this.applySdtDataset(fragmentEl, block.attrs?.sdt);
+      this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
+
+      lines.forEach((line, index) => {
+        const lineEl = this.renderLine(block, line, context);
+        if (index === 0 && !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker) {
+          const markerContainer = this.doc!.createElement('span');
+          markerContainer.style.display = 'inline-block';
+
+          const markerEl = this.doc!.createElement('span');
+          markerEl.classList.add('superdoc-paragraph-marker');
+          markerEl.textContent = wordLayout.marker.markerText ?? '';
+          markerEl.style.width = `${fragment.markerWidth}px`;
+          markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
+          markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
+          markerEl.style.pointerEvents = 'none';
+
+          // Apply marker run styling
+          markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
+          markerEl.style.fontSize = `${wordLayout.marker.run.fontSize}px`;
+          markerEl.style.fontWeight = wordLayout.marker.run.bold ? 'bold' : '';
+          markerEl.style.fontStyle = wordLayout.marker.run.italic ? 'italic' : '';
+          if (wordLayout.marker.run.color) {
+            markerEl.style.color = wordLayout.marker.run.color;
+          }
+          if (wordLayout.marker.run.letterSpacing != null) {
+            markerEl.style.letterSpacing = `${wordLayout.marker.run.letterSpacing}px`;
+          }
+          markerContainer.appendChild(markerEl);
+
+          const suffix = wordLayout.marker.suffix ?? 'tab';
+          if (suffix === 'tab') {
+            const tabEl = this.doc!.createElement('span');
+            tabEl.className = 'superdoc-tab';
+            tabEl.innerHTML = '&nbsp;';
+            const gutterWidth =
+              typeof wordLayout.marker.gutterWidthPx === 'number' &&
+              isFinite(wordLayout.marker.gutterWidthPx) &&
+              wordLayout.marker.gutterWidthPx > 0
+                ? wordLayout.marker.gutterWidthPx
+                : LIST_MARKER_GAP;
+            tabEl.style.display = 'inline-block';
+            tabEl.style.width = `${gutterWidth}px`;
+            markerContainer.appendChild(tabEl);
+          } else if (suffix === 'space') {
+            markerContainer.appendChild(this.doc!.createTextNode('\u00A0'));
+          }
+          lineEl.prepend(markerContainer);
+        }
+        fragmentEl.appendChild(lineEl);
+      });
+
+      return fragmentEl;
+    } catch (error) {
+      console.error('[DomPainter] Fragment rendering failed:', { fragment, error });
+      return this.createErrorPlaceholder(fragment.blockId, error);
+    }
+  }
+
+  /**
+   * Creates an error placeholder element for failed fragment renders.
+   * Prevents entire paint operation from failing due to single fragment error.
+   *
+   * @param blockId - The block ID that failed to render
+   * @param error - The error that occurred
+   * @returns HTMLElement showing the error
+   */
+  private createErrorPlaceholder(blockId: string, error: unknown): HTMLElement {
+    if (!this.doc) {
+      // Fallback if doc is not available
+      const el = document.createElement('div');
+      el.className = 'render-error-placeholder';
+      el.style.cssText = 'color: red; padding: 4px; border: 1px solid red; background: #fee;';
+      el.textContent = `[Render Error: ${blockId}]`;
+      return el;
+    }
+
+    const el = this.doc.createElement('div');
+    el.className = 'render-error-placeholder';
+    el.style.cssText = 'color: red; padding: 4px; border: 1px solid red; background: #fee;';
+    el.textContent = `[Render Error: ${blockId}]`;
+    if (error instanceof Error) {
+      el.title = error.message;
+    }
+    return el;
+  }
+
+  private renderListItemFragment(fragment: ListItemFragment, context: FragmentRenderContext): HTMLElement {
+    try {
+      const lookup = this.blockLookup.get(fragment.blockId);
+      if (!lookup || lookup.block.kind !== 'list' || lookup.measure.kind !== 'list') {
+        throw new Error(`DomPainter: missing list data for fragment ${fragment.blockId}`);
+      }
+
+      if (!this.doc) {
+        throw new Error('DomPainter: document is not available');
+      }
+
+      const block = lookup.block as ListBlock;
+      const measure = lookup.measure as ListMeasure;
+      const item = block.items.find((entry) => entry.id === fragment.itemId);
+      const itemMeasure = measure.items.find((entry) => entry.itemId === fragment.itemId);
+      if (!item || !itemMeasure) {
+        throw new Error(`DomPainter: missing list item ${fragment.itemId}`);
+      }
+
+      const fragmentEl = this.doc.createElement('div');
+      fragmentEl.classList.add(CLASS_NAMES.fragment, `${CLASS_NAMES.fragment}-list-item`);
+      applyStyles(fragmentEl, fragmentStyles);
+      fragmentEl.style.left = `${fragment.x - fragment.markerWidth}px`;
+      fragmentEl.style.top = `${fragment.y}px`;
+      fragmentEl.style.width = `${fragment.markerWidth + fragment.width}px`;
+      fragmentEl.dataset.blockId = fragment.blockId;
+      fragmentEl.dataset.itemId = fragment.itemId;
+
+      const paragraphMetadata = item.paragraph.attrs?.sdt;
+      this.applySdtDataset(fragmentEl, paragraphMetadata);
+
+      if (fragment.continuesFromPrev) {
+        fragmentEl.dataset.continuesFromPrev = 'true';
+      }
+      if (fragment.continuesOnNext) {
+        fragmentEl.dataset.continuesOnNext = 'true';
+      }
+
+      const markerEl = this.doc.createElement('span');
+      markerEl.classList.add('superdoc-list-marker');
+
+      // Track B: Use marker styling from wordLayout if available
+      const wordLayout: MinimalWordLayout | undefined = item.paragraph.attrs?.wordLayout as
+        | MinimalWordLayout
+        | undefined;
+      const marker = wordLayout?.marker;
+      if (marker) {
+        markerEl.textContent = marker.markerText ?? null;
+        markerEl.style.display = 'inline-block';
+        markerEl.style.width = `${Math.max(0, fragment.markerWidth - LIST_MARKER_GAP)}px`;
+        markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
+        markerEl.style.textAlign = marker.justification ?? 'left';
+
+        // Apply marker run styling
+        markerEl.style.fontFamily = marker.run.fontFamily;
+        markerEl.style.fontSize = `${marker.run.fontSize}px`;
+        if (marker.run.bold) markerEl.style.fontWeight = 'bold';
+        if (marker.run.italic) markerEl.style.fontStyle = 'italic';
+        if (marker.run.color) markerEl.style.color = marker.run.color;
+        if (marker.run.letterSpacing) markerEl.style.letterSpacing = `${marker.run.letterSpacing}px`;
+      } else {
+        // Fallback: legacy behavior
+        markerEl.textContent = item.marker.text;
+        markerEl.style.display = 'inline-block';
+        markerEl.style.width = `${Math.max(0, fragment.markerWidth - LIST_MARKER_GAP)}px`;
+        markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
+        if (item.marker.align) {
+          markerEl.style.textAlign = item.marker.align;
+        }
+      }
+      fragmentEl.appendChild(markerEl);
+
+      const contentEl = this.doc.createElement('div');
+      contentEl.classList.add('superdoc-list-content');
+      this.applySdtDataset(contentEl, paragraphMetadata);
+      contentEl.style.display = 'inline-block';
+      contentEl.style.width = `${fragment.width}px`;
+      const lines = itemMeasure.paragraph.lines.slice(fragment.fromLine, fragment.toLine);
+      // Track B: preserve indent for wordLayout-based lists to show hierarchy
+      const contentAttrs = wordLayout ? item.paragraph.attrs : stripListIndent(item.paragraph.attrs);
+      applyParagraphBlockStyles(contentEl, contentAttrs);
+      lines.forEach((line) => {
+        const lineEl = this.renderLine(item.paragraph, line, context);
+        contentEl.appendChild(lineEl);
+      });
+      fragmentEl.appendChild(contentEl);
+
+      return fragmentEl;
+    } catch (error) {
+      console.error('[DomPainter] List item fragment rendering failed:', { fragment, error });
+      return this.createErrorPlaceholder(fragment.blockId, error);
+    }
+  }
+
+  private renderImageFragment(fragment: ImageFragment): HTMLElement {
+    try {
+      const lookup = this.blockLookup.get(fragment.blockId);
+      if (!lookup || lookup.block.kind !== 'image' || lookup.measure.kind !== 'image') {
+        throw new Error(`DomPainter: missing image block for fragment ${fragment.blockId}`);
+      }
+
+      if (!this.doc) {
+        throw new Error('DomPainter: document is not available');
+      }
+
+      const block = lookup.block as ImageBlock;
+
+      const fragmentEl = this.doc.createElement('div');
+      fragmentEl.classList.add(CLASS_NAMES.fragment);
+      applyStyles(fragmentEl, fragmentStyles);
+      this.applyFragmentFrame(fragmentEl, fragment);
+      fragmentEl.style.height = `${fragment.height}px`;
+      this.applySdtDataset(fragmentEl, block.attrs?.sdt);
+      this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
+
+      // Apply z-index for anchored images
+      if (fragment.isAnchored && fragment.zIndex != null) {
+        fragmentEl.style.zIndex = String(fragment.zIndex);
+      }
+
+      // behindDoc images are supported via z-index; suppress noisy debug logs
+
+      const img = this.doc.createElement('img');
+      if (block.src) {
+        img.src = block.src;
+      }
+      img.alt = block.alt ?? '';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = block.objectFit ?? 'contain';
+      img.style.display = block.display === 'inline' ? 'inline-block' : 'block';
+      fragmentEl.appendChild(img);
+
+      return fragmentEl;
+    } catch (error) {
+      console.error('[DomPainter] Image fragment rendering failed:', { fragment, error });
+      return this.createErrorPlaceholder(fragment.blockId, error);
+    }
+  }
+
+  private renderDrawingFragment(fragment: DrawingFragment): HTMLElement {
+    try {
+      const lookup = this.blockLookup.get(fragment.blockId);
+      if (!lookup || lookup.block.kind !== 'drawing' || lookup.measure.kind !== 'drawing') {
+        throw new Error(`DomPainter: missing drawing block for fragment ${fragment.blockId}`);
+      }
+      if (!this.doc) {
+        throw new Error('DomPainter: document is not available');
+      }
+
+      const block = lookup.block as DrawingBlock;
+      const isVectorShapeBlock = block.kind === 'drawing' && block.drawingKind === 'vectorShape';
+
+      const fragmentEl = this.doc.createElement('div');
+      fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-drawing-fragment');
+      applyStyles(fragmentEl, fragmentStyles);
+      this.applyFragmentFrame(fragmentEl, fragment);
+      fragmentEl.style.height = `${fragment.height}px`;
+      fragmentEl.style.position = 'absolute';
+
+      if (fragment.isAnchored && fragment.zIndex != null) {
+        fragmentEl.style.zIndex = String(fragment.zIndex);
+      }
+
+      const innerWrapper = this.doc.createElement('div');
+      innerWrapper.classList.add('superdoc-drawing-inner');
+      innerWrapper.style.position = 'absolute';
+      innerWrapper.style.left = '50%';
+      innerWrapper.style.top = '50%';
+      innerWrapper.style.width = `${fragment.geometry.width}px`;
+      innerWrapper.style.height = `${fragment.geometry.height}px`;
+      innerWrapper.style.transformOrigin = 'center';
+
+      const scale = fragment.scale ?? 1;
+      const transforms: string[] = ['translate(-50%, -50%)'];
+      if (!isVectorShapeBlock) {
+        transforms.push(`rotate(${fragment.geometry.rotation ?? 0}deg)`);
+        transforms.push(`scaleX(${fragment.geometry.flipH ? -1 : 1})`);
+        transforms.push(`scaleY(${fragment.geometry.flipV ? -1 : 1})`);
+      }
+      transforms.push(`scale(${scale})`);
+      innerWrapper.style.transform = transforms.join(' ');
+
+      innerWrapper.appendChild(this.renderDrawingContent(block, fragment));
+      fragmentEl.appendChild(innerWrapper);
+
+      return fragmentEl;
+    } catch (error) {
+      console.error('[DomPainter] Drawing fragment rendering failed:', { fragment, error });
+      return this.createErrorPlaceholder(fragment.blockId, error);
+    }
+  }
+
+  private renderDrawingContent(block: DrawingBlock, fragment: DrawingFragment): HTMLElement {
+    if (!this.doc) {
+      throw new Error('DomPainter: document is not available');
+    }
+    if (block.drawingKind === 'image') {
+      return this.createDrawingImageElement(block);
+    }
+    if (block.drawingKind === 'vectorShape') {
+      return this.createVectorShapeElement(block, fragment.geometry, true);
+    }
+    if (block.drawingKind === 'shapeGroup') {
+      return this.createShapeGroupElement(block);
+    }
+    return this.createDrawingPlaceholder();
+  }
+
+  private createDrawingImageElement(block: DrawingBlock): HTMLElement {
+    const drawing = block as ImageDrawing;
+    const img = this.doc!.createElement('img');
+    img.classList.add('superdoc-drawing-image');
+    if (drawing.src) {
+      img.src = drawing.src;
+    }
+    img.alt = drawing.alt ?? '';
+    img.style.width = '100%';
+    img.style.height = '100%';
+    img.style.objectFit = drawing.objectFit ?? 'contain';
+    img.style.display = 'block';
+    return img;
+  }
+
+  private createVectorShapeElement(
+    block: VectorShapeDrawing,
+    geometry?: DrawingGeometry,
+    applyTransforms = false,
+  ): HTMLElement {
+    const container = this.doc!.createElement('div');
+    container.classList.add('superdoc-vector-shape');
+    container.style.width = '100%';
+    container.style.height = '100%';
+    container.style.position = 'relative';
+
+    const svgMarkup = block.shapeKind ? this.tryCreatePresetSvg(block) : null;
+    if (svgMarkup) {
+      const svgElement = this.parseSafeSvg(svgMarkup);
+      if (svgElement) {
+        svgElement.setAttribute('width', '100%');
+        svgElement.setAttribute('height', '100%');
+        svgElement.style.display = 'block';
+        if (applyTransforms && geometry) {
+          this.applyVectorShapeTransforms(svgElement, geometry);
+        }
+        container.appendChild(svgElement);
+        return container;
+      }
+    }
+
+    container.style.background = block.fillColor ?? 'rgba(15, 23, 42, 0.1)';
+    container.style.border = `1px solid ${block.strokeColor ?? 'rgba(15, 23, 42, 0.3)'}`;
+    if (applyTransforms && geometry) {
+      this.applyVectorShapeTransforms(container, geometry);
+    }
+    return container;
+  }
+
+  private tryCreatePresetSvg(block: VectorShapeDrawing): string | null {
+    try {
+      return getPresetShapeSvg({
+        preset: block.shapeKind ?? '',
+        styleOverrides: () => ({
+          fill: block.fillColor ?? undefined,
+          stroke: block.strokeColor ?? undefined,
+          strokeWidth: block.strokeWidth ?? undefined,
+        }),
+      });
+    } catch (error) {
+      console.warn(`[DomPainter] Unable to render preset shape "${block.shapeKind}":`, error);
+      return null;
+    }
+  }
+
+  private parseSafeSvg(markup: string): SVGElement | null {
+    const DOMParserCtor = this.doc?.defaultView?.DOMParser ?? (typeof DOMParser !== 'undefined' ? DOMParser : null);
+    if (!DOMParserCtor) {
+      return null;
+    }
+    const parser = new DOMParserCtor();
+    const parsed = parser.parseFromString(markup, 'image/svg+xml');
+    if (!parsed || parsed.getElementsByTagName('parsererror').length > 0) {
+      return null;
+    }
+    // documentElement might be HTMLElement or Element, use type guard via unknown
+    const svgElement = parsed.documentElement as unknown as SVGElement | null;
+    if (!svgElement) return null;
+    this.stripUnsafeSvgContent(svgElement);
+    // Safe cast: importNode preserves the element type, and we've verified it's an SVGElement
+    const imported = this.doc?.importNode(svgElement, true);
+    return imported ? (imported as unknown as SVGElement) : null;
+  }
+
+  private stripUnsafeSvgContent(element: Element): void {
+    element.querySelectorAll('script').forEach((script) => script.remove());
+    const sanitize = (node: Element) => {
+      Array.from(node.attributes).forEach((attr) => {
+        if (attr.name.toLowerCase().startsWith('on')) {
+          node.removeAttribute(attr.name);
+        }
+      });
+      Array.from(node.children).forEach((child) => {
+        sanitize(child as Element);
+      });
+    };
+    sanitize(element);
+  }
+
+  private applyVectorShapeTransforms(target: HTMLElement | SVGElement, geometry: DrawingGeometry): void {
+    const transforms: string[] = [];
+    if (geometry.rotation) {
+      transforms.push(`rotate(${geometry.rotation}deg)`);
+    }
+    if (geometry.flipH) {
+      transforms.push('scaleX(-1)');
+    }
+    if (geometry.flipV) {
+      transforms.push('scaleY(-1)');
+    }
+    if (transforms.length > 0) {
+      target.style.transformOrigin = 'center';
+      target.style.transform = transforms.join(' ');
+    } else {
+      target.style.removeProperty('transform');
+      target.style.removeProperty('transform-origin');
+    }
+  }
+
+  private createShapeGroupElement(block: ShapeGroupDrawing): HTMLElement {
+    const groupEl = this.doc!.createElement('div');
+    groupEl.classList.add('superdoc-shape-group');
+    groupEl.style.position = 'relative';
+    groupEl.style.width = '100%';
+    groupEl.style.height = '100%';
+
+    const groupTransform = block.groupTransform;
+    let contentContainer: HTMLElement = groupEl;
+
+    if (groupTransform) {
+      const inner = this.doc!.createElement('div');
+      inner.style.position = 'absolute';
+      inner.style.left = '0';
+      inner.style.top = '0';
+      const childWidth = groupTransform.childWidth ?? groupTransform.width ?? block.geometry.width ?? 0;
+      const childHeight = groupTransform.childHeight ?? groupTransform.height ?? block.geometry.height ?? 0;
+      inner.style.width = `${Math.max(1, childWidth)}px`;
+      inner.style.height = `${Math.max(1, childHeight)}px`;
+      const transforms: string[] = [];
+      const offsetX = groupTransform.childX ?? 0;
+      const offsetY = groupTransform.childY ?? 0;
+      if (offsetX || offsetY) {
+        transforms.push(`translate(${-offsetX}px, ${-offsetY}px)`);
+      }
+      const targetWidth = groupTransform.width ?? block.geometry.width ?? childWidth;
+      const targetHeight = groupTransform.height ?? block.geometry.height ?? childHeight;
+      const scaleX = childWidth ? targetWidth / childWidth : 1;
+      const scaleY = childHeight ? targetHeight / childHeight : 1;
+      if (scaleX !== 1 || scaleY !== 1) {
+        transforms.push(`scale(${scaleX}, ${scaleY})`);
+      }
+      if (transforms.length > 0) {
+        inner.style.transformOrigin = 'top left';
+        inner.style.transform = transforms.join(' ');
+      }
+      groupEl.appendChild(inner);
+      contentContainer = inner;
+    }
+
+    block.shapes.forEach((child) => {
+      const childContent = this.createGroupChildContent(child);
+      if (!childContent) return;
+      const attrs = (child as ShapeGroupChild).attrs ?? {};
+      const wrapper = this.doc!.createElement('div');
+      wrapper.classList.add('superdoc-shape-group__child');
+      wrapper.style.position = 'absolute';
+      wrapper.style.left = `${attrs.x ?? 0}px`;
+      wrapper.style.top = `${attrs.y ?? 0}px`;
+      const childWidthValue = typeof attrs.width === 'number' ? attrs.width : block.geometry.width;
+      const childHeightValue = typeof attrs.height === 'number' ? attrs.height : block.geometry.height;
+      wrapper.style.width = `${Math.max(1, childWidthValue)}px`;
+      wrapper.style.height = `${Math.max(1, childHeightValue)}px`;
+      wrapper.style.transformOrigin = 'center';
+      const transforms: string[] = [];
+      if (attrs.rotation) {
+        transforms.push(`rotate(${attrs.rotation}deg)`);
+      }
+      if (attrs.flipH) {
+        transforms.push('scaleX(-1)');
+      }
+      if (attrs.flipV) {
+        transforms.push('scaleY(-1)');
+      }
+      if (transforms.length > 0) {
+        wrapper.style.transform = transforms.join(' ');
+      }
+      childContent.style.width = '100%';
+      childContent.style.height = '100%';
+      wrapper.appendChild(childContent);
+      contentContainer.appendChild(wrapper);
+    });
+
+    return groupEl;
+  }
+
+  private createGroupChildContent(child: ShapeGroupChild): HTMLElement | null {
+    // Type narrowing with explicit checks to help TypeScript distinguish union members
+    if (child.shapeType === 'vectorShape' && 'fillColor' in child.attrs) {
+      // After this check, child should be ShapeGroupVectorChild
+      const attrs = child.attrs as PositionedDrawingGeometry &
+        VectorShapeStyle & {
+          kind?: string;
+          shapeId?: string;
+          shapeName?: string;
+        };
+      const vectorChild: VectorShapeDrawing = {
+        drawingKind: 'vectorShape',
+        kind: 'drawing',
+        id: `${attrs.shapeId ?? child.shapeType}`,
+        geometry: {
+          width: attrs.width ?? 0,
+          height: attrs.height ?? 0,
+          rotation: attrs.rotation ?? 0,
+          flipH: attrs.flipH ?? false,
+          flipV: attrs.flipV ?? false,
+        },
+        padding: undefined,
+        margin: undefined,
+        anchor: undefined,
+        wrap: undefined,
+        attrs: child.attrs,
+        drawingContentId: undefined,
+        drawingContent: undefined,
+        shapeKind: attrs.kind,
+        fillColor: attrs.fillColor,
+        strokeColor: attrs.strokeColor,
+        strokeWidth: attrs.strokeWidth,
+      };
+      return this.createVectorShapeElement(vectorChild);
+    }
+    if (child.shapeType === 'image' && 'src' in child.attrs) {
+      // After this check, child should be ShapeGroupImageChild
+      const attrs = child.attrs as PositionedDrawingGeometry & {
+        src: string;
+        alt?: string;
+      };
+      const img = this.doc!.createElement('img');
+      img.src = attrs.src;
+      img.alt = attrs.alt ?? '';
+      img.style.objectFit = 'contain';
+      img.style.display = 'block';
+      return img;
+    }
+    return this.createDrawingPlaceholder();
+  }
+
+  private createDrawingPlaceholder(): HTMLElement {
+    const placeholder = this.doc!.createElement('div');
+    placeholder.classList.add('superdoc-drawing-placeholder');
+    placeholder.style.width = '100%';
+    placeholder.style.height = '100%';
+    placeholder.style.background =
+      'repeating-linear-gradient(45deg, rgba(15,23,42,0.1), rgba(15,23,42,0.1) 6px, rgba(15,23,42,0.2) 6px, rgba(15,23,42,0.2) 12px)';
+    placeholder.style.border = '1px dashed rgba(15, 23, 42, 0.3)';
+    return placeholder;
+  }
+
+  private renderTableFragment(fragment: TableFragment, context: FragmentRenderContext): HTMLElement {
+    if (!this.doc) {
+      throw new Error('DomPainter: document is not available');
+    }
+
+    return renderTableFragmentElement({
+      doc: this.doc,
+      fragment,
+      context,
+      blockLookup: this.blockLookup,
+      renderLine: this.renderLine.bind(this),
+      applyFragmentFrame: this.applyFragmentFrame.bind(this),
+      applySdtDataset: this.applySdtDataset.bind(this),
+      applyStyles,
+    });
+  }
+
+  /**
+   * Extract link data from a run, including sanitization.
+   * @returns Sanitized link data or null if invalid/missing
+   */
+  private extractLinkData(run: Run): LinkRenderData | null {
+    if (run.kind === 'tab') {
+      return null;
+    }
+    const link = (run as TextRun).link as FlowRunLink | undefined;
+    if (!link) {
+      return null;
+    }
+    return this.buildLinkRenderData(link);
+  }
+
+  private buildLinkRenderData(link: FlowRunLink): LinkRenderData | null {
+    const dataset = buildLinkDataset(link);
+    const sanitized = typeof link.href === 'string' ? sanitizeHref(link.href) : null;
+    const anchorHref = normalizeAnchor(link.anchor ?? link.name ?? '');
+    let href: string | null = sanitized?.href ?? anchorHref;
+    if (link.version === 2) {
+      href = appendDocLocation(href, link.docLocation ?? null);
+    }
+
+    // Track metrics: successful sanitization
+    if (sanitized) {
+      linkMetrics.sanitized++;
+
+      // Check for homograph if hostname has non-ASCII (in raw href before URL parsing)
+      if (sanitized.href && typeof link.href === 'string') {
+        const hostStartIndex = link.href.indexOf('://') + 3;
+        let hostEndIndex = link.href.indexOf('/', hostStartIndex);
+        if (hostEndIndex === -1) {
+          hostEndIndex = link.href.indexOf('?', hostStartIndex);
+        }
+        if (hostEndIndex === -1) {
+          hostEndIndex = link.href.indexOf('#', hostStartIndex);
+        }
+        if (hostEndIndex === -1) {
+          hostEndIndex = link.href.length;
+        }
+        const rawHostname = link.href.slice(hostStartIndex, hostEndIndex);
+        if (rawHostname && /[^\x00-\x7F]/.test(rawHostname)) {
+          linkMetrics.homographWarnings++;
+        }
+      }
+    }
+
+    // Defense-in-depth: Enforce maximum URL length even if sanitization was bypassed
+    if (sanitized && sanitized.href.length > MAX_HREF_LENGTH) {
+      console.warn(`[DomPainter] Rejecting URL exceeding ${MAX_HREF_LENGTH} characters`);
+      linkMetrics.blocked++;
+      return { blocked: true, dataset: { [LINK_DATASET_KEYS.blocked]: 'true' } };
+    }
+
+    if (!href) {
+      if (typeof link.href === 'string' && link.href.trim()) {
+        dataset[LINK_DATASET_KEYS.blocked] = 'true';
+        console.warn(`[DomPainter] Blocked potentially unsafe URL: ${link.href.slice(0, 50)}`);
+        linkMetrics.blocked++;
+        // Track invalid protocol if sanitized was null
+        if (!sanitized) {
+          linkMetrics.invalidProtocol++;
+        }
+        return { blocked: true, dataset };
+      }
+      // Check if there was an anchor/name that failed validation
+      const hadAnchor = (link.anchor ?? link.name ?? null) != null;
+      if (Object.keys(dataset).length > 0 || hadAnchor) {
+        dataset[LINK_DATASET_KEYS.blocked] = 'true';
+        linkMetrics.blocked++;
+        return { blocked: true, dataset };
+      }
+      return null;
+    }
+
+    const target = resolveLinkTarget(link, sanitized);
+    const rel = resolveLinkRel(link, target);
+    const tooltipSource = link.version === 2 ? (link.tooltip ?? link.title) : link.title;
+    const tooltipResult = tooltipSource ? encodeTooltip(tooltipSource) : null;
+    // Use raw text - browser will escape when setting attribute
+    const tooltip = tooltipResult?.text ?? null;
+
+    // Signal when tooltip is truncated
+    if (tooltipResult?.wasTruncated) {
+      dataset[LINK_DATASET_KEYS.truncated] = 'true';
+    }
+
+    return {
+      href,
+      target,
+      rel,
+      tooltip,
+      dataset: Object.keys(dataset).length > 0 ? dataset : undefined,
+      blocked: false,
+    };
+  }
+
+  /**
+   * Apply tooltip accessibility using aria-describedby for better screen reader support.
+   * Creates a visually-hidden element containing the tooltip text and links it to the anchor.
+   *
+   * @param elem - The anchor element to enhance
+   * @param tooltip - The tooltip text to make accessible
+   * @returns The unique ID generated for this link
+   */
+  private applyTooltipAccessibility(elem: HTMLAnchorElement, tooltip: string | null): string {
+    const linkId = `superdoc-link-${++this.linkIdCounter}`;
+    elem.id = linkId;
+
+    if (!tooltip || !this.doc) return linkId;
+
+    // Keep title attribute for visual tooltip (browser default)
+    elem.setAttribute('title', tooltip);
+
+    // Create visually-hidden element for screen readers
+    const descId = `link-desc-${linkId}`;
+    const descElem = this.doc.createElement('span');
+    descElem.id = descId;
+    descElem.className = 'sr-only'; // Screen reader only class
+    descElem.textContent = tooltip;
+
+    // Insert description element after the link
+    // Note: We'll insert it as a sibling in the parent line element
+    if (elem.parentElement) {
+      elem.parentElement.appendChild(descElem);
+      // Reference from link only if we successfully added the description element
+      elem.setAttribute('aria-describedby', descId);
+    } else {
+      // Element not yet in DOM - accessibility feature will degrade gracefully
+      // The title attribute will still provide tooltip functionality
+      console.warn('[DomPainter] Unable to add aria-describedby for tooltip (element not in DOM)');
+    }
+
+    return linkId;
+  }
+
+  /**
+   * Enhance accessibility of a link element with ARIA labels and attributes.
+   * Adds descriptive ARIA labels for ambiguous text and target=_blank links (WCAG 2.4.4).
+   *
+   * @param elem - The anchor element to enhance
+   * @param linkData - Link metadata including href and target
+   * @param textContent - The visible link text to analyze for ambiguity
+   */
+  private enhanceAccessibility(elem: HTMLAnchorElement, linkData: LinkRenderData, textContent: string): void {
+    if (!linkData.href) return;
+
+    const trimmedText = textContent.trim().toLowerCase();
+
+    // Check if link text is ambiguous (e.g., "click here", "read more")
+    if (AMBIGUOUS_LINK_PATTERNS.test(trimmedText)) {
+      try {
+        const url = new URL(linkData.href);
+        const hostname = url.hostname.replace(/^www\./, '');
+
+        // Generate descriptive aria-label for screen readers
+        const ariaLabel = `${textContent.trim()} - ${hostname}`;
+        elem.setAttribute('aria-label', ariaLabel);
+        return; // Exit early since we've set the label
+      } catch {
+        // If URL parsing fails, add generic label
+        elem.setAttribute('aria-label', `${textContent.trim()} - external link`);
+        return;
+      }
+    }
+
+    // Add aria-label for external links without one (indicates new tab)
+    if (linkData.target === '_blank' && !elem.getAttribute('aria-label')) {
+      elem.setAttribute('aria-label', `${textContent.trim()} (opens in new tab)`);
+    }
+  }
+
+  /**
+   * Apply link attributes to an anchor element.
+   */
+  private applyLinkAttributes(elem: HTMLAnchorElement, linkData: LinkRenderData): void {
+    if (!linkData.href) return;
+    elem.href = linkData.href;
+    elem.classList.add('superdoc-link');
+
+    if (linkData.target) {
+      elem.target = linkData.target;
+    } else {
+      elem.removeAttribute('target');
+    }
+    if (linkData.rel) {
+      elem.rel = linkData.rel;
+    } else {
+      elem.removeAttribute('rel');
+    }
+    if (linkData.tooltip) {
+      elem.title = linkData.tooltip;
+    } else {
+      elem.removeAttribute('title');
+    }
+
+    // Explicitly set role for clarity (though <a> with href has implicit role="link")
+    elem.setAttribute('role', 'link');
+
+    // Ensure link is keyboard accessible (should be default for <a>, but verify)
+    elem.setAttribute('tabindex', '0');
+  }
+
+  /**
+   * Render a single run as an HTML element (span or anchor).
+   */
+  private renderRun(
+    run: Run,
+    context: FragmentRenderContext,
+    trackedConfig?: TrackedChangesRenderConfig,
+  ): HTMLElement | null {
+    if (!run.text || !this.doc) {
+      return null;
+    }
+
+    const linkData = this.extractLinkData(run);
+    const isActiveLink = !!(linkData && !linkData.blocked && linkData.href);
+    const elem = isActiveLink ? this.doc.createElement('a') : this.doc.createElement('span');
+    const text = resolveRunText(run, context);
+    elem.textContent = text;
+
+    if (linkData?.dataset) {
+      applyLinkDataset(elem, linkData.dataset);
+    }
+    if (linkData?.blocked) {
+      elem.dataset[LINK_DATASET_KEYS.blocked] = 'true';
+      // For blocked links rendered as spans, set appropriate role
+      elem.setAttribute('role', 'text');
+      elem.setAttribute('aria-label', 'Invalid link - not clickable');
+    }
+    if (isActiveLink && linkData) {
+      this.applyLinkAttributes(elem as HTMLAnchorElement, linkData);
+      // Enhance accessibility with ARIA labels for ambiguous text
+      this.enhanceAccessibility(elem as HTMLAnchorElement, linkData, text);
+
+      // Note: Tooltip accessibility (aria-describedby) will be applied after
+      // the element is added to the DOM in renderLine, since it creates a sibling element
+      // Store tooltip for later processing
+      if (linkData.tooltip) {
+        this.pendingTooltips.set(elem, linkData.tooltip);
+      }
+    }
+
+    // Pass isLink flag to skip applying inline color/decoration styles for links
+    applyRunStyles(elem as HTMLElement, run, isActiveLink);
+    // Ensure text renders above tab leaders (leaders are z-index: 0)
+    elem.style.zIndex = '1';
+    applyRunDataAttributes(elem as HTMLElement, (run as TextRun).dataAttrs);
+    if (run.pmStart != null) elem.dataset.pmStart = String(run.pmStart);
+    if (run.pmEnd != null) elem.dataset.pmEnd = String(run.pmEnd);
+    if (trackedConfig) {
+      this.applyTrackedChangeDecorations(elem, run, trackedConfig);
+    }
+    this.applySdtDataset(elem, (run as TextRun).sdt);
+
+    return elem;
+  }
+
+  private renderLine(block: ParagraphBlock, line: Line, context: FragmentRenderContext): HTMLElement {
+    if (!this.doc) {
+      throw new Error('DomPainter: document is not available');
+    }
+
+    const el = this.doc.createElement('div');
+    el.classList.add(CLASS_NAMES.line);
+    applyStyles(el, lineStyles(line.lineHeight));
+    const styleId = (block.attrs as ParagraphAttrs | undefined)?.styleId;
+    if (styleId) {
+      el.setAttribute('styleid', styleId);
+    }
+
+    const lineRange = computeLinePmRange(block, line);
+
+    if (lineRange.pmStart != null) {
+      el.dataset.pmStart = String(lineRange.pmStart);
+    }
+    if (lineRange.pmEnd != null) {
+      el.dataset.pmEnd = String(lineRange.pmEnd);
+    }
+
+    const runs = sliceRunsForLine(block, line);
+    const trackedConfig = this.resolveTrackedChangesConfig(block);
+
+    if (runs.length === 0) {
+      const span = this.doc.createElement('span');
+      span.innerHTML = '&nbsp;';
+      el.appendChild(span);
+    }
+
+    // Render tab leaders (absolute positioned overlays)
+    if (line.leaders && line.leaders.length > 0) {
+      line.leaders.forEach((ld) => {
+        const leaderEl = this.doc!.createElement('div');
+        leaderEl.classList.add('superdoc-leader');
+        leaderEl.setAttribute('data-style', ld.style);
+        leaderEl.style.position = 'absolute';
+        leaderEl.style.left = `${ld.from}px`;
+        leaderEl.style.width = `${Math.max(0, ld.to - ld.from)}px`;
+        // Align leaders closer to the text baseline using measured descent
+        const baselineOffset = Math.max(1, Math.round(Math.max(1, line.descent * 0.5)));
+        leaderEl.style.bottom = `${baselineOffset}px`;
+        leaderEl.style.height = ld.style === 'heavy' ? '2px' : '1px';
+        leaderEl.style.pointerEvents = 'none';
+        leaderEl.style.zIndex = '0'; // Same layer as line, text will be z-index: 1
+
+        // Map leader styles to CSS
+        if (ld.style === 'dot' || ld.style === 'middleDot') {
+          leaderEl.style.borderBottom = '1px dotted currentColor';
+        } else if (ld.style === 'hyphen') {
+          leaderEl.style.borderBottom = '1px dashed currentColor';
+        } else if (ld.style === 'underscore') {
+          leaderEl.style.borderBottom = '1px solid currentColor';
+        } else if (ld.style === 'heavy') {
+          leaderEl.style.borderBottom = '2px solid currentColor';
+        }
+
+        el.appendChild(leaderEl);
+      });
+    }
+
+    // Render bar tabs (vertical hairlines)
+    if (line.bars && line.bars.length > 0) {
+      line.bars.forEach((bar) => {
+        const barEl = this.doc!.createElement('div');
+        barEl.classList.add('superdoc-tab-bar');
+        barEl.style.position = 'absolute';
+        barEl.style.left = `${bar.x}px`;
+        barEl.style.top = '0px';
+        barEl.style.bottom = '0px';
+        barEl.style.width = '1px';
+        barEl.style.background = 'currentColor';
+        barEl.style.opacity = '0.6';
+        barEl.style.pointerEvents = 'none';
+        el.appendChild(barEl);
+      });
+    }
+
+    // Check if any segments have explicit X positioning (from tab stops)
+    const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+
+    if (hasExplicitPositioning && line.segments) {
+      // Use segment-based rendering with absolute positioning for tab-aligned text
+      // When rendering segments, we need to track cumulative X position
+      // for segments that don't have explicit X coordinates
+      let cumulativeX = 0;
+
+      line.segments.forEach((segment, _segIdx) => {
+        const baseRun = runs[segment.runIndex];
+        if (!baseRun || baseRun.kind === 'tab') return;
+
+        // Extract the text for this segment from the text run
+        const segmentText = baseRun.text.slice(segment.fromChar, segment.toChar);
+        const segmentRun: TextRun = { ...(baseRun as TextRun), text: segmentText };
+
+        const elem = this.renderRun(segmentRun, context, trackedConfig);
+        if (elem) {
+          if (styleId) {
+            elem.setAttribute('styleid', styleId);
+          }
+          // Determine X position for this segment
+          let xPos: number;
+          if (segment.x !== undefined) {
+            // Segment has explicit X position
+            xPos = segment.x;
+          } else {
+            // No explicit X, use cumulative position
+            xPos = cumulativeX;
+          }
+
+          elem.style.position = 'absolute';
+          elem.style.left = `${xPos}px`;
+          el.appendChild(elem);
+
+          // Update cumulative X for next segment by measuring this element's width
+          // This applies to ALL segments (both with and without explicit X)
+          if (this.doc) {
+            const measureEl = elem.cloneNode(true) as HTMLElement;
+            measureEl.style.position = 'absolute';
+            measureEl.style.visibility = 'hidden';
+            measureEl.style.left = '-9999px';
+            this.doc.body.appendChild(measureEl);
+            const width = measureEl.offsetWidth;
+            this.doc.body.removeChild(measureEl);
+            cumulativeX = xPos + width;
+          }
+        }
+      });
+    } else {
+      // Use run-based rendering for normal text flow
+      runs.forEach((run) => {
+        const elem = this.renderRun(run, context, trackedConfig);
+        if (elem) {
+          if (styleId) {
+            elem.setAttribute('styleid', styleId);
+          }
+          el.appendChild(elem);
+        }
+      });
+    }
+
+    // Post-process: Apply tooltip accessibility for any links with pending tooltips
+    // This must happen after elements are in the DOM so aria-describedby can reference siblings
+    const anchors = el.querySelectorAll('a[href]');
+    anchors.forEach((anchor) => {
+      const pendingTooltip = this.pendingTooltips.get(anchor as HTMLElement);
+      if (pendingTooltip) {
+        this.applyTooltipAccessibility(anchor as HTMLAnchorElement, pendingTooltip);
+        this.pendingTooltips.delete(anchor as HTMLElement); // Clean up memory
+      }
+    });
+
+    return el;
+  }
+
+  private resolveTrackedChangesConfig(block: ParagraphBlock): TrackedChangesRenderConfig {
+    const attrs = (block.attrs as ParagraphAttrs | undefined) ?? {};
+    const mode = (attrs.trackedChangesMode as TrackedChangesMode | undefined) ?? 'review';
+    const enabled = attrs.trackedChangesEnabled !== false;
+    return { mode, enabled };
+  }
+
+  private applyTrackedChangeDecorations(elem: HTMLElement, run: Run, config: TrackedChangesRenderConfig): void {
+    if (!config.enabled || config.mode === 'off') {
+      return;
+    }
+
+    const textRun = run as TextRun;
+    const meta = textRun.trackedChange;
+    if (!meta) {
+      return;
+    }
+
+    const baseClass = TRACK_CHANGE_BASE_CLASS[meta.kind];
+    if (baseClass) {
+      elem.classList.add(baseClass);
+    }
+
+    const modifier = TRACK_CHANGE_MODIFIER_CLASS[meta.kind]?.[config.mode];
+    if (modifier) {
+      elem.classList.add(modifier);
+    }
+
+    elem.dataset.trackChangeId = meta.id;
+    elem.dataset.trackChangeKind = meta.kind;
+    if (meta.author) {
+      elem.dataset.trackChangeAuthor = meta.author;
+    }
+    if (meta.authorEmail) {
+      elem.dataset.trackChangeAuthorEmail = meta.authorEmail;
+    }
+    if (meta.authorImage) {
+      elem.dataset.trackChangeAuthorImage = meta.authorImage;
+    }
+    if (meta.date) {
+      elem.dataset.trackChangeDate = meta.date;
+    }
+  }
+
+  private updateFragmentElement(el: HTMLElement, fragment: Fragment): void {
+    this.applyFragmentFrame(el, fragment);
+    if (fragment.kind === 'image') {
+      el.style.height = `${fragment.height}px`;
+    }
+    if (fragment.kind === 'drawing') {
+      el.style.height = `${fragment.height}px`;
+    }
+  }
+
+  private applyFragmentFrame(el: HTMLElement, fragment: Fragment): void {
+    el.style.left = `${fragment.x}px`;
+    el.style.top = `${fragment.y}px`;
+    el.style.width = `${fragment.width}px`;
+    el.dataset.blockId = fragment.blockId;
+
+    if (fragment.kind === 'para') {
+      if (fragment.pmStart != null) {
+        el.dataset.pmStart = String(fragment.pmStart);
+      } else {
+        delete el.dataset.pmStart;
+      }
+      if (fragment.pmEnd != null) {
+        el.dataset.pmEnd = String(fragment.pmEnd);
+      } else {
+        delete el.dataset.pmEnd;
+      }
+      if (fragment.pmStart != null && fragment.pmEnd != null) {
+        el.title = `PM ${fragment.pmStart}–${fragment.pmEnd}`;
+      } else {
+        el.removeAttribute('title');
+      }
+      if (fragment.continuesFromPrev) {
+        el.dataset.continuesFromPrev = 'true';
+      } else {
+        delete el.dataset.continuesFromPrev;
+      }
+      if (fragment.continuesOnNext) {
+        el.dataset.continuesOnNext = 'true';
+      } else {
+        delete el.dataset.continuesOnNext;
+      }
+    }
+  }
+
+  /**
+   * Estimates the height of a fragment when explicit height is not available.
+   *
+   * This method provides fallback height calculations for footer bottom-alignment
+   * by consulting measure data for paragraphs and list items, or using the
+   * fragment's height property for tables, images, and drawings.
+   *
+   * @param fragment - The fragment to estimate height for
+   * @returns Estimated height in pixels, or 0 if height cannot be determined
+   */
+  private estimateFragmentHeight(fragment: Fragment): number {
+    const lookup = this.blockLookup.get(fragment.blockId);
+    const measure = lookup?.measure;
+
+    if (fragment.kind === 'para' && measure?.kind === 'paragraph') {
+      return measure.totalHeight;
+    }
+
+    if (fragment.kind === 'list-item' && measure?.kind === 'list') {
+      return measure.totalHeight;
+    }
+
+    if (fragment.kind === 'table') {
+      return fragment.height;
+    }
+
+    if (fragment.kind === 'image' || fragment.kind === 'drawing') {
+      return fragment.height;
+    }
+
+    return 0;
+  }
+
+  private buildBlockLookup(blocks: FlowBlock[], measures: Measure[]): BlockLookup {
+    if (blocks.length !== measures.length) {
+      throw new Error('DomPainter requires the same number of blocks and measures');
+    }
+
+    const lookup: BlockLookup = new Map();
+    blocks.forEach((block, index) => {
+      lookup.set(block.id, {
+        block,
+        measure: measures[index],
+        version: deriveBlockVersion(block),
+      });
+    });
+    return lookup;
+  }
+
+  /**
+   * All dataset keys used for SDT metadata.
+   * Shared between applySdtDataset and clearSdtDataset to ensure consistency.
+   */
+  private static readonly SDT_DATASET_KEYS = [
+    'sdtType',
+    'sdtId',
+    'sdtFieldId',
+    'sdtFieldType',
+    'sdtFieldVariant',
+    'sdtFieldVisibility',
+    'sdtFieldHidden',
+    'sdtFieldLocked',
+    'sdtScope',
+    'sdtTag',
+    'sdtAlias',
+    'sdtSectionTitle',
+    'sdtSectionType',
+    'sdtSectionLocked',
+    'sdtDocpartGallery',
+    'sdtDocpartId',
+    'sdtDocpartInstruction',
+  ] as const;
+
+  /**
+   * Helper to set a string dataset attribute if the value is truthy.
+   */
+  private setDatasetString(el: HTMLElement, key: string, value: string | null | undefined): void {
+    if (value) {
+      el.dataset[key] = value;
+    }
+  }
+
+  /**
+   * Helper to set a boolean dataset attribute if the value is not null/undefined.
+   */
+  private setDatasetBoolean(el: HTMLElement, key: string, value: boolean | null | undefined): void {
+    if (value != null) {
+      el.dataset[key] = String(value);
+    }
+  }
+
+  /**
+   * Applies SDT (Structured Document Tag) metadata to an element's dataset as data-sdt-* attributes.
+   * Supports field annotations, structured content, document sections, and doc parts.
+   * Clears existing SDT metadata before applying new values.
+   *
+   * @param el - The HTML element to annotate
+   * @param metadata - The SDT metadata to render as data attributes
+   */
+  private applySdtDataset(el: HTMLElement | null, metadata?: SdtMetadata | null): void {
+    if (!el?.dataset) return;
+    this.clearSdtDataset(el);
+    if (!metadata) return;
+
+    el.dataset.sdtType = metadata.type;
+
+    if ('id' in metadata && metadata.id != null) {
+      el.dataset.sdtId = String(metadata.id);
+    }
+
+    if (metadata.type === 'fieldAnnotation') {
+      this.setDatasetString(el, 'sdtFieldId', metadata.fieldId);
+      this.setDatasetString(el, 'sdtFieldType', metadata.fieldType);
+      this.setDatasetString(el, 'sdtFieldVariant', metadata.variant);
+      this.setDatasetString(el, 'sdtFieldVisibility', metadata.visibility);
+      this.setDatasetBoolean(el, 'sdtFieldHidden', metadata.hidden);
+      this.setDatasetBoolean(el, 'sdtFieldLocked', metadata.isLocked);
+    } else if (metadata.type === 'structuredContent') {
+      this.setDatasetString(el, 'sdtScope', metadata.scope);
+      this.setDatasetString(el, 'sdtTag', metadata.tag);
+      this.setDatasetString(el, 'sdtAlias', metadata.alias);
+    } else if (metadata.type === 'documentSection') {
+      this.setDatasetString(el, 'sdtSectionTitle', metadata.title);
+      this.setDatasetString(el, 'sdtSectionType', metadata.sectionType);
+      this.setDatasetBoolean(el, 'sdtSectionLocked', metadata.isLocked);
+    } else if (metadata.type === 'docPartObject') {
+      this.setDatasetString(el, 'sdtDocpartGallery', metadata.gallery);
+      this.setDatasetString(el, 'sdtDocpartId', metadata.uniqueId);
+      this.setDatasetString(el, 'sdtDocpartInstruction', metadata.instruction);
+    }
+  }
+
+  private clearSdtDataset(el: HTMLElement): void {
+    DomPainter.SDT_DATASET_KEYS.forEach((key) => {
+      delete el.dataset[key];
+    });
+  }
+
+  /**
+   * Applies container SDT metadata to an element's dataset (data-sdt-container-* attributes).
+   * Used when a block has both primary SDT metadata (e.g., docPartObject) and container
+   * metadata (e.g., documentSection). The container metadata is rendered with a "Container"
+   * prefix to distinguish it from the primary SDT metadata.
+   *
+   * @param el - The HTML element to annotate
+   * @param metadata - The container SDT metadata (typically documentSection)
+   */
+  private applyContainerSdtDataset(el: HTMLElement | null, metadata?: SdtMetadata | null): void {
+    if (!el?.dataset) return;
+    if (!metadata) return;
+
+    el.dataset.sdtContainerType = metadata.type;
+
+    if ('id' in metadata && metadata.id != null) {
+      el.dataset.sdtContainerId = String(metadata.id);
+    }
+
+    if (metadata.type === 'documentSection') {
+      this.setDatasetString(el, 'sdtContainerSectionTitle', metadata.title);
+      this.setDatasetString(el, 'sdtContainerSectionType', metadata.sectionType);
+      this.setDatasetBoolean(el, 'sdtContainerSectionLocked', metadata.isLocked);
+    }
+    // Other container types can be added here if needed
+  }
+}
+
+const fragmentKey = (fragment: Fragment): string => {
+  if (fragment.kind === 'para') {
+    return `para:${fragment.blockId}:${fragment.fromLine}:${fragment.toLine}`;
+  }
+  if (fragment.kind === 'list-item') {
+    return `list-item:${fragment.blockId}:${fragment.itemId}:${fragment.fromLine}:${fragment.toLine}`;
+  }
+  if (fragment.kind === 'image') {
+    return `image:${fragment.blockId}:${fragment.x}:${fragment.y}`;
+  }
+  if (fragment.kind === 'drawing') {
+    return `drawing:${fragment.blockId}:${fragment.x}:${fragment.y}`;
+  }
+  return `${fragment.kind}:${fragment.blockId}`;
+};
+
+const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
+  const base = lookup.get(fragment.blockId)?.version ?? 'missing';
+  if (fragment.kind === 'para') {
+    return [
+      base,
+      fragment.fromLine,
+      fragment.toLine,
+      fragment.pmStart ?? '',
+      fragment.pmEnd ?? '',
+      fragment.continuesFromPrev ? 1 : 0,
+      fragment.continuesOnNext ? 1 : 0,
+    ].join('|');
+  }
+  if (fragment.kind === 'list-item') {
+    return [
+      base,
+      fragment.itemId,
+      fragment.fromLine,
+      fragment.toLine,
+      fragment.continuesFromPrev ? 1 : 0,
+      fragment.continuesOnNext ? 1 : 0,
+    ].join('|');
+  }
+  if (fragment.kind === 'image') {
+    return [base, fragment.width, fragment.height].join('|');
+  }
+  if (fragment.kind === 'drawing') {
+    return [
+      base,
+      fragment.drawingKind,
+      fragment.drawingContentId ?? '',
+      fragment.width,
+      fragment.height,
+      fragment.geometry.width,
+      fragment.geometry.height,
+      fragment.geometry.rotation ?? 0,
+      fragment.scale ?? 1,
+      fragment.zIndex ?? '',
+    ].join('|');
+  }
+  return base;
+};
+
+/**
+ * Derives a version string for a flow block based on its content and styling properties.
+ *
+ * This version string is used for cache invalidation - when any visual property of the block
+ * changes, the version string changes, triggering a DOM rebuild instead of reusing cached elements.
+ *
+ * The version includes all properties that affect visual rendering:
+ * - Text content
+ * - Font properties (family, size, bold, italic)
+ * - Text decorations (underline style/color, strike, highlight)
+ * - Spacing (letterSpacing)
+ * - Position markers (pmStart, pmEnd)
+ * - Special tokens (page numbers, etc.)
+ *
+ * @param block - The flow block to generate a version string for
+ * @returns A pipe-delimited string representing all visual properties of the block.
+ *          Changes to any included property will change the version string.
+ */
+const deriveBlockVersion = (block: FlowBlock): string => {
+  if (block.kind === 'paragraph') {
+    return block.runs
+      .map((run) =>
+        [
+          run.text ?? '',
+          run.kind !== 'tab' ? run.fontFamily : '',
+          run.kind !== 'tab' ? run.fontSize : '',
+          run.kind !== 'tab' && run.bold ? 1 : 0,
+          run.kind !== 'tab' && run.italic ? 1 : 0,
+          run.kind !== 'tab' ? (run.color ?? '') : '',
+          // Text decorations - ensures DOM updates when decoration properties change.
+          run.kind !== 'tab' ? (run.underline?.style ?? '') : '',
+          run.kind !== 'tab' ? (run.underline?.color ?? '') : '',
+          run.kind !== 'tab' && run.strike ? 1 : 0,
+          run.kind !== 'tab' ? (run.highlight ?? '') : '',
+          run.kind !== 'tab' && run.letterSpacing != null ? run.letterSpacing : '',
+          run.pmStart ?? '',
+          run.pmEnd ?? '',
+          run.kind !== 'tab' ? (run.token ?? '') : '',
+        ].join(','),
+      )
+      .join('|');
+  }
+
+  if (block.kind === 'list') {
+    return block.items.map((item) => `${item.id}:${item.marker.text}:${deriveBlockVersion(item.paragraph)}`).join('|');
+  }
+
+  if (block.kind === 'image') {
+    return [block.src ?? '', block.width ?? '', block.height ?? '', block.alt ?? '', block.title ?? ''].join('|');
+  }
+
+  if (block.kind === 'drawing') {
+    if (block.drawingKind === 'image') {
+      // Type narrowing: block is ImageDrawing (not ImageBlock)
+      const imageLike = block as ImageDrawing;
+      return [
+        'drawing:image',
+        imageLike.src ?? '',
+        imageLike.width ?? '',
+        imageLike.height ?? '',
+        imageLike.alt ?? '',
+      ].join('|');
+    }
+    if (block.drawingKind === 'vectorShape') {
+      const vector = block as VectorShapeDrawing;
+      return [
+        'drawing:vector',
+        vector.shapeKind ?? '',
+        vector.fillColor ?? '',
+        vector.strokeColor ?? '',
+        vector.strokeWidth ?? '',
+        vector.geometry.width,
+        vector.geometry.height,
+        vector.geometry.rotation ?? 0,
+        vector.geometry.flipH ? 1 : 0,
+        vector.geometry.flipV ? 1 : 0,
+      ].join('|');
+    }
+    if (block.drawingKind === 'shapeGroup') {
+      const group = block as ShapeGroupDrawing;
+      const childSignature = group.shapes
+        .map((child) => `${child.shapeType}:${JSON.stringify(child.attrs ?? {})}`)
+        .join(';');
+      return [
+        'drawing:group',
+        group.geometry.width,
+        group.geometry.height,
+        group.groupTransform ? JSON.stringify(group.groupTransform) : '',
+        childSignature,
+      ].join('|');
+    }
+    // Exhaustiveness check: if a new drawingKind is added, TypeScript will error here
+    const _exhaustive: never = block;
+    return `drawing:unknown:${(block as DrawingBlock).id}`;
+  }
+
+  if (block.kind === 'table') {
+    const tableBlock = block as TableBlock;
+    // Include column widths in version to trigger re-render when table is resized
+    return [
+      block.id,
+      tableBlock.columnWidths ? JSON.stringify(tableBlock.columnWidths) : '',
+      tableBlock.rows.length,
+    ].join('|');
+  }
+
+  return block.id;
+};
+
+const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void => {
+  if (run.kind === 'tab') {
+    // Tab runs don't have text styling properties
+    return;
+  }
+
+  element.style.fontFamily = run.fontFamily;
+  element.style.fontSize = `${run.fontSize}px`;
+  if (run.bold) element.style.fontWeight = 'bold';
+  if (run.italic) element.style.fontStyle = 'italic';
+
+  // For links, skip applying color and text-decoration to allow CSS to handle styling
+  if (!isLink) {
+    if (run.color) element.style.color = run.color;
+  }
+
+  if (run.letterSpacing != null) {
+    element.style.letterSpacing = `${run.letterSpacing}px`;
+  }
+  if (run.highlight) {
+    element.style.backgroundColor = run.highlight;
+  }
+
+  // Apply text decorations from the run. Even for links, inline decorations should reflect
+  // the document styling (tests assert underline presence on anchors).
+  const decorations: string[] = [];
+  if (run.underline) {
+    decorations.push('underline');
+    const u = run.underline;
+    element.style.textDecorationStyle = u.style && u.style !== 'single' ? u.style : 'solid';
+    if (u.color) {
+      element.style.textDecorationColor = u.color;
+    }
+  }
+  if (run.strike) {
+    decorations.push('line-through');
+  }
+  if (decorations.length > 0) {
+    element.style.textDecorationLine = decorations.join(' ');
+  }
+};
+
+/**
+ * Applies data-* attributes from a text run to a DOM element.
+ * Validates attribute names and safely sets them on the element.
+ * Invalid or unsafe attributes are skipped with development-mode logging.
+ *
+ * @param element - The HTML element to apply attributes to
+ * @param dataAttrs - Record of data-* attribute key-value pairs from the text run
+ *
+ * @example
+ * ```typescript
+ * const span = document.createElement('span');
+ * applyRunDataAttributes(span, { 'data-id': '123', 'data-name': 'test' });
+ * // span now has: <span data-id="123" data-name="test"></span>
+ * ```
+ */
+export const applyRunDataAttributes = (element: HTMLElement, dataAttrs?: Record<string, string>): void => {
+  if (!dataAttrs) return;
+  Object.entries(dataAttrs).forEach(([key, value]) => {
+    if (typeof key !== 'string' || !key.toLowerCase().startsWith('data-')) return;
+    if (typeof value !== 'string') return;
+    try {
+      element.setAttribute(key, value);
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn(`[DomPainter] Failed to set data attribute "${key}":`, error);
+      }
+    }
+  });
+};
+
+const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs): void => {
+  if (!attrs) return;
+  if (attrs.styleId) {
+    element.setAttribute('styleid', attrs.styleId);
+  }
+  if (attrs.alignment) {
+    element.style.textAlign = attrs.alignment;
+  }
+  if ((attrs as Record<string, unknown>).dropCap) {
+    element.classList.add('sd-editor-dropcap');
+  }
+  const indent = attrs.indent;
+  if (indent) {
+    if (indent.left) {
+      element.style.paddingLeft = `${indent.left}px`;
+    }
+    if (indent.right) {
+      element.style.paddingRight = `${indent.right}px`;
+    }
+    const textIndent = (indent.firstLine ?? 0) - (indent.hanging ?? 0);
+    if (textIndent) {
+      element.style.textIndent = `${textIndent}px`;
+    }
+  }
+  applyParagraphBorderStyles(element, attrs.borders);
+  applyParagraphShadingStyles(element, attrs.shading);
+};
+
+type BorderSide = keyof NonNullable<ParagraphAttrs['borders']>;
+const BORDER_SIDES: BorderSide[] = ['top', 'right', 'bottom', 'left'];
+
+const applyParagraphBorderStyles = (element: HTMLElement, borders?: ParagraphAttrs['borders']): void => {
+  if (!borders) return;
+  element.style.boxSizing = 'border-box';
+  BORDER_SIDES.forEach((side) => {
+    const border = borders[side];
+    if (!border) return;
+    setBorderSideStyle(element, side, border);
+  });
+};
+
+const setBorderSideStyle = (element: HTMLElement, side: BorderSide, border: ParagraphBorder): void => {
+  const cssSide = side;
+  const resolvedStyle =
+    border.style && border.style !== 'none' ? border.style : border.style === 'none' ? 'none' : 'solid';
+  if (resolvedStyle === 'none') {
+    element.style.setProperty(`border-${cssSide}-style`, 'none');
+    element.style.setProperty(`border-${cssSide}-width`, '0px');
+    if (border.color) {
+      element.style.setProperty(`border-${cssSide}-color`, border.color);
+    }
+    return;
+  }
+
+  const width = border.width != null ? Math.max(0, border.width) : undefined;
+  element.style.setProperty(`border-${cssSide}-style`, resolvedStyle);
+  element.style.setProperty(`border-${cssSide}-width`, `${width ?? 1}px`);
+  element.style.setProperty(`border-${cssSide}-color`, border.color ?? '#000');
+};
+
+const stripListIndent = (attrs?: ParagraphAttrs): ParagraphAttrs | undefined => {
+  if (!attrs?.indent || attrs.indent.left == null) {
+    return attrs;
+  }
+  const nextIndent = { ...attrs.indent };
+  delete nextIndent.left;
+
+  return {
+    ...attrs,
+    indent: Object.keys(nextIndent).length > 0 ? nextIndent : undefined,
+  };
+};
+
+const applyParagraphShadingStyles = (element: HTMLElement, shading?: ParagraphAttrs['shading']): void => {
+  if (!shading?.fill) return;
+  element.style.backgroundColor = shading.fill;
+};
+
+/**
+ * Extracts and slices text runs that belong to a specific line within a paragraph block.
+ * Handles partial runs at line boundaries by creating sliced copies with correct character ranges.
+ *
+ * @param {ParagraphBlock} block - The paragraph block containing runs
+ * @param {Line} line - The line definition with fromRun/toRun and fromChar/toChar ranges
+ * @returns {Run[]} Array of runs (or sliced run portions) that comprise the line
+ *
+ * @remarks
+ * - Preserves run styling and metadata (pmStart, pmEnd positions) in sliced runs
+ * - Tab runs are only included if the slice contains the actual tab character
+ * - Text runs are sliced to match exact character boundaries of the line
+ * - Returns empty array if no valid runs are found within the line range
+ *
+ * @example
+ * ```typescript
+ * const line = { fromRun: 0, toRun: 2, fromChar: 5, toChar: 10 };
+ * const runs = sliceRunsForLine(paragraphBlock, line);
+ * // Returns runs or run slices that fall within the specified character range
+ * ```
+ */
+export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
+  const result: Run[] = [];
+
+  for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
+    const run = block.runs[runIndex];
+    if (!run) continue;
+
+    const text = run.text ?? '';
+    const isFirstRun = runIndex === line.fromRun;
+    const isLastRun = runIndex === line.toRun;
+    const runLength = text.length;
+    const runPmStart = run.pmStart ?? null;
+    const fallbackPmEnd = runPmStart != null && run.pmEnd == null ? runPmStart + runLength : (run.pmEnd ?? null);
+
+    if (isFirstRun || isLastRun) {
+      const start = isFirstRun ? line.fromChar : 0;
+      const end = isLastRun ? line.toChar : text.length;
+      const slice = text.slice(start, end);
+      if (!slice) continue;
+
+      const pmSliceStart = runPmStart != null ? runPmStart + start : undefined;
+      const pmSliceEnd = runPmStart != null ? runPmStart + end : (fallbackPmEnd ?? undefined);
+      if (run.kind === 'tab') {
+        // Only include the tab run if the slice contains the tab character
+        if (slice.includes('\t')) {
+          result.push(run);
+        }
+      } else {
+        // TextRun: return a sliced TextRun preserving styles
+        const sliced: TextRun = {
+          ...(run as TextRun),
+          text: slice,
+          pmStart: pmSliceStart,
+          pmEnd: pmSliceEnd,
+        };
+        result.push(sliced);
+      }
+    } else {
+      result.push(run);
+    }
+  }
+
+  return result;
+};
+
+type LinePmRange = { pmStart?: number; pmEnd?: number };
+
+const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
+  let pmStart: number | undefined;
+  let pmEnd: number | undefined;
+
+  for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
+    const run = block.runs[runIndex];
+    if (!run) continue;
+
+    const text = run.text ?? '';
+    const runLength = text.length;
+    const runPmStart = run.pmStart ?? null;
+    const fallbackPmEnd = runPmStart != null && run.pmEnd == null ? runPmStart + runLength : (run.pmEnd ?? null);
+
+    if (runPmStart == null || fallbackPmEnd == null) {
+      continue;
+    }
+
+    const isFirstRun = runIndex === line.fromRun;
+    const isLastRun = runIndex === line.toRun;
+    const startOffset = isFirstRun ? line.fromChar : 0;
+    const endOffset = isLastRun ? line.toChar : runLength;
+
+    const sliceStart = runPmStart + startOffset;
+    const sliceEnd = Math.min(runPmStart + endOffset, fallbackPmEnd);
+
+    if (pmStart == null) {
+      pmStart = sliceStart;
+    }
+    pmEnd = sliceEnd;
+
+    // Early exit optimization: both boundaries are determined on the last run
+    if (isLastRun) {
+      break;
+    }
+  }
+
+  return { pmStart, pmEnd };
+};
+
+const applyStyles = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>): void => {
+  Object.entries(styles).forEach(([key, value]) => {
+    if (value != null && value !== '' && key in el.style) {
+      (el.style as unknown as Record<string, string>)[key] = String(value);
+    }
+  });
+};
+
+const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
+  if (run.kind === 'tab') {
+    return run.text;
+  }
+  if (!run.token) {
+    return run.text ?? '';
+  }
+  if (run.token === 'pageNumber') {
+    const resolved = context.pageNumberText ?? String(context.pageNumber);
+    // Debug: Log page number resolution in development
+    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && context.section) {
+      console.debug(
+        `[Page Number] ${context.section}: page ${context.pageNumber} of ${context.totalPages} → "${resolved}"`,
+      );
+    }
+    return resolved;
+  }
+  if (run.token === 'totalPageCount') {
+    const resolved = context.totalPages ? String(context.totalPages) : (run.text ?? '');
+    // Debug: Log total page count resolution in development
+    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && context.section) {
+      console.debug(`[Total Pages] ${context.section}: ${resolved}`);
+    }
+    return resolved;
+  }
+  return run.text ?? '';
+};

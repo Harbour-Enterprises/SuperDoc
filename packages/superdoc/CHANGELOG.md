@@ -1,3 +1,52 @@
+## [0.31.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.2...v0.31.3) (2025-11-24)
+
+### Bug Fixes
+
+- content not editable on safari ([#1304](https://github.com/Harbour-Enterprises/SuperDoc/issues/1304)) ([9972b1f](https://github.com/Harbour-Enterprises/SuperDoc/commit/9972b1f9da7a4a7d090488aab159a85fb1c81a96))
+
+## [0.31.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.1...v0.31.2) (2025-11-21)
+
+### Reverts
+
+- Revert "fix: import and export tagUtils for enhanced structured content management ([#1300](https://github.com/Harbour-Enterprises/SuperDoc/issues/1300))" ([d937827](https://github.com/Harbour-Enterprises/SuperDoc/commit/d9378272260bc363c165ccc0ac4ba4c10d3991a9))
+
+## [0.31.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.0...v0.31.1) (2025-11-21)
+
+### Bug Fixes
+
+- import and export tagUtils for enhanced structured content management ([#1300](https://github.com/Harbour-Enterprises/SuperDoc/issues/1300)) ([7b8551d](https://github.com/Harbour-Enterprises/SuperDoc/commit/7b8551d46cfac7a1b9f77bb448cedf26544392ff))
+
+# [0.31.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.30.0...v0.31.0) (2025-11-21)
+
+### Features
+
+- add tag-based operations for structured content management ([#1296](https://github.com/Harbour-Enterprises/SuperDoc/issues/1296)) ([af80442](https://github.com/Harbour-Enterprises/SuperDoc/commit/af80442b451739dc1a0a08270edc9c317c53c127))
+
+# [0.31.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.30.0...v0.31.0) (2025-11-21)
+
+### Features
+
+- add tag-based operations for structured content management ([#1296](https://github.com/Harbour-Enterprises/SuperDoc/issues/1296)) ([af80442](https://github.com/Harbour-Enterprises/SuperDoc/commit/af80442b451739dc1a0a08270edc9c317c53c127))
+
+# [0.30.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.29.0...v0.30.0) (2025-11-19)
+
+### Bug Fixes
+
+- css style isolation after shape groups ([c428122](https://github.com/Harbour-Enterprises/SuperDoc/commit/c428122218187c70ad54e9e8a870898993b40354))
+- improve index mapping for text nodes and handle transparent inline nodes ([#1216](https://github.com/Harbour-Enterprises/SuperDoc/issues/1216)) ([2ed5d3a](https://github.com/Harbour-Enterprises/SuperDoc/commit/2ed5d3a7401c90e0a4fd02294c66b34bc7da9af2))
+- update highlight method to accept optional color parameter ([#1253](https://github.com/Harbour-Enterprises/SuperDoc/issues/1253)) ([900b9be](https://github.com/Harbour-Enterprises/SuperDoc/commit/900b9be4064eabb4bf5706bca3947d09ba8e3f4c))
+- update locks ([658cadb](https://github.com/Harbour-Enterprises/SuperDoc/commit/658cadb2465a72bf1d6753fdc1c19a18b68c2fbd))
+- update package-lock.json for latest collab package intellisense ([#1252](https://github.com/Harbour-Enterprises/SuperDoc/issues/1252)) ([e4cdae7](https://github.com/Harbour-Enterprises/SuperDoc/commit/e4cdae7529a660e7ae419d9e406d0477de28e420))
+- update toolbar item label when linked style selected ([#1245](https://github.com/Harbour-Enterprises/SuperDoc/issues/1245)) ([22ebb62](https://github.com/Harbour-Enterprises/SuperDoc/commit/22ebb62c1e8ce7578fd712d44913b043f2049fb6))
+
+### Features
+
+- shape groups ([#1236](https://github.com/Harbour-Enterprises/SuperDoc/issues/1236)) ([ca05ba2](https://github.com/Harbour-Enterprises/SuperDoc/commit/ca05ba2e099ca59073b0c59c33ca579ddcaa9f1d))
+
+### Performance Improvements
+
+- **pagination:** optimize for headless mode ([#1239](https://github.com/Harbour-Enterprises/SuperDoc/issues/1239)) ([28272f7](https://github.com/Harbour-Enterprises/SuperDoc/commit/28272f7c58c5b1114f35f68b2481ce4441f58cd3))
+
 # [0.29.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.28.6...v0.29.0) (2025-11-10)
 
 ### Bug Fixes

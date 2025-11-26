@@ -15,4 +15,4 @@ export const comments_module_events = {
   CHANGE_REJECTED: 'change-rejected',
 } as const;
 
-export type CommentEvent = typeof comments_module_events[keyof typeof comments_module_events];
+export type CommentEvent = (typeof comments_module_events)[keyof typeof comments_module_events];

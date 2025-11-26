@@ -1,5 +1,4 @@
 import { selectionHasNodeOrMark } from '../cursor-helpers.js';
-import { readFromClipboard } from '../../core/utilities/clipboardUtils.js';
 import { tableActionsOptions } from './constants.js';
 import { markRaw } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
@@ -73,44 +72,6 @@ export const getPropsByItemId = (itemId, props) => {
 };
 
 /**
- * Normalize clipboard content returned from readFromClipboard into a consistent shape
- * Supports modern clipboard API responses as well as legacy ProseMirror fragments
- * @param {any} rawClipboardContent
- * @returns {{ html: string|null, text: string|null, hasContent: boolean, raw: any }}
- */
-function normalizeClipboardContent(rawClipboardContent) {
-  if (!rawClipboardContent) {
-    return {
-      html: null,
-      text: null,
-      hasContent: false,
-      raw: null,
-    };
-  }
-
-  const html = typeof rawClipboardContent.html === 'string' ? rawClipboardContent.html : null;
-  const text = typeof rawClipboardContent.text === 'string' ? rawClipboardContent.text : null;
-
-  const hasHtml = !!html && html.trim().length > 0;
-  const hasText = !!text && text.length > 0;
-  const isObject = typeof rawClipboardContent === 'object' && rawClipboardContent !== null;
-  const fragmentSize = typeof rawClipboardContent.size === 'number' ? rawClipboardContent.size : null;
-  const nestedSize =
-    isObject && rawClipboardContent.content && typeof rawClipboardContent.content.size === 'number'
-      ? rawClipboardContent.content.size
-      : null;
-
-  const hasFragmentContent = (fragmentSize ?? nestedSize ?? 0) > 0;
-
-  return {
-    html,
-    text,
-    hasContent: hasHtml || hasText || hasFragmentContent,
-    raw: rawClipboardContent,
-  };
-}
-
-/**
  * Get the current editor context for menu logic
  *
  * @param {Object} editor - The editor instance
@@ -118,29 +79,40 @@ function normalizeClipboardContent(rawClipboardContent) {
  * @returns {Promise<Object>} context - Enhanced editor context with comprehensive state information
  */
 export async function getEditorContext(editor, event) {
-  const { view } = editor;
-  const { state } = view;
+  if (!editor) return null;
+
+  const state = editor.state;
+  if (!state) return null;
+
   const { from, to, empty } = state.selection;
   const selectedText = !empty ? state.doc.textBetween(from, to) : '';
 
   let pos = null;
   let node = null;
 
-  if (event) {
+  if (event && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
     const coords = { left: event.clientX, top: event.clientY };
-    pos = view.posAtCoords(coords)?.pos ?? null;
-    node = pos !== null ? state.doc.nodeAt(pos) : null;
-  } else {
-    // For slash trigger, use the selection anchor
+    const hit = editor.posAtCoords?.(coords);
+    if (typeof hit?.pos === 'number') {
+      pos = hit.pos;
+      node = state.doc.nodeAt(pos);
+    }
+  }
+
+  if (pos === null && typeof from === 'number') {
     pos = from;
     node = state.doc.nodeAt(pos);
   }
 
-  // We need to check if we have anything in the clipboard and request permission if needed
-  const rawClipboardContent = await readFromClipboard(state);
-  const clipboardContent = normalizeClipboardContent(rawClipboardContent);
+  // Don't read clipboard proactively to avoid permission prompts
+  // Clipboard will be read only when user actually clicks "Paste"
+  const clipboardContent = {
+    html: null,
+    text: null,
+    hasContent: true, // Assume clipboard might have content - we'll check on paste
+    raw: null,
+  };
 
-  // Get document structure information
   const structureFromResolvedPos = pos !== null ? getStructureFromResolvedPos(state, pos) : null;
   const isInTable =
     structureFromResolvedPos?.isInTable ?? selectionHasNodeOrMark(state, 'table', { requireEnds: true });
@@ -156,13 +128,10 @@ export async function getEditorContext(editor, event) {
   if (event && pos !== null) {
     const $pos = state.doc.resolve(pos);
 
-    // Process marks with a helper function to avoid duplication
     const processMark = (mark) => {
       if (!activeMarks.includes(mark.type.name)) {
         activeMarks.push(mark.type.name);
       }
-
-      // extract tracked change ID if this is a tracked change mark and we haven't found one yet
       if (
         !trackedChangeId &&
         (mark.type.name === 'trackInsert' || mark.type.name === 'trackDelete' || mark.type.name === 'trackFormat')
@@ -171,25 +140,21 @@ export async function getEditorContext(editor, event) {
       }
     };
 
-    const marksAtPos = $pos.marks();
-    marksAtPos.forEach(processMark);
+    $pos.marks().forEach(processMark);
 
     const nodeBefore = $pos.nodeBefore;
     const nodeAfter = $pos.nodeAfter;
 
-    if (nodeBefore && nodeBefore.marks) {
+    if (nodeBefore?.marks) {
       nodeBefore.marks.forEach(processMark);
     }
 
-    if (nodeAfter && nodeAfter.marks) {
+    if (nodeAfter?.marks) {
       nodeAfter.marks.forEach(processMark);
     }
 
-    if (state.storedMarks) {
-      state.storedMarks.forEach(processMark);
-    }
+    state.storedMarks?.forEach(processMark);
   } else {
-    // For slash trigger, use stored marks and selection head marks
     state.storedMarks?.forEach((mark) => activeMarks.push(mark.type.name));
     state.selection.$head.marks().forEach((mark) => activeMarks.push(mark.type.name));
   }
@@ -197,58 +162,46 @@ export async function getEditorContext(editor, event) {
   const isTrackedChange =
     activeMarks.includes('trackInsert') || activeMarks.includes('trackDelete') || activeMarks.includes('trackFormat');
 
-  const trackedChanges = event
-    ? collectTrackedChangesForContext({ state, pos, trackedChangeId })
-    : collectTrackedChanges({ state, from, to });
+  const trackedChanges =
+    event && pos !== null
+      ? collectTrackedChangesForContext({ state, pos, trackedChangeId })
+      : collectTrackedChanges({ state, from, to });
 
-  const cursorCoords = pos ? view.coordsAtPos(pos) : null;
+  const cursorCoords = pos !== null ? editor.coordsAtPos?.(pos) : null;
   const cursorPosition = cursorCoords
     ? {
         x: cursorCoords.left,
         y: cursorCoords.top,
       }
-    : null;
+    : event
+      ? { x: event.clientX, y: event.clientY }
+      : null;
 
-  const context = {
-    // Selection info
+  return {
     selectedText,
     hasSelection: !empty,
     selectionStart: from,
     selectionEnd: to,
-
-    // Document structure
     isInTable,
     isInList,
     isInSectionNode,
     currentNodeType,
     activeMarks,
-
-    // Document state
     isTrackedChange,
     trackedChangeId,
     documentMode: editor.options?.documentMode || 'editing',
     canUndo: computeCanUndo(editor, state),
     canRedo: computeCanRedo(editor, state),
     isEditable: editor.isEditable,
-
-    // Clipboard
     clipboardContent,
-
-    // Position and trigger info
     cursorPosition,
     pos,
     node,
     event,
     trigger: event ? 'click' : 'slash',
-
-    // Editor reference for advanced use cases
     editor,
-
-    // Tracked change metadata
     trackedChanges,
   };
-
-  return context;
 }
 
 function computeCanUndo(editor, state) {

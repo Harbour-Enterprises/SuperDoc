@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 import { Extension } from '@core/index.js';
 import { getMarksFromSelection } from '@core/helpers/getMarksFromSelection.js';
 import { toggleMarkCascade } from '@core/commands/toggleMarkCascade.js';

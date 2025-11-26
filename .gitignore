@@ -48,11 +48,8 @@ coverage/
 **/coverage
 **/coverage/
 
-# TypeScript generated declaration files in source (build artifacts)
-**/src/**/*.d.ts
 **/src/**/*.d.ts.map
-# But allow hand-written .d.ts files within packages
-!packages/**/src/*.d.ts
+**/src/**/*.js.map
 
 # TypeScript build info files
 *.tsbuildinfo
@@ -62,3 +59,5 @@ coverage/
 
 AGENTS.md
 codex.config.json
+perf-baseline-results.json
+.claude
