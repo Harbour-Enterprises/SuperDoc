@@ -10,6 +10,7 @@
     "outDir": "dist",
     "declarationMap": true,
     "skipLibCheck": true,
+    "noErrorTruncation": true,
     "paths": {
       "@superdoc/common": ["../../shared/common/index.ts"],
       "@superdoc/common/*": ["../../shared/common/*"]

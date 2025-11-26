@@ -107,7 +107,7 @@ export default defineConfig(({ mode, command}) => {
       target: 'es2022',
       cssCodeSplit: false,
       lib: {
-        entry: "src/index.js",
+        entry: "src/index.ts",
         name: "SuperDoc",
         cssFileName: 'style',
       },
@@ -115,8 +115,8 @@ export default defineConfig(({ mode, command}) => {
       sourcemap: false,
       rollupOptions: {
         input: {
-          'superdoc': 'src/index.js',
-          'super-editor': 'src/super-editor.js',
+          'superdoc': 'src/index.ts',
+          'super-editor': 'src/super-editor.ts',
         },
         external: [
           'yjs',
