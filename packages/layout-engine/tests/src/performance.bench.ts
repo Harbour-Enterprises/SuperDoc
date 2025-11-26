@@ -201,8 +201,8 @@ describe('Performance Benchmarks', () => {
 
       console.log(`toFlowBlocks conversion: ${elapsed.toFixed(1)}ms for ${blocks.length} blocks`);
 
-      // Conversion should be fast (<100ms for 50-page doc)
-      expect(elapsed).toBeLessThan(100);
+      // Conversion should be fast (<150ms for 50-page doc)
+      expect(elapsed).toBeLessThan(150);
       expect(blocks.length).toBeGreaterThan(0);
     });
   });

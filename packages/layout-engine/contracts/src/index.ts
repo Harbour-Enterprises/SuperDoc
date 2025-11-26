@@ -591,6 +591,8 @@ export type ParagraphAttrs = {
   spacing?: ParagraphSpacing;
   contextualSpacing?: boolean;
   indent?: ParagraphIndent;
+  /** Drop cap flag from w:framePr/@w:dropCap. */
+  dropCap?: string | number | boolean;
   numberingProperties?: Record<string, unknown>;
   borders?: ParagraphBorders;
   shading?: ParagraphShading;

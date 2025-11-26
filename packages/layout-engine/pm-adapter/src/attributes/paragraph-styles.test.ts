@@ -18,14 +18,26 @@ describe('hydrateParagraphStyleAttrs', () => {
     expect(converterStyles.resolveParagraphProperties).not.toHaveBeenCalled();
   });
 
-  it('returns null when paragraph lacks styleId', () => {
+  it('calls resolveParagraphProperties even when paragraph lacks styleId (to apply docDefaults)', () => {
+    vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue({
+      spacing: { after: 200, line: 276, lineRule: 'auto' },
+    });
+
     const para = { attrs: {} } as never;
     const result = hydrateParagraphStyleAttrs(para, {
       docx: {},
       numbering: {},
     });
-    expect(result).toBeNull();
-    expect(converterStyles.resolveParagraphProperties).not.toHaveBeenCalled();
+
+    expect(converterStyles.resolveParagraphProperties).toHaveBeenCalledWith(
+      { docx: {}, numbering: {} },
+      { styleId: null },
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        spacing: { after: 200, line: 276, lineRule: 'auto' },
+      }),
+    );
   });
 
   it('delegates to resolveParagraphProperties and clones the result', () => {
@@ -72,5 +84,46 @@ describe('hydrateParagraphStyleAttrs', () => {
     expect(result?.spacing).not.toBe(
       vi.mocked(converterStyles.resolveParagraphProperties).mock.results[0]?.value?.spacing,
     );
+  });
+
+  it('provides empty numbering fallback when context.numbering is undefined', () => {
+    vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue({
+      spacing: { after: 200, line: 276, lineRule: 'auto' },
+    });
+
+    const para = { attrs: { styleId: 'Normal' } } as never;
+    hydrateParagraphStyleAttrs(para, {
+      docx: { styles: {}, docDefaults: {} },
+      // numbering is explicitly undefined - should receive { definitions: {}, abstracts: {} }
+    });
+
+    expect(converterStyles.resolveParagraphProperties).toHaveBeenCalledWith(
+      { docx: { styles: {}, docDefaults: {} }, numbering: { definitions: {}, abstracts: {} } },
+      expect.objectContaining({ styleId: 'Normal' }),
+    );
+  });
+
+  it('returns null when resolveParagraphProperties returns null', () => {
+    vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue(null);
+
+    const para = { attrs: { styleId: 'Heading1' } } as never;
+    const result = hydrateParagraphStyleAttrs(para, {
+      docx: {},
+      numbering: {},
+    });
+
+    expect(result).toBeNull();
+  });
+
+  it('returns null when resolveParagraphProperties returns undefined', () => {
+    vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue(undefined);
+
+    const para = { attrs: { styleId: 'Heading1' } } as never;
+    const result = hydrateParagraphStyleAttrs(para, {
+      docx: {},
+      numbering: {},
+    });
+
+    expect(result).toBeNull();
   });
 });

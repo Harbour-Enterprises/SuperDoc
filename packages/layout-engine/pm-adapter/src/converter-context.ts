@@ -28,16 +28,17 @@ export type ConverterContext = {
 };
 
 /**
- * Guard that checks whether the converter context includes DOCX + numbering
- * data required for paragraph style hydration.
+ * Guard that checks whether the converter context includes DOCX data
+ * required for paragraph style hydration.
  *
- * Paragraph hydration needs both structures so it can follow style and
- * numbering inheritance chains via resolveParagraphProperties.
+ * Paragraph hydration needs DOCX structures so it can follow style
+ * inheritance chains via resolveParagraphProperties. Numbering is optional
+ * since documents without lists should still get docDefaults spacing.
  */
 export const hasParagraphStyleContext = (
   context?: ConverterContext,
-): context is ConverterContext & { docx: Record<string, unknown>; numbering: ConverterNumberingContext } => {
-  return Boolean(context?.docx && context?.numbering);
+): context is ConverterContext & { docx: Record<string, unknown> } => {
+  return Boolean(context?.docx);
 };
 
 /**
