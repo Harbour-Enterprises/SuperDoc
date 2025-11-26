@@ -3951,25 +3951,20 @@ class PresentationInputBridge {
       return;
     }
 
-    queueMicrotask(() => {
-      // Only re-check mutable state - surface check was already done
-      if (event.defaultPrevented) {
-        return;
-      }
-      const synthetic = new KeyboardEvent(event.type, {
-        key: event.key,
-        code: event.code,
-        location: event.location,
-        repeat: event.repeat,
-        ctrlKey: event.ctrlKey,
-        shiftKey: event.shiftKey,
-        altKey: event.altKey,
-        metaKey: event.metaKey,
-        bubbles: true,
-        cancelable: true,
-      });
-      this.#dispatchToTarget(event, synthetic);
+    // Dispatch synchronously so browser defaults can still be prevented
+    const synthetic = new KeyboardEvent(event.type, {
+      key: event.key,
+      code: event.code,
+      location: event.location,
+      repeat: event.repeat,
+      ctrlKey: event.ctrlKey,
+      shiftKey: event.shiftKey,
+      altKey: event.altKey,
+      metaKey: event.metaKey,
+      bubbles: true,
+      cancelable: true,
     });
+    this.#dispatchToTarget(event, synthetic);
   }
 
   /**

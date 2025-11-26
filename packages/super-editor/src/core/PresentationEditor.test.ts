@@ -661,6 +661,67 @@ describe('PresentationEditor', () => {
       expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'keydown', key: 'Enter' }));
     });
 
+    it('dispatches keyboard events synchronously so preventDefault can block browser defaults', () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+
+      // Track when dispatchEvent is called relative to our code
+      let dispatchedSynchronously = false;
+      let checkRan = false;
+
+      mockEditorInstance.view.dom.dispatchEvent = vi.fn(() => {
+        // This runs when the synthetic event is dispatched
+        dispatchedSynchronously = !checkRan;
+        return true;
+      });
+
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+
+      container.dispatchEvent(event);
+
+      // Mark that synchronous code has completed
+      checkRan = true;
+
+      // The dispatch should have happened synchronously (before checkRan was set)
+      expect(dispatchedSynchronously).toBe(true);
+    });
+
+    it('calls preventDefault on original event when synthetic event is canceled', () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+
+      // Make dispatchEvent return false (event was canceled)
+      mockEditorInstance.view.dom.dispatchEvent = vi.fn(() => false);
+
+      const event = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+
+      container.dispatchEvent(event);
+
+      // Original event should have preventDefault called when synthetic was canceled
+      expect(preventDefaultSpy).toHaveBeenCalled();
+    });
+
     it('forwards contextmenu events to the hidden editor via the input bridge', () => {
       editor = new PresentationEditor({
         element: container,
