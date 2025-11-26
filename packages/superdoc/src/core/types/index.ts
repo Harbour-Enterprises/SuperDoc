@@ -295,16 +295,143 @@ export interface Config {
 }
 
 /**
- * SuperDoc interface for type references
- * This is a minimal interface to avoid circular dependencies.
+ * SuperDoc type for callback references
+ * This is a minimal type to avoid circular dependencies.
  * The full implementation is in SuperDoc.ts
  *
- * Note: This uses Partial to make all properties optional and allow
- * the concrete class to define them without strict checking issues
+ * This interface represents the public API surface that external code commonly
+ * uses. It declares the most frequently accessed properties and methods, allowing
+ * the actual SuperDoc class (which extends EventEmitter and has many additional
+ * properties) to be assignable to this type without conflicts.
+ *
+ * Note: The `emit` method is typed as a generic function to maintain compatibility
+ * with EventEmitter's strongly-typed signature. The actual SuperDoc class has a
+ * more specific emit method from EventEmitter<SuperDocEvents>.
+ *
+ * We avoid an index signature `[key: string]: unknown` because it would conflict
+ * with EventEmitter's method signatures and prevent proper type checking.
  */
-export type SuperDoc = {
+export interface SuperDoc {
+  // Core configuration and state
   /** Configuration object */
   config: Config;
-  /** Event emitter method */
-  emit?: (event: string, ...args: unknown[]) => boolean;
-} & Record<string, unknown>;
+  /** Current user */
+  user: User;
+  /** All users who have access to this superdoc */
+  users: User[];
+  /** Unique ID for this SuperDoc instance */
+  superdocId: string;
+  /** Version of SuperDoc */
+  version: string;
+  /** Whether running in development mode */
+  isDev: boolean;
+
+  // Editor and document state
+  /** Currently active editor instance */
+  activeEditor: Editor | null;
+  /** All comments in the document */
+  comments: unknown[];
+  /** Number of editors that have been initialized */
+  readyEditors: number;
+  /** The number of editors required for this superdoc */
+  readonly requiredNumberOfEditors: number;
+  /** Current state containing documents and users */
+  readonly state: { documents: unknown[]; users: User[] };
+  /** The SuperDoc container element */
+  readonly element: HTMLElement | null;
+
+  // Collaboration properties
+  /** Yjs document for collaboration */
+  ydoc?: YDoc;
+  /** Whether this SuperDoc uses collaboration */
+  isCollaborative?: boolean;
+  /** Pending collaboration saves counter */
+  pendingCollaborationSaves: number;
+
+  // Lock state
+  /** Whether the document is locked */
+  isLocked: boolean;
+  /** User who locked the document */
+  lockedBy: User | null;
+
+  // Stores (typed as unknown to avoid deep circular dependencies with store types)
+  /** Comments store */
+  commentsStore: unknown;
+  /** SuperDoc store */
+  superdocStore: unknown;
+
+  // User management methods
+  /** Add a user to the shared users list */
+  addSharedUser(user: User): void;
+  /** Remove a user from the shared users list */
+  removeSharedUser(email: string): void;
+
+  // Editor management methods
+  /** Set the active editor */
+  setActiveEditor(editor: Editor): void;
+  /** Focus the active editor or the first editor in the superdoc */
+  focus(): void;
+
+  // Document mode and state management
+  /** Set the document mode */
+  setDocumentMode(type: DocumentMode): void;
+  /** Configure how tracked changes are displayed */
+  setTrackedChangesPreferences(preferences?: {
+    mode?: 'review' | 'original' | 'final' | 'off';
+    enabled?: boolean;
+  }): void;
+
+  // Lock management
+  /** Set the document to locked or unlocked */
+  setLocked(lock?: boolean): void;
+  /** Lock the current superdoc */
+  lockSuperdoc(isLocked?: boolean, lockedBy?: User): void;
+
+  // Permission checking
+  /** Determine whether the current configuration allows a given permission */
+  canPerformPermission(params: {
+    permission: string;
+    role?: string;
+    isInternal?: boolean;
+    comment?: object | null;
+    trackedChange?: { commentId?: string; id?: string; comment?: object } | null;
+  }): boolean;
+
+  // Search functionality
+  /** Search for text or regex in the active editor */
+  search(text: string | RegExp): unknown[];
+  /** Go to the next search result */
+  goToSearchResult(match: unknown): void;
+
+  // Export and content methods
+  /** Get the HTML content of all editors */
+  getHTML(options?: object): string[];
+  /** Export the superdoc to a file */
+  export(
+    params?: ExportParams & {
+      additionalFiles?: Blob[];
+      additionalFileNames?: string[];
+      isFinalDoc?: boolean;
+    },
+  ): Promise<void | Blob>;
+  /** Export editors to DOCX format */
+  exportEditorsToDOCX(options?: {
+    commentsType?: CommentsType;
+    isFinalDoc?: boolean;
+    fieldsHighlightColor?: string | null;
+  }): Promise<Blob[]>;
+
+  // Lifecycle methods
+  /** Save the superdoc if in collaboration mode */
+  save(): Promise<unknown[]>;
+  /** Destroy the superdoc instance */
+  destroy(): void;
+
+  /**
+   * Event emitter method
+   * The actual implementation has strongly typed events, but we use a generic
+   * signature here to avoid circular dependencies and maintain compatibility.
+   * The unknown[] allows any arguments while maintaining type safety.
+   */
+  emit?(event: string, ...args: unknown[]): boolean;
+}

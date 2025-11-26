@@ -486,8 +486,7 @@ export class SuperDoc extends EventEmitter<SuperDocEvents> {
     this.superdocStore.init(this.config);
 
     const commentsModuleConfig = this.config.modules?.comments;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.commentsStore.init((commentsModuleConfig as any) || {});
+    this.commentsStore.init(commentsModuleConfig ?? {});
   }
 
   /**
@@ -498,12 +497,10 @@ export class SuperDoc extends EventEmitter<SuperDocEvents> {
       this.on('editorBeforeCreate', (data) => this.config.onEditorBeforeCreate?.(data.editor));
     if (this.config.onEditorCreate) this.on('editorCreate', (data) => this.config.onEditorCreate?.(data.editor));
     if (this.config.onEditorDestroy) this.on('editorDestroy', () => this.config.onEditorDestroy?.());
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (this.config.onReady) this.on('ready', (data) => this.config.onReady?.(data as any));
+    if (this.config.onReady) this.on('ready', (data) => this.config.onReady?.(data));
     if (this.config.onCommentsUpdate) this.on('comments-update', (data) => this.config.onCommentsUpdate?.(data));
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (this.config.onAwarenessUpdate)
-      this.on('awareness-update', (data) => this.config.onAwarenessUpdate?.(data as any));
+
+    if (this.config.onAwarenessUpdate) this.on('awareness-update', (data) => this.config.onAwarenessUpdate?.(data));
     if (this.config.onLocked) this.on('locked', this.config.onLocked);
     if (this.config.onPdfDocumentReady) this.on('pdf-document-ready', this.config.onPdfDocumentReady);
     if (this.config.onSidebarToggle) this.on('sidebar-toggle', this.config.onSidebarToggle);

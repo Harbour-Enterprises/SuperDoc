@@ -12,7 +12,7 @@ import {
 import { getRichTextExtensions } from '@harbour-enterprises/super-editor';
 import useComment, { type UseCommentReturn, type UseCommentParams } from '../components/CommentsLayer/use-comment';
 import { groupChanges, type GroupedChange } from '../helpers/group-changes';
-import type { SuperDoc, Editor } from '../core/types';
+import type { SuperDoc, Editor, CommentsModuleConfig } from '../core/types';
 import type { UseDocumentReturn } from '../composables/use-document';
 import type { SelectionBounds } from './types';
 
@@ -273,7 +273,7 @@ interface CommentsStoreReturn {
   getFloatingComments: ComputedRef<UnwrapNestedRefs<UseCommentReturn>[]>;
 
   // Actions
-  init: (config?: Partial<CommentsConfig>) => void;
+  init: (config?: Partial<CommentsConfig & CommentsModuleConfig>) => void;
   getComment: (id: string | number | undefined | null) => UnwrapNestedRefs<UseCommentReturn> | null;
   setActiveComment: (superdoc: SuperDoc, id: string | undefined | null) => void;
   getCommentLocation: (
@@ -370,7 +370,7 @@ export const useCommentsStore = defineStore('comments', (): CommentsStoreReturn 
    *
    * @param config - The comments module config from SuperDoc
    */
-  const init = (config: Partial<CommentsConfig> = {}): void => {
+  const init = (config: Partial<CommentsConfig & CommentsModuleConfig> = {}): void => {
     const updatedConfig = { ...commentsConfig, ...config };
     Object.assign(commentsConfig, updatedConfig);
 

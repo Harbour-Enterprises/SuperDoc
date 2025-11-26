@@ -12,138 +12,24 @@ import { SuperDoc } from '../SuperDoc';
 import { PERMISSIONS, isAllowed } from './permissions';
 import * as permissionsModule from './permissions';
 
-let awarenessStatesToArrayMock: ReturnType<typeof vi.fn>;
+const awarenessStatesToArrayMock = vi.hoisted(() => vi.fn(() => [{ name: 'Remote User' }]));
 
-let MockYMap: typeof Map;
-let MockYArray: new () => {
-  items: unknown[];
-  _observers: Set<(event: unknown) => void>;
-  push: (nodes: unknown[]) => void;
-  delete: (index: number, count: number) => void;
-  insert: (index: number, nodes: unknown[]) => void;
-  toJSON: () => unknown[];
-  observe: (handler: (event: unknown) => void) => void;
-  emit: (event: unknown) => void;
-};
-let MockYDoc: new () => {
-  _arrays: Map<string, InstanceType<typeof MockYArray>>;
-  _lastMeta: unknown;
-  getArray: (name: string) => InstanceType<typeof MockYArray>;
-  transact: (fn: () => void, meta?: unknown) => void;
-};
-let MockWebsocketProvider: new (
-  url: string,
-  name: string,
-  ydoc: unknown,
-  options?: unknown,
-) => {
-  url: string;
-  name: string;
-  ydoc: unknown;
-  options: unknown;
-  awareness: {
-    setLocalStateField: ReturnType<typeof vi.fn>;
-    on: ReturnType<typeof vi.fn>;
-    getStates: ReturnType<typeof vi.fn>;
-  };
-  _states?: Map<number, unknown>;
-  _awarenessHandler?: (changes: unknown) => void;
-  emitAwareness: (changes: unknown, states?: Map<number, unknown>) => void;
-};
-let MockHocuspocusProvider: new (options: unknown) => {
-  options: Record<string, unknown>;
-  _handlers: Record<string, (payload: unknown) => void>;
-  _awarenessField?: { field: string; value: unknown };
-  setAwarenessField: (field: string, value: unknown) => void;
-  on: (event: string, handler: (payload: unknown) => void) => void;
-  emit: (event: string, payload: unknown) => void;
-};
-const websocketInstances: InstanceType<typeof MockWebsocketProvider>[] = [];
-const hocuspocusInstances: InstanceType<typeof MockHocuspocusProvider>[] = [];
-
-vi.mock('@superdoc/common/collaboration/awareness', () => {
-  awarenessStatesToArrayMock = vi.fn(() => [{ name: 'Remote User' }]);
-  return { awarenessStatesToArray: awarenessStatesToArrayMock };
-});
-
-vi.mock('y-websocket', () => {
-  MockWebsocketProvider = class {
-    url: string;
-    name: string;
-    ydoc: unknown;
-    options: unknown;
-    awareness: {
-      setLocalStateField: ReturnType<typeof vi.fn>;
-      on: ReturnType<typeof vi.fn>;
-      getStates: ReturnType<typeof vi.fn>;
-    };
-    _states?: Map<number, unknown>;
-    _awarenessHandler?: (changes: unknown) => void;
-
-    constructor(url: string, name: string, ydoc: unknown, options?: unknown) {
-      this.url = url;
-      this.name = name;
-      this.ydoc = ydoc;
-      this.options = options;
-      this.awareness = {
-        setLocalStateField: vi.fn(),
-        on: vi.fn((event: string, handler: (changes: unknown) => void) => {
-          if (event === 'update') this._awarenessHandler = handler;
-        }),
-        getStates: vi.fn(() => this._states || new Map()),
-      };
-      websocketInstances.push(this);
-    }
-
-    emitAwareness(changes: unknown, states = new Map()): void {
-      this._states = states;
-      this._awarenessHandler?.(changes);
-    }
-  };
-
-  return {
-    WebsocketProvider: vi.fn((...args: [string, string, unknown, unknown?]) => new MockWebsocketProvider(...args)),
-  };
-});
-
-vi.mock('@hocuspocus/provider', () => {
-  MockHocuspocusProvider = class {
-    options: Record<string, unknown>;
-    _handlers: Record<string, (payload: unknown) => void>;
-    _awarenessField?: { field: string; value: unknown };
-
-    constructor(options: unknown) {
-      this.options = options as Record<string, unknown>;
-      this._handlers = {};
-      hocuspocusInstances.push(this);
-    }
-
-    setAwarenessField(field: string, value: unknown): void {
-      this._awarenessField = { field, value };
-    }
-
-    on(event: string, handler: (payload: unknown) => void): void {
-      this._handlers[event] = handler;
-    }
-
-    emit(event: string, payload: unknown): void {
-      this._handlers[event]?.(payload);
-    }
-  };
-
-  return {
-    HocuspocusProvider: vi.fn((options: unknown) => new MockHocuspocusProvider(options)),
-  };
-});
-
-vi.mock('yjs', () => {
-  MockYMap = class extends Map {
+const {
+  MockWebsocketProvider,
+  MockHocuspocusProvider,
+  MockYMap,
+  MockYArray,
+  MockYDoc,
+  websocketInstances,
+  hocuspocusInstances,
+} = vi.hoisted(() => {
+  class MockYMap extends Map {
     toJSON(): Record<string, unknown> {
       return Object.fromEntries(this);
     }
-  };
+  }
 
-  MockYArray = class {
+  class MockYArray {
     items: unknown[];
     _observers: Set<(event: unknown) => void>;
 
@@ -177,9 +63,9 @@ vi.mock('yjs', () => {
     emit(event: unknown): void {
       for (const handler of this._observers) handler(event);
     }
-  };
+  }
 
-  MockYDoc = class {
+  class MockYDoc {
     _arrays: Map<string, InstanceType<typeof MockYArray>>;
     _lastMeta: unknown;
 
@@ -199,17 +85,106 @@ vi.mock('yjs', () => {
       this._lastMeta = meta;
       fn();
     }
-  };
+  }
 
+  const websocketInstances: MockWebsocketProvider[] = [];
+
+  class MockWebsocketProvider {
+    url: string;
+    name: string;
+    ydoc: unknown;
+    options: unknown;
+    awareness: {
+      setLocalStateField: ReturnType<typeof vi.fn>;
+      on: ReturnType<typeof vi.fn>;
+      getStates: ReturnType<typeof vi.fn>;
+    };
+    _states?: Map<number, unknown>;
+    _awarenessHandler?: (changes: unknown) => void;
+
+    constructor(url: string, name: string, ydoc: unknown, options?: unknown) {
+      this.url = url;
+      this.name = name;
+      this.ydoc = ydoc;
+      this.options = options;
+      this.awareness = {
+        setLocalStateField: vi.fn(),
+        on: vi.fn((event: string, handler: (changes: unknown) => void) => {
+          if (event === 'update') this._awarenessHandler = handler;
+        }),
+        getStates: vi.fn(() => this._states || new Map()),
+      };
+      websocketInstances.push(this);
+    }
+
+    emitAwareness(changes: unknown, states = new Map()): void {
+      this._states = states;
+      this._awarenessHandler?.(changes);
+    }
+  }
+
+  const hocuspocusInstances: MockHocuspocusProvider[] = [];
+
+  class MockHocuspocusProvider {
+    options: Record<string, unknown>;
+    _handlers: Record<string, (payload: unknown) => void>;
+    _awarenessField?: { field: string; value: unknown };
+
+    constructor(options: unknown) {
+      this.options = options as Record<string, unknown>;
+      this._handlers = {};
+      hocuspocusInstances.push(this);
+    }
+
+    setAwarenessField(field: string, value: unknown): void {
+      this._awarenessField = { field, value };
+    }
+
+    on(event: string, handler: (payload: unknown) => void): void {
+      this._handlers[event] = handler;
+    }
+
+    emit(event: string, payload: unknown): void {
+      this._handlers[event]?.(payload);
+    }
+  }
+
+  return {
+    MockWebsocketProvider,
+    MockHocuspocusProvider,
+    MockYMap,
+    MockYArray,
+    MockYDoc,
+    websocketInstances,
+    hocuspocusInstances,
+  };
+});
+
+vi.mock('@superdoc/common/collaboration/awareness', () => {
+  return { awarenessStatesToArray: awarenessStatesToArrayMock };
+});
+
+vi.mock('y-websocket', () => {
+  return {
+    WebsocketProvider: vi.fn((...args: [string, string, unknown, unknown?]) => new MockWebsocketProvider(...args)),
+  };
+});
+
+vi.mock('@hocuspocus/provider', () => {
+  return {
+    HocuspocusProvider: vi.fn((options: unknown) => new MockHocuspocusProvider(options)),
+  };
+});
+
+vi.mock('yjs', () => {
   return {
     Doc: MockYDoc,
     Map: MockYMap,
   };
 });
 
-let useCommentMock: ReturnType<typeof vi.fn>;
-vi.mock('../../components/CommentsLayer/use-comment', () => {
-  useCommentMock = vi.fn((comment: { commentId?: string; selection?: unknown } = {}) => {
+const useCommentMock = vi.hoisted(() =>
+  vi.fn((comment: { commentId?: string; selection?: unknown } = {}) => {
     const selection = comment.selection || { source: 'mock', selectionBounds: {} };
     return {
       ...comment,
@@ -219,12 +194,12 @@ vi.mock('../../components/CommentsLayer/use-comment', () => {
       getValues: () => ({ ...comment, commentId: comment.commentId ?? 'mock-id', selection }),
       setText: vi.fn(),
     };
-  });
+  }),
+);
 
-  return {
-    default: useCommentMock,
-  };
-});
+vi.mock('../../components/CommentsLayer/use-comment', () => ({
+  default: useCommentMock,
+}));
 
 beforeAll(() => {
   (globalThis as { superdoc: { user: { name: string; email: string } } }).superdoc = {

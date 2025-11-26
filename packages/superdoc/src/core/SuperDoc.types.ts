@@ -6,6 +6,7 @@
  */
 
 import type { User, Document, Editor } from './types';
+import type { SuperDoc } from './SuperDoc';
 
 /**
  * Awareness state for a connected user in collaboration mode.
@@ -82,13 +83,11 @@ export interface SuperDocEvents {
   /** Fired when an editor instance is destroyed */
   editorDestroy: [];
   /** Fired when SuperDoc is fully initialized and ready */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ready: [{ superdoc: any }];
+  ready: [{ superdoc: SuperDoc }];
   /** Fired when comments are added, updated, deleted, or resolved */
   'comments-update': [{ type: string; data: CommentsUpdateData }];
   /** Fired when awareness state changes (user cursors, selections) */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  'awareness-update': [{ context: any; states: AwarenessState[] }];
+  'awareness-update': [{ context: SuperDoc; states: AwarenessState[] }];
   /** Fired when document lock state changes */
   locked: [{ isLocked: boolean; lockedBy: User | null }];
   /** Fired when a PDF document is fully loaded and ready */

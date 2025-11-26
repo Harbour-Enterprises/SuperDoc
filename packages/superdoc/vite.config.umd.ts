@@ -1,7 +1,8 @@
-import vue from '@vitejs/plugin-vue';
 import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+
 import { version } from './package.json';
-import { getAliases } from './vite.config.js';
+import { getAliases } from './vite.config';
 
 export default defineConfig(({ command }) => {
   const plugins = [vue()];
@@ -22,7 +23,7 @@ export default defineConfig(({ command }) => {
       target: 'es2022',
       cssCodeSplit: false,
       lib: {
-        entry: 'src/index.js',
+        entry: 'src/index.ts',
         formats: ['umd'],
         name: 'SuperDocLibrary',
         cssFileName: 'style',

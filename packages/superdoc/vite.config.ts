@@ -1,23 +1,26 @@
-import path from 'path';
-import copy from 'rollup-plugin-copy'
-import { defineConfig } from 'vite'
+import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
-import { nodePolyfills } from 'vite-plugin-node-polyfills';
+
+import vue from '@vitejs/plugin-vue';
+import copy from 'rollup-plugin-copy';
 import { visualizer } from 'rollup-plugin-visualizer';
-import vue from '@vitejs/plugin-vue'
+import { defineConfig } from 'vite';
+import { nodePolyfills } from 'vite-plugin-node-polyfills';
 
 import { version } from './package.json';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const visualizerConfig = {
   filename: './dist/bundle-analysis.html',
   template: 'treemap',
   gzipSize: true,
   brotliSize: true,
-  open: true
-}
+  open: true,
+};
 
-export const getAliases = (isDev) => {
-  const aliases = {
+export const getAliases = (isDev: boolean) => {
+  const aliases: Record<string, string> = {
     // IMPORTANT: Specific @superdoc/* package aliases must come BEFORE the generic '@superdoc'
     // to avoid partial matches swallowing them.
     '@superdoc/common': path.resolve(__dirname, '../../shared/common'),
@@ -50,7 +53,9 @@ export const getAliases = (isDev) => {
     '@helpers': fileURLToPath(new URL('../super-editor/src/core/helpers', import.meta.url)),
     '@converter': fileURLToPath(new URL('../super-editor/src/core/super-converter', import.meta.url)),
     '@tests': fileURLToPath(new URL('../super-editor/src/tests', import.meta.url)),
-    '@translator': fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
+    '@translator': fileURLToPath(
+      new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url),
+    ),
   };
 
   if (isDev) {
@@ -60,9 +65,8 @@ export const getAliases = (isDev) => {
   return aliases;
 };
 
-
 // https://vitejs.dev/config/
-export default defineConfig(({ mode, command}) => {
+export default defineConfig(({ mode, command }) => {
   const plugins = [
     vue(),
     copy({
@@ -71,15 +75,19 @@ export default defineConfig(({ mode, command}) => {
           src: path.resolve(__dirname, '../super-editor/dist/*'),
           dest: 'dist/super-editor',
         },
-        { 
-          src: path.resolve(__dirname, '../../node_modules/pdfjs-dist/web/images/*'), 
+        {
+          src: path.resolve(__dirname, '../../node_modules/pdfjs-dist/web/images/*'),
           dest: 'dist/images',
         },
       ],
-      hook: 'writeBundle'
+      hook: 'writeBundle',
     }),
-    // visualizer(visualizerConfig)
   ];
+
+  if (process.env.BUNDLE_ANALYZE === 'true') {
+    plugins.push(visualizer(visualizerConfig));
+  }
+
   if (mode !== 'test') plugins.push(nodePolyfills());
   const isDev = command === 'serve';
 
@@ -99,23 +107,21 @@ export default defineConfig(({ mode, command}) => {
       retry: 2,
       testTimeout: 20000,
       hookTimeout: 10000,
-      exclude: [
-        '**/*.spec.js',
-      ],
+      exclude: ['**/*.spec.js'],
     },
     build: {
       target: 'es2022',
       cssCodeSplit: false,
       lib: {
-        entry: "src/index.ts",
-        name: "SuperDoc",
+        entry: 'src/index.ts',
+        name: 'SuperDoc',
         cssFileName: 'style',
       },
       minify: false,
       sourcemap: false,
       rollupOptions: {
         input: {
-          'superdoc': 'src/index.ts',
+          superdoc: 'src/index.ts',
           'super-editor': 'src/super-editor.ts',
         },
         external: [
@@ -133,29 +139,29 @@ export default defineConfig(({ mode, command}) => {
             entryFileNames: '[name].es.js',
             chunkFileNames: 'chunks/[name]-[hash].es.js',
             manualChunks: {
-              'vue': ['vue'],
+              vue: ['vue'],
               'blank-docx': ['@superdoc/common/data/blank.docx?url'],
-              'jszip': ['jszip'],
-              'eventemitter3': ['eventemitter3'],
-              'uuid': ['uuid'],
+              jszip: ['jszip'],
+              eventemitter3: ['eventemitter3'],
+              uuid: ['uuid'],
               'xml-js': ['xml-js'],
-            }
+            },
           },
           {
             format: 'cjs',
             entryFileNames: '[name].cjs',
             chunkFileNames: 'chunks/[name]-[hash].cjs',
             manualChunks: {
-              'vue': ['vue'],
+              vue: ['vue'],
               'blank-docx': ['@superdoc/common/data/blank.docx?url'],
-              'jszip': ['jszip'],
-              'eventemitter3': ['eventemitter3'],
-              'uuid': ['uuid'],
+              jszip: ['jszip'],
+              eventemitter3: ['eventemitter3'],
+              uuid: ['uuid'],
               'xml-js': ['xml-js'],
-            }
-          }
-        ],        
-      }
+            },
+          },
+        ],
+      },
     },
     optimizeDeps: {
       include: ['yjs', '@hocuspocus/provider'],
@@ -192,5 +198,5 @@ export default defineConfig(({ mode, command}) => {
         ],
       },
     },
-  }
+  };
 });
