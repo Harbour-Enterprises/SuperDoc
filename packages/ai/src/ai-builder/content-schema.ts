@@ -26,7 +26,8 @@ export const CONTENT_SCHEMA = {
       type: {
         type: 'string',
         const: 'paragraph',
-        description: 'Paragraph node. For headings, use styleId attribute (e.g., "Heading1"). For lists, use numberingProperties.'
+        description:
+          'Paragraph node. For headings, use styleId attribute (e.g., "Heading1"). For lists, use numberingProperties.',
       },
       content: {
         type: 'array',
@@ -40,11 +41,11 @@ export const CONTENT_SCHEMA = {
                 type: {
                   type: 'string',
                   const: 'text',
-                  description: 'Text content node'
+                  description: 'Text content node',
                 },
                 text: {
                   type: 'string',
-                  description: 'The actual text content'
+                  description: 'The actual text content',
                 },
                 marks: {
                   type: 'array',
@@ -56,16 +57,16 @@ export const CONTENT_SCHEMA = {
                       type: {
                         type: 'string',
                         enum: ['bold', 'italic', 'underline', 'strike', 'link', 'highlight', 'textStyle'],
-                        description: 'Type of formatting mark'
+                        description: 'Type of formatting mark',
                       },
                       attrs: {
                         type: 'object',
-                        description: 'Mark attributes (e.g., href for links, color for highlights)'
-                      }
-                    }
-                  }
-                }
-              }
+                        description: 'Mark attributes (e.g., href for links, color for highlights)',
+                      },
+                    },
+                  },
+                },
+              },
             },
             {
               type: 'object',
@@ -74,12 +75,12 @@ export const CONTENT_SCHEMA = {
                 type: {
                   type: 'string',
                   const: 'hardBreak',
-                  description: 'Line break (Shift+Enter)'
-                }
-              }
-            }
-          ]
-        }
+                  description: 'Line break (Shift+Enter)',
+                },
+              },
+            },
+          ],
+        },
       },
       attrs: {
         type: 'object',
@@ -87,26 +88,20 @@ export const CONTENT_SCHEMA = {
         properties: {
           styleId: {
             type: 'string',
-            description: 'Word style ID for headings (e.g., "Heading1", "Heading2", etc.) or other styles'
+            description: 'Word style ID for headings (e.g., "Heading1", "Heading2", etc.) or other styles',
           },
           textAlign: {
             type: 'string',
             enum: ['left', 'center', 'right', 'justify'],
-            description: 'Text alignment'
+            description: 'Text alignment',
           },
           lineHeight: {
-            oneOf: [
-              { type: 'string' },
-              { type: 'number' }
-            ],
-            description: 'Line height (e.g., "1.5" or 1.5)'
+            oneOf: [{ type: 'string' }, { type: 'number' }],
+            description: 'Line height (e.g., "1.5" or 1.5)',
           },
           textIndent: {
-            oneOf: [
-              { type: 'string' },
-              { type: 'number' }
-            ],
-            description: 'First-line indentation'
+            oneOf: [{ type: 'string' }, { type: 'number' }],
+            description: 'First-line indentation',
           },
           numberingProperties: {
             type: 'object',
@@ -115,16 +110,16 @@ export const CONTENT_SCHEMA = {
             properties: {
               numId: {
                 type: 'number',
-                description: 'Numbering definition ID: 1 for bullets, 2 for numbered lists'
+                description: 'Numbering definition ID: 1 for bullets, 2 for numbered lists',
               },
               ilvl: {
                 type: 'number',
-                description: 'Indentation level (0-8, where 0 is top level)'
-              }
-            }
-          }
-        }
-      }
-    }
-  }
+                description: 'Indentation level (0-8, where 0 is top level)',
+              },
+            },
+          },
+        },
+      },
+    },
+  },
 } as const;

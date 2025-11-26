@@ -6,12 +6,16 @@ import { enrichParagraphNodes } from '../helpers/enrichContent';
  * Params for replaceContent tool
  */
 export interface ReplaceContentParams {
-    /** Start position (character offset) */
-    from: number;
-    /** End position (character offset) */
-    to: number;
-    /** Array of content nodes to replace with (ProseMirror JSON format) */
-    content: any[];
+  /** Text to search for and replace (alternative to from/to positions) */
+  query?: string;
+  /** Start position (character offset) - required if query not provided */
+  from?: number;
+  /** End position (character offset) - required if query not provided */
+  to?: number;
+  /** Array of content nodes to replace with (ProseMirror JSON format) */
+  content: any[];
+  /** Whether to replace all occurrences when using query (default: false) */
+  replaceAll?: boolean;
 }
 
 /**
@@ -19,93 +23,147 @@ export interface ReplaceContentParams {
  * Removes content from 'from' to 'to' positions and inserts new content.
  */
 export const replaceContent: SuperDocTool = {
-    name: 'replaceContent',
-    description: 'Replace content in a specific range of the document. Specify from and to positions (character offsets) and provide an array of paragraph blocks to replace with.',
-    category: 'write',
+  name: 'replaceContent',
+  description:
+    'Replace content in the document. Either provide a query to search and replace text, or specify exact from/to positions.',
+  category: 'write',
 
-    async execute(editor: Editor, params: ReplaceContentParams): Promise<ToolResult> {
-        try {
-            const { from, to, content } = params;
+  async execute(editor: Editor, params: ReplaceContentParams): Promise<ToolResult> {
+    try {
+      const { query, from, to, content, replaceAll = false } = params;
 
-            if (typeof from !== 'number' || typeof to !== 'number') {
-                return {
-                    success: false,
-                    error: 'From and to must be numbers',
-                    docChanged: false
-                };
-            }
+      if (!content || !Array.isArray(content)) {
+        return {
+          success: false,
+          error: 'Content must be an array of nodes',
+          docChanged: false,
+        };
+      }
 
-            if (from < 0 || to < from) {
-                return {
-                    success: false,
-                    error: 'Invalid range: from must be >= 0 and to must be >= from',
-                    docChanged: false
-                };
-            }
+      const { state } = editor;
+      if (!state) {
+        return {
+          success: false,
+          error: 'Editor state not available',
+          docChanged: false,
+        };
+      }
 
-            if (!content || !Array.isArray(content)) {
-                return {
-                    success: false,
-                    error: 'Content must be an array of nodes',
-                    docChanged: false
-                };
-            }
+      // Automatically add default spacing attributes to paragraph nodes
+      const enrichedContent = enrichParagraphNodes(content);
 
-            // Automatically add default spacing attributes to paragraph nodes
-            const enrichedContent = enrichParagraphNodes(content);
-
-            const { state } = editor;
-            if (!state) {
-                return {
-                    success: false,
-                    error: 'Editor state not available',
-                    docChanged: false
-                };
-            }
-
-            // Clamp positions to valid document range
-            const docSize = state.doc.content.size;
-            const validFrom = Math.max(0, Math.min(from, docSize));
-            const validTo = Math.max(0, Math.min(to, docSize));
-
-            // For full document replacement, use setContent
-            if (validFrom === 0 && validTo === docSize) {
-                const success = editor.commands.setContent({ type: 'doc', content: enrichedContent });
-
-                return {
-                    success,
-                    data: { replacedRange: { from: validFrom, to: validTo } },
-                    docChanged: success,
-                    message: success ? 'Replaced entire document' : 'Failed to replace document'
-                };
-            }
-
-            // For partial replacement, use insertContentAt
-            const success = editor.commands.insertContentAt(
-                { from: validFrom, to: validTo },
-                { type: 'doc', content: enrichedContent }
-            );
-
-            if (!success) {
-                return {
-                    success: false,
-                    error: 'Failed to replace content',
-                    docChanged: false
-                };
-            }
-
-            return {
-                success: true,
-                data: { replacedRange: { from: validFrom, to: validTo } },
-                docChanged: true,
-                message: `Replaced content from position ${validFrom} to ${validTo}`
-            };
-        } catch (error) {
-            return {
-                success: false,
-                error: error instanceof Error ? error.message : 'Unknown error',
-                docChanged: false
-            };
+      // If query is provided, search for it first
+      if (query) {
+        if (!editor.commands?.search) {
+          return {
+            success: false,
+            error: 'Search command not available in editor',
+            docChanged: false,
+          };
         }
+
+        const matches = editor.commands.search(query);
+        if (!matches || !Array.isArray(matches) || matches.length === 0) {
+          return {
+            success: false,
+            error: `No matches found for "${query}"`,
+            docChanged: false,
+          };
+        }
+
+        // For inline text replacement, extract text content from paragraphs
+        // This prevents splitting paragraphs when replacing text within them
+        let inlineContent = enrichedContent;
+        if (
+          enrichedContent.length === 1 &&
+          enrichedContent[0].type === 'paragraph' &&
+          Array.isArray(enrichedContent[0].content)
+        ) {
+          // Extract just the inline content (text nodes) from the paragraph
+          inlineContent = enrichedContent[0].content;
+        }
+
+        // Replace matches (in reverse order to maintain positions)
+        const matchesToReplace = replaceAll ? [...matches].reverse() : [matches[0]];
+        let replacedCount = 0;
+
+        for (const match of matchesToReplace) {
+          const success = editor.commands.insertContentAt({ from: match.from, to: match.to }, inlineContent);
+          if (success) replacedCount++;
+        }
+
+        return {
+          success: replacedCount > 0,
+          data: {
+            replacedCount,
+            totalMatches: matches.length,
+            query,
+          },
+          docChanged: replacedCount > 0,
+          message: `Replaced ${replacedCount} of ${matches.length} occurrence(s) of "${query}"`,
+        };
+      }
+
+      // Otherwise, use explicit from/to positions
+      if (typeof from !== 'number' || typeof to !== 'number') {
+        return {
+          success: false,
+          error: 'Either query or from/to positions must be provided',
+          docChanged: false,
+        };
+      }
+
+      if (from < 0 || to < from) {
+        return {
+          success: false,
+          error: 'Invalid range: from must be >= 0 and to must be >= from',
+          docChanged: false,
+        };
+      }
+
+      // Clamp positions to valid document range
+      const docSize = state.doc.content.size;
+      const validFrom = Math.max(0, Math.min(from, docSize));
+      const validTo = Math.max(0, Math.min(to, docSize));
+
+      // For full document replacement, use setContent
+      if (validFrom === 0 && validTo === docSize) {
+        const success = editor.commands.setContent({ type: 'doc', content: enrichedContent });
+
+        return {
+          success,
+          data: { replacedRange: { from: validFrom, to: validTo } },
+          docChanged: success,
+          message: success ? 'Replaced entire document' : 'Failed to replace document',
+        };
+      }
+
+      // For partial replacement, use insertContentAt
+      const success = editor.commands.insertContentAt(
+        { from: validFrom, to: validTo },
+        { type: 'doc', content: enrichedContent },
+      );
+
+      if (!success) {
+        return {
+          success: false,
+          error: 'Failed to replace content',
+          docChanged: false,
+        };
+      }
+
+      return {
+        success: true,
+        data: { replacedRange: { from: validFrom, to: validTo } },
+        docChanged: true,
+        message: `Replaced content from position ${validFrom} to ${validTo}`,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+        docChanged: false,
+      };
     }
+  },
 };

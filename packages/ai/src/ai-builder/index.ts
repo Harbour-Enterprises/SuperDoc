@@ -6,25 +6,29 @@
  * AI Builder provides the foundational components for creating AI-powered
  * document editing experiences. It offers:
  *
- * - **Tools**: Core document operations (insert, replace)
+ * - **Tools**: Core document operations (read, search, insert, replace)
  * - **Executor**: Primitive for running tool calls (executeTool)
  * - **Provider**: Anthropic tool schemas
- * - **Schema Generator**: Generate schemas from SuperDoc extensions
+ * - **Helper**: Token-efficient document context (getDocumentContext)
  *
  * @example
  * ```typescript
- * import { executeTool, anthropicTools } from '@superdoc-dev/ai/ai-builder';
+ * import { executeTool, anthropicTools, getDocumentContext } from '@superdoc-dev/ai/ai-builder';
  * import Anthropic from '@anthropic-ai/sdk';
  *
  * // Get tool definitions
- * const tools = anthropicTools(editor.extensionManager.extensions);
+ * const tools = anthropicTools();
+ *
+ * // Get document context (full doc for small, selection for large)
+ * const context = getDocumentContext(editor, { maxTokens: 5000 });
  *
  * // Use with Anthropic SDK
  * const anthropic = new Anthropic({ apiKey: '...' });
- * const response = await anthropic.beta.messages.create({
+ * const response = await anthropic.messages.create({
  *   model: 'claude-sonnet-4-5',
+ *   system: `You are a document editor.\n\nDocument:\n${JSON.stringify(context.content)}`,
  *   tools,
- *   messages: [...]
+ *   messages: [{ role: 'user', content: userMessage }]
  * });
  *
  * // Execute tool calls
@@ -49,3 +53,7 @@ export * from './providers/index';
 
 // Content schema
 export { CONTENT_SCHEMA } from './content-schema';
+
+// Helpers
+export { getDocumentContext } from './helpers/getDocumentContext';
+export type { DocumentContextResult, DocumentContextOptions } from './helpers/getDocumentContext';

@@ -34,7 +34,7 @@ export function enrichParagraphNodes(nodes: any[]): any[] {
     return nodes;
   }
 
-  return nodes.map(node => {
+  return nodes.map((node) => {
     // Only process paragraph nodes
     if (node?.type !== 'paragraph') {
       return node;

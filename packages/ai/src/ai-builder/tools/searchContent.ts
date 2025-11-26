@@ -2,9 +2,9 @@ import type { Editor } from '../../types';
 import type { SuperDocTool, ToolResult } from '../types';
 
 /**
- * Params for searchDocument tool
+ * Params for searchContent tool
  */
-export interface SearchDocumentParams {
+export interface SearchContentParams {
   /** The text or pattern to search for */
   query: string;
   /** Whether the search should be case-sensitive (default: false) */
@@ -29,31 +29,37 @@ export interface SearchMatch {
 
 /**
  * Tool for searching text in the document.
- * Returns positions of matches that can be used with other tools like replaceContent.
+ * Returns positions of matches that can be used with readContent or replaceContent.
  *
  * @example
  * // Search for all occurrences of "privacy"
- * const result = await executeTool('searchDocument', {
+ * const result = await executeTool('searchContent', {
  *   query: 'privacy',
  *   caseSensitive: false,
  *   findAll: true
  * }, editor);
  * // Returns: { matches: [{ text: 'privacy', from: 100, to: 107 }, ...] }
  *
- * // Then use with replaceContent:
+ * // Then read content around the match:
+ * await executeTool('readContent', {
+ *   from: result.data.matches[0].from - 50,
+ *   to: result.data.matches[0].to + 50
+ * }, editor);
+ *
+ * // Or replace it:
  * await executeTool('replaceContent', {
  *   from: result.data.matches[0].from,
  *   to: result.data.matches[0].to,
  *   content: [{ type: 'paragraph', content: [{ type: 'text', text: 'confidentiality' }] }]
  * }, editor);
  */
-export const searchDocument: SuperDocTool = {
-  name: 'searchDocument',
+export const searchContent: SuperDocTool = {
+  name: 'searchContent',
   description:
-    'Search for text or patterns in the document. Returns an array of matches with their positions (from/to character offsets). Use this before replaceContent to find exact positions to replace.',
+    'Search for text or patterns in the document. Returns an array of matches with their positions (from/to character offsets). Use with readContent to see context or replaceContent to modify.',
   category: 'read',
 
-  async execute(editor: Editor, params: SearchDocumentParams): Promise<ToolResult> {
+  async execute(editor: Editor, params: SearchContentParams): Promise<ToolResult> {
     try {
       const { query, caseSensitive = false, regex = false, findAll = true } = params;
 

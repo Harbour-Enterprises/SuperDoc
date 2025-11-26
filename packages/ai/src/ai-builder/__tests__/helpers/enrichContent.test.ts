@@ -3,9 +3,7 @@ import { enrichParagraphNodes } from '../../helpers/enrichContent';
 
 describe('enrichParagraphNodes', () => {
   it('should add default spacing to paragraph nodes without spacing', () => {
-    const input = [
-      { type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }
-    ];
+    const input = [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }];
 
     const result = enrichParagraphNodes(input);
 
@@ -14,7 +12,7 @@ describe('enrichParagraphNodes', () => {
       after: null,
       before: null,
       line: null,
-      lineRule: 'auto'
+      lineRule: 'auto',
     });
   });
 
@@ -24,9 +22,9 @@ describe('enrichParagraphNodes', () => {
         type: 'paragraph',
         content: [{ type: 'text', text: 'Hello' }],
         attrs: {
-          spacing: { after: 100, before: 50, line: 120, lineRule: 'exact' }
-        }
-      }
+          spacing: { after: 100, before: 50, line: 120, lineRule: 'exact' },
+        },
+      },
     ];
 
     const result = enrichParagraphNodes(input);
@@ -35,7 +33,7 @@ describe('enrichParagraphNodes', () => {
       after: 100,
       before: 50,
       line: 120,
-      lineRule: 'exact'
+      lineRule: 'exact',
     });
   });
 
@@ -44,8 +42,8 @@ describe('enrichParagraphNodes', () => {
       {
         type: 'paragraph',
         content: [{ type: 'text', text: 'Hello' }],
-        attrs: { styleId: 'Heading1' }
-      }
+        attrs: { styleId: 'Heading1' },
+      },
     ];
 
     const result = enrichParagraphNodes(input);
@@ -55,14 +53,14 @@ describe('enrichParagraphNodes', () => {
       after: null,
       before: null,
       line: null,
-      lineRule: 'auto'
+      lineRule: 'auto',
     });
   });
 
   it('should not affect non-paragraph nodes', () => {
     const input = [
       { type: 'heading', level: 1, content: [{ type: 'text', text: 'Title' }] },
-      { type: 'paragraph', content: [{ type: 'text', text: 'Content' }] }
+      { type: 'paragraph', content: [{ type: 'text', text: 'Content' }] },
     ];
 
     const result = enrichParagraphNodes(input);
@@ -87,9 +85,7 @@ describe('enrichParagraphNodes', () => {
   });
 
   it('should not mutate original nodes', () => {
-    const input = [
-      { type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }
-    ];
+    const input = [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }];
 
     const original = JSON.parse(JSON.stringify(input));
     const result = enrichParagraphNodes(input);
@@ -105,17 +101,17 @@ describe('enrichParagraphNodes', () => {
     const input = [
       { type: 'paragraph', content: [{ type: 'text', text: 'First' }] },
       { type: 'paragraph', content: [{ type: 'text', text: 'Second' }] },
-      { type: 'paragraph', content: [{ type: 'text', text: 'Third' }] }
+      { type: 'paragraph', content: [{ type: 'text', text: 'Third' }] },
     ];
 
     const result = enrichParagraphNodes(input);
 
-    result.forEach(node => {
+    result.forEach((node) => {
       expect(node.attrs.spacing).toEqual({
         after: null,
         before: null,
         line: null,
-        lineRule: 'auto'
+        lineRule: 'auto',
       });
     });
   });
