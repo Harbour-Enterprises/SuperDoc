@@ -622,6 +622,12 @@ export type TableCellMeasure = {
   paragraph: ParagraphMeasure;
   width: number;
   height: number;
+  /** Starting grid column index (0-based) */
+  gridColumnStart?: number;
+  /** Number of grid columns this cell spans */
+  colSpan?: number;
+  /** Number of rows this cell spans */
+  rowSpan?: number;
 };
 export type TableRowMeasure = {
   cells: TableCellMeasure[];

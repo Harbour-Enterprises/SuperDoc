@@ -455,36 +455,105 @@ export const computeParagraphAttrs = (
   const indentSource = attrs.indent ?? paragraphProps.indent ?? hydrated?.indent;
   const normalizedIndent =
     normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? attrs.textIndent);
+
+  /**
+   * Unwraps and normalizes tab stop data structures from various formats.
+   *
+   * Handles two primary formats:
+   * 1. Nested format: `{ tab: { tabType: 'start', pos: 720 } }` (OOXML-style)
+   * 2. Direct format: `{ val: 'start', pos: 720 }` (normalized)
+   *
+   * Performs runtime validation to ensure:
+   * - Input is an array
+   * - Each entry is an object with valid structure
+   * - Required properties (val/tabType and pos) are present and correctly typed
+   * - Optional properties (leader, originalPos) are validated if present
+   *
+   * @param tabStops - Unknown input that may contain tab stop data
+   * @returns Array of normalized tab stop objects, or undefined if invalid/empty
+   *
+   * @example
+   * ```typescript
+   * // Nested format
+   * unwrapTabStops([{ tab: { tabType: 'start', pos: 720 } }])
+   * // Returns: [{ val: 'start', pos: 720 }]
+   *
+   * // Direct format
+   * unwrapTabStops([{ val: 'center', pos: 1440, leader: 'dot' }])
+   * // Returns: [{ val: 'center', pos: 1440, leader: 'dot' }]
+   *
+   * // Invalid input
+   * unwrapTabStops("not an array")
+   * // Returns: undefined
+   * ```
+   */
   const unwrapTabStops = (tabStops: unknown): Array<Record<string, unknown>> | undefined => {
-    if (!Array.isArray(tabStops)) return undefined;
+    // Runtime type guard: validate input is an array
+    if (!Array.isArray(tabStops)) {
+      return undefined;
+    }
+
     const unwrapped: Array<Record<string, unknown>> = [];
 
     for (const entry of tabStops) {
-      if (entry && typeof entry === 'object' && 'tab' in entry) {
-        const tab = (entry as Record<string, unknown>).tab;
-        if (tab && typeof tab === 'object') {
-          const tabObj = tab as Record<string, unknown>;
-          const val =
-            typeof tabObj.tabType === 'string'
-              ? tabObj.tabType
-              : typeof tabObj.val === 'string'
-                ? tabObj.val
-                : undefined;
-          const pos = pickNumber(tabObj.originalPos ?? tabObj.pos);
-          if (val && pos != null) {
-            const normalized: Record<string, unknown> = { val, pos };
-            const leader = tabObj.leader;
-            if (typeof leader === 'string') normalized.leader = leader;
-            const originalPos = pickNumber(tabObj.originalPos);
-            if (originalPos != null) normalized.originalPos = originalPos;
-            unwrapped.push(normalized);
-            continue;
-          }
-        }
+      // Runtime type guard: validate entry is a non-null object
+      if (!entry || typeof entry !== 'object') {
+        continue;
       }
 
-      if (entry && typeof entry === 'object') {
-        unwrapped.push(entry as Record<string, unknown>);
+      // Type guard: check for nested format { tab: {...} }
+      if ('tab' in entry) {
+        const entryRecord = entry as Record<string, unknown>;
+        const tab = entryRecord.tab;
+
+        // Validate tab property is a non-null object
+        if (!tab || typeof tab !== 'object') {
+          continue;
+        }
+
+        const tabObj = tab as Record<string, unknown>;
+
+        // Validate and extract val (alignment type)
+        const val =
+          typeof tabObj.tabType === 'string' ? tabObj.tabType : typeof tabObj.val === 'string' ? tabObj.val : undefined;
+
+        // Validate and extract pos (position in twips)
+        const pos = pickNumber(tabObj.originalPos ?? tabObj.pos);
+
+        // Skip entry if required fields are missing or invalid
+        if (!val || pos == null) {
+          continue;
+        }
+
+        // Build normalized tab stop object with validated properties
+        const normalized: Record<string, unknown> = { val, pos };
+
+        // Validate and add optional leader property
+        const leader = tabObj.leader;
+        if (typeof leader === 'string' && leader.length > 0) {
+          normalized.leader = leader;
+        }
+
+        // Validate and add optional originalPos property
+        const originalPos = pickNumber(tabObj.originalPos);
+        if (originalPos != null && Number.isFinite(originalPos)) {
+          normalized.originalPos = originalPos;
+        }
+
+        unwrapped.push(normalized);
+        continue;
+      }
+
+      // Direct format - entry is already a tab stop object
+      // Validate it has the expected structure before adding
+      const entryRecord = entry as Record<string, unknown>;
+
+      // Check if it has at least the basic tab stop properties
+      const hasValidStructure =
+        ('val' in entryRecord || 'tabType' in entryRecord) && ('pos' in entryRecord || 'originalPos' in entryRecord);
+
+      if (hasValidStructure) {
+        unwrapped.push(entryRecord);
       }
     }
 

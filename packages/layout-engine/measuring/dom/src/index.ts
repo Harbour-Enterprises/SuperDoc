@@ -856,29 +856,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
 async function measureTableBlock(block: TableBlock, constraints: MeasureConstraints): Promise<TableMeasure> {
   const maxWidth = typeof constraints === 'number' ? constraints : constraints.maxWidth;
-  const columnCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
 
   let columnWidths: number[];
 
   // Use provided column widths from OOXML w:tblGrid if available
   if (block.columnWidths && block.columnWidths.length > 0) {
     columnWidths = [...block.columnWidths];
-
-    // Handle column count mismatch: pad or truncate
-    if (columnWidths.length < columnCount) {
-      // Not enough widths - distribute remaining space equally
-      const usedWidth = columnWidths.reduce((a, b) => a + b, 0);
-      const remainingWidth = Math.max(0, maxWidth - usedWidth);
-      const missingCount = columnCount - columnWidths.length;
-      const defaultWidth = missingCount > 0 ? Math.max(1, Math.floor(remainingWidth / missingCount)) : 0;
-
-      for (let i = columnWidths.length; i < columnCount; i++) {
-        columnWidths.push(defaultWidth);
-      }
-    } else if (columnWidths.length > columnCount) {
-      // Too many widths - truncate to actual column count
-      columnWidths = columnWidths.slice(0, columnCount);
-    }
 
     // Scale proportionally if total width exceeds available width
     // UNLESS the table has an explicit tableWidth (user-resized tables)
@@ -889,27 +872,87 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
       columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
     }
   } else {
-    // Fallback: Equal distribution (existing behavior)
-    const columnWidth = Math.max(1, Math.floor(maxWidth / columnCount));
-    columnWidths = Array.from({ length: columnCount }, () => columnWidth);
+    // Fallback: Equal distribution based on max cells in any row
+    const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
+    const columnWidth = Math.max(1, Math.floor(maxWidth / maxCellCount));
+    columnWidths = Array.from({ length: maxCellCount }, () => columnWidth);
   }
 
-  // Measure each cell paragraph with appropriate column width
-  const rows: TableRowMeasure[] = [];
-  for (const row of block.rows) {
-    const cellMeasures: TableCellMeasure[] = [];
-    for (let col = 0; col < columnCount; col++) {
-      const cell = row.cells[col];
-      const cellWidth = columnWidths[col] || columnWidths[0] || Math.floor(maxWidth / columnCount);
+  // Derive grid column count from computed columnWidths (handles both explicit tblGrid and fallback cases)
+  const gridColumnCount = columnWidths.length;
 
-      if (!cell) {
-        cellMeasures.push({ paragraph: { kind: 'paragraph', lines: [], totalHeight: 0 }, width: cellWidth, height: 0 });
-        continue;
+  /**
+   * Calculate the width for a cell by summing the grid column widths it spans.
+   * @param startCol - The starting grid column index
+   * @param colspan - Number of grid columns this cell spans
+   */
+  const calculateCellWidth = (startCol: number, colspan: number): number => {
+    let width = 0;
+    for (let i = 0; i < colspan && startCol + i < columnWidths.length; i++) {
+      width += columnWidths[startCol + i];
+    }
+    // Ensure minimum width of 1px
+    return Math.max(1, width);
+  };
+
+  // Track which grid columns are "occupied" by rowspans from previous rows
+  // Each element contains the number of remaining rows the cell spans into
+  const rowspanTracker: number[] = new Array(gridColumnCount).fill(0);
+
+  // Measure each cell paragraph with appropriate column width based on colspan
+  const rows: TableRowMeasure[] = [];
+  for (let rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+    const row = block.rows[rowIndex];
+    const cellMeasures: TableCellMeasure[] = [];
+    let gridColIndex = 0; // Track position in the grid
+
+    for (const cell of row.cells) {
+      const colspan = cell.colSpan ?? 1;
+      const rowspan = cell.rowSpan ?? 1;
+
+      // Skip grid columns that are occupied by rowspans from previous rows
+      // before processing this cell
+      while (gridColIndex < gridColumnCount && rowspanTracker[gridColIndex] > 0) {
+        rowspanTracker[gridColIndex]--;
+        gridColIndex++;
       }
+
+      // If we've exhausted the grid, stop processing cells
+      if (gridColIndex >= gridColumnCount) {
+        break;
+      }
+
+      const cellWidth = calculateCellWidth(gridColIndex, colspan);
+
+      // Mark grid columns as occupied for future rows if rowspan > 1
+      if (rowspan > 1) {
+        for (let c = 0; c < colspan && gridColIndex + c < gridColumnCount; c++) {
+          rowspanTracker[gridColIndex + c] = rowspan - 1;
+        }
+      }
+
       const paraMeasure = await measureParagraphBlock(cell.paragraph, cellWidth);
       const height = paraMeasure.totalHeight;
-      cellMeasures.push({ paragraph: paraMeasure, width: cellWidth, height });
+      cellMeasures.push({
+        paragraph: paraMeasure,
+        width: cellWidth,
+        height,
+        gridColumnStart: gridColIndex,
+        colSpan: colspan,
+        rowSpan: rowspan,
+      });
+
+      // Advance grid column position by colspan
+      gridColIndex += colspan;
     }
+
+    // Decrement any remaining rowspan trackers that weren't handled
+    for (let col = gridColIndex; col < gridColumnCount; col++) {
+      if (rowspanTracker[col] > 0) {
+        rowspanTracker[col]--;
+      }
+    }
+
     const rowHeight = Math.max(0, ...cellMeasures.map((c) => c.height));
     rows.push({ cells: cellMeasures, height: rowHeight });
   }
