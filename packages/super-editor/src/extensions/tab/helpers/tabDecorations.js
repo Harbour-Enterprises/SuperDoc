@@ -130,8 +130,8 @@ export function calculateTabStyle(
 
     paragraphContext.accumulatedTabWidth = accumulatedTabWidth + tabWidth;
     return `width: ${tabWidth}px; height: ${tabHeight}; ${extraStyles}`;
-  } catch (error) {
-    console.error('tab decoration error', error);
+  } catch {
+    return null;
   }
 }
 
@@ -152,20 +152,26 @@ export function findParagraphContext($pos, cache, helpers) {
 
 export function extractParagraphContext(node, startPos, helpers, depth = 0) {
   const paragraphProperties = getResolvedParagraphProperties(node);
+  // Map OOXML alignment values to internal values (for RTL support)
+  const alignmentAliases = { left: 'start', right: 'end' };
   let tabStops = [];
+
   if (Array.isArray(paragraphProperties.tabStops)) {
     tabStops = paragraphProperties.tabStops
       .map((stop) => {
         const ref = stop?.tab;
         if (!ref) return stop || null;
+        const rawType = ref.tabType || 'start';
+        const mappedVal = alignmentAliases[rawType] || rawType;
         return {
-          val: ref.tabType || 'start',
+          val: mappedVal,
           pos: twipsToPixels(Number(ref.pos) || 0),
           leader: ref.leader,
         };
       })
       .filter(Boolean);
   }
+
   const { entries, positionMap } = flattenParagraph(node, startPos);
   return {
     paragraph: node,

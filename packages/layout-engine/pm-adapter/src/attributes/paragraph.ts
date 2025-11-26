@@ -15,6 +15,7 @@ import type {
   NumberingProperties,
   ResolvedRunProperties,
   ResolvedTabStop,
+  NumberingFormat,
 } from '@superdoc/word-layout';
 import { computeWordParagraphLayout } from '@superdoc/word-layout';
 import { Engines } from '@superdoc/contracts';
@@ -333,13 +334,31 @@ const normalizeResolvedTabAlignment = (value: TabStop['val']): ResolvedTabStop['
 
 /**
  * Compute Word paragraph layout for numbered paragraphs.
- * Integrates with @superdoc/word-layout for accurate numbering layout.
+ *
+ * Integrates with @superdoc/word-layout to compute accurate list marker positioning,
+ * indent calculation, and marker text rendering. Merges paragraph indent with
+ * level-specific indent from numbering definitions.
+ *
+ * @param paragraphAttrs - Resolved paragraph attributes including spacing, indent, and tabs
+ * @param numberingProps - Numbering properties with numId, ilvl, and optional resolved marker RPr
+ * @param styleContext - Style context for resolving character styles and doc defaults
+ * @returns WordParagraphLayoutOutput with marker and gutter information, or null if computation fails
+ *
+ * @remarks
+ * - Returns null early if numberingProps is explicitly null (vs undefined)
+ * - Falls back to style-engine character style if resolvedMarkerRpr is not available
+ * - Converts indent from twips to pixels for rendering
+ * - Gracefully handles computation errors by returning null
  */
 export const computeWordLayoutForParagraph = (
   paragraphAttrs: ParagraphAttrs,
   numberingProps: AdapterNumberingProps | undefined,
   styleContext: StyleContext,
 ): WordParagraphLayoutOutput | null => {
+  if (numberingProps === null) {
+    return null;
+  }
+
   try {
     // Merge paragraph indent with level-specific indent from numbering definition
     let effectiveIndent = paragraphAttrs.indent;
@@ -379,11 +398,27 @@ export const computeWordLayoutForParagraph = (
       },
     };
 
+    let markerRun = numberingProps?.resolvedMarkerRpr;
+    if (!markerRun) {
+      // Fallback to style-engine computed character style for the paragraph
+      const { character: characterStyle } = resolveStyle({ styleId: paragraphAttrs.styleId }, styleContext);
+      if (characterStyle) {
+        markerRun = {
+          fontFamily: characterStyle.font?.family ?? 'Times New Roman',
+          fontSize: characterStyle.font?.size ?? 12,
+          bold: characterStyle.font?.weight != null && characterStyle.font.weight > 400,
+          italic: characterStyle.font?.italic,
+          color: characterStyle.color,
+          letterSpacing: characterStyle.letterSpacing,
+        };
+      }
+    }
+
     // Compute Word paragraph layout
     return computeWordParagraphLayout({
       paragraph: resolvedParagraph,
       numbering: numberingProps,
-      markerRun: numberingProps.resolvedMarkerRpr, // Use cached if available
+      markerRun,
       docDefaults,
     });
   } catch {
@@ -420,12 +455,131 @@ export const computeParagraphAttrs = (
   const indentSource = attrs.indent ?? paragraphProps.indent ?? hydrated?.indent;
   const normalizedIndent =
     normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? attrs.textIndent);
-  const styleNodeAttrs =
-    hydrated?.tabStops && !attrs.tabStops && !attrs.tabs
-      ? { ...attrs, tabStops: hydrated.tabStops }
-      : !attrs.tabStops && paragraphProps.tabStops
-        ? { ...attrs, tabStops: paragraphProps.tabStops }
-        : attrs;
+
+  /**
+   * Unwraps and normalizes tab stop data structures from various formats.
+   *
+   * Handles two primary formats:
+   * 1. Nested format: `{ tab: { tabType: 'start', pos: 720 } }` (OOXML-style)
+   * 2. Direct format: `{ val: 'start', pos: 720 }` (normalized)
+   *
+   * Performs runtime validation to ensure:
+   * - Input is an array
+   * - Each entry is an object with valid structure
+   * - Required properties (val/tabType and pos) are present and correctly typed
+   * - Optional properties (leader, originalPos) are validated if present
+   *
+   * @param tabStops - Unknown input that may contain tab stop data
+   * @returns Array of normalized tab stop objects, or undefined if invalid/empty
+   *
+   * @example
+   * ```typescript
+   * // Nested format
+   * unwrapTabStops([{ tab: { tabType: 'start', pos: 720 } }])
+   * // Returns: [{ val: 'start', pos: 720 }]
+   *
+   * // Direct format
+   * unwrapTabStops([{ val: 'center', pos: 1440, leader: 'dot' }])
+   * // Returns: [{ val: 'center', pos: 1440, leader: 'dot' }]
+   *
+   * // Invalid input
+   * unwrapTabStops("not an array")
+   * // Returns: undefined
+   * ```
+   */
+  const unwrapTabStops = (tabStops: unknown): Array<Record<string, unknown>> | undefined => {
+    // Runtime type guard: validate input is an array
+    if (!Array.isArray(tabStops)) {
+      return undefined;
+    }
+
+    const unwrapped: Array<Record<string, unknown>> = [];
+
+    for (const entry of tabStops) {
+      // Runtime type guard: validate entry is a non-null object
+      if (!entry || typeof entry !== 'object') {
+        continue;
+      }
+
+      // Type guard: check for nested format { tab: {...} }
+      if ('tab' in entry) {
+        const entryRecord = entry as Record<string, unknown>;
+        const tab = entryRecord.tab;
+
+        // Validate tab property is a non-null object
+        if (!tab || typeof tab !== 'object') {
+          continue;
+        }
+
+        const tabObj = tab as Record<string, unknown>;
+
+        // Validate and extract val (alignment type)
+        const val =
+          typeof tabObj.tabType === 'string' ? tabObj.tabType : typeof tabObj.val === 'string' ? tabObj.val : undefined;
+
+        // Validate and extract pos (position in twips)
+        const pos = pickNumber(tabObj.originalPos ?? tabObj.pos);
+
+        // Skip entry if required fields are missing or invalid
+        if (!val || pos == null) {
+          continue;
+        }
+
+        // Build normalized tab stop object with validated properties
+        const normalized: Record<string, unknown> = { val, pos };
+
+        // Validate and add optional leader property
+        const leader = tabObj.leader;
+        if (typeof leader === 'string' && leader.length > 0) {
+          normalized.leader = leader;
+        }
+
+        // Validate and add optional originalPos property
+        const originalPos = pickNumber(tabObj.originalPos);
+        if (originalPos != null && Number.isFinite(originalPos)) {
+          normalized.originalPos = originalPos;
+        }
+
+        unwrapped.push(normalized);
+        continue;
+      }
+
+      // Direct format - entry is already a tab stop object
+      // Validate it has the expected structure before adding
+      const entryRecord = entry as Record<string, unknown>;
+
+      // Check if it has at least the basic tab stop properties
+      const hasValidStructure =
+        ('val' in entryRecord || 'tabType' in entryRecord) && ('pos' in entryRecord || 'originalPos' in entryRecord);
+
+      if (hasValidStructure) {
+        unwrapped.push(entryRecord);
+      }
+    }
+
+    return unwrapped.length > 0 ? unwrapped : undefined;
+  };
+
+  const styleNodeAttrs = { ...attrs };
+  const attrTabStops = unwrapTabStops(styleNodeAttrs.tabStops ?? styleNodeAttrs.tabs) ?? styleNodeAttrs.tabStops;
+  const hydratedTabStops = unwrapTabStops(hydrated?.tabStops) ?? hydrated?.tabStops;
+  const paragraphTabStops = unwrapTabStops(paragraphProps.tabStops) ?? paragraphProps.tabStops;
+
+  let tabSource = attrTabStops;
+  if (!tabSource && hydratedTabStops) {
+    tabSource = hydratedTabStops;
+  }
+  if (!tabSource && paragraphTabStops) {
+    tabSource = paragraphTabStops;
+  }
+
+  if (tabSource) {
+    styleNodeAttrs.tabStops = tabSource;
+    if ('tabs' in styleNodeAttrs) {
+      delete styleNodeAttrs.tabs;
+    }
+  }
+
   const styleNode = buildStyleNodeFromAttrs(styleNodeAttrs, normalizedSpacing, normalizedIndent);
   if (styleNodeAttrs.styleId == null && paragraphProps.styleId) {
     styleNode.styleId = paragraphProps.styleId as string;
@@ -444,6 +598,9 @@ export const computeParagraphAttrs = (
 
   const explicitAlignment = normalizeAlignment(attrs.alignment ?? attrs.textAlign);
   const styleAlignment = hydrated?.alignment ? normalizeAlignment(hydrated.alignment) : undefined;
+  const paragraphAlignment = paragraphProps.justification
+    ? normalizeAlignment(paragraphProps.justification as string)
+    : undefined;
   if (bidi && adjustRightInd) {
     paragraphAttrs.alignment = 'right';
   } else if (explicitAlignment) {
@@ -453,6 +610,8 @@ export const computeParagraphAttrs = (
     paragraphAttrs.alignment = 'right';
   } else if (styleAlignment) {
     paragraphAttrs.alignment = styleAlignment;
+  } else if (paragraphAlignment) {
+    paragraphAttrs.alignment = paragraphAlignment;
   } else if (computed.paragraph.alignment) {
     paragraphAttrs.alignment = computed.paragraph.alignment;
   }
@@ -488,10 +647,10 @@ export const computeParagraphAttrs = (
     }
   }
 
-  const borders = normalizeParagraphBorders(attrs.borders ?? hydrated?.borders);
+  const borders = normalizeParagraphBorders(attrs.borders ?? hydrated?.borders ?? paragraphProps.borders);
   if (borders) paragraphAttrs.borders = borders;
 
-  const shading = normalizeParagraphShading(attrs.shading ?? hydrated?.shading);
+  const shading = normalizeParagraphShading(attrs.shading ?? hydrated?.shading ?? paragraphProps.shading);
   if (shading) paragraphAttrs.shading = shading;
 
   const keepNext = paragraphProps.keepNext ?? hydrated?.keepNext ?? attrs.keepNext;
@@ -526,8 +685,8 @@ export const computeParagraphAttrs = (
 
   if (computed.paragraph.tabs && computed.paragraph.tabs.length > 0) {
     paragraphAttrs.tabs = computed.paragraph.tabs.map((tab) => ({ ...tab }));
-  } else if (hydrated?.tabStops) {
-    const normalizedTabs = normalizeOoxmlTabs(hydrated.tabStops as unknown);
+  } else if (hydratedTabStops) {
+    const normalizedTabs = normalizeOoxmlTabs(hydratedTabStops as unknown);
     if (normalizedTabs) {
       paragraphAttrs.tabs = normalizedTabs;
     }
@@ -536,7 +695,7 @@ export const computeParagraphAttrs = (
   // Extract floating alignment from framePr (OOXML w:framePr/@w:xAlign)
   // Used for positioned paragraphs like right-aligned page numbers in headers/footers
   // Note: framePr may be at top level (from converter) or nested in paragraphProperties (from PM serialization)
-  let framePr = attrs.framePr as { xAlign?: string } | undefined;
+  let framePr = attrs.framePr as { xAlign?: string; dropCap?: string } | undefined;
 
   // If not at top level, try to extract from paragraphProperties
   if (!framePr && attrs.paragraphProperties && typeof attrs.paragraphProperties === 'object') {
@@ -546,6 +705,7 @@ export const computeParagraphAttrs = (
       if (framePrElement?.attributes) {
         framePr = {
           xAlign: framePrElement.attributes['w:xAlign'],
+          dropCap: framePrElement.attributes['w:dropCap'],
         };
       }
     }
@@ -555,6 +715,9 @@ export const computeParagraphAttrs = (
     const xAlign = framePr.xAlign.toLowerCase();
     if (xAlign === 'left' || xAlign === 'right' || xAlign === 'center') {
       paragraphAttrs.floatAlignment = xAlign;
+    }
+    if (framePr.dropCap != null) {
+      paragraphAttrs.dropCap = framePr.dropCap;
     }
   }
 
@@ -595,7 +758,7 @@ export const computeParagraphAttrs = (
     };
 
     if (listRendering?.numberingType && enrichedNumberingProps.format == null) {
-      enrichedNumberingProps.format = listRendering.numberingType;
+      enrichedNumberingProps.format = listRendering.numberingType as NumberingFormat;
     }
     if (listRendering?.markerText && enrichedNumberingProps.markerText == null) {
       enrichedNumberingProps.markerText = listRendering.markerText;
@@ -605,6 +768,25 @@ export const computeParagraphAttrs = (
     }
     if (listRendering?.suffix && enrichedNumberingProps.suffix == null) {
       enrichedNumberingProps.suffix = listRendering.suffix;
+    }
+
+    // Ensure marker run properties are available even when not pre-resolved
+    if (!enrichedNumberingProps.resolvedMarkerRpr) {
+      const numbering = computed.numbering as Record<string, unknown> | undefined;
+      if (numbering && typeof numbering.marker === 'object' && numbering.marker !== null) {
+        const marker = numbering.marker as Record<string, unknown>;
+        if (typeof marker.run === 'object' && marker.run !== null) {
+          enrichedNumberingProps.resolvedMarkerRpr = marker.run as ResolvedRunProperties;
+        }
+      }
+      // Fallback: use paragraph run defaults if nothing else is available
+      if (!enrichedNumberingProps.resolvedMarkerRpr) {
+        enrichedNumberingProps.resolvedMarkerRpr = {
+          fontFamily: 'Times New Roman',
+          fontSize: 12,
+          color: '#000000',
+        };
+      }
     }
 
     const wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext);

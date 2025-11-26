@@ -41,28 +41,38 @@ vi.mock('@helpers/index.js', () => ({
   findParentNodeClosestToPos: vi.fn().mockReturnValue(null),
 }));
 
-const createEditor = () => ({
-  schema: {
-    nodes: {
-      tab: {
-        create: vi.fn().mockReturnValue({}),
+const createEditor = () => {
+  const resolvedPos = {
+    start: vi.fn().mockReturnValue(0),
+    depth: 0,
+    parent: {
+      childCount: 1,
+      child: vi.fn(),
+    },
+    index: vi.fn().mockReturnValue(0),
+  };
+
+  return {
+    schema: {
+      nodes: {
+        tab: {
+          create: vi.fn().mockReturnValue({}),
+        },
       },
     },
-  },
-  view: {},
-  converter: {
-    convertedXml: {},
-    numbering: {},
-  },
-  state: {
-    doc: {
-      resolve: vi.fn().mockReturnValue({
-        start: () => 0,
-      }),
+    view: {},
+    converter: {
+      convertedXml: {},
+      numbering: {},
     },
-  },
-  helpers: {},
-});
+    state: {
+      doc: {
+        resolve: vi.fn().mockReturnValue(resolvedPos),
+      },
+    },
+    helpers: {},
+  };
+};
 
 const createNode = (overrides = {}) => ({
   type: { name: 'paragraph' },
@@ -254,7 +264,7 @@ describe('ParagraphNodeView', () => {
       },
     });
 
-    expect(encodeCSSFromPPr).toHaveBeenCalledWith(resolvedProps);
+    expect(encodeCSSFromPPr).toHaveBeenCalledWith(resolvedProps, false, null);
     expect(nodeView.dom.getAttribute('data-num-id')).toBe('5');
     expect(nodeView.dom.getAttribute('data-level')).toBe('2');
     expect(nodeView.dom.classList.contains('sd-editor-dropcap')).toBe(true);

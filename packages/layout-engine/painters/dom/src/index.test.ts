@@ -1579,7 +1579,10 @@ describe('DomPainter', () => {
           descent: 4,
           lineHeight: 18,
           segments: [{ runIndex: 0, fromChar: 0, toChar: 11, width: 100 }],
-          leaders: [{ from: 10, to: 60, style: 'dot' }],
+          leaders: [
+            { from: 10, to: 60, style: 'dot' },
+            { from: 65, to: 90, style: 'middleDot' },
+          ],
           bars: [{ x: 80 }],
         },
       ],
@@ -1609,12 +1612,17 @@ describe('DomPainter', () => {
 
     painter.paint(tabLayout, mount);
 
-    const leader = mount.querySelector('.superdoc-leader') as HTMLElement;
+    const leaders = mount.querySelectorAll('.superdoc-leader');
     const bar = mount.querySelector('.superdoc-tab-bar') as HTMLElement;
-    expect(leader).toBeTruthy();
-    expect(leader.getAttribute('data-style')).toBe('dot');
-    expect(leader.style.left).toBe('10px');
-    expect(leader.style.width).toBe('50px');
+    expect(leaders.length).toBe(2);
+    const leaderDot = leaders[0] as HTMLElement;
+    const leaderMiddle = leaders[1] as HTMLElement;
+    expect(leaderDot.getAttribute('data-style')).toBe('dot');
+    expect(leaderDot.style.left).toBe('10px');
+    expect(leaderDot.style.width).toBe('50px');
+    expect(leaderMiddle.getAttribute('data-style')).toBe('middleDot');
+    expect(leaderMiddle.style.left).toBe('65px');
+    expect(leaderMiddle.style.width).toBe('25px');
     expect(bar).toBeTruthy();
     expect(bar.style.left).toBe('80px');
   });

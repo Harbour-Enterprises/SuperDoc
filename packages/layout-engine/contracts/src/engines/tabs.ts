@@ -57,6 +57,48 @@ export interface LayoutWithTabsOptions<T = unknown> {
   decimalSeparator?: string;
 }
 
+export interface CalculateTabWidthParams {
+  /**
+   * Current horizontal position before the tab, in the same units as tabStops (usually px)
+   */
+  currentX: number;
+  /**
+   * Sorted tab stops in the same units as currentX. Use computeTabStops + unit conversion first.
+   */
+  tabStops: TabStop[];
+  /**
+   * Available paragraph width in the same units.
+   */
+  paragraphWidth: number;
+  /**
+   * Default tab distance (fallback) in the same units.
+   */
+  defaultTabDistance: number;
+  /**
+   * Default line length (used to repeat the default grid) in the same units.
+   */
+  defaultLineLength: number;
+  /**
+   * Text immediately following the tab (used for center/end/decimal).
+   */
+  followingText?: string;
+  /**
+   * Optional measurement function for followingText; if omitted, length-based approximation is used.
+   */
+  measureText?: (text: string) => number;
+  /**
+   * Decimal separator character for decimal/num tabs.
+   */
+  decimalSeparator?: string;
+}
+
+export interface CalculateTabWidthResult {
+  width: number;
+  leader?: TabStop['leader'];
+  alignment: TabStop['val'] | 'default';
+  tabStopPosUsed: number | 'default';
+}
+
 /**
  * Compute the full set of tab stops for a paragraph.
  *
@@ -235,4 +277,76 @@ function computeEndAlignedX<T>(entry: TabbedRun<T>, stop: TabStop): number {
   const width = entry.width;
   const targetX = stop.pos - width;
   return targetX < 0 ? 0 : targetX;
+}
+
+/**
+ * Compute the visual width a tab should occupy based on tab stops and following text.
+ * This is a pure helper for consumers that only need a single tab width (e.g., adapters).
+ */
+export function calculateTabWidth(params: CalculateTabWidthParams): CalculateTabWidthResult {
+  const {
+    currentX,
+    tabStops,
+    paragraphWidth,
+    defaultTabDistance,
+    defaultLineLength,
+    followingText = '',
+    measureText,
+    decimalSeparator = '.',
+  } = params;
+
+  const nextStop = tabStops.find((stop) => stop.val !== 'clear' && stop.pos > currentX);
+
+  const fallbackWidth = (): CalculateTabWidthResult => {
+    let tabWidth = defaultTabDistance - ((currentX % defaultLineLength) % defaultTabDistance);
+    if (tabWidth <= 0) tabWidth = defaultTabDistance;
+    return {
+      width: tabWidth,
+      alignment: 'default',
+      tabStopPosUsed: 'default',
+    };
+  };
+
+  if (!nextStop) {
+    return fallbackWidth();
+  }
+
+  let width = Math.min(nextStop.pos, paragraphWidth) - currentX;
+  const alignment = nextStop.val;
+
+  if (alignment === 'bar') {
+    return {
+      width: 0,
+      leader: nextStop.leader,
+      alignment,
+      tabStopPosUsed: nextStop.pos,
+    };
+  }
+
+  if (alignment === 'center' || alignment === 'end') {
+    const textWidth = measureText ? measureText(followingText) : 0;
+    if (alignment === 'center') {
+      width -= textWidth / 2;
+    } else {
+      width -= textWidth;
+    }
+  } else if (alignment === 'decimal') {
+    const decimalIndex = followingText.indexOf(decimalSeparator);
+    if (decimalIndex >= 0) {
+      const before = followingText.slice(0, decimalIndex);
+      const beforeWidth = measureText ? measureText(before) : 0;
+      width -= beforeWidth;
+    }
+  }
+
+  if (width < 1) {
+    return fallbackWidth();
+  }
+
+  return {
+    width,
+    leader: nextStop.leader,
+    alignment,
+    tabStopPosUsed: nextStop.pos,
+  };
 }

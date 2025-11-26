@@ -64,6 +64,7 @@ import {
 } from '@superdoc/common/layout-constants';
 import { calculateRotatedBounds, normalizeRotation } from '@superdoc/geometry-utils';
 export { installNodeCanvasPolyfill } from './setup.js';
+import { clearMeasurementCache, getMeasuredTextWidth, setCacheSize } from './measurementCache.js';
 
 const { computeTabStops } = Engines;
 
@@ -75,6 +76,7 @@ type MeasurementConfig = {
     deterministicFamily: string;
     fallbackStack: string[];
   };
+  cacheSize: number;
 };
 
 const measurementConfig: MeasurementConfig = {
@@ -83,6 +85,7 @@ const measurementConfig: MeasurementConfig = {
     deterministicFamily: 'Noto Sans',
     fallbackStack: ['Noto Sans', 'Arial', 'sans-serif'],
   },
+  cacheSize: 5000,
 };
 
 export function configureMeasurement(options: Partial<MeasurementConfig>): void {
@@ -95,7 +98,13 @@ export function configureMeasurement(options: Partial<MeasurementConfig>): void 
       ...options.fonts,
     };
   }
+  if (typeof options.cacheSize === 'number' && Number.isFinite(options.cacheSize) && options.cacheSize > 0) {
+    measurementConfig.cacheSize = options.cacheSize;
+    setCacheSize(options.cacheSize);
+  }
 }
+
+export { clearMeasurementCache };
 
 /**
  * Future: Font-specific calibration factors could be added here if Canvas measurements
@@ -128,6 +137,7 @@ const pxToTwips = (px: number): number => Math.round(px * TWIPS_PER_PX);
 const DEFAULT_TAB_INTERVAL_PX = twipsToPx(DEFAULT_TAB_INTERVAL_TWIPS);
 const TAB_EPSILON = 0.1;
 const DEFAULT_DECIMAL_SEPARATOR = '.';
+const ALLOWED_TAB_VALS = new Set<TabStop['val']>(['start', 'center', 'end', 'decimal', 'bar', 'clear']);
 
 /**
  * Tab stop in pixel coordinates for measurement.
@@ -229,14 +239,12 @@ function measureText(
   _fontFamily?: string,
   _letterSpacing?: number,
 ): number {
+  // Deprecated direct measurement; kept for backward compatibility in case of direct calls.
   ctx.font = font;
   const metrics = ctx.measureText(text);
-  // Use maximum of advance and painted width to account for glyph overhang
   const advanceWidth = metrics.width;
   const paintedWidth = (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0);
-  const baseWidth = Math.max(advanceWidth, paintedWidth);
-  // Letter-spacing is handled by callers (measureRunWidth)
-  return baseWidth;
+  return Math.max(advanceWidth, paintedWidth);
 }
 
 /**
@@ -408,6 +416,19 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   // Remember the last applied tab alignment so we can clamp end-aligned
   // segments to the exact target after measuring to avoid 1px drift.
   let lastAppliedTabAlign: { target: number; val: TabStop['val'] } | null = null;
+  const warnedTabVals = new Set<string>();
+
+  /**
+   * Validate and track tab stop val to ensure it's normalized.
+   * Returns true if validation passed, false if val is invalid (treated as 'start').
+   */
+  const validateTabStopVal = (stop: TabStopPx): boolean => {
+    if (!ALLOWED_TAB_VALS.has(stop.val) && !warnedTabVals.has(stop.val)) {
+      warnedTabVals.add(stop.val);
+      return false;
+    }
+    return true;
+  };
 
   const alignSegmentAtTab = (segmentText: string, font: string, runContext: Run): void => {
     if (!pendingTabAlignment || !currentLine) return;
@@ -467,11 +488,16 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       currentLine.maxFontSize = Math.max(currentLine.maxFontSize, 12);
       currentLine.toRun = runIndex;
       currentLine.toChar = 1; // tab is a single character
-      pendingTabAlignment = stop ? { target, val: stop.val } : null;
+      if (stop) {
+        validateTabStopVal(stop);
+        pendingTabAlignment = { target, val: stop.val };
+      } else {
+        pendingTabAlignment = null;
+      }
 
       // Emit leader decoration if requested
-      if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
-        const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' = stop.leader;
+      if (stop && stop.leader && stop.leader !== 'none') {
+        const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' = stop.leader;
         const from = Math.min(originX, target);
         const to = Math.max(originX, target);
         if (!currentLine.leaders) currentLine.leaders = [];
@@ -649,7 +675,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         currentLine.toRun = runIndex;
         currentLine.toChar = charPosInRun;
         charPosInRun += 1;
-        pendingTabAlignment = stop ? { target, val: stop.val } : null;
+        if (stop) {
+          validateTabStopVal(stop);
+          pendingTabAlignment = { target, val: stop.val };
+        } else {
+          pendingTabAlignment = null;
+        }
 
         // Emit leader decoration if requested
         if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
@@ -813,10 +844,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       markerTextWidth: glyphWidth,
       indentLeft: wordLayout.indentLeftPx ?? 0,
     };
-    console.log(
-      '[measure] Marker:',
-      JSON.stringify({ text: markerText, width: markerInfo.markerWidth, indent: markerInfo.indentLeft }),
-    );
   }
 
   return {
@@ -829,29 +856,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
 async function measureTableBlock(block: TableBlock, constraints: MeasureConstraints): Promise<TableMeasure> {
   const maxWidth = typeof constraints === 'number' ? constraints : constraints.maxWidth;
-  const columnCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
 
   let columnWidths: number[];
 
   // Use provided column widths from OOXML w:tblGrid if available
   if (block.columnWidths && block.columnWidths.length > 0) {
     columnWidths = [...block.columnWidths];
-
-    // Handle column count mismatch: pad or truncate
-    if (columnWidths.length < columnCount) {
-      // Not enough widths - distribute remaining space equally
-      const usedWidth = columnWidths.reduce((a, b) => a + b, 0);
-      const remainingWidth = Math.max(0, maxWidth - usedWidth);
-      const missingCount = columnCount - columnWidths.length;
-      const defaultWidth = missingCount > 0 ? Math.max(1, Math.floor(remainingWidth / missingCount)) : 0;
-
-      for (let i = columnWidths.length; i < columnCount; i++) {
-        columnWidths.push(defaultWidth);
-      }
-    } else if (columnWidths.length > columnCount) {
-      // Too many widths - truncate to actual column count
-      columnWidths = columnWidths.slice(0, columnCount);
-    }
 
     // Scale proportionally if total width exceeds available width
     // UNLESS the table has an explicit tableWidth (user-resized tables)
@@ -862,27 +872,87 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
       columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
     }
   } else {
-    // Fallback: Equal distribution (existing behavior)
-    const columnWidth = Math.max(1, Math.floor(maxWidth / columnCount));
-    columnWidths = Array.from({ length: columnCount }, () => columnWidth);
+    // Fallback: Equal distribution based on max cells in any row
+    const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
+    const columnWidth = Math.max(1, Math.floor(maxWidth / maxCellCount));
+    columnWidths = Array.from({ length: maxCellCount }, () => columnWidth);
   }
 
-  // Measure each cell paragraph with appropriate column width
-  const rows: TableRowMeasure[] = [];
-  for (const row of block.rows) {
-    const cellMeasures: TableCellMeasure[] = [];
-    for (let col = 0; col < columnCount; col++) {
-      const cell = row.cells[col];
-      const cellWidth = columnWidths[col] || columnWidths[0] || Math.floor(maxWidth / columnCount);
+  // Derive grid column count from computed columnWidths (handles both explicit tblGrid and fallback cases)
+  const gridColumnCount = columnWidths.length;
 
-      if (!cell) {
-        cellMeasures.push({ paragraph: { kind: 'paragraph', lines: [], totalHeight: 0 }, width: cellWidth, height: 0 });
-        continue;
+  /**
+   * Calculate the width for a cell by summing the grid column widths it spans.
+   * @param startCol - The starting grid column index
+   * @param colspan - Number of grid columns this cell spans
+   */
+  const calculateCellWidth = (startCol: number, colspan: number): number => {
+    let width = 0;
+    for (let i = 0; i < colspan && startCol + i < columnWidths.length; i++) {
+      width += columnWidths[startCol + i];
+    }
+    // Ensure minimum width of 1px
+    return Math.max(1, width);
+  };
+
+  // Track which grid columns are "occupied" by rowspans from previous rows
+  // Each element contains the number of remaining rows the cell spans into
+  const rowspanTracker: number[] = new Array(gridColumnCount).fill(0);
+
+  // Measure each cell paragraph with appropriate column width based on colspan
+  const rows: TableRowMeasure[] = [];
+  for (let rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+    const row = block.rows[rowIndex];
+    const cellMeasures: TableCellMeasure[] = [];
+    let gridColIndex = 0; // Track position in the grid
+
+    for (const cell of row.cells) {
+      const colspan = cell.colSpan ?? 1;
+      const rowspan = cell.rowSpan ?? 1;
+
+      // Skip grid columns that are occupied by rowspans from previous rows
+      // before processing this cell
+      while (gridColIndex < gridColumnCount && rowspanTracker[gridColIndex] > 0) {
+        rowspanTracker[gridColIndex]--;
+        gridColIndex++;
       }
+
+      // If we've exhausted the grid, stop processing cells
+      if (gridColIndex >= gridColumnCount) {
+        break;
+      }
+
+      const cellWidth = calculateCellWidth(gridColIndex, colspan);
+
+      // Mark grid columns as occupied for future rows if rowspan > 1
+      if (rowspan > 1) {
+        for (let c = 0; c < colspan && gridColIndex + c < gridColumnCount; c++) {
+          rowspanTracker[gridColIndex + c] = rowspan - 1;
+        }
+      }
+
       const paraMeasure = await measureParagraphBlock(cell.paragraph, cellWidth);
       const height = paraMeasure.totalHeight;
-      cellMeasures.push({ paragraph: paraMeasure, width: cellWidth, height });
+      cellMeasures.push({
+        paragraph: paraMeasure,
+        width: cellWidth,
+        height,
+        gridColumnStart: gridColIndex,
+        colSpan: colspan,
+        rowSpan: rowspan,
+      });
+
+      // Advance grid column position by colspan
+      gridColIndex += colspan;
     }
+
+    // Decrement any remaining rowspan trackers that weren't handled
+    for (let col = gridColIndex; col < gridColumnCount; col++) {
+      if (rowspanTracker[col] > 0) {
+        rowspanTracker[col]--;
+      }
+    }
+
     const rowHeight = Math.max(0, ...cellMeasures.map((c) => c.height));
     rows.push({ cells: cellMeasures, height: rowHeight });
   }
@@ -1100,13 +1170,9 @@ const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
 };
 
 const measureRunWidth = (text: string, font: string, ctx: CanvasRenderingContext2D, run: Run): number => {
-  const baseWidth = measureText(text, font, ctx);
-  const letterSpacing = run.kind !== 'tab' ? run.letterSpacing : undefined;
-  if (!letterSpacing) {
-    return baseWidth;
-  }
-  const extra = Math.max(0, text.length - 1) * letterSpacing;
-  return roundValue(baseWidth + extra);
+  const letterSpacing = run.kind !== 'tab' ? run.letterSpacing || 0 : 0;
+  const width = getMeasuredTextWidth(text, font, letterSpacing, ctx);
+  return roundValue(width);
 };
 
 const appendSegment = (

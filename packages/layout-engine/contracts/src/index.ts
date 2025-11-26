@@ -1,4 +1,5 @@
 import type { TabStop } from './engines/tabs.js';
+export { computeTabStops, layoutWithTabs, calculateTabWidth } from './engines/tabs.js';
 
 // Re-export TabStop for external consumers
 export type { TabStop };
@@ -590,6 +591,8 @@ export type ParagraphAttrs = {
   spacing?: ParagraphSpacing;
   contextualSpacing?: boolean;
   indent?: ParagraphIndent;
+  /** Drop cap flag from w:framePr/@w:dropCap. */
+  dropCap?: string | number | boolean;
   numberingProperties?: Record<string, unknown>;
   borders?: ParagraphBorders;
   shading?: ParagraphShading;
@@ -681,7 +684,7 @@ export type LineSegment = {
 export type LeaderDecoration = {
   from: number;
   to: number;
-  style: 'dot' | 'hyphen' | 'underscore' | 'heavy';
+  style: 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 };
 
 export type BarDecoration = {
@@ -721,6 +724,12 @@ export type TableCellMeasure = {
   paragraph: ParagraphMeasure;
   width: number;
   height: number;
+  /** Starting grid column index (0-based) */
+  gridColumnStart?: number;
+  /** Number of grid columns this cell spans */
+  colSpan?: number;
+  /** Number of rows this cell spans */
+  rowSpan?: number;
 };
 
 export type TableRowMeasure = {

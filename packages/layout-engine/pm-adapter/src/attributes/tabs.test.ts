@@ -312,6 +312,133 @@ describe('normalizeTabLeader', () => {
   });
 });
 
+describe('super-editor format (nested tab object)', () => {
+  it('should normalize tab with nested { tab: { tabType, pos } } format', () => {
+    const tabs = [{ tab: { tabType: 'left', pos: 4320 } }];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'start', pos: 4320 }]);
+  });
+
+  it('should normalize right-aligned tab from super-editor format', () => {
+    const tabs = [{ tab: { tabType: 'right', pos: 8640 } }];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'end', pos: 8640 }]);
+  });
+
+  it('should normalize center-aligned tab from super-editor format', () => {
+    const tabs = [{ tab: { tabType: 'center', pos: 6480 } }];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'center', pos: 6480 }]);
+  });
+
+  it('should normalize decimal tab from super-editor format', () => {
+    const tabs = [{ tab: { tabType: 'decimal', pos: 7200 } }];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'decimal', pos: 7200 }]);
+  });
+
+  it('should include leader from super-editor format', () => {
+    const tabs = [{ tab: { tabType: 'right', pos: 8640, leader: 'dot' } }];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'end', pos: 8640, leader: 'dot' }]);
+  });
+
+  it('should normalize multiple tabs from super-editor format', () => {
+    const tabs = [
+      { tab: { tabType: 'left', pos: 2880 } },
+      { tab: { tabType: 'center', pos: 5760 } },
+      { tab: { tabType: 'right', pos: 8640 } },
+    ];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([
+      { val: 'start', pos: 2880 },
+      { val: 'center', pos: 5760 },
+      { val: 'end', pos: 8640 },
+    ]);
+  });
+
+  it('should handle mixed format (super-editor and flat) in same array', () => {
+    const tabs = [
+      { tab: { tabType: 'left', pos: 2880 } }, // super-editor format
+      { val: 'center', originalPos: 5760 }, // flat format with originalPos
+    ];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([
+      { val: 'start', pos: 2880 },
+      { val: 'center', pos: 5760 },
+    ]);
+  });
+
+  it('should skip super-editor entries with malformed tab object', () => {
+    const tabs = [
+      { tab: null }, // Malformed: tab is null
+      { tab: 'invalid' }, // Malformed: tab is not an object
+      { tab: { tabType: 'left', pos: 4320 } }, // Valid
+    ];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'start', pos: 4320 }]);
+  });
+
+  it('should skip super-editor entries with missing tabType', () => {
+    const tabs = [
+      { tab: { pos: 4320 } }, // Missing tabType
+      { tab: { tabType: 'left', pos: 5760 } }, // Valid
+    ];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'start', pos: 5760 }]);
+  });
+
+  it('should skip super-editor entries with missing pos', () => {
+    const tabs = [
+      { tab: { tabType: 'left' } }, // Missing pos
+      { tab: { tabType: 'center', pos: 5760 } }, // Valid
+    ];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'center', pos: 5760 }]);
+  });
+
+  it('should skip super-editor entries with invalid tabType', () => {
+    const tabs = [
+      { tab: { tabType: 'invalid', pos: 4320 } }, // Invalid tabType
+      { tab: { tabType: 'center', pos: 5760 } }, // Valid
+    ];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'center', pos: 5760 }]);
+  });
+
+  it('should normalize leader values in super-editor format', () => {
+    const tabs = [
+      { tab: { tabType: 'right', pos: 4320, leader: 'dot' } },
+      { tab: { tabType: 'right', pos: 5760, leader: 'heavy' } },
+      { tab: { tabType: 'right', pos: 7200, leader: 'thick' } }, // Legacy -> heavy
+    ];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([
+      { val: 'end', pos: 4320, leader: 'dot' },
+      { val: 'end', pos: 5760, leader: 'heavy' },
+      { val: 'end', pos: 7200, leader: 'heavy' },
+    ]);
+  });
+
+  it('should handle super-editor format with all supported alignments', () => {
+    const tabs = [
+      { tab: { tabType: 'start', pos: 1440 } },
+      { tab: { tabType: 'center', pos: 2880 } },
+      { tab: { tabType: 'end', pos: 4320 } },
+      { tab: { tabType: 'decimal', pos: 5760 } },
+      { tab: { tabType: 'bar', pos: 7200 } },
+    ];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([
+      { val: 'start', pos: 1440 },
+      { val: 'center', pos: 2880 },
+      { val: 'end', pos: 4320 },
+      { val: 'decimal', pos: 5760 },
+      { val: 'bar', pos: 7200 },
+    ]);
+  });
+});
+
 describe('normalizeOoxmlTabs integration', () => {
   it('should normalize complete tab with all properties', () => {
     const tabs = [

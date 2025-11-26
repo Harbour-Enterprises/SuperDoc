@@ -1,9 +1,18 @@
 import type { ParagraphAttrs, ParagraphIndent, ParagraphSpacing } from '@superdoc/contracts';
 import { resolveParagraphProperties } from '@converter/styles.js';
 import type { PMNode } from '../types.js';
-import type { ConverterContext } from '../converter-context.js';
+import type { ConverterContext, ConverterNumberingContext } from '../converter-context.js';
 import { hasParagraphStyleContext } from '../converter-context.js';
 import type { ResolvedParagraphProperties } from '@superdoc/word-layout';
+
+/**
+ * Empty numbering context used as a fallback when documents don't have lists.
+ * This allows paragraph style resolution to proceed even without numbering data.
+ */
+const EMPTY_NUMBERING_CONTEXT: ConverterNumberingContext = {
+  definitions: {},
+  abstracts: {},
+};
 
 export type ParagraphStyleHydration = {
   resolved?: ResolvedParagraphProperties;
@@ -21,11 +30,29 @@ export type ParagraphStyleHydration = {
 /**
  * Hydrates paragraph-level attributes from a linked style when converter context is available.
  *
+ * This function works even when styleId is null or undefined, as it will apply docDefaults
+ * from the document's styles.xml through the resolveParagraphProperties function. This ensures
+ * that all paragraphs receive at minimum the document's default spacing and formatting.
+ *
  * The helper never mutates the ProseMirror node; callers should merge the returned
  * attributes with existing attrs, preserving explicit overrides on the node.
  *
  * Normal style semantics (doc defaults, w:default flags) are delegated to
  * resolveParagraphProperties which already mirrors Word's cascade rules.
+ *
+ * @param para - The ProseMirror paragraph node to hydrate
+ * @param context - The converter context containing DOCX and optional numbering data
+ * @param preResolved - Optional pre-resolved paragraph properties to use instead of resolving
+ * @returns Hydrated paragraph attributes or null if context is missing or resolution fails.
+ *          Returns null when:
+ *          - context is undefined or missing docx data (checked by hasParagraphStyleContext)
+ *          - resolveParagraphProperties returns null or undefined
+ *
+ * @remarks
+ * - Provides an empty numbering fallback (EMPTY_NUMBERING_CONTEXT) for documents without lists,
+ *   ensuring paragraph style resolution can proceed even when context.numbering is undefined.
+ * - Uses null-safe checks (!= null) for numberingProperties, indent, and spacing to handle
+ *   both null and undefined consistently.
  */
 export const hydrateParagraphStyleAttrs = (
   para: PMNode,
@@ -42,23 +69,33 @@ export const hydrateParagraphStyleAttrs = (
       : {};
   const styleIdSource = attrs.styleId ?? paragraphProps.styleId;
   const styleId = typeof styleIdSource === 'string' && styleIdSource.trim() ? styleIdSource : null;
-  if (!styleId) {
-    return null;
+
+  const inlineProps: Record<string, unknown> = { styleId };
+
+  const numberingProperties = cloneIfObject(attrs.numberingProperties ?? paragraphProps.numberingProperties);
+  if (numberingProperties != null) {
+    inlineProps.numberingProperties = numberingProperties;
   }
 
-  const inlineProps = {
-    styleId,
-    numberingProperties: cloneIfObject(attrs.numberingProperties ?? paragraphProps.numberingProperties),
-    indent: cloneIfObject(attrs.indent ?? paragraphProps.indent),
-    spacing: cloneIfObject(attrs.spacing ?? paragraphProps.spacing),
-  };
+  const indent = cloneIfObject(attrs.indent ?? paragraphProps.indent);
+  if (indent != null) {
+    inlineProps.indent = indent;
+  }
+
+  const spacing = cloneIfObject(attrs.spacing ?? paragraphProps.spacing);
+  if (spacing != null) {
+    inlineProps.spacing = spacing;
+  }
 
   const resolverParams = {
     docx: context.docx,
-    numbering: context.numbering,
-  } as Parameters<typeof resolveParagraphProperties>[0];
+    // Provide empty numbering context if not present - documents without lists
+    // should still get docDefaults spacing from style resolution
+    numbering: context.numbering ?? EMPTY_NUMBERING_CONTEXT,
+  };
 
-  const resolved = preResolved ?? resolveParagraphProperties(resolverParams, inlineProps);
+  // Cast to bypass JSDoc type mismatch - the JS function actually accepts { docx, numbering }
+  const resolved = preResolved ?? resolveParagraphProperties(resolverParams as never, inlineProps);
   if (!resolved) {
     return null;
   }
@@ -75,17 +112,18 @@ export const hydrateParagraphStyleAttrs = (
     keepNext?: boolean;
   };
   const resolvedExtended = resolved as ExtendedResolvedProps;
+  const resolvedAsRecord = resolved as Record<string, unknown>;
   const hydrated: ParagraphStyleHydration = {
     resolved,
-    spacing: cloneIfObject(resolved.spacing),
-    indent: cloneIfObject(resolved.indent),
-    borders: cloneIfObject(resolvedExtended.borders),
-    shading: cloneIfObject(resolvedExtended.shading),
+    spacing: cloneIfObject(resolvedAsRecord.spacing) as ParagraphSpacing | undefined,
+    indent: cloneIfObject(resolvedAsRecord.indent) as ParagraphIndent | undefined,
+    borders: cloneIfObject(resolvedExtended.borders) as ParagraphAttrs['borders'],
+    shading: cloneIfObject(resolvedExtended.shading) as ParagraphAttrs['shading'],
     alignment: resolvedExtended.justification as ParagraphAttrs['alignment'],
     tabStops: cloneIfObject(resolvedExtended.tabStops),
     keepLines: resolvedExtended.keepLines,
     keepNext: resolvedExtended.keepNext,
-    numberingProperties: cloneIfObject(resolved.numberingProperties),
+    numberingProperties: cloneIfObject(resolvedAsRecord.numberingProperties) as Record<string, unknown> | undefined,
   };
   return hydrated;
 };

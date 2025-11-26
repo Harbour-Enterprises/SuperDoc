@@ -37,7 +37,7 @@ describe('findParagraphContext', () => {
 
     const context = findParagraphContext($pos, cache, mockHelpers);
 
-    expect(context.tabStops).toEqual([{ val: 'left', pos: 720 }]);
+    expect(context.tabStops).toEqual([{ val: 'start', pos: 720, leader: undefined }]);
     expect(mockHelpers.linkedStyles.getStyleById).not.toHaveBeenCalled();
   });
 
