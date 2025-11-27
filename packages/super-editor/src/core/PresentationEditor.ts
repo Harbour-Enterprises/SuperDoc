@@ -2975,11 +2975,10 @@ export class PresentationEditor extends EventEmitter {
       if (!variant || !variant.layout?.pages?.length) {
         return null;
       }
-      const slotPage =
-        variant.layout.pages.find((candidate: Page) => candidate.number === pageNumber) ?? variant.layout.pages[0];
-      if (!slotPage) {
-        return null;
-      }
+      // Flatten all internal pages' fragments to prevent content loss from overflow
+      // Headers/footers may have content that exceeds height constraints during internal layout,
+      // causing pagination. We collect all fragments across all internal pages.
+      const allFragments = variant.layout.pages.flatMap((p: Page) => p.fragments ?? []);
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
@@ -2992,7 +2991,7 @@ export class PresentationEditor extends EventEmitter {
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = headerId ?? fallbackId ?? undefined;
       return {
-        fragments: slotPage.fragments,
+        fragments: allFragments,
         height: box.height,
         contentHeight: variant.layout.height ?? box.height,
         offset: box.offset,

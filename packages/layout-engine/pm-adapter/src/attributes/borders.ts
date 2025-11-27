@@ -374,7 +374,8 @@ export const normalizeBorderSide = (value: unknown): ParagraphBorder | undefined
   }
 
   const border: ParagraphBorder = {};
-  if (style && style !== 'none') border.style = style;
+  // Note: style cannot be 'none' here - we already returned early above
+  if (style) border.style = style;
   if (widthPx != null) border.width = Math.max(0, widthPx);
   if (color) border.color = color;
   if (space != null) border.space = Math.max(0, space);

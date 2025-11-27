@@ -216,20 +216,28 @@ describe('image converter', () => {
       expect(result.wrap?.behindDoc).toBe(true);
     });
 
-    it('ignores Inline wrap type', () => {
+    it('preserves Inline wrap type for spacing attributes', () => {
       const node: PMNode = {
         type: 'image',
         attrs: {
           src: 'image.jpg',
           wrap: {
             type: 'Inline',
+            attrs: {
+              distTop: 10,
+              distBottom: 20,
+            },
           },
         },
       };
 
       const result = imageNodeToBlock(node, mockBlockIdGenerator, mockPositionMap) as ImageBlock;
 
-      expect(result.wrap).toBeUndefined();
+      // Inline wrap type is now preserved to support spacing attributes
+      expect(result.wrap).toBeDefined();
+      expect(result.wrap?.type).toBe('Inline');
+      expect(result.wrap?.distTop).toBe(10);
+      expect(result.wrap?.distBottom).toBe(20);
     });
 
     it('handles anchor data', () => {

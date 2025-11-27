@@ -1340,17 +1340,21 @@ describe('toFlowBlocks', () => {
   });
 
   describe('image support', () => {
-    it('creates image blocks for standalone ProseMirror image nodes', () => {
+    it('creates ImageRuns for inline images (wrap.type: Inline)', () => {
+      // imageFixture has wrap.type: 'Inline', so it should become an ImageRun inside a paragraph
       const { blocks } = toFlowBlocks(imageFixture);
-      const imageBlock = blocks.find((block) => block.kind === 'image');
+      const paragraphBlock = blocks.find((block) => block.kind === 'paragraph');
 
-      expect(imageBlock).toBeDefined();
-      expect(imageBlock?.src).toBeTruthy();
-      expect(imageBlock?.width).toBeGreaterThan(0);
-      expect(imageBlock?.height).toBeGreaterThan(0);
+      expect(paragraphBlock).toBeDefined();
+      // The image should be an ImageRun in the paragraph's runs array
+      const imageRun = paragraphBlock?.runs?.find((run: { kind?: string }) => run.kind === 'image');
+      expect(imageRun).toBeDefined();
+      expect(imageRun?.src).toBeTruthy();
+      expect(imageRun?.width).toBeGreaterThan(0);
+      expect(imageRun?.height).toBeGreaterThan(0);
     });
 
-    it('splits paragraphs that contain inline images', () => {
+    it('keeps inline images as ImageRuns within the same paragraph', () => {
       const pmDoc = {
         type: 'doc',
         content: [
@@ -1373,9 +1377,15 @@ describe('toFlowBlocks', () => {
       };
 
       const { blocks } = toFlowBlocks(pmDoc);
-      expect(blocks.map((block) => block.kind)).toEqual(['paragraph', 'image', 'paragraph']);
-      expect(blocks[0].runs[0].text).toContain('Before');
-      expect(blocks[2].runs[0].text).toContain('after');
+      // Inline images should be kept as ImageRuns within a single paragraph
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe('paragraph');
+      // Check runs: text, image, text
+      const runs = (blocks[0] as ParagraphBlock).runs;
+      expect(runs.length).toBeGreaterThanOrEqual(2);
+      // Should have ImageRun in the runs
+      const imageRun = runs.find((run: { kind?: string }) => run.kind === 'image');
+      expect(imageRun).toBeDefined();
     });
 
     it('preserves anchor and wrap metadata for anchored images', () => {
@@ -2282,7 +2292,7 @@ describe('toFlowBlocks', () => {
       });
     });
 
-    it('ignores documentPartObject with non-TOC docPartGallery', () => {
+    it('processes non-TOC documentPartObject by extracting child paragraphs', () => {
       const pmDoc = {
         type: 'doc',
         content: [
@@ -2290,13 +2300,13 @@ describe('toFlowBlocks', () => {
             type: 'documentPartObject',
             attrs: {
               id: 'other-1',
-              docPartGallery: 'Bibliography',
+              docPartGallery: 'Page Numbers',
               docPartUnique: true,
             },
             content: [
               {
                 type: 'paragraph',
-                content: [{ type: 'text', text: 'Reference 1' }],
+                content: [{ type: 'text', text: 'Page 1' }],
               },
             ],
           },
@@ -2305,8 +2315,10 @@ describe('toFlowBlocks', () => {
 
       const { blocks } = toFlowBlocks(pmDoc);
 
-      // Should not unwrap non-TOC documentPartObject
-      expect(blocks).toHaveLength(0);
+      // Non-TOC documentPartObjects should have their child paragraphs processed
+      // (This is needed for page numbers, bibliography, and other SDT-wrapped content)
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe('paragraph');
     });
   });
 

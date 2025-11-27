@@ -7,7 +7,13 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { paragraphToFlowBlocks, mergeAdjacentRuns, dataAttrsCompatible } from './paragraph.js';
+import {
+  paragraphToFlowBlocks,
+  mergeAdjacentRuns,
+  dataAttrsCompatible,
+  isInlineImage,
+  imageNodeToRun,
+} from './paragraph.js';
 import type {
   PMNode,
   BlockIdGenerator,
@@ -16,7 +22,7 @@ import type {
   HyperlinkConfig,
   StyleContext,
 } from '../types.js';
-import type { Run, TextRun, FlowBlock, ParagraphBlock, TrackedChangeMeta } from '@superdoc/contracts';
+import type { Run, TextRun, FlowBlock, ParagraphBlock, TrackedChangeMeta, ImageRun } from '@superdoc/contracts';
 
 // Mock external dependencies
 vi.mock('./text-run.js', () => ({
@@ -2282,6 +2288,541 @@ describe('paragraph converters', () => {
       };
 
       expect(dataAttrsCompatible(runA, runB)).toBe(false);
+    });
+  });
+
+  describe('isInlineImage', () => {
+    it('returns true when wrap.type is Inline', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          wrap: { type: 'Inline' },
+        },
+      };
+      expect(isInlineImage(node)).toBe(true);
+    });
+
+    it('returns false when wrap.type is Tight (anchored)', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          wrap: { type: 'Tight' },
+        },
+      };
+      expect(isInlineImage(node)).toBe(false);
+    });
+
+    it('returns false when wrap.type is Square (anchored)', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          wrap: { type: 'Square' },
+        },
+      };
+      expect(isInlineImage(node)).toBe(false);
+    });
+
+    it('returns true for legacy inline attribute when no wrap.type', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          inline: true,
+        },
+      };
+      expect(isInlineImage(node)).toBe(true);
+    });
+
+    it('returns true for display=inline when no wrap.type', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          display: 'inline',
+        },
+      };
+      expect(isInlineImage(node)).toBe(true);
+    });
+
+    it('prioritizes wrap.type over inline attribute', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          wrap: { type: 'Tight' },
+          inline: true, // Should be ignored
+        },
+      };
+      expect(isInlineImage(node)).toBe(false);
+    });
+
+    it('returns false by default when no inline indicators', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {},
+      };
+      expect(isInlineImage(node)).toBe(false);
+    });
+
+    it('returns false when attrs is missing', () => {
+      const node: PMNode = {
+        type: 'image',
+      };
+      expect(isInlineImage(node)).toBe(false);
+    });
+  });
+
+  describe('imageNodeToRun', () => {
+    let positions: PositionMap;
+
+    beforeEach(() => {
+      positions = new WeakMap();
+    });
+
+    it('converts image node to ImageRun with all properties', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'data:image/png;base64,iVBORw...',
+          size: { width: 200, height: 150 },
+          alt: 'Test image',
+          title: 'Test title',
+          wrap: {
+            attrs: {
+              distTop: 10,
+              distBottom: 20,
+              distLeft: 5,
+              distRight: 15,
+            },
+          },
+        },
+      };
+      positions.set(node, { start: 10, end: 11 });
+
+      const result = imageNodeToRun(node, positions);
+
+      expect(result).toEqual({
+        kind: 'image',
+        src: 'data:image/png;base64,iVBORw...',
+        width: 200,
+        height: 150,
+        alt: 'Test image',
+        title: 'Test title',
+        distTop: 10,
+        distBottom: 20,
+        distLeft: 5,
+        distRight: 15,
+        verticalAlign: 'bottom',
+        pmStart: 10,
+        pmEnd: 11,
+      });
+    });
+
+    it('returns null when src is missing', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          size: { width: 100, height: 100 },
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when src is empty string', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: '',
+          size: { width: 100, height: 100 },
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result).toBeNull();
+    });
+
+    it('uses default dimensions when size is missing', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'image.png',
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.width).toBe(100);
+      expect(result?.height).toBe(100);
+    });
+
+    it('uses default dimensions when size has invalid values', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'image.png',
+          size: { width: NaN, height: Infinity },
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.width).toBe(100);
+      expect(result?.height).toBe(100);
+    });
+
+    it('uses default dimensions for negative width', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'image.png',
+          size: { width: -10, height: 100 },
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.width).toBe(100); // DEFAULT_IMAGE_DIMENSION_PX
+      expect(result?.height).toBe(100);
+    });
+
+    it('uses default dimensions for negative height', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'image.png',
+          size: { width: 100, height: -10 },
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.width).toBe(100);
+      expect(result?.height).toBe(100); // DEFAULT_IMAGE_DIMENSION_PX
+    });
+
+    it('uses default dimensions for zero width', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'image.png',
+          size: { width: 0, height: 100 },
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.width).toBe(100); // DEFAULT_IMAGE_DIMENSION_PX
+      expect(result?.height).toBe(100);
+    });
+
+    it('uses default dimensions for zero height', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'image.png',
+          size: { width: 100, height: 0 },
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.width).toBe(100);
+      expect(result?.height).toBe(100); // DEFAULT_IMAGE_DIMENSION_PX
+    });
+
+    it('extracts spacing from wrap.attrs with distT/distB/distL/distR', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'image.png',
+          wrap: {
+            attrs: {
+              distT: 5,
+              distB: 10,
+              distL: 3,
+              distR: 7,
+            },
+          },
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.distTop).toBe(5);
+      expect(result?.distBottom).toBe(10);
+      expect(result?.distLeft).toBe(3);
+      expect(result?.distRight).toBe(7);
+    });
+
+    it('extracts spacing with full names (distTop, distBottom, etc.)', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'image.png',
+          wrap: {
+            attrs: {
+              distTop: 12,
+              distBottom: 14,
+              distLeft: 8,
+              distRight: 10,
+            },
+          },
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.distTop).toBe(12);
+      expect(result?.distBottom).toBe(14);
+      expect(result?.distLeft).toBe(8);
+      expect(result?.distRight).toBe(10);
+    });
+
+    it('omits spacing when not present', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: {
+          src: 'image.png',
+        },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.distTop).toBeUndefined();
+      expect(result?.distBottom).toBeUndefined();
+      expect(result?.distLeft).toBeUndefined();
+      expect(result?.distRight).toBeUndefined();
+    });
+
+    it('includes SDT metadata when provided', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: { src: 'image.png' },
+      };
+      const sdt = { kind: 'field' as const };
+
+      const result = imageNodeToRun(node, positions, sdt);
+      expect(result?.sdt).toEqual(sdt);
+    });
+
+    it('includes PM positions when available', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: { src: 'image.png' },
+      };
+      positions.set(node, { start: 42, end: 43 });
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.pmStart).toBe(42);
+      expect(result?.pmEnd).toBe(43);
+    });
+
+    it('omits PM positions when not in map', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: { src: 'image.png' },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.pmStart).toBeUndefined();
+      expect(result?.pmEnd).toBeUndefined();
+    });
+
+    it('sets verticalAlign to bottom by default', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: { src: 'image.png' },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.verticalAlign).toBe('bottom');
+    });
+
+    it('omits alt and title when not present', () => {
+      const node: PMNode = {
+        type: 'image',
+        attrs: { src: 'image.png' },
+      };
+
+      const result = imageNodeToRun(node, positions);
+      expect(result?.alt).toBeUndefined();
+      expect(result?.title).toBeUndefined();
+    });
+  });
+
+  describe('Integration: Inline images in paragraphs', () => {
+    let nextBlockId: BlockIdGenerator;
+    let positions: PositionMap;
+    let styleContext: StyleContext;
+
+    beforeEach(() => {
+      vi.clearAllMocks();
+
+      let counter = 0;
+      nextBlockId = vi.fn((kind: string) => `${kind}-${counter++}`);
+      positions = new WeakMap();
+      styleContext = {};
+
+      vi.mocked(computeParagraphAttrs).mockReturnValue({});
+      vi.mocked(cloneParagraphAttrs).mockReturnValue({});
+      vi.mocked(hasPageBreakBefore).mockReturnValue(false);
+      vi.mocked(textNodeToRun).mockImplementation((node) => ({
+        text: node.text || '',
+        fontFamily: 'Arial',
+        fontSize: 16,
+      }));
+      vi.mocked(trackedChangesCompatible).mockReturnValue(true);
+    });
+
+    it('creates ImageRuns for inline images in paragraphToFlowBlocks', () => {
+      const imageNode: PMNode = {
+        type: 'image',
+        attrs: {
+          wrap: { type: 'Inline' },
+          src: 'image.png',
+          size: { width: 50, height: 50 },
+        },
+      };
+      const para: PMNode = {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Text before ' }, imageNode, { type: 'text', text: ' text after' }],
+      };
+
+      const converters = {};
+      const blocks = paragraphToFlowBlocks(
+        para,
+        nextBlockId,
+        positions,
+        'Arial',
+        16,
+        styleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        converters as never,
+      );
+
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe('paragraph');
+      const paraBlock = blocks[0] as ParagraphBlock;
+      expect(paraBlock.runs).toHaveLength(3);
+
+      // Check that second run is an ImageRun
+      const imageRun = paraBlock.runs[1] as ImageRun;
+      expect(imageRun.kind).toBe('image');
+      expect(imageRun.src).toBe('image.png');
+      expect(imageRun.width).toBe(50);
+      expect(imageRun.height).toBe(50);
+    });
+
+    it('creates ImageBlock for anchored images (not inline)', () => {
+      const imageNode: PMNode = {
+        type: 'image',
+        attrs: {
+          wrap: { type: 'Tight' },
+          src: 'image.png',
+          size: { width: 100, height: 100 },
+        },
+      };
+      const para: PMNode = {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Before' }, imageNode, { type: 'text', text: 'After' }],
+      };
+
+      const mockImageBlock: FlowBlock = {
+        kind: 'image',
+        id: 'image-0',
+        src: 'image.png',
+        width: 100,
+        height: 100,
+        attrs: {},
+      };
+
+      const converters = {
+        imageNodeToBlock: vi.fn().mockReturnValue(mockImageBlock),
+      };
+
+      const blocks = paragraphToFlowBlocks(
+        para,
+        nextBlockId,
+        positions,
+        'Arial',
+        16,
+        styleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        converters as never,
+      );
+
+      // Should split into: paragraph before, image block, paragraph after
+      expect(blocks).toHaveLength(3);
+      expect(blocks[0].kind).toBe('paragraph');
+      expect(blocks[1].kind).toBe('image');
+      expect(blocks[2].kind).toBe('paragraph');
+      expect(converters.imageNodeToBlock).toHaveBeenCalledWith(imageNode, nextBlockId, positions, undefined, undefined);
+    });
+
+    it('handles multiple inline images in same paragraph', () => {
+      const para: PMNode = {
+        type: 'paragraph',
+        content: [
+          {
+            type: 'image',
+            attrs: {
+              wrap: { type: 'Inline' },
+              src: 'img1.png',
+              size: { width: 20, height: 20 },
+            },
+          },
+          { type: 'text', text: ' and ' },
+          {
+            type: 'image',
+            attrs: {
+              wrap: { type: 'Inline' },
+              src: 'img2.png',
+              size: { width: 30, height: 30 },
+            },
+          },
+        ],
+      };
+
+      const blocks = paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
+
+      expect(blocks).toHaveLength(1);
+      const paraBlock = blocks[0] as ParagraphBlock;
+      expect(paraBlock.runs).toHaveLength(3);
+
+      const img1 = paraBlock.runs[0] as ImageRun;
+      expect(img1.kind).toBe('image');
+      expect(img1.src).toBe('img1.png');
+      expect(img1.width).toBe(20);
+
+      const img2 = paraBlock.runs[2] as ImageRun;
+      expect(img2.kind).toBe('image');
+      expect(img2.src).toBe('img2.png');
+      expect(img2.width).toBe(30);
+    });
+
+    it('does not create ImageRun when src is missing', () => {
+      const para: PMNode = {
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Before ' },
+          {
+            type: 'image',
+            attrs: {
+              wrap: { type: 'Inline' },
+              // Missing src
+              size: { width: 50, height: 50 },
+            },
+          },
+          { type: 'text', text: ' After' },
+        ],
+      };
+
+      const blocks = paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
+
+      expect(blocks).toHaveLength(1);
+      const paraBlock = blocks[0] as ParagraphBlock;
+      // Should only have the text runs, no image run
+      expect(paraBlock.runs).toHaveLength(2);
+      expect(paraBlock.runs[0].text).toBe('Before ');
+      expect(paraBlock.runs[1].text).toBe(' After');
     });
   });
 });

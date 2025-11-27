@@ -10,6 +10,7 @@ import type {
   DrawingFragment,
   Run,
   TextRun,
+  ImageRun,
   Line,
   ParagraphBlock,
   ParagraphMeasure,
@@ -201,6 +202,19 @@ const LINK_DATASET_KEYS = {
 const MAX_HREF_LENGTH = 2048;
 
 const SAFE_ANCHOR_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Maximum allowed length for data URLs (10MB).
+ * Prevents denial of service attacks from extremely large embedded images.
+ */
+const MAX_DATA_URL_LENGTH = 10 * 1024 * 1024; // 10MB
+
+/**
+ * Regular expression to validate data URL format for images.
+ * Only allows common, safe image MIME types with base64 encoding.
+ * Prevents XSS and malformed data URL attacks.
+ */
+const VALID_IMAGE_DATA_URL = /^data:image\/(png|jpeg|jpg|gif|svg\+xml|webp|bmp|ico|tiff?);base64,/i;
 
 /**
  * Pattern to detect ambiguous link text that doesn't convey destination (WCAG 2.4.4).
@@ -2404,11 +2418,24 @@ export class DomPainter {
   /**
    * Render a single run as an HTML element (span or anchor).
    */
+  /**
+   * Type guard to check if a run is an image run.
+   */
+  private isImageRun(run: Run): run is ImageRun {
+    return run.kind === 'image';
+  }
+
   private renderRun(
     run: Run,
     context: FragmentRenderContext,
     trackedConfig?: TrackedChangesRenderConfig,
   ): HTMLElement | null {
+    // Handle ImageRun
+    if (this.isImageRun(run)) {
+      return this.renderImageRun(run);
+    }
+
+    // Handle TextRun
     if (!run.text || !this.doc) {
       return null;
     }
@@ -2454,6 +2481,120 @@ export class DomPainter {
     this.applySdtDataset(elem, (run as TextRun).sdt);
 
     return elem;
+  }
+
+  /**
+   * Renders an ImageRun as an inline <img> element.
+   *
+   * SECURITY NOTES:
+   * - Data URLs are validated against VALID_IMAGE_DATA_URL regex to ensure proper format
+   * - Size limit (MAX_DATA_URL_LENGTH) prevents DoS attacks from extremely large images
+   * - Only allows safe image MIME types (png, jpeg, gif, etc.) with base64 encoding
+   * - Non-data URLs are sanitized through sanitizeUrl to prevent XSS
+   *
+   * @param run - The ImageRun to render containing image source, dimensions, and spacing
+   * @returns HTMLElement (img) or null if src is missing or invalid
+   *
+   * @example
+   * ```typescript
+   * // Valid data URL
+   * renderImageRun({ kind: 'image', src: 'data:image/png;base64,iVBORw...', width: 100, height: 100 })
+   * // Returns: <img> element
+   *
+   * // Invalid MIME type
+   * renderImageRun({ kind: 'image', src: 'data:text/html;base64,PHNjcmlwdD4...', width: 100, height: 100 })
+   * // Returns: null (blocked)
+   *
+   * // HTTP URL
+   * renderImageRun({ kind: 'image', src: 'https://example.com/image.png', width: 100, height: 100 })
+   * // Returns: <img> element (after sanitization)
+   * ```
+   */
+  private renderImageRun(run: ImageRun): HTMLElement | null {
+    if (!this.doc || !run.src) {
+      return null;
+    }
+
+    // Create img element
+    const img = this.doc.createElement('img');
+
+    // Set source - validate data URLs with strict format and size checks
+    // Note: data: URLs are blocked by sanitizeUrl for hyperlinks (XSS risk),
+    // but are safe for <img> elements when properly validated
+    const isDataUrl = typeof run.src === 'string' && run.src.startsWith('data:');
+    if (isDataUrl) {
+      // SECURITY: Validate data URL format and size
+      if (run.src.length > MAX_DATA_URL_LENGTH) {
+        // Reject data URLs that are too large (DoS prevention)
+        return null;
+      }
+      if (!VALID_IMAGE_DATA_URL.test(run.src)) {
+        // Reject data URLs with invalid MIME types or encoding
+        return null;
+      }
+      img.src = run.src;
+    } else {
+      const sanitized = sanitizeUrl(run.src);
+      if (sanitized) {
+        img.src = sanitized;
+      } else {
+        // Invalid URL - return null
+        return null;
+      }
+    }
+
+    // Set dimensions
+    img.width = run.width;
+    img.height = run.height;
+
+    // Set alt text (required for accessibility)
+    img.alt = run.alt ?? '';
+
+    // Set title if present
+    if (run.title) {
+      img.title = run.title;
+    }
+
+    // Apply inline-block display
+    img.style.display = 'inline-block';
+
+    // Apply vertical alignment (bottom-aligned to text baseline)
+    img.style.verticalAlign = run.verticalAlign ?? 'bottom';
+
+    // Apply spacing as CSS margins
+    if (run.distTop) {
+      img.style.marginTop = `${run.distTop}px`;
+    }
+    if (run.distBottom) {
+      img.style.marginBottom = `${run.distBottom}px`;
+    }
+    if (run.distLeft) {
+      img.style.marginLeft = `${run.distLeft}px`;
+    }
+    if (run.distRight) {
+      img.style.marginRight = `${run.distRight}px`;
+    }
+
+    // Apply z-index to render above tab leaders
+    img.style.zIndex = '1';
+
+    // Apply PM position tracking for cursor placement
+    if (run.pmStart != null) {
+      img.dataset.pmStart = String(run.pmStart);
+    }
+    if (run.pmEnd != null) {
+      img.dataset.pmEnd = String(run.pmEnd);
+    }
+
+    // Apply SDT metadata
+    this.applySdtDataset(img, run.sdt);
+
+    // Apply data attributes
+    if (run.dataAttrs) {
+      applyRunDataAttributes(img, run.dataAttrs);
+    }
+
+    return img;
   }
 
   private renderLine(block: ParagraphBlock, line: Line, context: FragmentRenderContext): HTMLElement {
@@ -2547,6 +2688,20 @@ export class DomPainter {
       line.segments.forEach((segment, _segIdx) => {
         const baseRun = runs[segment.runIndex];
         if (!baseRun || baseRun.kind === 'tab') return;
+
+        // Handle ImageRun - render as-is (no slicing needed, atomic unit)
+        if (this.isImageRun(baseRun)) {
+          const elem = this.renderRun(baseRun, context, trackedConfig);
+          if (elem) {
+            if (styleId) {
+              elem.setAttribute('styleid', styleId);
+            }
+            // Images don't need explicit X positioning in tab-aligned content
+            // They flow naturally at their position in the run sequence
+            el.appendChild(elem);
+          }
+          return;
+        }
 
         // Extract the text for this segment from the text run
         const segmentText = baseRun.text.slice(segment.fromChar, segment.toChar);
@@ -2947,8 +3102,28 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
 const deriveBlockVersion = (block: FlowBlock): string => {
   if (block.kind === 'paragraph') {
     return block.runs
-      .map((run) =>
-        [
+      .map((run) => {
+        // Handle ImageRun
+        if (run.kind === 'image') {
+          const imgRun = run as ImageRun;
+          return [
+            'img',
+            imgRun.src,
+            imgRun.width,
+            imgRun.height,
+            imgRun.alt ?? '',
+            imgRun.title ?? '',
+            imgRun.distTop ?? '',
+            imgRun.distBottom ?? '',
+            imgRun.distLeft ?? '',
+            imgRun.distRight ?? '',
+            imgRun.pmStart ?? '',
+            imgRun.pmEnd ?? '',
+          ].join(',');
+        }
+
+        // Handle TextRun and TabRun
+        return [
           run.text ?? '',
           run.kind !== 'tab' ? run.fontFamily : '',
           run.kind !== 'tab' ? run.fontSize : '',
@@ -2964,8 +3139,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           run.pmStart ?? '',
           run.pmEnd ?? '',
           run.kind !== 'tab' ? (run.token ?? '') : '',
-        ].join(','),
-      )
+        ].join(',');
+      })
       .join('|');
   }
 
@@ -3036,8 +3211,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 };
 
 const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void => {
-  if (run.kind === 'tab') {
-    // Tab runs don't have text styling properties
+  if (run.kind === 'tab' || run.kind === 'image') {
+    // Tab and image runs don't have text styling properties
     return;
   }
 
@@ -3213,6 +3388,12 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
     const run = block.runs[runIndex];
     if (!run) continue;
 
+    // FIXED: ImageRun handling - images are atomic units, no slicing needed
+    if (run.kind === 'image') {
+      result.push(run);
+      continue;
+    }
+
     const text = run.text ?? '';
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
@@ -3261,6 +3442,27 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
     const run = block.runs[runIndex];
     if (!run) continue;
 
+    // FIXED: ImageRun handling - images are treated as single units (length = 1)
+    if (run.kind === 'image') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
     const text = run.text ?? '';
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
@@ -3303,6 +3505,10 @@ const applyStyles = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>): voi
 const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
   if (run.kind === 'tab') {
     return run.text;
+  }
+  if (run.kind === 'image') {
+    // Image runs don't have text content
+    return '';
   }
   if (!run.token) {
     return run.text ?? '';

@@ -1797,6 +1797,664 @@ describe('DomPainter', () => {
     const content = mount.querySelector('.superdoc-list-content') as HTMLElement;
     expect(content.style.paddingLeft).toBe('');
   });
+
+  describe('renderImageRun (inline image runs)', () => {
+    it('renders img element with valid data URL', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            width: 100,
+            height: 100,
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 100,
+            ascent: 100,
+            descent: 0,
+            lineHeight: 100,
+          },
+        ],
+        totalHeight: 100,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 100,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img');
+      expect(img).toBeTruthy();
+      expect(img?.src).toContain('data:image/png;base64');
+      expect(img?.width).toBe(100);
+      expect(img?.height).toBe(100);
+    });
+
+    it('renders img element with external https URL', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: 'https://example.com/image.png',
+            width: 200,
+            height: 150,
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 200,
+            ascent: 150,
+            descent: 0,
+            lineHeight: 150,
+          },
+        ],
+        totalHeight: 150,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 200,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img');
+      expect(img).toBeTruthy();
+      expect(img?.src).toBe('https://example.com/image.png');
+      expect(img?.width).toBe(200);
+      expect(img?.height).toBe(150);
+    });
+
+    it('returns null for missing src', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: '',
+            width: 100,
+            height: 100,
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 100,
+            ascent: 100,
+            descent: 0,
+            lineHeight: 100,
+          },
+        ],
+        totalHeight: 100,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 100,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img');
+      expect(img).toBeNull();
+    });
+
+    it('returns null for javascript: URL (blocked by sanitizeUrl)', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: 'javascript:alert("XSS")',
+            width: 100,
+            height: 100,
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 100,
+            ascent: 100,
+            descent: 0,
+            lineHeight: 100,
+          },
+        ],
+        totalHeight: 100,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 100,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img');
+      expect(img).toBeNull();
+    });
+
+    it('returns null for data URLs exceeding MAX_DATA_URL_LENGTH (10MB)', () => {
+      // Create a data URL that exceeds 10MB
+      const largeBase64 = 'A'.repeat(10 * 1024 * 1024 + 1);
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: `data:image/png;base64,${largeBase64}`,
+            width: 100,
+            height: 100,
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 100,
+            ascent: 100,
+            descent: 0,
+            lineHeight: 100,
+          },
+        ],
+        totalHeight: 100,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 100,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img');
+      expect(img).toBeNull();
+    });
+
+    it('returns null for invalid MIME type (e.g., data:text/html)', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: 'data:text/html;base64,PHNjcmlwdD5hbGVydCgnWFNTJyk8L3NjcmlwdD4=',
+            width: 100,
+            height: 100,
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 100,
+            ascent: 100,
+            descent: 0,
+            lineHeight: 100,
+          },
+        ],
+        totalHeight: 100,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 100,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img');
+      expect(img).toBeNull();
+    });
+
+    it('applies correct dimensions (width, height)', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            width: 250,
+            height: 175,
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 250,
+            ascent: 175,
+            descent: 0,
+            lineHeight: 175,
+          },
+        ],
+        totalHeight: 175,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 250,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img');
+      expect(img?.width).toBe(250);
+      expect(img?.height).toBe(175);
+    });
+
+    it('sets alt attribute (empty string default)', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            width: 100,
+            height: 100,
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 100,
+            ascent: 100,
+            descent: 0,
+            lineHeight: 100,
+          },
+        ],
+        totalHeight: 100,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 100,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img');
+      expect(img?.alt).toBe('');
+    });
+
+    it('sets title attribute when provided', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            width: 100,
+            height: 100,
+            title: 'Test Image',
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 100,
+            ascent: 100,
+            descent: 0,
+            lineHeight: 100,
+          },
+        ],
+        totalHeight: 100,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 100,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img');
+      expect(img?.title).toBe('Test Image');
+    });
+
+    it('applies spacing margins (distTop, distBottom, distLeft, distRight)', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            width: 100,
+            height: 100,
+            distTop: 10,
+            distBottom: 20,
+            distLeft: 5,
+            distRight: 15,
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 100,
+            ascent: 100,
+            descent: 0,
+            lineHeight: 100,
+          },
+        ],
+        totalHeight: 100,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 100,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img') as HTMLElement;
+      expect(img?.style.marginTop).toBe('10px');
+      expect(img?.style.marginBottom).toBe('20px');
+      expect(img?.style.marginLeft).toBe('5px');
+      expect(img?.style.marginRight).toBe('15px');
+    });
+
+    it('sets vertical alignment', () => {
+      const imageBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'img-block',
+        runs: [
+          {
+            kind: 'image',
+            src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+            width: 100,
+            height: 100,
+            verticalAlign: 'bottom',
+          },
+        ],
+      };
+
+      const imageMeasure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 0,
+            width: 100,
+            ascent: 100,
+            descent: 0,
+            lineHeight: 100,
+          },
+        ],
+        totalHeight: 100,
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'img-block',
+                fromLine: 0,
+                toLine: 1,
+                x: 0,
+                y: 0,
+                width: 100,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+      painter.paint(imageLayout, mount);
+
+      const img = mount.querySelector('img') as HTMLElement;
+      expect(img?.style.verticalAlign).toBe('bottom');
+    });
+  });
 });
 
 describe('URL sanitization security', () => {

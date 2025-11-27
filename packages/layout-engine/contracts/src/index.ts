@@ -180,7 +180,69 @@ export type TabRun = {
   pmEnd?: number;
 };
 
-export type Run = TextRun | TabRun;
+/**
+ * Inline image run for images that flow with text on the same line.
+ * Unlike ImageBlock (anchored/floating images), ImageRun is part of the paragraph's run array
+ * and participates in line breaking alongside text.
+ *
+ * Corresponds to Microsoft Word's inline images (<wp:inline> in DOCX).
+ *
+ * @example
+ * // A paragraph with text and inline image:
+ * {
+ *   kind: 'paragraph',
+ *   runs: [
+ *     { kind: 'text', text: 'Here is an image: ', ... },
+ *     { kind: 'image', src: 'data:...', width: 100, height: 50, ... },
+ *     { kind: 'text', text: ' within text.', ... }
+ *   ]
+ * }
+ */
+export type ImageRun = {
+  kind: 'image';
+  /** Image source URL (data URI or external URL). */
+  src: string;
+  /** Image width in pixels. */
+  width: number;
+  /** Image height in pixels. */
+  height: number;
+  /** Alternative text for accessibility. */
+  alt?: string;
+  /** Image title (tooltip). */
+  title?: string;
+
+  /**
+   * Spacing around the image (from DOCX distT/distB/distL/distR attributes).
+   * Applied as CSS margins in the DOM painter.
+   * All values in pixels.
+   */
+  distTop?: number;
+  distBottom?: number;
+  distLeft?: number;
+  distRight?: number;
+
+  /**
+   * Vertical alignment of image relative to text baseline.
+   * Currently only 'bottom' is supported (image sits on baseline).
+   * Future: 'top', 'middle', 'baseline', 'text-top', 'text-bottom'.
+   */
+  verticalAlign?: 'bottom';
+
+  /** Absolute ProseMirror position (inclusive) of this image run. */
+  pmStart?: number;
+  /** Absolute ProseMirror position (exclusive) after this image run. */
+  pmEnd?: number;
+
+  /** SDT metadata if image is wrapped in a structured document tag. */
+  sdt?: SdtMetadata;
+
+  /**
+   * Custom data attributes propagated from ProseMirror marks (keys must be data-*).
+   */
+  dataAttrs?: Record<string, string>;
+};
+
+export type Run = TextRun | TabRun | ImageRun;
 
 export type ParagraphBlock = {
   kind: 'paragraph';
