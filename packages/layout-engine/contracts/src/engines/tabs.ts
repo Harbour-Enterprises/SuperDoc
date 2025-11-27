@@ -337,9 +337,6 @@ export function calculateTabWidth(params: CalculateTabWidthParams): CalculateTab
       const beforeWidth = measureText ? measureText(before) : 0;
       width -= beforeWidth;
     }
-  } else if (alignment === 'bar') {
-    // Bar tabs render a vertical line at the stop; width is zero advance.
-    width = 0;
   }
 
   if (width < 1) {

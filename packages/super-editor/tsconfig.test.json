@@ -1,0 +1,10 @@
+{
+  "extends": "./tsconfig.strict.json",
+  "compilerOptions": {
+    "types": ["vitest/globals", "node"],
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["src/**/*.test.ts", "src/tests/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/core/super-converter/**/*"]
+}
