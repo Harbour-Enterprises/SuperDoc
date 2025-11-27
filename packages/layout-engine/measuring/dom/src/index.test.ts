@@ -1321,6 +1321,186 @@ describe('measureBlock', () => {
       const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 200 }));
       expect(measure.geometry.rotation).toBe(270);
     });
+
+    describe('negative positioning bypass logic', () => {
+      it('bypasses maxHeight when anchored drawing has offsetV < 0', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-negative-offset',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: -50,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should NOT scale height due to negative offsetV bypass
+        expect(measure.height).toBe(200);
+        expect(measure.width).toBe(100);
+        expect(measure.scale).toBe(1);
+      });
+
+      it('bypasses maxHeight when anchored drawing has margin.top < 0', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-negative-margin',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: 0,
+          },
+          margin: {
+            top: -30,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should NOT scale height due to negative margin.top bypass
+        expect(measure.height).toBe(200);
+        expect(measure.width).toBe(100);
+        expect(measure.scale).toBe(1);
+      });
+
+      it('does NOT bypass maxHeight when anchored drawing has offsetV === 0', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-zero-offset',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: 0,
+          },
+          margin: {
+            top: 0,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should scale height because offsetV and margin.top are both 0 (not negative)
+        expect(measure.height).toBe(100);
+        expect(measure.width).toBe(50);
+        expect(measure.scale).toBe(0.5);
+      });
+
+      it('does NOT bypass maxHeight when non-anchored drawing has negative margin', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-not-anchored',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: false,
+          },
+          margin: {
+            top: -30,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should scale height because drawing is not anchored
+        expect(measure.height).toBe(100);
+        expect(measure.width).toBe(50);
+        expect(measure.scale).toBe(0.5);
+      });
+
+      it('respects maxHeight when anchored drawing has positive offsets', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-positive-offset',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: 10,
+          },
+          margin: {
+            top: 5,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should scale height because both offsetV and margin.top are positive
+        expect(measure.height).toBe(100);
+        expect(measure.width).toBe(50);
+        expect(measure.scale).toBe(0.5);
+      });
+
+      it('bypasses maxHeight when one of offsetV or margin.top is negative (OR condition)', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-mixed-offsets',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: 10,
+          },
+          margin: {
+            top: -20,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should NOT scale height because margin.top is negative (OR condition)
+        expect(measure.height).toBe(200);
+        expect(measure.width).toBe(100);
+        expect(measure.scale).toBe(1);
+      });
+
+      it('bypasses maxHeight when offsetV is negative even with positive margin.top', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-negative-offsetV-positive-margin',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: -15,
+          },
+          margin: {
+            top: 25,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should NOT scale height because offsetV is negative (OR condition)
+        expect(measure.height).toBe(200);
+        expect(measure.width).toBe(100);
+        expect(measure.scale).toBe(1);
+      });
+    });
   });
 
   describe('table measurement with column widths', () => {

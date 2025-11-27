@@ -283,15 +283,15 @@ describe('handleImageNode', () => {
     expect(result.type).toBe('vectorShape');
   });
 
-  it('marks textbox shapes with a specific placeholder type', () => {
+  it('renders textbox shapes as vectorShapes with text content', () => {
     const node = makeShapeNode({ includeTextbox: true });
     const result = handleImageNode(node, makeParams(), false);
 
-    expect(result.type).toBe('contentBlock');
-    expect(result.attrs.attributes).toMatchObject({
-      'data-shape-type': 'textbox',
-      'data-padding-top': 1,
-    });
+    // Textbox shapes are now properly handled as vectorShapes (not placeholders)
+    expect(result.type).toBe('vectorShape');
+    expect(result.attrs.kind).toBe('ellipse');
+    // Should have textContent extracted from the textbox
+    expect(result.attrs.textContent).toBeDefined();
   });
 
   describe('wrap types', () => {
@@ -532,7 +532,7 @@ describe('getVectorShape', () => {
 
   it('returns null when wsp is missing', () => {
     const graphicData = { elements: [] };
-    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData, size: { width: 100, height: 100 } });
     expect(result).toBeNull();
   });
 
@@ -540,18 +540,28 @@ describe('getVectorShape', () => {
     const graphicData = {
       elements: [{ name: 'wps:wsp', elements: [] }],
     };
-    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData, size: { width: 100, height: 100 } });
     expect(result).toBeNull();
   });
 
-  it('extracts basic shape properties', () => {
+  it('uses wp:extent for dimensions (not a:xfrm/a:ext)', () => {
     const graphicData = makeGraphicData();
-    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+    // wp:extent says 150x150 (square)
+    const wpExtentSize = { width: 150, height: 150 };
+    // a:xfrm/a:ext in graphicData says 914400x914400 (this should be ignored)
+
+    const result = getVectorShape({
+      params: makeParams(),
+      node: {},
+      graphicData,
+      size: wpExtentSize,
+    });
 
     expect(result.type).toBe('vectorShape');
     expect(result.attrs.kind).toBe('ellipse');
-    expect(result.attrs.width).toBe(72); // 914400 / 12700
-    expect(result.attrs.height).toBe(72);
+    // Should use wp:extent dimensions, not a:xfrm/a:ext
+    expect(result.attrs.width).toBe(150);
+    expect(result.attrs.height).toBe(150);
     expect(result.attrs.rotation).toBe(0);
     expect(result.attrs.flipH).toBe(false);
     expect(result.attrs.flipV).toBe(false);
@@ -559,7 +569,7 @@ describe('getVectorShape', () => {
 
   it('extracts colors and stroke width', () => {
     const graphicData = makeGraphicData();
-    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData, size: { width: 72, height: 72 } });
 
     expect(extractFillColor).toHaveBeenCalled();
     expect(extractStrokeColor).toHaveBeenCalled();
@@ -570,7 +580,7 @@ describe('getVectorShape', () => {
     expect(result.attrs.strokeWidth).toBe(1);
   });
 
-  it('handles rotation and flips', () => {
+  it('handles rotation and flips from a:xfrm', () => {
     const graphicData = makeGraphicData();
     graphicData.elements[0].elements[0].elements[1].attributes = {
       rot: '5400000', // 90 degrees
@@ -578,16 +588,20 @@ describe('getVectorShape', () => {
       flipV: '1',
     };
 
-    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+    const result = getVectorShape({
+      params: makeParams(),
+      node: {},
+      graphicData,
+      size: { width: 72, height: 72 },
+    });
 
     expect(result.attrs.rotation).toBe(90);
     expect(result.attrs.flipH).toBe(true);
     expect(result.attrs.flipV).toBe(true);
   });
 
-  it('uses default size when extent is missing', () => {
+  it('uses default size when size parameter is missing', () => {
     const graphicData = makeGraphicData();
-    graphicData.elements[0].elements[0].elements[1].elements = [];
 
     const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
 
@@ -600,7 +614,7 @@ describe('getVectorShape', () => {
     const params = { nodes: [drawingNode] };
     const graphicData = makeGraphicData();
 
-    const result = getVectorShape({ params, node: {}, graphicData });
+    const result = getVectorShape({ params, node: {}, graphicData, size: { width: 72, height: 72 } });
 
     expect(result.attrs.drawingContent).toBe(drawingNode);
   });
@@ -610,11 +624,238 @@ describe('getVectorShape', () => {
     const graphicData = makeGraphicData();
     graphicData.elements[0].elements[0].elements[0].attributes = {}; // No prst
 
-    const result = getVectorShape({ params: makeParams(), node: {}, graphicData });
+    const result = getVectorShape({ params: makeParams(), node: {}, graphicData, size: { width: 72, height: 72 } });
 
     expect(consoleWarnSpy).toHaveBeenCalledWith('Shape kind not found');
     expect(result.attrs.kind).toBeUndefined();
 
     consoleWarnSpy.mockRestore();
+  });
+
+  it('correctly prioritizes wp:extent over a:xfrm/a:ext for dimensions', () => {
+    const graphicData = makeGraphicData();
+    // Override a:xfrm/a:ext to have different dimensions (571500 x 161926 EMU like the actual bug)
+    graphicData.elements[0].elements[0].elements[1].elements = [
+      {
+        name: 'a:ext',
+        attributes: { cx: '571500', cy: '161926' },
+      },
+    ];
+
+    // wp:extent says the shape should be 150x150 (square)
+    const wpExtentSize = { width: 150, height: 150 };
+
+    const result = getVectorShape({
+      params: makeParams(),
+      node: {},
+      graphicData,
+      size: wpExtentSize,
+    });
+
+    // Should use wp:extent (150x150), not a:xfrm/a:ext (571500/12700 x 161926/12700)
+    expect(result.attrs.width).toBe(150);
+    expect(result.attrs.height).toBe(150);
+  });
+
+  it('regression test: picture marker shape with mismatched extents', () => {
+    // This test validates the fix for the reported bug where picture marker shapes
+    // were being scaled incorrectly because we read the wrong extent values.
+    const graphicData = makeGraphicData();
+
+    // Simulate the actual bug scenario:
+    // a:xfrm/a:ext has the intrinsic shape dimensions (rectangular)
+    graphicData.elements[0].elements[0].elements[1].elements = [
+      {
+        name: 'a:ext',
+        attributes: { cx: '571500', cy: '161926' }, // Rectangular intrinsic size
+      },
+    ];
+
+    // wp:extent has the final display dimensions (square)
+    const wpExtentSize = { width: 150, height: 150 }; // Square display size
+
+    const result = getVectorShape({
+      params: makeParams(),
+      node: {},
+      graphicData,
+      size: wpExtentSize,
+    });
+
+    // Validate that we use wp:extent (the anchor extent) for the final display size
+    expect(result.attrs.width).toBe(150);
+    expect(result.attrs.height).toBe(150);
+
+    // The shape should maintain square proportions, not the rectangular intrinsic dimensions
+    const aspectRatio = result.attrs.width / result.attrs.height;
+    expect(aspectRatio).toBe(1); // Square aspect ratio
+  });
+
+  describe('[[sdspace]] placeholder replacement', () => {
+    const makeGraphicDataWithTextbox = (text) => ({
+      elements: [
+        {
+          name: 'wps:wsp',
+          elements: [
+            {
+              name: 'wps:spPr',
+              elements: [
+                {
+                  name: 'a:prstGeom',
+                  attributes: { prst: 'rect' },
+                },
+                {
+                  name: 'a:xfrm',
+                  attributes: { rot: '0', flipH: '0', flipV: '0' },
+                  elements: [
+                    {
+                      name: 'a:ext',
+                      attributes: { cx: '914400', cy: '914400' },
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              name: 'wps:style',
+              elements: [],
+            },
+            {
+              name: 'wps:txbx',
+              elements: [
+                {
+                  name: 'w:txbxContent',
+                  elements: [
+                    {
+                      name: 'w:p',
+                      elements: [
+                        {
+                          name: 'w:r',
+                          elements: [
+                            {
+                              name: 'w:t',
+                              elements: [{ type: 'text', text }],
+                            },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    it('replaces a single [[sdspace]] placeholder with a space', () => {
+      const graphicData = makeGraphicDataWithTextbox('Hello[[sdspace]]World');
+      const result = getVectorShape({
+        params: makeParams(),
+        node: {},
+        graphicData,
+        size: { width: 100, height: 100 },
+      });
+
+      expect(result.attrs.textContent).toBeDefined();
+      expect(result.attrs.textContent.parts).toHaveLength(1);
+      expect(result.attrs.textContent.parts[0].text).toBe('Hello World');
+    });
+
+    it('replaces multiple [[sdspace]] placeholders with spaces', () => {
+      const graphicData = makeGraphicDataWithTextbox('A[[sdspace]]B[[sdspace]]C[[sdspace]]D');
+      const result = getVectorShape({
+        params: makeParams(),
+        node: {},
+        graphicData,
+        size: { width: 100, height: 100 },
+      });
+
+      expect(result.attrs.textContent.parts[0].text).toBe('A B C D');
+    });
+
+    it('handles text without [[sdspace]] placeholders', () => {
+      const graphicData = makeGraphicDataWithTextbox('Hello World');
+      const result = getVectorShape({
+        params: makeParams(),
+        node: {},
+        graphicData,
+        size: { width: 100, height: 100 },
+      });
+
+      expect(result.attrs.textContent.parts[0].text).toBe('Hello World');
+    });
+
+    it('handles [[sdspace]] at the beginning of text', () => {
+      const graphicData = makeGraphicDataWithTextbox('[[sdspace]]Hello');
+      const result = getVectorShape({
+        params: makeParams(),
+        node: {},
+        graphicData,
+        size: { width: 100, height: 100 },
+      });
+
+      expect(result.attrs.textContent.parts[0].text).toBe(' Hello');
+    });
+
+    it('handles [[sdspace]] at the end of text', () => {
+      const graphicData = makeGraphicDataWithTextbox('Hello[[sdspace]]');
+      const result = getVectorShape({
+        params: makeParams(),
+        node: {},
+        graphicData,
+        size: { width: 100, height: 100 },
+      });
+
+      expect(result.attrs.textContent.parts[0].text).toBe('Hello ');
+    });
+
+    it('handles consecutive [[sdspace]] placeholders', () => {
+      const graphicData = makeGraphicDataWithTextbox('A[[sdspace]][[sdspace]]B');
+      const result = getVectorShape({
+        params: makeParams(),
+        node: {},
+        graphicData,
+        size: { width: 100, height: 100 },
+      });
+
+      expect(result.attrs.textContent.parts[0].text).toBe('A  B');
+    });
+
+    it('handles text that is only [[sdspace]] placeholders', () => {
+      const graphicData = makeGraphicDataWithTextbox('[[sdspace]][[sdspace]][[sdspace]]');
+      const result = getVectorShape({
+        params: makeParams(),
+        node: {},
+        graphicData,
+        size: { width: 100, height: 100 },
+      });
+
+      expect(result.attrs.textContent.parts[0].text).toBe('   ');
+    });
+
+    it('handles empty text', () => {
+      const graphicData = makeGraphicDataWithTextbox('');
+      const result = getVectorShape({
+        params: makeParams(),
+        node: {},
+        graphicData,
+        size: { width: 100, height: 100 },
+      });
+
+      expect(result.attrs.textContent.parts[0].text).toBe('');
+    });
+
+    it('preserves non-[[sdspace]] bracket patterns', () => {
+      const graphicData = makeGraphicDataWithTextbox('[[notspace]][[sdspace]][other]');
+      const result = getVectorShape({
+        params: makeParams(),
+        node: {},
+        graphicData,
+        size: { width: 100, height: 100 },
+      });
+
+      expect(result.attrs.textContent.parts[0].text).toBe('[[notspace]] [other]');
+    });
   });
 });

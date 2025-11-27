@@ -68,6 +68,20 @@ export const ShapeGroup = Node.create({
       drawingContent: {
         rendered: false,
       },
+
+      wrap: {
+        default: { type: 'Inline' },
+        rendered: false,
+      },
+
+      anchorData: {
+        default: null,
+        rendered: false,
+      },
+
+      originalAttributes: {
+        rendered: false,
+      },
     };
   },
 
