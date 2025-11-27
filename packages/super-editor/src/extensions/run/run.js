@@ -1,7 +1,7 @@
 // @ts-nocheck
 
 import { Attribute, OxmlNode } from '@core/index.js';
-import { splitRunToParagraph } from './commands/index.js';
+import { splitRunToParagraph, splitRunAtCursor } from './commands/index.js';
 import { cleanupEmptyRunsPlugin } from './cleanupEmptyRunsPlugin.js';
 
 /**
@@ -54,6 +54,7 @@ export const Run = OxmlNode.create({
   addCommands() {
     return {
       splitRunToParagraph,
+      splitRunAtCursor,
     };
   },
 

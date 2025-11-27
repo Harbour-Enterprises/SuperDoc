@@ -3,9 +3,10 @@ import { TextSelection, EditorState } from 'prosemirror-state';
 import { initTestEditor } from '@tests/helpers/helpers.js';
 
 let splitRunToParagraph;
+let splitRunAtCursor;
 
 beforeAll(async () => {
-  ({ splitRunToParagraph } = await import('@extensions/run/commands/split-run.js'));
+  ({ splitRunToParagraph, splitRunAtCursor } = await import('@extensions/run/commands/split-run.js'));
 });
 
 const RUN_DOC = {
@@ -37,6 +38,16 @@ const getParagraphTexts = (doc) => {
   const texts = [];
   doc.descendants((node) => {
     if (node.type.name === 'paragraph') {
+      texts.push(node.textContent);
+    }
+  });
+  return texts;
+};
+
+const getRunTexts = (doc) => {
+  const texts = [];
+  doc.descendants((node) => {
+    if (node.type.name === 'run') {
       texts.push(node.textContent);
     }
   });
@@ -129,5 +140,33 @@ describe('splitRunToParagraph command', () => {
 
     const paragraphTexts = getParagraphTexts(editor.view.state.doc);
     expect(paragraphTexts).toEqual(['He', 'llo']);
+  });
+
+  it('splits a run at the cursor into two runs', () => {
+    loadDoc(RUN_DOC);
+
+    const start = findTextPos('Hello');
+    expect(start).not.toBeNull();
+    updateSelection((start ?? 0) + 3); // after "Hel"
+
+    expect(editor.view.state.selection.$from.parent.type.name).toBe('run');
+
+    const handled = editor.commands.splitRunAtCursor();
+
+    expect(handled).toBe(true);
+    const runTexts = getRunTexts(editor.view.state.doc);
+    expect(runTexts).toEqual(['Hel', 'lo']);
+  });
+
+  it('returns false when selection is not empty for splitRunAtCursor', () => {
+    loadDoc(RUN_DOC);
+
+    const start = findTextPos('Hello');
+    expect(start).not.toBeNull();
+    updateSelection((start ?? 0) + 1, (start ?? 0) + 2);
+
+    const handled = editor.commands.splitRunAtCursor();
+
+    expect(handled).toBe(false);
   });
 });
