@@ -1,4 +1,4 @@
-const isKeyboardInvocation = (event) => {
+const isKeyboardInvocation = (event: MouseEvent): boolean => {
   return (
     event.type === 'contextmenu' &&
     typeof event.detail === 'number' &&
@@ -9,7 +9,7 @@ const isKeyboardInvocation = (event) => {
   );
 };
 
-const prefersNativeMenu = (event) => {
+const prefersNativeMenu = (event: MouseEvent | null | undefined): boolean => {
   if (!event) return false;
 
   if (event.ctrlKey || event.metaKey) {
@@ -26,7 +26,7 @@ const prefersNativeMenu = (event) => {
  * @param {MouseEvent} event
  * @returns {boolean}
  */
-const shouldAllowNativeContextMenu = (event) => {
+const shouldAllowNativeContextMenu = (event: MouseEvent): boolean => {
   return prefersNativeMenu(event);
 };
 
