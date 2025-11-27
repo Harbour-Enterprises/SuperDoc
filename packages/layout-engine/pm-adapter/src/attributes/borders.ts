@@ -344,7 +344,7 @@ export const normalizeParagraphBorders = (value: unknown): ParagraphAttrs['borde
  * color, and spacing. Negative values for width and space are clamped to zero.
  *
  * @param value - Raw OOXML border specification for a single side
- * @returns ParagraphBorder with normalized properties, or undefined if no valid border properties
+ * @returns ParagraphBorder with normalized properties, or undefined if no valid border properties or if style is 'none'
  *
  * @example
  * ```typescript
@@ -352,13 +352,18 @@ export const normalizeParagraphBorders = (value: unknown): ParagraphAttrs['borde
  * // { style: 'solid', width: 2, color: '#FF0000', space: 2 }
  *
  * normalizeBorderSide({ val: 'nil' });
- * // { style: 'none' }
+ * // undefined
  * ```
  */
 export const normalizeBorderSide = (value: unknown): ParagraphBorder | undefined => {
   if (!value || typeof value !== 'object') return undefined;
   const raw = value as Record<string, unknown>;
   const style = mapBorderStyle(raw.val);
+
+  // If style is 'none' (from val='nil' or val='none'), return undefined
+  // so this side is not included in the borders object at all
+  if (style === 'none') return undefined;
+
   const width = pickNumber(raw.size);
   const widthPx = borderSizeToPx(width);
   const color = normalizeColor(raw.color);
