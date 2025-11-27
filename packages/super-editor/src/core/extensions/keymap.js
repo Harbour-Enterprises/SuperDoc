@@ -19,6 +19,7 @@ export const handleBackspace = (editor) => {
       tr.setMeta('inputType', 'deleteContentBackward');
       return false;
     },
+    () => commands.backspaceEmptyRunParagraph(),
     () => commands.deleteSelection(),
     () => commands.removeNumberingProperties(),
     () => commands.joinBackward(),
