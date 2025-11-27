@@ -25,6 +25,7 @@ import { tableNodeHandlerEntity } from './tableImporter.js';
 import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
 import { preProcessNodesForFldChar } from '../../field-references';
 import { ensureNumberingCache } from './numberingCache.js';
+import { logHeaderFooter, inspectNodeTree } from './header-footer-debug.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -566,8 +567,20 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     let sectionType = sectPrHeader?.attributes['w:type'];
     if (converter.headerIds[sectionType]) sectionType = null;
     const nodeListHandler = defaultNodeListHandler();
+
+    // Debug: log raw elements
+    const rawElements = referenceFile?.elements?.[0]?.elements ?? [];
+    logHeaderFooter('RAW_ELEMENTS', 'header', rId, rawElements);
+    inspectNodeTree(rawElements, `header ${rId} raw`);
+
+    const { processedNodes } = preProcessNodesForFldChar(rawElements, docx);
+    logHeaderFooter('PREPROCESSED', 'header', rId, processedNodes);
+
+    const cleanedNodes = pruneIgnoredNodes(processedNodes);
+    logHeaderFooter('AFTER_PRUNE', 'header', rId, cleanedNodes);
+
     let schema = nodeListHandler.handler({
-      nodes: referenceFile.elements[0].elements,
+      nodes: cleanedNodes,
       nodeListHandler,
       docx,
       converter,
@@ -577,8 +590,11 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       path: [],
     });
 
+    logHeaderFooter('TRANSLATED', 'header', rId, schema);
+
     // Safety: drop inline-only nodes at the root of header docs
     schema = filterOutRootInlineNodes(schema);
+    logHeaderFooter('AFTER_FILTER', 'header', rId, schema);
 
     if (!converter.headerIds.ids) converter.headerIds.ids = [];
     converter.headerIds.ids.push(rId);
@@ -599,8 +615,20 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     const sectionType = sectPrFooter?.attributes['w:type'];
 
     const nodeListHandler = defaultNodeListHandler();
+
+    // Debug: log raw elements
+    const rawElements = referenceFile?.elements?.[0]?.elements ?? [];
+    logHeaderFooter('RAW_ELEMENTS', 'footer', rId, rawElements);
+    inspectNodeTree(rawElements, `footer ${rId} raw`);
+
+    const { processedNodes } = preProcessNodesForFldChar(rawElements, docx);
+    logHeaderFooter('PREPROCESSED', 'footer', rId, processedNodes);
+
+    const cleanedNodes = pruneIgnoredNodes(processedNodes);
+    logHeaderFooter('AFTER_PRUNE', 'footer', rId, cleanedNodes);
+
     let schema = nodeListHandler.handler({
-      nodes: referenceFile.elements[0].elements,
+      nodes: cleanedNodes,
       nodeListHandler,
       docx,
       converter,
@@ -610,8 +638,11 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
       path: [],
     });
 
+    logHeaderFooter('TRANSLATED', 'footer', rId, schema);
+
     // Safety: drop inline-only nodes at the root of footer docs
     schema = filterOutRootInlineNodes(schema);
+    logHeaderFooter('AFTER_FILTER', 'footer', rId, schema);
 
     if (!converter.footerIds.ids) converter.footerIds.ids = [];
     converter.footerIds.ids.push(rId);

@@ -901,7 +901,7 @@ describe('computeParagraphAttrs', () => {
     expect(result?.floatAlignment).toBe('right');
   });
 
-  it('should handle framePr in paragraphProperties', () => {
+  it('should handle framePr in paragraphProperties (XML elements structure)', () => {
     const para: PMNode = {
       attrs: {
         paragraphProperties: {
@@ -921,6 +921,29 @@ describe('computeParagraphAttrs', () => {
 
     const result = computeParagraphAttrs(para, styleContext);
     expect(result?.floatAlignment).toBe('center');
+  });
+
+  it('should extract floatAlignment from paragraphProperties.framePr (JSON structure)', () => {
+    const para: PMNode = {
+      attrs: {
+        paragraphProperties: {
+          framePr: {
+            xAlign: 'right',
+            hAnchor: 'margin',
+            vAnchor: 'text',
+            wrap: 'none',
+            y: 1,
+          },
+        },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+    expect(result?.floatAlignment).toBe('right');
   });
 
   it('should handle numberingProperties with list counter', () => {

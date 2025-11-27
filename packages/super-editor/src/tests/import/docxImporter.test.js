@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { addDefaultStylesIfMissing, createDocumentJson } from '@core/super-converter/v2/importer/docxImporter';
 import { DEFAULT_LINKED_STYLES } from '../../core/super-converter/exporter-docx-defs';
 import { parseXmlToJson } from '@converter/v2/docxHelper.js';
-import { getTestDataByFileName } from '@tests/helpers/helpers.js';
+import { getExtractedDocxData, getTestDataByFileName } from '@tests/helpers/helpers.js';
 import { extractParagraphText } from '@tests/helpers/getParagraphText.js';
 
 describe('addDefaultStylesIfMissing', () => {
@@ -247,5 +247,42 @@ describe('createDocumentJson', () => {
       'HASH-5678',
       converter.documentInternalId,
     );
+  });
+
+  it('imports PAGE fields in headers/footers into page-number nodes', async () => {
+    const docx = await getExtractedDocxData('headers_image_text_pagenum_left');
+
+    const converter = {
+      headers: {},
+      footers: {},
+      headerIds: {},
+      footerIds: {},
+      docHiglightColors: new Set(),
+    };
+
+    const editor = { options: {}, emit: vi.fn() };
+
+    const result = createDocumentJson(docx, converter, editor);
+    expect(result).toBeTruthy();
+
+    const countNodesOfType = (node, type) => {
+      let count = 0;
+      const visit = (n) => {
+        if (!n || typeof n !== 'object') return;
+        if (n.type === type) count += 1;
+        if (Array.isArray(n.content)) n.content.forEach(visit);
+      };
+      visit(node);
+      return count;
+    };
+
+    const headerDocs = Object.values(converter.headers || {});
+    const footerDocs = Object.values(converter.footers || {});
+    const totalPageNumberNodes = [...headerDocs, ...footerDocs].reduce(
+      (sum, doc) => sum + countNodesOfType(doc, 'page-number'),
+      0,
+    );
+
+    expect(totalPageNumberNodes).toBeGreaterThan(0);
   });
 });

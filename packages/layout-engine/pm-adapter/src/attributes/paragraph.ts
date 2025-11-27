@@ -700,7 +700,17 @@ export const computeParagraphAttrs = (
   // If not at top level, try to extract from paragraphProperties
   if (!framePr && attrs.paragraphProperties && typeof attrs.paragraphProperties === 'object') {
     const pPr = attrs.paragraphProperties as Record<string, unknown>;
-    if (pPr.elements && Array.isArray(pPr.elements)) {
+
+    // Check for already-parsed framePr object (JSON structure from import)
+    if (pPr.framePr && typeof pPr.framePr === 'object') {
+      const fp = pPr.framePr as Record<string, unknown>;
+      framePr = {
+        xAlign: typeof fp.xAlign === 'string' ? fp.xAlign : undefined,
+        dropCap: typeof fp.dropCap === 'string' ? fp.dropCap : undefined,
+      };
+    }
+    // Fallback: check for XML elements array structure (OOXML parsing)
+    else if (pPr.elements && Array.isArray(pPr.elements)) {
       const framePrElement = pPr.elements.find((el: Record<string, unknown>) => el.name === 'w:framePr');
       if (framePrElement?.attributes) {
         framePr = {

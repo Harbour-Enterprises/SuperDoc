@@ -2870,6 +2870,25 @@ const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs)
   if ((attrs as Record<string, unknown>).dropCap) {
     element.classList.add('sd-editor-dropcap');
   }
+
+  // Apply float alignment for positioned paragraphs (e.g., page numbers in headers/footers)
+  // This positions the paragraph horizontally within its container using CSS positioning
+  const floatAlignment = (attrs as Record<string, unknown>).floatAlignment as string | undefined;
+  if (floatAlignment === 'right') {
+    element.style.position = 'absolute';
+    element.style.right = '0';
+    element.style.width = 'auto';
+  } else if (floatAlignment === 'left') {
+    element.style.position = 'absolute';
+    element.style.left = '0';
+    element.style.width = 'auto';
+  } else if (floatAlignment === 'center') {
+    element.style.position = 'absolute';
+    element.style.left = '50%';
+    element.style.transform = 'translateX(-50%)';
+    element.style.width = 'auto';
+  }
+
   const indent = attrs.indent;
   if (indent) {
     if (indent.left) {
