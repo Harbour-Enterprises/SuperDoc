@@ -866,7 +866,9 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       const isEmpty =
         !paraBlock.runs ||
         paraBlock.runs.length === 0 ||
-        (paraBlock.runs.length === 1 && (!paraBlock.runs[0].text || paraBlock.runs[0].text === ''));
+        (paraBlock.runs.length === 1 &&
+          paraBlock.runs[0].kind === 'text' &&
+          (!paraBlock.runs[0].text || paraBlock.runs[0].text === ''));
 
       if (isEmpty) {
         // Check if previous block was pageBreak and next block is sectionBreak
