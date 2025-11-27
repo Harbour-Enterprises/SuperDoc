@@ -21,6 +21,7 @@ export const handleBackspace = (editor) => {
     },
     () => commands.backspaceEmptyRunParagraph(),
     () => commands.backspaceSkipEmptyRun(),
+    () => commands.backspaceNextToRun(),
     () => commands.deleteSelection(),
     () => commands.removeNumberingProperties(),
     () => commands.joinBackward(),
