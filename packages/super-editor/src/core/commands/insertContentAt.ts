@@ -107,7 +107,8 @@ export const insertContentAt =
     });
 
     // Replace empty textblock wrapper when inserting blocks at a cursor
-    if (from === to && isOnlyBlockContent) {
+    // But NOT when we're forcing text insertion (e.g., bare strings with newlines)
+    if (from === to && isOnlyBlockContent && !forceTextInsert) {
       const { parent } = tr.doc.resolve(from);
       const isEmptyTextBlock = parent.isTextblock && !parent.type.spec.code && !parent.childCount;
 

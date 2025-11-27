@@ -68,10 +68,8 @@ export const Link = Mark.create<LinkOptions>({
        */
       href: {
         default: null,
-        renderDOM: (this: { options: LinkOptions }, { href, name }: { href?: string; name?: string }) => {
-          const options = this.options;
-          const sanitized = sanitizeLinkHref(href, options?.protocols ?? []);
-          if (sanitized) return { href: sanitized.href };
+        renderDOM: ({ href, name }: { href?: string; name?: string }) => {
+          if (href) return { href };
           if (name) return { href: `#${name}` };
           return {};
         },
@@ -81,12 +79,9 @@ export const Link = Mark.create<LinkOptions>({
        * @param target - Link target window
        */
       target: {
-        default: (this.options as LinkOptions | undefined)?.htmlAttributes?.target ?? null,
-        renderDOM: (this: { options: LinkOptions }, { target, href }: { target?: string; href?: string }) => {
+        default: null,
+        renderDOM: ({ target }: { target?: string }) => {
           if (target) return { target };
-          const options = this.options;
-          const sanitized = sanitizeLinkHref(href, options?.protocols ?? []);
-          if (sanitized && sanitized.isExternal) return { target: '_blank' };
           return {};
         },
       },
@@ -95,14 +90,14 @@ export const Link = Mark.create<LinkOptions>({
        * @param rel - Relationship attributes
        */
       rel: {
-        default: (this.options as LinkOptions | undefined)?.htmlAttributes?.rel ?? 'noopener noreferrer nofollow',
+        default: 'noopener noreferrer nofollow',
       },
       /**
        * @private
        * @category Attribute
        * @param rId - Word relationship ID for internal links
        */
-      rId: { default: (this.options as LinkOptions | undefined)?.htmlAttributes?.rId || null },
+      rId: { default: null },
       /**
        * @category Attribute
        * @param text - Display text for the link
