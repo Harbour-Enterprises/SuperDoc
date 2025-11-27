@@ -45,6 +45,7 @@ export * from './lineHeight.js';
 // Run
 export * from './backspaceEmptyRunParagraph.js';
 export * from './backspaceSkipEmptyRun.js';
+export * from './backspaceNextToRun.js';
 export * from './deleteSkipEmptyRun.js';
 export * from './skipTab.js';
 
