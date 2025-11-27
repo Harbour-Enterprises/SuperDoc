@@ -1070,4 +1070,54 @@ test.describe('toolbar', () => {
       await expect(styleButtonText).toBeVisible({ timeout: 2000 });
     });
   });
+
+  test.describe('dropdown closing behavior', () => {
+    test('should close font family dropdown with Escape', async ({ page }) => {
+      await page.goto('http://localhost:4173/');
+      await page.waitForSelector('div.super-editor');
+
+      const superEditor = page.locator('div.super-editor').first();
+      await expect(superEditor).toBeVisible({
+        timeout: 1_000,
+      });
+
+      // Open font family dropdown
+      const fontButton = await page.locator('div[data-item="btn-fontFamily"]');
+      await fontButton.click();
+
+      // Verify dropdown is open
+      const dropdownItem = page.locator('div[aria-label="Font family - Georgia"]');
+      await expect(dropdownItem).toBeVisible();
+
+      // Press Escape
+      await page.keyboard.press('Escape');
+
+      // Verify dropdown is closed
+      await expect(dropdownItem).not.toBeVisible();
+    });
+
+    test('should close color dropdown when clicking outside', async ({ page }) => {
+      await page.goto('http://localhost:4173/');
+      await page.waitForSelector('div.super-editor');
+
+      const superEditor = page.locator('div.super-editor').first();
+      await expect(superEditor).toBeVisible({
+        timeout: 1_000,
+      });
+
+      // Open color dropdown
+      const colorButton = await page.locator('div[data-item="btn-color"]');
+      await colorButton.click();
+
+      // Verify dropdown is open
+      const colorItem = page.locator('div[aria-label="red"]');
+      await expect(colorItem).toBeVisible();
+
+      // Click outside the dropdown
+      await colorButton.click();
+
+      // Verify dropdown is closed
+      await expect(colorItem).not.toBeVisible();
+    });
+  });
 });
