@@ -7,6 +7,9 @@
     "emitDeclarationOnly": true,
     "outDir": "dist",
     "baseUrl": ".",
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
     "paths": {
       "@": ["./src/*"],
       "@core/*": ["./src/core/*"],

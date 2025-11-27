@@ -517,7 +517,7 @@ export class HeaderFooterEditorManager extends EventEmitter {
     if (!json) return null;
 
     let editor: Editor;
-    let container: HTMLElement;
+    let container: HTMLDivElement;
     try {
       container = this.#createEditorContainer();
       editor = createHeaderFooterEditor({
@@ -632,7 +632,7 @@ export class HeaderFooterEditorManager extends EventEmitter {
     };
   }
 
-  #createEditorContainer(): HTMLElement {
+  #createEditorContainer(): HTMLDivElement {
     const doc =
       (this.#editor.options?.element?.ownerDocument as Document | undefined) ?? globalThis.document ?? undefined;
     const container = doc?.createElement('div') ?? document.createElement('div');

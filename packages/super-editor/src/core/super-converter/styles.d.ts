@@ -53,3 +53,14 @@ export function encodeCSSFromRPr(runProperties: unknown, docx: unknown): unknown
  * Decodes run properties from marks
  */
 export function decodeRPrFromMarks(marks: unknown): unknown;
+
+/**
+ * Resolves run properties
+ */
+export function resolveRunProperties(
+  params: unknown,
+  inlineRpr: unknown,
+  resolvedPpr: unknown,
+  isListNumber?: boolean,
+  numberingDefinedInline?: boolean,
+): unknown;

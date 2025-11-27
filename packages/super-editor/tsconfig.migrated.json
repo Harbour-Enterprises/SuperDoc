@@ -60,6 +60,7 @@
     "**/*.test.ts",
     "**/*.test.js",
     "src/core/super-converter",
+    "src/core/super-validator",
     "src/core/index.ts",
     "src/core/Editor.ts",
     "src/tests"

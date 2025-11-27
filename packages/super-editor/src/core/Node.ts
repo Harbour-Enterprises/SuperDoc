@@ -44,7 +44,7 @@ export interface NodeConfig<
   tableRole?: string;
 
   /** ProseMirror string for what content this node accepts */
-  content?: MaybeGetter<string, []>;
+  content?: MaybeGetter<string>;
 
   /** The marks applied to this node */
   marks?: string;

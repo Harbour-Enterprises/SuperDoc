@@ -66,6 +66,17 @@ export interface CollaborationProvider {
 }
 
 /**
+ * Base interface for all extensions (node, mark, extension)
+ */
+export interface ExtensionBase {
+  type: 'node' | 'mark' | 'extension';
+  name: string;
+  options: Record<string, unknown>;
+  storage: Record<string, unknown>;
+  config: Record<string, unknown>;
+}
+
+/**
  * Any extension supported by the editor (node, mark, or extension)
  */
 export type EditorExtension =

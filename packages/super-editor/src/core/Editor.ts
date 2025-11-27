@@ -1,7 +1,7 @@
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import type { EditorView as PmEditorView } from 'prosemirror-view';
 import type { Node as PmNode, Schema } from 'prosemirror-model';
-import type { EditorOptions, User, FieldValue, DocxFileEntry } from './types/EditorConfig.js';
+import type { EditorOptions, User, FieldValue, DocxFileEntry, EditorExtension } from './types/EditorConfig.js';
 import type {
   EditorHelpers,
   ExtensionStorage,
@@ -354,7 +354,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    */
   #initRichText(): void {
     if (!this.options.extensions || !this.options.extensions.length) {
-      this.options.extensions = getRichTextExtensions();
+      this.options.extensions = getRichTextExtensions() as EditorExtension[];
     }
 
     this.#createExtensionService();
@@ -466,7 +466,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Get extension helpers.
    */
   get helpers(): EditorHelpers {
-    return this.extensionService.helpers;
+    return this.extensionService.helpers as EditorHelpers;
   }
 
   /**
@@ -972,7 +972,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Set the document version
    */
   static setDocumentVersion(doc: DocxFileEntry[], version: string): string {
-    return SuperConverter.setStoredSuperdocVersion(doc, version) ?? version;
+    const result = SuperConverter.setStoredSuperdocVersion(doc, version);
+    return (result as unknown as string | undefined) ?? version;
   }
 
   /**
@@ -1002,12 +1003,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     const suppressedNames = new Set(
       (this.extensionService?.extensions || [])
-        .filter((ext: { config?: { excludeFromSummaryJSON?: boolean } }) => {
-          const config = (ext as { config?: { excludeFromSummaryJSON?: boolean } })?.config;
+        .filter((ext) => {
+          const config = ext?.config as { excludeFromSummaryJSON?: boolean } | undefined;
           const suppressFlag = config?.excludeFromSummaryJSON;
           return Boolean(suppressFlag);
         })
-        .map((ext: { name: string }) => ext.name),
+        .map((ext) => ext.name),
     );
 
     const summary = buildSchemaSummary(this.schema, schemaVersion);
@@ -1077,7 +1078,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
           doc = this.schema.nodeFromJSON(content);
           doc = this.#prepareDocumentForImport(doc);
         } else {
-          doc = createDocument(this.converter, this.schema, this);
+          const createdDoc = createDocument(this.converter as unknown as Record<string, unknown>, this.schema, this);
+          if (!createdDoc) {
+            throw new Error('Failed to create document from converter');
+          }
+          doc = createdDoc;
           // Perform any additional document processing prior to finalizing the doc here
           doc = this.#prepareDocumentForImport(doc);
 
@@ -1145,8 +1150,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
     if (this.options.skipViewCreation || typeof this.view?.setProps !== 'function') {
       return;
     }
+
     this.view.setProps({
-      nodeViews: this.extensionService.nodeViews,
+      nodeViews: this.extensionService.nodeViews as unknown as Record<string, unknown>,
     });
   }
 
@@ -1635,7 +1641,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Or paragraph fields that rely on the same underlying document and list defintions
    */
   createChildEditor(options: Partial<EditorOptions>): Editor {
-    return createLinkedChildEditor(this, options);
+    const childEditor = createLinkedChildEditor(this, options);
+    if (!childEditor) {
+      throw new Error('Failed to create child editor - current editor is already a child editor');
+    }
+    return childEditor;
   }
 
   /**
@@ -1658,7 +1668,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       hasMadeUpdate = true;
     }
 
-    if (hasMadeUpdate && this.view && !isHeadless()) {
+    if (hasMadeUpdate && this.view && !isHeadless(this)) {
       const newTr = this.view.state.tr;
       newTr.setMeta('forceUpdatePagination', true);
       this.#dispatchTransaction(newTr);
@@ -1710,7 +1720,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
   migrateListsToV2(): Array<{ from: number; to: number; slice: unknown }> {
     if (this.options.isHeaderOrFooter) return [];
     const replacements = migrateListsToV2IfNecessary(this);
-    return replacements;
+    return replacements as unknown as Array<{ from: number; to: number; slice: unknown }>;
   }
 
   /**
@@ -1727,7 +1737,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     const { tr, doc } = newState;
 
-    prepareCommentsForExport(doc, tr, this.schema, comments);
+    prepareCommentsForExport(doc, tr, this.schema, comments as unknown as Record<string, unknown>[]);
     const updatedState = newState.apply(tr);
     return updatedState.doc.toJSON();
   }
@@ -1835,24 +1845,24 @@ export class Editor extends EventEmitter<EditorEventMap> {
       const zipper = new DocxZipper();
 
       if (getUpdatedDocs) {
-        updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes(
+        updatedDocs['[Content_Types].xml'] = (await zipper.updateContentTypes(
           {
-            files: this.options.content,
+            files: this.options.content as unknown as Record<string, string> | import('./DocxZipper.js').DocxFile[],
           },
           media,
           true,
           updatedDocs,
-        );
+        )) as string;
         return updatedDocs;
       }
 
       const result = await zipper.updateZip({
-        docx: this.options.content,
+        docx: this.options.content as unknown as Record<string, string> | import('./DocxZipper.js').DocxFile[],
         updatedDocs: updatedDocs,
-        originalDocxFile: this.options.fileSource,
+        originalDocxFile: this.options.fileSource ?? undefined,
         media,
-        fonts: this.options.fonts,
-        isHeadless: this.options.isHeadless,
+        fonts: this.options.fonts as unknown as Record<string, Uint8Array>,
+        isHeadless: this.options.isHeadless ?? false,
       });
 
       (this.options.telemetry as TelemetryData | null)?.trackUsage?.('document_export', {
@@ -1934,10 +1944,10 @@ export class Editor extends EventEmitter<EditorEventMap> {
     if (!this.options.ydoc) return;
 
     const metaMap = this.options.ydoc.getMap('meta');
-    let docVersion = metaMap.get('version');
+    let docVersion = metaMap.get('version') as string | undefined;
     if (!docVersion) docVersion = 'initial';
     console.debug('[checkVersionMigrations] Document version', docVersion);
-    const migrations = getNecessaryMigrations(docVersion) || [];
+    const migrations = getNecessaryMigrations(docVersion as string) || [];
 
     const plugins = this.state.plugins;
     const syncPlugin = plugins.find((plugin) => this.#getPluginKeyName(plugin).startsWith('y-sync'));

@@ -27,6 +27,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
       justification: 'left',
       path: [1],
       numberingType: 'decimal',
+      suffix: null,
     });
     expect(listItem.attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 0,
@@ -41,6 +42,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
       justification: 'left',
       path: [1, 1],
       numberingType: 'lowerLetter',
+      suffix: null,
     });
 
     const subItem2 = currentState.content[3];
@@ -49,6 +51,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
       justification: 'left',
       path: [1, 2],
       numberingType: 'lowerLetter',
+      suffix: null,
     });
 
     const subItem3 = currentState.content[5];
@@ -57,6 +60,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
       justification: 'left',
       path: [1, 3],
       numberingType: 'lowerLetter',
+      suffix: null,
     });
     const subItem4 = currentState.content[7];
     expect(subItem4.attrs.listRendering).toEqual({
@@ -64,6 +68,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
       justification: 'left',
       path: [1, 4],
       numberingType: 'lowerLetter',
+      suffix: null,
     });
   });
 
@@ -83,7 +88,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
       justification: 'left',
       path: [3, 2],
       numberingType: 'lowerLetter',
-      suffix: undefined,
+      suffix: null,
     });
 
     const subItem4 = currentState.content[23];
@@ -93,7 +98,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
       justification: 'left',
       path: [3, 3],
       numberingType: 'lowerLetter',
-      suffix: undefined,
+      suffix: null,
     });
   });
 
@@ -106,6 +111,7 @@ describe('[complex-list-def-issue.docx] importing complex list (repeated num id 
       justification: 'left',
       path: [4],
       numberingType: 'decimal',
+      suffix: null,
     });
 
     const runNode = listItem.content[0];
@@ -177,6 +183,7 @@ describe('[custom-list-numbering1.docx] importing complex list (repeated num id 
       justification: 'left',
       path: [1, 1],
       numberingType: 'lowerLetter',
+      suffix: null,
     });
   });
 });

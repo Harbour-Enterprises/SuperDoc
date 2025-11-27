@@ -86,10 +86,13 @@ describe('getListDefinitionDetails', () => {
 
       expect(result).toEqual({
         start: '1',
+        restart: null,
         numFmt: 'decimal',
         lvlText: '%1.',
+        suffix: null,
+        justification: null,
         listNumberingType: 'decimal',
-        customFormat: undefined,
+        customFormat: null,
         abstract: mockAbstracts['abstract1'],
         abstractId: 'abstract1',
       });
@@ -288,12 +291,13 @@ describe('getListDefinitionDetails', () => {
 
       expect(result).toEqual({
         start: null,
+        restart: null,
         numFmt: null,
         lvlText: null,
+        suffix: null,
+        justification: null,
         listNumberingType: null,
         customFormat: null,
-        justification: null,
-        suffix: null,
         abstract: null,
         abstractId: 'nonexistent', // The function correctly returns the abstractId even when abstract is not found
       });
@@ -327,6 +331,7 @@ describe('getListDefinitionDetails', () => {
 
       expect(result).toEqual({
         start: null,
+        restart: null,
         numFmt: null,
         lvlText: null,
         suffix: null,
@@ -614,8 +619,8 @@ describe('getListDefinitionDetails', () => {
         editor: mockEditor,
       });
 
-      expect(result.start).toBe(undefined);
-      expect(result.numFmt).toBe(undefined);
+      expect(result.start).toBeNull();
+      expect(result.numFmt).toBeNull();
       expect(result.lvlText).toBe('valid');
     });
 
@@ -661,6 +666,7 @@ describe('getListDefinitionDetails', () => {
 
       expect(result).toEqual({
         start: null,
+        restart: null,
         numFmt: null,
         lvlText: null,
         justification: null,
@@ -668,7 +674,7 @@ describe('getListDefinitionDetails', () => {
         listNumberingType: null,
         customFormat: null,
         abstract: null,
-        abstractId: undefined,
+        abstractId: null,
       });
     });
   });
@@ -738,13 +744,15 @@ describe('getListDefinitionDetails', () => {
         converter: null,
       };
 
-      expect(() => {
-        getListDefinitionDetails({
-          numId: 1,
-          level: 0,
-          editor: badEditor,
-        });
-      }).toThrow();
+      const result = getListDefinitionDetails({
+        numId: 1,
+        level: 0,
+        editor: badEditor,
+      });
+
+      // Should return nulls for all fields instead of throwing
+      expect(result.numFmt).toBeNull();
+      expect(result.abstract).toBeNull();
     });
 
     it('should handle missing numbering gracefully', () => {
@@ -754,13 +762,15 @@ describe('getListDefinitionDetails', () => {
         },
       };
 
-      expect(() => {
-        getListDefinitionDetails({
-          numId: 1,
-          level: 0,
-          editor: editorWithoutNumbering,
-        });
-      }).toThrow();
+      const result = getListDefinitionDetails({
+        numId: 1,
+        level: 0,
+        editor: editorWithoutNumbering,
+      });
+
+      // Should return nulls for all fields instead of throwing
+      expect(result.numFmt).toBeNull();
+      expect(result.abstract).toBeNull();
     });
   });
 
