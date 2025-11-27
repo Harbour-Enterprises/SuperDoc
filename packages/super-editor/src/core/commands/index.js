@@ -44,6 +44,9 @@ export * from './lineHeight.js';
 
 // Run
 export * from './backspaceEmptyRunParagraph.js';
+export * from './backspaceSkipEmptyRun.js';
+export * from './deleteSkipEmptyRun.js';
+
 // Lists
 export * from './toggleList.js';
 export * from './increaseListIndent.js';
