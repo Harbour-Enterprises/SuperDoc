@@ -7,7 +7,7 @@ import { defaultBlockAt } from '@core/helpers/defaultBlockAt.js';
  * Splits a run node at the current selection.
  * @returns {import('@core/commands/types').Command} A command handler.
  */
-export const splitRun = () => (props) => {
+export const splitRunToParagraph = () => (props) => {
   const { state, view, tr } = props;
   const { $from, empty } = state.selection;
   if (!empty) return false;
