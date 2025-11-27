@@ -239,15 +239,18 @@ export const createTableBorderOverlay = (
 /**
  * Resolves cell-specific borders based on cell position within a table.
  *
- * Determines which borders to apply to a cell based on its position:
- * - Top row cells use table's top border
- * - Bottom row cells use table's bottom border
- * - Left column cells use table's left border
- * - Right column cells use table's right border
- * - Interior cells use insideH (horizontal) and insideV (vertical) borders
+ * Implements a **single-owner border model** to prevent double borders when
+ * rendering tables with absolutely-positioned divs (which don't support CSS
+ * border-collapse). Each shared border is owned by exactly one cell:
  *
- * This implements Word's table border resolution model where outer edges use table
- * borders and interior edges use inside borders.
+ * - TOP border: Cell owns its own top (first row uses table.top, others use insideH)
+ * - LEFT border: Cell owns its own left (first col uses table.left, others use insideV)
+ * - BOTTOM border: Only last row renders it (using table.bottom)
+ * - RIGHT border: Only last column renders it (using table.right)
+ *
+ * This ensures each border line is rendered exactly once, eliminating the
+ * double-border issue that occurs when adjacent cells both render their
+ * shared edge.
  *
  * @param tableBorders - Table-level border definitions
  * @param rowIndex - Zero-based row index of the cell
@@ -258,12 +261,10 @@ export const createTableBorderOverlay = (
  *
  * @example
  * ```typescript
- * // For a 3x3 table, top-left cell (0, 0)
- * const borders = resolveTableCellBorders(tableBorders, 0, 0, 3, 3);
- * // borders.top = tableBorders.top
- * // borders.left = tableBorders.left
- * // borders.bottom = tableBorders.insideH
- * // borders.right = tableBorders.insideV
+ * // For a 3x3 table:
+ * // Cell (0,0): top=table.top, left=table.left, bottom=undefined, right=undefined
+ * // Cell (1,1): top=insideH, left=insideV, bottom=undefined, right=undefined
+ * // Cell (2,2): top=insideH, left=insideV, bottom=table.bottom, right=table.right
  * ```
  */
 export const resolveTableCellBorders = (
@@ -285,10 +286,15 @@ export const resolveTableCellBorders = (
   const isFirstCol = colIndex === 0;
   const isLastCol = colIndex === totalCols - 1;
 
+  // Single-owner model: each cell owns TOP and LEFT, only edge cells own BOTTOM and RIGHT
   return {
-    top: resolveTableBorderValue(isFirstRow ? tableBorders?.top : null, tableBorders?.insideH),
-    bottom: resolveTableBorderValue(isLastRow ? tableBorders?.bottom : null, tableBorders?.insideH),
-    left: resolveTableBorderValue(isFirstCol ? tableBorders?.left : null, tableBorders?.insideV),
-    right: resolveTableBorderValue(isLastCol ? tableBorders?.right : null, tableBorders?.insideV),
+    // Top: first row gets table.top, interior rows get insideH
+    top: borderValueToSpec(isFirstRow ? tableBorders?.top : tableBorders?.insideH),
+    // Bottom: ONLY last row gets table.bottom (interior cells don't render bottom - it comes from cell below's top)
+    bottom: borderValueToSpec(isLastRow ? tableBorders?.bottom : null),
+    // Left: first col gets table.left, interior cols get insideV
+    left: borderValueToSpec(isFirstCol ? tableBorders?.left : tableBorders?.insideV),
+    // Right: ONLY last col gets table.right (interior cells don't render right - it comes from cell to right's left)
+    right: borderValueToSpec(isLastCol ? tableBorders?.right : null),
   };
 };
