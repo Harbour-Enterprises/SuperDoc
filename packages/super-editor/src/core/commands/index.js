@@ -46,6 +46,7 @@ export * from './lineHeight.js';
 export * from './backspaceEmptyRunParagraph.js';
 export * from './backspaceSkipEmptyRun.js';
 export * from './deleteSkipEmptyRun.js';
+export * from './skipTab.js';
 
 // Lists
 export * from './toggleList.js';
