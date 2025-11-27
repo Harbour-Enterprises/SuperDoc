@@ -173,18 +173,18 @@ type RunDefaults = {
  * This is used to match list marker font to the paragraph's first text run.
  *
  * @param para - The paragraph PM node
- * @returns Font properties (fontSize in points, fontFamily) or undefined if not found
+ * @returns Font properties (fontSizePx already in pixels, fontFamily) or undefined if not found
  */
-const extractFirstTextRunFont = (para: PMNode): { fontSize?: number; fontFamily?: string } | undefined => {
+const extractFirstTextRunFont = (para: PMNode): { fontSizePx?: number; fontFamily?: string } | undefined => {
   if (!para.content || !Array.isArray(para.content) || para.content.length === 0) {
     return undefined;
   }
 
   // Helper to find fontSize mark and extract value
-  const extractFontFromMarks = (marks?: PMMark[]): { fontSize?: number; fontFamily?: string } | undefined => {
+  const extractFontFromMarks = (marks?: PMMark[]): { fontSizePx?: number; fontFamily?: string } | undefined => {
     if (!marks || !Array.isArray(marks)) return undefined;
 
-    const result: { fontSize?: number; fontFamily?: string } = {};
+    const result: { fontSizePx?: number; fontFamily?: string } = {};
 
     for (const mark of marks) {
       if (!mark || typeof mark !== 'object') continue;
@@ -192,11 +192,18 @@ const extractFirstTextRunFont = (para: PMNode): { fontSize?: number; fontFamily?
       // Look for textStyle mark which contains font info
       if (mark.type === 'textStyle' && mark.attrs) {
         const attrs = mark.attrs as Record<string, unknown>;
-        // fontSize is typically stored in points
+        // fontSize is stored as a string with unit, e.g., '12pt' or '16px'
         if (attrs.fontSize != null) {
-          const size = parseFloat(String(attrs.fontSize));
+          const fontSizeStr = String(attrs.fontSize);
+          const size = parseFloat(fontSizeStr);
           if (Number.isFinite(size)) {
-            result.fontSize = size;
+            // Check the unit - only convert if it's in points
+            if (fontSizeStr.endsWith('pt')) {
+              result.fontSizePx = ptToPx(size);
+            } else {
+              // px or unitless - already in pixels
+              result.fontSizePx = size;
+            }
           }
         }
         if (typeof attrs.fontFamily === 'string') {
@@ -209,7 +216,7 @@ const extractFirstTextRunFont = (para: PMNode): { fontSize?: number; fontFamily?
   };
 
   // Recursively find first text node
-  const findFirstTextFont = (nodes: PMNode[]): { fontSize?: number; fontFamily?: string } | undefined => {
+  const findFirstTextFont = (nodes: PMNode[]): { fontSizePx?: number; fontFamily?: string } | undefined => {
     for (const node of nodes) {
       if (!node) continue;
 
@@ -225,10 +232,10 @@ const extractFirstTextRunFont = (para: PMNode): { fontSize?: number; fontFamily?
         const runFont = extractFontFromMarks(node.marks);
         // Then check children
         const childFont = findFirstTextFont(node.content);
-        // Merge: child takes precedence for fontSize
+        // Merge: child takes precedence for fontSizePx
         if (runFont || childFont) {
           return {
-            fontSize: childFont?.fontSize ?? runFont?.fontSize,
+            fontSizePx: childFont?.fontSizePx ?? runFont?.fontSizePx,
             fontFamily: childFont?.fontFamily ?? runFont?.fontFamily,
           };
         }
@@ -436,12 +443,9 @@ export function paragraphToFlowBlocks(
       if (marker?.run) {
         const markerRun = marker.run as Record<string, unknown>;
         // Override marker font with first text run's font
-        // Convert from points to pixels (marker run already uses pixels)
-        if (firstRunFont.fontSize != null && Number.isFinite(firstRunFont.fontSize)) {
-          const fontSizePx = ptToPx(firstRunFont.fontSize);
-          if (fontSizePx != null) {
-            markerRun.fontSize = fontSizePx;
-          }
+        // fontSizePx is already converted to pixels by extractFirstTextRunFont
+        if (firstRunFont.fontSizePx != null && Number.isFinite(firstRunFont.fontSizePx)) {
+          markerRun.fontSize = firstRunFont.fontSizePx;
         }
         if (firstRunFont.fontFamily) {
           markerRun.fontFamily = firstRunFont.fontFamily;
