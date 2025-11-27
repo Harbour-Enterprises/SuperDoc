@@ -1,4 +1,12 @@
-import type { CellBorders, Line, ParagraphBlock, SdtMetadata, TableBlock, TableMeasure } from '@superdoc/contracts';
+import type {
+  CellBorders,
+  Line,
+  ParagraphBlock,
+  ParagraphMeasure,
+  SdtMetadata,
+  TableBlock,
+  TableMeasure,
+} from '@superdoc/contracts';
 import { applyCellBorders } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
 
@@ -59,6 +67,21 @@ export type TableCellRenderResult = {
  * - Cell padding
  * - Empty cells
  *
+ * **Multi-Block Cell Rendering:**
+ * - Iterates through all blocks in the cell (cell.blocks or cell.paragraph)
+ * - Each block is rendered sequentially and stacked vertically
+ * - Block positions are accumulated using absolute positioning within the content container
+ * - Only paragraph blocks are currently rendered (other block types are ignored)
+ *
+ * **Backward Compatibility:**
+ * - Supports legacy cell.paragraph field (single paragraph)
+ * - Falls back to empty array if neither cell.blocks nor cell.paragraph is present
+ * - Handles mismatches between blockMeasures and cellBlocks arrays using bounds checking
+ *
+ * **Empty Cell Handling:**
+ * - Cells with no blocks render only the cellElement (no contentElement)
+ * - Empty blocks arrays are safe (no content rendered)
+ *
  * @param deps - All dependencies required for rendering
  * @returns Object containing cellElement and optional contentElement
  *
@@ -114,25 +137,47 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
 
   const attrs = cell?.attrs;
   const padding = attrs?.padding || { top: 2, left: 4, right: 4, bottom: 2 };
+  const paddingLeft = padding.left ?? 4;
+  const paddingTop = padding.top ?? 2;
+  const paddingRight = padding.right ?? 4;
 
-  if (cell && cellMeasure.paragraph.lines.length > 0) {
-    const lines = cellMeasure.paragraph.lines;
+  // Support multi-block cells with backward compatibility
+  const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
+  const blockMeasures = cellMeasure.blocks ?? (cellMeasure.paragraph ? [cellMeasure.paragraph] : []);
+
+  if (cellBlocks.length > 0 && blockMeasures.length > 0) {
     const content = doc.createElement('div');
     content.style.position = 'absolute';
-    applySdtDataset(content, cell.paragraph.attrs?.sdt);
-
-    const paddingLeft = padding.left ?? 4;
-    const paddingTop = padding.top ?? 2;
-    const paddingRight = padding.right ?? 4;
-
     content.style.left = `${x + paddingLeft}px`;
     content.style.top = `${y + paddingTop}px`;
     content.style.width = `${Math.max(0, cellMeasure.width - paddingLeft - paddingRight)}px`;
 
-    lines.forEach((line) => {
-      const lineEl = renderLine(cell.paragraph, line, { ...context, section: 'body' });
-      content.appendChild(lineEl);
-    });
+    let blockY = 0;
+    for (let i = 0; i < Math.min(blockMeasures.length, cellBlocks.length); i++) {
+      const blockMeasure = blockMeasures[i];
+      const block = cellBlocks[i];
+
+      if (blockMeasure.kind === 'paragraph' && block?.kind === 'paragraph') {
+        // Create wrapper for this paragraph's SDT metadata
+        // Use absolute positioning within the content container to stack blocks vertically
+        const paraWrapper = doc.createElement('div');
+        paraWrapper.style.position = 'absolute';
+        paraWrapper.style.top = `${blockY}px`;
+        paraWrapper.style.left = '0';
+        paraWrapper.style.width = '100%';
+        applySdtDataset(paraWrapper, block.attrs?.sdt);
+
+        const lines = (blockMeasure as ParagraphMeasure).lines;
+        lines.forEach((line) => {
+          const lineEl = renderLine(block as ParagraphBlock, line, { ...context, section: 'body' });
+          paraWrapper.appendChild(lineEl);
+        });
+
+        content.appendChild(paraWrapper);
+        blockY += blockMeasure.totalHeight;
+      }
+      // TODO: Handle other block types (list, image) if needed
+    }
 
     contentElement = content;
   }

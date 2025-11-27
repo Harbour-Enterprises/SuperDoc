@@ -234,7 +234,10 @@ export type TableAttrs = {
 };
 export type TableCell = {
   id: BlockId;
-  paragraph: ParagraphBlock;
+  /** @deprecated Use `blocks` instead. Kept for backward compatibility. */
+  paragraph?: ParagraphBlock;
+  /** Cell content blocks - supports multiple paragraphs and other flow content */
+  blocks: FlowBlock[];
   rowSpan?: number;
   colSpan?: number;
   /** Cell-specific attributes */
@@ -619,7 +622,10 @@ export type ImageMeasure = {
   height: number;
 };
 export type TableCellMeasure = {
-  paragraph: ParagraphMeasure;
+  /** @deprecated Use `blocks` instead. Kept for backward compatibility. */
+  paragraph?: ParagraphMeasure;
+  /** Measured blocks within the cell */
+  blocks: Measure[];
   width: number;
   height: number;
   /** Starting grid column index (0-based) */

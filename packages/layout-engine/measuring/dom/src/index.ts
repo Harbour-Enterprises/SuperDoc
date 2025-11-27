@@ -859,21 +859,48 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
 
   let columnWidths: number[];
 
+  // Determine actual column count from table structure
+  const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
+
   // Use provided column widths from OOXML w:tblGrid if available
   if (block.columnWidths && block.columnWidths.length > 0) {
     columnWidths = [...block.columnWidths];
 
-    // Scale proportionally if total width exceeds available width
-    // UNLESS the table has an explicit tableWidth (user-resized tables)
-    const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+    // Check if table has fixed layout (preserves exact widths)
     const hasExplicitWidth = block.attrs?.tableWidth != null;
-    if (!hasExplicitWidth && totalWidth > maxWidth) {
-      const scale = maxWidth / totalWidth;
-      columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
+    const hasFixedLayout = block.attrs?.tableLayout === 'fixed';
+
+    // For fixed-layout tables, preserve the exact widths without adjustment
+    if (hasExplicitWidth || hasFixedLayout) {
+      // Scale proportionally only if total width exceeds available width
+      const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+      if (totalWidth > maxWidth) {
+        const scale = maxWidth / totalWidth;
+        columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
+      }
+    } else {
+      // For auto-layout tables, adjust column widths to match actual column count
+      if (columnWidths.length < maxCellCount) {
+        // Pad missing columns with equal distribution of remaining space
+        const usedWidth = columnWidths.reduce((a, b) => a + b, 0);
+        const remainingWidth = Math.max(0, maxWidth - usedWidth);
+        const missingColumns = maxCellCount - columnWidths.length;
+        const paddingWidth = Math.max(1, Math.floor(remainingWidth / missingColumns));
+        columnWidths.push(...Array.from({ length: missingColumns }, () => paddingWidth));
+      } else if (columnWidths.length > maxCellCount) {
+        // Truncate extra column widths
+        columnWidths = columnWidths.slice(0, maxCellCount);
+      }
+
+      // Scale proportionally if total width exceeds available width
+      const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+      if (totalWidth > maxWidth) {
+        const scale = maxWidth / totalWidth;
+        columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
+      }
     }
   } else {
     // Fallback: Equal distribution based on max cells in any row
-    const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
     const columnWidth = Math.max(1, Math.floor(maxWidth / maxCellCount));
     columnWidths = Array.from({ length: maxCellCount }, () => columnWidth);
   }
@@ -931,12 +958,60 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
         }
       }
 
-      const paraMeasure = await measureParagraphBlock(cell.paragraph, cellWidth);
-      const height = paraMeasure.totalHeight;
+      // Get cell padding for height calculation
+      const cellPadding = cell.attrs?.padding ?? { top: 2, left: 4, right: 4, bottom: 2 };
+      const paddingTop = cellPadding.top ?? 2;
+      const paddingBottom = cellPadding.bottom ?? 2;
+      const paddingLeft = cellPadding.left ?? 4;
+      const paddingRight = cellPadding.right ?? 4;
+
+      // Content width accounts for horizontal padding
+      const contentWidth = Math.max(1, cellWidth - paddingLeft - paddingRight);
+
+      /**
+       * Measure all blocks in the cell and accumulate total content height.
+       *
+       * Multi-Block Cell Support:
+       * - Cells can contain multiple blocks (paragraphs, lists, images, etc.)
+       * - Each block is measured independently with the cell's content width
+       * - Block heights are accumulated to calculate total content height
+       * - Vertical padding is applied to the total accumulated height
+       *
+       * Backward Compatibility:
+       * - If cell.blocks is not present, falls back to cell.paragraph (legacy format)
+       * - Empty blocks arrays are handled gracefully (no content)
+       *
+       * Height Calculation:
+       * - contentHeight = sum of all block.totalHeight values
+       * - totalCellHeight = contentHeight + paddingTop + paddingBottom
+       *
+       * Example:
+       * ```
+       * cell.blocks = [paragraph1, paragraph2, paragraph3]
+       * contentHeight = para1.height + para2.height + para3.height
+       * totalCellHeight = contentHeight + 2 (top) + 2 (bottom)
+       * ```
+       */
+      const blockMeasures: Measure[] = [];
+      let contentHeight = 0;
+
+      const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+
+      for (const block of cellBlocks) {
+        const measure = await measureBlock(block, { maxWidth: contentWidth, maxHeight: Infinity });
+        blockMeasures.push(measure);
+        contentHeight += measure.totalHeight;
+      }
+
+      // Total cell height includes vertical padding
+      const totalCellHeight = contentHeight + paddingTop + paddingBottom;
+
       cellMeasures.push({
-        paragraph: paraMeasure,
+        blocks: blockMeasures,
+        // Backward compatibility
+        paragraph: blockMeasures[0]?.kind === 'paragraph' ? (blockMeasures[0] as ParagraphMeasure) : undefined,
         width: cellWidth,
-        height,
+        height: totalCellHeight,
         gridColumnStart: gridColIndex,
         colSpan: colspan,
         rowSpan: rowspan,
