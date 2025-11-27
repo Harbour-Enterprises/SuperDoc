@@ -32,6 +32,7 @@ export const handleBackspace = (editor) => {
 export const handleDelete = (editor) => {
   return editor.commands.first(({ commands }) => [
     () => commands.deleteSkipEmptyRun(),
+    () => commands.deleteNextToRun(),
     () => commands.deleteSelection(),
     () => commands.joinForward(),
     () => commands.selectNodeForward(),
