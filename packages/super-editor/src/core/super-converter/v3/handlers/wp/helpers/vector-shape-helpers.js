@@ -230,6 +230,10 @@ export function extractFillColor(spPr, style) {
   const fillRef = style.elements?.find((el) => el.name === 'a:fillRef');
   if (!fillRef) return '#5b9bd5';
 
+  // Per OOXML spec, fillRef idx="0" means "no fill" - return null to indicate transparent
+  const fillRefIdx = fillRef.attributes?.['idx'];
+  if (fillRefIdx === '0') return null;
+
   const schemeClr = fillRef.elements?.find((el) => el.name === 'a:schemeClr');
   if (!schemeClr) return '#5b9bd5';
 

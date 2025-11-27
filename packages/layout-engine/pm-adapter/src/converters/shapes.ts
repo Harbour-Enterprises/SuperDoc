@@ -19,6 +19,12 @@ import {
   isShapeGroupTransform,
   normalizeShapeSize,
   normalizeShapeGroupChildren,
+  normalizeFillColor,
+  normalizeStrokeColor,
+  normalizeTextContent,
+  normalizeTextVerticalAlign,
+  normalizeTextInsets,
+  normalizeZIndex,
 } from '../utilities.js';
 
 // ============================================================================
@@ -320,6 +326,10 @@ const buildDrawingBlock = (
     attrsWithPm.pmEnd = pos.end;
   }
 
+  // Try to get zIndex from relativeHeight first, fallback to direct zIndex attribute
+  const zIndexFromRelativeHeight = normalizeZIndex(rawAttrs.originalAttributes);
+  const finalZIndex = zIndexFromRelativeHeight ?? coerceNumber(rawAttrs.zIndex);
+
   return {
     kind: 'drawing',
     id: nextBlockId('drawing'),
@@ -330,15 +340,19 @@ const buildDrawingBlock = (
       toBoxSpacing(rawAttrs.margin as Record<string, unknown> | undefined),
     anchor: baseAnchor,
     wrap: normalizedWrap,
-    zIndex: coerceNumber(rawAttrs.zIndex),
+    zIndex: finalZIndex,
     drawingContentId: typeof rawAttrs.drawingContentId === 'string' ? rawAttrs.drawingContentId : undefined,
     drawingContent: toDrawingContentSnapshot(rawAttrs.drawingContent),
     attrs: attrsWithPm,
     geometry,
     shapeKind: typeof rawAttrs.kind === 'string' ? rawAttrs.kind : undefined,
-    fillColor: typeof rawAttrs.fillColor === 'string' ? rawAttrs.fillColor : undefined,
-    strokeColor: typeof rawAttrs.strokeColor === 'string' ? rawAttrs.strokeColor : undefined,
+    fillColor: normalizeFillColor(rawAttrs.fillColor),
+    strokeColor: normalizeStrokeColor(rawAttrs.strokeColor),
     strokeWidth: coerceNumber(rawAttrs.strokeWidth),
+    textContent: normalizeTextContent(rawAttrs.textContent),
+    textAlign: typeof rawAttrs.textAlign === 'string' ? rawAttrs.textAlign : undefined,
+    textVerticalAlign: normalizeTextVerticalAlign(rawAttrs.textVerticalAlign),
+    textInsets: normalizeTextInsets(rawAttrs.textInsets),
     ...extraProps,
   } as ShapeDrawingBlock;
 };

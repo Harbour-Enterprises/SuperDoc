@@ -7,9 +7,22 @@ const SHAPE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingS
 const GROUP_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
 
 /**
- * Encodes image xml into Editor node
- * @param {Object} params
- * @returns {Object|null}
+ * Default dimensions for vector shapes when size is not specified.
+ * These values provide reasonable fallback dimensions while maintaining a square aspect ratio.
+ */
+const DEFAULT_SHAPE_WIDTH = 100;
+const DEFAULT_SHAPE_HEIGHT = 100;
+
+/**
+ * Encodes image XML into Editor node.
+ *
+ * Parses WordprocessingML drawing elements (wp:anchor or wp:inline) and converts them
+ * into editor-compatible image, vectorShape, or shapeGroup nodes.
+ *
+ * @param {Object} node - The wp:anchor or wp:inline XML node
+ * @param {{ docx: Object, filename?: string }} params - Parameters containing the document context and relationships
+ * @param {boolean} isAnchor - Whether the image is anchored (true) or inline (false)
+ * @returns {{ type: string, attrs: Object }|null} An editor node (image, vectorShape, shapeGroup, or contentBlock) or null if parsing fails
  */
 export function handleImageNode(node, params, isAnchor) {
   const { docx, filename } = params;
@@ -258,16 +271,16 @@ export function handleImageNode(node, params, isAnchor) {
 /**
  * Handles a shape drawing within a WordprocessingML graphic node.
  *
- * @param {{ nodes: Array }} params - Translator params including the surrounding drawing node.
- * @param {Object} node - The `wp:drawing` or related shape container node.
- * @param {Object} graphicData - The `a:graphicData` node containing the shape elements.
- * @param {{ width?: number, height?: number }} size - Shape bounding box in pixels.
+ * @param {{ nodes: Array<Object> }} params - Translator params including the surrounding drawing node.
+ * @param {Object} node - The wp:anchor or wp:inline node containing the shape.
+ * @param {Object} graphicData - The a:graphicData node containing the wps:wsp shape elements.
+ * @param {{ width?: number, height?: number }} size - Shape bounding box in pixels (from wp:extent).
  * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Distance attributes converted to pixels.
- * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Shape offsets relative to its anchor.
- * @param {Object|null} anchorData - Anchor positioning data.
- * @param {Object} wrap - Wrap configuration.
- * @param {boolean} isAnchor - Whether the shape is anchored.
- * @returns {Object|null} A contentBlock node representing the shape, or null when no content exists.
+ * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Shape offsets relative to its anchor (in pixels).
+ * @param {{ hRelativeFrom?: string, vRelativeFrom?: string, alignH?: string, alignV?: string }|null} anchorData - Anchor positioning data.
+ * @param {{ type: string, attrs: Object }} wrap - Wrap configuration.
+ * @param {boolean} isAnchor - Whether the shape is anchored (true) or inline (false).
+ * @returns {{ type: string, attrs: Object }|null} A vectorShape or contentBlock node, or null when no content exists.
  */
 const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffset, anchorData, wrap, isAnchor) => {
   const wsp = graphicData.elements.find((el) => el.name === 'wps:wsp');
@@ -288,7 +301,7 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
 
   // For all other shapes (with or without text), or shapes with gradients, use the vector shape handler
   if (shapeType) {
-    const result = getVectorShape({ params, node, graphicData, marginOffset, anchorData, wrap, isAnchor });
+    const result = getVectorShape({ params, node, graphicData, size, marginOffset, anchorData, wrap, isAnchor });
     if (result) return result;
   }
 
@@ -300,13 +313,15 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
 /**
  * Handles a shape group (wpg:wgp) within a WordprocessingML graphic node.
  *
- * @param {{ nodes: Array }} params - Translator params including the surrounding drawing node.
- * @param {Object} node - The `wp:drawing` or related shape container node.
- * @param {Object} graphicData - The `a:graphicData` node containing the group elements.
- * @param {{ width?: number, height?: number }} size - Group bounding box in pixels.
+ * @param {{ nodes: Array<Object> }} params - Translator params including the surrounding drawing node.
+ * @param {Object} node - The wp:anchor or wp:inline node containing the group.
+ * @param {Object} graphicData - The a:graphicData node containing the wpg:wgp group elements.
+ * @param {{ width?: number, height?: number }} size - Group bounding box in pixels (from wp:extent).
  * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Distance attributes converted to pixels.
- * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Group offsets relative to its anchor.
- * @returns {Object|null} A shapeGroup node representing the group, or null when no content exists.
+ * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Group offsets relative to its anchor (in pixels).
+ * @param {{ hRelativeFrom?: string, vRelativeFrom?: string, alignH?: string, alignV?: string }|null} anchorData - Anchor positioning data.
+ * @param {{ type: string, attrs: Object }} wrap - Wrap configuration.
+ * @returns {{ type: 'shapeGroup', attrs: Object }|null} A shapeGroup node representing the group, or null when no content exists.
  */
 const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset, anchorData, wrap) => {
   const wgp = graphicData.elements.find((el) => el.name === 'wpg:wgp');
@@ -413,15 +428,15 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
       // Extract textbox content if present
       const textBox = wsp.elements?.find((el) => el.name === 'wps:txbx');
       const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
+      const bodyPr = wsp.elements?.find((el) => el.name === 'wps:bodyPr');
       let textContent = null;
 
       if (textBoxContent) {
         // Extract text from all paragraphs in the textbox
-        textContent = extractTextFromTextBox(textBoxContent);
+        textContent = extractTextFromTextBox(textBoxContent, bodyPr);
       }
 
       // Extract horizontal alignment from text content (defaults to 'left' if not specified)
-      // Note: bodyPr 'anchor' attribute is for vertical alignment (t/ctr/b), not horizontal
       const textAlign = textContent?.horizontalAlign || 'left';
 
       return {
@@ -442,6 +457,8 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
           shapeName,
           textContent,
           textAlign,
+          textVerticalAlign: textContent?.verticalAlign,
+          textInsets: textContent?.insets,
         },
       };
     })
@@ -558,18 +575,24 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
 };
 
 /**
- * Extracts text content from a textbox
- * @param {Object} textBoxContent - The w:txbxContent element
- * @returns {Object|null} Text content with formatting information
+ * Extracts text content from a textbox element.
+ *
+ * Parses w:txbxContent to extract text runs with formatting and paragraph alignment.
+ * Handles the [[sdspace]] placeholder replacement for preserved spaces.
+ * Inserts line break markers between paragraphs to preserve multi-line text layout.
+ *
+ * @param {Object} textBoxContent - The w:txbxContent element containing paragraphs and text runs
+ * @param {Object} bodyPr - The wps:bodyPr element containing text box properties (vertical alignment, insets, wrap mode)
+ * @returns {{ parts: Array<{ text: string, formatting: Object, isLineBreak?: boolean }>, horizontalAlign: string, verticalAlign: string, insets: { top: number, right: number, bottom: number, left: number }, wrap: string }|null} Text content with formatting information and line break markers, or null if no text found
  */
-function extractTextFromTextBox(textBoxContent) {
+function extractTextFromTextBox(textBoxContent, bodyPr) {
   if (!textBoxContent || !textBoxContent.elements) return null;
 
   const paragraphs = textBoxContent.elements.filter((el) => el.name === 'w:p');
   const textParts = [];
   let horizontalAlign = null; // Extract from first paragraph with alignment
 
-  paragraphs.forEach((paragraph) => {
+  paragraphs.forEach((paragraph, paragraphIndex) => {
     // Extract paragraph alignment (w:jc) if not already found
     if (!horizontalAlign) {
       const pPr = paragraph.elements?.find((el) => el.name === 'w:pPr');
@@ -584,11 +607,16 @@ function extractTextFromTextBox(textBoxContent) {
     }
 
     const runs = paragraph.elements?.filter((el) => el.name === 'w:r') || [];
+    let paragraphHasText = false;
+
     runs.forEach((run) => {
       const textEl = run.elements?.find((el) => el.name === 'w:t');
       if (textEl && textEl.elements) {
         const text = textEl.elements.find((el) => el.type === 'text');
         if (text) {
+          paragraphHasText = true;
+          // Replace temporary sdspace placeholders with real spaces
+          const cleanedText = typeof text.text === 'string' ? text.text.replace(/\[\[sdspace\]\]/g, ' ') : text.text;
           // Extract formatting from run properties
           const rPr = run.elements?.find((el) => el.name === 'w:rPr');
           const formatting = {};
@@ -606,33 +634,79 @@ function extractTextFromTextBox(textBoxContent) {
           }
 
           textParts.push({
-            text: text.text,
+            text: cleanedText,
             formatting,
           });
         }
       }
     });
+
+    // Add line break marker after each paragraph except the last one
+    // Empty paragraphs (no text) create blank lines with extra spacing
+    if (paragraphIndex < paragraphs.length - 1) {
+      textParts.push({
+        text: '\n',
+        formatting: {},
+        isLineBreak: true,
+        isEmptyParagraph: !paragraphHasText, // Mark empty paragraphs for extra spacing
+      });
+    }
   });
 
   if (textParts.length === 0) return null;
 
+  // Extract bodyPr attributes for text alignment and insets
+  const bodyPrAttrs = bodyPr?.attributes || {};
+
+  // Extract vertical alignment from anchor attribute (t=top, ctr=center, b=bottom)
+  let verticalAlign = 'center'; // Default to center
+  const anchorAttr = bodyPrAttrs['anchor'];
+  if (anchorAttr === 't') verticalAlign = 'top';
+  else if (anchorAttr === 'ctr') verticalAlign = 'center';
+  else if (anchorAttr === 'b') verticalAlign = 'bottom';
+
+  // Extract text insets from bodyPr (in EMUs, need to convert to pixels)
+  // Default insets in OOXML: left/right = 91440 EMU (~9.6px), top/bottom = 45720 EMU (~4.8px)
+  // Conversion formula: pixels = emu * 96 / 914400
+  const EMU_TO_PX = 96 / 914400;
+  const DEFAULT_HORIZONTAL_INSET_EMU = 91440;
+  const DEFAULT_VERTICAL_INSET_EMU = 45720;
+
+  const lIns = bodyPrAttrs['lIns'] != null ? parseFloat(bodyPrAttrs['lIns']) : DEFAULT_HORIZONTAL_INSET_EMU;
+  const tIns = bodyPrAttrs['tIns'] != null ? parseFloat(bodyPrAttrs['tIns']) : DEFAULT_VERTICAL_INSET_EMU;
+  const rIns = bodyPrAttrs['rIns'] != null ? parseFloat(bodyPrAttrs['rIns']) : DEFAULT_HORIZONTAL_INSET_EMU;
+  const bIns = bodyPrAttrs['bIns'] != null ? parseFloat(bodyPrAttrs['bIns']) : DEFAULT_VERTICAL_INSET_EMU;
+
+  const insets = {
+    top: tIns * EMU_TO_PX,
+    right: rIns * EMU_TO_PX,
+    bottom: bIns * EMU_TO_PX,
+    left: lIns * EMU_TO_PX,
+  };
+
+  // Extract wrap mode (default to 'square' if not specified)
+  const wrap = bodyPrAttrs['wrap'] || 'square';
+
   return {
     parts: textParts,
     horizontalAlign: horizontalAlign || 'left', // Default to left if not specified
+    verticalAlign,
+    insets,
+    wrap,
   };
 }
 
 /**
- * Translates a rectangle shape (`a:prstGeom` with `prst="rect"`) into a contentBlock node.
+ * Translates a rectangle shape (a:prstGeom with prst="rect") into a contentBlock node.
  *
- * @param {Object} params - Parameters object containing the current nodes.
- * @param {Object} spPr - The shape properties element.
- * @param {Object} node - The drawing node containing attributes.
- * @param {Object} marginOffset - Positioning offsets for anchored shapes (horizontal, top).
- * @param {Object} anchorData - Anchor positioning data.
- * @param {Object} wrap - Text wrapping configuration.
- * @param {boolean} isAnchor - Whether the shape is anchored.
- * @returns {Object} An object of type `contentBlock` with size, positioning, and optional background color.
+ * @param {{ nodes: Array<Object> }} params - Parameters object containing the current nodes.
+ * @param {Object} spPr - The wps:spPr shape properties element.
+ * @param {Object} node - The wp:anchor or wp:inline node containing attributes.
+ * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Positioning offsets for anchored shapes (in pixels).
+ * @param {{ hRelativeFrom?: string, vRelativeFrom?: string, alignH?: string, alignV?: string }|null} anchorData - Anchor positioning data.
+ * @param {{ type: string, attrs: Object }} wrap - Text wrapping configuration.
+ * @param {boolean} isAnchor - Whether the shape is anchored (true) or inline (false).
+ * @returns {{ type: 'contentBlock', attrs: Object }} An object of type contentBlock with size, positioning, and optional background color.
  */
 const getRectangleShape = (params, spPr, node, marginOffset, anchorData, wrap, isAnchor) => {
   const schemaAttrs = {};
@@ -684,11 +758,11 @@ const getRectangleShape = (params, spPr, node, marginOffset, anchorData, wrap, i
 /**
  * Builds a contentBlock placeholder for shapes that we cannot fully translate yet.
  *
- * @param {Object} node - Original shape `wp:drawing` node to snapshot for round-tripping.
- * @param {{ width?: number, height?: number }} size - Calculated size of the shape in pixels.
+ * @param {Object} node - Original shape wp:anchor or wp:inline node to snapshot for round-tripping.
+ * @param {{ width?: number, height?: number }} size - Calculated size of the shape in pixels (from wp:extent).
  * @param {{ top?: number, right?: number, bottom?: number, left?: number }} padding - Padding around the shape in pixels.
  * @param {{ horizontal?: number, left?: number, top?: number }} marginOffset - Offset of the anchored shape relative to its origin in pixels.
- * @param {'drawing'|'textbox'} shapeType - Identifier describing the kind of shape placeholder.
+ * @param {'drawing'|'textbox'|'group'} shapeType - Identifier describing the kind of shape placeholder.
  * @returns {{ type: 'contentBlock', attrs: Object }} Placeholder node that retains the original XML.
  */
 const buildShapePlaceholder = (node, size, padding, marginOffset, shapeType) => {
@@ -747,14 +821,69 @@ const buildShapePlaceholder = (node, size, padding, marginOffset, shapeType) => 
 };
 
 /**
- * Extracts vector shape data.
- * Parses shape geometry, transformations, and styling information.
- * @param {Object} options - Options
- * @param {Object} options.params - Translator params
- * @param {Object} options.graphicData - The graphicData node
- * @returns {Object|null} A vectorShape node with extracted attributes
+ * Extracts vector shape data from OOXML drawing elements.
+ *
+ * Parses shape geometry, transformations, and styling information from WordprocessingML shape elements.
+ * This function handles the critical distinction between two different dimension specifications in OOXML:
+ *
+ * 1. **wp:extent** (anchor extent): The final displayed size of the shape in the document.
+ *    This is the authoritative size that Word displays the shape at, accounting for any
+ *    resizing or scaling applied by the user.
+ *
+ * 2. **a:xfrm/a:ext** (intrinsic dimensions): The shape's internal coordinate space dimensions.
+ *    These may differ from wp:extent when a shape has been resized non-uniformly.
+ *    For example, a picture marker shape may have intrinsic dimensions of 571500x161926 EMU (rectangular)
+ *    but be displayed at 150x150 pixels (square) as specified by wp:extent.
+ *
+ * **Why wp:extent is required:**
+ * Using a:xfrm/a:ext for dimensions would cause visual distortion because it doesn't account for
+ * how Word actually displays the shape. The wp:extent is the only reliable source for the final
+ * display dimensions. When combined with `preserveAspectRatio="none"` in SVG rendering, this
+ * allows us to match Word's exact rendering behavior for non-uniformly scaled shapes.
+ *
+ * @param {Object} options - Configuration object
+ * @param {{ nodes: Array<Object> }} options.params - Translator params containing the drawing node context
+ * @param {Object} options.node - The anchor/inline node (wp:anchor or wp:inline) containing wp:extent
+ * @param {Object} options.graphicData - The a:graphicData node containing wps:wsp shape elements
+ * @param {{ width?: number, height?: number }} options.size - Shape size from wp:extent (required, already converted to pixels).
+ *                                                              This represents the final displayed dimensions.
+ * @param {{ horizontal?: number, left?: number, top?: number }} options.marginOffset - Positioning offsets for anchored shapes (in pixels)
+ * @param {{ hRelativeFrom?: string, vRelativeFrom?: string, alignH?: string, alignV?: string }|null} options.anchorData - Anchor positioning data
+ * @param {{ type: string, attrs: Object }} options.wrap - Text wrapping configuration
+ * @param {boolean} options.isAnchor - Whether the shape is anchored (true) or inline (false)
+ *
+ * @returns {{ type: 'vectorShape', attrs: Object }|null} A vectorShape node with extracted attributes, or null if parsing fails
+ *
+ * @example
+ * // Extract a vector shape from OOXML
+ * const result = getVectorShape({
+ *   params: { nodes: [drawingNode] },
+ *   node: anchorNode,
+ *   graphicData: graphicDataNode,
+ *   size: { width: 150, height: 150 }, // From wp:extent, already in pixels
+ *   marginOffset: { horizontal: 10, top: 20 },
+ *   anchorData: { hRelativeFrom: 'column', vRelativeFrom: 'paragraph' },
+ *   wrap: { type: 'Square', attrs: {} },
+ *   isAnchor: true
+ * });
+ * // Returns:
+ * // {
+ * //   type: 'vectorShape',
+ * //   attrs: {
+ * //     kind: 'ellipse',
+ * //     width: 150,
+ * //     height: 150,
+ * //     rotation: 0,
+ * //     flipH: false,
+ * //     flipV: false,
+ * //     fillColor: '#70ad47',
+ * //     strokeColor: '#000000',
+ * //     strokeWidth: 1,
+ * //     ...
+ * //   }
+ * // }
  */
-export function getVectorShape({ params, node, graphicData, marginOffset, anchorData, wrap, isAnchor }) {
+export function getVectorShape({ params, node, graphicData, size, marginOffset, anchorData, wrap, isAnchor }) {
   const schemaAttrs = {};
 
   const drawingNode = params.nodes?.[0];
@@ -780,12 +909,13 @@ export function getVectorShape({ params, node, graphicData, marginOffset, anchor
   }
   schemaAttrs.kind = shapeKind;
 
-  // Extract size and transformations
-  const xfrm = spPr.elements?.find((el) => el.name === 'a:xfrm');
-  const extent = xfrm?.elements?.find((el) => el.name === 'a:ext');
+  // Use wp:extent for dimensions (final displayed size from anchor)
+  // This is the correct size that Word displays the shape at
+  const width = size?.width ?? DEFAULT_SHAPE_WIDTH;
+  const height = size?.height ?? DEFAULT_SHAPE_HEIGHT;
 
-  const width = extent?.attributes?.['cx'] ? emuToPixels(extent.attributes['cx']) : 100;
-  const height = extent?.attributes?.['cy'] ? emuToPixels(extent.attributes['cy']) : 100;
+  // Extract transformations from a:xfrm (rotation and flips are still valid)
+  const xfrm = spPr.elements?.find((el) => el.name === 'a:xfrm');
   const rotation = xfrm?.attributes?.['rot'] ? rotToDegrees(xfrm.attributes['rot']) : 0;
   const flipH = xfrm?.attributes?.['flipH'] === '1';
   const flipV = xfrm?.attributes?.['flipV'] === '1';
@@ -799,11 +929,12 @@ export function getVectorShape({ params, node, graphicData, marginOffset, anchor
   // Extract textbox content if present
   const textBox = wsp.elements?.find((el) => el.name === 'wps:txbx');
   const textBoxContent = textBox?.elements?.find((el) => el.name === 'w:txbxContent');
+  const bodyPr = wsp.elements?.find((el) => el.name === 'wps:bodyPr');
   let textContent = null;
   let textAlign = 'left';
 
   if (textBoxContent) {
-    textContent = extractTextFromTextBox(textBoxContent);
+    textContent = extractTextFromTextBox(textBoxContent, bodyPr);
     textAlign = textContent?.horizontalAlign || 'left';
   }
 
@@ -825,6 +956,8 @@ export function getVectorShape({ params, node, graphicData, marginOffset, anchor
       isAnchor,
       textContent,
       textAlign,
+      textVerticalAlign: textContent?.verticalAlign,
+      textInsets: textContent?.insets,
       originalAttributes: node?.attributes,
     },
   };

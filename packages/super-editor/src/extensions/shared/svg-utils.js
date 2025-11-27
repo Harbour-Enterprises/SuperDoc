@@ -81,52 +81,61 @@ export function createTextElement(textContent, textAlign, width, height) {
   div.style.width = '100%';
   div.style.height = '100%';
   div.style.display = 'flex';
-  div.style.alignItems = 'center';
+  div.style.flexDirection = 'column';
+  div.style.justifyContent = 'center'; // Vertically center the text block
   div.style.padding = '10px';
   div.style.boxSizing = 'border-box';
   div.style.wordWrap = 'break-word';
   div.style.overflowWrap = 'break-word';
 
-  // Set text alignment
+  // Set text alignment (horizontal alignment for each paragraph)
   if (textAlign === 'center') {
     div.style.textAlign = 'center';
-    div.style.justifyContent = 'center';
   } else if (textAlign === 'right' || textAlign === 'r') {
     div.style.textAlign = 'right';
-    div.style.justifyContent = 'flex-end';
   } else {
     div.style.textAlign = 'left';
-    div.style.justifyContent = 'flex-start';
   }
 
-  // Create text container
-  const textContainer = document.createElement('div');
+  // Create paragraphs by splitting on line breaks
+  let currentParagraph = document.createElement('div');
 
   // Add text content with formatting
   textContent.parts.forEach((part) => {
-    const span = document.createElement('span');
-    span.textContent = part.text;
+    if (part.isLineBreak) {
+      // Finish current paragraph and start a new one
+      div.appendChild(currentParagraph);
+      currentParagraph = document.createElement('div');
+      // Empty paragraphs create extra spacing (blank line)
+      if (part.isEmptyParagraph) {
+        currentParagraph.style.minHeight = '1em';
+      }
+    } else {
+      const span = document.createElement('span');
+      span.textContent = part.text;
 
-    // Apply formatting
-    if (part.formatting) {
-      if (part.formatting.bold) {
-        span.style.fontWeight = 'bold';
+      // Apply formatting
+      if (part.formatting) {
+        if (part.formatting.bold) {
+          span.style.fontWeight = 'bold';
+        }
+        if (part.formatting.italic) {
+          span.style.fontStyle = 'italic';
+        }
+        if (part.formatting.color) {
+          span.style.color = `#${part.formatting.color}`;
+        }
+        if (part.formatting.fontSize) {
+          span.style.fontSize = `${part.formatting.fontSize}px`;
+        }
       }
-      if (part.formatting.italic) {
-        span.style.fontStyle = 'italic';
-      }
-      if (part.formatting.color) {
-        span.style.color = `#${part.formatting.color}`;
-      }
-      if (part.formatting.fontSize) {
-        span.style.fontSize = `${part.formatting.fontSize}px`;
-      }
+
+      currentParagraph.appendChild(span);
     }
-
-    textContainer.appendChild(span);
   });
 
-  div.appendChild(textContainer);
+  // Add the final paragraph
+  div.appendChild(currentParagraph);
   foreignObject.appendChild(div);
 
   return foreignObject;

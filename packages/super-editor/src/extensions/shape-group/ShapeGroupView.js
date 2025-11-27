@@ -179,10 +179,10 @@ export class ShapeGroupView {
     if (!attrs) return null;
 
     // Calculate position relative to group
-    const x = attrs.x || 0;
-    const y = attrs.y || 0;
-    const width = attrs.width || 100;
-    const height = attrs.height || 100;
+    const x = attrs.x ?? 0;
+    const y = attrs.y ?? 0;
+    const width = attrs.width ?? 100;
+    const height = attrs.height ?? 100;
 
     // Create a group element for the shape
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -226,6 +226,31 @@ export class ShapeGroupView {
       fillValue = 'none'; // Transparent
     } else if (typeof fillColor === 'string') {
       fillValue = fillColor;
+    }
+
+    // Special case: handle line shapes directly since getPresetShapeSvg doesn't support them
+    if (shapeKind === 'line') {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', '0');
+      line.setAttribute('y1', '0');
+      // For horizontal lines (height=0), draw from (0,0) to (width,0)
+      // For vertical lines (width=0), draw from (0,0) to (0,height)
+      // For diagonal lines, draw from (0,0) to (width,height)
+      line.setAttribute('x2', width.toString());
+      line.setAttribute('y2', height.toString());
+      line.setAttribute('stroke', strokeColor === null ? 'none' : strokeColor);
+      line.setAttribute('stroke-width', (strokeColor === null ? 0 : strokeWidth).toString());
+      g.appendChild(line);
+
+      // Add text content if present
+      if (attrs.textContent && attrs.textContent.parts) {
+        const textGroup = this.createTextElement(attrs.textContent, attrs.textAlign, width, height);
+        if (textGroup) {
+          g.appendChild(textGroup);
+        }
+      }
+
+      return g;
     }
 
     try {

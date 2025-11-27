@@ -9,6 +9,13 @@ import {
   generateTransforms,
 } from '../shared/svg-utils.js';
 
+/**
+ * Scaling factor to convert OOXML relativeHeight values to CSS z-index range.
+ * OOXML uses large numbers (e.g., 251659318), so we scale down by dividing by this factor.
+ * This ensures proper z-ordering of overlapping elements while staying within reasonable CSS limits.
+ */
+const Z_INDEX_SCALE_FACTOR = 1000000;
+
 export class VectorShapeView {
   node;
 
@@ -69,9 +76,30 @@ export class VectorShapeView {
       element.style.cssText += positioningStyle;
     }
 
+    // Combine positioning transforms (from getPositioningStyle) with shape transforms (rotation, flip)
+    // Transform order matters: positioning transforms are applied first, then shape transforms
     const transforms = this.generateTransform();
-    if (transforms.length > 0) {
-      element.style.transform = transforms.join(' ');
+    const positioningTransform = element.style.transform;
+    const combinedTransforms = [];
+
+    // Handle edge case: empty or whitespace-only positioning transform
+    if (positioningTransform && positioningTransform.trim() !== '') {
+      combinedTransforms.push(positioningTransform.trim());
+    }
+
+    // Handle edge case: validate transforms array and filter out invalid values
+    if (Array.isArray(transforms) && transforms.length > 0) {
+      const validTransforms = transforms.filter(
+        (t) => t !== null && t !== undefined && typeof t === 'string' && t.trim() !== '',
+      );
+      if (validTransforms.length > 0) {
+        combinedTransforms.push(...validTransforms);
+      }
+    }
+
+    // Only apply combined transform if we have valid transforms
+    if (combinedTransforms.length > 0) {
+      element.style.transform = combinedTransforms.join(' ');
     }
 
     // Create SVG directly with proper dimensions
@@ -112,7 +140,7 @@ export class VectorShapeView {
       if (relativeHeight != null) {
         // Scale down the relativeHeight value to a reasonable CSS z-index range
         // OOXML uses large numbers (e.g., 251659318), we normalize to a smaller range
-        const zIndex = Math.floor(relativeHeight / 1000000);
+        const zIndex = Math.floor(relativeHeight / Z_INDEX_SCALE_FACTOR);
         style += `z-index: ${zIndex};`;
       } else if (wrap?.attrs?.behindDoc) {
         style += 'z-index: -1;';
@@ -148,6 +176,12 @@ export class VectorShapeView {
           } else if (anchorData.alignH === 'left') {
             if (!style.includes('float: left;')) {
               style += 'float: left;';
+            }
+          } else if (!anchorData.alignH && marginOffset?.horizontal != null) {
+            const isAbsolutelyPositioned = style.includes('position: absolute;');
+            if (isAbsolutelyPositioned) {
+              style += `left: ${baseHorizontal}px;`;
+              baseHorizontal = 0;
             }
           }
           break;
@@ -272,17 +306,28 @@ export class VectorShapeView {
 
       default:
         // For complex shapes, fall back to preset geometry with proper viewBox
-        const svgTemplate = this.generateSVG({ kind, fillColor, strokeColor, strokeWidth, width, height });
-        if (svgTemplate) {
-          const tempDiv = document.createElement('div');
-          tempDiv.innerHTML = svgTemplate;
-          const tempSvg = tempDiv.querySelector('svg');
-          if (tempSvg) {
-            // Fix viewBox to match actual dimensions
-            tempSvg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-            tempSvg.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-            return tempSvg;
+        try {
+          const svgTemplate = this.generateSVG({ kind, fillColor, strokeColor, strokeWidth, width, height });
+          if (svgTemplate) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = svgTemplate;
+            const tempSvg = tempDiv.querySelector('svg');
+            if (tempSvg) {
+              // Preserve the preset viewBox and scale via width/height
+              tempSvg.setAttribute('width', width.toString());
+              tempSvg.setAttribute('height', height.toString());
+              // Use 'none' to allow non-uniform scaling to match Word's behavior
+              // Now that we're reading wp:extent correctly, the dimensions are accurate
+              tempSvg.setAttribute('preserveAspectRatio', 'none');
+              tempSvg.style.width = `${width}px`;
+              tempSvg.style.height = `${height}px`;
+              tempSvg.style.display = 'block';
+              return tempSvg;
+            }
           }
+        } catch (error) {
+          console.warn('Failed to generate SVG for shape:', kind, error);
+          return null;
         }
         return null;
     }

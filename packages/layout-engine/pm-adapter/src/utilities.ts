@@ -1040,3 +1040,257 @@ export function shallowObjectEquals(x?: Record<string, unknown>, y?: Record<stri
   if (kx.length !== ky.length) return false;
   return kx.every((k) => x[k] === y[k]);
 }
+
+// ============================================================================
+// Shape Fill/Stroke/Text Normalizers (for Phase 2: PM-Adapter Fix)
+// ============================================================================
+
+/**
+ * Type guard to check if a value is a GradientFill object.
+ *
+ * Validates that:
+ * - The object has type: 'gradient'
+ * - gradientType is either 'linear' or 'radial'
+ * - angle is a finite number (for linear gradients)
+ * - stops is a non-empty array with proper structure
+ *
+ * @param value - The value to check
+ * @returns True if value is a valid GradientFill object
+ *
+ * @example
+ * ```typescript
+ * isGradientFill({ type: 'gradient', gradientType: 'linear', stops: [...], angle: 90 }); // true
+ * isGradientFill({ type: 'gradient', gradientType: 'radial', stops: [...] }); // true
+ * isGradientFill({ type: 'gradient', gradientType: 'invalid', stops: [...] }); // false
+ * isGradientFill('#FF0000'); // false
+ * isGradientFill(null); // false
+ * ```
+ */
+export function isGradientFill(value: unknown): value is import('@superdoc/contracts').GradientFill {
+  if (!isPlainObject(value)) return false;
+  if (value.type !== 'gradient') return false;
+
+  // Validate gradientType is 'linear' or 'radial'
+  const gradientType = value.gradientType;
+  if (gradientType !== 'linear' && gradientType !== 'radial') return false;
+
+  // Validate angle is a number (required for linear gradients)
+  if (gradientType === 'linear') {
+    if (typeof value.angle !== 'number' || !Number.isFinite(value.angle)) {
+      return false;
+    }
+  }
+
+  // Validate stops array has proper structure
+  if (!Array.isArray(value.stops) || value.stops.length === 0) return false;
+
+  // Validate each stop has required properties
+  return value.stops.every((stop: unknown) => {
+    if (!isPlainObject(stop)) return false;
+    return (
+      typeof stop.position === 'number' &&
+      Number.isFinite(stop.position) &&
+      typeof stop.color === 'string' &&
+      (stop.alpha === undefined || (typeof stop.alpha === 'number' && Number.isFinite(stop.alpha)))
+    );
+  });
+}
+
+/**
+ * Type guard to check if a value is a SolidFillWithAlpha object.
+ *
+ * @param value - The value to check
+ * @returns True if value is a valid SolidFillWithAlpha object
+ *
+ * @example
+ * ```typescript
+ * isSolidFillWithAlpha({ type: 'solidWithAlpha', color: '#FF0000', alpha: 0.5 }); // true
+ * isSolidFillWithAlpha('#FF0000'); // false
+ * isSolidFillWithAlpha(null); // false
+ * ```
+ */
+export function isSolidFillWithAlpha(value: unknown): value is import('@superdoc/contracts').SolidFillWithAlpha {
+  return (
+    isPlainObject(value) &&
+    value.type === 'solidWithAlpha' &&
+    typeof value.color === 'string' &&
+    typeof value.alpha === 'number'
+  );
+}
+
+/**
+ * Normalizes a fill color value to a valid FillColor type.
+ * Preserves gradient objects, solid with alpha objects, string colors, and null.
+ *
+ * @param value - Raw fill color value from ProseMirror node
+ * @returns Normalized FillColor or undefined if invalid
+ *
+ * @example
+ * ```typescript
+ * normalizeFillColor('#FF0000'); // '#FF0000' (string pass-through)
+ * normalizeFillColor({ type: 'gradient', ... }); // GradientFill object
+ * normalizeFillColor({ type: 'solidWithAlpha', color: '#FF0000', alpha: 0.5 }); // SolidFillWithAlpha
+ * normalizeFillColor(null); // null (no fill)
+ * normalizeFillColor(123); // undefined (invalid)
+ * ```
+ */
+export function normalizeFillColor(value: unknown): import('@superdoc/contracts').FillColor | undefined {
+  if (value === null) return null;
+  if (typeof value === 'string') return value;
+  if (isGradientFill(value)) return value;
+  if (isSolidFillWithAlpha(value)) return value;
+  return undefined;
+}
+
+/**
+ * Normalizes a stroke color value to a valid StrokeColor type.
+ * Null explicitly means "no border" (not a default black border).
+ *
+ * @param value - Raw stroke color value from ProseMirror node
+ * @returns Normalized StrokeColor or undefined if invalid
+ *
+ * @example
+ * ```typescript
+ * normalizeStrokeColor('#000000'); // '#000000' (string)
+ * normalizeStrokeColor(null); // null (explicit no border)
+ * normalizeStrokeColor(undefined); // undefined
+ * normalizeStrokeColor(123); // undefined (invalid)
+ * ```
+ */
+export function normalizeStrokeColor(value: unknown): import('@superdoc/contracts').StrokeColor | undefined {
+  if (value === null) return null; // Explicit no-border
+  if (typeof value === 'string') return value;
+  return undefined;
+}
+
+/**
+ * Normalizes text content for shapes.
+ * Validates structure and filters out invalid text parts.
+ *
+ * @param value - Raw text content value from ProseMirror node
+ * @returns Normalized ShapeTextContent or undefined if invalid
+ *
+ * @example
+ * ```typescript
+ * normalizeTextContent({ parts: [{ text: 'Hello' }], horizontalAlign: 'center' });
+ * // { parts: [{ text: 'Hello' }], horizontalAlign: 'center' }
+ *
+ * normalizeTextContent({ parts: [] }); // undefined (empty parts)
+ * normalizeTextContent({ parts: [{ text: 'A' }, null, { text: 'B' }] });
+ * // { parts: [{ text: 'A' }, { text: 'B' }] } (null filtered)
+ * ```
+ */
+export function normalizeTextContent(value: unknown): import('@superdoc/contracts').ShapeTextContent | undefined {
+  if (!isPlainObject(value)) return undefined;
+  if (!Array.isArray(value.parts)) return undefined;
+  if (value.parts.length === 0) return undefined;
+
+  // Filter valid text parts
+  const validParts = value.parts.filter((p: unknown) => isPlainObject(p) && typeof p.text === 'string');
+
+  if (validParts.length === 0) return undefined;
+
+  const result: import('@superdoc/contracts').ShapeTextContent = {
+    parts: validParts as import('@superdoc/contracts').TextPart[],
+  };
+
+  // Validate horizontal alignment
+  if (['left', 'center', 'right'].includes(value.horizontalAlign as string)) {
+    result.horizontalAlign = value.horizontalAlign as 'left' | 'center' | 'right';
+  }
+
+  return result;
+}
+
+/**
+ * Normalizes vertical text alignment value.
+ *
+ * @param value - Raw vertical alignment value from node attributes
+ * @returns Normalized vertical alignment or undefined if invalid
+ *
+ * @example
+ * ```typescript
+ * normalizeTextVerticalAlign('top'); // 'top'
+ * normalizeTextVerticalAlign('center'); // 'center'
+ * normalizeTextVerticalAlign('bottom'); // 'bottom'
+ * normalizeTextVerticalAlign('invalid'); // undefined
+ * ```
+ */
+export function normalizeTextVerticalAlign(value: unknown): 'top' | 'center' | 'bottom' | undefined {
+  if (typeof value !== 'string') return undefined;
+  if (value === 'top' || value === 'center' || value === 'bottom') {
+    return value;
+  }
+  return undefined;
+}
+
+/**
+ * Normalizes text insets object.
+ *
+ * @param value - Raw text insets object from node attributes
+ * @returns Normalized text insets or undefined if invalid
+ *
+ * @example
+ * ```typescript
+ * normalizeTextInsets({ top: 4.8, right: 9.6, bottom: 4.8, left: 9.6 });
+ * // { top: 4.8, right: 9.6, bottom: 4.8, left: 9.6 }
+ * normalizeTextInsets(null); // undefined
+ * ```
+ */
+export function normalizeTextInsets(
+  value: unknown,
+): { top: number; right: number; bottom: number; left: number } | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const top = pickNumber(value.top);
+  const right = pickNumber(value.right);
+  const bottom = pickNumber(value.bottom);
+  const left = pickNumber(value.left);
+
+  if (top == null || right == null || bottom == null || left == null) {
+    return undefined;
+  }
+
+  return { top, right, bottom, left };
+}
+
+/**
+ * Base z-index offset for OOXML relativeHeight values.
+ *
+ * OOXML relativeHeight values typically start around 251658240 (a base value).
+ * By subtracting this base, we get the relative stacking order within the document.
+ * This preserves fine-grained differences between overlapping elements.
+ *
+ * For example:
+ * - 251658240 (base) → 0 (background layer)
+ * - 251658242 → 2 (slightly above base)
+ * - 251658291 → 51 (further above)
+ */
+export const OOXML_Z_INDEX_BASE = 251658240;
+
+/**
+ * Normalizes z-index from OOXML relativeHeight value.
+ *
+ * OOXML uses large numbers starting around 251658240. To preserve the relative
+ * stacking order, we subtract the base value to get a small positive number
+ * suitable for CSS z-index. This ensures elements with close relativeHeight
+ * values maintain their correct stacking order.
+ *
+ * @param originalAttributes - The originalAttributes object from ProseMirror node attrs
+ * @returns Normalized z-index number or undefined if no relativeHeight
+ *
+ * @example
+ * ```typescript
+ * normalizeZIndex({ relativeHeight: 251658240 }); // 0 (background)
+ * normalizeZIndex({ relativeHeight: 251658242 }); // 2 (above background)
+ * normalizeZIndex({ relativeHeight: 251658291 }); // 51 (further above)
+ * normalizeZIndex({}); // undefined
+ * normalizeZIndex(null); // undefined
+ * ```
+ */
+export function normalizeZIndex(originalAttributes: unknown): number | undefined {
+  if (!isPlainObject(originalAttributes)) return undefined;
+  const relativeHeight = originalAttributes.relativeHeight;
+  if (typeof relativeHeight !== 'number') return undefined;
+  // Subtract base to get relative z-index, ensuring non-negative values
+  return Math.max(0, relativeHeight - OOXML_Z_INDEX_BASE);
+}

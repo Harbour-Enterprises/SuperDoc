@@ -954,8 +954,14 @@ export class HeaderFooterLayoutAdapter {
 
     const blockIdPrefix = `hf-${descriptor.kind}-${descriptor.id}-`;
     const converterContext = this.#getConverterContext();
+    const rootConverter = (this.#manager.rootEditor as EditorWithConverter | undefined)?.converter as
+      | { media?: Record<string, string> }
+      | undefined;
+    const providedMedia = this.#mediaFiles;
+    const fallbackMedia = rootConverter?.media;
+    const mediaFiles = providedMedia && Object.keys(providedMedia).length > 0 ? providedMedia : fallbackMedia;
     const result = toFlowBlocks(doc as object, {
-      mediaFiles: this.#mediaFiles,
+      mediaFiles,
       blockIdPrefix,
       converterContext,
     });
