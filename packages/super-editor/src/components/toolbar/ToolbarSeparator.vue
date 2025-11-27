@@ -1,16 +1,19 @@
-<script setup>
-import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
-const emit = defineEmits(['command']);
-const props = defineProps({
-  active: {
-    type: Boolean,
-    default: false,
-  },
-});
+<script setup lang="ts">
+import { useHighContrastMode } from '../../composables/use-high-contrast-mode.js';
+
+interface Props {
+  active?: boolean;
+}
+
+defineEmits<{
+  command: [];
+}>();
+
+defineProps<Props>();
 
 const { isHighContrastMode } = useHighContrastMode();
 
-const getSeparatorColor = () => {
+const getSeparatorColor = (): string => {
   if (isHighContrastMode.value) {
     return '#000';
   }

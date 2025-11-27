@@ -1,23 +1,27 @@
-<script setup>
-const emit = defineEmits(['toggle', 'select']);
-const props = defineProps({
-  item: {
-    type: Object,
-    required: true,
-  },
-  name: {
-    type: String,
-    required: true,
-  },
-  command: {
-    type: String,
-    required: true,
-  },
-  active: {
-    type: Boolean,
-    required: true,
-  },
-});
+<script setup lang="ts">
+/**
+ * Toolbar item structure
+ */
+interface ToolbarItem {
+  name?: string;
+  command?: string;
+  active?: boolean;
+  [key: string]: unknown;
+}
+
+interface Props {
+  item: ToolbarItem;
+  name: string;
+  command: string;
+  active: boolean;
+}
+
+defineEmits<{
+  toggle: [];
+  select: [];
+}>();
+
+defineProps<Props>();
 </script>
 
 <template>

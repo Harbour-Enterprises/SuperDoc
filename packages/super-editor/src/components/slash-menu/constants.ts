@@ -13,7 +13,7 @@ import pasteIconSvg from '@superdoc/common/icons/paste-solid.svg?raw';
 import checkIconSvg from '@superdoc/common/icons/check-solid.svg?raw';
 import xMarkIconSvg from '@superdoc/common/icons/xmark-solid.svg?raw';
 
-export const ICONS = {
+export const ICONS: Record<string, string> = {
   addRowBefore: plusIconSvg,
   addRowAfter: plusIconSvg,
   addColumnBefore: plusIconSvg,
@@ -38,7 +38,7 @@ export const ICONS = {
 };
 
 // Table actions constant
-export const TEXTS = {
+export const TEXTS: Record<string, string> = {
   addRowBefore: 'Insert row above',
   addRowAfter: 'Insert row below',
   addColumnBefore: 'Insert column left',
@@ -64,7 +64,18 @@ export const TEXTS = {
   trackChangesReject: 'Reject change',
 };
 
-export const tableActionsOptions = [
+export interface TableAction {
+  label: string;
+  command: string;
+  icon: string;
+  bottomBorder?: boolean;
+  props: {
+    'data-item': string;
+    ariaLabel: string;
+  };
+}
+
+export const tableActionsOptions: TableAction[] = [
   {
     label: TEXTS.addRowBefore,
     command: 'addRowBefore',
@@ -171,4 +182,4 @@ export const tableActionsOptions = [
 export const TRIGGERS = {
   slash: 'slash',
   click: 'click',
-};
+} as const;

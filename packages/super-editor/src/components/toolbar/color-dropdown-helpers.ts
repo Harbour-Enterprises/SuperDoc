@@ -1,12 +1,28 @@
-import { h } from 'vue';
+import { h, type VNode, type Ref } from 'vue';
 import IconGrid from './IconGrid.vue';
 import { toolbarIcons } from './toolbarIcons.js';
 
-const closeDropdown = (dropdown) => {
+interface DropdownButton {
+  expand: Ref<boolean>;
+  iconColor: Ref<string>;
+}
+
+const closeDropdown = (dropdown: DropdownButton): void => {
   dropdown.expand.value = false;
 };
 
-export const makeColorOption = (color, label = null) => {
+export interface ColorOption {
+  label: string | null;
+  icon: string;
+  value: string;
+  style: {
+    color: string;
+    boxShadow: string;
+    borderRadius: string;
+  };
+}
+
+export const makeColorOption = (color: string, label: string | null = null): ColorOption => {
   return {
     label,
     icon: toolbarIcons.colorOption,
@@ -19,8 +35,17 @@ export const makeColorOption = (color, label = null) => {
   };
 };
 
-export const renderColorOptions = (superToolbar, button, customIcons = [], hasNoneIcon = false) => {
-  const handleSelect = (e) => {
+interface SuperToolbar {
+  emitCommand: (payload: { item: DropdownButton; argument: string }) => void;
+}
+
+export const renderColorOptions = (
+  superToolbar: SuperToolbar,
+  button: DropdownButton,
+  customIcons: ColorOption[] = [],
+  hasNoneIcon: boolean = false,
+): VNode => {
+  const handleSelect = (e: string): void => {
     button.iconColor.value = e;
     superToolbar.emitCommand({ item: button, argument: e });
     closeDropdown(button);
@@ -37,7 +62,7 @@ export const renderColorOptions = (superToolbar, button, customIcons = [], hasNo
   ]);
 };
 
-const icons = [
+const icons: ColorOption[][] = [
   [
     makeColorOption('#111111', 'black'),
     makeColorOption('#333333', 'dark gray'),
@@ -119,6 +144,6 @@ const icons = [
   ],
 ];
 
-export const getAvailableColorOptions = () => {
+export const getAvailableColorOptions = (): string[] => {
   return icons.flat().map((item) => item.value);
 };

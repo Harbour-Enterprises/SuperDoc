@@ -20,33 +20,81 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import type { Editor } from '@/core/Editor.js';
 import { pixelsToTwips, twipsToPixels } from '@core/super-converter/helpers.js';
 import { measureCache } from '@superdoc/layout-bridge';
 
 /**
  * Props for the TableResizeOverlay component
  */
-const props = defineProps({
+interface Props {
   /** Editor instance for dispatching transactions */
-  editor: {
-    type: Object,
-    required: true,
-  },
+  editor: Editor;
   /** Show or hide the overlay */
-  visible: {
-    type: Boolean,
-    default: false,
-  },
+  visible?: boolean;
   /** Table fragment element containing data-table-boundaries */
-  tableElement: {
-    type: Object,
-    default: null,
-  },
+  tableElement?: HTMLElement | null;
+}
+
+/**
+ * Payload for resize-start event
+ */
+interface ResizeStartPayload {
+  columnIndex: number;
+  isRightEdge: boolean;
+  initialWidths: number[];
+}
+
+/**
+ * Payload for resize-move event
+ */
+interface ResizeMovePayload {
+  columnIndex: number;
+  delta: number;
+}
+
+/**
+ * Payload for resize-end event
+ */
+interface ResizeEndPayload {
+  columnIndex: number;
+  finalWidths: number[];
+  delta: number;
+}
+
+/**
+ * Payload for resize-success event
+ */
+interface ResizeSuccessPayload {
+  columnIndex: number;
+  newWidths: number[];
+}
+
+/**
+ * Payload for resize-error event
+ */
+interface ResizeErrorPayload {
+  columnIndex?: number;
+  error: string | unknown;
+  rawMetadata?: string;
+}
+
+interface Emits {
+  (e: 'resize-start', payload: ResizeStartPayload): void;
+  (e: 'resize-move', payload: ResizeMovePayload): void;
+  (e: 'resize-end', payload: ResizeEndPayload): void;
+  (e: 'resize-success', payload: ResizeSuccessPayload): void;
+  (e: 'resize-error', payload: ResizeErrorPayload): void;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  visible: false,
+  tableElement: null,
 });
 
-const emit = defineEmits(['resize-start', 'resize-move', 'resize-end', 'resize-success', 'resize-error']);
+const emit = defineEmits<Emits>();
 
 /**
  * Parsed table metadata from data-table-boundaries attribute

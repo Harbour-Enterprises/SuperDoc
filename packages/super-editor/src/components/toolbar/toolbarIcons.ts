@@ -50,7 +50,7 @@ import copyIconSvg from '@superdoc/common/icons/copy-solid.svg?raw';
 import pasteIconSvg from '@superdoc/common/icons/paste-solid.svg?raw';
 import strikethroughSvg from '@superdoc/common/icons/strikethrough.svg?raw';
 
-export const toolbarIcons = {
+export const toolbarIcons: Record<string, string> = {
   undo: rotateLeftIconSvg,
   redo: rotateRightIconSvg,
   bold: boldIconSvg,

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { getCurrentInstance, ref, computed } from 'vue';
 import ToolbarButton from './ToolbarButton.vue';
 import ButtonGroup from './ButtonGroup.vue';

@@ -1,4 +1,22 @@
-export const TOOLBAR_FONTS = [
+export interface ToolbarFont {
+  label: string;
+  key: string;
+  fontWeight: number;
+  props: {
+    style: { fontFamily: string };
+    'data-item': string;
+  };
+}
+
+export interface ToolbarFontSize {
+  label: string;
+  key: string;
+  props: {
+    'data-item': string;
+  };
+}
+
+export const TOOLBAR_FONTS: ToolbarFont[] = [
   {
     label: 'Georgia',
     key: 'Georgia, serif',
@@ -37,7 +55,7 @@ export const TOOLBAR_FONTS = [
   },
 ];
 
-export const TOOLBAR_FONT_SIZES = [
+export const TOOLBAR_FONT_SIZES: ToolbarFontSize[] = [
   { label: '8', key: '8pt', props: { 'data-item': 'btn-fontSize-option' } },
   { label: '9', key: '9pt', props: { 'data-item': 'btn-fontSize-option' } },
   { label: '10', key: '10pt', props: { 'data-item': 'btn-fontSize-option' } },

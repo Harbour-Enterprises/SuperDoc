@@ -1,19 +1,33 @@
-import { TextSelection } from 'prosemirror-state';
+import { TextSelection, EditorState } from 'prosemirror-state';
+import type { Editor } from '../core/Editor.js';
+import type { Component } from 'vue';
 import LinkInput from './toolbar/LinkInput.vue';
 import { getEditorSurfaceElement } from '../core/helpers/editorSurface.js';
+
+interface PopoverControls {
+  component: Component;
+  position: {
+    left: string;
+    top: string;
+  };
+  props: {
+    showInput: boolean;
+  };
+  visible: boolean;
+}
 
 /**
  * Calculates cursor position based on margin click event
  * @param {MouseEvent} event Mousedown event
- * @param {SuperEditor} editor SuperEditor instance
+ * @param {Editor} editor Editor instance
  */
-export const onMarginClickCursorChange = (event, editor) => {
+export const onMarginClickCursorChange = (event: MouseEvent, editor: Editor): void => {
   const y = event.clientY;
   const x = event.clientX;
   const { view } = editor;
   const editorRect = view.dom.getBoundingClientRect();
 
-  let coords = {
+  const coords = {
     left: 0,
     top: y,
   };
@@ -51,9 +65,14 @@ export const onMarginClickCursorChange = (event, editor) => {
  * Checks if the current selection has a parent node of a given type
  * and shows a popover with a link input if it does
  * @param {Editor} editor - The editor instance
- * @param {Object} popoverControls - The popover controls object
+ * @param {MouseEvent} event - The mouse event
+ * @param {PopoverControls} popoverControls - The popover controls object
  */
-export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
+export const checkNodeSpecificClicks = (
+  editor: Editor | null | undefined,
+  event: MouseEvent,
+  popoverControls: PopoverControls,
+): void => {
   if (!editor) return;
   const state = editor.state;
   if (!state) return;
@@ -76,20 +95,24 @@ export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
   }
 };
 
+interface SelectionCheckOptions {
+  requireEnds?: boolean;
+}
+
 /**
  * Checks if the current selection is inside a node or mark with the given name.
  * Optionally, can restrict the check to only the start or end of the selection (not anywhere in the range).
  *
  * @param {EditorState} state - The ProseMirror editor state.
  * @param {string} name - The node or mark name to check for (e.g. 'paragraph', 'link').
- * @param {Object} [options] - Optional settings.
+ * @param {SelectionCheckOptions} [options] - Optional settings.
  * @param {boolean} [options.requireEnds=false] - If true, only checks if the start or end of the selection has the node/mark, not if it exists anywhere in the selection.
  *
  * This is useful for cases like showing a link popup: you may only want to show the popup if the selection starts or ends with a link, not if a link exists anywhere in the selection.
  *
  * @returns {boolean}
  */
-export function selectionHasNodeOrMark(state, name, options = {}) {
+export function selectionHasNodeOrMark(state: EditorState, name: string, options: SelectionCheckOptions = {}): boolean {
   const { requireEnds = false } = options;
   const $from = state.selection.$from;
   const $to = state.selection.$to;
@@ -158,9 +181,9 @@ export function selectionHasNodeOrMark(state, name, options = {}) {
 /**
  * Move the editor cursor to the position closest to the mouse event
  * @param {MouseEvent} event
- * @param {Object} editor - The editor instance
+ * @param {Editor} editor - The editor instance
  */
-export function moveCursorToMouseEvent(event, editor) {
+export function moveCursorToMouseEvent(event: MouseEvent, editor: Editor | null | undefined): void {
   if (!editor) return;
   const state = editor.state;
   if (!state) return;

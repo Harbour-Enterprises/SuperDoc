@@ -1,4 +1,4 @@
-function getScrollableParent(element) {
+function getScrollableParent(element: HTMLElement | null): HTMLElement | Element {
   let currentElement = element;
 
   while (currentElement) {
@@ -12,7 +12,15 @@ function getScrollableParent(element) {
   return document.scrollingElement || document.documentElement;
 }
 
-export function scrollToElement(targetElement, options = { behavior: 'smooth', block: 'start' }) {
+interface ScrollOptions {
+  behavior?: ScrollBehavior;
+  block?: 'start' | 'end';
+}
+
+export function scrollToElement(
+  targetElement: HTMLElement | null,
+  options: ScrollOptions = { behavior: 'smooth', block: 'start' },
+): void {
   if (!targetElement) return;
 
   const container = getScrollableParent(targetElement);
@@ -22,7 +30,10 @@ export function scrollToElement(targetElement, options = { behavior: 'smooth', b
   const offsetTop = targetRect.top - containerRect.top + container.scrollTop;
 
   container.scrollTo({
-    top: options.block === 'start' ? offsetTop : offsetTop - container.clientHeight + targetElement.offsetHeight,
+    top:
+      options.block === 'start'
+        ? offsetTop
+        : offsetTop - (container as HTMLElement).clientHeight + targetElement.offsetHeight,
     behavior: options.behavior,
   });
 }

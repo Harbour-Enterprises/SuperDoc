@@ -1,7 +1,7 @@
-import { h, ref } from 'vue';
+import { h, ref, type Ref } from 'vue';
 
 import { sanitizeNumber } from './helpers';
-import { useToolbarItem } from './use-toolbar-item';
+import { useToolbarItem, type ToolbarItem } from './use-toolbar-item';
 import AIWriter from './AIWriter.vue';
 import AlignmentButtons from './AlignmentButtons.vue';
 import DocumentMode from './DocumentMode.vue';
@@ -17,9 +17,20 @@ import SearchInput from './SearchInput.vue';
 import { TOOLBAR_FONTS, TOOLBAR_FONT_SIZES } from './constants.js';
 import { getQuickFormatList } from '@extensions/linked-styles/index.js';
 
-const closeDropdown = (dropdown) => {
+const closeDropdown = (dropdown: ToolbarItem): void => {
   dropdown.expand.value = false;
 };
+
+interface MakeDefaultItemsParams {
+  superToolbar: import('./super-toolbar').SuperToolbar;
+  toolbarIcons: Record<string, string>;
+  toolbarTexts: Record<string, string>;
+  toolbarFonts: Array<{ label: string; key: string }> | null;
+  hideButtons: boolean;
+  availableWidth: number;
+  role: string;
+  isDev?: boolean;
+}
 
 export const makeDefaultItems = ({
   superToolbar,
@@ -30,7 +41,7 @@ export const makeDefaultItems = ({
   availableWidth,
   role,
   isDev = false,
-} = {}) => {
+}: MakeDefaultItemsParams) => {
   // bold
   const bold = useToolbarItem({
     type: 'button',
@@ -174,7 +185,7 @@ export const makeDefaultItems = ({
       let sanitizedValue = sanitizeNumber(size, 12);
       if (sanitizedValue < 8) sanitizedValue = 8;
       if (sanitizedValue > 96) sanitizedValue = 96;
-      let sanitizedValueStr = String(sanitizedValue);
+      const sanitizedValueStr = String(sanitizedValue);
 
       const foundSize = fontSizeOptions.find((i) => {
         return i.label === sanitizedValueStr || i.key === sanitizedValueStr;
@@ -209,7 +220,6 @@ export const makeDefaultItems = ({
     name: 'italic',
     command: 'toggleItalic',
     icon: toolbarIcons.italic,
-    active: false,
     tooltip: toolbarTexts.italic,
     attributes: {
       ariaLabel: 'Italic',
@@ -222,7 +232,6 @@ export const makeDefaultItems = ({
     name: 'underline',
     command: 'toggleUnderline',
     icon: toolbarIcons.underline,
-    active: false,
     tooltip: toolbarTexts.underline,
     attributes: {
       ariaLabel: 'Underline',
@@ -234,7 +243,6 @@ export const makeDefaultItems = ({
     name: 'strike',
     command: 'toggleStrike',
     icon: toolbarIcons.strikethrough,
-    active: false,
     tooltip: toolbarTexts.strikethrough,
     attributes: {
       ariaLabel: 'Strikethrough',
@@ -249,10 +257,9 @@ export const makeDefaultItems = ({
     hideLabel: true,
     markName: 'highlight',
     labelAttr: 'color',
-    active: false,
     tooltip: toolbarTexts.highlight,
     command: 'setHighlight',
-    noArgumentCommand: 'unsetHighlight',
+    noArgumentCommand: false,
     suppressActiveHighlight: true,
     attributes: {
       ariaLabel: 'Highlight',
@@ -278,7 +285,6 @@ export const makeDefaultItems = ({
     hideLabel: true,
     markName: 'textStyle',
     labelAttr: 'color',
-    active: false,
     tooltip: toolbarTexts.color,
     command: 'setColor',
     suppressActiveHighlight: true,
@@ -299,15 +305,14 @@ export const makeDefaultItems = ({
   });
 
   // search
-  const searchRef = ref(null);
+  const searchRef: Ref<HTMLInputElement | null> = ref(null);
   const search = useToolbarItem({
     type: 'dropdown',
     name: 'search',
-    active: false,
     icon: toolbarIcons.search,
     tooltip: toolbarTexts.search,
     group: 'right',
-    inputRef: searchRef,
+    inputRef: null,
     attributes: {
       ariaLabel: 'Search',
     },
@@ -339,7 +344,6 @@ export const makeDefaultItems = ({
     name: 'link',
     markName: 'link',
     icon: toolbarIcons.link,
-    active: false,
     tooltip: toolbarTexts.link,
     attributes: {
       ariaLabel: 'Link dropdown',
@@ -382,10 +386,9 @@ export const makeDefaultItems = ({
     type: 'options',
     name: 'linkInput',
     command: 'toggleLink',
-    active: false,
   });
-  link.childItem = linkInput;
-  linkInput.parentItem = link;
+  link.childItem.value = linkInput;
+  linkInput.parentItem.value = link;
 
   // image
   const image = useToolbarItem({
@@ -393,7 +396,6 @@ export const makeDefaultItems = ({
     name: 'image',
     command: 'startImageUpload',
     icon: toolbarIcons.image,
-    active: false,
     tooltip: toolbarTexts.image,
     disabled: false,
     attributes: {
@@ -408,7 +410,6 @@ export const makeDefaultItems = ({
     icon: toolbarIcons.table,
     hideLabel: true,
     labelAttr: 'table',
-    active: false,
     tooltip: toolbarTexts.table,
     command: 'insertTable',
     suppressActiveHighlight: true,
@@ -616,15 +617,15 @@ export const makeDefaultItems = ({
   });
 
   const setAlignmentIcon = (alignment, e) => {
-    let alignValue = e === 'both' ? 'justify' : e;
-    let icons = {
+    const alignValue = e === 'both' ? 'justify' : e;
+    const icons = {
       left: toolbarIcons.alignLeft,
       right: toolbarIcons.alignRight,
       center: toolbarIcons.alignCenter,
       justify: toolbarIcons.alignJustify,
     };
 
-    let icon = icons[alignValue] ?? icons.left;
+    const icon = icons[alignValue] ?? icons.left;
     alignment.icon.value = icon;
   };
 
@@ -634,7 +635,6 @@ export const makeDefaultItems = ({
     name: 'list',
     command: 'toggleBulletList',
     icon: toolbarIcons.bulletList,
-    active: false,
     tooltip: toolbarTexts.bulletList,
     attributes: {
       ariaLabel: 'Bullet list',
@@ -647,7 +647,6 @@ export const makeDefaultItems = ({
     name: 'numberedlist',
     command: 'toggleOrderedList',
     icon: toolbarIcons.numberedList,
-    active: false,
     tooltip: toolbarTexts.numberedList,
     attributes: {
       ariaLabel: 'Numbered list',
@@ -660,7 +659,6 @@ export const makeDefaultItems = ({
     name: 'indentleft',
     command: 'decreaseTextIndent',
     icon: toolbarIcons.indentLeft,
-    active: false,
     tooltip: toolbarTexts.indentLeft,
     disabled: false,
     attributes: {
@@ -674,7 +672,6 @@ export const makeDefaultItems = ({
     name: 'indentright',
     command: 'increaseTextIndent',
     icon: toolbarIcons.indentRight,
-    active: false,
     tooltip: toolbarTexts.indentRight,
     disabled: false,
     attributes: {
@@ -686,9 +683,7 @@ export const makeDefaultItems = ({
   const overflow = useToolbarItem({
     type: 'overflow',
     name: 'overflow',
-    command: null,
     icon: toolbarIcons.overflow,
-    active: false,
     disabled: false,
     attributes: {
       ariaLabel: 'Overflow items',
@@ -846,7 +841,6 @@ export const makeDefaultItems = ({
     tooltip: toolbarTexts.copyFormat,
     icon: toolbarIcons.copyFormat,
     command: 'copyFormat',
-    active: false,
     attributes: {
       ariaLabel: 'Copy formatting',
     },
@@ -945,7 +939,6 @@ export const makeDefaultItems = ({
     name: 'ruler',
     command: 'toggleRuler',
     icon: toolbarIcons.ruler,
-    active: false,
     tooltip: toolbarTexts.ruler,
     attributes: {
       ariaLabel: 'Ruler',

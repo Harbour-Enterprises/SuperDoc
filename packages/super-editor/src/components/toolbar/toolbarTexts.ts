@@ -1,4 +1,4 @@
-export const toolbarTexts = {
+export const toolbarTexts: Record<string, string> = {
   bold: 'Bold',
   fontFamily: 'Font',
   ai: 'AI text generation',

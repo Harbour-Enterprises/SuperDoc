@@ -1,54 +1,51 @@
-<script setup>
+<script setup lang="ts">
 import { ref, shallowRef, onMounted, onBeforeUnmount } from 'vue';
+import type { Editor as EditorType } from '@/index.js';
 import { Editor } from '@/index.js';
 import { getRichTextExtensions, Placeholder } from '@extensions/index.js';
+import type { Transaction } from 'prosemirror-state';
 
-const emit = defineEmits(['update:modelValue', 'focus', 'blur']);
-const props = defineProps({
-  modelValue: {
-    type: String,
-  },
+interface Props {
+  modelValue?: string;
+  placeholder?: string;
+  options?: Record<string, unknown>;
+  users?: unknown[];
+}
 
-  placeholder: {
-    type: String,
-    required: false,
-    default: 'Type something...',
-  },
+interface Emits {
+  (e: 'update:modelValue', value: string): void;
+  (e: 'focus', payload: { editor: EditorType; transaction: Transaction }): void;
+  (e: 'blur', payload: { editor: EditorType; transaction: Transaction }): void;
+}
 
-  options: {
-    type: Object,
-    required: false,
-    default: () => ({}),
-  },
-
-  users: {
-    type: Array,
-    required: false,
-    default: () => [],
-  },
+const emit = defineEmits<Emits>();
+const props = withDefaults(defineProps<Props>(), {
+  placeholder: 'Type something...',
+  options: () => ({}),
+  users: () => [],
 });
 
-const editor = shallowRef();
-const editorElem = ref(null);
+const editor = shallowRef<EditorType>();
+const editorElem = ref<HTMLElement | null>(null);
 const isFocused = ref(false);
 
-const onTransaction = ({ editor, transaction }) => {
+const onTransaction = ({ editor, transaction }: { editor: EditorType; transaction: Transaction }): void => {
   const contents = editor.getHTML();
   emit('update:modelValue', contents);
 };
 
-const onFocus = ({ editor, transaction }) => {
+const onFocus = ({ editor, transaction }: { editor: EditorType; transaction: Transaction }): void => {
   isFocused.value = true;
   updateUsersState();
   emit('focus', { editor, transaction });
 };
 
-const onBlur = ({ editor, transaction }) => {
+const onBlur = ({ editor, transaction }: { editor: EditorType; transaction: Transaction }): void => {
   isFocused.value = false;
   emit('blur', { editor, transaction });
 };
 
-const initEditor = async () => {
+const initEditor = async (): Promise<void> => {
   Placeholder.options.placeholder = props.placeholder || 'Type something...';
 
   props.options.onTransaction = onTransaction;
@@ -64,12 +61,12 @@ const initEditor = async () => {
   });
 };
 
-const handleFocus = () => {
+const handleFocus = (): void => {
   isFocused.value = true;
   editor.value?.view?.focus();
 };
 
-const updateUsersState = () => {
+const updateUsersState = (): void => {
   editor.value?.setOptions({ users: props.users });
 };
 

@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import IconGridRow from './IconGridRow.vue';
 import DropIcon from '@superdoc/common/icons/droplet-slash.svg?raw';
 const emit = defineEmits(['select', 'clickoutside']);

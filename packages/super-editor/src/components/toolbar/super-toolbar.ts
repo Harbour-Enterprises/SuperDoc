@@ -1,6 +1,7 @@
 import { EventEmitter } from 'eventemitter3';
-import { createApp } from 'vue';
+import { createApp, type App } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
+import { TextSelection } from 'prosemirror-state';
 import { makeDefaultItems } from './defaultItems';
 import { getActiveFormatting } from '@core/helpers/getActiveFormatting.js';
 import { findParentNode } from '@helpers/index.js';
@@ -15,9 +16,14 @@ import {
 import { toolbarIcons } from './toolbarIcons.js';
 import { toolbarTexts } from './toolbarTexts.js';
 import { getQuickFormatList } from '@extensions/linked-styles/index.js';
-import { getAvailableColorOptions, makeColorOption, renderColorOptions } from './color-dropdown-helpers.js';
+import {
+  getAvailableColorOptions,
+  makeColorOption,
+  renderColorOptions,
+  type ColorOption,
+} from './color-dropdown-helpers.js';
 import { isInTable } from '@helpers/isInTable.js';
-import { useToolbarItem } from '@components/toolbar/use-toolbar-item';
+import { useToolbarItem, type ToolbarItem } from '@components/toolbar/use-toolbar-item';
 import { yUndoPluginKey } from 'y-prosemirror';
 import { isNegatedMark } from './format-negation.js';
 import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
@@ -37,10 +43,14 @@ import { parseSizeUnit } from '@core/utilities';
 /**
  * @typedef {Object} ToolbarConfig
  * @property {string} [selector] - CSS selector for the toolbar container
+ * @property {string} [element] - Legacy: CSS selector for the toolbar container (use selector instead)
  * @property {string[]} [toolbarGroups=['left', 'center', 'right']] - Groups to organize toolbar items
  * @property {string} [role='editor'] - Role of the toolbar ('editor' or 'viewer')
  * @property {Object} [icons] - Custom icons for toolbar items
  * @property {Object} [texts] - Custom texts for toolbar items
+ * @property {any[]} [fonts] - Font options for the toolbar
+ * @property {boolean} [hideButtons] - Whether to hide buttons on overflow
+ * @property {boolean} [responsiveToContainer] - Whether toolbar should be responsive to container size
  * @property {string} [mode='docx'] - Editor mode
  * @property {string[]} [excludeItems=[]] - Items to exclude from the toolbar
  * @property {Object} [groups=null] - Custom groups configuration
@@ -48,6 +58,9 @@ import { parseSizeUnit } from '@core/utilities';
  * @property {string} [aiApiKey=null] - API key for AI integration
  * @property {string} [aiEndpoint=null] - Endpoint for AI integration
  * @property {ToolbarItem[]} [customButtons=[]] - Custom buttons to add to the toolbar
+ * @property {string} [documentMode] - Document mode ('editing', 'viewing', etc.)
+ * @property {boolean} [isDev] - Whether in development mode
+ * @property {any} [superdoc] - SuperDoc instance
  */
 
 /**
@@ -163,8 +176,27 @@ export class SuperToolbar extends EventEmitter {
    * Default configuration for the toolbar
    * @type {ToolbarConfig}
    */
-  config = {
+  config: {
+    selector: string | null;
+    element: string | null;
+    toolbarGroups: string[];
+    role: string;
+    icons: Record<string, string>;
+    texts: Record<string, string>;
+    fonts: Array<{ label: string; key: string }> | null;
+    hideButtons: boolean;
+    responsiveToContainer: boolean;
+    mode: string;
+    excludeItems: string[];
+    groups: Record<string, string[]> | null;
+    editor: import('../../core/Editor').Editor | null;
+    aiApiKey: string | null;
+    aiEndpoint: string | null;
+    customButtons: ToolbarItem[];
+    superdoc: unknown;
+  } = {
     selector: null,
+    element: null,
     toolbarGroups: ['left', 'center', 'right'],
     role: 'editor',
     icons: { ...toolbarIcons },
@@ -179,6 +211,108 @@ export class SuperToolbar extends EventEmitter {
     aiApiKey: null,
     aiEndpoint: null,
     customButtons: [],
+    superdoc: null,
+  };
+
+  /**
+   * Array of toolbar items
+   * @type {ToolbarItem[]}
+   */
+  toolbarItems: ToolbarItem[] = [];
+
+  /**
+   * Array of overflow items
+   * @type {ToolbarItem[]}
+   */
+  overflowItems: ToolbarItem[] = [];
+
+  /**
+   * Document mode
+   * @type {string}
+   */
+  documentMode: string = 'editing';
+
+  /**
+   * Whether in development mode
+   * @type {boolean}
+   */
+  isDev: boolean = false;
+
+  /**
+   * SuperDoc instance
+   * @type {unknown}
+   */
+  superdoc: unknown = null;
+
+  /**
+   * Toolbar role
+   * @type {string}
+   */
+  role: string = 'editor';
+
+  /**
+   * Toolbar container element
+   * @type {HTMLElement | null}
+   */
+  toolbarContainer: HTMLElement | null = null;
+
+  /**
+   * Vue app instance
+   * @type {App | null}
+   */
+  app: App | null = null;
+
+  /**
+   * Toolbar Vue component instance
+   * @type {unknown}
+   */
+  toolbar: unknown = null;
+
+  /**
+   * Active editor instance
+   * @type {import('../../core/Editor').Editor | null}
+   */
+  activeEditor: import('../../core/Editor').Editor | null = null;
+
+  /**
+   * Undo depth
+   * @type {number}
+   */
+  undoDepth: number = 0;
+
+  /**
+   * Redo depth
+   * @type {number}
+   */
+  redoDepth: number = 0;
+
+  /**
+   * Queue of mark commands to execute when editor regains focus.
+   * @type {Array<{command: string, argument: unknown, item: ToolbarItem}>}
+   * @private
+   */
+  pendingMarkCommands: Array<{ command: string; argument: unknown; item: ToolbarItem }> = [];
+
+  /**
+   * Persisted stored marks to re-apply when the selection is empty and has no formatting.
+   * @type {import('prosemirror-model').Mark[]|null}
+   * @private
+   */
+  stickyStoredMarks: import('prosemirror-model').Mark[] | null = null;
+
+  /**
+   * Bound event handlers stored for proper cleanup when switching editors.
+   * @type {{transaction: ((params: { transaction: unknown }) => void) | null, selectionUpdate: (() => void) | null, focus: (() => void) | null}}
+   * @private
+   */
+  _boundEditorHandlers: {
+    transaction: ((params: { transaction: unknown }) => void) | null;
+    selectionUpdate: (() => void) | null;
+    focus: (() => void) | null;
+  } = {
+    transaction: null,
+    selectionUpdate: null,
+    focus: null,
   };
 
   /**
@@ -186,17 +320,22 @@ export class SuperToolbar extends EventEmitter {
    * @param {ToolbarConfig} config - The configuration for the toolbar
    * @returns {void}
    */
-  constructor(config) {
+  constructor(
+    config: Partial<typeof SuperToolbar.prototype.config> & {
+      editor?: import('../../core/Editor').Editor;
+      documentMode?: string;
+      isDev?: boolean;
+      superdoc?: unknown;
+      role?: string;
+    },
+  ) {
     super();
 
     this.config = { ...this.config, ...config };
-    this.toolbarItems = [];
-    this.overflowItems = [];
     this.documentMode = config.documentMode || 'editing';
     this.isDev = config.isDev || false;
     this.superdoc = config.superdoc;
     this.role = config.role || 'editor';
-    this.toolbarContainer = null;
 
     if (this.config.editor) {
       this.config.mode = this.config.editor.options.mode;
@@ -215,31 +354,6 @@ export class SuperToolbar extends EventEmitter {
     this.config.hideButtons = config.hideButtons ?? true;
     this.config.responsiveToContainer = config.responsiveToContainer ?? false;
 
-    /**
-     * Queue of mark commands to execute when editor regains focus.
-     * @type {Array<{command: string, argument: *, item: ToolbarItem}>}
-     * @private
-     */
-    this.pendingMarkCommands = [];
-
-    /**
-     * Persisted stored marks to re-apply when the selection is empty and has no formatting.
-     * @type {import('prosemirror-model').Mark[]|null}
-     * @private
-     */
-    this.stickyStoredMarks = null;
-
-    /**
-     * Bound event handlers stored for proper cleanup when switching editors.
-     * @type {{transaction: Function|null, selectionUpdate: Function|null, focus: Function|null}}
-     * @private
-     */
-    this._boundEditorHandlers = {
-      transaction: null,
-      selectionUpdate: null,
-      focus: null,
-    };
-
     // Move legacy 'element' to 'selector'
     if (!this.config.selector && this.config.element) {
       this.config.selector = this.config.element;
@@ -249,10 +363,12 @@ export class SuperToolbar extends EventEmitter {
     this.#initToolbarGroups();
     this.#makeToolbarItems({
       superToolbar: this,
-      icons: this.config.icons,
-      texts: this.config.texts,
-      fonts: this.config.fonts,
+      toolbarIcons: this.config.icons,
+      toolbarTexts: this.config.texts,
+      toolbarFonts: this.config.fonts,
       hideButtons: this.config.hideButtons,
+      availableWidth: 0,
+      role: this.role,
       isDev: config.isDev,
     });
 
@@ -270,8 +386,8 @@ export class SuperToolbar extends EventEmitter {
     this.updateToolbarState();
   }
 
-  findElementBySelector(selector) {
-    let el = null;
+  findElementBySelector(selector: string | null | undefined): HTMLElement | null {
+    let el: HTMLElement | null = null;
 
     if (selector) {
       if (selector.startsWith('#') || selector.startsWith('.')) {
@@ -430,8 +546,8 @@ export class SuperToolbar extends EventEmitter {
      */
     startImageUpload: async () => {
       try {
-        let open = getFileOpener();
-        let result = await open();
+        const open = getFileOpener();
+        const result: { file?: File } | undefined = await open();
 
         if (!result?.file) {
           return;
@@ -476,7 +592,7 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     increaseTextIndent: ({ item, argument }) => {
-      let command = item.command;
+      const command = item.command;
 
       if (this.activeEditor.commands.increaseListIndent?.()) {
         return true;
@@ -495,7 +611,7 @@ export class SuperToolbar extends EventEmitter {
      * @returns {boolean}
      */
     decreaseTextIndent: ({ item, argument }) => {
-      let command = item.command;
+      const command = item.command;
 
       if (this.activeEditor.commands.decreaseListIndent?.()) {
         return true;
@@ -514,7 +630,7 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     toggleBold: ({ item, argument }) => {
-      let command = item.command;
+      const command = item.command;
 
       if (command in this.activeEditor.commands) {
         this.activeEditor.commands[command](argument);
@@ -532,7 +648,7 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     toggleItalic: ({ item, argument }) => {
-      let command = item.command;
+      const command = item.command;
 
       if (command in this.activeEditor.commands) {
         this.activeEditor.commands[command](argument);
@@ -550,7 +666,7 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     toggleUnderline: ({ item, argument }) => {
-      let command = item.command;
+      const command = item.command;
 
       if (command in this.activeEditor.commands) {
         this.activeEditor.commands[command](argument);
@@ -568,7 +684,7 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     toggleLink: ({ item, argument }) => {
-      let command = item.command;
+      const command = item.command;
 
       if (command in this.activeEditor.commands) {
         this.activeEditor.commands[command](argument);
@@ -603,7 +719,13 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     insertTable: ({ item, argument }) => {
-      this.#runCommandWithArgumentOnly({ item, argument });
+      if (!argument || !this.activeEditor) return;
+
+      const command = item.command;
+      if (this.activeEditor && this.activeEditor.commands && command && command in this.activeEditor.commands) {
+        this.activeEditor.commands[command](argument);
+        this.updateToolbarState();
+      }
     },
 
     /**
@@ -616,7 +738,7 @@ export class SuperToolbar extends EventEmitter {
     executeTableCommand: ({ argument }) => {
       if (!argument) return;
 
-      let command = argument.command;
+      const command = argument.command;
 
       if (command in this.activeEditor.commands) {
         this.activeEditor.commands[command](argument);
@@ -701,24 +823,45 @@ export class SuperToolbar extends EventEmitter {
    * Create toolbar items based on configuration
    * @private
    * @param {SuperToolbar} options.superToolbar - The toolbar instance
-   * @param {Object} options.icons - Icons to use for toolbar items
-   * @param {Object} options.texts - Texts to use for toolbar items
-   * @param {Array} options.fonts - Fonts for the toolbar item
+   * @param {Object} options.toolbarIcons - Icons to use for toolbar items
+   * @param {Object} options.toolbarTexts - Texts to use for toolbar items
+   * @param {Array} options.toolbarFonts - Fonts for the toolbar item
+   * @param {boolean} options.hideButtons - Whether to hide buttons on overflow
+   * @param {number} options.availableWidth - Available width for toolbar
+   * @param {string} options.role - Toolbar role
    * @param {boolean} options.isDev - Whether in development mode
    * @returns {void}
    */
-  #makeToolbarItems({ superToolbar, icons, texts, fonts, hideButtons, isDev = false } = {}) {
+  #makeToolbarItems({
+    superToolbar,
+    toolbarIcons,
+    toolbarTexts,
+    toolbarFonts,
+    hideButtons,
+    availableWidth,
+    role: _role,
+    isDev = false,
+  }: {
+    superToolbar: SuperToolbar;
+    toolbarIcons: Record<string, string>;
+    toolbarTexts: Record<string, string>;
+    toolbarFonts: Array<{ label: string; key: string }> | null;
+    hideButtons: boolean;
+    availableWidth: number;
+    role: string;
+    isDev?: boolean;
+  }) {
     const documentWidth = document.documentElement.clientWidth; // take into account the scrollbar
     const containerWidth = this.toolbarContainer?.offsetWidth ?? 0;
-    const availableWidth = this.config.responsiveToContainer ? containerWidth : documentWidth;
+    const computedAvailableWidth = this.config.responsiveToContainer ? containerWidth : documentWidth;
 
     const { defaultItems, overflowItems } = makeDefaultItems({
       superToolbar,
-      toolbarIcons: icons,
-      toolbarTexts: texts,
-      toolbarFonts: fonts,
+      toolbarIcons,
+      toolbarTexts,
+      toolbarFonts,
       hideButtons,
-      availableWidth,
+      availableWidth: computedAvailableWidth || availableWidth,
       role: this.role,
       isDev,
     });
@@ -770,22 +913,15 @@ export class SuperToolbar extends EventEmitter {
     if (!highlightItem) return;
 
     const pickerColorOptions = getAvailableColorOptions();
-    const perChunk = 7; // items per chunk
 
-    const result = Array.from(this.activeEditor.converter.docHiglightColors).reduce((resultArray, item, index) => {
-      const chunkIndex = Math.floor(index / perChunk);
-      if (!resultArray[chunkIndex]) {
-        resultArray[chunkIndex] = [];
-      }
-
-      if (!pickerColorOptions.includes(item)) resultArray[chunkIndex].push(makeColorOption(item));
-      return resultArray;
-    }, []);
+    const customColors: ColorOption[] = Array.from(this.activeEditor.converter.docHiglightColors)
+      .filter((color: string) => !pickerColorOptions.includes(color))
+      .map((color: string) => makeColorOption(color));
 
     const option = {
       key: 'color',
       type: 'render',
-      render: () => renderColorOptions(this, highlightItem, result, true),
+      render: () => renderColorOptions(this, highlightItem, customColors, true),
     };
 
     highlightItem.nestedOptions.value = [option];
@@ -915,7 +1051,7 @@ export class SuperToolbar extends EventEmitter {
 
       if (item.name.value === 'lineHeight') {
         if (paragraphProps?.spacing) {
-          item.selectedValue.value = twipsToLines(paragraphProps.spacing.line);
+          item.selectedValue.value = String(twipsToLines(paragraphProps.spacing.line));
         } else {
           item.selectedValue.value = '';
         }
@@ -945,10 +1081,12 @@ export class SuperToolbar extends EventEmitter {
   onToolbarResize = () => {
     this.#makeToolbarItems({
       superToolbar: this,
-      icons: this.config.icons,
-      texts: this.config.texts,
-      fonts: this.config.fonts,
+      toolbarIcons: this.config.icons,
+      toolbarTexts: this.config.texts,
+      toolbarFonts: this.config.fonts,
       hideButtons: this.config.hideButtons,
+      availableWidth: 0,
+      role: this.role,
       isDev: this.isDev,
     });
 
@@ -1161,7 +1299,7 @@ export class SuperToolbar extends EventEmitter {
   #runCommandWithArgumentOnly({ item, argument, noArgumentCallback = false }, callback) {
     if (!argument || !this.activeEditor) return;
 
-    let command = item.command;
+    const command = item.command;
     const noArgumentCommand = item.noArgumentCommand;
 
     if (
