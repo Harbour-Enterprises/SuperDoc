@@ -47,7 +47,7 @@ const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = run.text ?? '';
+    const text = run.kind === 'image' ? '' : (run.text ?? '');
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
     const runLength = text.length;
@@ -187,6 +187,10 @@ const translateFragment = (fragment: Fragment, offsetY: number, offsetX: number 
 const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
   if (run.kind === 'tab') {
     return run.text;
+  }
+  if (run.kind === 'image') {
+    // Image runs don't have text content
+    return '';
   }
   if (!run.token) {
     return run.text ?? '';
@@ -637,7 +641,7 @@ export class PdfPainter {
     }
 
     const fontId = selectFont(markerRun);
-    const fontSize = markerRun.kind === 'tab' ? 12 : markerRun.fontSize;
+    const fontSize = markerRun.kind === 'text' ? markerRun.fontSize : 12;
     const markerParts = [
       'BT',
       `1 0 0 1 ${toPt(markerX).toFixed(2)} ${toPt(pageHeightPx - markerBaseline).toFixed(2)} Tm`,
@@ -743,7 +747,8 @@ export class PdfPainter {
         // Prefer original block run for styling; slice text by absolute run chars
         const blockRun = block.runs[segment.runIndex] as Run | undefined;
         const isTab = blockRun?.kind === 'tab';
-        if (!blockRun || isTab) continue;
+        const isImage = blockRun?.kind === 'image';
+        if (!blockRun || isTab || isImage) continue;
 
         const fullText = blockRun.text ?? '';
         const segSlice = fullText.slice(segment.fromChar, segment.toChar);
@@ -762,7 +767,7 @@ export class PdfPainter {
           positioned = true;
         }
 
-        if (segRun.kind !== 'tab') {
+        if (segRun.kind === 'text') {
           parts.push(`${formatColor(segRun.color)} rg`);
           parts.push(`/${fontId} ${toPt(segRun.fontSize).toFixed(2)} Tf`);
         }
@@ -773,7 +778,7 @@ export class PdfPainter {
       // Fallback: sequential run-based rendering from the line origin
       parts.push(`1 0 0 1 ${toPt(x).toFixed(2)} ${toPt(pageHeightPx - baseline).toFixed(2)} Tm`);
       runs.forEach((run) => {
-        if (run.kind === 'tab') return; // skip tabs
+        if (run.kind === 'tab' || run.kind === 'image') return; // skip tabs and images
         const fontId = selectFont(run);
         parts.push(`${formatColor(run.color)} rg`);
         parts.push(`/${fontId} ${toPt(run.fontSize).toFixed(2)} Tf`);
@@ -1035,12 +1040,29 @@ export class PdfPainter {
 
     // Set fill color
     if (block.fillColor) {
-      const rgb = this.parseColor(block.fillColor);
-      pdf += `${rgb.r.toFixed(4)} ${rgb.g.toFixed(4)} ${rgb.b.toFixed(4)} rg\n`;
+      // Handle complex fill types - extract color string or use fallback
+      let colorStr: string | null = null;
+      if (typeof block.fillColor === 'string') {
+        colorStr = block.fillColor;
+      } else if (block.fillColor && typeof block.fillColor === 'object' && 'type' in block.fillColor) {
+        if (block.fillColor.type === 'solidWithAlpha') {
+          colorStr = (block.fillColor as { color: string }).color;
+          // TODO: Apply alpha via ExtGState
+        } else if (block.fillColor.type === 'gradient') {
+          // TODO: Implement PDF gradient shading patterns
+          // For now, use first stop color as fallback
+          const stops = (block.fillColor as { stops?: Array<{ color: string }> }).stops;
+          colorStr = stops?.[0]?.color ?? '#cccccc';
+        }
+      }
+      if (colorStr) {
+        const rgb = this.parseColor(colorStr);
+        pdf += `${rgb.r.toFixed(4)} ${rgb.g.toFixed(4)} ${rgb.b.toFixed(4)} rg\n`;
+      }
     }
 
     // Set stroke color and width
-    if (block.strokeColor) {
+    if (block.strokeColor && typeof block.strokeColor === 'string') {
       const rgb = this.parseColor(block.strokeColor);
       pdf += `${rgb.r.toFixed(4)} ${rgb.g.toFixed(4)} ${rgb.b.toFixed(4)} RG\n`;
     }
@@ -1403,7 +1425,7 @@ const getDashPattern = (style: BorderStyle, strokeWidthPx: number): number[] | n
 const toPt = (px: number) => px * PX_TO_PT;
 
 const selectFont = (run: Run): FontKey => {
-  if (run.kind === 'tab') return FONT_IDS.regular;
+  if (run.kind === 'tab' || run.kind === 'image') return FONT_IDS.regular;
   if (run.bold && run.italic) return FONT_IDS.boldItalic;
   if (run.bold) return FONT_IDS.bold;
   if (run.italic) return FONT_IDS.italic;
@@ -1978,7 +2000,7 @@ const concatBytes = (...buffers: Uint8Array[]): Uint8Array => {
 
 const getPrimaryRun = (paragraph: ParagraphBlock): Run => {
   return (
-    paragraph.runs.find((run) => run.kind !== 'tab' && Boolean(run.fontFamily && run.fontSize)) || {
+    paragraph.runs.find((run) => run.kind === 'text' && Boolean(run.fontFamily && run.fontSize)) || {
       text: '',
       fontFamily: 'Arial',
       fontSize: 16,

@@ -100,10 +100,12 @@ const normalizeWrap = (value: unknown): ImageBlock['wrap'] | undefined => {
   }
 
   const type = normalizeWrapType(value.type);
-  if (!type || type === 'Inline') {
+  if (!type) {
     return undefined;
   }
 
+  // FIXED: For inline images, still return wrap data but mark it as Inline type
+  // This preserves spacing attributes (distT/distB/distL/distR) for inline images
   const wrap: ImageBlock['wrap'] = { type };
   const attrs = isPlainObject(value.attrs) ? value.attrs : {};
 

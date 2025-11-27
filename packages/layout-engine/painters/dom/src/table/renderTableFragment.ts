@@ -9,7 +9,6 @@ import type {
 } from '@superdoc/contracts';
 import { CLASS_NAMES, fragmentStyles } from '../styles.js';
 import type { FragmentRenderContext, BlockLookup } from '../renderer.js';
-import { createTableBorderOverlay } from './border-utils.js';
 import { renderTableRow } from './renderTableRow.js';
 
 type ApplyStylesFn = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>) => void;
@@ -132,7 +131,9 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
   const block = lookup.block as TableBlock;
   const measure = lookup.measure as TableMeasure;
   const tableBorders = block.attrs?.borders;
-  const borderOverlay = tableBorders ? createTableBorderOverlay(doc, fragment, tableBorders) : null;
+  // Note: We don't use createTableBorderOverlay because we implement single-owner
+  // border model where cells handle all borders (including outer table borders)
+  // to prevent double borders when rendering with absolutely-positioned divs.
 
   const container = doc.createElement('div');
   container.classList.add(CLASS_NAMES.fragment);
@@ -260,10 +261,6 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
       applySdtDataset,
     });
     y += rowMeasure.height;
-  }
-
-  if (borderOverlay) {
-    container.appendChild(borderOverlay);
   }
 
   return container;

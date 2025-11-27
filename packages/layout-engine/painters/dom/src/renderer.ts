@@ -10,6 +10,7 @@ import type {
   DrawingFragment,
   Run,
   TextRun,
+  ImageRun,
   Line,
   ParagraphBlock,
   ParagraphMeasure,
@@ -33,8 +34,12 @@ import type {
   PositionedDrawingGeometry,
   VectorShapeStyle,
   FlowRunLink,
+  GradientFill,
+  SolidFillWithAlpha,
+  ShapeTextContent,
 } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
+import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
 import {
   CLASS_NAMES,
   containerStyles,
@@ -197,6 +202,19 @@ const LINK_DATASET_KEYS = {
 const MAX_HREF_LENGTH = 2048;
 
 const SAFE_ANCHOR_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Maximum allowed length for data URLs (10MB).
+ * Prevents denial of service attacks from extremely large embedded images.
+ */
+const MAX_DATA_URL_LENGTH = 10 * 1024 * 1024; // 10MB
+
+/**
+ * Regular expression to validate data URL format for images.
+ * Only allows common, safe image MIME types with base64 encoding.
+ * Prevents XSS and malformed data URL attacks.
+ */
+const VALID_IMAGE_DATA_URL = /^data:image\/(png|jpeg|jpg|gif|svg\+xml|webp|bmp|ico|tiff?);base64,/i;
 
 /**
  * Pattern to detect ambiguous link text that doesn't convey destination (WCAG 2.4.4).
@@ -1625,6 +1643,7 @@ export class DomPainter {
       this.applyFragmentFrame(fragmentEl, fragment);
       fragmentEl.style.height = `${fragment.height}px`;
       fragmentEl.style.position = 'absolute';
+      fragmentEl.style.overflow = 'hidden';
 
       if (fragment.isAnchored && fragment.zIndex != null) {
         fragmentEl.style.zIndex = String(fragment.zIndex);
@@ -1694,12 +1713,15 @@ export class DomPainter {
     block: VectorShapeDrawing,
     geometry?: DrawingGeometry,
     applyTransforms = false,
+    groupScaleX = 1,
+    groupScaleY = 1,
   ): HTMLElement {
     const container = this.doc!.createElement('div');
     container.classList.add('superdoc-vector-shape');
     container.style.width = '100%';
     container.style.height = '100%';
     container.style.position = 'relative';
+    container.style.overflow = 'hidden';
 
     const svgMarkup = block.shapeKind ? this.tryCreatePresetSvg(block) : null;
     if (svgMarkup) {
@@ -1708,29 +1730,255 @@ export class DomPainter {
         svgElement.setAttribute('width', '100%');
         svgElement.setAttribute('height', '100%');
         svgElement.style.display = 'block';
+
+        // Apply gradient fill if present
+        if (block.fillColor && typeof block.fillColor === 'object') {
+          if ('type' in block.fillColor && block.fillColor.type === 'gradient') {
+            applyGradientToSVG(svgElement, block.fillColor as GradientFill);
+          } else if ('type' in block.fillColor && block.fillColor.type === 'solidWithAlpha') {
+            applyAlphaToSVG(svgElement, block.fillColor as SolidFillWithAlpha);
+          }
+        }
+
         if (applyTransforms && geometry) {
           this.applyVectorShapeTransforms(svgElement, geometry);
         }
         container.appendChild(svgElement);
+
+        // Apply text content as an overlay div (not inside SVG to avoid viewBox scaling)
+        if (block.textContent && block.textContent.parts.length > 0) {
+          const textDiv = this.createFallbackTextElement(
+            block.textContent,
+            block.textAlign ?? 'center',
+            block.textVerticalAlign,
+            block.textInsets,
+            groupScaleX,
+            groupScaleY,
+          );
+          container.appendChild(textDiv);
+        }
+
         return container;
       }
     }
 
-    container.style.background = block.fillColor ?? 'rgba(15, 23, 42, 0.1)';
-    container.style.border = `1px solid ${block.strokeColor ?? 'rgba(15, 23, 42, 0.3)'}`;
+    // Fallback rendering when no preset shape SVG is available
+    this.applyFallbackShapeStyle(container, block);
+
+    // Apply text content to fallback rendering
+    if (block.textContent && block.textContent.parts.length > 0) {
+      const textDiv = this.createFallbackTextElement(
+        block.textContent,
+        block.textAlign ?? 'center',
+        block.textVerticalAlign,
+        block.textInsets,
+        groupScaleX,
+        groupScaleY,
+      );
+      container.appendChild(textDiv);
+    }
+
     if (applyTransforms && geometry) {
       this.applyVectorShapeTransforms(container, geometry);
     }
     return container;
   }
 
+  /**
+   * Apply fill and stroke styles to a fallback shape container
+   */
+  private applyFallbackShapeStyle(container: HTMLElement, block: VectorShapeDrawing): void {
+    // Handle fill color
+    if (block.fillColor === null) {
+      container.style.background = 'none';
+    } else if (typeof block.fillColor === 'string') {
+      container.style.background = block.fillColor;
+    } else if (typeof block.fillColor === 'object' && 'type' in block.fillColor) {
+      if (block.fillColor.type === 'solidWithAlpha') {
+        const alpha = (block.fillColor as SolidFillWithAlpha).alpha;
+        const color = (block.fillColor as SolidFillWithAlpha).color;
+        container.style.background = color;
+        container.style.opacity = alpha.toString();
+      } else if (block.fillColor.type === 'gradient') {
+        // For CSS gradients in fallback, we'd need to convert
+        // For now, use a placeholder color
+        container.style.background = 'rgba(15, 23, 42, 0.1)';
+      }
+    } else {
+      container.style.background = 'rgba(15, 23, 42, 0.1)';
+    }
+
+    // Handle stroke color
+    if (block.strokeColor === null) {
+      container.style.border = 'none';
+    } else if (typeof block.strokeColor === 'string') {
+      const strokeWidth = block.strokeWidth ?? 1;
+      container.style.border = `${strokeWidth}px solid ${block.strokeColor}`;
+    } else {
+      container.style.border = '1px solid rgba(15, 23, 42, 0.3)';
+    }
+  }
+
+  /**
+   * Create a fallback text element for shapes without SVG
+   * @param textContent - Text content with formatting
+   * @param textAlign - Horizontal text alignment
+   * @param textVerticalAlign - Vertical text alignment (top, center, bottom)
+   * @param textInsets - Text insets in pixels (top, right, bottom, left)
+   * @param groupScaleX - Scale factor applied by parent group (for counter-scaling)
+   * @param groupScaleY - Scale factor applied by parent group (for counter-scaling)
+   */
+  private createFallbackTextElement(
+    textContent: ShapeTextContent,
+    textAlign: string,
+    textVerticalAlign?: 'top' | 'center' | 'bottom',
+    textInsets?: { top: number; right: number; bottom: number; left: number },
+    groupScaleX = 1,
+    groupScaleY = 1,
+  ): HTMLElement {
+    const textDiv = this.doc!.createElement('div');
+    textDiv.style.position = 'absolute';
+    textDiv.style.top = '0';
+    textDiv.style.left = '0';
+    textDiv.style.width = '100%';
+    textDiv.style.height = '100%';
+    textDiv.style.display = 'flex';
+    textDiv.style.flexDirection = 'column';
+
+    // Use extracted vertical alignment or default to center
+    // In flex-direction: column, justifyContent controls vertical (main axis)
+    const verticalAlign = textVerticalAlign ?? 'center';
+    if (verticalAlign === 'top') {
+      textDiv.style.justifyContent = 'flex-start';
+    } else if (verticalAlign === 'bottom') {
+      textDiv.style.justifyContent = 'flex-end';
+    } else {
+      textDiv.style.justifyContent = 'center';
+    }
+
+    // Use extracted text insets or default to 10px all around
+    if (textInsets) {
+      textDiv.style.padding = `${textInsets.top}px ${textInsets.right}px ${textInsets.bottom}px ${textInsets.left}px`;
+    } else {
+      textDiv.style.padding = '10px';
+    }
+
+    textDiv.style.boxSizing = 'border-box';
+    textDiv.style.wordWrap = 'break-word';
+    textDiv.style.overflowWrap = 'break-word';
+    textDiv.style.overflow = 'hidden';
+    // min-width: 0 allows flex container to shrink below content size for text wrapping
+    textDiv.style.minWidth = '0';
+    // Set explicit base font-size to prevent CSS inheritance issues
+    // Individual spans will override with their own sizes from textContent.parts
+    textDiv.style.fontSize = '12px';
+    textDiv.style.lineHeight = '1.2';
+
+    // Apply counter-scaling to prevent text from being stretched by parent group transform
+    if (groupScaleX !== 1 || groupScaleY !== 1) {
+      const counterScaleX = 1 / groupScaleX;
+      const counterScaleY = 1 / groupScaleY;
+      textDiv.style.transform = `scale(${counterScaleX}, ${counterScaleY})`;
+      textDiv.style.transformOrigin = 'top left';
+      // Adjust dimensions to compensate for counter-scaling
+      textDiv.style.width = `${100 * groupScaleX}%`;
+      textDiv.style.height = `${100 * groupScaleY}%`;
+    }
+
+    // Horizontal text alignment uses CSS text-align property
+    // Note: justifyContent is already set above for vertical alignment
+    if (textAlign === 'center') {
+      textDiv.style.textAlign = 'center';
+    } else if (textAlign === 'right' || textAlign === 'r') {
+      textDiv.style.textAlign = 'right';
+    } else {
+      textDiv.style.textAlign = 'left';
+    }
+
+    // Create paragraphs by splitting on line breaks
+    let currentParagraph = this.doc!.createElement('div');
+    // Set width to 100% to enable text wrapping within the shape bounds
+    currentParagraph.style.width = '100%';
+    // min-width: 0 prevents flex item from overflowing (flexbox default is min-width: auto)
+    currentParagraph.style.minWidth = '0';
+    // Override inherited white-space: pre from parent fragment to allow text wrapping
+    currentParagraph.style.whiteSpace = 'normal';
+
+    textContent.parts.forEach((part) => {
+      if (part.isLineBreak) {
+        // Finish current paragraph and start a new one
+        textDiv.appendChild(currentParagraph);
+        currentParagraph = this.doc!.createElement('div');
+        currentParagraph.style.width = '100%';
+        currentParagraph.style.minWidth = '0';
+        currentParagraph.style.whiteSpace = 'normal';
+        // Empty paragraphs create extra spacing (blank line)
+        if (part.isEmptyParagraph) {
+          currentParagraph.style.minHeight = '1em';
+        }
+      } else {
+        const span = this.doc!.createElement('span');
+        span.textContent = part.text;
+        if (part.formatting) {
+          if (part.formatting.bold) {
+            span.style.fontWeight = 'bold';
+          }
+          if (part.formatting.italic) {
+            span.style.fontStyle = 'italic';
+          }
+          if (part.formatting.color) {
+            // Validate and normalize color format (handles both with and without # prefix)
+            const validatedColor = validateHexColor(part.formatting.color);
+            if (validatedColor) {
+              span.style.color = validatedColor;
+            }
+          }
+          if (part.formatting.fontSize) {
+            span.style.fontSize = `${part.formatting.fontSize}px`;
+          }
+        }
+        currentParagraph.appendChild(span);
+      }
+    });
+
+    // Add the final paragraph
+    textDiv.appendChild(currentParagraph);
+
+    return textDiv;
+  }
+
   private tryCreatePresetSvg(block: VectorShapeDrawing): string | null {
     try {
+      // For preset shapes, we need to pass string colors only
+      // Gradients and alpha will be applied after SVG is created
+      // null means explicitly "no fill" (from <a:noFill/> or fillRef idx="0"), so use 'none'
+      // undefined means no explicit fill, so we let the preset library use its default
+      let fillColor: string | undefined;
+      if (block.fillColor === null) {
+        fillColor = 'none';
+      } else if (typeof block.fillColor === 'string') {
+        fillColor = block.fillColor;
+      }
+      const strokeColor =
+        block.strokeColor === null ? 'none' : typeof block.strokeColor === 'string' ? block.strokeColor : undefined;
+
+      // Special case: handle line shapes directly since getPresetShapeSvg doesn't support them
+      if (block.shapeKind === 'line') {
+        const width = block.geometry.width;
+        const height = block.geometry.height;
+        const stroke = strokeColor ?? '#000000';
+        const strokeWidth = block.strokeWidth ?? 1;
+
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <line x1="0" y1="0" x2="${width}" y2="${height}" stroke="${stroke}" stroke-width="${strokeWidth}" />
+</svg>`;
+      }
+
       return getPresetShapeSvg({
         preset: block.shapeKind ?? '',
         styleOverrides: () => ({
-          fill: block.fillColor ?? undefined,
-          stroke: block.strokeColor ?? undefined,
+          fill: fillColor,
+          stroke: strokeColor,
           strokeWidth: block.strokeWidth ?? undefined,
         }),
       });
@@ -1804,6 +2052,10 @@ export class DomPainter {
     const groupTransform = block.groupTransform;
     let contentContainer: HTMLElement = groupEl;
 
+    // Calculate scale factors for counter-scaling text
+    let groupScaleX = 1;
+    let groupScaleY = 1;
+
     if (groupTransform) {
       const inner = this.doc!.createElement('div');
       inner.style.position = 'absolute';
@@ -1821,10 +2073,10 @@ export class DomPainter {
       }
       const targetWidth = groupTransform.width ?? block.geometry.width ?? childWidth;
       const targetHeight = groupTransform.height ?? block.geometry.height ?? childHeight;
-      const scaleX = childWidth ? targetWidth / childWidth : 1;
-      const scaleY = childHeight ? targetHeight / childHeight : 1;
-      if (scaleX !== 1 || scaleY !== 1) {
-        transforms.push(`scale(${scaleX}, ${scaleY})`);
+      groupScaleX = childWidth ? targetWidth / childWidth : 1;
+      groupScaleY = childHeight ? targetHeight / childHeight : 1;
+      if (groupScaleX !== 1 || groupScaleY !== 1) {
+        transforms.push(`scale(${groupScaleX}, ${groupScaleY})`);
       }
       if (transforms.length > 0) {
         inner.style.transformOrigin = 'top left';
@@ -1835,7 +2087,7 @@ export class DomPainter {
     }
 
     block.shapes.forEach((child) => {
-      const childContent = this.createGroupChildContent(child);
+      const childContent = this.createGroupChildContent(child, groupScaleX, groupScaleY);
       if (!childContent) return;
       const attrs = (child as ShapeGroupChild).attrs ?? {};
       const wrapper = this.doc!.createElement('div');
@@ -1870,7 +2122,11 @@ export class DomPainter {
     return groupEl;
   }
 
-  private createGroupChildContent(child: ShapeGroupChild): HTMLElement | null {
+  private createGroupChildContent(
+    child: ShapeGroupChild,
+    groupScaleX: number = 1,
+    groupScaleY: number = 1,
+  ): HTMLElement | null {
     // Type narrowing with explicit checks to help TypeScript distinguish union members
     if (child.shapeType === 'vectorShape' && 'fillColor' in child.attrs) {
       // After this check, child should be ShapeGroupVectorChild
@@ -1879,18 +2135,21 @@ export class DomPainter {
           kind?: string;
           shapeId?: string;
           shapeName?: string;
+          textContent?: ShapeTextContent;
+          textAlign?: string;
         };
+      const childGeometry = {
+        width: attrs.width ?? 0,
+        height: attrs.height ?? 0,
+        rotation: attrs.rotation ?? 0,
+        flipH: attrs.flipH ?? false,
+        flipV: attrs.flipV ?? false,
+      };
       const vectorChild: VectorShapeDrawing = {
         drawingKind: 'vectorShape',
         kind: 'drawing',
         id: `${attrs.shapeId ?? child.shapeType}`,
-        geometry: {
-          width: attrs.width ?? 0,
-          height: attrs.height ?? 0,
-          rotation: attrs.rotation ?? 0,
-          flipH: attrs.flipH ?? false,
-          flipV: attrs.flipV ?? false,
-        },
+        geometry: childGeometry,
         padding: undefined,
         margin: undefined,
         anchor: undefined,
@@ -1902,8 +2161,11 @@ export class DomPainter {
         fillColor: attrs.fillColor,
         strokeColor: attrs.strokeColor,
         strokeWidth: attrs.strokeWidth,
+        textContent: attrs.textContent,
+        textAlign: attrs.textAlign,
       };
-      return this.createVectorShapeElement(vectorChild);
+      // Pass geometry and scale factors to ensure text overlay has correct dimensions
+      return this.createVectorShapeElement(vectorChild, childGeometry, false, groupScaleX, groupScaleY);
     }
     if (child.shapeType === 'image' && 'src' in child.attrs) {
       // After this check, child should be ShapeGroupImageChild
@@ -2156,11 +2418,24 @@ export class DomPainter {
   /**
    * Render a single run as an HTML element (span or anchor).
    */
+  /**
+   * Type guard to check if a run is an image run.
+   */
+  private isImageRun(run: Run): run is ImageRun {
+    return run.kind === 'image';
+  }
+
   private renderRun(
     run: Run,
     context: FragmentRenderContext,
     trackedConfig?: TrackedChangesRenderConfig,
   ): HTMLElement | null {
+    // Handle ImageRun
+    if (this.isImageRun(run)) {
+      return this.renderImageRun(run);
+    }
+
+    // Handle TextRun
     if (!run.text || !this.doc) {
       return null;
     }
@@ -2206,6 +2481,120 @@ export class DomPainter {
     this.applySdtDataset(elem, (run as TextRun).sdt);
 
     return elem;
+  }
+
+  /**
+   * Renders an ImageRun as an inline <img> element.
+   *
+   * SECURITY NOTES:
+   * - Data URLs are validated against VALID_IMAGE_DATA_URL regex to ensure proper format
+   * - Size limit (MAX_DATA_URL_LENGTH) prevents DoS attacks from extremely large images
+   * - Only allows safe image MIME types (png, jpeg, gif, etc.) with base64 encoding
+   * - Non-data URLs are sanitized through sanitizeUrl to prevent XSS
+   *
+   * @param run - The ImageRun to render containing image source, dimensions, and spacing
+   * @returns HTMLElement (img) or null if src is missing or invalid
+   *
+   * @example
+   * ```typescript
+   * // Valid data URL
+   * renderImageRun({ kind: 'image', src: 'data:image/png;base64,iVBORw...', width: 100, height: 100 })
+   * // Returns: <img> element
+   *
+   * // Invalid MIME type
+   * renderImageRun({ kind: 'image', src: 'data:text/html;base64,PHNjcmlwdD4...', width: 100, height: 100 })
+   * // Returns: null (blocked)
+   *
+   * // HTTP URL
+   * renderImageRun({ kind: 'image', src: 'https://example.com/image.png', width: 100, height: 100 })
+   * // Returns: <img> element (after sanitization)
+   * ```
+   */
+  private renderImageRun(run: ImageRun): HTMLElement | null {
+    if (!this.doc || !run.src) {
+      return null;
+    }
+
+    // Create img element
+    const img = this.doc.createElement('img');
+
+    // Set source - validate data URLs with strict format and size checks
+    // Note: data: URLs are blocked by sanitizeUrl for hyperlinks (XSS risk),
+    // but are safe for <img> elements when properly validated
+    const isDataUrl = typeof run.src === 'string' && run.src.startsWith('data:');
+    if (isDataUrl) {
+      // SECURITY: Validate data URL format and size
+      if (run.src.length > MAX_DATA_URL_LENGTH) {
+        // Reject data URLs that are too large (DoS prevention)
+        return null;
+      }
+      if (!VALID_IMAGE_DATA_URL.test(run.src)) {
+        // Reject data URLs with invalid MIME types or encoding
+        return null;
+      }
+      img.src = run.src;
+    } else {
+      const sanitized = sanitizeUrl(run.src);
+      if (sanitized) {
+        img.src = sanitized;
+      } else {
+        // Invalid URL - return null
+        return null;
+      }
+    }
+
+    // Set dimensions
+    img.width = run.width;
+    img.height = run.height;
+
+    // Set alt text (required for accessibility)
+    img.alt = run.alt ?? '';
+
+    // Set title if present
+    if (run.title) {
+      img.title = run.title;
+    }
+
+    // Apply inline-block display
+    img.style.display = 'inline-block';
+
+    // Apply vertical alignment (bottom-aligned to text baseline)
+    img.style.verticalAlign = run.verticalAlign ?? 'bottom';
+
+    // Apply spacing as CSS margins
+    if (run.distTop) {
+      img.style.marginTop = `${run.distTop}px`;
+    }
+    if (run.distBottom) {
+      img.style.marginBottom = `${run.distBottom}px`;
+    }
+    if (run.distLeft) {
+      img.style.marginLeft = `${run.distLeft}px`;
+    }
+    if (run.distRight) {
+      img.style.marginRight = `${run.distRight}px`;
+    }
+
+    // Apply z-index to render above tab leaders
+    img.style.zIndex = '1';
+
+    // Apply PM position tracking for cursor placement
+    if (run.pmStart != null) {
+      img.dataset.pmStart = String(run.pmStart);
+    }
+    if (run.pmEnd != null) {
+      img.dataset.pmEnd = String(run.pmEnd);
+    }
+
+    // Apply SDT metadata
+    this.applySdtDataset(img, run.sdt);
+
+    // Apply data attributes
+    if (run.dataAttrs) {
+      applyRunDataAttributes(img, run.dataAttrs);
+    }
+
+    return img;
   }
 
   private renderLine(block: ParagraphBlock, line: Line, context: FragmentRenderContext): HTMLElement {
@@ -2299,6 +2688,20 @@ export class DomPainter {
       line.segments.forEach((segment, _segIdx) => {
         const baseRun = runs[segment.runIndex];
         if (!baseRun || baseRun.kind === 'tab') return;
+
+        // Handle ImageRun - render as-is (no slicing needed, atomic unit)
+        if (this.isImageRun(baseRun)) {
+          const elem = this.renderRun(baseRun, context, trackedConfig);
+          if (elem) {
+            if (styleId) {
+              elem.setAttribute('styleid', styleId);
+            }
+            // Images don't need explicit X positioning in tab-aligned content
+            // They flow naturally at their position in the run sequence
+            el.appendChild(elem);
+          }
+          return;
+        }
 
         // Extract the text for this segment from the text run
         const segmentText = baseRun.text.slice(segment.fromChar, segment.toChar);
@@ -2699,8 +3102,28 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
 const deriveBlockVersion = (block: FlowBlock): string => {
   if (block.kind === 'paragraph') {
     return block.runs
-      .map((run) =>
-        [
+      .map((run) => {
+        // Handle ImageRun
+        if (run.kind === 'image') {
+          const imgRun = run as ImageRun;
+          return [
+            'img',
+            imgRun.src,
+            imgRun.width,
+            imgRun.height,
+            imgRun.alt ?? '',
+            imgRun.title ?? '',
+            imgRun.distTop ?? '',
+            imgRun.distBottom ?? '',
+            imgRun.distLeft ?? '',
+            imgRun.distRight ?? '',
+            imgRun.pmStart ?? '',
+            imgRun.pmEnd ?? '',
+          ].join(',');
+        }
+
+        // Handle TextRun and TabRun
+        return [
           run.text ?? '',
           run.kind !== 'tab' ? run.fontFamily : '',
           run.kind !== 'tab' ? run.fontSize : '',
@@ -2716,8 +3139,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           run.pmStart ?? '',
           run.pmEnd ?? '',
           run.kind !== 'tab' ? (run.token ?? '') : '',
-        ].join(','),
-      )
+        ].join(',');
+      })
       .join('|');
   }
 
@@ -2788,8 +3211,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 };
 
 const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void => {
-  if (run.kind === 'tab') {
-    // Tab runs don't have text styling properties
+  if (run.kind === 'tab' || run.kind === 'image') {
+    // Tab and image runs don't have text styling properties
     return;
   }
 
@@ -2965,6 +3388,12 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
     const run = block.runs[runIndex];
     if (!run) continue;
 
+    // FIXED: ImageRun handling - images are atomic units, no slicing needed
+    if (run.kind === 'image') {
+      result.push(run);
+      continue;
+    }
+
     const text = run.text ?? '';
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
@@ -3013,6 +3442,27 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
     const run = block.runs[runIndex];
     if (!run) continue;
 
+    // FIXED: ImageRun handling - images are treated as single units (length = 1)
+    if (run.kind === 'image') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
     const text = run.text ?? '';
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
@@ -3055,6 +3505,10 @@ const applyStyles = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>): voi
 const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
   if (run.kind === 'tab') {
     return run.text;
+  }
+  if (run.kind === 'image') {
+    // Image runs don't have text content
+    return '';
   }
   if (!run.token) {
     return run.text ?? '';

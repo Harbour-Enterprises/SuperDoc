@@ -1,5 +1,6 @@
 // @ts-expect-error - preset-geometry package may not have type definitions
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
+import { createGradient, createTextElement } from '../shared/svg-utils.js';
 
 export class ShapeGroupView {
   node;
@@ -35,6 +36,45 @@ export class ShapeGroupView {
 
   mount() {
     this.buildView();
+    // For absolutely positioned shape groups, ensure parent paragraph is positioned
+    // so it becomes the containing block for CSS absolute positioning
+    this.#ensureParentPositioned();
+  }
+
+  /**
+   * Ensures the parent paragraph element is positioned for absolute-positioned shape groups.
+   *
+   * For shape groups with wrap type 'None' (absolutely positioned), the parent paragraph
+   * element must have `position: relative` to establish a containing block for CSS absolute
+   * positioning. This allows the shape group's `top` and `left` offsets to position correctly
+   * relative to the paragraph.
+   *
+   * Uses requestAnimationFrame to defer the DOM manipulation until after the element is fully
+   * mounted in the DOM tree. This prevents race conditions where the parent element might not
+   * yet be available during the initial render phase.
+   *
+   * Only applies to wrap type 'None' - inline and floated elements do not require this setup.
+   */
+  #ensureParentPositioned() {
+    const wrapType = this.node.attrs.wrap?.type || 'Inline';
+    if (wrapType !== 'None') return;
+
+    // Use requestAnimationFrame to ensure the element is in the DOM
+    if (typeof globalThis !== 'undefined' && globalThis.requestAnimationFrame) {
+      globalThis.requestAnimationFrame(() => {
+        try {
+          const parent = this.root?.parentElement;
+          if (parent && parent.tagName === 'P') {
+            // Set parent paragraph as positioned so shape group positions relative to it
+            parent.style.position = 'relative';
+          }
+        } catch (error) {
+          // Silently handle DOM manipulation errors (e.g., detached node, read-only style)
+          // These are edge cases that should not break rendering
+          console.warn('Failed to position parent element for shape group:', error);
+        }
+      });
+    }
   }
 
   get dom() {
@@ -47,7 +87,7 @@ export class ShapeGroupView {
 
   createElement() {
     const attrs = this.node.attrs;
-    const { groupTransform, shapes, size } = attrs;
+    const { groupTransform, shapes, size, marginOffset, originalAttributes, wrap, anchorData } = attrs;
 
     const container = document.createElement('div');
     container.classList.add('sd-shape-group');
@@ -62,6 +102,73 @@ export class ShapeGroupView {
     container.style.position = 'relative';
     container.style.display = 'inline-block';
 
+    // Handle wrapping and positioning based on wrap type
+    const wrapType = wrap?.type || 'Inline';
+
+    if (wrapType === 'None') {
+      // Absolutely positioned, floats above content
+      container.style.position = 'absolute';
+
+      // Per OOXML spec, all relativeFrom values (page, margin, column, paragraph)
+      // position relative to the top-left edge of the reference element.
+      // Use CSS top/left for absolute positioning from containing block.
+      if (marginOffset?.horizontal != null) {
+        container.style.left = `${marginOffset.horizontal}px`;
+      }
+
+      // For column-relative positioning with posOffset, override max-width to allow extending into margins
+      const isColumnRelative = anchorData?.hRelativeFrom === 'column';
+      if (isColumnRelative && !anchorData?.alignH && marginOffset?.horizontal != null) {
+        container.style.maxWidth = 'none';
+      }
+      if (marginOffset?.top != null) {
+        container.style.top = `${marginOffset.top}px`;
+      }
+
+      // Use relativeHeight from OOXML for proper z-ordering of overlapping elements
+      const relativeHeight = originalAttributes?.relativeHeight;
+      if (relativeHeight != null) {
+        const zIndex = Math.floor(relativeHeight / 1000000);
+        container.style.zIndex = zIndex.toString();
+      } else {
+        container.style.zIndex = '1';
+      }
+    } else if (wrapType === 'Square') {
+      // Float element so text wraps around it
+      container.style.float = 'left';
+      container.style.clear = 'both';
+
+      // Apply margins for positioning and spacing
+      if (marginOffset?.horizontal != null) {
+        container.style.marginLeft = `${marginOffset.horizontal}px`;
+      }
+      if (marginOffset?.top != null) {
+        container.style.marginTop = `${marginOffset.top}px`;
+      }
+
+      // Add wrap distance margins if available
+      if (wrap?.attrs?.distLeft) {
+        container.style.marginLeft = `${(marginOffset?.horizontal || 0) + wrap.attrs.distLeft}px`;
+      }
+      if (wrap?.attrs?.distRight) {
+        container.style.marginRight = `${wrap.attrs.distRight}px`;
+      }
+      if (wrap?.attrs?.distTop) {
+        container.style.marginTop = `${(marginOffset?.top || 0) + wrap.attrs.distTop}px`;
+      }
+      if (wrap?.attrs?.distBottom) {
+        container.style.marginBottom = `${wrap.attrs.distBottom}px`;
+      }
+    } else {
+      // Inline or other wrap types - keep in flow
+      if (marginOffset?.horizontal != null) {
+        container.style.marginLeft = `${marginOffset.horizontal}px`;
+      }
+      if (marginOffset?.top != null) {
+        container.style.marginTop = `${marginOffset.top}px`;
+      }
+    }
+
     // Create SVG container for the group
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     svg.setAttribute('version', '1.1');
@@ -71,13 +178,22 @@ export class ShapeGroupView {
     svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
     svg.style.display = 'block';
 
+    // Create defs section for gradients
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    svg.appendChild(defs);
+
     // Render each shape in the group
     if (shapes && Array.isArray(shapes)) {
-      shapes.forEach((shape) => {
+      shapes.forEach((shape, index) => {
         if (shape.shapeType === 'vectorShape') {
-          const shapeElement = this.createShapeElement(shape, groupTransform);
+          const shapeElement = this.createShapeElement(shape, groupTransform, defs, index);
           if (shapeElement) {
             svg.appendChild(shapeElement);
+          }
+        } else if (shape.shapeType === 'image') {
+          const imageElement = this.createImageElement(shape, groupTransform);
+          if (imageElement) {
+            svg.appendChild(imageElement);
           }
         }
       });
@@ -88,15 +204,15 @@ export class ShapeGroupView {
     return { element: container };
   }
 
-  createShapeElement(shape) {
+  createShapeElement(shape, groupTransform, defs, shapeIndex) {
     const attrs = shape.attrs;
     if (!attrs) return null;
 
     // Calculate position relative to group
-    const x = attrs.x || 0;
-    const y = attrs.y || 0;
-    const width = attrs.width || 100;
-    const height = attrs.height || 100;
+    const x = attrs.x ?? 0;
+    const y = attrs.y ?? 0;
+    const width = attrs.width ?? 100;
+    const height = attrs.height ?? 100;
 
     // Create a group element for the shape
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -123,17 +239,57 @@ export class ShapeGroupView {
 
     // Generate the shape based on its kind
     const shapeKind = attrs.kind || 'rect';
-    const fillColor = attrs.fillColor || '#5b9bd5';
-    const strokeColor = attrs.strokeColor || '#000000';
-    const strokeWidth = attrs.strokeWidth || 1;
+    // Preserve null (from <a:noFill/>), but provide default for undefined
+    const fillColor = attrs.fillColor === null ? null : (attrs.fillColor ?? '#5b9bd5');
+    // Use null-coalescing to preserve null (from <a:noFill/>), but provide default for undefined
+    const strokeColor = attrs.strokeColor === null ? null : (attrs.strokeColor ?? '#000000');
+    const strokeWidth = attrs.strokeWidth ?? 1;
+
+    // Handle gradient fills
+    let fillValue = fillColor;
+    if (fillColor && typeof fillColor === 'object' && fillColor.type === 'gradient') {
+      const gradientId = `gradient-${shapeIndex}-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
+      const gradient = this.createGradient(fillColor, gradientId);
+      defs.appendChild(gradient);
+      fillValue = `url(#${gradientId})`;
+    } else if (fillColor === null) {
+      fillValue = 'none'; // Transparent
+    } else if (typeof fillColor === 'string') {
+      fillValue = fillColor;
+    }
+
+    // Special case: handle line shapes directly since getPresetShapeSvg doesn't support them
+    if (shapeKind === 'line') {
+      const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+      line.setAttribute('x1', '0');
+      line.setAttribute('y1', '0');
+      // For horizontal lines (height=0), draw from (0,0) to (width,0)
+      // For vertical lines (width=0), draw from (0,0) to (0,height)
+      // For diagonal lines, draw from (0,0) to (width,height)
+      line.setAttribute('x2', width.toString());
+      line.setAttribute('y2', height.toString());
+      line.setAttribute('stroke', strokeColor === null ? 'none' : strokeColor);
+      line.setAttribute('stroke-width', (strokeColor === null ? 0 : strokeWidth).toString());
+      g.appendChild(line);
+
+      // Add text content if present
+      if (attrs.textContent && attrs.textContent.parts) {
+        const textGroup = this.createTextElement(attrs.textContent, attrs.textAlign, width, height);
+        if (textGroup) {
+          g.appendChild(textGroup);
+        }
+      }
+
+      return g;
+    }
 
     try {
       const svgContent = getPresetShapeSvg({
         preset: shapeKind,
         styleOverrides: {
-          fill: fillColor || 'none',
-          stroke: strokeColor || 'none',
-          strokeWidth: strokeWidth || 0,
+          fill: fillValue || 'none',
+          stroke: strokeColor === null ? 'none' : strokeColor,
+          strokeWidth: strokeColor === null ? 0 : strokeWidth,
         },
         width,
         height,
@@ -216,13 +372,54 @@ export class ShapeGroupView {
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.setAttribute('width', width.toString());
       rect.setAttribute('height', height.toString());
-      rect.setAttribute('fill', fillColor || '#cccccc');
-      rect.setAttribute('stroke', strokeColor || '#000000');
-      rect.setAttribute('stroke-width', (strokeWidth || 1).toString());
+      rect.setAttribute('fill', fillColor === null ? 'none' : typeof fillColor === 'string' ? fillColor : '#cccccc');
+      rect.setAttribute('stroke', strokeColor === null ? 'none' : strokeColor);
+      rect.setAttribute('stroke-width', strokeColor === null ? '0' : strokeWidth.toString());
       g.appendChild(rect);
     }
 
+    // Add text content if present
+    if (attrs.textContent && attrs.textContent.parts) {
+      const textGroup = this.createTextElement(attrs.textContent, attrs.textAlign, width, height);
+      if (textGroup) {
+        g.appendChild(textGroup);
+      }
+    }
+
     return g;
+  }
+
+  createTextElement(textContent, textAlign, width, height) {
+    return createTextElement(textContent, textAlign, width, height);
+  }
+
+  createGradient(gradientData, gradientId) {
+    return createGradient(gradientData, gradientId);
+  }
+
+  createImageElement(shape, _groupTransform) {
+    const attrs = shape.attrs;
+    if (!attrs) return null;
+
+    // Get image position and size
+    const x = attrs.x || 0;
+    const y = attrs.y || 0;
+    const width = attrs.width || 100;
+    const height = attrs.height || 100;
+
+    // Create SVG image element
+    const image = document.createElementNS('http://www.w3.org/2000/svg', 'image');
+    image.setAttribute('x', x.toString());
+    image.setAttribute('y', y.toString());
+    image.setAttribute('width', width.toString());
+    image.setAttribute('height', height.toString());
+
+    // Get image source from editor's media storage or use the path directly
+    const src = this.editor?.storage?.image?.media?.[attrs.src] ?? attrs.src;
+    image.setAttribute('href', src);
+    image.setAttribute('preserveAspectRatio', 'none'); // Stretch to fill
+
+    return image;
   }
 
   buildView() {

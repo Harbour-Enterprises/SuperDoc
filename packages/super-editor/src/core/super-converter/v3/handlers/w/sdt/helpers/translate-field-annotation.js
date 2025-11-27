@@ -69,16 +69,28 @@ export function translateFieldAnnotation(params) {
   };
   const annotationAttrsJson = JSON.stringify(annotationAttrs);
 
+  // Build sdtPr elements with passthrough support
+  const sdtPrElements = [
+    { name: 'w:alias', attributes: { 'w:val': attrs.displayLabel } },
+    { name: 'w:tag', attributes: { 'w:val': annotationAttrsJson } },
+    { name: 'w:id', attributes: { 'w:val': id } },
+  ];
+
+  // Passthrough: preserve any sdtPr elements not explicitly managed
+  if (attrs.sdtPr?.elements && Array.isArray(attrs.sdtPr.elements)) {
+    const elementsToExclude = ['w:alias', 'w:tag', 'w:id'];
+    const passthroughElements = attrs.sdtPr.elements.filter(
+      (el) => el && el.name && !elementsToExclude.includes(el.name),
+    );
+    sdtPrElements.push(...passthroughElements);
+  }
+
   const result = {
     name: 'w:sdt',
     elements: [
       {
         name: 'w:sdtPr',
-        elements: [
-          { name: 'w:alias', attributes: { 'w:val': attrs.displayLabel } },
-          { name: 'w:tag', attributes: { 'w:val': annotationAttrsJson } },
-          { name: 'w:id', attributes: { 'w:val': id } },
-        ],
+        elements: sdtPrElements,
       },
       {
         name: 'w:sdtContent',

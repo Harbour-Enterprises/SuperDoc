@@ -524,6 +524,33 @@ describe('normalizeParagraphBorders', () => {
     });
   });
 
+  describe('nil borders exclusion', () => {
+    it('should exclude nil borders from result', () => {
+      const input = {
+        top: { val: 'single', size: 2, color: 'FF0000' },
+        bottom: { val: 'nil' },
+        left: { val: 'none' },
+        right: { val: 'double', size: 4 },
+      };
+      const result = normalizeParagraphBorders(input);
+      expect(result).toBeDefined();
+      expect(result?.top).toBeDefined();
+      expect(result?.right).toBeDefined();
+      expect(result?.bottom).toBeUndefined();
+      expect(result?.left).toBeUndefined();
+    });
+
+    it('should return undefined when all borders are nil', () => {
+      const input = {
+        top: { val: 'nil' },
+        bottom: { val: 'none' },
+        left: { val: 'nil' },
+        right: { val: 'none' },
+      };
+      expect(normalizeParagraphBorders(input)).toBeUndefined();
+    });
+  });
+
   describe('invalid inputs', () => {
     it('should return undefined for null', () => {
       expect(normalizeParagraphBorders(null)).toBeUndefined();
@@ -591,6 +618,28 @@ describe('normalizeBorderSide', () => {
       const input = { size: 32 };
       const result = normalizeBorderSide(input);
       expect(result?.width).toBeCloseTo((32 / 8) * (96 / 72));
+    });
+  });
+
+  describe('nil and none borders', () => {
+    it('should return undefined for nil border without size', () => {
+      const input = { val: 'nil' };
+      expect(normalizeBorderSide(input)).toBeUndefined();
+    });
+
+    it('should return undefined for none border without size', () => {
+      const input = { val: 'none' };
+      expect(normalizeBorderSide(input)).toBeUndefined();
+    });
+
+    it('should return undefined for nil border with size', () => {
+      const input = { val: 'nil', size: 2 };
+      expect(normalizeBorderSide(input)).toBeUndefined();
+    });
+
+    it('should return undefined for none border with size', () => {
+      const input = { val: 'none', size: 2 };
+      expect(normalizeBorderSide(input)).toBeUndefined();
     });
   });
 

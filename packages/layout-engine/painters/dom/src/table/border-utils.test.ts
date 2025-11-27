@@ -237,6 +237,8 @@ describe('resolveTableBorderValue', () => {
 });
 
 describe('resolveTableCellBorders', () => {
+  // Tests use single-owner border model: each cell owns TOP and LEFT,
+  // only edge cells (last row/col) own BOTTOM and RIGHT
   const tableBorders: TableBorders = {
     top: { style: 'single', width: 2, color: '#FF0000' },
     right: { style: 'single', width: 2, color: '#00FF00' },
@@ -246,15 +248,17 @@ describe('resolveTableCellBorders', () => {
     insideV: { style: 'single', width: 1, color: '#CCCCCC' },
   };
 
-  it('should use top/left borders for top-left corner cell', () => {
+  it('should use top/left borders for top-left corner cell (no bottom/right)', () => {
+    // Cell (0,0) in 3x3: owns top and left, but NOT bottom/right (those come from adjacent cells)
     const result = resolveTableCellBorders(tableBorders, 0, 0, 3, 3);
     expect(result.top).toEqual({ style: 'single', width: 2, color: '#FF0000' });
     expect(result.left).toEqual({ style: 'single', width: 2, color: '#FFFF00' });
-    expect(result.bottom).toEqual({ style: 'single', width: 1, color: '#888888' });
-    expect(result.right).toEqual({ style: 'single', width: 1, color: '#CCCCCC' });
+    expect(result.bottom).toBeUndefined(); // Not last row
+    expect(result.right).toBeUndefined(); // Not last col
   });
 
   it('should use bottom/right borders for bottom-right corner cell', () => {
+    // Cell (2,2) in 3x3: is last row AND last col, so owns all four borders
     const result = resolveTableCellBorders(tableBorders, 2, 2, 3, 3);
     expect(result.bottom).toEqual({ style: 'single', width: 2, color: '#0000FF' });
     expect(result.right).toEqual({ style: 'single', width: 2, color: '#00FF00' });
@@ -262,24 +266,31 @@ describe('resolveTableCellBorders', () => {
     expect(result.left).toEqual({ style: 'single', width: 1, color: '#CCCCCC' });
   });
 
-  it('should use insideH/insideV for middle cells', () => {
+  it('should use insideH/insideV for middle cells (no bottom/right)', () => {
+    // Cell (1,1) in 3x3: interior cell owns only top and left (insideH/insideV)
     const result = resolveTableCellBorders(tableBorders, 1, 1, 3, 3);
     expect(result.top).toEqual({ style: 'single', width: 1, color: '#888888' });
-    expect(result.bottom).toEqual({ style: 'single', width: 1, color: '#888888' });
+    expect(result.bottom).toBeUndefined(); // Not last row - bottom comes from cell below
     expect(result.left).toEqual({ style: 'single', width: 1, color: '#CCCCCC' });
-    expect(result.right).toEqual({ style: 'single', width: 1, color: '#CCCCCC' });
+    expect(result.right).toBeUndefined(); // Not last col - right comes from cell to the right
   });
 
-  it('should handle single row table', () => {
+  it('should handle single row table (has both top and bottom)', () => {
+    // Cell in single row table: is both first AND last row
     const result = resolveTableCellBorders(tableBorders, 0, 1, 1, 3);
     expect(result.top).toEqual({ style: 'single', width: 2, color: '#FF0000' });
     expect(result.bottom).toEqual({ style: 'single', width: 2, color: '#0000FF' });
+    // Middle column - no right border
+    expect(result.right).toBeUndefined();
   });
 
-  it('should handle single column table', () => {
+  it('should handle single column table (has both left and right)', () => {
+    // Cell in single column table: is both first AND last column
     const result = resolveTableCellBorders(tableBorders, 1, 0, 3, 1);
     expect(result.left).toEqual({ style: 'single', width: 2, color: '#FFFF00' });
     expect(result.right).toEqual({ style: 'single', width: 2, color: '#00FF00' });
+    // Middle row - no bottom border
+    expect(result.bottom).toBeUndefined();
   });
 });
 

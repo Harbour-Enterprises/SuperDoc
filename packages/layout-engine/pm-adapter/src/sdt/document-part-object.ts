@@ -1,8 +1,8 @@
 /**
  * Document Part Object Handler
  *
- * Processes documentPartObject nodes (e.g., TOC galleries).
- * Applies document part metadata and processes TOC children.
+ * Processes documentPartObject nodes (e.g., TOC galleries, page numbers).
+ * Applies document part metadata and processes children appropriately.
  */
 
 import type { PMNode, NodeHandlerContext } from '../types.js';
@@ -10,8 +10,9 @@ import { getDocPartGallery, getDocPartObjectId, getNodeInstruction, resolveNodeS
 import { processTocChildren } from './toc.js';
 
 /**
- * Handle document part object nodes (e.g., TOC galleries).
+ * Handle document part object nodes (e.g., TOC galleries, page numbers).
  * Processes TOC children for Table of Contents galleries.
+ * For other gallery types (page numbers, etc.), processes child paragraphs normally.
  *
  * @param node - Document part object node to process
  * @param context - Shared handler context
@@ -30,6 +31,8 @@ export function handleDocumentPartObjectNode(node: PMNode, context: NodeHandlerC
     bookmarks,
     hyperlinkConfig,
     converters,
+    listCounterContext,
+    trackedChangesConfig,
   } = context;
   const docPartGallery = getDocPartGallery(node);
   const docPartObjectId = getDocPartObjectId(node);
@@ -53,5 +56,27 @@ export function handleDocumentPartObjectNode(node: PMNode, context: NodeHandlerC
       { blocks, recordBlockKind },
       paragraphToFlowBlocks,
     );
+  } else if (paragraphToFlowBlocks) {
+    // For non-ToC gallery types (page numbers, etc.), process child paragraphs normally
+    for (const child of node.content) {
+      if (child.type === 'paragraph') {
+        const childBlocks = paragraphToFlowBlocks(
+          child,
+          nextBlockId,
+          positions,
+          defaultFont,
+          defaultSize,
+          styleContext,
+          listCounterContext,
+          trackedChangesConfig,
+          bookmarks,
+          hyperlinkConfig,
+        );
+        for (const block of childBlocks) {
+          blocks.push(block);
+          recordBlockKind(block.kind);
+        }
+      }
+    }
   }
 }

@@ -48,6 +48,7 @@ import type {
   Run,
   TextRun,
   TabRun,
+  ImageRun,
   TabStop,
   DrawingBlock,
   DrawingMeasure,
@@ -281,6 +282,13 @@ function isTabRun(run: Run): run is TabRun {
 }
 
 /**
+ * Type guard to check if a run is an image run
+ */
+function isImageRun(run: Run): run is ImageRun {
+  return run.kind === 'image';
+}
+
+/**
  * Calculate tab width and update the tab run with resolved width
  *
  * @param tabRun - The tab run to resolve
@@ -502,6 +510,91 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         const to = Math.max(originX, target);
         if (!currentLine.leaders) currentLine.leaders = [];
         currentLine.leaders.push({ from, to, style: leaderStyle });
+      }
+
+      continue;
+    }
+
+    // Handle image runs
+    if (isImageRun(run)) {
+      // Calculate image width including spacing
+      const leftSpace = run.distLeft ?? 0;
+      const rightSpace = run.distRight ?? 0;
+      const imageWidth = run.width + leftSpace + rightSpace;
+
+      // Calculate image height including spacing (for line height)
+      const topSpace = run.distTop ?? 0;
+      const bottomSpace = run.distBottom ?? 0;
+      const imageHeight = run.height + topSpace + bottomSpace;
+
+      // Initialize line if needed
+      if (!currentLine) {
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1, // Images are treated as single atomic units
+          width: imageWidth,
+          maxFontSize: imageHeight, // Use image height for line height calculation
+          maxWidth: availableWidth,
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: imageWidth,
+            },
+          ],
+        };
+        availableWidth = contentWidth;
+        continue;
+      }
+
+      // Check if image fits on current line
+      if (currentLine.width + imageWidth > currentLine.maxWidth && currentLine.width > 0) {
+        // Image doesn't fit - finish current line and start new line with image
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+        const completedLine: Line = {
+          ...currentLine,
+          ...metrics,
+        };
+        addBarTabsToLine(completedLine);
+        lines.push(completedLine);
+        tabStopCursor = 0;
+        pendingTabAlignment = null;
+
+        // Start new line with the image
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1,
+          width: imageWidth,
+          maxFontSize: imageHeight,
+          maxWidth: contentWidth,
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: imageWidth,
+            },
+          ],
+        };
+        availableWidth = contentWidth;
+      } else {
+        // Image fits on current line - append it
+        currentLine.toRun = runIndex;
+        currentLine.toChar = 1;
+        currentLine.width = roundValue(currentLine.width + imageWidth);
+        currentLine.maxFontSize = Math.max(currentLine.maxFontSize, imageHeight);
+        if (!currentLine.segments) currentLine.segments = [];
+        currentLine.segments.push({
+          runIndex,
+          fromChar: 0,
+          toChar: 1,
+          width: imageWidth,
+        });
       }
 
       continue;
@@ -801,7 +894,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   }
 
   if (!currentLine && lines.length === 0) {
-    const fallbackFontSize = (block.runs[0]?.kind !== 'tab' ? block.runs[0]?.fontSize : undefined) ?? 12;
+    const fallbackFontSize = (block.runs[0]?.kind === 'text' ? block.runs[0].fontSize : undefined) ?? 12;
     const metrics = calculateTypographyMetrics(fallbackFontSize, spacing);
     const fallbackLine: Line = {
       fromRun: 0,
@@ -859,21 +952,48 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
 
   let columnWidths: number[];
 
+  // Determine actual column count from table structure
+  const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
+
   // Use provided column widths from OOXML w:tblGrid if available
   if (block.columnWidths && block.columnWidths.length > 0) {
     columnWidths = [...block.columnWidths];
 
-    // Scale proportionally if total width exceeds available width
-    // UNLESS the table has an explicit tableWidth (user-resized tables)
-    const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+    // Check if table has fixed layout (preserves exact widths)
     const hasExplicitWidth = block.attrs?.tableWidth != null;
-    if (!hasExplicitWidth && totalWidth > maxWidth) {
-      const scale = maxWidth / totalWidth;
-      columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
+    const hasFixedLayout = block.attrs?.tableLayout === 'fixed';
+
+    // For fixed-layout tables, preserve the exact widths without adjustment
+    if (hasExplicitWidth || hasFixedLayout) {
+      // Scale proportionally only if total width exceeds available width
+      const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+      if (totalWidth > maxWidth) {
+        const scale = maxWidth / totalWidth;
+        columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
+      }
+    } else {
+      // For auto-layout tables, adjust column widths to match actual column count
+      if (columnWidths.length < maxCellCount) {
+        // Pad missing columns with equal distribution of remaining space
+        const usedWidth = columnWidths.reduce((a, b) => a + b, 0);
+        const remainingWidth = Math.max(0, maxWidth - usedWidth);
+        const missingColumns = maxCellCount - columnWidths.length;
+        const paddingWidth = Math.max(1, Math.floor(remainingWidth / missingColumns));
+        columnWidths.push(...Array.from({ length: missingColumns }, () => paddingWidth));
+      } else if (columnWidths.length > maxCellCount) {
+        // Truncate extra column widths
+        columnWidths = columnWidths.slice(0, maxCellCount);
+      }
+
+      // Scale proportionally if total width exceeds available width
+      const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+      if (totalWidth > maxWidth) {
+        const scale = maxWidth / totalWidth;
+        columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
+      }
     }
   } else {
     // Fallback: Equal distribution based on max cells in any row
-    const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
     const columnWidth = Math.max(1, Math.floor(maxWidth / maxCellCount));
     columnWidths = Array.from({ length: maxCellCount }, () => columnWidth);
   }
@@ -931,12 +1051,60 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
         }
       }
 
-      const paraMeasure = await measureParagraphBlock(cell.paragraph, cellWidth);
-      const height = paraMeasure.totalHeight;
+      // Get cell padding for height calculation
+      const cellPadding = cell.attrs?.padding ?? { top: 2, left: 4, right: 4, bottom: 2 };
+      const paddingTop = cellPadding.top ?? 2;
+      const paddingBottom = cellPadding.bottom ?? 2;
+      const paddingLeft = cellPadding.left ?? 4;
+      const paddingRight = cellPadding.right ?? 4;
+
+      // Content width accounts for horizontal padding
+      const contentWidth = Math.max(1, cellWidth - paddingLeft - paddingRight);
+
+      /**
+       * Measure all blocks in the cell and accumulate total content height.
+       *
+       * Multi-Block Cell Support:
+       * - Cells can contain multiple blocks (paragraphs, lists, images, etc.)
+       * - Each block is measured independently with the cell's content width
+       * - Block heights are accumulated to calculate total content height
+       * - Vertical padding is applied to the total accumulated height
+       *
+       * Backward Compatibility:
+       * - If cell.blocks is not present, falls back to cell.paragraph (legacy format)
+       * - Empty blocks arrays are handled gracefully (no content)
+       *
+       * Height Calculation:
+       * - contentHeight = sum of all block.totalHeight values
+       * - totalCellHeight = contentHeight + paddingTop + paddingBottom
+       *
+       * Example:
+       * ```
+       * cell.blocks = [paragraph1, paragraph2, paragraph3]
+       * contentHeight = para1.height + para2.height + para3.height
+       * totalCellHeight = contentHeight + 2 (top) + 2 (bottom)
+       * ```
+       */
+      const blockMeasures: Measure[] = [];
+      let contentHeight = 0;
+
+      const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+
+      for (const block of cellBlocks) {
+        const measure = await measureBlock(block, { maxWidth: contentWidth, maxHeight: Infinity });
+        blockMeasures.push(measure);
+        contentHeight += measure.totalHeight;
+      }
+
+      // Total cell height includes vertical padding
+      const totalCellHeight = contentHeight + paddingTop + paddingBottom;
+
       cellMeasures.push({
-        paragraph: paraMeasure,
+        blocks: blockMeasures,
+        // Backward compatibility
+        paragraph: blockMeasures[0]?.kind === 'paragraph' ? (blockMeasures[0] as ParagraphMeasure) : undefined,
         width: cellWidth,
-        height,
+        height: totalCellHeight,
         gridColumnStart: gridColIndex,
         colSpan: colspan,
         rowSpan: rowspan,
@@ -972,7 +1140,19 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
   const intrinsic = getIntrinsicImageSize(block, constraints.maxWidth);
 
   const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : intrinsic.width;
-  const maxHeight = constraints.maxHeight && constraints.maxHeight > 0 ? constraints.maxHeight : Infinity;
+
+  // For anchored images with negative vertical positioning (designed to overflow their container),
+  // bypass the height constraint. This matches MS Word behavior where images in headers/footers
+  // with negative offsets are rendered at their full size regardless of region constraints.
+  const hasNegativeVerticalPosition =
+    block.anchor?.isAnchored &&
+    ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
+      (typeof block.margin?.top === 'number' && block.margin.top < 0));
+
+  const maxHeight =
+    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+      ? Infinity
+      : constraints.maxHeight;
 
   const widthScale = maxWidth / intrinsic.width;
   const heightScale = maxHeight / intrinsic.height;
@@ -988,6 +1168,40 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
   };
 }
 
+/**
+ * Measures a drawing block (vector shapes, shape groups, embedded images) and calculates
+ * its rendered dimensions within the given constraints.
+ *
+ * This function handles:
+ * - Rotation transformations and their effect on bounding box dimensions
+ * - Proportional scaling to fit within maxWidth/maxHeight constraints
+ * - Special case: negative vertical positioning bypass for anchored drawings
+ *
+ * Negative Positioning Bypass:
+ * For anchored drawings with negative vertical positioning (offsetV < 0 or margin.top < 0),
+ * the maxHeight constraint is bypassed. This is intentional for footer/header graphics
+ * that are designed to overflow their nominal container region (e.g., decorative elements
+ * positioned above a footer's top edge). The bypass only applies when the drawing is
+ * anchored AND has at least one negative vertical offset value.
+ *
+ * @param block - The drawing block to measure, containing geometry, anchor, and margin data
+ * @param constraints - Measurement constraints with maxWidth and optional maxHeight
+ * @returns A DrawingMeasure containing final dimensions, scale factor, and geometry
+ *
+ * @example
+ * ```typescript
+ * const block: DrawingBlock = {
+ *   kind: 'drawing',
+ *   drawingKind: 'vectorShape',
+ *   geometry: { width: 200, height: 100, rotation: 0 },
+ *   anchor: { isAnchored: true, offsetV: -20 },
+ * };
+ *
+ * const measure = await measureDrawingBlock(block, { maxWidth: 500, maxHeight: 80 });
+ * // Result: { width: 200, height: 100, scale: 1 }
+ * // (maxHeight bypassed due to negative offsetV)
+ * ```
+ */
 async function measureDrawingBlock(block: DrawingBlock, constraints: MeasureConstraints): Promise<DrawingMeasure> {
   if (block.drawingKind === 'image') {
     const intrinsic = getIntrinsicSizeFromDims(block.width, block.height, constraints.maxWidth);
@@ -1026,7 +1240,19 @@ async function measureDrawingBlock(block: DrawingBlock, constraints: MeasureCons
   const naturalHeight = Math.max(1, rotatedBounds.height);
 
   const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : naturalWidth;
-  const maxHeight = constraints.maxHeight && constraints.maxHeight > 0 ? constraints.maxHeight : Infinity;
+
+  // For anchored drawings with negative vertical positioning (designed to overflow their container),
+  // bypass the height constraint. This is common for footer/header graphics that extend beyond
+  // their nominal region (e.g., decorative elements with marginOffset.top < 0).
+  const hasNegativeVerticalPosition =
+    block.anchor?.isAnchored &&
+    ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
+      (typeof block.margin?.top === 'number' && block.margin.top < 0));
+
+  const maxHeight =
+    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+      ? Infinity
+      : constraints.maxHeight;
 
   const widthScale = maxWidth / naturalWidth;
   const heightScale = maxHeight / naturalHeight;
@@ -1161,7 +1387,7 @@ async function measureListBlock(block: ListBlock, constraints: MeasureConstraint
 
 const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
   return (
-    paragraph.runs.find((run): run is TextRun => run.kind !== 'tab' && Boolean(run.fontFamily && run.fontSize)) || {
+    paragraph.runs.find((run): run is TextRun => run.kind === 'text' && Boolean(run.fontFamily && run.fontSize)) || {
       text: '',
       fontFamily: 'Arial',
       fontSize: 16,
@@ -1170,7 +1396,7 @@ const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
 };
 
 const measureRunWidth = (text: string, font: string, ctx: CanvasRenderingContext2D, run: Run): number => {
-  const letterSpacing = run.kind !== 'tab' ? run.letterSpacing || 0 : 0;
+  const letterSpacing = run.kind === 'text' ? run.letterSpacing || 0 : 0;
   const width = getMeasuredTextWidth(text, font, letterSpacing, ctx);
   return roundValue(width);
 };

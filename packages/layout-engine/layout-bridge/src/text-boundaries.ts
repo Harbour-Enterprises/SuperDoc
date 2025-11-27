@@ -104,7 +104,7 @@ function extractBlockText(block: FlowBlock): {
   let pmEnd = 0;
 
   for (const run of block.runs) {
-    text += run.text;
+    text += run.kind === 'image' ? '' : run.text;
     if (run.pmStart !== undefined) {
       pmStart = Math.min(pmStart, run.pmStart);
     }

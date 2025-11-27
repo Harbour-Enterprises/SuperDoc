@@ -503,6 +503,32 @@ describe('HeaderFooterLayoutAdapter', () => {
     expect(mockToFlowBlocks.mock.calls.length).toBe(callsAfterFirst + 1); // One more call
   });
 
+  it('falls back to converter media when mediaFiles are not provided', () => {
+    const descriptor = { id: 'rId-header-default', kind: 'header', variant: 'default' };
+    const doc = { type: 'doc', content: [{ type: 'paragraph' }] };
+
+    const manager = {
+      rootEditor: {
+        converter: {
+          convertedXml: {},
+          numbering: {},
+          linkedStyles: {},
+          media: { 'word/media/image1.png': 'base64data' },
+        },
+      },
+      getDescriptors: (kind: string) => (kind === 'header' ? [descriptor] : []),
+      getDocumentJson: vi.fn(() => doc),
+    } as unknown as HeaderFooterEditorManager;
+
+    const adapter = new HeaderFooterLayoutAdapter(manager);
+
+    mockToFlowBlocks.mockClear();
+    adapter.getBatch('header');
+
+    const [, options] = mockToFlowBlocks.mock.calls[0] || [];
+    expect(options?.mediaFiles).toEqual(manager.rootEditor.converter.media);
+  });
+
   it('returns undefined when no descriptors have FlowBlocks', () => {
     const manager = {
       getDescriptors: () => [{ id: 'missing', kind: 'header', variant: 'default' }],

@@ -44,11 +44,16 @@ describe('handleDocPartObj', () => {
     expect(result).toBeNull();
   });
 
-  it('should return null if docPartGalleryType is not supported', () => {
+  it('should use generic handler for unsupported docPartGalleryType', () => {
     const node = createSdtNode('UnsupportedType');
-    const params = { nodes: [node] };
+    const params = { nodes: [node], nodeListHandler: mockNodeListHandler, path: [] };
     const result = handleDocPartObj(params);
-    expect(result).toBeNull();
+
+    // Generic handler processes unsupported types for round-trip preservation
+    expect(result.type).toEqual('documentPartObject');
+    expect(result.attrs.docPartGallery).toEqual('UnsupportedType');
+    expect(result.attrs.sdtPr).toBeDefined(); // Passthrough for round-trip
+    expect(result.attrs.sdtPr).toHaveProperty('elements');
   });
 
   it('should call the correct handler for a supported docPartGalleryType', () => {
@@ -56,15 +61,36 @@ describe('handleDocPartObj', () => {
     const params = { nodes: [node], nodeListHandler: mockNodeListHandler, path: [] };
     const result = handleDocPartObj(params);
     expect(mockNodeListHandler.handler).toHaveBeenCalled();
-    expect(result).toEqual({
-      type: 'documentPartObject',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'TOC Content' }] }],
-      attrs: {
-        id: '123',
-        docPartGallery: 'Table of Contents',
-        docPartUnique: true,
-      },
-    });
+    expect(result.type).toEqual('documentPartObject');
+    expect(result.content).toEqual([{ type: 'paragraph', content: [{ type: 'text', text: 'TOC Content' }] }]);
+    expect(result.attrs.id).toEqual('123');
+    expect(result.attrs.docPartGallery).toEqual('Table of Contents');
+    expect(result.attrs.docPartUnique).toEqual(false); // No w:docPartUnique element in mock
+    expect(result.attrs.sdtPr).toBeDefined(); // Passthrough for round-trip
+    expect(result.attrs.sdtPr).toHaveProperty('elements');
+  });
+
+  it('should set docPartGallery to null when missing and preserve sdtPr', () => {
+    const node = {
+      name: 'w:sdt',
+      elements: [
+        {
+          name: 'w:sdtPr',
+          elements: [
+            { name: 'w:docPartObj', elements: [] },
+            { name: 'w:id', attributes: { 'w:val': '123' } },
+          ],
+        },
+        { name: 'w:sdtContent', elements: [{ name: 'w:p', elements: [] }] },
+      ],
+    };
+
+    const params = { nodes: [node], nodeListHandler: mockNodeListHandler, path: [] };
+    const result = handleDocPartObj(params);
+
+    expect(result.attrs.docPartGallery).toBeNull();
+    expect(result.attrs.sdtPr).toBeDefined();
+    expect(result.attrs.sdtPr.elements.find((el) => el.name === 'w:docPartObj')).toBeDefined();
   });
 });
 
@@ -76,7 +102,16 @@ describe('tableOfContentsHandler', () => {
   it('should process a Table of Contents node correctly', () => {
     const sdtPr = {
       name: 'w:sdtPr',
-      elements: [{ name: 'w:id', attributes: { 'w:val': '456' } }],
+      elements: [
+        { name: 'w:id', attributes: { 'w:val': '456' } },
+        {
+          name: 'w:docPartObj',
+          elements: [
+            { name: 'w:docPartGallery', attributes: { 'w:val': 'Table of Contents' } },
+            { name: 'w:docPartUnique' },
+          ],
+        },
+      ],
     };
     const contentNode = {
       name: 'w:sdtContent',
@@ -96,14 +131,60 @@ describe('tableOfContentsHandler', () => {
       nodes: contentNode.elements,
       path: [contentNode],
     });
-    expect(result).toEqual({
-      type: 'documentPartObject',
-      content: [{ type: 'paragraph', content: [{ type: 'text', text: 'TOC Content' }] }],
-      attrs: {
-        id: '456',
-        docPartGallery: 'Table of Contents',
-        docPartUnique: true,
-      },
-    });
+    expect(result.type).toEqual('documentPartObject');
+    expect(result.content).toEqual([{ type: 'paragraph', content: [{ type: 'text', text: 'TOC Content' }] }]);
+    expect(result.attrs.id).toEqual('456');
+    expect(result.attrs.docPartGallery).toEqual('Table of Contents');
+    expect(result.attrs.docPartUnique).toEqual(true);
+    expect(result.attrs.sdtPr).toBeDefined(); // Passthrough for round-trip
+    expect(result.attrs.sdtPr).toHaveProperty('elements');
+  });
+
+  it('should handle empty sdtPr.elements array', () => {
+    const sdtPr = {
+      name: 'w:sdtPr',
+      elements: [],
+    };
+    const contentNode = {
+      name: 'w:sdtContent',
+      elements: [{ name: 'w:p', elements: [] }],
+    };
+    const params = {
+      nodes: [contentNode],
+      nodeListHandler: mockNodeListHandler,
+      extraParams: { sdtPr },
+      path: [],
+    };
+
+    const result = tableOfContentsHandler(params);
+
+    expect(result.type).toEqual('documentPartObject');
+    expect(result.attrs.id).toEqual('');
+    expect(result.attrs.docPartUnique).toEqual(false); // Default to false per OOXML spec
+    expect(result.attrs.sdtPr).toBeDefined();
+  });
+
+  it('should handle null/undefined docPartObj gracefully', () => {
+    const sdtPr = {
+      name: 'w:sdtPr',
+      elements: [{ name: 'w:id', attributes: { 'w:val': '789' } }],
+    };
+    const contentNode = {
+      name: 'w:sdtContent',
+      elements: [{ name: 'w:p', elements: [] }],
+    };
+    const params = {
+      nodes: [contentNode],
+      nodeListHandler: mockNodeListHandler,
+      extraParams: { sdtPr },
+      path: [],
+    };
+
+    const result = tableOfContentsHandler(params);
+
+    expect(result.type).toEqual('documentPartObject');
+    expect(result.attrs.id).toEqual('789');
+    expect(result.attrs.docPartUnique).toEqual(false); // Default to false when docPartObj is missing
+    expect(result.attrs.sdtPr).toBeDefined();
   });
 });

@@ -185,17 +185,40 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
     const gridColIndex = cellMeasure.gridColumnStart ?? cellIndex;
     const totalCols = columnWidths.length;
 
-    // Border resolution priority:
-    // 1. Cell has explicit borders with sides defined → use those
-    // 2. Cell has borders attribute but empty → no borders (intentionally borderless)
-    // 3. Table has borders → resolve from table borders
-    // 4. Neither → no borders (we never use default gray borders anymore)
+    // Border resolution with single-owner model:
+    // DOCX files often use right/bottom ownership (each cell stores right and bottom).
+    // We need to ensure edge cells get table's outer borders for missing top/left.
+    //
+    // Priority:
+    // 1. Cell has borders attribute but empty → no borders (intentionally borderless)
+    // 2. Cell has explicit borders → use those, but merge with table borders for edges
+    // 3. Table has borders → resolve from table borders (single-owner: top/left + edge bottom/right)
+    // 4. Neither → no borders
     let resolvedBorders;
-    if (hasExplicitBorders) {
-      resolvedBorders = cellBordersAttr;
-    } else if (hasBordersAttribute) {
+    if (hasBordersAttribute && !hasExplicitBorders) {
       // Cell explicitly has borders={} meaning "no borders"
       resolvedBorders = undefined;
+    } else if (hasExplicitBorders && tableBorders) {
+      // Merge cell's explicit borders with table's outer borders for edge cells
+      // This handles DOCX files that use right/bottom ownership model
+      const isFirstRow = rowIndex === 0;
+      const isLastRow = rowIndex === totalRows - 1;
+      const isFirstCol = gridColIndex === 0;
+      const isLastCol = gridColIndex === totalCols - 1;
+
+      resolvedBorders = {
+        // For top: use cell's if defined, otherwise use table's top for first row
+        top: cellBordersAttr.top ?? (isFirstRow ? tableBorders.top : tableBorders.insideH),
+        // For bottom: use cell's if defined, otherwise use table's bottom for last row only
+        bottom: cellBordersAttr.bottom ?? (isLastRow ? tableBorders.bottom : undefined),
+        // For left: use cell's if defined, otherwise use table's left for first col
+        left: cellBordersAttr.left ?? (isFirstCol ? tableBorders.left : tableBorders.insideV),
+        // For right: use cell's if defined, otherwise use table's right for last col only
+        right: cellBordersAttr.right ?? (isLastCol ? tableBorders.right : undefined),
+      };
+    } else if (hasExplicitBorders) {
+      // Cell has explicit borders but no table borders to merge with
+      resolvedBorders = cellBordersAttr;
     } else if (tableBorders) {
       resolvedBorders = resolveTableCellBorders(tableBorders, rowIndex, gridColIndex, totalRows, totalCols);
     } else {

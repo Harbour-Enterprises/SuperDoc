@@ -2128,9 +2128,12 @@ export class PresentationEditor extends EventEmitter {
     const converter = (this.#editor as Editor & { converter?: unknown }).converter;
     this.#headerFooterIdentifier = extractIdentifierFromConverter(converter);
     this.#headerFooterManager = new HeaderFooterEditorManager(this.#editor);
-    const mediaFiles =
-      (this.#options as { mediaFiles?: Record<string, unknown> })?.mediaFiles ??
-      (this.#editor as Editor & { storage?: { image?: { media?: Record<string, unknown> } } }).storage?.image?.media;
+
+    const optionsMedia = (this.#options as { mediaFiles?: Record<string, unknown> })?.mediaFiles;
+    const storageMedia = (this.#editor as Editor & { storage?: { image?: { media?: Record<string, unknown> } } })
+      .storage?.image?.media;
+    const mediaFiles = optionsMedia ?? storageMedia;
+
     this.#headerFooterAdapter = new HeaderFooterLayoutAdapter(
       this.#headerFooterManager,
       mediaFiles as Record<string, string> | undefined,
@@ -2932,7 +2935,9 @@ export class PresentationEditor extends EventEmitter {
   #computeHeaderFooterConstraints() {
     const pageSize = this.#layoutOptions.pageSize ?? DEFAULT_PAGE_SIZE;
     const margins = this.#layoutOptions.margins ?? DEFAULT_MARGINS;
-    const width = pageSize.w - ((margins.left ?? DEFAULT_MARGINS.left!) + (margins.right ?? DEFAULT_MARGINS.right!));
+    const marginLeft = margins.left ?? DEFAULT_MARGINS.left!;
+    const marginRight = margins.right ?? DEFAULT_MARGINS.right!;
+    const width = pageSize.w - (marginLeft + marginRight);
     if (!Number.isFinite(width) || width <= 0) {
       return null;
     }
@@ -2941,6 +2946,9 @@ export class PresentationEditor extends EventEmitter {
     return {
       width,
       height,
+      // Pass actual page dimensions for page-relative anchor positioning in headers/footers
+      pageWidth: pageSize.w,
+      margins: { left: marginLeft, right: marginRight },
     };
   }
 
@@ -2967,11 +2975,10 @@ export class PresentationEditor extends EventEmitter {
       if (!variant || !variant.layout?.pages?.length) {
         return null;
       }
-      const slotPage =
-        variant.layout.pages.find((candidate: Page) => candidate.number === pageNumber) ?? variant.layout.pages[0];
-      if (!slotPage) {
-        return null;
-      }
+      // Flatten all internal pages' fragments to prevent content loss from overflow
+      // Headers/footers may have content that exceeds height constraints during internal layout,
+      // causing pagination. We collect all fragments across all internal pages.
+      const allFragments = variant.layout.pages.flatMap((p: Page) => p.fragments ?? []);
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
@@ -2984,7 +2991,7 @@ export class PresentationEditor extends EventEmitter {
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = headerId ?? fallbackId ?? undefined;
       return {
-        fragments: slotPage.fragments,
+        fragments: allFragments,
         height: box.height,
         contentHeight: variant.layout.height ?? box.height,
         offset: box.offset,
