@@ -1,0 +1,74 @@
+import { Node, Attribute } from '@core/index.js';
+
+/**
+ * Configuration options for ShapeTextbox
+ * @category Options
+ */
+interface ShapeTextboxOptions extends Record<string, unknown> {
+  /** HTML attributes for shape textbox elements */
+  htmlAttributes: Record<string, string>;
+}
+
+/**
+ * Attributes for shape textbox nodes
+ * @typedef {Object} ShapeTextboxAttributes
+ * @category Attributes
+ * @property {string} [sdBlockId] @internal - Internal block tracking ID
+ * @property {Object} [attributes] @internal - Internal attributes storage
+ */
+
+/**
+ * @module ShapeTextbox
+ * @sidebarTitle Shape Textbox
+ * @snippetPath /snippets/extensions/shape-textbox.mdx
+ */
+export const ShapeTextbox = Node.create<ShapeTextboxOptions>({
+  name: 'shapeTextbox',
+
+  group: 'block',
+
+  content: 'paragraph* block*',
+
+  isolating: true,
+
+  addOptions() {
+    return {
+      htmlAttributes: {
+        class: 'sd-editor-shape-textbox',
+        'aria-label': 'Shape textbox node',
+      },
+    };
+  },
+
+  addAttributes() {
+    return {
+      sdBlockId: {
+        default: null,
+        keepOnSplit: false,
+        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs) => {
+          return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
+        },
+      },
+      attributes: {
+        rendered: false,
+      },
+    };
+  },
+
+  parseDOM() {
+    return [
+      {
+        tag: `div[data-type="${this.name}"]`,
+      },
+    ];
+  },
+
+  renderDOM({ htmlAttributes }) {
+    return [
+      'div',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }),
+      0,
+    ];
+  },
+});

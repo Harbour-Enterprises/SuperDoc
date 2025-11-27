@@ -24,6 +24,7 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
       justification: 'right',
       path: [1],
       numberingType: 'decimal',
+      suffix: null,
     });
   });
 
@@ -38,6 +39,7 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
       justification: 'right',
       path: [2],
       numberingType: 'decimal',
+      suffix: null,
     });
 
     // Ensure we're importing the empty paragraprh
@@ -57,6 +59,7 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
       justification: 'left',
       path: [1],
       numberingType: 'lowerLetter',
+      suffix: null,
     });
   });
 });
