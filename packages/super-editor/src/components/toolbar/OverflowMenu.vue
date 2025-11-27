@@ -1,5 +1,5 @@
 <script setup>
-import { getCurrentInstance, ref, computed, onMounted, watch, onBeforeMount } from 'vue';
+import { getCurrentInstance, ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import ToolbarButton from './ToolbarButton.vue';
 import ButtonGroup from './ButtonGroup.vue';
 
@@ -47,7 +47,7 @@ onMounted(() => {
   document.addEventListener('keydown', handleKeyDown, true);
 });
 
-onBeforeMount(() => {
+onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleKeyDown, true);
 });
 </script>
