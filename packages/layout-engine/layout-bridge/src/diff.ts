@@ -136,7 +136,7 @@ const paragraphBlocksEqual = (a: FlowBlock & { kind: 'paragraph' }, b: FlowBlock
     const runA = a.runs[i];
     const runB = b.runs[i];
     if (
-      runA.text !== runB.text ||
+      (runA.kind === 'image' ? '' : runA.text) !== (runB.kind === 'image' ? '' : runB.text) ||
       ('bold' in runA ? runA.bold : false) !== ('bold' in runB ? runB.bold : false) ||
       ('italic' in runA ? runA.italic : false) !== ('italic' in runB ? runB.italic : false) ||
       ('color' in runA ? runA.color : undefined) !== ('color' in runB ? runB.color : undefined) ||

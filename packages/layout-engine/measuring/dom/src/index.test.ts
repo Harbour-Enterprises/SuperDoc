@@ -1267,6 +1267,88 @@ describe('measureBlock', () => {
       expect(Math.round(measure.height)).toBe(300);
       expect(measure.width).toBeCloseTo(150);
     });
+
+    describe('negative positioning bypass logic', () => {
+      it('bypasses maxHeight when anchored image has offsetV < 0', async () => {
+        const block: FlowBlock = {
+          kind: 'image',
+          id: 'img-negative-offset',
+          src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+          width: 200,
+          height: 100,
+          anchor: {
+            isAnchored: true,
+            offsetV: -24,
+          },
+        };
+
+        // maxHeight is 50, but bypass should allow full 100px height
+        const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 50 }));
+        expect(measure.width).toBe(200);
+        expect(measure.height).toBe(100);
+      });
+
+      it('bypasses maxHeight when anchored image has margin.top < 0', async () => {
+        const block: FlowBlock = {
+          kind: 'image',
+          id: 'img-negative-margin',
+          src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+          width: 200,
+          height: 100,
+          anchor: {
+            isAnchored: true,
+          },
+          margin: {
+            top: -24,
+          },
+        };
+
+        // maxHeight is 50, but bypass should allow full 100px height
+        const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 50 }));
+        expect(measure.width).toBe(200);
+        expect(measure.height).toBe(100);
+      });
+
+      it('does NOT bypass maxHeight when anchored image has offsetV === 0', async () => {
+        const block: FlowBlock = {
+          kind: 'image',
+          id: 'img-zero-offset',
+          src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+          width: 200,
+          height: 100,
+          anchor: {
+            isAnchored: true,
+            offsetV: 0,
+          },
+        };
+
+        // maxHeight is 50, should scale down since no negative offset
+        const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 50 }));
+        expect(measure.height).toBe(50);
+        expect(measure.width).toBe(100);
+      });
+
+      it('does NOT bypass maxHeight when image is not anchored', async () => {
+        const block: FlowBlock = {
+          kind: 'image',
+          id: 'img-not-anchored',
+          src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+          width: 200,
+          height: 100,
+          anchor: {
+            isAnchored: false,
+          },
+          margin: {
+            top: -24,
+          },
+        };
+
+        // maxHeight is 50, should scale down since not anchored
+        const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 50 }));
+        expect(measure.height).toBe(50);
+        expect(measure.width).toBe(100);
+      });
+    });
   });
 
   describe('drawing measurement', () => {

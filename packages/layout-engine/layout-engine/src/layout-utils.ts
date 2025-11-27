@@ -78,6 +78,22 @@ export const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRan
     const run = block.runs[runIndex];
     if (!run) continue;
 
+    // FIXED: ImageRun handling - images are treated as single units (length = 1)
+    if (run.kind === 'image') {
+      const runPmStart = run.pmStart ?? undefined;
+      const runPmEnd = run.pmEnd ?? undefined;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+      continue;
+    }
+
     // Type assertion: runs should have text and PM positions
     const runWithPm = run as { text?: string; pmStart?: number; pmEnd?: number };
     const text = runWithPm.text ?? '';

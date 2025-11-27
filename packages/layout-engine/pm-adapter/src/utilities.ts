@@ -12,6 +12,9 @@ import type {
   ShapeGroupChild,
   ShapeGroupTransform,
   FlowBlock,
+  ImageRun,
+  ParagraphBlock,
+  Run,
 } from '@superdoc/contracts';
 import type { PMNode, PositionMap, BlockIdGenerator } from './types.js';
 import { TWIPS_PER_INCH, PX_PER_INCH, PX_PER_PT, ATOMIC_INLINE_TYPES } from './constants.js';
@@ -962,24 +965,20 @@ export function hydrateImageBlocks(blocks: FlowBlock[], mediaFiles?: Record<stri
     return blocks;
   }
 
-  return blocks.map((block) => {
-    if (block.kind !== 'image') {
-      return block;
+  /**
+   * Helper to resolve an image source path to a data URL.
+   * Tries multiple candidate paths to find a match in the media files.
+   */
+  const resolveImageSrc = (src: string, relId?: string, attrSrc?: string, extension?: string): string | undefined => {
+    if (!src || src.startsWith('data:')) {
+      return undefined;
     }
-    if (!block.src || block.src.startsWith('data:')) {
-      return block;
-    }
-
-    const attrs = (block.attrs ?? {}) as Record<string, unknown>;
-    const relId = typeof attrs.rId === 'string' ? attrs.rId : undefined;
-    const attrSrc = typeof attrs.src === 'string' ? attrs.src : undefined;
-    const extension = typeof attrs.extension === 'string' ? attrs.extension.toLowerCase() : undefined;
 
     const candidates = new Set<string>();
-    candidates.add(block.src);
+    candidates.add(src);
     if (attrSrc) candidates.add(attrSrc);
     if (relId) {
-      const inferredExt = extension ?? inferExtensionFromPath(block.src) ?? 'jpeg';
+      const inferredExt = extension ?? inferExtensionFromPath(src) ?? 'jpeg';
       candidates.add(`word/media/${relId}.${inferredExt}`);
       candidates.add(`media/${relId}.${inferredExt}`);
     }
@@ -992,11 +991,93 @@ export function hydrateImageBlocks(blocks: FlowBlock[], mediaFiles?: Record<stri
 
       const finalExt = extension ?? inferExtensionFromPath(normalized) ?? 'jpeg';
       // Check if base64 already has data URI prefix (some sources store full data URIs)
-      const src = base64.startsWith('data:') ? base64 : `data:image/${finalExt};base64,${base64}`;
-      return {
-        ...block,
-        src,
-      };
+      return base64.startsWith('data:') ? base64 : `data:image/${finalExt};base64,${base64}`;
+    }
+
+    return undefined;
+  };
+
+  /**
+   * Helper to hydrate ImageRuns inside a paragraph block.
+   *
+   * Iterates through all runs in a paragraph and converts any ImageRun instances
+   * with file path references to data URLs using the mediaFiles map.
+   *
+   * OPTIMIZATION: Returns the original array if no changes are made to avoid
+   * unnecessary object allocation and re-rendering.
+   *
+   * @param runs - Array of runs (may include TextRuns, TabRuns, and ImageRuns)
+   * @returns New array with hydrated ImageRuns, or original array if no changes
+   *
+   * @example
+   * ```typescript
+   * const runs = [
+   *   { text: 'Hello' },
+   *   { kind: 'image', src: 'media/logo.png', width: 100, height: 100 },
+   *   { text: 'World' }
+   * ];
+   * const hydrated = hydrateRuns(runs);
+   * // Returns: [
+   * //   { text: 'Hello' },
+   * //   { kind: 'image', src: 'data:image/png;base64,...', width: 100, height: 100 },
+   * //   { text: 'World' }
+   * // ]
+   * ```
+   */
+  const hydrateRuns = (runs: Run[]): Run[] => {
+    let hasChanges = false;
+    const hydratedRuns = runs.map((run) => {
+      if ((run as ImageRun).kind !== 'image') {
+        return run;
+      }
+      const imageRun = run as ImageRun;
+      if (!imageRun.src || imageRun.src.startsWith('data:')) {
+        return run;
+      }
+
+      // ImageRun doesn't have attrs like ImageBlock, so we just use the src directly
+      const resolvedSrc = resolveImageSrc(imageRun.src);
+      if (resolvedSrc) {
+        hasChanges = true;
+        return { ...imageRun, src: resolvedSrc };
+      }
+      return run;
+    });
+
+    return hasChanges ? hydratedRuns : runs;
+  };
+
+  return blocks.map((block) => {
+    // Handle ImageBlocks (top-level images)
+    if (block.kind === 'image') {
+      if (!block.src || block.src.startsWith('data:')) {
+        return block;
+      }
+
+      const attrs = (block.attrs ?? {}) as Record<string, unknown>;
+      const relId = typeof attrs.rId === 'string' ? attrs.rId : undefined;
+      const attrSrc = typeof attrs.src === 'string' ? attrs.src : undefined;
+      const extension = typeof attrs.extension === 'string' ? attrs.extension.toLowerCase() : undefined;
+
+      const resolvedSrc = resolveImageSrc(block.src, relId, attrSrc, extension);
+      if (resolvedSrc) {
+        return { ...block, src: resolvedSrc };
+      }
+      return block;
+    }
+
+    // Handle ParagraphBlocks (may contain ImageRuns)
+    if (block.kind === 'paragraph') {
+      const paragraphBlock = block as ParagraphBlock;
+      if (!paragraphBlock.runs || paragraphBlock.runs.length === 0) {
+        return block;
+      }
+
+      const hydratedRuns = hydrateRuns(paragraphBlock.runs);
+      if (hydratedRuns !== paragraphBlock.runs) {
+        return { ...paragraphBlock, runs: hydratedRuns };
+      }
+      return block;
     }
 
     return block;
