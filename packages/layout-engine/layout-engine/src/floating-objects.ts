@@ -276,15 +276,16 @@ export function computeAnchorX(
     availableWidth = columns.width;
   }
 
-  if (alignH === 'left') {
-    return baseX + offsetH;
-  } else if (alignH === 'right') {
-    return baseX + availableWidth - imageWidth - offsetH;
-  } else if (alignH === 'center') {
-    return baseX + (availableWidth - imageWidth) / 2 + offsetH;
-  }
+  const result =
+    alignH === 'left'
+      ? baseX + offsetH
+      : alignH === 'right'
+        ? baseX + availableWidth - imageWidth - offsetH
+        : alignH === 'center'
+          ? baseX + (availableWidth - imageWidth) / 2 + offsetH
+          : baseX;
 
-  return baseX;
+  return result;
 }
 
 /**

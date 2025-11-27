@@ -1,5 +1,5 @@
 import type { FlowBlock, Layout, Measure, HeaderFooterLayout } from '@superdoc/contracts';
-import { layoutDocument, type LayoutOptions } from '../../layout-engine/src/index';
+import { layoutDocument, type LayoutOptions, type HeaderFooterConstraints } from '../../layout-engine/src/index';
 import { remeasureParagraph } from './remeasure';
 import { computeDirtyRegions } from './diff';
 import { MeasureCache } from './cache';
@@ -47,7 +47,7 @@ export async function incrementalLayout(
   headerFooter?: {
     headerBlocks?: HeaderFooterBatch;
     footerBlocks?: HeaderFooterBatch;
-    constraints: { width: number; height: number };
+    constraints: HeaderFooterConstraints;
     measure?: HeaderFooterMeasureFn;
   },
 ): Promise<IncrementalLayoutResult> {

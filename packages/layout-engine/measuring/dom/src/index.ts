@@ -988,6 +988,40 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
   };
 }
 
+/**
+ * Measures a drawing block (vector shapes, shape groups, embedded images) and calculates
+ * its rendered dimensions within the given constraints.
+ *
+ * This function handles:
+ * - Rotation transformations and their effect on bounding box dimensions
+ * - Proportional scaling to fit within maxWidth/maxHeight constraints
+ * - Special case: negative vertical positioning bypass for anchored drawings
+ *
+ * Negative Positioning Bypass:
+ * For anchored drawings with negative vertical positioning (offsetV < 0 or margin.top < 0),
+ * the maxHeight constraint is bypassed. This is intentional for footer/header graphics
+ * that are designed to overflow their nominal container region (e.g., decorative elements
+ * positioned above a footer's top edge). The bypass only applies when the drawing is
+ * anchored AND has at least one negative vertical offset value.
+ *
+ * @param block - The drawing block to measure, containing geometry, anchor, and margin data
+ * @param constraints - Measurement constraints with maxWidth and optional maxHeight
+ * @returns A DrawingMeasure containing final dimensions, scale factor, and geometry
+ *
+ * @example
+ * ```typescript
+ * const block: DrawingBlock = {
+ *   kind: 'drawing',
+ *   drawingKind: 'vectorShape',
+ *   geometry: { width: 200, height: 100, rotation: 0 },
+ *   anchor: { isAnchored: true, offsetV: -20 },
+ * };
+ *
+ * const measure = await measureDrawingBlock(block, { maxWidth: 500, maxHeight: 80 });
+ * // Result: { width: 200, height: 100, scale: 1 }
+ * // (maxHeight bypassed due to negative offsetV)
+ * ```
+ */
 async function measureDrawingBlock(block: DrawingBlock, constraints: MeasureConstraints): Promise<DrawingMeasure> {
   if (block.drawingKind === 'image') {
     const intrinsic = getIntrinsicSizeFromDims(block.width, block.height, constraints.maxWidth);
@@ -1026,7 +1060,19 @@ async function measureDrawingBlock(block: DrawingBlock, constraints: MeasureCons
   const naturalHeight = Math.max(1, rotatedBounds.height);
 
   const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : naturalWidth;
-  const maxHeight = constraints.maxHeight && constraints.maxHeight > 0 ? constraints.maxHeight : Infinity;
+
+  // For anchored drawings with negative vertical positioning (designed to overflow their container),
+  // bypass the height constraint. This is common for footer/header graphics that extend beyond
+  // their nominal region (e.g., decorative elements with marginOffset.top < 0).
+  const hasNegativeVerticalPosition =
+    block.anchor?.isAnchored &&
+    ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
+      (typeof block.margin?.top === 'number' && block.margin.top < 0));
+
+  const maxHeight =
+    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+      ? Infinity
+      : constraints.maxHeight;
 
   const widthScale = maxWidth / naturalWidth;
   const heightScale = maxHeight / naturalHeight;

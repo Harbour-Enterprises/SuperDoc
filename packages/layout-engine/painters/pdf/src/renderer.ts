@@ -1035,12 +1035,29 @@ export class PdfPainter {
 
     // Set fill color
     if (block.fillColor) {
-      const rgb = this.parseColor(block.fillColor);
-      pdf += `${rgb.r.toFixed(4)} ${rgb.g.toFixed(4)} ${rgb.b.toFixed(4)} rg\n`;
+      // Handle complex fill types - extract color string or use fallback
+      let colorStr: string | null = null;
+      if (typeof block.fillColor === 'string') {
+        colorStr = block.fillColor;
+      } else if (block.fillColor && typeof block.fillColor === 'object' && 'type' in block.fillColor) {
+        if (block.fillColor.type === 'solidWithAlpha') {
+          colorStr = (block.fillColor as { color: string }).color;
+          // TODO: Apply alpha via ExtGState
+        } else if (block.fillColor.type === 'gradient') {
+          // TODO: Implement PDF gradient shading patterns
+          // For now, use first stop color as fallback
+          const stops = (block.fillColor as { stops?: Array<{ color: string }> }).stops;
+          colorStr = stops?.[0]?.color ?? '#cccccc';
+        }
+      }
+      if (colorStr) {
+        const rgb = this.parseColor(colorStr);
+        pdf += `${rgb.r.toFixed(4)} ${rgb.g.toFixed(4)} ${rgb.b.toFixed(4)} rg\n`;
+      }
     }
 
     // Set stroke color and width
-    if (block.strokeColor) {
+    if (block.strokeColor && typeof block.strokeColor === 'string') {
       const rgb = this.parseColor(block.strokeColor);
       pdf += `${rgb.r.toFixed(4)} ${rgb.g.toFixed(4)} ${rgb.b.toFixed(4)} RG\n`;
     }

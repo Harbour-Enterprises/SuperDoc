@@ -1833,6 +1833,132 @@ describe('layoutHeaderFooter', () => {
     expect(layout.height).toBe(40);
     expect(layout.pages[0].fragments[0]).toMatchObject({ kind: 'image', height: 40 });
   });
+
+  it('transforms page-relative anchor offsets by subtracting left margin', () => {
+    // An anchored image with hRelativeFrom='page' and offsetH=545 (absolute from page left)
+    // When left margin is 107, the image should be positioned at 545-107=438 within the header
+    // Anchored images are attached to the nearest paragraph and placed during paragraph layout
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        hRelativeFrom: 'page',
+        offsetH: 545,
+        offsetV: 0,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 200,
+      height: 70,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 602, // content width
+      height: 100,
+      pageWidth: 816, // actual page width (8.5" at 96dpi)
+      margins: { left: 107, right: 107 },
+    });
+
+    expect(layout.pages).toHaveLength(1);
+    // Find the image fragment (should be anchored)
+    const imageFragment = layout.pages[0].fragments.find((f) => f.kind === 'image');
+    expect(imageFragment).toBeDefined();
+    // The offsetH should be transformed: 545 - 107 = 438
+    expect(imageFragment!.x).toBe(438);
+  });
+
+  it('does not transform anchor offset when margins not provided', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        hRelativeFrom: 'page',
+        offsetH: 100,
+        offsetV: 0,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    // No margins provided - should not transform (marginLeft defaults to 0)
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 400,
+      height: 60,
+    });
+
+    const imageFragment = layout.pages[0].fragments.find((f) => f.kind === 'image');
+    expect(imageFragment).toBeDefined();
+    // With no margin transform, offsetH stays at 100
+    expect(imageFragment!.x).toBe(100);
+  });
+
+  it('does not transform non-page-relative anchors', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        hRelativeFrom: 'margin',
+        offsetH: 50,
+        offsetV: 0,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 400,
+      height: 60,
+      margins: { left: 100, right: 100 },
+    });
+
+    const imageFragment = layout.pages[0].fragments.find((f) => f.kind === 'image');
+    expect(imageFragment).toBeDefined();
+    // margin-relative anchors should not be transformed - offsetH stays at 50
+    expect(imageFragment!.x).toBe(50);
+  });
 });
 
 describe('requirePageBoundary edge cases', () => {

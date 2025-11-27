@@ -33,8 +33,12 @@ import type {
   PositionedDrawingGeometry,
   VectorShapeStyle,
   FlowRunLink,
+  GradientFill,
+  SolidFillWithAlpha,
+  ShapeTextContent,
 } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
+import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
 import {
   CLASS_NAMES,
   containerStyles,
@@ -1625,6 +1629,7 @@ export class DomPainter {
       this.applyFragmentFrame(fragmentEl, fragment);
       fragmentEl.style.height = `${fragment.height}px`;
       fragmentEl.style.position = 'absolute';
+      fragmentEl.style.overflow = 'hidden';
 
       if (fragment.isAnchored && fragment.zIndex != null) {
         fragmentEl.style.zIndex = String(fragment.zIndex);
@@ -1694,12 +1699,15 @@ export class DomPainter {
     block: VectorShapeDrawing,
     geometry?: DrawingGeometry,
     applyTransforms = false,
+    groupScaleX = 1,
+    groupScaleY = 1,
   ): HTMLElement {
     const container = this.doc!.createElement('div');
     container.classList.add('superdoc-vector-shape');
     container.style.width = '100%';
     container.style.height = '100%';
     container.style.position = 'relative';
+    container.style.overflow = 'hidden';
 
     const svgMarkup = block.shapeKind ? this.tryCreatePresetSvg(block) : null;
     if (svgMarkup) {
@@ -1708,29 +1716,255 @@ export class DomPainter {
         svgElement.setAttribute('width', '100%');
         svgElement.setAttribute('height', '100%');
         svgElement.style.display = 'block';
+
+        // Apply gradient fill if present
+        if (block.fillColor && typeof block.fillColor === 'object') {
+          if ('type' in block.fillColor && block.fillColor.type === 'gradient') {
+            applyGradientToSVG(svgElement, block.fillColor as GradientFill);
+          } else if ('type' in block.fillColor && block.fillColor.type === 'solidWithAlpha') {
+            applyAlphaToSVG(svgElement, block.fillColor as SolidFillWithAlpha);
+          }
+        }
+
         if (applyTransforms && geometry) {
           this.applyVectorShapeTransforms(svgElement, geometry);
         }
         container.appendChild(svgElement);
+
+        // Apply text content as an overlay div (not inside SVG to avoid viewBox scaling)
+        if (block.textContent && block.textContent.parts.length > 0) {
+          const textDiv = this.createFallbackTextElement(
+            block.textContent,
+            block.textAlign ?? 'center',
+            block.textVerticalAlign,
+            block.textInsets,
+            groupScaleX,
+            groupScaleY,
+          );
+          container.appendChild(textDiv);
+        }
+
         return container;
       }
     }
 
-    container.style.background = block.fillColor ?? 'rgba(15, 23, 42, 0.1)';
-    container.style.border = `1px solid ${block.strokeColor ?? 'rgba(15, 23, 42, 0.3)'}`;
+    // Fallback rendering when no preset shape SVG is available
+    this.applyFallbackShapeStyle(container, block);
+
+    // Apply text content to fallback rendering
+    if (block.textContent && block.textContent.parts.length > 0) {
+      const textDiv = this.createFallbackTextElement(
+        block.textContent,
+        block.textAlign ?? 'center',
+        block.textVerticalAlign,
+        block.textInsets,
+        groupScaleX,
+        groupScaleY,
+      );
+      container.appendChild(textDiv);
+    }
+
     if (applyTransforms && geometry) {
       this.applyVectorShapeTransforms(container, geometry);
     }
     return container;
   }
 
+  /**
+   * Apply fill and stroke styles to a fallback shape container
+   */
+  private applyFallbackShapeStyle(container: HTMLElement, block: VectorShapeDrawing): void {
+    // Handle fill color
+    if (block.fillColor === null) {
+      container.style.background = 'none';
+    } else if (typeof block.fillColor === 'string') {
+      container.style.background = block.fillColor;
+    } else if (typeof block.fillColor === 'object' && 'type' in block.fillColor) {
+      if (block.fillColor.type === 'solidWithAlpha') {
+        const alpha = (block.fillColor as SolidFillWithAlpha).alpha;
+        const color = (block.fillColor as SolidFillWithAlpha).color;
+        container.style.background = color;
+        container.style.opacity = alpha.toString();
+      } else if (block.fillColor.type === 'gradient') {
+        // For CSS gradients in fallback, we'd need to convert
+        // For now, use a placeholder color
+        container.style.background = 'rgba(15, 23, 42, 0.1)';
+      }
+    } else {
+      container.style.background = 'rgba(15, 23, 42, 0.1)';
+    }
+
+    // Handle stroke color
+    if (block.strokeColor === null) {
+      container.style.border = 'none';
+    } else if (typeof block.strokeColor === 'string') {
+      const strokeWidth = block.strokeWidth ?? 1;
+      container.style.border = `${strokeWidth}px solid ${block.strokeColor}`;
+    } else {
+      container.style.border = '1px solid rgba(15, 23, 42, 0.3)';
+    }
+  }
+
+  /**
+   * Create a fallback text element for shapes without SVG
+   * @param textContent - Text content with formatting
+   * @param textAlign - Horizontal text alignment
+   * @param textVerticalAlign - Vertical text alignment (top, center, bottom)
+   * @param textInsets - Text insets in pixels (top, right, bottom, left)
+   * @param groupScaleX - Scale factor applied by parent group (for counter-scaling)
+   * @param groupScaleY - Scale factor applied by parent group (for counter-scaling)
+   */
+  private createFallbackTextElement(
+    textContent: ShapeTextContent,
+    textAlign: string,
+    textVerticalAlign?: 'top' | 'center' | 'bottom',
+    textInsets?: { top: number; right: number; bottom: number; left: number },
+    groupScaleX = 1,
+    groupScaleY = 1,
+  ): HTMLElement {
+    const textDiv = this.doc!.createElement('div');
+    textDiv.style.position = 'absolute';
+    textDiv.style.top = '0';
+    textDiv.style.left = '0';
+    textDiv.style.width = '100%';
+    textDiv.style.height = '100%';
+    textDiv.style.display = 'flex';
+    textDiv.style.flexDirection = 'column';
+
+    // Use extracted vertical alignment or default to center
+    // In flex-direction: column, justifyContent controls vertical (main axis)
+    const verticalAlign = textVerticalAlign ?? 'center';
+    if (verticalAlign === 'top') {
+      textDiv.style.justifyContent = 'flex-start';
+    } else if (verticalAlign === 'bottom') {
+      textDiv.style.justifyContent = 'flex-end';
+    } else {
+      textDiv.style.justifyContent = 'center';
+    }
+
+    // Use extracted text insets or default to 10px all around
+    if (textInsets) {
+      textDiv.style.padding = `${textInsets.top}px ${textInsets.right}px ${textInsets.bottom}px ${textInsets.left}px`;
+    } else {
+      textDiv.style.padding = '10px';
+    }
+
+    textDiv.style.boxSizing = 'border-box';
+    textDiv.style.wordWrap = 'break-word';
+    textDiv.style.overflowWrap = 'break-word';
+    textDiv.style.overflow = 'hidden';
+    // min-width: 0 allows flex container to shrink below content size for text wrapping
+    textDiv.style.minWidth = '0';
+    // Set explicit base font-size to prevent CSS inheritance issues
+    // Individual spans will override with their own sizes from textContent.parts
+    textDiv.style.fontSize = '12px';
+    textDiv.style.lineHeight = '1.2';
+
+    // Apply counter-scaling to prevent text from being stretched by parent group transform
+    if (groupScaleX !== 1 || groupScaleY !== 1) {
+      const counterScaleX = 1 / groupScaleX;
+      const counterScaleY = 1 / groupScaleY;
+      textDiv.style.transform = `scale(${counterScaleX}, ${counterScaleY})`;
+      textDiv.style.transformOrigin = 'top left';
+      // Adjust dimensions to compensate for counter-scaling
+      textDiv.style.width = `${100 * groupScaleX}%`;
+      textDiv.style.height = `${100 * groupScaleY}%`;
+    }
+
+    // Horizontal text alignment uses CSS text-align property
+    // Note: justifyContent is already set above for vertical alignment
+    if (textAlign === 'center') {
+      textDiv.style.textAlign = 'center';
+    } else if (textAlign === 'right' || textAlign === 'r') {
+      textDiv.style.textAlign = 'right';
+    } else {
+      textDiv.style.textAlign = 'left';
+    }
+
+    // Create paragraphs by splitting on line breaks
+    let currentParagraph = this.doc!.createElement('div');
+    // Set width to 100% to enable text wrapping within the shape bounds
+    currentParagraph.style.width = '100%';
+    // min-width: 0 prevents flex item from overflowing (flexbox default is min-width: auto)
+    currentParagraph.style.minWidth = '0';
+    // Override inherited white-space: pre from parent fragment to allow text wrapping
+    currentParagraph.style.whiteSpace = 'normal';
+
+    textContent.parts.forEach((part) => {
+      if (part.isLineBreak) {
+        // Finish current paragraph and start a new one
+        textDiv.appendChild(currentParagraph);
+        currentParagraph = this.doc!.createElement('div');
+        currentParagraph.style.width = '100%';
+        currentParagraph.style.minWidth = '0';
+        currentParagraph.style.whiteSpace = 'normal';
+        // Empty paragraphs create extra spacing (blank line)
+        if (part.isEmptyParagraph) {
+          currentParagraph.style.minHeight = '1em';
+        }
+      } else {
+        const span = this.doc!.createElement('span');
+        span.textContent = part.text;
+        if (part.formatting) {
+          if (part.formatting.bold) {
+            span.style.fontWeight = 'bold';
+          }
+          if (part.formatting.italic) {
+            span.style.fontStyle = 'italic';
+          }
+          if (part.formatting.color) {
+            // Validate and normalize color format (handles both with and without # prefix)
+            const validatedColor = validateHexColor(part.formatting.color);
+            if (validatedColor) {
+              span.style.color = validatedColor;
+            }
+          }
+          if (part.formatting.fontSize) {
+            span.style.fontSize = `${part.formatting.fontSize}px`;
+          }
+        }
+        currentParagraph.appendChild(span);
+      }
+    });
+
+    // Add the final paragraph
+    textDiv.appendChild(currentParagraph);
+
+    return textDiv;
+  }
+
   private tryCreatePresetSvg(block: VectorShapeDrawing): string | null {
     try {
+      // For preset shapes, we need to pass string colors only
+      // Gradients and alpha will be applied after SVG is created
+      // null means explicitly "no fill" (from <a:noFill/> or fillRef idx="0"), so use 'none'
+      // undefined means no explicit fill, so we let the preset library use its default
+      let fillColor: string | undefined;
+      if (block.fillColor === null) {
+        fillColor = 'none';
+      } else if (typeof block.fillColor === 'string') {
+        fillColor = block.fillColor;
+      }
+      const strokeColor =
+        block.strokeColor === null ? 'none' : typeof block.strokeColor === 'string' ? block.strokeColor : undefined;
+
+      // Special case: handle line shapes directly since getPresetShapeSvg doesn't support them
+      if (block.shapeKind === 'line') {
+        const width = block.geometry.width;
+        const height = block.geometry.height;
+        const stroke = strokeColor ?? '#000000';
+        const strokeWidth = block.strokeWidth ?? 1;
+
+        return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  <line x1="0" y1="0" x2="${width}" y2="${height}" stroke="${stroke}" stroke-width="${strokeWidth}" />
+</svg>`;
+      }
+
       return getPresetShapeSvg({
         preset: block.shapeKind ?? '',
         styleOverrides: () => ({
-          fill: block.fillColor ?? undefined,
-          stroke: block.strokeColor ?? undefined,
+          fill: fillColor,
+          stroke: strokeColor,
           strokeWidth: block.strokeWidth ?? undefined,
         }),
       });
@@ -1804,6 +2038,10 @@ export class DomPainter {
     const groupTransform = block.groupTransform;
     let contentContainer: HTMLElement = groupEl;
 
+    // Calculate scale factors for counter-scaling text
+    let groupScaleX = 1;
+    let groupScaleY = 1;
+
     if (groupTransform) {
       const inner = this.doc!.createElement('div');
       inner.style.position = 'absolute';
@@ -1821,10 +2059,10 @@ export class DomPainter {
       }
       const targetWidth = groupTransform.width ?? block.geometry.width ?? childWidth;
       const targetHeight = groupTransform.height ?? block.geometry.height ?? childHeight;
-      const scaleX = childWidth ? targetWidth / childWidth : 1;
-      const scaleY = childHeight ? targetHeight / childHeight : 1;
-      if (scaleX !== 1 || scaleY !== 1) {
-        transforms.push(`scale(${scaleX}, ${scaleY})`);
+      groupScaleX = childWidth ? targetWidth / childWidth : 1;
+      groupScaleY = childHeight ? targetHeight / childHeight : 1;
+      if (groupScaleX !== 1 || groupScaleY !== 1) {
+        transforms.push(`scale(${groupScaleX}, ${groupScaleY})`);
       }
       if (transforms.length > 0) {
         inner.style.transformOrigin = 'top left';
@@ -1835,7 +2073,7 @@ export class DomPainter {
     }
 
     block.shapes.forEach((child) => {
-      const childContent = this.createGroupChildContent(child);
+      const childContent = this.createGroupChildContent(child, groupScaleX, groupScaleY);
       if (!childContent) return;
       const attrs = (child as ShapeGroupChild).attrs ?? {};
       const wrapper = this.doc!.createElement('div');
@@ -1870,7 +2108,11 @@ export class DomPainter {
     return groupEl;
   }
 
-  private createGroupChildContent(child: ShapeGroupChild): HTMLElement | null {
+  private createGroupChildContent(
+    child: ShapeGroupChild,
+    groupScaleX: number = 1,
+    groupScaleY: number = 1,
+  ): HTMLElement | null {
     // Type narrowing with explicit checks to help TypeScript distinguish union members
     if (child.shapeType === 'vectorShape' && 'fillColor' in child.attrs) {
       // After this check, child should be ShapeGroupVectorChild
@@ -1879,18 +2121,21 @@ export class DomPainter {
           kind?: string;
           shapeId?: string;
           shapeName?: string;
+          textContent?: ShapeTextContent;
+          textAlign?: string;
         };
+      const childGeometry = {
+        width: attrs.width ?? 0,
+        height: attrs.height ?? 0,
+        rotation: attrs.rotation ?? 0,
+        flipH: attrs.flipH ?? false,
+        flipV: attrs.flipV ?? false,
+      };
       const vectorChild: VectorShapeDrawing = {
         drawingKind: 'vectorShape',
         kind: 'drawing',
         id: `${attrs.shapeId ?? child.shapeType}`,
-        geometry: {
-          width: attrs.width ?? 0,
-          height: attrs.height ?? 0,
-          rotation: attrs.rotation ?? 0,
-          flipH: attrs.flipH ?? false,
-          flipV: attrs.flipV ?? false,
-        },
+        geometry: childGeometry,
         padding: undefined,
         margin: undefined,
         anchor: undefined,
@@ -1902,8 +2147,11 @@ export class DomPainter {
         fillColor: attrs.fillColor,
         strokeColor: attrs.strokeColor,
         strokeWidth: attrs.strokeWidth,
+        textContent: attrs.textContent,
+        textAlign: attrs.textAlign,
       };
-      return this.createVectorShapeElement(vectorChild);
+      // Pass geometry and scale factors to ensure text overlay has correct dimensions
+      return this.createVectorShapeElement(vectorChild, childGeometry, false, groupScaleX, groupScaleY);
     }
     if (child.shapeType === 'image' && 'src' in child.attrs) {
       // After this check, child should be ShapeGroupImageChild
