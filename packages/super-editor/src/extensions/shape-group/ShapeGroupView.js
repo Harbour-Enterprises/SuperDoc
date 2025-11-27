@@ -36,6 +36,45 @@ export class ShapeGroupView {
 
   mount() {
     this.buildView();
+    // For absolutely positioned shape groups, ensure parent paragraph is positioned
+    // so it becomes the containing block for CSS absolute positioning
+    this.#ensureParentPositioned();
+  }
+
+  /**
+   * Ensures the parent paragraph element is positioned for absolute-positioned shape groups.
+   *
+   * For shape groups with wrap type 'None' (absolutely positioned), the parent paragraph
+   * element must have `position: relative` to establish a containing block for CSS absolute
+   * positioning. This allows the shape group's `top` and `left` offsets to position correctly
+   * relative to the paragraph.
+   *
+   * Uses requestAnimationFrame to defer the DOM manipulation until after the element is fully
+   * mounted in the DOM tree. This prevents race conditions where the parent element might not
+   * yet be available during the initial render phase.
+   *
+   * Only applies to wrap type 'None' - inline and floated elements do not require this setup.
+   */
+  #ensureParentPositioned() {
+    const wrapType = this.node.attrs.wrap?.type || 'Inline';
+    if (wrapType !== 'None') return;
+
+    // Use requestAnimationFrame to ensure the element is in the DOM
+    if (typeof globalThis !== 'undefined' && globalThis.requestAnimationFrame) {
+      globalThis.requestAnimationFrame(() => {
+        try {
+          const parent = this.root?.parentElement;
+          if (parent && parent.tagName === 'P') {
+            // Set parent paragraph as positioned so shape group positions relative to it
+            parent.style.position = 'relative';
+          }
+        } catch (error) {
+          // Silently handle DOM manipulation errors (e.g., detached node, read-only style)
+          // These are edge cases that should not break rendering
+          console.warn('Failed to position parent element for shape group:', error);
+        }
+      });
+    }
   }
 
   get dom() {
@@ -70,16 +109,11 @@ export class ShapeGroupView {
       // Absolutely positioned, floats above content
       container.style.position = 'absolute';
 
-      // For paragraph-relative positioning, use margins instead of left/top
-      // to position relative to the paragraph's natural position
-      const isParagraphRelative = anchorData?.vRelativeFrom === 'paragraph';
-
+      // Per OOXML spec, all relativeFrom values (page, margin, column, paragraph)
+      // position relative to the top-left edge of the reference element.
+      // Use CSS top/left for absolute positioning from containing block.
       if (marginOffset?.horizontal != null) {
-        if (isParagraphRelative) {
-          container.style.marginLeft = `${marginOffset.horizontal}px`;
-        } else {
-          container.style.left = `${marginOffset.horizontal}px`;
-        }
+        container.style.left = `${marginOffset.horizontal}px`;
       }
 
       // For column-relative positioning with posOffset, override max-width to allow extending into margins
@@ -88,11 +122,7 @@ export class ShapeGroupView {
         container.style.maxWidth = 'none';
       }
       if (marginOffset?.top != null) {
-        if (isParagraphRelative) {
-          container.style.marginTop = `${marginOffset.top}px`;
-        } else {
-          container.style.top = `${marginOffset.top}px`;
-        }
+        container.style.top = `${marginOffset.top}px`;
       }
 
       // Use relativeHeight from OOXML for proper z-ordering of overlapping elements

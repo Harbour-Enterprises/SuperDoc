@@ -272,15 +272,14 @@ describe('handleImageNode - Header/Footer Images', () => {
     expect(result).toBeNull();
   });
 
-  it('should exactly match footer-missing-lighthouse.docx header2.xml scenario', () => {
-    // This test replicates the exact structure from footer-missing-lighthouse.docx
-    // where header2.xml contains an image with rId1 that should resolve via
-    // header2.xml.rels to media/image1.png
+  it('should resolve image from header2.xml.rels with full document structure', () => {
+    // This test replicates a typical header structure where header2.xml contains
+    // an image with rId1 that should resolve via header2.xml.rels to media/image1.png
 
     const node = makeImageNode();
 
     const params = {
-      filename: 'header2.xml', // Passed from docxImporter.js line 576
+      filename: 'header2.xml',
       docx: {
         // The header relationship file (word/_rels/header2.xml.rels)
         'word/_rels/header2.xml.rels': {

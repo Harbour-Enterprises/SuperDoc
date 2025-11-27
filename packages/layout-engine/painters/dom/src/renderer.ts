@@ -33,14 +33,12 @@ import type {
   PositionedDrawingGeometry,
   VectorShapeStyle,
   FlowRunLink,
-  FillColor,
-  StrokeColor,
   GradientFill,
   SolidFillWithAlpha,
   ShapeTextContent,
 } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
-import { applyGradientToSVG, applyAlphaToSVG, generateGradientId, validateHexColor } from './svg-utils.js';
+import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
 import {
   CLASS_NAMES,
   containerStyles,
@@ -1834,13 +1832,14 @@ export class DomPainter {
     textDiv.style.flexDirection = 'column';
 
     // Use extracted vertical alignment or default to center
+    // In flex-direction: column, justifyContent controls vertical (main axis)
     const verticalAlign = textVerticalAlign ?? 'center';
     if (verticalAlign === 'top') {
-      textDiv.style.alignItems = 'flex-start';
+      textDiv.style.justifyContent = 'flex-start';
     } else if (verticalAlign === 'bottom') {
-      textDiv.style.alignItems = 'flex-end';
+      textDiv.style.justifyContent = 'flex-end';
     } else {
-      textDiv.style.alignItems = 'center';
+      textDiv.style.justifyContent = 'center';
     }
 
     // Use extracted text insets or default to 10px all around
@@ -1856,6 +1855,10 @@ export class DomPainter {
     textDiv.style.overflow = 'hidden';
     // min-width: 0 allows flex container to shrink below content size for text wrapping
     textDiv.style.minWidth = '0';
+    // Set explicit base font-size to prevent CSS inheritance issues
+    // Individual spans will override with their own sizes from textContent.parts
+    textDiv.style.fontSize = '12px';
+    textDiv.style.lineHeight = '1.2';
 
     // Apply counter-scaling to prevent text from being stretched by parent group transform
     if (groupScaleX !== 1 || groupScaleY !== 1) {
@@ -1868,15 +1871,14 @@ export class DomPainter {
       textDiv.style.height = `${100 * groupScaleY}%`;
     }
 
+    // Horizontal text alignment uses CSS text-align property
+    // Note: justifyContent is already set above for vertical alignment
     if (textAlign === 'center') {
       textDiv.style.textAlign = 'center';
-      textDiv.style.justifyContent = 'center';
     } else if (textAlign === 'right' || textAlign === 'r') {
       textDiv.style.textAlign = 'right';
-      textDiv.style.justifyContent = 'flex-end';
     } else {
       textDiv.style.textAlign = 'left';
-      textDiv.style.justifyContent = 'flex-start';
     }
 
     // Create paragraphs by splitting on line breaks
@@ -1927,6 +1929,7 @@ export class DomPainter {
 
     // Add the final paragraph
     textDiv.appendChild(currentParagraph);
+
     return textDiv;
   }
 

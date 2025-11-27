@@ -59,6 +59,10 @@ export type LayoutOptions = {
 export type HeaderFooterConstraints = {
   width: number;
   height: number;
+  /** Actual page width for page-relative anchor positioning */
+  pageWidth?: number;
+  /** Page margins for page-relative anchor positioning */
+  margins?: { left: number; right: number };
 };
 
 const DEFAULT_PAGE_SIZE: PageSize = { w: 612, h: 792 }; // Letter portrait in px (8.5in × 11in @ 72dpi)
@@ -1017,7 +1021,33 @@ export function layoutHeaderFooter(
     throw new Error('layoutHeaderFooter: height must be positive');
   }
 
-  const layout = layoutDocument(blocks, measures, {
+  // Transform page-relative anchor offsets to content-relative for correct positioning
+  // Headers/footers are rendered within the content box, but page-relative anchors
+  // specify offsets from the physical page edge. We need to adjust by subtracting
+  // the left margin so the image appears at the correct position within the header/footer.
+  const marginLeft = constraints.margins?.left ?? 0;
+  const transformedBlocks =
+    marginLeft > 0
+      ? blocks.map((block) => {
+          // Handle both image blocks and drawing blocks (vectorShape, shapeGroup)
+          const hasPageRelativeAnchor =
+            (block.kind === 'image' || block.kind === 'drawing') &&
+            block.anchor?.hRelativeFrom === 'page' &&
+            block.anchor.offsetH != null;
+          if (hasPageRelativeAnchor) {
+            return {
+              ...block,
+              anchor: {
+                ...block.anchor,
+                offsetH: block.anchor!.offsetH! - marginLeft,
+              },
+            };
+          }
+          return block;
+        })
+      : blocks;
+
+  const layout = layoutDocument(transformedBlocks, measures, {
     pageSize: { w: width, h: height },
     margins: { top: 0, right: 0, bottom: 0, left: 0 },
   });

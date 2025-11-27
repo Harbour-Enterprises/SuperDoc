@@ -50,6 +50,45 @@ export class VectorShapeView {
 
   mount() {
     this.buildView();
+    // For absolutely positioned vector shapes, ensure parent paragraph is positioned
+    // so it becomes the containing block for CSS absolute positioning
+    this.#ensureParentPositioned();
+  }
+
+  /**
+   * Ensures the parent paragraph element is positioned for absolute-positioned vector shapes.
+   *
+   * For vector shapes with wrap type 'None' (absolutely positioned), the parent paragraph
+   * element must have `position: relative` to establish a containing block for CSS absolute
+   * positioning. This allows the vector shape's `top` and `left` offsets to position correctly
+   * relative to the paragraph.
+   *
+   * Uses requestAnimationFrame to defer the DOM manipulation until after the element is fully
+   * mounted in the DOM tree. This prevents race conditions where the parent element might not
+   * yet be available during the initial render phase.
+   *
+   * Only applies to wrap type 'None' - inline and floated elements do not require this setup.
+   */
+  #ensureParentPositioned() {
+    const wrapType = this.node.attrs.wrap?.type;
+    if (wrapType !== 'None') return;
+
+    // Use requestAnimationFrame to ensure the element is in the DOM
+    if (typeof globalThis !== 'undefined' && globalThis.requestAnimationFrame) {
+      globalThis.requestAnimationFrame(() => {
+        try {
+          const parent = this.root?.parentElement;
+          if (parent && parent.tagName === 'P') {
+            // Set parent paragraph as positioned so vector shape positions relative to it
+            parent.style.position = 'relative';
+          }
+        } catch (error) {
+          // Silently handle DOM manipulation errors (e.g., detached node, read-only style)
+          // These are edge cases that should not break rendering
+          console.warn('Failed to position parent element for vector shape:', error);
+        }
+      });
+    }
   }
 
   get dom() {
@@ -190,32 +229,46 @@ export class VectorShapeView {
       }
     }
 
-    // Apply margin offsets
+    // Apply position offsets
+    // For absolutely positioned elements, use top/left per OOXML spec
+    // For floated elements, use margins
+    const isAbsolutelyPositioned = style.includes('position: absolute;');
+
     if (anchorData || marginOffset?.horizontal != null || marginOffset?.top != null) {
       const horizontal = baseHorizontal;
-      const top = Math.max(0, marginOffset?.top ?? 0);
+      const top = marginOffset?.top ?? 0;
 
-      if (horizontal) {
-        if (floatRight) {
-          margin.right += horizontal;
-        } else {
-          margin.left += horizontal;
+      if (isAbsolutelyPositioned) {
+        // Use CSS top/left for absolute positioning per OOXML spec
+        if (horizontal && !style.includes('left:')) {
+          style += `left: ${horizontal}px;`;
         }
-      }
-
-      if (top) {
-        margin.top += top;
+        if (top != null) {
+          style += `top: ${top}px;`;
+        }
+      } else {
+        // Use margins for floated/inline elements
+        if (horizontal) {
+          if (floatRight) {
+            margin.right += horizontal;
+          } else {
+            margin.left += horizontal;
+          }
+        }
+        if (top > 0) {
+          margin.top += top;
+        }
       }
     }
 
-    // Apply margins to style
+    // Apply margins to style (for non-absolute positioning)
     if (centered) {
       style += 'margin-left: auto; margin-right: auto;';
-    } else {
+    } else if (!isAbsolutelyPositioned) {
       if (margin.left) style += `margin-left: ${margin.left}px;`;
       if (margin.right) style += `margin-right: ${margin.right}px;`;
     }
-    if (margin.top) style += `margin-top: ${margin.top}px;`;
+    if (!isAbsolutelyPositioned && margin.top) style += `margin-top: ${margin.top}px;`;
     if (margin.bottom) style += `margin-bottom: ${margin.bottom}px;`;
 
     return style;

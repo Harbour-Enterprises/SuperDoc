@@ -87,6 +87,10 @@ export function createTextElement(textContent, textAlign, width, height) {
   div.style.boxSizing = 'border-box';
   div.style.wordWrap = 'break-word';
   div.style.overflowWrap = 'break-word';
+  // Set explicit base font-size to prevent CSS inheritance from parent editor
+  // Default to 12px which is a reasonable base; individual spans will override with their own sizes
+  div.style.fontSize = '12px';
+  div.style.lineHeight = '1.2';
 
   // Set text alignment (horizontal alignment for each paragraph)
   if (textAlign === 'center') {

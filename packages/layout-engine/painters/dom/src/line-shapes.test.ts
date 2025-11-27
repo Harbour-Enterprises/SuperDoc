@@ -158,38 +158,6 @@ describe('Line Shape SVG Markup Specification', () => {
     }
   });
 
-  it('should match OOXML spec for footer-missing-lighthouse.docx line', () => {
-    // This test documents the expected output for the specific bug case:
-    // OOXML: <a:ext cx="6112933" cy="0"/>, <a:ln w="9525"/>, accent1 color
-    // Converted: width ≈ 642px, height = 0, strokeWidth ≈ 0.75pt, color #5b9bd5
-
-    const width = 642;
-    const height = 0;
-    const strokeWidth = 0.75;
-
-    const expectedMarkup = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
-  <line x1="0" y1="0" x2="${width}" y2="${height}" stroke="#5b9bd5" stroke-width="${strokeWidth}" />
-</svg>`;
-
-    const { svg, line } = parseSvg(expectedMarkup);
-
-    expect(svg).toBeTruthy();
-    expect(line).toBeTruthy();
-
-    if (svg && line) {
-      // Verify it's a horizontal line
-      expect(line.getAttribute('y1')).toBe('0');
-      expect(line.getAttribute('y2')).toBe('0');
-
-      // Verify it has the blue accent1 color
-      expect(line.getAttribute('stroke')).toBe('#5b9bd5');
-
-      // Verify stroke width is set
-      const actualStrokeWidth = parseFloat(line.getAttribute('stroke-width') || '0');
-      expect(actualStrokeWidth).toBeGreaterThan(0);
-    }
-  });
-
   it('should handle edge case of zero-width and zero-height line', () => {
     // Degenerate line (point) should still have valid SVG structure
     const expectedMarkup = `<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" viewBox="0 0 0 0">

@@ -630,7 +630,10 @@ function extractTextFromTextBox(textBoxContent, bodyPr) {
             if (bold) formatting.bold = true;
             if (italic) formatting.italic = true;
             if (color) formatting.color = color.attributes?.['val'] || color.attributes?.['w:val'];
-            if (sz) formatting.fontSize = parseInt(sz.attributes?.['val'] || sz.attributes?.['w:val'], 10) / 2; // half-points to points
+            if (sz) {
+              const szVal = sz.attributes?.['val'] || sz.attributes?.['w:val'];
+              formatting.fontSize = parseInt(szVal, 10) / 2; // half-points to points
+            }
           }
 
           textParts.push({

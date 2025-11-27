@@ -991,9 +991,11 @@ export function hydrateImageBlocks(blocks: FlowBlock[], mediaFiles?: Record<stri
       if (!base64) continue;
 
       const finalExt = extension ?? inferExtensionFromPath(normalized) ?? 'jpeg';
+      // Check if base64 already has data URI prefix (some sources store full data URIs)
+      const src = base64.startsWith('data:') ? base64 : `data:image/${finalExt};base64,${base64}`;
       return {
         ...block,
-        src: `data:image/${finalExt};base64,${base64}`,
+        src,
       };
     }
 

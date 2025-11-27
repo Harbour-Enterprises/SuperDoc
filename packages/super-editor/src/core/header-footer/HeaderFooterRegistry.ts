@@ -960,12 +960,14 @@ export class HeaderFooterLayoutAdapter {
     const providedMedia = this.#mediaFiles;
     const fallbackMedia = rootConverter?.media;
     const mediaFiles = providedMedia && Object.keys(providedMedia).length > 0 ? providedMedia : fallbackMedia;
+
     const result = toFlowBlocks(doc as object, {
       mediaFiles,
       blockIdPrefix,
       converterContext,
     });
     const blocks = result.blocks;
+
     this.#blockCache.set(descriptor.id, { docRef: doc, blocks });
     return blocks;
   }

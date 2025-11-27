@@ -748,6 +748,59 @@ describe('Media Utilities', () => {
       const result = hydrateImageBlocks(blocks, mediaFiles);
       expect(result[0].src).toBe('data:image/jpg;base64,base64data');
     });
+
+    it('does not double-prefix when media value already has data URI prefix', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'image',
+          id: '1',
+          src: 'media/image.png',
+          runs: [],
+        },
+      ];
+      // Media value already contains full data URI (as stored by some converters)
+      const mediaFiles = { 'media/image.png': 'data:image/png;base64,iVBORw0KGgoAAAANS' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      // Should use the existing data URI as-is, not add another prefix
+      expect(result[0].src).toBe('data:image/png;base64,iVBORw0KGgoAAAANS');
+      // Verify no double prefix
+      expect(result[0].src).not.toContain('data:image/png;base64,data:image');
+    });
+
+    it('does not double-prefix with rId fallback matching', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'image',
+          id: '1',
+          src: './unknown.png',
+          attrs: { rId: 'rId5' },
+          runs: [],
+        },
+      ];
+      // Media value already contains full data URI
+      const mediaFiles = { 'word/media/rId5.png': 'data:image/png;base64,existingData' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      expect(result[0].src).toBe('data:image/png;base64,existingData');
+      expect(result[0].src).not.toContain('data:image/png;base64,data:image');
+    });
+
+    it('adds prefix to raw base64 values without data URI prefix', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'image',
+          id: '1',
+          src: 'media/image.png',
+          runs: [],
+        },
+      ];
+      // Media value is raw base64 without prefix
+      const mediaFiles = { 'media/image.png': 'iVBORw0KGgoAAAANS' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      expect(result[0].src).toBe('data:image/png;base64,iVBORw0KGgoAAAANS');
+    });
   });
 });
 

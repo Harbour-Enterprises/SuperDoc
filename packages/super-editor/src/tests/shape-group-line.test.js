@@ -583,14 +583,7 @@ describe('ShapeGroup Line Shape Rendering', () => {
   });
 
   it('should render line shape matching MS Word appearance', () => {
-    // Regression test for footer-missing-lighthouse.docx
-    // This matches the exact XML structure from the document:
-    // <a:off x="0" y="800100"/>
-    // <a:ext cx="6112933" cy="0"/>
-    // <a:prstGeom prst="line"/>
-    // <a:ln w="9525"/>
-    // <a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef>
-
+    // Test horizontal line with theme color matching MS Word output
     // Convert EMUs to pixels: 6112933 EMUs / 9525 = ~641.78 px
     const width = Math.round(6112933 / 9525);
     const lineWidth = 9525 / 12700; // Convert EMUs to points, ~0.75pt
