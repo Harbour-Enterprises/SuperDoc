@@ -1,5 +1,3 @@
-import { emuToPixels } from '@converter/helpers';
-
 /**
  * Converts a theme color name to its corresponding hex color value.
  * Uses the default Office theme color palette.
@@ -22,6 +20,9 @@ export function getThemeColor(name) {
     text2: '#1f497d',
     background1: '#ffffff',
     background2: '#eeece1',
+    // Office XML shortcuts
+    bg1: '#ffffff',
+    bg2: '#eeece1',
   };
   return colors[name] ?? '#000000';
 }
@@ -77,7 +78,14 @@ export function applyColorModifier(hexColor, modifier, value) {
 export function extractStrokeWidth(spPr) {
   const ln = spPr?.elements?.find((el) => el.name === 'a:ln');
   const w = ln?.attributes?.['w'];
-  return w ? emuToPixels(w) : 1;
+  if (!w) return 1;
+
+  // Convert EMUs to pixels for stroke width using 72 DPI to match Word's rendering
+  // Word appears to use 72 DPI for stroke widths rather than the standard 96 DPI
+  // This gives us: 19050 EMUs * 72 / 914400 = 1.5 pixels (renders closer to 1px in browsers)
+  const emu = typeof w === 'string' ? parseFloat(w) : w;
+  const STROKE_DPI = 72;
+  return (emu * STROKE_DPI) / 914400;
 }
 
 /**
@@ -167,6 +175,7 @@ export function extractFillColor(spPr, style) {
     if (schemeClr) {
       const themeName = schemeClr.attributes?.['val'];
       let color = getThemeColor(themeName);
+      let alpha = null;
 
       const modifiers = schemeClr.elements || [];
       modifiers.forEach((mod) => {
@@ -178,20 +187,37 @@ export function extractFillColor(spPr, style) {
           color = applyColorModifier(color, 'lumMod', mod.attributes['val']);
         } else if (mod.name === 'a:lumOff') {
           color = applyColorModifier(color, 'lumOff', mod.attributes['val']);
+        } else if (mod.name === 'a:alpha') {
+          alpha = parseInt(mod.attributes['val']) / 100000;
         }
       });
+
+      // Return object with alpha if present, otherwise just the color string
+      if (alpha !== null && alpha < 1) {
+        return { type: 'solidWithAlpha', color, alpha };
+      }
       return color;
     }
 
     const srgbClr = solidFill.elements?.find((el) => el.name === 'a:srgbClr');
     if (srgbClr) {
-      return '#' + srgbClr.attributes?.['val'];
+      let alpha = null;
+      const alphaEl = srgbClr.elements?.find((el) => el.name === 'a:alpha');
+      if (alphaEl) {
+        alpha = parseInt(alphaEl.attributes?.['val'] || '100000', 10) / 100000;
+      }
+
+      const color = '#' + srgbClr.attributes?.['val'];
+      if (alpha !== null && alpha < 1) {
+        return { type: 'solidWithAlpha', color, alpha };
+      }
+      return color;
     }
   }
 
   const gradFill = spPr?.elements?.find((el) => el.name === 'a:gradFill');
   if (gradFill) {
-    return '#cccccc'; // placeholder color for now
+    return extractGradientFill(gradFill);
   }
 
   const blipFill = spPr?.elements?.find((el) => el.name === 'a:blipFill');
@@ -222,4 +248,62 @@ export function extractFillColor(spPr, style) {
   });
 
   return color;
+}
+
+/**
+ * Extracts gradient fill information from a:gradFill element
+ * @param {Object} gradFill - The a:gradFill element
+ * @returns {Object} Gradient fill data with type, stops, and angle
+ */
+function extractGradientFill(gradFill) {
+  const gradient = {
+    type: 'gradient',
+    stops: [],
+    angle: 0,
+  };
+
+  // Extract gradient stops
+  const gsLst = gradFill.elements?.find((el) => el.name === 'a:gsLst');
+  if (gsLst) {
+    const stops = gsLst.elements?.filter((el) => el.name === 'a:gs') || [];
+    gradient.stops = stops.map((stop) => {
+      const pos = parseInt(stop.attributes?.['pos'] || '0', 10) / 100000; // Convert from 0-100000 to 0-1
+
+      // Extract color from the stop
+      const srgbClr = stop.elements?.find((el) => el.name === 'a:srgbClr');
+      let color = '#000000';
+      let alpha = 1;
+
+      if (srgbClr) {
+        color = '#' + srgbClr.attributes?.['val'];
+
+        // Extract alpha if present
+        const alphaEl = srgbClr.elements?.find((el) => el.name === 'a:alpha');
+        if (alphaEl) {
+          alpha = parseInt(alphaEl.attributes?.['val'] || '100000', 10) / 100000;
+        }
+      }
+
+      return { position: pos, color, alpha };
+    });
+  }
+
+  // Extract gradient direction (linear angle)
+  const lin = gradFill.elements?.find((el) => el.name === 'a:lin');
+  if (lin) {
+    // Convert from 60000ths of a degree to degrees
+    const ang = parseInt(lin.attributes?.['ang'] || '0', 10) / 60000;
+    gradient.angle = ang;
+  }
+
+  // Check if it's a radial gradient
+  const path = gradFill.elements?.find((el) => el.name === 'a:path');
+  if (path) {
+    gradient.gradientType = 'radial';
+    gradient.path = path.attributes?.['path'] || 'circle';
+  } else {
+    gradient.gradientType = 'linear';
+  }
+
+  return gradient;
 }

@@ -90,7 +90,40 @@ export const VectorShape = Node.create({
         },
       },
 
+      wrap: {
+        default: { type: 'Inline' },
+        rendered: false,
+      },
+
+      anchorData: {
+        default: null,
+        rendered: false,
+      },
+
+      isAnchor: {
+        rendered: false,
+      },
+
+      marginOffset: {
+        default: {},
+        rendered: false,
+      },
+
       drawingContent: {
+        rendered: false,
+      },
+
+      originalAttributes: {
+        rendered: false,
+      },
+
+      textContent: {
+        default: null,
+        rendered: false,
+      },
+
+      textAlign: {
+        default: 'center',
         rendered: false,
       },
     };
