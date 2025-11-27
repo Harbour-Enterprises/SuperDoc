@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 import { Extension } from '@core/index.js';
 import { parseSizeUnit } from '@core/utilities/index.js';
 

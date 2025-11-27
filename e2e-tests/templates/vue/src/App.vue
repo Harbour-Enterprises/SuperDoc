@@ -25,6 +25,7 @@ const init = async () => {
   // In such case we want to add a custom button for testing
   const isToolbarTest = window.location.search.includes('includeCustomButton=true');
   const isFontsTest = window.location.search.includes('includeFontsResolved=true');
+  const isCommentsTest = window.location.search.includes('includeComments=true');
 
   if (isToolbarTest) {
     config.editorExtensions = [CustomMark];
@@ -54,6 +55,8 @@ const init = async () => {
     config.onFontsResolved = onFontsResolved;
   }
 
+  config.modules = { ...config.modules, comments: isCommentsTest };
+
   if (superdoc.value) superdoc.value.destroy();
 
   if (window.fileData) {
@@ -79,7 +82,6 @@ const init = async () => {
 
   nextTick(() => {
     if (!config.modules) config.modules = {};
-    config.modules.comments = false;
     superdoc.value = new SuperDoc(config);
   });
 };

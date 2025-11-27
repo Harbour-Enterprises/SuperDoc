@@ -701,7 +701,10 @@ class SuperConverter {
     let result;
     try {
       this.getDocumentInternalId();
-      result = createDocumentJson({ ...this.convertedXml, media: this.media }, this, editor);
+      if (!this.convertedXml.media) {
+        this.convertedXml.media = this.media;
+      }
+      result = createDocumentJson(this.convertedXml, this, editor);
     } catch (error) {
       editor?.emit('exception', { error, editor });
     }

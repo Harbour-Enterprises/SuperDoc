@@ -1,11 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["./src/**/*"],
+  "include": ["../../packages/superdoc/src/**/*"],
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false,
     "declaration": true,
     "emitDeclarationOnly": true,
+    "rootDir": "../../",
     "outDir": "dist",
     "declarationMap": true,
     "skipLibCheck": true,

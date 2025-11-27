@@ -37,10 +37,10 @@ describe('getLinkedStyle', () => {
 });
 
 describe('spacing helpers', () => {
-  const spacing = { lineSpaceBefore: 12, lineSpaceAfter: 8, line: 24, lineRule: 'auto' };
+  const spacing = { before: 180, after: 120, line: 24, lineRule: 'auto' };
 
   it('getSpacingStyle returns CSS property map', () => {
-    const style = getSpacingStyle(spacing);
+    const style = getSpacingStyle({ lineSpaceBefore: 12, lineSpaceAfter: 8, line: 24, lineRule: 'auto' });
     expect(style['margin-top']).toBe('12px');
     expect(style['margin-bottom']).toBe('8px');
   });

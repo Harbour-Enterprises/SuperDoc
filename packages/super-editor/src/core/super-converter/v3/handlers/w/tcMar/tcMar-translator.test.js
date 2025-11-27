@@ -97,7 +97,7 @@ describe('w:tcMar translator', () => {
       expect(result.elements.length).toBe(3);
     });
 
-    it('returns a <w:tcMar> element with empty elements for an empty cellMargins object', () => {
+    it('returns undefined for an empty cellMargins object', () => {
       const params = {
         node: {
           attrs: {
@@ -106,8 +106,7 @@ describe('w:tcMar translator', () => {
         },
       };
       const result = translator.decode(params);
-      expect(result.name).toBe('w:tcMar');
-      expect(result.elements).toEqual([]);
+      expect(result).toBeUndefined();
     });
 
     it('handles a missing cellMargins attribute gracefully', () => {
@@ -117,8 +116,7 @@ describe('w:tcMar translator', () => {
         },
       };
       const result = translator.decode(params);
-      expect(result.name).toBe('w:tcMar');
-      expect(result.elements).toEqual([]);
+      expect(result).toBeUndefined();
     });
   });
 });

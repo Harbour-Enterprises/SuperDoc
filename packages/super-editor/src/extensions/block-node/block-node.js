@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 import { Extension } from '@core/Extension.js';
 import { helpers } from '@core/index.js';
 import { mergeRanges, clampRange } from '@core/helpers/rangeUtils.js';

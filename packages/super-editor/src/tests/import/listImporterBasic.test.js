@@ -1,6 +1,7 @@
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { expect } from 'vitest';
 import { extractParagraphText } from '../helpers/getParagraphText.js';
+import { pixelsToTwips } from '@converter/helpers.js';
 
 describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
   const filename = 'sublist-issue.docx';
@@ -13,35 +14,38 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
   });
 
   it('correctly imports first list item and indented paragraph break', () => {
-    const list1 = content.content[2];
-    const item1 = list1.content[0];
+    const item1 = content.content[2];
 
-    expect(list1.type).toBe('orderedList');
-    expect(item1.type).toBe('listItem');
-    expect(item1.attrs.indent.left).toBeUndefined();
-    expect(item1.attrs.indent.hanging).toBeUndefined();
-    expect(item1.attrs.indent.right).toBeCloseTo(-14.667, 3);
-    expect(item1.attrs.numId).toBe('5');
-
-    const spacerP1 = content.content[3];
-    expect(spacerP1.type).toBe('paragraph');
-    expect(spacerP1.attrs.indent.firstLine).toBe(0);
-    expect(spacerP1.attrs.indent.left).toBe(48);
-    expect(spacerP1.attrs.indent.right).toBeCloseTo(-14.667, 3);
-    expect(spacerP1.attrs.indent.hanging).toBe(0);
+    expect(item1.type).toBe('paragraph');
+    expect(item1.attrs.indent.left).toBe(360);
+    expect(item1.attrs.indent.hanging).toBe(360);
+    expect(item1.attrs.indent.right).toBe(-220);
+    expect(item1.attrs.numberingProperties).toEqual({ ilvl: 0, numId: 5 });
+    expect(item1.attrs.paragraphProperties.numberingProperties).toEqual({ ilvl: 0, numId: 5 });
+    expect(item1.attrs.listRendering).toBeDefined();
+    expect(item1.attrs.listRendering).toEqual({
+      markerText: '1.',
+      justification: 'right',
+      path: [1],
+      numberingType: 'decimal',
+    });
   });
 
   it('imports second list item and break', () => {
-    const list2 = content.content[4];
-    expect(list2.type).toBe('orderedList');
-    expect(list2.content.length).toBe(1);
-
-    const item = list2.content[0];
-    expect(item.type).toBe('listItem');
-    expect(item.attrs.indent.left).toBeUndefined();
-    expect(item.attrs.indent.hanging).toBeUndefined();
+    const item = content.content[4];
+    expect(item.type).toBe('paragraph');
+    expect(item.attrs.indent.left).toBe(360);
+    expect(item.attrs.indent.hanging).toBe(360);
     expect(item.attrs.indent.right).toBeUndefined();
-    expect(item.attrs.numId).toBe('5');
+    expect(item.attrs.numberingProperties).toEqual({ ilvl: 0, numId: 5 });
+    expect(item.attrs.paragraphProperties.numberingProperties).toEqual({ ilvl: 0, numId: 5 });
+    expect(item.attrs.listRendering).toBeDefined();
+    expect(item.attrs.listRendering).toEqual({
+      markerText: '2.',
+      justification: 'right',
+      path: [2],
+      numberingType: 'decimal',
+    });
 
     // Ensure we're importing the empty paragraprh
     const emptyParagraph = content.content[5];
@@ -50,18 +54,21 @@ describe('[sublist-issue.docx] Imports sublist with numId issue', () => {
   });
 
   it('correctly imports numId in sublist that does not match outer list', () => {
-    const indentedList = content.content[6];
-    expect(indentedList.type).toBe('orderedList');
-    expect(indentedList.content.length).toBe(1);
-
-    const item = indentedList.content[0];
-    expect(item.type).toBe('listItem');
-    expect(item.attrs.indent.left).toBe(24);
+    const item = content.content[6];
+    expect(item.type).toBe('paragraph');
+    expect(item.attrs.indent.left).toBe(360);
     expect(item.attrs.indent.hanging).toBeUndefined();
-    expect(item.attrs.indent.right).toBeCloseTo(-14.733, 3);
+    expect(item.attrs.indent.right).toBe(-221);
     expect(item.attrs.indent.firstLine).toBe(0);
-    expect(item.attrs.numId).toBe('3');
-    expect(item.attrs.listLevel).toStrictEqual([1]);
+    expect(item.attrs.numberingProperties).toEqual({ ilvl: 0, numId: 3 });
+    expect(item.attrs.paragraphProperties.numberingProperties).toEqual({ ilvl: 0, numId: 3 });
+    expect(item.attrs.listRendering).toBeDefined();
+    expect(item.attrs.listRendering).toEqual({
+      markerText: 'a.',
+      justification: 'left',
+      path: [1],
+      numberingType: 'lowerLetter',
+    });
   });
 });
 
@@ -76,102 +83,77 @@ describe('[base-ordered.docx] Imports base list and sublist', () => {
   });
 
   it('can import the first list item from list 1', () => {
-    const item1 = content.content[0];
-    expect(item1.type).toBe('orderedList');
-    expect(item1.content.length).toBe(1);
-
-    const list = item1.content[0];
-    expect(list.type).toBe('listItem');
-    expect(list.content.length).toBe(1);
+    const list = content.content[0];
+    expect(list.type).toBe('paragraph');
 
     const { attrs: listAttrs } = list;
     expect(listAttrs).toBeDefined();
-    expect(listAttrs.listLevel).toStrictEqual([1]);
-    expect(listAttrs.numId).toBe('1');
-    expect(listAttrs.indent.left).toBeUndefined();
-    expect(listAttrs.indent.hanging).toBeUndefined();
+    expect(listAttrs.listRendering.path).toStrictEqual([1]);
+    expect(listAttrs.numberingProperties).toEqual({ ilvl: 0, numId: 1 });
+    expect(listAttrs.indent.left).toBe(720);
+    expect(listAttrs.indent.hanging).toBe(360);
 
-    const paragraph = list.content[0];
-    expect(paragraph.type).toBe('paragraph');
-    expect(paragraph.content.length).toBe(1);
-    const runNode = paragraph.content[0];
+    expect(list.content.length).toBe(1);
+    const runNode = list.content[0];
     expect(runNode.type).toBe('run');
     const textNode = runNode.content.find((child) => child.type === 'text');
     expect(textNode?.text).toBe('One');
-    expect(extractParagraphText(paragraph)).toBe('One');
-
-    const { attrs: paragraphAttrs } = paragraph;
-    expect(paragraphAttrs).toBeDefined();
-    expect(paragraphAttrs.indent).toBeNull();
+    expect(extractParagraphText(list)).toBe('One');
   });
 
   it('can import the second list item from list 1', () => {
-    const item2 = content.content[1];
-    expect(item2.type).toBe('orderedList');
-
-    const list = item2.content[0];
-    expect(list.type).toBe('listItem');
+    const list = content.content[1];
+    expect(list.type).toBe('paragraph');
     expect(list.content.length).toBe(1);
 
     const { attrs: listAttrs } = list;
-    expect(listAttrs.listLevel).toStrictEqual([2]);
-    expect(listAttrs.numId).toBe('1');
-    expect(listAttrs.indent.left).toBeUndefined();
-    expect(listAttrs.indent.hanging).toBeUndefined();
+    expect(listAttrs.listRendering.path).toStrictEqual([2]);
+    expect(listAttrs.numberingProperties).toEqual({ ilvl: 0, numId: 1 });
+    expect(listAttrs.indent.left).toBe(720);
+    expect(listAttrs.indent.hanging).toBe(360);
   });
 
   it('can import the third list item from list 1', () => {
-    const item2 = content.content[2];
-    expect(item2.type).toBe('orderedList');
-
-    const list = item2.content[0];
-    expect(list.type).toBe('listItem');
+    const list = content.content[2];
+    expect(list.type).toBe('paragraph');
     expect(list.content.length).toBe(1);
 
     const { attrs: listAttrs } = list;
-    expect(listAttrs.listLevel).toStrictEqual([3]);
-    expect(listAttrs.numId).toBe('1');
-    expect(listAttrs.indent.left).toBeUndefined();
-    expect(listAttrs.indent.hanging).toBeUndefined();
+    expect(listAttrs.listRendering.path).toStrictEqual([3]);
+    expect(listAttrs.numberingProperties).toEqual({ ilvl: 0, numId: 1 });
+    expect(listAttrs.indent.left).toBe(720);
+    expect(listAttrs.indent.hanging).toBe(360);
   });
 
   it('correctly imports spacer paragraphs', () => {
     const p1 = content.content[3];
     expect(p1.type).toBe('paragraph');
     expect(p1.content).toBeUndefined();
+    expect(p1.numberingProperties).toBeUndefined();
 
     const p2 = content.content[4];
     expect(p2.type).toBe('paragraph');
     expect(p2.content).toBeUndefined();
+    expect(p2.numberingProperties).toBeUndefined();
   });
 
   it('correctly imports first item list 2', () => {
-    const item1 = content.content[5];
-    expect(item1.type).toBe('orderedList');
-    expect(item1.content.length).toBe(1);
+    const list = content.content[5];
 
-    const list = item1.content[0];
-    expect(list.type).toBe('listItem');
+    expect(list.type).toBe('paragraph');
     expect(list.content.length).toBe(1);
 
     const { attrs: listAttrs } = list;
     expect(listAttrs).toBeDefined();
-    expect(listAttrs.listLevel).toStrictEqual([1]);
-    expect(listAttrs.numId).toBe('2');
-    expect(listAttrs.indent.left).toBeUndefined();
-    expect(listAttrs.indent.hanging).toBeUndefined();
+    expect(listAttrs.listRendering.path).toStrictEqual([1]);
+    expect(listAttrs.numberingProperties).toEqual({ ilvl: 0, numId: 2 });
+    expect(listAttrs.indent.left).toBe(720);
+    expect(listAttrs.indent.hanging).toBe(360);
 
-    const paragraph = list.content[0];
-    expect(paragraph.type).toBe('paragraph');
-    expect(paragraph.content.length).toBe(1);
-    const runNode = paragraph.content[0];
+    const runNode = list.content[0];
     expect(runNode.type).toBe('run');
     const textNode = runNode.content.find((child) => child.type === 'text');
     expect(textNode?.text).toBe('One');
-    expect(extractParagraphText(paragraph)).toBe('One');
-
-    const { attrs: paragraphAttrs } = paragraph;
-    expect(paragraphAttrs).toBeDefined();
-    expect(paragraphAttrs.indent).toBeNull();
+    expect(extractParagraphText(list)).toBe('One');
   });
 });

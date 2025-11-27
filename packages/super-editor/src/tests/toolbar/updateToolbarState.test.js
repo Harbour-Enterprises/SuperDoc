@@ -6,6 +6,11 @@ vi.mock('@core/helpers/getActiveFormatting.js', () => ({
   getActiveFormatting: vi.fn(),
 }));
 
+vi.mock('prosemirror-history', () => ({
+  undoDepth: vi.fn(),
+  redoDepth: vi.fn(),
+}));
+
 vi.mock('@helpers/isInTable.js', () => ({
   isInTable: vi.fn().mockImplementation(() => false),
 }));
@@ -13,6 +18,14 @@ vi.mock('@helpers/isInTable.js', () => ({
 vi.mock('@extensions/linked-styles/linked-styles.js', () => ({
   getQuickFormatList: vi.fn(),
 }));
+
+vi.mock(import('@helpers/index.js'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    findParentNode: vi.fn().mockImplementation(() => vi.fn().mockReturnValue(null)),
+  };
+});
 
 vi.mock('@extensions/track-changes/permission-helpers.js', () => ({
   collectTrackedChanges: vi.fn(() => []),
@@ -340,5 +353,132 @@ describe('updateToolbarState', () => {
     const fontSizeItem = toolbar.toolbarItems.find((item) => item.name.value === 'fontSize');
     expect(fontSizeItem.activate).toHaveBeenCalledWith({ fontSize: '20pt' }, false);
     expect(fontSizeItem.activate).not.toHaveBeenCalledWith({ fontSize: '14pt' });
+  });
+
+  describe('undo/redo button state', () => {
+    it('should disable undo button when undoDepth is 0', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(0);
+      mockRedoDepth.mockReturnValue(0);
+
+      const undoItem = {
+        name: { value: 'undo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [undoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(undoItem.setDisabled).toHaveBeenCalledWith(true);
+    });
+
+    it('should enable undo button when undoDepth is greater than 0', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(3);
+      mockRedoDepth.mockReturnValue(0);
+
+      const undoItem = {
+        name: { value: 'undo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [undoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(undoItem.setDisabled).toHaveBeenCalledWith(false);
+    });
+
+    it('should disable redo button when redoDepth is 0', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(0);
+      mockRedoDepth.mockReturnValue(0);
+
+      const redoItem = {
+        name: { value: 'redo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [redoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(redoItem.setDisabled).toHaveBeenCalledWith(true);
+    });
+
+    it('should enable redo button when redoDepth is greater than 0', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(0);
+      mockRedoDepth.mockReturnValue(2);
+
+      const redoItem = {
+        name: { value: 'redo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [redoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(redoItem.setDisabled).toHaveBeenCalledWith(false);
+    });
+
+    it('should update both undo and redo buttons correctly', async () => {
+      const { undoDepth: mockUndoDepth, redoDepth: mockRedoDepth } = await import('prosemirror-history');
+      mockUndoDepth.mockReturnValue(5);
+      mockRedoDepth.mockReturnValue(0);
+
+      const undoItem = {
+        name: { value: 'undo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      const redoItem = {
+        name: { value: 'redo' },
+        resetDisabled: vi.fn(),
+        activate: vi.fn(),
+        deactivate: vi.fn(),
+        setDisabled: vi.fn(),
+        allowWithoutEditor: { value: false },
+      };
+
+      toolbar.toolbarItems = [undoItem, redoItem];
+      toolbar.activeEditor = mockEditor;
+      mockGetActiveFormatting.mockReturnValue([]);
+
+      toolbar.updateToolbarState();
+
+      expect(undoItem.setDisabled).toHaveBeenCalledWith(false);
+      expect(redoItem.setDisabled).toHaveBeenCalledWith(true);
+    });
   });
 });

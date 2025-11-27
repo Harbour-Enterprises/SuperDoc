@@ -31,12 +31,9 @@ describe('html list helpers', () => {
 
     const flattened = flattenListsInHtml(html, editor);
     const parsed = new DOMParser().parseFromString(`<body>${flattened}</body>`, 'text/html');
-    const lists = parsed.querySelectorAll('ul[data-list-id]');
+    const lists = parsed.querySelectorAll('p[data-num-id]');
 
     expect(lists.length).toBe(2);
-    lists.forEach((list) => {
-      expect(list.querySelectorAll('li').length).toBe(1);
-    });
     expect(generateNewListDefinitionMock).toHaveBeenCalled();
   });
 
@@ -44,7 +41,7 @@ describe('html list helpers', () => {
     const doc = new DOMParser().parseFromString('<li style="color:red">Solo</li>', 'text/html');
     const li = doc.body.firstElementChild;
 
-    const list = createSingleItemList({
+    const listItem = createSingleItemList({
       li,
       tag: 'ol',
       rootNumId: '42',
@@ -53,35 +50,67 @@ describe('html list helpers', () => {
       NodeInterface: window.Node,
     });
 
-    const listItem = list.querySelector('li');
-    expect(list.tagName).toBe('OL');
-    expect(list.getAttribute('data-list-id')).toBe('42');
+    expect(listItem.tagName).toBe('P');
     expect(listItem.getAttribute('data-num-id')).toBe('42');
-    expect(listItem.getAttribute('data-num-fmt')).toBe('decimal');
-    expect(listItem.getAttribute('data-lvl-text')).toBe('%1.');
-    expect(listItem.querySelector('p')).not.toBeNull();
+    expect(listItem.getAttribute('data-level')).toBe('0');
   });
 
-  it('reconstructs nested lists from flattened markup', () => {
+  it('reconstructs nested lists from flattened paragraph markup', () => {
     const flattenedHtml = `
-      <ol data-list-id="7">
-        <li data-level="0" data-num-fmt="decimal" data-list-level="[1]">Item 1</li>
-      </ol>
-      <ol data-list-id="7">
-        <li data-level="0" data-num-fmt="decimal" data-list-level="[2]">Item 2</li>
-      </ol>
+      <p data-num-id="7" data-level="0" data-list-numbering-type="decimal" data-list-level="[1]">Item 1</p>
+      <p data-num-id="7" data-level="1" data-list-numbering-type="bullet" data-list-level="[1,1]">Nested</p>
+      <p data-num-id="7" data-level="0" data-list-numbering-type="decimal" data-list-level="[2]">Item 2</p>
     `;
 
     const reconstructed = unflattenListsInHtml(flattenedHtml);
     const parsed = new DOMParser().parseFromString(`<body>${reconstructed}</body>`, 'text/html');
-    const list = parsed.querySelector('ol');
+    const list = parsed.querySelector('ol[data-list-id="7"]');
 
     expect(list).not.toBeNull();
-    const items = list.querySelectorAll('li');
-    expect(items.length).toBe(2);
-    items.forEach((item) => {
-      expect(item.hasAttribute('data-num-id')).toBe(false);
-      expect(item.textContent.trim()).toMatch(/Item/);
-    });
+    const topLevelItems = list.querySelectorAll(':scope > li');
+    expect(topLevelItems.length).toBe(2);
+
+    const nestedList = topLevelItems[0].querySelector('ul');
+    expect(nestedList).not.toBeNull();
+    expect(nestedList.querySelectorAll('li').length).toBe(1);
+    expect(parsed.querySelectorAll('p[data-num-id]').length).toBe(0);
+  });
+
+  it('preserves start attribute for ordered lists', () => {
+    const flattenedHtml = `
+      <p data-num-id="9" data-level="0" data-list-numbering-type="decimal" data-list-level="[3]">Item 3</p>
+      <p data-num-id="9" data-level="0" data-list-numbering-type="decimal" data-list-level="[4]">Item 4</p>
+    `;
+
+    const reconstructed = unflattenListsInHtml(flattenedHtml);
+    const parsed = new DOMParser().parseFromString(`<body>${reconstructed}</body>`, 'text/html');
+    const list = parsed.querySelector('ol[data-list-id="9"]');
+
+    expect(list).not.toBeNull();
+    expect(list.getAttribute('start')).toBe('3');
+  });
+
+  it('round-trips flattened HTML through unflatten -> flatten', () => {
+    const sourceHtml = `
+      <ol>
+        <li>Item 1</li>
+        <li>
+          Item 2
+          <ol>
+            <li>Sub Item</li>
+          </ol>
+        </li>
+        <li>Item 3</li>
+      </ol>
+    `;
+
+    const flattenedOnce = flattenListsInHtml(sourceHtml, editor);
+    const unflattened = unflattenListsInHtml(flattenedOnce);
+    const flattenedAgain = flattenListsInHtml(unflattened, editor);
+
+    const firstPass = flattenedOnce.replace(/\s+/g, ' ').trim();
+    const secondPass = flattenedAgain.replace(/\s+/g, ' ').trim();
+
+    expect(secondPass).toBe(firstPass);
   });
 });

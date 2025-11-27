@@ -158,13 +158,13 @@ function _addNewLinkRelationship(params, link) {
     type: 'element',
     name: 'Relationship',
     attributes: {
-      Id: id,
+      Id: `rId${id}`,
       Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
       Target: link,
       TargetMode: 'External',
     },
   });
-  return id;
+  return `rId${id}`;
 }
 
 /** @type {import('@translator').NodeTranslatorConfig} */

@@ -64,64 +64,71 @@ function findListToFlatten(container) {
  * 3. Extracting nested lists and processing them recursively
  */
 function flattenFoundList(listElem, editor) {
-  let NodeInterface;
-  if (editor.options.mockDocument) {
-    const win = editor.options.mockDocument.defaultView;
-    NodeInterface = win.Node;
-  } else {
-    NodeInterface = window.Node;
-  }
-
   const tag = listElem.tagName.toLowerCase();
-  const rootListLevel = Number(listElem.children[0].getAttribute('aria-level'));
-  const rootListFmt = listElem.children[0].style['list-style-type'] || 'decimal';
-  const start = listElem.getAttribute('start') || 1;
+  const baseLevel = getBaseLevel(listElem);
+  const items = Array.from(listElem.children).filter((c) => c.tagName?.toLowerCase() === 'li');
+  if (!items.length) return;
 
-  // Google docs list doesn't have numId
+  const counters = {};
+  const levelStarts = {};
+
   const rootNumId = ListHelpers.getNewListId(editor);
-
-  ListHelpers.generateNewListDefinition({
-    numId: rootNumId,
-    listType: tag === 'ol' ? 'orderedList' : 'bulletList',
-    editor,
-    fmt: googleNumDefMap.get(rootListFmt),
-    level: (rootListLevel - 1).toString(),
-    start,
-    text: getLvlTextForGoogleList(rootListFmt, rootListLevel, editor),
-  });
-
-  // Create single-item lists for each item
-  const newLists = [];
-
-  // Get all direct <li> children
-  const items = Array.from(listElem.children).filter((c) => c.tagName.toLowerCase() === 'li');
+  const newNodes = [];
 
   items.forEach((li) => {
-    const level = Number(li.getAttribute('aria-level')) - 1;
-    const listLevel = [level + 1];
-    const nestedLists = getNestedLists([li.nextSibling]);
+    const level = getEffectiveLevel(li, baseLevel);
+    const styleType = getListStyleType(li, tag);
+    const numFmt = googleNumDefMap.get(styleType) || (tag === 'ol' ? 'decimal' : 'bullet');
+    const lvlText = getLvlTextForGoogleList(styleType, level + 1, editor);
 
-    // Create a new single-item list for this li
-    const newList = createSingleItemList({ li, tag, rootNumId, level, listLevel, editor, NodeInterface });
-    newLists.push(newList);
-
-    if (nestedLists.length > 0) {
-      // deeper nested list are processed with child lists
-      newLists.push(nestedLists[0].cloneNode(true));
+    if (levelStarts[level] == null) {
+      levelStarts[level] = getInitialStartValue({ li, listElem, level, baseLevel });
     }
 
-    if (nestedLists.length && ['OL', 'UL'].includes(li.nextSibling.tagName)) {
-      li.nextSibling?.remove();
+    const currentValue = incrementLevelCounter(counters, level, levelStarts[level]);
+    const path = buildListPath(level, counters);
+
+    const paragraph = createSingleItemList({
+      li: li.childNodes.length && li.childNodes[0].tagName === 'P' ? li.childNodes[0] : li,
+      rootNumId,
+      level,
+      listNumberingType: numFmt,
+    });
+
+    paragraph.setAttribute('data-num-fmt', numFmt);
+    paragraph.setAttribute('data-lvl-text', lvlText);
+    paragraph.setAttribute('data-list-level', JSON.stringify(path.length ? path : [currentValue]));
+
+    ListHelpers.generateNewListDefinition({
+      numId: rootNumId,
+      listType: numFmt === 'bullet' ? 'bulletList' : 'orderedList',
+      editor,
+      fmt: numFmt,
+      level: level.toString(),
+      start: levelStarts[level],
+      text: lvlText,
+    });
+
+    newNodes.push(paragraph);
+
+    const nestedLists = getNestedLists([li.nextSibling]);
+    const nestedList = nestedLists[0];
+    if (nestedList) {
+      const cloned = nestedList.cloneNode(true);
+      cloned.setAttribute('data-level', String(level + 1));
+      newNodes.push(cloned);
+      if (['OL', 'UL'].includes(li.nextSibling?.tagName)) {
+        li.nextSibling.remove();
+      }
     }
   });
 
-  // Replace the original list with the new single-item lists
   const parent = listElem.parentNode;
   const nextSibling = listElem.nextSibling;
   parent.removeChild(listElem);
 
-  newLists.forEach((list) => {
-    parent.insertBefore(list, nextSibling);
+  newNodes.forEach((node) => {
+    parent.insertBefore(node, nextSibling);
   });
 }
 
@@ -136,7 +143,6 @@ function getNestedLists(nodes) {
   for (let item of nodesArray) {
     if (item.tagName === 'OL' || item.tagName === 'UL') {
       result.push(item);
-      result.push(...getNestedLists(item.children));
     }
   }
 
@@ -151,18 +157,94 @@ function mergeSeparateLists(container) {
   const tempCont = container.cloneNode(true);
 
   const rootLevelLists = Array.from(tempCont.querySelectorAll('ol:not(ol ol):not(ul ol)') || []);
-  const mainList = rootLevelLists.find((list) => !list.getAttribute('start'));
+  const mainList = rootLevelLists.find((list) => !list.getAttribute('start')) || rootLevelLists[0];
   const hasStartAttr = rootLevelLists.some((list) => list.getAttribute('start') !== null);
 
-  if (hasStartAttr) {
-    const listsWithStartAttr = rootLevelLists.filter((list) => list.getAttribute('start') !== null);
-    for (let [index, item] of listsWithStartAttr.entries()) {
-      if (item.getAttribute('start') === (index + 2).toString()) {
+  if (hasStartAttr && mainList) {
+    const listsWithStartAttr = rootLevelLists.filter(
+      (list) => list !== mainList && list.getAttribute('start') !== null,
+    );
+    listsWithStartAttr
+      .sort((a, b) => Number(a.getAttribute('start')) - Number(b.getAttribute('start')))
+      .forEach((item) => {
         mainList.append(...item.childNodes);
         item.remove();
-      }
-    }
+      });
   }
 
   return tempCont;
+}
+
+function getBaseLevel(listElem) {
+  const explicitLevel = Number(listElem.getAttribute('data-level'));
+  if (!Number.isNaN(explicitLevel)) return explicitLevel;
+
+  let level = 0;
+  let ancestor = listElem.parentElement;
+  while (ancestor && ancestor.tagName) {
+    if (ancestor.tagName.toLowerCase() === 'li') level++;
+    ancestor = ancestor.parentElement;
+  }
+
+  return level;
+}
+
+function getEffectiveLevel(li, baseLevel) {
+  const ariaLevel = Number(li.getAttribute('aria-level'));
+  if (Number.isNaN(ariaLevel)) {
+    return baseLevel;
+  }
+  return Math.max(ariaLevel - 1, baseLevel);
+}
+
+function getListStyleType(li, fallbackTag) {
+  return li.style?.['list-style-type'] || (fallbackTag === 'ol' ? 'decimal' : 'bullet');
+}
+
+function getInitialStartValue({ li, listElem, level, baseLevel }) {
+  const valueAttr = Number(li.getAttribute('value'));
+  if (!Number.isNaN(valueAttr)) {
+    return valueAttr;
+  }
+
+  if (level === baseLevel) {
+    const listStart = Number(listElem.getAttribute('start'));
+    if (!Number.isNaN(listStart)) {
+      return listStart;
+    }
+  }
+
+  return 1;
+}
+
+function incrementLevelCounter(map, level, start) {
+  const numericLevel = Number(level);
+  Object.keys(map).forEach((key) => {
+    if (Number(key) > numericLevel) {
+      delete map[key];
+    }
+  });
+
+  if (map[numericLevel] == null) {
+    map[numericLevel] = Number(start) || 1;
+  } else {
+    map[numericLevel] += 1;
+  }
+
+  return map[numericLevel];
+}
+
+function buildListPath(level, map) {
+  const numericLevel = Number(level);
+  if (Number.isNaN(numericLevel)) {
+    return [];
+  }
+
+  const path = [];
+  for (let i = 0; i <= numericLevel; i++) {
+    if (map[i] != null) {
+      path.push(map[i]);
+    }
+  }
+  return path;
 }

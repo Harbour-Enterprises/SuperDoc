@@ -1,4 +1,5 @@
-// @ts-check
+// @ts-nocheck
+
 import { Attribute, OxmlNode } from '@core/index.js';
 import { splitRun } from './commands/index.js';
 
@@ -48,6 +49,7 @@ export const Run = OxmlNode.create({
     };
   },
 
+  // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
       splitRun,

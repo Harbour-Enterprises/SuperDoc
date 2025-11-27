@@ -56,7 +56,7 @@ function halfPointToPixels(halfPoints) {
 
 function halfPointToPoints(halfPoints) {
   if (halfPoints == null) return;
-  return Math.round(halfPoints / 2);
+  return Math.round(halfPoints) / 2;
 }
 
 function emuToPixels(emu) {
@@ -82,6 +82,16 @@ function eighthPointsToPixels(eighthPoints) {
   const points = parseFloat(eighthPoints) / 8;
   const pixels = points * 1.3333;
   return pixels;
+}
+
+function pointsToTwips(points) {
+  if (points == null) return;
+  return points * 20;
+}
+
+function pointsToLines(points) {
+  if (points == null) return;
+  return twipsToLines(pointsToTwips(points));
 }
 
 function pixelsToEightPoints(pixels) {
@@ -366,6 +376,10 @@ const getLineHeightValueString = (lineHeight, defaultUnit, lineRule = '', isObje
   let [value, unit] = parseSizeUnit(lineHeight);
   if (Number.isNaN(value) || value === 0) return {};
   if (lineRule === 'atLeast' && value < 1) return {};
+  // Prevent values less than 1 to avoid squashed text (unless using explicit units like pt)
+  if (!unit && value < 1) {
+    value = 1;
+  }
   unit = unit ? unit : defaultUnit;
   return isObject ? { ['line-height']: `${value}${unit}` } : `line-height: ${value}${unit}`;
 };
@@ -407,6 +421,7 @@ export {
   twipsToPixels,
   pixelsToTwips,
   pixelsToInches,
+  pointsToLines,
   inchesToPixels,
   twipsToLines,
   linesToTwips,
@@ -417,6 +432,7 @@ export {
   halfPointToPoints,
   eighthPointsToPixels,
   pixelsToEightPoints,
+  pointsToTwips,
   rotToDegrees,
   degreesToRot,
   objToPolygon,

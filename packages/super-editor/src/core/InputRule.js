@@ -256,6 +256,7 @@ export function handleHtmlPaste(html, editor, source) {
   // Check if we're pasting into an existing paragraph
   const { $from } = state.selection;
   const isInParagraph = $from.parent.type.name === 'paragraph';
+  const isParagraphEmpty = $from.parent.content.size === 0;
 
   // Check if the pasted content is a single paragraph
   const isSingleParagraph = doc.childCount === 1 && doc.firstChild.type.name === 'paragraph';
@@ -265,7 +266,7 @@ export function handleHtmlPaste(html, editor, source) {
     const paragraphContent = doc.firstChild.content;
     const tr = state.tr.replaceSelectionWith(paragraphContent, false);
     dispatch(tr);
-  } else if (isInParagraph && state.doc.textContent) {
+  } else if (isInParagraph && state.doc.textContent && !isParagraphEmpty) {
     // We're in a paragraph but pasting multiple nodes, extract content from all paragraph nodes
     const allContent = [];
     doc.content.forEach((node, index) => {
