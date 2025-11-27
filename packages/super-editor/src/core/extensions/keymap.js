@@ -20,6 +20,7 @@ export const handleBackspace = (editor) => {
       return false;
     },
     () => commands.backspaceEmptyRunParagraph(),
+    () => commands.backspaceSkipEmptyRun(),
     () => commands.deleteSelection(),
     () => commands.removeNumberingProperties(),
     () => commands.joinBackward(),
