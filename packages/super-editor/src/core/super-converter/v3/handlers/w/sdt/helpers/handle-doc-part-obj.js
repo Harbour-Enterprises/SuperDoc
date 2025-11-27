@@ -13,24 +13,32 @@ export function handleDocPartObj(params) {
   const sdtPr = node.elements.find((el) => el.name === 'w:sdtPr');
   const docPartObj = sdtPr?.elements.find((el) => el.name === 'w:docPartObj');
   const docPartGallery = docPartObj?.elements.find((el) => el.name === 'w:docPartGallery');
-  const docPartGalleryType = docPartGallery?.attributes['w:val'];
-
-  if (!docPartGalleryType || !validGalleryTypeMap[docPartGalleryType]) {
-    // TODO: Handle catching unkown gallery types
-    return null;
-  }
+  const docPartGalleryType = docPartGallery?.attributes?.['w:val'] ?? null;
 
   const content = node?.elements.find((el) => el.name === 'w:sdtContent');
-  const handler = validGalleryTypeMap[docPartGalleryType];
+
+  // Use specific handler if available, otherwise fall back to generic handler
+  const handler = validGalleryTypeMap[docPartGalleryType] || genericDocPartHandler;
   const result = handler({
     ...params,
     nodes: [content],
-    extraParams: { ...(params.extraParams || {}), sdtPr },
+    extraParams: { ...(params.extraParams || {}), sdtPr, docPartGalleryType },
   });
 
   return result;
 }
 
+/**
+ * Handler for Table of Contents docPartGallery type.
+ * Processes ToC content and preserves sdtPr for round-trip.
+ * @param {Object} params - The handler parameters
+ * @param {Array} params.nodes - Array containing the w:sdtContent node
+ * @param {Object} params.nodeListHandler - Handler for processing child nodes
+ * @param {Object} params.extraParams - Extra parameters containing sdtPr
+ * @param {Object} params.extraParams.sdtPr - The original sdtPr element for passthrough
+ * @param {Array} [params.path] - Current processing path for nested nodes
+ * @returns {Object} Document part object node configured for Table of Contents
+ */
 export const tableOfContentsHandler = (params) => {
   const node = params.nodes[0];
   const translatedContent = params.nodeListHandler.handler({
@@ -40,6 +48,9 @@ export const tableOfContentsHandler = (params) => {
   });
   const sdtPr = params.extraParams.sdtPr;
   const id = sdtPr.elements?.find((el) => el.name === 'w:id')?.attributes['w:val'] || '';
+  const docPartObj = sdtPr?.elements.find((el) => el.name === 'w:docPartObj');
+  // Per OOXML spec: presence of w:docPartUnique element = true, absence = false
+  const docPartUnique = docPartObj?.elements.some((el) => el.name === 'w:docPartUnique') ?? false;
 
   const result = {
     type: 'documentPartObject',
@@ -47,7 +58,51 @@ export const tableOfContentsHandler = (params) => {
     attrs: {
       id,
       docPartGallery: 'Table of Contents',
-      docPartUnique: true,
+      docPartUnique,
+      sdtPr, // Passthrough for round-trip preservation
+    },
+  };
+  return result;
+};
+
+/**
+ * Generic handler for unknown docPartGallery types.
+ * Translates content for display but preserves full sdtPr for round-trip preservation.
+ * @param {Object} params - The handler parameters
+ * @param {Array} params.nodes - Array containing the w:sdtContent node
+ * @param {Object} params.nodeListHandler - Handler for processing child nodes
+ * @param {Object} params.extraParams - Extra parameters containing sdtPr and docPartGalleryType
+ * @param {Object} params.extraParams.sdtPr - The original sdtPr element for passthrough
+ * @param {string} params.extraParams.docPartGalleryType - The type of document part gallery
+ * @param {Array} [params.path] - Current processing path for nested nodes
+ * @returns {Object} Document part object node with content, type, and attrs including sdtPr passthrough
+ */
+export const genericDocPartHandler = (params) => {
+  const node = params.nodes[0];
+  const translatedContent = params.nodeListHandler.handler({
+    ...params,
+    nodes: node.elements,
+    path: [...(params.path || []), node],
+  });
+  const sdtPr = params.extraParams.sdtPr;
+  const docPartGalleryType = params.extraParams.docPartGalleryType;
+  const id = sdtPr?.elements?.find((el) => el.name === 'w:id')?.attributes['w:val'] || '';
+  const docPartObj = sdtPr?.elements.find((el) => el.name === 'w:docPartObj');
+  const docPartGallery =
+    docPartGalleryType ??
+    docPartObj?.elements?.find((el) => el.name === 'w:docPartGallery')?.attributes?.['w:val'] ??
+    null;
+  // Per OOXML spec: presence of w:docPartUnique element = true, absence = false
+  const docPartUnique = docPartObj?.elements.some((el) => el.name === 'w:docPartUnique') ?? false;
+
+  const result = {
+    type: 'documentPartObject',
+    content: translatedContent,
+    attrs: {
+      id,
+      docPartGallery,
+      docPartUnique,
+      sdtPr, // Passthrough for round-trip preservation of all sdtPr elements
     },
   };
   return result;
