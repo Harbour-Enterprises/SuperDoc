@@ -2,6 +2,7 @@
 
 import { Attribute, OxmlNode } from '@core/index.js';
 import { splitRun } from './commands/index.js';
+import { cleanupEmptyRunsPlugin } from './cleanupEmptyRunsPlugin.js';
 
 /**
  * Run node emulates OOXML w:r (run) boundaries while remaining transparent to layout.
@@ -63,5 +64,8 @@ export const Run = OxmlNode.create({
   renderDOM({ htmlAttributes }) {
     const base = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
     return ['span', base, 0];
+  },
+  addPmPlugins() {
+    return [cleanupEmptyRunsPlugin];
   },
 });
