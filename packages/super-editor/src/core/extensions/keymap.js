@@ -4,7 +4,7 @@ import { isMacOS } from '../utilities/isMacOS.js';
 
 export const handleEnter = (editor) => {
   return editor.commands.first(({ commands }) => [
-    () => commands.splitRun(),
+    () => commands.splitRunToParagraph(),
     () => commands.newlineInCode(),
     () => commands.createParagraphNear(),
     () => commands.liftEmptyBlock(),

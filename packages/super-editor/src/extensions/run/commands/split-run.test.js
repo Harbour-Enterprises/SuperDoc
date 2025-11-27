@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vite
 import { TextSelection, EditorState } from 'prosemirror-state';
 import { initTestEditor } from '@tests/helpers/helpers.js';
 
-let splitRun;
+let splitRunToParagraph;
 
 beforeAll(async () => {
-  ({ splitRun } = await import('@extensions/run/commands/split-run.js'));
+  ({ splitRunToParagraph } = await import('@extensions/run/commands/split-run.js'));
 });
 
 const RUN_DOC = {
@@ -43,7 +43,7 @@ const getParagraphTexts = (doc) => {
   return texts;
 };
 
-describe('splitRun command', () => {
+describe('splitRunToParagraph command', () => {
   let editor;
   let originalMatchMedia;
 
@@ -99,7 +99,7 @@ describe('splitRun command', () => {
     expect(start).not.toBeNull();
     updateSelection((start ?? 0) + 1, (start ?? 0) + 3);
 
-    const handled = editor.commands.splitRun();
+    const handled = editor.commands.splitRunToParagraph();
 
     expect(handled).toBe(false);
   });
@@ -109,7 +109,7 @@ describe('splitRun command', () => {
 
     updateSelection(1);
 
-    const handled = editor.commands.splitRun();
+    const handled = editor.commands.splitRunToParagraph();
 
     expect(handled).toBe(false);
   });
@@ -123,7 +123,7 @@ describe('splitRun command', () => {
 
     expect(editor.view.state.selection.$from.parent.type.name).toBe('run');
 
-    const handled = editor.commands.splitRun();
+    const handled = editor.commands.splitRunToParagraph();
 
     expect(handled).toBe(true);
 
