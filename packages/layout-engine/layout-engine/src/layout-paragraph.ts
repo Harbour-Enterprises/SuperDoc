@@ -253,16 +253,6 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       fragment.markerWidth = measure.marker.markerWidth;
     }
 
-    if (process.env.NODE_ENV !== 'production' && measure.marker && fromLine === 0) {
-      console.log('[layoutParagraphBlock] fragment marker info', {
-        blockId: block.id,
-        indent: block.attrs?.indent,
-        markerWidth: fragment.markerWidth,
-        textWidth: fragment.width,
-        marker: measure.marker,
-      });
-    }
-
     if (fromLine > 0) fragment.continuesFromPrev = true;
     if (slice.toLine < lines.length) fragment.continuesOnNext = true;
 

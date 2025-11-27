@@ -168,6 +168,85 @@ type RunDefaults = {
   letterSpacing?: number;
 };
 
+/**
+ * Extracts font properties from the first text node in a paragraph's content.
+ * This is used to match list marker font to the paragraph's first text run.
+ *
+ * @param para - The paragraph PM node
+ * @returns Font properties (fontSize in points, fontFamily) or undefined if not found
+ */
+const extractFirstTextRunFont = (para: PMNode): { fontSize?: number; fontFamily?: string } | undefined => {
+  if (!para.content || !Array.isArray(para.content) || para.content.length === 0) {
+    return undefined;
+  }
+
+  // Helper to find fontSize mark and extract value
+  const extractFontFromMarks = (marks?: PMMark[]): { fontSize?: number; fontFamily?: string } | undefined => {
+    if (!marks || !Array.isArray(marks)) return undefined;
+
+    const result: { fontSize?: number; fontFamily?: string } = {};
+
+    for (const mark of marks) {
+      if (!mark || typeof mark !== 'object') continue;
+
+      // Look for textStyle mark which contains font info
+      if (mark.type === 'textStyle' && mark.attrs) {
+        const attrs = mark.attrs as Record<string, unknown>;
+        // fontSize is typically stored in points
+        if (attrs.fontSize != null) {
+          const size = parseFloat(String(attrs.fontSize));
+          if (Number.isFinite(size)) {
+            result.fontSize = size;
+          }
+        }
+        if (typeof attrs.fontFamily === 'string') {
+          result.fontFamily = attrs.fontFamily;
+        }
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : undefined;
+  };
+
+  // Recursively find first text node
+  const findFirstTextFont = (nodes: PMNode[]): { fontSize?: number; fontFamily?: string } | undefined => {
+    for (const node of nodes) {
+      if (!node) continue;
+
+      // If it's a text node, check its marks
+      if (node.type === 'text') {
+        const font = extractFontFromMarks(node.marks);
+        if (font) return font;
+      }
+
+      // If it's a run node, check its content
+      if (node.type === 'run' && Array.isArray(node.content)) {
+        // First check the run's own marks
+        const runFont = extractFontFromMarks(node.marks);
+        // Then check children
+        const childFont = findFirstTextFont(node.content);
+        // Merge: child takes precedence for fontSize
+        if (runFont || childFont) {
+          return {
+            fontSize: childFont?.fontSize ?? runFont?.fontSize,
+            fontFamily: childFont?.fontFamily ?? runFont?.fontFamily,
+          };
+        }
+      }
+
+      // Handle other container nodes
+      if (Array.isArray(node.content)) {
+        const font = findFirstTextFont(node.content);
+        if (font) return font;
+      }
+    }
+    return undefined;
+  };
+
+  const font = findFirstTextFont(para.content);
+  return font;
+};
+
 const applyBaseRunDefaults = (
   run: TextRun,
   defaults: RunDefaults,
@@ -346,6 +425,31 @@ export function paragraphToFlowBlocks(
     }
     paragraphAttrs.spacing = spacing as ParagraphAttrs['spacing'];
   }
+
+  // Update marker font from first text run if paragraph has numbering
+  // This matches MS Word behavior where markers inherit font from first text run
+  if (paragraphAttrs?.numberingProperties && paragraphAttrs?.wordLayout) {
+    const firstRunFont = extractFirstTextRunFont(para);
+    if (firstRunFont) {
+      const wordLayout = paragraphAttrs.wordLayout as Record<string, unknown>;
+      const marker = wordLayout.marker as Record<string, unknown> | undefined;
+      if (marker?.run) {
+        const markerRun = marker.run as Record<string, unknown>;
+        // Override marker font with first text run's font
+        // Convert from points to pixels (marker run already uses pixels)
+        if (firstRunFont.fontSize != null && Number.isFinite(firstRunFont.fontSize)) {
+          const fontSizePx = ptToPx(firstRunFont.fontSize);
+          if (fontSizePx != null) {
+            markerRun.fontSize = fontSizePx;
+          }
+        }
+        if (firstRunFont.fontFamily) {
+          markerRun.fontFamily = firstRunFont.fontFamily;
+        }
+      }
+    }
+  }
+
   const linkedStyleResolver = createLinkedStyleResolver(converterContext?.linkedStyles);
   const blocks: FlowBlock[] = [];
 
