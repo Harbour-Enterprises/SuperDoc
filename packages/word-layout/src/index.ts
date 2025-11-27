@@ -188,7 +188,14 @@ export function resolveMarkerRunProperties(input: ResolveMarkerRunPropsInput): R
   const numberingResolved =
     input.numbering?.resolvedMarkerRpr || input.resolvedParagraphProps.numberingProperties?.resolvedMarkerRpr;
 
-  return mergeRunProperties(DEFAULT_MARKER_RUN, input.docDefaults.run, numberingResolved, input.inlineMarkerRpr);
+  const result = mergeRunProperties(
+    DEFAULT_MARKER_RUN,
+    input.docDefaults.run,
+    numberingResolved,
+    input.inlineMarkerRpr,
+  );
+
+  return result;
 }
 
 const DEFAULT_MARKER_RUN: ResolvedRunProperties = {

@@ -19,7 +19,7 @@ import type {
 } from '@superdoc/word-layout';
 import { computeWordParagraphLayout } from '@superdoc/word-layout';
 import { Engines } from '@superdoc/contracts';
-import { pickNumber, twipsToPx, isFiniteNumber } from '../utilities.js';
+import { pickNumber, twipsToPx, isFiniteNumber, ptToPx } from '../utilities.js';
 import {
   normalizeAlignment,
   normalizeParagraphSpacing,
@@ -342,11 +342,12 @@ const normalizeResolvedTabAlignment = (value: TabStop['val']): ResolvedTabStop['
  * @param paragraphAttrs - Resolved paragraph attributes including spacing, indent, and tabs
  * @param numberingProps - Numbering properties with numId, ilvl, and optional resolved marker RPr
  * @param styleContext - Style context for resolving character styles and doc defaults
+ * @param paragraphNode - Optional paragraph node to extract first text run font properties
  * @returns WordParagraphLayoutOutput with marker and gutter information, or null if computation fails
  *
  * @remarks
  * - Returns null early if numberingProps is explicitly null (vs undefined)
- * - Falls back to style-engine character style if resolvedMarkerRpr is not available
+ * - Falls back to first text run font, then style-engine character style if resolvedMarkerRpr is not available
  * - Converts indent from twips to pixels for rendering
  * - Gracefully handles computation errors by returning null
  */
@@ -354,6 +355,7 @@ export const computeWordLayoutForParagraph = (
   paragraphAttrs: ParagraphAttrs,
   numberingProps: AdapterNumberingProps | undefined,
   styleContext: StyleContext,
+  _paragraphNode?: PMNode,
 ): WordParagraphLayoutOutput | null => {
   if (numberingProps === null) {
     return null;
@@ -384,13 +386,17 @@ export const computeWordLayoutForParagraph = (
       numberingProperties: numberingProps,
     };
 
-    // Build doc defaults
+    // Build doc defaults from style context
+    const defaultFontFamily =
+      styleContext.defaults?.paragraphFont ?? styleContext.defaults?.paragraphFontFamily ?? 'Times New Roman';
+    const defaultFontSize = styleContext.defaults?.fontSize ?? 12;
+
     const docDefaults: DocDefaults = {
       defaultTabIntervalTwips: styleContext.defaults?.defaultTabIntervalTwips ?? 720,
       decimalSeparator: styleContext.defaults?.decimalSeparator ?? '.',
       run: {
-        fontFamily: 'Times New Roman',
-        fontSize: 12,
+        fontFamily: defaultFontFamily,
+        fontSize: defaultFontSize,
       },
       paragraph: {
         indent: {},
@@ -399,8 +405,10 @@ export const computeWordLayoutForParagraph = (
     };
 
     let markerRun = numberingProps?.resolvedMarkerRpr;
+
     if (!markerRun) {
       // Fallback to style-engine computed character style for the paragraph
+      // This matches MS Word behavior: list markers inherit font from paragraph style
       const { character: characterStyle } = resolveStyle({ styleId: paragraphAttrs.styleId }, styleContext);
       if (characterStyle) {
         markerRun = {
@@ -414,13 +422,33 @@ export const computeWordLayoutForParagraph = (
       }
     }
 
+    // Final fallback if style-engine returned nothing
+    if (!markerRun) {
+      markerRun = {
+        fontFamily: 'Times New Roman',
+        fontSize: 12,
+        color: '#000000',
+      };
+    }
+
+    // Convert marker fontSize from points to pixels
+    // Style-engine and document defaults use points, but buildFontCss expects pixels
+    if (markerRun.fontSize != null) {
+      const fontSizePx = ptToPx(markerRun.fontSize);
+      if (fontSizePx != null) {
+        markerRun = { ...markerRun, fontSize: fontSizePx };
+      }
+    }
+
     // Compute Word paragraph layout
-    return computeWordParagraphLayout({
+    const layout = computeWordParagraphLayout({
       paragraph: resolvedParagraph,
       numbering: numberingProps,
       markerRun,
       docDefaults,
     });
+
+    return layout;
   } catch {
     // Graceful fallback if wordLayout computation fails
     return null;
@@ -770,7 +798,9 @@ export const computeParagraphAttrs = (
       enrichedNumberingProps.suffix = listRendering.suffix;
     }
 
-    // Ensure marker run properties are available even when not pre-resolved
+    // Try to get marker run properties from numbering definition if not pre-resolved
+    // Do NOT set hardcoded defaults here - let computeWordLayoutForParagraph use
+    // style-engine fallback to resolve from paragraph style (matching MS Word behavior)
     if (!enrichedNumberingProps.resolvedMarkerRpr) {
       const numbering = computed.numbering as Record<string, unknown> | undefined;
       if (numbering && typeof numbering.marker === 'object' && numbering.marker !== null) {
@@ -779,17 +809,11 @@ export const computeParagraphAttrs = (
           enrichedNumberingProps.resolvedMarkerRpr = marker.run as ResolvedRunProperties;
         }
       }
-      // Fallback: use paragraph run defaults if nothing else is available
-      if (!enrichedNumberingProps.resolvedMarkerRpr) {
-        enrichedNumberingProps.resolvedMarkerRpr = {
-          fontFamily: 'Times New Roman',
-          fontSize: 12,
-          color: '#000000',
-        };
-      }
+      // NOTE: If still not resolved, computeWordLayoutForParagraph will use
+      // style-engine to resolve from paragraph style, which is the correct MS Word behavior
     }
 
-    const wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext);
+    const wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
     if (wordLayout) {
       if (wordLayout.marker) {
         if (listRendering?.markerText) {
