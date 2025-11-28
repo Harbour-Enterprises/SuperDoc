@@ -1,4 +1,4 @@
-import { TextSelection } from 'prosemirror-state';
+import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { toFlowBlocks } from '@superdoc/pm-adapter';
@@ -393,6 +393,7 @@ export class PresentationEditor extends EventEmitter {
   #clickCount = 0;
   #lastClickTime = 0;
   #lastClickPosition: { x: number; y: number } = { x: 0, y: 0 };
+  #lastSelectedImageBlockId: string | null = null;
 
   // Remote cursor/presence state management
   /** Map of clientId -> normalized remote cursor state */
@@ -2271,6 +2272,67 @@ export class PresentationEditor extends EventEmitter {
       }
       return;
     }
+
+    // Check if click landed on an atomic fragment (image, drawing)
+    const fragmentHit = getFragmentAtPosition(
+      this.#layoutState.layout,
+      this.#layoutState.blocks,
+      this.#layoutState.measures,
+      hit.pos,
+    );
+
+    // If clicked on an atomic fragment (image or drawing), create NodeSelection
+    if (fragmentHit && (fragmentHit.fragment.kind === 'image' || fragmentHit.fragment.kind === 'drawing')) {
+      const doc = this.#editor.state.doc;
+      try {
+        // Create NodeSelection for atomic node at hit position
+        const tr = this.#editor.state.tr.setSelection(NodeSelection.create(doc, hit.pos));
+        this.#editor.view?.dispatch(tr);
+
+        // Emit imageDeselected if previous selection was a different image
+        if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== fragmentHit.fragment.blockId) {
+          this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+        }
+
+        // Emit imageSelected event for overlay to detect
+        if (fragmentHit.fragment.kind === 'image') {
+          const targetElement = this.#viewportHost.querySelector(
+            `.superdoc-image-fragment[data-pm-start="${fragmentHit.fragment.pmStart}"]`,
+          );
+          if (targetElement) {
+            this.emit('imageSelected', {
+              element: targetElement,
+              blockId: fragmentHit.fragment.blockId,
+              pmStart: fragmentHit.fragment.pmStart,
+            });
+            this.#lastSelectedImageBlockId = fragmentHit.fragment.blockId;
+          }
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to create NodeSelection for atomic fragment:', error);
+        }
+      }
+
+      // Focus editor and schedule selection update
+      this.#scheduleSelectionUpdate();
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+      if (editorDom) {
+        editorDom.focus();
+        this.#editor.view?.focus();
+      }
+      return;
+    }
+
+    // If clicking away from an image, emit imageDeselected
+    if (this.#lastSelectedImageBlockId) {
+      this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+      this.#lastSelectedImageBlockId = null;
+    }
+
     const clickDepth = this.#registerPointerClick(event);
     let handledByDepth = false;
     if (this.#session.mode === 'body') {

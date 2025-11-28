@@ -8,6 +8,7 @@ import type {
   ImageBlock,
   ImageMeasure,
   ImageFragment,
+  ImageFragmentMetadata,
   DrawingBlock,
   DrawingMeasure,
   DrawingFragment,
@@ -70,6 +71,34 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
 
       const pmRange = extractBlockPmRange(entry.block);
       if (entry.block.kind === 'image' && entry.measure.kind === 'image') {
+        const pageContentHeight = Math.max(0, state.contentBottom - state.topMargin);
+        const relativeFrom = entry.block.anchor?.hRelativeFrom ?? 'column';
+        const marginLeft = anchors.pageMargins.left ?? 0;
+        const marginRight = anchors.pageMargins.right ?? 0;
+        let maxWidth: number;
+        if (relativeFrom === 'page') {
+          maxWidth = anchors.columns.count === 1 ? anchors.pageWidth - marginLeft - marginRight : anchors.pageWidth;
+        } else if (relativeFrom === 'margin') {
+          maxWidth = anchors.pageWidth - marginLeft - marginRight;
+        } else {
+          maxWidth = anchors.columns.width;
+        }
+
+        const aspectRatio =
+          entry.measure.width > 0 && entry.measure.height > 0 ? entry.measure.width / entry.measure.height : 1.0;
+        const minWidth = 20;
+        const minHeight = minWidth / aspectRatio;
+
+        const metadata: ImageFragmentMetadata = {
+          originalWidth: entry.measure.width,
+          originalHeight: entry.measure.height,
+          maxWidth,
+          maxHeight: pageContentHeight,
+          aspectRatio,
+          minWidth,
+          minHeight,
+        };
+
         const fragment: ImageFragment = {
           kind: 'image',
           blockId: entry.block.id,
@@ -79,6 +108,7 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
           height: entry.measure.height,
           isAnchored: true,
           zIndex: entry.block.anchor?.behindDoc ? 0 : 1,
+          metadata,
         };
         if (pmRange.pmStart != null) fragment.pmStart = pmRange.pmStart;
         if (pmRange.pmEnd != null) fragment.pmEnd = pmRange.pmEnd;

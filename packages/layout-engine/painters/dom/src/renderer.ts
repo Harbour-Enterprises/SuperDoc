@@ -1578,7 +1578,7 @@ export class DomPainter {
       const block = lookup.block as ImageBlock;
 
       const fragmentEl = this.doc.createElement('div');
-      fragmentEl.classList.add(CLASS_NAMES.fragment);
+      fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-image-fragment');
       applyStyles(fragmentEl, fragmentStyles);
       this.applyFragmentFrame(fragmentEl, fragment);
       fragmentEl.style.height = `${fragment.height}px`;
@@ -1588,6 +1588,24 @@ export class DomPainter {
       // Apply z-index for anchored images
       if (fragment.isAnchored && fragment.zIndex != null) {
         fragmentEl.style.zIndex = String(fragment.zIndex);
+      }
+
+      // Add block ID for PM transaction targeting
+      if (block.id) {
+        fragmentEl.setAttribute('data-sd-block-id', block.id);
+      }
+
+      // Add PM position markers for transaction targeting
+      if (fragment.pmStart != null) {
+        fragmentEl.dataset.pmStart = String(fragment.pmStart);
+      }
+      if (fragment.pmEnd != null) {
+        fragmentEl.dataset.pmEnd = String(fragment.pmEnd);
+      }
+
+      // Add metadata for interactive image resizing
+      if (fragment.metadata) {
+        fragmentEl.setAttribute('data-image-metadata', JSON.stringify(fragment.metadata));
       }
 
       // behindDoc images are supported via z-index; suppress noisy debug logs
