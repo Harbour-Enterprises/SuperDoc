@@ -165,6 +165,8 @@ type FragmentRenderContext = {
   pageNumber: number;
   totalPages: number;
   section: 'body' | 'header' | 'footer';
+  /** Optional formatted page number text from layout (e.g., "i", "III", "23") */
+  pageNumberText?: string;
 };
 
 const translateFragment = (fragment: Fragment, offsetY: number, offsetX: number = 0): Fragment => {
@@ -192,7 +194,8 @@ const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
     return run.text ?? '';
   }
   if (run.token === 'pageNumber') {
-    return String(context.pageNumber);
+    // Use formatted page number text from layout if available
+    return context.pageNumberText ?? String(context.pageNumber);
   }
   if (run.token === 'totalPageCount') {
     return context.totalPages ? String(context.totalPages) : (run.text ?? '');
@@ -335,7 +338,12 @@ export class PdfPainter {
       payload.fragments.forEach((fragment) => {
         fragments.push({
           fragment: translateFragment(fragment, baseOffset + footerYOffset, marginLeft),
-          context: { pageNumber: page.number, totalPages: this.totalPages, section },
+          context: {
+            pageNumber: page.number,
+            totalPages: this.totalPages,
+            section,
+            pageNumberText: page.numberText,
+          },
         });
       });
     };
@@ -344,7 +352,12 @@ export class PdfPainter {
     page.fragments.forEach((fragment) => {
       fragments.push({
         fragment,
-        context: { pageNumber: page.number, totalPages: this.totalPages, section: 'body' },
+        context: {
+          pageNumber: page.number,
+          totalPages: this.totalPages,
+          section: 'body',
+          pageNumberText: page.numberText,
+        },
       });
     });
     addFragments(this.footerProvider?.(page.number, page.margins) ?? null, 'footer');

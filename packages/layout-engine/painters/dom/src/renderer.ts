@@ -3319,29 +3319,23 @@ const applyStyles = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>): voi
 };
 
 const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
+  const runToken = 'token' in run ? run.token : undefined;
+
   if (run.kind === 'tab') {
     return run.text;
   }
-  if (!run.token) {
+  if (run.kind === 'image') {
+    // Image runs don't have text content
+    return '';
+  }
+  if (!runToken) {
     return run.text ?? '';
   }
-  if (run.token === 'pageNumber') {
-    const resolved = context.pageNumberText ?? String(context.pageNumber);
-    // Debug: Log page number resolution in development
-    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && context.section) {
-      console.debug(
-        `[Page Number] ${context.section}: page ${context.pageNumber} of ${context.totalPages} → "${resolved}"`,
-      );
-    }
-    return resolved;
+  if (runToken === 'pageNumber') {
+    return context.pageNumberText ?? String(context.pageNumber);
   }
-  if (run.token === 'totalPageCount') {
-    const resolved = context.totalPages ? String(context.totalPages) : (run.text ?? '');
-    // Debug: Log total page count resolution in development
-    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && context.section) {
-      console.debug(`[Total Pages] ${context.section}: ${resolved}`);
-    }
-    return resolved;
+  if (runToken === 'totalPageCount') {
+    return context.totalPages ? String(context.totalPages) : (run.text ?? '');
   }
   return run.text ?? '';
 };

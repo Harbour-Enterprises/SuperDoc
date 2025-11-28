@@ -683,6 +683,7 @@ export type ParagraphAttrs = {
   indent?: ParagraphIndent;
   /** Drop cap flag from w:framePr/@w:dropCap. */
   dropCap?: string | number | boolean;
+  frame?: ParagraphFrame;
   numberingProperties?: Record<string, unknown>;
   borders?: ParagraphBorders;
   shading?: ParagraphShading;
@@ -704,6 +705,16 @@ export type ParagraphAttrs = {
   sdt?: SdtMetadata;
   /** Container SDT for blocks with both primary and container metadata. */
   containerSdt?: SdtMetadata;
+};
+
+export type ParagraphFrame = {
+  wrap?: string;
+  x?: number;
+  y?: number;
+  xAlign?: 'left' | 'right' | 'center';
+  yAlign?: 'top' | 'center' | 'bottom';
+  hAnchor?: string;
+  vAnchor?: string;
 };
 
 export type ListMarker = {

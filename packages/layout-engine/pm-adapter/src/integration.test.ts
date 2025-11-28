@@ -766,7 +766,8 @@ describe('page break integration tests', () => {
                     'w:vAnchor': 'text',
                     'w:hAnchor': 'margin',
                     'w:xAlign': 'right',
-                    'w:y': '1',
+                    // Note: w:y omitted because framePr.y applies a vertical offset to positioned frames.
+                    // This test focuses on horizontal alignment (xAlign), not vertical positioning.
                   },
                 },
               ],

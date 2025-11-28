@@ -11,6 +11,8 @@ import {
   measureCharacterX,
   extractIdentifierFromConverter,
   getHeaderFooterType,
+  getBucketForPageNumber,
+  getBucketRepresentative,
 } from '@superdoc/layout-bridge';
 import type { HeaderFooterIdentifier, HeaderFooterLayoutResult, PositionHit } from '@superdoc/layout-bridge';
 import { createDomPainter } from '@superdoc/painter-dom';
@@ -26,6 +28,7 @@ import type {
   Line,
   TrackedChangesMode,
   ParaFragment,
+  Fragment,
 } from '@superdoc/contracts';
 import { extractHeaderFooterSpace } from '@superdoc/contracts';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
@@ -3037,8 +3040,8 @@ export class PresentationEditor extends EventEmitter {
       if (!variant || !variant.layout?.pages?.length) {
         return null;
       }
-      const slotPage =
-        variant.layout.pages.find((candidate: Page) => candidate.number === pageNumber) ?? variant.layout.pages[0];
+      // Find page slot: exact match first, then fall back to bucket representative
+      const slotPage = this.#findHeaderFooterPageForPageNumber(variant.layout.pages, pageNumber);
       if (!slotPage) {
         return null;
       }
@@ -3076,6 +3079,50 @@ export class PresentationEditor extends EventEmitter {
         },
       };
     };
+  }
+
+  /**
+   * Finds the header/footer page layout for a given page number with bucket fallback.
+   *
+   * Lookup strategy:
+   * 1. Try exact match first (find page with matching number)
+   * 2. If bucketing is used, fall back to the bucket's representative page
+   * 3. Finally, fall back to the first available page
+   *
+   * Digit buckets (for large documents):
+   * - d1: pages 1-9 → representative page 5
+   * - d2: pages 10-99 → representative page 50
+   * - d3: pages 100-999 → representative page 500
+   * - d4: pages 1000+ → representative page 5000
+   *
+   * @param pages - Array of header/footer layout pages from the variant
+   * @param pageNumber - Physical page number to find layout for (1-indexed)
+   * @returns Header/footer page layout, or undefined if no suitable page found
+   */
+  #findHeaderFooterPageForPageNumber(
+    pages: Array<{ number: number; fragments: Fragment[] }>,
+    pageNumber: number,
+  ): { number: number; fragments: Fragment[] } | undefined {
+    if (!pages || pages.length === 0) {
+      return undefined;
+    }
+
+    // 1. Try exact match first
+    const exactMatch = pages.find((p) => p.number === pageNumber);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    // 2. If bucketing is used, find the representative for this page's bucket
+    const bucket = getBucketForPageNumber(pageNumber);
+    const representative = getBucketRepresentative(bucket);
+    const bucketMatch = pages.find((p) => p.number === representative);
+    if (bucketMatch) {
+      return bucketMatch;
+    }
+
+    // 3. Final fallback: return the first available page
+    return pages[0];
   }
 
   #computeDecorationBox(kind: 'header' | 'footer', pageMargins?: PageMargins, pageHeight?: number) {

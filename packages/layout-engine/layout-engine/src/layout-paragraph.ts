@@ -50,6 +50,15 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   const { block, measure, columnWidth, ensurePage, advanceColumn, columnX, floatManager } = ctx;
   const remeasureParagraph = ctx.remeasureParagraph;
 
+  const frame = (block.attrs as { frame?: Record<string, unknown> } | undefined)?.frame as
+    | {
+        wrap?: string;
+        x?: number;
+        y?: number;
+        xAlign?: 'left' | 'right' | 'center';
+      }
+    | undefined;
+
   if (anchors?.anchoredDrawings?.length) {
     for (const entry of anchors.anchoredDrawings) {
       if (anchors.placedAnchoredIds.has(entry.block.id)) continue;
@@ -153,6 +162,48 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       spacingBefore,
       spacingAfter,
     });
+  }
+
+  const isPositionedFrame = frame?.wrap === 'none';
+  if (isPositionedFrame) {
+    let state = ensurePage();
+    if (state.cursorY >= state.contentBottom) {
+      state = advanceColumn(state);
+    }
+
+    const maxLineWidth = lines.reduce((max, line) => Math.max(max, line.width ?? 0), 0);
+    const fragmentWidth = maxLineWidth || columnWidth;
+
+    let x = columnX(state.columnIndex);
+    if (frame.xAlign === 'right') {
+      x += columnWidth - fragmentWidth;
+    } else if (frame.xAlign === 'center') {
+      x += (columnWidth - fragmentWidth) / 2;
+    }
+    if (typeof frame.x === 'number' && Number.isFinite(frame.x)) {
+      x += frame.x;
+    }
+
+    const yOffset = typeof frame.y === 'number' && Number.isFinite(frame.y) ? frame.y : 0;
+    const fragment: ParaFragment = {
+      kind: 'para',
+      blockId: block.id,
+      fromLine: 0,
+      toLine: lines.length,
+      x,
+      y: state.cursorY + yOffset,
+      width: fragmentWidth,
+      ...computeFragmentPmRange(block, lines, 0, lines.length),
+    };
+
+    if (measure.marker) {
+      fragment.markerWidth = measure.marker.markerWidth;
+    }
+
+    state.page.fragments.push(fragment);
+    state.trailingSpacing = 0;
+    state.lastParagraphStyleId = styleId;
+    return;
   }
 
   let didRemeasureForFloats = false;

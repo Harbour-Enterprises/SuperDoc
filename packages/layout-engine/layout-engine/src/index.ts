@@ -866,7 +866,9 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       const isEmpty =
         !paraBlock.runs ||
         paraBlock.runs.length === 0 ||
-        (paraBlock.runs.length === 1 && (!paraBlock.runs[0].text || paraBlock.runs[0].text === ''));
+        (paraBlock.runs.length === 1 &&
+          (!paraBlock.runs[0].kind || paraBlock.runs[0].kind === 'text') &&
+          (!paraBlock.runs[0].text || paraBlock.runs[0].text === ''));
 
       if (isEmpty) {
         // Check if previous block was pageBreak and next block is sectionBreak
@@ -1287,3 +1289,11 @@ const sumLineHeights = (measure: ParagraphMeasure, fromLine: number, toLine: num
 
 // Export page reference resolution utilities
 export { buildAnchorMap, resolvePageRefTokens, getTocBlocksForRemeasurement } from './resolvePageRefs.js';
+
+// Export page numbering utilities
+export { formatPageNumber, computeDisplayPageNumber } from './pageNumbering.js';
+export type { PageNumberFormat, DisplayPageInfo } from './pageNumbering.js';
+
+// Export page token resolution utilities
+export { resolvePageNumberTokens } from './resolvePageTokens.js';
+export type { NumberingContext, ResolvePageTokensResult } from './resolvePageTokens.js';

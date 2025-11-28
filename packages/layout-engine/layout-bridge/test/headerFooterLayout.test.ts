@@ -149,10 +149,14 @@ describe('layoutHeaderFooterWithCache', () => {
       expect(result.default?.measures).toHaveLength(1);
       expect(result.default?.blocks[0].id.startsWith('header-default-')).toBe(true);
 
-      // 6. Verify tokens are preserved in blocks (painters will resolve them)
+      // 6. Verify tokens are resolved (text updated for measurement, tokens preserved for painter)
       const firstBlock = result.default?.blocks[0];
+      // Tokens should be PRESERVED so painter can re-resolve at render time for each page
       expect(firstBlock?.runs.some((run) => run.token === 'pageNumber')).toBe(true);
       expect(firstBlock?.runs.some((run) => run.token === 'totalPageCount')).toBe(true);
+      // Text should be resolved to page 1 (for measurement purposes)
+      expect(firstBlock?.runs[1]?.text).toBe('1'); // pageNumber resolved to '1'
+      expect(firstBlock?.runs[3]?.text).toBe('1'); // totalPageCount resolved to '1' (1 page total)
     });
   });
 });
