@@ -1,6 +1,6 @@
 import type { Line, ParagraphBlock, SdtMetadata, TableBlock, TableBorders, TableMeasure } from '@superdoc/contracts';
 import { renderTableCell } from './renderTableCell.js';
-import { resolveTableCellBorders } from './border-utils.js';
+import { resolveTableCellBorders, borderValueToSpec } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
 
 type TableRowMeasure = TableMeasure['rows'][number];
@@ -208,13 +208,13 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
 
       resolvedBorders = {
         // For top: use cell's if defined, otherwise use table's top for first row
-        top: cellBordersAttr.top ?? (isFirstRow ? tableBorders.top : tableBorders.insideH),
+        top: cellBordersAttr.top ?? borderValueToSpec(isFirstRow ? tableBorders.top : tableBorders.insideH),
         // For bottom: use cell's if defined, otherwise use table's bottom for last row only
-        bottom: cellBordersAttr.bottom ?? (isLastRow ? tableBorders.bottom : undefined),
+        bottom: cellBordersAttr.bottom ?? borderValueToSpec(isLastRow ? tableBorders.bottom : undefined),
         // For left: use cell's if defined, otherwise use table's left for first col
-        left: cellBordersAttr.left ?? (isFirstCol ? tableBorders.left : tableBorders.insideV),
+        left: cellBordersAttr.left ?? borderValueToSpec(isFirstCol ? tableBorders.left : tableBorders.insideV),
         // For right: use cell's if defined, otherwise use table's right for last col only
-        right: cellBordersAttr.right ?? (isLastCol ? tableBorders.right : undefined),
+        right: cellBordersAttr.right ?? borderValueToSpec(isLastCol ? tableBorders.right : undefined),
       };
     } else if (hasExplicitBorders) {
       // Cell has explicit borders but no table borders to merge with

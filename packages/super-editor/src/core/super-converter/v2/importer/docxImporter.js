@@ -24,6 +24,7 @@ import { tabNodeEntityHandler } from './tabImporter.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
 import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
 import { preProcessNodesForFldChar } from '../../field-references';
+import { preProcessPageFieldsOnly } from '../../field-references/preProcessPageFieldsOnly.js';
 import { ensureNumberingCache } from './numberingCache.js';
 
 /**
@@ -560,6 +561,11 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
   headers.forEach((header) => {
     const { rId, referenceFile, currentFileName } = getHeaderFooterSectionData(header, docx);
 
+    // Pre-process PAGE and NUMPAGES field codes in headers
+    // Uses the targeted version that preserves other field types (DOCPROPERTY, etc.)
+    const { processedNodes: headerProcessedNodes } = preProcessPageFieldsOnly(referenceFile.elements[0].elements ?? []);
+    referenceFile.elements[0].elements = headerProcessedNodes;
+
     const sectPrHeader = allSectPrElements.find(
       (el) => el.name === 'w:headerReference' && el.attributes['r:id'] === rId,
     );
@@ -593,6 +599,12 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
 
   footers.forEach((footer) => {
     const { rId, referenceFile, currentFileName } = getHeaderFooterSectionData(footer, docx);
+
+    // Pre-process PAGE and NUMPAGES field codes in footers
+    // Uses the targeted version that preserves other field types (DOCPROPERTY, etc.)
+    const { processedNodes: footerProcessedNodes } = preProcessPageFieldsOnly(referenceFile.elements[0].elements ?? []);
+    referenceFile.elements[0].elements = footerProcessedNodes;
+
     const sectPrFooter = allSectPrElements.find(
       (el) => el.name === 'w:footerReference' && el.attributes['r:id'] === rId,
     );

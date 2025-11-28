@@ -720,32 +720,126 @@ export const computeParagraphAttrs = (
     }
   }
 
-  // Extract floating alignment from framePr (OOXML w:framePr/@w:xAlign)
-  // Used for positioned paragraphs like right-aligned page numbers in headers/footers
-  // Note: framePr may be at top level (from converter) or nested in paragraphProperties (from PM serialization)
-  let framePr = attrs.framePr as { xAlign?: string; dropCap?: string } | undefined;
+  /**
+   * Safely converts an unknown value to a string.
+   *
+   * @param value - The value to convert
+   * @returns The value as a string if it is a string, otherwise undefined
+   */
+  const asString = (value: unknown): string | undefined => {
+    return typeof value === 'string' ? value : undefined;
+  };
 
-  // If not at top level, try to extract from paragraphProperties
-  if (!framePr && attrs.paragraphProperties && typeof attrs.paragraphProperties === 'object') {
-    const pPr = attrs.paragraphProperties as Record<string, unknown>;
-    if (pPr.elements && Array.isArray(pPr.elements)) {
-      const framePrElement = pPr.elements.find((el: Record<string, unknown>) => el.name === 'w:framePr');
-      if (framePrElement?.attributes) {
-        framePr = {
-          xAlign: framePrElement.attributes['w:xAlign'],
-          dropCap: framePrElement.attributes['w:dropCap'],
-        };
-      }
+  /**
+   * Normalizes framePr data from various input formats to a consistent object structure.
+   *
+   * OOXML framePr (w:framePr) defines paragraph positioning and floating text alignment,
+   * commonly used for positioned elements like page numbers in headers/footers.
+   *
+   * This function handles three different input structures:
+   * 1. Direct object with frame properties: `{ xAlign: 'right', yAlign: 'top', ... }`
+   * 2. Wrapped in attributes object: `{ attributes: { xAlign: 'right', ... } }`
+   * 3. Invalid/missing data: returns undefined
+   *
+   * @param value - The framePr value from OOXML parsing, which may be in various formats
+   * @returns A record containing the frame properties, or undefined if invalid
+   *
+   * @example
+   * // Direct object
+   * normalizeFramePr({ xAlign: 'right', yAlign: 'top' })
+   * // => { xAlign: 'right', yAlign: 'top' }
+   *
+   * @example
+   * // Wrapped in attributes
+   * normalizeFramePr({ attributes: { xAlign: 'right' } })
+   * // => { xAlign: 'right' }
+   *
+   * @example
+   * // Invalid input
+   * normalizeFramePr(null)
+   * // => undefined
+   */
+  const normalizeFramePr = (value: unknown): Record<string, unknown> | undefined => {
+    if (!value || typeof value !== 'object') return undefined;
+    const record = value as Record<string, unknown>;
+    if (record.attributes && typeof record.attributes === 'object') {
+      return record.attributes as Record<string, unknown>;
     }
-  }
+    return record;
+  };
 
-  if (framePr?.xAlign) {
-    const xAlign = framePr.xAlign.toLowerCase();
+  /**
+   * Extracts framePr from raw OOXML elements array in paragraphProperties.
+   *
+   * This handles the case where framePr is stored as a raw OOXML element
+   * (from ProseMirror serialization) rather than as a decoded object.
+   *
+   * @param paragraphProperties - The paragraphProperties object that may contain elements array
+   * @returns The framePr attributes if found, otherwise undefined
+   */
+  const extractFramePrFromElements = (paragraphProperties: unknown): Record<string, unknown> | undefined => {
+    if (!paragraphProperties || typeof paragraphProperties !== 'object') return undefined;
+    const pPr = paragraphProperties as Record<string, unknown>;
+    if (!Array.isArray(pPr.elements)) return undefined;
+    const framePrElement = pPr.elements.find((el: Record<string, unknown>) => el.name === 'w:framePr');
+    if (framePrElement?.attributes && typeof framePrElement.attributes === 'object') {
+      return framePrElement.attributes as Record<string, unknown>;
+    }
+    return undefined;
+  };
+
+  // Extract floating alignment and positioning from framePr (OOXML w:framePr).
+  // Used for positioned paragraphs like right-aligned page numbers in headers/footers.
+  //
+  // Three-tier lookup strategy to handle different data sources:
+  // 1. attrs.framePr - Top-level framePr from the converter (most direct path)
+  // 2. attrs.paragraphProperties.framePr - Decoded framePr object from v3 translator
+  // 3. attrs.paragraphProperties.elements[name='w:framePr'] - Raw OOXML element from PM serialization
+  const framePr =
+    normalizeFramePr(attrs.framePr) ??
+    normalizeFramePr((attrs.paragraphProperties as Record<string, unknown> | undefined)?.framePr) ??
+    extractFramePrFromElements(attrs.paragraphProperties);
+
+  if (framePr) {
+    const rawXAlign = asString(framePr['w:xAlign'] ?? framePr.xAlign);
+    const xAlign = typeof rawXAlign === 'string' ? rawXAlign.toLowerCase() : undefined;
+    // Only set floatAlignment if xAlign is a valid value
     if (xAlign === 'left' || xAlign === 'right' || xAlign === 'center') {
       paragraphAttrs.floatAlignment = xAlign;
     }
-    if (framePr.dropCap != null) {
-      paragraphAttrs.dropCap = framePr.dropCap;
+
+    const dropCap = framePr['w:dropCap'] ?? framePr.dropCap;
+    if (dropCap != null) {
+      paragraphAttrs.dropCap = dropCap;
+    }
+
+    const frame: ParagraphAttrs['frame'] = {};
+    const wrap = asString(framePr['w:wrap'] ?? framePr.wrap);
+    if (wrap) frame.wrap = wrap;
+
+    // Set xAlign in frame (accepts any string, validation deferred to renderer)
+    if (xAlign) {
+      frame.xAlign = xAlign as 'left' | 'right' | 'center';
+    }
+
+    // yAlign: Accept any string value, validation deferred to renderer
+    const rawYAlign = asString(framePr['w:yAlign'] ?? framePr.yAlign);
+    if (rawYAlign) {
+      frame.yAlign = rawYAlign as 'top' | 'center' | 'bottom';
+    }
+
+    const hAnchor = asString(framePr['w:hAnchor'] ?? framePr.hAnchor);
+    if (hAnchor) frame.hAnchor = hAnchor;
+    const vAnchor = asString(framePr['w:vAnchor'] ?? framePr.vAnchor);
+    if (vAnchor) frame.vAnchor = vAnchor;
+
+    const xTwips = pickNumber(framePr['w:x'] ?? framePr.x);
+    if (xTwips != null) frame.x = twipsToPx(xTwips);
+    const yTwips = pickNumber(framePr['w:y'] ?? framePr.y);
+    if (yTwips != null) frame.y = twipsToPx(yTwips);
+
+    if (Object.keys(frame).length > 0) {
+      paragraphAttrs.frame = frame;
     }
   }
 

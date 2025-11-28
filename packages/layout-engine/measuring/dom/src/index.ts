@@ -1093,7 +1093,9 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
       for (const block of cellBlocks) {
         const measure = await measureBlock(block, { maxWidth: contentWidth, maxHeight: Infinity });
         blockMeasures.push(measure);
-        contentHeight += measure.totalHeight;
+        // Get height from different measure types
+        const blockHeight = 'totalHeight' in measure ? measure.totalHeight : 'height' in measure ? measure.height : 0;
+        contentHeight += blockHeight;
       }
 
       // Total cell height includes vertical padding

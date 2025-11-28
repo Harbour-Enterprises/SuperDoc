@@ -1,4 +1,4 @@
-import { TextSelection } from 'prosemirror-state';
+import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { toFlowBlocks } from '@superdoc/pm-adapter';
@@ -11,6 +11,8 @@ import {
   measureCharacterX,
   extractIdentifierFromConverter,
   getHeaderFooterType,
+  getBucketForPageNumber,
+  getBucketRepresentative,
 } from '@superdoc/layout-bridge';
 import type { HeaderFooterIdentifier, HeaderFooterLayoutResult, PositionHit } from '@superdoc/layout-bridge';
 import { createDomPainter } from '@superdoc/painter-dom';
@@ -26,6 +28,7 @@ import type {
   Line,
   TrackedChangesMode,
   ParaFragment,
+  Fragment,
 } from '@superdoc/contracts';
 import { extractHeaderFooterSpace } from '@superdoc/contracts';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
@@ -393,6 +396,7 @@ export class PresentationEditor extends EventEmitter {
   #clickCount = 0;
   #lastClickTime = 0;
   #lastClickPosition: { x: number; y: number } = { x: 0, y: 0 };
+  #lastSelectedImageBlockId: string | null = null;
 
   // Remote cursor/presence state management
   /** Map of clientId -> normalized remote cursor state */
@@ -2271,6 +2275,67 @@ export class PresentationEditor extends EventEmitter {
       }
       return;
     }
+
+    // Check if click landed on an atomic fragment (image, drawing)
+    const fragmentHit = getFragmentAtPosition(
+      this.#layoutState.layout,
+      this.#layoutState.blocks,
+      this.#layoutState.measures,
+      hit.pos,
+    );
+
+    // If clicked on an atomic fragment (image or drawing), create NodeSelection
+    if (fragmentHit && (fragmentHit.fragment.kind === 'image' || fragmentHit.fragment.kind === 'drawing')) {
+      const doc = this.#editor.state.doc;
+      try {
+        // Create NodeSelection for atomic node at hit position
+        const tr = this.#editor.state.tr.setSelection(NodeSelection.create(doc, hit.pos));
+        this.#editor.view?.dispatch(tr);
+
+        // Emit imageDeselected if previous selection was a different image
+        if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== fragmentHit.fragment.blockId) {
+          this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+        }
+
+        // Emit imageSelected event for overlay to detect
+        if (fragmentHit.fragment.kind === 'image') {
+          const targetElement = this.#viewportHost.querySelector(
+            `.superdoc-image-fragment[data-pm-start="${fragmentHit.fragment.pmStart}"]`,
+          );
+          if (targetElement) {
+            this.emit('imageSelected', {
+              element: targetElement,
+              blockId: fragmentHit.fragment.blockId,
+              pmStart: fragmentHit.fragment.pmStart,
+            });
+            this.#lastSelectedImageBlockId = fragmentHit.fragment.blockId;
+          }
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to create NodeSelection for atomic fragment:', error);
+        }
+      }
+
+      // Focus editor and schedule selection update
+      this.#scheduleSelectionUpdate();
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+      if (editorDom) {
+        editorDom.focus();
+        this.#editor.view?.focus();
+      }
+      return;
+    }
+
+    // If clicking away from an image, emit imageDeselected
+    if (this.#lastSelectedImageBlockId) {
+      this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+      this.#lastSelectedImageBlockId = null;
+    }
+
     const clickDepth = this.#registerPointerClick(event);
     let handledByDepth = false;
     if (this.#session.mode === 'body') {
@@ -2975,10 +3040,12 @@ export class PresentationEditor extends EventEmitter {
       if (!variant || !variant.layout?.pages?.length) {
         return null;
       }
-      // Flatten all internal pages' fragments to prevent content loss from overflow
-      // Headers/footers may have content that exceeds height constraints during internal layout,
-      // causing pagination. We collect all fragments across all internal pages.
-      const allFragments = variant.layout.pages.flatMap((p: Page) => p.fragments ?? []);
+      // Find the best page slot for this page number (exact match, then bucket representative)
+      const slotPage = this.#findHeaderFooterPageForPageNumber(variant.layout.pages, pageNumber);
+      if (!slotPage) {
+        return null;
+      }
+      const fragments = slotPage.fragments ?? [];
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
@@ -2991,7 +3058,7 @@ export class PresentationEditor extends EventEmitter {
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = headerId ?? fallbackId ?? undefined;
       return {
-        fragments: allFragments,
+        fragments,
         height: box.height,
         contentHeight: variant.layout.height ?? box.height,
         offset: box.offset,
@@ -3013,6 +3080,50 @@ export class PresentationEditor extends EventEmitter {
         },
       };
     };
+  }
+
+  /**
+   * Finds the header/footer page layout for a given page number with bucket fallback.
+   *
+   * Lookup strategy:
+   * 1. Try exact match first (find page with matching number)
+   * 2. If bucketing is used, fall back to the bucket's representative page
+   * 3. Finally, fall back to the first available page
+   *
+   * Digit buckets (for large documents):
+   * - d1: pages 1-9 → representative page 5
+   * - d2: pages 10-99 → representative page 50
+   * - d3: pages 100-999 → representative page 500
+   * - d4: pages 1000+ → representative page 5000
+   *
+   * @param pages - Array of header/footer layout pages from the variant
+   * @param pageNumber - Physical page number to find layout for (1-indexed)
+   * @returns Header/footer page layout, or undefined if no suitable page found
+   */
+  #findHeaderFooterPageForPageNumber(
+    pages: Array<{ number: number; fragments: Fragment[] }>,
+    pageNumber: number,
+  ): { number: number; fragments: Fragment[] } | undefined {
+    if (!pages || pages.length === 0) {
+      return undefined;
+    }
+
+    // 1. Try exact match first
+    const exactMatch = pages.find((p) => p.number === pageNumber);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    // 2. If bucketing is used, find the representative for this page's bucket
+    const bucket = getBucketForPageNumber(pageNumber);
+    const representative = getBucketRepresentative(bucket);
+    const bucketMatch = pages.find((p) => p.number === representative);
+    if (bucketMatch) {
+      return bucketMatch;
+    }
+
+    // 3. Final fallback: return the first available page
+    return pages[0];
   }
 
   #computeDecorationBox(kind: 'header' | 'footer', pageMargins?: PageMargins, pageHeight?: number) {

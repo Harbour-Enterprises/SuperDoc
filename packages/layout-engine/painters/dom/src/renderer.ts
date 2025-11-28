@@ -1592,7 +1592,7 @@ export class DomPainter {
       const block = lookup.block as ImageBlock;
 
       const fragmentEl = this.doc.createElement('div');
-      fragmentEl.classList.add(CLASS_NAMES.fragment);
+      fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-image-fragment');
       applyStyles(fragmentEl, fragmentStyles);
       this.applyFragmentFrame(fragmentEl, fragment);
       fragmentEl.style.height = `${fragment.height}px`;
@@ -1602,6 +1602,24 @@ export class DomPainter {
       // Apply z-index for anchored images
       if (fragment.isAnchored && fragment.zIndex != null) {
         fragmentEl.style.zIndex = String(fragment.zIndex);
+      }
+
+      // Add block ID for PM transaction targeting
+      if (block.id) {
+        fragmentEl.setAttribute('data-sd-block-id', block.id);
+      }
+
+      // Add PM position markers for transaction targeting
+      if (fragment.pmStart != null) {
+        fragmentEl.dataset.pmStart = String(fragment.pmStart);
+      }
+      if (fragment.pmEnd != null) {
+        fragmentEl.dataset.pmEnd = String(fragment.pmEnd);
+      }
+
+      // Add metadata for interactive image resizing
+      if (fragment.metadata) {
+        fragmentEl.setAttribute('data-image-metadata', JSON.stringify(fragment.metadata));
       }
 
       // behindDoc images are supported via z-index; suppress noisy debug logs
@@ -3503,6 +3521,8 @@ const applyStyles = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>): voi
 };
 
 const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
+  const runToken = 'token' in run ? run.token : undefined;
+
   if (run.kind === 'tab') {
     return run.text;
   }
@@ -3510,26 +3530,14 @@ const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
     // Image runs don't have text content
     return '';
   }
-  if (!run.token) {
+  if (!runToken) {
     return run.text ?? '';
   }
-  if (run.token === 'pageNumber') {
-    const resolved = context.pageNumberText ?? String(context.pageNumber);
-    // Debug: Log page number resolution in development
-    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && context.section) {
-      console.debug(
-        `[Page Number] ${context.section}: page ${context.pageNumber} of ${context.totalPages} → "${resolved}"`,
-      );
-    }
-    return resolved;
+  if (runToken === 'pageNumber') {
+    return context.pageNumberText ?? String(context.pageNumber);
   }
-  if (run.token === 'totalPageCount') {
-    const resolved = context.totalPages ? String(context.totalPages) : (run.text ?? '');
-    // Debug: Log total page count resolution in development
-    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && context.section) {
-      console.debug(`[Total Pages] ${context.section}: ${resolved}`);
-    }
-    return resolved;
+  if (runToken === 'totalPageCount') {
+    return context.totalPages ? String(context.totalPages) : (run.text ?? '');
   }
   return run.text ?? '';
 };

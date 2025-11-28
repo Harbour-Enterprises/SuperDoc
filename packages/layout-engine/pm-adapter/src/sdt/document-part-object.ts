@@ -79,4 +79,6 @@ export function handleDocumentPartObjectNode(node: PMNode, context: NodeHandlerC
       }
     }
   }
+  // Note: Other documentPartObject types (e.g., Bibliography) are intentionally
+  // not processed - they are ignored to maintain backward compatibility.
 }

@@ -1,4 +1,4 @@
-import type { ImageBlock, ImageMeasure, ImageFragment } from '@superdoc/contracts';
+import type { ImageBlock, ImageMeasure, ImageFragment, ImageFragmentMetadata } from '@superdoc/contracts';
 import { extractBlockPmRange } from './layout-utils.js';
 import type { PageState } from './paginator.js';
 
@@ -58,6 +58,20 @@ export function layoutImageBlock({
 
   const pmRange = extractBlockPmRange(block);
 
+  const aspectRatio = measure.width > 0 && measure.height > 0 ? measure.width / measure.height : 1.0;
+  const minWidth = 20;
+  const minHeight = minWidth / aspectRatio;
+
+  const metadata: ImageFragmentMetadata = {
+    originalWidth: measure.width,
+    originalHeight: measure.height,
+    maxWidth,
+    maxHeight: pageContentHeight,
+    aspectRatio,
+    minWidth,
+    minHeight,
+  };
+
   const fragment: ImageFragment = {
     kind: 'image',
     blockId: block.id,
@@ -67,6 +81,7 @@ export function layoutImageBlock({
     height,
     pmStart: pmRange.pmStart,
     pmEnd: pmRange.pmEnd,
+    metadata,
   };
 
   state.page.fragments.push(fragment);
