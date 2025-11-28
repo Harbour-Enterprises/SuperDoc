@@ -1,7 +1,7 @@
 {
   "name": "superdoc",
   "type": "module",
-  "version": "0.31.4-RC.1",
+  "version": "1.0.0-beta.14",
   "license": "AGPL-3.0",
   "readme": "../../README.md",
   "files": [
