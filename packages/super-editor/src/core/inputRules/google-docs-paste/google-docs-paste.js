@@ -3,6 +3,7 @@ import { convertEmToPt, sanitizeHtml } from '../../InputRule.js';
 import { ListHelpers } from '../../helpers/list-numbering-helpers.js';
 import { createSingleItemList } from '../html/html-helpers.js';
 import { getLvlTextForGoogleList, googleNumDefMap } from '../../helpers/pasteListHelpers.js';
+import { wrapTextsInRuns } from '../docx-paste/docx-paste.js';
 
 /**
  * Main handler for pasted Google Docs content.
@@ -23,7 +24,8 @@ export const handleGoogleDocsHtml = (html, editor, view) => {
   const htmlWithMergedLists = mergeSeparateLists(tempDiv);
   const flattenHtml = flattenListsInHtml(htmlWithMergedLists, editor);
 
-  const doc = DOMParser.fromSchema(editor.schema).parse(flattenHtml);
+  let doc = DOMParser.fromSchema(editor.schema).parse(flattenHtml);
+  doc = wrapTextsInRuns(doc);
   tempDiv.remove();
 
   const { dispatch } = editor.view;
